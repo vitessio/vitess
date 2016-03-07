@@ -29,6 +29,9 @@ func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan,
 	if err != nil {
 		return nil, err
 	}
+	if tableInfo.Type == schema.Sequence {
+		return nil, fmt.Errorf("DML not allowed on sequences: %s", tableName)
+	}
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
 		log.Warningf("no primary key for table %s", tableName)
@@ -78,6 +81,9 @@ func analyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan,
 	tableInfo, err := plan.setTableInfo(tableName, getTable)
 	if err != nil {
 		return nil, err
+	}
+	if tableInfo.Type == schema.Sequence {
+		return nil, fmt.Errorf("DML not allowed on sequences: %s", tableName)
 	}
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
@@ -160,9 +166,18 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 
 	// from
 	tableName, hasHints := analyzeFrom(sel.From)
-	if tableName == "" {
+	switch tableName {
+	case "":
 		plan.Reason = ReasonTable
 		return plan, nil
+	case "dual":
+		nextvalPlan, err := analyzeNextval(sel, getTable)
+		if err != nil {
+			return nil, err
+		}
+		if nextvalPlan != nil {
+			return nextvalPlan, nil
+		}
 	}
 	tableInfo, err := plan.setTableInfo(tableName, getTable)
 	if err != nil {
@@ -379,6 +394,9 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 	if err != nil {
 		return nil, err
 	}
+	if tableInfo.Type == schema.Sequence {
+		return nil, fmt.Errorf("DML not allowed on sequences: %s", tableName)
+	}
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
 		log.Warningf("no primary key for table %s", tableName)
@@ -455,6 +473,27 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 		Exprs:    sqlparser.UpdateExprs(ins.OnDup),
 	}
 	plan.UpsertQuery = GenerateUpdateOuterQuery(upd)
+	return plan, nil
+}
+
+func analyzeNextval(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan, err error) {
+	if len(sel.SelectExprs) > 1 {
+		return nil, nil
+	}
+	nval, ok := sel.SelectExprs[0].(*sqlparser.Nextval)
+	if !ok {
+		return nil, nil
+	}
+	plan = &ExecPlan{
+		PlanID: PlanNextval,
+	}
+	tableInfo, err := plan.setTableInfo(string(nval.TableName), getTable)
+	if err != nil {
+		return nil, err
+	}
+	if tableInfo.Type != schema.Sequence {
+		return nil, fmt.Errorf("%s is not a sequence", nval.TableName)
+	}
 	return plan, nil
 }
 

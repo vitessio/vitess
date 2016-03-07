@@ -57,6 +57,8 @@ const (
 	PlanOther
 	// PlanUpsertPK is for insert ... on duplicate key constructs
 	PlanUpsertPK
+	// PlanNextval is for NEXTVAL
+	PlanNextval
 	// NumPlans stores the total number of plans
 	NumPlans
 )
@@ -77,6 +79,7 @@ var planName = []string{
 	"SELECT_STREAM",
 	"OTHER",
 	"UPSERT_PK",
+	"NEXTVAL",
 }
 
 func (pt PlanType) String() string {
@@ -125,6 +128,7 @@ var tableAclRoles = map[PlanType]tableacl.Role{
 	PlanSelectStream:   tableacl.READER,
 	PlanOther:          tableacl.ADMIN,
 	PlanUpsertPK:       tableacl.WRITER,
+	PlanNextval:        tableacl.WRITER,
 }
 
 // ReasonType indicates why a query plan fails to build
@@ -271,9 +275,13 @@ func GetStreamExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err er
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
 		if stmt.Lock != "" {
-			return nil, errors.New("select with lock disallowed with streaming")
+			return nil, errors.New("select with lock not allowed for streaming")
 		}
 		tableName, _ := analyzeFrom(stmt.From)
+		// This will block usage of NEXTVAL.
+		if tableName == "dual" {
+			return nil, errors.New("select from dual not allowed for streaming")
+		}
 		if tableName != "" {
 			plan.setTableInfo(tableName, getTable)
 		}

@@ -1075,6 +1075,53 @@
   "FullQuery": "delete from c"
 }
 
+# sequence
+"select nextval(seq) from dual"
+{
+  "PlanID": "NEXTVAL",
+  "TableName": "seq"
+}
+
+# sequence with multiselect
+"select nextval(seq), 1 from dual"
+{
+  "PlanID": "PASS_SELECT",
+  "Reason": "NOCACHE",
+  "TableName": "dual",
+  "FieldQuery": "select nextval(seq), 1 from dual where 1 != 1",
+  "FullQuery": "select nextval(seq), 1 from dual limit :#maxLimit"
+}
+
+# select non-nextval from dual
+"select 1 from dual"
+{
+  "PlanID": "PASS_SELECT",
+  "Reason": "NOCACHE",
+  "TableName": "dual",
+  "FieldQuery": "select 1 from dual where 1 != 1",
+  "FullQuery": "select 1 from dual limit :#maxLimit"
+}
+
+# nextval on non-sequence table
+"select nextval(a) from dual"
+"a is not a sequence"
+
+# nextval on non-existent table
+"select nextval(id) from dual"
+"table id not found in schema"
+
+# insert not allowed on sequences
+"insert into seq values (1)"
+"DML not allowed on sequences: seq"
+
+# update not allowed on sequences
+"update seq set a = 1"
+"DML not allowed on sequences: seq"
+
+#delete not allowed on sequences
+"delete from seq"
+"DML not allowed on sequences: seq"
+
 # int
 "set  a=1"
 {
