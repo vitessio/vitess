@@ -531,7 +531,7 @@ type Nextval struct {
 
 // Format formats the node.
 func (node *Nextval) Format(buf *TrackedBuffer) {
-	buf.Myprintf("nextval(%v)", node.TableName)
+	buf.Myprintf("next value for %v", node.TableName)
 }
 
 // WalkSubtree walks the nodes of the subtree

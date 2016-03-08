@@ -219,5 +219,5 @@
 "unsupported: subqueries in insert"
 
 # nextval not supported yet
-"select nextval(t) from user"
+"select next value for t from user"
 "unsupported: NEXTVAL construct"
