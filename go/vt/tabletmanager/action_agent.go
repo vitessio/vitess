@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"regexp"
 	"sync"
 	"time"
 
@@ -129,6 +130,10 @@ type ActionAgent struct {
 
 	// last time we ran TabletExternallyReparented
 	_tabletExternallyReparentedTime time.Time
+
+	// _ignoreHealthErrorExpr can be set by RPC to selectively disable certain
+	// healthcheck errors. It should only be accessed while holding actionMutex.
+	_ignoreHealthErrorExpr *regexp.Regexp
 }
 
 func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {

@@ -4,10 +4,10 @@
 
 namespace Vitess\Proto\Tabletmanagerdata {
 
-  class SleepRequest extends \DrSlump\Protobuf\Message {
+  class IgnoreHealthErrorRequest extends \DrSlump\Protobuf\Message {
 
-    /**  @var int */
-    public $duration = null;
+    /**  @var string */
+    public $pattern = null;
     
 
     /** @var \Closure[] */
@@ -15,13 +15,13 @@ namespace Vitess\Proto\Tabletmanagerdata {
 
     public static function descriptor()
     {
-      $descriptor = new \DrSlump\Protobuf\Descriptor(__CLASS__, 'tabletmanagerdata.SleepRequest');
+      $descriptor = new \DrSlump\Protobuf\Descriptor(__CLASS__, 'tabletmanagerdata.IgnoreHealthErrorRequest');
 
-      // OPTIONAL INT64 duration = 1
+      // OPTIONAL STRING pattern = 1
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 1;
-      $f->name      = "duration";
-      $f->type      = \DrSlump\Protobuf::TYPE_INT64;
+      $f->name      = "pattern";
+      $f->type      = \DrSlump\Protobuf::TYPE_STRING;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
@@ -33,39 +33,39 @@ namespace Vitess\Proto\Tabletmanagerdata {
     }
 
     /**
-     * Check if <duration> has a value
+     * Check if <pattern> has a value
      *
      * @return boolean
      */
-    public function hasDuration(){
+    public function hasPattern(){
       return $this->_has(1);
     }
     
     /**
-     * Clear <duration> value
+     * Clear <pattern> value
      *
-     * @return \Vitess\Proto\Tabletmanagerdata\SleepRequest
+     * @return \Vitess\Proto\Tabletmanagerdata\IgnoreHealthErrorRequest
      */
-    public function clearDuration(){
+    public function clearPattern(){
       return $this->_clear(1);
     }
     
     /**
-     * Get <duration> value
+     * Get <pattern> value
      *
-     * @return int
+     * @return string
      */
-    public function getDuration(){
+    public function getPattern(){
       return $this->_get(1);
     }
     
     /**
-     * Set <duration> value
+     * Set <pattern> value
      *
-     * @param int $value
-     * @return \Vitess\Proto\Tabletmanagerdata\SleepRequest
+     * @param string $value
+     * @return \Vitess\Proto\Tabletmanagerdata\IgnoreHealthErrorRequest
      */
-    public function setDuration( $value){
+    public function setPattern( $value){
       return $this->_set(1, $value);
     }
   }

@@ -69,6 +69,9 @@ type TabletManagerClient interface {
 	// RunHealthCheck asks the remote tablet to run a health check cycle
 	RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topodatapb.TabletType) error
 
+	// IgnoreHealthError sets the regexp for health errors to ignore.
+	IgnoreHealthError(ctx context.Context, tablet *topo.TabletInfo, pattern string) error
+
 	// ReloadSchema asks the remote tablet to reload its schema
 	ReloadSchema(ctx context.Context, tablet *topo.TabletInfo) error
 

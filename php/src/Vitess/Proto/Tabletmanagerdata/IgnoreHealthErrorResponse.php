@@ -4,7 +4,7 @@
 
 namespace Vitess\Proto\Tabletmanagerdata {
 
-  class ChangeTypeResponse extends \DrSlump\Protobuf\Message {
+  class IgnoreHealthErrorResponse extends \DrSlump\Protobuf\Message {
 
 
     /** @var \Closure[] */
@@ -12,7 +12,7 @@ namespace Vitess\Proto\Tabletmanagerdata {
 
     public static function descriptor()
     {
-      $descriptor = new \DrSlump\Protobuf\Descriptor(__CLASS__, 'tabletmanagerdata.ChangeTypeResponse');
+      $descriptor = new \DrSlump\Protobuf\Descriptor(__CLASS__, 'tabletmanagerdata.IgnoreHealthErrorResponse');
 
       foreach (self::$__extensions as $cb) {
         $descriptor->addField($cb(), true);

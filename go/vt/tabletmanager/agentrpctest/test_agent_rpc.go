@@ -448,6 +448,16 @@ func (fra *fakeRPCAgent) RunHealthCheck(ctx context.Context, targetTabletType to
 	compare(fra.t, "RunHealthCheck tabletType", targetTabletType, testRunHealthCheckValue)
 }
 
+var testIgnoreHealthErrorValue = ".*"
+
+func (fra *fakeRPCAgent) IgnoreHealthError(ctx context.Context, pattern string) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	compare(fra.t, "IgnoreHealthError pattern", pattern, testIgnoreHealthErrorValue)
+	return nil
+}
+
 func agentRPCTestRunHealthCheck(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
 	err := client.RunHealthCheck(ctx, ti, testRunHealthCheckValue)
 	if err != nil {
@@ -457,6 +467,18 @@ func agentRPCTestRunHealthCheck(ctx context.Context, t *testing.T, client tmclie
 
 func agentRPCTestRunHealthCheckPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
 	err := client.RunHealthCheck(ctx, ti, testRunHealthCheckValue)
+	expectRPCWrapPanic(t, err)
+}
+
+func agentRPCTestIgnoreHealthError(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	err := client.IgnoreHealthError(ctx, ti, testIgnoreHealthErrorValue)
+	if err != nil {
+		t.Errorf("IgnoreHealthError failed: %v", err)
+	}
+}
+
+func agentRPCTestIgnoreHealthErrorPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	err := client.IgnoreHealthError(ctx, ti, testIgnoreHealthErrorValue)
 	expectRPCWrapPanic(t, err)
 }
 
@@ -1178,6 +1200,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestExecuteHook(ctx, t, client, ti)
 	agentRPCTestRefreshState(ctx, t, client, ti)
 	agentRPCTestRunHealthCheck(ctx, t, client, ti)
+	agentRPCTestIgnoreHealthError(ctx, t, client, ti)
 	agentRPCTestReloadSchema(ctx, t, client, ti)
 	agentRPCTestPreflightSchema(ctx, t, client, ti)
 	agentRPCTestApplySchema(ctx, t, client, ti)
