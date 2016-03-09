@@ -51,6 +51,7 @@ func NewFullScanAlgorithm(splitParams *SplitParams, sqlExecuter SQLExecuter) *Fu
 	}
 	result.initialQuery = buildInitialQuery(splitParams)
 	result.noninitialQuery = buildNoninitialQuery(splitParams, result.prevBindVariableNames)
+	// TODO(erez): Check that the split-columns are the primary key.
 	return result
 }
 
