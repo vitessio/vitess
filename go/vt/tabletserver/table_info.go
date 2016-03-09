@@ -25,7 +25,7 @@ type TableInfo struct {
 	Cache *RowCache
 
 	// Seq must be locked before accessing the sequence vars.
-	// If CurVal==LastVal, a new chunk has to be obtained.
+	// If CurVal==LastVal, we have to cache new values.
 	Seq       sync.Mutex
 	NextVal   int64
 	Increment int64
@@ -42,10 +42,7 @@ func NewTableInfo(conn *DBConn, tableName string, tableType string, comment stri
 		return nil, err
 	}
 	if strings.Contains(comment, "vitess_sequence") {
-		err = ti.initSequence(conn)
-		if err != nil {
-			return nil, err
-		}
+		ti.Type = schema.Sequence
 		return ti, nil
 	}
 	ti.initRowCache(conn, tableType, comment, cachePool)
@@ -196,24 +193,6 @@ func (ti *TableInfo) initRowCache(conn *DBConn, tableType string, comment string
 
 	ti.Type = schema.CacheRW
 	ti.Cache = NewRowCache(ti, cachePool)
-}
-
-func (ti *TableInfo) initSequence(conn *DBConn) error {
-	ti.Type = schema.Sequence
-	qr, err := conn.Exec(context.Background(), fmt.Sprintf("select next_id from `%s` where id = 0", ti.Name), 10000, true)
-	if err != nil {
-		return fmt.Errorf("error loading sequence %s: %v", ti.Name, err)
-	}
-	if len(qr.Rows) != 1 {
-		return fmt.Errorf("unexpected rows from loading sequence %s: %d", ti.Name, len(qr.Rows))
-	}
-	nextID, err := qr.Rows[0][0].ParseInt64()
-	if err != nil {
-		return fmt.Errorf("error loading sequence %s: %v", ti.Name, err)
-	}
-	ti.NextVal = nextID
-	ti.LastVal = nextID
-	return nil
 }
 
 // StatsJSON returns a JSON representation of the TableInfo stats.

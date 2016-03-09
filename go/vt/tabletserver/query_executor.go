@@ -341,7 +341,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	defer t.Seq.Unlock()
 	if t.NextVal >= t.LastVal {
 		_, err := qre.execAsTransaction(func(conn *TxConnection) (*sqltypes.Result, error) {
-			query := fmt.Sprintf("select next_id, chunk_size, increment from `%s` where id = 0", qre.plan.TableName)
+			query := fmt.Sprintf("select next_id, cache, increment from `%s` where id = 0", qre.plan.TableName)
 			conn.RecordQuery(query)
 			qr, err := qre.execSQL(conn, query, false)
 			if err != nil {
@@ -354,21 +354,22 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if err != nil {
 				return nil, fmt.Errorf("error loading sequence %s: %v", qre.plan.TableName, err)
 			}
-			chunkSize, err := qr.Rows[0][1].ParseInt64()
+			cache, err := qr.Rows[0][1].ParseInt64()
 			if err != nil {
 				return nil, fmt.Errorf("error loading sequence %s: %v", qre.plan.TableName, err)
 			}
-			if chunkSize < 1 {
-				return nil, fmt.Errorf("invalid chunk size for sequence %s: %d", qre.plan.TableName, chunkSize)
+			if cache < 1 {
+				return nil, fmt.Errorf("invalid cache value for sequence %s: %d", qre.plan.TableName, cache)
 			}
 			inc, err := qr.Rows[0][2].ParseInt64()
 			if err != nil {
 				return nil, fmt.Errorf("error loading sequence %s: %v", qre.plan.TableName, err)
 			}
-			if inc < 1 || inc > chunkSize {
+			if inc < 1 {
 				return nil, fmt.Errorf("invalid increment for sequence %s: %d", qre.plan.TableName, inc)
 			}
-			query = fmt.Sprintf("update `%s` set next_id = %d where id = 0", qre.plan.TableName, nextID+chunkSize)
+			newLast := nextID + cache*inc
+			query = fmt.Sprintf("update `%s` set next_id = %d where id = 0", qre.plan.TableName, newLast)
 			conn.RecordQuery(query)
 			_, err = qre.execSQL(conn, query, false)
 			if err != nil {
@@ -376,7 +377,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			}
 			t.NextVal = nextID
 			t.Increment = inc
-			t.LastVal = nextID + chunkSize
+			t.LastVal = newLast
 			return nil, nil
 		})
 		if err != nil {

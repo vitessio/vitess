@@ -41,11 +41,11 @@ func TestSequence(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("13")),
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("4")),
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
 		}},
 	}
-	qr, err := framework.NewClient().Execute("select next_id, chunk_size, increment from vitess_seq", nil)
+	qr, err := framework.NewClient().Execute("select next_id, cache, increment from vitess_seq", nil)
 	if err != nil {
 		t.Error(err)
 		return

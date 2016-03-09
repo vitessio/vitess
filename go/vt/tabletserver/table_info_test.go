@@ -295,8 +295,6 @@ func TestTableInfoSequence(t *testing.T) {
 			Name: "test_table",
 			Type: schema.Sequence,
 		},
-		NextVal: 1,
-		LastVal: 1,
 	}
 	tableInfo.Columns = nil
 	tableInfo.Indexes = nil
