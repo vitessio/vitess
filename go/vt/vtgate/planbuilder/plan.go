@@ -14,9 +14,9 @@ import (
 
 // Plan represents the execution strategy for a given query.
 // For now it's a simple wrapper around the real instructions.
-// An instruction (aka primitive), tells VTGate how to execute
+// An instruction (aka primitive) tells VTGate how to execute
 // a single command. Primitives can be cascaded as long as
-// their inputs and outpus can be combined meaningfully.
+// their inputs and outputs can be combined meaningfully.
 // For example, a Join can depend on another Join or a Route.
 // However, a Route cannot depend on another primitive.
 type Plan struct {

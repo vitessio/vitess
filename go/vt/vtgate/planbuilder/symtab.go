@@ -116,18 +116,21 @@ func (st *symtab) SetRHS() {
 }
 
 // Find returns the route for the symbol referenced by col.
-// If a reference is found, the column's Metadata is set to point
-// it. Subsequent searches will reuse this meatadata.
+//
+// If a reference is found, the column's Metadata is set to point to it.
+// Subsequent searches will reuse this meatadata.
+//
 // If autoResolve is true, and there is only one table in the symbol table,
 // then an unqualified reference is assumed to be implicitly against
 // that table. The table info doesn't contain the full list of columns.
-// So, any column reference is presumed valid. If a Colsyms scope is
-// present, then the table scope is not searched. If a symbol is found
-// in the current symtab, then isLocal is set to true. Otherwise, the
-// search is continued in the outer symtab. If so, isLocal will be set
+// So, any column reference is presumed valid.
+//
+// If a Colsyms scope is present, then the table scope is not searched.
+// If a symbol is found in the current symtab, then isLocal is set to true.
+// Otherwise, the search is continued in the outer symtab and isLocal is set
 // to false. If the symbol was not found, an error is returned.
-// isLocal must be checked before you can push-down (or pull-out)
-// a construct.
+//
+// isLocal must be checked before you can push-down (or pull-out) a construct.
 // If a symbol was found in an outer scope, then the column reference
 // is added to the Externs field.
 func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (route *routeBuilder, isLocal bool, err error) {
