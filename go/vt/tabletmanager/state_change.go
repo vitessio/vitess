@@ -66,11 +66,15 @@ func (agent *ActionAgent) loadBlacklistRules(tablet *topodatapb.Tablet, blacklis
 	return nil
 }
 
-func (agent *ActionAgent) allowQueries(tabletType topodatapb.TabletType) error {
+// allowQueries tells QueryService to go in the serving state.
+// Returns true if the state of QueryService or the tablet type changed.
+func (agent *ActionAgent) allowQueries(tabletType topodatapb.TabletType) (bool, error) {
 	return agent.QueryServiceControl.SetServingType(tabletType, true, nil)
 }
 
-func (agent *ActionAgent) disallowQueries(tabletType topodatapb.TabletType, reason string) error {
+// disallowQueries tells QueryService to go in the *not* serving state.
+// Returns true if the state of QueryService or the tablet type changed.
+func (agent *ActionAgent) disallowQueries(tabletType topodatapb.TabletType, reason string) (bool, error) {
 	log.Infof("Agent is going to disallow queries, reason: %v", reason)
 
 	return agent.QueryServiceControl.SetServingType(tabletType, false, nil)
@@ -180,6 +184,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	defer span.Finish()
 
 	allowQuery := topo.IsRunningQueryService(newTablet.Type)
+	broadcastHealth := false
 
 	// Read the shard to get SourceShards / TabletControlMap if
 	// we're going to use it.
@@ -228,16 +233,24 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 			newTablet.Type == topodatapb.TabletType_MASTER {
 			// When promoting from replica to master, allow both master and replica
 			// queries to be served during gracePeriod.
-			if err := agent.QueryServiceControl.SetServingType(newTablet.Type, true,
-				[]topodatapb.TabletType{oldTablet.Type}); err != nil {
-				log.Errorf("Can't start query service for MASTER+REPLICA mode: %v", err)
-			} else {
+			if _, err := agent.QueryServiceControl.SetServingType(newTablet.Type,
+				true, []topodatapb.TabletType{oldTablet.Type}); err == nil {
 				// If successful, broadcast to vtgate and then wait.
 				agent.broadcastHealth()
 				time.Sleep(*gracePeriod)
+			} else {
+				log.Errorf("Can't start query service for MASTER+REPLICA mode: %v", err)
 			}
 		}
-		if err := agent.allowQueries(newTablet.Type); err != nil {
+		if stateChanged, err := agent.allowQueries(newTablet.Type); err == nil {
+			// If the state changed, broadcast to vtgate.
+			// (e.g. this happens when the tablet was already master, but it just
+			// changed from NOT_SERVING to SERVING due to
+			// "vtctl MigrateServedFrom ... master".)
+			if stateChanged {
+				broadcastHealth = true
+			}
+		} else {
 			log.Errorf("Cannot start query service: %v", err)
 		}
 	} else {
@@ -251,7 +264,17 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 			agent.broadcastHealth()
 			time.Sleep(*gracePeriod)
 		}
-		agent.disallowQueries(newTablet.Type, disallowQueryReason)
+		if stateChanged, err := agent.disallowQueries(newTablet.Type, disallowQueryReason); err == nil {
+			// If the state changed, broadcast to vtgate.
+			// (e.g. this happens when the tablet was already master, but it just
+			// changed from NOT_SERVING to SERVING because filtered replication was
+			// enabled.
+			if stateChanged {
+				broadcastHealth = true
+			}
+		} else {
+			log.Errorf("disallowQueries failed: %v", err)
+		}
 	}
 
 	// save the tabletControl we've been using, so the background
@@ -277,6 +300,11 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		} else {
 			agent.BinlogPlayerMap.StopAllPlayersAndReset()
 		}
+	}
+
+	// Broadcast health changes to vtgate immediately.
+	if broadcastHealth {
+		agent.broadcastHealth()
 	}
 	return nil
 }

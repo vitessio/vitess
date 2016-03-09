@@ -18,6 +18,7 @@ type Histogram struct {
 	labels     []string
 	countLabel string
 	totalLabel string
+	hook       func(int64)
 
 	// mu controls buckets & total
 	mu      sync.Mutex
@@ -68,8 +69,11 @@ func (h *Histogram) Add(value int64) {
 			h.buckets[i]++
 			h.total += value
 			h.mu.Unlock()
-			return
+			break
 		}
+	}
+	if h.hook != nil {
+		h.hook(value)
 	}
 }
 

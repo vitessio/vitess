@@ -105,14 +105,29 @@ docker_bootstrap:
 	docker/bootstrap/build.sh common
 	docker/bootstrap/build.sh mariadb
 	docker/bootstrap/build.sh mysql56
+	docker/bootstrap/build.sh percona
 
 docker_base:
 	# Fix permissions before copying files, to avoid AUFS bug.
 	chmod -R o=g *
 	docker build -t vitess/base .
 
+docker_base_percona:
+	chmod -R o=g *
+	docker build -f Dockerfile.percona -t vitess/base:percona .
+
+docker_base_mariadb:
+	chmod -R o=g *
+	docker build -f Dockerfile.mariadb -t vitess/base:mariadb .
+
 docker_lite:
 	cd docker/lite && ./build.sh
+
+docker_lite_mariadb:
+	cd docker/lite && ./build.sh mariadb
+
+docker_lite_percona:
+	cd docker/lite && ./build.sh percona
 
 docker_guestbook:
 	cd examples/kubernetes/guestbook && ./build.sh

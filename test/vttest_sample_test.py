@@ -96,8 +96,8 @@ class TestMysqlctl(unittest.TestCase):
         keyspace_ids=[pack_kid(keyspace_id)],
         writable=True)
     cursor.begin()
-    insert = ('insert into test_table (id, msg, keyspace_id) values (%(id)s, '
-              '%(msg)s, %(keyspace_id)s)')
+    insert = ('insert into test_table (id, msg, keyspace_id) values (:id, '
+              ':msg, :keyspace_id)')
     bind_variables = {
         'id': row_id,
         'msg': 'test %s' % row_id,
@@ -108,7 +108,7 @@ class TestMysqlctl(unittest.TestCase):
 
     # Read the row back.
     cursor.execute(
-        'select * from test_table where id=%(id)s', {'id': row_id})
+        'select * from test_table where id=:id', {'id': row_id})
     result = cursor.fetchall()
     self.assertEqual(result[0][1], 'test 123')
 
@@ -136,7 +136,7 @@ class TestMysqlctl(unittest.TestCase):
         tablet_type='master', keyspace='test_keyspace',
         keyspace_ids=[pack_kid(keyspace_id)],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
-    stream_cursor.execute('select * from test_table where id >= %(id_start)s',
+    stream_cursor.execute('select * from test_table where id >= :id_start',
                           {'id_start': id_start})
     self.assertEqual(rowcount, len(list(stream_cursor.fetchall())))
     stream_cursor.close()

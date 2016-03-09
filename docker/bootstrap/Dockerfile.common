@@ -33,7 +33,8 @@ RUN curl -sL --connect-timeout 10 --retry 3 \
     https://bootstrap.pypa.io/get-pip.py | python
 
 # Install PHP modules for running tests
-RUN mkdir -p /vt/bin && \
+RUN export MAKEFLAGS="-j$(nproc)" && \
+    mkdir -p /vt/bin && \
     curl -sL --connect-timeout 10 --retry 3 \
         https://phar.phpunit.de/phpunit-4.8.9.phar > /vt/bin/phpunit && \
     chmod +x /vt/bin/phpunit && \
@@ -46,7 +47,7 @@ RUN mkdir -p /vt/bin && \
 RUN mkdir -p /vt/dist && \
     cd /vt/dist && \
     curl -sL --connect-timeout 10 --retry 3 \
-        http://www.carfab.com/apachesoftware/maven/maven-3/3.3.3/binaries/apache-maven-3.3.3-bin.tar.gz | tar -xz && \
+        http://www-us.apache.org/dist/maven/maven-3/3.3.3/binaries/apache-maven-3.3.3-bin.tar.gz | tar -xz && \
     mv apache-maven-3.3.3 maven
 
 # Install etcd v2.0
@@ -84,7 +85,8 @@ COPY travis /vt/src/github.com/youtube/vitess/travis
 COPY composer.json composer.lock /vt/src/github.com/youtube/vitess/
 
 # Install gRPC (and protobuf) as root
-RUN cd /vt/dist && \
+RUN export MAKEFLAGS="-j$(nproc)" && \
+    cd /vt/dist && \
     INSTALL_GRPC_PHP=`php-config --extension-dir` $VTTOP/travis/install_grpc.sh && \
     echo 'extension=grpc.so' > /etc/php5/cli/conf.d/20-grpc.ini && \
     rm -rf /vt/dist/grpc

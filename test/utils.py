@@ -88,7 +88,7 @@ def add_options(parser):
   parser.add_option('--mysql-flavor')
   parser.add_option('--protocols-flavor', default='gorpc')
   parser.add_option('--topo-server-flavor', default='zookeeper')
-  parser.add_option('--vtgate-gateway-flavor', default='shardgateway')
+  parser.add_option('--vtgate-gateway-flavor', default='discoverygateway')
 
 
 def set_options(opts):
@@ -374,13 +374,13 @@ def get_vars(port):
 
 # wait_for_vars will wait until we can actually get the vars from a process,
 # and if var is specified, will wait until that var is in vars
-def wait_for_vars(name, port, var=None):
-  timeout = 10.0
+def wait_for_vars(name, port, var=None, timeout=10.0):
   while True:
     v = get_vars(port)
     if v and (var is None or var in v):
       break
-    timeout = wait_step('waiting for /debug/vars of %s' % name, timeout)
+    timeout = wait_step('waiting for http://localhost:%d/debug/vars of %s'
+                        % (port, name), timeout)
 
 
 def poll_for_vars(
@@ -503,7 +503,8 @@ class VtGate(object):
   def start(self, cell='test_nj', retry_delay=1, retry_count=2,
             topo_impl=None, cache_ttl='1s',
             timeout_total='2s', timeout_per_conn='1s',
-            extra_args=None, tablets=None):
+            extra_args=None, tablets=None,
+            tablet_types_to_wait='MASTER,REPLICA'):
     """Start vtgate. Saves it into the global vtgate variable if not set yet."""
 
     args = environment.binary_args('vtgate') + [
@@ -518,9 +519,10 @@ class VtGate(object):
         '-bsonrpc_timeout', '5s',
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-gateway_implementation', vtgate_gateway_flavor().flavor(),
-        '-tablet_types_to_wait', 'MASTER,REPLICA',
     ]
     args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
+    if tablet_types_to_wait:
+      args.extend(['-tablet_types_to_wait', tablet_types_to_wait])
     if protocols_flavor().vtgate_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
     if protocols_flavor().service_map():

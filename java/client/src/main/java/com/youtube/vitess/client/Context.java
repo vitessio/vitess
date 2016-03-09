@@ -5,6 +5,8 @@ import com.youtube.vitess.proto.Vtrpc.CallerID;
 import org.joda.time.Duration;
 import org.joda.time.Instant;
 
+import javax.annotation.Nullable;
+
 /**
  * Context is an immutable object that carries per-request info.
  *
@@ -56,10 +58,20 @@ public class Context {
     return new Context(deadline, callerId);
   }
 
+  @Nullable
   public Instant getDeadline() {
     return deadline;
   }
 
+  @Nullable
+  public Duration getTimeout() {
+    if (deadline == null) {
+      return null;
+    }
+    return new Duration(null, deadline);
+  }
+
+  @Nullable
   public CallerID getCallerId() {
     return callerId;
   }
