@@ -18,8 +18,3 @@ type tuple []sqltypes.Value
 type SplitAlgorithmInterface interface {
 	generateBoundaries() ([]tuple, error)
 }
-
-// SQLExecuter enacpsulates access to the MySQL database.
-type SQLExecuter interface {
-	SQLExecute(sql string, bindVariables map[string]interface{}) (*sqltypes.Result, error)
-}
