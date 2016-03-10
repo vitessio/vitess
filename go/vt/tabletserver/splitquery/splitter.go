@@ -1,8 +1,6 @@
 package splitquery
 
 import (
-	"fmt"
-
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
@@ -124,9 +122,7 @@ func populateBoundaryBindVariables(
 	inputTuple tuple, bindVariableNames []string, resultBindVariables map[string]interface{}) {
 	assertEqual(len(inputTuple), len(bindVariableNames))
 	for i := range inputTuple {
-		_, alreadyInMap := resultBindVariables[bindVariableNames[i]]
-		assertFalse(alreadyInMap)
-		resultBindVariables[bindVariableNames[i]] = inputTuple[i].ToNative()
+		populateNewBindVariable(bindVariableNames[i], inputTuple[i].ToNative(), resultBindVariables)
 	}
 }
 
@@ -210,45 +206,9 @@ func constructTupleInequalityUnchecked(
 // becomes the query's WHERE clause.
 func queryWithAdditionalWhere(
 	selectAST *sqlparser.Select, addedWhere sqlparser.BoolExpr) *sqlparser.Select {
-	result := *selectAST // Create a shallow-copy of the selectAST
-	if result.Where == nil {
-		result.Where = sqlparser.NewWhere(sqlparser.WhereStr, addedWhere)
-	} else {
-		result.Where = sqlparser.NewWhere(sqlparser.WhereStr,
-			&sqlparser.AndExpr{
-				Left:  &sqlparser.ParenBoolExpr{Expr: selectAST.Where.Expr},
-				Right: &sqlparser.ParenBoolExpr{Expr: addedWhere},
-			},
-		)
-	}
+	result := *selectAST // Create a shallow-copy of 'selectAST'
+	addAndTermToWhereClause(&result, addedWhere)
 	return &result
-}
-
-func cloneBindVariables(bindVariables map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
-	for key, value := range bindVariables {
-		result[key] = value
-	}
-	return result
-}
-
-// TODO(erez): Replace these with something more standard
-func assertEqual(a, b int) {
-	if a != b {
-		panic(fmt.Sprintf("assertion %v == %v failed", a, b))
-	}
-}
-
-func assertFalse(a bool) {
-	if a {
-		panic("condition is true. Expected false.")
-	}
-}
-
-func assertGreaterOrEqual(a, b int) {
-	if a < b {
-		panic(fmt.Sprintf("assertion %v>=%v failed", a, b))
-	}
 }
 
 const (
