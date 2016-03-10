@@ -419,11 +419,5 @@ func getTestTableInfoQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"select next_id from `test_table` where id = 0": {
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-			}},
-		},
 	}
 }

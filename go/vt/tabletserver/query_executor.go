@@ -341,7 +341,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	defer t.Seq.Unlock()
 	if t.NextVal >= t.LastVal {
 		_, err := qre.execAsTransaction(func(conn *TxConnection) (*sqltypes.Result, error) {
-			query := fmt.Sprintf("select next_id, cache, increment from `%s` where id = 0", qre.plan.TableName)
+			query := fmt.Sprintf("select next_id, cache, increment from `%s` where id = 0 for update", qre.plan.TableName)
 			conn.RecordQuery(query)
 			qr, err := qre.execSQL(conn, query, false)
 			if err != nil {

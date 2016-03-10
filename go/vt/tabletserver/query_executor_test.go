@@ -601,7 +601,7 @@ func TestQueryExecutorPlanOther(t *testing.T) {
 
 func TestQueryExecutorPlanNextval(t *testing.T) {
 	db := setUpQueryExecutorTest()
-	selQuery := "select next_id, cache, increment from `seq` where id = 0"
+	selQuery := "select next_id, cache, increment from `seq` where id = 0 for update"
 	db.AddQuery(selQuery, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
