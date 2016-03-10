@@ -6,18 +6,80 @@ package sqlparser
 
 import "testing"
 
+func TestSelect(t *testing.T) {
+	tree, err := Parse("select * from t where a = 1")
+	if err != nil {
+		t.Error(err)
+	}
+	expr := tree.(*Select).Where.Expr
+
+	sel := &Select{}
+	sel.AddWhere(expr)
+	buf := NewTrackedBuffer(nil)
+	sel.Where.Format(buf)
+	want := " where a = 1"
+	if buf.String() != want {
+		t.Errorf("where: %q, want %s", buf.String(), want)
+	}
+	sel.AddWhere(expr)
+	buf = NewTrackedBuffer(nil)
+	sel.Where.Format(buf)
+	want = " where a = 1 and a = 1"
+	if buf.String() != want {
+		t.Errorf("where: %q, want %s", buf.String(), want)
+	}
+	sel = &Select{}
+	sel.AddHaving(expr)
+	buf = NewTrackedBuffer(nil)
+	sel.Having.Format(buf)
+	want = " having a = 1"
+	if buf.String() != want {
+		t.Errorf("having: %q, want %s", buf.String(), want)
+	}
+	sel.AddHaving(expr)
+	buf = NewTrackedBuffer(nil)
+	sel.Having.Format(buf)
+	want = " having a = 1 and a = 1"
+	if buf.String() != want {
+		t.Errorf("having: %q, want %s", buf.String(), want)
+	}
+
+	// OR clauses must be parenthesized.
+	tree, err = Parse("select * from t where a = 1 or b = 1")
+	if err != nil {
+		t.Error(err)
+	}
+	expr = tree.(*Select).Where.Expr
+	sel = &Select{}
+	sel.AddWhere(expr)
+	buf = NewTrackedBuffer(nil)
+	sel.Where.Format(buf)
+	want = " where (a = 1 or b = 1)"
+	if buf.String() != want {
+		t.Errorf("where: %q, want %s", buf.String(), want)
+	}
+	sel = &Select{}
+	sel.AddHaving(expr)
+	buf = NewTrackedBuffer(nil)
+	sel.Having.Format(buf)
+	want = " having (a = 1 or b = 1)"
+	if buf.String() != want {
+		t.Errorf("having: %q, want %s", buf.String(), want)
+	}
+}
+
 func TestWhere(t *testing.T) {
 	var w *Where
 	buf := NewTrackedBuffer(nil)
 	w.Format(buf)
 	if buf.String() != "" {
-		t.Errorf("w.Format(nil): %q, want \"\"", buf.String)
+		t.Errorf("w.Format(nil): %q, want \"\"", buf.String())
 	}
 	w = NewWhere(WhereStr, nil)
 	buf = NewTrackedBuffer(nil)
 	w.Format(buf)
 	if buf.String() != "" {
-		t.Errorf("w.Format(&Where{nil}: %q, want \"\"", buf.String)
+		t.Errorf("w.Format(&Where{nil}: %q, want \"\"", buf.String())
 	}
 }
 

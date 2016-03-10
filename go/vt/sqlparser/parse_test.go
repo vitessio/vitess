@@ -88,6 +88,8 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* a.* */ a.* from t",
 	}, {
+		input: "select /* next value for */ next value for t from t",
+	}, {
 		input: "select /* `By`.* */ `By`.* from t",
 	}, {
 		input: "select /* select with bool expr */ a = b from t",
@@ -727,6 +729,9 @@ func TestErrors(t *testing.T) {
 	}, {
 		input:  "select * from a natural join b on c = d",
 		output: "syntax error at position 34 near 'on'",
+	}, {
+		input:  "select * from a where next value for t = 1",
+		output: "syntax error at position 27 near 'next'",
 	}}
 	for _, tcase := range invalidSQL {
 		if tcase.output == "" {

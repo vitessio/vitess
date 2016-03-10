@@ -76,6 +76,7 @@ func forceEOF(yylex interface{}) {
 %token <empty> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT FOR
 %token <empty> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK KEYRANGE
 %token <empty> VALUES LAST_INSERT_ID
+%token <empty> NEXT VALUE
 %left <empty> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <empty> ON
 %token <empty> '(' ',' ')'
@@ -372,6 +373,10 @@ select_expression:
 | table_id '.' '*'
   {
     $$ = &StarExpr{TableName: $1}
+  }
+| NEXT VALUE FOR table_id
+  {
+    $$ = &Nextval{TableName: $4}
   }
 
 expression:
