@@ -1397,7 +1397,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public int getDatabaseMinorVersion() throws SQLException {
-        return Integer.valueOf(this.connection.getDbProperties().getMajorVersion());
+        return Integer.valueOf(this.connection.getDbProperties().getMinorVersion());
     }
 
     public int getSQLStateType() throws SQLException {
