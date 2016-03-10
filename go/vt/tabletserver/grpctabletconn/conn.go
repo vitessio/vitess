@@ -284,37 +284,9 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query querytypes.Bo
 	return split, nil
 }
 
-// StreamHealth is the stub for TabletServer.StreamHealth RPC
-func (conn *gRPCQueryClient) StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, tabletconn.ErrFunc, error) {
-	conn.mu.RLock()
-	defer conn.mu.RUnlock()
-	if conn.cc == nil {
-		return nil, nil, tabletconn.ConnClosed
-	}
-
-	result := make(chan *querypb.StreamHealthResponse, 10)
-	stream, err := conn.c.StreamHealth(ctx, &querypb.StreamHealthRequest{})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var finalErr error
-	go func() {
-		for {
-			hsr, err := stream.Recv()
-			if err != nil {
-				if err != io.EOF {
-					finalErr = err
-				}
-				close(result)
-				return
-			}
-			result <- hsr
-		}
-	}()
-	return result, func() error {
-		return finalErr
-	}, nil
+// StreamHealth starts a streaming RPC for VTTablet health status updates.
+func (conn *gRPCQueryClient) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
+	return conn.c.StreamHealth(ctx, &querypb.StreamHealthRequest{})
 }
 
 // Close closes underlying bsonrpc.

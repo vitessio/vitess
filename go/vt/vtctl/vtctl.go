@@ -1413,7 +1413,7 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 		return fmt.Errorf("cannot connect to tablet %v: %v", alias, err)
 	}
 
-	stream, errFunc, err := conn.StreamHealth(ctx)
+	stream, err := conn.StreamHealth(ctx)
 	if err != nil {
 		return fmt.Errorf("could not stream health records from tablet: %v err: %v", alias, err)
 	}
@@ -1422,32 +1422,34 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("context was done before filtered replication did catch up. Last seen delay: %v context Error: %v", lastSeenDelay, ctx.Err())
-		case shr, ok := <-stream:
-			if !ok {
-				return fmt.Errorf("stream ended early: %v", errFunc())
-			}
-			stats := shr.RealtimeStats
-			if stats == nil {
-				return fmt.Errorf("health record does not include RealtimeStats message. tablet: %v health record: %v", alias, shr)
-			}
-			if stats.HealthError != "" {
-				return fmt.Errorf("tablet is not healthy. tablet: %v health record: %v", alias, shr)
-			}
-			if stats.BinlogPlayersCount == 0 {
-				return fmt.Errorf("no filtered replication running on tablet: %v health record: %v", alias, shr)
-			}
-
-			delaySecs := stats.SecondsBehindMasterFilteredReplication
-			lastSeenDelay := time.Duration(delaySecs) * time.Second
-			if lastSeenDelay < 0 {
-				return fmt.Errorf("last seen delay should never be negative. tablet: %v delay: %v", alias, lastSeenDelay)
-			}
-			if lastSeenDelay <= *maxDelay {
-				wr.Logger().Printf("Filtered replication on tablet: %v has caught up. Last seen delay: %.1f seconds\n", alias, lastSeenDelay.Seconds())
-				return nil
-			}
-			wr.Logger().Printf("Waiting for filtered replication to catch up on tablet: %v Last seen delay: %.1f seconds\n", alias, lastSeenDelay.Seconds())
+		default:
 		}
+
+		shr, err := stream.Recv()
+		if err != nil {
+			return fmt.Errorf("stream ended early: %v", err)
+		}
+		stats := shr.RealtimeStats
+		if stats == nil {
+			return fmt.Errorf("health record does not include RealtimeStats message. tablet: %v health record: %v", alias, shr)
+		}
+		if stats.HealthError != "" {
+			return fmt.Errorf("tablet is not healthy. tablet: %v health record: %v", alias, shr)
+		}
+		if stats.BinlogPlayersCount == 0 {
+			return fmt.Errorf("no filtered replication running on tablet: %v health record: %v", alias, shr)
+		}
+
+		delaySecs := stats.SecondsBehindMasterFilteredReplication
+		lastSeenDelay := time.Duration(delaySecs) * time.Second
+		if lastSeenDelay < 0 {
+			return fmt.Errorf("last seen delay should never be negative. tablet: %v delay: %v", alias, lastSeenDelay)
+		}
+		if lastSeenDelay <= *maxDelay {
+			wr.Logger().Printf("Filtered replication on tablet: %v has caught up. Last seen delay: %.1f seconds\n", alias, lastSeenDelay.Seconds())
+			return nil
+		}
+		wr.Logger().Printf("Waiting for filtered replication to catch up on tablet: %v Last seen delay: %.1f seconds\n", alias, lastSeenDelay.Seconds())
 	}
 }
 

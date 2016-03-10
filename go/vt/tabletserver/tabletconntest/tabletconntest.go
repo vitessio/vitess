@@ -712,20 +712,18 @@ var testStreamHealthStreamHealthResponse = &querypb.StreamHealthResponse{
 		CpuUsage: 1.0,
 	},
 }
-var testStreamHealthError = "to trigger a server error"
-
-// The server side should write the response to the stream, then wait for
-// this channel to close, then return the error
-var streamHealthSynchronization chan struct{}
+var testStreamHealthErrorMsg = "to trigger a server error"
 
 // StreamHealthRegister is part of the queryservice.QueryService interface
 func (f *FakeQueryService) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+	if f.hasError {
+		return 0, fmt.Errorf(testStreamHealthErrorMsg)
+	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	c <- testStreamHealthStreamHealthResponse
-	<-streamHealthSynchronization
-	return 0, fmt.Errorf(testStreamHealthError)
+	return 1, nil
 }
 
 // StreamHealthUnregister is part of the queryservice.QueryService interface
@@ -734,50 +732,42 @@ func (f *FakeQueryService) StreamHealthUnregister(int) error {
 }
 
 func testStreamHealth(t *testing.T, conn tabletconn.TabletConn) {
-	streamHealthSynchronization = make(chan struct{})
 	ctx := context.Background()
 
-	c, errFunc, err := conn.StreamHealth(ctx)
+	stream, err := conn.StreamHealth(ctx)
 	if err != nil {
 		t.Fatalf("StreamHealth failed: %v", err)
 	}
 	// channel should have one response, then closed
-	shr, ok := <-c
-	if !ok {
+	shr, err := stream.Recv()
+	if err != nil {
 		t.Fatalf("StreamHealth got no response")
 	}
 
 	if !reflect.DeepEqual(*shr, *testStreamHealthStreamHealthResponse) {
 		t.Errorf("invalid StreamHealthResponse: got %v expected %v", *shr, *testStreamHealthStreamHealthResponse)
 	}
+}
 
-	// close streamHealthSynchronization so server side knows we
-	// got the response, and it can send the error
-	close(streamHealthSynchronization)
-
-	_, ok = <-c
-	if ok {
-		t.Fatalf("StreamHealth wasn't closed")
+func testStreamHealthError(t *testing.T, conn tabletconn.TabletConn) {
+	ctx := context.Background()
+	stream, err := conn.StreamHealth(ctx)
+	if err != nil {
+		t.Fatalf("StreamHealth failed: %v", err)
 	}
-	err = errFunc()
-	if !strings.Contains(err.Error(), testStreamHealthError) {
+	_, err = stream.Recv()
+	if err == nil || !strings.Contains(err.Error(), testStreamHealthErrorMsg) {
 		t.Fatalf("StreamHealth failed with the wrong error: %v", err)
 	}
 }
 
 func testStreamHealthPanics(t *testing.T, conn tabletconn.TabletConn) {
 	ctx := context.Background()
-
-	c, errFunc, err := conn.StreamHealth(ctx)
+	stream, err := conn.StreamHealth(ctx)
 	if err != nil {
 		t.Fatalf("StreamHealth failed: %v", err)
 	}
-	// channel should have no response, just closed
-	_, ok := <-c
-	if ok {
-		t.Fatalf("StreamHealth wasn't closed")
-	}
-	err = errFunc()
+	_, err = stream.Recv()
 	if err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
@@ -826,6 +816,7 @@ func TestSuite(t *testing.T, protocol string, endPoint *topodatapb.EndPoint, fak
 	testStreamExecuteError(t, conn, fake)
 	testExecuteBatchError(t, conn)
 	testSplitQueryError(t, conn)
+	testStreamHealthError(t, conn)
 	fake.hasError = false
 
 	// force panics, make sure they're caught
@@ -867,6 +858,7 @@ func TestSuite(t *testing.T, protocol string, endPoint *topodatapb.EndPoint, fak
 	testStreamExecuteError(t, conn, fake)
 	testExecuteBatchError(t, conn)
 	testSplitQueryError(t, conn)
+	testStreamHealthError(t, conn)
 	fake.hasError = false
 
 	// force panics, make sure they're caught

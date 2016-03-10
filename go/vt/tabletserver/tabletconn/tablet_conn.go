@@ -58,6 +58,12 @@ type OperationalError string
 
 func (e OperationalError) Error() string { return string(e) }
 
+// StreamHealthReader defines the interface for a reader to read StreamHealth messages.
+type StreamHealthReader interface {
+	// Recv reads one StreamHealthResponse.
+	Recv() (*querypb.StreamHealthResponse, error)
+}
+
 // In all the following calls, context is an opaque structure that may
 // carry data related to the call. For instance, if an incoming RPC
 // call is responsible for these outgoing calls, and the incoming
@@ -109,8 +115,8 @@ type TabletConn interface {
 	// appending primary key range clauses to the original query
 	SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error)
 
-	// StreamHealth streams StreamHealthResponse to the client
-	StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, ErrFunc, error)
+	// StreamHealth starts a streaming RPC for VTTablet health status updates.
+	StreamHealth(ctx context.Context) (StreamHealthReader, error)
 }
 
 type ErrFunc func() error
