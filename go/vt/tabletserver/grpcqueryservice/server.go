@@ -5,8 +5,6 @@
 package grpcqueryservice
 
 import (
-	"sync"
-
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -174,25 +172,20 @@ func (q *query) StreamHealth(request *querypb.StreamHealthRequest, stream querys
 	defer q.server.HandlePanic(&err)
 
 	c := make(chan *querypb.StreamHealthResponse, 10)
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for shr := range c {
-			// we send until the client disconnects
-			if err := stream.Send(shr); err != nil {
-				return
-			}
-		}
-	}()
 
 	id, err := q.server.StreamHealthRegister(c)
 	if err != nil {
 		close(c)
-		wg.Wait()
 		return err
 	}
-	wg.Wait()
+
+	for shr := range c {
+		// we send until the client disconnects
+		if err := stream.Send(shr); err != nil {
+			break
+		}
+	}
+
 	return q.server.StreamHealthUnregister(id)
 }
 

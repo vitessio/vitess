@@ -551,9 +551,9 @@ func (sbc *sandboxConn) SplitQuery(ctx context.Context, query querytypes.BoundQu
 	return splits, nil
 }
 
-// StreamHealth does nothing
-func (sbc *sandboxConn) StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, tabletconn.ErrFunc, error) {
-	return nil, nil, fmt.Errorf("Not implemented in test")
+// StreamHealth is not implemented.
+func (sbc *sandboxConn) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
+	return nil, fmt.Errorf("Not implemented in test")
 }
 
 // Close does not change ExecCount

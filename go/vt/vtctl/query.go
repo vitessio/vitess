@@ -475,14 +475,14 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
 
-	stream, errFunc, err := conn.StreamHealth(ctx)
+	stream, err := conn.StreamHealth(ctx)
 	if err != nil {
 		return err
 	}
 	for i := 0; i < *count; i++ {
-		shr, ok := <-stream
-		if !ok {
-			return fmt.Errorf("stream ended early: %v", errFunc())
+		shr, err := stream.Recv()
+		if err != nil {
+			return fmt.Errorf("stream ended early: %v", err)
 		}
 		data, err := json.Marshal(shr)
 		if err != nil {

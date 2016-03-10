@@ -226,8 +226,23 @@ func (ftc *fakeTabletConn) SplitQuery(ctx context.Context, query querytypes.Boun
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
-// StreamHealth is part of the TabletConn interface
-func (ftc *fakeTabletConn) StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+type streamHealthReader struct {
+	c       <-chan *querypb.StreamHealthResponse
+	errFunc tabletconn.ErrFunc
+}
+
+// Recv implements tabletconn.StreamHealthReader.
+// It returns one response from the chan.
+func (r *streamHealthReader) Recv() (*querypb.StreamHealthResponse, error) {
+	resp, ok := <-r.c
+	if !ok {
+		return nil, r.errFunc()
+	}
+	return resp, nil
+}
+
+// StreamHealth is part of tabletconn.TabletConn.
+func (ftc *fakeTabletConn) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
 	c := make(chan *querypb.StreamHealthResponse)
 	var finalErr error
 	go func() {
@@ -246,8 +261,9 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context) (<-chan *querypb.St
 			close(c)
 		}
 	}()
-	return c, func() error {
-		return finalErr
+	return &streamHealthReader{
+		c:       c,
+		errFunc: func() error { return finalErr },
 	}, nil
 }
 
