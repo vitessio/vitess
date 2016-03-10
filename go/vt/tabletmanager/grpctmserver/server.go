@@ -135,6 +135,14 @@ func (s *server) RunHealthCheck(ctx context.Context, request *tabletmanagerdatap
 	})
 }
 
+func (s *server) IgnoreHealthError(ctx context.Context, request *tabletmanagerdatapb.IgnoreHealthErrorRequest) (*tabletmanagerdatapb.IgnoreHealthErrorResponse, error) {
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response := &tabletmanagerdatapb.IgnoreHealthErrorResponse{}
+	return response, s.agent.RPCWrap(ctx, actionnode.TabletActionIgnoreHealthError, request, response, func() error {
+		return s.agent.IgnoreHealthError(ctx, request.Pattern)
+	})
+}
+
 func (s *server) ReloadSchema(ctx context.Context, request *tabletmanagerdatapb.ReloadSchemaRequest) (*tabletmanagerdatapb.ReloadSchemaResponse, error) {
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &tabletmanagerdatapb.ReloadSchemaResponse{}

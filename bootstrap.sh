@@ -105,17 +105,19 @@ go install launchpad.net/gozk/zookeeper
 # (We use one go get command (and therefore one variable) for all repositories because this saves us several seconds of execution time.)
 repos="github.com/golang/glog \
        github.com/golang/lint/golint \
+       github.com/golang/mock/gomock \
+       github.com/golang/mock/mockgen \
        github.com/golang/protobuf/proto \
        github.com/golang/protobuf/protoc-gen-go \
+       github.com/olekukonko/tablewriter \
        github.com/tools/godep \
+       golang.org/x/crypto/ssh/terminal \
        golang.org/x/net/context \
        golang.org/x/oauth2/google \
        golang.org/x/tools/cmd/goimports \
-       google.golang.org/grpc \
        google.golang.org/cloud \
        google.golang.org/cloud/storage \
-       golang.org/x/crypto/ssh/terminal \
-       github.com/olekukonko/tablewriter \
+       google.golang.org/grpc \
 "
 
 # Packages for uploading code coverage to coveralls.io (used by Travis CI).
@@ -137,9 +139,10 @@ ln -snf $VTTOP/py $VTROOT/py-vtdb
 ln -snf $VTTOP/go/zk/zkctl/zksrv.sh $VTROOT/bin/zksrv.sh
 ln -snf $VTTOP/test/vthook-test.sh $VTROOT/vthook/test.sh
 
-# install mysql
+# find mysql and prepare to use libmysqlclient
 if [ -z "$MYSQL_FLAVOR" ]; then
-  export MYSQL_FLAVOR=MariaDB
+  export MYSQL_FLAVOR=MySQL56
+  echo "MYSQL_FLAVOR environment variable not set. Using default: $MYSQL_FLAVOR"
 fi
 case "$MYSQL_FLAVOR" in
   "MySQL56")

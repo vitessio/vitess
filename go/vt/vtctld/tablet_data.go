@@ -95,7 +95,7 @@ func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias 
 	}
 	defer conn.Close()
 
-	stream, errFunc, err := conn.StreamHealth(ctx)
+	stream, err := conn.StreamHealth(ctx)
 	if err != nil {
 		return err
 	}
@@ -105,20 +105,22 @@ func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias 
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case result, ok := <-stream:
-			if !ok {
-				return errFunc()
-			}
+		default:
+		}
 
-			th.mu.Lock()
-			th.result = result
-			th.mu.Unlock()
+		result, err := stream.Recv()
+		if err != nil {
+			return err
+		}
 
-			if first {
-				// We got the first result, so we're ready to be accessed.
-				close(th.ready)
-				first = false
-			}
+		th.mu.Lock()
+		th.result = result
+		th.mu.Unlock()
+
+		if first {
+			// We got the first result, so we're ready to be accessed.
+			close(th.ready)
+			first = false
 		}
 	}
 

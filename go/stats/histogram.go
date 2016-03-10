@@ -69,7 +69,7 @@ func (h *Histogram) Add(value int64) {
 			h.buckets[i]++
 			h.total += value
 			h.mu.Unlock()
-			return
+			break
 		}
 	}
 	if h.hook != nil {

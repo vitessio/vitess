@@ -46,6 +46,8 @@ type RPCAgent interface {
 
 	RunHealthCheck(ctx context.Context, targetTabletType topodatapb.TabletType)
 
+	IgnoreHealthError(ctx context.Context, pattern string) error
+
 	ReloadSchema(ctx context.Context)
 
 	PreflightSchema(ctx context.Context, change string) (*tmutils.SchemaChangeResult, error)

@@ -196,7 +196,8 @@ type Controller interface {
 	InitDBConfig(querypb.Target, dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error
 
 	// SetServingType transitions the query service to the required serving type.
-	SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) error
+	// Returns true if the state of QueryService or the tablet type changed.
+	SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (bool, error)
 
 	// EnterLameduck causes tabletserver to enter the lameduck state.
 	EnterLameduck()
