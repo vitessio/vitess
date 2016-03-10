@@ -348,7 +348,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 				return nil, err
 			}
 			if len(qr.Rows) != 1 {
-				return nil, fmt.Errorf("unexpected rows from reading sequence %s: %d", qre.plan.TableName, len(qr.Rows))
+				return nil, fmt.Errorf("unexpected rows from reading sequence %s (possible mis-route): %d", qre.plan.TableName, len(qr.Rows))
 			}
 			nextID, err := qr.Rows[0][0].ParseInt64()
 			if err != nil {
