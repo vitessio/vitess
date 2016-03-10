@@ -208,6 +208,10 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, plan planBuilder) ([]*c
 			// We can push without validating the reference because
 			// MySQL will fail if it's invalid.
 			colsyms[i] = route.PushStar(node)
+		case *sqlparser.Nextval:
+			// For now, this is only supported as an implicit feature
+			// for auto_inc in inserts.
+			return nil, errors.New("unsupported: NEXTVAL construct")
 		}
 	}
 	return colsyms, nil

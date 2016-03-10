@@ -472,6 +472,7 @@ type SelectExpr interface {
 
 func (*StarExpr) iSelectExpr()    {}
 func (*NonStarExpr) iSelectExpr() {}
+func (*Nextval) iSelectExpr()     {}
 
 // StarExpr defines a '*' or 'table.*' expression.
 type StarExpr struct {
@@ -520,6 +521,27 @@ func (node *NonStarExpr) WalkSubtree(visit Visit) error {
 		visit,
 		node.Expr,
 		node.As,
+	)
+}
+
+// Nextval defines the NEXTVAL expression.
+type Nextval struct {
+	TableName SQLName
+}
+
+// Format formats the node.
+func (node *Nextval) Format(buf *TrackedBuffer) {
+	buf.Myprintf("next value for %v", node.TableName)
+}
+
+// WalkSubtree walks the nodes of the subtree
+func (node *Nextval) WalkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.TableName,
 	)
 }
 

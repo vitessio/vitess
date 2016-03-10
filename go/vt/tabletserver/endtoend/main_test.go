@@ -140,6 +140,9 @@ insert into vitess_part1 values(10, 2, 2);
 insert into vitess_part2 values(1, 3);
 insert into vitess_part2 values(2, 4);
 
+create table vitess_seq(id int, next_id bigint, cache bigint, increment bigint, primary key(id)) comment 'vitess_sequence';
+insert into vitess_seq values(0, 1, 3, 2);
+
 create table vitess_acl_no_access(key1 bigint, key2 bigint, primary key(key1));
 create table vitess_acl_read_only(key1 bigint, key2 bigint, primary key(key1));
 create table vitess_acl_read_write(key1 bigint, key2 bigint, primary key(key1));
@@ -187,6 +190,13 @@ var tableACLConfig = `{
     {
       "name": "vitess_test",
       "table_names_or_prefixes": ["vitess_test"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_seq",
+      "table_names_or_prefixes": ["vitess_seq"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]
