@@ -60,7 +60,7 @@ public class Constants {
             "Getting Error while closing ResultSet";
         public static final String CONN_INIT_ERROR = "Connection initialization error";
         public static final String BAD_FORMAT_BIG_DECIMAL = "Bad format for big decimal";
-        public static final String COLUMN_NOT_FOUND = "Column label not found";
+        public static final String COLUMN_NOT_FOUND = "column not found";
         public static final String MALFORMED_URL = "Malformed URL Exception";
         public static final String SQL_TYPE_INFER =
             "Cannot infer the SQL type to use for an instance of ";

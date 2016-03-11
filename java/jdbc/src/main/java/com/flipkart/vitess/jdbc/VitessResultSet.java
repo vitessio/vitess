@@ -502,7 +502,8 @@ public class VitessResultSet implements ResultSet {
         try {
             return this.row.findColumn(columnLabel) + 1;
         } catch (Exception e) {
-            throw new SQLException(Constants.SQLExceptionMessages.COLUMN_NOT_FOUND);
+            throw new SQLException(
+                columnLabel + " " + Constants.SQLExceptionMessages.COLUMN_NOT_FOUND);
         }
     }
 
