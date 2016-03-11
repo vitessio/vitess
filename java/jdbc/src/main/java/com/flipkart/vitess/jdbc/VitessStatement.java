@@ -302,7 +302,7 @@ public class VitessStatement implements Statement {
             throw new SQLException(
                 Constants.SQLExceptionMessages.ILLEGAL_VALUE_FOR + "query timeout");
         }
-        this.queryTimeoutInMillis = seconds * 1000;
+        this.queryTimeoutInMillis = (long) seconds * 1000;
     }
 
     /**
