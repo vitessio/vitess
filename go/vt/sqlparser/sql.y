@@ -191,6 +191,10 @@ select_statement:
   {
     $$ = &Select{Comments: Comments($2), Distinct: $3, SelectExprs: $4, From: $6, Where: NewWhere(WhereStr, $7), GroupBy: GroupBy($8), Having: NewWhere(HavingStr, $9), OrderBy: $10, Limit: $11, Lock: $12}
   }
+| SELECT comment_opt NEXT VALUE FROM simple_table_expression
+  {
+    $$ = &Select{Comments: Comments($2), SelectExprs: SelectExprs{Nextval{}}, From: TableExprs{&AliasedTableExpr{Expr: $6}}}
+  }
 | select_statement union_op select_statement %prec UNION
   {
     $$ = &Union{Type: $2, Left: $1, Right: $3}
@@ -373,10 +377,6 @@ select_expression:
 | table_id '.' '*'
   {
     $$ = &StarExpr{TableName: $1}
-  }
-| NEXT VALUE FOR table_id
-  {
-    $$ = &Nextval{TableName: $4}
   }
 
 expression:

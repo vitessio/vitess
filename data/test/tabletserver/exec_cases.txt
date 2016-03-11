@@ -1076,38 +1076,18 @@
 }
 
 # sequence
-"select next value for seq from dual"
+"select next value from seq"
 {
   "PlanID": "NEXTVAL",
   "TableName": "seq"
 }
 
-# sequence with multiselect
-"select next value for seq, 1 from dual"
-{
-  "PlanID": "PASS_SELECT",
-  "Reason": "NOCACHE",
-  "TableName": "dual",
-  "FieldQuery": "select next value for seq, 1 from dual where 1 != 1",
-  "FullQuery": "select next value for seq, 1 from dual limit :#maxLimit"
-}
-
-# select non-nextval from dual
-"select 1 from dual"
-{
-  "PlanID": "PASS_SELECT",
-  "Reason": "NOCACHE",
-  "TableName": "dual",
-  "FieldQuery": "select 1 from dual where 1 != 1",
-  "FullQuery": "select 1 from dual limit :#maxLimit"
-}
-
 # nextval on non-sequence table
-"select next value for a from dual"
+"select next value from a"
 "a is not a sequence"
 
 # nextval on non-existent table
-"select next value for id from dual"
+"select next value from id"
 "table id not found in schema"
 
 # int

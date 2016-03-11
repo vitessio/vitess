@@ -160,22 +160,24 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 
 	// from
 	tableName, hasHints := analyzeFrom(sel.From)
-	switch tableName {
-	case "":
+	if tableName == "" {
 		plan.Reason = ReasonTable
 		return plan, nil
-	case "dual":
-		nextvalPlan, err := analyzeNextval(sel, getTable)
-		if err != nil {
-			return nil, err
-		}
-		if nextvalPlan != nil {
-			return nextvalPlan, nil
-		}
 	}
 	tableInfo, err := plan.setTableInfo(tableName, getTable)
 	if err != nil {
 		return nil, err
+	}
+
+	// Check if it's a NEXT VALUE statement.
+	if _, ok := sel.SelectExprs[0].(sqlparser.Nextval); ok {
+		if tableInfo.Type != schema.Sequence {
+			return nil, fmt.Errorf("%s is not a sequence", tableName)
+		}
+		plan.PlanID = PlanNextval
+		plan.FieldQuery = nil
+		plan.FullQuery = nil
+		return plan, nil
 	}
 
 	// There are bind variables in the SELECT list
@@ -464,27 +466,6 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 		Exprs:    sqlparser.UpdateExprs(ins.OnDup),
 	}
 	plan.UpsertQuery = GenerateUpdateOuterQuery(upd)
-	return plan, nil
-}
-
-func analyzeNextval(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan, err error) {
-	if len(sel.SelectExprs) > 1 {
-		return nil, nil
-	}
-	nval, ok := sel.SelectExprs[0].(*sqlparser.Nextval)
-	if !ok {
-		return nil, nil
-	}
-	plan = &ExecPlan{
-		PlanID: PlanNextval,
-	}
-	tableInfo, err := plan.setTableInfo(string(nval.TableName), getTable)
-	if err != nil {
-		return nil, err
-	}
-	if tableInfo.Type != schema.Sequence {
-		return nil, fmt.Errorf("%s is not a sequence", nval.TableName)
-	}
 	return plan, nil
 }
 
