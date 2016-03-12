@@ -32,7 +32,6 @@ public class VitessConnection implements Connection {
      * A Map of currently open statements
      */
     protected Set<Statement> openStatements = new HashSet<>();
-    private Context context;
     private VTGateConn vtGateConn;
     private VTGateTx vtGateTx;
     private boolean closed = true;
@@ -62,8 +61,7 @@ public class VitessConnection implements Connection {
             inetSocketAddress =
                 new InetSocketAddress(this.urlProperties.getProperty(Constants.Property.HOST),
                     Integer.parseInt(this.urlProperties.getProperty(Constants.Property.PORT)));
-            this.context = Context.getDefault()
-                .withDeadlineAfter(Duration.millis(Constants.CONNECTION_TIMEOUT));
+            Context context = createContext(Constants.CONNECTION_TIMEOUT);
             client = new GrpcClientFactory().create(context, inetSocketAddress);
             this.vtGateConn = new VTGateConn(client);
             this.tabletType =
@@ -136,7 +134,10 @@ public class VitessConnection implements Connection {
         if (this.autoCommit != autoCommit) { //If same then no-op
             //Old Transaction Needs to be committed as per JDBC 4.1 Spec.
             if (null != this.vtGateTx) {
-                this.vtGateTx.commit(this.context);
+
+                Context context = createContext(Constants.CONNECTION_TIMEOUT);
+
+                this.vtGateTx.commit(context);
                 this.vtGateTx = null;
             }
             this.autoCommit = autoCommit;
@@ -153,6 +154,7 @@ public class VitessConnection implements Connection {
         checkTransaction();
         checkAutoCommit(Constants.SQLExceptionMessages.COMMIT_WHEN_AUTO_COMMIT_TRUE);
         try {
+            Context context = createContext(Constants.CONNECTION_TIMEOUT);
             this.vtGateTx.commit(context);
         } catch (SQLException ex) {
             throw new SQLException(ex);
@@ -172,6 +174,7 @@ public class VitessConnection implements Connection {
         checkTransaction();
         checkAutoCommit(Constants.SQLExceptionMessages.ROLLBACK_WHEN_AUTO_COMMIT_TRUE);
         try {
+            Context context = createContext(Constants.CONNECTION_TIMEOUT);
             this.vtGateTx.rollback(context);
         } catch (SQLException ex) {
             throw new SQLException(ex);
@@ -189,7 +192,8 @@ public class VitessConnection implements Connection {
         if (!this.closed) { //no-op when Connection already closed
             try {
                 if (null != this.vtGateTx) { //Rolling back active transaction on close
-                    this.vtGateTx.rollback(this.context);
+                    Context context = createContext(Constants.CONNECTION_TIMEOUT);
+                    this.vtGateTx.rollback(context);
                 }
                 closeAllOpenStatements();
                 this.vtGateConn.close();
@@ -571,10 +575,6 @@ public class VitessConnection implements Connection {
         }
     }
 
-    public Context getContext() {
-        return context;
-    }
-
     public VTGateConn getVtGateConn() {
         return vtGateConn;
     }
@@ -870,5 +870,10 @@ public class VitessConnection implements Connection {
 
     public DBProperties getDbProperties() {
         return this.dbProperties;
+    }
+
+    public Context createContext(long deadlineAfter) {
+        Context context = Context.getDefault().withDeadlineAfter(Duration.millis(deadlineAfter));
+        return context;
     }
 }

@@ -7,7 +7,6 @@ import com.youtube.vitess.client.VTGateConn;
 import com.youtube.vitess.client.VTGateTx;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.proto.Topodata;
-import org.joda.time.Duration;
 
 import java.sql.*;
 import java.util.Arrays;
@@ -25,8 +24,7 @@ public class VitessStatement implements Statement {
     protected VitessConnection vitessConnection;
     protected boolean closed;
     protected long resultCount;
-    protected Context context;
-    protected int queryTimeoutInMillis = Constants.DEFAULT_TIMEOUT;
+    protected long queryTimeoutInMillis = Constants.DEFAULT_TIMEOUT;
     protected int maxFieldSize = Constants.MAX_BUFFER_SIZE;
     protected int maxRows = 0;
     protected int fetchSize = 0;
@@ -42,8 +40,6 @@ public class VitessStatement implements Statement {
         int resultSetConcurrency) {
         this.vitessConnection = vitessConnection;
         this.vitessResultSet = null;
-        this.context =
-            Context.getDefault().withDeadlineAfter(Duration.millis(this.queryTimeoutInMillis));
         this.resultSetType = resultSetType;
         this.resultSetConcurrency = resultSetConcurrency;
         this.closed = false;
@@ -72,20 +68,24 @@ public class VitessStatement implements Statement {
         if (showSql) {
             String keyspace = this.vitessConnection.getKeyspace();
             List<byte[]> keyspaceIds = Arrays.asList(new byte[] {1}); //To Hit any single shard
+            Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
 
             cursor = vtGateConn
-                .executeKeyspaceIds(this.context, sql, keyspace, keyspaceIds, null, tabletType)
+                .executeKeyspaceIds(context, sql, keyspace, keyspaceIds, null, tabletType)
                 .checkedGet();
         } else {
             if (tabletType != Topodata.TabletType.MASTER || this.vitessConnection.getAutoCommit()) {
-                cursor = vtGateConn.execute(this.context, sql, null, tabletType).checkedGet();
+                Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                cursor = vtGateConn.execute(context, sql, null, tabletType).checkedGet();
             } else {
                 VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
                 if (null == vtGateTx) {
-                    vtGateTx = vtGateConn.begin(this.context).checkedGet();
+                    Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                    vtGateTx = vtGateConn.begin(context).checkedGet();
                     this.vitessConnection.setVtGateTx(vtGateTx);
                 }
-                cursor = vtGateTx.execute(this.context, sql, null, tabletType).checkedGet();
+                Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                cursor = vtGateTx.execute(context, sql, null, tabletType).checkedGet();
             }
         }
 
@@ -121,14 +121,17 @@ public class VitessStatement implements Statement {
 
         vtGateTx = this.vitessConnection.getVtGateTx();
         if (null == vtGateTx) {
-            vtGateTx = vtGateConn.begin(this.context).checkedGet();
+            Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+            vtGateTx = vtGateConn.begin(context).checkedGet();
             this.vitessConnection.setVtGateTx(vtGateTx);
         }
 
-        cursor = vtGateTx.execute(this.context, sql, null, tabletType).checkedGet();
+        Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+        cursor = vtGateTx.execute(context, sql, null, tabletType).checkedGet();
 
         if (this.vitessConnection.getAutoCommit()) {
-            vtGateTx.commit(this.context);
+            context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+            vtGateTx.commit(context);
             this.vitessConnection.setVtGateTx(null);
         }
 
@@ -172,27 +175,31 @@ public class VitessStatement implements Statement {
         showSql = StringUtils.startsWithIgnoreCaseAndWs(sql, Constants.SQL_SHOW);
 
         if (selectSql) {
-            cursor = vtGateConn.streamExecute(this.context, sql, null, tabletType);
+            Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+            cursor = vtGateConn.streamExecute(context, sql, null, tabletType);
         } else if (showSql) {
 
 
             String keyspace = this.vitessConnection.getKeyspace();
             List<byte[]> keyspaceIds = Arrays.asList(new byte[] {1}); //To Hit any single shard
 
+            Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
             cursor = vtGateConn
-                .executeKeyspaceIds(this.context, sql, keyspace, keyspaceIds, null, tabletType)
+                .executeKeyspaceIds(context, sql, keyspace, keyspaceIds, null, tabletType)
                 .checkedGet();
         } else {
             VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
             if (null == vtGateTx) {
-                vtGateTx = vtGateConn.begin(this.context).checkedGet();
+                Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                vtGateTx = vtGateConn.begin(context).checkedGet();
                 this.vitessConnection.setVtGateTx(vtGateTx);
             }
-
-            cursor = vtGateTx.execute(this.context, sql, null, tabletType).checkedGet();
+            Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+            cursor = vtGateTx.execute(context, sql, null, tabletType).checkedGet();
 
             if (this.vitessConnection.getAutoCommit()) {
-                vtGateTx.commit(this.context);
+                context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                vtGateTx.commit(context);
                 this.vitessConnection.setVtGateTx(null);
             }
         }
@@ -286,7 +293,7 @@ public class VitessStatement implements Statement {
 
     public int getQueryTimeout() throws SQLException {
         checkOpen();
-        return this.queryTimeoutInMillis / 1000;
+        return (int) (this.queryTimeoutInMillis / 1000);
     }
 
     public void setQueryTimeout(int seconds) throws SQLException {
@@ -295,9 +302,7 @@ public class VitessStatement implements Statement {
             throw new SQLException(
                 Constants.SQLExceptionMessages.ILLEGAL_VALUE_FOR + "query timeout");
         }
-        this.queryTimeoutInMillis = seconds * 1000;
-        this.context =
-            Context.getDefault().withDeadlineAfter(Duration.millis(this.queryTimeoutInMillis));
+        this.queryTimeoutInMillis = (long) seconds * 1000;
     }
 
     /**
