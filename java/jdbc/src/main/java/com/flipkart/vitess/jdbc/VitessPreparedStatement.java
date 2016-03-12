@@ -127,7 +127,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
             cursor = executeSQL(vtGateTx, USE_BIND_VARIABLES, context, this.sql, tabletType,
                 this.bindVariables, this.parameterMap);
-            vtGateTx.commit(context);
+            vtGateTx.commit(context).checkedGet();
             vtGateTx = null;
             this.vitessConnection.setVtGateTx(vtGateTx);
         } else {
@@ -201,7 +201,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
 
             if (this.vitessConnection.getAutoCommit()) {
                 context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                vtGateTx.commit(context);
+                vtGateTx.commit(context).checkedGet();
                 this.vitessConnection.setVtGateTx(null);
             }
         }

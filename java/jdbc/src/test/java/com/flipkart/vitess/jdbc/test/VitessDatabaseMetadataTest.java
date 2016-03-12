@@ -161,7 +161,7 @@ public class VitessDatabaseMetadataTest {
         }
 
         ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
-        Assert.assertEquals(resultSetMetaData.getColumnName(1), "TABLE_TYPE");
+        Assert.assertEquals(resultSetMetaData.getColumnName(1), "table_type");
         //Checking Data
         Assert.assertEquals(data.get(0), "LOCAL TEMPORARY");
         Assert.assertEquals(data.get(1), "SYSTEM TABLES");

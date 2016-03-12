@@ -702,7 +702,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public ResultSet getTableTypes() throws SQLException {
-        String[] columnNames = {"TABLE_TYPE"};
+        String[] columnNames = {"table_type"};
         Query.Type[] columnType = {Query.Type.VARCHAR};
         String[][] data =
             new String[][] {{"LOCAL TEMPORARY"}, {"SYSTEM TABLES"}, {"SYSTEM VIEW"}, {"TABLE"},

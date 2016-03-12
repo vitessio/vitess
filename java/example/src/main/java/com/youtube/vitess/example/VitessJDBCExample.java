@@ -6,7 +6,7 @@ import java.sql.*;
  * Created by harshit.gangal on 10/03/16.
  */
 public class VitessJDBCExample {
-    private static final String dbURL = "jdbc:vitess://<vtGateIP>:<vtGatePort>/<keyspace>/<dbName>";
+    private static final String dbURL = "jdbc:vitess://<vtGateHostname>:<vtGatePort>/<keyspace>/<dbName>";
     private static Connection conn;
 
     static {
@@ -33,7 +33,7 @@ public class VitessJDBCExample {
         stmt.close();
 
 
-        String sql = "select * from shipment where shipmentid BETWEEN ? AND ?";
+        String sql = "select * from test_table where id BETWEEN ? AND ?";
         PreparedStatement preparedStatement = conn.prepareStatement(sql);
         preparedStatement.setInt(1, 1);
         preparedStatement.setInt(2, 10);

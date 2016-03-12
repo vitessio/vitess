@@ -131,7 +131,7 @@ public class VitessStatement implements Statement {
 
         if (this.vitessConnection.getAutoCommit()) {
             context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-            vtGateTx.commit(context);
+            vtGateTx.commit(context).checkedGet();
             this.vitessConnection.setVtGateTx(null);
         }
 
@@ -199,7 +199,7 @@ public class VitessStatement implements Statement {
 
             if (this.vitessConnection.getAutoCommit()) {
                 context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                vtGateTx.commit(context);
+                vtGateTx.commit(context).checkedGet();
                 this.vitessConnection.setVtGateTx(null);
             }
         }
