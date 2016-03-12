@@ -1,7 +1,6 @@
 package com.flipkart.vitess.jdbc;
 
 import com.flipkart.vitess.util.Constants;
-import com.flipkart.vitess.util.Utils;
 
 import java.sql.*;
 import java.util.Properties;
@@ -57,25 +56,25 @@ public class VitessDriver implements Driver {
 
         DriverPropertyInfo[] dpi = new DriverPropertyInfo[4];
         if (acceptsURL(url)) {
-            Utils.parseURLForPropertyInfo(url, info);
+            VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(url,info);
 
             dpi[0] = new DriverPropertyInfo(Constants.Property.HOST,
-                info.getProperty(Constants.Property.HOST));
+                vitessJDBCUrl.getHostInfos().get(0).getHostname());
             dpi[0].required = true;
             dpi[0].description = Constants.VITESS_HOST;
 
             dpi[1] = new DriverPropertyInfo(Constants.Property.PORT,
-                info.getProperty(Constants.Property.PORT));
+                (new Integer(vitessJDBCUrl.getHostInfos().get(0).getPort())).toString());
             dpi[1].required = false;
             dpi[1].description = Constants.VITESS_PORT;
 
             dpi[2] = new DriverPropertyInfo(Constants.Property.KEYSPACE,
-                info.getProperty(Constants.Property.KEYSPACE));
+                vitessJDBCUrl.getKeyspace());
             dpi[2].required = true;
             dpi[2].description = Constants.VITESS_KEYSPACE;
 
             dpi[3] = new DriverPropertyInfo(Constants.Property.TABLET_TYPE,
-                info.getProperty(Constants.Property.TABLET_TYPE));
+                vitessJDBCUrl.getTabletType().toString());
             dpi[3].required = false;
             dpi[3].description = Constants.VITESS_TABLET_TYPE;
 

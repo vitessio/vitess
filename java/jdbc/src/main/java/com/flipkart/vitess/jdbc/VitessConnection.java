@@ -1,18 +1,13 @@
 package com.flipkart.vitess.jdbc;
 
+import com.flipkart.vitess.util.CommonUtils;
 import com.flipkart.vitess.util.Constants;
 import com.flipkart.vitess.util.MysqlDefs;
-import com.flipkart.vitess.util.Utils;
 import com.youtube.vitess.client.Context;
-import com.youtube.vitess.client.RpcClient;
 import com.youtube.vitess.client.VTGateConn;
 import com.youtube.vitess.client.VTGateTx;
-import com.youtube.vitess.client.grpc.GrpcClientFactory;
 import com.youtube.vitess.proto.Topodata;
-import org.joda.time.Duration;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.sql.*;
 import java.util.*;
 import java.util.concurrent.Executor;
@@ -32,17 +27,14 @@ public class VitessConnection implements Connection {
      * A Map of currently open statements
      */
     protected Set<Statement> openStatements = new HashSet<>();
-    private VTGateConn vtGateConn;
+    private VitessVTGateManager.VTGateConnections vTGateConnections;
     private VTGateTx vtGateTx;
     private boolean closed = true;
     private boolean autoCommit = true;
     private boolean readOnly = false;
-    private Topodata.TabletType tabletType;
-    private String url;
-    private String catalog;
-    private Properties urlProperties;
-    private String keyspace;
     private DBProperties dbProperties;
+    private VitessJDBCUrl vitessJDBCUrl;
+
 
     /**
      * Constructor to Create Connection Object
@@ -52,22 +44,10 @@ public class VitessConnection implements Connection {
      * @throws SQLException
      */
     public VitessConnection(String url, Properties info) throws SQLException {
-        InetSocketAddress inetSocketAddress;
-        RpcClient client;
 
         try {
-            this.urlProperties = Utils.parseURLForPropertyInfo(url, info);
-            this.url = url;
-            inetSocketAddress =
-                new InetSocketAddress(this.urlProperties.getProperty(Constants.Property.HOST),
-                    Integer.parseInt(this.urlProperties.getProperty(Constants.Property.PORT)));
-            Context context = createContext(Constants.CONNECTION_TIMEOUT);
-            client = new GrpcClientFactory().create(context, inetSocketAddress);
-            this.vtGateConn = new VTGateConn(client);
-            this.tabletType =
-                getTabletType(this.urlProperties.getProperty(Constants.Property.TABLET_TYPE));
-            this.keyspace = this.urlProperties.get(Constants.Property.KEYSPACE).toString();
-            this.catalog = this.urlProperties.get(Constants.Property.DBNAME).toString();
+            this.vitessJDBCUrl = new VitessJDBCUrl(url,info);
+            this.vTGateConnections = new VitessVTGateManager.VTGateConnections(vitessJDBCUrl);
             this.closed = false;
             this.dbProperties = null;
         } catch (Exception e) {
@@ -196,9 +176,6 @@ public class VitessConnection implements Connection {
                     this.vtGateTx.rollback(context);
                 }
                 closeAllOpenStatements();
-                this.vtGateConn.close();
-            } catch (IOException e) {
-                throw new SQLException(Constants.SQLExceptionMessages.ERROR_CLOSE, e);
             } finally {
                 this.vtGateTx = null;
                 this.closed = true;
@@ -268,7 +245,7 @@ public class VitessConnection implements Connection {
      */
     public String getCatalog() throws SQLException {
         checkOpen();
-        return catalog;
+        return this.vitessJDBCUrl.getCatalog();
     }
 
     /**
@@ -279,7 +256,7 @@ public class VitessConnection implements Connection {
      */
     public void setCatalog(String catalog) throws SQLException {
         checkOpen();
-        this.catalog = catalog; //Ignoring any affect
+        this.vitessJDBCUrl.setCatalog(catalog); //Ignoring any affect
     }
 
     /**
@@ -576,7 +553,7 @@ public class VitessConnection implements Connection {
     }
 
     public VTGateConn getVtGateConn() {
-        return vtGateConn;
+        return vTGateConnections.getVtGateConnInstance();
     }
 
     public VTGateTx getVtGateTx() {
@@ -588,34 +565,15 @@ public class VitessConnection implements Connection {
     }
 
     public Topodata.TabletType getTabletType() {
-        return tabletType;
-    }
-
-    private Topodata.TabletType getTabletType(String tabletType) {
-        switch (tabletType.toLowerCase()) {
-            case "master":
-                return Topodata.TabletType.MASTER;
-            case "replica":
-                return Topodata.TabletType.REPLICA;
-            case "rdonly":
-                return Topodata.TabletType.RDONLY;
-            default:
-                return Topodata.TabletType.UNRECOGNIZED;
-        }
+        return this.vitessJDBCUrl.getTabletType();
     }
 
     public String getUrl() {
-        return this.url;
+        return this.vitessJDBCUrl.getUrl();
     }
 
     private void abortInternal() throws SQLException {
-        try {
-            this.vtGateConn.close();
-        } catch (IOException e) {
-            throw new SQLException(e);
-        } finally {
-            this.closed = true;
-        }
+        this.closed = true;
     }
 
     /**
@@ -665,7 +623,7 @@ public class VitessConnection implements Connection {
      * @return keyspace name
      */
     public String getKeyspace() {
-        return keyspace;
+        return this.vitessJDBCUrl.getKeyspace();
     }
 
     // UnSupported Feature List
@@ -873,7 +831,6 @@ public class VitessConnection implements Connection {
     }
 
     public Context createContext(long deadlineAfter) {
-        Context context = Context.getDefault().withDeadlineAfter(Duration.millis(deadlineAfter));
-        return context;
+        return CommonUtils.createContext(this.vitessJDBCUrl.getUsername(),deadlineAfter);
     }
 }
