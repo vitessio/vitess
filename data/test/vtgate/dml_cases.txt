@@ -101,7 +101,7 @@
     "Vindex": "user_index",
     "Values": 1,
     "Table": "user",
-    "Subquery": "select id, name, costly from user where id = 1 for update"
+    "Subquery": "select name, costly from user where id = 1 for update"
   }
 }
 

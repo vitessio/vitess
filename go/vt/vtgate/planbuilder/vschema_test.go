@@ -5,6 +5,7 @@
 package planbuilder
 
 import (
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -163,10 +164,9 @@ func TestShardedVSchemaOwned(t *testing.T) {
 				},
 				ColVindexes: []*ColVindex{
 					{
-						Col:   "c1",
-						Type:  "stfu",
-						Name:  "stfu1",
-						Owned: true,
+						Col:  "c1",
+						Type: "stfu",
+						Name: "stfu1",
 						Vindex: &stFU{
 							name: "stfu1",
 							Params: map[string]interface{}{
@@ -189,9 +189,11 @@ func TestShardedVSchemaOwned(t *testing.T) {
 		want.Tables["t1"].ColVindexes[1],
 		want.Tables["t1"].ColVindexes[0],
 	}
-	want.Tables["t1"].Owned = want.Tables["t1"].ColVindexes
+	want.Tables["t1"].Owned = want.Tables["t1"].ColVindexes[1:]
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("BuildVSchema:s\n%v, want\n%v", got, want)
+		gotjson, _ := json.Marshal(got)
+		wantjson, _ := json.Marshal(want)
+		t.Errorf("BuildVSchema:s\n%s, want\n%s", gotjson, wantjson)
 	}
 }
 
@@ -496,7 +498,7 @@ func TestBuildVSchemaNotUniqueFail(t *testing.T) {
 		},
 	}
 	_, err := BuildVSchema(&bad)
-	want := "primary index stln is not Unique for class t1"
+	want := "primary vindex stln is not Unique for class t1"
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
@@ -530,36 +532,76 @@ func TestBuildVSchemaPrimaryNonFunctionalFail(t *testing.T) {
 		},
 	}
 	_, err := BuildVSchema(&bad)
-	want := "primary owned index stlu is not Functional for class t1"
+	want := "primary vindex stlu cannot be owned for class t1"
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
 }
 
-func TestBuildVSchemaNonPrimaryLookupFail(t *testing.T) {
-	bad := VSchemaFormal{
+func TestSequence(t *testing.T) {
+	good := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
-			"sharded": {
-				Sharded: true,
-				Vindexes: map[string]VindexFormal{
-					"stlu": {
-						Type: "stlu",
+			"unsharded": {
+				Classes: map[string]ClassFormal{
+					"seq": {
+						Type: "Sequence",
 					},
-					"stfu": {
-						Type:  "stfu",
-						Owner: "t1",
+					"t1": {
+						Autoinc: &AutoincFormal{
+							Col:      "c1",
+							Sequence: "seq",
+						},
 					},
 				},
+				Tables: map[string]string{
+					"seq": "seq",
+					"t1":  "t1",
+				},
+			},
+		},
+	}
+	got, err := BuildVSchema(&good)
+	if err != nil {
+		t.Error(err)
+	}
+	seq := &Table{
+		Name: "seq",
+		Keyspace: &Keyspace{
+			Name: "unsharded",
+		},
+		IsSequence: true,
+	}
+	want := &VSchema{
+		Tables: map[string]*Table{
+			"seq": seq,
+			"t1": {
+				Name: "t1",
+				Keyspace: &Keyspace{
+					Name: "unsharded",
+				},
+				Autoinc: &Autoinc{
+					Col:      "c1",
+					Sequence: seq,
+				},
+			},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		gotjson, _ := json.Marshal(got)
+		wantjson, _ := json.Marshal(want)
+		t.Errorf("BuildVSchema:s\n%s, want\n%s", gotjson, wantjson)
+	}
+}
+
+func TestBadSequence(t *testing.T) {
+	good := VSchemaFormal{
+		Keyspaces: map[string]KeyspaceFormal{
+			"unsharded": {
 				Classes: map[string]ClassFormal{
 					"t1": {
-						ColVindexes: []ColVindexFormal{
-							{
-								Col:  "c1",
-								Name: "stlu",
-							}, {
-								Col:  "c2",
-								Name: "stfu",
-							},
+						Autoinc: &AutoincFormal{
+							Col:      "c1",
+							Sequence: "seq",
 						},
 					},
 				},
@@ -569,8 +611,8 @@ func TestBuildVSchemaNonPrimaryLookupFail(t *testing.T) {
 			},
 		},
 	}
-	_, err := BuildVSchema(&bad)
-	want := "non-primary owned index stfu is not Lookup for class t1"
+	_, err := BuildVSchema(&good)
+	want := "sequence seq not found for class t1"
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
