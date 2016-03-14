@@ -1,5 +1,5 @@
 // Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
+// Use of this source code is governed by a BSD_style
 // license that can be found in the LICENSE file.
 
 /*
@@ -23,11 +23,11 @@ import (
 )
 
 var (
-	enableFakeTxBuffer = flag.Bool("enable-fake-tx_buffer", false, "Enable fake transaction buffering.")
-	bufferKeyspace     = flag.String("buffer-keyspace", "", "The name of the keyspace to buffer transactions on.")
-	bufferShard        = flag.String("buffer-shard", "", "The name of the shard to buffer transactions on.")
-	maxBufferSize      = flag.Int("max-buffer-size", 10, "The maximum number of transactions to buffer at a time.")
-	fakeBufferDelay    = flag.Duration("fake-buffer-delay", 1*time.Second, "The amount of time that we should delay all transactions for, to fake a transaction buffer.")
+	enableFakeTxBuffer = flag.Bool("enable_fake_tx_buffer", false, "Enable fake transaction buffering.")
+	bufferKeyspace     = flag.String("buffer_keyspace", "", "The name of the keyspace to buffer transactions on.")
+	bufferShard        = flag.String("buffer_shard", "", "The name of the shard to buffer transactions on.")
+	maxBufferSize      = flag.Int("max_buffer_size", 10, "The maximum number of transactions to buffer at a time.")
+	fakeBufferDelay    = flag.Duration("fake_buffer_delay", 1*time.Second, "The amount of time that we should delay all transactions for, to fake a transaction buffer.")
 
 	bufferedTransactionsAttempted  = stats.NewInt("BufferedTransactionsAttempted")
 	bufferedTransactionsSuccessful = stats.NewInt("BufferedTransactionsSuccessful")
