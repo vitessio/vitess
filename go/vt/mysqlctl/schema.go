@@ -218,6 +218,14 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*tmut
 			sql += td.Schema + ";\n"
 		}
 	}
+	for _, td := range beforeSchema.TableDefinitions {
+		if td.Type == tmutils.TableView {
+			// Views will have {{.DatabaseName}} in there, replace
+			// it with _vt_preflight
+			s := strings.Replace(td.Schema, "`{{.DatabaseName}}`", "`_vt_preflight`", -1)
+			sql += s + ";\n"
+		}
+	}
 	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
 		return nil, err
 	}
@@ -249,7 +257,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*tmut
 // ApplySchemaChange will apply the schema change to the given database.
 func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
 	// check current schema matches
-	beforeSchema, err := mysqld.GetSchema(dbName, nil, nil, false)
+	beforeSchema, err := mysqld.GetSchema(dbName, nil, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -296,7 +304,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *tmutils.SchemaCha
 	}
 
 	// get AfterSchema
-	afterSchema, err := mysqld.GetSchema(dbName, nil, nil, false)
+	afterSchema, err := mysqld.GetSchema(dbName, nil, nil, true)
 	if err != nil {
 		return nil, err
 	}

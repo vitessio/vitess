@@ -536,6 +536,24 @@ index by_msg (msg)
     # check the stats are correct
     self._check_stats()
 
+    # now remove the tables on the source shard. The blacklisted tables
+    # in the source shard won't match any table, make sure that works.
+    utils.run_vtctl(['ApplySchema',
+                     '-sql=drop view view1',
+                     'source_keyspace'],
+                    auto_log=True)
+    for t in ['moving1', 'moving2']:
+      utils.run_vtctl(['ApplySchema',
+                       '-sql=drop table %s' % (t),
+                       'source_keyspace'],
+                      auto_log=True)
+    for t in [source_master, source_replica, source_rdonly1, source_rdonly2]:
+      utils.run_vtctl(['ReloadSchema', t.tablet_alias])
+    qr = source_master.execute('select count(1) from staying1')
+    self.assertEqual(len(qr['rows']), 1,
+                     'cannot read staying1: got %s' % str(qr))
+
+    # test SetShardTabletControl
     self._verify_vtctl_set_shard_tablet_control()
 
   def _verify_vtctl_set_shard_tablet_control(self):
