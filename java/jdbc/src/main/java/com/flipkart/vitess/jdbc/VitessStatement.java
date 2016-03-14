@@ -70,9 +70,9 @@ public class VitessStatement implements Statement {
             List<byte[]> keyspaceIds = Arrays.asList(new byte[] {1}); //To Hit any single shard
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
 
-            cursor = vtGateConn
-                .executeKeyspaceIds(context, sql, keyspace, keyspaceIds, null, tabletType)
-                .checkedGet();
+            cursor =
+                vtGateConn.executeKeyspaceIds(context, sql, keyspace, keyspaceIds, null, tabletType)
+                    .checkedGet();
         } else {
             if (tabletType != Topodata.TabletType.MASTER || this.vitessConnection.getAutoCommit()) {
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
@@ -80,7 +80,8 @@ public class VitessStatement implements Statement {
             } else {
                 VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
                 if (null == vtGateTx) {
-                    Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                    Context context =
+                        this.vitessConnection.createContext(this.queryTimeoutInMillis);
                     vtGateTx = vtGateConn.begin(context).checkedGet();
                     this.vitessConnection.setVtGateTx(vtGateTx);
                 }
@@ -139,7 +140,7 @@ public class VitessStatement implements Statement {
             throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
         }
 
-        if (null != cursor && null != cursor.getFields()) {
+        if (null != cursor.getFields()) {
             throw new SQLException(Constants.SQLExceptionMessages.SQL_RETURNED_RESULT_SET);
         }
 
@@ -184,9 +185,9 @@ public class VitessStatement implements Statement {
             List<byte[]> keyspaceIds = Arrays.asList(new byte[] {1}); //To Hit any single shard
 
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-            cursor = vtGateConn
-                .executeKeyspaceIds(context, sql, keyspace, keyspaceIds, null, tabletType)
-                .checkedGet();
+            cursor =
+                vtGateConn.executeKeyspaceIds(context, sql, keyspace, keyspaceIds, null, tabletType)
+                    .checkedGet();
         } else {
             VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
             if (null == vtGateTx) {

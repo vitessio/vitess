@@ -24,7 +24,7 @@ import java.util.logging.Logger;
  */
 public class VitessPreparedStatement extends VitessStatement implements PreparedStatement {
 
-    private final static boolean USE_BIND_VARIABLES = false;
+    private final boolean USE_BIND_VARIABLES;
     /* Get actual class name to be printed on */
     private static Logger logger = Logger.getLogger(VitessPreparedStatement.class.getName());
     private final String sql;
@@ -33,22 +33,28 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
 
     public VitessPreparedStatement(VitessConnection vitessConnection, String sql)
         throws SQLException {
-        this(vitessConnection, sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
+        this(vitessConnection, sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY, false);
     }
 
     public VitessPreparedStatement(VitessConnection vitessConnection, String sql, int resultSetType,
         int resultSetConcurrency) throws SQLException {
+        this(vitessConnection, sql, resultSetType, resultSetConcurrency, false);
+    }
+
+    public VitessPreparedStatement(VitessConnection vitessConnection, String sql, int resultSetType,
+        int resultSetConcurrency, boolean useBindVariables) throws SQLException {
         super(vitessConnection, resultSetType, resultSetConcurrency);
         checkSQLNullOrEmpty(sql);
         this.parameterMap = new HashMap<>();
         this.bindVariables = new HashMap<>();
+        this.USE_BIND_VARIABLES = useBindVariables;
         this.sql = sql;
     }
 
     public ResultSet executeQuery() throws SQLException {
         VTGateConn vtGateConn;
         Topodata.TabletType tabletType;
-        Cursor cursor = null;
+        Cursor cursor;
         boolean showSql;
 
         checkOpen();
@@ -69,12 +75,13 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         } else {
             if (tabletType != Topodata.TabletType.MASTER || this.vitessConnection.getAutoCommit()) {
                 if (USE_BIND_VARIABLES) {
-                    Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                    cursor =
-                        vtGateConn.execute(context, this.sql, this.bindVariables, tabletType)
-                            .checkedGet();
+                    Context context =
+                        this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                    cursor = vtGateConn.execute(context, this.sql, this.bindVariables, tabletType)
+                        .checkedGet();
                 } else {
-                    Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                    Context context =
+                        this.vitessConnection.createContext(this.queryTimeoutInMillis);
                     cursor = vtGateConn
                         .execute(context, Utils.getSqlWithoutParameter(this.sql, parameterMap),
                             null, tabletType).checkedGet();
@@ -82,14 +89,14 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             } else {
                 VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
                 if (vtGateTx == null) {
-                    Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                    Context context =
+                        this.vitessConnection.createContext(this.queryTimeoutInMillis);
                     vtGateTx = vtGateConn.begin(context).checkedGet();
                     this.vitessConnection.setVtGateTx(vtGateTx);
                 }
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                cursor =
-                    executeSQL(vtGateTx, USE_BIND_VARIABLES, context, this.sql, tabletType,
-                        this.bindVariables, this.parameterMap);
+                cursor = executeSQL(vtGateTx, USE_BIND_VARIABLES, context, this.sql, tabletType,
+                    this.bindVariables, this.parameterMap);
             }
         }
 
@@ -140,6 +147,10 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
         }
 
+        if (null != cursor.getFields()) {
+            throw new SQLException(Constants.SQLExceptionMessages.SQL_RETURNED_RESULT_SET);
+        }
+
         this.resultCount = cursor.getRowsAffected();
 
         int truncatedUpdateCount;
@@ -155,7 +166,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
     public boolean execute() throws SQLException {
         VTGateConn vtGateConn;
         Topodata.TabletType tabletType;
-        Cursor cursor = null;
+        Cursor cursor;
         boolean selectSql;
         boolean showSql;
 
@@ -171,8 +182,8 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         if (selectSql) {
             if (USE_BIND_VARIABLES) {
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                cursor = vtGateConn
-                    .streamExecute(context, this.sql, this.bindVariables, tabletType);
+                cursor =
+                    vtGateConn.streamExecute(context, this.sql, this.bindVariables, tabletType);
             } else {
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
                 cursor = vtGateConn.streamExecute(context,
@@ -320,13 +331,17 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             setByte(parameterIndex, (Byte) x);
         } else if (x instanceof Character) {
             setString(parameterIndex, String.valueOf(x));
+        } else if (x instanceof Date) {
+            setDate(parameterIndex, (Date) x);
+        } else if (x instanceof Time) {
+            setTime(parameterIndex, (Time) x);
         } else if (x instanceof Timestamp) {
             setTimestamp(parameterIndex, (Timestamp) x);
         } else if (x instanceof BigDecimal) {
             setBigDecimal(parameterIndex, (BigDecimal) x);
         } else {
             throw new SQLException(
-                Constants.SQLExceptionMessages.SQL_TYPE_INFER + x.getClass().getName());
+                Constants.SQLExceptionMessages.SQL_TYPE_INFER + x.getClass().getCanonicalName());
         }
     }
 
