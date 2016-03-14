@@ -24,6 +24,19 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
     private static Logger logger = Logger.getLogger(VitessDatabaseMetaData.class.getName());
     protected VitessConnection connection = null;
 
+    public String getURL() throws SQLException {
+        return this.connection.getUrl();
+    }
+
+    public String getUserName() throws SQLException {
+        throw new SQLFeatureNotSupportedException(
+            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+    }
+
+    public boolean isReadOnly() throws SQLException {
+        return this.connection.isReadOnly();
+    }
+
     public boolean allProceduresAreCallable() throws SQLException {
         return false;
     }
@@ -37,15 +50,7 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
     }
 
     public boolean nullsAreSortedLow() throws SQLException {
-        return false;
-    }
-
-    public boolean nullsAreSortedAtStart() throws SQLException {
-        return false;
-    }
-
-    public boolean nullsAreSortedAtEnd() throws SQLException {
-        return false;
+        return !this.nullsAreSortedHigh();
     }
 
     public String getDatabaseProductName() throws SQLException {
@@ -53,20 +58,19 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
     }
 
     public String getDatabaseProductVersion() throws SQLException {
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+        return this.connection.getDbProperties().getProductversion();
     }
 
     public String getDriverVersion() throws SQLException {
-        return Constants.MAJOR_VERSION + "." + Constants.MINOR_VERSION;
+        return Constants.DRIVER_MAJOR_VERSION + "." + Constants.DRIVER_MINOR_VERSION;
     }
 
     public int getDriverMajorVersion() {
-        return Constants.MAJOR_VERSION;
+        return Constants.DRIVER_MAJOR_VERSION;
     }
 
     public int getDriverMinorVersion() {
-        return Constants.MINOR_VERSION;
+        return Constants.DRIVER_MINOR_VERSION;
     }
 
     public boolean usesLocalFiles() throws SQLException {
@@ -142,7 +146,7 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
     }
 
     public boolean supportsColumnAliasing() throws SQLException {
-        return false;
+        return true;
     }
 
     public boolean nullPlusNonNullIsNull() throws SQLException {
@@ -186,7 +190,7 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
     }
 
     public boolean supportsLikeEscapeClause() throws SQLException {
-        return false;
+        return true;
     }
 
     public boolean supportsMultipleResultSets() throws SQLException {
@@ -194,15 +198,15 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
     }
 
     public boolean supportsMultipleTransactions() throws SQLException {
-        return false;
+        return true;
     }
 
     public boolean supportsNonNullableColumns() throws SQLException {
-        return false;
+        return true;
     }
 
     public boolean supportsMinimumSQLGrammar() throws SQLException {
-        return false;
+        return true;
     }
 
     public boolean supportsCoreSQLGrammar() throws SQLException {
@@ -413,10 +417,6 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
         return false;
     }
 
-    public int getMaxStatementLength() throws SQLException {
-        return 0;
-    }
-
     public int getMaxStatements() throws SQLException {
         return 0;
     }
@@ -433,12 +433,8 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
         return 16;
     }
 
-    public int getDefaultTransactionIsolation() throws SQLException {
-        return 0;
-    }
-
-    public boolean supportsTransactions() throws SQLException {
-        return false;
+    public int getMaxProcedureNameLength() throws SQLException {
+        return 256;
     }
 
     public boolean supportsDataDefinitionAndDataManipulationTransactions() throws SQLException {
@@ -545,11 +541,11 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
     }
 
     public int getDatabaseMajorVersion() throws SQLException {
-        return 0;
+        return Integer.valueOf(this.connection.getDbProperties().getMajorVersion());
     }
 
     public int getDatabaseMinorVersion() throws SQLException {
-        return 0;
+        return Integer.valueOf(this.connection.getDbProperties().getMinorVersion());
     }
 
     public int getJDBCMajorVersion() throws SQLException {

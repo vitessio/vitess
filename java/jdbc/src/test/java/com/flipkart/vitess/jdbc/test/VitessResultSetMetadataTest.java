@@ -1,6 +1,7 @@
 package com.flipkart.vitess.jdbc.test;
 
 import com.flipkart.vitess.jdbc.VitessResultSetMetaData;
+import com.flipkart.vitess.util.Constants;
 import com.youtube.vitess.proto.Query;
 import org.junit.Assert;
 import org.junit.Test;
@@ -143,6 +144,19 @@ public class VitessResultSetMetadataTest {
         Assert.assertEquals(-7, vitessResultSetMetadata.getColumnType(25));
         Assert.assertEquals(1, vitessResultSetMetadata.getColumnType(26));
         Assert.assertEquals(1, vitessResultSetMetadata.getColumnType(27));
+        try {
+            int type = vitessResultSetMetadata.getColumnType(28);
+        } catch (SQLException ex) {
+            Assert
+                .assertEquals(Constants.SQLExceptionMessages.INVALID_COLUMN_TYPE, ex.getMessage());
+        }
+
+        try {
+            int type = vitessResultSetMetadata.getColumnType(0);
+        } catch (SQLException ex) {
+            Assert.assertEquals(Constants.SQLExceptionMessages.INVALID_COLUMN_INDEX + ": " + 0,
+                ex.getMessage());
+        }
     }
 
     @Test public void testgetColumnLabel() throws SQLException {
@@ -151,6 +165,37 @@ public class VitessResultSetMetadataTest {
         for (int i = 1; i <= vitessResultSetMetaData.getColumnCount(); i++) {
             Assert.assertEquals("col" + i, vitessResultSetMetaData.getColumnLabel(i));
         }
+    }
+
+    @Test public void isReadOnlyTest() throws SQLException {
+        List<Query.Field> fieldList = getFieldList();
+        VitessResultSetMetaData vitessResultSetMetadata = new VitessResultSetMetaData(fieldList);
+        for (int i = 1; i <= vitessResultSetMetadata.getColumnCount(); i++) {
+            Assert.assertEquals(vitessResultSetMetadata.isReadOnly(i), false);
+            Assert.assertEquals(vitessResultSetMetadata.isWritable(i), true);
+            Assert.assertEquals(vitessResultSetMetadata.isDefinitelyWritable(i), true);
+        }
+    }
+
+    @Test public void getColumnClassNameTest() throws SQLException {
+        List<Query.Field> fieldList = getFieldList();
+        VitessResultSetMetaData vitessResultSetMetadata = new VitessResultSetMetaData(fieldList);
+        for (int i = 1; i <= vitessResultSetMetadata.getColumnCount(); i++) {
+            Assert.assertEquals(vitessResultSetMetadata.getColumnClassName(i), null);
+        }
+    }
+
+    @Test public void getSchemaNameTest() throws SQLException {
+        List<Query.Field> fieldList = getFieldList();
+        VitessResultSetMetaData vitessResultSetMetaData = new VitessResultSetMetaData(fieldList);
+        Assert.assertEquals(vitessResultSetMetaData.getSchemaName(1), null);
+        Assert.assertEquals(vitessResultSetMetaData.getTableName(1), null);
+        Assert.assertEquals(vitessResultSetMetaData.getCatalogName(1), null);
+        Assert.assertEquals(vitessResultSetMetaData.getSchemaName(1), null);
+        Assert.assertEquals(vitessResultSetMetaData.getPrecision(1), 0);
+        Assert.assertEquals(vitessResultSetMetaData.getScale(1), 0);
+        Assert.assertEquals(vitessResultSetMetaData.getColumnDisplaySize(1), 0);
+        Assert.assertEquals(vitessResultSetMetaData.isCurrency(1), false);
     }
 }
 

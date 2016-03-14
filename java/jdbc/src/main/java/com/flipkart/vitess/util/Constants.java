@@ -25,8 +25,8 @@ public class Constants {
     public static final String SQL_INSERT = "insert";
     public static final String SQL_UPDATE = "update";
     public static final String SQL_DELETE = "delete";
-    public static final int MAJOR_VERSION = 1;
-    public static final int MINOR_VERSION = 0;
+    public static final int DRIVER_MAJOR_VERSION = 1;
+    public static final int DRIVER_MINOR_VERSION = 0;
     public static final int MAX_BUFFER_SIZE = 65535;
     public static final int DEFAULT_TIMEOUT = 5000; //In miliseconds
     public static final String LITERAL_S = "s";
