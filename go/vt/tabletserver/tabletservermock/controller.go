@@ -82,9 +82,9 @@ func (tqsc *Controller) InitDBConfig(target querypb.Target, dbConfigs dbconfigs.
 func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (bool, error) {
 	stateChanged := false
 	if tqsc.SetServingTypeError == nil {
+		stateChanged = tqsc.QueryServiceEnabled != serving || tqsc.CurrentTarget.TabletType != tabletType
 		tqsc.CurrentTarget.TabletType = tabletType
 		tqsc.QueryServiceEnabled = serving
-		stateChanged = tqsc.QueryServiceEnabled != serving || tqsc.CurrentTarget.TabletType != tabletType
 	}
 	return stateChanged, tqsc.SetServingTypeError
 }
