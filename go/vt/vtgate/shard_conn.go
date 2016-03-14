@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vtgate/txbuffer"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -166,9 +167,13 @@ func (sdc *ShardConn) StreamExecute(ctx context.Context, query string, bindVars 
 
 // Begin begins a transaction. The retry rules are the same as Execute.
 func (sdc *ShardConn) Begin(ctx context.Context) (transactionID int64, err error) {
+	attemptNumber := 0
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var innerErr error
+		// Potentially buffer this transaction.
+		txbuffer.FakeBuffer(sdc.keyspace, sdc.shard, attemptNumber)
 		transactionID, innerErr = conn.Begin(ctx)
+		attemptNumber++
 		return innerErr
 	}, 0, false)
 	return transactionID, err
