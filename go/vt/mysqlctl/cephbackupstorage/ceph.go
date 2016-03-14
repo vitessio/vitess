@@ -14,7 +14,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio-go"
-	"github.com/youtube/vitess2/go/vt/mysqlctl/backupstorage"
+	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
 	"golang.org/x/net/context"
 	"google.golang.org/cloud/storage"
 )
