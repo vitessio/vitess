@@ -28,7 +28,7 @@ var routerVSchema = createTestVSchema(`
           "Type": "hash"
         },
         "music_user_map": {
-          "Type": "lookup_hash_unique_autoinc",
+          "Type": "lookup_hash_unique",
           "Owner": "music",
           "Params": {
             "Table": "music_user_map",
@@ -47,15 +47,6 @@ var routerVSchema = createTestVSchema(`
         },
         "idx1": {
           "Type": "hash"
-        },
-        "idx2": {
-          "Type": "lookup_hash_autoinc",
-          "Owner": "multi_autoinc_table",
-          "Params": {
-            "Table": "idx2",
-            "From": "id",
-            "To": "val"
-          }
         },
         "idx_noauto": {
           "Type": "hash",
@@ -100,7 +91,11 @@ var routerVSchema = createTestVSchema(`
               "Col": "id",
               "Name": "music_user_map"
             }
-          ]
+          ],
+					"Autoinc" : {
+						"Col": "id",
+						"Sequence": "user_seq"
+					}
         },
         "music_extra": {
           "ColVindexes": [
@@ -126,22 +121,6 @@ var routerVSchema = createTestVSchema(`
             }
           ]
         },
-        "multi_autoinc_table": {
-          "ColVindexes": [
-            {
-              "Col": "id1",
-              "Name": "idx1"
-            },
-            {
-              "Col": "id2",
-              "Name": "idx2"
-            }
-          ],
-					"Autoinc" : {
-						"Col": "id1",
-						"Sequence": "user_seq"
-					}
-        },
         "noauto_table": {
           "ColVindexes": [
             {
@@ -165,7 +144,6 @@ var routerVSchema = createTestVSchema(`
         "music": "music",
         "music_extra": "music_extra",
         "music_extra_reversed": "music_extra_reversed",
-        "multi_autoinc_table": "multi_autoinc_table",
         "noauto_table": "noauto_table",
         "ksid_table": "ksid_table"
       }
@@ -186,8 +164,7 @@ var routerVSchema = createTestVSchema(`
       "Tables": {
         "user_seq": "seq",
         "music_user_map": "",
-        "name_user_map": "",
-        "idx2": ""
+        "name_user_map": ""
       }
     }
   }

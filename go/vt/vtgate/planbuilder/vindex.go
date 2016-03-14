@@ -91,13 +91,6 @@ type Lookup interface {
 	Delete(VCursor, []interface{}, []byte) error
 }
 
-// A LookupGenerator vindex is a Lookup that can
-// generate new ids.
-type LookupGenerator interface {
-	Lookup
-	Generate(VCursor, []byte) (id int64, err error)
-}
-
 // A NewVindexFunc is a function that creates a Vindex based on the
 // properties specified in the input map. Every vindex must
 // register a NewVindexFunc under a unique vindexType.

@@ -13,9 +13,7 @@ import (
 
 func init() {
 	planbuilder.Register("lookup_hash", NewLookupHash)
-	planbuilder.Register("lookup_hash_autoinc", NewLookupHashAuto)
 	planbuilder.Register("lookup_hash_unique", NewLookupHashUnique)
-	planbuilder.Register("lookup_hash_unique_autoinc", NewLookupHashUniqueAuto)
 }
 
 //====================================================================
@@ -67,59 +65,6 @@ func (vind *LookupHash) Delete(vcursor planbuilder.VCursor, ids []interface{}, k
 
 //====================================================================
 
-// LookupHashAuto defines a vindex that uses a lookup table.
-// The table is expected to define the id column as unique. It's
-// NonUnique and a Lookup. It's also a LookupGenerator, because it
-// can use the autoinc capabilities of the lookup table.
-type LookupHashAuto struct {
-	name string
-	lkp  lookup
-}
-
-// NewLookupHashAuto creates a new LookupHashAuto.
-func NewLookupHashAuto(name string, m map[string]interface{}) (planbuilder.Vindex, error) {
-	h := &LookupHashAuto{name: name}
-	h.lkp.Init(m)
-	return h, nil
-}
-
-// String returns the name of the vindex.
-func (vind *LookupHashAuto) String() string {
-	return vind.name
-}
-
-// Cost returns the cost of this index as 20.
-func (vind *LookupHashAuto) Cost() int {
-	return 20
-}
-
-// Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *LookupHashAuto) Map(vcursor planbuilder.VCursor, ids []interface{}) ([][][]byte, error) {
-	return vind.lkp.Map2(vcursor, ids)
-}
-
-// Verify returns true if id maps to ksid.
-func (vind *LookupHashAuto) Verify(vcursor planbuilder.VCursor, id interface{}, ksid []byte) (bool, error) {
-	return vind.lkp.Verify(vcursor, id, ksid)
-}
-
-// Create reserves the id by inserting it into the vindex table.
-func (vind *LookupHashAuto) Create(vcursor planbuilder.VCursor, id interface{}, ksid []byte) error {
-	return vind.lkp.Create(vcursor, id, ksid)
-}
-
-// Generate reserves the id by inserting it into the vindex table.
-func (vind *LookupHashAuto) Generate(vcursor planbuilder.VCursor, ksid []byte) (id int64, err error) {
-	return vind.lkp.Generate(vcursor, ksid)
-}
-
-// Delete deletes the entry from the vindex table.
-func (vind *LookupHashAuto) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid []byte) error {
-	return vind.lkp.Delete(vcursor, ids, ksid)
-}
-
-//====================================================================
-
 // LookupHashUnique defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
 // Unique and a Lookup.
@@ -162,59 +107,6 @@ func (vind *LookupHashUnique) Create(vcursor planbuilder.VCursor, id interface{}
 
 // Delete deletes the entry from the vindex table.
 func (vind *LookupHashUnique) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid []byte) error {
-	return vind.lkp.Delete(vcursor, ids, ksid)
-}
-
-//====================================================================
-
-// LookupHashUniqueAuto defines a vindex that uses a lookup table.
-// The table is expected to define the id column as unique. It's
-// Unique and a Lookup. It's also a LookupGenerator, because it
-// can use the autoinc capabilities of the lookup table.
-type LookupHashUniqueAuto struct {
-	name string
-	lkp  lookup
-}
-
-// NewLookupHashUniqueAuto creates a new LookupHashUniqueAuto.
-func NewLookupHashUniqueAuto(name string, m map[string]interface{}) (planbuilder.Vindex, error) {
-	h := &LookupHashUniqueAuto{name: name}
-	h.lkp.Init(m)
-	return h, nil
-}
-
-// String returns the name of the vindex.
-func (vind *LookupHashUniqueAuto) String() string {
-	return vind.name
-}
-
-// Cost returns the cost of this index as 10.
-func (vind *LookupHashUniqueAuto) Cost() int {
-	return 10
-}
-
-// Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *LookupHashUniqueAuto) Map(vcursor planbuilder.VCursor, ids []interface{}) ([][]byte, error) {
-	return vind.lkp.Map1(vcursor, ids)
-}
-
-// Verify returns true if id maps to ksid.
-func (vind *LookupHashUniqueAuto) Verify(vcursor planbuilder.VCursor, id interface{}, ksid []byte) (bool, error) {
-	return vind.lkp.Verify(vcursor, id, ksid)
-}
-
-// Create reserves the id by inserting it into the vindex table.
-func (vind *LookupHashUniqueAuto) Create(vcursor planbuilder.VCursor, id interface{}, ksid []byte) error {
-	return vind.lkp.Create(vcursor, id, ksid)
-}
-
-// Generate reserves the id by inserting it into the vindex table.
-func (vind *LookupHashUniqueAuto) Generate(vcursor planbuilder.VCursor, ksid []byte) (id int64, err error) {
-	return vind.lkp.Generate(vcursor, ksid)
-}
-
-// Delete deletes the entry from the vindex table.
-func (vind *LookupHashUniqueAuto) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid []byte) error {
 	return vind.lkp.Delete(vcursor, ids, ksid)
 }
 
@@ -341,26 +233,6 @@ func (lkp *lookup) Create(vcursor planbuilder.VCursor, id interface{}, ksid []by
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
 	return nil
-}
-
-// Generate generates an id and associates the ksid to the new id.
-func (lkp *lookup) Generate(vcursor planbuilder.VCursor, ksid []byte) (id int64, err error) {
-	val, err := vunhash(ksid)
-	if err != nil {
-		return 0, fmt.Errorf("lookup.Generate: %v", err)
-	}
-	bq := &querytypes.BoundQuery{
-		Sql: lkp.ins,
-		BindVariables: map[string]interface{}{
-			lkp.From: nil,
-			lkp.To:   val,
-		},
-	}
-	result, err := vcursor.Execute(bq)
-	if err != nil {
-		return 0, fmt.Errorf("lookup.Generate: %v", err)
-	}
-	return int64(result.InsertID), err
 }
 
 // Delete deletes the association between ids and ksid.

@@ -5,12 +5,54 @@
 package vindexes
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
+
+type vcursor struct {
+	mustFail bool
+	numRows  int
+	result   *sqltypes.Result
+	query    *querytypes.BoundQuery
+}
+
+func (vc *vcursor) Execute(query *querytypes.BoundQuery) (*sqltypes.Result, error) {
+	vc.query = query
+	if vc.mustFail {
+		return nil, errors.New("execute failed")
+	}
+	switch {
+	case strings.HasPrefix(query.Sql, "select"):
+		if vc.result != nil {
+			return vc.result, nil
+		}
+		result := &sqltypes.Result{
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Int32,
+			}},
+			RowsAffected: uint64(vc.numRows),
+		}
+		for i := 0; i < vc.numRows; i++ {
+			result.Rows = append(result.Rows, []sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", i+1))),
+			})
+		}
+		return result, nil
+	case strings.HasPrefix(query.Sql, "insert"):
+		return &sqltypes.Result{InsertID: 1}, nil
+	case strings.HasPrefix(query.Sql, "delete"):
+		return &sqltypes.Result{}, nil
+	}
+	panic("unexpected")
+}
 
 var lhm planbuilder.Vindex
 
@@ -72,13 +114,6 @@ func TestLookupHashCreate(t *testing.T) {
 	}
 	if !reflect.DeepEqual(vc.query, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
-	}
-}
-
-func TestLookupHashGenerate(t *testing.T) {
-	_, ok := lhm.(planbuilder.LookupGenerator)
-	if ok {
-		t.Errorf("lhm.(planbuilder.LookupGenerator): true, want false")
 	}
 }
 
