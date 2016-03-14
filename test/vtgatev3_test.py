@@ -55,10 +55,25 @@ artist varchar(64),
 primary key (music_id)
 ) Engine=InnoDB'''
 
-create_vt_user_idx = '''create table vt_user_idx (
-id bigint auto_increment,
-primary key (id)
-) Engine=InnoDB'''
+create_vt_user_seq = '''create table vt_user_seq (
+  id int,
+  next_id bigint,
+  cache bigint,
+  increment bigint,
+  primary key(id)
+) comment 'vitess_sequence' Engine=InnoDB'''
+
+init_vt_user_seq = 'insert into vt_user_seq values(0, 1, 2, 1)'
+
+create_vt_music_seq = '''create table vt_music_seq (
+  id int,
+  next_id bigint,
+  cache bigint,
+  increment bigint,
+  primary key(id)
+) comment 'vitess_sequence' Engine=InnoDB'''
+
+init_vt_music_seq = 'insert into vt_music_seq values(0, 1, 2, 1)'
 
 create_name_user2_map = '''create table name_user2_map (
 name varchar(64),
@@ -67,7 +82,7 @@ primary key (name, user2_id)
 ) Engine=InnoDB'''
 
 create_music_user_map = '''create table music_user_map (
-music_id bigint auto_increment,
+music_id bigint,
 user_id bigint,
 primary key (music_id)
 ) Engine=InnoDB'''
@@ -78,12 +93,7 @@ vschema = '''{
       "Sharded": true,
       "Vindexes": {
         "user_index": {
-          "Type": "hash_autoinc",
-          "Params": {
-            "Table": "vt_user_idx",
-            "Column": "id"
-          },
-          "Owner": "vt_user"
+          "Type": "hash"
         },
         "name_user2_map": {
           "Type": "lookup_hash",
@@ -95,7 +105,7 @@ vschema = '''{
           "Owner": "vt_user2"
         },
         "music_user_map": {
-          "Type": "lookup_hash_unique_autoinc",
+          "Type": "lookup_hash_unique",
           "Params": {
             "Table": "music_user_map",
             "From": "music_id",
@@ -111,7 +121,11 @@ vschema = '''{
               "Col": "id",
               "Name": "user_index"
             }
-          ]
+          ],
+          "Autoinc": {
+            "Col": "id",
+            "Sequence": "vt_user_seq"
+          }
         },
         "vt_user2": {
           "ColVindexes": [
@@ -143,7 +157,11 @@ vschema = '''{
               "Col": "id",
               "Name": "music_user_map"
             }
-          ]
+          ],
+          "Autoinc": {
+            "Col": "id",
+            "Sequence": "vt_music_seq"
+          }
         },
         "vt_music_extra": {
           "ColVindexes": [
@@ -168,8 +186,14 @@ vschema = '''{
     },
     "lookup": {
       "Sharded": false,
+      "Classes" : {
+        "seq": {
+          "Type": "Sequence"
+        }
+      },
       "Tables": {
-        "vt_user_idx": "",
+        "vt_user_seq": "seq",
+        "vt_music_seq": "seq",
         "music_user_map": "",
         "name_user2_map": ""
       }
@@ -206,7 +230,8 @@ def setUpModule():
     keyspace_env.launch(
         'lookup',
         ddls=[
-            create_vt_user_idx,
+            create_vt_user_seq,
+            create_vt_music_seq,
             create_music_user_map,
             create_name_user2_map,
             ],
@@ -267,6 +292,12 @@ class TestVTGateFunctions(unittest.TestCase):
     cursor = vtgate_conn.cursor(
         tablet_type='master', keyspace=None, writable=True)
 
+    # Initialize the sequence.
+    # TODO(sougou): Use DDL when ready.
+    cursor.begin()
+    cursor.execute(init_vt_user_seq, {})
+    cursor.commit()
+
     # Test insert
     for x in xrange(count):
       i = x+1
@@ -290,27 +321,20 @@ class TestVTGateFunctions(unittest.TestCase):
           ([(i, 'test %s' % i)], 1L, 0,
            [('id', self.int_type), ('name', self.string_type)]))
 
-    # Test insert with no auto-inc, then auto-inc
+    # Test insert with no auto-inc
     vtgate_conn.begin()
     result = self.execute_on_master(
         vtgate_conn,
         'insert into vt_user (id, name) values (:id, :name)',
         {'id': 6, 'name': 'test 6'})
     self.assertEqual(result, ([], 1L, 0L, []))
-    result = self.execute_on_master(
-        vtgate_conn,
-        'insert into vt_user (name) values (:name)',
-        {'name': 'test 7'})
-    self.assertEqual(result, ([], 1L, 7L, []))
     vtgate_conn.commit()
 
     # Verify values in db
     result = shard_0_master.mquery('vt_user', 'select id, name from vt_user')
     self.assertEqual(result, ((1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3')))
     result = shard_1_master.mquery('vt_user', 'select id, name from vt_user')
-    self.assertEqual(result, ((4L, 'test 4'), (6L, 'test 6'), (7L, 'test 7')))
-    result = lookup_master.mquery('vt_lookup', 'select id from vt_user_idx')
-    self.assertEqual(result, ((1L,), (2L,), (3L,), (4L,), (6L,), (7L,)))
+    self.assertEqual(result, ((4L, 'test 4'), (6L, 'test 6')))
 
     # Test IN clause
     result = self.execute_on_master(
@@ -338,7 +362,7 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(
         result,
         ([(1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3'), (4L, 'test 4'),
-          (6L, 'test 6'), (7L, 'test 7')], 6L, 0,
+          (6L, 'test 6')], 5L, 0,
          [('id', self.int_type), ('name', self.string_type)]))
 
     # Test stream over scatter
@@ -362,11 +386,11 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(
         sorted(rows_1),
         [(1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3'), (4L, 'test 4'),
-         (6L, 'test 6'), (7L, 'test 7')])
+         (6L, 'test 6')])
     self.assertEqual(
         sorted(rows_2),
         [(1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3'), (4L, 'test 4'),
-         (6L, 'test 6'), (7L, 'test 7')])
+         (6L, 'test 6')])
 
     # Test updates
     vtgate_conn.begin()
@@ -386,7 +410,7 @@ class TestVTGateFunctions(unittest.TestCase):
         result, ((1L, 'test one'), (2L, 'test 2'), (3L, 'test 3')))
     result = shard_1_master.mquery('vt_user', 'select id, name from vt_user')
     self.assertEqual(
-        result, ((4L, 'test four'), (6L, 'test 6'), (7L, 'test 7')))
+        result, ((4L, 'test four'), (6L, 'test 6')))
 
     # Test deletes
     vtgate_conn.begin()
@@ -404,9 +428,7 @@ class TestVTGateFunctions(unittest.TestCase):
     result = shard_0_master.mquery('vt_user', 'select id, name from vt_user')
     self.assertEqual(result, ((2L, 'test 2'), (3L, 'test 3')))
     result = shard_1_master.mquery('vt_user', 'select id, name from vt_user')
-    self.assertEqual(result, ((6L, 'test 6'), (7L, 'test 7')))
-    result = lookup_master.mquery('vt_lookup', 'select id from vt_user_idx')
-    self.assertEqual(result, ((2L,), (3L,), (6L,), (7L,)))
+    self.assertEqual(result, ((6L, 'test 6'),))
 
   def test_user2(self):
     # user2 is for testing non-unique vindexes
@@ -580,8 +602,15 @@ class TestVTGateFunctions(unittest.TestCase):
 
   def test_music(self):
     # music is for testing owned lookup index
-    count = 4
     vtgate_conn = get_connection()
+
+    # Initialize the sequence.
+    # TODO(sougou): Use DDL when ready.
+    vtgate_conn.begin()
+    self.execute_on_master(vtgate_conn, init_vt_music_seq, {})
+    vtgate_conn.commit()
+
+    count = 4
     for x in xrange(count):
       i = x+1
       vtgate_conn.begin()
@@ -609,16 +638,6 @@ class TestVTGateFunctions(unittest.TestCase):
         'values (:user_id, :id, :song)',
         {'user_id': 5, 'id': 6, 'song': 'test 6'})
     self.assertEqual(result, ([], 1L, 0L, []))
-    result = self.execute_on_master(
-        vtgate_conn,
-        'insert into vt_music (user_id, song) values (:user_id, :song)',
-        {'user_id': 6, 'song': 'test 7'})
-    self.assertEqual(result, ([], 1L, 7L, []))
-    result = self.execute_on_master(
-        vtgate_conn,
-        'insert into vt_music (user_id, song) values (:user_id, :song)',
-        {'user_id': 6, 'song': 'test 8'})
-    self.assertEqual(result, ([], 1L, 8L, []))
     vtgate_conn.commit()
     result = shard_0_master.mquery(
         'vt_user', 'select user_id, id, song from vt_music')
@@ -629,12 +648,12 @@ class TestVTGateFunctions(unittest.TestCase):
     result = shard_1_master.mquery(
         'vt_user', 'select user_id, id, song from vt_music')
     self.assertEqual(
-        result, ((4L, 4L, 'test 4'), (6L, 7L, 'test 7'), (6L, 8L, 'test 8')))
+        result, ((4L, 4L, 'test 4'),))
     result = lookup_master.mquery(
         'vt_lookup', 'select music_id, user_id from music_user_map')
     self.assertEqual(
         result,
-        ((1L, 1L), (2L, 2L), (3L, 3L), (4L, 4L), (6L, 5L), (7L, 6L), (8L, 6L)))
+        ((1L, 1L), (2L, 2L), (3L, 3L), (4L, 4L), (6L, 5L)))
 
     vtgate_conn.begin()
     result = self.execute_on_master(
@@ -645,7 +664,7 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'update vt_music set song = :song where id = :id',
-        {'id': 7, 'song': 'test seven'})
+        {'id': 4, 'song': 'test four'})
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
     result = shard_0_master.mquery(
@@ -656,8 +675,7 @@ class TestVTGateFunctions(unittest.TestCase):
     result = shard_1_master.mquery(
         'vt_user', 'select user_id, id, song from vt_music')
     self.assertEqual(
-        result, ((4L, 4L, 'test 4'), (6L, 7L, 'test seven'),
-                 (6L, 8L, 'test 8')))
+        result, ((4L, 4L, 'test four'),))
 
     vtgate_conn.begin()
     result = self.execute_on_master(
@@ -668,8 +686,8 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'delete from vt_music where user_id = :user_id',
-        {'user_id': 6})
-    self.assertEqual(result, ([], 2L, 0L, []))
+        {'user_id': 4})
+    self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
     result = shard_0_master.mquery(
         'vt_user', 'select user_id, id, song from vt_music')
@@ -677,10 +695,10 @@ class TestVTGateFunctions(unittest.TestCase):
         result, ((1L, 1L, 'test 1'), (2L, 2L, 'test 2'), (5L, 6L, 'test six')))
     result = shard_1_master.mquery(
         'vt_user', 'select user_id, id, song from vt_music')
-    self.assertEqual(result, ((4L, 4L, 'test 4'),))
+    self.assertEqual(result, ())
     result = lookup_master.mquery(
         'vt_lookup', 'select music_id, user_id from music_user_map')
-    self.assertEqual(result, ((1L, 1L), (2L, 2L), (4L, 4L), (6L, 5L)))
+    self.assertEqual(result, ((1L, 1L), (2L, 2L), (6L, 5L)))
 
   def test_music_extra(self):
     # music_extra is for testing unonwed lookup index
