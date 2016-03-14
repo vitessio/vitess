@@ -70,25 +70,12 @@ type Reversible interface {
 }
 
 // A Functional vindex is an index that can compute
-// the keyspace id from the id without a lookup. This
-// means that the creation of a functional vindex entry
-// does not take the keyspace id as input. In general,
-// the main reason to support creation functions for
-// functional indexes is for auto-generating ids.
+// the keyspace id from the id without a lookup.
 // A Functional vindex is also required to be Unique.
 // If it's not unique, we cannot determine the target shard
 // for an insert operation.
 type Functional interface {
-	Create(VCursor, interface{}) error
-	Delete(VCursor, []interface{}, []byte) error
 	Unique
-}
-
-// A FunctionalGenerator vindex is a Functional vindex
-// that can generate new ids.
-type FunctionalGenerator interface {
-	Functional
-	Generate(cursor VCursor) (id int64, err error)
 }
 
 // A Lookup vindex is one that needs to lookup

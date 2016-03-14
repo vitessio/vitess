@@ -25,12 +25,7 @@ var routerVSchema = createTestVSchema(`
       "Sharded": true,
       "Vindexes": {
         "user_index": {
-          "Type": "hash_autoinc",
-          "Owner": "user",
-          "Params": {
-            "Table": "user_idx",
-            "Column": "id"
-          }
+          "Type": "hash"
         },
         "music_user_map": {
           "Type": "lookup_hash_unique_autoinc",
@@ -51,12 +46,7 @@ var routerVSchema = createTestVSchema(`
           }
         },
         "idx1": {
-          "Type": "hash_autoinc",
-          "Owner": "multi_autoinc_table",
-          "Params": {
-            "Table": "idx1",
-            "Column": "id1"
-          }
+          "Type": "hash"
         },
         "idx2": {
           "Type": "lookup_hash_autoinc",
@@ -86,7 +76,11 @@ var routerVSchema = createTestVSchema(`
               "Col": "name",
               "Name": "name_user_map"
             }
-          ]
+          ],
+					"Autoinc" : {
+						"Col": "id",
+						"Sequence": "user_seq"
+					}
         },
         "user_extra": {
           "ColVindexes": [
@@ -142,7 +136,11 @@ var routerVSchema = createTestVSchema(`
               "Col": "id2",
               "Name": "idx2"
             }
-          ]
+          ],
+					"Autoinc" : {
+						"Col": "id1",
+						"Sequence": "user_seq"
+					}
         },
         "noauto_table": {
           "ColVindexes": [
@@ -180,11 +178,15 @@ var routerVSchema = createTestVSchema(`
     },
     "TestUnsharded": {
       "Sharded": false,
+			"Classes": {
+				"seq": {
+					"Type": "Sequence"
+				}
+			},
       "Tables": {
-        "user_idx": "",
+        "user_seq": "seq",
         "music_user_map": "",
         "name_user_map": "",
-        "idx1": "",
         "idx2": ""
       }
     }

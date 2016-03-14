@@ -494,12 +494,16 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, route *planbuilder.R
 }
 
 func (rtr *Router) execInsertSharded(vcursor *requestContext, route *planbuilder.Route) (*sqltypes.Result, error) {
+	insertid, err := rtr.handleGenerate(vcursor, route.Generate)
+	if err != nil {
+		return nil, fmt.Errorf("execInsertSharded: %v", err)
+	}
 	input := route.Values.([]interface{})
 	keys, err := rtr.resolveKeys(input, vcursor.bindVars)
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
-	ksid, generated, err := rtr.handlePrimary(vcursor, keys[0], route.Table.ColVindexes[0], vcursor.bindVars)
+	ksid, err := rtr.handlePrimary(vcursor, keys[0], route.Table.ColVindexes[0], vcursor.bindVars)
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
@@ -513,10 +517,10 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *planbuilder
 			return nil, err
 		}
 		if newgen != 0 {
-			if generated != 0 {
+			if insertid != 0 {
 				return nil, fmt.Errorf("insert generated more than one value")
 			}
-			generated = newgen
+			insertid = newgen
 		}
 	}
 	vcursor.bindVars[ksidName] = string(ksid)
@@ -533,11 +537,11 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *planbuilder
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
-	if generated != 0 {
+	if insertid != 0 {
 		if result.InsertID != 0 {
-			return nil, fmt.Errorf("vindex and db generated a value each for insert")
+			return nil, fmt.Errorf("sequence and db generated a value each for insert")
 		}
-		result.InsertID = uint64(generated)
+		result.InsertID = uint64(insertid)
 	}
 	return result, nil
 }
@@ -653,10 +657,6 @@ func (rtr *Router) deleteVindexEntries(vcursor *requestContext, route *planbuild
 			ids = append(ids, k)
 		}
 		switch vindex := colVindex.Vindex.(type) {
-		case planbuilder.Functional:
-			if err = vindex.Delete(vcursor, ids, ksid); err != nil {
-				return err
-			}
 		case planbuilder.Lookup:
 			if err = vindex.Delete(vcursor, ids, ksid); err != nil {
 				return err
@@ -668,42 +668,69 @@ func (rtr *Router) deleteVindexEntries(vcursor *requestContext, route *planbuild
 	return nil
 }
 
-func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{}, colVindex *planbuilder.ColVindex, bv map[string]interface{}) (ksid []byte, generated int64, err error) {
-	if colVindex.Owned {
-		if vindexKey == nil {
-			generator, ok := colVindex.Vindex.(planbuilder.FunctionalGenerator)
-			if !ok {
-				return nil, 0, fmt.Errorf("value must be supplied for column %s", colVindex.Col)
-			}
-			generated, err = generator.Generate(vcursor)
-			vindexKey = generated
-			if err != nil {
-				return nil, 0, err
-			}
-		} else {
-			// TODO(sougou): I think we have to ignore dup key error if this was
-			// an upsert. For now, I'm punting on this because this would be a very
-			// uncommon use case. We should revisit this when work on v3 resumes.
-			err = colVindex.Vindex.(planbuilder.Functional).Create(vcursor, vindexKey)
-			if err != nil {
-				return nil, 0, err
-			}
+func (rtr *Router) handleGenerate(vcursor *requestContext, gen *planbuilder.Generate) (insertid int64, err error) {
+	if gen == nil {
+		return 0, nil
+	}
+	val := gen.Value
+	if v, ok := val.(string); ok {
+		val, ok = vcursor.bindVars[v[1:]]
+		if !ok {
+			return 0, fmt.Errorf("handleGenerate: could not find bind var %s", v)
 		}
 	}
+	if val != nil {
+		vcursor.bindVars[planbuilder.SeqVarName] = val
+		return 0, nil
+	}
+	// TODO(sougou): This is similar to paramsUnsharded.
+	ks, _, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, gen.Keyspace.Name, vcursor.tabletType)
+	if err != nil {
+		return 0, fmt.Errorf("handleGenerate: %v", err)
+	}
+	if len(allShards) != 1 {
+		return 0, fmt.Errorf("unsharded keyspace %s has multiple shards", ks)
+	}
+	params := newScatterParams(ks, nil, []string{allShards[0].Name})
+	// We nil out the transaction context for this particular call.
+	// TODO(sougou): Use ExecuteShard instead.
+	qr, err := rtr.scatterConn.ExecuteMulti(
+		vcursor.ctx,
+		gen.Query,
+		params.ks,
+		params.shardVars,
+		vcursor.tabletType,
+		NewSafeSession(nil),
+		false,
+	)
+	if err != nil {
+		return 0, err
+	}
+	// If no rows are returned, it's an internal error, and the code
+	// must panic, which will caught and reported.
+	num, err := qr.Rows[0][0].ParseInt64()
+	if err != nil {
+		return 0, err
+	}
+	vcursor.bindVars[planbuilder.SeqVarName] = num
+	return num, nil
+}
+
+func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{}, colVindex *planbuilder.ColVindex, bv map[string]interface{}) (ksid []byte, err error) {
 	if vindexKey == nil {
-		return nil, 0, fmt.Errorf("value must be supplied for column %s", colVindex.Col)
+		return nil, fmt.Errorf("value must be supplied for column %s", colVindex.Col)
 	}
 	mapper := colVindex.Vindex.(planbuilder.Unique)
 	ksids, err := mapper.Map(vcursor, []interface{}{vindexKey})
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	ksid = ksids[0]
 	if len(ksid) == 0 {
-		return nil, 0, fmt.Errorf("could not map %v to a keyspace id", vindexKey)
+		return nil, fmt.Errorf("could not map %v to a keyspace id", vindexKey)
 	}
 	bv["_"+colVindex.Col] = vindexKey
-	return ksid, generated, nil
+	return ksid, nil
 }
 
 func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface{}, colVindex *planbuilder.ColVindex, bv map[string]interface{}, ksid []byte) (generated int64, err error) {

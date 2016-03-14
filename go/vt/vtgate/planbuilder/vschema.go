@@ -136,7 +136,7 @@ func buildTables(source *VSchemaFormal, vschema *VSchema, keyspaces map[string]*
 				Name:     tname,
 				Keyspace: keyspace,
 			}
-			if cname == "" {
+			if !keyspace.Sharded {
 				vschema.Tables[tname] = t
 				continue
 			}
@@ -144,40 +144,38 @@ func buildTables(source *VSchemaFormal, vschema *VSchema, keyspaces map[string]*
 			if !ok {
 				return fmt.Errorf("class %s not found for table %s", cname, tname)
 			}
-			if keyspace.Sharded {
-				for i, ind := range class.ColVindexes {
-					vindexInfo, ok := ks.Vindexes[ind.Name]
-					if !ok {
-						return fmt.Errorf("vindex %s not found for class %s", ind.Name, cname)
+			for i, ind := range class.ColVindexes {
+				vindexInfo, ok := ks.Vindexes[ind.Name]
+				if !ok {
+					return fmt.Errorf("vindex %s not found for class %s", ind.Name, cname)
+				}
+				vindex := vindexes[ind.Name]
+				owned := false
+				if _, ok := vindex.(Lookup); ok && vindexInfo.Owner == tname {
+					owned = true
+				}
+				columnVindex := &ColVindex{
+					Col:    strings.ToLower(ind.Col),
+					Type:   vindexInfo.Type,
+					Name:   ind.Name,
+					Owned:  owned,
+					Vindex: vindex,
+				}
+				if i == 0 {
+					// Perform Primary vindex check.
+					if _, ok := columnVindex.Vindex.(Unique); !ok {
+						return fmt.Errorf("primary vindex %s is not Unique for class %s", ind.Name, cname)
 					}
-					vindex := vindexes[ind.Name]
-					owned := false
-					if _, ok := vindex.(Lookup); ok && vindexInfo.Owner == tname {
-						owned = true
-					}
-					columnVindex := &ColVindex{
-						Col:    strings.ToLower(ind.Col),
-						Type:   vindexInfo.Type,
-						Name:   ind.Name,
-						Owned:  owned,
-						Vindex: vindex,
-					}
-					if i == 0 {
-						// Perform Primary vindex check.
-						if _, ok := columnVindex.Vindex.(Unique); !ok {
-							return fmt.Errorf("primary vindex %s is not Unique for class %s", ind.Name, cname)
-						}
-						if owned {
-							return fmt.Errorf("primary vindex %s cannot be owned for class %s", ind.Name, cname)
-						}
-					}
-					t.ColVindexes = append(t.ColVindexes, columnVindex)
 					if owned {
-						t.Owned = append(t.Owned, columnVindex)
+						return fmt.Errorf("primary vindex %s cannot be owned for class %s", ind.Name, cname)
 					}
 				}
-				t.Ordered = colVindexSorted(t.ColVindexes)
+				t.ColVindexes = append(t.ColVindexes, columnVindex)
+				if owned {
+					t.Owned = append(t.Owned, columnVindex)
+				}
 			}
+			t.Ordered = colVindexSorted(t.ColVindexes)
 			if class.Autoinc != nil {
 				t.Autoinc = &Autoinc{Col: class.Autoinc.Col, ColVindexNum: -1}
 				seq, ok := vschema.Tables[class.Autoinc.Sequence]

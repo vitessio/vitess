@@ -21,8 +21,6 @@ func (v *stFU) String() string                                  { return v.name 
 func (*stFU) Cost() int                                         { return 1 }
 func (*stFU) Verify(VCursor, interface{}, []byte) (bool, error) { return false, nil }
 func (*stFU) Map(VCursor, []interface{}) ([][]byte, error)      { return nil, nil }
-func (*stFU) Create(VCursor, interface{}) error                 { return nil }
-func (*stFU) Delete(VCursor, []interface{}, []byte) error       { return nil }
 
 func NewSTFU(name string, params map[string]interface{}) (Vindex, error) {
 	return &stFU{name: name, Params: params}, nil
@@ -546,62 +544,6 @@ func TestSequence(t *testing.T) {
 					"seq": {
 						Type: "Sequence",
 					},
-					"t1": {
-						Autoinc: &AutoincFormal{
-							Col:      "c1",
-							Sequence: "seq",
-						},
-					},
-				},
-				Tables: map[string]string{
-					"seq": "seq",
-					"t1":  "t1",
-				},
-			},
-		},
-	}
-	got, err := BuildVSchema(&good)
-	if err != nil {
-		t.Error(err)
-	}
-	seq := &Table{
-		Name: "seq",
-		Keyspace: &Keyspace{
-			Name: "unsharded",
-		},
-		IsSequence: true,
-	}
-	want := &VSchema{
-		Tables: map[string]*Table{
-			"seq": seq,
-			"t1": {
-				Name: "t1",
-				Keyspace: &Keyspace{
-					Name: "unsharded",
-				},
-				Autoinc: &Autoinc{
-					Col:          "c1",
-					Sequence:     seq,
-					ColVindexNum: -1,
-				},
-			},
-		},
-	}
-	if !reflect.DeepEqual(got, want) {
-		gotjson, _ := json.Marshal(got)
-		wantjson, _ := json.Marshal(want)
-		t.Errorf("BuildVSchema:s\n%s, want\n%s", gotjson, wantjson)
-	}
-}
-
-func TestSequenceSharded(t *testing.T) {
-	good := VSchemaFormal{
-		Keyspaces: map[string]KeyspaceFormal{
-			"unsharded": {
-				Classes: map[string]ClassFormal{
-					"seq": {
-						Type: "Sequence",
-					},
 				},
 				Tables: map[string]string{
 					"seq": "seq",
@@ -690,7 +632,8 @@ func TestSequenceSharded(t *testing.T) {
 func TestBadSequence(t *testing.T) {
 	good := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
-			"unsharded": {
+			"sharded": {
+				Sharded: true,
 				Classes: map[string]ClassFormal{
 					"t1": {
 						Autoinc: &AutoincFormal{
