@@ -89,7 +89,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where costly in ('aa', 'bb') and name in ::_vals",
+    "Query": "select id from user where costly in ('aa', 'bb') and name in ::__vals",
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "name_user_map",
     "Values": [
@@ -158,7 +158,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where name in ::_vals",
+    "Query": "select id from user where name in ::__vals",
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "name_user_map",
     "Values": "::list"
@@ -389,7 +389,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where user.col = 5 and user.id in ::_vals",
+    "Query": "select id from user where user.col = 5 and user.id in ::__vals",
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "user_index",
     "Values": [
@@ -520,7 +520,7 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select u.m from user as u where u.id in ::_vals and u.id in (select m2 from user where user.id = u.id and user.col = :user_extra_col)",
+      "Query": "select u.m from user as u where u.id in ::__vals and u.id in (select m2 from user where user.id = u.id and user.col = :user_extra_col)",
       "FieldQuery": "select u.m from user as u where 1 != 1",
       "Vindex": "user_index",
       "Values": [
@@ -591,7 +591,7 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select u.m from user as u where u.id in ::_vals and u.id in (select m2 from user where user.id = u.id and user.col = :user_extra_col and user.id in (select m3 from user_extra where user_extra.user_id = user.id))",
+      "Query": "select u.m from user as u where u.id in ::__vals and u.id in (select m2 from user where user.id = u.id and user.col = :user_extra_col and user.id in (select m3 from user_extra where user_extra.user_id = user.id))",
       "FieldQuery": "select u.m from user as u where 1 != 1",
       "Vindex": "user_index",
       "Values": [

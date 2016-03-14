@@ -580,11 +580,105 @@ func TestSequence(t *testing.T) {
 					Name: "unsharded",
 				},
 				Autoinc: &Autoinc{
+					Col:          "c1",
+					Sequence:     seq,
+					ColVindexNum: -1,
+				},
+			},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		gotjson, _ := json.Marshal(got)
+		wantjson, _ := json.Marshal(want)
+		t.Errorf("BuildVSchema:s\n%s, want\n%s", gotjson, wantjson)
+	}
+}
+
+func TestSequenceSharded(t *testing.T) {
+	good := VSchemaFormal{
+		Keyspaces: map[string]KeyspaceFormal{
+			"unsharded": {
+				Classes: map[string]ClassFormal{
+					"seq": {
+						Type: "Sequence",
+					},
+				},
+				Tables: map[string]string{
+					"seq": "seq",
+				},
+			},
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]VindexFormal{
+					"stfu1": {
+						Type: "stfu",
+						Params: map[string]interface{}{
+							"stfu1": 1,
+						},
+					},
+				},
+				Classes: map[string]ClassFormal{
+					"t1": {
+						ColVindexes: []ColVindexFormal{
+							{
+								Col:  "c1",
+								Name: "stfu1",
+							},
+						},
+						Autoinc: &AutoincFormal{
+							Col:      "c1",
+							Sequence: "seq",
+						},
+					},
+				},
+				Tables: map[string]string{
+					"t1": "t1",
+				},
+			},
+		},
+	}
+	got, err := BuildVSchema(&good)
+	if err != nil {
+		t.Error(err)
+	}
+	seq := &Table{
+		Name: "seq",
+		Keyspace: &Keyspace{
+			Name: "unsharded",
+		},
+		IsSequence: true,
+	}
+	want := &VSchema{
+		Tables: map[string]*Table{
+			"seq": seq,
+			"t1": {
+				Name: "t1",
+				Keyspace: &Keyspace{
+					Name:    "sharded",
+					Sharded: true,
+				},
+				ColVindexes: []*ColVindex{
+					{
+						Col:  "c1",
+						Type: "stfu",
+						Name: "stfu1",
+						Vindex: &stFU{
+							name: "stfu1",
+							Params: map[string]interface{}{
+								"stfu1": 1,
+							},
+						},
+					},
+				},
+				Autoinc: &Autoinc{
 					Col:      "c1",
 					Sequence: seq,
 				},
 			},
 		},
+	}
+	want.Tables["t1"].Ordered = []*ColVindex{
+		want.Tables["t1"].ColVindexes[0],
 	}
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)

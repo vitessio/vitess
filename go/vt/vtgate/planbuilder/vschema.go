@@ -49,33 +49,88 @@ type ColVindex struct {
 type Autoinc struct {
 	Col      string
 	Sequence *Table
+	// ColVindexNum is the index of the ColVindex
+	// if the column is also a ColVindex. Otherwise, it's -1.
+	ColVindexNum int
 }
 
 // BuildVSchema builds a VSchema from a VSchemaFormal.
 func BuildVSchema(source *VSchemaFormal) (vschema *VSchema, err error) {
 	vschema = &VSchema{Tables: make(map[string]*Table)}
+	keyspaces := buildKeyspaces(source)
+	// We have to build the sequences first to avoid
+	// forward reference errors.
+	err = buildSequences(source, vschema, keyspaces)
+	if err != nil {
+		return nil, err
+	}
+	err = buildTables(source, vschema, keyspaces)
+	if err != nil {
+		return nil, err
+	}
+	return vschema, nil
+}
+
+func buildKeyspaces(source *VSchemaFormal) map[string]*Keyspace {
+	k := make(map[string]*Keyspace)
 	for ksname, ks := range source.Keyspaces {
-		keyspace := &Keyspace{
+		k[ksname] = &Keyspace{
 			Name:    ksname,
 			Sharded: ks.Sharded,
 		}
+	}
+	return k
+}
+
+func buildSequences(source *VSchemaFormal, vschema *VSchema, keyspaces map[string]*Keyspace) error {
+	for ksname, ks := range source.Keyspaces {
+		keyspace := keyspaces[ksname]
+		for tname, cname := range ks.Tables {
+			if _, ok := vschema.Tables[tname]; ok {
+				return fmt.Errorf("table %s has multiple definitions", tname)
+			}
+			if cname == "" {
+				continue
+			}
+			class, ok := ks.Classes[cname]
+			if !ok {
+				return fmt.Errorf("class %s not found for table %s", cname, tname)
+			}
+			if class.Type == "Sequence" {
+				vschema.Tables[tname] = &Table{
+					Name:       tname,
+					Keyspace:   keyspace,
+					IsSequence: true,
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func buildTables(source *VSchemaFormal, vschema *VSchema, keyspaces map[string]*Keyspace) error {
+	for ksname, ks := range source.Keyspaces {
+		keyspace := keyspaces[ksname]
 		vindexes := make(map[string]Vindex)
 		for vname, vindexInfo := range ks.Vindexes {
 			vindex, err := CreateVindex(vindexInfo.Type, vname, vindexInfo.Params)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			switch vindex.(type) {
 			case Unique:
 			case NonUnique:
 			default:
-				return nil, fmt.Errorf("vindex %s needs to be Unique or NonUnique", vname)
+				return fmt.Errorf("vindex %s needs to be Unique or NonUnique", vname)
 			}
 			vindexes[vname] = vindex
 		}
 		for tname, cname := range ks.Tables {
-			if _, ok := vschema.Tables[tname]; ok {
-				return nil, fmt.Errorf("table %s has multiple definitions", tname)
+			if t, ok := vschema.Tables[tname]; ok {
+				if t.IsSequence {
+					continue
+				}
+				return fmt.Errorf("table %s has multiple definitions", tname)
 			}
 			t := &Table{
 				Name:     tname,
@@ -87,16 +142,13 @@ func BuildVSchema(source *VSchemaFormal) (vschema *VSchema, err error) {
 			}
 			class, ok := ks.Classes[cname]
 			if !ok {
-				return nil, fmt.Errorf("class %s not found for table %s", cname, tname)
-			}
-			if class.Type == "Sequence" {
-				t.IsSequence = true
+				return fmt.Errorf("class %s not found for table %s", cname, tname)
 			}
 			if keyspace.Sharded {
 				for i, ind := range class.ColVindexes {
 					vindexInfo, ok := ks.Vindexes[ind.Name]
 					if !ok {
-						return nil, fmt.Errorf("vindex %s not found for class %s", ind.Name, cname)
+						return fmt.Errorf("vindex %s not found for class %s", ind.Name, cname)
 					}
 					vindex := vindexes[ind.Name]
 					owned := false
@@ -113,10 +165,10 @@ func BuildVSchema(source *VSchemaFormal) (vschema *VSchema, err error) {
 					if i == 0 {
 						// Perform Primary vindex check.
 						if _, ok := columnVindex.Vindex.(Unique); !ok {
-							return nil, fmt.Errorf("primary vindex %s is not Unique for class %s", ind.Name, cname)
+							return fmt.Errorf("primary vindex %s is not Unique for class %s", ind.Name, cname)
 						}
 						if owned {
-							return nil, fmt.Errorf("primary vindex %s cannot be owned for class %s", ind.Name, cname)
+							return fmt.Errorf("primary vindex %s cannot be owned for class %s", ind.Name, cname)
 						}
 					}
 					t.ColVindexes = append(t.ColVindexes, columnVindex)
@@ -127,17 +179,23 @@ func BuildVSchema(source *VSchemaFormal) (vschema *VSchema, err error) {
 				t.Ordered = colVindexSorted(t.ColVindexes)
 			}
 			if class.Autoinc != nil {
-				t.Autoinc = &Autoinc{Col: class.Autoinc.Col}
+				t.Autoinc = &Autoinc{Col: class.Autoinc.Col, ColVindexNum: -1}
 				seq, ok := vschema.Tables[class.Autoinc.Sequence]
 				if !ok {
-					return nil, fmt.Errorf("sequence %s not found for class %s", class.Autoinc.Sequence, cname)
+					return fmt.Errorf("sequence %s not found for class %s", class.Autoinc.Sequence, cname)
 				}
 				t.Autoinc.Sequence = seq
+				for i, cv := range t.ColVindexes {
+					if t.Autoinc.Col == cv.Col {
+						t.Autoinc.ColVindexNum = i
+						break
+					}
+				}
 			}
 			vschema.Tables[tname] = t
 		}
 	}
-	return vschema, nil
+	return nil
 }
 
 // FindTable returns a pointer to the Table if found.

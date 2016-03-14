@@ -192,11 +192,20 @@
     },
     "Query": "insert into user(id, name, costly) values (:_id, :_name, :_costly)",
     "Values": [
-      1,
+      ":__seq",
       null,
       null
     ],
-    "Table": "user"
+    "Table": "user",
+    "Generate": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next value from `seq`",
+      "Value": 1
+    }
   }
 }
 
@@ -212,11 +221,19 @@
     },
     "Query": "insert into user(nonid, id, name, costly) values (2, :_id, :_name, :_costly)",
     "Values": [
-      null,
+      ":__seq",
       null,
       null
     ],
-    "Table": "user"
+    "Table": "user",
+    "Generate": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next value from `seq`"
+    }
   }
 }
 
@@ -232,13 +249,52 @@
     },
     "Query": "insert into user(nonid, name, id, costly) values (2, :_name, :_id, :_costly)",
     "Values": [
-      1,
+      ":__seq",
       "foo",
       null
     ],
-    "Table": "user"
+    "Table": "user",
+    "Generate": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next value from `seq`",
+      "Value": 1
+    }
   }
 }
+
+# insert for non-vindex autoinc
+"insert into user_extra(nonid) values (2)"
+{
+  "Original": "insert into user_extra(nonid) values (2)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into user_extra(nonid, user_id, extra_id) values (2, :_user_id, :__seq)",
+    "Values": [
+      null
+    ],
+    "Table": "user_extra",
+    "Generate": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next value from `seq`"
+    }
+  }
+}
+
+# insert for non-vindex autoinc, invalid value
+"insert into user_extra(nonid, extra_id) values (2, 1.1)"
+"could not convert val: 1.1, pos: 1: strconv.ParseUint: parsing "1.1": invalid syntax"
 
 # insert invalid index value
 "insert into music_extra(music_id, user_id) values(1, 1.1)"
