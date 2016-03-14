@@ -81,6 +81,14 @@ public class VitessStatementTest {
         VitessStatement statement = new VitessStatement(mockConn);
         try {
 
+            //Empty Sql Statement
+            try {
+                statement.executeQuery("");
+                Assert.fail("Should have thrown exception for empty sql");
+            } catch (SQLException ex) {
+                Assert.assertEquals("SQL statement is not valid", ex.getMessage());
+            }
+
             //select on replica
             PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.REPLICA);
             ResultSet rs = statement.executeQuery(sqlSelect);
@@ -324,5 +332,87 @@ public class VitessStatementTest {
         } catch (SQLException e) {
             Assert.fail("Test failed " + e.getMessage());
         }
+    }
+
+    @Test public void testGetMaxFieldSize() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+
+        VitessStatement statement = new VitessStatement(mockConn);
+        Assert.assertEquals(65535, statement.getMaxFieldSize());
+    }
+
+    @Test public void testGetMaxRows() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+
+        VitessStatement statement = new VitessStatement(mockConn);
+        Assert.assertEquals(0, statement.getMaxRows());
+    }
+
+    @Test public void testGetQueryTimeout() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+
+        VitessStatement statement = new VitessStatement(mockConn);
+        Assert.assertEquals(5, statement.getQueryTimeout());
+    }
+
+    @Test public void testSetQueryTimeout() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+
+        VitessStatement statement = new VitessStatement(mockConn);
+
+        int queryTimeout = 10;
+        statement.setQueryTimeout(queryTimeout);
+        Assert.assertEquals(queryTimeout, statement.getQueryTimeout());
+        try {
+            queryTimeout = -1;
+            statement.setQueryTimeout(queryTimeout);
+            Assert.fail("Should have thrown exception for wrong value");
+        } catch (SQLException ex) {
+            Assert.assertEquals("Illegal value for query timeout",ex.getMessage());
+        }
+    }
+
+    @Test public void testGetWarnings() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+
+        VitessStatement statement = new VitessStatement(mockConn);
+        Assert.assertNull(statement.getWarnings());
+    }
+
+    @Test public void testGetFetchDirection() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+
+        VitessStatement statement = new VitessStatement(mockConn);
+        Assert.assertEquals(ResultSet.FETCH_FORWARD, statement.getFetchDirection());
+    }
+
+    @Test public void testGetFetchSize() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+
+        VitessStatement statement = new VitessStatement(mockConn);
+        Assert.assertEquals(0, statement.getFetchSize());
+    }
+
+    @Test public void testGetResultSetConcurrency() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+
+        VitessStatement statement = new VitessStatement(mockConn);
+        Assert.assertEquals(ResultSet.CONCUR_READ_ONLY, statement.getResultSetConcurrency());
+    }
+
+    @Test public void testGetResultSetType() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+
+        VitessStatement statement = new VitessStatement(mockConn);
+        Assert.assertEquals(ResultSet.TYPE_FORWARD_ONLY, statement.getResultSetType());
+    }
+
+    @Test public void testIsClosed() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+
+        VitessStatement statement = new VitessStatement(mockConn);
+        Assert.assertFalse(statement.isClosed());
+        statement.close();
+        Assert.assertTrue(statement.isClosed());
     }
 }
