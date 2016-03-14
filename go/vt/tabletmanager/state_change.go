@@ -51,12 +51,18 @@ func (agent *ActionAgent) loadBlacklistRules(tablet *topodatapb.Tablet, blacklis
 		if err != nil {
 			return err
 		}
-		log.Infof("Blacklisting tables %v", strings.Join(tables, ", "))
-		qr := tabletserver.NewQueryRule("enforce blacklisted tables", "blacklisted_table", tabletserver.QRFailRetry)
-		for _, t := range tables {
-			qr.AddTableCond(t)
+
+		// if the wildcards resolve into real tables, blacklist them.
+		// (if there are no tables here, the rule would blacklist
+		// all queries, oops).
+		if len(tables) > 0 {
+			log.Infof("Blacklisting tables %v", strings.Join(tables, ", "))
+			qr := tabletserver.NewQueryRule("enforce blacklisted tables", "blacklisted_table", tabletserver.QRFailRetry)
+			for _, t := range tables {
+				qr.AddTableCond(t)
+			}
+			blacklistRules.Add(qr)
 		}
-		blacklistRules.Add(qr)
 	}
 
 	loadRuleErr := agent.QueryServiceControl.SetQueryRules(blacklistQueryRules, blacklistRules)
