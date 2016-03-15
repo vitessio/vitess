@@ -6,6 +6,7 @@ package tabletmanager
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"html/template"
 	"reflect"
@@ -13,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
@@ -110,7 +113,7 @@ func (fhc *fakeHealthCheck) HTMLName() template.HTML {
 	return template.HTML("fakeHealthCheck")
 }
 
-func createTestAgent(ctx context.Context, t *testing.T) *ActionAgent {
+func createTestAgent(ctx context.Context, t *testing.T) (*ActionAgent, chan<- *binlogplayer.VtClientMock) {
 	ts := zktestserver.New(t, []string{"cell1"})
 
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
@@ -139,17 +142,22 @@ func createTestAgent(ctx context.Context, t *testing.T) *ActionAgent {
 
 	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{MysqlPort: 3306}
 	agent := NewTestActionAgent(ctx, ts, tabletAlias, port, 0, mysqlDaemon)
-	agent.BinlogPlayerMap = NewBinlogPlayerMap(ts, nil, nil)
+
+	vtClientMocksChannel := make(chan *binlogplayer.VtClientMock, 1)
+	agent.BinlogPlayerMap = NewBinlogPlayerMap(ts, mysqlDaemon, func() binlogplayer.VtClient {
+		return <-vtClientMocksChannel
+	})
+
 	agent.HealthReporter = &fakeHealthCheck{}
 
-	return agent
+	return agent, vtClientMocksChannel
 }
 
 // TestHealthCheckControlsQueryService verifies that a tablet going healthy
 // starts the query service, and going unhealthy stops it.
 func TestHealthCheckControlsQueryService(t *testing.T) {
 	ctx := context.Background()
-	agent := createTestAgent(ctx, t)
+	agent, _ := createTestAgent(ctx, t)
 	targetTabletType := topodatapb.TabletType_REPLICA
 
 	// Consume the first health broadcast triggered by ActionAgent.Start():
@@ -258,7 +266,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 // query service, it should not go healthy
 func TestQueryServiceNotStarting(t *testing.T) {
 	ctx := context.Background()
-	agent := createTestAgent(ctx, t)
+	agent, _ := createTestAgent(ctx, t)
 	targetTabletType := topodatapb.TabletType_REPLICA
 	agent.QueryServiceControl.(*tabletservermock.Controller).SetServingTypeError = fmt.Errorf("test cannot start query service")
 
@@ -309,7 +317,7 @@ func TestQueryServiceNotStarting(t *testing.T) {
 // service is shut down, the tablet goes unhealthy
 func TestQueryServiceStopped(t *testing.T) {
 	ctx := context.Background()
-	agent := createTestAgent(ctx, t)
+	agent, _ := createTestAgent(ctx, t)
 	targetTabletType := topodatapb.TabletType_REPLICA
 
 	// Consume the first health broadcast triggered by ActionAgent.Start():
@@ -413,7 +421,7 @@ func TestQueryServiceStopped(t *testing.T) {
 // query service in a tablet.
 func TestTabletControl(t *testing.T) {
 	ctx := context.Background()
-	agent := createTestAgent(ctx, t)
+	agent, _ := createTestAgent(ctx, t)
 	targetTabletType := topodatapb.TabletType_REPLICA
 
 	// Consume the first health broadcast triggered by ActionAgent.Start():
@@ -624,11 +632,182 @@ func TestTabletControl(t *testing.T) {
 	}
 }
 
+// TestQueryServiceChangeImmediateHealthcheckResponse verifies that a change
+// of the QueryService state or the tablet type will result into a broadcast
+// of a StreamHealthResponse message.
+func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
+	// BinlogPlayer will fail in the second retry because we don't fully mock
+	// it. Retry faster to make it fail faster.
+	flag.Set("binlog_player_retry_delay", "100ms")
+
+	ctx := context.Background()
+	agent, vtClientMocksChannel := createTestAgent(ctx, t)
+	targetTabletType := topodatapb.TabletType_MASTER
+
+	// Consume the first health broadcast triggered by ActionAgent.Start():
+	//   (SPARE, SERVING) goes to (SPARE, NOT_SERVING).
+	if _, err := expectBroadcastData(agent.QueryServiceControl, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := expectStateChange(agent.QueryServiceControl, false, topodatapb.TabletType_SPARE); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run health check to get changed from SPARE to MASTER.
+	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 20 * time.Second
+	agent.runHealthCheck(targetTabletType)
+	ti, err := agent.TopoServer.GetTablet(ctx, tabletAlias)
+	if err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+	if ti.Type != targetTabletType {
+		t.Errorf("First health check failed to go to replica: %v", ti.Type)
+	}
+	if !agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should be running")
+	}
+	if got := agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType; got != targetTabletType {
+		t.Errorf("invalid tabletserver target: got = %v, want = %v", got, targetTabletType)
+	}
+	if _, err := expectBroadcastData(agent.QueryServiceControl, 20); err != nil {
+		t.Fatal(err)
+	}
+	if err := expectStateChange(agent.QueryServiceControl, true, targetTabletType); err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate a vertical split resharding where we set SourceShards in the topo
+	// and enable filtered replication.
+	si, err := agent.TopoServer.GetShard(ctx, "test_keyspace", "0")
+	if err != nil {
+		t.Fatalf("GetShard failed: %v", err)
+	}
+	si.SourceShards = []*topodatapb.Shard_SourceShard{
+		{
+			Uid:      1,
+			Keyspace: "source_keyspace",
+			Shard:    "0",
+			Tables: []string{
+				"table1",
+			},
+		},
+	}
+	if err := agent.TopoServer.UpdateShard(ctx, si); err != nil {
+		t.Fatalf("UpdateShard failed: %v", err)
+	}
+	// Mock out the BinlogPlayer client. Tell the BinlogPlayer not to start.
+	vtClientMock := binlogplayer.NewVtClientMock()
+	vtClientMock.Result = &sqltypes.Result{
+		Fields:       nil,
+		RowsAffected: 1,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.MakeString([]byte("MariaDB/0-1-1234")),
+				sqltypes.MakeString([]byte("DontStart")),
+			},
+		},
+	}
+	vtClientMocksChannel <- vtClientMock
+
+	// Refresh the tablet state, as vtworker would do.
+	// Since we change the QueryService state, we'll also trigger a health broadcast.
+	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 21 * time.Second
+	agent.RPCWrapLockAction(ctx, actionnode.TabletActionRefreshState, "", "", true, func() error {
+		agent.RefreshState(ctx)
+		return nil
+	})
+	// (Destination) MASTER with enabled filtered replication mustn't serve anymore.
+	if agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should not be running")
+	}
+	// Consume health broadcast sent out due to QueryService state change from
+	// (MASTER, SERVING) to (MASTER, NOT_SERVING).
+	// Since we didn't run healthcheck again yet, the broadcast data contains the
+	// cached replication lag of 20 instead of 21.
+	if bd, err := expectBroadcastData(agent.QueryServiceControl, 20); err == nil {
+		if bd.RealtimeStats.BinlogPlayersCount != 1 {
+			t.Fatalf("filtered replication must be enabled: %v", bd)
+		}
+	} else {
+		t.Fatal(err)
+	}
+	if err := expectStateChange(agent.QueryServiceControl, false, targetTabletType); err != nil {
+		t.Fatal(err)
+	}
+
+	// Running a healthcheck won't put the QueryService back to SERVING.
+	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 22 * time.Second
+	agent.runHealthCheck(targetTabletType)
+	ti, err = agent.TopoServer.GetTablet(ctx, tabletAlias)
+	if err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+	if ti.Type != targetTabletType {
+		t.Errorf("Health check failed to go to replica: %v", ti.Type)
+	}
+	if agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should not be running")
+	}
+	if got := agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType; got != targetTabletType {
+		t.Errorf("invalid tabletserver target: got = %v, want = %v", got, targetTabletType)
+	}
+	if bd, err := expectBroadcastData(agent.QueryServiceControl, 22); err == nil {
+		if bd.RealtimeStats.BinlogPlayersCount != 1 {
+			t.Fatalf("filtered replication must be still running: %v", bd)
+		}
+	} else {
+		t.Fatal(err)
+	}
+	// NOTE: No state change here since nothing has changed.
+
+	// Simulate migration to destination master i.e. remove SourceShards.
+	si, err = agent.TopoServer.GetShard(ctx, "test_keyspace", "0")
+	if err != nil {
+		t.Fatalf("GetShard failed: %v", err)
+	}
+	si.SourceShards = nil
+	if err = agent.TopoServer.UpdateShard(ctx, si); err != nil {
+		t.Fatalf("UpdateShard failed: %v", err)
+	}
+	// Refresh the tablet state, as vtctl MigrateServedFrom would do.
+	// This should also trigger a health broadcast since the QueryService state
+	// changes from NOT_SERVING to SERVING.
+	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 23 * time.Second
+	agent.RPCWrapLockAction(ctx, actionnode.TabletActionRefreshState, "", "", true, func() error {
+		agent.RefreshState(ctx)
+		return nil
+	})
+	// QueryService changed from NOT_SERVING to SERVING.
+	if !agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should not be running")
+	}
+	// Since we didn't run healthcheck again yet, the broadcast data contains the
+	// cached replication lag of 22 instead of 23.
+	if bd, err := expectBroadcastData(agent.QueryServiceControl, 22); err == nil {
+		if bd.RealtimeStats.BinlogPlayersCount != 0 {
+			t.Fatalf("filtered replication must be disabled now: %v", bd)
+		}
+	} else {
+		t.Fatal(err)
+	}
+	if err := expectStateChange(agent.QueryServiceControl, true, targetTabletType); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := expectBroadcastDataEmpty(agent.QueryServiceControl); err != nil {
+		t.Fatal(err)
+	}
+	if err := expectStateChangesEmpty(agent.QueryServiceControl); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestOldHealthCheck verifies that a healthcheck that is too old will
 // return an error
 func TestOldHealthCheck(t *testing.T) {
 	ctx := context.Background()
-	agent := createTestAgent(ctx, t)
+	agent, _ := createTestAgent(ctx, t)
 	*healthCheckInterval = 20 * time.Second
 	agent._healthy = nil
 
