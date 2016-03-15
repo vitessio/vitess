@@ -18,10 +18,9 @@ to build query plans.
 Additionally, this package defines the various Vindex
 related interfaces. These interfaces need to be satisfied
 by plugin code that wants to define a Vindex type.
-*/
-package planbuilder
 
-/*
+Primitives
+
 The planbuilder for the SELECT statement has the highest
 complexity. Currently, VTGate can only perform the following
 two primitives: Route and Join.
@@ -59,6 +58,8 @@ The planbuilder tries to push all the constructs of
 the original request into these two primitives. If
 successful, we return the built plan. Otherwise, it's
 an error.
+
+Symbol Table
 
 The central design element for analyzing queries and
 building plans is the symbol table (symtab). This data
@@ -99,6 +100,8 @@ of the outer query, because those have not been created
 yet. But a subquery in the HAVING clause will be able
 to see them.
 
+Break-Up and Push-Down
+
 The plan builder builds the plan in two phases. In the
 first phase (break-up and push-down), the query is
 broken into smaller parts and pushed down into
@@ -115,7 +118,7 @@ vertically, the query actually becomes a SELECT statement feeding
 into another. This means that symbols that were previously
 not visible during analysis are now visible. It's very important
 to remember the original resolution. Otherwise, there is
-risk that incorrent values are used when the RHS of a join
+risk that incorrect values are used when the RHS of a join
 requests values from the LHS. In order to achieve this,
 the sqlparser.ColName type has been ammended with a Metadata
 field that is populated as soon as a symbol is resolved.
@@ -133,6 +136,8 @@ the current route. In the case of a subquery, it initially
 starts off with its own route. After the analysis is done,
 if we decide to merge it with an outer route, we repoint
 all the symbols of the subquery to the outer route.
+
+Caveats
 
 The VSchema currently doesn't contain the full list of columns
 in the tables. For the sake of convenience, if a query
@@ -160,3 +165,4 @@ column name. This is the basis for the definition of the
 colref type. If the colref points to a colsym, then
 the column name is irrelevant.
 */
+package planbuilder

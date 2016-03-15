@@ -25,23 +25,28 @@ func splitAndExpression(filters []sqlparser.BoolExpr, node sqlparser.BoolExpr) [
 	return append(filters, node)
 }
 
-// findRoute identifies the right-most route for expr. In situations where
-// the expression addresses multiple routes, the expectation is that the
-// executor will use the results of the previous routes to feed the necessary
-// values for the external references.
+// findRoute identifies the right-most route for expr.
+//
+// In situations where the expression addresses multiple routes, the expectation
+// is that the executor will use the results of the previous routes to feed the
+// necessary values for the external references.
+//
 // If the expression contains a subquery, the right-most route identification
 // also follows the same rules of a normal expression. This is achieved by
 // looking at the Externs field of its symbol table that contains the list of
 // external references.
+//
 // Once the target route is identified, we have to verify that the subquery's
 // route can be merged with it. If it cannot, we fail the query. This is because
 // we don't have the ability to wire up subqueries through expression evaluation
 // primitives. Consequently, if the plan for a subquery comes out as a Join,
 // we can immediately error out.
+//
 // Since findRoute can itself be called from within a subquery, it has to assume
 // that some of the external references may actually be pointing to an outer
 // query. The isLocal response from the symtab is used to make sure that we
 // only analyze symbols that point to the current symtab.
+//
 // If an expression has no references to the current query, then the left-most
 // route is chosen as the default.
 func findRoute(expr sqlparser.Expr, plan planBuilder) (route *routeBuilder, err error) {

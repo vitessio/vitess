@@ -50,7 +50,18 @@ func (plr *Planner) GetPlan(sql string) (*planbuilder.Plan, error) {
 	if result, ok := plr.plans.Get(sql); ok {
 		return result.(*planbuilder.Plan), nil
 	}
-	plan, err := planbuilder.BuildPlan(sql, plr.vschema)
+	// Build a naive execution tree.
+	root, err := buildPrimitiveTree(sql, plr.vschema)
+	if err != nil {
+		return nil, err
+	}
+	// Optimize the tree.
+	root, err = optimizer.Optimize(root, plr.vschema)
+	if err != nil {
+		return nil, err
+	}
+	// Check if we've reached an actually executable plan.
+	plan, err := MakePlan(root)
 	if err != nil {
 		return nil, err
 	}
