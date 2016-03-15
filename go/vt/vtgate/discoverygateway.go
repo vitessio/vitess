@@ -21,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vtgate/txbuffer"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -141,9 +142,13 @@ func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard s
 // Begin starts a transaction for the specified keyspace, shard, and tablet type.
 // It returns the transaction ID.
 func (dg *discoveryGateway) Begin(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType) (transactionID int64, err error) {
+	attemptNumber := 0
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var innerErr error
+		// Potentially buffer this transaction.
+		txbuffer.FakeBuffer(keyspace, shard, attemptNumber)
 		transactionID, innerErr = conn.Begin(ctx)
+		attemptNumber++
 		return innerErr
 	}, 0, false)
 	return transactionID, err
