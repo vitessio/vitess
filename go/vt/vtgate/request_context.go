@@ -13,8 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
-type requestContext struct {
-	ctx              context.Context
+type Request struct {
 	sql              string
 	bindVars         map[string]interface{}
 	tabletType       topodatapb.TabletType

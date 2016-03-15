@@ -63,12 +63,12 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
-	vcursor := newRequestContext(ctx, sql, bindVars, tabletType, session, notInTransaction, rtr)
+	req := newRequestContext(sql, bindVars, tabletType, session, notInTransaction, rtr)
 	plan, err := rtr.planner.GetPlan(sql)
 	if err != nil {
 		return nil, err
 	}
-	return rtr.execInstruction(vcursor, plan.Instructions, true)
+	return plan.Execute(ctx, req)
 }
 
 // execInstruction performs a non-streaming execution of the specified primitve.
