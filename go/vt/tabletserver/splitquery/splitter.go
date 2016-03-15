@@ -1,6 +1,8 @@
 package splitquery
 
 import (
+	"fmt"
+
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
@@ -120,7 +122,10 @@ func (splitter *Splitter) constructQueryPart(start, end tuple) *querytypes.Query
 // The function panics if a bind variable name already exists in 'resultBindVariables'.
 func populateBoundaryBindVariables(
 	inputTuple tuple, bindVariableNames []string, resultBindVariables map[string]interface{}) {
-	assertEqual(len(inputTuple), len(bindVariableNames))
+	if len(inputTuple) != len(bindVariableNames) {
+		panic(fmt.Sprintf("len(inputTuple) != len(bindVariableNames): %v != %v",
+			len(inputTuple), len(bindVariableNames)))
+	}
 	for i := range inputTuple {
 		populateNewBindVariable(bindVariableNames[i], inputTuple[i].ToNative(), resultBindVariables)
 	}
@@ -154,8 +159,12 @@ func convertBindVariableNamesToValExpr(bindVariableNames []string) []sqlparser.V
 // (l1 < r1) or ((l1 = r1) and (l2 < r2)), otherwise.
 func constructTupleInequality(
 	lhsTuple []sqlparser.ValExpr, rhsTuple []sqlparser.ValExpr, strict bool) sqlparser.BoolExpr {
-	assertEqual(len(lhsTuple), len(rhsTuple))
-	assertGreaterOrEqual(len(lhsTuple), 1)
+	if len(lhsTuple) != len(rhsTuple) {
+		panic(fmt.Sprintf("len(lhsTuple)!=len(rhsTuple): %v!=%v", len(lhsTuple), len(rhsTuple)))
+	}
+	if len(lhsTuple) == 0 {
+		panic("len(lhsTuple)==0")
+	}
 	return constructTupleInequalityUnchecked(lhsTuple, rhsTuple, strict)
 }
 func constructTupleInequalityUnchecked(

@@ -53,29 +53,3 @@ func addAndTermToWhereClause(selectAST *sqlparser.Select, andTerm sqlparser.Bool
 		)
 	}
 }
-
-// Assertions
-// TODO(erez): Replace these with something more standard
-func assertEqual(a, b int) {
-	if a != b {
-		panic(fmt.Sprintf("assertion %v == %v failed", a, b))
-	}
-}
-
-func assertFalse(a bool) {
-	if a {
-		panic("condition is true. Expected false.")
-	}
-}
-
-func assertTrue(a bool) {
-	if !a {
-		panic("condition is false. Expected false.")
-	}
-}
-
-func assertGreaterOrEqual(a, b int) {
-	if a < b {
-		panic(fmt.Sprintf("assertion %v<=%v failed", a, b))
-	}
-}

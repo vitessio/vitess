@@ -84,7 +84,10 @@ func (algorithm *FullScanAlgorithm) generateBoundaries() ([]tuple, error) {
 
 func (algorithm *FullScanAlgorithm) populatePrevTupleInBindVariables(
 	prevTuple tuple, bindVariables map[string]interface{}) {
-	assertEqual(len(prevTuple), len(algorithm.prevBindVariableNames))
+	if len(prevTuple) != len(algorithm.prevBindVariableNames) {
+		panic(fmt.Sprintf("len(prevTuple) != len(algorithm.prevBindVariableNames): %v != %v",
+			len(prevTuple), len(algorithm.prevBindVariableNames)))
+	}
 	for i, tupleElement := range prevTuple {
 		bindVariables[algorithm.prevBindVariableNames[i]] = tupleElement.ToNative()
 	}
