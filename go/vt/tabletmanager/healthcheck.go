@@ -243,8 +243,8 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 		if isServing {
 			// We are not healthy or should not be running the query service.
 			//
-			// We do NOT enter lameduck in this case, because we should only hit this
-			// in the following scenarios:
+			// Ideally, we should NOT enter lameduck in this case, because we should
+			// only hit this in the following scenarios:
 			//
 			// * Healthcheck fails: We're probably serving errors anyway, so no point.
 			// * Replication lag exceeds unhealthy threshold: This is very rare, so it
@@ -252,6 +252,10 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 			//   go away when vtgate is the only one looking at lag.
 			// * We're in a special state where queryservice should be disabled
 			//   despite being non-SPARE: This is not a live serving instance anyway.
+			//
+			// However, the current implementation enters lameduck in these cases as
+			// well (see state_change.go) since the code can only distinguish between
+			// the old and new tablet type.
 			//
 			// We don't care if the QueryService state actually changed because we'll
 			// broadcast the latest health status after this immediately anway.
