@@ -27,9 +27,10 @@ public class FieldMap {
     this.fields = ImmutableList.copyOf(checkNotNull(fields));
 
     ImmutableMap.Builder<String, Integer> builder = new ImmutableMap.Builder<>();
-    int i = 0;
+    // columnIndex is 1-based.
+    int columnIndex = 1;
     for (Field field : this.fields) {
-      builder.put(field.getName(), i++);
+      builder.put(field.getName(), columnIndex++);
     }
     indexMap = builder.build();
   }
@@ -38,13 +39,14 @@ public class FieldMap {
     return fields;
   }
 
-  public Field get(int fieldIndex) {
-    checkArgument(fieldIndex >= 0);
-    return fields.get(fieldIndex);
+  public Field get(int columnIndex) {
+    // columnIndex is 1-based.
+    checkArgument(columnIndex >= 1, "columnIndex out of range: %s", columnIndex);
+    return fields.get(columnIndex - 1);
   }
 
   @Nullable
-  public Integer getIndex(String fieldName) {
-    return indexMap.get(fieldName);
+  public Integer getIndex(String columnLabel) {
+    return indexMap.get(columnLabel);
   }
 }
