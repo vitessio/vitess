@@ -7,6 +7,8 @@ import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.VTGateConn;
 import com.youtube.vitess.client.VTGateTx;
 import com.youtube.vitess.proto.Topodata;
+import com.youtube.vitess.proto.Vtrpc;
+import org.joda.time.Duration;
 
 import java.sql.*;
 import java.util.*;
@@ -494,7 +496,7 @@ public class VitessConnection implements Connection {
             executor.execute(new Runnable() {
                 @Override public void run() {
                     try {
-                        abortInternal();
+                        close();
                     } catch (SQLException e) {
                         throw new RuntimeException(e);
                     }
@@ -570,10 +572,6 @@ public class VitessConnection implements Connection {
 
     public String getUrl() {
         return this.vitessJDBCUrl.getUrl();
-    }
-
-    private void abortInternal() throws SQLException {
-        this.closed = true;
     }
 
     /**
@@ -833,4 +831,6 @@ public class VitessConnection implements Connection {
     public Context createContext(long deadlineAfter) {
         return CommonUtils.createContext(this.vitessJDBCUrl.getUsername(),deadlineAfter);
     }
+
+
 }

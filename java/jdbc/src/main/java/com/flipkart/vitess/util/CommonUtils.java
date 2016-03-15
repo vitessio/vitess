@@ -9,6 +9,7 @@ import org.joda.time.Duration;
  * Created by naveen.nahata on 24/02/16.
  */
 public class CommonUtils {
+
     /**
      * Create context used to create grpc client and executing query.
      *
@@ -24,30 +25,11 @@ public class CommonUtils {
         }
         if (null != callerID) {
             context = Context.getDefault().withDeadlineAfter(Duration.millis(connectionTimeout))
-                .withCallerId(callerID);
+                    .withCallerId(callerID);
         } else {
             context = Context.getDefault().withDeadlineAfter(Duration.millis(connectionTimeout));
         }
         return context;
-    }
-
-    /**
-     * Converting string tabletType to Topodata.TabletType
-     *
-     * @param tabletType
-     * @return
-     */
-    public static Topodata.TabletType getTabletType(String tabletType) {
-        switch (tabletType.toLowerCase()) {
-            case "master":
-                return Topodata.TabletType.MASTER;
-            case "replica":
-                return Topodata.TabletType.REPLICA;
-            case "rdonly":
-                return Topodata.TabletType.RDONLY;
-            default:
-                return Topodata.TabletType.UNRECOGNIZED;
-        }
     }
 
 }

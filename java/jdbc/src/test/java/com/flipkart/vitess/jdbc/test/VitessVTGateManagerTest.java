@@ -11,6 +11,7 @@ import org.joda.time.Duration;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.sql.SQLException;
@@ -32,7 +33,8 @@ public class VitessVTGateManagerTest {
     }
 
     @Test public void testVtGateConnectionsConstructorMultipleVtGateConnections()
-        throws SQLException, NoSuchFieldException, IllegalAccessException {
+        throws SQLException, NoSuchFieldException, IllegalAccessException, IOException {
+        VitessVTGateManager.close();
         Properties info = new Properties();
         info.setProperty("username", "user");
         VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
@@ -53,12 +55,13 @@ public class VitessVTGateManagerTest {
         privateMapField.setAccessible(true);
         ConcurrentHashMap<String, VTGateConn> map =
             (ConcurrentHashMap<String, VTGateConn>) privateMapField.get(VitessVTGateManager.class);
-        Assert.assertEquals(map.size(), 4);
-
+        Assert.assertEquals(4, map.size());
+        VitessVTGateManager.close();
     }
 
     @Test public void testVtGateConnectionsConstructor()
-        throws SQLException, NoSuchFieldException, IllegalAccessException {
+        throws SQLException, NoSuchFieldException, IllegalAccessException, IOException {
+        VitessVTGateManager.close();
         Properties info = new Properties();
         info.setProperty("username", "user");
         VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
@@ -73,7 +76,8 @@ public class VitessVTGateManagerTest {
         privateMapField.setAccessible(true);
         ConcurrentHashMap<String, VTGateConn> map =
             (ConcurrentHashMap<String, VTGateConn>) privateMapField.get(VitessVTGateManager.class);
-        Assert.assertEquals(map.size(), 4);
+        Assert.assertEquals(3, map.size());
+        VitessVTGateManager.close();
     }
 
 }

@@ -18,7 +18,7 @@ public class Constants {
     public static final String DEFAULT_PORT = "15991";
     public static final String DEFAULT_DBNAME = "";
     public static final String DEFAULT_TABLET_TYPE = "MASTER";
-    public static final long CONNECTION_TIMEOUT = 5000;
+    public static final long CONNECTION_TIMEOUT = 30000;
     public static final String LITERAL_V = "v";
     public static final String LITERAL_SINGLE_QUOTE = "'";
     public static final String SQL_SELECT = "select";
@@ -28,7 +28,7 @@ public class Constants {
     public static final int MAJOR_VERSION = 1;
     public static final int MINOR_VERSION = 0;
     public static final int MAX_BUFFER_SIZE = 65535;
-    public static final int DEFAULT_TIMEOUT = 5000; //In miliseconds
+    public static final int DEFAULT_TIMEOUT = 30000; //In miliseconds
     public static final String LITERAL_S = "s";
     public static final String SQL_SHOW = "show";
     public static final String VITESS_KEYSPACE = "Keyspace name in Vitess Server";
@@ -94,6 +94,8 @@ public class Constants {
             "No column was accessed before calling this method";
         public static final String DBNAME_REQUIRED =
             "Database name is required in the connection url";
+        public static final String VITESS_VTGATE_CONN_CLOSE =
+            "Not able to close vitess connection";
     }
 
 
@@ -103,5 +105,6 @@ public class Constants {
         public static final String PORT = "PORT";
         public static final String DBNAME = "DBNAME";
         public static final String KEYSPACE = "KEYSPACE";
+        public static final String USERNAME = "userName";
     }
 }

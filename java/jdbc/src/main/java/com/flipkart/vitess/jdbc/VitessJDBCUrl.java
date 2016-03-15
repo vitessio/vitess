@@ -70,8 +70,8 @@ public class VitessJDBCUrl {
         if (!m.find()) {
             throw new SQLException(Constants.SQLExceptionMessages.MALFORMED_URL);
         }
-        this.username = (m.group(3) == null ? info.getProperty("username") : m.group(3));
-        // Will add passport property once its supported from vitess
+        this.username = (m.group(3) == null ? info.getProperty(Constants.Property.USERNAME) : m.group(3));
+        // Will add password property once its supported from vitess
         // this.password = (m.group(5) == null ? info.getProperty("password") : m.group(5));
         String postUrl = m.group(6);
         if (null == postUrl) {
@@ -81,11 +81,11 @@ public class VitessJDBCUrl {
         this.catalog = m.group(8);
         this.hostInfos = getURLHostInfos(postUrl);
 
-        String tabletType = info.getProperty("tabletType");
+        String tabletType = info.getProperty(Constants.Property.TABLET_TYPE);
         if (null == tabletType) {
             tabletType = Constants.DEFAULT_TABLET_TYPE;
         }
-        this.tabletType = CommonUtils.getTabletType(tabletType);
+        this.tabletType = getTabletType(tabletType);
         this.url = url;
     }
 
@@ -214,4 +214,24 @@ public class VitessJDBCUrl {
         }
         return hostInfos;
     }
+
+    /**
+     * Converting string tabletType to Topodata.TabletType
+     *
+     * @param tabletType
+     * @return
+     */
+    public static Topodata.TabletType getTabletType(String tabletType) {
+        switch (tabletType.toLowerCase()) {
+            case "master":
+                return Topodata.TabletType.MASTER;
+            case "replica":
+                return Topodata.TabletType.REPLICA;
+            case "rdonly":
+                return Topodata.TabletType.RDONLY;
+            default:
+                return Topodata.TabletType.UNRECOGNIZED;
+        }
+    }
+
 }

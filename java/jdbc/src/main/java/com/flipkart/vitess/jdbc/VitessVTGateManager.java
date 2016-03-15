@@ -9,6 +9,7 @@ import com.youtube.vitess.client.grpc.GrpcClientFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -59,16 +60,15 @@ public class VitessVTGateManager {
          * @return
          */
         public VTGateConn getVtGateConnInstance() {
+            counter++;
             counter = counter % vtGateIdentifiers.size();
             return vtGateConnHashMap.get(vtGateIdentifiers.get(counter));
         }
 
-        public void close() throws IOException {
-        }
     }
 
     private static String getIdentifer(String hostname, int port, String userIdentifer) {
-        return (hostname + new Integer(port).toString() + userIdentifer);
+        return (hostname + String.valueOf(port) + userIdentifer);
     }
 
     /**
@@ -99,9 +99,20 @@ public class VitessVTGateManager {
         vtGateConnHashMap.put(identifier, getVtGateConn(hostname, port, username));
     }
 
-    public static void close() throws IOException {
+    public static void close() throws SQLException {
+        SQLException exception = null;
+
         for (VTGateConn vtGateConn : vtGateConnHashMap.values()) {
-            vtGateConn.close();
+            try {
+                vtGateConn.close();
+            } catch (IOException e) {
+                exception =
+                    new SQLException(Constants.SQLExceptionMessages.VITESS_VTGATE_CONN_CLOSE);
+            }
+        }
+        vtGateConnHashMap.clear();
+        if (null != exception) {
+            throw exception;
         }
     }
 }

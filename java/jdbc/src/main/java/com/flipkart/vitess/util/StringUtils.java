@@ -73,7 +73,7 @@ public class StringUtils {
      */
     public final static int indexOfIgnoreCase(int startingPosition, String searchIn,
         String searchFor) {
-        if ((searchIn == null) || (searchFor == null) || startingPosition > searchIn.length()) {
+        if ((searchIn == null) || (searchFor == null) || startingPosition >= searchIn.length()) {
             return -1;
         }
 
