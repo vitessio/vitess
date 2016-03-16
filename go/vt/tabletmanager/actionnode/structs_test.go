@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/youtube/vitess/go/bson"
-
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -54,46 +52,5 @@ func TestExtraFieldsJson(t *testing.T) {
 	output := &slaveWasRestartedTestArgs{}
 	if err = json.Unmarshal(data, output); err != nil {
 		t.Errorf("Cannot re-decode struct without field: %v", err)
-	}
-}
-
-func TestMissingFieldsBson(t *testing.T) {
-	swra := &slaveWasRestartedTestArgs{
-		Parent: &topodatapb.TabletAlias{
-			Uid:  1,
-			Cell: "aa",
-		},
-		ExpectedMasterAddr:   "a1",
-		ExpectedMasterIPAddr: "i1",
-	}
-	data, err := bson.Marshal(swra)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	output := &SlaveWasRestartedArgs{}
-	err = bson.Unmarshal(data, output)
-	if err != nil {
-		t.Error(err)
-	}
-}
-
-func TestExtraFieldsBson(t *testing.T) {
-	swra := &SlaveWasRestartedArgs{
-		Parent: &topodatapb.TabletAlias{
-			Uid:  1,
-			Cell: "aa",
-		},
-	}
-	data, err := bson.Marshal(swra)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	output := &slaveWasRestartedTestArgs{}
-
-	err = bson.Unmarshal(data, output)
-	if err != nil {
-		t.Error(err)
 	}
 }
