@@ -20,9 +20,7 @@ type Splitter struct {
 }
 
 // NewSplitter creates a new Splitter object.
-func NewSplitter(
-	splitParams *SplitParams,
-	algorithm SplitAlgorithmInterface) *Splitter {
+func NewSplitter(splitParams *SplitParams, algorithm SplitAlgorithmInterface) *Splitter {
 	var splitter Splitter
 	splitter.splitParams = splitParams
 	splitter.algorithm = algorithm
@@ -147,12 +145,17 @@ func convertBindVariableNamesToValExpr(bindVariableNames []string) []sqlparser.V
 	return valExprs
 }
 
-// TODO(erez): Explain that mysql doesn't support tuple-inequalities well so we need to expand
-// to use scala inequalities.
 // constructTupleInequality constructs a boolean expression representing a tuple lexicographical
 // comparison using only scalar comparisons.
-// The expression returned repersents the lexicographical comparisons: lhsTuple <= rhsTuple,
-// if strict is fale, or lhsTuple < rhsTuple, otherwise.
+//
+// MySQL does support tuple-inequalities ((a,b) <= (c,d) and interpretes them using the
+// lexicographical ordering of tuples. However, it does not optimize queries with such inequalities
+// well. Specifically, it does not recognize that a query with such inequalities, that involve only
+// the columns of an index, can be done as an index scan. Rather, it resorts to a full-table scan.
+// Thus, we convert such tuple inequalties to an expression involving only scalar inequalties.
+//
+// The expression returned by this function represents the lexicographical comparisons:
+// lhsTuple <= rhsTuple, if strict is false, or lhsTuple < rhsTuple, otherwise.
 // For example: if lhsTuple = (l1, l2) and rhsTuple = (r1, r2) then the returned expression is
 // (l1 < r1) or ((l1 = r1) and (l2 <= r2)) if strict is false,
 // and
@@ -165,49 +168,56 @@ func constructTupleInequality(
 	if len(lhsTuple) == 0 {
 		panic("len(lhsTuple)==0")
 	}
-	return constructTupleInequalityUnchecked(lhsTuple, rhsTuple, strict)
-}
-func constructTupleInequalityUnchecked(
-	lhsTuple []sqlparser.ValExpr, rhsTuple []sqlparser.ValExpr, strict bool) sqlparser.BoolExpr {
-	if len(lhsTuple) == 1 {
-		op := sqlparser.LessEqualStr
-		if strict {
-			op = sqlparser.LessThanStr
+	// The actual work of this function is done in a "nested" function
+	// 'constructTupleInequalityUnchecked' which does not further check the lengths.
+	// It's a recursive function and so we must define the 'constructTupleInequalityUnchecked'
+	// variable beforehand.
+	var constructTupleInequalityUnchecked func(
+		lhsTuple []sqlparser.ValExpr, rhsTuple []sqlparser.ValExpr, strict bool) sqlparser.BoolExpr
+	constructTupleInequalityUnchecked = func(
+		lhsTuple []sqlparser.ValExpr, rhsTuple []sqlparser.ValExpr, strict bool) sqlparser.BoolExpr {
+		if len(lhsTuple) == 1 {
+			op := sqlparser.LessEqualStr
+			if strict {
+				op = sqlparser.LessThanStr
+			}
+			return &sqlparser.ComparisonExpr{
+				Operator: op,
+				Left:     lhsTuple[0],
+				Right:    rhsTuple[0],
+			}
 		}
-		return &sqlparser.ComparisonExpr{
-			Operator: op,
-			Left:     lhsTuple[0],
-			Right:    rhsTuple[0],
+		restOfTupleInequality := constructTupleInequalityUnchecked(lhsTuple[1:], rhsTuple[1:], strict)
+		if len(lhsTuple[1:]) > 1 {
+			// A non-scalar inequality needs to be parenthesized since we combine it below with
+			// other expressions.
+			restOfTupleInequality = &sqlparser.ParenBoolExpr{
+				Expr: restOfTupleInequality,
+			}
 		}
-	}
-	restOfTupleInequality := constructTupleInequalityUnchecked(lhsTuple[1:], rhsTuple[1:], strict)
-	if len(lhsTuple[1:]) > 1 {
-		// A non-scalar inequality need to be parenthesized since we combine it below with
-		// other expressions.
-		restOfTupleInequality = &sqlparser.ParenBoolExpr{
-			Expr: restOfTupleInequality,
-		}
-	}
-	// Return:
-	// lhsTuple[0] < rhsTuple[0] OR
-	// ( lhsTuple[0] = rhsTuple[0] AND restOfTupleInequality)
-	return &sqlparser.OrExpr{
-		Left: &sqlparser.ComparisonExpr{
-			Operator: sqlparser.LessThanStr,
-			Left:     lhsTuple[0],
-			Right:    rhsTuple[0],
-		},
-		Right: &sqlparser.ParenBoolExpr{
-			Expr: &sqlparser.AndExpr{
-				Left: &sqlparser.ComparisonExpr{
-					Operator: sqlparser.EqualStr,
-					Left:     lhsTuple[0],
-					Right:    rhsTuple[0],
-				},
-				Right: restOfTupleInequality,
+		// Return:
+		// lhsTuple[0] < rhsTuple[0] OR
+		// ( lhsTuple[0] = rhsTuple[0] AND restOfTupleInequality)
+		return &sqlparser.OrExpr{
+			Left: &sqlparser.ComparisonExpr{
+				Operator: sqlparser.LessThanStr,
+				Left:     lhsTuple[0],
+				Right:    rhsTuple[0],
 			},
-		},
+			Right: &sqlparser.ParenBoolExpr{
+				Expr: &sqlparser.AndExpr{
+					Left: &sqlparser.ComparisonExpr{
+						Operator: sqlparser.EqualStr,
+						Left:     lhsTuple[0],
+						Right:    rhsTuple[0],
+					},
+					Right: restOfTupleInequality,
+				},
+			},
+		}
 	}
+
+	return constructTupleInequalityUnchecked(lhsTuple, rhsTuple, strict)
 }
 
 // queryWithAdditionalWhere returns a copy of the given SELECT query with 'addedWhere' ANDed with

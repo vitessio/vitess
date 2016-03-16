@@ -43,7 +43,7 @@ func verifyQueryPartsEqual(t *testing.T, expected, got []querytypes.QuerySplit) 
 }
 
 func TestSplit1SplitColumn(t *testing.T) {
-	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		"select * from test_table",
 		map[string]interface{}{},
 		[]string{"id"},
@@ -104,7 +104,7 @@ func TestSplit1SplitColumn(t *testing.T) {
 }
 
 func TestSplit2SplitColumns(t *testing.T) {
-	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		"select * from test_table",
 		map[string]interface{}{},
 		[]string{"id", "user_id"},
@@ -178,7 +178,7 @@ func TestSplit2SplitColumns(t *testing.T) {
 }
 
 func TestSplit3SplitColumns(t *testing.T) {
-	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		"select * from test_table",
 		map[string]interface{}{},
 		[]string{"id", "user_id", "user_id2"},
@@ -257,7 +257,7 @@ func TestSplit3SplitColumns(t *testing.T) {
 }
 
 func TestSplitWithWhereClause(t *testing.T) {
-	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		"select * from test_table where name!='foo'",
 		map[string]interface{}{},
 		[]string{"id", "user_id"},
@@ -331,7 +331,7 @@ func TestSplitWithWhereClause(t *testing.T) {
 }
 
 func TestSplitWithExistingBindVariables(t *testing.T) {
-	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		"select * from test_table",
 		map[string]interface{}{"foo": int64(100)},
 		[]string{"id", "user_id"},
@@ -409,7 +409,7 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 }
 
 func TestSplitWithEmptyBoundaryList(t *testing.T) {
-	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		"select * from test_table",
 		map[string]interface{}{"foo": int64(100)},
 		[]string{"id", "user_id"},
