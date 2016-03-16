@@ -50,6 +50,9 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
   def vtgate_python_protocol(self):
     return 'gorpc'
 
+  def vtgate_python_types(self):
+    return 'mysql'
+
   def client_error_exception_type(self):
     return face.AbortionError
 
