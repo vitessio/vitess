@@ -19,7 +19,10 @@ public class FieldMap {
   public FieldMap(List<Field> fields) {
     indexMap = new CaseInsensitiveMap();
     for (int i = 0; i < fields.size(); i++) {
-      indexMap.put(fields.get(i).getName(), i);
+      String colName = fields.get(i).getName();
+      if(null == indexMap.get(colName)) {
+        indexMap.put(colName, i);
+      }
     }
     this.fields = fields;
   }
