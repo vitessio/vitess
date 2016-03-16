@@ -349,7 +349,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
 
     private void setMapVariable(int parameterIndex, String str, Object x) throws SQLException {
         checkOpen();
-        if(USE_BIND_VARIABLES) {
+        if (USE_BIND_VARIABLES) {
             this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
         } else {
             this.parameterMap.put(parameterIndex, str);

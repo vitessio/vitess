@@ -154,8 +154,6 @@ public class VitessConnection implements Connection {
         try {
             Context context = createContext(Constants.CONNECTION_TIMEOUT);
             this.vtGateTx.commit(context).checkedGet();
-        } catch (SQLException ex) {
-            throw new SQLException(ex);
         } finally {
             this.vtGateTx = null;
         }
@@ -174,8 +172,6 @@ public class VitessConnection implements Connection {
         try {
             Context context = createContext(Constants.CONNECTION_TIMEOUT);
             this.vtGateTx.rollback(context).checkedGet();
-        } catch (SQLException ex) {
-            throw new SQLException(ex);
         } finally {
             this.vtGateTx = null;
         }
