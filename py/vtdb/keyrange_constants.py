@@ -41,40 +41,6 @@ PROTO3_TABLET_TYPE_TO_STRING = {
 }
 
 
-# (Eventually this will go away, as we will retire BSON)
-def srv_keyspace_bson_proto3_to_old(sk):
-  """Converts a bson-encoded proto3 SrvKeyspace.
-
-  Args:
-    sk: bson-encoded proto3 SrvKeyspace.
-
-  Returns:
-    sk with converted values.
-  """
-  if 'ShardingColumnType' in sk:
-    if sk['ShardingColumnType'] == 1:
-      sk['ShardingColumnType'] = KIT_UINT64
-    elif sk['ShardingColumnType'] == 2:
-      sk['ShardingColumnType'] = KIT_BYTES
-    else:
-      sk['ShardingColumnType'] = KIT_UNSET
-  if 'ServedFrom' in sk:
-    sfmap = {}
-    for sf in sk['ServedFrom']:
-      tt = PROTO3_TABLET_TYPE_TO_STRING[sf['TabletType']]
-      sfmap[tt] = sf['Keyspace']
-    sk['ServedFrom'] = sfmap
-  if 'Partitions' in sk:
-    pmap = {}
-    for p in sk['Partitions']:
-      tt = PROTO3_TABLET_TYPE_TO_STRING[p['ServedType']]
-      pmap[tt] = {
-          'ShardReferences': p['ShardReferences'],
-          }
-    sk['Partitions'] = pmap
-  return sk
-
-
 # (Eventually this will just go away, as keyspace.Keyspace will use
 # the proto3 version directly).
 def srv_keyspace_proto3_to_old(sk):

@@ -58,9 +58,7 @@ def extra_vtcombo_parameters():
   return [
       '-service_map', ','.join([
           'grpc-vtgateservice',
-          'bsonrpc-vt-vtgateservice',
           'grpc-vtctl',
-          'bsonrpc-vt-vtctl',
           ]),
       ]
 

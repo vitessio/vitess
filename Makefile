@@ -8,7 +8,7 @@ MAKEFLAGS = -s
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build test clean unit_test unit_test_cover unit_test_race integration_test bson proto site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test php_test reshard_tests
+.PHONY: all build test clean unit_test unit_test_cover unit_test_race integration_test proto site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test php_test reshard_tests
 
 all: build test
 
@@ -86,9 +86,6 @@ java_test:
 php_test:
 	godep go install ./go/cmd/vtgateclienttest
 	phpunit php/tests
-
-bson:
-	go generate ./go/...
 
 # This rule rebuilds all the go files from the proto definitions for gRPC.
 # 1. list all proto files.

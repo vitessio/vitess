@@ -47,13 +47,14 @@ Vitess client libraries follow these core principles:
 * Each client library should support language-specific, idiomatic
   constructs to simplify application development in that language.
 * Client libraries should integrate with the following language-specific
-  database drivers, though this support is not yet provided:
-  * Go: [database/sql package](http://golang.org/pkg/database/sql/)
+  database drivers, though this support is not yet provided in some cases:
+  * Go: [database/sql package](http://golang.org/pkg/database/sql/) (done)
   * Java: [JDBC](https://docs.oracle.com/javase/tutorial/jdbc/index.html)
-    compliance
+    compliance (in progress)
   * PHP: [PHP Data Objects \(PDO\)](http://php.net/manual/en/intro.pdo.php)
-    compliance
+    compliance (in progress)
   * Python: [DB API](https://www.python.org/dev/peps/pep-0249/) compliance
+    (done)
 * Libraries provide a thin wrapper around the proto3 service definitions.
   Those wrappers could be extended with adapters to higher level libraries
   like SQLAlchemy (Python) or JDBC (Java), with other object-based helper
@@ -107,4 +108,4 @@ test your application against an actual instance.
 
 ### Python
 
-* [Python client](https://github.com/youtube/vitess/blob/master/py/vtdb/vtgatev2.py)
+* [Python client](https://github.com/youtube/vitess/blob/master/py/vtdb/vtgate_client.py)

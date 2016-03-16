@@ -28,7 +28,7 @@ Vitess improves a vanilla MySQL implementation in several ways:
   <tbody>
   <tr>
     <td>Every MySQL connection has a memory overhead that ranges between 256KB and almost 3MB, depending on which MySQL release you're using. As your user base grows, you need to add RAM to support additional connections, but the RAM does not contribute to faster queries. In addition, there is a significant CPU cost associated with obtaining the connections.</td>
-    <td>Vitess' BSON-based protocol creates very lightweight connections that are around 32KB. Vitess' connection pooling feature uses Go's concurrency support to map these lightweight connections to a small pool of MySQL connections. As such, Vitess can easily handle thousands of connections.</td>
+    <td>Vitess' gRPC-based protocol creates very lightweight connections. Vitess' connection pooling feature uses Go's concurrency support to map these lightweight connections to a small pool of MySQL connections. As such, Vitess can easily handle thousands of connections.</td>
   </tr>
   <tr>
     <td>Poorly written queries, such as those that don't set a LIMIT, can negatively impact database performance for all users.</td>

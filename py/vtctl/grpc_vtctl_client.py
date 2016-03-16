@@ -15,7 +15,7 @@ from vtproto import vtctlservice_pb2
 
 
 class GRPCVtctlClient(vtctl_client.VtctlClient):
-  """GoRpcVtctlClient is the gRPC implementation of VtctlClient.
+  """GRPCVtctlClient is the gRPC implementation of VtctlClient.
 
   It is registered as 'grpc' protocol.
   """

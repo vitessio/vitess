@@ -1,10 +1,17 @@
 package com.youtube.vitess.client.cursor;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import com.google.common.collect.ImmutableList;
+
 import com.youtube.vitess.proto.Query.Field;
 import org.apache.commons.collections.map.CaseInsensitiveMap;
 
 import java.util.List;
 import java.util.Map;
+
+import javax.annotation.Nullable;
 
 /**
  * A wrapper for {@code List<Field>} that also facilitates lookup by field name.
@@ -16,30 +23,32 @@ public class FieldMap {
   private final List<Field> fields;
   private final Map<String, Integer> indexMap;
 
-  public FieldMap(List<Field> fields) {
+  public FieldMap(Iterable<Field> fields) {
+    this.fields = ImmutableList.copyOf(checkNotNull(fields));
+
     indexMap = new CaseInsensitiveMap();
-    for (int i = 0; i < fields.size(); i++) {
-      String colName = fields.get(i).getName();
+    // columnIndex is 1-based.
+    int columnIndex = 1;
+    for (Field field : this.fields) {
+      String colName = field.getName();
       if(null == indexMap.get(colName)) {
-        indexMap.put(colName, i);
+        indexMap.put(colName, columnIndex++);
       }
     }
-    this.fields = fields;
   }
 
   public List<Field> getList() {
     return fields;
   }
 
-  public Map<String, Integer> getIndexMap() {
-    return indexMap;
+  public Field get(int columnIndex) {
+    // columnIndex is 1-based.
+    checkArgument(columnIndex >= 1, "columnIndex out of range: %s", columnIndex);
+    return fields.get(columnIndex - 1);
   }
 
-  public Field get(int i) {
-    return fields.get(i);
-  }
-
-  public Integer getIndex(String fieldName) {
-    return indexMap.get(fieldName);
+  @Nullable
+  public Integer getIndex(String columnLabel) {
+    return indexMap.get(columnLabel);
   }
 }
