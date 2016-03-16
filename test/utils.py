@@ -516,7 +516,6 @@ class VtGate(object):
         '-srv_topo_cache_ttl', cache_ttl,
         '-conn-timeout-total', timeout_total,
         '-conn-timeout-per-conn', timeout_per_conn,
-        '-bsonrpc_timeout', '5s',
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-gateway_implementation', vtgate_gateway_flavor().flavor(),
     ]

@@ -17,7 +17,7 @@ At a very high level, as the graph shows, first the client sends a query to VtGa
 
 ## From Client to VtGate
 
-A client application first sends a bson rpc with an embedded sql query to VtGate. VtGate's rpc server unmarshals this rpc request, calls the appropriate VtGate method and return its result back to client. VtGate has an rpc server that listens to localhost:port/\_bson\_rpc\_ for http requests and localhost:port/\_bson\_rpc\_/auth for https requests.
+A client application first sends an rpc with an embedded sql query to VtGate. VtGate's rpc server unmarshals this rpc request, calls the appropriate VtGate method and return its result back to client.
 
 ![](https://raw.githubusercontent.com/youtube/vitess/master/doc/life_of_a_query_client_to_vtgate.png)
 
