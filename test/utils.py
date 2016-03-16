@@ -86,7 +86,7 @@ def add_options(parser):
       '--skip-teardown', action='store_true',
       help='Leave the global processes running after the test is done.')
   parser.add_option('--mysql-flavor')
-  parser.add_option('--protocols-flavor', default='gorpc')
+  parser.add_option('--protocols-flavor', default='grpc')
   parser.add_option('--topo-server-flavor', default='zookeeper')
   parser.add_option('--vtgate-gateway-flavor', default='discoverygateway')
 
@@ -516,7 +516,6 @@ class VtGate(object):
         '-srv_topo_cache_ttl', cache_ttl,
         '-conn-timeout-total', timeout_total,
         '-conn-timeout-per-conn', timeout_per_conn,
-        '-bsonrpc_timeout', '5s',
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-gateway_implementation', vtgate_gateway_flavor().flavor(),
     ]

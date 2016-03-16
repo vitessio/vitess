@@ -17,7 +17,7 @@ import (
 )
 
 // This test makes sure the go rpc service works
-func TestGoRPCTabletConn(t *testing.T) {
+func TestGRPCTabletConn(t *testing.T) {
 	// fake service
 	service := tabletconntest.CreateFakeServer(t)
 

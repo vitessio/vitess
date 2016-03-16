@@ -289,7 +289,7 @@ func (conn *gRPCQueryClient) StreamHealth(ctx context.Context) (tabletconn.Strea
 	return conn.c.StreamHealth(ctx, &querypb.StreamHealthRequest{})
 }
 
-// Close closes underlying bsonrpc.
+// Close closes underlying gRPC channel.
 func (conn *gRPCQueryClient) Close() {
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
