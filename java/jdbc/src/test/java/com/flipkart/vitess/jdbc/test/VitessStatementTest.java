@@ -1,7 +1,6 @@
 package com.flipkart.vitess.jdbc.test;
 
 import com.flipkart.vitess.jdbc.VitessConnection;
-import com.flipkart.vitess.jdbc.VitessResultSet;
 import com.flipkart.vitess.jdbc.VitessStatement;
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.SQLFuture;
@@ -12,11 +11,8 @@ import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Topodata;
 import org.junit.Assert;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.Matchers;
-import org.mockito.runners.MockitoJUnitRunner;
 import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PrepareForTest;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -169,8 +165,8 @@ public class VitessStatementTest {
             PowerMockito.when(mockVtGateConn.begin(Matchers.any(Context.class)))
                 .thenReturn(mockSqlFutureVtGateTx);
             PowerMockito.when(mockConn.getAutoCommit()).thenReturn(true);
-            PowerMockito.when(mockVtGateTx
-                .commit(Matchers.any(Context.class))).thenReturn(mockSqlFutureCursor);
+            PowerMockito.when(mockVtGateTx.commit(Matchers.any(Context.class)))
+                .thenReturn(mockSqlFutureCursor);
             updateCount = statement.executeUpdate(sqlUpdate);
             Assert.assertEquals(0, updateCount);
 
@@ -224,8 +220,8 @@ public class VitessStatementTest {
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
                 Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockConn.getAutoCommit()).thenReturn(true);
-        PowerMockito.when(mockVtGateTx
-            .commit(Matchers.any(Context.class))).thenReturn(mockSqlFutureCursor);
+        PowerMockito.when(mockVtGateTx.commit(Matchers.any(Context.class)))
+            .thenReturn(mockSqlFutureCursor);
 
         PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
         PowerMockito.when(mockSqlFutureVtGateTx.checkedGet()).thenReturn(mockVtGateTx);
@@ -368,7 +364,7 @@ public class VitessStatementTest {
             statement.setQueryTimeout(queryTimeout);
             Assert.fail("Should have thrown exception for wrong value");
         } catch (SQLException ex) {
-            Assert.assertEquals("Illegal value for query timeout",ex.getMessage());
+            Assert.assertEquals("Illegal value for query timeout", ex.getMessage());
         }
     }
 
