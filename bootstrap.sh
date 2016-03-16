@@ -181,16 +181,6 @@ else
   echo "Libs:" "$($VT_MYSQL_ROOT/bin/mysql_config --libs_r)" >> $VTROOT/lib/gomysql.pc
 fi
 
-# install bson
-bson_dist=$VTROOT/dist/py-vt-bson-0.3.2
-if [ -f $bson_dist/lib/python2.7/site-packages/bson/__init__.py ]; then
-  echo "skipping bson python build"
-else
-  cd $VTTOP/third_party/py/bson-0.3.2 && \
-    python ./setup.py install --prefix=$bson_dist && \
-    rm -r build
-fi
-
 # install mock
 mock_dist=$VTROOT/dist/py-mock-1.0.1
 if [ -f $mock_dist/.build_finished ]; then
