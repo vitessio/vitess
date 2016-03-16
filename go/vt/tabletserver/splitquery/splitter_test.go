@@ -3,45 +3,11 @@ package splitquery
 import (
 	"fmt"
 	"reflect"
-	"strconv"
 	"testing"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/splitquery/splitquery_testing"
 )
-
-func getSchema() map[string]*schema.Table {
-	table := schema.Table{
-		Name: "test_table",
-	}
-	zero, _ := sqltypes.BuildValue(0)
-	table.AddColumn("id", sqltypes.Int64, zero, "")
-	table.AddColumn("id2", sqltypes.Int64, zero, "")
-	table.AddColumn("count", sqltypes.Int64, zero, "")
-	table.PKColumns = []int{0}
-	primaryIndex := table.AddIndex("PRIMARY")
-	primaryIndex.AddColumn("id", 12345)
-
-	id2Index := table.AddIndex("idx_id2")
-	id2Index.AddColumn("id2", 1234)
-
-	result := make(map[string]*schema.Table)
-	result["test_table"] = &table
-
-	tableNoPK := schema.Table{
-		Name: "test_table_no_pk",
-	}
-	tableNoPK.AddColumn("id", sqltypes.Int64, zero, "")
-	tableNoPK.PKColumns = []int{}
-	result["test_table_no_pk"] = &tableNoPK
-
-	return result
-}
-
-func Int64Value(value int64) sqltypes.Value {
-	return sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt([]byte{}, value, 10))
-}
 
 type FakeSplitAlgorithm struct {
 	boundaries []tuple
@@ -77,18 +43,83 @@ func verifyQueryPartsEqual(t *testing.T, expected, got []querytypes.QuerySplit) 
 	t.Errorf("%s", message)
 }
 
-func TestSplit(t *testing.T) {
-	splitParams, err := NewSplitParams("select * from test_table",
-		map[string]interface{}{}, []string{"id", "user_id"}, getSchema())
+func TestSplit1SplitColumn(t *testing.T) {
+	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+		"select * from test_table",
+		map[string]interface{}{},
+		[]string{"id"},
+		1000, // numRowsPerQueryPart
+		splitquery_testing.GetSchema())
 	if err != nil {
 		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
 	}
 	splitter := NewSplitter(splitParams,
 		&FakeSplitAlgorithm{
 			boundaries: []tuple{
-				{Int64Value(1), Int64Value(2)},
-				{Int64Value(1), Int64Value(3)},
-				{Int64Value(5), Int64Value(1)},
+				{splitquery_testing.Int64Value(1)},
+				{splitquery_testing.Int64Value(10)},
+				{splitquery_testing.Int64Value(50)},
+			},
+		})
+	var queryParts []querytypes.QuerySplit
+	queryParts, err = splitter.Split()
+	if err != nil {
+		t.Errorf("Splitter.Split() failed with: %v", err)
+	}
+	expected := []querytypes.QuerySplit{
+		{
+			Sql: "select * from test_table where id < :_splitquery_end_id",
+			BindVariables: map[string]interface{}{
+				"_splitquery_end_id": int64(1),
+			},
+		},
+		{
+			Sql: "select * from test_table where" +
+				" (:_splitquery_start_id <= id)" +
+				" and" +
+				" (id < :_splitquery_end_id)",
+			BindVariables: map[string]interface{}{
+				"_splitquery_start_id": int64(1),
+				"_splitquery_end_id":   int64(10),
+			},
+		},
+		{
+			Sql: "select * from test_table where" +
+				" (:_splitquery_start_id <= id)" +
+				" and" +
+				" (id < :_splitquery_end_id)",
+			BindVariables: map[string]interface{}{
+				"_splitquery_start_id": int64(10),
+				"_splitquery_end_id":   int64(50),
+			},
+		},
+		{
+			Sql: "select * from test_table where" +
+				" :_splitquery_start_id <= id",
+			BindVariables: map[string]interface{}{
+				"_splitquery_start_id": int64(50),
+			},
+		},
+	}
+	verifyQueryPartsEqual(t, expected, queryParts)
+}
+
+func TestSplit2SplitColumns(t *testing.T) {
+	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+		"select * from test_table",
+		map[string]interface{}{},
+		[]string{"id", "user_id"},
+		1000, // numRowsPerQueryPart
+		splitquery_testing.GetSchema())
+	if err != nil {
+		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
+	}
+	splitter := NewSplitter(splitParams,
+		&FakeSplitAlgorithm{
+			boundaries: []tuple{
+				{splitquery_testing.Int64Value(1), splitquery_testing.Int64Value(2)},
+				{splitquery_testing.Int64Value(1), splitquery_testing.Int64Value(3)},
+				{splitquery_testing.Int64Value(5), splitquery_testing.Int64Value(1)},
 			},
 		})
 	var queryParts []querytypes.QuerySplit
@@ -147,18 +178,101 @@ func TestSplit(t *testing.T) {
 	verifyQueryPartsEqual(t, expected, queryParts)
 }
 
-func TestSplitWithWhereClause(t *testing.T) {
-	splitParams, err := NewSplitParams("select * from test_table where name!='foo'",
-		map[string]interface{}{}, []string{"id", "user_id"}, getSchema())
+func TestSplit3SplitColumns(t *testing.T) {
+	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+		"select * from test_table",
+		map[string]interface{}{},
+		[]string{"id", "user_id", "user_id2"},
+		1000, // numRowsPerQueryPart
+		splitquery_testing.GetSchema())
 	if err != nil {
 		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
 	}
 	splitter := NewSplitter(splitParams,
 		&FakeSplitAlgorithm{
 			boundaries: []tuple{
-				{Int64Value(1), Int64Value(2)},
-				{Int64Value(1), Int64Value(3)},
-				{Int64Value(5), Int64Value(1)},
+				{
+					splitquery_testing.Int64Value(1),
+					splitquery_testing.Int64Value(2),
+					splitquery_testing.Int64Value(2),
+				},
+				{
+					splitquery_testing.Int64Value(2),
+					splitquery_testing.Int64Value(1),
+					splitquery_testing.Int64Value(1),
+				},
+			},
+		})
+	var queryParts []querytypes.QuerySplit
+	queryParts, err = splitter.Split()
+	if err != nil {
+		t.Errorf("Splitter.Split() failed with: %v", err)
+	}
+	expected := []querytypes.QuerySplit{
+		{
+			Sql: "select * from test_table where" +
+				" id < :_splitquery_end_id or" +
+				" (id = :_splitquery_end_id and" +
+				" (user_id < :_splitquery_end_user_id or" +
+				" (user_id = :_splitquery_end_user_id and user_id2 < :_splitquery_end_user_id2)))",
+			BindVariables: map[string]interface{}{
+				"_splitquery_end_id":       int64(1),
+				"_splitquery_end_user_id":  int64(2),
+				"_splitquery_end_user_id2": int64(2),
+			},
+		},
+		{
+			Sql: "select * from test_table where" +
+				" (:_splitquery_start_id < id or" +
+				" (:_splitquery_start_id = id and" +
+				" (:_splitquery_start_user_id < user_id or" +
+				" (:_splitquery_start_user_id = user_id and :_splitquery_start_user_id2 <= user_id2))))" +
+				" and" +
+				" (id < :_splitquery_end_id or" +
+				" (id = :_splitquery_end_id and" +
+				" (user_id < :_splitquery_end_user_id or" +
+				" (user_id = :_splitquery_end_user_id and user_id2 < :_splitquery_end_user_id2))))",
+			BindVariables: map[string]interface{}{
+				"_splitquery_start_id":       int64(1),
+				"_splitquery_start_user_id":  int64(2),
+				"_splitquery_start_user_id2": int64(2),
+				"_splitquery_end_id":         int64(2),
+				"_splitquery_end_user_id":    int64(1),
+				"_splitquery_end_user_id2":   int64(1),
+			},
+		},
+		{
+			Sql: "select * from test_table where" +
+				" :_splitquery_start_id < id or" +
+				" (:_splitquery_start_id = id and" +
+				" (:_splitquery_start_user_id < user_id or" +
+				" (:_splitquery_start_user_id = user_id and :_splitquery_start_user_id2 <= user_id2)))",
+			BindVariables: map[string]interface{}{
+				"_splitquery_start_id":       int64(2),
+				"_splitquery_start_user_id":  int64(1),
+				"_splitquery_start_user_id2": int64(1),
+			},
+		},
+	}
+	verifyQueryPartsEqual(t, expected, queryParts)
+}
+
+func TestSplitWithWhereClause(t *testing.T) {
+	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+		"select * from test_table where name!='foo'",
+		map[string]interface{}{},
+		[]string{"id", "user_id"},
+		1000, // numRowsPerQueryPart
+		splitquery_testing.GetSchema())
+	if err != nil {
+		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
+	}
+	splitter := NewSplitter(splitParams,
+		&FakeSplitAlgorithm{
+			boundaries: []tuple{
+				{splitquery_testing.Int64Value(1), splitquery_testing.Int64Value(2)},
+				{splitquery_testing.Int64Value(1), splitquery_testing.Int64Value(3)},
+				{splitquery_testing.Int64Value(5), splitquery_testing.Int64Value(1)},
 			},
 		})
 	var queryParts []querytypes.QuerySplit
@@ -218,17 +332,21 @@ func TestSplitWithWhereClause(t *testing.T) {
 }
 
 func TestSplitWithExistingBindVariables(t *testing.T) {
-	splitParams, err := NewSplitParams("select * from test_table",
-		map[string]interface{}{"foo": int64(100)}, []string{"id", "user_id"}, getSchema())
+	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+		"select * from test_table",
+		map[string]interface{}{"foo": int64(100)},
+		[]string{"id", "user_id"},
+		1000, // numRowsPerQueryPart
+		splitquery_testing.GetSchema())
 	if err != nil {
 		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
 	}
 	splitter := NewSplitter(splitParams,
 		&FakeSplitAlgorithm{
 			boundaries: []tuple{
-				{Int64Value(1), Int64Value(2)},
-				{Int64Value(1), Int64Value(3)},
-				{Int64Value(5), Int64Value(1)},
+				{splitquery_testing.Int64Value(1), splitquery_testing.Int64Value(2)},
+				{splitquery_testing.Int64Value(1), splitquery_testing.Int64Value(3)},
+				{splitquery_testing.Int64Value(5), splitquery_testing.Int64Value(1)},
 			},
 		})
 	var queryParts []querytypes.QuerySplit
@@ -292,8 +410,12 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 }
 
 func TestSplitWithEmptyBoundaryList(t *testing.T) {
-	splitParams, err := NewSplitParams("select * from test_table",
-		map[string]interface{}{"foo": int64(100)}, []string{"id", "user_id"}, getSchema())
+	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+		"select * from test_table",
+		map[string]interface{}{"foo": int64(100)},
+		[]string{"id", "user_id"},
+		1000,
+		splitquery_testing.GetSchema())
 	if err != nil {
 		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
 	}

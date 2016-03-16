@@ -82,60 +82,40 @@ func (fbc *fakeBinlogClient) Close() {
 }
 
 // ServeUpdateStream is part of the binlogplayer.Client interface
-func (fbc *fakeBinlogClient) ServeUpdateStream(ctx context.Context, position string) (chan *binlogdatapb.StreamEvent, binlogplayer.ErrFunc, error) {
-	return nil, nil, fmt.Errorf("Should never be called")
+func (fbc *fakeBinlogClient) ServeUpdateStream(ctx context.Context, position string) (binlogplayer.StreamEventStream, error) {
+	return nil, fmt.Errorf("Should never be called")
+}
+
+type testStreamEventAdapter struct {
+	c   chan *binlogdatapb.BinlogTransaction
+	ctx context.Context
+}
+
+func (t *testStreamEventAdapter) Recv() (*binlogdatapb.BinlogTransaction, error) {
+	select {
+	case bt := <-t.c:
+		return bt, nil
+	case <-t.ctx.Done():
+		return nil, t.ctx.Err()
+	}
 }
 
 // StreamTables is part of the binlogplayer.Client interface
-func (fbc *fakeBinlogClient) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset) (chan *binlogdatapb.BinlogTransaction, binlogplayer.ErrFunc, error) {
+func (fbc *fakeBinlogClient) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset) (binlogplayer.BinlogTransactionStream, error) {
 	actualTables := strings.Join(tables, ",")
 	if actualTables != fbc.expectedTables {
-		return nil, nil, fmt.Errorf("Got wrong tables %v, expected %v", actualTables, fbc.expectedTables)
+		return nil, fmt.Errorf("Got wrong tables %v, expected %v", actualTables, fbc.expectedTables)
 	}
-
-	c := make(chan *binlogdatapb.BinlogTransaction)
-	var finalErr error
-	go func() {
-		for {
-			select {
-			case bt := <-fbc.tablesChannel:
-				c <- bt
-			case <-ctx.Done():
-				finalErr = ctx.Err()
-				close(c)
-				return
-			}
-		}
-	}()
-	return c, func() error {
-		return finalErr
-	}, nil
+	return &testStreamEventAdapter{c: fbc.tablesChannel, ctx: ctx}, nil
 }
 
 // StreamKeyRange is part of the binlogplayer.Client interface
-func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset) (chan *binlogdatapb.BinlogTransaction, binlogplayer.ErrFunc, error) {
+func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset) (binlogplayer.BinlogTransactionStream, error) {
 	actualKeyRange := key.KeyRangeString(keyRange)
 	if actualKeyRange != fbc.expectedKeyRange {
-		return nil, nil, fmt.Errorf("Got wrong keyrange %v, expected %v", actualKeyRange, fbc.expectedKeyRange)
+		return nil, fmt.Errorf("Got wrong keyrange %v, expected %v", actualKeyRange, fbc.expectedKeyRange)
 	}
-
-	c := make(chan *binlogdatapb.BinlogTransaction)
-	var finalErr error
-	go func() {
-		for {
-			select {
-			case bt := <-fbc.keyRangeChannel:
-				c <- bt
-			case <-ctx.Done():
-				finalErr = ctx.Err()
-				close(c)
-				return
-			}
-		}
-	}()
-	return c, func() error {
-		return finalErr
-	}, nil
+	return &testStreamEventAdapter{c: fbc.keyRangeChannel, ctx: ctx}, nil
 }
 
 // fakeTabletConn implement TabletConn interface. We only care about the
@@ -226,8 +206,23 @@ func (ftc *fakeTabletConn) SplitQuery(ctx context.Context, query querytypes.Boun
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
-// StreamHealth is part of the TabletConn interface
-func (ftc *fakeTabletConn) StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+type streamHealthReader struct {
+	c       <-chan *querypb.StreamHealthResponse
+	errFunc tabletconn.ErrFunc
+}
+
+// Recv implements tabletconn.StreamHealthReader.
+// It returns one response from the chan.
+func (r *streamHealthReader) Recv() (*querypb.StreamHealthResponse, error) {
+	resp, ok := <-r.c
+	if !ok {
+		return nil, r.errFunc()
+	}
+	return resp, nil
+}
+
+// StreamHealth is part of tabletconn.TabletConn.
+func (ftc *fakeTabletConn) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
 	c := make(chan *querypb.StreamHealthResponse)
 	var finalErr error
 	go func() {
@@ -246,8 +241,9 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context) (<-chan *querypb.St
 			close(c)
 		}
 	}()
-	return c, func() error {
-		return finalErr
+	return &streamHealthReader{
+		c:       c,
+		errFunc: func() error { return finalErr },
 	}, nil
 }
 

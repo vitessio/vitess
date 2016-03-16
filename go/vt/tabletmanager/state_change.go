@@ -51,12 +51,17 @@ func (agent *ActionAgent) loadBlacklistRules(tablet *topodatapb.Tablet, blacklis
 		if err != nil {
 			return err
 		}
-		log.Infof("Blacklisting tables %v", strings.Join(tables, ", "))
-		qr := tabletserver.NewQueryRule("enforce blacklisted tables", "blacklisted_table", tabletserver.QRFailRetry)
-		for _, t := range tables {
-			qr.AddTableCond(t)
+
+		// Verify that at least one table matches the wildcards, so
+		// that we don't add a rule to blacklist all tables
+		if len(tables) > 0 {
+			log.Infof("Blacklisting tables %v", strings.Join(tables, ", "))
+			qr := tabletserver.NewQueryRule("enforce blacklisted tables", "blacklisted_table", tabletserver.QRFailRetry)
+			for _, t := range tables {
+				qr.AddTableCond(t)
+			}
+			blacklistRules.Add(qr)
 		}
-		blacklistRules.Add(qr)
 	}
 
 	loadRuleErr := agent.QueryServiceControl.SetQueryRules(blacklistQueryRules, blacklistRules)
@@ -242,6 +247,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 				log.Errorf("Can't start query service for MASTER+REPLICA mode: %v", err)
 			}
 		}
+
 		if stateChanged, err := agent.allowQueries(newTablet.Type); err == nil {
 			// If the state changed, broadcast to vtgate.
 			// (e.g. this happens when the tablet was already master, but it just
@@ -264,6 +270,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 			agent.broadcastHealth()
 			time.Sleep(*gracePeriod)
 		}
+
 		if stateChanged, err := agent.disallowQueries(newTablet.Type, disallowQueryReason); err == nil {
 			// If the state changed, broadcast to vtgate.
 			// (e.g. this happens when the tablet was already master, but it just

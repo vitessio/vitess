@@ -29,7 +29,7 @@ func TestHealthCheck(t *testing.T) {
 	ep := topo.NewEndPoint(0, "a")
 	ep.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse)
-	createFakeConn(ep, input)
+	fakeConn := createFakeConn(ep, input)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	l := newListener()
 	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, time.Hour, "" /* statsSuffix */).(*HealthCheckImpl)
@@ -163,6 +163,7 @@ func TestHealthCheck(t *testing.T) {
 
 	// remove endpoint
 	hc.deleteConn(ep)
+	close(fakeConn.hcChan)
 	t.Logf(`hc.RemoveEndPoint({Host: "a", PortMap: {"vt": 1}})`)
 	want = &EndPointStats{
 		EndPoint: ep,
@@ -172,7 +173,7 @@ func TestHealthCheck(t *testing.T) {
 		Serving:  false,
 		Stats:    &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
 		TabletExternallyReparentedTimestamp: 0,
-		LastError:                           fmt.Errorf("context canceled"),
+		LastError:                           fmt.Errorf("recv error"),
 	}
 	res = <-l.output
 	if !reflect.DeepEqual(res, want) {
@@ -280,69 +281,104 @@ type fakeConn struct {
 	hcChan   chan *querypb.StreamHealthResponse
 }
 
-func (fc *fakeConn) StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, tabletconn.ErrFunc, error) {
-	return fc.hcChan, func() error { return nil }, nil
+type streamHealthReader struct {
+	c       <-chan *querypb.StreamHealthResponse
+	errFunc tabletconn.ErrFunc
 }
 
+// Recv implements tabletconn.StreamHealthReader.
+// It returns one response from the chan.
+func (r *streamHealthReader) Recv() (*querypb.StreamHealthResponse, error) {
+	resp, ok := <-r.c
+	if !ok {
+		return nil, fmt.Errorf("recv error")
+	}
+	return resp, nil
+}
+
+// StreamHealth implements tabletconn.TabletConn.
+func (fc *fakeConn) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
+	return &streamHealthReader{
+		c:       fc.hcChan,
+		errFunc: func() error { return nil },
+	}, nil
+}
+
+// Execute implements tabletconn.TabletConn.
 func (fc *fakeConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
+// Execute2 implements tabletconn.TabletConn.
 func (fc *fakeConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	return fc.Execute(ctx, query, bindVars, transactionID)
 }
 
+// ExecuteBatch implements tabletconn.TabletConn.
 func (fc *fakeConn) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
+// ExecuteBatch2 implements tabletconn.TabletConn.
 func (fc *fakeConn) ExecuteBatch2(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return fc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 
+// StreamExecute implements tabletconn.TabletConn.
 func (fc *fakeConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
 	return nil, nil, fmt.Errorf("not implemented")
 }
 
+// StreamExecute2 implements tabletconn.TabletConn.
 func (fc *fakeConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
 	return fc.StreamExecute(ctx, query, bindVars, transactionID)
 }
 
+// Begin implements tabletconn.TabletConn.
 func (fc *fakeConn) Begin(ctx context.Context) (int64, error) {
 	return 0, fmt.Errorf("not implemented")
 }
 
+// Begin2 implements tabletconn.TabletConn.
 func (fc *fakeConn) Begin2(ctx context.Context) (int64, error) {
 	return fc.Begin(ctx)
 }
 
+// Commit implements tabletconn.TabletConn.
 func (fc *fakeConn) Commit(ctx context.Context, transactionID int64) error {
 	return fmt.Errorf("not implemented")
 }
 
+// Commit2 implements tabletconn.TabletConn.
 func (fc *fakeConn) Commit2(ctx context.Context, transactionID int64) error {
 	return fc.Commit(ctx, transactionID)
 }
 
+// Rollback implements tabletconn.TabletConn.
 func (fc *fakeConn) Rollback(ctx context.Context, transactionID int64) error {
 	return fmt.Errorf("not implemented")
 }
 
+// Rollback2 implements tabletconn.TabletConn.
 func (fc *fakeConn) Rollback2(ctx context.Context, transactionID int64) error {
 	return fc.Rollback(ctx, transactionID)
 }
 
+// SplitQuery implements tabletconn.TabletConn.
 func (fc *fakeConn) SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
+// SetTarget implements tabletconn.TabletConn.
 func (fc *fakeConn) SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error {
 	return fmt.Errorf("not implemented")
 }
 
+// EndPoint returns the endpoint associated with the connection.
 func (fc *fakeConn) EndPoint() *topodatapb.EndPoint {
 	return fc.endPoint
 }
 
+// Close closes the connection.
 func (fc *fakeConn) Close() {
 }

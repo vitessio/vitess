@@ -348,13 +348,28 @@ func (itc *internalTabletConn) SplitQuery(ctx context.Context, query querytypes.
 	return splits, nil
 }
 
+type streamHealthReader struct {
+	c       <-chan *querypb.StreamHealthResponse
+	errFunc tabletconn.ErrFunc
+}
+
+// Recv implements tabletconn.StreamHealthReader.
+// It returns one response from the chan.
+func (r *streamHealthReader) Recv() (*querypb.StreamHealthResponse, error) {
+	resp, ok := <-r.c
+	if !ok {
+		return nil, r.errFunc()
+	}
+	return resp, nil
+}
+
 // StreamHealth is part of tabletconn.TabletConn
-func (itc *internalTabletConn) StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+func (itc *internalTabletConn) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
 	result := make(chan *querypb.StreamHealthResponse, 10)
 
 	id, err := itc.tablet.qsc.QueryService().StreamHealthRegister(result)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	var finalErr error
@@ -367,8 +382,13 @@ func (itc *internalTabletConn) StreamHealth(ctx context.Context) (<-chan *queryp
 		close(result)
 	}()
 
-	return result, func() error {
+	errFunc := func() error {
 		return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
+	}
+
+	return &streamHealthReader{
+		c:       result,
+		errFunc: errFunc,
 	}, nil
 }
 

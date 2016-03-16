@@ -170,7 +170,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, en
 	}()
 	// retry health check if it fails
 	for {
-		stream, errfunc, err := hcc.connect(hc, endPoint)
+		stream, err := hcc.connect(hc, endPoint)
 		if err != nil {
 			select {
 			case <-hcc.ctx.Done():
@@ -187,7 +187,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, en
 			continue
 		}
 		for {
-			reconnect, err := hcc.processResponse(hc, endPoint, stream, errfunc)
+			reconnect, err := hcc.processResponse(hc, endPoint, stream)
 			if err != nil {
 				hcc.mu.Lock()
 				hcc.serving = false
@@ -230,105 +230,98 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, en
 }
 
 // connect creates connection to the endpoint and starts streaming.
-func (hcc *healthCheckConn) connect(hc *HealthCheckImpl, endPoint *topodatapb.EndPoint) (<-chan *querypb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+func (hcc *healthCheckConn) connect(hc *HealthCheckImpl, endPoint *topodatapb.EndPoint) (tabletconn.StreamHealthReader, error) {
 	conn, err := tabletconn.GetDialer()(hcc.ctx, endPoint, "" /*keyspace*/, "" /*shard*/, topodatapb.TabletType_RDONLY, hc.connTimeout)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	stream, errfunc, err := conn.StreamHealth(hcc.ctx)
+	stream, err := conn.StreamHealth(hcc.ctx)
 	if err != nil {
 		conn.Close()
-		return nil, nil, err
+		return nil, err
 	}
 	hcc.mu.Lock()
 	hcc.conn = conn
 	hcc.lastError = nil
 	hcc.mu.Unlock()
-	return stream, errfunc, nil
+	return stream, nil
 }
 
 // processResponse reads one health check response, and notifies HealthCheckStatsListener.
 // It returns bool to indicate if the caller should reconnect. We do not need to reconnect when the streaming is working.
-func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, endPoint *topodatapb.EndPoint, stream <-chan *querypb.StreamHealthResponse, errfunc tabletconn.ErrFunc) (bool, error) {
+func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, endPoint *topodatapb.EndPoint, stream tabletconn.StreamHealthReader) (bool, error) {
 	select {
 	case <-hcc.ctx.Done():
 		return false, hcc.ctx.Err()
-	case shr, ok := <-stream:
-		if !ok {
-			return true, errfunc()
-		}
-		// TODO(liang): remove after bug fix in tablet.
-		if shr.Target == nil || shr.RealtimeStats == nil {
-			return false, fmt.Errorf("health stats is not valid: %v", shr)
-		}
-
-		// an app-level error from tablet, force serving state.
-		var healthErr error
-		serving := shr.Serving
-		if shr.RealtimeStats.HealthError != "" {
-			healthErr = fmt.Errorf("vttablet error: %v", shr.RealtimeStats.HealthError)
-			serving = false
-		}
-
-		if hcc.target.TabletType == topodatapb.TabletType_UNKNOWN {
-			// The first time we see response for the endpoint.
-			hcc.mu.Lock()
-			hcc.lastResponseTimestamp = time.Now()
-			hcc.target = shr.Target
-			hcc.serving = serving
-			hcc.tabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
-			hcc.stats = shr.RealtimeStats
-			hcc.lastError = healthErr
-			hcc.conn.SetTarget(hcc.target.Keyspace, hcc.target.Shard, hcc.target.TabletType)
-			hcc.mu.Unlock()
-			hc.mu.Lock()
-			hc.addEndPointToTargetProtected(hcc.target, endPoint)
-			hc.mu.Unlock()
-		} else if hcc.target.TabletType != shr.Target.TabletType {
-			// tablet type changed for the tablet
-			log.Infof("HealthCheckUpdate(Type Change): %v, EP: %v/%+v, target %+v => %+v, reparent time: %v", hcc.name, hcc.cell, endPoint, hcc.target, shr.Target, shr.TabletExternallyReparentedTimestamp)
-			hc.mu.Lock()
-			hc.deleteEndPointFromTargetProtected(hcc.target, endPoint)
-			hcc.mu.Lock()
-			hcc.lastResponseTimestamp = time.Now()
-			hcc.target = shr.Target
-			hcc.serving = serving
-			hcc.tabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
-			hcc.stats = shr.RealtimeStats
-			hcc.lastError = healthErr
-			hcc.conn.SetTarget(hcc.target.Keyspace, hcc.target.Shard, hcc.target.TabletType)
-			hcc.mu.Unlock()
-			hc.addEndPointToTargetProtected(shr.Target, endPoint)
-			hc.mu.Unlock()
-		} else {
-			hcc.mu.Lock()
-			hcc.lastResponseTimestamp = time.Now()
-			hcc.target = shr.Target
-			hcc.serving = serving
-			hcc.tabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
-			hcc.stats = shr.RealtimeStats
-			hcc.lastError = healthErr
-			hcc.mu.Unlock()
-		}
-		// notify downstream for tablettype and realtimestats change
-		if hc.listener != nil {
-			hcc.mu.RLock()
-			eps := &EndPointStats{
-				EndPoint: endPoint,
-				Cell:     hcc.cell,
-				Name:     hcc.name,
-				Target:   hcc.target,
-				Up:       hcc.up,
-				Serving:  hcc.serving,
-				Stats:    hcc.stats,
-				TabletExternallyReparentedTimestamp: hcc.tabletExternallyReparentedTimestamp,
-				LastError:                           hcc.lastError,
-			}
-			hcc.mu.RUnlock()
-			hc.listener.StatsUpdate(eps)
-		}
-		return false, nil
+	default:
 	}
+
+	shr, err := stream.Recv()
+	if err != nil {
+		return true, err
+	}
+	// TODO(liang): remove after bug fix in tablet.
+	if shr.Target == nil || shr.RealtimeStats == nil {
+		return false, fmt.Errorf("health stats is not valid: %v", shr)
+	}
+
+	// an app-level error from tablet, force serving state.
+	var healthErr error
+	serving := shr.Serving
+	if shr.RealtimeStats.HealthError != "" {
+		healthErr = fmt.Errorf("vttablet error: %v", shr.RealtimeStats.HealthError)
+		serving = false
+	}
+
+	if hcc.target.TabletType == topodatapb.TabletType_UNKNOWN {
+		// The first time we see response for the endpoint.
+		hcc.update(shr, serving, healthErr, true)
+		hc.mu.Lock()
+		hc.addEndPointToTargetProtected(hcc.target, endPoint)
+		hc.mu.Unlock()
+	} else if hcc.target.TabletType != shr.Target.TabletType {
+		// tablet type changed for the tablet
+		log.Infof("HealthCheckUpdate(Type Change): %v, EP: %v/%+v, target %+v => %+v, reparent time: %v", hcc.name, hcc.cell, endPoint, hcc.target, shr.Target, shr.TabletExternallyReparentedTimestamp)
+		hc.mu.Lock()
+		hc.deleteEndPointFromTargetProtected(hcc.target, endPoint)
+		hcc.update(shr, serving, healthErr, true)
+		hc.addEndPointToTargetProtected(shr.Target, endPoint)
+		hc.mu.Unlock()
+	} else {
+		hcc.update(shr, serving, healthErr, false)
+	}
+	// notify downstream for tablettype and realtimestats change
+	if hc.listener != nil {
+		hcc.mu.RLock()
+		eps := &EndPointStats{
+			EndPoint: endPoint,
+			Cell:     hcc.cell,
+			Name:     hcc.name,
+			Target:   hcc.target,
+			Up:       hcc.up,
+			Serving:  hcc.serving,
+			Stats:    hcc.stats,
+			TabletExternallyReparentedTimestamp: hcc.tabletExternallyReparentedTimestamp,
+			LastError:                           hcc.lastError,
+		}
+		hcc.mu.RUnlock()
+		hc.listener.StatsUpdate(eps)
+	}
+	return false, nil
+}
+
+func (hcc *healthCheckConn) update(shr *querypb.StreamHealthResponse, serving bool, healthErr error, setTarget bool) {
+	hcc.mu.Lock()
+	hcc.lastResponseTimestamp = time.Now()
+	hcc.target = shr.Target
+	hcc.serving = serving
+	hcc.tabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
+	hcc.stats = shr.RealtimeStats
+	hcc.lastError = healthErr
+	if setTarget {
+		hcc.conn.SetTarget(hcc.target.Keyspace, hcc.target.Shard, hcc.target.TabletType)
+	}
+	hcc.mu.Unlock()
 }
 
 func (hc *HealthCheckImpl) checkHealthCheckTimeout() {
