@@ -373,15 +373,15 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             while (resultSet.next()) {
                 row = new ArrayList<String>();
                 row.add(0, catalog);
-                row.add(1, "null");
+                row.add(1, null);
                 row.add(2, resultSet.getString(1));
                 row.add(3, "");
-                row.add(4, "null");
-                row.add(5, "null");
-                row.add(6, "null");
-                row.add(7, "null");
-                row.add(8, "null");
-                row.add(9, "null");
+                row.add(4, null);
+                row.add(5, null);
+                row.add(6, null);
+                row.add(7, null);
+                row.add(8, null);
+                row.add(9, null);
 
                 if (hasTableTypes) {
                     String tableType = resultSet.getString(typeColumnIndex);
@@ -606,7 +606,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                     while (resultSet.next()) {
                         row = new ArrayList<String>();
                         row.add(0, catalog);
-                        row.add(1, "null");
+                        row.add(1, null);
                         row.add(2, tableName);
                         row.add(3, resultSet.getString("Field"));
                         TypeDescriptor typeDesc = new TypeDescriptor(resultSet.getString("Type"),
@@ -618,7 +618,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                         row.add(5, typeDesc.typeName); // TYPE_NAME
                         // (native)
                         if (null == typeDesc.columnSize) {
-                            row.add(6, "null");
+                            row.add(6, null);
                         } else {
                             String collation = resultSet.getString("Collation");
                             int mbminlen = 1;
@@ -638,7 +638,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                         }
                         row.add(7, Integer.toString(typeDesc.bufferLength));
                         row.add(8, typeDesc.decimalDigits == null ?
-                            "null" :
+                            null :
                             typeDesc.decimalDigits.toString());
                         row.add(9, Integer.toString(typeDesc.numPrecRadix));
                         row.add(10, Integer.toString(typeDesc.nullability));
@@ -653,7 +653,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
 
                         // COLUMN_DEF
                         row.add(12, resultSet.getString("Default") == null ?
-                            "null" :
+                            null :
                             resultSet.getString("Default"));
 
                         row.add(13, Integer.toString(0));// SQL_DATA_TYPE
@@ -686,10 +686,10 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                         row.add(17, typeDesc.isNullable);
 
                         // We don't support REF or DISTINCT types
-                        row.add(18, "null");
-                        row.add(19, "null");
-                        row.add(20, "null");
-                        row.add(21, "0");
+                        row.add(18, null);
+                        row.add(19, null);
+                        row.add(20, null);
+                        row.add(21, null);
                         String extra = resultSet.getString("Extra");
                         if (null != extra) {
                             row.add(22,
@@ -871,14 +871,14 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 row = new ArrayList<String>();
                 if (null != keyType) {
                     if (keyType.equalsIgnoreCase("PRIMARY") || keyType.equalsIgnoreCase("PRI")) {
-                        row.add((catalog == null) ? "" : catalog);
-                        row.add("null");
-                        row.add(table);
+                        row.add(0, (catalog == null) ? "" : catalog);
+                        row.add(1, null);
+                        row.add(2, table);
 
                         String columnName = resultSet.getString("Column_name");
-                        row.add(columnName);
-                        row.add(resultSet.getString("Seq_in_index"));
-                        row.add(keyType);
+                        row.add(3, columnName);
+                        row.add(4, resultSet.getString("Seq_in_index"));
+                        row.add(5, keyType);
                         sortMap.put(columnName, row);
                     }
                 }
@@ -1049,7 +1049,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             while (resultSet.next()) {
                 row = new ArrayList<String>();
                 row.add(0, catalog);
-                row.add(1, "null");
+                row.add(1, null);
                 row.add(2, resultSet.getString("Table"));
 
                 boolean indexIsUnique = resultSet.getInt("Non_unique") == 0;
@@ -1070,7 +1070,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
 
                 row.add(10, String.valueOf(cardinality));
                 row.add(11, "0");
-                row.add(12, "null");
+                row.add(12, null);
 
                 IndexMetaDataKey indexInfoKey = new IndexMetaDataKey(!indexIsUnique, indexType,
                     resultSet.getString("Key_name").toLowerCase(),

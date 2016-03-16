@@ -111,8 +111,12 @@ public class VitessResultSet implements ResultSet {
             Query.Row.Builder queryRow = Query.Row.newBuilder();
             StringBuilder sb = new StringBuilder();
             for (String aRowData : rowData) {
-                sb.append(aRowData);
-                queryRow.addLengths(aRowData.length());
+                if (null != aRowData) {
+                    sb.append(aRowData);
+                    queryRow.addLengths(aRowData.length());
+                } else {
+                    queryRow.addLengths(-1);
+                }
             }
             queryRow.setValues(ByteString.copyFromUtf8(sb.toString()));
             queryResultBuilder.addRows(queryRow);

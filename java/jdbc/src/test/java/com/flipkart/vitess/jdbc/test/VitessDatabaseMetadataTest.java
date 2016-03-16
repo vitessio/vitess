@@ -660,8 +660,8 @@ import java.util.ArrayList;
     @Test public void supportsResultSetConcurrencyTest() throws SQLException {
         VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
         Assert.assertEquals(vitessDatabaseMetaData
-                .supportsResultSetConcurrency(ResultSet.TYPE_FORWARD_ONLY,
-                    ResultSet.CONCUR_READ_ONLY), true);
+            .supportsResultSetConcurrency(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY),
+            true);
         Assert.assertEquals(vitessDatabaseMetaData
             .supportsResultSetConcurrency(ResultSet.TYPE_SCROLL_INSENSITIVE,
                 ResultSet.CONCUR_READ_ONLY), false);
@@ -672,11 +672,11 @@ import java.util.ArrayList;
             .supportsResultSetConcurrency(ResultSet.CLOSE_CURSORS_AT_COMMIT,
                 ResultSet.CONCUR_READ_ONLY), false);
         Assert.assertEquals(vitessDatabaseMetaData
-                .supportsResultSetConcurrency(ResultSet.CONCUR_READ_ONLY,
-                    ResultSet.CONCUR_READ_ONLY), false);
+            .supportsResultSetConcurrency(ResultSet.CONCUR_READ_ONLY, ResultSet.CONCUR_READ_ONLY),
+            false);
         Assert.assertEquals(vitessDatabaseMetaData
-                .supportsResultSetConcurrency(ResultSet.CONCUR_UPDATABLE,
-                    ResultSet.CONCUR_READ_ONLY), false);
+            .supportsResultSetConcurrency(ResultSet.CONCUR_UPDATABLE, ResultSet.CONCUR_READ_ONLY),
+            false);
         Assert.assertEquals(vitessDatabaseMetaData
                 .supportsResultSetConcurrency(ResultSet.FETCH_FORWARD, ResultSet.CONCUR_READ_ONLY),
             false);
@@ -899,10 +899,9 @@ import java.util.ArrayList;
         Assert.assertEquals(vitessMariaDBDatabaseMetadata.supportsStatementPooling(), false);
     }
 
-    /*@Test public void getCatalogsTest() throws SQLException, Exception {
-        //Prepare Dummy ResultSet
+    @Test public void getCatalogsTest() throws SQLException, Exception {
         String sql = "SHOW DATABASES";
-        Cursor cursor = new SimpleCursor(Query.QueryResult.newBuilder().addFields(
+        Cursor mockedCursor = new SimpleCursor(Query.QueryResult.newBuilder().addFields(
             Query.Field.newBuilder().setName("TABLE_CAT").setType(Query.Type.VARCHAR).build())
             .addRows(Query.Row.newBuilder().addLengths("vitessDB".length())
                 .setValues(ByteString.copyFromUtf8("vitessDB"))).addRows(
@@ -916,7 +915,7 @@ import java.util.ArrayList;
         VitessStatement vitessStatement = PowerMockito.mock(VitessStatement.class);
         PowerMockito.whenNew(VitessStatement.class).withAnyArguments().thenReturn(vitessStatement);
         PowerMockito.when(vitessStatement.executeQuery(sql))
-            .thenReturn(new VitessResultSet(cursor));
+            .thenReturn(new VitessResultSet(mockedCursor));
 
         VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
         ResultSet resultSet = vitessDatabaseMetaData.getCatalogs();
@@ -933,7 +932,7 @@ import java.util.ArrayList;
     @Test public void getTablesTest() throws SQLException, Exception {
 
         String sql = "SHOW FULL TABLES FROM `vt` LIKE '%'";
-        Cursor cursor = new SimpleCursor(Query.QueryResult.newBuilder()
+        Cursor mockedCursor = new SimpleCursor(Query.QueryResult.newBuilder()
             .addFields(Query.Field.newBuilder().setName("TABLE_CAT").setType(Query.Type.VARCHAR))
             .addFields(Query.Field.newBuilder().setName("TABLE_SCHEM").setType(Query.Type.VARCHAR))
             .addFields(Query.Field.newBuilder().setName("TABLE_NAME").setType(Query.Type.VARCHAR))
@@ -961,10 +960,10 @@ import java.util.ArrayList;
                     .addLengths("".length()).addLengths("".length()).addLengths("".length())
                     .setValues(ByteString.copyFromUtf8("TestDB2SampleSystemViewSYSTEM VIEW")))
             .addRows(Query.Row.newBuilder().addLengths("TestDB1".length()).addLengths("".length())
-                    .addLengths("SampleSystemTable".length()).addLengths("SYSTEM TABLE".length())
-                    .addLengths("".length()).addLengths("".length()).addLengths("".length())
-                    .addLengths("".length()).addLengths("".length()).addLengths("".length())
-                    .setValues(ByteString.copyFromUtf8("TestDB2SampleSystemTableSYSTEM TABLE")))
+                .addLengths("SampleSystemTable".length()).addLengths("SYSTEM TABLE".length())
+                .addLengths("".length()).addLengths("".length()).addLengths("".length())
+                .addLengths("".length()).addLengths("".length()).addLengths("".length())
+                .setValues(ByteString.copyFromUtf8("TestDB2SampleSystemTableSYSTEM TABLE")))
             .addRows(Query.Row.newBuilder().addLengths("TestDB1".length()).addLengths("".length())
                 .addLengths("SampleLocalTemporary".length()).addLengths("LOCAL TEMPORARY".length())
                 .addLengths("".length()).addLengths("".length()).addLengths("".length())
@@ -976,7 +975,7 @@ import java.util.ArrayList;
         VitessStatement vitessStatement = PowerMockito.mock(VitessStatement.class);
         PowerMockito.whenNew(VitessStatement.class).withAnyArguments().thenReturn(vitessStatement);
         PowerMockito.when(vitessStatement.executeQuery(sql))
-            .thenReturn(new VitessResultSet(cursor));
+            .thenReturn(new VitessResultSet(mockedCursor));
 
         VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
         ResultSet rs = vitessDatabaseMetaData.getTables("vt", null, null, null);
@@ -1001,13 +1000,13 @@ import java.util.ArrayList;
             new VitessResultSet(columnNames, columnTypes, resultSetList);
 
         //Assert.assertEquals(actualResultSet,rs);
-    }*/
+    }
 
     @Test public void getColumnsTest() throws SQLException, Exception {
 
         String sql = "SHOW FULL COLUMNS FROM nullsampleTable1null FROM nullvtnull LIKE '%'";
 
-        Cursor tablecursor = new SimpleCursor(Query.QueryResult.newBuilder()
+        Cursor mockedTablecursor = new SimpleCursor(Query.QueryResult.newBuilder()
             .addFields(Query.Field.newBuilder().setName("TABLE_CAT").setType(Query.Type.VARCHAR))
             .addFields(Query.Field.newBuilder().setName("TABLE_SCHEM").setType(Query.Type.VARCHAR))
             .addFields(Query.Field.newBuilder().setName("TABLE_NAME").setType(Query.Type.VARCHAR))
@@ -1024,6 +1023,30 @@ import java.util.ArrayList;
                 .addLengths("".length()).addLengths("".length()).addLengths("".length())
                 .addLengths("".length()).addLengths("".length()).addLengths("".length())
                 .setValues(ByteString.copyFromUtf8("TestDB1sampleTable1TABLE"))).build());
+
+        Cursor expectedCursor = new SimpleCursor(Query.QueryResult.newBuilder()
+            .addFields(Query.Field.newBuilder().setName("Field").setType(Query.Type.VARCHAR))
+            .addFields(Query.Field.newBuilder().setName("Type").setType(Query.Type.VARCHAR))
+            .addFields(Query.Field.newBuilder().setName("Collation").setType(Query.Type.VARCHAR))
+            .addFields(Query.Field.newBuilder().setName("NULL").setType(Query.Type.VARCHAR))
+            .addFields(Query.Field.newBuilder().setName("Key").setType(Query.Type.VARCHAR))
+            .addFields(Query.Field.newBuilder().setName("Default").setType(Query.Type.VARCHAR))
+            .addFields(Query.Field.newBuilder().setName("Extra").setType(Query.Type.VARCHAR))
+            .addFields(Query.Field.newBuilder().setName("Privileges").setType(Query.Type.VARCHAR))
+            .addFields(Query.Field.newBuilder().setName("Comment").setType(Query.Type.VARCHAR))
+            .addRows(Query.Row.newBuilder().addLengths("shipmentid".length())
+                .addLengths("bigint".length()).addLengths("NULL".length()).addLengths("NO".length())
+                .addLengths("PRI".length()).addLengths("NULL".length()).addLengths("".length())
+                .addLengths("select,insert,update,references".length()).addLengths("".length())
+                .setValues(ByteString
+                    .copyFromUtf8("shipmentidbigintNULLNOPRINULLselect,insert,update,references")))
+            .addRows(Query.Row.newBuilder().addLengths("trackingid".length())
+                .addLengths("varchar".length()).addLengths("utf8_general_ci".length())
+                .addLengths("YES".length()).addLengths("".length()).addLengths("NULL".length())
+                .addLengths("".length()).addLengths("select,insert,update,references".length())
+                .addLengths("".length()).setValues(ByteString.copyFromUtf8(
+                    "trackingidvarcharutf8_general_ciYESNULLselect,insert,update,references")))
+            .build());
 
         Cursor cursor = new SimpleCursor(Query.QueryResult.newBuilder()
             .addFields(Query.Field.newBuilder().setName("TABLE_CAT").setType(Query.Type.CHAR))
@@ -1082,15 +1105,14 @@ import java.util.ArrayList;
         VitessStatement vitessStatement = PowerMockito.mock(VitessStatement.class);
         PowerMockito.whenNew(VitessStatement.class).withAnyArguments().thenReturn(vitessStatement);
         PowerMockito.when(vitessStatement.executeQuery(sql))
-            .thenReturn(new VitessResultSet(cursor));
+            .thenReturn(new VitessResultSet(expectedCursor));
 
         VitessDatabaseMetaData vitessDatabaseMetaData =
             PowerMockito.mock(VitessMySQLDatabaseMetadata.class);
         PowerMockito.doCallRealMethod().when(vitessDatabaseMetaData)
             .getColumns("vt", null, null, null);
-        ResultSet resultSet = new VitessResultSet(tablecursor);
         PowerMockito.when(vitessDatabaseMetaData.getTables("vt", null, "%", new String[0]))
-            .thenReturn(resultSet);
+            .thenReturn(new VitessResultSet(mockedTablecursor));
         resultSet = vitessDatabaseMetaData.getColumns("vt", null, null, null);
         String[] columnNames =
             new String[] {"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "COLUMN_NAME", "DATA_TYPE",
@@ -1124,33 +1146,66 @@ import java.util.ArrayList;
 
     @Test public void getPrimaryKeysTest() throws SQLException, Exception {
 
-        String sql = "SHOW KEYS FROM `SampleTable` FROM `vt`";
-        Cursor cursor = new SimpleCursor(Query.QueryResult.newBuilder()
-            .addFields(Query.Field.newBuilder().setName("TABLE_CAT").setType(Query.Type.VARCHAR))
-            .addFields(Query.Field.newBuilder().setName("TABLE_SCHEM").setType(Query.Type.VARCHAR))
-            .addFields(Query.Field.newBuilder().setName("TABLE_NAME").setType(Query.Type.VARCHAR))
-            .addFields(Query.Field.newBuilder().setName("TABLE_TYPE").setType(Query.Type.VARCHAR))
-            .addFields(Query.Field.newBuilder().setName("REMARKS").setType(Query.Type.VARCHAR))
-            .addFields(Query.Field.newBuilder().setName("TYPE_CAT").setType(Query.Type.VARCHAR))
-            .addFields(Query.Field.newBuilder().setName("TYPE_SCHEM").setType(Query.Type.VARCHAR))
-            .addFields(Query.Field.newBuilder().setName("TYPE_NAME").setType(Query.Type.VARCHAR))
-            .addFields(Query.Field.newBuilder().setName("SELF_REFERENCING_COL_NAME")
-                .setType(Query.Type.VARCHAR)).addFields(
-                Query.Field.newBuilder().setName("REF_GENERATION").setType(Query.Type.VARCHAR))
-            .addRows(Query.Row.newBuilder().addLengths("TestDB1".length()).addLengths("".length())
-                .addLengths("SampleTable1".length()).addLengths("TABLE".length())
-                .addLengths("".length()).addLengths("".length()).addLengths("".length())
-                .addLengths("".length()).addLengths("".length()).addLengths("".length())
-                .setValues(ByteString.copyFromUtf8("TestDB1sampleTable1TABLE"))).build());
+        String sql = "SHOW KEYS FROM nullshipmentnull FROM nullvtnull";
+        Cursor mockedCursor = new SimpleCursor(Query.QueryResult.newBuilder()
+            .addFields(Query.Field.newBuilder().setName("TABLE").setType(Query.Type.VARCHAR))
+            .addFields(Query.Field.newBuilder().setName("NON_UNIQUE").setType(Query.Type.INT64))
+            .addFields(Query.Field.newBuilder().setName("Key_name").setType(Query.Type.VARCHAR))
+            .addFields(Query.Field.newBuilder().setName("Seq_in_index").setType(Query.Type.INT64))
+            .addFields(Query.Field.newBuilder().setName("Column_name").setType(Query.Type.VARCHAR))
+            .addFields(Query.Field.newBuilder().setName("Collation").setType(Query.Type.VARCHAR))
+            .addFields(Query.Field.newBuilder().setName("Cardinality").setType(Query.Type.INT64))
+            .addFields(Query.Field.newBuilder().setName("Sub_part").setType(Query.Type.INT64))
+            .addFields(Query.Field.newBuilder().setName("Packed").setType(Query.Type.VARCHAR))
+            .addFields(Query.Field.newBuilder().setName("Null").setType(Query.Type.VARCHAR))
+            .addFields(Query.Field.newBuilder().setName("Index_type").setType(Query.Type.VARCHAR))
+            .addFields(Query.Field.newBuilder().setName("Comment").setType(Query.Type.VARCHAR))
+            .addFields(
+                Query.Field.newBuilder().setName("Index_comment").setType(Query.Type.VARCHAR))
+            .addRows(Query.Row.newBuilder().addLengths("shipment".length()).addLengths("0".length())
+                .addLengths("PRIMARY".length()).addLengths("1".length())
+                .addLengths("shipmentid".length()).addLengths("A".length())
+                .addLengths("434880".length()).addLengths(-1).addLengths(-1).addLengths("".length())
+                .addLengths("BTREE".length()).addLengths("".length()).addLengths("".length())
+                .setValues(ByteString.copyFromUtf8("shipment0PRIMARY1shipmentidA434880BTREE")))
+            .build());
+        Cursor expectedcursor = new SimpleCursor(Query.QueryResult.newBuilder()
+            .addFields(Query.Field.newBuilder().setName("TABLE_CAT").setType(Query.Type.CHAR))
+            .addFields(Query.Field.newBuilder().setName("TABLE_SCHEM").setType(Query.Type.CHAR))
+            .addFields(Query.Field.newBuilder().setName("TABLE_NAME").setType(Query.Type.CHAR))
+            .addFields(Query.Field.newBuilder().setName("COLUMN_NAME").setType(Query.Type.CHAR))
+            .addFields(Query.Field.newBuilder().setName("KEY_SEQ").setType(Query.Type.INT16))
+            .addFields(Query.Field.newBuilder().setName("PK_NAME").setType(Query.Type.CHAR))
+            .addRows(Query.Row.newBuilder().addLengths("vt".length()).addLengths(-1)
+                .addLengths("shipment".length()).addLengths("shipmentid".length())
+                .addLengths("1".length()).addLengths("PRIMARY".length())
+                .setValues(ByteString.copyFromUtf8("vtshipmentshipmentid1PRIMARY"))).build());
         VitessStatement vitessStatement = PowerMockito.mock(VitessStatement.class);
+        VitessDatabaseMetaData vitessDatabaseMetaData =
+            PowerMockito.mock(VitessMySQLDatabaseMetadata.class);
+        PowerMockito.mock(VitessMySQLDatabaseMetadata.class);
+        PowerMockito.doCallRealMethod().when(vitessDatabaseMetaData)
+            .getPrimaryKeys("vt", null, "shipment");
+        PowerMockito.whenNew(VitessStatement.class).withAnyArguments().thenReturn(vitessStatement);
         PowerMockito.when(vitessStatement.executeQuery(sql))
-            .thenReturn(new VitessResultSet(cursor));
+            .thenReturn(new VitessResultSet(mockedCursor));
+        ResultSet resultSet = vitessDatabaseMetaData.getPrimaryKeys("vt", null, "shipment");
+        /*while (resultSet.next()) {
+            System.out.println(
+                resultSet.getString(1) + "->" + resultSet.getString(2) + "->" + resultSet
+                    .getString(3) + "->" + resultSet.getString(4) + "->" + resultSet.getString(5)
+                    + "->" + resultSet.getString(6));
+        }*/
         String[] columnNames =
             new String[] {"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "COLUMN_NAME", "KEY_SEQ",
                 "PK_NAME"};
         Query.Type[] columnType =
             new Query.Type[] {Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR,
                 Query.Type.INT16, Query.Type.CHAR};
+    }
+
+    private boolean compareResultSets(ResultSet actualResultSet, ResultSet expectedResultSet) {
+        return true;
     }
 
 }
