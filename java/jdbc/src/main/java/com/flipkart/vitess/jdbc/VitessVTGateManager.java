@@ -68,7 +68,7 @@ public class VitessVTGateManager {
     }
 
     private static String getIdentifer(String hostname, int port, String userIdentifer) {
-        return (hostname + String.valueOf(port) + userIdentifer);
+        return (hostname + port + userIdentifer);
     }
 
     /**
@@ -107,7 +107,7 @@ public class VitessVTGateManager {
                 vtGateConn.close();
             } catch (IOException e) {
                 exception =
-                    new SQLException(Constants.SQLExceptionMessages.VITESS_VTGATE_CONN_CLOSE);
+                    new SQLException(e.getMessage());
             }
         }
         vtGateConnHashMap.clear();
