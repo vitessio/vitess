@@ -21,7 +21,7 @@ A client application first sends an rpc with an embedded sql query to VtGate. Vt
 
 ![](https://raw.githubusercontent.com/youtube/vitess/master/doc/life_of_a_query_client_to_vtgate.png)
 
-VtGate keeps an in-memory table that stores all available rpc methods for each service, e.g. VtGate uses "VTGate" as its service name and most of its methods defined in [go/vt/vtgate/vtgate.go](../go/vt/vtgate/vtgate.go) are used to serve rpc request [go/rpcplus/server.go](../go/rpcplus/server.go).
+VtGate keeps an in-memory table that stores all available rpc methods for each service, e.g. VtGate uses "VTGate" as its service name and most of its methods defined in [go/vt/vtgate/vtgate.go](../go/vt/vtgate/vtgate.go) are used to serve rpc request.
 
 ## From VtGate to VtTablet
 
