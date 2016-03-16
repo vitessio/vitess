@@ -139,12 +139,14 @@ public abstract class RpcClientTest {
     List<Field> fields = cursor.getFields();
     Row row = cursor.next();
     Assert.assertNotNull(row);
-    for (int i = 0; i < fields.size(); i++) {
-      byte[] bytes = row.getBytes(i);
+    int columnIndex = 1;
+    for (Field field : fields) {
+      byte[] bytes = row.getBytes(columnIndex);
       if (bytes != null) {
-        values.put(fields.get(i).getName(), new String(row.getBytes(i), StandardCharsets.UTF_8));
+        values.put(field.getName(), new String(row.getBytes(columnIndex), StandardCharsets.UTF_8));
       }
-      rawValues.put(fields.get(i).getName(), row.getObject(i));
+      rawValues.put(field.getName(), row.getObject(columnIndex));
+      ++columnIndex;
     }
     Assert.assertNull(cursor.next()); // There should only be one row.
     cursor.close();
