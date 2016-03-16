@@ -86,7 +86,7 @@ def add_options(parser):
       '--skip-teardown', action='store_true',
       help='Leave the global processes running after the test is done.')
   parser.add_option('--mysql-flavor')
-  parser.add_option('--protocols-flavor', default='gorpc')
+  parser.add_option('--protocols-flavor', default='grpc')
   parser.add_option('--topo-server-flavor', default='zookeeper')
   parser.add_option('--vtgate-gateway-flavor', default='discoverygateway')
 
