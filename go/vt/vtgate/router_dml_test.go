@@ -147,10 +147,10 @@ func TestDeleteEqual(t *testing.T) {
 	}
 
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "delete from name_user_map where name in ::name and user_id = :user_id",
+		Sql: "delete from name_user_map where name = :name and user_id = :user_id",
 		BindVariables: map[string]interface{}{
 			"user_id": int64(1),
-			"name":    []interface{}{"myname"},
+			"name":    "myname",
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {

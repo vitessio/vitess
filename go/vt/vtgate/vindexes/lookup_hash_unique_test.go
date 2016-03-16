@@ -86,9 +86,9 @@ func TestLookupHashUniqueDelete(t *testing.T) {
 		t.Error(err)
 	}
 	wantQuery := &querytypes.BoundQuery{
-		Sql: "delete from t where fromc in ::fromc and toc = :toc",
+		Sql: "delete from t where fromc = :fromc and toc = :toc",
 		BindVariables: map[string]interface{}{
-			"fromc": []interface{}{1},
+			"fromc": 1,
 			"toc":   int64(1),
 		},
 	}
