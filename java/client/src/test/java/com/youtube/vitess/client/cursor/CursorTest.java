@@ -32,12 +32,13 @@ public class CursorTest {
             new SimpleCursor(
                 QueryResult.newBuilder()
                     .addFields(Field.newBuilder().setName("col1").build())
-                    .addFields(Field.newBuilder().setName("col2").build())
-                    .addFields(Field.newBuilder().setName("col3").build())
+                    .addFields(Field.newBuilder().setName("COL2").build()) // case-insensitive
+                    .addFields(Field.newBuilder().setName("col1").build()) // duplicate
+                    .addFields(Field.newBuilder().setName("col4").build()) // skip duplicate
                     .build())) {
-      Assert.assertEquals(1, cursor.findColumn("col1"));
-      Assert.assertEquals(2, cursor.findColumn("col2"));
-      Assert.assertEquals(3, cursor.findColumn("col3"));
+      Assert.assertEquals(1, cursor.findColumn("col1")); // should return first col1
+      Assert.assertEquals(2, cursor.findColumn("Col2")); // should be case-insensitive
+      Assert.assertEquals(4, cursor.findColumn("col4")); // index should skip over duplicate
     }
   }
 
