@@ -1,8 +1,7 @@
 package com.youtube.vitess.client.cursor;
 
-import com.google.common.collect.ImmutableMap;
-
 import com.youtube.vitess.proto.Query.Field;
+import org.apache.commons.collections.map.CaseInsensitiveMap;
 
 import java.util.List;
 import java.util.Map;
@@ -18,11 +17,10 @@ public class FieldMap {
   private final Map<String, Integer> indexMap;
 
   public FieldMap(List<Field> fields) {
-    ImmutableMap.Builder<String, Integer> builder = new ImmutableMap.Builder<>();
+    indexMap = new CaseInsensitiveMap();
     for (int i = 0; i < fields.size(); i++) {
-      builder.put(fields.get(i).getName(), i);
+      indexMap.put(fields.get(i).getName(), i);
     }
-    indexMap = builder.build();
     this.fields = fields;
   }
 
