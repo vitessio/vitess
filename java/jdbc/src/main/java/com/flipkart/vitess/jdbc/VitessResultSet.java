@@ -499,7 +499,14 @@ public class VitessResultSet implements ResultSet {
     }
 
     public int findColumn(String columnLabel) throws SQLException {
-        return this.row.findColumn(columnLabel.toLowerCase()) + 1;
+        int idx = 0;
+        for (Query.Field field : fields) {
+            idx++;
+            if (columnLabel.equalsIgnoreCase(field.getName())) {
+                return idx;
+            }
+        }
+        return -1;
     }
 
     public BigDecimal getBigDecimal(int columnIndex) throws SQLException {
