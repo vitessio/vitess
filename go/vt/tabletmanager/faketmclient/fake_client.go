@@ -20,6 +20,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 
+	"fmt"
+
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
@@ -273,6 +275,7 @@ func (client *FakeTabletManagerClient) PromoteSlave(ctx context.Context, tablet 
 
 // Backup is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (<-chan *logutilpb.Event, tmclient.ErrFunc, error) {
+	fmt.Println("1f")
 	logstream := make(chan *logutilpb.Event, 10)
 	return logstream, func() error {
 		return nil

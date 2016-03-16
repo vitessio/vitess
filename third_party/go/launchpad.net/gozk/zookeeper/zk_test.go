@@ -2,9 +2,10 @@ package zookeeper_test
 
 import (
 	"errors"
+	"time"
+
 	. "launchpad.net/gocheck"
 	zk "launchpad.net/gozk/zookeeper"
-	"time"
 )
 
 // This error will be delivered via C errno, since ZK unfortunately

@@ -15,6 +15,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 	"golang.org/x/net/context"
 
+	"fmt"
+
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 )
 
@@ -39,6 +41,7 @@ func main() {
 		func(e *logutilpb.Event) {
 			logutil.LogEvent(logger, e)
 		})
+	fmt.Println("Prints all the error message here")
 	if err != nil {
 		log.Error(err)
 		os.Exit(1)

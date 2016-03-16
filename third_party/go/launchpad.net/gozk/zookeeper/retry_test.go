@@ -2,6 +2,7 @@ package zookeeper_test
 
 import (
 	"errors"
+
 	. "launchpad.net/gocheck"
 	zk "launchpad.net/gozk/zookeeper"
 )

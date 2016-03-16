@@ -1109,6 +1109,7 @@ var testBackupConcurrency = 24
 var testBackupCalled = false
 
 func (fra *fakeRPCAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger) error {
+	fmt.Println("1e")
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1120,6 +1121,7 @@ func (fra *fakeRPCAgent) Backup(ctx context.Context, concurrency int, logger log
 
 func agentRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
 	logChannel, errFunc, err := client.Backup(ctx, ti, testBackupConcurrency)
+	fmt.Println("2b")
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)
 	}

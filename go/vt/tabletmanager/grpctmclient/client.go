@@ -640,6 +640,7 @@ func (client *Client) PromoteSlave(ctx context.Context, tablet *topo.TabletInfo)
 
 // Backup is part of the tmclient.TabletManagerClient interface.
 func (client *Client) Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (<-chan *logutilpb.Event, tmclient.ErrFunc, error) {
+	fmt.Println("1a")
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, nil, err
@@ -649,6 +650,7 @@ func (client *Client) Backup(ctx context.Context, tablet *topo.TabletInfo, concu
 	stream, err := c.Backup(ctx, &tabletmanagerdatapb.BackupRequest{
 		Concurrency: int64(concurrency),
 	})
+	fmt.Println("2c")
 	if err != nil {
 		cc.Close()
 		return nil, nil, err

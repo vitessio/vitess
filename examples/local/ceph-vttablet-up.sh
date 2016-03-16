@@ -5,7 +5,7 @@
 set -e
 
 cell='test'
-keyspace='test_keyspace'
+keyspace='test_ksp2'
 shard=0
 uid_base=100
 tablet_type='replica'

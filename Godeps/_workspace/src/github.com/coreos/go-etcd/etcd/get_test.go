@@ -17,9 +17,9 @@ func cleanNode(n *Node) {
 func cleanResult(result *Response) {
 	//  TODO(philips): make this recursive.
 	cleanNode(result.Node)
-	for i, _ := range result.Node.Nodes {
+	for i := range result.Node.Nodes {
 		cleanNode(result.Node.Nodes[i])
-		for j, _ := range result.Node.Nodes[i].Nodes {
+		for j := range result.Node.Nodes[i].Nodes {
 			cleanNode(result.Node.Nodes[i].Nodes[j])
 		}
 	}

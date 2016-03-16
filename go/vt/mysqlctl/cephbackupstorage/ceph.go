@@ -1,22 +1,18 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 // Package cephbackupstorage implements the BackupStorage interface
-// for Google Cloud Storage.
+// for Ceph Cloud Storage.
 package cephbackupstorage
 
 import (
 	"fmt"
 	"io"
-	"sort"
 	"strings"
 	"sync"
+
+	"log"
 
 	"github.com/minio/minio-go"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
 	"golang.org/x/net/context"
-	"google.golang.org/cloud/storage"
 )
 
 var (
@@ -28,14 +24,13 @@ var (
 //	root = flag.String("sd", "", "root prefix for all backup-related object names")
 )
 
-// GCSBackupHandle implements BackupHandle for Google Cloud Storage.
+// CephBackupHandle implements BackupHandle for Ceph Cloud Storage.
 type CephBackupHandle struct {
 	client_ceph *minio.Client
-
-	bs       *CephBackupStorage
-	dir      string
-	name     string
-	readOnly bool
+	bs          *CephBackupStorage
+	dir         string
+	name        string
+	readOnly    bool
 }
 
 // Directory implements BackupHandle.
@@ -86,9 +81,8 @@ func (bh *CephBackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
 
 // GCSBackupStorage implements BackupStorage for Google Cloud Storage.
 type CephBackupStorage struct {
-	// client is the instance of the Google Cloud Storage Go client.
+	// client is the instance of the Minio Go client.
 	// Once this field is set, it must not be written again/unset to nil.
-	_client     *storage.Client
 	client_ceph *minio.Client
 
 	// mu guards all fields.
@@ -98,50 +92,25 @@ type CephBackupStorage struct {
 // ListBackups implements BackupStorage.
 func (bs *CephBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHandle, error) {
 	c, err := bs.client()
-
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(c)
 
-	// List prefixes that begin with dir (i.e. list subdirs).
-	var subdirs []string
-	fmt.Println(subdirs)
-	searchPrefix := objName(dir, "" /* include trailing slash */)
-	query := &minio.Query{
-		Delimiter: "/",
-		Prefix:    searchPrefix,
-	}
-
+	doneCh := make(chan struct{})
 	// Loop in case results are returned in multiple batches.
-	for query != nil {
-		//		objs, err := c.Bucket(*bucket).List(context.TODO(), query)
-		objs, err := c.Bucket(bucket).List(context.TODO(), query)
-		if err != nil {
-			return nil, err
+	dirTemp := dir
+	dir = "raunaktestbucket"
+	var result []backupstorage.BackupHandle
+	for object := range c.ListObjects(dir, "", false, doneCh) {
+		if object.Err != nil {
+			fmt.Println(object.Err)
+			return nil, object.Err
 		}
-
-		// Each returned prefix is a subdir.
-		// Strip parent dir from full path.
-		for _, prefix := range objs.Prefixes {
-			subdir := strings.TrimPrefix(prefix, searchPrefix)
-			subdir = strings.TrimSuffix(subdir, "/")
-			subdirs = append(subdirs, subdir)
-		}
-
-		query = objs.Next
-	}
-
-	// Backups must be returned in order, oldest first.
-	sort.Strings(subdirs)
-
-	result := make([]backupstorage.BackupHandle, 0, len(subdirs))
-	for _, subdir := range subdirs {
 		result = append(result, &CephBackupHandle{
 			client_ceph: c,
 			bs:          bs,
-			dir:         dir,
-			name:        subdir,
+			dir:         dirTemp,
+			name:        object.Key,
 			readOnly:    true,
 		})
 	}
@@ -150,10 +119,12 @@ func (bs *CephBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHand
 
 // StartBackup implements BackupStorage.
 func (bs *CephBackupStorage) StartBackup(dir, name string) (backupstorage.BackupHandle, error) {
+	fmt.Println("startBackup")
 	c, err := bs.client()
 	if err != nil {
 		return nil, err
 	}
+	dir = "raunaktestbucket"
 
 	return &CephBackupHandle{
 		client_ceph: c,
@@ -170,30 +141,10 @@ func (bs *CephBackupStorage) RemoveBackup(dir, name string) error {
 	if err != nil {
 		return err
 	}
-
-	// Find all objects with the right prefix.
-	query := &minio.Query{
-		Prefix: objName(dir, name, "" /* include trailing slash */),
-	}
-
-	// Loop in case results are returned in multiple batches.
-	for query != nil {
-		//		objs, err := c.Bucket(*bucket).List(context.TODO(), query)
-		objs, err := c.Bucket(bucket).List(context.TODO(), query)
-		if err != nil {
-			return err
-		}
-
-		// Delete all the found objects.
-		for _, obj := range objs.Results {
-			if err := c.Bucket(bucket).Object(obj.Name).Delete(context.TODO()); err != nil {
-				//			if err := c.Bucket(*bucket).Object(obj.Name).Delete(context.TODO()); err != nil {
-				//				return fmt.Errorf("unable to delete %q from bucket %q: %v", obj.Name, *bucket, err)
-				return fmt.Errorf("unable to delete %q from bucket %q: %v", obj.Name, bucket, err)
-			}
-		}
-
-		query = objs.Next
+	dir = "raunaktestbucket"
+	err = c.RemoveObject(dir, name)
+	if err != nil {
+		log.Fatalln(err)
 	}
 
 	return nil
@@ -216,9 +167,11 @@ func (bs *CephBackupStorage) Close() error {
 	return nil
 }
 
-// client returns the GCS Storage client instance.
+// client returns the Ceph Storage client instance.
 // If there isn't one yet, it tries to create one.
 func (bs *CephBackupStorage) client() (*minio.Client, error) {
+	//	client resource has been locked such that no other instance/thread can edit the client object
+	//	single occurance
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 

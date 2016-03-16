@@ -987,12 +987,17 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		return err
 	}
 	logStream, errFunc, err := wr.TabletManagerClient().Backup(ctx, tabletInfo, *concurrency)
+	fmt.Println("2e")
+	fmt.Println(logStream)
+
 	if err != nil {
 		return err
 	}
+	fmt.Println("2f")
 	for e := range logStream {
 		logutil.LogEvent(wr.Logger(), e)
 	}
+	fmt.Println("2g")
 	return errFunc()
 }
 

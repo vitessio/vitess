@@ -186,7 +186,7 @@ func findFilesTobackup(cnf *Mycnf) ([]FileEntry, error) {
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
 func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, dir, name string, backupConcurrency int, hookExtraEnv map[string]string) error {
-
+	fmt.Println("1b")
 	// start the backup with the BackupStorage
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
@@ -197,7 +197,7 @@ func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, dir,
 	if err != nil {
 		return fmt.Errorf("StartBackup failed: %v", err)
 	}
-
+	fmt.Println("3c")
 	if err = backup(ctx, mysqld, logger, bh, backupConcurrency, hookExtraEnv); err != nil {
 		if abortErr := bh.AbortBackup(); abortErr != nil {
 			logger.Errorf("failed to abort backup: %v", abortErr)
@@ -209,6 +209,7 @@ func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, dir,
 
 func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) error {
 
+	fmt.Println("3b")
 	// save initial state so we can restore
 	slaveStartRequired := false
 	sourceIsMaster := false
@@ -317,6 +318,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 }
 
 func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fes []FileEntry, replicationPosition replication.Position, backupConcurrency int) (err error) {
+	fmt.Println("3a")
 	sema := sync2.NewSemaphore(backupConcurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
