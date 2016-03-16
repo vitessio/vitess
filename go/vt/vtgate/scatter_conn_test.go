@@ -584,3 +584,46 @@ func TestAppendResult(t *testing.T) {
 		t.Errorf("want 2, got %v", len(qr.Rows))
 	}
 }
+
+// MockShuffleQueryPartsRandomGenerator implements the ShuffleQueryPartsRandomGeneratorInterface
+// and returns a canned set of responses given in 'intNResults' for successive calls to its Intn()
+// method.
+type mockShuffleQueryPartsRandomGenerator struct {
+	intNResults []int
+}
+
+func (mockRandGen *mockShuffleQueryPartsRandomGenerator) Intn(unused int) int {
+	if len(mockRandGen.intNResults) == 0 {
+		panic("MockShuffleQueryPartsRandomGenerator exhausted.")
+	}
+	result := mockRandGen.intNResults[0]
+	mockRandGen.intNResults = mockRandGen.intNResults[1:]
+	return result
+}
+
+func TestShuffleQueryParts(t *testing.T) {
+	mockRandGen := &mockShuffleQueryPartsRandomGenerator{
+		intNResults: []int{1, 0},
+	}
+	oldGen := injectShuffleQueryPartsRandomGenerator(mockRandGen)
+	queryPart1 := vtgatepb.SplitQueryResponse_Part{
+		Query: &querypb.BoundQuery{Sql: "part_1"},
+	}
+	queryPart2 := vtgatepb.SplitQueryResponse_Part{
+		Query: &querypb.BoundQuery{Sql: "part_2"},
+	}
+	queryPart3 := vtgatepb.SplitQueryResponse_Part{
+		Query: &querypb.BoundQuery{Sql: "part_3"},
+	}
+	queryParts := []*vtgatepb.SplitQueryResponse_Part{&queryPart1, &queryPart2, &queryPart3}
+	queryPartsExpectedOutput := []*vtgatepb.SplitQueryResponse_Part{
+		&queryPart3, &queryPart1, &queryPart2,
+	}
+	shuffleQueryParts(queryParts)
+	if !reflect.DeepEqual(queryPartsExpectedOutput, queryParts) {
+		t.Errorf("want: %+v, got %+v", queryPartsExpectedOutput, queryParts)
+	}
+
+	// Return the generator to what it was to avoid disrupting other tests.
+	injectShuffleQueryPartsRandomGenerator(oldGen)
+}
