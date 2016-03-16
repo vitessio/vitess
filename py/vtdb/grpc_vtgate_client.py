@@ -172,7 +172,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       try:
         for response in it:
           for row in response.result.rows:
-            yield tuple(self._make_row(row, convs))
+            yield tuple(proto3_encoding.make_row(row, convs))
       except Exception:
         logging.exception('gRPC low-level error')
         raise
