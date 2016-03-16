@@ -43,7 +43,13 @@ type FullScanAlgorithm struct {
 }
 
 // NewFullScanAlgorithm constructs a new FullScanAlgorithm.
-func NewFullScanAlgorithm(splitParams *SplitParams, sqlExecuter SQLExecuter) *FullScanAlgorithm {
+func NewFullScanAlgorithm(
+	splitParams *SplitParams, sqlExecuter SQLExecuter) (*FullScanAlgorithm, error) {
+
+	if !splitParams.areSplitColumnsPrimaryKey() {
+		return nil, fmt.Errorf("splitquery: Using the FULL_SCAN algorithm requires split columns to be"+
+			" the primary key. Got: %+v", splitParams)
+	}
 	result := &FullScanAlgorithm{
 		splitParams:           splitParams,
 		sqlExecuter:           sqlExecuter,
@@ -51,8 +57,7 @@ func NewFullScanAlgorithm(splitParams *SplitParams, sqlExecuter SQLExecuter) *Fu
 	}
 	result.initialQuery = buildInitialQuery(splitParams)
 	result.noninitialQuery = buildNoninitialQuery(splitParams, result.prevBindVariableNames)
-	// TODO(erez): Check that the split-columns are the primary key.
-	return result
+	return result, nil
 }
 
 const (

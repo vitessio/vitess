@@ -7,10 +7,12 @@
 //
 // 1. Create a SplitParams object.
 //
-//   splitParams, err := NewSplitParams("SELECT * FROM table WHERE id > :id", // SQL query
-//                                      map[string]interface{}{id: int64(5)}  // Bind Variables
-//                                      ["id", "user_id"],                    // SplitColumns
-//                                      schema)                               // See below.
+//   splitParams, err := NewSplitParamsGivenSplitCount(
+//      "SELECT * FROM table WHERE id > :id", // SQL query
+//      map[string]interface{}{id: int64(5)}  // Bind Variables
+//      ["id", "user_id"],                    // SplitColumns
+//      1000,                                 // SplitCount
+//      schema)                               // See below.
 //   // Schema should be a map[string]schema.Table that maps a table name to its schema.Table
 //   // object. It's mostly used for error-checking the split columns.
 //   if (err != nil) {

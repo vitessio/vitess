@@ -53,3 +53,11 @@ func addAndTermToWhereClause(selectAST *sqlparser.Select, andTerm sqlparser.Bool
 		)
 	}
 }
+
+// int64Max computes the max of two int64 values.
+func int64Max(a, b int64) int64 {
+	if b > a {
+		return b
+	}
+	return a
+}
