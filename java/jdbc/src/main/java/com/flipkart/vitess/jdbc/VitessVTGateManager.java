@@ -51,7 +51,7 @@ public class VitessVTGateManager {
                 vtGateIdentifiers.add(identifier);
             }
             Random random = new Random();
-            counter = random.nextInt(vtGateIdentifiers.size() + 1);
+            counter = random.nextInt(vtGateIdentifiers.size());
         }
 
         /**

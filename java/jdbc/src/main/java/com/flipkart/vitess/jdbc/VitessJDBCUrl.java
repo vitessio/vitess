@@ -26,6 +26,7 @@ public class VitessJDBCUrl {
     private final List<HostInfo> hostInfos;
     private final String keyspace;
     private String catalog;
+    private final String executeType;
 
 
     /*
@@ -85,7 +86,14 @@ public class VitessJDBCUrl {
         if (null == tabletType) {
             tabletType = Constants.DEFAULT_TABLET_TYPE;
         }
+
         this.tabletType = getTabletType(tabletType);
+
+        String executeType = info.getProperty(Constants.Property.EXECUTE_TYPE);
+        if (null == executeType) {
+            executeType = Constants.DEFAULT_EXECUTE_TYPE;
+        }
+        this.executeType = executeType;
         this.url = url;
     }
 
@@ -115,6 +123,10 @@ public class VitessJDBCUrl {
 
     public void setCatalog(String catalog) {
         this.catalog = catalog;
+    }
+
+    public String getExecuteType() {
+        return executeType;
     }
 
     /**

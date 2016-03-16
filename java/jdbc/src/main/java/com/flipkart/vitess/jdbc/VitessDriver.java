@@ -54,7 +54,7 @@ public class VitessDriver implements Driver {
             info = new Properties();
         }
 
-        DriverPropertyInfo[] dpi = new DriverPropertyInfo[4];
+        DriverPropertyInfo[] dpi = new DriverPropertyInfo[7];
         if (acceptsURL(url)) {
             VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(url,info);
 
@@ -77,6 +77,22 @@ public class VitessDriver implements Driver {
                 vitessJDBCUrl.getTabletType().toString());
             dpi[3].required = false;
             dpi[3].description = Constants.VITESS_TABLET_TYPE;
+
+            dpi[4] = new DriverPropertyInfo(Constants.Property.EXECUTE_TYPE,
+                    vitessJDBCUrl.getExecuteType());
+            dpi[4].required = false;
+            dpi[4].description = Constants.EXECUTE_TYPE_DESC;
+
+            dpi[5] = new DriverPropertyInfo(Constants.Property.DBNAME,
+                    vitessJDBCUrl.getCatalog());
+            dpi[5].required = true;
+            dpi[5].description = Constants.VITESS_DB_NAME;
+
+            dpi[6] = new DriverPropertyInfo(Constants.Property.USERNAME,
+                    vitessJDBCUrl.getUsername());
+            dpi[6].required = false;
+            dpi[6].description = Constants.USERNAME_DESC;
+
 
         } else {
             throw new SQLException(Constants.SQLExceptionMessages.INVALID_CONN_URL + " : " + url);
