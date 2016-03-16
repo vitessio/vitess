@@ -144,7 +144,7 @@ public class VitessJDBCUrl {
             while (queryParams.hasMoreTokens()) {
                 String parameterValuePair = queryParams.nextToken();
 
-                int indexOfEquals = StringUtils.indexOfIgnoreCase(0, parameterValuePair, "=");
+                int indexOfEquals = parameterValuePair.indexOf('=');
 
                 String parameter = null;
                 String value = null;
