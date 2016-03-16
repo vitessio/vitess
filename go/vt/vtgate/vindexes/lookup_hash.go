@@ -133,7 +133,7 @@ func (lkp *lookup) Init(m map[string]interface{}) {
 	lkp.sel = fmt.Sprintf("select %s from %s where %s = :%s", to, t, from, from)
 	lkp.ver = fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", from, t, from, from, to, to)
 	lkp.ins = fmt.Sprintf("insert into %s(%s, %s) values(:%s, :%s)", t, from, to, from, to)
-	lkp.del = fmt.Sprintf("delete from %s where %s in ::%s and %s = :%s", t, from, from, to, to)
+	lkp.del = fmt.Sprintf("delete from %s where %s = :%s and %s = :%s", t, from, from, to, to)
 }
 
 // Map1 is for a unique vindex.
@@ -244,12 +244,14 @@ func (lkp *lookup) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid [
 	bq := &querytypes.BoundQuery{
 		Sql: lkp.del,
 		BindVariables: map[string]interface{}{
-			lkp.From: ids,
-			lkp.To:   val,
+			lkp.To: val,
 		},
 	}
-	if _, err := vcursor.Execute(bq); err != nil {
-		return fmt.Errorf("lookup.Delete: %v", err)
+	for _, id := range ids {
+		bq.BindVariables[lkp.From] = id
+		if _, err := vcursor.Execute(bq); err != nil {
+			return fmt.Errorf("lookup.Delete: %v", err)
+		}
 	}
 	return nil
 }
