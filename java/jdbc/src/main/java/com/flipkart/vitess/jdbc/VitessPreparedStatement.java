@@ -349,8 +349,11 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
 
     private void setMapVariable(int parameterIndex, String str, Object x) throws SQLException {
         checkOpen();
-        this.parameterMap.put(parameterIndex, str);
-        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
+        if(USE_BIND_VARIABLES) {
+            this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
+        } else {
+            this.parameterMap.put(parameterIndex, str);
+        }
     }
 
     private Cursor executeSQL(VTGateTx vtGateTx, final boolean useBindVariables,
