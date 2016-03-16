@@ -754,7 +754,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       want = 1
       for _ in xrange(10):
         result, _, _, _ = vtgate_conn._execute(
-            'select next value from vt_seq', {},
+            'select next value for vt_seq', {},
             tablet_type=tablet_type, keyspace_name=KEYSPACE_NAME,
             keyspace_ids=[pack_kid(0)])
         self.assertEqual(result[0][0], want)

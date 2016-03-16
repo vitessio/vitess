@@ -88,7 +88,10 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* a.* */ a.* from t",
 	}, {
-		input: "select /* next value */ next value from t",
+		input:  "select /* next value for */ next value for t",
+		output: "select /* next value for */ next value from t",
+	}, {
+		input: "select /* next value from */ next value from t",
 	}, {
 		input: "select /* `By`.* */ `By`.* from t",
 	}, {
