@@ -503,14 +503,7 @@ public class VitessResultSet implements ResultSet {
     }
 
     public int findColumn(String columnLabel) throws SQLException {
-        int idx = 0;
-        for (Query.Field field : fields) {
-            idx++;
-            if (columnLabel.equalsIgnoreCase(field.getName())) {
-                return idx;
-            }
-        }
-        return -1;
+        return this.cursor.findColumn(columnLabel);
     }
 
     public BigDecimal getBigDecimal(int columnIndex) throws SQLException {
