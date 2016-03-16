@@ -22,6 +22,7 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
     private static final String DATABASE_PRODUCT_NAME = "MySQL";
     /* Get actual class name to be printed on */
     private static Logger logger = Logger.getLogger(VitessDatabaseMetaData.class.getName());
+    protected final String quotedId = "`";
     protected VitessConnection connection = null;
 
     public String getURL() throws SQLException {
@@ -454,7 +455,7 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
     }
 
     public String getIdentifierQuoteString() throws SQLException {
-        return "`";
+        return this.quotedId;
     }
 
     public ResultSet getProcedures(String catalog, String schemaPattern,

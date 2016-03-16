@@ -117,19 +117,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         mysqlKeywordsThatArentSQL92 = keywordBuf.toString();
     }
 
-    private final String quotedId;
-    //private final VitessConnection connection;
-
-    public VitessMySQLDatabaseMetadata(VitessConnection connection) {
-        String identifierQuote = null;
-        try {
-            this.setConnection(connection);
-            identifierQuote = getIdentifierQuoteString();
-        } catch (SQLException sqlEx) {
-            //Forced by API, getIdentifiedQuoteString() never throws SQL Exception 
-        } finally {
-            this.quotedId = identifierQuote;
-        }
+    public VitessMySQLDatabaseMetadata(VitessConnection connection) throws SQLException {
+        this.setConnection(connection);
     }
 
     public boolean nullsAreSortedAtStart() throws SQLException {
