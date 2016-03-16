@@ -657,8 +657,8 @@ import java.util.ArrayList;
     @Test public void supportsResultSetConcurrencyTest() throws SQLException {
         VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
         Assert.assertEquals(vitessDatabaseMetaData
-            .supportsResultSetConcurrency(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY),
-            true);
+                .supportsResultSetConcurrency(ResultSet.TYPE_FORWARD_ONLY,
+                    ResultSet.CONCUR_READ_ONLY), true);
         Assert.assertEquals(vitessDatabaseMetaData
             .supportsResultSetConcurrency(ResultSet.TYPE_SCROLL_INSENSITIVE,
                 ResultSet.CONCUR_READ_ONLY), false);
@@ -669,11 +669,11 @@ import java.util.ArrayList;
             .supportsResultSetConcurrency(ResultSet.CLOSE_CURSORS_AT_COMMIT,
                 ResultSet.CONCUR_READ_ONLY), false);
         Assert.assertEquals(vitessDatabaseMetaData
-            .supportsResultSetConcurrency(ResultSet.CONCUR_READ_ONLY, ResultSet.CONCUR_READ_ONLY),
-            false);
+                .supportsResultSetConcurrency(ResultSet.CONCUR_READ_ONLY,
+                    ResultSet.CONCUR_READ_ONLY), false);
         Assert.assertEquals(vitessDatabaseMetaData
-            .supportsResultSetConcurrency(ResultSet.CONCUR_UPDATABLE, ResultSet.CONCUR_READ_ONLY),
-            false);
+                .supportsResultSetConcurrency(ResultSet.CONCUR_UPDATABLE,
+                    ResultSet.CONCUR_READ_ONLY), false);
         Assert.assertEquals(vitessDatabaseMetaData
                 .supportsResultSetConcurrency(ResultSet.FETCH_FORWARD, ResultSet.CONCUR_READ_ONLY),
             false);
