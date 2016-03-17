@@ -15,7 +15,7 @@ import (
 var hash planbuilder.Vindex
 
 func init() {
-	hv, err := planbuilder.CreateVindex("hash", map[string]interface{}{"Table": "t", "Column": "c"})
+	hv, err := planbuilder.CreateVindex("hash", "nn", map[string]interface{}{"Table": "t", "Column": "c"})
 	if err != nil {
 		panic(err)
 	}

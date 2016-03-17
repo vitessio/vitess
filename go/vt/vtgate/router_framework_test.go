@@ -18,7 +18,7 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-var routerSchema = createTestSchema(`
+var routerVSchema = createTestVSchema(`
 {
   "Keyspaces": {
     "TestRouter": {
@@ -192,9 +192,9 @@ var routerSchema = createTestSchema(`
 }
 `)
 
-// createTestSchema creates a schema based on the JSON specs.
+// createTestVSchema creates a vschema based on the JSON specs.
 // It panics on failure.
-func createTestSchema(schemaJSON string) *planbuilder.Schema {
+func createTestVSchema(vschemaJSON string) *planbuilder.VSchema {
 	f, err := ioutil.TempFile("", "vtgate_schema")
 	if err != nil {
 		panic(err)
@@ -203,15 +203,15 @@ func createTestSchema(schemaJSON string) *planbuilder.Schema {
 	f.Close()
 	defer os.Remove(fname)
 
-	err = ioutil.WriteFile(fname, []byte(schemaJSON), 0644)
+	err = ioutil.WriteFile(fname, []byte(vschemaJSON), 0644)
 	if err != nil {
 		panic(err)
 	}
-	schema, err := planbuilder.LoadFile(fname)
+	vschema, err := planbuilder.LoadFile(fname)
 	if err != nil {
 		panic(err)
 	}
-	return schema
+	return vschema
 }
 
 func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxConn) {
@@ -229,7 +229,7 @@ func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxConn) {
 
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, nil, "")
-	router = NewRouter(serv, "aa", routerSchema, "", scatterConn)
+	router = NewRouter(serv, "aa", routerVSchema, "", scatterConn)
 	return router, sbc1, sbc2, sbclookup
 }
 

@@ -15,7 +15,7 @@ import (
 var lhu planbuilder.Vindex
 
 func init() {
-	h, err := planbuilder.CreateVindex("lookup_hash_unique", map[string]interface{}{"Table": "t", "From": "fromc", "To": "toc"})
+	h, err := planbuilder.CreateVindex("lookup_hash_unique", "nn", map[string]interface{}{"Table": "t", "From": "fromc", "To": "toc"})
 	if err != nil {
 		panic(err)
 	}

@@ -31,6 +31,7 @@ func DDLParse(sql string) (plan *DDLPlan) {
 }
 
 func analyzeDDL(ddl *sqlparser.DDL, getTable TableGetter) *ExecPlan {
+	// TODO(sougou): Add support for sequences.
 	plan := &ExecPlan{PlanID: PlanDDL}
 	tableName := string(ddl.Table)
 	// Skip TableName if table is empty (create statements) or not found in schema

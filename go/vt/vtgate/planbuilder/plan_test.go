@@ -16,13 +16,13 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/testfiles"
-	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 // hashIndex satisfies Functional, Unique.
-type hashIndex struct{}
+type hashIndex struct{ name string }
 
-func (*hashIndex) Cost() int { return 1 }
+func (v *hashIndex) String() string { return v.name }
+func (*hashIndex) Cost() int        { return 1 }
 func (*hashIndex) Verify(VCursor, interface{}, []byte) (bool, error) {
 	return false, nil
 }
@@ -30,12 +30,15 @@ func (*hashIndex) Map(VCursor, []interface{}) ([][]byte, error) { return nil, ni
 func (*hashIndex) Create(VCursor, interface{}) error            { return nil }
 func (*hashIndex) Delete(VCursor, []interface{}, []byte) error  { return nil }
 
-func newHashIndex(map[string]interface{}) (Vindex, error) { return &hashIndex{}, nil }
+func newHashIndex(name string, _ map[string]interface{}) (Vindex, error) {
+	return &hashIndex{name: name}, nil
+}
 
 // lookupIndex satisfies Lookup, Unique.
-type lookupIndex struct{}
+type lookupIndex struct{ name string }
 
-func (*lookupIndex) Cost() int { return 2 }
+func (v *lookupIndex) String() string { return v.name }
+func (*lookupIndex) Cost() int        { return 2 }
 func (*lookupIndex) Verify(VCursor, interface{}, []byte) (bool, error) {
 	return false, nil
 }
@@ -43,12 +46,15 @@ func (*lookupIndex) Map(VCursor, []interface{}) ([][]byte, error) { return nil, 
 func (*lookupIndex) Create(VCursor, interface{}, []byte) error    { return nil }
 func (*lookupIndex) Delete(VCursor, []interface{}, []byte) error  { return nil }
 
-func newLookupIndex(map[string]interface{}) (Vindex, error) { return &lookupIndex{}, nil }
+func newLookupIndex(name string, _ map[string]interface{}) (Vindex, error) {
+	return &lookupIndex{name: name}, nil
+}
 
 // multiIndex satisfies Lookup, NonUnique.
-type multiIndex struct{}
+type multiIndex struct{ name string }
 
-func (*multiIndex) Cost() int { return 3 }
+func (v *multiIndex) String() string { return v.name }
+func (*multiIndex) Cost() int        { return 3 }
 func (*multiIndex) Verify(VCursor, interface{}, []byte) (bool, error) {
 	return false, nil
 }
@@ -56,66 +62,85 @@ func (*multiIndex) Map(VCursor, []interface{}) ([][][]byte, error) { return nil,
 func (*multiIndex) Create(VCursor, interface{}, []byte) error      { return nil }
 func (*multiIndex) Delete(VCursor, []interface{}, []byte) error    { return nil }
 
-func newMultiIndex(map[string]interface{}) (Vindex, error) { return &multiIndex{}, nil }
+func newMultiIndex(name string, _ map[string]interface{}) (Vindex, error) {
+	return &multiIndex{name: name}, nil
+}
+
+// costlyIndex satisfies Lookup, NonUnique.
+type costlyIndex struct{ name string }
+
+func (v *costlyIndex) String() string { return v.name }
+func (*costlyIndex) Cost() int        { return 10 }
+func (*costlyIndex) Verify(VCursor, interface{}, []byte) (bool, error) {
+	return false, nil
+}
+func (*costlyIndex) Map(VCursor, []interface{}) ([][][]byte, error) { return nil, nil }
+func (*costlyIndex) Create(VCursor, interface{}, []byte) error      { return nil }
+func (*costlyIndex) Delete(VCursor, []interface{}, []byte) error    { return nil }
+
+func newCostlyIndex(name string, _ map[string]interface{}) (Vindex, error) {
+	return &costlyIndex{name: name}, nil
+}
 
 func init() {
 	Register("hash", newHashIndex)
 	Register("lookup", newLookupIndex)
 	Register("multi", newMultiIndex)
-}
-
-func TestPlanName(t *testing.T) {
-	id, ok := PlanByName("SelectUnsharded")
-	if !ok {
-		t.Errorf("got false, want true")
-	}
-	if id != SelectUnsharded {
-		t.Errorf("got %d, want SelectUnsharded", id)
-	}
-	id, ok = PlanByName("NonExistent")
-	if ok {
-		t.Errorf("got true, want false")
-	}
-	fakeName := NumPlans.String()
-	if fakeName != "" {
-		t.Errorf("got %s, want \"\"", fakeName)
-	}
+	Register("costly", newCostlyIndex)
 }
 
 func TestPlan(t *testing.T) {
-	schema, err := LoadFile(locateFile("schema_test.json"))
+	vschema, err := LoadFile(locateFile("schema_test.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	testFile(t, "select_cases.txt", schema)
-	testFile(t, "dml_cases.txt", schema)
-	testFile(t, "insert_cases.txt", schema)
+	testFile(t, "from_cases.txt", vschema)
+	testFile(t, "filter_cases.txt", vschema)
+	testFile(t, "select_cases.txt", vschema)
+	testFile(t, "postprocess_cases.txt", vschema)
+	testFile(t, "generator_cases.txt", vschema)
+	testFile(t, "dml_cases.txt", vschema)
+	testFile(t, "unsupported_cases.txt", vschema)
 }
 
-func testFile(t *testing.T, filename string, schema *Schema) {
+func TestOne(t *testing.T) {
+	vschema, err := LoadFile(locateFile("schema_test.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	testFile(t, "onecase.txt", vschema)
+}
+
+func testFile(t *testing.T, filename string, vschema *VSchema) {
 	for tcase := range iterateExecFile(filename) {
-		plan := BuildPlan(tcase.input, schema)
-		if plan.ID == NoPlan {
-			plan.Rewritten = ""
-			plan.ColVindex = nil
-			plan.Values = nil
-		}
-		bout, err := json.Marshal(plan)
+		plan, err := BuildPlan(tcase.input, vschema)
+		var out string
 		if err != nil {
-			panic(fmt.Sprintf("Error marshalling %v: %v", plan, err))
+			out = err.Error()
+		} else {
+			bout, _ := json.Marshal(plan)
+			out = string(bout)
 		}
-		out := string(bout)
 		if out != tcase.output {
 			t.Errorf("File: %s, Line:%v\n%s\n%s", filename, tcase.lineno, tcase.output, out)
+			// Uncomment these lines to re-generate input files
+			if err != nil {
+				out = fmt.Sprintf("\"%s\"", out)
+			} else {
+				bout, _ := json.MarshalIndent(plan, "", "  ")
+				out = string(bout)
+			}
+			fmt.Printf("%s\"%s\"\n%s\n\n", tcase.comments, tcase.input, out)
 		}
 	}
 }
 
 type testCase struct {
-	file   string
-	lineno int
-	input  string
-	output string
+	file     string
+	lineno   int
+	input    string
+	output   string
+	comments string
 }
 
 func iterateExecFile(name string) (testCaseIterator chan testCase) {
@@ -125,6 +150,7 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 		panic(fmt.Sprintf("Could not open file %s", name))
 	}
 	testCaseIterator = make(chan testCase)
+	var comments string
 	go func() {
 		defer close(testCaseIterator)
 
@@ -141,7 +167,11 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 			}
 			lineno++
 			input := string(binput)
-			if input == "" || input == "\n" || input[0] == '#' || strings.HasPrefix(input, "Length:") {
+			if input == "" || input == "\n" || strings.HasPrefix(input, "Length:") {
+				continue
+			}
+			if input[0] == '#' {
+				comments = comments + input
 				continue
 			}
 			err = json.Unmarshal(binput, &input)
@@ -172,7 +202,14 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 					break
 				}
 			}
-			testCaseIterator <- testCase{name, lineno, input, string(output)}
+			testCaseIterator <- testCase{
+				file:     name,
+				lineno:   lineno,
+				input:    input,
+				output:   string(output),
+				comments: comments,
+			}
+			comments = ""
 		}
 	}()
 	return testCaseIterator
@@ -183,12 +220,4 @@ func locateFile(name string) string {
 		return name
 	}
 	return testfiles.Locate("vtgate/" + name)
-}
-
-// TestCompleteness ensures that we're covering all Expr types.
-func TestCompleteness(t *testing.T) {
-	for _, expr := range sqlparser.AllExprs {
-		exprHasAggregates(expr)
-		hasSubquery(expr)
-	}
 }

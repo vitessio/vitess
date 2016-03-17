@@ -16,7 +16,7 @@ This file contains the vschema management code for etcdtopo.Server
 
 // SaveVSchema saves the JSON vschema into the topo.
 func (s *Server) SaveVSchema(ctx context.Context, vschema string) error {
-	_, err := planbuilder.NewSchema([]byte(vschema))
+	_, err := planbuilder.NewVSchema([]byte(vschema))
 	if err != nil {
 		return err
 	}

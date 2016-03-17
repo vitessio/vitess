@@ -15,7 +15,7 @@ import (
 var lhm planbuilder.Vindex
 
 func init() {
-	h, err := planbuilder.CreateVindex("lookup_hash", map[string]interface{}{"Table": "t", "From": "fromc", "To": "toc"})
+	h, err := planbuilder.CreateVindex("lookup_hash", "nn", map[string]interface{}{"Table": "t", "From": "fromc", "To": "toc"})
 	if err != nil {
 		panic(err)
 	}
