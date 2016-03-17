@@ -20,31 +20,6 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
         this.connection = connection;
     }
 
-    public boolean allTablesAreSelectable() throws SQLException {
-        return false;
-    }
-
-    public String getURL() throws SQLException {
-        return connection.getUrl();
-    }
-
-    public String getUserName() throws SQLException {
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
-    }
-
-    public boolean isReadOnly() throws SQLException {
-        return connection.isReadOnly();
-    }
-
-    public boolean nullsAreSortedHigh() throws SQLException {
-        return false;
-    }
-
-    public boolean nullsAreSortedLow() throws SQLException {
-        return !this.nullsAreSortedHigh();
-    }
-
     public boolean nullsAreSortedAtStart() throws SQLException {
         return false;
     }
@@ -60,18 +35,6 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
 
     public String getDriverName() throws SQLException {
         return DRIVER_NAME;
-    }
-
-    public boolean usesLocalFiles() throws SQLException {
-        return false;
-    }
-
-    public boolean usesLocalFilePerTable() throws SQLException {
-        return false;
-    }
-
-    public boolean storesUpperCaseIdentifiers() throws SQLException {
-        return false;
     }
 
     public boolean storesLowerCaseIdentifiers() throws SQLException {
@@ -230,18 +193,6 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
         return sb.toString();
     }
 
-    public boolean supportsAlterTableWithAddColumn() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsAlterTableWithDropColumn() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsColumnAliasing() throws SQLException {
-        return true;
-    }
-
     public boolean supportsConvert() throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
@@ -279,31 +230,7 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
         return false;
     }
 
-    public boolean supportsLikeEscapeClause() throws SQLException {
-        return false;
-    }
-
     public boolean supportsMultipleResultSets() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsMultipleTransactions() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsNonNullableColumns() throws SQLException {
-        return true;
-    }
-
-    public boolean supportsMinimumSQLGrammar() throws SQLException {
-        return true;
-    }
-
-    public boolean supportsCoreSQLGrammar() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsExtendedSQLGrammar() throws SQLException {
         return false;
     }
 
@@ -323,18 +250,6 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
         return false;
     }
 
-    public boolean supportsOuterJoins() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsFullOuterJoins() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsLimitedOuterJoins() throws SQLException {
-        return false;
-    }
-
     public boolean supportsSchemasInDataManipulation() throws SQLException {
         return false;
     }
@@ -344,10 +259,6 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public boolean supportsSchemasInTableDefinitions() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsSchemasInIndexDefinitions() throws SQLException {
         return false;
     }
 
@@ -383,51 +294,7 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
         return false;
     }
 
-    public boolean supportsSelectForUpdate() throws SQLException {
-        return false;
-    }
-
     public boolean supportsSubqueriesInComparisons() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsSubqueriesInExists() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsSubqueriesInIns() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsSubqueriesInQuantifieds() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsCorrelatedSubqueries() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsUnion() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsUnionAll() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsOpenCursorsAcrossCommit() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsOpenCursorsAcrossRollback() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsOpenStatementsAcrossCommit() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsOpenStatementsAcrossRollback() throws SQLException {
         return false;
     }
 
@@ -443,10 +310,6 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
         return 32;
     }
 
-    public int getMaxProcedureNameLength() throws SQLException {
-        return 0;
-    }
-
     public int getMaxCatalogNameLength() throws SQLException {
         return 0;
     }
@@ -460,10 +323,6 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public int getMaxStatementLength() throws SQLException {
-        return 0;
-    }
-
-    public int getMaxStatements() throws SQLException {
         return 0;
     }
 
@@ -485,14 +344,6 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
             default:
                 return false;
         }
-    }
-
-    public boolean supportsDataDefinitionAndDataManipulationTransactions() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsDataManipulationTransactionsOnly() throws SQLException {
-        return false;
     }
 
     public ResultSet getTables(String catalog, String schemaPattern, String tableNamePattern,
@@ -717,14 +568,6 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
         return connection;
     }
 
-    public boolean supportsSavepoints() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsMultipleOpenResults() throws SQLException {
-        return false;
-    }
-
     public ResultSet getSuperTypes(String catalog, String schemaPattern, String typeNamePattern)
         throws SQLException {
         throw new SQLFeatureNotSupportedException(
@@ -743,31 +586,11 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
-    public boolean supportsResultSetHoldability(int holdability) throws SQLException {
-        return false;
-    }
-
-    public int getResultSetHoldability() throws SQLException {
-        return 0;
-    }
-
-    public int getDatabaseMajorVersion() throws SQLException {
-        return 0;
-    }
-
-    public int getDatabaseMinorVersion() throws SQLException {
-        return 0;
-    }
-
     public int getSQLStateType() throws SQLException {
         return DatabaseMetaData.sqlStateSQL;
     }
 
     public boolean locatorsUpdateCopy() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsStatementPooling() throws SQLException {
         return false;
     }
 
@@ -779,10 +602,6 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
     public ResultSet getSchemas(String catalog, String schemaPattern) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
-    }
-
-    public boolean supportsStoredFunctionsUsingCallSyntax() throws SQLException {
-        return false;
     }
 
     public boolean autoCommitFailureClosesAllResultSets() throws SQLException {

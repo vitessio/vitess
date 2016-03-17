@@ -117,44 +117,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         mysqlKeywordsThatArentSQL92 = keywordBuf.toString();
     }
 
-    private final String quotedId;
-    //private final VitessConnection connection;
-
-    public VitessMySQLDatabaseMetadata(VitessConnection connection) {
-        String identifierQuote = null;
-        try {
-            this.setConnection(connection);
-            identifierQuote = getIdentifierQuoteString();
-        } catch (SQLException sqlEx) {
-            //Forced by API, getIdentifiedQuoteString() never throws SQL Exception 
-        } finally {
-            this.quotedId = identifierQuote;
-        }
-    }
-
-    public boolean allTablesAreSelectable() throws SQLException {
-        return false;
-    }
-
-    public String getURL() throws SQLException {
-        return this.connection.getUrl();
-    }
-
-    public String getUserName() throws SQLException {
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
-    }
-
-    public boolean isReadOnly() throws SQLException {
-        return this.connection.isReadOnly();
-    }
-
-    public boolean nullsAreSortedHigh() throws SQLException {
-        return false;
-    }
-
-    public boolean nullsAreSortedLow() throws SQLException {
-        return !this.nullsAreSortedHigh();
+    public VitessMySQLDatabaseMetadata(VitessConnection connection) throws SQLException {
+        this.setConnection(connection);
     }
 
     public boolean nullsAreSortedAtStart() throws SQLException {
@@ -165,24 +129,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         return false;
     }
 
-    public String getDatabaseProductVersion() throws SQLException {
-        return this.connection.getDbProperties().getProductversion();
-    }
-
     public String getDriverName() throws SQLException {
         return DRIVER_NAME;
-    }
-
-    public boolean usesLocalFiles() throws SQLException {
-        return false;
-    }
-
-    public boolean usesLocalFilePerTable() throws SQLException {
-        return false;
-    }
-
-    public boolean storesUpperCaseIdentifiers() throws SQLException {
-        return false;
     }
 
     public boolean storesLowerCaseIdentifiers() throws SQLException {
@@ -214,19 +162,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public String getSystemFunctions() throws SQLException {
-        return super.getSystemFunctions() + "PASSWORD,ENCRYPT";
-    }
-
-    public boolean supportsAlterTableWithAddColumn() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsAlterTableWithDropColumn() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsColumnAliasing() throws SQLException {
-        return true;
+        return super.getSystemFunctions() + ",PASSWORD,ENCRYPT";
     }
 
     public boolean supportsConvert() throws SQLException {
@@ -246,54 +182,6 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         return false;
     }
 
-    public boolean supportsExpressionsInOrderBy() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsOrderByUnrelated() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsGroupBy() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsGroupByUnrelated() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsGroupByBeyondSelect() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsLikeEscapeClause() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsMultipleResultSets() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsMultipleTransactions() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsNonNullableColumns() throws SQLException {
-        return true;
-    }
-
-    public boolean supportsMinimumSQLGrammar() throws SQLException {
-        return true;
-    }
-
-    public boolean supportsCoreSQLGrammar() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsExtendedSQLGrammar() throws SQLException {
-        return false;
-    }
-
     public boolean supportsANSI92EntryLevelSQL() throws SQLException {
         return false;
     }
@@ -310,18 +198,6 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         return false;
     }
 
-    public boolean supportsOuterJoins() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsFullOuterJoins() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsLimitedOuterJoins() throws SQLException {
-        return false;
-    }
-
     public boolean supportsSchemasInDataManipulation() throws SQLException {
         return false;
     }
@@ -331,10 +207,6 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public boolean supportsSchemasInTableDefinitions() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsSchemasInIndexDefinitions() throws SQLException {
         return false;
     }
 
@@ -370,54 +242,6 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         return false;
     }
 
-    public boolean supportsSelectForUpdate() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsSubqueriesInComparisons() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsSubqueriesInExists() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsSubqueriesInIns() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsSubqueriesInQuantifieds() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsCorrelatedSubqueries() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsUnion() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsUnionAll() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsOpenCursorsAcrossCommit() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsOpenCursorsAcrossRollback() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsOpenStatementsAcrossCommit() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsOpenStatementsAcrossRollback() throws SQLException {
-        return false;
-    }
-
     public int getMaxColumnsInTable() throws SQLException {
         return 0;
     }
@@ -428,10 +252,6 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
 
     public int getMaxSchemaNameLength() throws SQLException {
         return 0;
-    }
-
-    public int getMaxProcedureNameLength() throws SQLException {
-        return 256;
     }
 
     public int getMaxCatalogNameLength() throws SQLException {
@@ -447,23 +267,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public int getMaxStatementLength() throws SQLException {
-        return 0;
-    }
-
-    public int getMaxStatements() throws SQLException {
-        return 0;
-    }
-
-    public int getMaxTableNameLength() throws SQLException {
-        return 64;
-    }
-
-    public int getMaxTablesInSelect() throws SQLException {
-        return 256;
-    }
-
-    public int getMaxUserNameLength() throws SQLException {
-        return 16;
+        return 65531;
     }
 
     public int getDefaultTransactionIsolation() throws SQLException {
@@ -485,14 +289,6 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             default:
                 return false;
         }
-    }
-
-    public boolean supportsDataDefinitionAndDataManipulationTransactions() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsDataManipulationTransactionsOnly() throws SQLException {
-        return false;
     }
 
     public ResultSet getTables(String catalog, String schemaPattern, String tableNamePattern,
@@ -566,15 +362,15 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             while (resultSet.next()) {
                 row = new ArrayList<String>();
                 row.add(0, catalog);
-                row.add(1, "null");
+                row.add(1, null);
                 row.add(2, resultSet.getString(1));
                 row.add(3, "");
-                row.add(4, "null");
-                row.add(5, "null");
-                row.add(6, "null");
-                row.add(7, "null");
-                row.add(8, "null");
-                row.add(9, "null");
+                row.add(4, null);
+                row.add(5, null);
+                row.add(6, null);
+                row.add(7, null);
+                row.add(8, null);
+                row.add(9, null);
 
                 if (hasTableTypes) {
                     String tableType = resultSet.getString(typeColumnIndex);
@@ -763,9 +559,9 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                     getColumnsQB.append(catalog);
                     getColumnsQB.append(this.quotedId);
                     getColumnsQB.append(" LIKE ");
-                    getColumnsQB.append("'");
+                    getColumnsQB.append(Constants.LITERAL_SINGLE_QUOTE);
                     getColumnsQB.append(columnNamePattern);
-                    getColumnsQB.append("'");
+                    getColumnsQB.append(Constants.LITERAL_SINGLE_QUOTE);
 
                     // Return correct ordinals if column name pattern is not '%'
                     // Currently, MySQL doesn't show enough data to do this, so we do it the 'hard' way...Once _SYSTEM tables are in, this should be
@@ -799,7 +595,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                     while (resultSet.next()) {
                         row = new ArrayList<String>();
                         row.add(0, catalog);
-                        row.add(1, "null");
+                        row.add(1, null);
                         row.add(2, tableName);
                         row.add(3, resultSet.getString("Field"));
                         TypeDescriptor typeDesc = new TypeDescriptor(resultSet.getString("Type"),
@@ -811,7 +607,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                         row.add(5, typeDesc.typeName); // TYPE_NAME
                         // (native)
                         if (null == typeDesc.columnSize) {
-                            row.add(6, "null");
+                            row.add(6, null);
                         } else {
                             String collation = resultSet.getString("Collation");
                             int mbminlen = 1;
@@ -831,7 +627,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                         }
                         row.add(7, Integer.toString(typeDesc.bufferLength));
                         row.add(8, typeDesc.decimalDigits == null ?
-                            "null" :
+                            null :
                             typeDesc.decimalDigits.toString());
                         row.add(9, Integer.toString(typeDesc.numPrecRadix));
                         row.add(10, Integer.toString(typeDesc.nullability));
@@ -846,7 +642,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
 
                         // COLUMN_DEF
                         row.add(12, resultSet.getString("Default") == null ?
-                            "null" :
+                            null :
                             resultSet.getString("Default"));
 
                         row.add(13, Integer.toString(0));// SQL_DATA_TYPE
@@ -879,10 +675,10 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                         row.add(17, typeDesc.isNullable);
 
                         // We don't support REF or DISTINCT types
-                        row.add(18, "null");
-                        row.add(19, "null");
-                        row.add(20, "null");
-                        row.add(21, "0");
+                        row.add(18, null);
+                        row.add(19, null);
+                        row.add(20, null);
+                        row.add(21, null);
                         String extra = resultSet.getString("Extra");
                         if (null != extra) {
                             row.add(22,
@@ -1064,14 +860,14 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 row = new ArrayList<String>();
                 if (null != keyType) {
                     if (keyType.equalsIgnoreCase("PRIMARY") || keyType.equalsIgnoreCase("PRI")) {
-                        row.add((catalog == null) ? "" : catalog);
-                        row.add("null");
-                        row.add(table);
+                        row.add(0, (catalog == null) ? "" : catalog);
+                        row.add(1, null);
+                        row.add(2, table);
 
                         String columnName = resultSet.getString("Column_name");
-                        row.add(columnName);
-                        row.add(resultSet.getString("Seq_in_index"));
-                        row.add(keyType);
+                        row.add(3, columnName);
+                        row.add(4, resultSet.getString("Seq_in_index"));
+                        row.add(5, keyType);
                         sortMap.put(columnName, row);
                     }
                 }
@@ -1242,7 +1038,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             while (resultSet.next()) {
                 row = new ArrayList<String>();
                 row.add(0, catalog);
-                row.add(1, "null");
+                row.add(1, null);
                 row.add(2, resultSet.getString("Table"));
 
                 boolean indexIsUnique = resultSet.getInt("Non_unique") == 0;
@@ -1263,7 +1059,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
 
                 row.add(10, String.valueOf(cardinality));
                 row.add(11, "0");
-                row.add(12, "null");
+                row.add(12, null);
 
                 IndexMetaDataKey indexInfoKey = new IndexMetaDataKey(!indexIsUnique, indexType,
                     resultSet.getString("Key_name").toLowerCase(),
@@ -1340,14 +1136,6 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         return new VitessResultSet(columnNames, columnType, new String[][] {});
     }
 
-    public boolean supportsSavepoints() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsMultipleOpenResults() throws SQLException {
-        return false;
-    }
-
     public ResultSet getSuperTypes(String catalog, String schemaPattern, String typeNamePattern)
         throws SQLException {
         String[] columnNames =
@@ -1384,32 +1172,12 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         return new VitessResultSet(columnNames, columnType, new String[][] {});
     }
 
-    public boolean supportsResultSetHoldability(int holdability) throws SQLException {
-        return false;
-    }
-
-    public int getResultSetHoldability() throws SQLException {
-        return 0;
-    }
-
-    public int getDatabaseMajorVersion() throws SQLException {
-        return Integer.valueOf(this.connection.getDbProperties().getMajorVersion());
-    }
-
-    public int getDatabaseMinorVersion() throws SQLException {
-        return Integer.valueOf(this.connection.getDbProperties().getMinorVersion());
-    }
-
     public int getSQLStateType() throws SQLException {
         return DatabaseMetaData.sqlStateSQL99;
     }
 
     public boolean locatorsUpdateCopy() throws SQLException {
         return true;
-    }
-
-    public boolean supportsStatementPooling() throws SQLException {
-        return false;
     }
 
     public RowIdLifetime getRowIdLifetime() throws SQLException {
@@ -1421,14 +1189,6 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         String[] columnNames = {"TABLE_CAT", "TABLE_CATALOG"};
         Query.Type[] columnType = {Query.Type.CHAR, Query.Type.CHAR};
         return new VitessResultSet(columnNames, columnType, new String[][] {});
-    }
-
-    public boolean supportsStoredFunctionsUsingCallSyntax() throws SQLException {
-        return false;
-    }
-
-    public boolean autoCommitFailureClosesAllResultSets() throws SQLException {
-        return false;
     }
 
     public ResultSet getClientInfoProperties() throws SQLException {
@@ -1470,41 +1230,6 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     public boolean isWrapperFor(Class<?> iface) throws SQLException {
         return false;
     }
-
-    private String getDatabaseVersion(String versionAttribute) throws SQLException {
-        ResultSet resultSet = null;
-        VitessStatement vitessStatement = new VitessStatement(this.connection);
-        String versionValue = "";
-
-        try {
-            StringBuilder getDatabaseVersionQB = new StringBuilder();
-            getDatabaseVersionQB.append("SHOW VARIABLES LIKE \'INNODB_VERSION\'");
-            resultSet = vitessStatement.executeQuery(getDatabaseVersionQB.toString());
-            while (resultSet.next()) {
-                versionValue = resultSet.getString("Value");
-            }
-        } finally {
-            if (null != resultSet) {
-                resultSet.close();
-            }
-            if (null != vitessStatement) {
-                vitessStatement.close();
-            }
-        }
-        String[] versions = new String[3];
-        if (null != versionValue) {
-            versions = versionValue.split("\\.", 3);
-        }
-        if (versionAttribute.equalsIgnoreCase("productversion")) {
-            return versionValue;
-        } else if (versionAttribute.equalsIgnoreCase("majorversion")) {
-            return versions[0];
-        } else if (versionAttribute.equalsIgnoreCase("minorversion")) {
-            return versions[1];
-        }
-        return "";
-    }
-
 
     /**
      * Enumeration for Table Types
@@ -1758,7 +1483,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 while (tokenizer.hasMoreTokens()) {
                     String setMember = tokenizer.nextToken().trim();
 
-                    if (setMember.startsWith("'") && setMember.endsWith("'")) {
+                    if (setMember.startsWith(Constants.LITERAL_SINGLE_QUOTE) && setMember
+                        .endsWith(Constants.LITERAL_SINGLE_QUOTE)) {
                         maxLength += setMember.length() - 2;
                     } else {
                         maxLength += setMember.length();
