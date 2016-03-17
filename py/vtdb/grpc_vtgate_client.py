@@ -9,6 +9,10 @@ import logging
 import re
 from urlparse import urlparse
 
+# Import main protobuf library first
+# to work around import order issues.
+import google.protobuf  # pylint: disable=unused-import
+
 from grpc.beta import implementations
 from grpc.beta import interfaces
 from grpc.framework.interfaces.face import face
