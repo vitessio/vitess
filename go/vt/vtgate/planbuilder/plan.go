@@ -54,6 +54,7 @@ type Route struct {
 	JoinVars   map[string]struct{}
 	Table      *Table
 	Subquery   string
+	Generate   *Generate
 }
 
 func (rt *Route) isPrimitive() {}
@@ -78,6 +79,7 @@ func (rt *Route) MarshalJSON() ([]byte, error) {
 		JoinVars   map[string]struct{} `json:",omitempty"`
 		Table      string              `json:",omitempty"`
 		Subquery   string              `json:",omitempty"`
+		Generate   *Generate           `json:",omitempty"`
 	}{
 		Opcode:     rt.Opcode,
 		Keyspace:   rt.Keyspace,
@@ -88,8 +90,41 @@ func (rt *Route) MarshalJSON() ([]byte, error) {
 		JoinVars:   rt.JoinVars,
 		Table:      tname,
 		Subquery:   rt.Subquery,
+		Generate:   rt.Generate,
 	}
 	return json.Marshal(marshalRoute)
+}
+
+// Generate represents the instruction to generate
+// a value from a sequence. We cannot reuse a Route
+// for this because this needs to be always executed
+// outside a transaction.
+type Generate struct {
+	// Opcode can only be SelectUnsharded for now.
+	Opcode   RouteOpcode
+	Keyspace *Keyspace
+	Query    string
+	// Value is the supplied value. A new value will be generated
+	// only if Value was NULL. Otherwise, the supplied value will
+	// be used.
+	Value interface{}
+}
+
+// MarshalJSON serializes Generate into a JSON representation.
+// It's used for testing and diagnostics.
+func (gen *Generate) MarshalJSON() ([]byte, error) {
+	jsongen := struct {
+		Opcode   RouteOpcode `json:",omitempty"`
+		Keyspace *Keyspace   `json:",omitempty"`
+		Query    string      `json:",omitempty"`
+		Value    interface{} `json:",omitempty"`
+	}{
+		Opcode:   gen.Opcode,
+		Keyspace: gen.Keyspace,
+		Query:    gen.Query,
+		Value:    prettyValue(gen.Value),
+	}
+	return json.Marshal(jsongen)
 }
 
 // prettyValue converts the Values field of a Route
@@ -168,7 +203,8 @@ const (
 	InsertUnsharded
 	// InsertUnsharded is for routing an insert statement
 	// to a single shard. Requires: A list of Values, one
-	// for each ColVindex.
+	// for each ColVindex. If the table has an Autoinc column,
+	// A Generate subplan must be created.
 	InsertSharded
 	// NumCodes is the total number of opcodes for routes.
 	NumCodes

@@ -615,7 +615,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
 	defer tsv.StopService()
-	qre := newTestQueryExecutor(ctx, tsv, "select next value for seq from dual", 0)
+	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
 	checkPlanID(t, planbuilder.PlanNextval, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {

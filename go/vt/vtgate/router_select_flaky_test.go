@@ -154,11 +154,11 @@ func TestSelectBindvars(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "select id from user where name in ::_vals",
+		Sql: "select id from user where name in ::__vals",
 		BindVariables: map[string]interface{}{
-			"name1": "foo1",
-			"name2": "foo2",
-			"_vals": []interface{}{"foo1", "foo2"},
+			"name1":  "foo1",
+			"name2":  "foo2",
+			"__vals": []interface{}{"foo1", "foo2"},
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -174,11 +174,11 @@ func TestSelectBindvars(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "select id from user where name in ::_vals",
+		Sql: "select id from user where name in ::__vals",
 		BindVariables: map[string]interface{}{
-			"name1": []byte("foo1"),
-			"name2": []byte("foo2"),
-			"_vals": []interface{}{"foo1", "foo2"},
+			"name1":  []byte("foo1"),
+			"name2":  []byte("foo2"),
+			"__vals": []interface{}{"foo1", "foo2"},
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -365,9 +365,9 @@ func TestSelectIN(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "select id from user where id in ::_vals",
+		Sql: "select id from user where id in ::__vals",
 		BindVariables: map[string]interface{}{
-			"_vals": []interface{}{int64(1)},
+			"__vals": []interface{}{int64(1)},
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -383,18 +383,18 @@ func TestSelectIN(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "select id from user where id in ::_vals",
+		Sql: "select id from user where id in ::__vals",
 		BindVariables: map[string]interface{}{
-			"_vals": []interface{}{int64(1)},
+			"__vals": []interface{}{int64(1)},
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "select id from user where id in ::_vals",
+		Sql: "select id from user where id in ::__vals",
 		BindVariables: map[string]interface{}{
-			"_vals": []interface{}{int64(3)},
+			"__vals": []interface{}{int64(3)},
 		},
 	}}
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
