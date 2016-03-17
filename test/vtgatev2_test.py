@@ -11,7 +11,6 @@ import traceback
 import unittest
 
 import environment
-from protocols_flavor import protocols_flavor
 import tablet
 import utils
 from vtdb import dbexceptions
@@ -1113,11 +1112,7 @@ class TestFailures(BaseTestCase):
       # FIXME(alainjobart) add a method to get the session to vtgate_client,
       # instead of poking into it like this.
       logging.info('Shard session: %s', vtgate_conn.session)
-      if protocols_flavor().vtgate_python_protocol() == 'gorpc':
-        transaction_id = (
-            vtgate_conn.session['ShardSessions'][0]['TransactionId'])
-      else:
-        transaction_id = vtgate_conn.session.shard_sessions[0].transaction_id
+      transaction_id = vtgate_conn.session.shard_sessions[0].transaction_id
       self.assertTrue(transaction_id != 0)
     except Exception, e:  # pylint: disable=broad-except
       self.fail('Expected DatabaseError as exception, got %s' % str(e))

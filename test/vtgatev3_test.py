@@ -275,7 +275,7 @@ class TestVTGateFunctions(unittest.TestCase):
 
   def setUp(self):
     self.master_tablet = shard_1_master
-    if protocols_flavor().vtgate_python_protocol() == 'grpc':
+    if protocols_flavor().vtgate_python_types() == 'proto3':
       self.int_type = 265
       self.string_type = 6165
     else:
@@ -794,7 +794,10 @@ class TestVTGateFunctions(unittest.TestCase):
         ([(1L, 'name1', 1L, 'email1')],
          1,
          0,
-         [('id', 8), ('name', 253), ('user_id', 8), ('email', 253)]))
+         [('id', self.int_type),
+          ('name', self.string_type),
+          ('user_id', self.int_type),
+          ('email', self.string_type)]))
     result = self.execute_on_master(
         vtgate_conn,
         'select u.id, u.name, e.user_id, e.email '
@@ -805,7 +808,10 @@ class TestVTGateFunctions(unittest.TestCase):
         ([(1L, 'name1', 2L, 'email2')],
          1,
          0,
-         [('id', 8), ('name', 253), ('user_id', 8), ('email', 253)]))
+         [('id', self.int_type),
+          ('name', self.string_type),
+          ('user_id', self.int_type),
+          ('email', self.string_type)]))
     result = self.execute_on_master(
         vtgate_conn,
         'select u.id, u.name, e.user_id, e.email '
@@ -816,7 +822,10 @@ class TestVTGateFunctions(unittest.TestCase):
         ([(1L, 'name1', 2L, 'email2')],
          1,
          0,
-         [('id', 8), ('name', 253), ('user_id', 8), ('email', 253)]))
+         [('id', self.int_type),
+          ('name', self.string_type),
+          ('user_id', self.int_type),
+          ('email', self.string_type)]))
     result = self.execute_on_master(
         vtgate_conn,
         'select u.id, u.name, e.user_id, e.email '
@@ -827,7 +836,10 @@ class TestVTGateFunctions(unittest.TestCase):
         ([(1L, 'name1', None, None)],
          1,
          0,
-         [('id', 8), ('name', 253), ('user_id', 8), ('email', 253)]))
+         [('id', self.int_type),
+          ('name', self.string_type),
+          ('user_id', self.int_type),
+          ('email', self.string_type)]))
     result = self.execute_on_master(
         vtgate_conn,
         'select u.id, u.name, e.user_id, e.email '
@@ -839,7 +851,10 @@ class TestVTGateFunctions(unittest.TestCase):
         ([],
          0,
          0,
-         [('id', 8), ('name', 253), ('user_id', 8), ('email', 253)]))
+         [('id', self.int_type),
+          ('name', self.string_type),
+          ('user_id', self.int_type),
+          ('email', self.string_type)]))
     vtgate_conn.begin()
     self.execute_on_master(
         vtgate_conn,

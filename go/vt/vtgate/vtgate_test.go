@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -701,13 +702,18 @@ func TestVTGateSplitQuery(t *testing.T) {
 			t.Errorf("wrong split size, want \n%+v, got \n%+v", sandboxSQRowCount, split.Size)
 		}
 		if split.KeyRangePart.Keyspace != keyspace {
-			t.Errorf("wrong split size, want \n%+v, got \n%+v", keyspace, split.KeyRangePart.Keyspace)
+			t.Errorf("wrong keyspace, want \n%+v, got \n%+v", keyspace, split.KeyRangePart.Keyspace)
 		}
 		if len(split.KeyRangePart.KeyRanges) != 1 {
 			t.Errorf("wrong number of keyranges, want \n%+v, got \n%+v", 1, len(split.KeyRangePart.KeyRanges))
 		}
 		kr := key.KeyRangeString(split.KeyRangePart.KeyRanges[0])
 		actualSqlsByKeyRange[kr] = append(actualSqlsByKeyRange[kr], split.Query.Sql)
+	}
+	// Sort the sqls for each KeyRange so that we can compare them without
+	// regard to the order in which they were returned by the vtgate.
+	for _, sqlsForKeyRange := range actualSqlsByKeyRange {
+		sort.Strings(sqlsForKeyRange)
 	}
 	expectedSqlsByKeyRange := map[string][]string{}
 	for _, kr := range keyranges {

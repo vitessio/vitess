@@ -1,5 +1,7 @@
 package com.youtube.vitess.client;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
@@ -59,8 +61,8 @@ public class VTGateTx {
   private SQLFuture<?> lastCall;
 
   private VTGateTx(RpcClient client, Session session) {
-    this.client = client;
-    this.session = session;
+    this.client = checkNotNull(client);
+    setSession(checkNotNull(session));
   }
 
   public static VTGateTx withRpcClientAndSession(RpcClient client, Session session) {

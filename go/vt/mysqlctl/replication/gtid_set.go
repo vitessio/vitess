@@ -9,9 +9,10 @@ package replication
 // transactions that came before it, but in others a more complex structure is
 // required.
 //
-// GTIDSet is wrapped by ReplicationPosition, which is a concrete struct that
-// enables JSON and BSON marshaling. Most code outside of this package should
-// use ReplicationPosition rather than GTIDSet.
+// GTIDSet is wrapped by replication.Position, which is a concrete struct.
+// When sending a GTIDSet over RPCs, encode/decode it as a string.
+// Most code outside of this package should use replication.Position rather
+// than GTIDSet.
 type GTIDSet interface {
 	// String returns the canonical printed form of the set as expected by a
 	// particular flavor of MySQL.

@@ -1,20 +1,23 @@
 # Copyright 2014, Google Inc. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
+"""This module defines the VtdbLogger interface, to report suspicious events.
+"""
 
 import logging
 
 
-# VtdbLogger's methods are called whenever something worth noting happens.
-# The default behavior of the class is to log using the logging module.
-# Registering a new implementation allows the client code to report the
-# conditions to any custom reporting mechanism.
-#
-# We use this in the following cases:
-# - error reporting (an exception happened)
-# - performance logging (calls to other services took that long)
 class VtdbLogger(object):
+  """VtdbLogger's methods are called whenever something worth noting happens.
 
+  The default behavior of the class is to log using the logging module.
+  Registering a new implementation allows the client code to report the
+  conditions to any custom reporting mechanism.
+
+  We use this in the following cases:
+  - error reporting (an exception happened)
+  - performance logging (calls to other services took that long)
+  """
   #
   # vtclient callbacks
   #
@@ -37,10 +40,6 @@ class VtdbLogger(object):
   # vtgatev2 callbacks
   #
 
-  # vtgatev2_exception is called when we get an exception talking to vtgate.
-  def vtgatev2_exception(self, e):
-    logging.warning('vtgatev2_exception: %s', e)
-
   def log_private_data(self, private_data):
     logging.info('Additional exception data %s', private_data)
 
@@ -49,13 +48,13 @@ class VtdbLogger(object):
 
 
 # registration mechanism for VtdbLogger
-__vtdb_logger = VtdbLogger()
+_vtdb_logger = VtdbLogger()
 
 
 def register_vtdb_logger(logger):
-  global __vtdb_logger
-  __vtdb_logger = logger
+  global _vtdb_logger
+  _vtdb_logger = logger
 
 
 def get_logger():
-  return __vtdb_logger
+  return _vtdb_logger
