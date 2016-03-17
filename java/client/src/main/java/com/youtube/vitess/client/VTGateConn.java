@@ -49,19 +49,15 @@ import java.util.Map;
 import javax.annotation.Nullable;
 
 /**
- * VTGateConn manages a VTGate connection.
+ * An asynchronous VTGate connection.
  *
  * <p>See the
  * <a href="https://github.com/youtube/vitess/blob/master/java/example/src/main/java/com/youtube/vitess/example/VitessClientExample.java">VitessClientExample</a>
  * for a usage example.
  *
- * <p>Non-streaming calls are asynchronous by default. To use these calls synchronously,
- * append {@code .checkedGet()}. For example:
- *
- * <blockquote><pre>
- * Cursor cursor = vtgateConn.execute(...).checkedGet();
- * </pre></blockquote>
- * */
+ * <p>All non-streaming calls on {@code VTGateConn} are asynchronous.
+ * Use {@link VTGateBlockingConn} if you want synchronous calls.
+ */
 public final class VTGateConn implements Closeable {
   private final RpcClient client;
 
@@ -370,7 +366,7 @@ public final class VTGateConn implements Closeable {
               @Override
               public ListenableFuture<VTGateTx> apply(BeginResponse response) throws Exception {
                 return Futures.<VTGateTx>immediateFuture(
-                    VTGateTx.withRpcClientAndSession(client, response.getSession()));
+                    new VTGateTx(client, response.getSession()));
               }
             }));
   }
