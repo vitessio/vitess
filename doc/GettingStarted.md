@@ -255,7 +255,6 @@ In addition, Vitess requires the software and libraries listed below.
     # skipping zookeeper build
     # go install golang.org/x/tools/cmd/cover ...
     # Found MariaDB installation in ...
-    # skipping bson python build
     # creating git pre-commit hooks
     #
     # source dev.env in your shell before building

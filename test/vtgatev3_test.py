@@ -250,7 +250,7 @@ class TestVTGateFunctions(unittest.TestCase):
 
   def setUp(self):
     self.master_tablet = shard_1_master
-    if protocols_flavor().vtgate_python_protocol() == 'grpc':
+    if protocols_flavor().vtgate_python_types() == 'proto3':
       self.int_type = 265
       self.string_type = 6165
     else:

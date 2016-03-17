@@ -8,9 +8,7 @@ import time
 import unittest
 import utils
 
-from net import gorpc
 from vtdb import vtgate_utils
-from vtproto import vtrpc_pb2
 
 
 def setUpModule():
@@ -85,53 +83,6 @@ class TestVtgateUtils(unittest.TestCase):
     fake_conn.method(None)
     self.assertEquals(len(fake_conn.invoked_intervals), 1)
 
-
-class TestExtractRPCError(unittest.TestCase):
-  """Tests extract_rpc_error is tolerant to various responses."""
-
-  def test_reply_is_none(self):
-    vtgate_utils.extract_rpc_error('method', gorpc.GoRpcResponse())
-
-  def test_reply_is_empty_string(self):
-    response = gorpc.GoRpcResponse()
-    vtgate_utils.extract_rpc_error('method', response)
-
-  def test_reply_is_string(self):
-    response = gorpc.GoRpcResponse()
-    response.reply = 'foo'
-    vtgate_utils.extract_rpc_error('method', response)
-
-  def test_reply_is_dict(self):
-    response = gorpc.GoRpcResponse()
-    response.reply = {'foo': 'bar'}
-    vtgate_utils.extract_rpc_error('method', response)
-
-  def test_reply_has_non_dict_err(self):
-    response = gorpc.GoRpcResponse()
-    response.reply = {'Err': 1}
-    with self.assertRaisesRegexp(vtgate_utils.VitessError, 'UNKNOWN_ERROR'):
-      vtgate_utils.extract_rpc_error('method', response)
-
-  def test_reply_has_missing_err_message(self):
-    response = gorpc.GoRpcResponse()
-    response.reply = {'Err': {'foo': 'bar'}}
-    with self.assertRaisesRegexp(vtgate_utils.VitessError,
-                                 'Missing error message'):
-      vtgate_utils.extract_rpc_error('method', response)
-
-  def test_reply_has_err_message(self):
-    response = gorpc.GoRpcResponse()
-    response.reply = {'Err': {'Message': 'bar'}}
-    with self.assertRaisesRegexp(vtgate_utils.VitessError,
-                                 'UNKNOWN_ERROR.+bar'):
-      vtgate_utils.extract_rpc_error('method', response)
-
-  def test_reply_has_err_code(self):
-    response = gorpc.GoRpcResponse()
-    response.reply = {'Err': {'Code': vtrpc_pb2.TRANSIENT_ERROR}}
-    with self.assertRaisesRegexp(vtgate_utils.VitessError,
-                                 'TRANSIENT_ERROR'):
-      vtgate_utils.extract_rpc_error('method', response)
 
 if __name__ == '__main__':
   utils.main()

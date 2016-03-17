@@ -24,8 +24,13 @@
       </dependency>
       <dependency>
         <groupId>org.apache.hadoop</groupId>
+        <artifactId>hadoop-client</artifactId>
+        <version>2.7.2</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-mapreduce-client-jobclient</artifactId>
-        <version>2.5.1</version>
+        <version>2.7.2</version>
         <!-- Include the test jar to reuse Hadoop testing utils -->
         <type>test-jar</type>
         <scope>test</scope>
