@@ -14,6 +14,10 @@
         "name_user_map": {
           "Type": "multi",
           "Owner": "user"
+        },
+        "costly_map": {
+          "Type": "costly",
+          "Owner": "user"
         }
       },
       "Classes": {
@@ -26,6 +30,10 @@
             {
               "Col": "name",
               "Name": "name_user_map"
+            },
+            {
+              "Col": "costly",
+              "Name": "costly_map"
             }
           ]
         },

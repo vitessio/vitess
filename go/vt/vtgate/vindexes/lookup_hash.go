@@ -24,14 +24,20 @@ func init() {
 // The table is expected to define the id column as unique. It's
 // NonUnique and a Lookup.
 type LookupHash struct {
-	lkp lookup
+	name string
+	lkp  lookup
 }
 
 // NewLookupHash creates a LookupHash vindex.
-func NewLookupHash(m map[string]interface{}) (planbuilder.Vindex, error) {
-	lhu := &LookupHash{}
+func NewLookupHash(name string, m map[string]interface{}) (planbuilder.Vindex, error) {
+	lhu := &LookupHash{name: name}
 	lhu.lkp.Init(m)
 	return lhu, nil
+}
+
+// String returns the name of the vindex.
+func (vind *LookupHash) String() string {
+	return vind.name
 }
 
 // Cost returns the cost of this vindex as 20.
@@ -66,14 +72,20 @@ func (vind *LookupHash) Delete(vcursor planbuilder.VCursor, ids []interface{}, k
 // NonUnique and a Lookup. It's also a LookupGenerator, because it
 // can use the autoinc capabilities of the lookup table.
 type LookupHashAuto struct {
-	lkp lookup
+	name string
+	lkp  lookup
 }
 
 // NewLookupHashAuto creates a new LookupHashAuto.
-func NewLookupHashAuto(m map[string]interface{}) (planbuilder.Vindex, error) {
-	h := &LookupHashAuto{}
+func NewLookupHashAuto(name string, m map[string]interface{}) (planbuilder.Vindex, error) {
+	h := &LookupHashAuto{name: name}
 	h.lkp.Init(m)
 	return h, nil
+}
+
+// String returns the name of the vindex.
+func (vind *LookupHashAuto) String() string {
+	return vind.name
 }
 
 // Cost returns the cost of this index as 20.
@@ -112,14 +124,20 @@ func (vind *LookupHashAuto) Delete(vcursor planbuilder.VCursor, ids []interface{
 // The table is expected to define the id column as unique. It's
 // Unique and a Lookup.
 type LookupHashUnique struct {
-	lkp lookup
+	name string
+	lkp  lookup
 }
 
 // NewLookupHashUnique creates a LookupHashUnique vindex.
-func NewLookupHashUnique(m map[string]interface{}) (planbuilder.Vindex, error) {
-	lhu := &LookupHashUnique{}
+func NewLookupHashUnique(name string, m map[string]interface{}) (planbuilder.Vindex, error) {
+	lhu := &LookupHashUnique{name: name}
 	lhu.lkp.Init(m)
 	return lhu, nil
+}
+
+// String returns the name of the vindex.
+func (vind *LookupHashUnique) String() string {
+	return vind.name
 }
 
 // Cost returns the cost of this vindex as 10.
@@ -154,14 +172,20 @@ func (vind *LookupHashUnique) Delete(vcursor planbuilder.VCursor, ids []interfac
 // Unique and a Lookup. It's also a LookupGenerator, because it
 // can use the autoinc capabilities of the lookup table.
 type LookupHashUniqueAuto struct {
-	lkp lookup
+	name string
+	lkp  lookup
 }
 
 // NewLookupHashUniqueAuto creates a new LookupHashUniqueAuto.
-func NewLookupHashUniqueAuto(m map[string]interface{}) (planbuilder.Vindex, error) {
-	h := &LookupHashUniqueAuto{}
+func NewLookupHashUniqueAuto(name string, m map[string]interface{}) (planbuilder.Vindex, error) {
+	h := &LookupHashUniqueAuto{name: name}
 	h.lkp.Init(m)
 	return h, nil
+}
+
+// String returns the name of the vindex.
+func (vind *LookupHashUniqueAuto) String() string {
+	return vind.name
 }
 
 // Cost returns the cost of this index as 10.

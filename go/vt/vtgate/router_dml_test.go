@@ -268,19 +268,19 @@ func TestInsertSharded(t *testing.T) {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "insert into user_idx(id) values(:id)",
+		Sql: "insert into user_idx(id) values (:id)",
 		BindVariables: map[string]interface{}{
 			"id": int64(1),
 		},
 	}, {
-		Sql: "insert into name_user_map(name, user_id) values(:name, :user_id)",
+		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
 		BindVariables: map[string]interface{}{
 			"name":    "myname",
 			"user_id": int64(1),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+		t.Errorf("sbclookup.Queries: \n%+v, want \n%+v", sbclookup.Queries, wantQueries)
 	}
 
 	sbc1.Queries = nil
@@ -304,19 +304,19 @@ func TestInsertSharded(t *testing.T) {
 		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "insert into user_idx(id) values(:id)",
+		Sql: "insert into user_idx(id) values (:id)",
 		BindVariables: map[string]interface{}{
 			"id": int64(3),
 		},
 	}, {
-		Sql: "insert into name_user_map(name, user_id) values(:name, :user_id)",
+		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
 		BindVariables: map[string]interface{}{
 			"name":    "myname2",
 			"user_id": int64(3),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+		t.Errorf("sbclookup.Queries: \n%+v, want \n%+v\n", sbclookup.Queries, wantQueries)
 	}
 }
 
@@ -340,19 +340,19 @@ func TestInsertGenerator(t *testing.T) {
 		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "insert into user_idx(id) values(:id)",
+		Sql: "insert into user_idx(id) values (:id)",
 		BindVariables: map[string]interface{}{
 			"id": nil,
 		},
 	}, {
-		Sql: "insert into name_user_map(name, user_id) values(:name, :user_id)",
+		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
 		BindVariables: map[string]interface{}{
 			"name":    "myname",
 			"user_id": int64(1),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+		t.Errorf("sbclookup.Queries: \n%+v, want \n%+v\n", sbclookup.Queries, wantQueries)
 	}
 	wantResult := *singleRowResult
 	wantResult.InsertID = 1
@@ -380,7 +380,7 @@ func TestInsertLookupOwned(t *testing.T) {
 		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "insert into music_user_map(music_id, user_id) values(:music_id, :user_id)",
+		Sql: "insert into music_user_map(music_id, user_id) values (:music_id, :user_id)",
 		BindVariables: map[string]interface{}{
 			"music_id": int64(3),
 			"user_id":  int64(2),
@@ -411,7 +411,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "insert into music_user_map(music_id, user_id) values(:music_id, :user_id)",
+		Sql: "insert into music_user_map(music_id, user_id) values (:music_id, :user_id)",
 		BindVariables: map[string]interface{}{
 			"music_id": nil,
 			"user_id":  int64(2),
