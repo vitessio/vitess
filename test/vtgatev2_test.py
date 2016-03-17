@@ -71,8 +71,23 @@ CREATE_VT_FIELD_TYPES = '''create table vt_field_types (
   primary key(id)
 ) Engine=InnoDB'''
 
+CREATE_VT_SEQ = '''create table vt_seq (
+  id int,
+  next_id bigint,
+  cache bigint,
+  increment bigint,
+  primary key(id)
+) comment 'vitess_sequence' Engine=InnoDB'''
 
-create_tables = [CREATE_VT_INSERT_TEST, CREATE_VT_A, CREATE_VT_FIELD_TYPES]
+INIT_VT_SEQ = 'insert into vt_seq values(0, 1, 2, 2)'
+
+
+create_tables = [
+    CREATE_VT_INSERT_TEST,
+    CREATE_VT_A,
+    CREATE_VT_FIELD_TYPES,
+    CREATE_VT_SEQ,
+]
 pack_kid = struct.Struct('!Q').pack
 
 
@@ -721,6 +736,28 @@ class TestCoreVTGateFunctions(BaseTestCase):
           for result in generator:
             self.assertEqual(result, (kid_list[i],))
       thd.join()
+    except Exception, e:  # pylint: disable=broad-except
+      self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
+
+  def test_sequence(self):
+    tablet_type = 'master'
+    try:
+      vtgate_conn = get_connection()
+      # Special-cased initialization of sequence to shard 0.
+      vtgate_conn.begin()
+      vtgate_conn._execute(
+          INIT_VT_SEQ, {'keyspace_id': 0},
+          tablet_type=tablet_type, keyspace_name=KEYSPACE_NAME,
+          keyspace_ids=[pack_kid(0)])
+      vtgate_conn.commit()
+      want = 1
+      for _ in xrange(10):
+        result, _, _, _ = vtgate_conn._execute(
+            'select next value for vt_seq', {},
+            tablet_type=tablet_type, keyspace_name=KEYSPACE_NAME,
+            keyspace_ids=[pack_kid(0)])
+        self.assertEqual(result[0][0], want)
+        want += 2
     except Exception, e:  # pylint: disable=broad-except
       self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
 

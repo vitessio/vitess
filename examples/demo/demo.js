@@ -8,9 +8,8 @@ function DemoController($scope, $http) {
 
   function init() {
     $scope.samples = [
-        "insert into user(name) values('test1') /* run this a few times */",
-        "insert into user(user_id, name) values(6, 'test2') /* app-suplied user_id */",
-        "insert into user(user_id, name) values(6, null) /* error: name must be supplied */",
+        "insert into user(name) values('test1') /* run this at least 6 times with different values of name */",
+        "insert into user(name) values(null) /* error: name must be supplied */",
         "select user_id, name from user where user_id=6 /* unique select */",
         "select user_id, name from user where name='test1' /* non-unique select */",
         "select user_id, name from user where user_id in (1, 6) /* unique multi-select */",
@@ -32,7 +31,6 @@ function DemoController($scope, $http) {
         "delete from user_extra where user_id=1 /* vindexes are unchanged */",
         "",
         "insert into music(user_id) values(1) /* auto-inc on music_id */",
-        "insert into music(user_id, music_id) values(1, 6) /* explicit music_id value */",
         "select user_id, music_id from music where user_id=1",
         "delete from music where music_id=6 /* one row deleted */",
         "delete from music where user_id=1 /* multiple rows deleted */",

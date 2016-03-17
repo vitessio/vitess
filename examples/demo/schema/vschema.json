@@ -3,13 +3,8 @@
     "user": {
       "Sharded": true,
       "Vindexes": {
-        "user_idx": {
-          "Type": "hash_autoinc",
-          "Params": {
-            "Table": "user_idx",
-            "Column": "user_id"
-          },
-          "Owner": "user"
+        "hash": {
+          "Type": "hash"
         },
         "name_user_idx": {
           "Type": "lookup_hash",
@@ -21,7 +16,7 @@
           "Owner": "user"
         },
         "music_user_idx": {
-          "Type": "lookup_hash_unique_autoinc",
+          "Type": "lookup_hash_unique",
           "Params": {
             "Table": "music_user_idx",
             "From": "music_id",
@@ -38,19 +33,23 @@
           "ColVindexes": [
             {
               "Col": "user_id",
-              "Name": "user_idx"
+              "Name": "hash"
             },
             {
               "Col": "name",
               "Name": "name_user_idx"
             }
-          ]
+          ],
+          "Autoinc": {
+            "Col": "user_id",
+            "Sequence": "user_seq"
+          }
         },
         "user_extra": {
           "ColVindexes": [
             {
               "Col": "user_id",
-              "Name": "user_idx"
+              "Name": "hash"
             }
           ]
         },
@@ -58,13 +57,17 @@
           "ColVindexes": [
             {
               "Col": "user_id",
-              "Name": "user_idx"
+              "Name": "hash"
             },
             {
               "Col": "music_id",
               "Name": "music_user_idx"
             }
-          ]
+          ],
+          "Autoinc": {
+            "Col": "music_id",
+            "Sequence": "music_seq"
+          }
         },
         "music_extra": {
           "ColVindexes": [
@@ -77,20 +80,34 @@
               "Name": "keyspace_idx"
             }
           ]
+        },
+        "music_user_idx": {
+          "ColVindexes": [
+            {
+              "Col": "music_id",
+              "Name": "hash"
+            }
+          ]
         }
       },
       "Tables": {
         "user": "user",
         "user_extra": "user_extra",
         "music": "music",
-        "music_extra": "music_extra"
+        "music_extra": "music_extra",
+        "music_user_idx": "music_user_idx"
       }
     },
     "lookup": {
       "Sharded": false,
+      "Classes": {
+        "seq": {
+          "Type": "Sequence"
+        }
+      },
       "Tables": {
-        "user_idx": "",
-        "music_user_idx": "",
+        "user_seq": "seq",
+        "music_seq": "seq",
         "name_user_idx": ""
       }
     }

@@ -14,7 +14,7 @@ import (
 // ListVarName is the bind var name used for plans
 // that require VTGate to compute custom list values,
 // like for IN clauses.
-const ListVarName = "_vals"
+const ListVarName = "__vals"
 
 // generator is used for the generation and wire-up phase
 // of plan building.

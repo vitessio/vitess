@@ -45,40 +45,40 @@ license that can be found in the LICENSE file.
       </div>
     </div>
     <div class="row">
-      <div class="col-md-2">
+      <div class="col-md-3">
         <div data-ng-repeat="curResult in [result.result]"
           data-ng-include="'result.html'"></div>
       </div>
       <div class="col-md-2">
         <div data-ng-repeat="curResult in [result.user0]"
           data-ng-include="'result.html'"></div>
-        <div data-ng-repeat="curResult in [result.user1]"
+        <div data-ng-repeat="curResult in [result.user_extra0]"
+          data-ng-include="'result.html'"></div>
+        <div data-ng-repeat="curResult in [result.music0]"
+          data-ng-include="'result.html'"></div>
+        <div data-ng-repeat="curResult in [result.music_extra0]"
+          data-ng-include="'result.html'"></div>
+        <div data-ng-repeat="curResult in [result.music_user_idx0]"
           data-ng-include="'result.html'"></div>
       </div>
       <div class="col-md-2">
-        <div data-ng-repeat="curResult in [result.user_extra0]"
+        <div data-ng-repeat="curResult in [result.user1]"
           data-ng-include="'result.html'"></div>
         <div data-ng-repeat="curResult in [result.user_extra1]"
           data-ng-include="'result.html'"></div>
-      </div>
-      <div class="col-md-2">
-        <div data-ng-repeat="curResult in [result.music0]"
-          data-ng-include="'result.html'"></div>
         <div data-ng-repeat="curResult in [result.music1]"
-          data-ng-include="'result.html'"></div>
-      </div>
-      <div class="col-md-2">
-        <div data-ng-repeat="curResult in [result.music_extra0]"
           data-ng-include="'result.html'"></div>
         <div data-ng-repeat="curResult in [result.music_extra1]"
           data-ng-include="'result.html'"></div>
+        <div data-ng-repeat="curResult in [result.music_user_idx1]"
+          data-ng-include="'result.html'"></div>
       </div>
       <div class="col-md-2">
-        <div data-ng-repeat="curResult in [result.user_idx]"
+        <div data-ng-repeat="curResult in [result.user_seq]"
+          data-ng-include="'result.html'"></div>
+        <div data-ng-repeat="curResult in [result.music_seq]"
           data-ng-include="'result.html'"></div>
         <div data-ng-repeat="curResult in [result.name_user_idx]"
-          data-ng-include="'result.html'"></div>
-        <div data-ng-repeat="curResult in [result.music_user_idx]"
           data-ng-include="'result.html'"></div>
       </div>
     </div>

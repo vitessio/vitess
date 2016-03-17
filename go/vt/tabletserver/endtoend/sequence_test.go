@@ -27,7 +27,7 @@ func TestSequence(t *testing.T) {
 	}
 	for wantval := int64(1); wantval < 10; wantval += 2 {
 		want.Rows[0][0] = sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt(nil, wantval, 10))
-		qr, err := framework.NewClient().Execute("select next value for vitess_seq from dual", nil)
+		qr, err := framework.NewClient().Execute("select next value from vitess_seq", nil)
 		if err != nil {
 			t.Error(err)
 			return
