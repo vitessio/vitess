@@ -13,9 +13,7 @@ from vtdb import grpc_vtgate_client  # pylint: disable=unused-import
 
 
 class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
-  """Overrides to use gRPC everywhere where it is supported.
-
-  If not supported yet, use GoRPC.
+  """Definitons to use gRPC everywhere.
   """
 
   def binlog_player_protocol(self):
@@ -45,6 +43,9 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
   def vtgate_python_protocol(self):
     return 'grpc'
 
+  def vtgate_python_types(self):
+    return 'proto3'
+
   def client_error_exception_type(self):
     return face.AbortionError
 
@@ -53,7 +54,6 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
 
   def service_map(self):
     return [
-        'bsonrpc-vt-vtgateservice',
         'grpc-queryservice',
         'grpc-updatestream',
         'grpc-vtctl',

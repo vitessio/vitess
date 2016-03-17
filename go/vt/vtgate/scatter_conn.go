@@ -6,6 +6,7 @@ package vtgate
 
 import (
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -484,6 +485,13 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 		err := allErrors.AggrError(stc.aggregateErrors)
 		return nil, err
 	}
+	// We shuffle the query-parts here. External frameworks like MapReduce may
+	// "deal" these jobs to workers in the order they are in the list. Without
+	// shuffling workers can be very unevenly distributed among
+	// the shards they query. E.g. all workers will first query the first shard,
+	// then most of them to the second shard, etc, which results with uneven
+	// load balancing among shards.
+	shuffleQueryParts(splits)
 	return splits, nil
 }
 
@@ -534,7 +542,45 @@ func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string
 		err := allErrors.AggrError(stc.aggregateErrors)
 		return nil, err
 	}
+	// See the comment for the analogues line in SplitQueryKeyRange for
+	// the motivation for shuffling.
+	shuffleQueryParts(splits)
 	return splits, nil
+}
+
+// randomGenerator is the randomGenerator used for the randomness
+// of 'shuffleQueryParts'. It's initialized in 'init()' below.
+type shuffleQueryPartsRandomGeneratorInterface interface {
+	Intn(n int) int
+}
+
+var shuffleQueryPartsRandomGenerator shuffleQueryPartsRandomGeneratorInterface
+
+func init() {
+	shuffleQueryPartsRandomGenerator =
+		rand.New(rand.NewSource(time.Now().UnixNano()))
+}
+
+// injectShuffleQueryParsRandomGenerator injects the given object
+// as the random generator used by shuffleQueryParts. This function
+// should only be used in tests and should not be called concurrently.
+// It returns the previous shuffleQueryPartsRandomGenerator used.
+func injectShuffleQueryPartsRandomGenerator(
+	randGen shuffleQueryPartsRandomGeneratorInterface) shuffleQueryPartsRandomGeneratorInterface {
+	oldRandGen := shuffleQueryPartsRandomGenerator
+	shuffleQueryPartsRandomGenerator = randGen
+	return oldRandGen
+}
+
+// shuffleQueryParts performs an in-place shuffle of the the given array.
+// The result is a psuedo-random permutation of the array chosen uniformally
+// from the space of all permutations.
+func shuffleQueryParts(splits []*vtgatepb.SplitQueryResponse_Part) {
+	for i := len(splits) - 1; i >= 1; i-- {
+		randIndex := shuffleQueryPartsRandomGenerator.Intn(i + 1)
+		// swap splits[i], splits[randIndex]
+		splits[randIndex], splits[i] = splits[i], splits[randIndex]
+	}
 }
 
 // Close closes the underlying Gateway.

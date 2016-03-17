@@ -164,6 +164,8 @@ class Proto3Connection(object):
       bind_variables: a map of strings to python native types.
       request_bind_variables: the proto3 object to add bind variables to.
     """
+    if not bind_variables:
+      return
     for key, val in bind_variables.iteritems():
       self._convert_value(val, request_bind_variables[key], allow_lists=True)
 

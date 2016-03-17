@@ -101,7 +101,7 @@ type drv struct {
 //
 // Example for a JSON string:
 //
-//   {"protocol": "gorpc", "address": "localhost:1111", "tablet_type": "master", "timeout": 1000000000}
+//   {"protocol": "grpc", "address": "localhost:1111", "tablet_type": "master", "timeout": 1000000000}
 //
 // For a description of the available fields, see the Configuration struct.
 // Note: In the JSON string, timeout has to be specified in nanoseconds.

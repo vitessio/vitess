@@ -18,13 +18,13 @@ import (
 )
 
 const (
-	// GoRPCProtocol is a vtgate protocol based on go rpc
-	GoRPCProtocol = "gorpc"
+	// GRPCProtocol is a vtgate protocol based on gRPC
+	GRPCProtocol = "grpc"
 )
 
 var (
 	// VtgateProtocol defines the RPC implementation used for connecting to vtgate.
-	VtgateProtocol = flag.String("vtgate_protocol", GoRPCProtocol, "how to talk to vtgate")
+	VtgateProtocol = flag.String("vtgate_protocol", GRPCProtocol, "how to talk to vtgate")
 )
 
 // VTGateConn is the client API object to talk to vtgate.

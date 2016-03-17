@@ -32,7 +32,7 @@ func init() {
 }
 
 // VtctlPipe is a vtctl server based on a topo server, and a client that
-// is connected to it via bson rpc.
+// is connected to it via gRPC.
 type VtctlPipe struct {
 	listener net.Listener
 	client   vtctlclient.VtctlClient
