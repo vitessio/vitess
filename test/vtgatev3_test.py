@@ -55,6 +55,18 @@ artist varchar(64),
 primary key (music_id)
 ) Engine=InnoDB'''
 
+create_join_user = '''create table join_user (
+id bigint,
+name varchar(64),
+primary key (id)
+) Engine=InnoDB'''
+
+create_join_user_extra = '''create table join_user_extra (
+user_id bigint,
+email varchar(64),
+primary key (user_id)
+) Engine=InnoDB'''
+
 create_vt_user_seq = '''create table vt_user_seq (
   id int,
   next_id bigint,
@@ -174,6 +186,22 @@ vschema = '''{
               "Name": "user_index"
             }
           ]
+        },
+        "join_user": {
+          "ColVindexes": [
+            {
+              "Col": "id",
+              "Name": "user_index"
+            }
+          ]
+        },
+        "join_user_extra": {
+          "ColVindexes": [
+            {
+              "Col": "user_id",
+              "Name": "user_index"
+            }
+          ]
         }
       },
       "Tables": {
@@ -181,7 +209,9 @@ vschema = '''{
         "vt_user2": "vt_user2",
         "vt_user_extra": "vt_user_extra",
         "vt_music": "vt_music",
-        "vt_music_extra": "vt_music_extra"
+        "vt_music_extra": "vt_music_extra",
+        "join_user": "join_user",
+        "join_user_extra": "join_user_extra"
       }
     },
     "lookup": {
@@ -225,6 +255,8 @@ def setUpModule():
             create_vt_user_extra,
             create_vt_music,
             create_vt_music_extra,
+            create_join_user,
+            create_join_user_extra,
             ],
         )
     keyspace_env.launch(
@@ -773,21 +805,23 @@ class TestVTGateFunctions(unittest.TestCase):
     vtgate_conn.begin()
     self.execute_on_master(
         vtgate_conn,
-        'insert into vt_user2 (id, name) values (:id, :name)',
+        'insert into join_user (id, name) values (:id, :name)',
         {'id': 1, 'name': 'name1'})
     self.execute_on_master(
         vtgate_conn,
-        'insert into vt_user_extra (user_id, email) values (:user_id, :email)',
+        'insert into join_user_extra (user_id, email) '
+        'values (:user_id, :email)',
         {'user_id': 1, 'email': 'email1'})
     self.execute_on_master(
         vtgate_conn,
-        'insert into vt_user_extra (user_id, email) values (:user_id, :email)',
+        'insert into join_user_extra (user_id, email) '
+        'values (:user_id, :email)',
         {'user_id': 2, 'email': 'email2'})
     vtgate_conn.commit()
     result = self.execute_on_master(
         vtgate_conn,
         'select u.id, u.name, e.user_id, e.email '
-        'from vt_user2 u join vt_user_extra e where e.user_id = u.id',
+        'from join_user u join join_user_extra e where e.user_id = u.id',
         {})
     self.assertEqual(
         result,
@@ -801,7 +835,7 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'select u.id, u.name, e.user_id, e.email '
-        'from vt_user2 u join vt_user_extra e where e.user_id = u.id+1',
+        'from join_user u join join_user_extra e where e.user_id = u.id+1',
         {})
     self.assertEqual(
         result,
@@ -815,7 +849,7 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'select u.id, u.name, e.user_id, e.email '
-        'from vt_user2 u left join vt_user_extra e on e.user_id = u.id+1',
+        'from join_user u left join join_user_extra e on e.user_id = u.id+1',
         {})
     self.assertEqual(
         result,
@@ -829,7 +863,7 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'select u.id, u.name, e.user_id, e.email '
-        'from vt_user2 u left join vt_user_extra e on e.user_id = u.id+2',
+        'from join_user u left join join_user_extra e on e.user_id = u.id+2',
         {})
     self.assertEqual(
         result,
@@ -843,7 +877,7 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'select u.id, u.name, e.user_id, e.email '
-        'from vt_user2 u join vt_user_extra e on e.user_id = u.id+2 '
+        'from join_user u join join_user_extra e on e.user_id = u.id+2 '
         'where u.id = 2',
         {})
     self.assertEqual(
@@ -858,15 +892,15 @@ class TestVTGateFunctions(unittest.TestCase):
     vtgate_conn.begin()
     self.execute_on_master(
         vtgate_conn,
-        'delete from vt_user2 where id = :id',
+        'delete from join_user where id = :id',
         {'id': 1})
     self.execute_on_master(
         vtgate_conn,
-        'delete from  vt_user_extra where user_id = :user_id',
+        'delete from  join_user_extra where user_id = :user_id',
         {'user_id': 1})
     self.execute_on_master(
         vtgate_conn,
-        'delete from  vt_user_extra where user_id = :user_id',
+        'delete from  join_user_extra where user_id = :user_id',
         {'user_id': 2})
     vtgate_conn.commit()
 
