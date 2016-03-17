@@ -53,7 +53,7 @@ public class VitessResultSet implements ResultSet {
         try {
             this.fields = this.cursor.getFields();
         } catch (SQLException e) {
-            throw new SQLException(Constants.SQLExceptionMessages.FETCH_FIELDS_ERROR);
+            throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, e);
         }
         this.currentRow = 0;
     }
@@ -88,7 +88,7 @@ public class VitessResultSet implements ResultSet {
         try {
             this.fields = this.cursor.getFields();
         } catch (SQLException e) {
-            throw new SQLException(Constants.SQLExceptionMessages.FETCH_FIELDS_ERROR);
+            throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, e);
         }
         this.currentRow = 0;
     }
@@ -127,7 +127,7 @@ public class VitessResultSet implements ResultSet {
         try {
             fields = cursor.getFields();
         } catch (SQLException e) {
-            throw new SQLException(Constants.SQLExceptionMessages.FETCH_FIELDS_ERROR);
+            throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, e);
         }
         this.currentRow = 0;
     }
