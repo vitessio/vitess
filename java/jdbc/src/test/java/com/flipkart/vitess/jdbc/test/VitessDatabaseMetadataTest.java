@@ -657,8 +657,8 @@ import java.util.ArrayList;
     @Test public void supportsResultSetConcurrencyTest() throws SQLException {
         VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
         Assert.assertEquals(vitessDatabaseMetaData
-            .supportsResultSetConcurrency(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY),
-            true);
+                .supportsResultSetConcurrency(ResultSet.TYPE_FORWARD_ONLY,
+                    ResultSet.CONCUR_READ_ONLY), true);
         Assert.assertEquals(vitessDatabaseMetaData
             .supportsResultSetConcurrency(ResultSet.TYPE_SCROLL_INSENSITIVE,
                 ResultSet.CONCUR_READ_ONLY), false);
@@ -669,11 +669,11 @@ import java.util.ArrayList;
             .supportsResultSetConcurrency(ResultSet.CLOSE_CURSORS_AT_COMMIT,
                 ResultSet.CONCUR_READ_ONLY), false);
         Assert.assertEquals(vitessDatabaseMetaData
-            .supportsResultSetConcurrency(ResultSet.CONCUR_READ_ONLY, ResultSet.CONCUR_READ_ONLY),
-            false);
+                .supportsResultSetConcurrency(ResultSet.CONCUR_READ_ONLY,
+                    ResultSet.CONCUR_READ_ONLY), false);
         Assert.assertEquals(vitessDatabaseMetaData
-            .supportsResultSetConcurrency(ResultSet.CONCUR_UPDATABLE, ResultSet.CONCUR_READ_ONLY),
-            false);
+                .supportsResultSetConcurrency(ResultSet.CONCUR_UPDATABLE,
+                    ResultSet.CONCUR_READ_ONLY), false);
         Assert.assertEquals(vitessDatabaseMetaData
                 .supportsResultSetConcurrency(ResultSet.FETCH_FORWARD, ResultSet.CONCUR_READ_ONLY),
             false);
@@ -1255,10 +1255,12 @@ import java.util.ArrayList;
         boolean areResultSetsEqual = true;
         ResultSetMetaData actualResultSetMetadata = actualResultSet.getMetaData();
         ResultSetMetaData expectedResultSetMetadata = expectedResultSet.getMetaData();
+        //Column Count Comparison
         if (actualResultSetMetadata.getColumnCount() != expectedResultSetMetadata
             .getColumnCount()) {
             areResultSetsEqual = false;
         }
+        //Column Type Comparison
         if (areResultSetsEqual) {
             for (int i = 0; i < actualResultSetMetadata.getColumnCount(); i++) {
                 if (actualResultSetMetadata.getColumnType(i + 1) != expectedResultSetMetadata
@@ -1268,6 +1270,7 @@ import java.util.ArrayList;
                 }
             }
         }
+        //Actual Values Comparison
         if (areResultSetsEqual) {
             try {
                 while (actualResultSet.next() && expectedResultSet.next()) {
@@ -1341,7 +1344,6 @@ import java.util.ArrayList;
                 }
 
             } catch (SQLException ex) {
-                System.out.println(ex.toString());
                 areResultSetsEqual = false;
             }
         }
