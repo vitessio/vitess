@@ -192,8 +192,12 @@ select_statement:
   {
     $$ = &Select{Comments: Comments($2), Distinct: $3, SelectExprs: $4, From: $6, Where: NewWhere(WhereStr, $7), GroupBy: GroupBy($8), Having: NewWhere(HavingStr, $9), OrderBy: $10, Limit: $11, Lock: $12}
   }
-| SELECT comment_opt NEXT VALUE for_from simple_table_expression
+| SELECT comment_opt NEXT sql_id for_from simple_table_expression
   {
+    if $4 != "value" {
+      yylex.Error("expecting value after next")
+      return 1
+    }
     $$ = &Select{Comments: Comments($2), SelectExprs: SelectExprs{Nextval{}}, From: TableExprs{&AliasedTableExpr{Expr: $6}}}
   }
 | select_statement union_op select_statement %prec UNION

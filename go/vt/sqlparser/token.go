@@ -27,6 +27,14 @@ type Tokenizer struct {
 	posVarIndex   int
 	ParseTree     Statement
 	nesting       int
+
+	// Special hack to recongnize
+	// SELECT NEXT VALUE for construct.
+	// If the token immediately after a SELECT is
+	// a NEXT, then it's treated as a keyword. Otherwise,
+	// it's a normal identifier. This flag gets set
+	// if we see a SELECT, and gets reset for any other token.
+	atSelect bool
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
@@ -84,7 +92,6 @@ var keywords = map[string]int{
 	"lock":           LOCK,
 	"minus":          MINUS,
 	"natural":        NATURAL,
-	"next":           NEXT,
 	"not":            NOT,
 	"null":           NULL,
 	"on":             ON,
@@ -109,7 +116,6 @@ var keywords = map[string]int{
 	"use":            USE,
 	"using":          USING,
 	"values":         VALUES,
-	"value":          VALUE,
 	"view":           VIEW,
 	"when":           WHEN,
 	"where":          WHERE,
@@ -130,6 +136,11 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		lval.bytes = val
 	}
 	tkn.lastToken = val
+	if typ == SELECT {
+		tkn.atSelect = true
+	} else {
+		tkn.atSelect = false
+	}
 	return typ
 }
 
@@ -261,6 +272,10 @@ func (tkn *Tokenizer) scanIdentifier() (int, []byte) {
 	loweredStr := string(lowered)
 	if keywordID, found := keywords[loweredStr]; found {
 		return keywordID, lowered
+	}
+	// If we're at a SELECT, treat NEXT as a keyword.
+	if tkn.atSelect && loweredStr == "next" {
+		return NEXT, lowered
 	}
 	// dual must always be case-insensitive
 	if loweredStr == "dual" {
