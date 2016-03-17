@@ -21,8 +21,6 @@ from vtproto import vtgate_pb2
 from vtproto import vtgateservice_pb2
 
 from vtdb import dbexceptions
-from vtdb import keyrange_constants
-from vtdb import keyspace
 from vtdb import proto3_encoding
 from vtdb import vtdb_logger
 from vtdb import vtgate_client
@@ -74,31 +72,27 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     try:
       request = self.begin_request(effective_caller_id)
       response = self.stub.Begin(request, self.timeout)
-      # we're saving effective_caller_id to re-use it for commit and rollback.
-      self.effective_caller_id = effective_caller_id
-      self.session = response.session
+      self.update_session(response)
     except (face.AbortionError, vtgate_utils.VitessError) as e:
       raise _convert_exception(e)
 
   def commit(self):
     try:
-      request = self.commit_request(self.effective_caller_id)
+      request = self.commit_request()
       self.stub.Commit(request, self.timeout)
     except (face.AbortionError, vtgate_utils.VitessError) as e:
       raise _convert_exception(e)
     finally:
       self.session = None
-      self.effective_caller_id = None
 
   def rollback(self):
     try:
-      request = self.rollback_request(self.effective_caller_id)
+      request = self.rollback_request()
       self.stub.Rollback(request, self.timeout)
     except (face.AbortionError, vtgate_utils.VitessError) as e:
       raise _convert_exception(e)
     finally:
       self.session = None
-      self.effective_caller_id = None
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _execute(
@@ -189,9 +183,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
           keyspace=name,
       )
       response = self.stub.GetSrvKeyspace(request, self.timeout)
-      return keyspace.Keyspace(
-          name,
-          keyrange_constants.srv_keyspace_proto3_to_old(response.srv_keyspace))
+      return self.keyspace_from_response(name, response)
 
     except (face.AbortionError, vtgate_utils.VitessError) as e:
       raise _convert_exception(e, keyspace=name)
