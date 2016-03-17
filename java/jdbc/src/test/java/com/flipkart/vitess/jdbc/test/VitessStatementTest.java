@@ -11,8 +11,11 @@ import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Topodata;
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.Matchers;
 import org.powermock.api.mockito.PowerMockito;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -23,7 +26,7 @@ import java.util.List;
  * Created by harshit.gangal on 19/01/16.
  */
 
-public class VitessStatementTest {
+@RunWith(PowerMockRunner.class) @PrepareForTest(VTGateConn.class) public class VitessStatementTest {
 
     private String sqlSelect = "select 1 from test_table";
     private String sqlShow = "show tables";

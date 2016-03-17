@@ -163,7 +163,7 @@ import java.util.ArrayList;
 
         ArrayList<String> data = new ArrayList<String>();
         while (resultSet.next()) {
-            data.add(resultSet.getString("TABLE_TYPE"));
+            data.add(resultSet.getString("table_type"));
         }
 
         ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
@@ -657,8 +657,8 @@ import java.util.ArrayList;
     @Test public void supportsResultSetConcurrencyTest() throws SQLException {
         VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
         Assert.assertEquals(vitessDatabaseMetaData
-                .supportsResultSetConcurrency(ResultSet.TYPE_FORWARD_ONLY,
-                    ResultSet.CONCUR_READ_ONLY), true);
+            .supportsResultSetConcurrency(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY),
+            true);
         Assert.assertEquals(vitessDatabaseMetaData
             .supportsResultSetConcurrency(ResultSet.TYPE_SCROLL_INSENSITIVE,
                 ResultSet.CONCUR_READ_ONLY), false);
@@ -669,11 +669,11 @@ import java.util.ArrayList;
             .supportsResultSetConcurrency(ResultSet.CLOSE_CURSORS_AT_COMMIT,
                 ResultSet.CONCUR_READ_ONLY), false);
         Assert.assertEquals(vitessDatabaseMetaData
-                .supportsResultSetConcurrency(ResultSet.CONCUR_READ_ONLY,
-                    ResultSet.CONCUR_READ_ONLY), false);
+            .supportsResultSetConcurrency(ResultSet.CONCUR_READ_ONLY, ResultSet.CONCUR_READ_ONLY),
+            false);
         Assert.assertEquals(vitessDatabaseMetaData
-                .supportsResultSetConcurrency(ResultSet.CONCUR_UPDATABLE,
-                    ResultSet.CONCUR_READ_ONLY), false);
+            .supportsResultSetConcurrency(ResultSet.CONCUR_UPDATABLE, ResultSet.CONCUR_READ_ONLY),
+            false);
         Assert.assertEquals(vitessDatabaseMetaData
                 .supportsResultSetConcurrency(ResultSet.FETCH_FORWARD, ResultSet.CONCUR_READ_ONLY),
             false);
@@ -1044,7 +1044,7 @@ import java.util.ArrayList;
             .addFields(Query.Field.newBuilder().setName("Field").setType(Query.Type.VARCHAR))
             .addFields(Query.Field.newBuilder().setName("Type").setType(Query.Type.VARCHAR))
             .addFields(Query.Field.newBuilder().setName("Collation").setType(Query.Type.VARCHAR))
-            .addFields(Query.Field.newBuilder().setName("NULL").setType(Query.Type.VARCHAR))
+            .addFields(Query.Field.newBuilder().setName("Null").setType(Query.Type.VARCHAR))
             .addFields(Query.Field.newBuilder().setName("Key").setType(Query.Type.VARCHAR))
             .addFields(Query.Field.newBuilder().setName("Default").setType(Query.Type.VARCHAR))
             .addFields(Query.Field.newBuilder().setName("Extra").setType(Query.Type.VARCHAR))
@@ -1138,7 +1138,7 @@ import java.util.ArrayList;
         String sql = "SHOW KEYS FROM `shipment` FROM `vt`";
         Cursor mockedCursor = new SimpleCursor(Query.QueryResult.newBuilder()
             .addFields(Query.Field.newBuilder().setName("TABLE").setType(Query.Type.VARCHAR))
-            .addFields(Query.Field.newBuilder().setName("NON_UNIQUE").setType(Query.Type.INT64))
+            .addFields(Query.Field.newBuilder().setName("Non_unique").setType(Query.Type.INT64))
             .addFields(Query.Field.newBuilder().setName("Key_name").setType(Query.Type.VARCHAR))
             .addFields(Query.Field.newBuilder().setName("Seq_in_index").setType(Query.Type.INT64))
             .addFields(Query.Field.newBuilder().setName("Column_name").setType(Query.Type.VARCHAR))
@@ -1189,8 +1189,8 @@ import java.util.ArrayList;
 
         String sql = "SHOW INDEX FROM `shipment` FROM `vt`";
         Cursor mockedCursor = new SimpleCursor(Query.QueryResult.newBuilder()
-            .addFields(Query.Field.newBuilder().setName("TABLE").setType(Query.Type.VARCHAR))
-            .addFields(Query.Field.newBuilder().setName("NON_UNIQUE").setType(Query.Type.INT64))
+            .addFields(Query.Field.newBuilder().setName("Table").setType(Query.Type.VARCHAR))
+            .addFields(Query.Field.newBuilder().setName("Non_unique").setType(Query.Type.INT64))
             .addFields(Query.Field.newBuilder().setName("Key_name").setType(Query.Type.VARCHAR))
             .addFields(Query.Field.newBuilder().setName("Seq_in_index").setType(Query.Type.INT64))
             .addFields(Query.Field.newBuilder().setName("Column_name").setType(Query.Type.VARCHAR))
@@ -1215,7 +1215,7 @@ import java.util.ArrayList;
             .addFields(Query.Field.newBuilder().setName("TABLE_CAT").setType(Query.Type.CHAR))
             .addFields(Query.Field.newBuilder().setName("TABLE_SCHEM").setType(Query.Type.CHAR))
             .addFields(Query.Field.newBuilder().setName("TABLE_NAME").setType(Query.Type.CHAR))
-            .addFields(Query.Field.newBuilder().setName("NON_UNIQUE").setType(Query.Type.BIT))
+            .addFields(Query.Field.newBuilder().setName("Non_unique").setType(Query.Type.BIT))
             .addFields(Query.Field.newBuilder().setName("INDEX_QUALIFIER").setType(Query.Type.CHAR))
             .addFields(Query.Field.newBuilder().setName("INDEX_NAME").setType(Query.Type.CHAR))
             .addFields(Query.Field.newBuilder().setName("TYPE").setType(Query.Type.INT16))

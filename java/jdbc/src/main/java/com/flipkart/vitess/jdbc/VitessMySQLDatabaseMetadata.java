@@ -1080,7 +1080,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 vitessStatement.close();
             }
         }
-        String[] columnName = new String[] {"TABLE_CAT", "TABLE_SCHEM", "'TABLE_NAME", "NON_UNIQUE",
+        String[] columnName = new String[] {"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "Non_unique",
             "INDEX_QUALIFIER", "INDEX_NAME", "TYPE", "ORDINAL_POSITION", "COLUMN_NAME",
             "ASC_OR_DESC", "CARDINALITY", "PAGES", "FILTER_CONDITION"};
 
@@ -1344,7 +1344,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
 
 
     /**
-     * Helper class to provide means of comparing indexes by NON_UNIQUE, TYPE, INDEX_NAME, and ORDINAL_POSITION.
+     * Helper class to provide means of comparing indexes by Non_unique, TYPE, INDEX_NAME, and ORDINAL_POSITION.
      */
     protected class IndexMetaDataKey implements Comparable<IndexMetaDataKey> {
         Boolean columnNonUnique;
