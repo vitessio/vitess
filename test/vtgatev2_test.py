@@ -258,15 +258,6 @@ def get_connection(timeout=10.0):
     raise
 
 
-def get_keyrange(shard_name):
-  kr = None
-  if shard_name == keyrange_constants.SHARD_ZERO:
-    kr = keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)
-  else:
-    kr = keyrange.KeyRange(shard_name)
-  return kr
-
-
 def _delete_all(shard_index, table_name):
   vtgate_conn = get_connection()
   # This write is to set up the test with fresh insert
@@ -275,7 +266,7 @@ def _delete_all(shard_index, table_name):
   vtgate_conn._execute(
       'delete from %s' % table_name, {},
       tablet_type='master', keyspace_name=KEYSPACE_NAME,
-      keyranges=[get_keyrange(SHARD_NAMES[shard_index])])
+      keyranges=[keyrange.KeyRange(SHARD_NAMES[shard_index])])
   vtgate_conn.commit()
 
 
@@ -338,7 +329,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
   def setUp(self):
     super(TestCoreVTGateFunctions, self).setUp()
     self.shard_index = 1
-    self.keyrange = get_keyrange(SHARD_NAMES[self.shard_index])
+    self.keyrange = keyrange.KeyRange(SHARD_NAMES[self.shard_index])
     self.master_tablet = shard_1_master
     self.replica_tablet = shard_1_replica1
 
@@ -382,7 +373,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       # Fetch all rows in each shard
       cursor = vtgate_conn.cursor(
           tablet_type='master', keyspace=KEYSPACE_NAME,
-          keyranges=[get_keyrange(SHARD_NAMES[shard_index])])
+          keyranges=[keyrange.KeyRange(SHARD_NAMES[shard_index])])
       rowcount = cursor.execute('select * from vt_insert_test', {})
       # Verify row count
       self.assertEqual(rowcount, row_counts[shard_index])
@@ -393,7 +384,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     # Do a cross shard range query and assert all rows are fetched
     cursor = vtgate_conn.cursor(
         tablet_type='master', keyspace=KEYSPACE_NAME,
-        keyranges=[get_keyrange('75-95')])
+        keyranges=[keyrange.KeyRange('75-95')])
     rowcount = cursor.execute('select * from vt_insert_test', {})
     self.assertEqual(rowcount, row_counts[0] + row_counts[1])
 
@@ -861,7 +852,7 @@ class TestFailures(BaseTestCase):
   def setUp(self):
     super(TestFailures, self).setUp()
     self.shard_index = 1
-    self.keyrange = get_keyrange(SHARD_NAMES[self.shard_index])
+    self.keyrange = keyrange.KeyRange(SHARD_NAMES[self.shard_index])
     self.master_tablet = shard_1_master
     self.master_tablet.kill_vttablet()
     self.tablet_start(self.master_tablet, 'replica')
@@ -1478,7 +1469,7 @@ class TestFailures(BaseTestCase):
     vtgate_conn._execute(
         'delete from vt_a', {},
         tablet_type='master', keyspace_name=KEYSPACE_NAME,
-        keyranges=[get_keyrange(SHARD_NAMES[self.shard_index])])
+        keyranges=[keyrange.KeyRange(SHARD_NAMES[self.shard_index])])
     vtgate_conn.commit()
     eid_map = {}
     # start transaction
@@ -1523,7 +1514,7 @@ class TestFailures(BaseTestCase):
     waiting around till the request deadline expires.
     """
     tablet_type = 'replica'
-    keyranges = [get_keyrange(SHARD_NAMES[self.shard_index])]
+    keyranges = [keyrange.KeyRange(SHARD_NAMES[self.shard_index])]
     query = 'select * from vt_insert_test'
 
     # Execute a query to warm VtGate's caches for connections and endpoints
@@ -1742,7 +1733,7 @@ class TestExceptionLogging(BaseTestCase):
   def setUp(self):
     super(TestExceptionLogging, self).setUp()
     self.shard_index = 1
-    self.keyrange = get_keyrange(SHARD_NAMES[self.shard_index])
+    self.keyrange = keyrange.KeyRange(SHARD_NAMES[self.shard_index])
     self.master_tablet = shard_1_master
     self.replica_tablet = shard_1_replica1
     vtdb_logger.register_vtdb_logger(VTGateTestLogger())

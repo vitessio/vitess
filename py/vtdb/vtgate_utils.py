@@ -83,24 +83,27 @@ class VitessError(Exception):
   """VitessError is raised by an RPC with a server-side application error.
 
   VitessErrors have an error code and message.
+
+  The individual protocols are responsible for getting the code and message
+  from their protocol-specific encoding, and creating this error.
+  Then this error can be converted to the right dbexception.
   """
 
   _errno_pattern = re.compile(r'\(errno (\d+)\)')
 
-  def __init__(self, method_name, error=None):
-    """Initializes a VitessError with appropriate defaults from an error dict.
+  def __init__(self, method_name, code, message):
+    """Initializes a VitessError from a code and message.
 
     Args:
       method_name: RPC method name, as a string, that was called.
-      error: error dict returned by an RPC call.
+      code: integer that represents the error code. From vtrpc_pb2.ErrorCode.
+      message: string representation of the error.
     """
-    if error is None or not isinstance(error, dict):
-      error = {}
     self.method_name = method_name
-    self.code = error.get('Code', vtrpc_pb2.UNKNOWN_ERROR)
-    self.message = error.get('Message', 'Missing error message')
+    self.code = code
+    self.message = message
     # Make self.args reflect the error components
-    super(VitessError, self).__init__(self.message, method_name, self.code)
+    super(VitessError, self).__init__(message, method_name, code)
 
   def __str__(self):
     """Print the error nicely, converting the proto error enum to its name."""
@@ -169,6 +172,10 @@ def convert_exception_kwarg(key, value):
       'keyspaces',
       'sqls'):
     return key, unique_join(value)
+  elif key in (
+      'not_in_transaction',
+      'as_transaction'):
+    return key, str(value)
   else:
     return key, 'unknown'
 
