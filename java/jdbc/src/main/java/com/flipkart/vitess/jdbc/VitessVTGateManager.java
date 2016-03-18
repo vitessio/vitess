@@ -107,7 +107,7 @@ public class VitessVTGateManager {
                 vtGateConn.close();
             } catch (IOException e) {
                 exception =
-                    new SQLException(e.getMessage());
+                    new SQLException(e.getMessage(),e);
             }
         }
         vtGateConnHashMap.clear();
