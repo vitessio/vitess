@@ -74,14 +74,14 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       response = self.stub.Begin(request, self.timeout)
       self.update_session(response)
     except (face.AbortionError, vtgate_utils.VitessError) as e:
-      raise _convert_exception(e)
+      raise _convert_exception(e, 'Begin')
 
   def commit(self):
     try:
       request = self.commit_request()
       self.stub.Commit(request, self.timeout)
     except (face.AbortionError, vtgate_utils.VitessError) as e:
-      raise _convert_exception(e)
+      raise _convert_exception(e, 'Commit')
     finally:
       self.session = None
 
@@ -90,7 +90,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       request = self.rollback_request()
       self.stub.Rollback(request, self.timeout)
     except (face.AbortionError, vtgate_utils.VitessError) as e:
-      raise _convert_exception(e)
+      raise _convert_exception(e, 'Rollback')
     finally:
       self.session = None
 
@@ -117,7 +117,9 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     except (face.AbortionError, vtgate_utils.VitessError) as e:
       self.logger_object.log_private_data(bind_variables)
       raise _convert_exception(
-          e, sql, keyspace=keyspace_name, tablet_type=tablet_type,
+          e, method_name,
+          sql=sql, keyspace=keyspace_name, tablet_type=tablet_type,
+          not_in_transaction=not_in_transaction,
           **routing_kwargs)
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
@@ -138,17 +140,19 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     except (face.AbortionError, vtgate_utils.VitessError) as e:
       self.logger_object.log_private_data(bind_variables_list)
       raise _convert_exception(
-          e, sql_list, method_name, keyspace='', tablet_type=tablet_type)
+          e, method_name,
+          sqls=sql_list, tablet_type=tablet_type,
+          as_transaction=as_transaction)
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _stream_execute(
       self, sql, bind_variables, tablet_type, keyspace_name=None,
       shards=None, keyspace_ids=None, keyranges=None,
-      not_in_transaction=False, effective_caller_id=None,
+      effective_caller_id=None,
       **kwargs):
 
     try:
-      request, method_name = self.stream_execute_request_and_name(
+      request, routing_kwargs, method_name = self.stream_execute_request_and_name(
           sql, bind_variables, tablet_type,
           keyspace_name,
           shards,
@@ -161,8 +165,9 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     except (face.AbortionError, vtgate_utils.VitessError) as e:
       self.logger_object.log_private_data(bind_variables)
       raise _convert_exception(
-          e, sql, keyspace_ids, keyranges,
-          keyspace=keyspace_name, tablet_type=tablet_type)
+          e, method_name,
+          sql=sql, keyspace=keyspace_name, tablet_type=tablet_type,
+          **routing_kwargs)
 
     fields, convs = self.build_conversions(first_response.result.fields)
 
@@ -198,6 +203,8 @@ def _convert_exception(exc, *args, **kwargs):
     exc: raw protocol exception.
     *args: additional args from the raising site.
     **kwargs: additional keyword args from the raising site.
+              They will be converted into a single string, and added as an extra
+              arg to the exception.
 
   Returns:
     Api interface exceptions - dbexceptions with new args.

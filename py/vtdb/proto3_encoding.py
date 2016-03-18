@@ -217,10 +217,7 @@ class Proto3Connection(object):
       vtgate_utils.VitessError: if an error was set.
     """
     if error.code:
-      raise vtgate_utils.VitessError(exec_method, {
-          'Code': error.code,
-          'Message': error.message,
-      })
+      raise vtgate_utils.VitessError(exec_method, error.code, error.message)
 
   def build_conversions(self, qr_fields):
     """Builds an array of fields and conversions from a result fields.
@@ -282,6 +279,7 @@ class Proto3Connection(object):
     """Builds a vtgate_pb2.CommitRequest object.
 
     Uses the effective_caller_id saved from begin_request().
+    It will also clear the saved effective_caller_id.
 
     Returns:
       A vtgate_pb2.CommitRequest object.
@@ -289,12 +287,14 @@ class Proto3Connection(object):
     request = vtgate_pb2.CommitRequest()
     self._add_caller_id(request, self._effective_caller_id)
     self._add_session(request)
+    self._effective_caller_id = None
     return request
 
   def rollback_request(self):
     """Builds a vtgate_pb2.RollbackRequest object.
 
     Uses the effective_caller_id saved from begin_request().
+    It will also clear the saved effective_caller_id.
 
     Returns:
       A vtgate_pb2.RollbackRequest object.
@@ -302,6 +302,7 @@ class Proto3Connection(object):
     request = vtgate_pb2.RollbackRequest()
     self._add_caller_id(request, self._effective_caller_id)
     self._add_session(request)
+    self._effective_caller_id = None
     return request
 
   def execute_request_and_name(self, sql, bind_variables, tablet_type,
@@ -474,34 +475,39 @@ class Proto3Connection(object):
 
     Returns:
       A vtgate_pb2.StreamExecuteXXXXRequest object.
+      A dict that contains the routing parameters.
       The name of the remote method called.
     """
 
     if shards is not None:
       request = vtgate_pb2.StreamExecuteShardsRequest(keyspace=keyspace_name)
       request.shards.extend(shards)
+      routing_kwargs = {'shards': shards}
       method_name = 'StreamExecuteShards'
 
     elif keyspace_ids is not None:
       request = vtgate_pb2.StreamExecuteKeyspaceIdsRequest(
           keyspace=keyspace_name)
       request.keyspace_ids.extend(keyspace_ids)
+      routing_kwargs = {'keyspace_ids': keyspace_ids}
       method_name = 'StreamExecuteKeyspaceIds'
 
     elif key_ranges is not None:
       request = vtgate_pb2.StreamExecuteKeyRangesRequest(keyspace=keyspace_name)
       self._add_key_ranges(request, key_ranges)
+      routing_kwargs = {'keyranges': key_ranges}
       method_name = 'StreamExecuteKeyRanges'
 
     else:
       request = vtgate_pb2.StreamExecuteRequest()
+      routing_kwargs = {}
       method_name = 'StreamExecute'
 
     request.query.sql = sql
     self._convert_bind_vars(bind_variables, request.query.bind_variables)
     request.tablet_type = topodata_pb2.TabletType.Value(tablet_type.upper())
     self._add_caller_id(request, effective_caller_id)
-    return request, method_name
+    return request, routing_kwargs, method_name
 
   def srv_keyspace_proto3_to_old(self, sk):
     """Converts a proto3 SrvKeyspace.
