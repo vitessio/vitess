@@ -99,6 +99,7 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot open source file %v: %v", name, err)
 	}
+	fmt.Println("10", name)
 	return fd, nil
 }
 
@@ -572,7 +573,7 @@ func removeExistingFiles(cnf *Mycnf) error {
 func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurrency int, hookExtraEnv map[string]string) (replication.Position, error) {
 	// find the right backup handle: most recent one, with a MANIFEST
 	log.Infof("Restore: looking for a suitable backup to restore")
-	fmt.Println("5a")
+	fmt.Println("10e")
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
 		return replication.Position{}, err
@@ -582,10 +583,12 @@ func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurr
 	if err != nil {
 		return replication.Position{}, fmt.Errorf("ListBackups failed: %v", err)
 	}
+	fmt.Println("10a")
 	var bh backupstorage.BackupHandle
 	var bm BackupManifest
 	var toRestore int
 	for toRestore = len(bhs) - 1; toRestore >= 0; toRestore-- {
+		fmt.Println("10b")
 		bh = bhs[toRestore]
 		rc, err := bh.ReadFile(backupManifest)
 		if err != nil {
@@ -599,11 +602,12 @@ func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurr
 			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage (cannot JSON decode MANIFEST: %v)", bh.Name(), dir, err)
 			continue
 		}
-
+		fmt.Println("10d", len(bm.FileEntries))
 		log.Infof("Restore: found backup %v %v to restore with %v files", bh.Directory(), bh.Name(), len(bm.FileEntries))
 		break
 	}
 	if toRestore < 0 {
+		fmt.Println("10c")
 		log.Errorf("No backup to restore on BackupStorage for directory %v", dir)
 		return replication.Position{}, ErrNoBackup
 	}

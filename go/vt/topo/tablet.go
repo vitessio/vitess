@@ -200,7 +200,6 @@ func NewTabletInfo(tablet *topodatapb.Tablet, version int64) *TabletInfo {
 // GetTablet is a high level function to read tablet data.
 // It generates trace spans.
 func (ts Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*TabletInfo, error) {
-	fmt.Println("4b")
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.GetTablet")
 	span.Annotate("tablet", topoproto.TabletAliasString(alias))
@@ -210,7 +209,7 @@ func (ts Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("4c")
+	//	fmt.Println("4c")
 	return &TabletInfo{
 		version: version,
 		Tablet:  value,

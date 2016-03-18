@@ -86,9 +86,9 @@ func (zkts *Server) DeleteTablet(ctx context.Context, alias *topodatapb.TabletAl
 
 // GetTablet is part of the topo.Server interface
 func (zkts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topodatapb.Tablet, int64, error) {
-	fmt.Println("4w")
+	//	fmt.Println("4w")
 	zkTabletPath := TabletPathForAlias(alias)
-	fmt.Println("4v", zkTabletPath)
+	//	fmt.Println("4v", zkTabletPath)
 	data, stat, err := zkts.zconn.Get(zkTabletPath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {

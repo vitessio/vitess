@@ -170,6 +170,7 @@ func NewActionAgent(
 	port, gRPCPort int32,
 	overridesFile string,
 ) (agent *ActionAgent, err error) {
+	fmt.Println("6ab4")
 	schemaOverrides := loadSchemaOverrides(overridesFile)
 
 	topoServer := topo.GetServer()
@@ -234,10 +235,12 @@ func NewActionAgent(
 	// - restoreFromBackup is set: we restore, then initHealthCheck, all
 	//   in the background
 	// - restoreFromBackup is not set: we initHealthCheck right away
+	fmt.Println("6ab3")
 	if *restoreFromBackup {
 		go func() {
 			// restoreFromBackup wil just be a regular action
 			// (same as if it was triggered remotely)
+			fmt.Println("6ab1")
 			if err := agent.RestoreFromBackup(batchCtx); err != nil {
 				fmt.Println("err RestoreFromBackup")
 				println(fmt.Sprintf("RestoreFromBackup failed: %v", err))

@@ -29,6 +29,7 @@ var (
 // an error in case of a non-recoverable error.
 // It takes the action lock so no RPC interferes.
 func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
+	fmt.Println("6ab2", restoreFromBackup)
 	agent.actionMutex.Lock()
 	defer agent.actionMutex.Unlock()
 
