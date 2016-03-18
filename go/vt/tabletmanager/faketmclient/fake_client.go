@@ -10,11 +10,13 @@ package faketmclient
 // for yours, feel free to extend this implementation.
 
 import (
+	"io"
 	"time"
 
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
@@ -271,12 +273,15 @@ func (client *FakeTabletManagerClient) PromoteSlave(ctx context.Context, tablet 
 // Backup related methods
 //
 
+type eofEventStream struct{}
+
+func (e *eofEventStream) Recv() (*logutilpb.Event, error) {
+	return nil, io.EOF
+}
+
 // Backup is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (<-chan *logutilpb.Event, tmclient.ErrFunc, error) {
-	logstream := make(chan *logutilpb.Event, 10)
-	return logstream, func() error {
-		return nil
-	}, nil
+func (client *FakeTabletManagerClient) Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (logutil.EventStream, error) {
+	return &eofEventStream{}, nil
 }
 
 //

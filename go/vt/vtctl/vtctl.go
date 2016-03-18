@@ -79,6 +79,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"sort"
@@ -986,14 +987,21 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	if err != nil {
 		return err
 	}
-	logStream, errFunc, err := wr.TabletManagerClient().Backup(ctx, tabletInfo, *concurrency)
+	stream, err := wr.TabletManagerClient().Backup(ctx, tabletInfo, *concurrency)
 	if err != nil {
 		return err
 	}
-	for e := range logStream {
-		logutil.LogEvent(wr.Logger(), e)
+	for {
+		e, err := stream.Recv()
+		switch err {
+		case nil:
+			logutil.LogEvent(wr.Logger(), e)
+		case io.EOF:
+			return nil
+		default:
+			return err
+		}
 	}
-	return errFunc()
 }
 
 func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
