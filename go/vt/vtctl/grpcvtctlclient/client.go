@@ -6,9 +6,9 @@
 package grpcvtctlclient
 
 import (
-	"io"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -37,8 +37,20 @@ func gRPCVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclient
 	}, nil
 }
 
+type eventStreamAdapter struct {
+	stream vtctlservicepb.Vtctl_ExecuteVtctlCommandClient
+}
+
+func (e *eventStreamAdapter) Recv() (*logutilpb.Event, error) {
+	le, err := e.stream.Recv()
+	if err != nil {
+		return nil, err
+	}
+	return le.Event, nil
+}
+
 // ExecuteVtctlCommand is part of the VtctlClient interface
-func (client *gRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout time.Duration) (<-chan *logutilpb.Event, vtctlclient.ErrFunc, error) {
+func (client *gRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout time.Duration) (logutil.EventStream, error) {
 	query := &vtctldatapb.ExecuteVtctlCommandRequest{
 		Args:          args,
 		ActionTimeout: int64(actionTimeout.Nanoseconds()),
@@ -46,27 +58,9 @@ func (client *gRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []s
 
 	stream, err := client.c.ExecuteVtctlCommand(ctx, query)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-
-	results := make(chan *logutilpb.Event, 1)
-	var finalError error
-	go func() {
-		for {
-			le, err := stream.Recv()
-			if err != nil {
-				if err != io.EOF {
-					finalError = err
-				}
-				close(results)
-				return
-			}
-			results <- le.Event
-		}
-	}()
-	return results, func() error {
-		return finalError
-	}, nil
+	return &eventStreamAdapter{stream}, nil
 }
 
 // Close is part of the VtctlClient interface

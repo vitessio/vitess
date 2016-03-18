@@ -7,6 +7,7 @@ package vtctlclient
 import (
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"golang.org/x/net/context"
@@ -31,19 +32,21 @@ func RunCommandAndWait(ctx context.Context, server string, args []string, dialTi
 	// run the command
 	ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
 	defer cancel()
-	c, errFunc, err := client.ExecuteVtctlCommand(ctx, args, actionTimeout)
+	stream, err := client.ExecuteVtctlCommand(ctx, args, actionTimeout)
 	if err != nil {
 		return fmt.Errorf("Cannot execute remote command: %v", err)
 	}
 
 	// stream the result
-	for e := range c {
-		recv(e)
+	for {
+		e, err := stream.Recv()
+		switch err {
+		case nil:
+			recv(e)
+		case io.EOF:
+			return nil
+		default:
+			return fmt.Errorf("Remote error: %v", err)
+		}
 	}
-
-	// then display the overall error
-	if err = errFunc(); err != nil {
-		return fmt.Errorf("Remote error: %v", err)
-	}
-	return nil
 }
