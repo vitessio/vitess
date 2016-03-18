@@ -6,6 +6,7 @@ package testlib
 
 import (
 	"flag"
+	"io"
 	"strings"
 	"testing"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -133,7 +135,7 @@ func testWaitForDrain(t *testing.T, desc, cells string, drain drainDirective, ex
 		// avoid flakyness.
 		timeout = "30s"
 	}
-	c, errFunc, err := vp.RunAndStreamOutput(
+	stream, err := vp.RunAndStreamOutput(
 		[]string{"WaitForDrain", "-cells", cells, "-retry_delay", "100ms", "-timeout", timeout,
 			keyspace + "/" + shard, topodatapb.TabletType_REPLICA.String()})
 	if err != nil {
@@ -144,7 +146,12 @@ func testWaitForDrain(t *testing.T, desc, cells string, drain drainDirective, ex
 	fqs1.addHealthResponse(1.0)
 	fqs2.addHealthResponse(1.0)
 
-	for le := range c {
+	var le *logutilpb.Event
+	for {
+		le, err = stream.Recv()
+		if err != nil {
+			break
+		}
 		line := logutil.EventString(le)
 		t.Logf(line)
 		if strings.Contains(line, "for all healthy tablets to be drained") {
@@ -168,18 +175,22 @@ func testWaitForDrain(t *testing.T, desc, cells string, drain drainDirective, ex
 
 	// If a cell was drained, rate should go below <0.0 now.
 	// If not all selected cells were drained, this will end after "-timeout".
-	for le := range c {
-		vp.t.Logf(logutil.EventString(le))
+	for {
+		le, err = stream.Recv()
+		if err == nil {
+			vp.t.Logf(logutil.EventString(le))
+		} else {
+			break
+		}
 	}
 
-	err = errFunc()
 	if len(expectedErrors) == 0 {
-		if err != nil {
+		if err != io.EOF {
 			t.Fatalf("TestWaitForDrain: %v: no error expected but got: %v", desc, err)
 		}
 		// else: Success.
 	} else {
-		if err == nil {
+		if err == nil || err == io.EOF {
 			t.Fatalf("TestWaitForDrain: %v: error expected but got none", desc)
 		}
 		for _, errString := range expectedErrors {
