@@ -432,6 +432,7 @@ func (tee *Tee) DeleteTablet(ctx context.Context, alias *topodatapb.TabletAlias)
 
 // GetTablet is part of the topo.Server interface
 func (tee *Tee) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topodatapb.Tablet, int64, error) {
+	fmt.Println("4x")
 	t, v, err := tee.readFrom.GetTablet(ctx, alias)
 	if err != nil {
 		return nil, 0, err

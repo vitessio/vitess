@@ -143,7 +143,7 @@ func newTabletHealthCache(ts topo.Server) *tabletHealthCache {
 
 func (thc *tabletHealthCache) Get(ctx context.Context, tabletAlias *topodatapb.TabletAlias) (*querypb.StreamHealthResponse, error) {
 	thc.mu.Lock()
-
+	//	fmt.Println("4u1")
 	th, ok := thc.tabletMap[*tabletAlias]
 	if !ok {
 		// No existing stream, so start one.

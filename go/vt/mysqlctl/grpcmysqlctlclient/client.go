@@ -16,6 +16,8 @@ import (
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlclient"
 
+	"fmt"
+
 	mysqlctlpb "github.com/youtube/vitess/go/vt/proto/mysqlctl"
 )
 
@@ -48,6 +50,7 @@ func (c *client) Start(ctx context.Context) error {
 
 // Shutdown is part of the MysqlctlClient interface.
 func (c *client) Shutdown(ctx context.Context, waitForMysqld bool) error {
+	fmt.Println("3r")
 	_, err := c.c.Shutdown(ctx, &mysqlctlpb.ShutdownRequest{
 		WaitForMysqld: waitForMysqld,
 	})

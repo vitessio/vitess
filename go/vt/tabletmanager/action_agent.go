@@ -239,6 +239,7 @@ func NewActionAgent(
 			// restoreFromBackup wil just be a regular action
 			// (same as if it was triggered remotely)
 			if err := agent.RestoreFromBackup(batchCtx); err != nil {
+				fmt.Println("err RestoreFromBackup")
 				println(fmt.Sprintf("RestoreFromBackup failed: %v", err))
 				log.Fatalf("RestoreFromBackup failed: %v", err)
 			}

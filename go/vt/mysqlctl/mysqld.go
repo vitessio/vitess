@@ -292,6 +292,7 @@ func (mysqld *Mysqld) Wait(ctx context.Context) error {
 //
 // If a mysqlctld address is provided in a flag, Shutdown will run remotely.
 func (mysqld *Mysqld) Shutdown(ctx context.Context, waitForMysqld bool) error {
+	fmt.Println("3q")
 	log.Infof("Mysqld.Shutdown")
 
 	// Execute as remote action on mysqlctld if requested.
@@ -376,6 +377,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, waitForMysqld bool) error {
 // execCmd searches the PATH for a command and runs it, logging the output.
 // If input is not nil, pipe it to the command's stdin.
 func execCmd(name string, args, env []string, dir string, input io.Reader) (cmd *exec.Cmd, err error) {
+	fmt.Println(name, "**", args, "**", env, "**", dir)
 	cmdPath, _ := exec.LookPath(name)
 	log.Infof("execCmd: %v %v %v", name, cmdPath, args)
 

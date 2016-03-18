@@ -226,6 +226,7 @@ func (fmd *FakeMysqlDaemon) Start(ctx context.Context) error {
 
 // Shutdown is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, waitForMysqld bool) error {
+	fmt.Println("3p")
 	if !fmd.Running {
 		return fmt.Errorf("fake mysql daemon not running")
 	}

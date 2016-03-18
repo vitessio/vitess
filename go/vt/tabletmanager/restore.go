@@ -47,6 +47,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 	// If we're not ok, return an error and the agent will log.Fatalf,
 	// causing the process to be restarted and the restore retried.
 	dir := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
+	fmt.Println("5c", tablet.Keyspace, tablet.Shard)
 	pos, err := mysqlctl.Restore(ctx, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv())
 	switch err {
 	case nil:
@@ -61,7 +62,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 	default:
 		return fmt.Errorf("Can't restore backup: %v", err)
 	}
-
+	fmt.Println("5d")
 	// Change type back to original type if we're ok to serve.
 	if _, err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *topodatapb.Tablet) error {
 		tablet.Type = originalType

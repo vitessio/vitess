@@ -5,7 +5,6 @@
 package grpctmserver
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -446,7 +445,6 @@ func (s *server) PromoteSlave(ctx context.Context, request *tabletmanagerdatapb.
 }
 
 func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream tabletmanagerservicepb.TabletManager_BackupServer) error {
-	fmt.Println("1g")
 	ctx := callinfo.GRPCCallInfo(stream.Context())
 	return s.agent.RPCWrapLockAction(ctx, actionnode.TabletActionBackup, request, nil, true, func() error {
 		// create a logger, send the result back to the caller
@@ -469,7 +467,6 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 		}()
 
 		err := s.agent.Backup(ctx, int(request.Concurrency), logger)
-		fmt.Println("2d")
 		close(logger)
 		wg.Wait()
 		return err

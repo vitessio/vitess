@@ -20,7 +20,6 @@ import (
 // Backup takes a db backup and sends it to the BackupStorage
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger) error {
-	fmt.Println("1d")
 	// update our type to BACKUP
 	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
@@ -33,22 +32,17 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	if _, err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP, make(map[string]string)); err != nil {
 		return err
 	}
-
 	// let's update our internal state (stop query service and other things)
 	if err := agent.refreshTablet(ctx, "backup"); err != nil {
 		return fmt.Errorf("failed to update state before backup: %v", err)
 	}
-
 	// create the loggers: tee to console and source
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
 	// now we can run the backup
 	dir := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
 	name := fmt.Sprintf("%v.%v", time.Now().UTC().Format("2006-01-02.150405"), topoproto.TabletAliasString(tablet.Alias))
-	fmt.Println("2a")
-	fmt.Println("3d")
 	returnErr := mysqlctl.Backup(ctx, agent.MysqlDaemon, l, dir, name, concurrency, agent.hookExtraEnv())
-
 	// and change our type back to the appropriate value:
 	// - if healthcheck is enabled, go to spare
 	// - if not, go back to original type
@@ -64,6 +58,5 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		}
 		returnErr = err
 	}
-
 	return returnErr
 }

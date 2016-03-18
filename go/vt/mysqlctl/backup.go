@@ -186,7 +186,6 @@ func findFilesTobackup(cnf *Mycnf) ([]FileEntry, error) {
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
 func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, dir, name string, backupConcurrency int, hookExtraEnv map[string]string) error {
-	fmt.Println("1b")
 	// start the backup with the BackupStorage
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
@@ -197,7 +196,7 @@ func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, dir,
 	if err != nil {
 		return fmt.Errorf("StartBackup failed: %v", err)
 	}
-	fmt.Println("3c")
+	fmt.Println("11a **", bh.Directory(), "**", bh.Name())
 	if err = backup(ctx, mysqld, logger, bh, backupConcurrency, hookExtraEnv); err != nil {
 		if abortErr := bh.AbortBackup(); abortErr != nil {
 			logger.Errorf("failed to abort backup: %v", abortErr)
@@ -208,15 +207,12 @@ func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, dir,
 }
 
 func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) error {
-
-	fmt.Println("3b")
 	// save initial state so we can restore
 	slaveStartRequired := false
 	sourceIsMaster := false
 	readOnly := true
 	var replicationPosition replication.Position
 	semiSyncMaster, semiSyncSlave := mysqld.SemiSyncEnabled()
-
 	// see if we need to restart replication after backup
 	logger.Infof("getting current replication status")
 	slaveStatus, err := mysqld.SlaveStatus()
@@ -229,13 +225,12 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	default:
 		return fmt.Errorf("can't get slave status: %v", err)
 	}
-
 	// get the read-only flag
 	readOnly, err = mysqld.IsReadOnly()
+	fmt.Println("3g **", readOnly, sourceIsMaster)
 	if err != nil {
 		return fmt.Errorf("can't get read-only status: %v", err)
 	}
-
 	// get the replication position
 	if sourceIsMaster {
 		if !readOnly {
@@ -260,25 +255,24 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 		replicationPosition = slaveStatus.Position
 	}
 	logger.Infof("using replication position: %v", replicationPosition)
-
 	// shutdown mysqld
 	err = mysqld.Shutdown(ctx, true)
 	if err != nil {
 		return fmt.Errorf("can't shutdown mysqld: %v", err)
 	}
-
 	// get the files to backup
 	fes, err := findFilesTobackup(mysqld.Cnf())
 	if err != nil {
 		return fmt.Errorf("can't find files to backup: %v", err)
 	}
+	//	for fesCounter, fesItem := range fes {
+	//		fmt.Println(fesCounter, "--", fesItem.Name, "--", fesItem.Base, "--", fesItem.Hash)
+	//	}
 	logger.Infof("found %v files to backup", len(fes))
-
 	// backup everything
 	if err := backupFiles(mysqld, logger, bh, fes, replicationPosition, backupConcurrency); err != nil {
 		return fmt.Errorf("can't backup files: %v", err)
 	}
-
 	// Try to restart mysqld
 	err = mysqld.Start(ctx)
 	if err != nil {
@@ -313,12 +307,10 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	if err := mysqld.SetReadOnly(readOnly); err != nil {
 		return err
 	}
-
 	return nil
 }
 
 func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fes []FileEntry, replicationPosition replication.Position, backupConcurrency int) (err error) {
-	fmt.Println("3a")
 	sema := sync2.NewSemaphore(backupConcurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
@@ -326,7 +318,6 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 		wg.Add(1)
 		go func(i int, fe FileEntry) {
 			defer wg.Done()
-
 			// wait until we are ready to go, skip if we already
 			// encountered an error
 			sema.Acquire()
@@ -334,7 +325,6 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 			if rec.HasErrors() {
 				return
 			}
-
 			// open the source file for reading
 			source, err := fe.open(mysqld.Cnf(), true)
 			if err != nil {
@@ -342,7 +332,6 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 				return
 			}
 			defer source.Close()
-
 			// open the destination file for writing, and a buffer
 			name := fmt.Sprintf("%v", i)
 			wc, err := bh.AddFile(name)
@@ -411,7 +400,6 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 	if _, err := wc.Write([]byte(data)); err != nil {
 		return fmt.Errorf("cannot write %v: %v", backupManifest, err)
 	}
-
 	return nil
 }
 
@@ -474,10 +462,12 @@ func restoreFiles(cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, re
 			// open the source file for reading
 			name := fmt.Sprintf("%v", i)
 			source, err := bh.ReadFile(name)
+
 			if err != nil {
 				rec.RecordError(err)
 				return
 			}
+			fmt.Println("5b")
 			defer source.Close()
 
 			// open the destination file for writing
@@ -582,6 +572,7 @@ func removeExistingFiles(cnf *Mycnf) error {
 func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurrency int, hookExtraEnv map[string]string) (replication.Position, error) {
 	// find the right backup handle: most recent one, with a MANIFEST
 	log.Infof("Restore: looking for a suitable backup to restore")
+	fmt.Println("5a")
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
 		return replication.Position{}, err

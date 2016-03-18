@@ -8,6 +8,8 @@
 package trace
 
 import (
+	"fmt"
+
 	"golang.org/x/net/context"
 )
 
@@ -61,6 +63,7 @@ func NewSpanFromContext(ctx context.Context) Span {
 // CopySpan creates a new context from parentCtx, with only the trace span
 // copied over from spanCtx, if it has any. If not, parentCtx is returned.
 func CopySpan(parentCtx, spanCtx context.Context) context.Context {
+	fmt.Println("4z")
 	if span, ok := FromContext(spanCtx); ok {
 		return NewContext(parentCtx, span)
 	}

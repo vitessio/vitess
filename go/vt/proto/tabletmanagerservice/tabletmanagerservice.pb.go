@@ -1112,6 +1112,7 @@ func _TabletManager_Backup_Handler(srv interface{}, stream grpc.ServerStream) er
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
+	fmt.Println("1h")
 	return srv.(TabletManagerServer).Backup(m, &tabletManagerBackupServer{stream})
 }
 

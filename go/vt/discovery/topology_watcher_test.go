@@ -148,6 +148,7 @@ func (ft *fakeTopo) GetShardReplication(ctx context.Context, cell, keyspace, sha
 }
 
 func (ft *fakeTopo) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topodatapb.Tablet, int64, error) {
+	fmt.Println("4y")
 	ft.mu.RLock()
 	defer ft.mu.RUnlock()
 	return ft.tablets[*alias], 0, nil

@@ -46,6 +46,7 @@ func (fbh *FileBackupHandle) AddFile(filename string) (io.WriteCloser, error) {
 	if fbh.readOnly {
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
+	fmt.Println("1o", "==", fbh.dir, "==", fbh.name, "==", filename, "==", *FileBackupStorageRoot)
 	p := path.Join(*FileBackupStorageRoot, fbh.dir, fbh.name, filename)
 	return os.Create(p)
 }
@@ -121,7 +122,7 @@ func (fbs *FileBackupStorage) StartBackup(dir, name string) (backupstorage.Backu
 	if err := os.Mkdir(p, os.ModePerm); err != nil {
 		return nil, err
 	}
-
+	fmt.Println(dir, "**", name)
 	return &FileBackupHandle{
 		fbs:      fbs,
 		dir:      dir,

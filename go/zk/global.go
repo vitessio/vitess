@@ -82,6 +82,7 @@ func (gzc *GlobalConn) Create(path, value string, flags int, aclv []zookeeper.AC
 }
 
 func (gzc *GlobalConn) Get(path string) (data string, stat Stat, err error) {
+	fmt.Println("6a", data)
 	datas := make([]string, len(gzc.zconns))
 	for i, zconn := range gzc.zconns {
 		data, stat, err = zconn.Get(path)

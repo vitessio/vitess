@@ -5,12 +5,12 @@ package cephbackupstorage
 import (
 	"fmt"
 	"io"
+	"log"
 	"strings"
 	"sync"
 
-	"log"
-
 	"github.com/minio/minio-go"
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
 	"golang.org/x/net/context"
 )
@@ -19,6 +19,7 @@ var (
 	// bucket is where the backups will go.
 	//	bucket = flag.String("ceph_backup_storage_bucket", "", "Ceph Cloud Storage bucket to use for backups")
 
+	//	bucket = "raunaktestbucket"
 	bucket = "minio-bucket1"
 	// root is a prefix added to all object names.
 //	root = flag.String("sd", "", "root prefix for all backup-related object names")
@@ -26,11 +27,13 @@ var (
 
 // CephBackupHandle implements BackupHandle for Ceph Cloud Storage.
 type CephBackupHandle struct {
-	client_ceph *minio.Client
-	bs          *CephBackupStorage
-	dir         string
-	name        string
-	readOnly    bool
+	client    *minio.Client
+	bs        *CephBackupStorage
+	dir       string
+	name      string
+	readOnly  bool
+	errors    concurrency.AllErrorRecorder
+	waitGroup sync.WaitGroup
 }
 
 // Directory implements BackupHandle.
@@ -48,9 +51,26 @@ func (bh *CephBackupHandle) AddFile(filename string) (io.WriteCloser, error) {
 	if bh.readOnly {
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
-	object := objName(bh.dir, bh.name, filename)
-	//	return bh.client_ceph.Bucket(*bucket).Object(object).NewWriter(context.TODO()), nil
-	return bh.client_ceph.Bucket(bucket).Object(object).NewWriter(context.TODO()), nil
+	//	Anthony's Code
+	// Pipe whatever the backup system gives us into PutObject().
+	reader, writer := io.Pipe()
+	bh.waitGroup.Add(1)
+	go func() {
+		defer bh.waitGroup.Done()
+		// Give PutObject() the read end of the pipe.
+		_, err := bh.client.PutObject(bucket, filename, reader, "application/octet-stream")
+		if err != nil {
+			fmt.Println("Error with io.Pipe")
+			// Signal the writer that an error occurred, in case it's not done writing yet.
+			reader.CloseWithError(err)
+			// In case the error happened after the writer finished, we need to remember it.
+			bh.errors.RecordError(err)
+		}
+	}()
+	// Give our caller the write end of the pipe.
+	return writer, nil
+
+	//	return wr, nil
 }
 
 // EndBackup implements BackupHandle.
@@ -76,7 +96,7 @@ func (bh *CephBackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
 	}
 	object := objName(bh.dir, bh.name, filename)
 	//	return bh.client_ceph.Bucket(*bucket).Object(object).NewReader(context.TODO())
-	return bh.client_ceph.Bucket(bucket).Object(object).NewReader(context.TODO())
+	return bh.client.Bucket(bucket).Object(object).NewReader(context.TODO())
 }
 
 // GCSBackupStorage implements BackupStorage for Google Cloud Storage.
@@ -99,19 +119,18 @@ func (bs *CephBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHand
 	doneCh := make(chan struct{})
 	// Loop in case results are returned in multiple batches.
 	dirTemp := dir
-	dir = "raunaktestbucket"
+	dir = "minio-bucket1"
 	var result []backupstorage.BackupHandle
 	for object := range c.ListObjects(dir, "", false, doneCh) {
 		if object.Err != nil {
-			fmt.Println(object.Err)
 			return nil, object.Err
 		}
 		result = append(result, &CephBackupHandle{
-			client_ceph: c,
-			bs:          bs,
-			dir:         dirTemp,
-			name:        object.Key,
-			readOnly:    true,
+			client:   c,
+			bs:       bs,
+			dir:      dirTemp,
+			name:     object.Key,
+			readOnly: true,
 		})
 	}
 	return result, nil
@@ -119,19 +138,18 @@ func (bs *CephBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHand
 
 // StartBackup implements BackupStorage.
 func (bs *CephBackupStorage) StartBackup(dir, name string) (backupstorage.BackupHandle, error) {
-	fmt.Println("startBackup")
 	c, err := bs.client()
 	if err != nil {
 		return nil, err
 	}
-	dir = "raunaktestbucket"
+	dir = "minio-bucket1"
 
 	return &CephBackupHandle{
-		client_ceph: c,
-		bs:          bs,
-		dir:         dir,
-		name:        name,
-		readOnly:    false,
+		client:   c,
+		bs:       bs,
+		dir:      dir,
+		name:     name,
+		readOnly: false,
 	}, nil
 }
 
@@ -141,7 +159,7 @@ func (bs *CephBackupStorage) RemoveBackup(dir, name string) error {
 	if err != nil {
 		return err
 	}
-	dir = "raunaktestbucket"
+	dir = "minio-bucket1"
 	err = c.RemoveObject(dir, name)
 	if err != nil {
 		log.Fatalln(err)

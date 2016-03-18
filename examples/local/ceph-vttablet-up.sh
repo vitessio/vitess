@@ -5,7 +5,7 @@
 set -e
 
 cell='test'
-keyspace='test_ksp2'
+keyspace='test_keyspace'
 shard=0
 uid_base=100
 tablet_type='replica'
@@ -61,7 +61,7 @@ fi
 
 # Start 3 vttablets by default.
 # Pass a list of UID indices on the command line to override.
-uids=${@:-'0 1'}
+uids=${@:-'0 1 2'}
 
 # Start all mysqlds in background.
 for uid_index in $uids; do
@@ -109,11 +109,13 @@ for uid_index in $uids; do
     -rowcache-bin $memcached_path \
     -rowcache-socket $VTDATAROOT/$tablet_dir/memcache.sock \
     -backup_storage_implementation ceph \
+    -restore_from_backup \
     -port $port \
     -grpc_port $grpc_port \
     -binlog_player_protocol grpc \
     -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
     -pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
+    -stderrthreshold=INFO \
     $dbconfig_flags \
     > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
