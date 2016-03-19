@@ -31,6 +31,8 @@ import (
 type planBuilder interface {
 	// Symtab returns the associated symtab.
 	Symtab() *symtab
+	// Colsyms returns the colsyms for the primitive.
+	Colsyms() []*colsym
 	// Order is a number that signifies execution order.
 	// A lower Order number Route is executed before a
 	// higher one. For a node that contains other nodes,
@@ -73,7 +75,7 @@ type routeBuilder struct {
 	order  int
 	symtab *symtab
 	// Colsyms represent the columns returned by this route.
-	Colsyms []*colsym
+	colsyms []*colsym
 	// Route is the plan object being built. It will contain all the
 	// information necessary to execute the route operation.
 	Route *Route
@@ -91,6 +93,11 @@ func (rtb *routeBuilder) Resolve() *routeBuilder {
 // Symtab returns the associated symtab.
 func (rtb *routeBuilder) Symtab() *symtab {
 	return rtb.symtab
+}
+
+// Colsyms returns the colsyms.
+func (rtb *routeBuilder) Colsyms() []*colsym {
+	return rtb.colsyms
 }
 
 // Order returns the order of the node.
@@ -236,8 +243,8 @@ func (rtb *routeBuilder) PushSelect(expr *sqlparser.NonStarExpr, _ *routeBuilder
 		}
 	}
 	rtb.Select.SelectExprs = append(rtb.Select.SelectExprs, expr)
-	rtb.Colsyms = append(rtb.Colsyms, colsym)
-	return colsym, len(rtb.Colsyms) - 1, nil
+	rtb.colsyms = append(rtb.colsyms, colsym)
+	return colsym, len(rtb.colsyms) - 1, nil
 }
 
 // PushStar pushes the '*' expression into the route.
@@ -245,7 +252,7 @@ func (rtb *routeBuilder) PushStar(expr *sqlparser.StarExpr) *colsym {
 	colsym := newColsym(rtb, rtb.Symtab())
 	colsym.Alias = sqlparser.SQLName(sqlparser.String(expr))
 	rtb.Select.SelectExprs = append(rtb.Select.SelectExprs, expr)
-	rtb.Colsyms = append(rtb.Colsyms, colsym)
+	rtb.colsyms = append(rtb.colsyms, colsym)
 	return colsym
 }
 
@@ -286,12 +293,12 @@ func (rtb *routeBuilder) SupplyCol(col *sqlparser.ColName) int {
 	// We already know it's a tableAlias.
 	meta := col.Metadata.(*tableAlias)
 	ref := newColref(col)
-	for i, colsym := range rtb.Colsyms {
+	for i, colsym := range rtb.colsyms {
 		if colsym.Underlying == ref {
 			return i
 		}
 	}
-	rtb.Colsyms = append(rtb.Colsyms, &colsym{
+	rtb.colsyms = append(rtb.colsyms, &colsym{
 		Alias:      sqlparser.SQLName(sqlparser.String(col)),
 		Underlying: ref,
 	})
@@ -305,7 +312,7 @@ func (rtb *routeBuilder) SupplyCol(col *sqlparser.ColName) int {
 			},
 		},
 	)
-	return len(rtb.Colsyms) - 1
+	return len(rtb.colsyms) - 1
 }
 
 // IsSingle returns true if the route targets only one database.

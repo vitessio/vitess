@@ -765,13 +765,53 @@
 "select c from user join t"
 "table t not found"
 
-# complex on clause on join
-"select c from user join user_extra on user.id in (select id from user)"
-"unsupported: scatter subquery"
+# complex on clause on join: NOW SUPPORTED
+"select e.col from user join user_extra e on user.id in (select id from user)"
+{
+  "Original": "select e.col from user join user_extra e on user.id in (select id from user)",
+  "Instructions": {
+    "Input": {
+      "Left": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        }
+      },
+      "Right": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        }
+      },
+      "Cols": [
+        1
+      ]
+    },
+    "Condition": {
+      "Left": "user.id",
+      "Right": {
+        "Input": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          }
+        },
+        "JoinVars": null
+      },
+      "JoinVars": null
+    },
+    "Cols": [
+      0
+    ]
+  }
+}
 
 # complex on clause on left join
 "select c from user left join user_extra on user.id in (select id from user)"
-"unsupported: scatter subquery"
+"unsupported: complex subquery in ON clause"
 
 # merging routes, but complex on clause
 "select user.id from user join user_extra on user_extra.user_id = user.id and user.id in (select id from user)"

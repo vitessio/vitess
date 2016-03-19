@@ -94,7 +94,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *VSchema
 		table := &Table{
 			Keyspace: subroute.Route.Keyspace,
 		}
-		for _, colsyms := range subroute.Colsyms {
+		for _, colsyms := range subroute.Colsyms() {
 			if colsyms.Vindex == nil {
 				continue
 			}
@@ -230,18 +230,22 @@ func makejoinBuilder(lplan, rplan planBuilder, join *sqlparser.JoinTableExpr) (p
 		},
 	}
 	if isLeft {
-		err := pushFilter(join.On, rplan, sqlparser.WhereStr)
+		newplan, err := pushFilter(join.On, rplan, sqlparser.WhereStr)
 		if err != nil {
 			return nil, err
+		}
+		if newplan != rplan {
+			// TODO(sougou): Handle this correctly.
+			return nil, errors.New("unsupported: complex subquery in ON clause")
 		}
 		setRHS(rplan)
 		return jb, nil
 	}
-	err = pushFilter(join.On, jb, sqlparser.WhereStr)
+	newplan, err := pushFilter(join.On, jb, sqlparser.WhereStr)
 	if err != nil {
 		return nil, err
 	}
-	return jb, nil
+	return newplan, nil
 }
 
 func setSymtab(plan planBuilder, symtab *symtab) {
@@ -261,6 +265,8 @@ func getUnderlyingPlan(plan planBuilder) Primitive {
 		return plan.Join
 	case *routeBuilder:
 		return plan.Route
+	case *filterBuilder:
+		return plan.Filter
 	}
 	panic("unreachable")
 }
@@ -338,7 +344,10 @@ func mergeRoutes(lRoute, rRoute *routeBuilder, join *sqlparser.JoinTableExpr) (p
 	for _, filter := range splitAndExpression(nil, join.On) {
 		// If VTGate evolves, this section should be rewritten
 		// to use processBoolExpr.
-		_, err = findRoute(filter, lRoute)
+		// TODO(sougou): This part has to be rewritten if we want
+		// to allow subqueries in the ON clause. But then, maybe
+		// we shouldn't be this flexible :).
+		_, _, err = findRoute(filter, lRoute)
 		if err != nil {
 			return nil, err
 		}

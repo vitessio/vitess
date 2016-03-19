@@ -1,6 +1,36 @@
 # outer and inner subquery match different types
 "select id from user where id = 1 and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)"
-"unsupported: subquery and parent route to different shards"
+{
+  "Original": "select id from user where id = 1 and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)",
+  "Instructions": {
+    "Input": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Vindex": "user_index",
+      "Values": "MQ=="
+    },
+    "Condition": {
+      "Left": "user.col",
+      "Right": {
+        "Input": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          }
+        },
+        "JoinVars": null
+      },
+      "JoinVars": null
+    },
+    "Cols": [
+      0
+    ]
+  }
+}
 
 # join on having clause
 "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid"

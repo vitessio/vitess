@@ -44,7 +44,7 @@ func splitAndExpression(filters []sqlparser.BoolExpr, node sqlparser.BoolExpr) [
 // only analyze symbols that point to the current symtab.
 // If an expression has no references to the current query, then the left-most
 // route is chosen as the default.
-func findRoute(expr sqlparser.Expr, plan planBuilder) (route *routeBuilder, err error) {
+func findRoute(expr sqlparser.Expr, plan planBuilder) (route *routeBuilder, cannotMerge bool, err error) {
 	highestRoute := leftmost(plan)
 	var subroutes []*routeBuilder
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
@@ -83,18 +83,18 @@ func findRoute(expr sqlparser.Expr, plan planBuilder) (route *routeBuilder, err 
 		return true, nil
 	}, expr)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	for _, subroute := range subroutes {
 		err = subqueryCanMerge(highestRoute, subroute)
 		if err != nil {
-			return nil, err
+			return highestRoute, true, err
 		}
-		// This should be moved out if we become capable of processing
-		// subqueries without push-down.
+	}
+	for _, subroute := range subroutes {
 		subroute.Redirect = highestRoute
 	}
-	return highestRoute, nil
+	return highestRoute, false, nil
 }
 
 // subqueryCanMerge returns nil if the inner subquery
@@ -185,6 +185,8 @@ func leftmost(plan planBuilder) *routeBuilder {
 		return leftmost(plan.Left)
 	case *routeBuilder:
 		return plan
+	case *filterBuilder:
+		return leftmost(plan.Input)
 	}
 	panic("unreachable")
 }

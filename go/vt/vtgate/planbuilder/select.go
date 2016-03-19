@@ -49,7 +49,7 @@ func processSelect(sel *sqlparser.Select, vschema *VSchema, outer planBuilder) (
 		plan.Symtab().Outer = outer.Symtab()
 	}
 	if sel.Where != nil {
-		err = pushFilter(sel.Where.Expr, plan, sqlparser.WhereStr)
+		plan, err = pushFilter(sel.Where.Expr, plan, sqlparser.WhereStr)
 		if err != nil {
 			return nil, err
 		}
@@ -59,7 +59,7 @@ func processSelect(sel *sqlparser.Select, vschema *VSchema, outer planBuilder) (
 		return nil, err
 	}
 	if sel.Having != nil {
-		err = pushFilter(sel.Having.Expr, plan, sqlparser.HavingStr)
+		plan, err = pushFilter(sel.Having.Expr, plan, sqlparser.HavingStr)
 		if err != nil {
 			return nil, err
 		}
@@ -79,20 +79,27 @@ func processSelect(sel *sqlparser.Select, vschema *VSchema, outer planBuilder) (
 // pushFilter identifies the target route for the specified bool expr,
 // pushes it down, and updates the route info if the new constraint improves
 // the plan. This function can push to a WHERE or HAVING clause.
-func pushFilter(boolExpr sqlparser.BoolExpr, plan planBuilder, whereType string) error {
+func pushFilter(boolExpr sqlparser.BoolExpr, plan planBuilder, whereType string) (planBuilder, error) {
 	filters := splitAndExpression(nil, boolExpr)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
-		route, err := findRoute(filter, plan)
+		route, cannotMerge, err := findRoute(filter, plan)
 		if err != nil {
-			return err
+			if cannotMerge {
+				newplan, err := newFilterBuilder(filter, plan)
+				if err != nil {
+					return nil, err
+				}
+				return newplan, nil
+			}
+			return nil, err
 		}
 		err = route.PushFilter(filter, whereType)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return plan, nil
 }
 
 // reorderBySubquery reorders the filters by pushing subqueries
@@ -191,7 +198,7 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, plan planBuilder) ([]*c
 	for i, node := range selectExprs {
 		switch node := node.(type) {
 		case *sqlparser.NonStarExpr:
-			route, err := findRoute(node.Expr, plan)
+			route, _, err := findRoute(node.Expr, plan)
 			if err != nil {
 				return nil, err
 			}

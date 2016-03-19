@@ -35,24 +35,166 @@
 "unsupported: complex join in subqueries"
 
 # subquery keyspace different from outer query
-"select * from user where id in (select m from main1)"
-"unsupported: subquery keyspace different from outer query"
+"select user.a from user where id in (select m from main1)"
+{
+  "Original": "select user.a from user where id in (select m from main1)",
+  "Instructions": {
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    },
+    "Condition": {
+      "Left": "id",
+      "Right": {
+        "Input": {
+          "Opcode": "SelectUnsharded",
+          "Keyspace": {
+            "Name": "main",
+            "Sharded": false
+          }
+        },
+        "JoinVars": null
+      },
+      "JoinVars": null
+    },
+    "Cols": [
+      0
+    ]
+  }
+}
 
 # scatter subquery
-"select * from user where id in (select id from user)"
-"unsupported: scatter subquery"
+"select user.a from user where id in (select id from user)"
+{
+  "Original": "select user.a from user where id in (select id from user)",
+  "Instructions": {
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    },
+    "Condition": {
+      "Left": "id",
+      "Right": {
+        "Input": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          }
+        },
+        "JoinVars": null
+      },
+      "JoinVars": null
+    },
+    "Cols": [
+      0
+    ]
+  }
+}
 
 # subquery does not depend on unique vindex of outer query
 "select id from user where id in (select user_id from user_extra where user_extra.user_id = user.col)"
-"unsupported: subquery does not depend on scatter outer query"
+{
+  "Original": "select id from user where id in (select user_id from user_extra where user_extra.user_id = user.col)",
+  "Instructions": {
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    },
+    "Condition": {
+      "Left": "id",
+      "Right": {
+        "Input": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          }
+        },
+        "JoinVars": null
+      },
+      "JoinVars": null
+    },
+    "Cols": [
+      0
+    ]
+  }
+}
 
 # subquery does not depend on scatter outer query
 "select id from user where id in (select user_id from user_extra where user_extra.user_id = 4)"
-"unsupported: subquery does not depend on scatter outer query"
+{
+  "Original": "select id from user where id in (select user_id from user_extra where user_extra.user_id = 4)",
+  "Instructions": {
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    },
+    "Condition": {
+      "Left": "id",
+      "Right": {
+        "Input": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          }
+        },
+        "JoinVars": null
+      },
+      "JoinVars": null
+    },
+    "Cols": [
+      0
+    ]
+  }
+}
 
 # subquery and outer query route to different shards
 "select id from user where id = 5 and id in (select user_id from user_extra where user_extra.user_id = 4)"
-"unsupported: subquery and parent route to different shards"
+{
+  "Original": "select id from user where id = 5 and id in (select user_id from user_extra where user_extra.user_id = 4)",
+  "Instructions": {
+    "Input": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Vindex": "user_index",
+      "Values": "NQ=="
+    },
+    "Condition": {
+      "Left": "id",
+      "Right": {
+        "Input": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          }
+        },
+        "JoinVars": null
+      },
+      "JoinVars": null
+    },
+    "Cols": [
+      0
+    ]
+  }
+}
 
 # scatter subquery in select
 "select id, (select id from user) from user"
