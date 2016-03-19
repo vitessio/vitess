@@ -115,12 +115,12 @@ func (a *EqualSplitsAlgorithm) generateBoundaries() ([]tuple, error) {
 	subIntervalSize := new(big.Rat)
 	subIntervalSize.Sub(max, min)
 	subIntervalSize.Quo(subIntervalSize, new(big.Rat).SetInt64(a.splitParams.splitCount))
+	boundary := new(big.Rat).Set(min) // Copy min into boundary.
+
 	var result []tuple
 	for i := int64(1); i < a.splitParams.splitCount; i++ {
-		// boundary = min + i*subIntervalSize
-		boundary := new(big.Rat)
-		boundary.Mul(new(big.Rat).SetInt64(i), subIntervalSize)
-		boundary.Add(boundary, min)
+		boundary.Add(boundary, subIntervalSize)
+		// Here boundary=min+i*subIntervalSize
 		boundaryValue := bigRatToValue(boundary, a.splitParams.splitColumnTypes[0])
 		result = append(result, tuple{boundaryValue})
 	}
@@ -168,9 +168,11 @@ func bigRatToValue(number *big.Rat, valueType querypb.Type) sqltypes.Value {
 	var numberAsBytes []byte
 	switch {
 	case sqltypes.IsIntegral(valueType):
-		truncatedNumber := *number.Num()
-		truncatedNumber.Quo(&truncatedNumber, number.Denom())
-		numberAsBytes = truncatedNumber.Append([]byte{}, 10)
+		// 'number.Num()' returns a reference to the numerator of 'number'.
+		// We copy it here to avoid changing 'number'.
+		truncatedNumber := new(big.Int).Set(number.Num())
+		truncatedNumber.Quo(truncatedNumber, number.Denom())
+		numberAsBytes = bigIntToSliceOfBytes(truncatedNumber)
 	case sqltypes.IsFloat(valueType):
 		// Truncate to the closest 'float'.
 		// There's not much we can do if there isn't an exact representation.
@@ -184,6 +186,16 @@ func bigRatToValue(number *big.Rat, valueType querypb.Type) sqltypes.Value {
 		panic(fmt.Sprintf("sqltypes.ValueFromBytes failed with: %v", err))
 	}
 	return result
+}
+
+// Converts a big.Int into a slice of bytes.
+func bigIntToSliceOfBytes(bigInt *big.Int) []byte {
+	// Go1.6 introduced the method bigInt.Append() which makes this conversion
+	// a lot easier.
+	// TODO(erez): Use bigInt.Append() once we switch to GO-1.6.
+	result := strconv.AppendQuoteToASCII([]byte{}, bigInt.String())
+	// AppendQuoteToASCII adds a double-quoted string. We need to remove them.
+	return result[1 : len(result)-1]
 }
 
 // valueToBigRat converts a numeric 'value' into a big.Rat object.
