@@ -6,38 +6,217 @@ package planbuilder
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-// PlanID is number representing the plan id.
-type PlanID int
+// Plan represents the execution strategy for a given query.
+// For now it's a simple wrapper around the real instructions.
+// An instruction (aka primitive), tells VTGate how to execute
+// a single command. Primitives can be cascaded as long as
+// their inputs and outpus can be combined meaningfully.
+// For example, a Join can depend on another Join or a Route.
+// However, a Route cannot depend on another primitive.
+type Plan struct {
+	// Original is the original query.
+	Original string `json:",omitempty"`
+	// Instructions contains the instructions needed to
+	// fulfil the query. It's a tree of primitives.
+	Instructions Primitive `json:",omitempty"`
+}
 
-// The following constants define all the PlanID values.
+// Size is defined so that Plan can be given to a cache.LRUCache.
+// VTGate needs to maintain a cache of plans. It uses LRUCache, which
+// in turn requires its objects to define a Size function.
+func (pln *Plan) Size() int {
+	return 1
+}
+
+// Primitive is the interface that needs to be satisfied by
+// all primitives of a plan. For now, the primitives just
+// have to define an isPrimitive function that does nothing.
+type Primitive interface {
+	isPrimitive()
+}
+
+// Route represents the instructions to route a query to
+// one or many vttablets. The meaning and values for the
+// the fields are described in the RouteOpcode values comments.
+type Route struct {
+	Opcode     RouteOpcode
+	Keyspace   *Keyspace
+	Query      string
+	FieldQuery string
+	Vindex     Vindex
+	Values     interface{}
+	JoinVars   map[string]struct{}
+	Table      *Table
+	Subquery   string
+	Generate   *Generate
+}
+
+func (rt *Route) isPrimitive() {}
+
+// MarshalJSON serializes the Route into a JSON representation.
+// It's used for testing and diagnostics.
+func (rt *Route) MarshalJSON() ([]byte, error) {
+	var tname, vindexName string
+	if rt.Table != nil {
+		tname = rt.Table.Name
+	}
+	if rt.Vindex != nil {
+		vindexName = rt.Vindex.String()
+	}
+	marshalRoute := struct {
+		Opcode     RouteOpcode         `json:",omitempty"`
+		Keyspace   *Keyspace           `json:",omitempty"`
+		Query      string              `json:",omitempty"`
+		FieldQuery string              `json:",omitempty"`
+		Vindex     string              `json:",omitempty"`
+		Values     interface{}         `json:",omitempty"`
+		JoinVars   map[string]struct{} `json:",omitempty"`
+		Table      string              `json:",omitempty"`
+		Subquery   string              `json:",omitempty"`
+		Generate   *Generate           `json:",omitempty"`
+	}{
+		Opcode:     rt.Opcode,
+		Keyspace:   rt.Keyspace,
+		Query:      rt.Query,
+		FieldQuery: rt.FieldQuery,
+		Vindex:     vindexName,
+		Values:     prettyValue(rt.Values),
+		JoinVars:   rt.JoinVars,
+		Table:      tname,
+		Subquery:   rt.Subquery,
+		Generate:   rt.Generate,
+	}
+	return json.Marshal(marshalRoute)
+}
+
+// Generate represents the instruction to generate
+// a value from a sequence. We cannot reuse a Route
+// for this because this needs to be always executed
+// outside a transaction.
+type Generate struct {
+	// Opcode can only be SelectUnsharded for now.
+	Opcode   RouteOpcode
+	Keyspace *Keyspace
+	Query    string
+	// Value is the supplied value. A new value will be generated
+	// only if Value was NULL. Otherwise, the supplied value will
+	// be used.
+	Value interface{}
+}
+
+// MarshalJSON serializes Generate into a JSON representation.
+// It's used for testing and diagnostics.
+func (gen *Generate) MarshalJSON() ([]byte, error) {
+	jsongen := struct {
+		Opcode   RouteOpcode `json:",omitempty"`
+		Keyspace *Keyspace   `json:",omitempty"`
+		Query    string      `json:",omitempty"`
+		Value    interface{} `json:",omitempty"`
+	}{
+		Opcode:   gen.Opcode,
+		Keyspace: gen.Keyspace,
+		Query:    gen.Query,
+		Value:    prettyValue(gen.Value),
+	}
+	return json.Marshal(jsongen)
+}
+
+// prettyValue converts the Values field of a Route
+// to a form that will be human-readable when
+// converted to JSON. This is for testing and diagnostics.
+func prettyValue(value interface{}) interface{} {
+	switch value := value.(type) {
+	case []byte:
+		return string(value)
+	case []interface{}:
+		newvals := make([]interface{}, len(value))
+		for i, old := range value {
+			newvals[i] = prettyValue(old)
+		}
+		return newvals
+	}
+	return value
+}
+
+// RouteOpcode is a number representing the opcode
+// for the Route primitve.
+type RouteOpcode int
+
+// This is the list of RouteOpcode values. The opcode
+// dictates which fields must be set in the Route.
+// All routes require the Query and a Keyspace
+// to be correctly set.
+// For any Select opcode, the FieldQuery is set
+// to a statement with an impossible where clause.
+// This gets used to build the field info in situations
+// where joins end up returning no rows.
+// In the case of a join, Joinvars will also be set.
+// These are variables that will be supplied by the
+// Join primitive when it invokes a Route.
+// All DMLs must have the Table field set. The
+// ColVindexes in the field will be used to perform
+// various computations and sanity checks.
+// The rest of the fields depend on the opcode.
 const (
-	NoPlan = PlanID(iota)
+	NoCode = RouteOpcode(iota)
+	// SelectUnsharded is the opcode for routing a
+	// select statement to an unsharded database.
 	SelectUnsharded
+	// SelectEqualUnique is for routing a query to
+	// a single shard. Requires: A Unique Vindex, and
+	// a single Value.
+	SelectEqualUnique
+	// SelectEqual is for routing a query using a
+	// non-unique vindex. Requires: A Vindex, and
+	// a single Value.
 	SelectEqual
+	// SelectIN is for routing a query that has an IN
+	// clause using a Vindex. Requires: A Vindex,
+	// and a Values list.
 	SelectIN
-	SelectKeyrange
+	// SelectScatter is for routing a scatter query
+	// to all shards of a keyspace.
 	SelectScatter
+	// UpdateUnsharded is for routing an update statement
+	// to an unsharded keyspace.
 	UpdateUnsharded
+	// UpdateEqual is for routing an update statement
+	// to a single shard: Requires: A Vindex, and
+	// a single Value.
 	UpdateEqual
+	// DeleteUnsharded is for routing a delete statement
+	// to an unsharded keyspace.
 	DeleteUnsharded
+	// DeleteEqual is for routing a delete statement
+	// to a single shard. Requires: A Vindex, a single
+	// Value, and a Subquery, which will be used to
+	// determine if lookup rows need to be deleted.
 	DeleteEqual
+	// InsertUnsharded is for routing an insert statement
+	// to an unsharded keyspace.
 	InsertUnsharded
+	// InsertUnsharded is for routing an insert statement
+	// to a single shard. Requires: A list of Values, one
+	// for each ColVindex. If the table has an Autoinc column,
+	// A Generate subplan must be created.
 	InsertSharded
-	NumPlans
+	// NumCodes is the total number of opcodes for routes.
+	NumCodes
 )
 
-// Must exactly match order of plan constants.
-var planName = [NumPlans]string{
-	"NoPlan",
+// opcodeName must exactly match order of opcode constants.
+var opcodeName = [NumCodes]string{
+	"NoCode",
 	"SelectUnsharded",
+	"SelectEqualUnique",
 	"SelectEqual",
 	"SelectIN",
-	"SelectKeyrange",
 	"SelectScatter",
 	"UpdateUnsharded",
 	"UpdateEqual",
@@ -47,137 +226,68 @@ var planName = [NumPlans]string{
 	"InsertSharded",
 }
 
-// Plan represents the routing strategy for a given query.
-type Plan struct {
-	ID PlanID
-	// Reason usually contains a string describing the reason
-	// for why a certain plan was (or not) chosen.
-	Reason string
-	Table  *Table
-	// Original is the original query.
-	Original string
-	// Rewritten is the rewritten query. This is empty for
-	// all Unsharded plans since the Original query is sufficient.
-	Rewritten string
-	// Subquery is used for DeleteUnsharded to fetch the column values
-	// for owned vindexes so they can be deleted.
-	Subquery  string
-	ColVindex *ColVindex
-	// Values is a single or a list of values that are used
-	// for making routing decisions.
-	Values interface{}
-}
-
-// Size is defined so that Plan can be given to an LRUCache.
-func (pln *Plan) Size() int {
-	return 1
-}
-
-// MarshalJSON serializes the Plan into a JSON representation.
-func (pln *Plan) MarshalJSON() ([]byte, error) {
-	var tname, vindexName, col string
-	if pln.Table != nil {
-		tname = pln.Table.Name
-	}
-	if pln.ColVindex != nil {
-		vindexName = pln.ColVindex.Name
-		col = pln.ColVindex.Col
-	}
-	marshalPlan := struct {
-		ID        PlanID      `json:",omitempty"`
-		Reason    string      `json:",omitempty"`
-		Table     string      `json:",omitempty"`
-		Original  string      `json:",omitempty"`
-		Rewritten string      `json:",omitempty"`
-		Subquery  string      `json:",omitempty"`
-		Vindex    string      `json:",omitempty"`
-		Col       string      `json:",omitempty"`
-		Values    interface{} `json:",omitempty"`
-	}{
-		ID:        pln.ID,
-		Reason:    pln.Reason,
-		Table:     tname,
-		Original:  pln.Original,
-		Rewritten: pln.Rewritten,
-		Subquery:  pln.Subquery,
-		Vindex:    vindexName,
-		Col:       col,
-		Values:    pln.Values,
-	}
-	return json.Marshal(marshalPlan)
-}
-
-// IsMulti returns true if the SELECT query can potentially
-// be sent to more than one shard.
-func (pln *Plan) IsMulti() bool {
-	if pln.ID == SelectIN || pln.ID == SelectScatter {
-		return true
-	}
-	if pln.ID == SelectEqual && !IsUnique(pln.ColVindex.Vindex) {
-		return true
-	}
-	return false
-}
-
-func (id PlanID) String() string {
-	if id < 0 || id >= NumPlans {
+func (code RouteOpcode) String() string {
+	if code < 0 || code >= NumCodes {
 		return ""
 	}
-	return planName[id]
+	return opcodeName[code]
 }
 
-// PlanByName returns the PlanID from the plan name.
-// If it cannot be found, then it returns NumPlans.
-func PlanByName(s string) (id PlanID, ok bool) {
-	for i, v := range planName {
-		if v == s {
-			return PlanID(i), true
-		}
-	}
-	return NumPlans, false
+// MarshalJSON serializes the RouteOpcode as a JSON string.
+// It's used for testing and diagnostics.
+func (code RouteOpcode) MarshalJSON() ([]byte, error) {
+	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
 }
 
-// MarshalJSON serializes the plan id as a JSON string.
-func (id PlanID) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprintf("\"%s\"", id.String())), nil
+// Join specifies the parameters for a join primitive.
+type Join struct {
+	// IsLeft is true if it's a LEFT JOIN.
+	IsLeft bool `json:",omitempty"`
+	// Left and Right are the LHS and RHS primitives
+	// of the Join. They can be any primitive.
+	Left, Right Primitive `json:",omitempty"`
+	// Cols defines which columns from the left
+	// or right results should be used to build the
+	// return result. For results coming from the
+	// left query, the index values go as -1, -2, etc.
+	// For the right query, they're 1, 2, etc.
+	// If Cols is {-1, -2, 1, 2}, it means that
+	// the returned result will be {Left0, Left1, Right0, Right1}.
+	Cols []int `json:",omitempty"`
+	// Vars defines the list of JoinVars that need to
+	// be built from the LHS result before invoking
+	// the RHS subqquery.
+	Vars map[string]int `json:",omitempty"`
 }
 
-// BuildPlan builds a plan for a query based on the specified schema.
-func BuildPlan(query string, schema *Schema) *Plan {
+func (jn *Join) isPrimitive() {}
+
+// BuildPlan builds a plan for a query based on the specified vschema.
+// It's the main entry point for this package.
+func BuildPlan(query string, vschema *VSchema) (*Plan, error) {
 	statement, err := sqlparser.Parse(query)
 	if err != nil {
-		return &Plan{
-			ID:       NoPlan,
-			Reason:   err.Error(),
-			Original: query,
-		}
+		return nil, err
 	}
-	noplan := &Plan{
-		ID:       NoPlan,
-		Reason:   "cannot build a plan for this construct",
+	plan := &Plan{
 		Original: query,
 	}
-	var plan *Plan
 	switch statement := statement.(type) {
 	case *sqlparser.Select:
-		plan = buildSelectPlan(statement, schema)
+		plan.Instructions, err = buildSelectPlan(statement, vschema)
 	case *sqlparser.Insert:
-		plan = buildInsertPlan(statement, schema)
+		plan.Instructions, err = buildInsertPlan(statement, vschema)
 	case *sqlparser.Update:
-		plan = buildUpdatePlan(statement, schema)
+		plan.Instructions, err = buildUpdatePlan(statement, vschema)
 	case *sqlparser.Delete:
-		plan = buildDeletePlan(statement, schema)
+		plan.Instructions, err = buildDeletePlan(statement, vschema)
 	case *sqlparser.Union, *sqlparser.Set, *sqlparser.DDL, *sqlparser.Other:
-		return noplan
+		return nil, errors.New("unsupported construct")
 	default:
-		panic("unexpected")
+		panic("unexpected statement type")
 	}
-	plan.Original = query
-	return plan
-}
-
-func generateQuery(statement sqlparser.Statement) string {
-	buf := sqlparser.NewTrackedBuffer(nil)
-	statement.Format(buf)
-	return buf.String()
+	if err != nil {
+		return nil, err
+	}
+	return plan, nil
 }

@@ -15,7 +15,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/logutil"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -276,35 +275,4 @@ func logError(queryServiceStats *QueryServiceStats) {
 			log.Errorf("%v", terr)
 		}
 	}
-}
-
-// rpcErrFromTabletError translate a TabletError to an *mproto.RPCError
-func rpcErrFromTabletError(err error) *mproto.RPCError {
-	if err == nil {
-		return nil
-	}
-	terr, ok := err.(*TabletError)
-	if ok {
-		return &mproto.RPCError{
-			Code: int64(terr.ErrorCode),
-			// Make sure the the VitessError message is identical to the TabletError
-			// err, so that downstream consumers will see identical messages no matter
-			// which server version they're using.
-			Message: terr.Error(),
-		}
-	}
-
-	// We don't know exactly what the passed in error was
-	return &mproto.RPCError{
-		Code:    int64(vtrpcpb.ErrorCode_UNKNOWN_ERROR),
-		Message: err.Error(),
-	}
-}
-
-// AddTabletError will update a mproto.RPCError with details from a TabletError.
-func AddTabletError(err error, replyErr **mproto.RPCError) {
-	if err == nil {
-		return
-	}
-	*replyErr = rpcErrFromTabletError(err)
 }

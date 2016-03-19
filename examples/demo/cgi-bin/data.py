@@ -15,7 +15,8 @@ import time
 from vtdb import keyrange
 from vtdb import vtgate_client
 
-# implementations
+# TODO(sougou): remove this import once the deps are fixed
+import google.protobuf
 from vtdb import grpc_vtgate_client  # pylint: disable=unused-import
 
 
@@ -113,6 +114,14 @@ def main():
         conn, "music1",
         "select * from music", response, keyspace="user", kr="80-")
 
+    # music_user_idx table
+    exec_query(
+        conn, "music_user_idx0",
+        "select * from music_user_idx", response, keyspace="user", kr="-80")
+    exec_query(
+        conn, "music_user_idx1",
+        "select * from music_user_idx", response, keyspace="user", kr="80-")
+
     # music_extra table
     exec_query(
         conn, "music_extra0",
@@ -123,14 +132,13 @@ def main():
 
     # lookup tables
     exec_query(
-        conn, "user_idx", "select * from user_idx", response,
+        conn, "user_seq", "select * from user_seq", response,
+        keyspace="lookup", kr="-")
+    exec_query(
+        conn, "music_seq", "select * from music_seq", response,
         keyspace="lookup", kr="-")
     exec_query(
         conn, "name_user_idx", "select * from name_user_idx", response,
-        keyspace="lookup", kr="-")
-    exec_query(
-        conn, "music_user_idx",
-        "select * from music_user_idx", response,
         keyspace="lookup", kr="-")
 
     print json.dumps(response)

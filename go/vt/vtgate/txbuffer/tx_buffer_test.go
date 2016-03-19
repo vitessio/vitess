@@ -16,6 +16,8 @@ type fakeSleepController struct {
 	block  bool
 	// block until the done channel if closed, if configured to do so.
 	done chan struct{}
+	// will close this channel when blocked
+	blocked chan struct{}
 }
 
 type sleepFunc func(d time.Duration)
@@ -28,6 +30,7 @@ func createFakeSleep(c *fakeSleepController) sleepFunc {
 		if !c.block {
 			return
 		}
+		close(c.blocked)
 		select {
 		case <-c.done:
 			return
@@ -149,23 +152,30 @@ func TestParallelFakeBuffer(t *testing.T) {
 
 	for i := 1; i <= *maxBufferSize+2; i++ {
 		controller := &fakeSleepController{
-			block: true,
-			done:  make(chan struct{}),
+			block:   true,
+			done:    make(chan struct{}),
+			blocked: make(chan struct{}),
 		}
 		timeSleep = createFakeSleep(controller)
 		// Only the first maxBufferSize calls to FakeBuffer should actually call fakeSleep
 		wantFakeSleepCalled := (i <= *maxBufferSize)
 
 		wg.Add(1)
+		finished := make(chan struct{})
 		go func() {
 			defer wg.Done()
 			FakeBuffer(*bufferKeyspace, *bufferShard, 0)
+			close(finished)
 		}()
-		// Give the goroutine some time to run.
-		// Ideally, we'd use a channel here to indicate when the fake sleep starts blocking.
-		// However, we can't do that because for some of the goroutines, the fake sleep is never
-		// even called.
-		time.Sleep(10 * time.Microsecond)
+
+		if wantFakeSleepCalled {
+			// the first maxBufferSize calls to FakeBuffer
+			// should call sleep, wait until they do
+			<-controller.blocked
+		} else {
+			// the rest should not block, wait until they're done
+			<-finished
+		}
 
 		if controller.called {
 			controllers = append(controllers, controller)

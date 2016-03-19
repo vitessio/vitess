@@ -4,10 +4,6 @@
 
 """Constants related to keyspaces and shard names."""
 
-# This is the shard name for when the keyrange covers the entire space
-# for unsharded database.
-SHARD_ZERO = '0'
-
 # Keyrange that spans the entire space, used
 # for unsharded database.
 NON_PARTIAL_KEYRANGE = ''
@@ -39,90 +35,3 @@ PROTO3_TABLET_TYPE_TO_STRING = {
     8: 'worker',
     9: 'scrap',
 }
-
-
-# (Eventually this will go away, as we will retire BSON)
-def srv_keyspace_bson_proto3_to_old(sk):
-  """Converts a bson-encoded proto3 SrvKeyspace.
-
-  Args:
-    sk: bson-encoded proto3 SrvKeyspace.
-
-  Returns:
-    sk with converted values.
-  """
-  if 'ShardingColumnType' in sk:
-    if sk['ShardingColumnType'] == 1:
-      sk['ShardingColumnType'] = KIT_UINT64
-    elif sk['ShardingColumnType'] == 2:
-      sk['ShardingColumnType'] = KIT_BYTES
-    else:
-      sk['ShardingColumnType'] = KIT_UNSET
-  if 'ServedFrom' in sk:
-    sfmap = {}
-    for sf in sk['ServedFrom']:
-      tt = PROTO3_TABLET_TYPE_TO_STRING[sf['TabletType']]
-      sfmap[tt] = sf['Keyspace']
-    sk['ServedFrom'] = sfmap
-  if 'Partitions' in sk:
-    pmap = {}
-    for p in sk['Partitions']:
-      tt = PROTO3_TABLET_TYPE_TO_STRING[p['ServedType']]
-      pmap[tt] = {
-          'ShardReferences': p['ShardReferences'],
-          }
-    sk['Partitions'] = pmap
-  return sk
-
-
-# (Eventually this will just go away, as keyspace.Keyspace will use
-# the proto3 version directly).
-def srv_keyspace_proto3_to_old(sk):
-  """Converts a proto3 SrvKeyspace.
-
-  Args:
-    sk: proto3 SrvKeyspace.
-
-  Returns:
-    dict with converted values.
-  """
-  result = {}
-
-  if sk.sharding_column_name:
-    result['ShardingColumnName'] = sk.sharding_column_name
-
-  if sk.sharding_column_type == 1:
-    result['ShardingColumnType'] = KIT_UINT64
-  elif sk.sharding_column_type == 2:
-    result['ShardingColumnType'] = KIT_BYTES
-
-  sfmap = {}
-  for sf in sk.served_from:
-    tt = PROTO3_TABLET_TYPE_TO_STRING[sf.tablet_type]
-    sfmap[tt] = sf.keyspace
-  result['ServedFrom'] = sfmap
-
-  if sk.partitions:
-    pmap = {}
-    for p in sk.partitions:
-      tt = PROTO3_TABLET_TYPE_TO_STRING[p.served_type]
-      srs = []
-      for sr in p.shard_references:
-        result_sr = {
-            'Name': sr.name,
-        }
-        if sr.key_range:
-          result_sr['KeyRange'] = {
-              'Start': sr.key_range.start,
-              'End': sr.key_range.end,
-          }
-        srs.append(result_sr)
-      pmap[tt] = {
-          'ShardReferences': srs,
-      }
-    result['Partitions'] = pmap
-
-  if sk.split_shard_count:
-    result['SplitShardCount'] = sk.split_shard_count
-
-  return result

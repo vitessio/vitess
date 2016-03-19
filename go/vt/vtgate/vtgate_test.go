@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -27,7 +28,7 @@ import (
 // This file uses the sandbox_test framework.
 
 func init() {
-	schema := createTestSchema(`
+	vschema := createTestVSchema(`
 {
   "Keyspaces": {
     "TestUnsharded": {
@@ -39,7 +40,7 @@ func init() {
   }
 }
 `)
-	Init(nil, topo.Server{}, new(sandboxTopo), schema, "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, 0, "")
+	Init(nil, topo.Server{}, new(sandboxTopo), vschema, "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, 0, "")
 }
 
 func TestVTGateExecute(t *testing.T) {
@@ -47,7 +48,7 @@ func TestVTGateExecute(t *testing.T) {
 	sbc := &sandboxConn{}
 	sandbox.MapTestConn("0", sbc)
 	qr, err := rpcVTGate.Execute(context.Background(),
-		"select * from t1",
+		"select id from t1",
 		nil,
 		topodatapb.TabletType_MASTER,
 		nil,
@@ -64,7 +65,7 @@ func TestVTGateExecute(t *testing.T) {
 		t.Errorf("want true, got false")
 	}
 	rpcVTGate.Execute(context.Background(),
-		"select * from t1",
+		"select id from t1",
 		nil,
 		topodatapb.TabletType_MASTER,
 		session,
@@ -91,7 +92,7 @@ func TestVTGateExecute(t *testing.T) {
 
 	session, err = rpcVTGate.Begin(context.Background())
 	rpcVTGate.Execute(context.Background(),
-		"select * from t1",
+		"select id from t1",
 		nil,
 		topodatapb.TabletType_MASTER,
 		session,
@@ -528,7 +529,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 	sandbox.MapTestConn("0", sbc)
 	var qrs []*sqltypes.Result
 	err := rpcVTGate.StreamExecute(context.Background(),
-		"select * from t1",
+		"select id from t1",
 		nil,
 		topodatapb.TabletType_MASTER,
 		func(r *sqltypes.Result) error {
@@ -701,13 +702,18 @@ func TestVTGateSplitQuery(t *testing.T) {
 			t.Errorf("wrong split size, want \n%+v, got \n%+v", sandboxSQRowCount, split.Size)
 		}
 		if split.KeyRangePart.Keyspace != keyspace {
-			t.Errorf("wrong split size, want \n%+v, got \n%+v", keyspace, split.KeyRangePart.Keyspace)
+			t.Errorf("wrong keyspace, want \n%+v, got \n%+v", keyspace, split.KeyRangePart.Keyspace)
 		}
 		if len(split.KeyRangePart.KeyRanges) != 1 {
 			t.Errorf("wrong number of keyranges, want \n%+v, got \n%+v", 1, len(split.KeyRangePart.KeyRanges))
 		}
 		kr := key.KeyRangeString(split.KeyRangePart.KeyRanges[0])
 		actualSqlsByKeyRange[kr] = append(actualSqlsByKeyRange[kr], split.Query.Sql)
+	}
+	// Sort the sqls for each KeyRange so that we can compare them without
+	// regard to the order in which they were returned by the vtgate.
+	for _, sqlsForKeyRange := range actualSqlsByKeyRange {
+		sort.Strings(sqlsForKeyRange)
 	}
 	expectedSqlsByKeyRange := map[string][]string{}
 	for _, kr := range keyranges {

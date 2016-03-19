@@ -201,11 +201,6 @@ def setup_protocol_flavor(flavor):
     protocols_flavor.set_protocols_flavor(
         grpc_protocols_flavor.GRpcProtocolsFlavor())
 
-  elif flavor == 'gorpc':
-    import gorpc_protocols_flavor  # pylint: disable=g-import-not-at-top
-    protocols_flavor.set_protocols_flavor(
-        gorpc_protocols_flavor.GoRpcProtocolsFlavor())
-
   else:
     logging.error('Unknown protocols flavor %s', flavor)
     exit(1)

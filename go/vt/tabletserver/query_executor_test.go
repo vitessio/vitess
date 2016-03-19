@@ -599,6 +599,43 @@ func TestQueryExecutorPlanOther(t *testing.T) {
 	}
 }
 
+func TestQueryExecutorPlanNextval(t *testing.T) {
+	db := setUpQueryExecutorTest()
+	selQuery := "select next_id, cache, increment from `seq` where id = 0 for update"
+	db.AddQuery(selQuery, &sqltypes.Result{
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
+		}},
+	})
+	updateQuery := "update `seq` set next_id = 7 where id = 0"
+	db.AddQuery(updateQuery, &sqltypes.Result{})
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
+	defer tsv.StopService()
+	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+	checkPlanID(t, planbuilder.PlanNextval, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	want := &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "nextval",
+			Type: sqltypes.Int64,
+		}},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+		}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
+	}
+}
+
 func TestQueryExecutorTableAcl(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
 	tableacl.Register(aclName, &simpleacl.Factory{})
@@ -1099,13 +1136,23 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		baseShowTables: {
-			RowsAffected: 1,
+			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
 				{
 					sqltypes.MakeString([]byte("test_table")),
 					sqltypes.MakeString([]byte("USER TABLE")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
+				},
+				{
+					sqltypes.MakeString([]byte("seq")),
+					sqltypes.MakeString([]byte("USER TABLE")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
+					sqltypes.MakeString([]byte("vitess_sequence")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
@@ -1196,5 +1243,86 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		"rollback": {},
+		"select * from `seq` where 1 != 1": {
+			Fields: []*querypb.Field{{
+				Name: "id",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "next_id",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "cache",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "increment",
+				Type: sqltypes.Int64,
+			}},
+		},
+		"describe `seq`": {
+			RowsAffected: 4,
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeString([]byte("id")),
+					sqltypes.MakeString([]byte("int")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("next_id")),
+					sqltypes.MakeString([]byte("bigint")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("cache")),
+					sqltypes.MakeString([]byte("bigint")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("increment")),
+					sqltypes.MakeString([]byte("bigint")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte{}),
+				},
+			},
+		},
+		"show index from `seq`": {
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("PRIMARY")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("id")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("300")),
+				},
+			},
+		},
+		baseShowTables + " and table_name = 'seq'": {
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeString([]byte("seq")),
+					sqltypes.MakeString([]byte("USER TABLE")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
+					sqltypes.MakeString([]byte("")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
+				},
+			},
+		},
 	}
 }

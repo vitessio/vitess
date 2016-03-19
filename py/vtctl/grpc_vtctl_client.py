@@ -7,15 +7,20 @@
 import datetime
 from urlparse import urlparse
 
+# Import main protobuf library first
+# to work around import order issues.
+import google.protobuf  # pylint: disable=unused-import
+
 from grpc.beta import implementations
 
 import vtctl_client
+
 from vtproto import vtctldata_pb2
 from vtproto import vtctlservice_pb2
 
 
 class GRPCVtctlClient(vtctl_client.VtctlClient):
-  """GoRpcVtctlClient is the gRPC implementation of VtctlClient.
+  """GRPCVtctlClient is the gRPC implementation of VtctlClient.
 
   It is registered as 'grpc' protocol.
   """

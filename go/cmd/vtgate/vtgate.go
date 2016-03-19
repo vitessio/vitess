@@ -26,7 +26,7 @@ import (
 
 var (
 	cell                  = flag.String("cell", "test_nj", "cell to use")
-	schemaFile            = flag.String("vschema_file", "", "JSON schema file")
+	vschemaFile           = flag.String("vschema_file", "", "JSON vschema file")
 	retryDelay            = flag.Duration("retry-delay", 2*time.Millisecond, "retry delay")
 	retryCount            = flag.Int("retry-count", 2, "retry count")
 	connTimeoutTotal      = flag.Duration("conn-timeout-total", 3*time.Second, "vttablet connection timeout (total)")
@@ -61,14 +61,14 @@ func main() {
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
-	var schema *planbuilder.Schema
-	if *schemaFile != "" {
+	var vschema *planbuilder.VSchema
+	if *vschemaFile != "" {
 		var err error
-		if schema, err = planbuilder.LoadFile(*schemaFile); err != nil {
+		if vschema, err = planbuilder.LoadFile(*vschemaFile); err != nil {
 			log.Error(err)
 			exit.Return(1)
 		}
-		log.Infof("v3 is enabled: loaded schema from file: %v", *schemaFile)
+		log.Infof("v3 is enabled: loaded vschema from file: %v", *vschemaFile)
 	} else {
 		ctx := context.Background()
 		schemaJSON, err := ts.GetVSchema(ctx)
@@ -76,12 +76,12 @@ func main() {
 			log.Warningf("Skipping v3 initialization: GetVSchema failed: %v", err)
 			goto startServer
 		}
-		schema, err = planbuilder.NewSchema([]byte(schemaJSON))
+		vschema, err = planbuilder.NewVSchema([]byte(schemaJSON))
 		if err != nil {
 			log.Warningf("Skipping v3 initialization: GetVSchema failed: %v", err)
 			goto startServer
 		}
-		log.Infof("v3 is enabled: loaded schema from topo")
+		log.Infof("v3 is enabled: loaded vschema from topo")
 	}
 
 startServer:
@@ -100,7 +100,7 @@ startServer:
 			tabletTypes = append(tabletTypes, tt)
 		}
 	}
-	vtg := vtgate.Init(healthCheck, ts, resilientSrvTopoServer, schema, *cell, *retryDelay, *retryCount, *connTimeoutTotal, *connTimeoutPerConn, *connLife, tabletTypes, *maxInFlight, *testGateway)
+	vtg := vtgate.Init(healthCheck, ts, resilientSrvTopoServer, vschema, *cell, *retryDelay, *retryCount, *connTimeoutTotal, *connTimeoutPerConn, *connLife, tabletTypes, *maxInFlight, *testGateway)
 
 	servenv.OnRun(func() {
 		addStatusParts(vtg)
