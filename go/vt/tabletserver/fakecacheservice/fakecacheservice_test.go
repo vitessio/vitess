@@ -165,7 +165,7 @@ func TestFakeCacheServiceError(t *testing.T) {
 }
 
 func checkCacheServiceError(t *testing.T, err error) {
-	if err.Error() != errCacheService {
+	if err != errCacheService {
 		t.Fatalf("should get cacheservice error")
 	}
 }

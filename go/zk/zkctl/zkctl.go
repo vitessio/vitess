@@ -185,7 +185,7 @@ func (zkd *Zkd) init(preserveData bool) error {
 	log.Infof("zkd.Init")
 	for _, path := range zkd.config.DirectoryList() {
 		if err := os.MkdirAll(path, 0775); err != nil {
-			log.Errorf(err.Error())
+			log.Errorf("%v", err)
 			return err
 		}
 		// FIXME(msolomon) validate permissions?

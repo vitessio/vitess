@@ -336,7 +336,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 
 	vsdw.wr.Logger().Infof("Gathering schema information...")
 	wg := sync.WaitGroup{}
-	rec := concurrency.AllErrorRecorder{}
+	rec := &concurrency.AllErrorRecorder{}
 	wg.Add(1)
 	go func() {
 		var err error
@@ -366,8 +366,8 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 
 	// Check the schema
 	vsdw.wr.Logger().Infof("Diffing the schema...")
-	rec = concurrency.AllErrorRecorder{}
-	tmutils.DiffSchema("destination", vsdw.destinationSchemaDefinition, "source", vsdw.sourceSchemaDefinition, &rec)
+	rec = &concurrency.AllErrorRecorder{}
+	tmutils.DiffSchema("destination", vsdw.destinationSchemaDefinition, "source", vsdw.sourceSchemaDefinition, rec)
 	if rec.HasErrors() {
 		vsdw.wr.Logger().Warningf("Different schemas: %v", rec.Error())
 	} else {
@@ -389,7 +389,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 			if err != nil {
 				newErr := fmt.Errorf("TableScan(source) failed: %v", err)
 				rec.RecordError(newErr)
-				vsdw.wr.Logger().Errorf(newErr.Error())
+				vsdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
 			defer sourceQueryResultReader.Close()
@@ -398,7 +398,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 			if err != nil {
 				newErr := fmt.Errorf("TableScan(destination) failed: %v", err)
 				rec.RecordError(newErr)
-				vsdw.wr.Logger().Errorf(newErr.Error())
+				vsdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
 			defer destinationQueryResultReader.Close()
@@ -407,7 +407,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 			if err != nil {
 				newErr := fmt.Errorf("NewRowDiffer() failed: %v", err)
 				rec.RecordError(newErr)
-				vsdw.wr.Logger().Errorf(newErr.Error())
+				vsdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
 
@@ -418,7 +418,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 				if report.HasDifferences() {
 					err := fmt.Errorf("Table %v has differences: %v", tableDefinition.Name, report.String())
 					rec.RecordError(err)
-					vsdw.wr.Logger().Errorf(err.Error())
+					vsdw.wr.Logger().Errorf("%v", err)
 				} else {
 					vsdw.wr.Logger().Infof("Table %v checks out (%v rows processed, %v qps)", tableDefinition.Name, report.processedRows, report.processingQPS)
 				}
