@@ -9,23 +9,24 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // Counters is similar to expvar.Map, except that
 // it doesn't allow floats. In addition, it provides
 // a Counts method which can be used for tracking rates.
 type Counters struct {
-	mu     sync.Mutex
-	counts map[string]int64
+	mu     sync.RWMutex
+	counts map[string]*int64
 }
 
 // NewCounters create a new Counters instance. If name is set, the variable
 // gets published. The functional also accepts an optional list of tags that
 // pre-creates them initialized to 0.
 func NewCounters(name string, tags ...string) *Counters {
-	c := &Counters{counts: make(map[string]int64)}
+	c := &Counters{counts: make(map[string]*int64)}
 	for _, tag := range tags {
-		c.counts[tag] = 0
+		c.counts[tag] = new(int64)
 	}
 	if name != "" {
 		Publish(name, c)
@@ -35,40 +36,72 @@ func NewCounters(name string, tags ...string) *Counters {
 
 // String is used by expvar.
 func (c *Counters) String() string {
+	b := bytes.NewBuffer(make([]byte, 0, 4096))
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	fmt.Fprintf(b, "{")
+	firstValue := true
+	for k, a := range c.counts {
+		if firstValue {
+			firstValue = false
+		} else {
+			fmt.Fprintf(b, ", ")
+		}
+		fmt.Fprintf(b, "\"%v\": %v", k, atomic.LoadInt64(a))
+	}
+	fmt.Fprintf(b, "}")
+	return b.String()
+}
+
+func (c *Counters) getValueAddr(name string) *int64 {
+	c.mu.RLock()
+	a, ok := c.counts[name]
+	c.mu.RUnlock()
+
+	if ok {
+		return a
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return counterToString(c.counts)
+	a, ok = c.counts[name]
+	if ok {
+		return a
+	}
+	a = new(int64)
+	c.counts[name] = a
+	return a
 }
 
 // Add adds a value to a named counter.
 func (c *Counters) Add(name string, value int64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.counts[name] += value
+	a := c.getValueAddr(name)
+	atomic.AddInt64(a, value)
 }
 
 // Set sets the value of a named counter.
 func (c *Counters) Set(name string, value int64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.counts[name] = value
+	a := c.getValueAddr(name)
+	atomic.StoreInt64(a, value)
 }
 
 // Reset resets all counter values
 func (c *Counters) Reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.counts = make(map[string]int64)
+	c.counts = make(map[string]*int64)
 }
 
 // Counts returns a copy of the Counters' map.
 func (c *Counters) Counts() map[string]int64 {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	counts := make(map[string]int64, len(c.counts))
-	for k, v := range c.counts {
-		counts[k] = v
+	for k, a := range c.counts {
+		counts[k] = atomic.LoadInt64(a)
 	}
 	return counts
 }
@@ -88,10 +121,6 @@ func (f CountersFunc) String() string {
 	if m == nil {
 		return "{}"
 	}
-	return counterToString(m)
-}
-
-func counterToString(m map[string]int64) string {
 	b := bytes.NewBuffer(make([]byte, 0, 4096))
 	fmt.Fprintf(b, "{")
 	firstValue := true
@@ -119,7 +148,7 @@ type MultiCounters struct {
 // if name is set.
 func NewMultiCounters(name string, labels []string) *MultiCounters {
 	t := &MultiCounters{
-		Counters: Counters{counts: make(map[string]int64)},
+		Counters: Counters{counts: make(map[string]*int64)},
 		labels:   labels,
 	}
 	if name != "" {
