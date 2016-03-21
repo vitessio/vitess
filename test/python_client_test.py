@@ -207,7 +207,7 @@ class TestErrors(TestPythonClientBase):
                   sql=query,
                   bind_variables={},
                   keyspace='keyspace',
-                  shards=[keyrange_constants.SHARD_ZERO])])
+                  shards=['0'])])
     cursor.close()
 
   def _verify_exception_for_stream_execute(self, query, exception):
@@ -412,7 +412,7 @@ class TestCallerId(TestPythonClientBase):
           params_list=[dict(
               sql=effective_caller_id_test_query, bind_variables={},
               keyspace='keyspace',
-              shards=[keyrange_constants.SHARD_ZERO])])
+              shards=['0'])])
 
     check_good_and_bad_effective_caller_ids(
         self._open_batch_cursor(), cursor_execute_batch_shard_method)

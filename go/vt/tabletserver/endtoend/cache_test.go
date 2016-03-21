@@ -42,8 +42,8 @@ func TestUncacheableTables(t *testing.T) {
 			t.Errorf("%s: table vitess_nocache not found in schema", tcase.create)
 			continue
 		}
-		if table.CacheType != schema.CacheNone {
-			t.Errorf("CacheType: %d, want %d", table.CacheType, schema.CacheNone)
+		if table.Type != schema.CacheNone {
+			t.Errorf("Type: %d, want %d", table.Type, schema.CacheNone)
 		}
 	}
 }
@@ -71,8 +71,8 @@ func TestOverrideTables(t *testing.T) {
 			t.Errorf("Table %s not found in schema", tcase.table)
 			return
 		}
-		if table.CacheType != tcase.cacheType {
-			t.Errorf("CacheType: %d, want %d", table.CacheType, tcase.cacheType)
+		if table.Type != tcase.cacheType {
+			t.Errorf("Type: %d, want %d", table.Type, tcase.cacheType)
 		}
 	}
 }

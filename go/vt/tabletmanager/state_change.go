@@ -247,6 +247,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 				log.Errorf("Can't start query service for MASTER+REPLICA mode: %v", err)
 			}
 		}
+
 		if stateChanged, err := agent.allowQueries(newTablet.Type); err == nil {
 			// If the state changed, broadcast to vtgate.
 			// (e.g. this happens when the tablet was already master, but it just
@@ -269,6 +270,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 			agent.broadcastHealth()
 			time.Sleep(*gracePeriod)
 		}
+
 		if stateChanged, err := agent.disallowQueries(newTablet.Type, disallowQueryReason); err == nil {
 			// If the state changed, broadcast to vtgate.
 			// (e.g. this happens when the tablet was already master, but it just

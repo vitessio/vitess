@@ -18,22 +18,17 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-var routerSchema = createTestSchema(`
+var routerVSchema = createTestVSchema(`
 {
   "Keyspaces": {
     "TestRouter": {
       "Sharded": true,
       "Vindexes": {
         "user_index": {
-          "Type": "hash_autoinc",
-          "Owner": "user",
-          "Params": {
-            "Table": "user_idx",
-            "Column": "id"
-          }
+          "Type": "hash"
         },
         "music_user_map": {
-          "Type": "lookup_hash_unique_autoinc",
+          "Type": "lookup_hash_unique",
           "Owner": "music",
           "Params": {
             "Table": "music_user_map",
@@ -51,21 +46,7 @@ var routerSchema = createTestSchema(`
           }
         },
         "idx1": {
-          "Type": "hash_autoinc",
-          "Owner": "multi_autoinc_table",
-          "Params": {
-            "Table": "idx1",
-            "Column": "id1"
-          }
-        },
-        "idx2": {
-          "Type": "lookup_hash_autoinc",
-          "Owner": "multi_autoinc_table",
-          "Params": {
-            "Table": "idx2",
-            "From": "id",
-            "To": "val"
-          }
+          "Type": "hash"
         },
         "idx_noauto": {
           "Type": "hash",
@@ -86,7 +67,11 @@ var routerSchema = createTestSchema(`
               "Col": "name",
               "Name": "name_user_map"
             }
-          ]
+          ],
+					"Autoinc" : {
+						"Col": "id",
+						"Sequence": "user_seq"
+					}
         },
         "user_extra": {
           "ColVindexes": [
@@ -106,7 +91,11 @@ var routerSchema = createTestSchema(`
               "Col": "id",
               "Name": "music_user_map"
             }
-          ]
+          ],
+					"Autoinc" : {
+						"Col": "id",
+						"Sequence": "user_seq"
+					}
         },
         "music_extra": {
           "ColVindexes": [
@@ -129,18 +118,6 @@ var routerSchema = createTestSchema(`
             {
               "Col": "user_id",
               "Name": "user_index"
-            }
-          ]
-        },
-        "multi_autoinc_table": {
-          "ColVindexes": [
-            {
-              "Col": "id1",
-              "Name": "idx1"
-            },
-            {
-              "Col": "id2",
-              "Name": "idx2"
             }
           ]
         },
@@ -167,7 +144,6 @@ var routerSchema = createTestSchema(`
         "music": "music",
         "music_extra": "music_extra",
         "music_extra_reversed": "music_extra_reversed",
-        "multi_autoinc_table": "multi_autoinc_table",
         "noauto_table": "noauto_table",
         "ksid_table": "ksid_table"
       }
@@ -180,21 +156,24 @@ var routerSchema = createTestSchema(`
     },
     "TestUnsharded": {
       "Sharded": false,
+			"Classes": {
+				"seq": {
+					"Type": "Sequence"
+				}
+			},
       "Tables": {
-        "user_idx": "",
+        "user_seq": "seq",
         "music_user_map": "",
-        "name_user_map": "",
-        "idx1": "",
-        "idx2": ""
+        "name_user_map": ""
       }
     }
   }
 }
 `)
 
-// createTestSchema creates a schema based on the JSON specs.
+// createTestVSchema creates a vschema based on the JSON specs.
 // It panics on failure.
-func createTestSchema(schemaJSON string) *planbuilder.Schema {
+func createTestVSchema(vschemaJSON string) *planbuilder.VSchema {
 	f, err := ioutil.TempFile("", "vtgate_schema")
 	if err != nil {
 		panic(err)
@@ -203,15 +182,15 @@ func createTestSchema(schemaJSON string) *planbuilder.Schema {
 	f.Close()
 	defer os.Remove(fname)
 
-	err = ioutil.WriteFile(fname, []byte(schemaJSON), 0644)
+	err = ioutil.WriteFile(fname, []byte(vschemaJSON), 0644)
 	if err != nil {
 		panic(err)
 	}
-	schema, err := planbuilder.LoadFile(fname)
+	vschema, err := planbuilder.LoadFile(fname)
 	if err != nil {
 		panic(err)
 	}
-	return schema
+	return vschema
 }
 
 func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxConn) {
@@ -229,7 +208,7 @@ func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxConn) {
 
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, nil, "")
-	router = NewRouter(serv, "aa", routerSchema, "", scatterConn)
+	router = NewRouter(serv, "aa", routerVSchema, "", scatterConn)
 	return router, sbc1, sbc2, sbclookup
 }
 

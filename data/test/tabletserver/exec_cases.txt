@@ -1075,6 +1075,21 @@
   "FullQuery": "delete from c"
 }
 
+# sequence
+"select next value from seq"
+{
+  "PlanID": "NEXTVAL",
+  "TableName": "seq"
+}
+
+# nextval on non-sequence table
+"select next value from a"
+"a is not a sequence"
+
+# nextval on non-existent table
+"select next value from id"
+"table id not found in schema"
+
 # int
 "set  a=1"
 {

@@ -28,8 +28,7 @@ def log_exception(exc, keyspace=None, tablet_type=None):
   if isinstance(exc, dbexceptions.IntegrityError):
     logger_object.integrity_error(exc)
   else:
-    logger_object.vtclient_exception(keyspace, shard_name, tablet_type,
-                                     exc)
+    logger_object.vtclient_exception(keyspace, shard_name, tablet_type, exc)
 
 
 def exponential_backoff_retry(
@@ -84,24 +83,27 @@ class VitessError(Exception):
   """VitessError is raised by an RPC with a server-side application error.
 
   VitessErrors have an error code and message.
+
+  The individual protocols are responsible for getting the code and message
+  from their protocol-specific encoding, and creating this error.
+  Then this error can be converted to the right dbexception.
   """
 
   _errno_pattern = re.compile(r'\(errno (\d+)\)')
 
-  def __init__(self, method_name, error=None):
-    """Initializes a VitessError with appropriate defaults from an error dict.
+  def __init__(self, method_name, code, message):
+    """Initializes a VitessError from a code and message.
 
     Args:
       method_name: RPC method name, as a string, that was called.
-      error: error dict returned by an RPC call.
+      code: integer that represents the error code. From vtrpc_pb2.ErrorCode.
+      message: string representation of the error.
     """
-    if error is None or not isinstance(error, dict):
-      error = {}
     self.method_name = method_name
-    self.code = error.get('Code', vtrpc_pb2.UNKNOWN_ERROR)
-    self.message = error.get('Message', 'Missing error message')
+    self.code = code
+    self.message = message
     # Make self.args reflect the error components
-    super(VitessError, self).__init__(self.message, method_name, self.code)
+    super(VitessError, self).__init__(message, method_name, code)
 
   def __str__(self):
     """Print the error nicely, converting the proto error enum to its name."""
@@ -132,25 +134,6 @@ class VitessError(Exception):
       return dbexceptions.IntegrityError(new_args)
 
     return dbexceptions.DatabaseError(args)
-
-
-def extract_rpc_error(method_name, response):
-  """Extracts any app error that's embedded in an RPC response.
-
-  Args:
-    method_name: RPC name, as a string.
-    response: response from an RPC.
-
-  Raises:
-    VitessError: If there is an app error embedded in the reply.
-  """
-  reply = response.reply
-  if not reply or not isinstance(reply, dict):
-    return
-  # Handle the case of new client => old server
-  err = reply.get('Err', None)
-  if err:
-    raise VitessError(method_name, err)
 
 
 def unique_join(str_list, delim='|'):
@@ -189,6 +172,10 @@ def convert_exception_kwarg(key, value):
       'keyspaces',
       'sqls'):
     return key, unique_join(value)
+  elif key in (
+      'not_in_transaction',
+      'as_transaction'):
+    return key, str(value)
   else:
     return key, 'unknown'
 

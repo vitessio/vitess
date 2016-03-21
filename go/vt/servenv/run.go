@@ -20,7 +20,6 @@ var (
 func Run(port int) {
 	populateListeningURL()
 	onRunHooks.Fire()
-	ServeRPC()
 	serveGRPC()
 
 	l, err := proc.Listen(fmt.Sprintf("%v", port))

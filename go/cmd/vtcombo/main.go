@@ -39,7 +39,7 @@ var (
 	topology           = flag.String("topology", "", "Define which shards exist in the test topology in the form <keyspace>/<shardrange>:<dbname>,... The dbname must be unique among all shards, since they share a MySQL instance in the test environment.")
 	shardingColumnName = flag.String("sharding_column_name", "keyspace_id", "Specifies the column to use for sharding operations")
 	shardingColumnType = flag.String("sharding_column_type", "uint64", "Specifies the type of the column to use for sharding operations")
-	vschema            = flag.String("vschema", "", "vschema file")
+	vschemaFile        = flag.String("vschema", "", "vschema file")
 
 	ts topo.Server
 )
@@ -88,14 +88,14 @@ func main() {
 	initTabletMap(ts, *topology, mysqld, dbcfgs, mycnf)
 
 	// vschema
-	var schema *planbuilder.Schema
-	if *vschema != "" {
-		schema, err = planbuilder.LoadFile(*vschema)
+	var vschema *planbuilder.VSchema
+	if *vschemaFile != "" {
+		vschema, err = planbuilder.LoadFile(*vschemaFile)
 		if err != nil {
 			log.Error(err)
 			exit.Return(1)
 		}
-		log.Infof("v3 is enabled: loaded schema from file")
+		log.Infof("v3 is enabled: loaded vschema from file")
 	}
 
 	// vtgate configuration and init
@@ -106,7 +106,7 @@ func main() {
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
 	}
-	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, schema, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, tabletTypesToWait, 0 /*maxInFlight*/, "" /*testGateway*/)
+	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, vschema, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, tabletTypesToWait, 0 /*maxInFlight*/, "" /*testGateway*/)
 
 	// vtctld configuration and init
 	vtctld.InitVtctld(ts)

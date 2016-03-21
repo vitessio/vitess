@@ -341,7 +341,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	sdw.wr.Logger().Infof("Gathering schema information...")
 	sdw.sourceSchemaDefinitions = make([]*tabletmanagerdatapb.SchemaDefinition, len(sdw.sourceAliases))
 	wg := sync.WaitGroup{}
-	rec := concurrency.AllErrorRecorder{}
+	rec := &concurrency.AllErrorRecorder{}
 	wg.Add(1)
 	go func() {
 		var err error
@@ -374,10 +374,10 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	// TODO(alainjobart) Checking against each source may be
 	// overkill, if all sources have the same schema?
 	sdw.wr.Logger().Infof("Diffing the schema...")
-	rec = concurrency.AllErrorRecorder{}
+	rec = &concurrency.AllErrorRecorder{}
 	for i, sourceSchemaDefinition := range sdw.sourceSchemaDefinitions {
 		sourceName := fmt.Sprintf("source[%v]", i)
-		tmutils.DiffSchema("destination", sdw.destinationSchemaDefinition, sourceName, sourceSchemaDefinition, &rec)
+		tmutils.DiffSchema("destination", sdw.destinationSchemaDefinition, sourceName, sourceSchemaDefinition, rec)
 	}
 	if rec.HasErrors() {
 		sdw.wr.Logger().Warningf("Different schemas: %v", rec.Error().Error())
@@ -399,7 +399,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			if len(sdw.sourceAliases) != 1 {
 				err := fmt.Errorf("Don't support more than one source for table yet: %v", tableDefinition.Name)
 				rec.RecordError(err)
-				sdw.wr.Logger().Errorf(err.Error())
+				sdw.wr.Logger().Errorf("%v", err)
 				return
 			}
 
@@ -407,14 +407,14 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			if err != nil {
 				newErr := fmt.Errorf("Source shard doesn't overlap with destination????: %v", err)
 				rec.RecordError(newErr)
-				sdw.wr.Logger().Errorf(newErr.Error())
+				sdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
 			sourceQueryResultReader, err := TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.sourceAliases[0], tableDefinition, overlap, sdw.keyspaceInfo.ShardingColumnType)
 			if err != nil {
 				newErr := fmt.Errorf("TableScanByKeyRange(source) failed: %v", err)
 				rec.RecordError(newErr)
-				sdw.wr.Logger().Errorf(newErr.Error())
+				sdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
 			defer sourceQueryResultReader.Close()
@@ -423,7 +423,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			if err != nil {
 				newErr := fmt.Errorf("TableScanByKeyRange(destination) failed: %v", err)
 				rec.RecordError(newErr)
-				sdw.wr.Logger().Errorf(newErr.Error())
+				sdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
 			defer destinationQueryResultReader.Close()
@@ -432,7 +432,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			if err != nil {
 				newErr := fmt.Errorf("NewRowDiffer() failed: %v", err)
 				rec.RecordError(newErr)
-				sdw.wr.Logger().Errorf(newErr.Error())
+				sdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
 
@@ -440,7 +440,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			if err != nil {
 				newErr := fmt.Errorf("Differ.Go failed: %v", err.Error())
 				rec.RecordError(newErr)
-				sdw.wr.Logger().Errorf(newErr.Error())
+				sdw.wr.Logger().Errorf("%v", newErr)
 			} else {
 				if report.HasDifferences() {
 					err := fmt.Errorf("Table %v has differences: %v", tableDefinition.Name, report.String())

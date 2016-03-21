@@ -8,14 +8,13 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
 var hash planbuilder.Vindex
 
 func init() {
-	hv, err := planbuilder.CreateVindex("hash", map[string]interface{}{"Table": "t", "Column": "c"})
+	hv, err := planbuilder.CreateVindex("hash", "nn", map[string]interface{}{"Table": "t", "Column": "c"})
 	if err != nil {
 		panic(err)
 	}
@@ -63,46 +62,5 @@ func TestHashReverseMap(t *testing.T) {
 	}
 	if got.(int64) != 1 {
 		t.Errorf("ReverseMap(): %+v, want 1", got)
-	}
-}
-
-func TestHashCreate(t *testing.T) {
-	vc := &vcursor{}
-	err := hash.(planbuilder.Functional).Create(vc, 1)
-	if err != nil {
-		t.Error(err)
-	}
-	wantQuery := &querytypes.BoundQuery{
-		Sql: "insert into t(c) values(:c)",
-		BindVariables: map[string]interface{}{
-			"c": 1,
-		},
-	}
-	if !reflect.DeepEqual(vc.query, wantQuery) {
-		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
-	}
-}
-
-func TestHashGenerate(t *testing.T) {
-	_, ok := hash.(planbuilder.FunctionalGenerator)
-	if ok {
-		t.Errorf("hash.(planbuilder.FunctionalGenerator): true, want false")
-	}
-}
-
-func TestHashDelete(t *testing.T) {
-	vc := &vcursor{}
-	err := hash.(planbuilder.Functional).Delete(vc, []interface{}{1}, []byte{})
-	if err != nil {
-		t.Error(err)
-	}
-	wantQuery := &querytypes.BoundQuery{
-		Sql: "delete from t where c in ::c",
-		BindVariables: map[string]interface{}{
-			"c": []interface{}{1},
-		},
-	}
-	if !reflect.DeepEqual(vc.query, wantQuery) {
-		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
 	}
 }

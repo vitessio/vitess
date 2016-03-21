@@ -1,5 +1,7 @@
 package com.youtube.vitess.client;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
@@ -44,34 +46,32 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 
+import javax.annotation.Nullable;
+
 /**
- * VTGateConn manages a VTGate connection.
+ * An asynchronous VTGate connection.
  *
  * <p>See the
  * <a href="https://github.com/youtube/vitess/blob/master/java/example/src/main/java/com/youtube/vitess/example/VitessClientExample.java">VitessClientExample</a>
  * for a usage example.
  *
- * <p>Non-streaming calls are asynchronous by default. To use these calls synchronously,
- * append {@code .checkedGet()}. For example:
- *
- * <blockquote><pre>
- * Cursor cursor = vtgateConn.execute(...).checkedGet();
- * </pre></blockquote>
- * */
-public class VTGateConn implements Closeable {
-  private RpcClient client;
+ * <p>All non-streaming calls on {@code VTGateConn} are asynchronous.
+ * Use {@link VTGateBlockingConn} if you want synchronous calls.
+ */
+public final class VTGateConn implements Closeable {
+  private final RpcClient client;
 
   public VTGateConn(RpcClient client) {
-    this.client = client;
+    this.client = checkNotNull(client);
   }
 
   public SQLFuture<Cursor> execute(
-      Context ctx, String query, Map<String, ?> bindVars, TabletType tabletType)
+      Context ctx, String query, @Nullable Map<String, ?> bindVars, TabletType tabletType)
       throws SQLException {
     ExecuteRequest.Builder requestBuilder =
         ExecuteRequest.newBuilder()
-            .setQuery(Proto.bindQuery(query, bindVars))
-            .setTabletType(tabletType);
+            .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
+            .setTabletType(checkNotNull(tabletType));
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
@@ -92,15 +92,15 @@ public class VTGateConn implements Closeable {
       String query,
       String keyspace,
       Iterable<String> shards,
-      Map<String, ?> bindVars,
+      @Nullable Map<String, ?> bindVars,
       TabletType tabletType)
       throws SQLException {
     ExecuteShardsRequest.Builder requestBuilder =
         ExecuteShardsRequest.newBuilder()
-            .setQuery(Proto.bindQuery(query, bindVars))
-            .setKeyspace(keyspace)
-            .addAllShards(shards)
-            .setTabletType(tabletType);
+            .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
+            .setKeyspace(checkNotNull(keyspace))
+            .addAllShards(checkNotNull(shards))
+            .setTabletType(checkNotNull(tabletType));
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
@@ -122,15 +122,16 @@ public class VTGateConn implements Closeable {
       String query,
       String keyspace,
       Iterable<byte[]> keyspaceIds,
-      Map<String, ?> bindVars,
+      @Nullable Map<String, ?> bindVars,
       TabletType tabletType)
       throws SQLException {
     ExecuteKeyspaceIdsRequest.Builder requestBuilder =
         ExecuteKeyspaceIdsRequest.newBuilder()
-            .setQuery(Proto.bindQuery(query, bindVars))
-            .setKeyspace(keyspace)
-            .addAllKeyspaceIds(Iterables.transform(keyspaceIds, Proto.BYTE_ARRAY_TO_BYTE_STRING))
-            .setTabletType(tabletType);
+            .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
+            .setKeyspace(checkNotNull(keyspace))
+            .addAllKeyspaceIds(
+                Iterables.transform(checkNotNull(keyspaceIds), Proto.BYTE_ARRAY_TO_BYTE_STRING))
+            .setTabletType(checkNotNull(tabletType));
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
@@ -152,15 +153,15 @@ public class VTGateConn implements Closeable {
       String query,
       String keyspace,
       Iterable<? extends KeyRange> keyRanges,
-      Map<String, ?> bindVars,
+      @Nullable Map<String, ?> bindVars,
       TabletType tabletType)
       throws SQLException {
     ExecuteKeyRangesRequest.Builder requestBuilder =
         ExecuteKeyRangesRequest.newBuilder()
-            .setQuery(Proto.bindQuery(query, bindVars))
-            .setKeyspace(keyspace)
-            .addAllKeyRanges(keyRanges)
-            .setTabletType(tabletType);
+            .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
+            .setKeyspace(checkNotNull(keyspace))
+            .addAllKeyRanges(checkNotNull(keyRanges))
+            .setTabletType(checkNotNull(tabletType));
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
@@ -183,18 +184,18 @@ public class VTGateConn implements Closeable {
       String keyspace,
       String entityColumnName,
       Map<byte[], ?> entityKeyspaceIds,
-      Map<String, ?> bindVars,
+      @Nullable Map<String, ?> bindVars,
       TabletType tabletType)
       throws SQLException {
     ExecuteEntityIdsRequest.Builder requestBuilder =
         ExecuteEntityIdsRequest.newBuilder()
-            .setQuery(Proto.bindQuery(query, bindVars))
-            .setKeyspace(keyspace)
-            .setEntityColumnName(entityColumnName)
+            .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
+            .setKeyspace(checkNotNull(keyspace))
+            .setEntityColumnName(checkNotNull(entityColumnName))
             .addAllEntityKeyspaceIds(
                 Iterables.transform(
                     entityKeyspaceIds.entrySet(), Proto.MAP_ENTRY_TO_ENTITY_KEYSPACE_ID))
-            .setTabletType(tabletType);
+            .setTabletType(checkNotNull(tabletType));
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
@@ -225,8 +226,8 @@ public class VTGateConn implements Closeable {
       throws SQLException {
     ExecuteBatchShardsRequest.Builder requestBuilder =
         ExecuteBatchShardsRequest.newBuilder()
-            .addAllQueries(queries)
-            .setTabletType(tabletType)
+            .addAllQueries(checkNotNull(queries))
+            .setTabletType(checkNotNull(tabletType))
             .setAsTransaction(asTransaction);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
@@ -259,8 +260,8 @@ public class VTGateConn implements Closeable {
       throws SQLException {
     ExecuteBatchKeyspaceIdsRequest.Builder requestBuilder =
         ExecuteBatchKeyspaceIdsRequest.newBuilder()
-            .addAllQueries(queries)
-            .setTabletType(tabletType)
+            .addAllQueries(checkNotNull(queries))
+            .setTabletType(checkNotNull(tabletType))
             .setAsTransaction(asTransaction);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
@@ -280,12 +281,12 @@ public class VTGateConn implements Closeable {
   }
 
   public Cursor streamExecute(
-      Context ctx, String query, Map<String, ?> bindVars, TabletType tabletType)
+      Context ctx, String query, @Nullable Map<String, ?> bindVars, TabletType tabletType)
       throws SQLException {
     StreamExecuteRequest.Builder requestBuilder =
         StreamExecuteRequest.newBuilder()
-            .setQuery(Proto.bindQuery(query, bindVars))
-            .setTabletType(tabletType);
+            .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
+            .setTabletType(checkNotNull(tabletType));
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
@@ -297,15 +298,15 @@ public class VTGateConn implements Closeable {
       String query,
       String keyspace,
       Iterable<String> shards,
-      Map<String, ?> bindVars,
+      @Nullable Map<String, ?> bindVars,
       TabletType tabletType)
       throws SQLException {
     StreamExecuteShardsRequest.Builder requestBuilder =
         StreamExecuteShardsRequest.newBuilder()
-            .setQuery(Proto.bindQuery(query, bindVars))
-            .setKeyspace(keyspace)
-            .addAllShards(shards)
-            .setTabletType(tabletType);
+            .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
+            .setKeyspace(checkNotNull(keyspace))
+            .addAllShards(checkNotNull(shards))
+            .setTabletType(checkNotNull(tabletType));
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
@@ -317,15 +318,16 @@ public class VTGateConn implements Closeable {
       String query,
       String keyspace,
       Iterable<byte[]> keyspaceIds,
-      Map<String, ?> bindVars,
+      @Nullable Map<String, ?> bindVars,
       TabletType tabletType)
       throws SQLException {
     StreamExecuteKeyspaceIdsRequest.Builder requestBuilder =
         StreamExecuteKeyspaceIdsRequest.newBuilder()
-            .setQuery(Proto.bindQuery(query, bindVars))
-            .setKeyspace(keyspace)
-            .addAllKeyspaceIds(Iterables.transform(keyspaceIds, Proto.BYTE_ARRAY_TO_BYTE_STRING))
-            .setTabletType(tabletType);
+            .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
+            .setKeyspace(checkNotNull(keyspace))
+            .addAllKeyspaceIds(
+                Iterables.transform(checkNotNull(keyspaceIds), Proto.BYTE_ARRAY_TO_BYTE_STRING))
+            .setTabletType(checkNotNull(tabletType));
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
@@ -337,15 +339,15 @@ public class VTGateConn implements Closeable {
       String query,
       String keyspace,
       Iterable<? extends KeyRange> keyRanges,
-      Map<String, ?> bindVars,
+      @Nullable Map<String, ?> bindVars,
       TabletType tabletType)
       throws SQLException {
     StreamExecuteKeyRangesRequest.Builder requestBuilder =
         StreamExecuteKeyRangesRequest.newBuilder()
-            .setQuery(Proto.bindQuery(query, bindVars))
-            .setKeyspace(keyspace)
-            .addAllKeyRanges(keyRanges)
-            .setTabletType(tabletType);
+            .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
+            .setKeyspace(checkNotNull(keyspace))
+            .addAllKeyRanges(checkNotNull(keyRanges))
+            .setTabletType(checkNotNull(tabletType));
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
@@ -364,7 +366,7 @@ public class VTGateConn implements Closeable {
               @Override
               public ListenableFuture<VTGateTx> apply(BeginResponse response) throws Exception {
                 return Futures.<VTGateTx>immediateFuture(
-                    VTGateTx.withRpcClientAndSession(client, response.getSession()));
+                    new VTGateTx(client, response.getSession()));
               }
             }));
   }
@@ -373,15 +375,15 @@ public class VTGateConn implements Closeable {
       Context ctx,
       String keyspace,
       String query,
-      Map<String, ?> bindVars,
+      @Nullable Map<String, ?> bindVars,
       String splitColumn,
       long splitCount)
       throws SQLException {
     SplitQueryRequest.Builder requestBuilder =
         SplitQueryRequest.newBuilder()
-            .setKeyspace(keyspace)
-            .setQuery(Proto.bindQuery(query, bindVars))
-            .setSplitColumn(splitColumn)
+            .setKeyspace(checkNotNull(keyspace))
+            .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
+            .setSplitColumn(checkNotNull(splitColumn))
             .setSplitCount(splitCount);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
@@ -401,7 +403,7 @@ public class VTGateConn implements Closeable {
 
   public SQLFuture<SrvKeyspace> getSrvKeyspace(Context ctx, String keyspace) throws SQLException {
     GetSrvKeyspaceRequest.Builder requestBuilder =
-        GetSrvKeyspaceRequest.newBuilder().setKeyspace(keyspace);
+        GetSrvKeyspaceRequest.newBuilder().setKeyspace(checkNotNull(keyspace));
     return new SQLFuture<SrvKeyspace>(
         Futures.transformAsync(
             client.getSrvKeyspace(ctx, requestBuilder.build()),

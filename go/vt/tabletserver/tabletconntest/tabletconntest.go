@@ -7,6 +7,7 @@
 package tabletconntest
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -717,7 +718,7 @@ var testStreamHealthErrorMsg = "to trigger a server error"
 // StreamHealthRegister is part of the queryservice.QueryService interface
 func (f *FakeQueryService) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
 	if f.hasError {
-		return 0, fmt.Errorf(testStreamHealthErrorMsg)
+		return 0, errors.New(testStreamHealthErrorMsg)
 	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
