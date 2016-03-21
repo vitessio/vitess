@@ -116,10 +116,8 @@ public class VitessConnection implements Connection {
         if (this.autoCommit != autoCommit) { //If same then no-op
             //Old Transaction Needs to be committed as per JDBC 4.1 Spec.
             if (null != this.vtGateTx) {
-
                 Context context = createContext(Constants.CONNECTION_TIMEOUT);
-
-                this.vtGateTx.commit(context);
+                this.vtGateTx.commit(context).checkedGet();
                 this.vtGateTx = null;
             }
             this.autoCommit = autoCommit;
@@ -137,9 +135,7 @@ public class VitessConnection implements Connection {
         checkAutoCommit(Constants.SQLExceptionMessages.COMMIT_WHEN_AUTO_COMMIT_TRUE);
         try {
             Context context = createContext(Constants.CONNECTION_TIMEOUT);
-            this.vtGateTx.commit(context);
-        } catch (SQLException ex) {
-            throw new SQLException(ex);
+            this.vtGateTx.commit(context).checkedGet();
         } finally {
             this.vtGateTx = null;
         }
@@ -157,9 +153,7 @@ public class VitessConnection implements Connection {
         checkAutoCommit(Constants.SQLExceptionMessages.ROLLBACK_WHEN_AUTO_COMMIT_TRUE);
         try {
             Context context = createContext(Constants.CONNECTION_TIMEOUT);
-            this.vtGateTx.rollback(context);
-        } catch (SQLException ex) {
-            throw new SQLException(ex);
+            this.vtGateTx.rollback(context).checkedGet();
         } finally {
             this.vtGateTx = null;
         }
@@ -175,7 +169,7 @@ public class VitessConnection implements Connection {
             try {
                 if (null != this.vtGateTx) { //Rolling back active transaction on close
                     Context context = createContext(Constants.CONNECTION_TIMEOUT);
-                    this.vtGateTx.rollback(context);
+                    this.vtGateTx.rollback(context).checkedGet();
                 }
                 closeAllOpenStatements();
             } finally {

@@ -90,37 +90,34 @@ func (fake *FakeBinlogStreamer) ServeUpdateStream(position string, sendReply fun
 
 func testServeUpdateStream(t *testing.T, bpc binlogplayer.Client) {
 	ctx := context.Background()
-	c, errFunc, err := bpc.ServeUpdateStream(ctx, testUpdateStreamRequest)
+	stream, err := bpc.ServeUpdateStream(ctx, testUpdateStreamRequest)
 	if err != nil {
 		t.Fatalf("got error: %v", err)
 	}
-	if se, ok := <-c; !ok {
-		t.Fatalf("got no response")
+	if se, err := stream.Recv(); err != nil {
+		t.Fatalf("got error: %v", err)
 	} else {
 		if !reflect.DeepEqual(*se, *testStreamEvent) {
 			t.Errorf("got wrong result, got \n%#v expected \n%#v", *se, *testStreamEvent)
 		}
 	}
-	if se, ok := <-c; ok {
+	if se, err := stream.Recv(); err == nil {
 		t.Fatalf("got a response when error expected: %v", se)
-	}
-	if err := errFunc(); err != nil {
-		t.Errorf("got unexpected error: %v", err)
 	}
 }
 
 func testServeUpdateStreamPanics(t *testing.T, bpc binlogplayer.Client) {
 	ctx := context.Background()
-	c, errFunc, err := bpc.ServeUpdateStream(ctx, testUpdateStreamRequest)
+	stream, err := bpc.ServeUpdateStream(ctx, testUpdateStreamRequest)
 	if err != nil {
 		t.Fatalf("got error: %v", err)
 	}
-	if se, ok := <-c; ok {
+	if se, err := stream.Recv(); err == nil {
 		t.Fatalf("got a response when error expected: %v", se)
-	}
-	err = errFunc()
-	if err == nil || !strings.Contains(err.Error(), "test-triggered panic") {
-		t.Errorf("wrong error from panic: %v", err)
+	} else {
+		if !strings.Contains(err.Error(), "test-triggered panic") {
+			t.Errorf("wrong error from panic: %v", err)
+		}
 	}
 }
 
@@ -176,37 +173,34 @@ func (fake *FakeBinlogStreamer) StreamKeyRange(position string, keyRange *topoda
 
 func testStreamKeyRange(t *testing.T, bpc binlogplayer.Client) {
 	ctx := context.Background()
-	c, errFunc, err := bpc.StreamKeyRange(ctx, testKeyRangeRequest.Position, testKeyRangeRequest.KeyRange, testKeyRangeRequest.Charset)
+	stream, err := bpc.StreamKeyRange(ctx, testKeyRangeRequest.Position, testKeyRangeRequest.KeyRange, testKeyRangeRequest.Charset)
 	if err != nil {
 		t.Fatalf("got error: %v", err)
 	}
-	if se, ok := <-c; !ok {
-		t.Fatalf("got no response")
+	if se, err := stream.Recv(); err != nil {
+		t.Fatalf("got error: %v", err)
 	} else {
 		if !reflect.DeepEqual(*se, *testBinlogTransaction) {
 			t.Errorf("got wrong result, got %v expected %v", *se, *testBinlogTransaction)
 		}
 	}
-	if se, ok := <-c; ok {
+	if se, err := stream.Recv(); err == nil {
 		t.Fatalf("got a response when error expected: %v", se)
-	}
-	if err := errFunc(); err != nil {
-		t.Errorf("got unexpected error: %v", err)
 	}
 }
 
 func testStreamKeyRangePanics(t *testing.T, bpc binlogplayer.Client) {
 	ctx := context.Background()
-	c, errFunc, err := bpc.StreamKeyRange(ctx, testKeyRangeRequest.Position, testKeyRangeRequest.KeyRange, testKeyRangeRequest.Charset)
+	stream, err := bpc.StreamKeyRange(ctx, testKeyRangeRequest.Position, testKeyRangeRequest.KeyRange, testKeyRangeRequest.Charset)
 	if err != nil {
 		t.Fatalf("got error: %v", err)
 	}
-	if se, ok := <-c; ok {
+	if se, err := stream.Recv(); err == nil {
 		t.Fatalf("got a response when error expected: %v", se)
-	}
-	err = errFunc()
-	if err == nil || !strings.Contains(err.Error(), "test-triggered panic") {
-		t.Errorf("wrong error from panic: %v", err)
+	} else {
+		if !strings.Contains(err.Error(), "test-triggered panic") {
+			t.Errorf("wrong error from panic: %v", err)
+		}
 	}
 }
 
@@ -243,37 +237,34 @@ func (fake *FakeBinlogStreamer) StreamTables(position string, tables []string, c
 
 func testStreamTables(t *testing.T, bpc binlogplayer.Client) {
 	ctx := context.Background()
-	c, errFunc, err := bpc.StreamTables(ctx, testTablesRequest.Position, testTablesRequest.Tables, testTablesRequest.Charset)
+	stream, err := bpc.StreamTables(ctx, testTablesRequest.Position, testTablesRequest.Tables, testTablesRequest.Charset)
 	if err != nil {
 		t.Fatalf("got error: %v", err)
 	}
-	if se, ok := <-c; !ok {
-		t.Fatalf("got no response")
+	if se, err := stream.Recv(); err != nil {
+		t.Fatalf("got error: %v", err)
 	} else {
 		if !reflect.DeepEqual(*se, *testBinlogTransaction) {
 			t.Errorf("got wrong result, got %v expected %v", *se, *testBinlogTransaction)
 		}
 	}
-	if se, ok := <-c; ok {
+	if se, err := stream.Recv(); err == nil {
 		t.Fatalf("got a response when error expected: %v", se)
-	}
-	if err := errFunc(); err != nil {
-		t.Errorf("got unexpected error: %v", err)
 	}
 }
 
 func testStreamTablesPanics(t *testing.T, bpc binlogplayer.Client) {
 	ctx := context.Background()
-	c, errFunc, err := bpc.StreamTables(ctx, testTablesRequest.Position, testTablesRequest.Tables, testTablesRequest.Charset)
+	stream, err := bpc.StreamTables(ctx, testTablesRequest.Position, testTablesRequest.Tables, testTablesRequest.Charset)
 	if err != nil {
 		t.Fatalf("got error: %v", err)
 	}
-	if se, ok := <-c; ok {
+	if se, err := stream.Recv(); err == nil {
 		t.Fatalf("got a response when error expected: %v", se)
-	}
-	err = errFunc()
-	if err == nil || !strings.Contains(err.Error(), "test-triggered panic") {
-		t.Errorf("wrong error from panic: %v", err)
+	} else {
+		if !strings.Contains(err.Error(), "test-triggered panic") {
+			t.Errorf("wrong error from panic: %v", err)
+		}
 	}
 }
 

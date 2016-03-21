@@ -25,8 +25,8 @@ public class Constants {
     public static final String SQL_INSERT = "insert";
     public static final String SQL_UPDATE = "update";
     public static final String SQL_DELETE = "delete";
-    public static final int MAJOR_VERSION = 1;
-    public static final int MINOR_VERSION = 0;
+    public static final int DRIVER_MAJOR_VERSION = 1;
+    public static final int DRIVER_MINOR_VERSION = 0;
     public static final int MAX_BUFFER_SIZE = 65535;
     public static final int DEFAULT_TIMEOUT = 30000; //In miliseconds
     public static final String LITERAL_S = "s";
@@ -47,7 +47,6 @@ public class Constants {
         public static final String INIT_FAILED = "Failed to Initialize Vitess JDBC Driver";
         public static final String INVALID_CONN_URL = "Connection URL is invalid";
         public static final String READ_ONLY = "Read Only mode is not supported";
-        public static final String STMT_ALREADY_CLOSED = "Statement is already closed";
         public static final String STMT_CLOSED = "Statement is closed";
         public static final String SQL_FEATURE_NOT_SUPPORTED = "SQL Feature Not Supported";
         public static final String TX_CLOSED = "No Transaction Exists";
@@ -59,7 +58,6 @@ public class Constants {
         public static final String CLOSED_RESULT_SET = "Result Set closed";
         public static final String INVALID_COLUMN_INDEX = "Invalid Column Index";
         public static final String NO_CURRENT_ROW = "Invalid Column Index";
-        public static final String FETCH_FIELDS_ERROR = "Error in fetching fields";
         public static final String VITESS_CURSOR_CLOSE_ERROR =
             "Getting Error while closing ResultSet";
         public static final String CONN_INIT_ERROR = "Connection initialization error";
@@ -100,6 +98,7 @@ public class Constants {
             "Database name is required in the connection url";
         public static final String VITESS_VTGATE_CONN_CLOSE =
             "Not able to close vitess connection";
+        public static final String RESULT_SET_INIT_ERROR = "ResultSet initialization error";
     }
 
 

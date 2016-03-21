@@ -53,7 +53,7 @@ public class VitessResultSet implements ResultSet {
         try {
             this.fields = this.cursor.getFields();
         } catch (SQLException e) {
-            throw new SQLException(Constants.SQLExceptionMessages.FETCH_FIELDS_ERROR);
+            throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, e);
         }
         this.currentRow = 0;
     }
@@ -88,7 +88,7 @@ public class VitessResultSet implements ResultSet {
         try {
             this.fields = this.cursor.getFields();
         } catch (SQLException e) {
-            throw new SQLException(Constants.SQLExceptionMessages.FETCH_FIELDS_ERROR);
+            throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, e);
         }
         this.currentRow = 0;
     }
@@ -111,8 +111,12 @@ public class VitessResultSet implements ResultSet {
             Query.Row.Builder queryRow = Query.Row.newBuilder();
             StringBuilder sb = new StringBuilder();
             for (String aRowData : rowData) {
-                sb.append(aRowData);
-                queryRow.addLengths(aRowData.length());
+                if (null != aRowData) {
+                    sb.append(aRowData);
+                    queryRow.addLengths(aRowData.length());
+                } else {
+                    queryRow.addLengths(-1);
+                }
             }
             queryRow.setValues(ByteString.copyFromUtf8(sb.toString()));
             queryResultBuilder.addRows(queryRow);
@@ -123,7 +127,7 @@ public class VitessResultSet implements ResultSet {
         try {
             fields = cursor.getFields();
         } catch (SQLException e) {
-            throw new SQLException(Constants.SQLExceptionMessages.FETCH_FIELDS_ERROR);
+            throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, e);
         }
         this.currentRow = 0;
     }
@@ -168,11 +172,11 @@ public class VitessResultSet implements ResultSet {
 
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex - 1)) {
+        if (isNull(columnIndex)) {
             return null;
         }
 
-        object = this.row.getObject(columnIndex - 1);
+        object = this.row.getObject(columnIndex);
 
         if (object instanceof byte[]) {
             columnValue = new String((byte[]) object);
@@ -189,7 +193,7 @@ public class VitessResultSet implements ResultSet {
 
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex - 1)) {
+        if (isNull(columnIndex)) {
             return false;
         }
 
@@ -210,7 +214,7 @@ public class VitessResultSet implements ResultSet {
 
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex - 1)) {
+        if (isNull(columnIndex)) {
             return 0;
         }
 
@@ -231,7 +235,7 @@ public class VitessResultSet implements ResultSet {
 
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex - 1)) {
+        if (isNull(columnIndex)) {
             return 0;
         }
 
@@ -252,7 +256,7 @@ public class VitessResultSet implements ResultSet {
 
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex - 1)) {
+        if (isNull(columnIndex)) {
             return 0;
         }
 
@@ -273,7 +277,7 @@ public class VitessResultSet implements ResultSet {
 
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex - 1)) {
+        if (isNull(columnIndex)) {
             return 0;
         }
 
@@ -294,7 +298,7 @@ public class VitessResultSet implements ResultSet {
 
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex - 1)) {
+        if (isNull(columnIndex)) {
             return 0;
         }
 
@@ -315,7 +319,7 @@ public class VitessResultSet implements ResultSet {
 
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex - 1)) {
+        if (isNull(columnIndex)) {
             return 0;
         }
 
@@ -336,7 +340,7 @@ public class VitessResultSet implements ResultSet {
 
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex - 1)) {
+        if (isNull(columnIndex)) {
             return null;
         }
 
@@ -358,7 +362,7 @@ public class VitessResultSet implements ResultSet {
 
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex - 1)) {
+        if (isNull(columnIndex)) {
             return null;
         }
 
@@ -376,31 +380,31 @@ public class VitessResultSet implements ResultSet {
     public Date getDate(int columnIndex) throws SQLException {
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex - 1)) {
+        if (isNull(columnIndex)) {
             return null;
         }
 
-        return this.row.getDate(columnIndex - 1);
+        return this.row.getDate(columnIndex);
     }
 
     public Time getTime(int columnIndex) throws SQLException {
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex - 1)) {
+        if (isNull(columnIndex)) {
             return null;
         }
 
-        return this.row.getTime(columnIndex - 1);
+        return this.row.getTime(columnIndex);
     }
 
     public Timestamp getTimestamp(int columnIndex) throws SQLException {
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex - 1)) {
+        if (isNull(columnIndex)) {
             return null;
         }
 
-        return this.row.getTimestamp(columnIndex - 1);
+        return this.row.getTimestamp(columnIndex);
     }
 
     public String getString(String columnLabel) throws SQLException {
@@ -486,11 +490,11 @@ public class VitessResultSet implements ResultSet {
     public Object getObject(int columnIndex) throws SQLException {
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex - 1)) {
+        if (isNull(columnIndex)) {
             return null;
         }
 
-        return this.row.getObject(columnIndex - 1);
+        return this.row.getObject(columnIndex);
     }
 
     public Object getObject(String columnLabel) throws SQLException {
@@ -499,12 +503,7 @@ public class VitessResultSet implements ResultSet {
     }
 
     public int findColumn(String columnLabel) throws SQLException {
-        try {
-            return this.row.findColumn(columnLabel) + 1;
-        } catch (Exception e) {
-            throw new SQLException(
-                columnLabel + " " + Constants.SQLExceptionMessages.COLUMN_NOT_FOUND);
-        }
+        return this.cursor.findColumn(columnLabel);
     }
 
     public BigDecimal getBigDecimal(int columnIndex) throws SQLException {
@@ -513,7 +512,7 @@ public class VitessResultSet implements ResultSet {
 
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex - 1)) {
+        if (isNull(columnIndex)) {
             return null;
         }
 
@@ -586,11 +585,11 @@ public class VitessResultSet implements ResultSet {
     public Date getDate(int columnIndex, Calendar cal) throws SQLException {
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex - 1)) {
+        if (isNull(columnIndex)) {
             return null;
         }
 
-        return this.row.getDate(columnIndex - 1, cal);
+        return this.row.getDate(columnIndex, cal);
     }
 
     public Date getDate(String columnLabel, Calendar cal) throws SQLException {
@@ -601,11 +600,11 @@ public class VitessResultSet implements ResultSet {
     public Time getTime(int columnIndex, Calendar cal) throws SQLException {
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex - 1)) {
+        if (isNull(columnIndex)) {
             return null;
         }
 
-        return this.row.getTime(columnIndex - 1, cal);
+        return this.row.getTime(columnIndex, cal);
     }
 
     public Time getTime(String columnLabel, Calendar cal) throws SQLException {
@@ -616,11 +615,11 @@ public class VitessResultSet implements ResultSet {
     public Timestamp getTimestamp(int columnIndex, Calendar cal) throws SQLException {
         preAccessor(columnIndex);
 
-        if (isNull(columnIndex - 1)) {
+        if (isNull(columnIndex)) {
             return null;
         }
 
-        return this.row.getTimestamp(columnIndex - 1, cal);
+        return this.row.getTimestamp(columnIndex, cal);
     }
 
     public Timestamp getTimestamp(String columnLabel, Calendar cal) throws SQLException {

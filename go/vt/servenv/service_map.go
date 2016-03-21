@@ -16,8 +16,7 @@ var (
 	serviceMapFlag flagutil.StringListValue
 
 	// serviceMap is the used version of the service map.
-	// init() functions will add default values to it (using
-	// InitServiceMap and InitServiceMapForBsonRpcService).
+	// init() functions can add default values to it (using InitServiceMap).
 	// service_map command line parameter will alter the map.
 	// Can only be used after servenv.Init has been called.
 	serviceMap = make(map[string]bool)

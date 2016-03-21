@@ -70,9 +70,9 @@ public class VitessStatement implements Statement {
             List<byte[]> keyspaceIds = Arrays.asList(new byte[] {1}); //To Hit any single shard
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
 
-            cursor = vtGateConn
-                .executeKeyspaceIds(context, sql, keyspace, keyspaceIds, null, tabletType)
-                .checkedGet();
+            cursor =
+                vtGateConn.executeKeyspaceIds(context, sql, keyspace, keyspaceIds, null, tabletType)
+                    .checkedGet();
         } else {
             if (tabletType != Topodata.TabletType.MASTER || this.vitessConnection.getAutoCommit()) {
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
@@ -80,7 +80,8 @@ public class VitessStatement implements Statement {
             } else {
                 VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
                 if (null == vtGateTx) {
-                    Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                    Context context =
+                        this.vitessConnection.createContext(this.queryTimeoutInMillis);
                     vtGateTx = vtGateConn.begin(context).checkedGet();
                     this.vitessConnection.setVtGateTx(vtGateTx);
                 }
@@ -131,7 +132,7 @@ public class VitessStatement implements Statement {
 
         if (this.vitessConnection.getAutoCommit()) {
             context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-            vtGateTx.commit(context);
+            vtGateTx.commit(context).checkedGet();
             this.vitessConnection.setVtGateTx(null);
         }
 
@@ -139,7 +140,7 @@ public class VitessStatement implements Statement {
             throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
         }
 
-        if (null != cursor && null != cursor.getFields()) {
+        if (null != cursor.getFields()) {
             throw new SQLException(Constants.SQLExceptionMessages.SQL_RETURNED_RESULT_SET);
         }
 
@@ -184,9 +185,9 @@ public class VitessStatement implements Statement {
             List<byte[]> keyspaceIds = Arrays.asList(new byte[] {1}); //To Hit any single shard
 
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-            cursor = vtGateConn
-                .executeKeyspaceIds(context, sql, keyspace, keyspaceIds, null, tabletType)
-                .checkedGet();
+            cursor =
+                vtGateConn.executeKeyspaceIds(context, sql, keyspace, keyspaceIds, null, tabletType)
+                    .checkedGet();
         } else {
             VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
             if (null == vtGateTx) {
@@ -199,7 +200,7 @@ public class VitessStatement implements Statement {
 
             if (this.vitessConnection.getAutoCommit()) {
                 context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                vtGateTx.commit(context);
+                vtGateTx.commit(context).checkedGet();
                 this.vitessConnection.setVtGateTx(null);
             }
         }
@@ -270,12 +271,16 @@ public class VitessStatement implements Statement {
     }
 
     public void setMaxFieldSize(int max) throws SQLException {
+        /* Currently not used
         checkOpen();
         if (max < 0 || max > Constants.MAX_BUFFER_SIZE) {
             throw new SQLException(
                 Constants.SQLExceptionMessages.ILLEGAL_VALUE_FOR + "max field size");
         }
         this.maxFieldSize = max;
+        */
+        throw new SQLFeatureNotSupportedException(
+            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
     public int getMaxRows() throws SQLException {
@@ -284,11 +289,15 @@ public class VitessStatement implements Statement {
     }
 
     public void setMaxRows(int max) throws SQLException {
+        /* Currently not used
         checkOpen();
         if (max < 0) {
             throw new SQLException(Constants.SQLExceptionMessages.ILLEGAL_VALUE_FOR + "max row");
         }
         this.maxRows = max;
+        */
+        throw new SQLFeatureNotSupportedException(
+            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
     public int getQueryTimeout() throws SQLException {
@@ -347,11 +356,15 @@ public class VitessStatement implements Statement {
     }
 
     public void setFetchSize(int rows) throws SQLException {
+        /* Currently not used
         checkOpen();
         if (rows < 0) {
             throw new SQLException(Constants.SQLExceptionMessages.ILLEGAL_VALUE_FOR + "fetch size");
         }
         this.fetchSize = rows;
+        */
+        throw new SQLFeatureNotSupportedException(
+            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
     public int getResultSetConcurrency() throws SQLException {

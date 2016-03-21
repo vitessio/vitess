@@ -250,7 +250,7 @@ class TestVTGateFunctions(unittest.TestCase):
 
   def setUp(self):
     self.master_tablet = shard_1_master
-    if protocols_flavor().vtgate_python_protocol() == 'grpc':
+    if protocols_flavor().vtgate_python_types() == 'proto3':
       self.int_type = 265
       self.string_type = 6165
     else:
@@ -334,7 +334,7 @@ class TestVTGateFunctions(unittest.TestCase):
     # FIXME(alainjobart): the values encoded in these strings are not UTF-8,
     # causing the encoding to fail. Check with Sugu on what to do.
     # Maybe the keyrange should be HEX-encoded in the query to avoid the issue.
-    if protocols_flavor().vtgate_python_protocol() != 'grpc':
+    if protocols_flavor().vtgate_python_types() != 'proto3':
       result = self.execute_on_master(
           vtgate_conn,
           "select * from vt_user where keyrange('', '\x80')", {})

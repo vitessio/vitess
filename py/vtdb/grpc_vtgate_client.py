@@ -9,6 +9,10 @@ import logging
 import re
 from urlparse import urlparse
 
+# Import main protobuf library first
+# to work around import order issues.
+import google.protobuf  # pylint: disable=unused-import
+
 from grpc.beta import implementations
 from grpc.beta import interfaces
 from grpc.framework.interfaces.face import face
@@ -172,7 +176,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       try:
         for response in it:
           for row in response.result.rows:
-            yield tuple(self._make_row(row, convs))
+            yield tuple(proto3_encoding.make_row(row, convs))
       except Exception:
         logging.exception('gRPC low-level error')
         raise
