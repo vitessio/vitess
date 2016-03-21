@@ -6,6 +6,7 @@
 package fakecacheservice
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -15,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 )
 
-var errCacheService = "cacheservice error"
+var errCacheService = errors.New("cacheservice error")
 
 // FakeCacheService is a fake implementation of CacheService
 type FakeCacheService struct {
@@ -85,7 +86,7 @@ func NewFakeCacheService(cache *Cache) *FakeCacheService {
 // Get returns cached data for given keys.
 func (service *FakeCacheService) Get(keys ...string) ([]cs.Result, error) {
 	if service.cache.enableCacheServiceError.Get() == 1 {
-		return nil, fmt.Errorf(errCacheService)
+		return nil, errCacheService
 	}
 	results := make([]cs.Result, 0, len(keys))
 	for _, key := range keys {
@@ -101,7 +102,7 @@ func (service *FakeCacheService) Get(keys ...string) ([]cs.Result, error) {
 // the item's CAS value has changed since you Gets'ed it, it will not be stored.
 func (service *FakeCacheService) Gets(keys ...string) ([]cs.Result, error) {
 	if service.cache.enableCacheServiceError.Get() == 1 {
-		return nil, fmt.Errorf(errCacheService)
+		return nil, errCacheService
 	}
 	results := make([]cs.Result, 0, len(keys))
 	for _, key := range keys {
@@ -117,7 +118,7 @@ func (service *FakeCacheService) Gets(keys ...string) ([]cs.Result, error) {
 // Set set the value with specified cache key.
 func (service *FakeCacheService) Set(key string, flags uint16, timeout uint64, value []byte) (bool, error) {
 	if service.cache.enableCacheServiceError.Get() == 1 {
-		return false, fmt.Errorf(errCacheService)
+		return false, errCacheService
 	}
 	service.cache.Set(key, &cs.Result{
 		Key:   key,
@@ -131,7 +132,7 @@ func (service *FakeCacheService) Set(key string, flags uint16, timeout uint64, v
 // Add store the value only if it does not already exist.
 func (service *FakeCacheService) Add(key string, flags uint16, timeout uint64, value []byte) (bool, error) {
 	if service.cache.enableCacheServiceError.Get() == 1 {
-		return false, fmt.Errorf(errCacheService)
+		return false, errCacheService
 	}
 	if _, ok := service.cache.Get(key); ok {
 		return false, nil
@@ -149,7 +150,7 @@ func (service *FakeCacheService) Add(key string, flags uint16, timeout uint64, v
 // for the specified cache key.
 func (service *FakeCacheService) Replace(key string, flags uint16, timeout uint64, value []byte) (bool, error) {
 	if service.cache.enableCacheServiceError.Get() == 1 {
-		return false, fmt.Errorf(errCacheService)
+		return false, errCacheService
 	}
 	result, ok := service.cache.Get(key)
 	if !ok {
@@ -164,7 +165,7 @@ func (service *FakeCacheService) Replace(key string, flags uint16, timeout uint6
 // Append appends the value after the last bytes in an existing item.
 func (service *FakeCacheService) Append(key string, flags uint16, timeout uint64, value []byte) (bool, error) {
 	if service.cache.enableCacheServiceError.Get() == 1 {
-		return false, fmt.Errorf(errCacheService)
+		return false, errCacheService
 	}
 	result, ok := service.cache.Get(key)
 	if !ok {
@@ -179,7 +180,7 @@ func (service *FakeCacheService) Append(key string, flags uint16, timeout uint64
 // Prepend prepends the value before existing value.
 func (service *FakeCacheService) Prepend(key string, flags uint16, timeout uint64, value []byte) (bool, error) {
 	if service.cache.enableCacheServiceError.Get() == 1 {
-		return false, fmt.Errorf(errCacheService)
+		return false, errCacheService
 	}
 	result, ok := service.cache.Get(key)
 	if !ok {
@@ -194,7 +195,7 @@ func (service *FakeCacheService) Prepend(key string, flags uint16, timeout uint6
 // Cas stores the value only if no one else has updated the data since you read it last.
 func (service *FakeCacheService) Cas(key string, flags uint16, timeout uint64, value []byte, cas uint64) (bool, error) {
 	if service.cache.enableCacheServiceError.Get() == 1 {
-		return false, fmt.Errorf(errCacheService)
+		return false, errCacheService
 	}
 	result, ok := service.cache.Get(key)
 	if !ok || result.Cas != cas {
@@ -210,7 +211,7 @@ func (service *FakeCacheService) Cas(key string, flags uint16, timeout uint64, v
 // Delete delete the value for the specified cache key.
 func (service *FakeCacheService) Delete(key string) (bool, error) {
 	if service.cache.enableCacheServiceError.Get() == 1 {
-		return false, fmt.Errorf(errCacheService)
+		return false, errCacheService
 	}
 	service.cache.Delete(key)
 	return true, nil
@@ -219,7 +220,7 @@ func (service *FakeCacheService) Delete(key string) (bool, error) {
 // FlushAll purges the entire cache.
 func (service *FakeCacheService) FlushAll() error {
 	if service.cache.enableCacheServiceError.Get() == 1 {
-		return fmt.Errorf(errCacheService)
+		return errCacheService
 	}
 	service.cache.Clear()
 	return nil
@@ -228,7 +229,7 @@ func (service *FakeCacheService) FlushAll() error {
 // Stats returns a list of basic stats.
 func (service *FakeCacheService) Stats(key string) ([]byte, error) {
 	if service.cache.enableCacheServiceError.Get() == 1 {
-		return nil, fmt.Errorf(errCacheService)
+		return nil, errCacheService
 	}
 	return []byte{}, nil
 }
