@@ -2,7 +2,6 @@ package com.flipkart.vitess.jdbc;
 
 import com.flipkart.vitess.util.Constants;
 import com.flipkart.vitess.util.StringUtils;
-import com.flipkart.vitess.util.Utils;
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.VTGateConn;
 import com.youtube.vitess.client.VTGateTx;
@@ -83,7 +82,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                     Context context =
                         this.vitessConnection.createContext(this.queryTimeoutInMillis);
                     cursor = vtGateConn
-                        .execute(context, Utils.getSqlWithoutParameter(this.sql, parameterMap),
+                        .execute(context, StringUtils.getSqlWithoutParameter(this.sql, parameterMap),
                             null, tabletType).checkedGet();
                 }
             } else {
@@ -187,7 +186,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             } else {
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
                 cursor = vtGateConn.streamExecute(context,
-                    Utils.getSqlWithoutParameter(this.sql, this.parameterMap), null, tabletType);
+                    StringUtils.getSqlWithoutParameter(this.sql, this.parameterMap), null, tabletType);
             }
         } else if (showSql) {
             String keyspace = this.vitessConnection.getKeyspace();
@@ -364,7 +363,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             return vtGateTx.execute(context, sql, bindVariables, tabletType).checkedGet();
         } else {
             return vtGateTx
-                .execute(context, Utils.getSqlWithoutParameter(sql, parameterMap), null, tabletType)
+                .execute(context, StringUtils.getSqlWithoutParameter(sql, parameterMap), null, tabletType)
                 .checkedGet();
         }
     }

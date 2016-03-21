@@ -1,15 +1,17 @@
 package com.flipkart.vitess.jdbc.test;
 
+import com.flipkart.vitess.jdbc.VitessConnection;
 import com.flipkart.vitess.jdbc.VitessJDBCUrl;
 import com.flipkart.vitess.jdbc.VitessVTGateManager;
-import com.youtube.vitess.client.Context;
-import com.youtube.vitess.client.RpcClient;
-import com.youtube.vitess.client.VTGateConn;
+import com.youtube.vitess.client.*;
 import com.youtube.vitess.client.grpc.GrpcClientFactory;
 import com.youtube.vitess.proto.Vtrpc;
 import org.joda.time.Duration;
 import org.junit.Assert;
 import org.junit.Test;
+import org.mockito.BDDMockito;
+import org.mockito.Matchers;
+import org.powermock.api.mockito.PowerMockito;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
