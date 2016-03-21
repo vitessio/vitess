@@ -9,8 +9,6 @@ of the remote execution of vtctl commands.
 package grpcvtctlserver
 
 import (
-	"sync"
-
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -20,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 	vtctldatapb "github.com/youtube/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "github.com/youtube/vitess/go/vt/proto/vtctlservice"
 )
@@ -39,39 +38,22 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *vtctldatapb.ExecuteVtctlCommandR
 	defer servenv.HandlePanic("vtctl", &err)
 
 	// create a logger, send the result back to the caller
-	logstream := logutil.NewChannelLogger(10)
+	logstream := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		// Note we don't interrupt the loop here, as
+		// we still need to flush and finish the
+		// command, even if the channel to the client
+		// has been broken. We'll just keep trying.
+		stream.Send(&vtctldatapb.ExecuteVtctlCommandResponse{
+			Event: e,
+		})
+	})
 	logger := logutil.NewTeeLogger(logstream, logutil.NewConsoleLogger())
-
-	// send logs to the caller
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		for e := range logstream {
-			// Note we don't interrupt the loop here, as
-			// we still need to flush and finish the
-			// command, even if the channel to the client
-			// has been broken. We'll just keep trying.
-			stream.Send(&vtctldatapb.ExecuteVtctlCommandResponse{
-				Event: e,
-			})
-		}
-		wg.Done()
-	}()
-
-	// Defer cleanup in case we panic.
-	defer func() {
-		// close the log channel, and wait for them all to be sent
-		close(logstream)
-		wg.Wait()
-	}()
 
 	// create the wrangler
 	wr := wrangler.New(logger, s.ts, tmclient.NewTabletManagerClient())
 
 	// execute the command
-	err = vtctl.RunCommand(stream.Context(), wr, args.Args)
-
-	return err
+	return vtctl.RunCommand(stream.Context(), wr, args.Args)
 }
 
 // StartServer registers the VtctlServer for RPCs
