@@ -6,6 +6,7 @@ package agentrpctest
 
 import (
 	"fmt"
+	"io"
 	"reflect"
 	"strings"
 	"sync"
@@ -24,7 +25,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
@@ -90,21 +90,25 @@ func logStuff(logger logutil.Logger, count int) {
 	}
 }
 
-func compareLoggedStuff(t *testing.T, name string, logChannel <-chan *logutilpb.Event, count int) {
+func compareLoggedStuff(t *testing.T, name string, stream logutil.EventStream, count int) error {
 	for i := 0; i < count; i++ {
-		le, ok := <-logChannel
-		if !ok {
+		le, err := stream.Recv()
+		if err != nil {
 			t.Errorf("No logged value for %v/%v", name, i)
-			return
+			return err
 		}
 		if le.Value != testLogString {
 			t.Errorf("Unexpected log response for %v: got %v expected %v", name, le.Value, testLogString)
 		}
 	}
-	_, ok := <-logChannel
-	if ok {
+	_, err := stream.Recv()
+	if err == nil {
 		t.Fatalf("log channel wasn't closed for %v", name)
 	}
+	if err == io.EOF {
+		return nil
+	}
+	return err
 }
 
 func expectRPCWrapPanic(t *testing.T, err error) {
@@ -1119,24 +1123,23 @@ func (fra *fakeRPCAgent) Backup(ctx context.Context, concurrency int, logger log
 }
 
 func agentRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	logChannel, errFunc, err := client.Backup(ctx, ti, testBackupConcurrency)
+	stream, err := client.Backup(ctx, ti, testBackupConcurrency)
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)
 	}
-	compareLoggedStuff(t, "Backup", logChannel, 10)
-	err = errFunc()
+	err = compareLoggedStuff(t, "Backup", stream, 10)
 	compareError(t, "Backup", err, true, testBackupCalled)
 }
 
 func agentRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	logChannel, errFunc, err := client.Backup(ctx, ti, testBackupConcurrency)
+	stream, err := client.Backup(ctx, ti, testBackupConcurrency)
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)
 	}
-	if e, ok := <-logChannel; ok {
+	e, err := stream.Recv()
+	if err == nil {
 		t.Fatalf("Unexpected Backup logs: %v", e)
 	}
-	err = errFunc()
 	expectRPCWrapLockActionPanic(t, err)
 }
 

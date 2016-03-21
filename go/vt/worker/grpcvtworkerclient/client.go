@@ -6,9 +6,9 @@
 package grpcvtworkerclient
 
 import (
-	"io"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -37,35 +37,29 @@ func gRPCVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworker
 	}, nil
 }
 
+type eventStreamAdapter struct {
+	stream vtworkerservicepb.Vtworker_ExecuteVtworkerCommandClient
+}
+
+func (e *eventStreamAdapter) Recv() (*logutilpb.Event, error) {
+	le, err := e.stream.Recv()
+	if err != nil {
+		return nil, err
+	}
+	return le.Event, nil
+}
+
 // ExecuteVtworkerCommand is part of the VtworkerClient interface.
-func (client *gRPCVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutilpb.Event, vtworkerclient.ErrFunc, error) {
+func (client *gRPCVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (logutil.EventStream, error) {
 	query := &vtworkerdatapb.ExecuteVtworkerCommandRequest{
 		Args: args,
 	}
 
 	stream, err := client.c.ExecuteVtworkerCommand(ctx, query)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-
-	results := make(chan *logutilpb.Event, 1)
-	var finalError error
-	go func() {
-		for {
-			le, err := stream.Recv()
-			if err != nil {
-				if err != io.EOF {
-					finalError = err
-				}
-				close(results)
-				return
-			}
-			results <- le.Event
-		}
-	}()
-	return results, func() error {
-		return finalError
-	}, nil
+	return &eventStreamAdapter{stream}, nil
 }
 
 // Close is part of the VtworkerClient interface.

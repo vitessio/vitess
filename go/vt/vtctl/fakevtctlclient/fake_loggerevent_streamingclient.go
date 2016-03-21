@@ -6,6 +6,7 @@ package fakevtctlclient
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -81,35 +82,48 @@ func (f *FakeLoggerEventStreamingClient) RegisteredCommands() []string {
 	return commands
 }
 
-// StreamResult returns a channel which streams back a registered result as logging events.
-func (f *FakeLoggerEventStreamingClient) StreamResult(args []string) (<-chan *logutilpb.Event, func() error, error) {
+type streamResultAdapter struct {
+	lines []string
+	index int
+	err   error
+}
+
+func (s *streamResultAdapter) Recv() (*logutilpb.Event, error) {
+	if s.index < len(s.lines) {
+		result := &logutilpb.Event{
+			Time:  logutil.TimeToProto(time.Now()),
+			Level: logutilpb.Level_CONSOLE,
+			File:  "fakevtctlclient",
+			Line:  -1,
+			Value: s.lines[s.index],
+		}
+		s.index++
+		return result, nil
+	}
+	if s.err == nil {
+		return nil, io.EOF
+	}
+	return nil, s.err
+}
+
+// StreamResult returns an EventStream which streams back a registered result as logging events.
+func (f *FakeLoggerEventStreamingClient) StreamResult(args []string) (logutil.EventStream, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	k := generateKey(args)
 	result, ok := f.results[k]
 	if !ok {
-		return nil, nil, fmt.Errorf("No response was registered for args: %v", args)
+		return nil, fmt.Errorf("No response was registered for args: %v", args)
 	}
 	result.count--
 	if result.count == 0 {
 		delete(f.results, k)
 	}
 
-	stream := make(chan *logutilpb.Event)
-	go func() {
-		// Each line of the multi-line string "output" is streamed as console text.
-		for _, line := range strings.Split(result.output, "\n") {
-			stream <- &logutilpb.Event{
-				Time:  logutil.TimeToProto(time.Now()),
-				Level: logutilpb.Level_CONSOLE,
-				File:  "fakevtctlclient",
-				Line:  -1,
-				Value: line,
-			}
-		}
-		close(stream)
-	}()
-
-	return stream, func() error { return result.err }, nil
+	return &streamResultAdapter{
+		lines: strings.Split(result.output, "\n"),
+		index: 0,
+		err:   result.err,
+	}, nil
 }
