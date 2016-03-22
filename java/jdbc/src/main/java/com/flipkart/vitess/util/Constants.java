@@ -96,8 +96,6 @@ public class Constants {
             "No column was accessed before calling this method";
         public static final String DBNAME_REQUIRED =
             "Database name is required in the connection url";
-        public static final String VITESS_VTGATE_CONN_CLOSE =
-            "Not able to close vitess connection";
         public static final String RESULT_SET_INIT_ERROR = "ResultSet initialization error";
     }
 
