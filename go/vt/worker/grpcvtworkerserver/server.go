@@ -39,10 +39,9 @@ func (s *VtworkerServer) ExecuteVtworkerCommand(args *vtworkerdatapb.ExecuteVtwo
 
 	// Stream everything back what the Wrangler is logging.
 	logstream := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
-		// Note we don't interrupt the loop here, as
-		// we still need to flush and finish the
-		// command, even if the channel to the client
-		// has been broken. We'll just keep trying.
+		// If the client disconnects, we will just fail
+		// to send the log events, but won't interrupt
+		// the command.
 		stream.Send(&vtworkerdatapb.ExecuteVtworkerCommandResponse{
 			Event: e,
 		})

@@ -449,11 +449,9 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 	return s.agent.RPCWrapLockAction(ctx, actionnode.TabletActionBackup, request, nil, true, func() error {
 		// create a logger, send the result back to the caller
 		logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
-			// Note we don't interrupt the loop here, as
-			// we still need to flush and finish the
-			// command, even if the channel to the client
-			// has been broken. We'll just keep trying
-			// to send.
+			// If the client disconnects, we will just fail
+			// to send the log events, but won't interrupt
+			// the backup.
 			stream.Send(&tabletmanagerdatapb.BackupResponse{
 				Event: e,
 			})
