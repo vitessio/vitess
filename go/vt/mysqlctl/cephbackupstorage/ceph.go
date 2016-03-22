@@ -216,11 +216,10 @@ func (bs *CephBackupStorage) Close() error {
 	if bs.client_ceph != nil {
 		// If client.Close() fails, we still clear bs._client, so we know to create
 		// a new client the next time one is needed.
-		client := bs.client_ceph
 		bs.client_ceph = nil
-		if err := client.Close(); err != nil {
-			return err
-		}
+		//		if err := client.Close(); err != nil {
+		//			return err
+		//		}
 	}
 	return nil
 }
