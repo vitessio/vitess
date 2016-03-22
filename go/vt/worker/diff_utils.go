@@ -113,42 +113,42 @@ func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAl
 // rows from a table that match the supplied KeyRange, ordered by
 // Primary Key. The returned columns are ordered with the Primary Key
 // columns in front.
-func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *topodatapb.TabletAlias, tableDefinition *tabletmanagerdatapb.TableDefinition, keyRange *topodatapb.KeyRange, keyspaceIDType topodatapb.KeyspaceIdType) (*QueryResultReader, error) {
+func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *topodatapb.TabletAlias, tableDefinition *tabletmanagerdatapb.TableDefinition, keyRange *topodatapb.KeyRange, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType) (*QueryResultReader, error) {
 	where := ""
 	if keyRange != nil {
-		switch keyspaceIDType {
+		switch shardingColumnType {
 		case topodatapb.KeyspaceIdType_UINT64:
 			if len(keyRange.Start) > 0 {
 				if len(keyRange.End) > 0 {
 					// have start & end
-					where = fmt.Sprintf("WHERE keyspace_id >= %v AND keyspace_id < %v ", uint64FromKeyspaceID(keyRange.Start), uint64FromKeyspaceID(keyRange.End))
+					where = fmt.Sprintf("WHERE %v >= %v AND %v < %v ", shardingColumnName, uint64FromKeyspaceID(keyRange.Start), shardingColumnName, uint64FromKeyspaceID(keyRange.End))
 				} else {
 					// have start only
-					where = fmt.Sprintf("WHERE keyspace_id >= %v ", uint64FromKeyspaceID(keyRange.Start))
+					where = fmt.Sprintf("WHERE %v >= %v ", shardingColumnName, uint64FromKeyspaceID(keyRange.Start))
 				}
 			} else {
 				if len(keyRange.End) > 0 {
 					// have end only
-					where = fmt.Sprintf("WHERE keyspace_id < %v ", uint64FromKeyspaceID(keyRange.End))
+					where = fmt.Sprintf("WHERE %v < %v ", shardingColumnName, uint64FromKeyspaceID(keyRange.End))
 				}
 			}
 		case topodatapb.KeyspaceIdType_BYTES:
 			if len(keyRange.Start) > 0 {
 				if len(keyRange.End) > 0 {
 					// have start & end
-					where = fmt.Sprintf("WHERE HEX(keyspace_id) >= '%v' AND HEX(keyspace_id) < '%v' ", hex.EncodeToString(keyRange.Start), hex.EncodeToString(keyRange.End))
+					where = fmt.Sprintf("WHERE HEX(%v) >= '%v' AND HEX(%v) < '%v' ", shardingColumnName, hex.EncodeToString(keyRange.Start), shardingColumnName, hex.EncodeToString(keyRange.End))
 				} else {
 					// have start only
-					where = fmt.Sprintf("WHERE HEX(keyspace_id) >= '%v' ", hex.EncodeToString(keyRange.Start))
+					where = fmt.Sprintf("WHERE HEX(%v) >= '%v' ", shardingColumnName, hex.EncodeToString(keyRange.Start))
 				}
 			} else {
 				if len(keyRange.End) > 0 {
 					// have end only
-					where = fmt.Sprintf("WHERE HEX(keyspace_id) < '%v' ", hex.EncodeToString(keyRange.End))
+					where = fmt.Sprintf("WHERE HEX(%v) < '%v' ", shardingColumnName, hex.EncodeToString(keyRange.End))
 				}
 			}
 		default:
-			return nil, fmt.Errorf("Unsupported KeyspaceIdType: %v", keyspaceIDType)
+			return nil, fmt.Errorf("Unsupported ShardingColumnType: %v", shardingColumnType)
 		}
 	}
 
