@@ -283,3 +283,43 @@ func (c *echoClient) SplitQuery(ctx context.Context, keyspace string, sql string
 	}
 	return c.fallback.SplitQuery(ctx, sql, keyspace, bindVariables, splitColumn, splitCount)
 }
+
+// TODO(erez): Rename after migration to SplitQuery V2 is done.
+func (c *echoClient) SplitQueryV2(
+	ctx context.Context,
+	keyspace string,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+
+	if strings.HasPrefix(sql, EchoPrefix) {
+		bv, err := querytypes.BindVariablesToProto3(bindVariables)
+		if err != nil {
+			return nil, err
+		}
+		return []*vtgatepb.SplitQueryResponse_Part{
+			{
+				Query: &querypb.BoundQuery{
+					Sql: fmt.Sprintf("%v:%v:%v:%v:%v",
+						sql, splitColumns, splitCount, numRowsPerQueryPart, algorithm),
+					BindVariables: bv,
+				},
+				KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
+					Keyspace: keyspace,
+				},
+			},
+		}, nil
+	}
+	return c.fallback.SplitQueryV2(
+		ctx,
+		sql,
+		keyspace,
+		bindVariables,
+		splitColumns,
+		splitCount,
+		numRowsPerQueryPart,
+		algorithm)
+}

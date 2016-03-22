@@ -362,6 +362,18 @@ func (fc *fakeConn) SplitQuery(ctx context.Context, query querytypes.BoundQuery,
 	return nil, fmt.Errorf("not implemented")
 }
 
+// SplitQueryV2 implements tabletconn.TabletConn.
+func (fc *fakeConn) SplitQueryV2(
+	ctx context.Context,
+	query querytypes.BoundQuery,
+	splitColumn []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm,
+) ([]querytypes.QuerySplit, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
 // SetTarget implements tabletconn.TabletConn.
 func (fc *fakeConn) SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error {
 	return fmt.Errorf("not implemented")

@@ -202,6 +202,17 @@ func (ftc *fakeTabletConn) SplitQuery(ctx context.Context, query querytypes.Boun
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
+// SplitQuery is part of the TabletConn interface
+func (ftc *fakeTabletConn) SplitQueryV2(
+	ctx context.Context,
+	query querytypes.BoundQuery,
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error) {
+	return nil, fmt.Errorf("not implemented in this test")
+}
+
 type streamHealthReader struct {
 	c   <-chan *querypb.StreamHealthResponse
 	err *error

@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/tb"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
@@ -88,6 +89,20 @@ func (c *terminalClient) Rollback(ctx context.Context, session *vtgatepb.Session
 }
 
 func (c *terminalClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+	return nil, errTerminal
+}
+
+// TODO(erez): Rename after migration to SplitQuery V2 is done.
+func (c *terminalClient) SplitQueryV2(
+	ctx context.Context,
+	keyspace string,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm,
+) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	return nil, errTerminal
 }
 
