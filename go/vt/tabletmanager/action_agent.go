@@ -235,7 +235,7 @@ func NewActionAgent(
 	// - restoreFromBackup is set: we restore, then initHealthCheck, all
 	//   in the background
 	// - restoreFromBackup is not set: we initHealthCheck right away
-	fmt.Println("6ab3")
+	fmt.Println("6ab3", *restoreFromBackup)
 	if *restoreFromBackup {
 		go func() {
 			// restoreFromBackup wil just be a regular action

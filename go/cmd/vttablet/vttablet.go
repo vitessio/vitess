@@ -24,6 +24,8 @@ import (
 	// import mysql to register mysql connection function
 	_ "github.com/youtube/vitess/go/mysql"
 	// import memcache to register memcache connection function
+	"fmt"
+
 	_ "github.com/youtube/vitess/go/memcache"
 )
 
@@ -38,9 +40,13 @@ var (
 
 func init() {
 	servenv.RegisterDefaultFlags()
+	fmt.Println("testing vttablet", *enforceTableACLConfig, *tableAclConfig, &tabletPath, *overridesFile)
+	log.Infof("testing vttablet", *enforceTableACLConfig, *tableAclConfig, &tabletPath, *overridesFile)
 }
 
 func main() {
+	fmt.Println("testing vttablet", *enforceTableACLConfig, *tableAclConfig, &tabletPath, *overridesFile)
+	log.Infof("testing vttablet", *enforceTableACLConfig, *tableAclConfig, &tabletPath, *overridesFile)
 	defer exit.Recover()
 
 	flags := dbconfigs.AppConfig | dbconfigs.DbaConfig |

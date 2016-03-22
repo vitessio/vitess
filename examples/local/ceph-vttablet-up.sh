@@ -118,6 +118,7 @@ for uid_index in $uids; do
     $dbconfig_flags \
     > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
+# -restore_from_backup \
   echo "Access tablet $alias at http://$hostname:$port/debug/status"
 done
 
