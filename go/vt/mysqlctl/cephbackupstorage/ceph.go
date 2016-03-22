@@ -234,9 +234,9 @@ func (bs *CephBackupStorage) client() (*minio.Client, error) {
 	defer bs.mu.Unlock()
 
 	if bs.client_ceph == nil {
-		accessKey := "439SQDG76BGBAM8ILSKR"
-		secretKey := "zu7wZxwJYKUHMf7KJISKFSbvUC546Ge3KO3qVXbT"
-		url := "10.47.2.3"
+		accessKey := "accessKey"
+		secretKey := "secretKey"
+		url := "url"
 		ceph_client, err := minio.NewV2(url, accessKey, secretKey, true)
 		if err != nil {
 			return nil, err
