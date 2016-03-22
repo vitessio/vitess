@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/topo"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -138,6 +139,23 @@ func (sg *shardGateway) Rollback(ctx context.Context, keyspace string, shard str
 // SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
 func (sg *shardGateway) SplitQuery(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, sql string, bindVars map[string]interface{}, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
 	return sg.getConnection(ctx, keyspace, shard, tabletType).SplitQuery(ctx, sql, bindVars, splitColumn, splitCount)
+}
+
+// SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
+// TODO(erez): Rename to SplitQuery after the migration to SplitQuery V2 is done.
+func (sg *shardGateway) SplitQueryV2(
+	ctx context.Context,
+	keyspace string,
+	shard string,
+	tabletType topodatapb.TabletType,
+	sql string,
+	bindVars map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error) {
+	return sg.getConnection(ctx, keyspace, shard, tabletType).SplitQueryV2(
+		ctx, sql, bindVars, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 }
 
 // Close shuts down the underlying connections.

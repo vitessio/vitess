@@ -362,6 +362,36 @@ func (itc *internalTabletConn) SplitQuery(ctx context.Context, query querytypes.
 	return splits, nil
 }
 
+// SplitQueryV2 is part of tabletconn.TabletConn
+// TODO(erez): Rename to SplitQuery once the migration to SplitQuery V2 is done.
+func (itc *internalTabletConn) SplitQueryV2(
+	ctx context.Context,
+	query querytypes.BoundQuery,
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error) {
+
+	splits, err := itc.tablet.qsc.QueryService().SplitQueryV2(
+		ctx,
+		&querypb.Target{
+			Keyspace:   itc.tablet.keyspace,
+			Shard:      itc.tablet.shard,
+			TabletType: itc.tablet.tabletType,
+		},
+		query.Sql,
+		query.BindVariables,
+		splitColumns,
+		splitCount,
+		numRowsPerQueryPart,
+		algorithm,
+		0 /* SessionID */)
+	if err != nil {
+		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
+	}
+	return splits, nil
+}
+
 type streamHealthReader struct {
 	c   <-chan *querypb.StreamHealthResponse
 	err *error
