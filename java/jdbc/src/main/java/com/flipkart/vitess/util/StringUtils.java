@@ -1,5 +1,7 @@
 package com.flipkart.vitess.util;
 
+import java.util.Map;
+
 /**
  * Created by naveen.nahata on 05/02/16.
  */
@@ -64,5 +66,66 @@ public class StringUtils {
     public static boolean isNullOrEmptyWithoutWS(String string) {
         return null == string || 0 == string.trim().length();
     }
+
+    /**
+     * Create the SQL string with parameters set by setXXX methods of PreparedStatement
+     *
+     * @param sql
+     * @param parameterMap
+     * @return updated SQL string
+     */
+    public static String getSqlWithoutParameter(String sql, Map<Integer, String> parameterMap) {
+        if (!sql.contains("?")) {
+            return sql;
+        }
+
+        StringBuilder newSql = new StringBuilder(sql);
+
+        int paramLoc = 1;
+        while (getCharIndexFromSqlByParamLocation(sql, '?', paramLoc) > 0) {
+            // check the user has set the needs parameters
+            if (parameterMap.containsKey(paramLoc)) {
+                int tt = getCharIndexFromSqlByParamLocation(newSql.toString(), '?', 1);
+                newSql.deleteCharAt(tt);
+                newSql.insert(tt, parameterMap.get(paramLoc));
+            }
+            paramLoc++;
+        }
+
+        return newSql.toString();
+
+    }
+
+    /**
+     * Get the index of given char from the SQL string by parameter location
+     * </br> The -1 will be return, if nothing found
+     *
+     * @param sql
+     * @param cchar
+     * @param paramLoc
+     * @return
+     */
+    private static int getCharIndexFromSqlByParamLocation(final String sql, final char cchar,
+                                                          final int paramLoc) {
+        int signalCount = 0;
+        int charIndex = -1;
+        int num = 0;
+        for (int i = 0; i < sql.length(); i++) {
+            char c = sql.charAt(i);
+            if (c == '\'' || c == '\\')// record the count of char "'" and char "\"
+            {
+                signalCount++;
+            } else if (c == cchar
+                    && signalCount % 2 == 0) {// check if the ? is really the parameter
+                num++;
+                if (num == paramLoc) {
+                    charIndex = i;
+                    break;
+                }
+            }
+        }
+        return charIndex;
+    }
+
 
 }
