@@ -6,44 +6,52 @@ package planbuilder
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func buildUpdatePlan(upd *sqlparser.Update, schema *Schema) *Plan {
-	plan := &Plan{
-		ID:        NoPlan,
-		Rewritten: generateQuery(upd),
+// buildUpdatePlan builds the instructions for an UPDATE statement.
+func buildUpdatePlan(upd *sqlparser.Update, vschema *VSchema) (*Route, error) {
+	route := &Route{
+		Query: generateQuery(upd),
 	}
+	// We allow only one table in an update.
 	tablename := sqlparser.GetTableName(upd.Table)
-	plan.Table, plan.Reason = schema.FindTable(tablename)
-	if plan.Reason != "" {
-		return plan
+	var err error
+	route.Table, err = vschema.FindTable(tablename)
+	if err != nil {
+		return nil, err
 	}
-	if !plan.Table.Keyspace.Sharded {
-		plan.ID = UpdateUnsharded
-		return plan
+	route.Keyspace = route.Table.Keyspace
+	if hasSubquery(upd) {
+		return nil, errors.New("unsupported: subqueries in DML")
+	}
+	if !route.Keyspace.Sharded {
+		route.Opcode = UpdateUnsharded
+		return route, nil
 	}
 
-	getWhereRouting(upd.Where, plan, true)
-	switch plan.ID {
-	case SelectEqual:
-		plan.ID = UpdateEqual
-	case SelectIN, SelectScatter, SelectKeyrange:
-		plan.ID = NoPlan
-		plan.Reason = "update has multi-shard where clause"
-		return plan
-	default:
-		panic("unexpected")
+	err = getDMLRouting(upd.Where, route)
+	if err != nil {
+		return nil, err
 	}
-	if isIndexChanging(upd.Exprs, plan.Table.ColVindexes) {
-		plan.ID = NoPlan
-		plan.Reason = "index is changing"
+	route.Opcode = UpdateEqual
+	if isIndexChanging(upd.Exprs, route.Table.ColVindexes) {
+		return nil, errors.New("unsupported: DML cannot change vindex column")
 	}
-	return plan
+	return route, nil
 }
 
+func generateQuery(statement sqlparser.Statement) string {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	statement.Format(buf)
+	return buf.String()
+}
+
+// isIndexChanging returns true if any of the update
+// expressions modify a vindex column.
 func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*ColVindex) bool {
 	vindexCols := make([]string, len(colVindexes))
 	for i, index := range colVindexes {
@@ -57,35 +65,39 @@ func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*ColVindex)
 	return false
 }
 
-func buildDeletePlan(del *sqlparser.Delete, schema *Schema) *Plan {
-	plan := &Plan{
-		ID:        NoPlan,
-		Rewritten: generateQuery(del),
+// buildUpdatePlan builds the instructions for a DELETE statement.
+func buildDeletePlan(del *sqlparser.Delete, vschema *VSchema) (*Route, error) {
+	route := &Route{
+		Query: generateQuery(del),
 	}
+	// We allow only one table in a delete.
 	tablename := sqlparser.GetTableName(del.Table)
-	plan.Table, plan.Reason = schema.FindTable(tablename)
-	if plan.Reason != "" {
-		return plan
+	var err error
+	route.Table, err = vschema.FindTable(tablename)
+	if err != nil {
+		return nil, err
 	}
-	if !plan.Table.Keyspace.Sharded {
-		plan.ID = DeleteUnsharded
-		return plan
+	route.Keyspace = route.Table.Keyspace
+	if hasSubquery(del) {
+		return nil, errors.New("unsupported: subqueries in DML")
+	}
+	if !route.Keyspace.Sharded {
+		route.Opcode = DeleteUnsharded
+		return route, nil
 	}
 
-	getWhereRouting(del.Where, plan, true)
-	switch plan.ID {
-	case SelectEqual:
-		plan.ID = DeleteEqual
-		plan.Subquery = generateDeleteSubquery(del, plan.Table)
-	case SelectIN, SelectScatter, SelectKeyrange:
-		plan.ID = NoPlan
-		plan.Reason = "delete has multi-shard where clause"
-	default:
-		panic("unexpected")
+	err = getDMLRouting(del.Where, route)
+	if err != nil {
+		return nil, err
 	}
-	return plan
+	route.Opcode = DeleteEqual
+	route.Subquery = generateDeleteSubquery(del, route.Table)
+	return route, nil
 }
 
+// generateDeleteSubquery generates the query to fetch the rows
+// that will be deleted. This allows VTGate to clean up any
+// owned vindexes as needed.
 func generateDeleteSubquery(del *sqlparser.Delete, table *Table) string {
 	if len(table.Owned) == 0 {
 		return ""
@@ -102,4 +114,56 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *Table) string {
 	buf.WriteString(sqlparser.String(del.Where))
 	buf.WriteString(" for update")
 	return buf.String()
+}
+
+// getDMLRouting updates the route with the necessary routing
+// info. If it cannot find a unique route, then it returns an error.
+func getDMLRouting(where *sqlparser.Where, route *Route) error {
+	if where == nil {
+		return errors.New("unsupported: multi-shard where clause in DML")
+	}
+	for _, index := range route.Table.Ordered {
+		if !IsUnique(index.Vindex) {
+			continue
+		}
+		if values := getMatch(where.Expr, index.Col); values != nil {
+			route.Vindex = index.Vindex
+			route.Values = values
+			return nil
+		}
+	}
+	return errors.New("unsupported: multi-shard where clause in DML")
+}
+
+// getMatch returns the matched value if there is an equality
+// constraint on the specified column that can be used to
+// decide on a route.
+func getMatch(node sqlparser.BoolExpr, col string) interface{} {
+	filters := splitAndExpression(nil, node)
+	for _, filter := range filters {
+		comparison, ok := filter.(*sqlparser.ComparisonExpr)
+		if !ok {
+			continue
+		}
+		if comparison.Operator != sqlparser.EqualStr {
+			continue
+		}
+		if !nameMatch(comparison.Left, col) {
+			continue
+		}
+		if !sqlparser.IsValue(comparison.Right) {
+			continue
+		}
+		val, err := valConvert(comparison.Right)
+		if err != nil {
+			continue
+		}
+		return val
+	}
+	return nil
+}
+
+func nameMatch(node sqlparser.ValExpr, col string) bool {
+	colname, ok := node.(*sqlparser.ColName)
+	return ok && string(colname.Name) == col
 }

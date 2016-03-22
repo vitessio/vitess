@@ -24,6 +24,11 @@ type VCursor interface {
 // Additional to these functions, a vindex also needs
 // to satisfy the Unique or NonUnique interface.
 type Vindex interface {
+	// String returns the name of the Vindex instance.
+	// It's used for testing and diagnostics. Use pointer
+	// comparison to see if two objects refer to the same
+	// Vindex.
+	String() string
 	// Cost is used by planbuilder to prioritize vindexes.
 	// The cost can be 0 if the id is basically a keyspace id.
 	// The cost can be 1 if the id can be hashed to a keyspace id.
@@ -65,25 +70,12 @@ type Reversible interface {
 }
 
 // A Functional vindex is an index that can compute
-// the keyspace id from the id without a lookup. This
-// means that the creation of a functional vindex entry
-// does not take the keyspace id as input. In general,
-// the main reason to support creation functions for
-// functional indexes is for auto-generating ids.
+// the keyspace id from the id without a lookup.
 // A Functional vindex is also required to be Unique.
 // If it's not unique, we cannot determine the target shard
 // for an insert operation.
 type Functional interface {
-	Create(VCursor, interface{}) error
-	Delete(VCursor, []interface{}, []byte) error
 	Unique
-}
-
-// A FunctionalGenerator vindex is a Functional vindex
-// that can generate new ids.
-type FunctionalGenerator interface {
-	Functional
-	Generate(cursor VCursor) (id int64, err error)
 }
 
 // A Lookup vindex is one that needs to lookup
@@ -99,24 +91,17 @@ type Lookup interface {
 	Delete(VCursor, []interface{}, []byte) error
 }
 
-// A LookupGenerator vindex is a Lookup that can
-// generate new ids.
-type LookupGenerator interface {
-	Lookup
-	Generate(VCursor, []byte) (id int64, err error)
-}
-
 // A NewVindexFunc is a function that creates a Vindex based on the
 // properties specified in the input map. Every vindex must
 // register a NewVindexFunc under a unique vindexType.
-type NewVindexFunc func(map[string]interface{}) (Vindex, error)
+type NewVindexFunc func(string, map[string]interface{}) (Vindex, error)
 
 var registry = make(map[string]NewVindexFunc)
 
 // Register registers a vindex under the specified vindexType.
 // A duplicate vindexType will generate a panic.
 // New vindexes will be created using these functions at the
-// time of schema loading.
+// time of vschema loading.
 func Register(vindexType string, newVindexFunc NewVindexFunc) {
 	if _, ok := registry[vindexType]; ok {
 		panic(fmt.Sprintf("%s is already registered", vindexType))
@@ -126,10 +111,10 @@ func Register(vindexType string, newVindexFunc NewVindexFunc) {
 
 // CreateVindex creates a vindex of the specified type using the
 // supplied params. The type must have been previously registered.
-func CreateVindex(vindexType string, params map[string]interface{}) (Vindex, error) {
+func CreateVindex(vindexType, name string, params map[string]interface{}) (Vindex, error) {
 	f, ok := registry[vindexType]
 	if !ok {
 		return nil, fmt.Errorf("vindexType %s not found", vindexType)
 	}
-	return f(params)
+	return f(name, params)
 }

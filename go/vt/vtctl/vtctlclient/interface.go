@@ -13,20 +13,16 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	"github.com/youtube/vitess/go/vt/logutil"
 )
 
 // vtctlClientProtocol specifices which RPC client implementation should be used.
 var vtctlClientProtocol = flag.String("vtctl_client_protocol", "grpc", "the protocol to use to talk to the vtctl server")
 
-// ErrFunc is returned by streaming queries to get the error
-type ErrFunc func() error
-
 // VtctlClient defines the interface used to send remote vtctl commands
 type VtctlClient interface {
 	// ExecuteVtctlCommand will execute the command remotely
-	// NOTE: ErrFunc should only be checked after the returned channel was closed to avoid races.
-	ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout time.Duration) (<-chan *logutilpb.Event, ErrFunc, error)
+	ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout time.Duration) (logutil.EventStream, error)
 
 	// Close will terminate the connection. This object won't be
 	// used after this.

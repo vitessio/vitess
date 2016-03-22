@@ -10,12 +10,12 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
@@ -25,9 +25,6 @@ import (
 // TabletManagerProtocol is the implementation to use for tablet
 // manager protocol. It is exported for tests only.
 var TabletManagerProtocol = flag.String("tablet_manager_protocol", "grpc", "the protocol to use to talk to vttablet")
-
-// ErrFunc is used by streaming RPCs that don't return a specific result
-type ErrFunc func() error
 
 // TabletManagerClient defines the interface used to talk to a remote tablet
 type TabletManagerClient interface {
@@ -186,7 +183,7 @@ type TabletManagerClient interface {
 	//
 
 	// Backup creates a database backup
-	Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (<-chan *logutilpb.Event, ErrFunc, error)
+	Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (logutil.EventStream, error)
 
 	//
 	// RPC related methods

@@ -14,6 +14,10 @@
         "name_user_map": {
           "Type": "multi",
           "Owner": "user"
+        },
+        "costly_map": {
+          "Type": "costly",
+          "Owner": "user"
         }
       },
       "Classes": {
@@ -26,8 +30,16 @@
             {
               "Col": "name",
               "Name": "name_user_map"
+            },
+            {
+              "Col": "costly",
+              "Name": "costly_map"
             }
-          ]
+          ],
+          "Autoinc": {
+            "Col": "id",
+            "Sequence": "seq"
+          }
         },
         "user_extra": {
           "ColVindexes": [
@@ -35,7 +47,11 @@
               "Col": "user_id",
               "Name": "user_index"
             }
-          ]
+          ],
+          "Autoinc": {
+            "Col": "extra_id",
+            "Sequence": "seq"
+          }
         },
         "music": {
           "ColVindexes": [
@@ -70,8 +86,14 @@
       }
     },
     "main": {
+      "Classes": {
+        "seq": {
+          "Type": "Sequence"
+        }
+      },
       "Tables": {
-        "main1": ""
+        "main1": "",
+        "seq": "seq"
       }
     }
   }

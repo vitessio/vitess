@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -22,6 +23,14 @@ import (
 type TableInfo struct {
 	*schema.Table
 	Cache *RowCache
+
+	// Seq must be locked before accessing the sequence vars.
+	// If CurVal==LastVal, we have to cache new values.
+	Seq       sync.Mutex
+	NextVal   int64
+	Increment int64
+	LastVal   int64
+
 	// rowcache stats updated by query_executor.go and query_engine.go.
 	hits, absent, misses, invalidations sync2.AtomicInt64
 }
@@ -31,6 +40,10 @@ func NewTableInfo(conn *DBConn, tableName string, tableType string, comment stri
 	ti, err = loadTableInfo(conn, tableName)
 	if err != nil {
 		return nil, err
+	}
+	if strings.Contains(comment, "vitess_sequence") {
+		ti.Type = schema.Sequence
+		return ti, nil
 	}
 	ti.initRowCache(conn, tableType, comment, cachePool)
 	return ti, nil
@@ -178,7 +191,7 @@ func (ti *TableInfo) initRowCache(conn *DBConn, tableType string, comment string
 		return
 	}
 
-	ti.CacheType = schema.CacheRW
+	ti.Type = schema.CacheRW
 	ti.Cache = NewRowCache(ti, cachePool)
 }
 

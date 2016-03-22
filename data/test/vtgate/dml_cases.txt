@@ -1,197 +1,309 @@
 # update table not found
 "update nouser set val = 1"
-{
-  "Reason": "table nouser not found",
-  "Original": "update nouser set val = 1"
-}
+"table nouser not found"
 
 # delete table not found
 "delete from nouser"
-{
-  "Reason": "table nouser not found",
-  "Original": "delete from nouser"
-}
+"table nouser not found"
 
 # update unsharded
 "update main1 set val = 1"
 {
-  "ID": "UpdateUnsharded",
-  "Table": "main1",
   "Original": "update main1 set val = 1",
-  "Rewritten": "update main1 set val = 1"
+  "Instructions": {
+    "Opcode": "UpdateUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "update main1 set val = 1",
+    "Table": "main1"
+  }
 }
 
 # delete unsharded
 "delete from main1"
 {
-  "ID": "DeleteUnsharded",
-  "Table": "main1",
   "Original": "delete from main1",
-  "Rewritten": "delete from main1"
-}
-
-# update with no where clause
-"update user set val = 1"
-{
-  "Reason": "update has multi-shard where clause",
-  "Table": "user",
-  "Original": "update user set val = 1"
-}
-
-# delete from with no where clause
-"delete from user"
-{
-  "Reason": "delete has multi-shard where clause",
-  "Table": "user",
-  "Original": "delete from user"
+  "Instructions": {
+    "Opcode": "DeleteUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "delete from main1",
+    "Table": "main1"
+  }
 }
 
 # update by primary keyspace id
 "update user set val = 1 where id = 1"
 {
-  "ID": "UpdateEqual",
-  "Table": "user",
   "Original": "update user set val = 1 where id = 1",
-  "Rewritten": "update user set val = 1 where id = 1",
-  "Vindex": "user_index",
-  "Col": "id",
-  "Values": 1
+  "Instructions": {
+    "Opcode": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user set val = 1 where id = 1",
+    "Vindex": "user_index",
+    "Values": 1,
+    "Table": "user"
+  }
+}
+
+# update by primary keyspace id, stray where clause
+"update user set val = 1 where  id = id2 and id = 1"
+{
+  "Original": "update user set val = 1 where  id = id2 and id = 1",
+  "Instructions": {
+    "Opcode": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user set val = 1 where id = id2 and id = 1",
+    "Vindex": "user_index",
+    "Values": 1,
+    "Table": "user"
+  }
+}
+
+# update by primary keyspace id, stray where clause with conversion error
+"update user set val = 1 where  id = 1.1 and id = 1"
+{
+  "Original": "update user set val = 1 where  id = 1.1 and id = 1",
+  "Instructions": {
+    "Opcode": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user set val = 1 where id = 1.1 and id = 1",
+    "Vindex": "user_index",
+    "Values": 1,
+    "Table": "user"
+  }
 }
 
 # delete from by primary keyspace id
 "delete from user where id = 1"
 {
-  "ID": "DeleteEqual",
-  "Table": "user",
   "Original": "delete from user where id = 1",
-  "Rewritten": "delete from user where id = 1",
-  "Subquery": "select id, name from user where id = 1 for update",
-  "Vindex": "user_index",
-  "Col": "id",
-  "Values": 1
-}
-
-# update KEYRANGE
-"update user set val = 1 where keyrange(1, 2)"
-{
-  "Reason": "update has multi-shard where clause",
-  "Table": "user",
-  "Original": "update user set val = 1 where keyrange(1, 2)"
-}
-
-# delete KEYRANGE
-"delete from user where keyrange(1, 2)"
-{
-  "Reason": "delete has multi-shard where clause",
-  "Table": "user",
-  "Original": "delete from user where keyrange(1, 2)"
-}
-
-# update with primary id through IN clause
-"update user set val = 1 where id in (1, 2)"
-{
-  "Reason": "update has multi-shard where clause",
-  "Table": "user",
-  "Original": "update user set val = 1 where id in (1, 2)"
-}
-
-# delete from with primary id through IN clause
-"delete from user where id in (1, 2)"
-{
-  "Reason": "delete has multi-shard where clause",
-  "Table": "user",
-  "Original": "delete from user where id in (1, 2)"
-}
-
-# update with non-unique key
-"update user set val = 1 where name = 'foo'"
-{
-  "Reason": "update has multi-shard where clause",
-  "Table": "user",
-  "Original": "update user set val = 1 where name = 'foo'"
-}
-
-# delete from with primary id through IN clause
-"delete from user where name = 'foo'"
-{
-  "Reason": "delete has multi-shard where clause",
-  "Table": "user",
-  "Original": "delete from user where name = 'foo'"
-}
-
-# update with no index match
-"update user set val = 1 where user_id = 1"
-{
-  "Reason": "update has multi-shard where clause",
-  "Table": "user",
-  "Original": "update user set val = 1 where user_id = 1"
-}
-
-# delete from with no index match
-"delete from user where user_id = 1"
-{
-  "Reason": "delete has multi-shard where clause",
-  "Table": "user",
-  "Original": "delete from user where user_id = 1"
+  "Instructions": {
+    "Opcode": "DeleteEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete from user where id = 1",
+    "Vindex": "user_index",
+    "Values": 1,
+    "Table": "user",
+    "Subquery": "select name, costly from user where id = 1 for update"
+  }
 }
 
 # update by lookup
 "update music set val = 1 where id = 1"
 {
-  "ID": "UpdateEqual",
-  "Table": "music",
   "Original": "update music set val = 1 where id = 1",
-  "Rewritten": "update music set val = 1 where id = 1",
-  "Vindex": "music_user_map",
-  "Col": "id",
-  "Values": 1
+  "Instructions": {
+    "Opcode": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update music set val = 1 where id = 1",
+    "Vindex": "music_user_map",
+    "Values": 1,
+    "Table": "music"
+  }
 }
 
 # delete from by lookup
 "delete from music where id = 1"
 {
-  "ID": "DeleteEqual",
-  "Table": "music",
   "Original": "delete from music where id = 1",
-  "Rewritten": "delete from music where id = 1",
-  "Subquery": "select id from music where id = 1 for update",
-  "Vindex": "music_user_map",
-  "Col": "id",
-  "Values": 1
+  "Instructions": {
+    "Opcode": "DeleteEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete from music where id = 1",
+    "Vindex": "music_user_map",
+    "Values": 1,
+    "Table": "music",
+    "Subquery": "select id from music where id = 1 for update"
+  }
 }
 
 # delete from, no owned vindexes
 "delete from music_extra where user_id = 1"
 {
-  "ID": "DeleteEqual",
-  "Table": "music_extra",
   "Original": "delete from music_extra where user_id = 1",
-  "Rewritten": "delete from music_extra where user_id = 1",
-  "Vindex": "user_index",
-  "Col": "user_id",
-  "Values": 1
+  "Instructions": {
+    "Opcode": "DeleteEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete from music_extra where user_id = 1",
+    "Vindex": "user_index",
+    "Values": 1,
+    "Table": "music_extra"
+  }
 }
 
-# update by lookup with IN clause
-"update music set val = 1 where id in (1, 2)"
+# insert unsharded
+"insert into main1 values(1, 2)"
 {
-  "Reason": "update has multi-shard where clause",
-  "Table": "music",
-  "Original": "update music set val = 1 where id in (1, 2)"
+  "Original": "insert into main1 values(1, 2)",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into main1 values (1, 2)",
+    "Table": "main1"
+  }
 }
 
-# delete from by lookup with IN clause
-"delete from music where id in (1, 2)"
+# insert no column list
+"insert into user values(1, 2, 3)"
+"no column list"
+
+# insert with mimatched column list
+"insert into user(id) values (1, 2)"
+"column list doesn't match values"
+
+# insert with one vindex
+"insert into user(id) values (1)"
 {
-  "Reason": "delete has multi-shard where clause",
-  "Table": "music",
-  "Original": "delete from music where id in (1, 2)"
+  "Original": "insert into user(id) values (1)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into user(id, name, costly) values (:_id, :_name, :_costly)",
+    "Values": [
+      ":__seq",
+      null,
+      null
+    ],
+    "Table": "user",
+    "Generate": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next value from `seq`",
+      "Value": 1
+    }
+  }
 }
 
-# update changes index column
-"update music set id = 1 where id = 1"
+# insert with non vindex
+"insert into user(nonid) values (2)"
 {
-  "Reason": "index is changing",
-  "Table": "music",
-  "Original": "update music set id = 1 where id = 1"
+  "Original": "insert into user(nonid) values (2)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into user(nonid, id, name, costly) values (2, :_id, :_name, :_costly)",
+    "Values": [
+      ":__seq",
+      null,
+      null
+    ],
+    "Table": "user",
+    "Generate": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next value from `seq`"
+    }
+  }
 }
+
+# insert with all vindexes supplied
+"insert into user(nonid, name, id) values (2, 'foo', 1)"
+{
+  "Original": "insert into user(nonid, name, id) values (2, 'foo', 1)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into user(nonid, name, id, costly) values (2, :_name, :_id, :_costly)",
+    "Values": [
+      ":__seq",
+      "foo",
+      null
+    ],
+    "Table": "user",
+    "Generate": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next value from `seq`",
+      "Value": 1
+    }
+  }
+}
+
+# insert for non-vindex autoinc
+"insert into user_extra(nonid) values (2)"
+{
+  "Original": "insert into user_extra(nonid) values (2)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into user_extra(nonid, user_id, extra_id) values (2, :_user_id, :__seq)",
+    "Values": [
+      null
+    ],
+    "Table": "user_extra",
+    "Generate": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next value from `seq`"
+    }
+  }
+}
+
+# insert for non-vindex autoinc, invalid value
+"insert into user_extra(nonid, extra_id) values (2, 1.1)"
+"could not convert val: 1.1, pos: 1: strconv.ParseUint: parsing "1.1": invalid syntax"
+
+# insert invalid index value
+"insert into music_extra(music_id, user_id) values(1, 1.1)"
+"could not convert val: 1.1, pos: 1: strconv.ParseUint: parsing "1.1": invalid syntax"
+
+# insert invalid index value
+"insert into music_extra(music_id, user_id) values(1, id)"
+"could not convert val: id, pos: 1: id is not a value"
+
+# insert invalid table
+"insert into noexist(music_id, user_id) values(1, 1.1)"
+"table noexist not found"

@@ -180,14 +180,14 @@ func TestSchemaInfoOpenWithSchemaOverride(t *testing.T) {
 	// test cache type RW
 	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, true)
 	testTableInfo := schemaInfo.GetTable("test_table_01")
-	if testTableInfo.Table.CacheType != schema.CacheRW {
+	if testTableInfo.Table.Type != schema.CacheRW {
 		t.Fatalf("test_table_01's cache type should be RW")
 	}
 	schemaInfo.Close()
 	// test cache type W
 	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, true)
 	testTableInfo = schemaInfo.GetTable("test_table_02")
-	if testTableInfo.Table.CacheType != schema.CacheW {
+	if testTableInfo.Table.Type != schema.CacheW {
 		t.Fatalf("test_table_02's cache type should be W")
 	}
 	schemaInfo.Close()

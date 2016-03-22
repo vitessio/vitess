@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/splitquery/splitquery_testing"
 )
 
 type FakeSplitAlgorithm struct {
@@ -49,16 +48,16 @@ func TestSplit1SplitColumn(t *testing.T) {
 		map[string]interface{}{},
 		[]string{"id"},
 		1000, // numRowsPerQueryPart
-		splitquery_testing.GetSchema())
+		GetSchema())
 	if err != nil {
 		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
 	}
 	splitter := NewSplitter(splitParams,
 		&FakeSplitAlgorithm{
 			boundaries: []tuple{
-				{splitquery_testing.Int64Value(1)},
-				{splitquery_testing.Int64Value(10)},
-				{splitquery_testing.Int64Value(50)},
+				{Int64Value(1)},
+				{Int64Value(10)},
+				{Int64Value(50)},
 			},
 		})
 	var queryParts []querytypes.QuerySplit
@@ -110,16 +109,16 @@ func TestSplit2SplitColumns(t *testing.T) {
 		map[string]interface{}{},
 		[]string{"id", "user_id"},
 		1000, // numRowsPerQueryPart
-		splitquery_testing.GetSchema())
+		GetSchema())
 	if err != nil {
 		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
 	}
 	splitter := NewSplitter(splitParams,
 		&FakeSplitAlgorithm{
 			boundaries: []tuple{
-				{splitquery_testing.Int64Value(1), splitquery_testing.Int64Value(2)},
-				{splitquery_testing.Int64Value(1), splitquery_testing.Int64Value(3)},
-				{splitquery_testing.Int64Value(5), splitquery_testing.Int64Value(1)},
+				{Int64Value(1), Int64Value(2)},
+				{Int64Value(1), Int64Value(3)},
+				{Int64Value(5), Int64Value(1)},
 			},
 		})
 	var queryParts []querytypes.QuerySplit
@@ -184,7 +183,7 @@ func TestSplit3SplitColumns(t *testing.T) {
 		map[string]interface{}{},
 		[]string{"id", "user_id", "user_id2"},
 		1000, // numRowsPerQueryPart
-		splitquery_testing.GetSchema())
+		GetSchema())
 	if err != nil {
 		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
 	}
@@ -192,14 +191,14 @@ func TestSplit3SplitColumns(t *testing.T) {
 		&FakeSplitAlgorithm{
 			boundaries: []tuple{
 				{
-					splitquery_testing.Int64Value(1),
-					splitquery_testing.Int64Value(2),
-					splitquery_testing.Int64Value(2),
+					Int64Value(1),
+					Int64Value(2),
+					Int64Value(2),
 				},
 				{
-					splitquery_testing.Int64Value(2),
-					splitquery_testing.Int64Value(1),
-					splitquery_testing.Int64Value(1),
+					Int64Value(2),
+					Int64Value(1),
+					Int64Value(1),
 				},
 			},
 		})
@@ -263,16 +262,16 @@ func TestSplitWithWhereClause(t *testing.T) {
 		map[string]interface{}{},
 		[]string{"id", "user_id"},
 		1000, // numRowsPerQueryPart
-		splitquery_testing.GetSchema())
+		GetSchema())
 	if err != nil {
 		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
 	}
 	splitter := NewSplitter(splitParams,
 		&FakeSplitAlgorithm{
 			boundaries: []tuple{
-				{splitquery_testing.Int64Value(1), splitquery_testing.Int64Value(2)},
-				{splitquery_testing.Int64Value(1), splitquery_testing.Int64Value(3)},
-				{splitquery_testing.Int64Value(5), splitquery_testing.Int64Value(1)},
+				{Int64Value(1), Int64Value(2)},
+				{Int64Value(1), Int64Value(3)},
+				{Int64Value(5), Int64Value(1)},
 			},
 		})
 	var queryParts []querytypes.QuerySplit
@@ -337,16 +336,16 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 		map[string]interface{}{"foo": int64(100)},
 		[]string{"id", "user_id"},
 		1000, // numRowsPerQueryPart
-		splitquery_testing.GetSchema())
+		GetSchema())
 	if err != nil {
 		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
 	}
 	splitter := NewSplitter(splitParams,
 		&FakeSplitAlgorithm{
 			boundaries: []tuple{
-				{splitquery_testing.Int64Value(1), splitquery_testing.Int64Value(2)},
-				{splitquery_testing.Int64Value(1), splitquery_testing.Int64Value(3)},
-				{splitquery_testing.Int64Value(5), splitquery_testing.Int64Value(1)},
+				{Int64Value(1), Int64Value(2)},
+				{Int64Value(1), Int64Value(3)},
+				{Int64Value(5), Int64Value(1)},
 			},
 		})
 	var queryParts []querytypes.QuerySplit
@@ -415,7 +414,7 @@ func TestSplitWithEmptyBoundaryList(t *testing.T) {
 		map[string]interface{}{"foo": int64(100)},
 		[]string{"id", "user_id"},
 		1000,
-		splitquery_testing.GetSchema())
+		GetSchema())
 	if err != nil {
 		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
 	}

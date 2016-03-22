@@ -6,9 +6,12 @@ package fakevtctlclient
 
 import (
 	"errors"
+	"io"
 	"reflect"
 	"strings"
 	"testing"
+
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 )
 
 func TestStreamOutputAndError(t *testing.T) {
@@ -40,14 +43,19 @@ func TestStreamOutput(t *testing.T) {
 }
 
 func verifyStreamOutputAndError(t *testing.T, fake *FakeLoggerEventStreamingClient, args, output []string, wantErr error) {
-	stream, errFunc, err := fake.StreamResult(args)
+	stream, err := fake.StreamResult(args)
 	if err != nil {
 		t.Fatalf("Failed to stream result: %v", err)
 	}
 
 	// Verify output and error.
 	i := 0
-	for event := range stream {
+	for {
+		var event *logutilpb.Event
+		event, err = stream.Recv()
+		if err != nil {
+			break
+		}
 		if i > len(output) {
 			t.Fatalf("Received more events than expected. got: %v want: %v", i, len(output))
 		}
@@ -60,19 +68,19 @@ func verifyStreamOutputAndError(t *testing.T, fake *FakeLoggerEventStreamingClie
 	if i != len(output) {
 		t.Errorf("Number of received events mismatches. got: %v want: %v", i, len(output))
 	}
-	if errFunc() != wantErr {
-		t.Errorf("Wrong error received. got: %v want: %v", errFunc(), wantErr)
+	if err == io.EOF {
+		err = nil
+	}
+	if err != wantErr {
+		t.Errorf("Wrong error received. got: %v want: %v", err, wantErr)
 	}
 }
 
 func TestNoResultRegistered(t *testing.T) {
 	fake := NewFakeLoggerEventStreamingClient()
-	stream, errFunc, err := fake.StreamResult([]string{"ListShardTablets", "test_keyspace/0"})
+	stream, err := fake.StreamResult([]string{"ListShardTablets", "test_keyspace/0"})
 	if stream != nil {
 		t.Fatalf("No stream should have been returned because no matching result is registered.")
-	}
-	if errFunc != nil {
-		t.Fatalf("Executing the command should fail because no matching result is registered.")
 	}
 	wantErr := "No response was registered for args: [ListShardTablets test_keyspace/0]"
 	if err.Error() != wantErr {

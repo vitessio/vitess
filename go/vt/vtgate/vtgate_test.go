@@ -28,7 +28,7 @@ import (
 // This file uses the sandbox_test framework.
 
 func init() {
-	schema := createTestSchema(`
+	vschema := createTestVSchema(`
 {
   "Keyspaces": {
     "TestUnsharded": {
@@ -40,7 +40,7 @@ func init() {
   }
 }
 `)
-	Init(nil, topo.Server{}, new(sandboxTopo), schema, "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, 0, "")
+	Init(nil, topo.Server{}, new(sandboxTopo), vschema, "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, 0, "")
 }
 
 func TestVTGateExecute(t *testing.T) {
@@ -48,7 +48,7 @@ func TestVTGateExecute(t *testing.T) {
 	sbc := &sandboxConn{}
 	sandbox.MapTestConn("0", sbc)
 	qr, err := rpcVTGate.Execute(context.Background(),
-		"select * from t1",
+		"select id from t1",
 		nil,
 		topodatapb.TabletType_MASTER,
 		nil,
@@ -65,7 +65,7 @@ func TestVTGateExecute(t *testing.T) {
 		t.Errorf("want true, got false")
 	}
 	rpcVTGate.Execute(context.Background(),
-		"select * from t1",
+		"select id from t1",
 		nil,
 		topodatapb.TabletType_MASTER,
 		session,
@@ -92,7 +92,7 @@ func TestVTGateExecute(t *testing.T) {
 
 	session, err = rpcVTGate.Begin(context.Background())
 	rpcVTGate.Execute(context.Background(),
-		"select * from t1",
+		"select id from t1",
 		nil,
 		topodatapb.TabletType_MASTER,
 		session,
@@ -529,7 +529,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 	sandbox.MapTestConn("0", sbc)
 	var qrs []*sqltypes.Result
 	err := rpcVTGate.StreamExecute(context.Background(),
-		"select * from t1",
+		"select id from t1",
 		nil,
 		topodatapb.TabletType_MASTER,
 		func(r *sqltypes.Result) error {

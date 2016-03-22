@@ -3,7 +3,7 @@ It also gives the steps to start a Kubernetes cluster with
 [Google Container Engine](https://cloud.google.com/container-engine/).
 
 If you already have Kubernetes v1.0+ running in one of the other
-[supported platforms](http://kubernetes.io/gettingstarted/),
+[supported platforms](http://kubernetes.io/docs/getting-started-guides/),
 you can skip the `gcloud` steps.
 The `kubectl` steps will apply to any Kubernetes cluster.
 
