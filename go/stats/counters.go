@@ -16,6 +16,8 @@ import (
 // it doesn't allow floats. In addition, it provides
 // a Counts method which can be used for tracking rates.
 type Counters struct {
+	// mu only protects adding and retrieving the value (*int64) from the map,
+	// modification to the actual number (int64) should be done with atomic funcs.
 	mu     sync.RWMutex
 	counts map[string]*int64
 }
@@ -66,6 +68,8 @@ func (c *Counters) getValueAddr(name string) *int64 {
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	// we need to check the existence again
+	// as it may be created by other goroutine.
 	a, ok = c.counts[name]
 	if ok {
 		return a

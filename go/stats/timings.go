@@ -17,9 +17,12 @@ import (
 // Timings is meant to tracks timing data
 // by named categories as well as histograms.
 type Timings struct {
-	mu         sync.RWMutex
 	totalCount sync2.AtomicInt64
 	totalTime  sync2.AtomicInt64
+
+	// mu protects get and set of hook and the map.
+	// Modification to the value in the map is not protected.
+	mu         sync.RWMutex
 	histograms map[string]*Histogram
 	hook       func(string, time.Duration)
 }

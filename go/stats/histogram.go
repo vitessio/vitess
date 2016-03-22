@@ -74,12 +74,16 @@ func (h *Histogram) Add(value int64) {
 }
 
 // String returns a string representation of the Histogram.
+// Note that sum of all buckets may not be equal to the total temporarily,
+// because Add() increments bucket and total with two atomic operations.
 func (h *Histogram) String() string {
 	b, _ := h.MarshalJSON()
 	return string(b)
 }
 
 // MarshalJSON returns a JSON representation of the Histogram.
+// Note that sum of all buckets may not be equal to the total temporarily,
+// because Add() increments bucket and total with two atomic operations.
 func (h *Histogram) MarshalJSON() ([]byte, error) {
 	b := bytes.NewBuffer(make([]byte, 0, 4096))
 	fmt.Fprintf(b, "{")
