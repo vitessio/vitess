@@ -116,6 +116,17 @@ type TabletConn interface {
 	// appending primary key range clauses to the original query
 	SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error)
 
+	// SplitQuery splits a query into equally sized smaller queries by
+	// appending primary key range clauses to the original query
+	// TODO(erez): Remove SplitQuery and rename this to SplitQueryV2 once migration is done.
+	SplitQueryV2(
+		ctx context.Context,
+		query querytypes.BoundQuery,
+		splitColumns []string,
+		splitCount int64,
+		numRowsPerQueryPart int64,
+		algorithm querypb.SplitQueryRequest_Algorithm) (queries []querytypes.QuerySplit, err error)
+
 	// StreamHealth starts a streaming RPC for VTTablet health status updates.
 	StreamHealth(ctx context.Context) (StreamHealthReader, error)
 }

@@ -160,13 +160,6 @@ func convertBindVariableNamesToValExpr(bindVariableNames []string) []sqlparser.V
 // (l1 < r1) or ((l1 = r1) and (l2 <= r2)) if strict is false,
 // and
 // (l1 < r1) or ((l1 = r1) and (l2 < r2)), otherwise.
-//
-// MySQL does support tuple-inequalities ((a,b) <= (c,d) and interpretes them using the
-// lexicographical ordering of tuples. However, it does not optimize queries with such inequalities
-// well. Specifically, it does not recognize that a query with such inequalities, that involve only
-// the columns of an index, can be done as an index scan. MySQL resorts to a full-table scan in this
-// case instead. Thus, we convert such tuple inequalties to an expression involving only scalar
-// inequalties.
 func constructTupleInequality(
 	lhsTuple []sqlparser.ValExpr, rhsTuple []sqlparser.ValExpr, strict bool) sqlparser.BoolExpr {
 	if len(lhsTuple) != len(rhsTuple) {

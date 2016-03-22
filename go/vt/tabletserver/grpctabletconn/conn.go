@@ -251,6 +251,8 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) 
 }
 
 // SplitQuery is the stub for TabletServer.SplitQuery RPC
+// TODO(erez): Remove this method and rename SplitQueryV2 to SplitQuery once
+// the migration to SplitQuery V2 is done.
 func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) (queries []querytypes.QuerySplit, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
@@ -264,13 +266,59 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query querytypes.Bo
 		return nil, tabletconn.TabletErrorFromGRPC(err)
 	}
 	req := &querypb.SplitQueryRequest{
-		Target:            conn.target,
-		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
-		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-		Query:             q,
-		SplitColumn:       splitColumn,
-		SplitCount:        splitCount,
-		SessionId:         conn.sessionID,
+		Target:              conn.target,
+		EffectiveCallerId:   callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId:   callerid.ImmediateCallerIDFromContext(ctx),
+		Query:               q,
+		SplitColumn:         []string{splitColumn},
+		SplitCount:          splitCount,
+		NumRowsPerQueryPart: 0,
+		Algorithm:           querypb.SplitQueryRequest_EQUAL_SPLITS,
+		UseSplitQueryV2:     false,
+		SessionId:           conn.sessionID,
+	}
+	sqr, err := conn.c.SplitQuery(ctx, req)
+	if err != nil {
+		return nil, tabletconn.TabletErrorFromGRPC(err)
+	}
+	split, err := querytypes.Proto3ToQuerySplits(sqr.Queries)
+	if err != nil {
+		return nil, tabletconn.TabletErrorFromGRPC(err)
+	}
+	return split, nil
+}
+
+// SplitQueryV2 is the stub for TabletServer.SplitQuery RPC
+func (conn *gRPCQueryClient) SplitQueryV2(
+	ctx context.Context,
+	query querytypes.BoundQuery,
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) (queries []querytypes.QuerySplit, err error) {
+
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		err = tabletconn.ConnClosed
+		return
+	}
+
+	q, err := querytypes.BoundQueryToProto3(query.Sql, query.BindVariables)
+	if err != nil {
+		return nil, tabletconn.TabletErrorFromGRPC(err)
+	}
+	req := &querypb.SplitQueryRequest{
+		Target:              conn.target,
+		EffectiveCallerId:   callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId:   callerid.ImmediateCallerIDFromContext(ctx),
+		Query:               q,
+		SplitColumn:         splitColumns,
+		SplitCount:          splitCount,
+		NumRowsPerQueryPart: numRowsPerQueryPart,
+		Algorithm:           algorithm,
+		UseSplitQueryV2:     true,
+		SessionId:           conn.sessionID,
 	}
 	sqr, err := conn.c.SplitQuery(ctx, req)
 	if err != nil {
