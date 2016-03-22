@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 
+	log1 "github.com/golang/glog"
+
 	"github.com/minio/minio-go"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
@@ -58,6 +60,8 @@ func (bh *CephBackupHandle) AddFile(filename string) (io.WriteCloser, error) {
 	go func() {
 		defer bh.waitGroup.Done()
 		// Give PutObject() the read end of the pipe.
+		fmt.Println(bucket, filename)
+		log1.Info(bucket, filename)
 		_, err := bh.client.PutObject(bucket, filename, reader, "application/octet-stream")
 		if err != nil {
 			fmt.Println("Error with io.Pipe")
@@ -73,10 +77,15 @@ func (bh *CephBackupHandle) AddFile(filename string) (io.WriteCloser, error) {
 
 // EndBackup implements BackupHandle.
 func (bh *CephBackupHandle) EndBackup() error {
-	if bh.readOnly {
-		return fmt.Errorf("EndBackup cannot be called on read-only backup")
-	}
-	return nil
+	//	if bh.readOnly {
+	//		return fmt.Errorf("EndBackup cannot be called on read-only backup")
+	//	}
+	//	return nil
+
+	// Wait for goroutines launched by AddFile() to finish, so we don't miss any errors.
+	bh.waitGroup.Wait()
+	// Return the saved PutObject() errors, if any.
+	return bh.errors.Error()
 }
 
 // AbortBackup implements BackupHandle.
@@ -96,33 +105,38 @@ func (bh *CephBackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
 	//	//	return bh.client_ceph.Bucket(*bucket).Object(object).NewReader(context.TODO())
 	//	return bh.client.Bucket(bucket).Object(object).NewReader(context.TODO())
 
-	reader, writer := io.Pipe()
-	//	var obj *minio.Object
-	//	var err error
-	bh.waitGroup.Add(1)
-	go func() {
-		defer bh.waitGroup.Done()
-		// Give PutObject() the read end of the pipe.
-		obj, err := bh.client.GetObject(bucket, filename)
-		stat, err := obj.Stat()
-		if _, err = io.CopyN(writer, reader, stat.Size); err != nil {
-			log.Fatalln(err)
-		}
-		if err != nil {
-			log.Fatalln(err)
-		}
+	/*
+		reader, writer := io.Pipe()
+		//	var obj *minio.Object
+		//	var err error
+		bh.waitGroup.Add(1)
+		go func() {
+			defer bh.waitGroup.Done()
+			// Give PutObject() the read end of the pipe.
+			obj, err := bh.client.GetObject(bucket, filename)
+			stat, err := obj.Stat()
+			if _, err = io.CopyN(writer, reader, stat.Size); err != nil {
+				log.Fatalln(err)
+			}
+			if err != nil {
+				log.Fatalln(err)
+			}
 
-		if err != nil {
-			fmt.Println("Error with io.Pipe")
-			// Signal the writer that an error occurred, in case it's not done writing yet.
-			reader.CloseWithError(err)
-			// In case the error happened after the writer finished, we need to remember it.
-			bh.errors.RecordError(err)
-		}
-	}()
+			if err != nil {
+				fmt.Println("Error with io.Pipe")
+				// Signal the writer that an error occurred, in case it's not done writing yet.
+				reader.CloseWithError(err)
+				// In case the error happened after the writer finished, we need to remember it.
+				bh.errors.RecordError(err)
+			}
+		}()
 
-	// Give our caller the write end of the pipe.
-	return reader, nil
+		// Give our caller the write end of the pipe.
+		return reader, nil
+
+	*/
+	//	return bh.client.GetObject(bucket, objName(bh.dir, bh.name, filename))
+	return bh.client.GetObject(bucket, filename)
 }
 
 // GCSBackupStorage implements BackupStorage for Google Cloud Storage.
@@ -220,9 +234,9 @@ func (bs *CephBackupStorage) client() (*minio.Client, error) {
 	defer bs.mu.Unlock()
 
 	if bs.client_ceph == nil {
-		accessKey := "accessKey"
-		secretKey := "secretKey"
-		url := "url"
+		accessKey := "439SQDG76BGBAM8ILSKR"
+		secretKey := "zu7wZxwJYKUHMf7KJISKFSbvUC546Ge3KO3qVXbT"
+		url := "10.47.2.3"
 		ceph_client, err := minio.NewV2(url, accessKey, secretKey, true)
 		if err != nil {
 			return nil, err
