@@ -93,10 +93,10 @@ func orderedColumns(tableDefinition *tabletmanagerdatapb.TableDefinition) []stri
 	return result
 }
 
-// uint64FromKeyspaceID returns a 64 bits hex number as a string
-// (in the form of 0x0123456789abcdef) from the provided keyspaceId
-func uint64FromKeyspaceID(keyspaceID []byte) string {
-	hex := hex.EncodeToString(keyspaceID)
+// uint64FromShardingKey returns a 64 bits hex number as a string
+// (in the form of 0x0123456789abcdef) from the provided sharding key
+func uint64FromShardingKey(shardingKey []byte) string {
+	hex := hex.EncodeToString(shardingKey)
 	return "0x" + hex + strings.Repeat("0", 16-len(hex))
 }
 
@@ -121,15 +121,15 @@ func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server
 			if len(keyRange.Start) > 0 {
 				if len(keyRange.End) > 0 {
 					// have start & end
-					where = fmt.Sprintf("WHERE %v >= %v AND %v < %v ", shardingColumnName, uint64FromKeyspaceID(keyRange.Start), shardingColumnName, uint64FromKeyspaceID(keyRange.End))
+					where = fmt.Sprintf("WHERE %v >= %v AND %v < %v ", shardingColumnName, uint64FromShardingKey(keyRange.Start), shardingColumnName, uint64FromShardingKey(keyRange.End))
 				} else {
 					// have start only
-					where = fmt.Sprintf("WHERE %v >= %v ", shardingColumnName, uint64FromKeyspaceID(keyRange.Start))
+					where = fmt.Sprintf("WHERE %v >= %v ", shardingColumnName, uint64FromShardingKey(keyRange.Start))
 				}
 			} else {
 				if len(keyRange.End) > 0 {
 					// have end only
-					where = fmt.Sprintf("WHERE %v < %v ", shardingColumnName, uint64FromKeyspaceID(keyRange.End))
+					where = fmt.Sprintf("WHERE %v < %v ", shardingColumnName, uint64FromShardingKey(keyRange.End))
 				}
 			}
 		case topodatapb.KeyspaceIdType_BYTES:
