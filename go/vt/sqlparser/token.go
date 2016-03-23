@@ -80,6 +80,7 @@ var keywords = map[string]int{
 	"inner":          INNER,
 	"insert":         INSERT,
 	"intersect":      INTERSECT,
+	"interval":       INTERVAL,
 	"into":           INTO,
 	"is":             IS,
 	"join":           JOIN,
