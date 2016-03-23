@@ -16,7 +16,7 @@ import (
 // (the use pattern is 'Find', if not found, then 'Append',
 // for a single shard)
 type SafeSession struct {
-	mu sync.Mutex
+	mu sync.RWMutex
 	*vtgatepb.Session
 }
 
@@ -30,8 +30,8 @@ func (session *SafeSession) InTransaction() bool {
 	if session == nil || session.Session == nil {
 		return false
 	}
-	session.mu.Lock()
-	defer session.mu.Unlock()
+	session.mu.RLock()
+	defer session.mu.RUnlock()
 	return session.Session.InTransaction
 }
 
@@ -40,8 +40,8 @@ func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.T
 	if session == nil {
 		return 0
 	}
-	session.mu.Lock()
-	defer session.mu.Unlock()
+	session.mu.RLock()
+	defer session.mu.RUnlock()
 	for _, shardSession := range session.ShardSessions {
 		if keyspace == shardSession.Target.Keyspace && tabletType == shardSession.Target.TabletType && shard == shardSession.Target.Shard {
 			return shardSession.TransactionId
