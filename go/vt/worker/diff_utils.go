@@ -114,6 +114,9 @@ func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAl
 // columns in front.
 func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *topodatapb.TabletAlias, tableDefinition *tabletmanagerdatapb.TableDefinition, keyRange *topodatapb.KeyRange, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType) (*QueryResultReader, error) {
 	where := ""
+	// TODO(aaijazi): this currently only works with V2 style sharding keys.
+	// We should add FilteredQueryResultReader that will do a full table scan, with client-side
+	// filtering to remove rows that don't map to the keyrange that we want.
 	if keyRange != nil {
 		switch shardingColumnType {
 		case topodatapb.KeyspaceIdType_UINT64:
