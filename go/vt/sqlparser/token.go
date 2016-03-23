@@ -77,7 +77,6 @@ var keywords = map[string]int{
 	"is":             IS,
 	"join":           JOIN,
 	"key":            KEY,
-	"keyrange":       KEYRANGE,
 	"last_insert_id": LAST_INSERT_ID,
 	"left":           LEFT,
 	"like":           LIKE,

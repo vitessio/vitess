@@ -198,8 +198,6 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* exists */ 1 from t where exists (select 1 from t)",
 	}, {
-		input: "select /* keyrange */ 1 from t where keyrange(1, 2)",
-	}, {
 		input: "select /* (boolean) */ 1 from t where not (a = b)",
 	}, {
 		input: "select /* in value list */ 1 from t where a in (b, c)",

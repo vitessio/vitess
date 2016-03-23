@@ -74,7 +74,7 @@ func forceEOF(yylex interface{}) {
 %token LEX_ERROR
 %left <empty> UNION MINUS EXCEPT INTERSECT
 %token <empty> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT FOR
-%token <empty> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK KEYRANGE
+%token <empty> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK
 %token <empty> VALUES LAST_INSERT_ID
 %token <empty> NEXT VALUE
 %left <empty> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
@@ -659,10 +659,6 @@ condition:
 | EXISTS subquery
   {
     $$ = &ExistsExpr{Subquery: $2}
-  }
-| KEYRANGE openb value ',' value closeb
-  {
-    $$ = &KeyrangeExpr{Start: $3, End: $5}
   }
 
 is_suffix:
