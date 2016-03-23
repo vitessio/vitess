@@ -396,6 +396,17 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 		return fmt.Errorf("no tables matching the table filter in tablet %v", topoproto.TabletAliasString(scw.sourceAliases[0]))
 	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
+
+	if *useV3ReshardingMode {
+		// TODO(sougou): instantiate a v3 key resolver here
+		return fmt.Errorf("v3 resharding mode is currently not fully supported. Please use v2 for now")
+	}
+
+	keyResolver, err := newV2Resolver(scw.keyspaceInfo, sourceSchemaDefinition.TableDefinitions)
+	if err != nil {
+		return fmt.Errorf("cannot resolving sharding keys for keyspace %v: %v", scw.keyspace, err)
+	}
+
 	scw.Mu.Lock()
 	scw.tableStatus = make([]*tableStatus, len(sourceSchemaDefinition.TableDefinitions))
 	for i, td := range sourceSchemaDefinition.TableDefinitions {
@@ -407,22 +418,9 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	scw.startTime = time.Now()
 	scw.Mu.Unlock()
 
-	// Find the column index for the sharding columns in all the databases, and count rows
-	columnIndexes := make([]int, len(sourceSchemaDefinition.TableDefinitions))
+	// Count rows for source tables
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
 		if td.Type == tmutils.TableBaseTable {
-			// find the column to split on
-			columnIndexes[tableIndex] = -1
-			for i, name := range td.Columns {
-				if name == scw.keyspaceInfo.ShardingColumnName {
-					columnIndexes[tableIndex] = i
-					break
-				}
-			}
-			if columnIndexes[tableIndex] == -1 {
-				return fmt.Errorf("table %v doesn't have a column named '%v'", td.Name, scw.keyspaceInfo.ShardingColumnName)
-			}
-
 			scw.tableStatus[tableIndex].mu.Lock()
 			scw.tableStatus[tableIndex].rowCount = td.RowCount
 			scw.tableStatus[tableIndex].mu.Unlock()
@@ -483,7 +481,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 				continue
 			}
 
-			rowSplitter := NewRowSplitter(scw.destinationShards, scw.keyspaceInfo.ShardingColumnType, columnIndexes[tableIndex])
+			rowSplitter := NewRowSplitter(scw.destinationShards, keyResolver, td.Name)
 
 			chunks, err := FindChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
 			if err != nil {
@@ -636,8 +634,7 @@ func (scw *SplitCloneWorker) processData(ctx context.Context, td *tabletmanagerd
 			return nil
 		}
 
-		// Split the rows by keyspace_id, and insert
-		// each chunk into each destination
+		// Split the rows by sharding key, and insert each chunk into each destination
 		if err := rowSplitter.Split(sr, r.Rows); err != nil {
 			return fmt.Errorf("RowSplitter failed for table %v: %v", td.Name, err)
 		}
