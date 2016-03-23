@@ -18,14 +18,16 @@ import (
 // RowSplitter is a helper class to split rows into multiple
 // subsets targeted to different shards.
 type RowSplitter struct {
+	ShardingKey     shardingKey
 	ShardingKeyType topodatapb.KeyspaceIdType
 	ValueIndex      int
 	KeyRanges       []*topodatapb.KeyRange
 }
 
 // NewRowSplitter returns a new row splitter for the given shard distribution.
-func NewRowSplitter(shardInfos []*topo.ShardInfo, shardingKeyType topodatapb.KeyspaceIdType, valueIndex int) *RowSplitter {
+func NewRowSplitter(shardInfos []*topo.ShardInfo, sk shardingKey, shardingKeyType topodatapb.KeyspaceIdType, valueIndex int) *RowSplitter {
 	result := &RowSplitter{
+		ShardingKey:     sk,
 		ShardingKeyType: shardingKeyType,
 		ValueIndex:      valueIndex,
 		KeyRanges:       make([]*topodatapb.KeyRange, len(shardInfos)),
@@ -45,7 +47,11 @@ func (rs *RowSplitter) StartSplit() [][][]sqltypes.Value {
 func (rs *RowSplitter) Split(result [][][]sqltypes.Value, rows [][]sqltypes.Value) error {
 	if rs.ShardingKeyType == topodatapb.KeyspaceIdType_UINT64 {
 		for _, row := range rows {
-			i, err := row[rs.ValueIndex].ParseUint64()
+			value, err := rs.ShardingKey.value(row[rs.ValueIndex])
+			if err != nil {
+				return err
+			}
+			i, err := value.ParseUint64()
 			if err != nil {
 				return fmt.Errorf("Non numerical value: %v", err)
 			}
@@ -59,7 +65,11 @@ func (rs *RowSplitter) Split(result [][][]sqltypes.Value, rows [][]sqltypes.Valu
 		}
 	} else {
 		for _, row := range rows {
-			k := row[rs.ValueIndex].Raw()
+			value, err := rs.ShardingKey.value(row[rs.ValueIndex])
+			if err != nil {
+				return err
+			}
+			k := value.Raw()
 			for i, kr := range rs.KeyRanges {
 				if key.KeyRangeContains(kr, k) {
 					result[i] = append(result[i], row)

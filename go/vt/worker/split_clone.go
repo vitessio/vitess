@@ -47,7 +47,7 @@ type SplitCloneWorker struct {
 	// all subsequent fields are protected by the mutex
 
 	// populated during WorkerStateInit, read-only after that
-	keyspaceInfo      *topo.KeyspaceInfo
+	shardingKey       shardingKey
 	sourceShards      []*topo.ShardInfo
 	destinationShards []*topo.ShardInfo
 
@@ -219,10 +219,15 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 
 	// read the keyspace and validate it
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	scw.keyspaceInfo, err = scw.wr.TopoServer().GetKeyspace(shortCtx, scw.keyspace)
+	keyspaceInfo, err := scw.wr.TopoServer().GetKeyspace(shortCtx, scw.keyspace)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot read keyspace %v: %v", scw.keyspace, err)
+	}
+
+	scw.shardingKey, err = newShardingKey(keyspaceInfo)
+	if err != nil {
+		return fmt.Errorf("cannot determine the sharding key for keyspace %v: %v", scw.keyspace, err)
 	}
 
 	// find the OverlappingShards in the keyspace
@@ -410,16 +415,17 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	columnIndexes := make([]int, len(sourceSchemaDefinition.TableDefinitions))
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
 		if td.Type == tmutils.TableBaseTable {
+			shardingColumnName := scw.shardingKey.columnName(scw.keyspace, td.Name)
 			// find the column to split on
 			columnIndexes[tableIndex] = -1
 			for i, name := range td.Columns {
-				if name == scw.keyspaceInfo.ShardingColumnName {
+				if name == shardingColumnName {
 					columnIndexes[tableIndex] = i
 					break
 				}
 			}
 			if columnIndexes[tableIndex] == -1 {
-				return fmt.Errorf("table %v doesn't have a column named '%v'", td.Name, scw.keyspaceInfo.ShardingColumnName)
+				return fmt.Errorf("table %v doesn't have a column named '%v'", td.Name, shardingColumnName)
 			}
 
 			scw.tableStatus[tableIndex].mu.Lock()
@@ -482,7 +488,8 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 				continue
 			}
 
-			rowSplitter := NewRowSplitter(scw.destinationShards, scw.keyspaceInfo.ShardingColumnType, columnIndexes[tableIndex])
+			shardingKeyType := scw.shardingKey.keyType(scw.keyspace, td.Name)
+			rowSplitter := NewRowSplitter(scw.destinationShards, scw.shardingKey, shardingKeyType, columnIndexes[tableIndex])
 
 			chunks, err := FindChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
 			if err != nil {
