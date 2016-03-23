@@ -637,8 +637,7 @@ func (scw *SplitCloneWorker) processData(td *tabletmanagerdatapb.TableDefinition
 				return nil
 			}
 
-			// Split the rows by keyspace_id, and insert
-			// each chunk into each destination
+			// Split the rows by sharding key, and insert each chunk into each destination
 			if err := rowSplitter.Split(sr, r.Rows); err != nil {
 				return fmt.Errorf("RowSplitter failed for table %v: %v", td.Name, err)
 			}
