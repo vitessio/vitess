@@ -56,7 +56,7 @@ type shardGateway struct {
 	connLife           time.Duration
 	connTimings        *stats.MultiTimings
 
-	mu         sync.Mutex
+	mu         sync.RWMutex
 	shardConns map[string]*ShardConn
 }
 
@@ -158,14 +158,21 @@ func (sg *shardGateway) CacheStatus() GatewayEndPointCacheStatusList {
 }
 
 func (sg *shardGateway) getConnection(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType) *ShardConn {
+	key := fmt.Sprintf("%s.%s.%s", keyspace, shard, strings.ToLower(tabletType.String()))
+	sg.mu.RLock()
+	sdc, ok := sg.shardConns[key]
+	sg.mu.RUnlock()
+	if ok {
+		return sdc
+	}
+
 	sg.mu.Lock()
 	defer sg.mu.Unlock()
-
-	key := fmt.Sprintf("%s.%s.%s", keyspace, shard, strings.ToLower(tabletType.String()))
-	sdc, ok := sg.shardConns[key]
-	if !ok {
-		sdc = NewShardConn(ctx, sg.toposerv, sg.cell, keyspace, shard, tabletType, sg.retryDelay, sg.retryCount, sg.connTimeoutTotal, sg.connTimeoutPerConn, sg.connLife, sg.connTimings)
-		sg.shardConns[key] = sdc
+	sdc, ok = sg.shardConns[key]
+	if ok {
+		return sdc
 	}
+	sdc = NewShardConn(ctx, sg.toposerv, sg.cell, keyspace, shard, tabletType, sg.retryDelay, sg.retryCount, sg.connTimeoutTotal, sg.connTimeoutPerConn, sg.connLife, sg.connTimings)
+	sg.shardConns[key] = sdc
 	return sdc
 }

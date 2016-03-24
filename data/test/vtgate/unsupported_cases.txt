@@ -162,14 +162,6 @@
 "delete from user"
 "unsupported: multi-shard where clause in DML"
 
-# update KEYRANGE
-"update user set val = 1 where keyrange(1, 2)"
-"unsupported: multi-shard where clause in DML"
-
-# delete KEYRANGE
-"delete from user where keyrange(1, 2)"
-"unsupported: multi-shard where clause in DML"
-
 # update with primary id through IN clause
 "update user set val = 1 where id in (1, 2)"
 "unsupported: multi-shard where clause in DML"
