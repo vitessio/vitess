@@ -828,6 +828,7 @@ func (*Subquery) iExpr()       {}
 func (ListArg) iExpr()         {}
 func (*BinaryExpr) iExpr()     {}
 func (*UnaryExpr) iExpr()      {}
+func (*IntervalExpr) iExpr()   {}
 func (*FuncExpr) iExpr()       {}
 func (*CaseExpr) iExpr()       {}
 
@@ -1086,18 +1087,19 @@ type ValExpr interface {
 	Expr
 }
 
-func (StrVal) iValExpr()      {}
-func (NumVal) iValExpr()      {}
-func (ValArg) iValExpr()      {}
-func (*NullVal) iValExpr()    {}
-func (*ColName) iValExpr()    {}
-func (ValTuple) iValExpr()    {}
-func (*Subquery) iValExpr()   {}
-func (ListArg) iValExpr()     {}
-func (*BinaryExpr) iValExpr() {}
-func (*UnaryExpr) iValExpr()  {}
-func (*FuncExpr) iValExpr()   {}
-func (*CaseExpr) iValExpr()   {}
+func (StrVal) iValExpr()        {}
+func (NumVal) iValExpr()        {}
+func (ValArg) iValExpr()        {}
+func (*NullVal) iValExpr()      {}
+func (*ColName) iValExpr()      {}
+func (ValTuple) iValExpr()      {}
+func (*Subquery) iValExpr()     {}
+func (ListArg) iValExpr()       {}
+func (*BinaryExpr) iValExpr()   {}
+func (*UnaryExpr) iValExpr()    {}
+func (*IntervalExpr) iValExpr() {}
+func (*FuncExpr) iValExpr()     {}
+func (*CaseExpr) iValExpr()     {}
 
 // StrVal represents a string value.
 type StrVal []byte
@@ -1348,6 +1350,29 @@ func (node *UnaryExpr) WalkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		node.Expr,
+	)
+}
+
+// IntervalExpr represents a date-time INTERVAL expression.
+type IntervalExpr struct {
+	Expr Expr
+	Unit SQLName
+}
+
+// Format formats the node.
+func (node *IntervalExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("interval %v %v", node.Expr, node.Unit)
+}
+
+// WalkSubtree walks the nodes of the subtree
+func (node *IntervalExpr) WalkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Expr,
+		node.Unit,
 	)
 }
 

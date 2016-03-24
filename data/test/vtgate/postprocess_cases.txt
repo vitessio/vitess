@@ -218,6 +218,97 @@
   }
 }
 
+# Order by, '*' expression
+"select * from user where id = 5 order by col"
+{
+  "Original": "select * from user where id = 5 order by col",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user where id = 5 order by col asc",
+    "FieldQuery": "select * from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 5
+  }
+}
+
+# Order by, qualified '*' expression
+"select user.* from user where id = 5 order by user.col"
+{
+  "Original": "select user.* from user where id = 5 order by user.col",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.* from user where id = 5 order by user.col asc",
+    "FieldQuery": "select user.* from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 5
+  }
+}
+
+# Order by, '*' expression with qualified reference
+"select * from user where id = 5 order by user.col"
+{
+  "Original": "select * from user where id = 5 order by user.col",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user where id = 5 order by user.col asc",
+    "FieldQuery": "select * from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 5
+  }
+}
+
+# Order by, '*' expression in a subquery
+"select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)"
+{
+  "Original": "select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)",
+  "Instructions": {
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select u.id, u.col from user as u where u.col in (select * from user where user.id = u.id order by col asc)",
+      "FieldQuery": "select u.id, u.col from user as u where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select e.id from user_extra as e where e.col = :u_col",
+      "FieldQuery": "select e.id from user_extra as e where 1 != 1",
+      "JoinVars": {
+        "u_col": {}
+      }
+    },
+    "Cols": [
+      -1,
+      1
+    ],
+    "Vars": {
+      "u_col": 1
+    }
+  }
+}
+
+# Order by, qualified '*' expression, name mismatched.
+"select user.* from user where id = 5 order by e.col"
+"symbol e.col not found"
+
 # Order by, invalid column number
 "select col from user order by 1.1"
 "error parsing order by clause: 1.1"

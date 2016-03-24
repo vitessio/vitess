@@ -74,7 +74,7 @@ func forceEOF(yylex interface{}) {
 %token LEX_ERROR
 %left <empty> UNION MINUS EXCEPT INTERSECT
 %token <empty> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT FOR
-%token <empty> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK KEYRANGE
+%token <empty> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK
 %token <empty> VALUES LAST_INSERT_ID
 %token <empty> NEXT VALUE
 %left <empty> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
@@ -99,6 +99,7 @@ func forceEOF(yylex interface{}) {
 %left <empty> '*' '/' '%'
 %left <empty> '^'
 %right <empty> '~' UNARY
+%right <empty> INTERVAL
 %nonassoc <empty> '.'
 %left <empty> END
 
@@ -135,7 +136,6 @@ func forceEOF(yylex interface{}) {
 %type <valExprs> value_expression_list
 %type <values> tuple_list
 %type <rowTuple> row_tuple
-%type <str> keyword_as_func
 %type <subquery> subquery
 %type <colName> column_name
 %type <caseExpr> case_expression
@@ -660,10 +660,6 @@ condition:
   {
     $$ = &ExistsExpr{Subquery: $2}
   }
-| KEYRANGE openb value ',' value closeb
-  {
-    $$ = &KeyrangeExpr{Start: $3, End: $5}
-  }
 
 is_suffix:
   NULL
@@ -829,6 +825,14 @@ value_expression:
   {
     $$ = &UnaryExpr{Operator: TildaStr, Expr: $2}
   }
+| INTERVAL value_expression sql_id
+  {
+    // This rule prevents the usage of INTERVAL
+    // as a function. If support is needed for that,
+    // we'll need to revisit this. The solution
+    // will be non-trivial because of grammar conflicts.
+    $$ = &IntervalExpr{Expr: $2, Unit: $3}
+  }
 | sql_id openb closeb
   {
     $$ = &FuncExpr{Name: string($1)}
@@ -841,19 +845,13 @@ value_expression:
   {
     $$ = &FuncExpr{Name: string($1), Distinct: true, Exprs: $4}
   }
-| keyword_as_func openb select_expression_list closeb
+| IF openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: $1, Exprs: $3}
+    $$ = &FuncExpr{Name: "if", Exprs: $3}
   }
 | case_expression
   {
     $$ = $1
-  }
-
-keyword_as_func:
-  IF
-  {
-    $$ = "if"
   }
 
 case_expression:
