@@ -21,7 +21,7 @@ func buildSelectPlan(sel *sqlparser.Select, vschema *VSchema) (primitive Primiti
 	if err != nil {
 		return nil, err
 	}
-	return getUnderlyingPlan(builder), nil
+	return builder.Primitive(), nil
 }
 
 // getBindvars returns a map of the bind vars referenced in the statement.
@@ -72,7 +72,7 @@ func processSelect(sel *sqlparser.Select, vschema *VSchema, outer planBuilder) (
 	if err != nil {
 		return nil, err
 	}
-	pushMisc(sel, plan)
+	plan.PushMisc(sel)
 	return plan, nil
 }
 

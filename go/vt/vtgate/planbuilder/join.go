@@ -22,7 +22,53 @@ type joinBuilder struct {
 	// join.
 	Colsyms []*colsym
 	// Join is the join plan.
-	Join *Join
+	join *Join
+}
+
+// newJoinBuilder makes a new joinBuilder using the two nodes.
+func newJoinBuilder(lhs, rhs planBuilder, join *sqlparser.JoinTableExpr) (*joinBuilder, error) {
+	// This function converts ON clauses to WHERE clauses. The WHERE clause
+	// scope can see all tables, whereas the ON clause can only see the
+	// participants of the JOIN. However, since the ON clause doesn't allow
+	// external references, and the FROM clause doesn't allow duplicates,
+	// it's safe to perform this conversion and still expect the same behavior.
+
+	err := lhs.Symtab().Merge(rhs.Symtab())
+	if err != nil {
+		return nil, err
+	}
+	rhs.SetSymtab(lhs.Symtab())
+	rhs.SetOrder(lhs.Order())
+	isLeft := false
+	if join.Join == sqlparser.LeftJoinStr {
+		isLeft = true
+	}
+	jb := &joinBuilder{
+		LeftOrder:  lhs.Order(),
+		RightOrder: rhs.Order(),
+		Left:       lhs,
+		Right:      rhs,
+		symtab:     lhs.Symtab(),
+		join: &Join{
+			IsLeft: isLeft,
+			Left:   lhs.Primitive(),
+			Right:  rhs.Primitive(),
+			Vars:   make(map[string]int),
+		},
+	}
+	if isLeft {
+		err := pushFilter(join.On, rhs, sqlparser.WhereStr)
+		if err != nil {
+			return nil, err
+		}
+		rhs.SetRHS()
+		return jb, nil
+	}
+	err = pushFilter(join.On, jb, sqlparser.WhereStr)
+	if err != nil {
+		return nil, err
+	}
+	return jb, nil
 }
 
 // Symtab returns the associated symtab.
@@ -30,9 +76,46 @@ func (jb *joinBuilder) Symtab() *symtab {
 	return jb.symtab
 }
 
+// SetSymtab sets the symtab for the current node and its
+// non-subquery children.
+func (jb *joinBuilder) SetSymtab(symtab *symtab) {
+	jb.symtab = symtab
+	jb.Left.SetSymtab(symtab)
+	jb.Right.SetSymtab(symtab)
+}
+
 // Order returns the order of the node.
 func (jb *joinBuilder) Order() int {
 	return jb.RightOrder
+}
+
+// SetOrder sets the order for the unerlying routes.
+func (jb *joinBuilder) SetOrder(order int) {
+	jb.Left.SetOrder(order)
+	jb.LeftOrder = jb.Left.Order()
+	jb.Right.SetOrder(jb.LeftOrder)
+	jb.RightOrder = jb.Right.Order()
+}
+
+// Primitve returns the built primitive.
+func (jb *joinBuilder) Primitive() Primitive {
+	return jb.join
+}
+
+// Leftmost returns the leftmost route.
+func (jb *joinBuilder) Leftmost() *routeBuilder {
+	return jb.Left.Leftmost()
+}
+
+// Join creates new joined node using the two plans.
+func (jb *joinBuilder) Join(rhs planBuilder, join *sqlparser.JoinTableExpr) (planBuilder, error) {
+	return newJoinBuilder(jb, rhs, join)
+}
+
+// SetRHS sets all underlying routes to RHS.
+func (jb *joinBuilder) SetRHS() {
+	jb.Left.SetRHS()
+	jb.Right.SetRHS()
 }
 
 // PushSelect pushes the select expression into the join and
@@ -43,34 +126,40 @@ func (jb *joinBuilder) PushSelect(expr *sqlparser.NonStarExpr, route *routeBuild
 		if err != nil {
 			return nil, 0, err
 		}
-		jb.Join.Cols = append(jb.Join.Cols, -colnum-1)
+		jb.join.Cols = append(jb.join.Cols, -colnum-1)
 	} else {
 		colsym, colnum, err = jb.Right.PushSelect(expr, route)
 		if err != nil {
 			return nil, 0, err
 		}
-		jb.Join.Cols = append(jb.Join.Cols, colnum+1)
+		jb.join.Cols = append(jb.join.Cols, colnum+1)
 	}
 	jb.Colsyms = append(jb.Colsyms, colsym)
 	return colsym, len(jb.Colsyms) - 1, nil
+}
+
+// PushMisc pushes misc constructs to the underlying routes.
+func (jb *joinBuilder) PushMisc(sel *sqlparser.Select) {
+	jb.Left.PushMisc(sel)
+	jb.Right.PushMisc(sel)
 }
 
 // SupplyVar updates the join to make it supply the requested
 // column as a join variable. If the column is not already in
 // its list, it requests the LHS node to supply it using SupplyCol.
 func (jb *joinBuilder) SupplyVar(col *sqlparser.ColName, varname string) {
-	if _, ok := jb.Join.Vars[varname]; ok {
+	if _, ok := jb.join.Vars[varname]; ok {
 		// Looks like somebody else already requested this.
 		return
 	}
 	switch meta := col.Metadata.(type) {
 	case *colsym:
 		for i, colsym := range jb.Colsyms {
-			if jb.Join.Cols[i] > 0 {
+			if jb.join.Cols[i] > 0 {
 				continue
 			}
 			if meta == colsym {
-				jb.Join.Vars[varname] = -jb.Join.Cols[i] - 1
+				jb.join.Vars[varname] = -jb.join.Cols[i] - 1
 				return
 			}
 		}
@@ -78,15 +167,15 @@ func (jb *joinBuilder) SupplyVar(col *sqlparser.ColName, varname string) {
 	case *tableAlias:
 		ref := newColref(col)
 		for i, colsym := range jb.Colsyms {
-			if jb.Join.Cols[i] > 0 {
+			if jb.join.Cols[i] > 0 {
 				continue
 			}
 			if colsym.Underlying == ref {
-				jb.Join.Vars[varname] = -jb.Join.Cols[i] - 1
+				jb.join.Vars[varname] = -jb.join.Cols[i] - 1
 				return
 			}
 		}
-		jb.Join.Vars[varname] = jb.Left.SupplyCol(col)
+		jb.join.Vars[varname] = jb.Left.SupplyCol(col)
 		return
 	}
 	panic("unreachable")
@@ -107,11 +196,11 @@ func (jb *joinBuilder) SupplyCol(col *sqlparser.ColName) int {
 	routeNumber := meta.Route().Order()
 	if routeNumber <= jb.LeftOrder {
 		ret := jb.Left.SupplyCol(col)
-		jb.Join.Cols = append(jb.Join.Cols, -ret-1)
+		jb.join.Cols = append(jb.join.Cols, -ret-1)
 	} else {
 		ret := jb.Right.SupplyCol(col)
-		jb.Join.Cols = append(jb.Join.Cols, ret+1)
+		jb.join.Cols = append(jb.join.Cols, ret+1)
 	}
 	jb.Colsyms = append(jb.Colsyms, &colsym{Underlying: ref})
-	return len(jb.Join.Cols) - 1
+	return len(jb.join.Cols) - 1
 }
