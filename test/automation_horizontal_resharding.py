@@ -5,6 +5,12 @@
 # be found in the LICENSE file.
 """End-to-end test for horizontal resharding automation."""
 
+# "unittest" is used indirectly by importing "worker", but pylint does
+# not grasp this.
+# Import it explicitly to make pylint happy and stop it complaining about
+# setUpModule, tearDownModule and the missing module docstring.
+import unittest  # pylint: disable=unused-import
+
 import environment
 import utils
 import worker
