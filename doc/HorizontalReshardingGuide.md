@@ -206,15 +206,15 @@ to the destination shards. The `vtworker` performs the following tasks:
 The following command starts the `vtworker`:
 
 ```
-vtworker -min_healthy_rdonly_endpoints 1 -cell=<cell name> \
-    SplitClone <keyspace name>/<source shard name>
+vtworker -cell=<cell name> \
+    SplitClone -min_healthy_rdonly_endpoints=1 <keyspace name>/<source shard name>
 ```
 
 For this example, run this command:
 
 ```
-vtworker -min_healthy_rdonly_endpoints 1 -cell=<cell name> \
-    SplitClone user_keyspace/0
+vtworker -cell=<cell name> \
+    SplitClone -min_healthy_rdonly_endpoints=1 user_keyspace/0
 ```
 
 The amount of time that the worker takes to complete will depend
@@ -256,8 +256,8 @@ might not be equal.
 To start the `vtworker`, run the following `SplitDiff` command:
 
 ``` sh
-vtworker -min_healthy_rdonly_endpoints=1 -cell=<cell name> \
-    SplitDiff <keyspace name>/<shard name>
+vtworker -cell=<cell name> \
+    SplitDiff -min_healthy_rdonly_endpoints=1 <keyspace name>/<shard name>
 ```
 
 The commands for the two new destination shards in this example are shown
@@ -268,10 +268,10 @@ sequentially rather than in parallel.
 
 
 ``` sh
-vtworker -min_healthy_rdonly_endpoints=1 -cell=<cell name> \
-    SplitDiff user_keyspace/-80
-vtworker -min_healthy_rdonly_endpoints=1 -cell=<cell name> \
-    SplitDiff user_keyspace/80-
+vtworker -cell=<cell name> \
+    SplitDiff -min_healthy_rdonly_endpoints=1 user_keyspace/-80
+vtworker -cell=<cell name> \
+    SplitDiff -min_healthy_rdonly_endpoints=1 user_keyspace/80-
 ```
 
 The vtworker performs the following tasks:

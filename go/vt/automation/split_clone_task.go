@@ -26,6 +26,9 @@ func (t *SplitCloneTask) Run(parameters map[string]string) ([]*automationpb.Task
 	if destinationPackCount := parameters["destination_pack_count"]; destinationPackCount != "" {
 		args = append(args, "--destination_pack_count="+destinationPackCount)
 	}
+	if minHealthyRdonlyEndPoints := parameters["min_healthy_rdonly_endpoints"]; minHealthyRdonlyEndPoints != "" {
+		args = append(args, "--min_healthy_rdonly_endpoints="+minHealthyRdonlyEndPoints)
+	}
 	args = append(args, topoproto.KeyspaceShardString(parameters["keyspace"], parameters["source_shard"]))
 	output, err := ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], args)
 
@@ -44,5 +47,5 @@ func (t *SplitCloneTask) RequiredParameters() []string {
 
 // OptionalParameters is part of the Task interface.
 func (t *SplitCloneTask) OptionalParameters() []string {
-	return []string{"exclude_tables", "destination_pack_count"}
+	return []string{"exclude_tables", "destination_pack_count", "min_healthy_rdonly_endpoints"}
 }

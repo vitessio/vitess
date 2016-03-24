@@ -372,6 +372,7 @@ index by_msg (msg)
                         '--tables', 'moving.*,view1',
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
+                        '--min_healthy_rdonly_endpoints', '1',
                         'destination_keyspace/0'],
                        auto_log=True)
     # One of the two source rdonly tablets went spare after the clone.
@@ -404,6 +405,7 @@ index by_msg (msg)
       utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
     logging.debug('Running vtworker VerticalSplitDiff')
     utils.run_vtworker(['-cell', 'test_nj', 'VerticalSplitDiff',
+                        '--min_healthy_rdonly_endpoints', '1',
                         'destination_keyspace/0'], auto_log=True)
     # One of each source and dest rdonly tablet went spare after the diff.
     # Force a healthcheck on all four to get them back to "rdonly".

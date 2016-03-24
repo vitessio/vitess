@@ -32,17 +32,18 @@ import (
 type SplitCloneWorker struct {
 	StatusWorker
 
-	wr                     *wrangler.Wrangler
-	cell                   string
-	keyspace               string
-	shard                  string
-	excludeTables          []string
-	strategy               *splitStrategy
-	sourceReaderCount      int
-	destinationPackCount   int
-	minTableSizeForSplit   uint64
-	destinationWriterCount int
-	cleaner                *wrangler.Cleaner
+	wr                        *wrangler.Wrangler
+	cell                      string
+	keyspace                  string
+	shard                     string
+	excludeTables             []string
+	strategy                  *splitStrategy
+	sourceReaderCount         int
+	destinationPackCount      int
+	minTableSizeForSplit      uint64
+	destinationWriterCount    int
+	minHealthyRdonlyEndPoints int
+	cleaner                   *wrangler.Cleaner
 
 	// all subsequent fields are protected by the mutex
 
@@ -74,24 +75,25 @@ type SplitCloneWorker struct {
 }
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
-func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
+func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyEndPoints int) (Worker, error) {
 	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
 	}
 	return &SplitCloneWorker{
-		StatusWorker:           NewStatusWorker(),
-		wr:                     wr,
-		cell:                   cell,
-		keyspace:               keyspace,
-		shard:                  shard,
-		excludeTables:          excludeTables,
-		strategy:               strategy,
-		sourceReaderCount:      sourceReaderCount,
-		destinationPackCount:   destinationPackCount,
-		minTableSizeForSplit:   minTableSizeForSplit,
-		destinationWriterCount: destinationWriterCount,
-		cleaner:                &wrangler.Cleaner{},
+		StatusWorker:              NewStatusWorker(),
+		wr:                        wr,
+		cell:                      cell,
+		keyspace:                  keyspace,
+		shard:                     shard,
+		excludeTables:             excludeTables,
+		strategy:                  strategy,
+		sourceReaderCount:         sourceReaderCount,
+		destinationPackCount:      destinationPackCount,
+		minTableSizeForSplit:      minTableSizeForSplit,
+		destinationWriterCount:    destinationWriterCount,
+		minHealthyRdonlyEndPoints: minHealthyRdonlyEndPoints,
+		cleaner:                   &wrangler.Cleaner{},
 
 		ev: &events.SplitClone{
 			Cell:          cell,
@@ -279,7 +281,7 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	// find an appropriate endpoint in the source shards
 	scw.sourceAliases = make([]*topodatapb.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
-		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName())
+		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyEndPoints)
 		if err != nil {
 			return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
 		}

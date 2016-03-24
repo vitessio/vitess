@@ -33,17 +33,18 @@ import (
 type VerticalSplitCloneWorker struct {
 	StatusWorker
 
-	wr                     *wrangler.Wrangler
-	cell                   string
-	destinationKeyspace    string
-	destinationShard       string
-	tables                 []string
-	strategy               *splitStrategy
-	sourceReaderCount      int
-	destinationPackCount   int
-	minTableSizeForSplit   uint64
-	destinationWriterCount int
-	cleaner                *wrangler.Cleaner
+	wr                        *wrangler.Wrangler
+	cell                      string
+	destinationKeyspace       string
+	destinationShard          string
+	tables                    []string
+	strategy                  *splitStrategy
+	sourceReaderCount         int
+	destinationPackCount      int
+	minTableSizeForSplit      uint64
+	destinationWriterCount    int
+	minHealthyRdonlyEndPoints int
+	cleaner                   *wrangler.Cleaner
 
 	// all subsequent fields are protected by the StatusWorker mutex
 
@@ -71,7 +72,7 @@ type VerticalSplitCloneWorker struct {
 }
 
 // NewVerticalSplitCloneWorker returns a new VerticalSplitCloneWorker object.
-func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspace, destinationShard string, tables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
+func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspace, destinationShard string, tables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyEndPoints int) (Worker, error) {
 	if len(tables) == 0 {
 		return nil, errors.New("list of tablets to be split out must not be empty")
 	}
@@ -80,18 +81,19 @@ func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspac
 		return nil, err
 	}
 	return &VerticalSplitCloneWorker{
-		StatusWorker:           NewStatusWorker(),
-		wr:                     wr,
-		cell:                   cell,
-		destinationKeyspace:    destinationKeyspace,
-		destinationShard:       destinationShard,
-		tables:                 tables,
-		strategy:               strategy,
-		sourceReaderCount:      sourceReaderCount,
-		destinationPackCount:   destinationPackCount,
-		minTableSizeForSplit:   minTableSizeForSplit,
-		destinationWriterCount: destinationWriterCount,
-		cleaner:                &wrangler.Cleaner{},
+		StatusWorker:              NewStatusWorker(),
+		wr:                        wr,
+		cell:                      cell,
+		destinationKeyspace:       destinationKeyspace,
+		destinationShard:          destinationShard,
+		tables:                    tables,
+		strategy:                  strategy,
+		sourceReaderCount:         sourceReaderCount,
+		destinationPackCount:      destinationPackCount,
+		minTableSizeForSplit:      minTableSizeForSplit,
+		destinationWriterCount:    destinationWriterCount,
+		minHealthyRdonlyEndPoints: minHealthyRdonlyEndPoints,
+		cleaner:                   &wrangler.Cleaner{},
 
 		ev: &events.VerticalSplitClone{
 			Cell:     cell,
@@ -252,7 +254,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 
 	// find an appropriate endpoint in the source shard
 	var err error
-	vscw.sourceAlias, err = FindWorkerTablet(ctx, vscw.wr, vscw.cleaner, vscw.cell, vscw.sourceKeyspace, "0")
+	vscw.sourceAlias, err = FindWorkerTablet(ctx, vscw.wr, vscw.cleaner, vscw.cell, vscw.sourceKeyspace, "0", vscw.minHealthyRdonlyEndPoints)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/0: %v", vscw.cell, vscw.sourceKeyspace, err)
 	}

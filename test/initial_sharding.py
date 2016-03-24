@@ -409,6 +409,7 @@ index by_msg (msg)
                         '--exclude_tables', 'unrelated',
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
+                        '--min_healthy_rdonly_endpoints', '1',
                         'test_keyspace/0'],
                        auto_log=True)
 
@@ -440,11 +441,15 @@ index by_msg (msg)
     logging.debug('Running vtworker SplitDiff for -80')
     for t in [shard_0_rdonly1, shard_1_rdonly1]:
       utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
-    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', 'test_keyspace/-80'],
+    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
+                        '--min_healthy_rdonly_endpoints', '1',
+                        'test_keyspace/-80'],
                        auto_log=True)
 
     logging.debug('Running vtworker SplitDiff for 80-')
-    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', 'test_keyspace/80-'],
+    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
+                        '--min_healthy_rdonly_endpoints', '1',
+                        'test_keyspace/80-'],
                        auto_log=True)
 
     utils.pause('Good time to test vtworker for diffs')

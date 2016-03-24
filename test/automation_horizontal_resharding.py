@@ -51,7 +51,8 @@ class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
         ' --param source_shard_list=' + source_shard_list +
         ' --param dest_shard_list=' + dest_shard_list +
         ' --param vtctld_endpoint=' + vtctld_endpoint +
-        ' --param vtworker_endpoint=' + vtworker_endpoint)
+        ' --param vtworker_endpoint=' + vtworker_endpoint +
+        ' --param min_healthy_rdonly_endpoints=1')
 
     self.verify()
 
