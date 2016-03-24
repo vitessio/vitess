@@ -329,11 +329,6 @@ func (fc *fakeConn) StreamExecute(ctx context.Context, query string, bindVars ma
 	return nil, nil, fmt.Errorf("not implemented")
 }
 
-// StreamExecute2 implements tabletconn.TabletConn.
-func (fc *fakeConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
-	return fc.StreamExecute(ctx, query, bindVars, transactionID)
-}
-
 // Begin implements tabletconn.TabletConn.
 func (fc *fakeConn) Begin(ctx context.Context) (int64, error) {
 	return 0, fmt.Errorf("not implemented")

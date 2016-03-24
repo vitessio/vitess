@@ -182,11 +182,6 @@ func (ftc *fakeTabletConn) Rollback2(ctx context.Context, transactionID int64) e
 	return fmt.Errorf("not implemented in this test")
 }
 
-// StreamExecute2 is part of the TabletConn interface
-func (ftc *fakeTabletConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
-	return nil, nil, fmt.Errorf("not implemented in this test")
-}
-
 // Close is part of the TabletConn interface
 func (ftc *fakeTabletConn) Close() {
 }
