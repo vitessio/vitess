@@ -685,14 +685,20 @@ func (stc *ScatterConn) multiGo(
 	if len(shardMap) == 0 {
 		return allErrors
 	}
+
+	oneShard := func(shard string) {
+		startTime, statsKey, transactionID, err := stc.startAction(ctx, name, keyspace, shard, tabletType, session, notInTransaction, allErrors)
+		defer stc.endAction(startTime, allErrors, statsKey, &err)
+		if err != nil {
+			return
+		}
+		err = action(shard, transactionID)
+	}
+
 	if len(shardMap) == 1 {
+		// only one shard, do it synchronously.
 		for shard := range shardMap {
-			startTime, statsKey, transactionID, err := stc.startAction(ctx, name, keyspace, shard, tabletType, session, notInTransaction, allErrors)
-			defer stc.endAction(startTime, allErrors, statsKey, &err)
-			if err != nil {
-				return allErrors
-			}
-			err = action(shard, transactionID)
+			oneShard(shard)
 			return allErrors
 		}
 	}
@@ -702,14 +708,7 @@ func (stc *ScatterConn) multiGo(
 		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()
-
-			startTime, statsKey, transactionID, err := stc.startAction(ctx, name, keyspace, shard, tabletType, session, notInTransaction, allErrors)
-			defer stc.endAction(startTime, allErrors, statsKey, &err)
-			if err != nil {
-				return
-			}
-
-			err = action(shard, transactionID)
+			oneShard(shard)
 		}(shard)
 	}
 	wg.Wait()
