@@ -59,7 +59,7 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 	for {
 		select {
 		case <-busywaitCtx.Done():
-			return nil, fmt.Errorf("Not enough healthy rdonly endpoints to choose from in (%v,%v/%v), have %v healthy ones, need at least %v Context Error: %v",
+			return nil, fmt.Errorf("not enough healthy rdonly endpoints to choose from in (%v,%v/%v), have %v healthy ones, need at least %v Context error: %v",
 				cell, keyspace, shard, len(healthyEndpoints), minHealthyRdonlyEndPoints, busywaitCtx.Err())
 		default:
 		}
