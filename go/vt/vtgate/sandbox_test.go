@@ -487,10 +487,6 @@ func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVar
 	return ch, func() error { return err }, err
 }
 
-func (sbc *sandboxConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
-	return sbc.StreamExecute(ctx, query, bindVars, transactionID)
-}
-
 func (sbc *sandboxConn) Begin(ctx context.Context) (int64, error) {
 	sbc.ExecCount.Add(1)
 	sbc.BeginCount.Add(1)
