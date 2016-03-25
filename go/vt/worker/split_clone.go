@@ -47,7 +47,7 @@ type SplitCloneWorker struct {
 	// all subsequent fields are protected by the mutex
 
 	// populated during WorkerStateInit, read-only after that
-	shardingKey       shardingKey
+	keyspaceInfo      *topo.KeyspaceInfo
 	sourceShards      []*topo.ShardInfo
 	destinationShards []*topo.ShardInfo
 
@@ -219,15 +219,10 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 
 	// read the keyspace and validate it
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	keyspaceInfo, err := scw.wr.TopoServer().GetKeyspace(shortCtx, scw.keyspace)
+	scw.keyspaceInfo, err = scw.wr.TopoServer().GetKeyspace(shortCtx, scw.keyspace)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot read keyspace %v: %v", scw.keyspace, err)
-	}
-
-	scw.shardingKey, err = newShardingKey(keyspaceInfo)
-	if err != nil {
-		return fmt.Errorf("cannot determine the sharding key for keyspace %v: %v", scw.keyspace, err)
 	}
 
 	// find the OverlappingShards in the keyspace
@@ -400,6 +395,17 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 		return fmt.Errorf("no tables matching the table filter in tablet %v", topoproto.TabletAliasString(scw.sourceAliases[0]))
 	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
+
+	if *useV3ReshardingMode {
+		// TODO(sougou): instantiate a v3 key resolver here
+		return fmt.Errorf("v3 resharding mode is currently not fully supported. Please use v2 for now")
+	}
+
+	keyResolver, err := newV2Resolver(scw.keyspaceInfo, sourceSchemaDefinition.TableDefinitions)
+	if err != nil {
+		return fmt.Errorf("cannot resolving sharding keys for keyspace %v: %v", scw.keyspace, err)
+	}
+
 	scw.Mu.Lock()
 	scw.tableStatus = make([]*tableStatus, len(sourceSchemaDefinition.TableDefinitions))
 	for i, td := range sourceSchemaDefinition.TableDefinitions {
@@ -411,23 +417,9 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	scw.startTime = time.Now()
 	scw.Mu.Unlock()
 
-	// Find the column index for the sharding columns in all the databases, and count rows
-	columnIndexes := make([]int, len(sourceSchemaDefinition.TableDefinitions))
+	// Count rows for source tables
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
 		if td.Type == tmutils.TableBaseTable {
-			shardingColumnName := scw.shardingKey.columnName(scw.keyspace, td.Name)
-			// find the column to split on
-			columnIndexes[tableIndex] = -1
-			for i, name := range td.Columns {
-				if name == shardingColumnName {
-					columnIndexes[tableIndex] = i
-					break
-				}
-			}
-			if columnIndexes[tableIndex] == -1 {
-				return fmt.Errorf("table %v doesn't have a column named '%v'", td.Name, shardingColumnName)
-			}
-
 			scw.tableStatus[tableIndex].mu.Lock()
 			scw.tableStatus[tableIndex].rowCount = td.RowCount
 			scw.tableStatus[tableIndex].mu.Unlock()
@@ -488,8 +480,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 				continue
 			}
 
-			shardingKeyType := scw.shardingKey.keyType(scw.keyspace, td.Name)
-			rowSplitter := NewRowSplitter(scw.destinationShards, scw.shardingKey, shardingKeyType, columnIndexes[tableIndex])
+			rowSplitter := NewRowSplitter(scw.destinationShards, keyResolver, td.Name)
 
 			chunks, err := FindChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
 			if err != nil {

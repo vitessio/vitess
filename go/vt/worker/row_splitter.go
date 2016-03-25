@@ -5,8 +5,6 @@
 package worker
 
 import (
-	"fmt"
-
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -18,19 +16,17 @@ import (
 // RowSplitter is a helper class to split rows into multiple
 // subsets targeted to different shards.
 type RowSplitter struct {
-	ShardingKey     shardingKey
-	ShardingKeyType topodatapb.KeyspaceIdType
-	ValueIndex      int
-	KeyRanges       []*topodatapb.KeyRange
+	KeyResolver shardingKeyResolver
+	Table       string
+	KeyRanges   []*topodatapb.KeyRange
 }
 
 // NewRowSplitter returns a new row splitter for the given shard distribution.
-func NewRowSplitter(shardInfos []*topo.ShardInfo, sk shardingKey, shardingKeyType topodatapb.KeyspaceIdType, valueIndex int) *RowSplitter {
+func NewRowSplitter(shardInfos []*topo.ShardInfo, keyResolver shardingKeyResolver, table string) *RowSplitter {
 	result := &RowSplitter{
-		ShardingKey:     sk,
-		ShardingKeyType: shardingKeyType,
-		ValueIndex:      valueIndex,
-		KeyRanges:       make([]*topodatapb.KeyRange, len(shardInfos)),
+		KeyResolver: keyResolver,
+		Table:       table,
+		KeyRanges:   make([]*topodatapb.KeyRange, len(shardInfos)),
 	}
 	for i, si := range shardInfos {
 		result.KeyRanges[i] = si.KeyRange
@@ -45,36 +41,15 @@ func (rs *RowSplitter) StartSplit() [][][]sqltypes.Value {
 
 // Split will split the rows into subset for each distribution
 func (rs *RowSplitter) Split(result [][][]sqltypes.Value, rows [][]sqltypes.Value) error {
-	if rs.ShardingKeyType == topodatapb.KeyspaceIdType_UINT64 {
-		for _, row := range rows {
-			value, err := rs.ShardingKey.value(row[rs.ValueIndex])
-			if err != nil {
-				return err
-			}
-			i, err := value.ParseUint64()
-			if err != nil {
-				return fmt.Errorf("Non numerical value: %v", err)
-			}
-			k := key.Uint64Key(i).Bytes()
-			for i, kr := range rs.KeyRanges {
-				if key.KeyRangeContains(kr, k) {
-					result[i] = append(result[i], row)
-					break
-				}
-			}
+	for _, row := range rows {
+		k, err := rs.KeyResolver.shardingKey(rs.Table, row)
+		if err != nil {
+			return err
 		}
-	} else {
-		for _, row := range rows {
-			value, err := rs.ShardingKey.value(row[rs.ValueIndex])
-			if err != nil {
-				return err
-			}
-			k := value.Raw()
-			for i, kr := range rs.KeyRanges {
-				if key.KeyRangeContains(kr, k) {
-					result[i] = append(result[i], row)
-					break
-				}
+		for i, kr := range rs.KeyRanges {
+			if key.KeyRangeContains(kr, k) {
+				result[i] = append(result[i], row)
+				break
 			}
 		}
 	}
