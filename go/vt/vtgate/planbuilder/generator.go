@@ -100,6 +100,9 @@ func (gen *generator) generateQueries(plan planBuilder) error {
 		return gen.generateQueries(plan.Right)
 	case *routeBuilder:
 		return gen.generateQuery(plan)
+	case *filterBuilder:
+		// TODO(sougou): Handle this
+		return nil
 	}
 	panic("unreachable")
 }
@@ -169,22 +172,35 @@ func (gen *generator) join(fromRoute *routeBuilder, col *sqlparser.ColName, join
 		gen.refs[newColref(col)] = joinVar
 	}
 	join := gen.commonJoin(fromRoute, toRoute)
+	if join == nil {
+		// TODO(sougou): Handle wire-up for filters
+		return
+	}
 	join.SupplyVar(col, joinVar)
 	toRoute.Route.JoinVars[joinVar] = struct{}{}
 }
 
 // commonJoin returns the common join between two routes.
 func (gen *generator) commonJoin(fromRoute *routeBuilder, toRoute *routeBuilder) *joinBuilder {
-	node := gen.plan.(*joinBuilder)
+	node, ok := gen.plan.(*joinBuilder)
+	if !ok {
+		return nil
+	}
 	from := fromRoute.Order()
 	to := toRoute.Order()
 	for {
 		if from > node.LeftOrder {
-			node = node.Right.(*joinBuilder)
+			node, ok = node.Right.(*joinBuilder)
+			if !ok {
+				return nil
+			}
 			continue
 		}
 		if to <= node.LeftOrder {
-			node = node.Left.(*joinBuilder)
+			node, ok = node.Left.(*joinBuilder)
+			if !ok {
+				return nil
+			}
 			continue
 		}
 		return node

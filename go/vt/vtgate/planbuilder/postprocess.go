@@ -101,7 +101,7 @@ func pushOrderBy(orderBy sqlparser.OrderBy, plan planBuilder) error {
 			colsym := plan.Symtab().Colsyms[num-1]
 			route = colsym.Route()
 			// We have to recompute the column number.
-			for num, s := range route.Colsyms {
+			for num, s := range route.colsyms {
 				if s == colsym {
 					pushOrder = &sqlparser.Order{
 						Expr:      sqlparser.NumVal(strconv.AppendInt(nil, int64(num+1), 10)),

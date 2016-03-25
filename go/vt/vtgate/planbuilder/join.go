@@ -18,9 +18,9 @@ type joinBuilder struct {
 	// Left and Right are the nodes for the join.
 	Left, Right planBuilder
 	symtab      *symtab
-	// Colsyms specifies the colsyms supplied by this
+	// colsyms specifies the colsyms supplied by this
 	// join.
-	Colsyms []*colsym
+	colsyms []*colsym
 	// Join is the join plan.
 	Join *Join
 }
@@ -28,6 +28,11 @@ type joinBuilder struct {
 // Symtab returns the associated symtab.
 func (jb *joinBuilder) Symtab() *symtab {
 	return jb.symtab
+}
+
+// Colsyms returns the colsyms.
+func (jb *joinBuilder) Colsyms() []*colsym {
+	return jb.colsyms
 }
 
 // Order returns the order of the node.
@@ -51,8 +56,8 @@ func (jb *joinBuilder) PushSelect(expr *sqlparser.NonStarExpr, route *routeBuild
 		}
 		jb.Join.Cols = append(jb.Join.Cols, colnum+1)
 	}
-	jb.Colsyms = append(jb.Colsyms, colsym)
-	return colsym, len(jb.Colsyms) - 1, nil
+	jb.colsyms = append(jb.colsyms, colsym)
+	return colsym, len(jb.colsyms) - 1, nil
 }
 
 // SupplyVar updates the join to make it supply the requested
@@ -65,7 +70,7 @@ func (jb *joinBuilder) SupplyVar(col *sqlparser.ColName, varname string) {
 	}
 	switch meta := col.Metadata.(type) {
 	case *colsym:
-		for i, colsym := range jb.Colsyms {
+		for i, colsym := range jb.colsyms {
 			if jb.Join.Cols[i] > 0 {
 				continue
 			}
@@ -77,7 +82,7 @@ func (jb *joinBuilder) SupplyVar(col *sqlparser.ColName, varname string) {
 		panic("unexpected: column not found")
 	case *tableAlias:
 		ref := newColref(col)
-		for i, colsym := range jb.Colsyms {
+		for i, colsym := range jb.colsyms {
 			if jb.Join.Cols[i] > 0 {
 				continue
 			}
@@ -99,7 +104,7 @@ func (jb *joinBuilder) SupplyCol(col *sqlparser.ColName) int {
 	// We already know it's a tableAlias.
 	meta := col.Metadata.(*tableAlias)
 	ref := newColref(col)
-	for i, colsym := range jb.Colsyms {
+	for i, colsym := range jb.colsyms {
 		if colsym.Underlying == ref {
 			return i
 		}
@@ -112,6 +117,6 @@ func (jb *joinBuilder) SupplyCol(col *sqlparser.ColName) int {
 		ret := jb.Right.SupplyCol(col)
 		jb.Join.Cols = append(jb.Join.Cols, ret+1)
 	}
-	jb.Colsyms = append(jb.Colsyms, &colsym{Underlying: ref})
+	jb.colsyms = append(jb.colsyms, &colsym{Underlying: ref})
 	return len(jb.Join.Cols) - 1
 }

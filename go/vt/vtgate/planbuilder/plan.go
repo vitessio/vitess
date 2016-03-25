@@ -262,6 +262,29 @@ type Join struct {
 
 func (jn *Join) isPrimitive() {}
 
+// Filter specifies parameters for a filter primitive.
+type Filter struct {
+	Input     Primitive
+	Condition *INClause
+	Cols      []int          `json:",omitempty"`
+	Vars      map[string]int `json:",omitempty"`
+}
+
+func (fl *Filter) isPrimitive() {}
+
+// INClause is a Boolean for IN clauses.
+type INClause struct {
+	Left     interface{}
+	Right    *Pivot
+	JoinVars map[string]struct{}
+}
+
+// Pivot can execute a relational primitive and pivot it into a tuple.
+type Pivot struct {
+	Input    Primitive
+	JoinVars map[string]struct{}
+}
+
 // BuildPlan builds a plan for a query based on the specified vschema.
 // It's the main entry point for this package.
 func BuildPlan(query string, vschema *VSchema) (*Plan, error) {
