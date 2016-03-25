@@ -144,10 +144,27 @@ func (jb *joinBuilder) PushMisc(sel *sqlparser.Select) {
 	jb.Right.PushMisc(sel)
 }
 
+// Wireup performs the wireup for joinBuilder.
+func (jb *joinBuilder) Wireup(plan planBuilder, gen *generator) error {
+	err := jb.Right.Wireup(plan, gen)
+	if err != nil {
+		return err
+	}
+	return jb.Left.Wireup(plan, gen)
+}
+
 // SupplyVar updates the join to make it supply the requested
 // column as a join variable. If the column is not already in
 // its list, it requests the LHS node to supply it using SupplyCol.
-func (jb *joinBuilder) SupplyVar(col *sqlparser.ColName, varname string) {
+func (jb *joinBuilder) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
+	if from > jb.LeftOrder {
+		jb.Right.SupplyVar(from, to, col, varname)
+		return
+	}
+	if to <= jb.LeftOrder {
+		jb.Left.SupplyVar(from, to, col, varname)
+		return
+	}
 	if _, ok := jb.join.Vars[varname]; ok {
 		// Looks like somebody else already requested this.
 		return

@@ -13,9 +13,6 @@ import (
 // planBuilder represents any object that's used to
 // build a plan. The top-level planBuilder will be a
 // tree that points to other planBuilder objects.
-// Currently, joinBuilder and routeBuilder are the
-// only two supported planBuilder objects. More will be
-// added as we extend the functionality.
 // Each Builder object builds a Plan object, and they
 // will mirror the same tree. Once all the plans are built,
 // the builder objects will be discarded, and only
@@ -62,6 +59,13 @@ type planBuilder interface {
 	PushSelect(expr *sqlparser.NonStarExpr, route *routeBuilder) (colsym *colsym, colnum int, err error)
 	// PushMisc pushes miscelleaneous constructs to all the routes.
 	PushMisc(sel *sqlparser.Select)
+	// Wireup performs the wire-up work. Nodes should be traversed
+	// from right to left because the rhs nodes can request vars from
+	// the lhs nodes.
+	Wireup(plan planBuilder, gen *generator) error
+	// SupplyVar finds the common root between from and to. If it's
+	// the common root, it supplies the requested var to the rhs tree.
+	SupplyVar(from, to int, col *sqlparser.ColName, varname string)
 	// SupplyCol will be used for the wire-up process. This function
 	// takes a column reference as input, changes the plan
 	// to supply the requested column and returns the column number of
@@ -429,6 +433,57 @@ func (rtb *routeBuilder) SetLimit(limit *sqlparser.Limit) {
 func (rtb *routeBuilder) PushMisc(sel *sqlparser.Select) {
 	rtb.Select.Comments = sel.Comments
 	rtb.Select.Lock = sel.Lock
+}
+
+// Wireup performs the wire-up tasks.
+func (rtb *routeBuilder) Wireup(plan planBuilder, gen *generator) error {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch node := node.(type) {
+		case *sqlparser.ColName:
+			gen.resolve(node, rtb)
+			return false, nil
+		case *sqlparser.Select:
+			if len(node.SelectExprs) == 0 {
+				node.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
+					&sqlparser.NonStarExpr{
+						Expr: sqlparser.NumVal([]byte{'1'}),
+					},
+				})
+			}
+		case *sqlparser.ComparisonExpr:
+			if node.Operator == sqlparser.EqualStr {
+				if exprIsValue(node.Left, rtb) && !exprIsValue(node.Right, rtb) {
+					node.Left, node.Right = node.Right, node.Left
+				}
+			}
+		}
+		return true, nil
+	}, &rtb.Select)
+	var err error
+	switch vals := rtb.Route.Values.(type) {
+	case *sqlparser.ComparisonExpr:
+		// It's an IN clause.
+		rtb.Route.Values, err = gen.convert(rtb, vals.Right)
+		if err != nil {
+			return err
+		}
+		vals.Right = sqlparser.ListArg("::" + ListVarName)
+	default:
+		rtb.Route.Values, err = gen.convert(rtb, vals)
+		if err != nil {
+			return err
+		}
+	}
+	// Generation of select cannot fail.
+	query, _ := gen.convert(rtb, &rtb.Select)
+	rtb.Route.Query = query.(string)
+	rtb.Route.FieldQuery = gen.generateFieldQuery(rtb, &rtb.Select)
+	return nil
+}
+
+// SupplyVar should be unreachable.
+func (rtb *routeBuilder) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
+	panic("unreachable")
 }
 
 // SupplyCol changes the router to supply the requested column

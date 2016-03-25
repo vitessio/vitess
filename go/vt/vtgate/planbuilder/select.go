@@ -17,7 +17,8 @@ func buildSelectPlan(sel *sqlparser.Select, vschema *VSchema) (primitive Primiti
 	if err != nil {
 		return nil, err
 	}
-	err = newGenerator(builder, bindvars).Generate()
+	gen := newGenerator(builder, bindvars)
+	err = builder.Wireup(builder, gen)
 	if err != nil {
 		return nil, err
 	}

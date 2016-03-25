@@ -36,86 +36,6 @@ func newGenerator(plan planBuilder, bindvars map[string]struct{}) *generator {
 	}
 }
 
-// Generate performs all the steps necessary to generate
-// the plan: wire-up, fixup and query generation.
-func (gen *generator) Generate() error {
-	gen.wireup(gen.plan)
-	gen.fixupSelect(gen.plan)
-	return gen.generateQueries(gen.plan)
-}
-
-// wireup finds all external references, replaces them
-// with bind vars and makes the source of the reference
-// supply the value accordingly.
-func (gen *generator) wireup(plan planBuilder) {
-	switch plan := plan.(type) {
-	case *joinBuilder:
-		gen.wireup(plan.Left)
-		gen.wireup(plan.Right)
-	case *routeBuilder:
-		gen.wireRouter(plan)
-	}
-}
-
-// fixupSelect fixes up the select statements for the routes:
-// If the select expression list is empty, it adds a '1' to it.
-// If comparison expressions are of the form 1 = col, it changes
-// them to col = 1.
-func (gen *generator) fixupSelect(plan planBuilder) {
-	switch plan := plan.(type) {
-	case *joinBuilder:
-		gen.fixupSelect(plan.Left)
-		gen.fixupSelect(plan.Right)
-	case *routeBuilder:
-		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-			switch node := node.(type) {
-			case *sqlparser.Select:
-				if len(node.SelectExprs) == 0 {
-					node.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
-						&sqlparser.NonStarExpr{
-							Expr: sqlparser.NumVal([]byte{'1'}),
-						},
-					})
-				}
-			case *sqlparser.ComparisonExpr:
-				if node.Operator == sqlparser.EqualStr {
-					if exprIsValue(node.Left, plan) && !exprIsValue(node.Right, plan) {
-						node.Left, node.Right = node.Right, node.Left
-					}
-				}
-			}
-			return true, nil
-		}, &plan.Select)
-	}
-}
-
-// generateQueries converts the AST in the routes to actual queries.
-func (gen *generator) generateQueries(plan planBuilder) error {
-	switch plan := plan.(type) {
-	case *joinBuilder:
-		err := gen.generateQueries(plan.Left)
-		if err != nil {
-			return err
-		}
-		return gen.generateQueries(plan.Right)
-	case *routeBuilder:
-		return gen.generateQuery(plan)
-	}
-	panic("unreachable")
-}
-
-// wireRouter performs the wireup for the specified router.
-func (gen *generator) wireRouter(route *routeBuilder) {
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		switch node := node.(type) {
-		case *sqlparser.ColName:
-			gen.resolve(node, route)
-			return false, nil
-		}
-		return true, nil
-	}, &route.Select)
-}
-
 // resolve performs the wireup for the specified column reference.
 // If the reference is local, then it's a no-op. Otherwise, it assigns
 // a bind var name to it and performs the wire-up.
@@ -168,51 +88,8 @@ func (gen *generator) join(fromRoute *routeBuilder, col *sqlparser.ColName, join
 		gen.vars[joinVar] = struct{}{}
 		gen.refs[newColref(col)] = joinVar
 	}
-	join := gen.commonJoin(fromRoute, toRoute)
-	join.SupplyVar(col, joinVar)
+	gen.plan.SupplyVar(fromRoute.Order(), toRoute.Order(), col, joinVar)
 	toRoute.Route.JoinVars[joinVar] = struct{}{}
-}
-
-// commonJoin returns the common join between two routes.
-func (gen *generator) commonJoin(fromRoute *routeBuilder, toRoute *routeBuilder) *joinBuilder {
-	node := gen.plan.(*joinBuilder)
-	from := fromRoute.Order()
-	to := toRoute.Order()
-	for {
-		if from > node.LeftOrder {
-			node = node.Right.(*joinBuilder)
-			continue
-		}
-		if to <= node.LeftOrder {
-			node = node.Left.(*joinBuilder)
-			continue
-		}
-		return node
-	}
-}
-
-// generateQueries converts the AST in the route to the actual query.
-func (gen *generator) generateQuery(route *routeBuilder) error {
-	var err error
-	switch vals := route.Route.Values.(type) {
-	case *sqlparser.ComparisonExpr:
-		// It's an IN clause.
-		route.Route.Values, err = gen.convert(route, vals.Right)
-		if err != nil {
-			return err
-		}
-		vals.Right = sqlparser.ListArg("::" + ListVarName)
-	default:
-		route.Route.Values, err = gen.convert(route, vals)
-		if err != nil {
-			return err
-		}
-	}
-	// Generation of select cannot fail.
-	query, _ := gen.convert(route, &route.Select)
-	route.Route.Query = query.(string)
-	route.Route.FieldQuery = gen.generateFieldQuery(route, &route.Select)
-	return nil
 }
 
 // convert converts the input value to the type that the route need.
