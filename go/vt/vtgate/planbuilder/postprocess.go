@@ -143,15 +143,3 @@ func pushLimit(limit *sqlparser.Limit, plan planBuilder) error {
 	route.SetLimit(limit)
 	return nil
 }
-
-// pushMisc pushes comments and 'for update' clauses
-// down to all routes.
-func pushMisc(sel *sqlparser.Select, plan planBuilder) {
-	switch plan := plan.(type) {
-	case *joinBuilder:
-		pushMisc(sel, plan.Left)
-		pushMisc(sel, plan.Right)
-	case *routeBuilder:
-		plan.SetMisc(sel.Comments, sel.Lock)
-	}
-}

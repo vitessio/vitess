@@ -45,7 +45,7 @@ func splitAndExpression(filters []sqlparser.BoolExpr, node sqlparser.BoolExpr) [
 // If an expression has no references to the current query, then the left-most
 // route is chosen as the default.
 func findRoute(expr sqlparser.Expr, plan planBuilder) (route *routeBuilder, err error) {
-	highestRoute := leftmost(plan)
+	highestRoute := plan.Leftmost()
 	var subroutes []*routeBuilder
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
@@ -177,14 +177,4 @@ func valEqual(a, b interface{}) bool {
 		}
 	}
 	return false
-}
-
-func leftmost(plan planBuilder) *routeBuilder {
-	switch plan := plan.(type) {
-	case *joinBuilder:
-		return leftmost(plan.Left)
-	case *routeBuilder:
-		return plan
-	}
-	panic("unreachable")
 }

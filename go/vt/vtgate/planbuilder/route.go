@@ -13,9 +13,6 @@ import (
 // planBuilder represents any object that's used to
 // build a plan. The top-level planBuilder will be a
 // tree that points to other planBuilder objects.
-// Currently, joinBuilder and routeBuilder are the
-// only two supported planBuilder objects. More will be
-// added as we extend the functionality.
 // Each Builder object builds a Plan object, and they
 // will mirror the same tree. Once all the plans are built,
 // the builder objects will be discarded, and only
@@ -31,6 +28,9 @@ import (
 type planBuilder interface {
 	// Symtab returns the associated symtab.
 	Symtab() *symtab
+	// SetSymtab sets the symtab for the current node and
+	// its non-subquery children.
+	SetSymtab(*symtab)
 	// Order is a number that signifies execution order.
 	// A lower Order number Route is executed before a
 	// higher one. For a node that contains other nodes,
@@ -38,6 +38,17 @@ type planBuilder interface {
 	// nodes. This function is used to travel from a root
 	// node to a target node.
 	Order() int
+	// SetOrder sets the order for the underlying routes.
+	SetOrder(int)
+	// Primitve returns the primitive built by the builder.
+	Primitive() Primitive
+	// Leftmost returns the leftmost route.
+	Leftmost() *routeBuilder
+	// Join joins the two planBuilder objects. The outcome
+	// can be a new planBuilder or a modified one.
+	Join(rhs planBuilder, Join *sqlparser.JoinTableExpr) (planBuilder, error)
+	// SetRHS marks all routes under this node as RHS.
+	SetRHS()
 	// PushSelect pushes the select expression through the tree
 	// all the way to the route that colsym points to.
 	// PushSelect is similar to SupplyCol except that it always
@@ -46,6 +57,15 @@ type planBuilder interface {
 	// may refer to columns by number. The function must return
 	// a colsym for the expression and the column number of the result.
 	PushSelect(expr *sqlparser.NonStarExpr, route *routeBuilder) (colsym *colsym, colnum int, err error)
+	// PushMisc pushes miscelleaneous constructs to all the routes.
+	PushMisc(sel *sqlparser.Select)
+	// Wireup performs the wire-up work. Nodes should be traversed
+	// from right to left because the rhs nodes can request vars from
+	// the lhs nodes.
+	Wireup(plan planBuilder, gen *generator) error
+	// SupplyVar finds the common root between from and to. If it's
+	// the common root, it supplies the requested var to the rhs tree.
+	SupplyVar(from, to int, col *sqlparser.ColName, varname string)
 	// SupplyCol will be used for the wire-up process. This function
 	// takes a column reference as input, changes the plan
 	// to supply the requested column and returns the column number of
@@ -79,6 +99,29 @@ type routeBuilder struct {
 	Route *Route
 }
 
+func newRouteBuilder(from sqlparser.TableExprs, route *Route, table *Table, vschema *VSchema, alias sqlparser.SQLName) *routeBuilder {
+	// We have some circular pointer references here:
+	// The routeBuilder points to the symtab idicating
+	// the symtab that should be used to resolve symbols
+	// for it. This is same as the SELECT statement's symtab.
+	// This pointer is needed because each subquery will have
+	// its own symtab. Multiple routes can point to the same
+	// symtab.
+	// The tabelAlias, which is inside the symtab, points back
+	// to the route to indidcate that the symbol is produced
+	// by this route. A symbol referenced in a route can actually
+	// be pointing to a different route. This information is used
+	// to determine if symbol references are local or not.
+	rtb := &routeBuilder{
+		Select: sqlparser.Select{From: from},
+		symtab: newSymtab(vschema),
+		order:  1,
+		Route:  route,
+	}
+	_ = rtb.symtab.AddAlias(alias, table, rtb)
+	return rtb
+}
+
 // Resolve resolves redirects, and returns the last
 // un-redirected route.
 func (rtb *routeBuilder) Resolve() *routeBuilder {
@@ -93,9 +136,122 @@ func (rtb *routeBuilder) Symtab() *symtab {
 	return rtb.symtab
 }
 
+// SetSymtab sets the symtab.
+func (rtb *routeBuilder) SetSymtab(symtab *symtab) {
+	rtb.symtab = symtab
+}
+
 // Order returns the order of the node.
 func (rtb *routeBuilder) Order() int {
 	return rtb.order
+}
+
+// SetOrder sets the order to one above the specified number.
+func (rtb *routeBuilder) SetOrder(order int) {
+	rtb.order = order + 1
+}
+
+// Primitve returns the built primitive.
+func (rtb *routeBuilder) Primitive() Primitive {
+	return rtb.Route
+}
+
+// Leftmost returns the current route.
+func (rtb *routeBuilder) Leftmost() *routeBuilder {
+	return rtb
+}
+
+// Join joins with the RHS. This could produce a merged route
+// or a new join node.
+func (rtb *routeBuilder) Join(rhs planBuilder, join *sqlparser.JoinTableExpr) (planBuilder, error) {
+	rRoute, ok := rhs.(*routeBuilder)
+	if !ok {
+		return newJoinBuilder(rtb, rhs, join)
+	}
+	if rtb.Route.Keyspace.Name != rRoute.Route.Keyspace.Name {
+		return newJoinBuilder(rtb, rRoute, join)
+	}
+	if rtb.Route.Opcode == SelectUnsharded {
+		// Two Routes from the same unsharded keyspace can be merged.
+		return rtb.merge(rRoute, join)
+	}
+
+	// Both routeBuilder are sharded routes. Analyze join condition for merging.
+	for _, filter := range splitAndExpression(nil, join.On) {
+		if rtb.isSameRoute(rRoute, filter) {
+			return rtb.merge(rRoute, join)
+		}
+	}
+
+	// Both l & r routes point to the same shard.
+	if rtb.Route.Opcode == SelectEqualUnique && rRoute.Route.Opcode == SelectEqualUnique {
+		if valEqual(rtb.Route.Values, rRoute.Route.Values) {
+			return rtb.merge(rRoute, join)
+		}
+	}
+
+	return newJoinBuilder(rtb, rRoute, join)
+}
+
+// SetRHS marks the route as RHS.
+func (rtb *routeBuilder) SetRHS() {
+	rtb.IsRHS = true
+}
+
+// merge merges the two routes. The ON clause is also analyzed to
+// see if the plan can be improved. The operation can fail if
+// the expression contains a non-pushable subquery.
+func (rtb *routeBuilder) merge(rhs *routeBuilder, join *sqlparser.JoinTableExpr) (planBuilder, error) {
+	rtb.Select.From = sqlparser.TableExprs{join}
+	if join.Join == sqlparser.LeftJoinStr {
+		rhs.Symtab().SetRHS()
+	}
+	err := rtb.Symtab().Merge(rhs.Symtab())
+	rhs.Redirect = rtb
+	if err != nil {
+		return nil, err
+	}
+	for _, filter := range splitAndExpression(nil, join.On) {
+		// If VTGate evolves, this section should be rewritten
+		// to use processBoolExpr.
+		_, err = findRoute(filter, rtb)
+		if err != nil {
+			return nil, err
+		}
+		rtb.UpdatePlan(filter)
+	}
+	return rtb, nil
+}
+
+// isSameRoute returns true if the join constraint makes the routes
+// mergeable by unique vindex. The constraint has to be an equality
+// like a.id = b.id where both columns have the same unique vindex.
+func (rtb *routeBuilder) isSameRoute(rhs *routeBuilder, filter sqlparser.BoolExpr) bool {
+	comparison, ok := filter.(*sqlparser.ComparisonExpr)
+	if !ok {
+		return false
+	}
+	if comparison.Operator != sqlparser.EqualStr {
+		return false
+	}
+	left := comparison.Left
+	right := comparison.Right
+	lVindex := rtb.Symtab().Vindex(left, rtb, false)
+	if lVindex == nil {
+		left, right = right, left
+		lVindex = rtb.Symtab().Vindex(left, rtb, false)
+	}
+	if lVindex == nil || !IsUnique(lVindex) {
+		return false
+	}
+	rVindex := rhs.Symtab().Vindex(right, rhs, false)
+	if rVindex == nil {
+		return false
+	}
+	if rVindex != lVindex {
+		return false
+	}
+	return true
 }
 
 // PushFilter pushes the filter into the route. The plan will
@@ -273,10 +429,61 @@ func (rtb *routeBuilder) SetLimit(limit *sqlparser.Limit) {
 	rtb.Select.Limit = limit
 }
 
-// SetMisc updates the comments & 'for update' sections of the route.
-func (rtb *routeBuilder) SetMisc(comments sqlparser.Comments, lock string) {
-	rtb.Select.Comments = comments
-	rtb.Select.Lock = lock
+// PushMisc updates the comments & 'for update' sections of the route.
+func (rtb *routeBuilder) PushMisc(sel *sqlparser.Select) {
+	rtb.Select.Comments = sel.Comments
+	rtb.Select.Lock = sel.Lock
+}
+
+// Wireup performs the wire-up tasks.
+func (rtb *routeBuilder) Wireup(plan planBuilder, gen *generator) error {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch node := node.(type) {
+		case *sqlparser.ColName:
+			gen.resolve(node, rtb)
+			return false, nil
+		case *sqlparser.Select:
+			if len(node.SelectExprs) == 0 {
+				node.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
+					&sqlparser.NonStarExpr{
+						Expr: sqlparser.NumVal([]byte{'1'}),
+					},
+				})
+			}
+		case *sqlparser.ComparisonExpr:
+			if node.Operator == sqlparser.EqualStr {
+				if exprIsValue(node.Left, rtb) && !exprIsValue(node.Right, rtb) {
+					node.Left, node.Right = node.Right, node.Left
+				}
+			}
+		}
+		return true, nil
+	}, &rtb.Select)
+	var err error
+	switch vals := rtb.Route.Values.(type) {
+	case *sqlparser.ComparisonExpr:
+		// It's an IN clause.
+		rtb.Route.Values, err = gen.convert(rtb, vals.Right)
+		if err != nil {
+			return err
+		}
+		vals.Right = sqlparser.ListArg("::" + ListVarName)
+	default:
+		rtb.Route.Values, err = gen.convert(rtb, vals)
+		if err != nil {
+			return err
+		}
+	}
+	// Generation of select cannot fail.
+	query, _ := gen.convert(rtb, &rtb.Select)
+	rtb.Route.Query = query.(string)
+	rtb.Route.FieldQuery = gen.generateFieldQuery(rtb, &rtb.Select)
+	return nil
+}
+
+// SupplyVar should be unreachable.
+func (rtb *routeBuilder) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
+	panic("unreachable")
 }
 
 // SupplyCol changes the router to supply the requested column
