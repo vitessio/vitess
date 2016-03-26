@@ -15,7 +15,8 @@ import (
 // like for IN clauses.
 const ListVarName = "__vals"
 
-// jointab is used for managing join dependencies.
+// jointab manages procurement and naming of join
+// variables across primitives.
 type jointab struct {
 	refs map[colref]string
 	vars map[string]struct{}
