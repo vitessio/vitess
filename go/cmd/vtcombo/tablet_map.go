@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -251,16 +252,32 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []query
 	return results, nil
 }
 
+type streamExecuteAdapter struct {
+	c   chan *sqltypes.Result
+	err *error
+}
+
+func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
+	r, ok := <-a.c
+	if !ok {
+		if *a.err == nil {
+			return nil, io.EOF
+		}
+		return nil, *a.err
+	}
+	return r, nil
+}
+
 // StreamExecute is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
+func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
 	bv, err := querytypes.BindVariablesToProto3(bindVars)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	bindVars, err = querytypes.Proto3ToBindVariables(bv)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	result := make(chan *sqltypes.Result, 10)
 	var finalErr error
@@ -282,9 +299,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 		close(result)
 	}()
 
-	return result, func() error {
-		return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
-	}, nil
+	return &streamExecuteAdapter{result, &finalErr}, nil
 }
 
 // Begin is part of tabletconn.TabletConn
@@ -348,8 +363,8 @@ func (itc *internalTabletConn) SplitQuery(ctx context.Context, query querytypes.
 }
 
 type streamHealthReader struct {
-	c       <-chan *querypb.StreamHealthResponse
-	errFunc tabletconn.ErrFunc
+	c   <-chan *querypb.StreamHealthResponse
+	err *error
 }
 
 // Recv implements tabletconn.StreamHealthReader.
@@ -357,7 +372,7 @@ type streamHealthReader struct {
 func (r *streamHealthReader) Recv() (*querypb.StreamHealthResponse, error) {
 	resp, ok := <-r.c
 	if !ok {
-		return nil, r.errFunc()
+		return nil, *r.err
 	}
 	return resp, nil
 }
@@ -377,17 +392,17 @@ func (itc *internalTabletConn) StreamHealth(ctx context.Context) (tabletconn.Str
 		case <-ctx.Done():
 		}
 
+		// We populate finalErr before closing the channel.
+		// The consumer first waits on the channel closure,
+		// then read finalErr
 		finalErr = itc.tablet.qsc.QueryService().StreamHealthUnregister(id)
+		finalErr = tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
 		close(result)
 	}()
 
-	errFunc := func() error {
-		return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
-	}
-
 	return &streamHealthReader{
-		c:       result,
-		errFunc: errFunc,
+		c:   result,
+		err: &finalErr,
 	}, nil
 }
 

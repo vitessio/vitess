@@ -6,6 +6,7 @@ package vtgate
 
 import (
 	"fmt"
+	"io"
 	"math/rand"
 	"strings"
 	"sync"
@@ -317,18 +318,29 @@ func (stc *ScatterConn) ExecuteBatch(
 	return results, nil
 }
 
-func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, sr <-chan *sqltypes.Result, replyErr *error, fieldSent *bool, sendReply func(reply *sqltypes.Result) error) {
-	if sr == nil {
-		return
+func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, stream sqltypes.ResultStream, err error, replyErr *error, fieldSent *bool, sendReply func(reply *sqltypes.Result) error) error {
+	if err != nil {
+		return err
 	}
-	for qr := range sr {
+	for {
+		qr, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+
 		mu.Lock()
 		if *replyErr != nil {
 			mu.Unlock()
 			// we had an error sending results, drain input
-			for range sr {
+			for {
+				if _, err := stream.Recv(); err != nil {
+					break
+				}
 			}
-			return
+			return nil
 		}
 
 		// only send field info once for scattered streaming
@@ -369,9 +381,8 @@ func (stc *ScatterConn) StreamExecute(
 		NewSafeSession(nil),
 		false,
 		func(shard string, transactionID int64) error {
-			sr, errFunc := stc.gateway.StreamExecute(ctx, keyspace, shard, tabletType, query, bindVars, transactionID)
-			stc.processOneStreamingResult(&mu, sr, &replyErr, &fieldSent, sendReply)
-			return errFunc()
+			stream, err := stc.gateway.StreamExecute(ctx, keyspace, shard, tabletType, query, bindVars, transactionID)
+			return stc.processOneStreamingResult(&mu, stream, err, &replyErr, &fieldSent, sendReply)
 		})
 	if replyErr != nil {
 		allErrors.RecordError(replyErr)
@@ -404,9 +415,8 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		NewSafeSession(nil),
 		false,
 		func(shard string, transactionID int64) error {
-			sr, errFunc := stc.gateway.StreamExecute(ctx, keyspace, shard, tabletType, query, shardVars[shard], transactionID)
-			stc.processOneStreamingResult(&mu, sr, &replyErr, &fieldSent, sendReply)
-			return errFunc()
+			stream, err := stc.gateway.StreamExecute(ctx, keyspace, shard, tabletType, query, shardVars[shard], transactionID)
+			return stc.processOneStreamingResult(&mu, stream, err, &replyErr, &fieldSent, sendReply)
 		})
 	if replyErr != nil {
 		allErrors.RecordError(replyErr)

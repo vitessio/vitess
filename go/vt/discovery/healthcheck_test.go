@@ -282,8 +282,7 @@ type fakeConn struct {
 }
 
 type streamHealthReader struct {
-	c       <-chan *querypb.StreamHealthResponse
-	errFunc tabletconn.ErrFunc
+	c <-chan *querypb.StreamHealthResponse
 }
 
 // Recv implements tabletconn.StreamHealthReader.
@@ -299,8 +298,7 @@ func (r *streamHealthReader) Recv() (*querypb.StreamHealthResponse, error) {
 // StreamHealth implements tabletconn.TabletConn.
 func (fc *fakeConn) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
 	return &streamHealthReader{
-		c:       fc.hcChan,
-		errFunc: func() error { return nil },
+		c: fc.hcChan,
 	}, nil
 }
 
@@ -325,8 +323,8 @@ func (fc *fakeConn) ExecuteBatch2(ctx context.Context, queries []querytypes.Boun
 }
 
 // StreamExecute implements tabletconn.TabletConn.
-func (fc *fakeConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
-	return nil, nil, fmt.Errorf("not implemented")
+func (fc *fakeConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 // Begin implements tabletconn.TabletConn.

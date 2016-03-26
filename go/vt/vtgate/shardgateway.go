@@ -17,7 +17,6 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -116,7 +115,7 @@ func (sg *shardGateway) ExecuteBatch(ctx context.Context, keyspace string, shard
 }
 
 // StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
-func (sg *shardGateway) StreamExecute(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc) {
+func (sg *shardGateway) StreamExecute(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
 	return sg.getConnection(ctx, keyspace, shard, tabletType).StreamExecute(ctx, query, bindVars, transactionID)
 }
 

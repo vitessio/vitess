@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -447,7 +448,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 				defer qrr.Close()
 
 				// process the data
-				if err := vscw.processData(td, tableIndex, qrr, insertChannel, vscw.destinationPackCount, ctx.Done()); err != nil {
+				if err := vscw.processData(ctx, td, tableIndex, qrr, insertChannel, vscw.destinationPackCount); err != nil {
 					processError("QueryResultReader failed: %v", err)
 				}
 				vscw.tableStatus[tableIndex].threadDone()
@@ -534,65 +535,52 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 
 // processData pumps the data out of the provided QueryResultReader.
 // It returns any error the source encounters.
-func (vscw *VerticalSplitCloneWorker) processData(td *tabletmanagerdatapb.TableDefinition, tableIndex int, qrr *QueryResultReader, insertChannel chan string, destinationPackCount int, abort <-chan struct{}) error {
+func (vscw *VerticalSplitCloneWorker) processData(ctx context.Context, td *tabletmanagerdatapb.TableDefinition, tableIndex int, qrr *QueryResultReader, insertChannel chan string, destinationPackCount int) error {
 	// process the data
 	baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
 	var rows [][]sqltypes.Value
 	packCount := 0
 
 	for {
-		select {
-		case r, ok := <-qrr.Output:
-			if !ok {
-				// we are done, see if there was an error
-				err := qrr.Error()
-				if err != nil {
-					return err
+		r, err := qrr.Output.Recv()
+		if err != nil {
+			// we are done, see if there was an error
+			if err != io.EOF {
+				return err
+			}
+
+			// send the remainder if any
+			if packCount > 0 {
+				cmd := baseCmd + makeValueString(qrr.Fields, rows)
+				select {
+				case insertChannel <- cmd:
+				case <-ctx.Done():
+					return nil
 				}
-
-				// send the remainder if any
-				if packCount > 0 {
-					cmd := baseCmd + makeValueString(qrr.Fields, rows)
-					select {
-					case insertChannel <- cmd:
-					case <-abort:
-						return nil
-					}
-				}
-				return nil
 			}
-
-			// add the rows to our current result
-			rows = append(rows, r.Rows...)
-			vscw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
-
-			// see if we reach the destination pack count
-			packCount++
-			if packCount < destinationPackCount {
-				continue
-			}
-
-			// send the rows to be inserted
-			cmd := baseCmd + makeValueString(qrr.Fields, rows)
-			select {
-			case insertChannel <- cmd:
-			case <-abort:
-				return nil
-			}
-
-			// and reset our row buffer
-			rows = nil
-			packCount = 0
-
-		case <-abort:
 			return nil
 		}
-		// the abort case might be starved above, so we check again; this means that the loop
-		// will run at most once before the abort case is triggered.
-		select {
-		case <-abort:
-			return nil
-		default:
+
+		// add the rows to our current result
+		rows = append(rows, r.Rows...)
+		vscw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
+
+		// see if we reach the destination pack count
+		packCount++
+		if packCount < destinationPackCount {
+			continue
 		}
+
+		// send the rows to be inserted
+		cmd := baseCmd + makeValueString(qrr.Fields, rows)
+		select {
+		case insertChannel <- cmd:
+		case <-ctx.Done():
+			return nil
+		}
+
+		// and reset our row buffer
+		rows = nil
+		packCount = 0
 	}
 }
