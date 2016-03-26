@@ -7,7 +7,6 @@ package vindexes
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
@@ -139,14 +138,10 @@ func (lkp *lookup) Init(m map[string]interface{}) {
 // Map1 is for a unique vindex.
 func (lkp *lookup) Map1(vcursor planbuilder.VCursor, ids []interface{}) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
-	bq := &querytypes.BoundQuery{
-		Sql: lkp.sel,
-	}
 	for _, id := range ids {
-		bq.BindVariables = map[string]interface{}{
+		result, err := vcursor.Execute(lkp.sel, map[string]interface{}{
 			lkp.From: id,
-		}
-		result, err := vcursor.Execute(bq)
+		})
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
@@ -169,14 +164,10 @@ func (lkp *lookup) Map1(vcursor planbuilder.VCursor, ids []interface{}) ([][]byt
 // Map2 is for a non-unique vindex.
 func (lkp *lookup) Map2(vcursor planbuilder.VCursor, ids []interface{}) ([][][]byte, error) {
 	out := make([][][]byte, 0, len(ids))
-	bq := &querytypes.BoundQuery{
-		Sql: lkp.sel,
-	}
 	for _, id := range ids {
-		bq.BindVariables = map[string]interface{}{
+		result, err := vcursor.Execute(lkp.sel, map[string]interface{}{
 			lkp.From: id,
-		}
-		result, err := vcursor.Execute(bq)
+		})
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
@@ -199,14 +190,10 @@ func (lkp *lookup) Verify(vcursor planbuilder.VCursor, id interface{}, ksid []by
 	if err != nil {
 		return false, fmt.Errorf("lookup.Verify: %v", err)
 	}
-	bq := &querytypes.BoundQuery{
-		Sql: lkp.ver,
-		BindVariables: map[string]interface{}{
-			lkp.From: id,
-			lkp.To:   val,
-		},
-	}
-	result, err := vcursor.Execute(bq)
+	result, err := vcursor.Execute(lkp.ver, map[string]interface{}{
+		lkp.From: id,
+		lkp.To:   val,
+	})
 	if err != nil {
 		return false, fmt.Errorf("lookup.Verify: %v", err)
 	}
@@ -222,14 +209,10 @@ func (lkp *lookup) Create(vcursor planbuilder.VCursor, id interface{}, ksid []by
 	if err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
-	bq := &querytypes.BoundQuery{
-		Sql: lkp.ins,
-		BindVariables: map[string]interface{}{
-			lkp.From: id,
-			lkp.To:   val,
-		},
-	}
-	if _, err := vcursor.Execute(bq); err != nil {
+	if _, err := vcursor.Execute(lkp.ins, map[string]interface{}{
+		lkp.From: id,
+		lkp.To:   val,
+	}); err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
 	return nil
@@ -241,15 +224,12 @@ func (lkp *lookup) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid [
 	if err != nil {
 		return fmt.Errorf("lookup.Delete: %v", err)
 	}
-	bq := &querytypes.BoundQuery{
-		Sql: lkp.del,
-		BindVariables: map[string]interface{}{
-			lkp.To: val,
-		},
+	bindvars := map[string]interface{}{
+		lkp.To: val,
 	}
 	for _, id := range ids {
-		bq.BindVariables[lkp.From] = id
-		if _, err := vcursor.Execute(bq); err != nil {
+		bindvars[lkp.From] = id
+		if _, err := vcursor.Execute(lkp.del, bindvars); err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
 		}
 	}

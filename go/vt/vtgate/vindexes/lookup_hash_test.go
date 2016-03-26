@@ -21,16 +21,19 @@ type vcursor struct {
 	mustFail bool
 	numRows  int
 	result   *sqltypes.Result
-	query    *querytypes.BoundQuery
+	bq       *querytypes.BoundQuery
 }
 
-func (vc *vcursor) Execute(query *querytypes.BoundQuery) (*sqltypes.Result, error) {
-	vc.query = query
+func (vc *vcursor) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
+	vc.bq = &querytypes.BoundQuery{
+		Sql:           query,
+		BindVariables: bindvars,
+	}
 	if vc.mustFail {
 		return nil, errors.New("execute failed")
 	}
 	switch {
-	case strings.HasPrefix(query.Sql, "select"):
+	case strings.HasPrefix(query, "select"):
 		if vc.result != nil {
 			return vc.result, nil
 		}
@@ -46,9 +49,9 @@ func (vc *vcursor) Execute(query *querytypes.BoundQuery) (*sqltypes.Result, erro
 			})
 		}
 		return result, nil
-	case strings.HasPrefix(query.Sql, "insert"):
+	case strings.HasPrefix(query, "insert"):
 		return &sqltypes.Result{InsertID: 1}, nil
-	case strings.HasPrefix(query.Sql, "delete"):
+	case strings.HasPrefix(query, "delete"):
 		return &sqltypes.Result{}, nil
 	}
 	panic("unexpected")
@@ -112,8 +115,8 @@ func TestLookupHashCreate(t *testing.T) {
 			"toc":   int64(1),
 		},
 	}
-	if !reflect.DeepEqual(vc.query, wantQuery) {
-		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
+	if !reflect.DeepEqual(vc.bq, wantQuery) {
+		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
 	}
 }
 
@@ -137,7 +140,7 @@ func TestLookupHashDelete(t *testing.T) {
 			"toc":   int64(1),
 		},
 	}
-	if !reflect.DeepEqual(vc.query, wantQuery) {
-		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
+	if !reflect.DeepEqual(vc.bq, wantQuery) {
+		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
 	}
 }

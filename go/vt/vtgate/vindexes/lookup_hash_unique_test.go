@@ -67,8 +67,8 @@ func TestLookupHashUniqueCreate(t *testing.T) {
 			"toc":   int64(1),
 		},
 	}
-	if !reflect.DeepEqual(vc.query, wantQuery) {
-		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
+	if !reflect.DeepEqual(vc.bq, wantQuery) {
+		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
 	}
 }
 
@@ -92,7 +92,7 @@ func TestLookupHashUniqueDelete(t *testing.T) {
 			"toc":   int64(1),
 		},
 	}
-	if !reflect.DeepEqual(vc.query, wantQuery) {
-		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
+	if !reflect.DeepEqual(vc.bq, wantQuery) {
+		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
 	}
 }
