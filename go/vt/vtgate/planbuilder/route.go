@@ -437,11 +437,27 @@ func (rtb *routeBuilder) PushMisc(sel *sqlparser.Select) {
 
 // Wireup performs the wire-up tasks.
 func (rtb *routeBuilder) Wireup(plan planBuilder, gen *generator) error {
+	// Resolve values stored in the builder.
+	var err error
+	switch vals := rtb.Route.Values.(type) {
+	case *sqlparser.ComparisonExpr:
+		// A comparison expression is stored only if it was an IN clause.
+		// We have to convert it to use a list argutment and resolve values.
+		rtb.Route.Values, err = rtb.procureValues(plan, gen, vals.Right)
+		if err != nil {
+			return err
+		}
+		vals.Right = sqlparser.ListArg("::" + ListVarName)
+	default:
+		rtb.Route.Values, err = rtb.procureValues(plan, gen, vals)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Fix up the AST.
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node := node.(type) {
-		case *sqlparser.ColName:
-			gen.resolve(node, rtb)
-			return false, nil
 		case *sqlparser.Select:
 			if len(node.SelectExprs) == 0 {
 				node.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
@@ -459,26 +475,94 @@ func (rtb *routeBuilder) Wireup(plan planBuilder, gen *generator) error {
 		}
 		return true, nil
 	}, &rtb.Select)
-	var err error
-	switch vals := rtb.Route.Values.(type) {
-	case *sqlparser.ComparisonExpr:
-		// It's an IN clause.
-		rtb.Route.Values, err = gen.convert(rtb, vals.Right)
-		if err != nil {
-			return err
+
+	// Generate query while simultaneously resolving values.
+	varFormatter := func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
+		switch node := node.(type) {
+		case *sqlparser.ColName:
+			if !rtb.isLocal(node) {
+				joinVar := gen.Procure(plan, node, rtb.Order())
+				rtb.Route.JoinVars[joinVar] = struct{}{}
+				buf.Myprintf("%a", ":"+joinVar)
+				return
+			}
 		}
-		vals.Right = sqlparser.ListArg("::" + ListVarName)
-	default:
-		rtb.Route.Values, err = gen.convert(rtb, vals)
-		if err != nil {
-			return err
-		}
+		node.Format(buf)
 	}
-	// Generation of select cannot fail.
-	query, _ := gen.convert(rtb, &rtb.Select)
-	rtb.Route.Query = query.(string)
-	rtb.Route.FieldQuery = gen.generateFieldQuery(rtb, &rtb.Select)
+	buf := sqlparser.NewTrackedBuffer(varFormatter)
+	varFormatter(buf, &rtb.Select)
+	rtb.Route.Query = buf.ParsedQuery().Query
+	rtb.Route.FieldQuery = rtb.generateFieldQuery(&rtb.Select, gen)
 	return nil
+}
+
+// procureValues procures and converts the input into
+// the expected types for rtb.Values.
+func (rtb *routeBuilder) procureValues(plan planBuilder, gen *generator, val interface{}) (interface{}, error) {
+	switch val := val.(type) {
+	case nil:
+		return nil, nil
+	case sqlparser.ValTuple:
+		vals := make([]interface{}, 0, len(val))
+		for _, val := range val {
+			v, err := rtb.procureValues(plan, gen, val)
+			if err != nil {
+				return nil, err
+			}
+			vals = append(vals, v)
+		}
+		return vals, nil
+	case *sqlparser.ColName:
+		joinVar := gen.Procure(plan, val, rtb.Order())
+		rtb.Route.JoinVars[joinVar] = struct{}{}
+		return ":" + joinVar, nil
+	case sqlparser.ListArg:
+		return string(val), nil
+	case sqlparser.ValExpr:
+		return valConvert(val)
+	}
+	panic("unrecognized symbol")
+}
+
+func (rtb *routeBuilder) isLocal(col *sqlparser.ColName) bool {
+	switch meta := col.Metadata.(type) {
+	case *colsym:
+		return meta.Route() == rtb
+	case *tableAlias:
+		return meta.Route() == rtb
+	}
+	panic("unreachable")
+}
+
+// generateFieldQuery generates a query with an impossible where.
+// This will be used on the RHS node to fetch field info if the LHS
+// returns no result.
+func (rtb *routeBuilder) generateFieldQuery(sel *sqlparser.Select, gen *generator) string {
+	formatter := func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
+		switch node := node.(type) {
+		case *sqlparser.Select:
+			buf.Myprintf("select %v from %v where 1 != 1", node.SelectExprs, node.From)
+			return
+		case *sqlparser.JoinTableExpr:
+			if node.Join == sqlparser.LeftJoinStr || node.Join == sqlparser.RightJoinStr {
+				// ON clause is requried
+				buf.Myprintf("%v %s %v on 1 != 1", node.LeftExpr, node.Join, node.RightExpr)
+			} else {
+				buf.Myprintf("%v %s %v", node.LeftExpr, node.Join, node.RightExpr)
+			}
+			return
+		case *sqlparser.ColName:
+			if !rtb.isLocal(node) {
+				_, joinVar := gen.Lookup(node)
+				buf.Myprintf("%a", ":"+joinVar)
+				return
+			}
+		}
+		node.Format(buf)
+	}
+	buf := sqlparser.NewTrackedBuffer(formatter)
+	formatter(buf, sel)
+	return buf.ParsedQuery().Query
 }
 
 // SupplyVar should be unreachable.

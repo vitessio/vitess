@@ -5,7 +5,6 @@
 package planbuilder
 
 import (
-	"fmt"
 	"strconv"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -21,58 +20,27 @@ const ListVarName = "__vals"
 type generator struct {
 	refs map[colref]string
 	vars map[string]struct{}
-	plan planBuilder
 }
 
 // newGenerator creates a new generator for the current plan
 // being built. It also needs the current list of bind vars
 // used in the original query to make sure that the names
 // it generates don't collide with those already in use.
-func newGenerator(plan planBuilder, bindvars map[string]struct{}) *generator {
+func newGenerator(bindvars map[string]struct{}) *generator {
 	return &generator{
 		refs: make(map[colref]string),
 		vars: bindvars,
-		plan: plan,
 	}
 }
 
-// resolve performs the wireup for the specified column reference.
-// If the reference is local, then it's a no-op. Otherwise, it assigns
-// a bind var name to it and performs the wire-up.
-func (gen *generator) resolve(col *sqlparser.ColName, toRoute *routeBuilder) {
-	fromRoute, joinVar := gen.lookup(col)
-	if fromRoute == toRoute {
-		return
-	}
-	if _, ok := toRoute.Route.JoinVars[joinVar]; ok {
-		// Already using.
-		return
-	}
-	gen.join(fromRoute, col, joinVar, toRoute)
-}
-
-// lookup returns the route that supplies the column, and
-// returns the join var name if one has already been assigned
-// for it.
-func (gen *generator) lookup(col *sqlparser.ColName) (route *routeBuilder, joinVar string) {
-	ref := newColref(col)
-	switch meta := col.Metadata.(type) {
-	case *colsym:
-		return meta.Route(), gen.refs[ref]
-	case *tableAlias:
-		return meta.Route(), gen.refs[ref]
-	}
-	panic("unreachable")
-}
-
-// join performs the wireup starting from the fromRoute all the way to the toRoute.
-// It first finds the common join node for the two routes, and makes it request
-// the column from the LHS, and then associates the join var name to the
-// returned column number.
-func (gen *generator) join(fromRoute *routeBuilder, col *sqlparser.ColName, joinVar string, toRoute *routeBuilder) {
-	suffix := ""
-	i := 0
+// Procure requests for the specified column from the tree
+// and returns the join var name for it.
+func (gen *generator) Procure(plan planBuilder, col *sqlparser.ColName, to int) string {
+	from, joinVar := gen.Lookup(col)
+	// If joinVar is empty, generate a unique name.
 	if joinVar == "" {
+		suffix := ""
+		i := 0
 		for {
 			if col.Qualifier != "" {
 				joinVar = string(col.Qualifier) + "_" + string(col.Name) + suffix
@@ -88,103 +56,20 @@ func (gen *generator) join(fromRoute *routeBuilder, col *sqlparser.ColName, join
 		gen.vars[joinVar] = struct{}{}
 		gen.refs[newColref(col)] = joinVar
 	}
-	gen.plan.SupplyVar(fromRoute.Order(), toRoute.Order(), col, joinVar)
-	toRoute.Route.JoinVars[joinVar] = struct{}{}
+	plan.SupplyVar(from, to, col, joinVar)
+	return joinVar
 }
 
-// convert converts the input value to the type that the route need.
-// If the input type is sqlparser.SQLNode, it generates the string representation,
-// and substitutes external references with bind vars. So, this function can
-// be used for generating the SELECT query for the route as well as resolving
-// the Values field of the Route.
-func (gen *generator) convert(route *routeBuilder, val interface{}) (interface{}, error) {
-	varFormatter := func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
-		switch node := node.(type) {
-		case *sqlparser.ColName:
-			fromRoute, joinVar := gen.lookup(node)
-			if fromRoute != route {
-				buf.Myprintf("%a", ":"+joinVar)
-				return
-			}
-		}
-		node.Format(buf)
+// Lookup returns the order of the route that supplies the column, and
+// returns the join var name if one has already been assigned
+// for it.
+func (gen *generator) Lookup(col *sqlparser.ColName) (order int, joinVar string) {
+	ref := newColref(col)
+	switch meta := col.Metadata.(type) {
+	case *colsym:
+		return meta.Route().Order(), gen.refs[ref]
+	case *tableAlias:
+		return meta.Route().Order(), gen.refs[ref]
 	}
-	buf := sqlparser.NewTrackedBuffer(varFormatter)
-	switch val := val.(type) {
-	case nil:
-		return nil, nil
-	case *sqlparser.Select, *sqlparser.ColName:
-		varFormatter(buf, val.(sqlparser.SQLNode))
-		return buf.ParsedQuery().Query, nil
-	case sqlparser.ValTuple:
-		vals := make([]interface{}, 0, len(val))
-		for _, val := range val {
-			v, err := gen.convert(route, val)
-			if err != nil {
-				return nil, err
-			}
-			vals = append(vals, v)
-		}
-		return vals, nil
-	case sqlparser.ListArg:
-		return string(val), nil
-	case sqlparser.ValExpr:
-		return valConvert(val)
-	}
-	panic("unrecognized symbol")
-}
-
-// valConvert converts an AST value to the Value field in the route.
-func valConvert(node sqlparser.ValExpr) (interface{}, error) {
-	switch node := node.(type) {
-	case sqlparser.ValArg:
-		return string(node), nil
-	case sqlparser.StrVal:
-		return []byte(node), nil
-	case sqlparser.NumVal:
-		val := string(node)
-		signed, err := strconv.ParseInt(val, 0, 64)
-		if err == nil {
-			return signed, nil
-		}
-		unsigned, err := strconv.ParseUint(val, 0, 64)
-		if err == nil {
-			return unsigned, nil
-		}
-		return nil, err
-	case *sqlparser.NullVal:
-		return nil, nil
-	}
-	return nil, fmt.Errorf("%v is not a value", sqlparser.String(node))
-}
-
-// generateFieldQuery generates a query with an impossible where.
-// This will be used on the RHS node to fetch field info if the LHS
-// returns no result.
-func (gen *generator) generateFieldQuery(route *routeBuilder, sel *sqlparser.Select) string {
-	formatter := func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
-		switch node := node.(type) {
-		case *sqlparser.Select:
-			buf.Myprintf("select %v from %v where 1 != 1", node.SelectExprs, node.From)
-			return
-		case *sqlparser.JoinTableExpr:
-			if node.Join == sqlparser.LeftJoinStr || node.Join == sqlparser.RightJoinStr {
-				// ON clause is requried
-				buf.Myprintf("%v %s %v on 1 != 1", node.LeftExpr, node.Join, node.RightExpr)
-			} else {
-				buf.Myprintf("%v %s %v", node.LeftExpr, node.Join, node.RightExpr)
-			}
-			return
-		case *sqlparser.ColName:
-			fromRoute, joinVar := gen.lookup(node)
-			if fromRoute != route {
-				buf.Myprintf("%a", ":"+joinVar)
-				return
-			}
-		}
-		node.Format(buf)
-	}
-	buf := sqlparser.NewTrackedBuffer(formatter)
-	formatter(buf, sel)
-	return buf.ParsedQuery().Query
+	panic("unreachable")
 }
