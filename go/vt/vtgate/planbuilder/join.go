@@ -145,12 +145,12 @@ func (jb *joinBuilder) PushMisc(sel *sqlparser.Select) {
 }
 
 // Wireup performs the wireup for joinBuilder.
-func (jb *joinBuilder) Wireup(plan planBuilder, gen *generator) error {
-	err := jb.Right.Wireup(plan, gen)
+func (jb *joinBuilder) Wireup(plan planBuilder, jt *jointab) error {
+	err := jb.Right.Wireup(plan, jt)
 	if err != nil {
 		return err
 	}
-	return jb.Left.Wireup(plan, gen)
+	return jb.Left.Wireup(plan, jt)
 }
 
 // SupplyVar updates the join to make it supply the requested

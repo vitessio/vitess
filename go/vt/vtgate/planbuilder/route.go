@@ -62,7 +62,7 @@ type planBuilder interface {
 	// Wireup performs the wire-up work. Nodes should be traversed
 	// from right to left because the rhs nodes can request vars from
 	// the lhs nodes.
-	Wireup(plan planBuilder, gen *generator) error
+	Wireup(plan planBuilder, jt *jointab) error
 	// SupplyVar finds the common root between from and to. If it's
 	// the common root, it supplies the requested var to the rhs tree.
 	SupplyVar(from, to int, col *sqlparser.ColName, varname string)
@@ -436,20 +436,20 @@ func (rtb *routeBuilder) PushMisc(sel *sqlparser.Select) {
 }
 
 // Wireup performs the wire-up tasks.
-func (rtb *routeBuilder) Wireup(plan planBuilder, gen *generator) error {
+func (rtb *routeBuilder) Wireup(plan planBuilder, jt *jointab) error {
 	// Resolve values stored in the builder.
 	var err error
 	switch vals := rtb.Route.Values.(type) {
 	case *sqlparser.ComparisonExpr:
 		// A comparison expression is stored only if it was an IN clause.
 		// We have to convert it to use a list argutment and resolve values.
-		rtb.Route.Values, err = rtb.procureValues(plan, gen, vals.Right)
+		rtb.Route.Values, err = rtb.procureValues(plan, jt, vals.Right)
 		if err != nil {
 			return err
 		}
 		vals.Right = sqlparser.ListArg("::" + ListVarName)
 	default:
-		rtb.Route.Values, err = rtb.procureValues(plan, gen, vals)
+		rtb.Route.Values, err = rtb.procureValues(plan, jt, vals)
 		if err != nil {
 			return err
 		}
@@ -481,7 +481,7 @@ func (rtb *routeBuilder) Wireup(plan planBuilder, gen *generator) error {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
 			if !rtb.isLocal(node) {
-				joinVar := gen.Procure(plan, node, rtb.Order())
+				joinVar := jt.Procure(plan, node, rtb.Order())
 				rtb.Route.JoinVars[joinVar] = struct{}{}
 				buf.Myprintf("%a", ":"+joinVar)
 				return
@@ -492,20 +492,20 @@ func (rtb *routeBuilder) Wireup(plan planBuilder, gen *generator) error {
 	buf := sqlparser.NewTrackedBuffer(varFormatter)
 	varFormatter(buf, &rtb.Select)
 	rtb.Route.Query = buf.ParsedQuery().Query
-	rtb.Route.FieldQuery = rtb.generateFieldQuery(&rtb.Select, gen)
+	rtb.Route.FieldQuery = rtb.generateFieldQuery(&rtb.Select, jt)
 	return nil
 }
 
 // procureValues procures and converts the input into
 // the expected types for rtb.Values.
-func (rtb *routeBuilder) procureValues(plan planBuilder, gen *generator, val interface{}) (interface{}, error) {
+func (rtb *routeBuilder) procureValues(plan planBuilder, jt *jointab, val interface{}) (interface{}, error) {
 	switch val := val.(type) {
 	case nil:
 		return nil, nil
 	case sqlparser.ValTuple:
 		vals := make([]interface{}, 0, len(val))
 		for _, val := range val {
-			v, err := rtb.procureValues(plan, gen, val)
+			v, err := rtb.procureValues(plan, jt, val)
 			if err != nil {
 				return nil, err
 			}
@@ -513,7 +513,7 @@ func (rtb *routeBuilder) procureValues(plan planBuilder, gen *generator, val int
 		}
 		return vals, nil
 	case *sqlparser.ColName:
-		joinVar := gen.Procure(plan, val, rtb.Order())
+		joinVar := jt.Procure(plan, val, rtb.Order())
 		rtb.Route.JoinVars[joinVar] = struct{}{}
 		return ":" + joinVar, nil
 	case sqlparser.ListArg:
@@ -537,7 +537,7 @@ func (rtb *routeBuilder) isLocal(col *sqlparser.ColName) bool {
 // generateFieldQuery generates a query with an impossible where.
 // This will be used on the RHS node to fetch field info if the LHS
 // returns no result.
-func (rtb *routeBuilder) generateFieldQuery(sel *sqlparser.Select, gen *generator) string {
+func (rtb *routeBuilder) generateFieldQuery(sel *sqlparser.Select, jt *jointab) string {
 	formatter := func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 		switch node := node.(type) {
 		case *sqlparser.Select:
@@ -553,7 +553,7 @@ func (rtb *routeBuilder) generateFieldQuery(sel *sqlparser.Select, gen *generato
 			return
 		case *sqlparser.ColName:
 			if !rtb.isLocal(node) {
-				_, joinVar := gen.Lookup(node)
+				_, joinVar := jt.Lookup(node)
 				buf.Myprintf("%a", ":"+joinVar)
 				return
 			}

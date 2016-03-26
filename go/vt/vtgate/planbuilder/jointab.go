@@ -15,29 +15,28 @@ import (
 // like for IN clauses.
 const ListVarName = "__vals"
 
-// generator is used for the generation and wire-up phase
-// of plan building.
-type generator struct {
+// jointab is used for managing join dependencies.
+type jointab struct {
 	refs map[colref]string
 	vars map[string]struct{}
 }
 
-// newGenerator creates a new generator for the current plan
+// newJointab creates a new jointab for the current plan
 // being built. It also needs the current list of bind vars
 // used in the original query to make sure that the names
 // it generates don't collide with those already in use.
-func newGenerator(bindvars map[string]struct{}) *generator {
-	return &generator{
+func newJointab(bindvars map[string]struct{}) *jointab {
+	return &jointab{
 		refs: make(map[colref]string),
 		vars: bindvars,
 	}
 }
 
-// Procure requests for the specified column from the tree
+// Procure requests for the specified column from the plan
 // and returns the join var name for it.
-func (gen *generator) Procure(plan planBuilder, col *sqlparser.ColName, to int) string {
-	from, joinVar := gen.Lookup(col)
-	// If joinVar is empty, generate a unique name.
+func (jt *jointab) Procure(plan planBuilder, col *sqlparser.ColName, to int) string {
+	from, joinVar := jt.Lookup(col)
+	// If joinVar is empty, jterate a unique name.
 	if joinVar == "" {
 		suffix := ""
 		i := 0
@@ -47,29 +46,28 @@ func (gen *generator) Procure(plan planBuilder, col *sqlparser.ColName, to int) 
 			} else {
 				joinVar = string(col.Name) + suffix
 			}
-			if _, ok := gen.vars[joinVar]; !ok {
+			if _, ok := jt.vars[joinVar]; !ok {
 				break
 			}
 			i++
 			suffix = strconv.Itoa(i)
 		}
-		gen.vars[joinVar] = struct{}{}
-		gen.refs[newColref(col)] = joinVar
+		jt.vars[joinVar] = struct{}{}
+		jt.refs[newColref(col)] = joinVar
 	}
 	plan.SupplyVar(from, to, col, joinVar)
 	return joinVar
 }
 
-// Lookup returns the order of the route that supplies the column, and
-// returns the join var name if one has already been assigned
-// for it.
-func (gen *generator) Lookup(col *sqlparser.ColName) (order int, joinVar string) {
+// Lookup returns the order of the route that supplies the column and
+// the join var name if one has already been assigned for it.
+func (jt *jointab) Lookup(col *sqlparser.ColName) (order int, joinVar string) {
 	ref := newColref(col)
 	switch meta := col.Metadata.(type) {
 	case *colsym:
-		return meta.Route().Order(), gen.refs[ref]
+		return meta.Route().Order(), jt.refs[ref]
 	case *tableAlias:
-		return meta.Route().Order(), gen.refs[ref]
+		return meta.Route().Order(), jt.refs[ref]
 	}
 	panic("unreachable")
 }
