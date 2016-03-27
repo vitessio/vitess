@@ -183,7 +183,7 @@ func (jb *join) SupplyVar(from, to int, col *sqlparser.ColName, varname string) 
 			}
 		}
 		panic("unexpected: column not found")
-	case *tableAlias:
+	case *tabsym:
 		ref := newColref(col)
 		for i, colsym := range jb.Colsyms {
 			if jb.ejoin.Cols[i] > 0 {
@@ -194,7 +194,7 @@ func (jb *join) SupplyVar(from, to int, col *sqlparser.ColName, varname string) 
 				return
 			}
 		}
-		jb.ejoin.Vars[varname] = jb.Left.SupplyCol(col)
+		jb.ejoin.Vars[varname] = jb.Left.SupplyCol(ref)
 		return
 	}
 	panic("unreachable")
@@ -203,21 +203,18 @@ func (jb *join) SupplyVar(from, to int, col *sqlparser.ColName, varname string) 
 // SupplyCol changes the join to supply the requested column
 // name, and returns the result column number. If the column
 // is already in the list, it's reused.
-func (jb *join) SupplyCol(col *sqlparser.ColName) int {
-	// We already know it's a tableAlias.
-	meta := col.Metadata.(*tableAlias)
-	ref := newColref(col)
+func (jb *join) SupplyCol(ref colref) int {
 	for i, colsym := range jb.Colsyms {
 		if colsym.Underlying == ref {
 			return i
 		}
 	}
-	routeNumber := meta.Route().Order()
+	routeNumber := ref.Route().Order()
 	if routeNumber <= jb.LeftOrder {
-		ret := jb.Left.SupplyCol(col)
+		ret := jb.Left.SupplyCol(ref)
 		jb.ejoin.Cols = append(jb.ejoin.Cols, -ret-1)
 	} else {
-		ret := jb.Right.SupplyCol(col)
+		ret := jb.Right.SupplyCol(ref)
 		jb.ejoin.Cols = append(jb.ejoin.Cols, ret+1)
 	}
 	jb.Colsyms = append(jb.Colsyms, &colsym{Underlying: ref})

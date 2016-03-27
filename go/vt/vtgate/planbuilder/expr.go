@@ -147,13 +147,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 func exprIsValue(expr sqlparser.ValExpr, rb *route) bool {
 	switch node := expr.(type) {
 	case *sqlparser.ColName:
-		switch meta := node.Metadata.(type) {
-		case *colsym:
-			return meta.Route() != rb
-		case *tableAlias:
-			return meta.Route() != rb
-		}
-		panic("unreachable")
+		return node.Metadata.(sym).Route() != rb
 	case sqlparser.ValArg, sqlparser.StrVal, sqlparser.NumVal:
 		return true
 	}

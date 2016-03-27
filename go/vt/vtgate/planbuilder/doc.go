@@ -42,22 +42,22 @@ we return an error.
 
 The central design element for analyzing queries and
 building plans is the symbol table (symtab). This data
-structure contains tableAlias and colsym elements.
-A tableAlias element represents a table alias defined
-in the FROM clause. A tableAlias must always point
+structure contains tabsym and colsym elements.
+A tabsym element represents a table alias defined
+in the FROM clause. A tabsym must always point
 to a route, which is responsible for building
 the SELECT statement for that alias.
 A colsym represents a result column. It can optionally
-point to a tableAlias if it's a plain column reference
+point to a tabsym if it's a plain column reference
 of that alias. A colsym must always point to a route.
-One symtab is created per SELECT statement. tableAlias
+One symtab is created per SELECT statement. tabsym
 names must be unique within each symtab. Currently,
 duplicates are allowed among colsyms, just like MySQL
 does. Different databases implement different rules
-about whether colsym symbols can hide the tableAlias
+about whether colsym symbols can hide the tabsym
 symbols. The rules used by MySQL are not well documented.
 Therefore, we use the conservative rule that no
-tableAlias can be seen if colsyms are present.
+tabsym can be seen if colsyms are present.
 
 The symbol table is modified as various sections of the
 query are parsed. The parsing of the FROM clause

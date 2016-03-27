@@ -65,7 +65,7 @@ type builder interface {
 	// to supply the requested column and returns the column number of
 	// the result for it. The request is passed down recursively
 	// as needed.
-	SupplyCol(col *sqlparser.ColName) int
+	SupplyCol(ref colref) int
 }
 
 // Build builds a plan for a query based on the specified vschema.

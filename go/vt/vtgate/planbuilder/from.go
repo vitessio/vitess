@@ -48,11 +48,11 @@ func processTableExpr(tableExpr sqlparser.TableExpr, vschema *vindexes.VSchema) 
 // processAliasedTable produces a builder subtree for the given AliasedTableExpr.
 // If the expression is a subquery, then the the route built for it will contain
 // the entire subquery tree in the from clause, as if it was a table.
-// The symtab entry for the query will be a tableAlias where the columns
+// The symtab entry for the query will be a tabsym where the columns
 // will be built from the select expressions of the subquery.
 // Since the table aliases only contain vindex columns, we'll follow
 // the same rule: only columns from the subquery that are identified as
-// vindex columns will be added to the tableAlias.
+// vindex columns will be added to the tabsym.
 // A symtab symbol can only point to a route. This means that we canoot
 // support complex joins in subqueries yet.
 func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *vindexes.VSchema) (builder, error) {

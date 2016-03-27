@@ -46,7 +46,7 @@ import (
 // keep track of every symtab created, and recursively chase them
 // down every time a subquery merges with an outer query.
 type symtab struct {
-	tables  []*tableAlias
+	tables  []*tabsym
 	Colsyms []*colsym
 	Externs []*sqlparser.ColName
 	Outer   *symtab
@@ -66,7 +66,7 @@ func (st *symtab) AddAlias(alias sqlparser.SQLName, table *vindexes.Table, rb *r
 	if found := st.findTable(alias); found != nil {
 		return fmt.Errorf("duplicate symbol: %s", alias)
 	}
-	st.tables = append(st.tables, &tableAlias{
+	st.tables = append(st.tables, &tabsym{
 		Alias:       alias,
 		route:       rb,
 		symtab:      st,
@@ -98,7 +98,7 @@ func (st *symtab) Merge(newsyms *symtab) error {
 	return nil
 }
 
-func (st *symtab) findTable(alias sqlparser.SQLName) *tableAlias {
+func (st *symtab) findTable(alias sqlparser.SQLName) *tabsym {
 	for i, t := range st.tables {
 		if t.Alias == alias {
 			return st.tables[i]
@@ -132,11 +132,8 @@ func (st *symtab) SetRHS() {
 // If a symbol was found in an outer scope, then the column reference
 // is added to the Externs field.
 func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (rb *route, isLocal bool, err error) {
-	switch m := col.Metadata.(type) {
-	case *colsym:
-		return m.Route(), m.symtab == st, nil
-	case *tableAlias:
-		return m.Route(), m.symtab == st, nil
+	if m, ok := col.Metadata.(sym); ok {
+		return m.Route(), m.Symtab() == st, nil
 	}
 	if len(st.Colsyms) != 0 {
 		name := sqlparser.SQLName(sqlparser.String(col))
@@ -202,7 +199,7 @@ func (st *symtab) Vindex(expr sqlparser.Expr, scope *route, autoResolve bool) vi
 			return nil
 		}
 		return meta.Vindex
-	case *tableAlias:
+	case *tabsym:
 		if scope != meta.Route() {
 			return nil
 		}
@@ -211,13 +208,21 @@ func (st *symtab) Vindex(expr sqlparser.Expr, scope *route, autoResolve bool) vi
 	panic("unreachable")
 }
 
-// tableAlias is part of symtab.
+// sym defines the interface that must be satisfied by
+// all symbols in symtab
+type sym interface {
+	newColRef(col *sqlparser.ColName) colref
+	Route() *route
+	Symtab() *symtab
+}
+
+// tabsym is part of symtab.
 // It represnts a table alias in a FROM clause.
-// The tableAlias contains a backpointer to the symtab to which
+// The tabsym contains a backpointer to the symtab to which
 // it belongs. This is necessary because column references directly
-// point to a tableAlias, and sometimes, we need to know the symtab
+// point to a tabsym, and sometimes, we need to know the symtab
 // to which it belongs.
-// The tableAlias also points to a route into which we'll try to
+// The tabsym also points to a route into which we'll try to
 // push the rest of the surrounding clauses.
 // A table alias could also represent a sbquery, as long as it
 // can be executed as a route. Once a subquery gets encapsulated
@@ -225,7 +230,7 @@ func (st *symtab) Vindex(expr sqlparser.Expr, scope *route, autoResolve bool) vi
 // compared to a normal table. Subqueries that require the use
 // of a join primitive cannot be used by this data structure, and
 // therefore, are not supported.
-type tableAlias struct {
+type tabsym struct {
 	Alias       sqlparser.SQLName
 	route       *route
 	symtab      *symtab
@@ -233,13 +238,23 @@ type tableAlias struct {
 	ColVindexes []*vindexes.ColVindex
 }
 
-// Route returns the resolved route for a tableAlias.
-func (t *tableAlias) Route() *route {
+func (t *tabsym) newColRef(col *sqlparser.ColName) colref {
+	return colref{
+		Meta: t,
+		Name: col.Name,
+	}
+}
+
+func (t *tabsym) Route() *route {
 	return t.route.Resolve()
 }
 
+func (t *tabsym) Symtab() *symtab {
+	return t.symtab
+}
+
 // FindVindex returns the vindex if one was found for the column.
-func (t *tableAlias) FindVindex(name sqlparser.SQLName) vindexes.Vindex {
+func (t *tabsym) FindVindex(name sqlparser.SQLName) vindexes.Vindex {
 	for _, colVindex := range t.ColVindexes {
 		if string(name) == colVindex.Col {
 			return colVindex.Vindex
@@ -249,7 +264,7 @@ func (t *tableAlias) FindVindex(name sqlparser.SQLName) vindexes.Vindex {
 }
 
 // colsym contains symbol info about a select expression. Just like
-// a tableAlias, colsym also contains a backpointer to the symtab,
+// a tabsym, colsym also contains a backpointer to the symtab,
 // and a pointer to the route that would compute or fetch this value.
 // In the future, it could point to primitives other than a route.
 // A colsym may not have an alias, in which case, it cannot be referenced
@@ -275,29 +290,37 @@ func newColsym(rb *route, st *symtab) *colsym {
 	}
 }
 
-// Route returns the resolved route for a colsym..
+func (cs *colsym) newColRef(col *sqlparser.ColName) colref {
+	return colref{
+		Meta: cs,
+	}
+}
+
 func (cs *colsym) Route() *route {
 	return cs.route.Resolve()
+}
+
+func (cs *colsym) Symtab() *symtab {
+	return cs.symtab
 }
 
 // colref uniquely identifies a column reference. For a column
 // reference like 'a.b', the qualifier 'a' could be ambiguous due
 // to scoping rules. Effectively, colref changes such references
-// to 'symbol.a', where symbol physically points to a tableAlias
+// to 'symbol.a', where symbol physically points to a tabsym
 // or colsym. This representation makes a colref unambiguous.
 type colref struct {
-	metadata interface{}
-	name     sqlparser.SQLName
+	Meta sym
+	Name sqlparser.SQLName
 }
 
 // newColref builds a colref from a sqlparser.ColName that was
 // previously resolved. Otherwise, it panics.
 func newColref(col *sqlparser.ColName) colref {
-	if col.Metadata == nil {
-		panic("unexpected nil in metadata")
-	}
-	return colref{
-		metadata: col.Metadata,
-		name:     col.Name,
-	}
+	return col.Metadata.(sym).newColRef(col)
+}
+
+// Route returns the route for the colref.
+func (cr colref) Route() *route {
+	return cr.Meta.Route()
 }

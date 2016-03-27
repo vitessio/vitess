@@ -461,13 +461,7 @@ func (rb *route) procureValues(bldr builder, jt *jointab, val interface{}) (inte
 }
 
 func (rb *route) isLocal(col *sqlparser.ColName) bool {
-	switch meta := col.Metadata.(type) {
-	case *colsym:
-		return meta.Route() == rb
-	case *tableAlias:
-		return meta.Route() == rb
-	}
-	panic("unreachable")
+	return col.Metadata.(sym).Route() == rb
 }
 
 // generateFieldQuery generates a query with an impossible where.
@@ -509,26 +503,25 @@ func (rb *route) SupplyVar(from, to int, col *sqlparser.ColName, varname string)
 // SupplyCol changes the router to supply the requested column
 // name, and returns the result column number. If the column
 // is already in the list, it's reused.
-func (rb *route) SupplyCol(col *sqlparser.ColName) int {
-	// We already know it's a tableAlias.
-	meta := col.Metadata.(*tableAlias)
-	ref := newColref(col)
+func (rb *route) SupplyCol(ref colref) int {
 	for i, colsym := range rb.Colsyms {
 		if colsym.Underlying == ref {
 			return i
 		}
 	}
+	alias := ref.Meta.(*tabsym).Alias
+	name := ref.Name
 	rb.Colsyms = append(rb.Colsyms, &colsym{
-		Alias:      sqlparser.SQLName(sqlparser.String(col)),
+		Alias:      alias + "." + name,
 		Underlying: ref,
 	})
 	rb.Select.SelectExprs = append(
 		rb.Select.SelectExprs,
 		&sqlparser.NonStarExpr{
 			Expr: &sqlparser.ColName{
-				Metadata:  col.Metadata,
-				Qualifier: meta.Alias,
-				Name:      col.Name,
+				Metadata:  ref.Meta,
+				Qualifier: alias,
+				Name:      name,
 			},
 		},
 	)
