@@ -936,7 +936,7 @@ func TestEmptyJoinRecursive(t *testing.T) {
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
 	}
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{

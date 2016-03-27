@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vtgate/engine"
 )
 
 // splitAndExpression breaks up the BoolExpr into AND-separated conditions
@@ -109,7 +110,7 @@ func subqueryCanMerge(outer, inner *routeBuilder) error {
 	if !inner.IsSingle() {
 		return errors.New("unsupported: scatter subquery")
 	}
-	if inner.Route.Opcode == SelectUnsharded {
+	if inner.Route.Opcode == engine.SelectUnsharded {
 		return nil
 	}
 	// SelectEqualUnique
@@ -120,7 +121,7 @@ func subqueryCanMerge(outer, inner *routeBuilder) error {
 			return nil
 		}
 	}
-	if outer.Route.Opcode != SelectEqualUnique {
+	if outer.Route.Opcode != engine.SelectEqualUnique {
 		return errors.New("unsupported: subquery does not depend on scatter outer query")
 	}
 	if !valEqual(outer.Route.Values, inner.Route.Values) {

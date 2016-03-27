@@ -4,25 +4,12 @@
 
 package vtgate
 
-import (
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
-)
+import "github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 
 type routingMap map[string][]interface{}
 
 func (rtm routingMap) Add(shard string, id interface{}) {
-	ids := rtm[shard]
-	// Check for duplicates
-	for _, current := range ids {
-		if c, ok := current.(sqltypes.Value); ok {
-			current = c.String()
-		}
-		if id == current {
-			return
-		}
-	}
-	rtm[shard] = append(ids, id)
+	rtm[shard] = append(rtm[shard], id)
 }
 
 func (rtm routingMap) Shards() []string {

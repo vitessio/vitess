@@ -4,7 +4,10 @@
 
 package planbuilder
 
-import "github.com/youtube/vitess/go/vt/sqlparser"
+import (
+	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vtgate/engine"
+)
 
 // joinBuilder is used to build a Join primitive.
 // It's used to buid a normal join or a left join
@@ -22,7 +25,7 @@ type joinBuilder struct {
 	// join.
 	Colsyms []*colsym
 	// Join is the join plan.
-	join *Join
+	join *engine.Join
 }
 
 // newJoinBuilder makes a new joinBuilder using the two nodes.
@@ -49,7 +52,7 @@ func newJoinBuilder(lhs, rhs planBuilder, join *sqlparser.JoinTableExpr) (*joinB
 		Left:       lhs,
 		Right:      rhs,
 		symtab:     lhs.Symtab(),
-		join: &Join{
+		join: &engine.Join{
 			IsLeft: isLeft,
 			Left:   lhs.Primitive(),
 			Right:  rhs.Primitive(),
@@ -98,7 +101,7 @@ func (jb *joinBuilder) SetOrder(order int) {
 }
 
 // Primitve returns the built primitive.
-func (jb *joinBuilder) Primitive() Primitive {
+func (jb *joinBuilder) Primitive() engine.Primitive {
 	return jb.join
 }
 

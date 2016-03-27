@@ -8,71 +8,9 @@ import (
 	"errors"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vtgate/engine"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
-
-// planBuilder represents any object that's used to
-// build a plan. The top-level planBuilder will be a
-// tree that points to other planBuilder objects.
-// Each Builder object builds a Plan object, and they
-// will mirror the same tree. Once all the plans are built,
-// the builder objects will be discarded, and only
-// the Plan objects will remain. Because of the near-equivalent
-// meaning of a planBuilder object and its plan, the variable
-// names are overloaded. The separation exists only because the
-// information in the planBuilder objects are not ultimately
-// required externally.
-// For example, a route variable usually refers to a
-// routeBuilder object, which in turn, has a Route field.
-// This should not cause confusion because we almost never
-// reference the inner Route directly.
-type planBuilder interface {
-	// Symtab returns the associated symtab.
-	Symtab() *symtab
-	// SetSymtab sets the symtab for the current node and
-	// its non-subquery children.
-	SetSymtab(*symtab)
-	// Order is a number that signifies execution order.
-	// A lower Order number Route is executed before a
-	// higher one. For a node that contains other nodes,
-	// the Order represents the highest order of the leaf
-	// nodes. This function is used to travel from a root
-	// node to a target node.
-	Order() int
-	// SetOrder sets the order for the underlying routes.
-	SetOrder(int)
-	// Primitve returns the primitive built by the builder.
-	Primitive() Primitive
-	// Leftmost returns the leftmost route.
-	Leftmost() *routeBuilder
-	// Join joins the two planBuilder objects. The outcome
-	// can be a new planBuilder or a modified one.
-	Join(rhs planBuilder, Join *sqlparser.JoinTableExpr) (planBuilder, error)
-	// SetRHS marks all routes under this node as RHS.
-	SetRHS()
-	// PushSelect pushes the select expression through the tree
-	// all the way to the route that colsym points to.
-	// PushSelect is similar to SupplyCol except that it always
-	// adds a new column, whereas SupplyCol can reuse an existing
-	// column. This is required because the ORDER BY clause
-	// may refer to columns by number. The function must return
-	// a colsym for the expression and the column number of the result.
-	PushSelect(expr *sqlparser.NonStarExpr, route *routeBuilder) (colsym *colsym, colnum int, err error)
-	// PushMisc pushes miscelleaneous constructs to all the routes.
-	PushMisc(sel *sqlparser.Select)
-	// Wireup performs the wire-up work. Nodes should be traversed
-	// from right to left because the rhs nodes can request vars from
-	// the lhs nodes.
-	Wireup(plan planBuilder, jt *jointab) error
-	// SupplyVar finds the common root between from and to. If it's
-	// the common root, it supplies the requested var to the rhs tree.
-	SupplyVar(from, to int, col *sqlparser.ColName, varname string)
-	// SupplyCol will be used for the wire-up process. This function
-	// takes a column reference as input, changes the plan
-	// to supply the requested column and returns the column number of
-	// the result for it. The request is passed down recursively
-	// as needed.
-	SupplyCol(col *sqlparser.ColName) int
-}
 
 // routeBuilder is used to build a Route primitive.
 // It's used to build one of the Select routes like
@@ -96,10 +34,10 @@ type routeBuilder struct {
 	Colsyms []*colsym
 	// Route is the plan object being built. It will contain all the
 	// information necessary to execute the route operation.
-	Route *Route
+	Route *engine.Route
 }
 
-func newRouteBuilder(from sqlparser.TableExprs, route *Route, table *Table, vschema *VSchema, alias sqlparser.SQLName) *routeBuilder {
+func newRouteBuilder(from sqlparser.TableExprs, route *engine.Route, table *vindexes.Table, vschema *vindexes.VSchema, alias sqlparser.SQLName) *routeBuilder {
 	// We have some circular pointer references here:
 	// The routeBuilder points to the symtab idicating
 	// the symtab that should be used to resolve symbols
@@ -152,7 +90,7 @@ func (rtb *routeBuilder) SetOrder(order int) {
 }
 
 // Primitve returns the built primitive.
-func (rtb *routeBuilder) Primitive() Primitive {
+func (rtb *routeBuilder) Primitive() engine.Primitive {
 	return rtb.Route
 }
 
@@ -171,7 +109,7 @@ func (rtb *routeBuilder) Join(rhs planBuilder, join *sqlparser.JoinTableExpr) (p
 	if rtb.Route.Keyspace.Name != rRoute.Route.Keyspace.Name {
 		return newJoinBuilder(rtb, rRoute, join)
 	}
-	if rtb.Route.Opcode == SelectUnsharded {
+	if rtb.Route.Opcode == engine.SelectUnsharded {
 		// Two Routes from the same unsharded keyspace can be merged.
 		return rtb.merge(rRoute, join)
 	}
@@ -184,7 +122,7 @@ func (rtb *routeBuilder) Join(rhs planBuilder, join *sqlparser.JoinTableExpr) (p
 	}
 
 	// Both l & r routes point to the same shard.
-	if rtb.Route.Opcode == SelectEqualUnique && rRoute.Route.Opcode == SelectEqualUnique {
+	if rtb.Route.Opcode == engine.SelectEqualUnique && rRoute.Route.Opcode == engine.SelectEqualUnique {
 		if valEqual(rtb.Route.Values, rRoute.Route.Values) {
 			return rtb.merge(rRoute, join)
 		}
@@ -241,7 +179,7 @@ func (rtb *routeBuilder) isSameRoute(rhs *routeBuilder, filter sqlparser.BoolExp
 		left, right = right, left
 		lVindex = rtb.Symtab().Vindex(left, rtb, false)
 	}
-	if lVindex == nil || !IsUnique(lVindex) {
+	if lVindex == nil || !vindexes.IsUnique(lVindex) {
 		return false
 	}
 	rVindex := rhs.Symtab().Vindex(right, rhs, false)
@@ -278,49 +216,49 @@ func (rtb *routeBuilder) PushFilter(filter sqlparser.BoolExpr, whereType string)
 // the merged route.
 func (rtb *routeBuilder) UpdatePlan(filter sqlparser.BoolExpr) {
 	opcode, vindex, values := rtb.computePlan(filter)
-	if opcode == SelectScatter {
+	if opcode == engine.SelectScatter {
 		return
 	}
 	switch rtb.Route.Opcode {
-	case SelectEqualUnique:
-		if opcode == SelectEqualUnique && vindex.Cost() < rtb.Route.Vindex.Cost() {
+	case engine.SelectEqualUnique:
+		if opcode == engine.SelectEqualUnique && vindex.Cost() < rtb.Route.Vindex.Cost() {
 			rtb.setPlan(opcode, vindex, values)
 		}
-	case SelectEqual:
+	case engine.SelectEqual:
 		switch opcode {
-		case SelectEqualUnique:
+		case engine.SelectEqualUnique:
 			rtb.setPlan(opcode, vindex, values)
-		case SelectEqual:
+		case engine.SelectEqual:
 			if vindex.Cost() < rtb.Route.Vindex.Cost() {
 				rtb.setPlan(opcode, vindex, values)
 			}
 		}
-	case SelectIN:
+	case engine.SelectIN:
 		switch opcode {
-		case SelectEqualUnique, SelectEqual:
+		case engine.SelectEqualUnique, engine.SelectEqual:
 			rtb.setPlan(opcode, vindex, values)
-		case SelectIN:
+		case engine.SelectIN:
 			if vindex.Cost() < rtb.Route.Vindex.Cost() {
 				rtb.setPlan(opcode, vindex, values)
 			}
 		}
-	case SelectScatter:
+	case engine.SelectScatter:
 		switch opcode {
-		case SelectEqualUnique, SelectEqual, SelectIN:
+		case engine.SelectEqualUnique, engine.SelectEqual, engine.SelectIN:
 			rtb.setPlan(opcode, vindex, values)
 		}
 	}
 }
 
 // setPlan updates the plan info for the route.
-func (rtb *routeBuilder) setPlan(opcode RouteOpcode, vindex Vindex, values interface{}) {
+func (rtb *routeBuilder) setPlan(opcode engine.RouteOpcode, vindex vindexes.Vindex, values interface{}) {
 	rtb.Route.Opcode = opcode
 	rtb.Route.Vindex = vindex
 	rtb.Route.Values = values
 }
 
 // ComputePlan computes the plan for the specified filter.
-func (rtb *routeBuilder) computePlan(filter sqlparser.BoolExpr) (opcode RouteOpcode, vindex Vindex, values interface{}) {
+func (rtb *routeBuilder) computePlan(filter sqlparser.BoolExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, values interface{}) {
 	switch node := filter.(type) {
 	case *sqlparser.ComparisonExpr:
 		switch node.Operator {
@@ -330,11 +268,11 @@ func (rtb *routeBuilder) computePlan(filter sqlparser.BoolExpr) (opcode RouteOpc
 			return rtb.computeINPlan(node)
 		}
 	}
-	return SelectScatter, nil, nil
+	return engine.SelectScatter, nil, nil
 }
 
 // computeEqualPlan computes the plan for an equality constraint.
-func (rtb *routeBuilder) computeEqualPlan(comparison *sqlparser.ComparisonExpr) (opcode RouteOpcode, vindex Vindex, values interface{}) {
+func (rtb *routeBuilder) computeEqualPlan(comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, values interface{}) {
 	left := comparison.Left
 	right := comparison.Right
 	vindex = rtb.Symtab().Vindex(left, rtb, true)
@@ -342,36 +280,36 @@ func (rtb *routeBuilder) computeEqualPlan(comparison *sqlparser.ComparisonExpr) 
 		left, right = right, left
 		vindex = rtb.Symtab().Vindex(left, rtb, true)
 		if vindex == nil {
-			return SelectScatter, nil, nil
+			return engine.SelectScatter, nil, nil
 		}
 	}
 	if !exprIsValue(right, rtb) {
-		return SelectScatter, nil, nil
+		return engine.SelectScatter, nil, nil
 	}
-	if IsUnique(vindex) {
-		return SelectEqualUnique, vindex, right
+	if vindexes.IsUnique(vindex) {
+		return engine.SelectEqualUnique, vindex, right
 	}
-	return SelectEqual, vindex, right
+	return engine.SelectEqual, vindex, right
 }
 
 // computeINPlan computes the plan for an IN constraint.
-func (rtb *routeBuilder) computeINPlan(comparison *sqlparser.ComparisonExpr) (opcode RouteOpcode, vindex Vindex, values interface{}) {
+func (rtb *routeBuilder) computeINPlan(comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, values interface{}) {
 	vindex = rtb.Symtab().Vindex(comparison.Left, rtb, true)
 	if vindex == nil {
-		return SelectScatter, nil, nil
+		return engine.SelectScatter, nil, nil
 	}
 	switch node := comparison.Right.(type) {
 	case sqlparser.ValTuple:
 		for _, n := range node {
 			if !exprIsValue(n, rtb) {
-				return SelectScatter, nil, nil
+				return engine.SelectScatter, nil, nil
 			}
 		}
-		return SelectIN, vindex, comparison
+		return engine.SelectIN, vindex, comparison
 	case sqlparser.ListArg:
-		return SelectIN, vindex, comparison
+		return engine.SelectIN, vindex, comparison
 	}
-	return SelectScatter, nil, nil
+	return engine.SelectScatter, nil, nil
 }
 
 // PushSelect pushes the select expression into the route.
@@ -601,5 +539,5 @@ func (rtb *routeBuilder) SupplyCol(col *sqlparser.ColName) int {
 
 // IsSingle returns true if the route targets only one database.
 func (rtb *routeBuilder) IsSingle() bool {
-	return rtb.Route.Opcode == SelectUnsharded || rtb.Route.Opcode == SelectEqualUnique
+	return rtb.Route.Opcode == engine.SelectUnsharded || rtb.Route.Opcode == engine.SelectEqualUnique
 }

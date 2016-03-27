@@ -14,7 +14,6 @@ import (
 	"strconv"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
 // Hash defines vindex that hashes an int64 to a KeyspaceId
@@ -25,7 +24,7 @@ type Hash struct {
 }
 
 // NewHash creates a new Hash.
-func NewHash(name string, m map[string]interface{}) (planbuilder.Vindex, error) {
+func NewHash(name string, m map[string]interface{}) (Vindex, error) {
 	return &Hash{name: name}, nil
 }
 
@@ -40,7 +39,7 @@ func (vind *Hash) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *Hash) Map(_ planbuilder.VCursor, ids []interface{}) ([][]byte, error) {
+func (vind *Hash) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
 		num, err := getNumber(id)
@@ -53,7 +52,7 @@ func (vind *Hash) Map(_ planbuilder.VCursor, ids []interface{}) ([][]byte, error
 }
 
 // Verify returns true if id maps to ksid.
-func (vind *Hash) Verify(_ planbuilder.VCursor, id interface{}, ksid []byte) (bool, error) {
+func (vind *Hash) Verify(_ VCursor, id interface{}, ksid []byte) (bool, error) {
 	num, err := getNumber(id)
 	if err != nil {
 		return false, fmt.Errorf("hash.Verify: %v", err)
@@ -62,7 +61,7 @@ func (vind *Hash) Verify(_ planbuilder.VCursor, id interface{}, ksid []byte) (bo
 }
 
 // ReverseMap returns the id from ksid.
-func (vind *Hash) ReverseMap(_ planbuilder.VCursor, ksid []byte) (interface{}, error) {
+func (vind *Hash) ReverseMap(_ VCursor, ksid []byte) (interface{}, error) {
 	return vunhash(ksid)
 }
 
@@ -110,7 +109,7 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	planbuilder.Register("hash", NewHash)
+	Register("hash", NewHash)
 }
 
 func vhash(shardKey int64) []byte {

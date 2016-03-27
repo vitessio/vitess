@@ -10,11 +10,13 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vtgate/engine"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 // buildUpdatePlan builds the instructions for an UPDATE statement.
-func buildUpdatePlan(upd *sqlparser.Update, vschema *VSchema) (*Route, error) {
-	route := &Route{
+func buildUpdatePlan(upd *sqlparser.Update, vschema *vindexes.VSchema) (*engine.Route, error) {
+	route := &engine.Route{
 		Query: generateQuery(upd),
 	}
 	// We allow only one table in an update.
@@ -29,7 +31,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema *VSchema) (*Route, error) {
 		return nil, errors.New("unsupported: subqueries in DML")
 	}
 	if !route.Keyspace.Sharded {
-		route.Opcode = UpdateUnsharded
+		route.Opcode = engine.UpdateUnsharded
 		return route, nil
 	}
 
@@ -37,7 +39,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema *VSchema) (*Route, error) {
 	if err != nil {
 		return nil, err
 	}
-	route.Opcode = UpdateEqual
+	route.Opcode = engine.UpdateEqual
 	if isIndexChanging(upd.Exprs, route.Table.ColVindexes) {
 		return nil, errors.New("unsupported: DML cannot change vindex column")
 	}
@@ -52,7 +54,7 @@ func generateQuery(statement sqlparser.Statement) string {
 
 // isIndexChanging returns true if any of the update
 // expressions modify a vindex column.
-func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*ColVindex) bool {
+func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.ColVindex) bool {
 	vindexCols := make([]string, len(colVindexes))
 	for i, index := range colVindexes {
 		vindexCols[i] = index.Col
@@ -66,8 +68,8 @@ func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*ColVindex)
 }
 
 // buildUpdatePlan builds the instructions for a DELETE statement.
-func buildDeletePlan(del *sqlparser.Delete, vschema *VSchema) (*Route, error) {
-	route := &Route{
+func buildDeletePlan(del *sqlparser.Delete, vschema *vindexes.VSchema) (*engine.Route, error) {
+	route := &engine.Route{
 		Query: generateQuery(del),
 	}
 	// We allow only one table in a delete.
@@ -82,7 +84,7 @@ func buildDeletePlan(del *sqlparser.Delete, vschema *VSchema) (*Route, error) {
 		return nil, errors.New("unsupported: subqueries in DML")
 	}
 	if !route.Keyspace.Sharded {
-		route.Opcode = DeleteUnsharded
+		route.Opcode = engine.DeleteUnsharded
 		return route, nil
 	}
 
@@ -90,7 +92,7 @@ func buildDeletePlan(del *sqlparser.Delete, vschema *VSchema) (*Route, error) {
 	if err != nil {
 		return nil, err
 	}
-	route.Opcode = DeleteEqual
+	route.Opcode = engine.DeleteEqual
 	route.Subquery = generateDeleteSubquery(del, route.Table)
 	return route, nil
 }
@@ -98,7 +100,7 @@ func buildDeletePlan(del *sqlparser.Delete, vschema *VSchema) (*Route, error) {
 // generateDeleteSubquery generates the query to fetch the rows
 // that will be deleted. This allows VTGate to clean up any
 // owned vindexes as needed.
-func generateDeleteSubquery(del *sqlparser.Delete, table *Table) string {
+func generateDeleteSubquery(del *sqlparser.Delete, table *vindexes.Table) string {
 	if len(table.Owned) == 0 {
 		return ""
 	}
@@ -118,12 +120,12 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *Table) string {
 
 // getDMLRouting updates the route with the necessary routing
 // info. If it cannot find a unique route, then it returns an error.
-func getDMLRouting(where *sqlparser.Where, route *Route) error {
+func getDMLRouting(where *sqlparser.Where, route *engine.Route) error {
 	if where == nil {
 		return errors.New("unsupported: multi-shard where clause in DML")
 	}
 	for _, index := range route.Table.Ordered {
-		if !IsUnique(index.Vindex) {
+		if !vindexes.IsUnique(index.Vindex) {
 			continue
 		}
 		if values := getMatch(where.Expr, index.Col); values != nil {

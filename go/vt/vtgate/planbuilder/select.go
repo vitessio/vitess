@@ -8,10 +8,12 @@ import (
 	"errors"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vtgate/engine"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 // buildSelectPlan is the new function to build a Select plan.
-func buildSelectPlan(sel *sqlparser.Select, vschema *VSchema) (primitive Primitive, err error) {
+func buildSelectPlan(sel *sqlparser.Select, vschema *vindexes.VSchema) (primitive engine.Primitive, err error) {
 	bindvars := getBindvars(sel)
 	builder, err := processSelect(sel, vschema, nil)
 	if err != nil {
@@ -41,7 +43,7 @@ func getBindvars(node sqlparser.SQLNode) map[string]struct{} {
 }
 
 // processSelect builds a plan for the given query or subquery.
-func processSelect(sel *sqlparser.Select, vschema *VSchema, outer planBuilder) (planBuilder, error) {
+func processSelect(sel *sqlparser.Select, vschema *vindexes.VSchema, outer planBuilder) (planBuilder, error) {
 	plan, err := processTableExprs(sel.From, vschema)
 	if err != nil {
 		return nil, err
@@ -177,7 +179,7 @@ func checkAggregates(sel *sqlparser.Select, plan planBuilder) error {
 		switch selectExpr := selectExpr.(type) {
 		case *sqlparser.NonStarExpr:
 			vindex := plan.Symtab().Vindex(selectExpr.Expr, route, true)
-			if vindex != nil && IsUnique(vindex) {
+			if vindex != nil && vindexes.IsUnique(vindex) {
 				return nil
 			}
 		}

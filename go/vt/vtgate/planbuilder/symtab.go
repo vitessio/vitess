@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 // symtab contains the symbols for a SELECT statement.
@@ -49,19 +50,19 @@ type symtab struct {
 	Colsyms []*colsym
 	Externs []*sqlparser.ColName
 	Outer   *symtab
-	VSchema *VSchema
+	VSchema *vindexes.VSchema
 }
 
 // newSymtab creates a new symtab initialized
 // to contain the provided table alias.
-func newSymtab(vschema *VSchema) *symtab {
+func newSymtab(vschema *vindexes.VSchema) *symtab {
 	return &symtab{
 		VSchema: vschema,
 	}
 }
 
 // AddAlias adds a table alias to symtab.
-func (st *symtab) AddAlias(alias sqlparser.SQLName, table *Table, route *routeBuilder) error {
+func (st *symtab) AddAlias(alias sqlparser.SQLName, table *vindexes.Table, route *routeBuilder) error {
 	if found := st.findTable(alias); found != nil {
 		return fmt.Errorf("duplicate symbol: %s", alias)
 	}
@@ -184,7 +185,7 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (route *routeBu
 
 // Vindex returns the vindex if the expression is a plain column reference
 // that is part of the specified route, and has an associated vindex.
-func (st *symtab) Vindex(expr sqlparser.Expr, scope *routeBuilder, autoResolve bool) Vindex {
+func (st *symtab) Vindex(expr sqlparser.Expr, scope *routeBuilder, autoResolve bool) vindexes.Vindex {
 	col, ok := expr.(*sqlparser.ColName)
 	if !ok {
 		return nil
@@ -228,8 +229,8 @@ type tableAlias struct {
 	Alias       sqlparser.SQLName
 	route       *routeBuilder
 	symtab      *symtab
-	Keyspace    *Keyspace
-	ColVindexes []*ColVindex
+	Keyspace    *vindexes.Keyspace
+	ColVindexes []*vindexes.ColVindex
 }
 
 // Route returns the resolved route for a tableAlias.
@@ -238,7 +239,7 @@ func (t *tableAlias) Route() *routeBuilder {
 }
 
 // FindVindex returns the vindex if one was found for the column.
-func (t *tableAlias) FindVindex(name sqlparser.SQLName) Vindex {
+func (t *tableAlias) FindVindex(name sqlparser.SQLName) vindexes.Vindex {
 	for _, colVindex := range t.ColVindexes {
 		if string(name) == colVindex.Col {
 			return colVindex.Vindex
@@ -261,7 +262,7 @@ type colsym struct {
 	route      *routeBuilder
 	symtab     *symtab
 	Underlying colref
-	Vindex     Vindex
+	Vindex     vindexes.Vindex
 }
 
 // newColsym builds a colsym for the specified route and symtab.

@@ -9,6 +9,8 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vtgate/engine"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 // This file has functions to analyze the FROM clause
@@ -16,7 +18,7 @@ import (
 
 // processTableExprs analyzes the FROM clause. It produces a planBuilder
 // with all the routes identified.
-func processTableExprs(tableExprs sqlparser.TableExprs, vschema *VSchema) (planBuilder, error) {
+func processTableExprs(tableExprs sqlparser.TableExprs, vschema *vindexes.VSchema) (planBuilder, error) {
 	if len(tableExprs) != 1 {
 		return nil, errors.New("unsupported: ',' join operator")
 	}
@@ -24,7 +26,7 @@ func processTableExprs(tableExprs sqlparser.TableExprs, vschema *VSchema) (planB
 }
 
 // processTableExpr produces a planBuilder subtree for the given TableExpr.
-func processTableExpr(tableExpr sqlparser.TableExpr, vschema *VSchema) (planBuilder, error) {
+func processTableExpr(tableExpr sqlparser.TableExpr, vschema *vindexes.VSchema) (planBuilder, error) {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		return processAliasedTable(tableExpr, vschema)
@@ -53,7 +55,7 @@ func processTableExpr(tableExpr sqlparser.TableExpr, vschema *VSchema) (planBuil
 // vindex columns will be added to the tableAlias.
 // The above statements imply that a subquery is allowed only if it's a route
 // that can be treated like a normal table. If not, we return an error.
-func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *VSchema) (planBuilder, error) {
+func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *vindexes.VSchema) (planBuilder, error) {
 	switch expr := tableExpr.Expr.(type) {
 	case *sqlparser.TableName:
 		route, table, err := getTablePlan(expr, vschema)
@@ -84,14 +86,14 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *VSchema
 		if !ok {
 			return nil, errors.New("unsupported: complex join in subqueries")
 		}
-		table := &Table{
+		table := &vindexes.Table{
 			Keyspace: subroute.Route.Keyspace,
 		}
 		for _, colsyms := range subroute.Colsyms {
 			if colsyms.Vindex == nil {
 				continue
 			}
-			table.ColVindexes = append(table.ColVindexes, &ColVindex{
+			table.ColVindexes = append(table.ColVindexes, &vindexes.ColVindex{
 				Col:    string(colsyms.Alias),
 				Vindex: colsyms.Vindex,
 			})
@@ -109,10 +111,10 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *VSchema
 	panic("unreachable")
 }
 
-// getTablePlan produces the initial Route for the specified TableName.
+// getTablePlan produces the initial engine.Route for the specified TableName.
 // It also returns the associated vschema info (*Table) so that
 // it can be used to create the symbol table entry.
-func getTablePlan(tableName *sqlparser.TableName, vschema *VSchema) (*Route, *Table, error) {
+func getTablePlan(tableName *sqlparser.TableName, vschema *vindexes.VSchema) (*engine.Route, *vindexes.Table, error) {
 	if tableName.Qualifier != "" {
 		return nil, nil, errors.New("unsupported: keyspace name qualifier for tables")
 	}
@@ -121,14 +123,14 @@ func getTablePlan(tableName *sqlparser.TableName, vschema *VSchema) (*Route, *Ta
 		return nil, nil, err
 	}
 	if table.Keyspace.Sharded {
-		return &Route{
-			Opcode:   SelectScatter,
+		return &engine.Route{
+			Opcode:   engine.SelectScatter,
 			Keyspace: table.Keyspace,
 			JoinVars: make(map[string]struct{}),
 		}, table, nil
 	}
-	return &Route{
-		Opcode:   SelectUnsharded,
+	return &engine.Route{
+		Opcode:   engine.SelectUnsharded,
 		Keyspace: table.Keyspace,
 		JoinVars: make(map[string]struct{}),
 	}, table, nil
@@ -137,7 +139,7 @@ func getTablePlan(tableName *sqlparser.TableName, vschema *VSchema) (*Route, *Ta
 // processJoin produces a planBuilder subtree for the given Join.
 // If the left and right nodes can be part of the same route,
 // then it's a routeBuilder. Otherwise, it's a joinBuilder.
-func processJoin(join *sqlparser.JoinTableExpr, vschema *VSchema) (planBuilder, error) {
+func processJoin(join *sqlparser.JoinTableExpr, vschema *vindexes.VSchema) (planBuilder, error) {
 	switch join.Join {
 	case sqlparser.JoinStr, sqlparser.StraightJoinStr, sqlparser.LeftJoinStr:
 	case sqlparser.RightJoinStr:

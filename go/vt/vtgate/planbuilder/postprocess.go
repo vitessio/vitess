@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 // This file has functions to analyze postprocessing
@@ -54,7 +55,7 @@ func pushGroupBy(groupBy sqlparser.GroupBy, plan planBuilder) error {
 	// column with a unique vindex.
 	for _, expr := range groupBy {
 		vindex := plan.Symtab().Vindex(expr, route, true)
-		if vindex != nil && IsUnique(vindex) {
+		if vindex != nil && vindexes.IsUnique(vindex) {
 			route.SetGroupBy(groupBy)
 			return nil
 		}

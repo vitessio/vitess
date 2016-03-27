@@ -11,8 +11,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
-	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -173,7 +172,7 @@ var routerVSchema = createTestVSchema(`
 
 // createTestVSchema creates a vschema based on the JSON specs.
 // It panics on failure.
-func createTestVSchema(vschemaJSON string) *planbuilder.VSchema {
+func createTestVSchema(vschemaJSON string) *vindexes.VSchema {
 	f, err := ioutil.TempFile("", "vtgate_schema")
 	if err != nil {
 		panic(err)
@@ -186,7 +185,7 @@ func createTestVSchema(vschemaJSON string) *planbuilder.VSchema {
 	if err != nil {
 		panic(err)
 	}
-	vschema, err := planbuilder.LoadFile(fname)
+	vschema, err := vindexes.LoadFile(fname)
 	if err != nil {
 		panic(err)
 	}
