@@ -42,55 +42,55 @@ func getBindvars(node sqlparser.SQLNode) map[string]struct{} {
 	return bindvars
 }
 
-// processSelect builds a plan for the given query or subquery.
-func processSelect(sel *sqlparser.Select, vschema *vindexes.VSchema, outer planBuilder) (planBuilder, error) {
-	plan, err := processTableExprs(sel.From, vschema)
+// processSelect builds a primitive tree for the given query or subquery.
+func processSelect(sel *sqlparser.Select, vschema *vindexes.VSchema, outer builder) (builder, error) {
+	bldr, err := processTableExprs(sel.From, vschema)
 	if err != nil {
 		return nil, err
 	}
 	if outer != nil {
-		plan.Symtab().Outer = outer.Symtab()
+		bldr.Symtab().Outer = outer.Symtab()
 	}
 	if sel.Where != nil {
-		err = pushFilter(sel.Where.Expr, plan, sqlparser.WhereStr)
+		err = pushFilter(sel.Where.Expr, bldr, sqlparser.WhereStr)
 		if err != nil {
 			return nil, err
 		}
 	}
-	err = pushSelectExprs(sel, plan)
+	err = pushSelectExprs(sel, bldr)
 	if err != nil {
 		return nil, err
 	}
 	if sel.Having != nil {
-		err = pushFilter(sel.Having.Expr, plan, sqlparser.HavingStr)
+		err = pushFilter(sel.Having.Expr, bldr, sqlparser.HavingStr)
 		if err != nil {
 			return nil, err
 		}
 	}
-	err = pushOrderBy(sel.OrderBy, plan)
+	err = pushOrderBy(sel.OrderBy, bldr)
 	if err != nil {
 		return nil, err
 	}
-	err = pushLimit(sel.Limit, plan)
+	err = pushLimit(sel.Limit, bldr)
 	if err != nil {
 		return nil, err
 	}
-	plan.PushMisc(sel)
-	return plan, nil
+	bldr.PushMisc(sel)
+	return bldr, nil
 }
 
 // pushFilter identifies the target route for the specified bool expr,
 // pushes it down, and updates the route info if the new constraint improves
-// the plan. This function can push to a WHERE or HAVING clause.
-func pushFilter(boolExpr sqlparser.BoolExpr, plan planBuilder, whereType string) error {
+// the primitive. This function can push to a WHERE or HAVING clause.
+func pushFilter(boolExpr sqlparser.BoolExpr, bldr builder, whereType string) error {
 	filters := splitAndExpression(nil, boolExpr)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
-		route, err := findRoute(filter, plan)
+		rb, err := findRoute(filter, bldr)
 		if err != nil {
 			return err
 		}
-		err = route.PushFilter(filter, whereType)
+		err = rb.PushFilter(filter, whereType)
 		if err != nil {
 			return err
 		}
@@ -120,22 +120,22 @@ func reorderBySubquery(filters []sqlparser.BoolExpr) {
 
 // pushSelectExprs identifies the target route for the
 // select expressions and pushes them down.
-func pushSelectExprs(sel *sqlparser.Select, plan planBuilder) error {
-	err := checkAggregates(sel, plan)
+func pushSelectExprs(sel *sqlparser.Select, bldr builder) error {
+	err := checkAggregates(sel, bldr)
 	if err != nil {
 		return err
 	}
 	if sel.Distinct != "" {
-		// We know it's a routeBuilder, but this may change
+		// We know it's a route, but this may change
 		// in the distant future.
-		plan.(*routeBuilder).MakeDistinct()
+		bldr.(*route).MakeDistinct()
 	}
-	colsyms, err := pushSelectRoutes(sel.SelectExprs, plan)
+	colsyms, err := pushSelectRoutes(sel.SelectExprs, bldr)
 	if err != nil {
 		return err
 	}
-	plan.Symtab().Colsyms = colsyms
-	err = pushGroupBy(sel.GroupBy, plan)
+	bldr.Symtab().Colsyms = colsyms
+	err = pushGroupBy(sel.GroupBy, bldr)
 	if err != nil {
 		return err
 	}
@@ -145,7 +145,7 @@ func pushSelectExprs(sel *sqlparser.Select, plan planBuilder) error {
 // checkAggregates returns an error if the select statement
 // has aggregates that cannot be pushed down due to a complex
 // plan.
-func checkAggregates(sel *sqlparser.Select, plan planBuilder) error {
+func checkAggregates(sel *sqlparser.Select, bldr builder) error {
 	hasAggregates := false
 	if sel.Distinct != "" {
 		hasAggregates = true
@@ -166,19 +166,19 @@ func checkAggregates(sel *sqlparser.Select, plan planBuilder) error {
 	}
 
 	// Check if we can allow aggregates.
-	route, ok := plan.(*routeBuilder)
+	rb, ok := bldr.(*route)
 	if !ok {
 		return errors.New("unsupported: complex join with aggregates")
 	}
-	if route.IsSingle() {
+	if rb.IsSingle() {
 		return nil
 	}
-	// It's a scatter route. We can allow aggregates if there is a unique
+	// It's a scatter rb. We can allow aggregates if there is a unique
 	// vindex in the select list.
 	for _, selectExpr := range sel.SelectExprs {
 		switch selectExpr := selectExpr.(type) {
 		case *sqlparser.NonStarExpr:
-			vindex := plan.Symtab().Vindex(selectExpr.Expr, route, true)
+			vindex := bldr.Symtab().Vindex(selectExpr.Expr, rb, true)
 			if vindex != nil && vindexes.IsUnique(vindex) {
 				return nil
 			}
@@ -189,28 +189,28 @@ func checkAggregates(sel *sqlparser.Select, plan planBuilder) error {
 
 // pusheSelectRoutes is a convenience function that pushes all the select
 // expressions and returns the list of colsyms generated for it.
-func pushSelectRoutes(selectExprs sqlparser.SelectExprs, plan planBuilder) ([]*colsym, error) {
+func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*colsym, error) {
 	colsyms := make([]*colsym, len(selectExprs))
 	for i, node := range selectExprs {
 		switch node := node.(type) {
 		case *sqlparser.NonStarExpr:
-			route, err := findRoute(node.Expr, plan)
+			rb, err := findRoute(node.Expr, bldr)
 			if err != nil {
 				return nil, err
 			}
-			colsyms[i], _, err = plan.PushSelect(node, route)
+			colsyms[i], _, err = bldr.PushSelect(node, rb)
 			if err != nil {
 				return nil, err
 			}
 		case *sqlparser.StarExpr:
 			// We'll allow select * for simple routes.
-			route, ok := plan.(*routeBuilder)
+			rb, ok := bldr.(*route)
 			if !ok {
 				return nil, errors.New("unsupported: '*' expression in complex join")
 			}
 			// We can push without validating the reference because
 			// MySQL will fail if it's invalid.
-			colsyms[i] = route.PushStar(node)
+			colsyms[i] = rb.PushStar(node)
 		case sqlparser.Nextval:
 			// For now, this is only supported as an implicit feature
 			// for auto_inc in inserts.

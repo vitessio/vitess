@@ -114,7 +114,7 @@ func TestOne(t *testing.T) {
 
 func testFile(t *testing.T, filename string, vschema *vindexes.VSchema) {
 	for tcase := range iterateExecFile(filename) {
-		plan, err := BuildPlan(tcase.input, vschema)
+		plan, err := Build(tcase.input, vschema)
 		var out string
 		if err != nil {
 			out = err.Error()

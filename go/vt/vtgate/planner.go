@@ -52,7 +52,7 @@ func (plr *Planner) GetPlan(sql string) (*engine.Plan, error) {
 	if result, ok := plr.plans.Get(sql); ok {
 		return result.(*engine.Plan), nil
 	}
-	plan, err := planbuilder.BuildPlan(sql, plr.vschema)
+	plan, err := planbuilder.Build(sql, plr.vschema)
 	if err != nil {
 		return nil, err
 	}

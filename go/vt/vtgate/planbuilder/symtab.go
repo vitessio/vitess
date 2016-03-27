@@ -62,13 +62,13 @@ func newSymtab(vschema *vindexes.VSchema) *symtab {
 }
 
 // AddAlias adds a table alias to symtab.
-func (st *symtab) AddAlias(alias sqlparser.SQLName, table *vindexes.Table, route *routeBuilder) error {
+func (st *symtab) AddAlias(alias sqlparser.SQLName, table *vindexes.Table, rb *route) error {
 	if found := st.findTable(alias); found != nil {
 		return fmt.Errorf("duplicate symbol: %s", alias)
 	}
 	st.tables = append(st.tables, &tableAlias{
 		Alias:       alias,
-		route:       route,
+		route:       rb,
 		symtab:      st,
 		Keyspace:    table.Keyspace,
 		ColVindexes: table.ColVindexes,
@@ -131,7 +131,7 @@ func (st *symtab) SetRHS() {
 // a construct.
 // If a symbol was found in an outer scope, then the column reference
 // is added to the Externs field.
-func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (route *routeBuilder, isLocal bool, err error) {
+func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (rb *route, isLocal bool, err error) {
 	switch m := col.Metadata.(type) {
 	case *colsym:
 		return m.Route(), m.symtab == st, nil
@@ -152,11 +152,11 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (route *routeBu
 		}
 		if st.Outer != nil {
 			// autoResolve only allowed for innermost scope.
-			route, _, err = st.Outer.Find(col, false)
+			rb, _, err = st.Outer.Find(col, false)
 			if err == nil {
 				st.Externs = append(st.Externs, col)
 			}
-			return route, false, err
+			return rb, false, err
 		}
 		return nil, false, fmt.Errorf("symbol %s not found", sqlparser.String(col))
 	}
@@ -171,11 +171,11 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (route *routeBu
 	if alias == nil {
 		if st.Outer != nil {
 			// autoResolve only allowed for innermost scope.
-			route, _, err = st.Outer.Find(col, false)
+			rb, _, err = st.Outer.Find(col, false)
 			if err == nil {
 				st.Externs = append(st.Externs, col)
 			}
-			return route, false, err
+			return rb, false, err
 		}
 		return nil, false, fmt.Errorf("symbol %s not found", sqlparser.String(col))
 	}
@@ -185,7 +185,7 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (route *routeBu
 
 // Vindex returns the vindex if the expression is a plain column reference
 // that is part of the specified route, and has an associated vindex.
-func (st *symtab) Vindex(expr sqlparser.Expr, scope *routeBuilder, autoResolve bool) vindexes.Vindex {
+func (st *symtab) Vindex(expr sqlparser.Expr, scope *route, autoResolve bool) vindexes.Vindex {
 	col, ok := expr.(*sqlparser.ColName)
 	if !ok {
 		return nil
@@ -227,14 +227,14 @@ func (st *symtab) Vindex(expr sqlparser.Expr, scope *routeBuilder, autoResolve b
 // therefore, are not supported.
 type tableAlias struct {
 	Alias       sqlparser.SQLName
-	route       *routeBuilder
+	route       *route
 	symtab      *symtab
 	Keyspace    *vindexes.Keyspace
 	ColVindexes []*vindexes.ColVindex
 }
 
 // Route returns the resolved route for a tableAlias.
-func (t *tableAlias) Route() *routeBuilder {
+func (t *tableAlias) Route() *route {
 	return t.route.Resolve()
 }
 
@@ -259,7 +259,7 @@ func (t *tableAlias) FindVindex(name sqlparser.SQLName) vindexes.Vindex {
 // the Vindex field is also accordingly set.
 type colsym struct {
 	Alias      sqlparser.SQLName
-	route      *routeBuilder
+	route      *route
 	symtab     *symtab
 	Underlying colref
 	Vindex     vindexes.Vindex
@@ -268,15 +268,15 @@ type colsym struct {
 // newColsym builds a colsym for the specified route and symtab.
 // Other parameters are optionally set based on additional metadata
 // gathered.
-func newColsym(route *routeBuilder, st *symtab) *colsym {
+func newColsym(rb *route, st *symtab) *colsym {
 	return &colsym{
-		route:  route,
+		route:  rb,
 		symtab: st,
 	}
 }
 
 // Route returns the resolved route for a colsym..
-func (cs *colsym) Route() *routeBuilder {
+func (cs *colsym) Route() *route {
 	return cs.route.Resolve()
 }
 

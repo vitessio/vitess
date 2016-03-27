@@ -12,22 +12,11 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
-// planBuilder represents any object that's used to
-// build a plan. The top-level planBuilder will be a
-// tree that points to other planBuilder objects.
-// Each Builder object builds a Plan object, and they
-// will mirror the same tree. Once all the plans are built,
-// the builder objects will be discarded, and only
-// the Plan objects will remain. Because of the near-equivalent
-// meaning of a planBuilder object and its plan, the variable
-// names are overloaded. The separation exists only because the
-// information in the planBuilder objects are not ultimately
-// required externally.
-// For example, a route variable usually refers to a
-// routeBuilder object, which in turn, has a Route field.
-// This should not cause confusion because we almost never
-// reference the inner Route directly.
-type planBuilder interface {
+// A builder is used to build a primitive. The top-level
+// builder will be a tree that points to other builders.
+// Each builder builds an engine.Primitive.
+// The primitives themselves will mirror the same tree.
+type builder interface {
 	// Symtab returns the associated symtab.
 	Symtab() *symtab
 	// SetSymtab sets the symtab for the current node and
@@ -42,43 +31,46 @@ type planBuilder interface {
 	Order() int
 	// SetOrder sets the order for the underlying routes.
 	SetOrder(int)
-	// Primitve returns the primitive built by the builder.
+	// Primitve returns the underlying primitive.
 	Primitive() engine.Primitive
 	// Leftmost returns the leftmost route.
-	Leftmost() *routeBuilder
-	// Join joins the two planBuilder objects. The outcome
-	// can be a new planBuilder or a modified one.
-	Join(rhs planBuilder, Join *sqlparser.JoinTableExpr) (planBuilder, error)
-	// SetRHS marks all routes under this node as RHS.
+	Leftmost() *route
+	// Join joins the two builder objects. The outcome
+	// can be a new builder or a modified one.
+	Join(rhs builder, ajoin *sqlparser.JoinTableExpr) (builder, error)
+	// SetRHS marks all routes under this node as RHS due
+	// to a left join. Such nodes have restrictions on what
+	// can be pushed into them. This should not propagate
+	// to subqueries.
 	SetRHS()
 	// PushSelect pushes the select expression through the tree
 	// all the way to the route that colsym points to.
 	// PushSelect is similar to SupplyCol except that it always
 	// adds a new column, whereas SupplyCol can reuse an existing
-	// column. This is required because the ORDER BY clause
-	// may refer to columns by number. The function must return
-	// a colsym for the expression and the column number of the result.
-	PushSelect(expr *sqlparser.NonStarExpr, route *routeBuilder) (colsym *colsym, colnum int, err error)
+	// column. The function must return a colsym for the expression
+	// and the column number of the result.
+	PushSelect(expr *sqlparser.NonStarExpr, rb *route) (colsym *colsym, colnum int, err error)
 	// PushMisc pushes miscelleaneous constructs to all the routes.
+	// This should not propagate to subqueries.
 	PushMisc(sel *sqlparser.Select)
 	// Wireup performs the wire-up work. Nodes should be traversed
 	// from right to left because the rhs nodes can request vars from
 	// the lhs nodes.
-	Wireup(plan planBuilder, jt *jointab) error
+	Wireup(bldr builder, jt *jointab) error
 	// SupplyVar finds the common root between from and to. If it's
 	// the common root, it supplies the requested var to the rhs tree.
 	SupplyVar(from, to int, col *sqlparser.ColName, varname string)
 	// SupplyCol will be used for the wire-up process. This function
-	// takes a column reference as input, changes the plan
+	// takes a column reference as input, changes the primitive
 	// to supply the requested column and returns the column number of
 	// the result for it. The request is passed down recursively
 	// as needed.
 	SupplyCol(col *sqlparser.ColName) int
 }
 
-// BuildPlan builds a plan for a query based on the specified vschema.
+// Build builds a plan for a query based on the specified vschema.
 // It's the main entry point for this package.
-func BuildPlan(query string, vschema *vindexes.VSchema) (*engine.Plan, error) {
+func Build(query string, vschema *vindexes.VSchema) (*engine.Plan, error) {
 	statement, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, err

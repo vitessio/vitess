@@ -4,7 +4,7 @@
 
 package vtgate
 
-import "github.com/youtube/vitess/go/vt/vtgate/planbuilder"
+import "github.com/youtube/vitess/go/vt/vtgate/engine"
 
 type routingMap map[string][]interface{}
 
@@ -27,7 +27,7 @@ func (rtm routingMap) ShardVars(bv map[string]interface{}) map[string]map[string
 		for k, v := range bv {
 			newbv[k] = v
 		}
-		newbv[planbuilder.ListVarName] = vals
+		newbv[engine.ListVarName] = vals
 		shardVars[shard] = newbv
 	}
 	return shardVars

@@ -47,13 +47,13 @@ func splitAndExpression(filters []sqlparser.BoolExpr, node sqlparser.BoolExpr) [
 // only analyze symbols that point to the current symtab.
 // If an expression has no references to the current query, then the left-most
 // route is chosen as the default.
-func findRoute(expr sqlparser.Expr, plan planBuilder) (route *routeBuilder, err error) {
-	highestRoute := plan.Leftmost()
-	var subroutes []*routeBuilder
+func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
+	highestRoute := bldr.Leftmost()
+	var subroutes []*route
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
-			newRoute, isLocal, err := plan.Symtab().Find(node, true)
+			newRoute, isLocal, err := bldr.Symtab().Find(node, true)
 			if err != nil {
 				return false, err
 			}
@@ -65,17 +65,17 @@ func findRoute(expr sqlparser.Expr, plan planBuilder) (route *routeBuilder, err 
 			if !ok {
 				return false, errors.New("unsupported: union operator in subqueries")
 			}
-			subplan, err := processSelect(sel, plan.Symtab().VSchema, plan)
+			subplan, err := processSelect(sel, bldr.Symtab().VSchema, bldr)
 			if err != nil {
 				return false, err
 			}
-			subroute, ok := subplan.(*routeBuilder)
+			subroute, ok := subplan.(*route)
 			if !ok {
 				return false, errors.New("unsupported: complex join in subqueries")
 			}
 			for _, extern := range subroute.Symtab().Externs {
 				// No error expected. These are resolved externs.
-				newRoute, isLocal, _ := plan.Symtab().Find(extern, false)
+				newRoute, isLocal, _ := bldr.Symtab().Find(extern, false)
 				if isLocal && newRoute.Order() > highestRoute.Order() {
 					highestRoute = newRoute
 				}
@@ -103,28 +103,28 @@ func findRoute(expr sqlparser.Expr, plan planBuilder) (route *routeBuilder, err 
 // subqueryCanMerge returns nil if the inner subquery
 // can be merged with the specified outer route. If it
 // cannot, then it returns an appropriate error.
-func subqueryCanMerge(outer, inner *routeBuilder) error {
-	if outer.Route.Keyspace.Name != inner.Route.Keyspace.Name {
+func subqueryCanMerge(outer, inner *route) error {
+	if outer.ERoute.Keyspace.Name != inner.ERoute.Keyspace.Name {
 		return errors.New("unsupported: subquery keyspace different from outer query")
 	}
 	if !inner.IsSingle() {
 		return errors.New("unsupported: scatter subquery")
 	}
-	if inner.Route.Opcode == engine.SelectUnsharded {
+	if inner.ERoute.Opcode == engine.SelectUnsharded {
 		return nil
 	}
 	// SelectEqualUnique
-	switch vals := inner.Route.Values.(type) {
+	switch vals := inner.ERoute.Values.(type) {
 	case *sqlparser.ColName:
 		outerVindex := outer.Symtab().Vindex(vals, outer, false)
-		if outerVindex == inner.Route.Vindex {
+		if outerVindex == inner.ERoute.Vindex {
 			return nil
 		}
 	}
-	if outer.Route.Opcode != engine.SelectEqualUnique {
+	if outer.ERoute.Opcode != engine.SelectEqualUnique {
 		return errors.New("unsupported: subquery does not depend on scatter outer query")
 	}
-	if !valEqual(outer.Route.Values, inner.Route.Values) {
+	if !valEqual(outer.ERoute.Values, inner.ERoute.Values) {
 		return errors.New("unsupported: subquery and parent route to different shards")
 	}
 	return nil
@@ -144,14 +144,14 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 
 // exprIsValue returns true if the expression can be treated as a value
 // for the current route. External references are treated as value.
-func exprIsValue(expr sqlparser.ValExpr, route *routeBuilder) bool {
+func exprIsValue(expr sqlparser.ValExpr, rb *route) bool {
 	switch node := expr.(type) {
 	case *sqlparser.ColName:
 		switch meta := node.Metadata.(type) {
 		case *colsym:
-			return meta.Route() != route
+			return meta.Route() != rb
 		case *tableAlias:
-			return meta.Route() != route
+			return meta.Route() != rb
 		}
 		panic("unreachable")
 	case sqlparser.ValArg, sqlparser.StrVal, sqlparser.NumVal:

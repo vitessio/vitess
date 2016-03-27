@@ -9,6 +9,11 @@ import "github.com/youtube/vitess/go/sqltypes"
 // SeqVarName is a reserved bind var name for sequence values.
 const SeqVarName = "__seq"
 
+// ListVarName is the bind var name used for plans
+// that require VTGate to compute custom list values,
+// like for IN clauses.
+const ListVarName = "__vals"
+
 // VCursor defines the interface the engine will use
 // to execute routes.
 type VCursor interface {
