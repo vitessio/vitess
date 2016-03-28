@@ -28,14 +28,14 @@ type Route struct {
 	Generate   *Generate
 }
 
-// Exec performs a non-streaming exec.
-func (rt *Route) Exec(vcursor VCursor, joinvars map[string]interface{}, wantields bool) (*sqltypes.Result, error) {
-	return vcursor.ExecRoute(rt, joinvars)
+// Execute performs a non-streaming exec.
+func (rt *Route) Execute(vcursor VCursor, joinvars map[string]interface{}, wantields bool) (*sqltypes.Result, error) {
+	return vcursor.ExecuteRoute(rt, joinvars)
 }
 
-// StreamExec performs a streaming exec.
-func (rt *Route) StreamExec(vcursor VCursor, joinvars map[string]interface{}, wantfields bool, sendReply func(*sqltypes.Result) error) error {
-	return vcursor.StreamExecRoute(rt, joinvars, sendReply)
+// StreamExecute performs a streaming exec.
+func (rt *Route) StreamExecute(vcursor VCursor, joinvars map[string]interface{}, wantfields bool, sendReply func(*sqltypes.Result) error) error {
+	return vcursor.StreamExecuteRoute(rt, joinvars, sendReply)
 }
 
 // GetFields fetches the field info.

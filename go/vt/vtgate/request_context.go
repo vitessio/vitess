@@ -39,12 +39,12 @@ func (vc *requestContext) Execute(query string, bindvars map[string]interface{})
 	return vc.router.Execute(vc.ctx, query, bindvars, vc.tabletType, vc.session, false)
 }
 
-func (vc *requestContext) ExecRoute(route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {
-	return vc.router.ExecRoute(vc, route, joinvars)
+func (vc *requestContext) ExecuteRoute(route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {
+	return vc.router.ExecuteRoute(vc, route, joinvars)
 }
 
-func (vc *requestContext) StreamExecRoute(route *engine.Route, joinvars map[string]interface{}, sendReply func(*sqltypes.Result) error) error {
-	return vc.router.StreamExecRoute(vc, route, joinvars, sendReply)
+func (vc *requestContext) StreamExecuteRoute(route *engine.Route, joinvars map[string]interface{}, sendReply func(*sqltypes.Result) error) error {
+	return vc.router.StreamExecuteRoute(vc, route, joinvars, sendReply)
 }
 
 func (vc *requestContext) GetRouteFields(route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {

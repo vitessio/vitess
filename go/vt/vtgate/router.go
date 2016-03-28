@@ -68,7 +68,7 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 	if err != nil {
 		return nil, err
 	}
-	return plan.Instructions.Exec(vcursor, make(map[string]interface{}), true)
+	return plan.Instructions.Execute(vcursor, make(map[string]interface{}), true)
 }
 
 // StreamExecute executes a streaming query.
@@ -81,15 +81,15 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[s
 	if err != nil {
 		return err
 	}
-	return plan.Instructions.StreamExec(vcursor, make(map[string]interface{}), true, sendReply)
+	return plan.Instructions.StreamExecute(vcursor, make(map[string]interface{}), true, sendReply)
 }
 
-// ExecRoute executes the route query for all route opcodes.
-func (rtr *Router) ExecRoute(vcursor *requestContext, route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {
+// ExecuteRoute executes the route query for all route opcodes.
+func (rtr *Router) ExecuteRoute(vcursor *requestContext, route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {
 	saved := copyBindVars(vcursor.bindVars)
 	defer func() { vcursor.bindVars = saved }()
-	for k := range joinvars {
-		vcursor.bindVars[k] = joinvars[k]
+	for k, v := range joinvars {
+		vcursor.bindVars[k] = v
 	}
 
 	switch route.Opcode {
@@ -163,12 +163,12 @@ func (rtr *Router) GetRouteFields(vcursor *requestContext, route *engine.Route, 
 	)
 }
 
-// StreamExecRoute performs a streaming route. Only selects are allowed.
-func (rtr *Router) StreamExecRoute(vcursor *requestContext, route *engine.Route, joinvars map[string]interface{}, sendReply func(*sqltypes.Result) error) error {
+// StreamExecuteRoute performs a streaming route. Only selects are allowed.
+func (rtr *Router) StreamExecuteRoute(vcursor *requestContext, route *engine.Route, joinvars map[string]interface{}, sendReply func(*sqltypes.Result) error) error {
 	saved := copyBindVars(vcursor.bindVars)
 	defer func() { vcursor.bindVars = saved }()
-	for k := range joinvars {
-		vcursor.bindVars[k] = joinvars[k]
+	for k, v := range joinvars {
+		vcursor.bindVars[k] = v
 	}
 
 	var err error

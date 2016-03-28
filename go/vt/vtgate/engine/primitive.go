@@ -17,8 +17,8 @@ const ListVarName = "__vals"
 // VCursor defines the interface the engine will use
 // to execute routes.
 type VCursor interface {
-	ExecRoute(route *Route, joinvars map[string]interface{}) (*sqltypes.Result, error)
-	StreamExecRoute(route *Route, joinvars map[string]interface{}, sendReply func(*sqltypes.Result) error) error
+	ExecuteRoute(route *Route, joinvars map[string]interface{}) (*sqltypes.Result, error)
+	StreamExecuteRoute(route *Route, joinvars map[string]interface{}, sendReply func(*sqltypes.Result) error) error
 	GetRouteFields(route *Route, joinvars map[string]interface{}) (*sqltypes.Result, error)
 }
 
@@ -45,7 +45,7 @@ func (pln *Plan) Size() int {
 // Primitive is the interface that needs to be satisfied by
 // all primitives of a plan.
 type Primitive interface {
-	Exec(vcursor VCursor, joinvars map[string]interface{}, wantields bool) (*sqltypes.Result, error)
-	StreamExec(vcursor VCursor, joinvars map[string]interface{}, wantields bool, sendReply func(*sqltypes.Result) error) error
+	Execute(vcursor VCursor, joinvars map[string]interface{}, wantields bool) (*sqltypes.Result, error)
+	StreamExecute(vcursor VCursor, joinvars map[string]interface{}, wantields bool, sendReply func(*sqltypes.Result) error) error
 	GetFields(vcursor VCursor, joinvars map[string]interface{}) (*sqltypes.Result, error)
 }

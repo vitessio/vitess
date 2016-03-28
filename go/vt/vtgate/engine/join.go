@@ -32,9 +32,9 @@ type Join struct {
 	Vars map[string]int `json:",omitempty"`
 }
 
-// Exec performs a non-streaming exec.
-func (jn *Join) Exec(vcursor VCursor, joinvars map[string]interface{}, wantfields bool) (*sqltypes.Result, error) {
-	lresult, err := jn.Left.Exec(vcursor, joinvars, wantfields)
+// Execute performs a non-streaming exec.
+func (jn *Join) Execute(vcursor VCursor, joinvars map[string]interface{}, wantfields bool) (*sqltypes.Result, error) {
+	lresult, err := jn.Left.Execute(vcursor, joinvars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func (jn *Join) Exec(vcursor VCursor, joinvars map[string]interface{}, wantfield
 		for k, col := range jn.Vars {
 			joinvars[k] = lrow[col]
 		}
-		rresult, err := jn.Right.Exec(vcursor, joinvars, wantfields)
+		rresult, err := jn.Right.Execute(vcursor, joinvars, wantfields)
 		if err != nil {
 			return nil, err
 		}
@@ -75,15 +75,15 @@ func (jn *Join) Exec(vcursor VCursor, joinvars map[string]interface{}, wantfield
 	return result, nil
 }
 
-// StreamExec performs a streaming exec.
-func (jn *Join) StreamExec(vcursor VCursor, joinvars map[string]interface{}, wantfields bool, sendReply func(*sqltypes.Result) error) error {
-	err := jn.Left.StreamExec(vcursor, joinvars, wantfields, func(lresult *sqltypes.Result) error {
+// StreamExecute performs a streaming exec.
+func (jn *Join) StreamExecute(vcursor VCursor, joinvars map[string]interface{}, wantfields bool, sendReply func(*sqltypes.Result) error) error {
+	err := jn.Left.StreamExecute(vcursor, joinvars, wantfields, func(lresult *sqltypes.Result) error {
 		for _, lrow := range lresult.Rows {
 			for k, col := range jn.Vars {
 				joinvars[k] = lrow[col]
 			}
 			rowSent := false
-			err := jn.Right.StreamExec(vcursor, joinvars, wantfields, func(rresult *sqltypes.Result) error {
+			err := jn.Right.StreamExecute(vcursor, joinvars, wantfields, func(rresult *sqltypes.Result) error {
 				result := &sqltypes.Result{}
 				if wantfields {
 					wantfields = false
