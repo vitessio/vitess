@@ -223,10 +223,29 @@ func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*
 	return sqltypes.Proto3ToResults(response.Results), response.Session, nil
 }
 
-func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
+type streamExecuteAdapter struct {
+	recv   func() (*querypb.QueryResult, error)
+	fields []*querypb.Field
+}
+
+func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
+	qr, err := a.recv()
+	if err != nil {
+		if err != io.EOF {
+			err = vterrors.FromGRPCError(err)
+		}
+		return nil, err
+	}
+	if a.fields == nil {
+		a.fields = qr.Fields
+	}
+	return sqltypes.CustomProto3ToResult(a.fields, qr), nil
+}
+
+func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error) {
 	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	req := &vtgatepb.StreamExecuteRequest{
 		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
@@ -235,36 +254,23 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVar
 	}
 	stream, err := conn.c.StreamExecute(ctx, req)
 	if err != nil {
-		return nil, nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPCError(err)
 	}
-	sr := make(chan *sqltypes.Result, 10)
-	var finalError error
-	go func() {
-		var fields []*querypb.Field
-		for {
+	return &streamExecuteAdapter{
+		recv: func() (*querypb.QueryResult, error) {
 			ser, err := stream.Recv()
 			if err != nil {
-				if err != io.EOF {
-					finalError = vterrors.FromGRPCError(err)
-				}
-				close(sr)
-				return
+				return nil, err
 			}
-			if fields == nil {
-				fields = ser.Result.Fields
-			}
-			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
-		}
-	}()
-	return sr, func() error {
-		return finalError
+			return ser.Result, nil
+		},
 	}, nil
 }
 
-func (conn *vtgateConn) StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
+func (conn *vtgateConn) StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error) {
 	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	req := &vtgatepb.StreamExecuteShardsRequest{
 		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
@@ -275,36 +281,23 @@ func (conn *vtgateConn) StreamExecuteShards(ctx context.Context, query string, k
 	}
 	stream, err := conn.c.StreamExecuteShards(ctx, req)
 	if err != nil {
-		return nil, nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPCError(err)
 	}
-	sr := make(chan *sqltypes.Result, 10)
-	var finalError error
-	go func() {
-		var fields []*querypb.Field
-		for {
+	return &streamExecuteAdapter{
+		recv: func() (*querypb.QueryResult, error) {
 			ser, err := stream.Recv()
 			if err != nil {
-				if err != io.EOF {
-					finalError = vterrors.FromGRPCError(err)
-				}
-				close(sr)
-				return
+				return nil, err
 			}
-			if fields == nil {
-				fields = ser.Result.Fields
-			}
-			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
-		}
-	}()
-	return sr, func() error {
-		return finalError
+			return ser.Result, nil
+		},
 	}, nil
 }
 
-func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
+func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error) {
 	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	req := &vtgatepb.StreamExecuteKeyRangesRequest{
 		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
@@ -315,36 +308,23 @@ func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string
 	}
 	stream, err := conn.c.StreamExecuteKeyRanges(ctx, req)
 	if err != nil {
-		return nil, nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPCError(err)
 	}
-	sr := make(chan *sqltypes.Result, 10)
-	var finalError error
-	go func() {
-		var fields []*querypb.Field
-		for {
+	return &streamExecuteAdapter{
+		recv: func() (*querypb.QueryResult, error) {
 			ser, err := stream.Recv()
 			if err != nil {
-				if err != io.EOF {
-					finalError = vterrors.FromGRPCError(err)
-				}
-				close(sr)
-				return
+				return nil, err
 			}
-			if fields == nil {
-				fields = ser.Result.Fields
-			}
-			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
-		}
-	}()
-	return sr, func() error {
-		return finalError
+			return ser.Result, nil
+		},
 	}, nil
 }
 
-func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
+func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error) {
 	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	req := &vtgatepb.StreamExecuteKeyspaceIdsRequest{
 		CallerId:    callerid.EffectiveCallerIDFromContext(ctx),
@@ -355,29 +335,16 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 	}
 	stream, err := conn.c.StreamExecuteKeyspaceIds(ctx, req)
 	if err != nil {
-		return nil, nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPCError(err)
 	}
-	sr := make(chan *sqltypes.Result, 10)
-	var finalError error
-	go func() {
-		var fields []*querypb.Field
-		for {
+	return &streamExecuteAdapter{
+		recv: func() (*querypb.QueryResult, error) {
 			ser, err := stream.Recv()
 			if err != nil {
-				if err != io.EOF {
-					finalError = vterrors.FromGRPCError(err)
-				}
-				close(sr)
-				return
+				return nil, err
 			}
-			if fields == nil {
-				fields = ser.Result.Fields
-			}
-			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
-		}
-	}()
-	return sr, func() error {
-		return finalError
+			return ser.Result, nil
+		},
 	}, nil
 }
 
