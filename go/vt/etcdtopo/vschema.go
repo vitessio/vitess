@@ -2,12 +2,8 @@ package etcdtopo
 
 import (
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"golang.org/x/net/context"
-	// vindexes needs to be imported so that they register
-	// themselves against vtgate/planbuilder. This will allow
-	// us to sanity check the schema being uploaded.
-	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 /*
@@ -16,7 +12,7 @@ This file contains the vschema management code for etcdtopo.Server
 
 // SaveVSchema saves the JSON vschema into the topo.
 func (s *Server) SaveVSchema(ctx context.Context, vschema string) error {
-	_, err := planbuilder.NewVSchema([]byte(vschema))
+	_, err := vindexes.NewVSchema([]byte(vschema))
 	if err != nil {
 		return err
 	}

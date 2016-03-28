@@ -19,7 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -61,10 +61,10 @@ func main() {
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
-	var vschema *planbuilder.VSchema
+	var vschema *vindexes.VSchema
 	if *vschemaFile != "" {
 		var err error
-		if vschema, err = planbuilder.LoadFile(*vschemaFile); err != nil {
+		if vschema, err = vindexes.LoadFile(*vschemaFile); err != nil {
 			log.Error(err)
 			exit.Return(1)
 		}
@@ -76,7 +76,7 @@ func main() {
 			log.Warningf("Skipping v3 initialization: GetVSchema failed: %v", err)
 			goto startServer
 		}
-		vschema, err = planbuilder.NewVSchema([]byte(schemaJSON))
+		vschema, err = vindexes.NewVSchema([]byte(schemaJSON))
 		if err != nil {
 			log.Warningf("Skipping v3 initialization: GetVSchema failed: %v", err)
 			goto startServer

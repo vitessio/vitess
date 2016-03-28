@@ -4,11 +4,11 @@
       "Sharded": true,
       "Vindexes": {
         "user_index": {
-          "Type": "hash",
+          "Type": "hash_test",
           "Owner": "user"
         },
         "music_user_map": {
-          "Type": "lookup",
+          "Type": "lookup_test",
           "Owner": "music"
         },
         "name_user_map": {

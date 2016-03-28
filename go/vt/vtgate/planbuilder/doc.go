@@ -8,23 +8,13 @@ plans that describe how to fulfill a query that may
 span multiple keyspaces or shards.
 
 The main entry point for the planbuilder is the
-BuildPlan function that accepts a query and vschema
+Build function that accepts a query and vschema
 and returns the plan.
-
-This package also provides various convenience functions
-to build the VSchema object, which it can later utilize
-to build query plans.
-
-Additionally, this package defines the various Vindex
-related interfaces. These interfaces need to be satisfied
-by plugin code that wants to define a Vindex type.
 */
 package planbuilder
 
 /*
-The planbuilder for the SELECT statement has the highest
-complexity. Currently, VTGate can only perform the following
-two primitives: Route and Join.
+The two core primitives built by this package are Route and Join.
 
 The Route primitive executes a query and returns the result.
 This can be either to a single keyspace or shard, or it can
@@ -45,39 +35,29 @@ will be executed as:
 	select ..., a.col from a (produce "a_col" from a.col)
 	select ... from b where b.col = :a_col
 
-The act of breaking up a join into two such statements
-like the above example is called a vertical break.
-As opposed to this, a horizontal break is one
-that breaks the individual clauses of a statement.
-For example, separating out a where clause from
-the select expressions would be a horizontal break.
-Breaking out a subquery would also be considered
-a horizontal break. The current set of primitives
-only allow for vertical breaks.
-
 The planbuilder tries to push all the constructs of
-the original request into these two primitives. If
-successful, we return the built plan. Otherwise, it's
-an error.
+the original request into a Route. If it's not possible,
+we see if we can build a primitive for it. If none exist,
+we return an error.
 
 The central design element for analyzing queries and
 building plans is the symbol table (symtab). This data
-structure contains tableAlias and colsym elements.
-A tableAlias element represents a table alias defined
-in the FROM clause. A tableAlias must always point
-to a routeBuilder, which is responsible for building
+structure contains tabsym and colsym elements.
+A tabsym element represents a table alias defined
+in the FROM clause. A tabsym must always point
+to a route, which is responsible for building
 the SELECT statement for that alias.
 A colsym represents a result column. It can optionally
-point to a tableAlias if it's a plain column reference
-of that alias. A colsym must always point to a routeBuilder.
-One symtab is created per SELECT statement. tableAlias
+point to a tabsym if it's a plain column reference
+of that alias. A colsym must always point to a route.
+One symtab is created per SELECT statement. tabsym
 names must be unique within each symtab. Currently,
 duplicates are allowed among colsyms, just like MySQL
 does. Different databases implement different rules
-about whether colsym symbols can hide the tableAlias
+about whether colsym symbols can hide the tabsym
 symbols. The rules used by MySQL are not well documented.
 Therefore, we use the conservative rule that no
-tableAlias can be seen if colsyms are present.
+tabsym can be seen if colsyms are present.
 
 The symbol table is modified as various sections of the
 query are parsed. The parsing of the FROM clause
@@ -87,52 +67,32 @@ produces the colsyms, which are added to the
 symtab after the analysis is done. Consequently,
 the GROUP BY, HAVING and ORDER BY clauses can only
 see the colsyms. They're not allowed to reference
-the table aliases.
+the table aliases. These access rules transitively
+apply to subqueries in those clauses, which is the
+intended behavior.
 
-The planbuilder supports subqueries. This gives rise
-to multiple symbol tables. As per SQL rules, symbols
-in the inner query can hide those in the outer query.
-However, the life-cycle of the symbol table also needs to
-be taken into account. For example, a subquery that's
-in a WHERE clause cannot see the SELECT symbols (colsyms)
-of the outer query, because those have not been created
-yet. But a subquery in the HAVING clause will be able
-to see them.
-
-The plan builder builds the plan in two phases. In the
+The plan is built in two phases. In the
 first phase (break-up and push-down), the query is
 broken into smaller parts and pushed down into
-Join or Route primitives. In the second phase (generator),
+Join or Route primitives. In the second phase (wire-up),
 external references are wired up using bind vars, and
 the individual ASTs are converted into actual queries.
 
-In the case of joins, the plan builder effectively
-performs a vertical break of the query. This gives rise
-to a possible conflict in the symbol tables. Specifically,
-a WHERE clause was only able to see tableAlias symbols
-during analysis. However, once the query is partitioned
-vertically, the query actually becomes a SELECT statement feeding
-into another. This means that symbols that were previously
-not visible during analysis are now visible. It's very important
-to remember the original resolution. Otherwise, there is
-risk that incorrent values are used when the RHS of a join
-requests values from the LHS. In order to achieve this,
-the sqlparser.ColName type has been ammended with a Metadata
-field that is populated as soon as a symbol is resolved.
-During the generator phase, we do not perform any more symtab
-lookups, but rely on the previously stored Metadata instead.
+Since the symbol table evolved during the first phase,
+the wire-up phase cannot reuse it. In order to address
+this, we save a pointer to the resolved symbol inside
+every column reference, which we can reuse during
+the wire-up. The Route for each symbol is used to
+determine if a reference is local or not. Anything
+external is converted to a bind var.
 
-In the case of a vertical break, we split a select into
-two select statements. If this happens, the symbol table
-is not split, because we still need the ability to find
-all symbols being referenced. Instead, each tableAlias
-points to the Route where the split queries are being
-built. When we need to know if a symbol is local or
-not, we compare the route of the table alias against
-the current route. In the case of a subquery, it initially
-starts off with its own route. After the analysis is done,
-if we decide to merge it with an outer route, we repoint
-all the symbols of the subquery to the outer route.
+A route can be merged with another one. If this happens,
+we should ideally repoint all symbols of that route to the
+new one. This gets complicated because each route would
+need to know the symbols that point to it.
+Instead, we mark the current route as defunct
+by redirecting to point to the new one. During symbol resolution
+we chase this pointer until we reach a non-defunct route.
 
 The VSchema currently doesn't contain the full list of columns
 in the tables. For the sake of convenience, if a query
@@ -159,4 +119,17 @@ column reference is a pointer to a table alias and a
 column name. This is the basis for the definition of the
 colref type. If the colref points to a colsym, then
 the column name is irrelevant.
+
+Variable naming: The AST, planbuilder and engine
+are three different worlds that use overloaded
+names that are contextually similar, but different.
+For example a join is:
+	Join is the AST node that represents the SQL construct
+	join is a builder in the current package
+	Join is a primitive in the engine package
+In order to disambiguate, we'll use the 'a' prefix
+for AST vars, and the 'e' prefix for engine vars.
+So, 'ajoin' would be of type *sqlparser.Join, and
+'ejoin' would be of type *engine.Join. For the planbuilder
+join we'll use 'jb'.
 */

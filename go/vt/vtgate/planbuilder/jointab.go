@@ -10,11 +10,6 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-// ListVarName is the bind var name used for plans
-// that require VTGate to compute custom list values,
-// like for IN clauses.
-const ListVarName = "__vals"
-
 // jointab manages procurement and naming of join
 // variables across primitives.
 type jointab struct {
@@ -35,7 +30,7 @@ func newJointab(bindvars map[string]struct{}) *jointab {
 
 // Procure requests for the specified column from the plan
 // and returns the join var name for it.
-func (jt *jointab) Procure(plan planBuilder, col *sqlparser.ColName, to int) string {
+func (jt *jointab) Procure(bldr builder, col *sqlparser.ColName, to int) string {
 	from, joinVar := jt.Lookup(col)
 	// If joinVar is empty, jterate a unique name.
 	if joinVar == "" {
@@ -56,7 +51,7 @@ func (jt *jointab) Procure(plan planBuilder, col *sqlparser.ColName, to int) str
 		jt.vars[joinVar] = struct{}{}
 		jt.refs[newColref(col)] = joinVar
 	}
-	plan.SupplyVar(from, to, col, joinVar)
+	bldr.SupplyVar(from, to, col, joinVar)
 	return joinVar
 }
 
@@ -64,11 +59,5 @@ func (jt *jointab) Procure(plan planBuilder, col *sqlparser.ColName, to int) str
 // the join var name if one has already been assigned for it.
 func (jt *jointab) Lookup(col *sqlparser.ColName) (order int, joinVar string) {
 	ref := newColref(col)
-	switch meta := col.Metadata.(type) {
-	case *colsym:
-		return meta.Route().Order(), jt.refs[ref]
-	case *tableAlias:
-		return meta.Route().Order(), jt.refs[ref]
-	}
-	panic("unreachable")
+	return ref.Route().Order(), jt.refs[ref]
 }

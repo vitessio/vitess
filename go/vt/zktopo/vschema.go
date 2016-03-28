@@ -5,13 +5,9 @@
 package zktopo
 
 import (
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
-	"golang.org/x/net/context"
-	// vindexes needs to be imported so that they register
-	// themselves against vtgate/planbuilder. This will allow
-	// us to sanity check the schema being uploaded.
-	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/zk"
+	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 )
 
@@ -25,7 +21,7 @@ const (
 
 // SaveVSchema saves the JSON vschema into the topo.
 func (zkts *Server) SaveVSchema(ctx context.Context, vschema string) error {
-	_, err := planbuilder.NewVSchema([]byte(vschema))
+	_, err := vindexes.NewVSchema([]byte(vschema))
 	if err != nil {
 		return err
 	}
