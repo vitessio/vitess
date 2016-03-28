@@ -9,6 +9,7 @@ package tabletconntest
 import (
 	"errors"
 	"fmt"
+	"io"
 	"reflect"
 	"strings"
 	"testing"
@@ -412,13 +413,13 @@ var streamExecuteQueryResult2 = sqltypes.Result{
 func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
-	stream, errFunc, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
+	stream, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
 	if err != nil {
 		t.Fatalf("StreamExecute failed: %v", err)
 	}
-	qr, ok := <-stream
-	if !ok {
-		t.Fatalf("StreamExecute failed: cannot read result1")
+	qr, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("StreamExecute failed: cannot read result1: %v", err)
 	}
 	if len(qr.Rows) == 0 {
 		qr.Rows = nil
@@ -426,9 +427,9 @@ func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
 	if !reflect.DeepEqual(*qr, streamExecuteQueryResult1) {
 		t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, streamExecuteQueryResult1)
 	}
-	qr, ok = <-stream
-	if !ok {
-		t.Fatalf("StreamExecute failed: cannot read result2")
+	qr, err = stream.Recv()
+	if err != nil {
+		t.Fatalf("StreamExecute failed: cannot read result2: %v", err)
 	}
 	if len(qr.Fields) == 0 {
 		qr.Fields = nil
@@ -436,11 +437,8 @@ func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
 	if !reflect.DeepEqual(*qr, streamExecuteQueryResult2) {
 		t.Errorf("Unexpected result2 from StreamExecute: got %v wanted %v", qr, streamExecuteQueryResult2)
 	}
-	qr, ok = <-stream
-	if ok {
-		t.Fatalf("StreamExecute channel wasn't closed")
-	}
-	if err := errFunc(); err != nil {
+	qr, err = stream.Recv()
+	if err != io.EOF {
 		t.Fatalf("StreamExecute errFunc failed: %v", err)
 	}
 }
@@ -448,13 +446,13 @@ func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
 func testStreamExecuteError(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
-	stream, errFunc, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
+	stream, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
 	if err != nil {
 		t.Fatalf("StreamExecute failed: %v", err)
 	}
-	qr, ok := <-stream
-	if !ok {
-		t.Fatalf("StreamExecute failed: cannot read result1")
+	qr, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("StreamExecute failed: cannot read result1: %v", err)
 	}
 	if len(qr.Rows) == 0 {
 		qr.Rows = nil
@@ -465,11 +463,10 @@ func testStreamExecuteError(t *testing.T, conn tabletconn.TabletConn, fake *Fake
 	// signal to the server that the first result has been received
 	close(fake.errorWait)
 	// After 1 result, we expect to get an error (no more results).
-	qr, ok = <-stream
-	if ok {
+	qr, err = stream.Recv()
+	if err == nil {
 		t.Fatalf("StreamExecute channel wasn't closed")
 	}
-	err = errFunc()
 	verifyError(t, err, "StreamExecute")
 }
 
@@ -480,17 +477,13 @@ func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *Fak
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	fake.streamExecutePanicsEarly = true
-	stream, errFunc, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
+	stream, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
 	if err != nil {
 		if !strings.Contains(err.Error(), "caught test panic") {
 			t.Fatalf("unexpected panic error: %v", err)
 		}
 	} else {
-		_, ok := <-stream
-		if ok {
-			t.Fatalf("StreamExecute early panic should not return anything")
-		}
-		err = errFunc()
+		_, err := stream.Recv()
 		if err == nil || !strings.Contains(err.Error(), "caught test panic") {
 			t.Fatalf("unexpected panic error: %v", err)
 		}
@@ -498,13 +491,13 @@ func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *Fak
 
 	// late panic is after sending Fields
 	fake.streamExecutePanicsEarly = false
-	stream, errFunc, err = conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
+	stream, err = conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
 	if err != nil {
 		t.Fatalf("StreamExecute failed: %v", err)
 	}
-	qr, ok := <-stream
-	if !ok {
-		t.Fatalf("StreamExecute failed: cannot read result1")
+	qr, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("StreamExecute failed: cannot read result1: %v", err)
 	}
 	if len(qr.Rows) == 0 {
 		qr.Rows = nil
@@ -513,10 +506,7 @@ func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *Fak
 		t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, streamExecuteQueryResult1)
 	}
 	close(fake.panicWait)
-	if _, ok := <-stream; ok {
-		t.Fatalf("StreamExecute returned more results")
-	}
-	if err := errFunc(); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+	if _, err := stream.Recv(); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
 }

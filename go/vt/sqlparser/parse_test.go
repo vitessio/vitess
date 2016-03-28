@@ -198,8 +198,6 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* exists */ 1 from t where exists (select 1 from t)",
 	}, {
-		input: "select /* keyrange */ 1 from t where keyrange(1, 2)",
-	}, {
 		input: "select /* (boolean) */ 1 from t where not (a = b)",
 	}, {
 		input: "select /* in value list */ 1 from t where a in (b, c)",
@@ -383,6 +381,8 @@ func TestValid(t *testing.T) {
 		output: "select /* binary unary */ a - -b from t",
 	}, {
 		input: "select /* - - */ - -b from t",
+	}, {
+		input: "select /* interval */ adddate('2008-01-02', interval 31 day) from t",
 	}, {
 		input: "select /* dual */ 1 from dual",
 	}, {

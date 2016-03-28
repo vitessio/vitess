@@ -7,6 +7,8 @@ package planbuilder
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"strconv"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -45,7 +47,7 @@ func splitAndExpression(filters []sqlparser.BoolExpr, node sqlparser.BoolExpr) [
 // If an expression has no references to the current query, then the left-most
 // route is chosen as the default.
 func findRoute(expr sqlparser.Expr, plan planBuilder) (route *routeBuilder, err error) {
-	highestRoute := leftmost(plan)
+	highestRoute := plan.Leftmost()
 	var subroutes []*routeBuilder
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
@@ -179,12 +181,26 @@ func valEqual(a, b interface{}) bool {
 	return false
 }
 
-func leftmost(plan planBuilder) *routeBuilder {
-	switch plan := plan.(type) {
-	case *joinBuilder:
-		return leftmost(plan.Left)
-	case *routeBuilder:
-		return plan
+// valConvert converts an AST value to the Value field in the route.
+func valConvert(node sqlparser.ValExpr) (interface{}, error) {
+	switch node := node.(type) {
+	case sqlparser.ValArg:
+		return string(node), nil
+	case sqlparser.StrVal:
+		return []byte(node), nil
+	case sqlparser.NumVal:
+		val := string(node)
+		signed, err := strconv.ParseInt(val, 0, 64)
+		if err == nil {
+			return signed, nil
+		}
+		unsigned, err := strconv.ParseUint(val, 0, 64)
+		if err == nil {
+			return unsigned, nil
+		}
+		return nil, err
+	case *sqlparser.NullVal:
+		return nil, nil
 	}
-	panic("unreachable")
+	return nil, fmt.Errorf("%v is not a value", sqlparser.String(node))
 }

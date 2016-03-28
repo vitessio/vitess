@@ -139,8 +139,12 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (route *routeBu
 	}
 	if len(st.Colsyms) != 0 {
 		name := sqlparser.SQLName(sqlparser.String(col))
+		starname := sqlparser.SQLName(sqlparser.String(&sqlparser.ColName{
+			Name:      "*",
+			Qualifier: col.Qualifier,
+		}))
 		for _, colsym := range st.Colsyms {
-			if name == colsym.Alias {
+			if name == colsym.Alias || starname == colsym.Alias || colsym.Alias == "*" {
 				col.Metadata = colsym
 				return colsym.Route(), true, nil
 			}

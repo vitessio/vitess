@@ -17,7 +17,6 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -56,7 +55,7 @@ type shardGateway struct {
 	connLife           time.Duration
 	connTimings        *stats.MultiTimings
 
-	mu         sync.Mutex
+	mu         sync.RWMutex
 	shardConns map[string]*ShardConn
 }
 
@@ -116,7 +115,7 @@ func (sg *shardGateway) ExecuteBatch(ctx context.Context, keyspace string, shard
 }
 
 // StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
-func (sg *shardGateway) StreamExecute(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc) {
+func (sg *shardGateway) StreamExecute(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
 	return sg.getConnection(ctx, keyspace, shard, tabletType).StreamExecute(ctx, query, bindVars, transactionID)
 }
 
@@ -158,14 +157,21 @@ func (sg *shardGateway) CacheStatus() GatewayEndPointCacheStatusList {
 }
 
 func (sg *shardGateway) getConnection(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType) *ShardConn {
+	key := fmt.Sprintf("%s.%s.%s", keyspace, shard, strings.ToLower(tabletType.String()))
+	sg.mu.RLock()
+	sdc, ok := sg.shardConns[key]
+	sg.mu.RUnlock()
+	if ok {
+		return sdc
+	}
+
 	sg.mu.Lock()
 	defer sg.mu.Unlock()
-
-	key := fmt.Sprintf("%s.%s.%s", keyspace, shard, strings.ToLower(tabletType.String()))
-	sdc, ok := sg.shardConns[key]
-	if !ok {
-		sdc = NewShardConn(ctx, sg.toposerv, sg.cell, keyspace, shard, tabletType, sg.retryDelay, sg.retryCount, sg.connTimeoutTotal, sg.connTimeoutPerConn, sg.connLife, sg.connTimings)
-		sg.shardConns[key] = sdc
+	sdc, ok = sg.shardConns[key]
+	if ok {
+		return sdc
 	}
+	sdc = NewShardConn(ctx, sg.toposerv, sg.cell, keyspace, shard, tabletType, sg.retryDelay, sg.retryCount, sg.connTimeoutTotal, sg.connTimeoutPerConn, sg.connLife, sg.connTimings)
+	sg.shardConns[key] = sdc
 	return sdc
 }

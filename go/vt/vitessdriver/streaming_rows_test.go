@@ -14,7 +14,6 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
 
 var packet1 = sqltypes.Result{
@@ -54,18 +53,26 @@ var packet3 = sqltypes.Result{
 	},
 }
 
+type adapter struct {
+	c   chan *sqltypes.Result
+	err error
+}
+
+func (a *adapter) Recv() (*sqltypes.Result, error) {
+	r, ok := <-a.c
+	if !ok {
+		return nil, a.err
+	}
+	return r, nil
+}
+
 func TestStreamingRows(t *testing.T) {
-	qrc, errFunc := func() (<-chan *sqltypes.Result, vtgateconn.ErrFunc) {
-		ch := make(chan *sqltypes.Result)
-		go func() {
-			ch <- &packet1
-			ch <- &packet2
-			ch <- &packet3
-			close(ch)
-		}()
-		return ch, func() error { return nil }
-	}()
-	ri := newStreamingRows(qrc, errFunc, nil)
+	c := make(chan *sqltypes.Result, 3)
+	c <- &packet1
+	c <- &packet2
+	c <- &packet3
+	close(c)
+	ri := newStreamingRows(&adapter{c: c, err: io.EOF}, nil)
 	wantCols := []string{
 		"field1",
 		"field2",
@@ -112,17 +119,12 @@ func TestStreamingRows(t *testing.T) {
 }
 
 func TestStreamingRowsReversed(t *testing.T) {
-	qrc, errFunc := func() (<-chan *sqltypes.Result, vtgateconn.ErrFunc) {
-		ch := make(chan *sqltypes.Result)
-		go func() {
-			ch <- &packet1
-			ch <- &packet2
-			ch <- &packet3
-			close(ch)
-		}()
-		return ch, func() error { return nil }
-	}()
-	ri := newStreamingRows(qrc, errFunc, nil)
+	c := make(chan *sqltypes.Result, 3)
+	c <- &packet1
+	c <- &packet2
+	c <- &packet3
+	close(c)
+	ri := newStreamingRows(&adapter{c: c, err: io.EOF}, nil)
 
 	wantRow := []driver.Value{
 		int64(1),
@@ -152,14 +154,10 @@ func TestStreamingRowsReversed(t *testing.T) {
 }
 
 func TestStreamingRowsError(t *testing.T) {
-	qrc, errFunc := func() (<-chan *sqltypes.Result, vtgateconn.ErrFunc) {
-		ch := make(chan *sqltypes.Result)
-		go func() {
-			close(ch)
-		}()
-		return ch, func() error { return errors.New("error before fields") }
-	}()
-	ri := newStreamingRows(qrc, errFunc, nil)
+	c := make(chan *sqltypes.Result)
+	close(c)
+	ri := newStreamingRows(&adapter{c: c, err: errors.New("error before fields")}, nil)
+
 	gotCols := ri.Columns()
 	if gotCols != nil {
 		t.Errorf("cols: %v, want nil", gotCols)
@@ -172,15 +170,10 @@ func TestStreamingRowsError(t *testing.T) {
 	}
 	_ = ri.Close()
 
-	qrc, errFunc = func() (<-chan *sqltypes.Result, vtgateconn.ErrFunc) {
-		ch := make(chan *sqltypes.Result)
-		go func() {
-			ch <- &packet1
-			close(ch)
-		}()
-		return ch, func() error { return errors.New("error after fields") }
-	}()
-	ri = newStreamingRows(qrc, errFunc, nil)
+	c = make(chan *sqltypes.Result, 1)
+	c <- &packet1
+	close(c)
+	ri = newStreamingRows(&adapter{c: c, err: errors.New("error after fields")}, nil)
 	wantCols := []string{
 		"field1",
 		"field2",
@@ -203,16 +196,11 @@ func TestStreamingRowsError(t *testing.T) {
 	}
 	_ = ri.Close()
 
-	qrc, errFunc = func() (<-chan *sqltypes.Result, vtgateconn.ErrFunc) {
-		ch := make(chan *sqltypes.Result)
-		go func() {
-			ch <- &packet1
-			ch <- &packet2
-			close(ch)
-		}()
-		return ch, func() error { return errors.New("error after rows") }
-	}()
-	ri = newStreamingRows(qrc, errFunc, nil)
+	c = make(chan *sqltypes.Result, 2)
+	c <- &packet1
+	c <- &packet2
+	close(c)
+	ri = newStreamingRows(&adapter{c: c, err: errors.New("error after rows")}, nil)
 	gotRow = make([]driver.Value, 3)
 	err = ri.Next(gotRow)
 	if err != nil {
@@ -225,15 +213,10 @@ func TestStreamingRowsError(t *testing.T) {
 	}
 	_ = ri.Close()
 
-	qrc, errFunc = func() (<-chan *sqltypes.Result, vtgateconn.ErrFunc) {
-		ch := make(chan *sqltypes.Result)
-		go func() {
-			ch <- &packet2
-			close(ch)
-		}()
-		return ch, func() error { return nil }
-	}()
-	ri = newStreamingRows(qrc, errFunc, nil)
+	c = make(chan *sqltypes.Result, 1)
+	c <- &packet2
+	close(c)
+	ri = newStreamingRows(&adapter{c: c, err: io.EOF}, nil)
 	gotRow = make([]driver.Value, 3)
 	err = ri.Next(gotRow)
 	wantErr = "first packet did not return fields"

@@ -13,7 +13,7 @@ import (
 func TestMultipleBoundaries(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
-	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		"select * from test_table where int_col > 5",
 		nil, /* bindVariables */
 		[]string{"id", "user_id"}, /* splitColumns */
@@ -21,7 +21,7 @@ func TestMultipleBoundaries(t *testing.T) {
 		GetSchema(),
 	)
 	if err != nil {
-		t.Fatalf("NewSplitParamsWithNumRowsPerQueryPart failed with: %v", err)
+		t.Fatalf("NewSplitParamsGivenNumRowsPerQueryPart failed with: %v", err)
 	}
 	mockSQLExecuter := splitquery_testing.NewMockSQLExecuter(mockCtrl)
 	expectedCall1 := mockSQLExecuter.EXPECT().SQLExecute(
@@ -69,7 +69,10 @@ func TestMultipleBoundaries(t *testing.T) {
 		&sqltypes.Result{Rows: [][]sqltypes.Value{}}, nil)
 	expectedCall3.After(expectedCall2)
 
-	algorithm := NewFullScanAlgorithm(splitParams, mockSQLExecuter)
+	algorithm, err := NewFullScanAlgorithm(splitParams, mockSQLExecuter)
+	if err != nil {
+		t.Fatalf("NewFullScanAlgorithm failed with: %v", err)
+	}
 	boundaries, err := algorithm.generateBoundaries()
 	if err != nil {
 		t.Fatalf("FullScanAlgorithm.generateBoundaries() failed with: %v", err)
@@ -86,7 +89,7 @@ func TestMultipleBoundaries(t *testing.T) {
 func TestSmallNumberOfRows(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
-	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		"select * from test_table where int_col > 5",
 		nil, /* bindVariables */
 		[]string{"id", "user_id"}, /* splitColumns */
@@ -94,7 +97,7 @@ func TestSmallNumberOfRows(t *testing.T) {
 		GetSchema(),
 	)
 	if err != nil {
-		t.Fatalf("NewSplitParamsWithNumRowsPerQueryPart failed with: %v", err)
+		t.Fatalf("NewSplitParamsGivenNumRowsPerQueryPart failed with: %v", err)
 	}
 	mockSQLExecuter := splitquery_testing.NewMockSQLExecuter(mockCtrl)
 	expectedCall1 := mockSQLExecuter.EXPECT().SQLExecute(
@@ -106,7 +109,10 @@ func TestSmallNumberOfRows(t *testing.T) {
 	expectedCall1.Return(
 		&sqltypes.Result{Rows: [][]sqltypes.Value{}}, nil)
 
-	algorithm := NewFullScanAlgorithm(splitParams, mockSQLExecuter)
+	algorithm, err := NewFullScanAlgorithm(splitParams, mockSQLExecuter)
+	if err != nil {
+		t.Fatalf("NewFullScanAlgorithm failed with: %v", err)
+	}
 	boundaries, err := algorithm.generateBoundaries()
 	if err != nil {
 		t.Fatalf("FullScanAlgorithm.generateBoundaries() failed with: %v", err)
@@ -120,7 +126,7 @@ func TestSmallNumberOfRows(t *testing.T) {
 func TestSQLExecuterReturnsError(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
-	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		"select * from test_table where int_col > 5",
 		nil, /* bindVariables */
 		[]string{"id", "user_id"}, /* splitColumns */
@@ -128,7 +134,7 @@ func TestSQLExecuterReturnsError(t *testing.T) {
 		GetSchema(),
 	)
 	if err != nil {
-		t.Fatalf("NewSplitParamsWithNumRowsPerQueryPart failed with: %v", err)
+		t.Fatalf("NewSplitParamsGivenNumRowsPerQueryPart failed with: %v", err)
 	}
 	mockSQLExecuter := splitquery_testing.NewMockSQLExecuter(mockCtrl)
 	expectedCall1 := mockSQLExecuter.EXPECT().SQLExecute(
@@ -156,7 +162,10 @@ func TestSQLExecuterReturnsError(t *testing.T) {
 		})
 	expectedErr := fmt.Errorf("Error accessing database!")
 	expectedCall2.Return(nil, expectedErr)
-	algorithm := NewFullScanAlgorithm(splitParams, mockSQLExecuter)
+	algorithm, err := NewFullScanAlgorithm(splitParams, mockSQLExecuter)
+	if err != nil {
+		t.Fatalf("NewFullScanAlgorithm failed with: %v", err)
+	}
 	boundaries, err := algorithm.generateBoundaries()
 	if err != expectedErr {
 		t.Fatalf("FullScanAlgorithm.generateBoundaries() did not fail as expected. err: %v", err)
