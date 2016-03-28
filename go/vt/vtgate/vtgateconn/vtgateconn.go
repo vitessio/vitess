@@ -82,38 +82,33 @@ func (conn *VTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*
 }
 
 // StreamExecute executes a streaming query on vtgate. It returns a
-// channel, an ErrFunc, and error. First check the error. Then you can
-// pull values from the channel till it's closed. Following this, you
-// can call ErrFunc to see if the stream ended normally or due to a
-// failure.
-func (conn *VTGateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, ErrFunc, error) {
+// ResultStream and an error. First check the error. Then you can
+// pull values from the ResultStream until io.EOF, or another error.
+func (conn *VTGateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error) {
 	return conn.impl.StreamExecute(ctx, query, bindVars, tabletType)
 }
 
 // StreamExecuteShards executes a streaming query on vtgate, on a set
-// of shards.  It returns a channel, an ErrFunc, and error. First
-// check the error. Then you can pull values from the channel till
-// it's closed. Following this, you can call ErrFunc to see if the
-// stream ended normally or due to a failure.
-func (conn *VTGateConn) StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, ErrFunc, error) {
+// of shards. It returns a ResultStream and an error. First check the
+// error. Then you can pull values from the ResultStream until io.EOF,
+// or another error.
+func (conn *VTGateConn) StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error) {
 	return conn.impl.StreamExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType)
 }
 
 // StreamExecuteKeyRanges executes a streaming query on vtgate, on a
-// set of keyranges.  It returns a channel, an ErrFunc, and
-// error. First check the error. Then you can pull values from the
-// channel till it's closed. Following this, you can call ErrFunc to
-// see if the stream ended normally or due to a failure.
-func (conn *VTGateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, ErrFunc, error) {
+// set of keyranges. It returns a ResultStream and an error. First check the
+// error. Then you can pull values from the ResultStream until io.EOF,
+// or another error.
+func (conn *VTGateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error) {
 	return conn.impl.StreamExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType)
 }
 
 // StreamExecuteKeyspaceIds executes a streaming query on vtgate, for
-// the given keyspaceIds.  It returns a channel, an ErrFunc, and
-// error. First check the error. Then you can pull values from the
-// channel till it's closed. Following this, you can call ErrFunc to
-// see if the stream ended normally or due to a failure.
-func (conn *VTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, ErrFunc, error) {
+// the given keyspaceIds.  It returns a ResultStream and an error. First check the
+// error. Then you can pull values from the ResultStream until io.EOF,
+// or another error.
+func (conn *VTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error) {
 	return conn.impl.StreamExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIds, bindVars, tabletType)
 }
 
@@ -277,9 +272,6 @@ func (tx *VTGateTx) Rollback2(ctx context.Context) error {
 	return err
 }
 
-// ErrFunc is used to check for streaming errors.
-type ErrFunc func() error
-
 //
 // The rest of this file is for the protocol implementations.
 //
@@ -309,16 +301,16 @@ type Impl interface {
 	ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}) ([]sqltypes.Result, interface{}, error)
 
 	// StreamExecute executes a streaming query on vtgate.
-	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, ErrFunc, error)
+	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error)
 
 	// StreamExecuteShards executes a streaming query on vtgate, on a set of shards.
-	StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, ErrFunc, error)
+	StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error)
 
 	// StreamExecuteKeyRanges executes a streaming query on vtgate, on a set of keyranges.
-	StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, ErrFunc, error)
+	StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error)
 
 	// StreamExecuteKeyspaceIds executes a streaming query on vtgate, for the given keyspaceIds.
-	StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, ErrFunc, error)
+	StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error)
 
 	// Begin starts a transaction and returns a VTGateTX.
 	Begin(ctx context.Context) (interface{}, error)

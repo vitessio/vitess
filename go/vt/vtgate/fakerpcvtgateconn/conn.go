@@ -10,6 +10,7 @@ package fakerpcvtgateconn
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"reflect"
 	"sort"
@@ -239,11 +240,23 @@ func (conn *FakeVTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries
 	panic("not implemented")
 }
 
+type streamExecuteAdapter struct {
+	c chan *sqltypes.Result
+}
+
+func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
+	r, ok := <-a.c
+	if !ok {
+		return nil, io.EOF
+	}
+	return r, nil
+}
+
 // StreamExecute please see vtgateconn.Impl.StreamExecute
-func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
+func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error) {
 	response, ok := conn.execMap[sql]
 	if !ok {
-		return nil, nil, fmt.Errorf("no match for: %s", sql)
+		return nil, fmt.Errorf("no match for: %s", sql)
 	}
 	query := &queryExecute{
 		SQL:           sql,
@@ -251,17 +264,17 @@ func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, sql string, bindV
 		TabletType:    tabletType,
 	}
 	if !reflect.DeepEqual(query, response.execQuery) {
-		return nil, nil, fmt.Errorf("StreamExecute: %+v, want %+v", sql, response.execQuery)
+		return nil, fmt.Errorf("StreamExecute: %+v, want %+v", sql, response.execQuery)
 	}
 	if response.err != nil {
-		return nil, nil, response.err
+		return nil, response.err
 	}
 	var resultChan chan *sqltypes.Result
 	defer close(resultChan)
 	if response.reply != nil {
 		// create a result channel big enough to buffer all of
 		// the responses so we don't need to fork a go routine.
-		resultChan := make(chan *sqltypes.Result, len(response.reply.Rows)+1)
+		resultChan = make(chan *sqltypes.Result, len(response.reply.Rows)+1)
 		result := &sqltypes.Result{}
 		result.Fields = response.reply.Fields
 		resultChan <- result
@@ -273,21 +286,21 @@ func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, sql string, bindV
 	} else {
 		resultChan = make(chan *sqltypes.Result)
 	}
-	return resultChan, func() error { return nil }, nil
+	return &streamExecuteAdapter{resultChan}, nil
 }
 
 // StreamExecuteShards please see vtgateconn.Impl.StreamExecuteShards
-func (conn *FakeVTGateConn) StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
+func (conn *FakeVTGateConn) StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error) {
 	panic("not implemented")
 }
 
 // StreamExecuteKeyRanges please see vtgateconn.Impl.StreamExecuteKeyRanges
-func (conn *FakeVTGateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
+func (conn *FakeVTGateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error) {
 	panic("not implemented")
 }
 
 // StreamExecuteKeyspaceIds please see vtgateconn.Impl.StreamExecuteKeyspaceIds
-func (conn *FakeVTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
+func (conn *FakeVTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error) {
 	panic("not implemented")
 }
 
