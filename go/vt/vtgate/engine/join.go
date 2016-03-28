@@ -5,6 +5,8 @@
 package engine
 
 import (
+	"fmt"
+
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -12,8 +14,7 @@ import (
 
 // Join specifies the parameters for a join primitive.
 type Join struct {
-	// IsLeft is true if it's a LEFT JOIN.
-	IsLeft bool `json:",omitempty"`
+	Opcode JoinOpcode
 	// Left and Right are the LHS and RHS primitives
 	// of the Join. They can be any primitive.
 	Left, Right Primitive `json:",omitempty"`
@@ -64,7 +65,7 @@ func (jn *Join) Exec(vcursor VCursor, joinvars map[string]interface{}, wantfield
 		for _, rrow := range rresult.Rows {
 			result.Rows = append(result.Rows, joinRows(lrow, rrow, jn.Cols))
 		}
-		if jn.IsLeft && len(rresult.Rows) == 0 {
+		if jn.Opcode == LeftJoin && len(rresult.Rows) == 0 {
 			result.Rows = append(result.Rows, joinRows(lrow, nil, jn.Cols))
 			result.RowsAffected++
 		} else {
@@ -103,7 +104,7 @@ func (jn *Join) StreamExec(vcursor VCursor, joinvars map[string]interface{}, wan
 				// TODO(sougou): remove after testing
 				panic("unexptected")
 			}
-			if jn.IsLeft && !rowSent {
+			if jn.Opcode == LeftJoin && !rowSent {
 				result := &sqltypes.Result{}
 				result.Rows = [][]sqltypes.Value{joinRows(
 					lrow,
@@ -174,4 +175,27 @@ func joinRows(lrow, rrow []sqltypes.Value, cols []int) []sqltypes.Value {
 		}
 	}
 	return row
+}
+
+// JoinOpcode is a number representing the opcode
+// for the Join primitive.
+type JoinOpcode int
+
+// This is the list of JoinOpcode values.
+const (
+	NormalJoin = JoinOpcode(iota)
+	LeftJoin
+)
+
+func (code JoinOpcode) String() string {
+	if code == NormalJoin {
+		return "Join"
+	}
+	return "LeftJoin"
+}
+
+// MarshalJSON serializes the JoinOpcode as a JSON string.
+// It's used for testing and diagnostics.
+func (code JoinOpcode) MarshalJSON() ([]byte, error) {
+	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
 }

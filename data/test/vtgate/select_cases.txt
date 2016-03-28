@@ -33,6 +33,7 @@
 {
   "Original": "select user_extra.id from user join user_extra",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -62,6 +63,7 @@
 {
   "Original": "select user.col, user_extra.id from user join user_extra",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -92,6 +94,7 @@
 {
   "Original": "select user.col, user_extra.id + user_extra.col from user join user_extra",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -122,6 +125,7 @@
 {
   "Original": "select user.col, user_extra.id, user.col2 from user join user_extra",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -230,6 +234,7 @@
 {
   "Original": "select /* comment */ user.col from user join user_extra",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -259,6 +264,7 @@
 {
   "Original": "select user.col from user join user_extra for update",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -288,6 +294,7 @@
 {
   "Original": "select user.id, (select user.id+outm.m+main1.m from main1) from user join main1 outm",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {

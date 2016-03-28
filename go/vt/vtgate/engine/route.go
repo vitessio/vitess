@@ -194,9 +194,9 @@ const (
 	NumCodes
 )
 
-// opcodeName must exactly match order of opcode constants.
-var opcodeName = [NumCodes]string{
-	"NoCode",
+// routeName must exactly match order of opcode constants.
+var routeName = [NumCodes]string{
+	"Error",
 	"SelectUnsharded",
 	"SelectEqualUnique",
 	"SelectEqual",
@@ -214,7 +214,7 @@ func (code RouteOpcode) String() string {
 	if code < 0 || code >= NumCodes {
 		return ""
 	}
-	return opcodeName[code]
+	return routeName[code]
 }
 
 // MarshalJSON serializes the RouteOpcode as a JSON string.

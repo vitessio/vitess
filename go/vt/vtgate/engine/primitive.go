@@ -9,9 +9,9 @@ import "github.com/youtube/vitess/go/sqltypes"
 // SeqVarName is a reserved bind var name for sequence values.
 const SeqVarName = "__seq"
 
-// ListVarName is the bind var name used for plans
-// that require VTGate to compute custom list values,
-// like for IN clauses.
+// ListVarName is a reserved bind var name for list vars.
+// This is used for sending different IN clause values
+// to different shards.
 const ListVarName = "__vals"
 
 // VCursor defines the interface the engine will use
@@ -24,16 +24,14 @@ type VCursor interface {
 
 // Plan represents the execution strategy for a given query.
 // For now it's a simple wrapper around the real instructions.
-// An instruction (aka primitive), tells VTGate how to execute
-// a single command. Primitives can be cascaded as long as
-// their inputs and outpus can be combined meaningfully.
-// For example, a Join can depend on another Join or a Route.
-// However, a Route cannot depend on another primitive.
+// An instruction (aka Primitive) is typically a tree where
+// each node does its part by combining the results of the
+// sub-nodes.
 type Plan struct {
 	// Original is the original query.
 	Original string `json:",omitempty"`
 	// Instructions contains the instructions needed to
-	// fulfil the query. It's a tree of primitives.
+	// fulfil the query.
 	Instructions Primitive `json:",omitempty"`
 }
 

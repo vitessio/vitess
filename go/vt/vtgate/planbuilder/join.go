@@ -41,9 +41,9 @@ func newJoin(lhs, rhs builder, ajoin *sqlparser.JoinTableExpr) (*join, error) {
 	}
 	rhs.SetSymtab(lhs.Symtab())
 	rhs.SetOrder(lhs.Order())
-	isLeft := false
+	opcode := engine.NormalJoin
 	if ajoin.Join == sqlparser.LeftJoinStr {
-		isLeft = true
+		opcode = engine.LeftJoin
 	}
 	jb := &join{
 		LeftOrder:  lhs.Order(),
@@ -52,13 +52,13 @@ func newJoin(lhs, rhs builder, ajoin *sqlparser.JoinTableExpr) (*join, error) {
 		Right:      rhs,
 		symtab:     lhs.Symtab(),
 		ejoin: &engine.Join{
-			IsLeft: isLeft,
+			Opcode: opcode,
 			Left:   lhs.Primitive(),
 			Right:  rhs.Primitive(),
 			Vars:   make(map[string]int),
 		},
 	}
-	if isLeft {
+	if opcode == engine.LeftJoin {
 		err := pushFilter(ajoin.On, rhs, sqlparser.WhereStr)
 		if err != nil {
 			return nil, err
