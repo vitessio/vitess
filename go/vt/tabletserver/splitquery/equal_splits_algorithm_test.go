@@ -108,15 +108,13 @@ var testCases = []testCaseType{
 func TestEqualSplitsAlgorithm(t *testing.T) {
 	// singleTest is a function that executes a single-test.
 	singleTest := func(testCase *testCaseType) {
-		splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+		splitParams, err := NewSplitParamsGivenSplitCount(
 			"select * from test_table where int_col > 5",
 			/* bindVariables */ nil,
 			[]string{testCase.SplitColumn},
-			1000,
+			testCase.SplitCount,
 			GetSchema(),
 		)
-		// TODO(erez): Move the setting of splitCount into the constructor of 'splitParams'.
-		splitParams.splitCount = testCase.SplitCount
 		if err != nil {
 			t.Errorf("NewSplitParamsWithNumRowsPerQueryPart failed with: %v", err)
 			return
@@ -155,3 +153,6 @@ func TestEqualSplitsAlgorithm(t *testing.T) {
 		singleTest(&testCase)
 	}
 }
+
+//TODO(erez): Add test that checks we return an error if column is not numeric (and maybe also
+// for other assumptions).

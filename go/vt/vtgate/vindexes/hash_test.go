@@ -7,14 +7,12 @@ package vindexes
 import (
 	"reflect"
 	"testing"
-
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
-var hash planbuilder.Vindex
+var hash Vindex
 
 func init() {
-	hv, err := planbuilder.CreateVindex("hash", "nn", map[string]interface{}{"Table": "t", "Column": "c"})
+	hv, err := CreateVindex("hash", "nn", map[string]interface{}{"Table": "t", "Column": "c"})
 	if err != nil {
 		panic(err)
 	}
@@ -28,7 +26,7 @@ func TestHashCost(t *testing.T) {
 }
 
 func TestHashMap(t *testing.T) {
-	got, err := hash.(planbuilder.Unique).Map(nil, []interface{}{1, int32(2), int64(3), uint(4), uint32(5), uint64(6)})
+	got, err := hash.(Unique).Map(nil, []interface{}{1, int32(2), int64(3), uint(4), uint32(5), uint64(6)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -56,7 +54,7 @@ func TestHashVerify(t *testing.T) {
 }
 
 func TestHashReverseMap(t *testing.T) {
-	got, err := hash.(planbuilder.Reversible).ReverseMap(nil, []byte("\x16k@\xb4J\xbaK\xd6"))
+	got, err := hash.(Reversible).ReverseMap(nil, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}

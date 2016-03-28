@@ -16,20 +16,22 @@ import (
 
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
+	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 // Planner is used to compute the plan. It contains
 // the vschema, and has a cache of previous computed plans.
 type Planner struct {
-	vschema *planbuilder.VSchema
+	vschema *vindexes.VSchema
 	plans   *cache.LRUCache
 }
 
 var once sync.Once
 
 // NewPlanner creates a new planner for VTGate.
-func NewPlanner(vschema *planbuilder.VSchema, cacheSize int) *Planner {
+func NewPlanner(vschema *vindexes.VSchema, cacheSize int) *Planner {
 	plr := &Planner{
 		vschema: vschema,
 		plans:   cache.NewLRUCache(int64(cacheSize)),
@@ -43,14 +45,14 @@ func NewPlanner(vschema *planbuilder.VSchema, cacheSize int) *Planner {
 
 // GetPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (plr *Planner) GetPlan(sql string) (*planbuilder.Plan, error) {
+func (plr *Planner) GetPlan(sql string) (*engine.Plan, error) {
 	if plr.vschema == nil {
 		return nil, errors.New("vschema not initialized")
 	}
 	if result, ok := plr.plans.Get(sql); ok {
-		return result.(*planbuilder.Plan), nil
+		return result.(*engine.Plan), nil
 	}
-	plan, err := planbuilder.BuildPlan(sql, plr.vschema)
+	plan, err := planbuilder.Build(sql, plr.vschema)
 	if err != nil {
 		return nil, err
 	}

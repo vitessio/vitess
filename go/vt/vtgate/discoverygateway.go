@@ -120,23 +120,19 @@ func (dg *discoveryGateway) ExecuteBatch(ctx context.Context, keyspace, shard st
 }
 
 // StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc) {
+func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
 	var usedConn tabletconn.TabletConn
-	var erFunc tabletconn.ErrFunc
-	var results <-chan *sqltypes.Result
+	var stream sqltypes.ResultStream
 	err := dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var err error
-		results, erFunc, err = conn.StreamExecute(ctx, query, bindVars, transactionID)
+		stream, err = conn.StreamExecute(ctx, query, bindVars, transactionID)
 		usedConn = conn
 		return err
 	}, transactionID, true)
 	if err != nil {
-		return results, func() error { return err }
+		return nil, err
 	}
-	inTransaction := (transactionID != 0)
-	return results, func() error {
-		return WrapError(erFunc(), keyspace, shard, tabletType, usedConn.EndPoint(), inTransaction)
-	}
+	return stream, nil
 }
 
 // Begin starts a transaction for the specified keyspace, shard, and tablet type.

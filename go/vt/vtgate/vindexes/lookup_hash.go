@@ -4,16 +4,11 @@
 
 package vindexes
 
-import (
-	"fmt"
-
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
-)
+import "fmt"
 
 func init() {
-	planbuilder.Register("lookup_hash", NewLookupHash)
-	planbuilder.Register("lookup_hash_unique", NewLookupHashUnique)
+	Register("lookup_hash", NewLookupHash)
+	Register("lookup_hash_unique", NewLookupHashUnique)
 }
 
 //====================================================================
@@ -27,7 +22,7 @@ type LookupHash struct {
 }
 
 // NewLookupHash creates a LookupHash vindex.
-func NewLookupHash(name string, m map[string]interface{}) (planbuilder.Vindex, error) {
+func NewLookupHash(name string, m map[string]interface{}) (Vindex, error) {
 	lhu := &LookupHash{name: name}
 	lhu.lkp.Init(m)
 	return lhu, nil
@@ -44,22 +39,22 @@ func (vind *LookupHash) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *LookupHash) Map(vcursor planbuilder.VCursor, ids []interface{}) ([][][]byte, error) {
+func (vind *LookupHash) Map(vcursor VCursor, ids []interface{}) ([][][]byte, error) {
 	return vind.lkp.Map2(vcursor, ids)
 }
 
 // Verify returns true if id maps to ksid.
-func (vind *LookupHash) Verify(vcursor planbuilder.VCursor, id interface{}, ksid []byte) (bool, error) {
+func (vind *LookupHash) Verify(vcursor VCursor, id interface{}, ksid []byte) (bool, error) {
 	return vind.lkp.Verify(vcursor, id, ksid)
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (vind *LookupHash) Create(vcursor planbuilder.VCursor, id interface{}, ksid []byte) error {
+func (vind *LookupHash) Create(vcursor VCursor, id interface{}, ksid []byte) error {
 	return vind.lkp.Create(vcursor, id, ksid)
 }
 
 // Delete deletes the entry from the vindex table.
-func (vind *LookupHash) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid []byte) error {
+func (vind *LookupHash) Delete(vcursor VCursor, ids []interface{}, ksid []byte) error {
 	return vind.lkp.Delete(vcursor, ids, ksid)
 }
 
@@ -74,7 +69,7 @@ type LookupHashUnique struct {
 }
 
 // NewLookupHashUnique creates a LookupHashUnique vindex.
-func NewLookupHashUnique(name string, m map[string]interface{}) (planbuilder.Vindex, error) {
+func NewLookupHashUnique(name string, m map[string]interface{}) (Vindex, error) {
 	lhu := &LookupHashUnique{name: name}
 	lhu.lkp.Init(m)
 	return lhu, nil
@@ -91,22 +86,22 @@ func (vind *LookupHashUnique) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *LookupHashUnique) Map(vcursor planbuilder.VCursor, ids []interface{}) ([][]byte, error) {
+func (vind *LookupHashUnique) Map(vcursor VCursor, ids []interface{}) ([][]byte, error) {
 	return vind.lkp.Map1(vcursor, ids)
 }
 
 // Verify returns true if id maps to ksid.
-func (vind *LookupHashUnique) Verify(vcursor planbuilder.VCursor, id interface{}, ksid []byte) (bool, error) {
+func (vind *LookupHashUnique) Verify(vcursor VCursor, id interface{}, ksid []byte) (bool, error) {
 	return vind.lkp.Verify(vcursor, id, ksid)
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (vind *LookupHashUnique) Create(vcursor planbuilder.VCursor, id interface{}, ksid []byte) error {
+func (vind *LookupHashUnique) Create(vcursor VCursor, id interface{}, ksid []byte) error {
 	return vind.lkp.Create(vcursor, id, ksid)
 }
 
 // Delete deletes the entry from the vindex table.
-func (vind *LookupHashUnique) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid []byte) error {
+func (vind *LookupHashUnique) Delete(vcursor VCursor, ids []interface{}, ksid []byte) error {
 	return vind.lkp.Delete(vcursor, ids, ksid)
 }
 
@@ -137,16 +132,12 @@ func (lkp *lookup) Init(m map[string]interface{}) {
 }
 
 // Map1 is for a unique vindex.
-func (lkp *lookup) Map1(vcursor planbuilder.VCursor, ids []interface{}) ([][]byte, error) {
+func (lkp *lookup) Map1(vcursor VCursor, ids []interface{}) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
-	bq := &querytypes.BoundQuery{
-		Sql: lkp.sel,
-	}
 	for _, id := range ids {
-		bq.BindVariables = map[string]interface{}{
+		result, err := vcursor.Execute(lkp.sel, map[string]interface{}{
 			lkp.From: id,
-		}
-		result, err := vcursor.Execute(bq)
+		})
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
@@ -167,16 +158,12 @@ func (lkp *lookup) Map1(vcursor planbuilder.VCursor, ids []interface{}) ([][]byt
 }
 
 // Map2 is for a non-unique vindex.
-func (lkp *lookup) Map2(vcursor planbuilder.VCursor, ids []interface{}) ([][][]byte, error) {
+func (lkp *lookup) Map2(vcursor VCursor, ids []interface{}) ([][][]byte, error) {
 	out := make([][][]byte, 0, len(ids))
-	bq := &querytypes.BoundQuery{
-		Sql: lkp.sel,
-	}
 	for _, id := range ids {
-		bq.BindVariables = map[string]interface{}{
+		result, err := vcursor.Execute(lkp.sel, map[string]interface{}{
 			lkp.From: id,
-		}
-		result, err := vcursor.Execute(bq)
+		})
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
@@ -194,19 +181,15 @@ func (lkp *lookup) Map2(vcursor planbuilder.VCursor, ids []interface{}) ([][][]b
 }
 
 // Verify returns true if id maps to ksid.
-func (lkp *lookup) Verify(vcursor planbuilder.VCursor, id interface{}, ksid []byte) (bool, error) {
+func (lkp *lookup) Verify(vcursor VCursor, id interface{}, ksid []byte) (bool, error) {
 	val, err := vunhash(ksid)
 	if err != nil {
 		return false, fmt.Errorf("lookup.Verify: %v", err)
 	}
-	bq := &querytypes.BoundQuery{
-		Sql: lkp.ver,
-		BindVariables: map[string]interface{}{
-			lkp.From: id,
-			lkp.To:   val,
-		},
-	}
-	result, err := vcursor.Execute(bq)
+	result, err := vcursor.Execute(lkp.ver, map[string]interface{}{
+		lkp.From: id,
+		lkp.To:   val,
+	})
 	if err != nil {
 		return false, fmt.Errorf("lookup.Verify: %v", err)
 	}
@@ -217,39 +200,32 @@ func (lkp *lookup) Verify(vcursor planbuilder.VCursor, id interface{}, ksid []by
 }
 
 // Create creates an association between id and ksid by inserting a row in the vindex table.
-func (lkp *lookup) Create(vcursor planbuilder.VCursor, id interface{}, ksid []byte) error {
+func (lkp *lookup) Create(vcursor VCursor, id interface{}, ksid []byte) error {
 	val, err := vunhash(ksid)
 	if err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
-	bq := &querytypes.BoundQuery{
-		Sql: lkp.ins,
-		BindVariables: map[string]interface{}{
-			lkp.From: id,
-			lkp.To:   val,
-		},
-	}
-	if _, err := vcursor.Execute(bq); err != nil {
+	if _, err := vcursor.Execute(lkp.ins, map[string]interface{}{
+		lkp.From: id,
+		lkp.To:   val,
+	}); err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
 	return nil
 }
 
 // Delete deletes the association between ids and ksid.
-func (lkp *lookup) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid []byte) error {
+func (lkp *lookup) Delete(vcursor VCursor, ids []interface{}, ksid []byte) error {
 	val, err := vunhash(ksid)
 	if err != nil {
 		return fmt.Errorf("lookup.Delete: %v", err)
 	}
-	bq := &querytypes.BoundQuery{
-		Sql: lkp.del,
-		BindVariables: map[string]interface{}{
-			lkp.To: val,
-		},
+	bindvars := map[string]interface{}{
+		lkp.To: val,
 	}
 	for _, id := range ids {
-		bq.BindVariables[lkp.From] = id
-		if _, err := vcursor.Execute(bq); err != nil {
+		bindvars[lkp.From] = id
+		if _, err := vcursor.Execute(lkp.del, bindvars); err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
 		}
 	}

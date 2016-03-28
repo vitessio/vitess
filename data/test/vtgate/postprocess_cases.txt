@@ -54,6 +54,7 @@
 {
   "Original": "select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -141,6 +142,7 @@
 {
   "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a asc, user.col2 desc, music.col3 asc",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectEqualUnique",
       "Keyspace": {
@@ -182,6 +184,7 @@
 {
   "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 2 desc, 3 asc",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectEqualUnique",
       "Keyspace": {
@@ -274,6 +277,7 @@
 {
   "Original": "select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {

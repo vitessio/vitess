@@ -9,14 +9,13 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vtgate/engine"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
-// SeqVarName is a reserved bind var name for sequence values.
-const SeqVarName = "__seq"
-
 // buildInsertPlan builds the route for an INSERT statement.
-func buildInsertPlan(ins *sqlparser.Insert, vschema *VSchema) (*Route, error) {
-	route := &Route{
+func buildInsertPlan(ins *sqlparser.Insert, vschema *vindexes.VSchema) (*engine.Route, error) {
+	route := &engine.Route{
 		Query: generateQuery(ins),
 	}
 	tablename := sqlparser.GetTableName(ins.Table)
@@ -27,7 +26,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema *VSchema) (*Route, error) {
 	}
 	route.Keyspace = route.Table.Keyspace
 	if !route.Keyspace.Sharded {
-		route.Opcode = InsertUnsharded
+		route.Opcode = engine.InsertUnsharded
 		return route, nil
 	}
 
@@ -55,7 +54,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema *VSchema) (*Route, error) {
 		return nil, errors.New("column list doesn't match values")
 	}
 	colVindexes := route.Table.ColVindexes
-	route.Opcode = InsertSharded
+	route.Opcode = engine.InsertSharded
 	route.Values = make([]interface{}, 0, len(colVindexes))
 	for _, index := range colVindexes {
 		if err := buildIndexPlan(ins, index, route); err != nil {
@@ -73,7 +72,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema *VSchema) (*Route, error) {
 
 // buildIndexPlan adds the insert value to the Values field for the specified ColVindex.
 // This value will be used at the time of insert to validate the vindex value.
-func buildIndexPlan(ins *sqlparser.Insert, colVindex *ColVindex, route *Route) error {
+func buildIndexPlan(ins *sqlparser.Insert, colVindex *vindexes.ColVindex, route *engine.Route) error {
 	row, pos := findOrInsertPos(ins, colVindex.Col)
 	val, err := valConvert(row[pos])
 	if err != nil {
@@ -84,9 +83,9 @@ func buildIndexPlan(ins *sqlparser.Insert, colVindex *ColVindex, route *Route) e
 	return nil
 }
 
-func buildAutoincPlan(ins *sqlparser.Insert, autoinc *Autoinc, route *Route) error {
-	route.Generate = &Generate{
-		Opcode:   SelectUnsharded,
+func buildAutoincPlan(ins *sqlparser.Insert, autoinc *vindexes.Autoinc, route *engine.Route) error {
+	route.Generate = &engine.Generate{
+		Opcode:   engine.SelectUnsharded,
 		Keyspace: autoinc.Sequence.Keyspace,
 		Query:    fmt.Sprintf("select next value from `%s`", autoinc.Sequence.Name),
 	}
@@ -94,7 +93,7 @@ func buildAutoincPlan(ins *sqlparser.Insert, autoinc *Autoinc, route *Route) err
 	// Otherwise, we have to redirect from row[pos].
 	if autoinc.ColVindexNum >= 0 {
 		route.Generate.Value = route.Values.([]interface{})[autoinc.ColVindexNum]
-		route.Values.([]interface{})[autoinc.ColVindexNum] = ":" + SeqVarName
+		route.Values.([]interface{})[autoinc.ColVindexNum] = ":" + engine.SeqVarName
 		return nil
 	}
 	row, pos := findOrInsertPos(ins, autoinc.Col)
@@ -103,7 +102,7 @@ func buildAutoincPlan(ins *sqlparser.Insert, autoinc *Autoinc, route *Route) err
 		return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
 	route.Generate.Value = val
-	row[pos] = sqlparser.ValArg([]byte(":" + SeqVarName))
+	row[pos] = sqlparser.ValArg([]byte(":" + engine.SeqVarName))
 	return nil
 }
 

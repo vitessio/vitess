@@ -236,6 +236,7 @@
 {
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectEqualUnique",
       "Keyspace": {
@@ -273,6 +274,7 @@
 {
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5 and user_extra.user_id = 5",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectEqualUnique",
       "Keyspace": {
@@ -312,6 +314,7 @@
 {
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user_extra.user_id = user.col",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -349,6 +352,7 @@
 {
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -470,6 +474,7 @@
 {
   "Original": "select main1.id from user join main1 where main1.id = user.id",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -505,6 +510,7 @@
 {
   "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -545,6 +551,7 @@
 {
   "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = 5) and u.id = 5",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -576,6 +583,7 @@
 {
   "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {

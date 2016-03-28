@@ -23,7 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctld"
 	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk/fakezk"
 
@@ -88,9 +88,9 @@ func main() {
 	initTabletMap(ts, *topology, mysqld, dbcfgs, mycnf)
 
 	// vschema
-	var vschema *planbuilder.VSchema
+	var vschema *vindexes.VSchema
 	if *vschemaFile != "" {
-		vschema, err = planbuilder.LoadFile(*vschemaFile)
+		vschema, err = vindexes.LoadFile(*vschemaFile)
 		if err != nil {
 			log.Error(err)
 			exit.Return(1)

@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -26,10 +27,9 @@ import (
 
 // QueryResultReader will stream rows towards the output channel.
 type QueryResultReader struct {
-	Output      <-chan *sqltypes.Result
-	Fields      []*querypb.Field
-	conn        tabletconn.TabletConn
-	clientErrFn func() error
+	Output sqltypes.ResultStream
+	Fields []*querypb.Field
+	conn   tabletconn.TabletConn
 }
 
 // NewQueryResultReaderForTablet creates a new QueryResultReader for
@@ -53,22 +53,21 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 		return nil, err
 	}
 
-	sr, clientErrFn, err := conn.StreamExecute(ctx, sql, make(map[string]interface{}), 0)
+	stream, err := conn.StreamExecute(ctx, sql, make(map[string]interface{}), 0)
 	if err != nil {
 		return nil, err
 	}
 
 	// read the columns, or grab the error
-	cols, ok := <-sr
-	if !ok {
-		return nil, fmt.Errorf("Cannot read Fields for query '%v': %v", sql, clientErrFn())
+	cols, err := stream.Recv()
+	if err != nil {
+		return nil, fmt.Errorf("Cannot read Fields for query '%v': %v", sql, err)
 	}
 
 	return &QueryResultReader{
-		Output:      sr,
-		Fields:      cols.Fields,
-		conn:        conn,
-		clientErrFn: clientErrFn,
+		Output: stream,
+		Fields: cols.Fields,
+		conn:   conn,
 	}, nil
 }
 
@@ -157,10 +156,6 @@ func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server
 	return NewQueryResultReaderForTablet(ctx, ts, tabletAlias, sql)
 }
 
-func (qrr *QueryResultReader) Error() error {
-	return qrr.clientErrFn()
-}
-
 // Close closes the connection to the tablet.
 func (qrr *QueryResultReader) Close() {
 	qrr.conn.Close()
@@ -186,10 +181,10 @@ func NewRowReader(queryResultReader *QueryResultReader) *RowReader {
 // (nil, error) if an error occurred
 func (rr *RowReader) Next() ([]sqltypes.Value, error) {
 	if rr.currentResult == nil || rr.currentIndex == len(rr.currentResult.Rows) {
-		var ok bool
-		rr.currentResult, ok = <-rr.queryResultReader.Output
-		if !ok {
-			if err := rr.queryResultReader.Error(); err != nil {
+		var err error
+		rr.currentResult, err = rr.queryResultReader.Output.Recv()
+		if err != nil {
+			if err != io.EOF {
 				return nil, err
 			}
 			return nil, nil

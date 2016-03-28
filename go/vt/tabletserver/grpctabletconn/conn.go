@@ -139,17 +139,37 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []queryty
 	return sqltypes.Proto3ToResults(ebr.Results), nil
 }
 
+type streamExecuteAdapter struct {
+	stream queryservicepb.Query_StreamExecuteClient
+	fields []*querypb.Field
+}
+
+func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
+	ser, err := a.stream.Recv()
+	switch err {
+	case nil:
+		if a.fields == nil {
+			a.fields = ser.Result.Fields
+		}
+		return sqltypes.CustomProto3ToResult(a.fields, ser.Result), nil
+	case io.EOF:
+		return nil, err
+	default:
+		return nil, tabletconn.TabletErrorFromGRPC(err)
+	}
+}
+
 // StreamExecute starts a streaming query to VTTablet.
-func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
+func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
-		return nil, nil, tabletconn.ConnClosed
+		return nil, tabletconn.ConnClosed
 	}
 
 	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	req := &querypb.StreamExecuteRequest{
 		Target:            conn.target,
@@ -160,30 +180,9 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 	}
 	stream, err := conn.c.StreamExecute(ctx, req)
 	if err != nil {
-		return nil, nil, tabletconn.TabletErrorFromGRPC(err)
+		return nil, tabletconn.TabletErrorFromGRPC(err)
 	}
-	sr := make(chan *sqltypes.Result, 10)
-	var finalError error
-	go func() {
-		var fields []*querypb.Field
-		for {
-			ser, err := stream.Recv()
-			if err != nil {
-				if err != io.EOF {
-					finalError = tabletconn.TabletErrorFromGRPC(err)
-				}
-				close(sr)
-				return
-			}
-			if fields == nil {
-				fields = ser.Result.Fields
-			}
-			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
-		}
-	}()
-	return sr, func() error {
-		return finalError
-	}, nil
+	return &streamExecuteAdapter{stream: stream}, err
 }
 
 // Begin starts a transaction.

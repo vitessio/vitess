@@ -7,6 +7,7 @@
 {
   "Original": "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -44,6 +45,7 @@
 {
   "Original": "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid and e.col = :uid",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -81,7 +83,9 @@
 {
   "Original": "select u1.id from user u1 join user u2 join user u3 where u3.col = u1.col",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
+      "Opcode": "Join",
       "Left": {
         "Opcode": "SelectScatter",
         "Keyspace": {
@@ -131,7 +135,9 @@
 {
   "Original": "select u1.id from user u1 join user u2 join user u3 where u3.col = u2.col",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
+      "Opcode": "Join",
       "Left": {
         "Opcode": "SelectScatter",
         "Keyspace": {
@@ -181,7 +187,9 @@
 {
   "Original": "select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
+      "Opcode": "Join",
       "Left": {
         "Opcode": "SelectScatter",
         "Keyspace": {
@@ -240,8 +248,11 @@
 {
   "Original": "select u1.id from user u1 join user u2 join user u3 on u3.id = u1.col join user u4 where u4.col = u1.col",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
+      "Opcode": "Join",
       "Left": {
+        "Opcode": "Join",
         "Left": {
           "Opcode": "SelectScatter",
           "Keyspace": {
@@ -313,6 +324,7 @@
 {
   "Original": "select u1.id from user u1 join (user u2 join user u3) where u2.id = u1.col and u3.id = u1.col",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -323,6 +335,7 @@
       "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1"
     },
     "Right": {
+      "Opcode": "Join",
       "Left": {
         "Opcode": "SelectEqualUnique",
         "Keyspace": {
