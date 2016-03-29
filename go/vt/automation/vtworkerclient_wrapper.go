@@ -6,6 +6,7 @@ package automation
 
 import (
 	"bytes"
+	"fmt"
 
 	log "github.com/golang/glog"
 
@@ -16,12 +17,19 @@ import (
 // ExecuteVtworker runs vtworker using vtworkerclient. The stream of LoggerEvent messages is concatenated into one output string.
 func ExecuteVtworker(ctx context.Context, server string, args []string) (string, error) {
 	var output bytes.Buffer
+	loggerToBufferFunc := createLoggerEventToBufferFunction(&output)
+	outputLogger := newOutputLogger(loggerToBufferFunc)
 
-	log.Infof("Executing remote vtworker command: %v server: %v", args, server)
+	startMsg := fmt.Sprintf("Executing remote vtworker command: %v server: %v", args, server)
+	outputLogger.Infof(startMsg)
+	log.Info(startMsg)
 	err := vtworkerclient.RunCommandAndWait(
 		ctx, server, args,
 		CreateLoggerEventToBufferFunction(&output))
-	log.Infof("Executed remote vtworker command: %v server: %v err: %v output (starting on next line):\n%v", args, server, err, output.String())
+	endMsg := fmt.Sprintf("Executed remote vtworker command: %v server: %v err: %v", args, server, err)
+	outputLogger.Infof(endMsg)
+	// Log full output to log file (but not to the buffer).
+	log.Infof("%v output (starting on next line):\n%v", endMsg, output.String())
 
 	return output.String(), err
 }
