@@ -47,8 +47,8 @@ func CreateWorkerInstance(t *testing.T) *worker.Instance {
 	return worker.NewInstance(context.Background(), ts, "cell1", 1*time.Second)
 }
 
-// TestSuite runs the test suite on the given vtworker and vtworkerclient
-func TestSuite(t *testing.T, wi *worker.Instance, c vtworkerclient.Client) {
+// TestSuite runs the test suite on the given vtworker and vtworkerclient.
+func TestSuite(t *testing.T, c vtworkerclient.Client) {
 	commandSucceeds(t, c)
 
 	commandErrors(t, c)

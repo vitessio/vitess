@@ -40,5 +40,5 @@ func TestVtworkerServer(t *testing.T) {
 	}
 	defer client.Close()
 
-	vtworkerclienttest.TestSuite(t, wi, client)
+	vtworkerclienttest.TestSuite(t, client)
 }
