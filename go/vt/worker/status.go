@@ -121,20 +121,12 @@ func (wi *Instance) InitStatusHandling() {
 			return
 		}
 
-		wi.currentWorkerMutex.Lock()
-
-		// no worker, or not running, we go to the menu
-		if wi.currentWorker == nil || wi.currentCancelFunc == nil {
-			wi.currentWorkerMutex.Unlock()
+		if wi.Cancel() {
+			// We cancelled the running worker. Go back to the status page.
+			http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
+		} else {
+			// No worker, or not running, we go to the menu.
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-			return
 		}
-
-		// otherwise, cancel the running worker and go back to the status page
-		cancel := wi.currentCancelFunc
-		wi.currentWorkerMutex.Unlock()
-		cancel()
-		http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
-
 	})
 }

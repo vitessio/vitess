@@ -149,3 +149,22 @@ func (wi *Instance) Reset() error {
 
 	return errors.New("worker still executing")
 }
+
+// Cancel calls the cancel function of the current vtworker job.
+// It returns true, if a job was running. False otherwise.
+// NOTE: Cancel won't reset the state as well. Use Reset() to do so.
+func (wi *Instance) Cancel() bool {
+	wi.currentWorkerMutex.Lock()
+
+	if wi.currentWorker == nil || wi.currentCancelFunc == nil {
+		wi.currentWorkerMutex.Unlock()
+		return false
+	}
+
+	cancel := wi.currentCancelFunc
+	wi.currentWorkerMutex.Unlock()
+
+	cancel()
+
+	return true
+}
