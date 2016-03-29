@@ -75,6 +75,19 @@ func (e *VitessError) AsString() string {
 	return fmt.Sprintf("Code: %v, err: %v", e.Code, e.err)
 }
 
+// FromError returns a VitessError with the supplied error code by wrapping an
+// existing error.
+// Use this method also when you want to create a VitessError without a custom
+// message. For example:
+//	 err := vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR,
+//     errors.New("no valid endpoint"))
+func FromError(code vtrpcpb.ErrorCode, err error) error {
+	return &VitessError{
+		Code: code,
+		err:  err,
+	}
+}
+
 // NewVitessError returns a VitessError backed error with the given arguments.
 // Useful for preserving an underlying error while creating a new error message.
 func NewVitessError(code vtrpcpb.ErrorCode, err error, format string, args ...interface{}) error {
@@ -82,15 +95,6 @@ func NewVitessError(code vtrpcpb.ErrorCode, err error, format string, args ...in
 		Code:    code,
 		Message: fmt.Sprintf(format, args...),
 		err:     err,
-	}
-}
-
-// FromError returns a VitessError with the supplied error code by wrapping an
-// existing error.
-func FromError(code vtrpcpb.ErrorCode, err error) error {
-	return &VitessError{
-		Code: code,
-		err:  err,
 	}
 }
 
