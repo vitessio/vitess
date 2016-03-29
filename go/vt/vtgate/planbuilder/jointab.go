@@ -37,8 +37,8 @@ func (jt *jointab) Procure(bldr builder, col *sqlparser.ColName, to int) string 
 		suffix := ""
 		i := 0
 		for {
-			if col.Qualifier != "" {
-				joinVar = string(col.Qualifier) + "_" + string(col.Name) + suffix
+			if !col.Qualifier.IsEmpty() {
+				joinVar = string(col.Qualifier.Name) + "_" + string(col.Name) + suffix
 			} else {
 				joinVar = string(col.Name) + suffix
 			}

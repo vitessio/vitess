@@ -47,7 +47,6 @@ func forceEOF(yylex interface{}) {
   colName     *ColName
   tableExprs  TableExprs
   tableExpr   TableExpr
-  smTableExpr SimpleTableExpr
   tableName   *TableName
   indexHints  *IndexHints
   expr        Expr
@@ -122,8 +121,7 @@ func forceEOF(yylex interface{}) {
 %type <tableExprs> table_references
 %type <tableExpr> table_reference table_factor join_table
 %type <str> inner_join outer_join natural_join
-%type <smTableExpr> simple_table_expression
-%type <tableName> dml_table_expression
+%type <tableName> table_name
 %type <indexHints> index_hint_list
 %type <sqlIDs> index_list
 %type <boolExpr> where_expression_opt
@@ -192,7 +190,7 @@ select_statement:
   {
     $$ = &Select{Comments: Comments($2), Distinct: $3, SelectExprs: $4, From: $6, Where: NewWhere(WhereStr, $7), GroupBy: GroupBy($8), Having: NewWhere(HavingStr, $9), OrderBy: $10, Limit: $11, Lock: $12}
   }
-| SELECT comment_opt NEXT sql_id for_from simple_table_expression
+| SELECT comment_opt NEXT sql_id for_from table_name
   {
     if $4 != "value" {
       yylex.Error("expecting value after next")
@@ -206,11 +204,11 @@ select_statement:
   }
 
 insert_statement:
-  INSERT comment_opt ignore_opt INTO dml_table_expression column_list_opt row_list on_dup_opt
+  INSERT comment_opt ignore_opt INTO table_name column_list_opt row_list on_dup_opt
   {
     $$ = &Insert{Comments: Comments($2), Ignore: $3, Table: $5, Columns: $6, Rows: $7, OnDup: OnDup($8)}
   }
-| INSERT comment_opt ignore_opt INTO dml_table_expression SET update_list on_dup_opt
+| INSERT comment_opt ignore_opt INTO table_name SET update_list on_dup_opt
   {
     cols := make(Columns, 0, len($7))
     vals := make(ValTuple, 0, len($7))
@@ -222,13 +220,13 @@ insert_statement:
   }
 
 update_statement:
-  UPDATE comment_opt dml_table_expression SET update_list where_expression_opt order_by_opt limit_opt
+  UPDATE comment_opt table_name SET update_list where_expression_opt order_by_opt limit_opt
   {
     $$ = &Update{Comments: Comments($2), Table: $3, Exprs: $5, Where: NewWhere(WhereStr, $6), OrderBy: $7, Limit: $8}
   }
 
 delete_statement:
-  DELETE comment_opt FROM dml_table_expression where_expression_opt order_by_opt limit_opt
+  DELETE comment_opt FROM table_name where_expression_opt order_by_opt limit_opt
   {
     $$ = &Delete{Comments: Comments($2), Table: $4, Where: NewWhere(WhereStr, $5), OrderBy: $6, Limit: $7}
   }
@@ -422,7 +420,7 @@ table_reference:
 | join_table
 
 table_factor:
-  simple_table_expression as_opt_id index_hint_list
+  table_name as_opt_id index_hint_list
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
   }
@@ -528,17 +526,7 @@ natural_join:
     }
   }
 
-simple_table_expression:
-  table_id
-  {
-    $$ = &TableName{Name: $1}
-  }
-| table_id '.' table_id
-  {
-    $$ = &TableName{Qualifier: $1, Name: $3}
-  }
-
-dml_table_expression:
+table_name:
   table_id
   {
     $$ = &TableName{Name: $1}
@@ -901,7 +889,11 @@ column_name:
   }
 | table_id '.' sql_id
   {
-    $$ = &ColName{Qualifier: $1, Name: $3}
+    $$ = &ColName{Qualifier: &TableName{Name: $1}, Name: $3}
+  }
+| table_id '.' table_id '.' sql_id
+  {
+    $$ = &ColName{Qualifier: &TableName{Qualifier: $1, Name: $3}, Name: $5}
   }
 
 value:
