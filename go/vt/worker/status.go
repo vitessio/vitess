@@ -73,6 +73,7 @@ func (wi *Instance) InitStatusHandling() {
 		logger := wi.currentMemoryLogger
 		ctx := wi.currentContext
 		err := wi.lastRunError
+		stopTime := wi.lastRunStopTime
 		wi.currentWorkerMutex.Unlock()
 
 		data := make(map[string]interface{})
@@ -83,6 +84,7 @@ func (wi *Instance) InitStatusHandling() {
 				if err != nil {
 					status += template.HTML(fmt.Sprintf("<br>\nEnded with an error: %v<br>\n", err))
 				}
+				status += template.HTML(fmt.Sprintf("<br>\n<b>End Time:</b> %v<br>\n", stopTime))
 			}
 			data["Status"] = status
 			if logger != nil {

@@ -157,6 +157,14 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client) {
 	if err := runVtworkerCommand(client, []string{"Cancel"}); err != nil {
 		t.Fatal(err)
 	}
+	// vtworker is now in a special state where the current job is already
+	// cancelled but not reset yet. New commands are still failing with a
+	// retryable error.
+	gotErr2 := runVtworkerCommand(client, []string{"Ping", "Cancelled and still busy?"})
+	wantCode2 := vtrpcpb.ErrorCode_TRANSIENT_ERROR
+	if gotCode2 := vterrors.RecoverVtErrorCode(gotErr2); gotCode2 != wantCode2 {
+		t.Fatalf("wrong error code for second cmd before reset: got = %v, want = %v, err: %v", gotCode2, wantCode2, gotErr2)
+	}
 
 	if err := runVtworkerCommand(client, []string{"Reset"}); err != nil {
 		t.Fatal(err)

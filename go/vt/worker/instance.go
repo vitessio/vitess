@@ -44,6 +44,7 @@ type Instance struct {
 	currentContext      context.Context
 	currentCancelFunc   context.CancelFunc
 	lastRunError        error
+	lastRunStopTime     time.Time
 
 	// backgroundContext is context.Background() from main() which has to be plumbed through.
 	backgroundContext      context.Context
@@ -72,15 +73,34 @@ func (wi *Instance) setAndStartWorker(wrk Worker, wr *wrangler.Wrangler) (chan s
 	wi.currentWorkerMutex.Lock()
 	defer wi.currentWorkerMutex.Unlock()
 
-	if wi.currentWorker != nil {
+	if wi.currentContext != nil {
 		return nil, vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR,
 			fmt.Errorf("A worker job is already in progress: %v", wi.currentWorker))
+	}
+
+	if wi.currentWorker != nil {
+		// During the grace period, we answer with a retryable error.
+		const gracePeriod = 1 * time.Minute
+		gracePeriodEnd := time.Now().Add(gracePeriod)
+		if wi.lastRunStopTime.Before(gracePeriodEnd) {
+			return nil, vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR,
+				fmt.Errorf("A worker job was recently stopped (%f seconds ago): %v",
+					time.Now().Sub(wi.lastRunStopTime).Seconds(),
+					wi.currentWorker))
+		}
+
+		// QUERY_NOT_SERVED = FailedPrecondition => manual resolution required.
+		return nil, vterrors.FromError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
+			fmt.Errorf("The worker job was stopped %.1f minutes ago, but not reset. You have to reset it manually. Job: %v",
+				time.Now().Sub(wi.lastRunStopTime).Minutes(),
+				wi.currentWorker))
 	}
 
 	wi.currentWorker = wrk
 	wi.currentMemoryLogger = logutil.NewMemoryLogger()
 	wi.currentContext, wi.currentCancelFunc = context.WithCancel(wi.backgroundContext)
 	wi.lastRunError = nil
+	wi.lastRunStopTime = time.Unix(0, 0)
 	done := make(chan struct{})
 	wranglerLogger := wr.Logger()
 	if wr == wi.wr {
@@ -106,6 +126,7 @@ func (wi *Instance) setAndStartWorker(wrk Worker, wr *wrangler.Wrangler) (chan s
 			wi.currentContext = nil
 			wi.currentCancelFunc = nil
 			wi.lastRunError = err
+			wi.lastRunStopTime = time.Now()
 			wi.currentWorkerMutex.Unlock()
 			close(done)
 		}()
