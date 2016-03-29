@@ -23,7 +23,7 @@ import (
 // See: https://github.com/grpc/grpc-go/issues/319
 const GRPCServerErrPrefix = "gRPCServerError:"
 
-// GRPCCodeToErrorCode maps a gRPC codes.Code to a vtrpcpb.ErrorCode
+// GRPCCodeToErrorCode maps a gRPC codes.Code to a vtrpcpb.ErrorCode.
 func GRPCCodeToErrorCode(code codes.Code) vtrpcpb.ErrorCode {
 	switch code {
 	case codes.OK:
@@ -57,7 +57,7 @@ func GRPCCodeToErrorCode(code codes.Code) vtrpcpb.ErrorCode {
 	}
 }
 
-// ErrorCodeToGRPCCode maps a vtrpcpb.ErrorCode to a gRPC codes.Code
+// ErrorCodeToGRPCCode maps a vtrpcpb.ErrorCode to a gRPC codes.Code.
 func ErrorCodeToGRPCCode(code vtrpcpb.ErrorCode) codes.Code {
 	switch code {
 	case vtrpcpb.ErrorCode_SUCCESS:
@@ -99,7 +99,7 @@ func toGRPCCode(err error) codes.Code {
 	if vtErr, ok := err.(VtError); ok {
 		return ErrorCodeToGRPCCode(vtErr.VtErrorCode())
 	}
-	// Returns the underlying grpc Code, or codes.Unknown if one doesn't exist
+	// Returns the underlying gRPC Code, or codes.Unknown if one doesn't exist.
 	return grpc.Code(err)
 }
 
@@ -118,7 +118,7 @@ func truncateError(err error) error {
 	return fmt.Errorf("%v %v", truncatedErr, truncateInfo)
 }
 
-// ToGRPCError returns an error as a grpc error, with the appropriate error code
+// ToGRPCError returns an error as a gRPC error, with the appropriate error code.
 func ToGRPCError(err error) error {
 	if err == nil {
 		return nil
@@ -126,7 +126,7 @@ func ToGRPCError(err error) error {
 	return grpc.Errorf(toGRPCCode(err), "%v %v", GRPCServerErrPrefix, truncateError(err))
 }
 
-// FromGRPCError return a grpc error as a VitessError, translating between error codes
+// FromGRPCError returns a gRPC error as a VitessError, translating between error codes.
 func FromGRPCError(err error) error {
 	if err == nil {
 		return nil
