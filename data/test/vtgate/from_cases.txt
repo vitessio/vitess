@@ -753,6 +753,43 @@
   }
 }
 
+# keyspace-qualified queries
+"select user.user.col1, main.main1.col1 from user.user join main.main1 where main.main1.col2 = user.user.col2"
+{
+  "Original": "select user.user.col1, main.main1.col1 from user.user join main.main1 where main.main1.col2 = user.user.col2",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col1, user.col2 from user",
+      "FieldQuery": "select user.col1, user.col2 from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select main1.col1 from main1 where main1.col2 = :user_col2",
+      "FieldQuery": "select main1.col1 from main1 where 1 != 1",
+      "JoinVars": {
+        "user_col2": {}
+      }
+    },
+    "Cols": [
+      -1,
+      1
+    ],
+    "Vars": {
+      "user_col2": 1
+    }
+  }
+}
+
 # duplicate symbols
 "select user.id from user join user"
 "duplicate symbol: user"

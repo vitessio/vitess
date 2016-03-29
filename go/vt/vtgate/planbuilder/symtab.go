@@ -62,12 +62,13 @@ func newSymtab(vschema *vindexes.VSchema) *symtab {
 }
 
 // AddAlias adds a table alias to symtab.
-func (st *symtab) AddAlias(alias sqlparser.SQLName, table *vindexes.Table, rb *route) error {
+func (st *symtab) AddAlias(alias, astName sqlparser.SQLName, table *vindexes.Table, rb *route) error {
 	if found := st.findTable(alias); found != nil {
 		return fmt.Errorf("duplicate symbol: %s", alias)
 	}
 	st.tables = append(st.tables, &tabsym{
 		Alias:       alias,
+		ASTName:     astName,
 		route:       rb,
 		symtab:      st,
 		Keyspace:    table.Keyspace,
@@ -157,7 +158,7 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (rb *route, isL
 		}
 		return nil, false, fmt.Errorf("symbol %s not found", sqlparser.String(col))
 	}
-	qualifier := col.Qualifier
+	qualifier := sqlparser.SQLName(sqlparser.String(col.Qualifier))
 	if qualifier == "" && autoResolve && len(st.tables) == 1 {
 		for _, t := range st.tables {
 			qualifier = t.Alias
@@ -218,20 +219,20 @@ type sym interface {
 
 // tabsym is part of symtab.
 // It represnts a table alias in a FROM clause.
-// The tabsym contains a backpointer to the symtab to which
-// it belongs. This is necessary because column references directly
-// point to a tabsym, and sometimes, we need to know the symtab
-// to which it belongs.
-// The tabsym also points to a route into which we'll try to
+// The tabsym points to a route into which we'll try to
 // push the rest of the surrounding clauses.
-// A table alias could also represent a sbquery, as long as it
-// can be executed as a route. Once a subquery gets encapsulated
-// as a route, there's no difference in how it's treated
-// compared to a normal table. Subqueries that require the use
-// of a join primitive cannot be used by this data structure, and
-// therefore, are not supported.
+// A table alias could also represent a sbquery. But
+// there's no difference in how it's treated compared to a normal
+// table. Consequently, ubqueries that cannot be executed
+// as a route are currently not supported.
+// While the Alias is used for resolving column references, the
+// ASTName is used for code generation. The difference between
+// the two is that the ASTName strips out the keyspace qualifier
+// from the table name, which is something that VTTablet and MySQL
+// can't recognize.
 type tabsym struct {
 	Alias       sqlparser.SQLName
+	ASTName     sqlparser.SQLName
 	route       *route
 	symtab      *symtab
 	Keyspace    *vindexes.Keyspace
