@@ -7,6 +7,8 @@ package main
 import (
 	"flag"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	log "github.com/golang/glog"
@@ -29,6 +31,13 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), *actionTimeout)
 	defer cancel()
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		s := <-sigChan
+		log.Errorf("Trying to cancel current command after receiving signal: %v", s)
+		cancel()
+	}()
 
 	logger := logutil.NewConsoleLogger()
 
