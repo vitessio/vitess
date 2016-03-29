@@ -58,10 +58,6 @@
 "select id, (select id from user) from user"
 "unsupported: scatter subquery"
 
-# keyspace name
-"select * from user.user"
-"unsupported: keyspace name qualifier for tables"
-
 # natural join
 "select * from user natural join user_extra"
 "unsupported: natural join"
