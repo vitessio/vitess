@@ -128,21 +128,55 @@ type GatewayEndPointCacheStatus struct {
 	AvgLatency float64 // in milliseconds
 }
 
+var (
+	// aggrChan buffers queryInfo objects to be processed.
+	aggrChan chan *queryInfo
+	// muAggr protects below vars.
+	muAggr sync.Mutex
+	// aggregators holds all Aggregators created.
+	aggregators []*GatewayEndPointStatusAggregator
+)
+
+func init() {
+	// init global goroutines to aggregate stats.
+	aggrChan = make(chan *queryInfo, 100000)
+	go resetAggregators()
+	for i := 0; i < 10; i++ {
+		go processQueryInfo()
+	}
+}
+
+// registerAggregator registers an aggregator to the global list.
+func registerAggregator(a *GatewayEndPointStatusAggregator) {
+	muAggr.Lock()
+	defer muAggr.Unlock()
+	aggregators = append(aggregators, a)
+}
+
+// resetAggregators resets the next stats slot for all aggregators every second.
+func resetAggregators() {
+	ticker := time.NewTicker(time.Second)
+	for range ticker.C {
+		muAggr.Lock()
+		for _, a := range aggregators {
+			a.resetNextSlot()
+		}
+		muAggr.Unlock()
+	}
+}
+
+// processQueryInfo processes the next queryInfo object.
+func processQueryInfo() {
+	for qi := range aggrChan {
+		qi.aggr.processQueryInfo(qi)
+	}
+}
+
 // NewGatewayEndPointStatusAggregator creates a GatewayEndPointStatusAggregator.
 func NewGatewayEndPointStatusAggregator() *GatewayEndPointStatusAggregator {
-	gepsa := &GatewayEndPointStatusAggregator{
-		qiChan: make(chan *queryInfo, 10000),
-	}
+	gepsa := &GatewayEndPointStatusAggregator{}
 	go func() {
-		ticker := time.NewTicker(time.Second)
-		for range ticker.C {
-			gepsa.resetNextSlot()
-		}
-	}()
-	go func() {
-		for qi := range gepsa.qiChan {
-			gepsa.processQueryInfo(qi)
-		}
+		registerAggregator(gepsa)
 	}()
 	return gepsa
 }
@@ -154,7 +188,6 @@ type GatewayEndPointStatusAggregator struct {
 	TabletType topodatapb.TabletType
 	Name       string // the alternative name of an endpoint
 	Addr       string // the host:port of an endpoint
-	qiChan     chan *queryInfo
 
 	// mu protects below fields.
 	mu         sync.RWMutex
@@ -167,6 +200,7 @@ type GatewayEndPointStatusAggregator struct {
 }
 
 type queryInfo struct {
+	aggr       *GatewayEndPointStatusAggregator
 	addr       string
 	tabletType topodatapb.TabletType
 	elapsed    time.Duration
@@ -176,19 +210,21 @@ type queryInfo struct {
 // UpdateQueryInfo updates the aggregator with the given information about a query.
 func (gepsa *GatewayEndPointStatusAggregator) UpdateQueryInfo(addr string, tabletType topodatapb.TabletType, elapsed time.Duration, hasError bool) {
 	qi := &queryInfo{
+		aggr:       gepsa,
 		addr:       addr,
 		tabletType: tabletType,
 		elapsed:    elapsed,
 		hasError:   hasError,
 	}
 	select {
-	case gepsa.qiChan <- qi:
+	case aggrChan <- qi:
 	default:
 	}
 }
 
 func (gepsa *GatewayEndPointStatusAggregator) processQueryInfo(qi *queryInfo) {
 	gepsa.mu.Lock()
+	defer gepsa.mu.Unlock()
 	if gepsa.TabletType != qi.tabletType {
 		// reset counters
 		gepsa.QueryCount = 0
@@ -210,7 +246,6 @@ func (gepsa *GatewayEndPointStatusAggregator) processQueryInfo(qi *queryInfo) {
 	if qi.hasError {
 		gepsa.QueryError++
 	}
-	gepsa.mu.Unlock()
 }
 
 // GetCacheStatus returns a GatewayEndPointCacheStatus representing the current gateway status.
