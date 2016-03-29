@@ -6,6 +6,7 @@ package vterrors
 
 import (
 	"fmt"
+	"io"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -127,9 +128,16 @@ func ToGRPCError(err error) error {
 }
 
 // FromGRPCError returns a gRPC error as a VitessError, translating between error codes.
+// However, there are a few errors which are not translated and passed as they
+// are. For example, io.EOF since our code base checks for this error to find
+// out that a stream has finished.
 func FromGRPCError(err error) error {
 	if err == nil {
 		return nil
+	}
+	if err == io.EOF {
+		// Do not wrap io.EOF because we compare against it for finished streams.
+		return err
 	}
 	return &VitessError{
 		Code: GRPCCodeToErrorCode(grpc.Code(err)),
