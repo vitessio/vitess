@@ -143,15 +143,20 @@ func (wi *Instance) InstallSignalHandlers() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
-		s := <-sigChan
-		// we got a signal, notify our modules
-		wi.currentWorkerMutex.Lock()
-		defer wi.currentWorkerMutex.Unlock()
-		if wi.currentCancelFunc != nil {
-			wi.currentCancelFunc()
-		} else {
-			log.Infof("Shutting down idle worker after receiving signal: %v", s)
-			os.Exit(0)
+		for s := range sigChan {
+			// We got a signal, notify our modules.
+			// Use an extra function to properly unlock using defer.
+			func() {
+				wi.currentWorkerMutex.Lock()
+				defer wi.currentWorkerMutex.Unlock()
+				if wi.currentCancelFunc != nil {
+					log.Infof("Trying to cancel current worker after receiving signal: %v", s)
+					wi.currentCancelFunc()
+				} else {
+					log.Infof("Shutting down idle worker after receiving signal: %v", s)
+					os.Exit(0)
+				}
+			}()
 		}
 	}()
 }
