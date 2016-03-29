@@ -17,6 +17,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
@@ -125,7 +126,7 @@ func (wi *Instance) RunCommand(args []string, wr *wrangler.Wrangler, runFromCli 
 	}
 	done, err := wi.setAndStartWorker(wrk, wr)
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot set worker: %v", err)
+		return nil, nil, vterrors.WithPrefix("cannot set worker: ", err)
 	}
 	return wrk, done, nil
 }

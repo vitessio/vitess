@@ -13,20 +13,25 @@ package vtworkerclienttest
 //       zookeeper) won't be drawn into production binaries as well.
 
 import (
+	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/logutil"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
 	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
-	"golang.org/x/net/context"
-
-	// import the gRPC client implementation for tablet manager
+	// Import the gRPC client implementation for tablet manager because the real
+	// vtworker implementation requires it.
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
 )
 
@@ -47,6 +52,8 @@ func TestSuite(t *testing.T, wi *worker.Instance, c vtworkerclient.Client) {
 	commandSucceeds(t, c)
 
 	commandErrors(t, c)
+
+	commandErrorsBecauseBusy(t, c)
 
 	commandPanics(t, c)
 }
@@ -70,22 +77,99 @@ func commandSucceeds(t *testing.T, client vtworkerclient.Client) {
 		t.Fatalf("Didn't get EOF as expected: %v", err)
 	}
 
-	stream, err = client.ExecuteVtworkerCommand(context.Background(), []string{"Reset"})
-	if err != nil {
-		t.Fatalf("Cannot execute remote command: %v", err)
+	// Reset vtworker for the next test function.
+	if err := runVtworkerCommand(client, []string{"Reset"}); err != nil {
+		t.Fatal(err)
 	}
+}
+
+func runVtworkerCommand(client vtworkerclient.Client, args []string) error {
+	stream, err := client.ExecuteVtworkerCommand(context.Background(), args)
+	if err != nil {
+		return fmt.Errorf("cannot execute remote command: %v", err)
+	}
+
 	for {
 		_, err := stream.Recv()
 		switch err {
 		case nil:
-			// next please!
+			// Consume next response.
 		case io.EOF:
-			// done with test
-			return
+			return nil
 		default:
-			// unexpected error
-			t.Fatalf("Cannot execute remote command: %v", err)
+			return vterrors.WithPrefix("unexpected error when reading the stream: ", err)
 		}
+	}
+}
+
+func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client) {
+	// Run the vtworker "Block" command which blocks until we cancel the context.
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancel(context.Background())
+	// blockCommandStarted will be closed after we're sure that vtworker is
+	// running the "Block" command.
+	blockCommandStarted := make(chan struct{})
+	var blockErr error
+	wg.Add(1)
+	go func() {
+		stream, err := client.ExecuteVtworkerCommand(ctx, []string{"Block"})
+		if err != nil {
+			t.Fatalf("Block command should not have failed: %v", err)
+		}
+
+		firstLineReceived := false
+		for {
+			if _, err := stream.Recv(); err != nil {
+				if !strings.Contains(err.Error(), context.Canceled.Error()) {
+					blockErr = fmt.Errorf("Block command should only error due to cancelled context: %v", err)
+				}
+				// Stream has finished.
+				break
+			}
+
+			if !firstLineReceived {
+				firstLineReceived = true
+				// The first log line will come from the "Block" command, so we are sure
+				// now that vtworker is actually executing it.
+				close(blockCommandStarted)
+			}
+		}
+		wg.Done()
+	}()
+
+	// Try to run a second, concurrent vtworker command.
+	// vtworker should send an error back that it's busy and we should retry later.
+	<-blockCommandStarted
+	gotErr := runVtworkerCommand(client, []string{"Ping", "Are you busy?"})
+	wantCode := vtrpcpb.ErrorCode_TRANSIENT_ERROR
+	if gotCode := vterrors.RecoverVtErrorCode(gotErr); gotCode != wantCode {
+		t.Fatalf("wrong error code for second cmd: got = %v, want = %v, err: %v", gotCode, wantCode, gotErr)
+	}
+
+	// Cancel Block.
+	cancel()
+	wg.Wait()
+	if blockErr != nil {
+		t.Fatalf("Block command should not have failed: %v", blockErr)
+	}
+	// It looks like gRPC cancels the RPC only on the client-side. Therefore, we
+	// have to explicitly cancel the (still) running vtworker command.
+	if err := runVtworkerCommand(client, []string{"Cancel"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runVtworkerCommand(client, []string{"Reset"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Second vtworker command should succeed now after the first has finished.
+	if err := runVtworkerCommand(client, []string{"Ping", "You should not be busy anymore!"}); err != nil {
+		t.Fatalf("second cmd should not have failed: %v", err)
+	}
+
+	// Reset vtworker for the next test function.
+	if err := runVtworkerCommand(client, []string{"Reset"}); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/worker"
 
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
@@ -60,7 +61,7 @@ func (s *VtworkerServer) ExecuteVtworkerCommand(args *vtworkerdatapb.ExecuteVtwo
 		err = s.wi.WaitForCommand(worker, done)
 	}
 
-	return err
+	return vterrors.ToGRPCError(err)
 }
 
 // StartServer registers the VtworkerServer for RPCs

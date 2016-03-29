@@ -15,8 +15,10 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/logutil"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 )
@@ -69,8 +71,10 @@ func (wi *Instance) CreateWrangler(logger logutil.Logger) *wrangler.Wrangler {
 func (wi *Instance) setAndStartWorker(wrk Worker, wr *wrangler.Wrangler) (chan struct{}, error) {
 	wi.currentWorkerMutex.Lock()
 	defer wi.currentWorkerMutex.Unlock()
+
 	if wi.currentWorker != nil {
-		return nil, fmt.Errorf("A worker is already in progress: %v", wi.currentWorker)
+		return nil, vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR,
+			fmt.Errorf("A worker job is already in progress: %v", wi.currentWorker))
 	}
 
 	wi.currentWorker = wrk
