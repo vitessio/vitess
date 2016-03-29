@@ -7,12 +7,12 @@ package vtworkerclient
 import (
 	"errors"
 	"fmt"
-	"io"
 	"time"
 
 	"golang.org/x/net/context"
 
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // RunCommandAndWait executes a single command on a given vtworker and blocks until the command did return or timed out.
@@ -38,13 +38,12 @@ func RunCommandAndWait(ctx context.Context, server string, args []string, recv f
 
 	for {
 		e, err := stream.Recv()
-		switch err {
-		case nil:
-			recv(e)
-		case io.EOF:
-			return nil
-		default:
+		if err != nil {
+			if vterrors.IsEOF(err) {
+				return nil
+			}
 			return fmt.Errorf("Remote error: %v", err)
 		}
+		recv(e)
 	}
 }

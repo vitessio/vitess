@@ -79,7 +79,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net"
 	"sort"
@@ -101,6 +100,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
@@ -993,14 +993,13 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	}
 	for {
 		e, err := stream.Recv()
-		switch err {
-		case nil:
-			logutil.LogEvent(wr.Logger(), e)
-		case io.EOF:
-			return nil
-		default:
+		if err != nil {
+			if vterrors.IsEOF(err) {
+				return nil
+			}
 			return err
 		}
+		logutil.LogEvent(wr.Logger(), e)
 	}
 }
 

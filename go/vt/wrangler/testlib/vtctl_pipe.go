@@ -7,7 +7,6 @@ package testlib
 import (
 	"flag"
 	"fmt"
-	"io"
 	"net"
 	"testing"
 	"time"
@@ -18,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl/grpcvtctlserver"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
 	// we need to import the grpcvtctlclient library so the gRPC
@@ -85,9 +85,10 @@ func (vp *VtctlPipe) Run(args []string) error {
 		switch err {
 		case nil:
 			vp.t.Logf(logutil.EventString(le))
-		case io.EOF:
-			return nil
 		default:
+			if vterrors.IsEOF(err) {
+				return nil
+			}
 			return err
 		}
 	}
