@@ -13,12 +13,11 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
-// This file has functions to analyze the FROM clause
-// for select statements.
+// This file has functions to analyze the FROM clause.
 
 // processTableExprs analyzes the FROM clause. It produces a builder
 // with all the routes identified.
-func processTableExprs(tableExprs sqlparser.TableExprs, vschema *vindexes.VSchema) (builder, error) {
+func processTableExprs(tableExprs sqlparser.TableExprs, vschema VSchema) (builder, error) {
 	if len(tableExprs) != 1 {
 		return nil, errors.New("unsupported: ',' join operator")
 	}
@@ -26,7 +25,7 @@ func processTableExprs(tableExprs sqlparser.TableExprs, vschema *vindexes.VSchem
 }
 
 // processTableExpr produces a builder subtree for the given TableExpr.
-func processTableExpr(tableExpr sqlparser.TableExpr, vschema *vindexes.VSchema) (builder, error) {
+func processTableExpr(tableExpr sqlparser.TableExpr, vschema VSchema) (builder, error) {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		return processAliasedTable(tableExpr, vschema)
@@ -55,7 +54,7 @@ func processTableExpr(tableExpr sqlparser.TableExpr, vschema *vindexes.VSchema) 
 // vindex columns will be added to the tabsym.
 // A symtab symbol can only point to a route. This means that we canoot
 // support complex joins in subqueries yet.
-func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *vindexes.VSchema) (builder, error) {
+func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema) (builder, error) {
 	switch expr := tableExpr.Expr.(type) {
 	case *sqlparser.TableName:
 		eroute, table, err := getTablePlan(expr, vschema)
@@ -118,8 +117,8 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *vindexe
 // getTablePlan produces the initial engine.Route for the specified TableName.
 // It also returns the associated vschema info (*Table) so that
 // it can be used to create the symbol table entry.
-func getTablePlan(tableName *sqlparser.TableName, vschema *vindexes.VSchema) (*engine.Route, *vindexes.Table, error) {
-	table, err := vschema.FindTable(string(tableName.Name))
+func getTablePlan(tableName *sqlparser.TableName, vschema VSchema) (*engine.Route, *vindexes.Table, error) {
+	table, err := vschema.Find(string(tableName.Qualifier), string(tableName.Name))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -140,7 +139,7 @@ func getTablePlan(tableName *sqlparser.TableName, vschema *vindexes.VSchema) (*e
 // processJoin produces a builder subtree for the given Join.
 // If the left and right nodes can be part of the same route,
 // then it's a route. Otherwise, it's a join.
-func processJoin(ajoin *sqlparser.JoinTableExpr, vschema *vindexes.VSchema) (builder, error) {
+func processJoin(ajoin *sqlparser.JoinTableExpr, vschema VSchema) (builder, error) {
 	switch ajoin.Join {
 	case sqlparser.JoinStr, sqlparser.StraightJoinStr, sqlparser.LeftJoinStr:
 	case sqlparser.RightJoinStr:

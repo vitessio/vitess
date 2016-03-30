@@ -6,7 +6,6 @@ package vindexes
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"sort"
@@ -48,8 +47,8 @@ type ColVindex struct {
 
 // KeyspaceSchema contains the schema(table) for a keyspace.
 type KeyspaceSchema struct {
-	Sharded bool
-	Tables  map[string]*Table
+	Keyspace *Keyspace
+	Tables   map[string]*Table
 }
 
 // Autoinc contains the auto-inc information for a table.
@@ -67,38 +66,35 @@ func BuildVSchema(source *VSchemaFormal) (vschema *VSchema, err error) {
 		tables:    make(map[string]*Table),
 		Keyspaces: make(map[string]*KeyspaceSchema),
 	}
-	keyspaces := buildKeyspaces(source, vschema)
+	buildKeyspaces(source, vschema)
 	// We have to build the sequences first to avoid
 	// forward reference errors.
-	err = buildSequences(source, vschema, keyspaces)
+	err = buildSequences(source, vschema)
 	if err != nil {
 		return nil, err
 	}
-	err = buildTables(source, vschema, keyspaces)
+	err = buildTables(source, vschema)
 	if err != nil {
 		return nil, err
 	}
 	return vschema, nil
 }
 
-func buildKeyspaces(source *VSchemaFormal, vschema *VSchema) map[string]*Keyspace {
-	k := make(map[string]*Keyspace)
+func buildKeyspaces(source *VSchemaFormal, vschema *VSchema) {
 	for ksname, ks := range source.Keyspaces {
-		k[ksname] = &Keyspace{
-			Name:    ksname,
-			Sharded: ks.Sharded,
-		}
 		vschema.Keyspaces[ksname] = &KeyspaceSchema{
-			Sharded: ks.Sharded,
-			Tables:  make(map[string]*Table),
+			Keyspace: &Keyspace{
+				Name:    ksname,
+				Sharded: ks.Sharded,
+			},
+			Tables: make(map[string]*Table),
 		}
 	}
-	return k
 }
 
-func buildSequences(source *VSchemaFormal, vschema *VSchema, keyspaces map[string]*Keyspace) error {
+func buildSequences(source *VSchemaFormal, vschema *VSchema) error {
 	for ksname, ks := range source.Keyspaces {
-		keyspace := keyspaces[ksname]
+		keyspace := vschema.Keyspaces[ksname].Keyspace
 		for tname, cname := range ks.Tables {
 			if cname == "" {
 				continue
@@ -125,9 +121,9 @@ func buildSequences(source *VSchemaFormal, vschema *VSchema, keyspaces map[strin
 	return nil
 }
 
-func buildTables(source *VSchemaFormal, vschema *VSchema, keyspaces map[string]*Keyspace) error {
+func buildTables(source *VSchemaFormal, vschema *VSchema) error {
 	for ksname, ks := range source.Keyspaces {
-		keyspace := keyspaces[ksname]
+		keyspace := vschema.Keyspaces[ksname].Keyspace
 		vindexes := make(map[string]Vindex)
 		for vname, vindexInfo := range ks.Vindexes {
 			vindex, err := CreateVindex(vindexInfo.Type, vname, vindexInfo.Params)
@@ -214,18 +210,43 @@ func buildTables(source *VSchemaFormal, vschema *VSchema, keyspaces map[string]*
 	return nil
 }
 
-// FindTable returns a pointer to the Table if found.
-// Otherwise, it returns a reason, which is equivalent to an error.
-func (vschema *VSchema) FindTable(tablename string) (table *Table, err error) {
-	if tablename == "" {
-		return nil, errors.New("unsupported: compex table expression in DML")
-	}
-	table, ok := vschema.tables[tablename]
-	if table == nil {
-		if ok {
-			return nil, fmt.Errorf("ambiguous table reference: %s", tablename)
+// Find returns a pointer to the Table. If a keyspace is specified, only tables
+// from that keyspace are searched. If the specified keyspace is unsharded
+// and no tables matched, it's considered valid: Find will construct a table
+// of that name and return it. If no kesypace is specified, then a table is returned
+// only if its name is unique across all keyspaces. If there is only one
+// keyspace in the vschema, and it's unsharded, then all table requests are considered
+// valid and belonging to that keyspace.
+func (vschema *VSchema) Find(keyspace, tablename string) (table *Table, err error) {
+	if keyspace == "" {
+		table, ok := vschema.tables[tablename]
+		if table == nil {
+			if ok {
+				return nil, fmt.Errorf("ambiguous table reference: %s", tablename)
+			}
+			if len(vschema.Keyspaces) != 1 {
+				return nil, fmt.Errorf("table %s not found", tablename)
+			}
+			// Loop happens only once.
+			for _, ks := range vschema.Keyspaces {
+				if ks.Keyspace.Sharded {
+					return nil, fmt.Errorf("table %s not found", tablename)
+				}
+				return &Table{Name: tablename, Keyspace: ks.Keyspace}, nil
+			}
 		}
-		return nil, fmt.Errorf("table %s not found", tablename)
+		return table, nil
+	}
+	ks, ok := vschema.Keyspaces[keyspace]
+	if !ok {
+		return nil, fmt.Errorf("keyspace %s not found in vschema", keyspace)
+	}
+	table = ks.Tables[tablename]
+	if table == nil {
+		if ks.Keyspace.Sharded {
+			return nil, fmt.Errorf("table %s not found", tablename)
+		}
+		return &Table{Name: tablename, Keyspace: ks.Keyspace}, nil
 	}
 	return table, nil
 }

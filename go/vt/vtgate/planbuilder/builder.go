@@ -68,6 +68,12 @@ type builder interface {
 	SupplyCol(ref colref) int
 }
 
+// VSchema defines the interface for this package to fetch
+// info about tables.
+type VSchema interface {
+	Find(keyspace, tablename string) (table *vindexes.Table, err error)
+}
+
 // Build builds a plan for a query based on the specified vschema.
 // It's the main entry point for this package.
 func Build(query string, vschema *vindexes.VSchema) (*engine.Plan, error) {

@@ -6,6 +6,21 @@
 "delete from nouser"
 "table nouser not found"
 
+# explicit keyspace reference
+"update main.m1 set val = 1"
+{
+  "Original": "update main.m1 set val = 1",
+  "Instructions": {
+    "Opcode": "UpdateUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "update m1 set val = 1",
+    "Table": "m1"
+  }
+}
+
 # update unsharded
 "update main1 set val = 1"
 {

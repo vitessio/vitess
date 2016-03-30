@@ -13,7 +13,7 @@ import (
 )
 
 // buildSelectPlan is the new function to build a Select plan.
-func buildSelectPlan(sel *sqlparser.Select, vschema *vindexes.VSchema) (primitive engine.Primitive, err error) {
+func buildSelectPlan(sel *sqlparser.Select, vschema VSchema) (primitive engine.Primitive, err error) {
 	bindvars := getBindvars(sel)
 	builder, err := processSelect(sel, vschema, nil)
 	if err != nil {
@@ -43,7 +43,7 @@ func getBindvars(node sqlparser.SQLNode) map[string]struct{} {
 }
 
 // processSelect builds a primitive tree for the given query or subquery.
-func processSelect(sel *sqlparser.Select, vschema *vindexes.VSchema, outer builder) (builder, error) {
+func processSelect(sel *sqlparser.Select, vschema VSchema, outer builder) (builder, error) {
 	bldr, err := processTableExprs(sel.From, vschema)
 	if err != nil {
 		return nil, err
