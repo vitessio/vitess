@@ -9,7 +9,6 @@ import numpy
 import logging
 
 import base_end2end_test
-import base_environment
 import utils
 import vtctl_helper
 
@@ -229,7 +228,7 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
     logging.info('restartalloc on %s/%s resulted in new master: %s, task: %d',
                  keyspace, shard_name, new_master_name, new_master_task_num)
 
-  def test_implicit_reparent(self):
+  def _test_implicit_reparent(self):
     logging.info('Performing %s implicit reparents', self.num_reparents)
     for attempt in xrange(1, self.num_reparents + 1):
       logging.info('Implicit reparent iteration number %d of %d', attempt,
@@ -255,7 +254,7 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
     self.assertLessEqual(median_duration, self.master_downtime_threshold,
                          'master downtime too high (performance regression)')
 
-  def test_explicit_external_reparent(self):
+  def _test_explicit_external_reparent(self):
     logging.info('Performing %s explicit external reparents',
                  self.num_reparents)
     durations = []
@@ -285,7 +284,7 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
       for keyspace, num_shards in zip(self.env.keyspaces, self.env.num_shards):
         self.explicit_reparent(keyspace, num_shards, cross_cell=True)
 
-  def test_explicit_external_reparent_cross_cell(self):
+  def _test_explicit_external_reparent_cross_cell(self):
     if len(self.env.cells) < 2:
       logging.info('Not enough cells to test cross_cell reparents!')
       return
