@@ -637,6 +637,52 @@ func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Targe
 	return splitQueryQuerySplitList, nil
 }
 
+// SplitQueryV2 is part of the queryservice.QueryService interface
+// TODO(erez): Rename to SplitQuery after migration to SplitQuery V2 is done.
+func (f *FakeQueryService) SplitQueryV2(
+	ctx context.Context,
+	target *querypb.Target,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm,
+	sessionID int64) ([]querytypes.QuerySplit, error) {
+
+	if f.hasError {
+		return nil, testTabletError
+	}
+	if f.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	f.checkSessionTargetCallerID(ctx, "SplitQuery", target, sessionID)
+	if !reflect.DeepEqual(querytypes.BoundQuery{
+		Sql:           sql,
+		BindVariables: bindVariables,
+	}, splitQueryV2BoundQuery) {
+		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v",
+			querytypes.QueryAsString(sql, bindVariables), splitQueryBoundQuery)
+	}
+	if !reflect.DeepEqual(splitColumns, splitQueryV2SplitColumns) {
+		f.t.Errorf("invalid SplitQuery.SplitColumn: got %v expected %v",
+			splitColumns, splitQueryV2SplitColumns)
+	}
+	if !reflect.DeepEqual(splitCount, splitQueryV2SplitCount) {
+		f.t.Errorf("invalid SplitQuery.SplitCount: got %v expected %v",
+			splitCount, splitQueryV2SplitCount)
+	}
+	if !reflect.DeepEqual(numRowsPerQueryPart, splitQueryV2NumRowsPerQueryPart) {
+		f.t.Errorf("invalid SplitQuery.numRowsPerQueryPart: got %v expected %v",
+			numRowsPerQueryPart, splitQueryV2NumRowsPerQueryPart)
+	}
+	if algorithm != splitQueryV2Algorithm {
+		f.t.Errorf("invalid SplitQuery.algorithm: got %v expected %v",
+			algorithm, splitQueryV2Algorithm)
+	}
+	return splitQueryQueryV2SplitList, nil
+}
+
 var splitQueryBoundQuery = querytypes.BoundQuery{
 	Sql: "splitQuery",
 	BindVariables: map[string]interface{}{
@@ -658,6 +704,32 @@ var splitQueryQuerySplitList = []querytypes.QuerySplit{
 	},
 }
 
+// TODO(erez): Rename to SplitQuery after migration to SplitQuery V2 is done.
+var splitQueryV2SplitColumns = []string{"nice_column_to_split"}
+
+const splitQueryV2SplitCount = 372
+
+var splitQueryV2BoundQuery = querytypes.BoundQuery{
+	Sql: "splitQuery",
+	BindVariables: map[string]interface{}{
+		"bind1": int64(43),
+	},
+}
+
+const splitQueryV2NumRowsPerQueryPart = 123
+const splitQueryV2Algorithm = querypb.SplitQueryRequest_FULL_SCAN
+
+var splitQueryQueryV2SplitList = []querytypes.QuerySplit{
+	{
+		Sql: "splitQuery",
+		BindVariables: map[string]interface{}{
+			"bind1":       int64(43),
+			"keyspace_id": int64(3333),
+		},
+		RowCount: 4456,
+	},
+}
+
 func testSplitQuery(t *testing.T, conn tabletconn.TabletConn) {
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
@@ -666,6 +738,26 @@ func testSplitQuery(t *testing.T, conn tabletconn.TabletConn) {
 		t.Fatalf("SplitQuery failed: %v", err)
 	}
 	if !reflect.DeepEqual(qsl, splitQueryQuerySplitList) {
+		t.Errorf("Unexpected result from SplitQuery: got %v wanted %v", qsl, splitQueryQuerySplitList)
+	}
+}
+
+// TODO(erez): Rename to SplitQuery after migration to SplitQuery V2 is done.
+func testSplitQueryV2(t *testing.T, conn tabletconn.TabletConn) {
+	ctx := context.Background()
+	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
+	qsl, err := conn.SplitQueryV2(
+		ctx,
+		splitQueryV2BoundQuery,
+		splitQueryV2SplitColumns,
+		splitQueryV2SplitCount,
+		splitQueryV2NumRowsPerQueryPart,
+		splitQueryV2Algorithm,
+	)
+	if err != nil {
+		t.Fatalf("SplitQuery failed: %v", err)
+	}
+	if !reflect.DeepEqual(qsl, splitQueryQueryV2SplitList) {
 		t.Errorf("Unexpected result from SplitQuery: got %v wanted %v", qsl, splitQueryQuerySplitList)
 	}
 }

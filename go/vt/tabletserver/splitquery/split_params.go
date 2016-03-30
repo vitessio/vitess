@@ -116,6 +116,10 @@ func NewSplitParamsGivenSplitCount(
 	return result, nil
 }
 
+func (splitParams *SplitParams) GetSplitTableName() string {
+	return splitParams.splitTableSchema.Name
+}
+
 // newSplitParams validates and initializes all the fields except splitCount and
 // numRowsPerQueryPart. It contains the common code for the constructors above.
 func newSplitParams(sql string, bindVariables map[string]interface{}, splitColumns []string,

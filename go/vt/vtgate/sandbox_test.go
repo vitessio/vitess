@@ -562,6 +562,28 @@ func (sbc *sandboxConn) SplitQuery(ctx context.Context, query querytypes.BoundQu
 	return splits, nil
 }
 
+// Fake SplitQuery returns a single QuerySplit whose 'sql' field describes the received arguments.
+// TODO(erez): Rename to SplitQuery after the migration to SplitQuery V2 is done.
+func (sbc *sandboxConn) SplitQueryV2(
+	ctx context.Context,
+	query querytypes.BoundQuery,
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error) {
+	// The sandbox stores the shard name in the endPoint Host field.
+	shard := sbc.endPoint.Host
+	splits := []querytypes.QuerySplit{
+		{
+			Sql: fmt.Sprintf(
+				"query:%v, splitColumns:%v, splitCount:%v,"+
+					" numRowsPerQueryPart:%v, algorithm:%v, shard:%v",
+				query, splitColumns, splitCount, numRowsPerQueryPart, algorithm, shard),
+		},
+	}
+	return splits, nil
+}
+
 // StreamHealth is not implemented.
 func (sbc *sandboxConn) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
 	return nil, fmt.Errorf("Not implemented in test")

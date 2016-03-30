@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/schema"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 func Example() {
@@ -45,9 +44,8 @@ func Example() {
 	splitter := NewSplitter(splitParams, algorithm)
 
 	// 4. Call splitter.Split() to Split the query.
-	// The result is a slice of querytypes.QuerySplit objects.
-	var queryParts []querytypes.QuerySplit
-	queryParts, err = splitter.Split()
+	// The result is a slice of querytypes.QuerySplit objects (and an error object).
+	queryParts, err := splitter.Split()
 	if err != nil {
 		panic(fmt.Sprintf("splitter.Split() failed with: %v", err))
 	}

@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/topo"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -54,6 +55,20 @@ type Gateway interface {
 
 	// SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
 	SplitQuery(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error)
+
+	// SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
+	// TODO(erez): Rename to SplitQuery after migration to SplitQuery V2.
+	SplitQueryV2(
+		ctx context.Context,
+		keyspace,
+		shard string,
+		tabletType topodatapb.TabletType,
+		sql string,
+		bindVariables map[string]interface{},
+		splitColumns []string,
+		splitCount int64,
+		numRowsPerQueryPart int64,
+		algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error)
 
 	// Close shuts down underlying connections.
 	Close(ctx context.Context) error
