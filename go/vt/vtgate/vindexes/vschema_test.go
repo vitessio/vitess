@@ -95,14 +95,21 @@ func TestUnshardedVSchema(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	t1 := &Table{
+		Name: "t1",
+		Keyspace: &Keyspace{
+			Name: "unsharded",
+		},
+	}
 	want := &VSchema{
-		Tables: map[string]*Table{
-			"t1": {
-				Name: "t1",
-				Keyspace: &Keyspace{
-					Name: "unsharded",
+		tables: map[string]*Table{
+			"t1": t1,
+		},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"unsharded": {
+				Tables: map[string]*Table{
+					"t1": t1,
 				},
-				ColVindexes: nil,
 			},
 		},
 	}
@@ -152,42 +159,51 @@ func TestShardedVSchemaOwned(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := &VSchema{
-		Tables: map[string]*Table{
-			"t1": {
-				Name: "t1",
-				Keyspace: &Keyspace{
-					Name:    "sharded",
-					Sharded: true,
+	t1 := &Table{
+		Name: "t1",
+		Keyspace: &Keyspace{
+			Name:    "sharded",
+			Sharded: true,
+		},
+		ColVindexes: []*ColVindex{
+			{
+				Col:  "c1",
+				Type: "stfu",
+				Name: "stfu1",
+				Vindex: &stFU{
+					name: "stfu1",
+					Params: map[string]interface{}{
+						"stfu1": 1,
+					},
 				},
-				ColVindexes: []*ColVindex{
-					{
-						Col:  "c1",
-						Type: "stfu",
-						Name: "stfu1",
-						Vindex: &stFU{
-							name: "stfu1",
-							Params: map[string]interface{}{
-								"stfu1": 1,
-							},
-						},
-					},
-					{
-						Col:    "c2",
-						Type:   "stln",
-						Name:   "stln1",
-						Owned:  true,
-						Vindex: &stLN{name: "stln1"},
-					},
+			},
+			{
+				Col:    "c2",
+				Type:   "stln",
+				Name:   "stln1",
+				Owned:  true,
+				Vindex: &stLN{name: "stln1"},
+			},
+		},
+	}
+	t1.Ordered = []*ColVindex{
+		t1.ColVindexes[1],
+		t1.ColVindexes[0],
+	}
+	t1.Owned = t1.ColVindexes[1:]
+	want := &VSchema{
+		tables: map[string]*Table{
+			"t1": t1,
+		},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"sharded": {
+				Sharded: true,
+				Tables: map[string]*Table{
+					"t1": t1,
 				},
 			},
 		},
 	}
-	want.Tables["t1"].Ordered = []*ColVindex{
-		want.Tables["t1"].ColVindexes[1],
-		want.Tables["t1"].ColVindexes[0],
-	}
-	want.Tables["t1"].Owned = want.Tables["t1"].ColVindexes[1:]
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)
 		wantjson, _ := json.Marshal(want)
@@ -233,36 +249,45 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := &VSchema{
-		Tables: map[string]*Table{
-			"t1": {
-				Name: "t1",
-				Keyspace: &Keyspace{
-					Name:    "sharded",
-					Sharded: true,
-				},
-				ColVindexes: []*ColVindex{
-					{
-						Col:    "c1",
-						Type:   "stlu",
-						Name:   "stlu1",
-						Owned:  false,
-						Vindex: &stLU{name: "stlu1"},
-					},
-					{
-						Col:    "c2",
-						Type:   "stfu",
-						Name:   "stfu1",
-						Owned:  false,
-						Vindex: &stFU{name: "stfu1"},
-					},
-				},
+	t1 := &Table{
+		Name: "t1",
+		Keyspace: &Keyspace{
+			Name:    "sharded",
+			Sharded: true,
+		},
+		ColVindexes: []*ColVindex{
+			{
+				Col:    "c1",
+				Type:   "stlu",
+				Name:   "stlu1",
+				Owned:  false,
+				Vindex: &stLU{name: "stlu1"},
+			},
+			{
+				Col:    "c2",
+				Type:   "stfu",
+				Name:   "stfu1",
+				Owned:  false,
+				Vindex: &stFU{name: "stfu1"},
 			},
 		},
 	}
-	want.Tables["t1"].Ordered = []*ColVindex{
-		want.Tables["t1"].ColVindexes[1],
-		want.Tables["t1"].ColVindexes[0],
+	t1.Ordered = []*ColVindex{
+		t1.ColVindexes[1],
+		t1.ColVindexes[0],
+	}
+	want := &VSchema{
+		tables: map[string]*Table{
+			"t1": t1,
+		},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"sharded": {
+				Sharded: true,
+				Tables: map[string]*Table{
+					"t1": t1,
+				},
+			},
+		},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("BuildVSchema:s\n%v, want\n%v", got, want)
@@ -382,57 +407,119 @@ func TestBuildVSchemaInvalidVindexFail(t *testing.T) {
 	}
 }
 
-func TestBuildVSchemaDupTableFail(t *testing.T) {
-	bad := VSchemaFormal{
+func TestBuildVSchemaDupSeq(t *testing.T) {
+	good := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
-			"sharded": {
-				Sharded: true,
-				Vindexes: map[string]VindexFormal{
-					"stfu": {
-						Type: "stfu",
-					},
-				},
+			"ksa": {
 				Classes: map[string]ClassFormal{
-					"t1": {
-						ColVindexes: []ColVindexFormal{
-							{
-								Col:  "c1",
-								Name: "stfu",
-							},
-						},
+					"seq": {
+						Type: "Sequence",
 					},
 				},
 				Tables: map[string]string{
-					"t1": "t1",
+					"t1": "seq",
 				},
 			},
-			"sharded1": {
-				Sharded: true,
-				Vindexes: map[string]VindexFormal{
-					"stfu": {
-						Type: "stfu",
-					},
-				},
+			"ksb": {
 				Classes: map[string]ClassFormal{
-					"t1": {
-						ColVindexes: []ColVindexFormal{
-							{
-								Col:  "c1",
-								Name: "stfu",
-							},
-						},
+					"seq": {
+						Type: "Sequence",
 					},
 				},
 				Tables: map[string]string{
-					"t1": "t1",
+					"t1": "seq",
 				},
 			},
 		},
 	}
-	_, err := BuildVSchema(&bad)
-	want := "table t1 has multiple definitions"
-	if err == nil || err.Error() != want {
-		t.Errorf("BuildVSchema: %v, want %v", err, want)
+	got, _ := BuildVSchema(&good)
+	t1a := &Table{
+		Name: "t1",
+		Keyspace: &Keyspace{
+			Name: "ksa",
+		},
+		IsSequence: true,
+	}
+	t1b := &Table{
+		Name: "t1",
+		Keyspace: &Keyspace{
+			Name: "ksb",
+		},
+		IsSequence: true,
+	}
+	want := &VSchema{
+		tables: map[string]*Table{
+			"t1": nil,
+		},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"ksa": {
+				Tables: map[string]*Table{
+					"t1": t1a,
+				},
+			},
+			"ksb": {
+				Tables: map[string]*Table{
+					"t1": t1b,
+				},
+			},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		gotjson, _ := json.Marshal(got)
+		wantjson, _ := json.Marshal(want)
+		t.Errorf("BuildVSchema:s\n%s, want\n%s", gotjson, wantjson)
+	}
+}
+
+func TestBuildVSchemaDupTable(t *testing.T) {
+	good := VSchemaFormal{
+		Keyspaces: map[string]KeyspaceFormal{
+			"ksa": {
+				Tables: map[string]string{
+					"t1": "",
+				},
+			},
+			"ksb": {
+				Tables: map[string]string{
+					"t1": "",
+				},
+			},
+		},
+	}
+	got, _ := BuildVSchema(&good)
+	t1a := &Table{
+		Name: "t1",
+		Keyspace: &Keyspace{
+			Name: "ksa",
+		},
+	}
+	t1b := &Table{
+		Name: "t1",
+		Keyspace: &Keyspace{
+			Name: "ksb",
+		},
+	}
+	want := &VSchema{
+		tables: map[string]*Table{
+			"t1": nil,
+		},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"ksa": {
+				Tables: map[string]*Table{
+					"t1": t1a,
+				},
+			},
+			"ksb": {
+				Tables: map[string]*Table{
+					"t1": t1b,
+				},
+			},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		gotjson, _ := json.Marshal(got)
+		wantjson, _ := json.Marshal(want)
+		t.Errorf("BuildVSchema:s\n%s, want\n%s", gotjson, wantjson)
 	}
 }
 
@@ -590,37 +677,51 @@ func TestSequence(t *testing.T) {
 		},
 		IsSequence: true,
 	}
-	want := &VSchema{
-		Tables: map[string]*Table{
-			"seq": seq,
-			"t1": {
-				Name: "t1",
-				Keyspace: &Keyspace{
-					Name:    "sharded",
-					Sharded: true,
-				},
-				ColVindexes: []*ColVindex{
-					{
-						Col:  "c1",
-						Type: "stfu",
-						Name: "stfu1",
-						Vindex: &stFU{
-							name: "stfu1",
-							Params: map[string]interface{}{
-								"stfu1": 1,
-							},
-						},
+	t1 := &Table{
+		Name: "t1",
+		Keyspace: &Keyspace{
+			Name:    "sharded",
+			Sharded: true,
+		},
+		ColVindexes: []*ColVindex{
+			{
+				Col:  "c1",
+				Type: "stfu",
+				Name: "stfu1",
+				Vindex: &stFU{
+					name: "stfu1",
+					Params: map[string]interface{}{
+						"stfu1": 1,
 					},
-				},
-				Autoinc: &Autoinc{
-					Col:      "c1",
-					Sequence: seq,
 				},
 			},
 		},
+		Autoinc: &Autoinc{
+			Col:      "c1",
+			Sequence: seq,
+		},
 	}
-	want.Tables["t1"].Ordered = []*ColVindex{
-		want.Tables["t1"].ColVindexes[0],
+	t1.Ordered = []*ColVindex{
+		t1.ColVindexes[0],
+	}
+	want := &VSchema{
+		tables: map[string]*Table{
+			"seq": seq,
+			"t1":  t1,
+		},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"unsharded": {
+				Tables: map[string]*Table{
+					"seq": seq,
+				},
+			},
+			"sharded": {
+				Sharded: true,
+				Tables: map[string]*Table{
+					"t1": t1,
+				},
+			},
+		},
 	}
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)
@@ -630,7 +731,7 @@ func TestSequence(t *testing.T) {
 }
 
 func TestBadSequence(t *testing.T) {
-	good := VSchemaFormal{
+	bad := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
 			"sharded": {
 				Sharded: true,
@@ -648,9 +749,58 @@ func TestBadSequence(t *testing.T) {
 			},
 		},
 	}
-	_, err := BuildVSchema(&good)
+	_, err := BuildVSchema(&bad)
 	want := "sequence seq not found for class t1"
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
+	}
+}
+
+func TestFind(t *testing.T) {
+	input := VSchemaFormal{
+		Keyspaces: map[string]KeyspaceFormal{
+			"ksa": {
+				Tables: map[string]string{
+					"ta": "",
+					"t1": "",
+				},
+			},
+			"ksb": {
+				Tables: map[string]string{
+					"tb": "",
+					"t1": "",
+				},
+			},
+		},
+	}
+	vschema, _ := BuildVSchema(&input)
+	_, err := vschema.FindTable("")
+	wantErr := "unsupported: compex table expression in DML"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("FindTable(\"\"): %v, want %s", err, wantErr)
+	}
+	_, err = vschema.FindTable("t1")
+	wantErr = "ambiguous table reference: t1"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("FindTable(\"\"): %v, want %s", err, wantErr)
+	}
+	_, err = vschema.FindTable("none")
+	wantErr = "table none not found"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("FindTable(\"\"): %v, want %s", err, wantErr)
+	}
+	got, err := vschema.FindTable("ta")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	want := &Table{
+		Name: "ta",
+		Keyspace: &Keyspace{
+			Name: "ksa",
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("FindTable(\"t1a\"): %+v, want %+v", got, want)
 	}
 }
