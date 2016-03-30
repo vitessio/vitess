@@ -62,9 +62,11 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *vindexe
 		if err != nil {
 			return nil, err
 		}
-		alias := expr.Name
+		alias := sqlparser.SQLName(sqlparser.String(expr))
+		astName := expr.Name
 		if tableExpr.As != "" {
 			alias = tableExpr.As
+			astName = alias
 		}
 		return newRoute(
 			sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr}),
@@ -72,6 +74,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *vindexe
 			table,
 			vschema,
 			alias,
+			astName,
 		), nil
 	case *sqlparser.Subquery:
 		sel, ok := expr.Select.(*sqlparser.Select)
@@ -104,6 +107,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *vindexe
 			table,
 			vschema,
 			tableExpr.As,
+			tableExpr.As,
 		)
 		subroute.Redirect = rtb
 		return rtb, nil
@@ -115,9 +119,6 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *vindexe
 // It also returns the associated vschema info (*Table) so that
 // it can be used to create the symbol table entry.
 func getTablePlan(tableName *sqlparser.TableName, vschema *vindexes.VSchema) (*engine.Route, *vindexes.Table, error) {
-	if tableName.Qualifier != "" {
-		return nil, nil, errors.New("unsupported: keyspace name qualifier for tables")
-	}
 	table, err := vschema.FindTable(string(tableName.Name))
 	if err != nil {
 		return nil, nil, err

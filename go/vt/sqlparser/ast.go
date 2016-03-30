@@ -646,6 +646,10 @@ type TableName struct {
 
 // Format formats the node.
 func (node *TableName) Format(buf *TrackedBuffer) {
+	// node can be nil for unqualified column names.
+	if node == nil {
+		return
+	}
 	if node.Qualifier != "" {
 		buf.Myprintf("%v.", node.Qualifier)
 	}
@@ -662,6 +666,11 @@ func (node *TableName) WalkSubtree(visit Visit) error {
 		node.Name,
 		node.Qualifier,
 	)
+}
+
+// IsEmpty returns true if TableName is nil or empty.
+func (node *TableName) IsEmpty() bool {
+	return node == nil || (node.Qualifier == "" && node.Name == "")
 }
 
 // ParenTableExpr represents a parenthesized list of TableExpr.
@@ -1179,12 +1188,12 @@ type ColName struct {
 	// table or column this node references.
 	Metadata  interface{}
 	Name      SQLName
-	Qualifier SQLName
+	Qualifier *TableName
 }
 
 // Format formats the node.
 func (node *ColName) Format(buf *TrackedBuffer) {
-	if node.Qualifier != "" {
+	if !node.Qualifier.IsEmpty() {
 		buf.Myprintf("%v.", node.Qualifier)
 	}
 	buf.Myprintf("%v", node.Name)

@@ -308,6 +308,8 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* a.b */ a.b from t",
 	}, {
+		input: "select /* a.b.c */ a.b.c from t",
+	}, {
 		input:  "select /* keyword a.b */ `By`.`bY` from t",
 		output: "select /* keyword a.b */ `By`.`by` from t",
 	}, {

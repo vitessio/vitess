@@ -36,7 +36,7 @@ type route struct {
 	ERoute *engine.Route
 }
 
-func newRoute(from sqlparser.TableExprs, eroute *engine.Route, table *vindexes.Table, vschema *vindexes.VSchema, alias sqlparser.SQLName) *route {
+func newRoute(from sqlparser.TableExprs, eroute *engine.Route, table *vindexes.Table, vschema *vindexes.VSchema, alias, astName sqlparser.SQLName) *route {
 	// We have some circular pointer references here:
 	// The route points to the symtab idicating
 	// the symtab that should be used to resolve symbols
@@ -55,7 +55,7 @@ func newRoute(from sqlparser.TableExprs, eroute *engine.Route, table *vindexes.T
 		order:  1,
 		ERoute: eroute,
 	}
-	_ = rb.symtab.AddAlias(alias, table, rb)
+	_ = rb.symtab.AddAlias(alias, astName, table, rb)
 	return rb
 }
 
@@ -422,6 +422,9 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 				buf.Myprintf("%a", ":"+joinVar)
 				return
 			}
+		case *sqlparser.TableName:
+			node.Name.Format(buf)
+			return
 		}
 		node.Format(buf)
 	}
@@ -487,6 +490,9 @@ func (rb *route) generateFieldQuery(sel *sqlparser.Select, jt *jointab) string {
 				buf.Myprintf("%a", ":"+joinVar)
 				return
 			}
+		case *sqlparser.TableName:
+			node.Name.Format(buf)
+			return
 		}
 		node.Format(buf)
 	}
@@ -509,10 +515,9 @@ func (rb *route) SupplyCol(ref colref) int {
 			return i
 		}
 	}
-	alias := ref.Meta.(*tabsym).Alias
-	name := ref.Name
+	ts := ref.Meta.(*tabsym)
 	rb.Colsyms = append(rb.Colsyms, &colsym{
-		Alias:      alias + "." + name,
+		Alias:      ts.Alias + "." + ref.Name,
 		Underlying: ref,
 	})
 	rb.Select.SelectExprs = append(
@@ -520,8 +525,8 @@ func (rb *route) SupplyCol(ref colref) int {
 		&sqlparser.NonStarExpr{
 			Expr: &sqlparser.ColName{
 				Metadata:  ref.Meta,
-				Qualifier: alias,
-				Name:      name,
+				Qualifier: &sqlparser.TableName{Name: ts.ASTName},
+				Name:      ref.Name,
 			},
 		},
 	)
