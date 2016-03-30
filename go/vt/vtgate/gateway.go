@@ -128,6 +128,10 @@ type GatewayEndPointCacheStatus struct {
 	AvgLatency float64 // in milliseconds
 }
 
+const (
+	aggrChanSize = 10000
+)
+
 var (
 	// aggrChan buffers queryInfo objects to be processed.
 	aggrChan chan *queryInfo
@@ -135,15 +139,17 @@ var (
 	muAggr sync.Mutex
 	// aggregators holds all Aggregators created.
 	aggregators []*GatewayEndPointStatusAggregator
+	// gatewayStatsChanFull tracks the number of times
+	// aggrChan becomes full.
+	gatewayStatsChanFull *stats.Int
 )
 
 func init() {
 	// init global goroutines to aggregate stats.
-	aggrChan = make(chan *queryInfo, 100000)
+	aggrChan = make(chan *queryInfo, aggrChanSize)
+	gatewayStatsChanFull = stats.NewInt("GatewayStatsChanFullCount")
 	go resetAggregators()
-	for i := 0; i < 10; i++ {
-		go processQueryInfo()
-	}
+	go processQueryInfo()
 }
 
 // registerAggregator registers an aggregator to the global list.
@@ -175,9 +181,7 @@ func processQueryInfo() {
 // NewGatewayEndPointStatusAggregator creates a GatewayEndPointStatusAggregator.
 func NewGatewayEndPointStatusAggregator() *GatewayEndPointStatusAggregator {
 	gepsa := &GatewayEndPointStatusAggregator{}
-	go func() {
-		registerAggregator(gepsa)
-	}()
+	registerAggregator(gepsa)
 	return gepsa
 }
 
@@ -219,6 +223,7 @@ func (gepsa *GatewayEndPointStatusAggregator) UpdateQueryInfo(addr string, table
 	select {
 	case aggrChan <- qi:
 	default:
+		gatewayStatsChanFull.Add(1)
 	}
 }
 
@@ -226,6 +231,7 @@ func (gepsa *GatewayEndPointStatusAggregator) processQueryInfo(qi *queryInfo) {
 	gepsa.mu.Lock()
 	defer gepsa.mu.Unlock()
 	if gepsa.TabletType != qi.tabletType {
+		gepsa.TabletType = qi.tabletType
 		// reset counters
 		gepsa.QueryCount = 0
 		gepsa.QueryError = 0
@@ -239,7 +245,6 @@ func (gepsa *GatewayEndPointStatusAggregator) processQueryInfo(qi *queryInfo) {
 	if qi.addr != "" {
 		gepsa.Addr = qi.addr
 	}
-	gepsa.TabletType = qi.tabletType
 	gepsa.QueryCount++
 	gepsa.queryCountInMinute[gepsa.tick]++
 	gepsa.latencyInMinute[gepsa.tick] += qi.elapsed
