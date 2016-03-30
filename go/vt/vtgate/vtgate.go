@@ -24,6 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -31,6 +32,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -625,6 +627,132 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, keyspace string, sql string, 
 		shardNames[i] = shard.Name
 	}
 	return vtg.resolver.scatterConn.SplitQueryCustomSharding(ctx, sql, bindVariables, splitColumn, perShardSplitCount, shardNames, keyspace)
+}
+
+// SplitQueryV2 implements the SplitQuery RPC. This is the new version that
+// supports multiple split-columns and multiple splitting algorithms.
+// See the documentation of SplitQueryRequest in "proto/vtgate.proto" for more
+// information.
+// TODO(erez): Remove 'SplitQuery' and rename this method to 'SplitQuery' once the migration
+// to SplitQuery-V2 is done.
+func (vtg *VTGate) SplitQueryV2(
+	ctx context.Context,
+	keyspace string,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+
+	// TODO(erez): Add validation of SplitQuery parameters.
+	keyspace, srvKeyspace, shardRefs, err := getKeyspaceShards(
+		ctx, vtg.resolver.toposerv, vtg.resolver.cell, keyspace, topodatapb.TabletType_RDONLY)
+	if err != nil {
+		return nil, err
+	}
+
+	// If the caller specified a splitCount (vs. specifying 'numRowsPerQueryPart') scale it by the
+	// number of shards (otherwise it stays 0).
+	perShardSplitCount := int64(math.Ceil(float64(splitCount) / float64(len(shardRefs))))
+
+	// Determine whether to return SplitQueryResponse_KeyRangeParts or SplitQueryResponse_ShardParts.
+	// We return 'KeyRangeParts' for sharded keyspaces that are not custom sharded. If the
+	// keyspace is custom sharded or unsharded we return 'ShardParts'.
+	var querySplitToQueryPartFunc func(
+		querySplit *querytypes.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error)
+	// sharding_column_type != KeyspaceIdType_UNSET can happen in one of the following two cases:
+	// 1. We are querying a sharded keyspace;
+	// 2. We are querying an unsharded keyspace which is being sharded.
+	if srvKeyspace.ShardingColumnType != topodatapb.KeyspaceIdType_UNSET {
+		// Index the shard references in 'shardRefs' by shard name.
+		shardRefByName := make(map[string]*topodatapb.ShardReference, len(shardRefs))
+		for _, shardRef := range shardRefs {
+			shardRefByName[shardRef.Name] = shardRef
+		}
+		querySplitToQueryPartFunc = getQuerySplitToKeyRangePartFunc(keyspace, shardRefByName)
+	} else {
+		// Keyspace is either unsharded or custom-sharded.
+		querySplitToQueryPartFunc = getQuerySplitToShardPartFunc(keyspace)
+	}
+
+	// Collect all shard names into a slice.
+	shardNames := make([]string, 0, len(shardRefs))
+	for _, shardRef := range shardRefs {
+		shardNames = append(shardNames, shardRef.Name)
+	}
+	return vtg.resolver.scatterConn.SplitQueryV2(
+		ctx,
+		sql,
+		bindVariables,
+		splitColumns,
+		perShardSplitCount,
+		numRowsPerQueryPart,
+		algorithm,
+		shardNames,
+		querySplitToQueryPartFunc,
+		keyspace)
+}
+
+// getQuerySplitToKeyRangePartFunc returns a function to use with scatterConn.SplitQueryV2
+// that converts the given QuerySplit to a SplitQueryResponse_Part message whose KeyRangePart field
+// is set.
+func getQuerySplitToKeyRangePartFunc(
+	keyspace string,
+	shardReferenceByName map[string]*topodatapb.ShardReference) func(
+	querySplit *querytypes.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
+
+	return func(
+		querySplit *querytypes.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
+		// TODO(erez): Assert that shardReferenceByName contains an entry for 'shard'.
+		// Keyrange can be nil for the shard (e.g. for single-sharded keyspaces during resharding).
+		// In this case we append an empty keyrange that represents the entire keyspace.
+		keyranges := []*topodatapb.KeyRange{{Start: []byte{}, End: []byte{}}}
+		if shardReferenceByName[shard].KeyRange != nil {
+			keyranges = []*topodatapb.KeyRange{shardReferenceByName[shard].KeyRange}
+		}
+		bindVars, err := querytypes.BindVariablesToProto3(querySplit.BindVariables)
+		if err != nil {
+			return nil, err
+		}
+		return &vtgatepb.SplitQueryResponse_Part{
+			Query: &querypb.BoundQuery{
+				Sql:           querySplit.Sql,
+				BindVariables: bindVars,
+			},
+			KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
+				Keyspace:  keyspace,
+				KeyRanges: keyranges,
+			},
+			Size: querySplit.RowCount,
+		}, nil
+	}
+}
+
+// getQuerySplitToShardPartFunc returns a function to use with scatterConn.SplitQueryV2
+// that converts the given QuerySplit to a SplitQueryResponse_Part message whose ShardPart field
+// is set.
+func getQuerySplitToShardPartFunc(keyspace string) func(
+	querySplit *querytypes.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
+
+	return func(
+		querySplit *querytypes.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error) {
+		bindVars, err := querytypes.BindVariablesToProto3(querySplit.BindVariables)
+		if err != nil {
+			return nil, err
+		}
+		return &vtgatepb.SplitQueryResponse_Part{
+			Query: &querypb.BoundQuery{
+				Sql:           querySplit.Sql,
+				BindVariables: bindVars,
+			},
+			ShardPart: &vtgatepb.SplitQueryResponse_ShardPart{
+				Keyspace: keyspace,
+				Shards:   []string{shard},
+			},
+			Size: querySplit.RowCount,
+		}, nil
+	}
 }
 
 // GetSrvKeyspace is part of the vtgate service API.
