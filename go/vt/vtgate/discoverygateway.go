@@ -143,7 +143,9 @@ func (dg *discoveryGateway) Begin(ctx context.Context, keyspace string, shard st
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var innerErr error
 		// Potentially buffer this transaction.
-		txbuffer.FakeBuffer(keyspace, shard, attemptNumber)
+		if bufferErr := txbuffer.FakeBuffer(keyspace, shard, attemptNumber); bufferErr != nil {
+			return bufferErr
+		}
 		transactionID, innerErr = conn.Begin(ctx)
 		attemptNumber++
 		return innerErr

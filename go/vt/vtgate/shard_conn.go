@@ -170,7 +170,9 @@ func (sdc *ShardConn) Begin(ctx context.Context) (transactionID int64, err error
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var innerErr error
 		// Potentially buffer this transaction.
-		txbuffer.FakeBuffer(sdc.keyspace, sdc.shard, attemptNumber)
+		if bufferErr := txbuffer.FakeBuffer(sdc.keyspace, sdc.shard, attemptNumber); bufferErr != nil {
+			return bufferErr
+		}
 		transactionID, innerErr = conn.Begin(ctx)
 		attemptNumber++
 		return innerErr
