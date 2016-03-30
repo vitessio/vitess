@@ -666,6 +666,10 @@ func (tsv *TabletServer) handleExecErrorNoPanic(sql string, bindVariables map[st
 		return myError
 	case ErrFatal:
 		logMethod = log.Errorf
+	case ErrFail:
+		// ErrFail is when we think the query itself is problematic. This doesn't
+		// indicate a system or component wide degradation, so we log to INFO.
+		logMethod = log.Infof
 	}
 	// We want to suppress/demote some MySQL error codes (regardless of the ErrorType)
 	switch terr.SQLError {
