@@ -75,15 +75,10 @@ func commandSucceeds(t *testing.T, client vtworkerclient.Client) {
 		t.Fatalf("Cannot execute remote command: %v", err)
 	}
 	for {
-		_, err := stream.Recv()
-		switch err {
-		case nil:
-			// next please!
-		case io.EOF:
-			// done with test
-			return
-		default:
-			// unexpected error
+		if _, err := stream.Recv(); err != nil {
+			if vterrors.IsEOF(err) {
+				return
+			}
 			t.Fatalf("Cannot execute remote command: %v", err)
 		}
 	}

@@ -8,6 +8,7 @@ package vterrors
 
 import (
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
@@ -36,6 +37,18 @@ func RecoverVtErrorCode(err error) vtrpcpb.ErrorCode {
 		return vtErr.VtErrorCode()
 	}
 	return vtrpcpb.ErrorCode_UNKNOWN_ERROR
+}
+
+// IsEOF returns true if "err" equals io.EOF.
+// In case of a VitessError, the wrapped err is checked instead.
+func IsEOF(err error) bool {
+	if err == io.EOF {
+		return true
+	}
+	if vtErr, ok := err.(*VitessError); ok {
+		return vtErr.err == io.EOF
+	}
+	return false
 }
 
 // VitessError is the error type that we use internally for passing structured errors
