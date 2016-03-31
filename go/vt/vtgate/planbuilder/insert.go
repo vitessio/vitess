@@ -14,13 +14,12 @@ import (
 )
 
 // buildInsertPlan builds the route for an INSERT statement.
-func buildInsertPlan(ins *sqlparser.Insert, vschema *vindexes.VSchema) (*engine.Route, error) {
+func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, error) {
 	route := &engine.Route{
 		Query: generateQuery(ins),
 	}
-	tablename := sqlparser.GetTableName(ins.Table)
 	var err error
-	route.Table, err = vschema.FindTable(tablename)
+	route.Table, err = vschema.Find(string(ins.Table.Qualifier), string(ins.Table.Name))
 	if err != nil {
 		return nil, err
 	}

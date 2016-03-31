@@ -20,7 +20,7 @@
           "Owner": "user"
         }
       },
-      "Classes": {
+      "Tables": {
         "user": {
           "ColVindexes": [
             {
@@ -77,23 +77,14 @@
             }
           ]
         }
-      },
-      "Tables": {
-        "user": "user",
-        "user_extra": "user_extra",
-        "music": "music",
-        "music_extra": "music_extra"
       }
     },
     "main": {
-      "Classes": {
+      "Tables": {
+        "main1": {},
         "seq": {
           "Type": "Sequence"
         }
-      },
-      "Tables": {
-        "main1": "",
-        "seq": "seq"
       }
     }
   }

@@ -157,7 +157,7 @@ func (vtg *VTGate) InitializeConnections(ctx context.Context) (err error) {
 }
 
 // Execute executes a non-streaming query by routing based on the values in the query.
-func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
+func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	startTime := time.Now()
 	statsKey := []string{"Execute", "Any", strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -168,7 +168,7 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 		return nil, errTooManyInFlight
 	}
 
-	qr, err := vtg.router.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction)
+	qr, err := vtg.router.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, notInTransaction)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		return qr, nil
@@ -177,6 +177,7 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 	query := map[string]interface{}{
 		"Sql":              sql,
 		"BindVariables":    bindVariables,
+		"Keyspace":         keyspace,
 		"TabletType":       strings.ToLower(tabletType.String()),
 		"Session":          session,
 		"NotInTransaction": notInTransaction,
@@ -410,7 +411,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgat
 }
 
 // StreamExecute executes a streaming query by routing based on the values in the query.
-func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
+func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
 	startTime := time.Now()
 	statsKey := []string{"StreamExecute", "Any", strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -426,6 +427,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables 
 		ctx,
 		sql,
 		bindVariables,
+		keyspace,
 		tabletType,
 		func(reply *sqltypes.Result) error {
 			rowCount += int64(len(reply.Rows))
@@ -438,6 +440,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables 
 		query := map[string]interface{}{
 			"Sql":           sql,
 			"BindVariables": bindVariables,
+			"Keyspace":      keyspace,
 			"TabletType":    strings.ToLower(tabletType.String()),
 		}
 		logError(err, query, vtg.logStreamExecute)

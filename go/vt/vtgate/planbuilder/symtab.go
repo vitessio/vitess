@@ -50,12 +50,12 @@ type symtab struct {
 	Colsyms []*colsym
 	Externs []*sqlparser.ColName
 	Outer   *symtab
-	VSchema *vindexes.VSchema
+	VSchema VSchema
 }
 
 // newSymtab creates a new symtab initialized
 // to contain the provided table alias.
-func newSymtab(vschema *vindexes.VSchema) *symtab {
+func newSymtab(vschema VSchema) *symtab {
 	return &symtab{
 		VSchema: vschema,
 	}

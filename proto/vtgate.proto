@@ -41,6 +41,9 @@ message ExecuteRequest {
 
   // not_in_transaction is deprecated and should not be used.
   bool not_in_transaction = 5;
+
+  // keyspace to target the query to.
+  string keyspace = 6;
 }
 
 // ExecuteResponse is the returned value from Execute.
@@ -345,6 +348,9 @@ message StreamExecuteRequest {
 
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 3;
+
+  // keyspace to target the query to.
+  string keyspace = 4;
 }
 
 // StreamExecuteResponse is the returned value from StreamExecute.
