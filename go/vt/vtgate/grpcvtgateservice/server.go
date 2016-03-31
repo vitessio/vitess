@@ -334,12 +334,17 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *vtgatepb.SplitQueryR
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
-	splits, vtgErr := vtg.server.SplitQuery(ctx,
+	splits, vtgErr := vtgateservice.CallCorrectSplitQuery(
+		vtg.server,
+		request.UseSplitQueryV2,
+		ctx,
 		request.Keyspace,
 		string(request.Query.Sql),
 		bv,
 		request.SplitColumn,
-		request.SplitCount)
+		request.SplitCount,
+		request.NumRowsPerQueryPart,
+		request.Algorithm)
 	if vtgErr != nil {
 		return nil, vterrors.ToGRPCError(vtgErr)
 	}

@@ -23,8 +23,12 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/splitquery"
+	"github.com/youtube/vitess/go/vt/utils"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -662,6 +666,10 @@ func (tsv *TabletServer) handleExecErrorNoPanic(sql string, bindVariables map[st
 		return myError
 	case ErrFatal:
 		logMethod = log.Errorf
+	case ErrFail:
+		// ErrFail is when we think the query itself is problematic. This doesn't
+		// indicate a system or component wide degradation, so we log to INFO.
+		logMethod = log.Infof
 	}
 	// We want to suppress/demote some MySQL error codes (regardless of the ErrorType)
 	switch terr.SQLError {
@@ -797,6 +805,8 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 
 // SplitQuery splits a query + bind variables into smaller queries that return a
 // subset of rows from the original query.
+// TODO(erez): Remove this method and rename SplitQueryV2 to SplitQuery once we migrate to
+// SplitQuery V2.
 func (tsv *TabletServer) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, sessionID int64) (splits []querytypes.QuerySplit, err error) {
 	logStats := newLogStats("SplitQuery", ctx)
 	logStats.OriginalSQL = sql
@@ -842,6 +852,204 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *querypb.Target,
 		return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "splitQuery: query split error: %s, request: %v", err, querytypes.QueryAsString(sql, bindVariables))
 	}
 	return splits, nil
+}
+
+// SplitQueryV2 splits a query + bind variables into smaller queries that return a
+// subset of rows from the original query. This is the new version that supports multiple
+// split columns and multiple split algortihms.
+// See the documentation of SplitQueryRequest in proto/vtgate.proto for more details.
+func (tsv *TabletServer) SplitQueryV2(
+	ctx context.Context,
+	target *querypb.Target,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm,
+	sessionID int64) (splits []querytypes.QuerySplit, err error) {
+
+	if err := validateSplitQueryParameters(
+		sql,
+		bindVariables,
+		splitColumns,
+		splitCount,
+		numRowsPerQueryPart,
+		algorithm,
+		sessionID); err != nil {
+		return nil, err
+	}
+
+	// TODO(erez): ASSERT/Check that we are a rdonly tablet.
+	logStats := newLogStats("SplitQuery", ctx)
+	logStats.OriginalSQL = sql
+	logStats.BindVariables = bindVariables
+	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
+	if err = tsv.startRequest(target, sessionID, false, false); err != nil {
+		return nil, err
+	}
+	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
+	defer func() {
+		cancel()
+		tsv.endRequest(false)
+	}()
+
+	schema := getSchemaForSplitQuery(tsv.qe.schemaInfo)
+	var splitParams *splitquery.SplitParams
+	switch {
+	case numRowsPerQueryPart != 0 && splitCount == 0:
+		splitParams, err = splitquery.NewSplitParamsGivenNumRowsPerQueryPart(
+			sql, bindVariables, splitColumns, numRowsPerQueryPart, schema)
+	case numRowsPerQueryPart == 0 && splitCount != 0:
+		splitParams, err = splitquery.NewSplitParamsGivenSplitCount(
+			sql, bindVariables, splitColumns, splitCount, schema)
+	default:
+		panic(fmt.Sprintf("Exactly one of {numRowsPerQueryPart, splitCount} must be"+
+			" non zero. This should have already been caught by 'validateSplitQueryParameters' and "+
+			" returned as an error. Got: numRowsPerQueryPart=%v, splitCount=%v. SQL: %v",
+			numRowsPerQueryPart,
+			splitCount,
+			querytypes.QueryAsString(sql, bindVariables)))
+	}
+	// TODO(erez): Make the splitquery package return tabletserver errors.
+	if err != nil {
+		return nil, err
+	}
+
+	defer func(start time.Time) {
+		addUserTableQueryStats(
+			tsv.qe.queryServiceStats,
+			ctx,
+			splitParams.GetSplitTableName(),
+			"SplitQuery",
+			int64(time.Now().Sub(start)))
+	}(time.Now())
+
+	sqlExecuter := &splitQuerySQLExecuter{
+		queryExecutor: &QueryExecutor{
+			ctx:      ctx,
+			logStats: logStats,
+			qe:       tsv.qe,
+		},
+	}
+	algorithmObject, err := createSplitQueryAlgorithmObject(algorithm, splitParams, sqlExecuter)
+	if err != nil {
+		return nil, err
+	}
+	// TODO(erez): Make the splitquery package use Vitess error codes.
+	return splitquery.NewSplitter(splitParams, algorithmObject).Split()
+}
+
+// validateSplitQueryParameters perform some validations on the SplitQuery parameters
+// returns an error that can be returned to the user if a validation fails.
+func validateSplitQueryParameters(
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm,
+	sessionID int64) error {
+	if numRowsPerQueryPart < 0 {
+		return NewTabletError(
+			ErrFail,
+			vtrpcpb.ErrorCode_BAD_INPUT,
+			"splitQuery: numRowsPerQueryPart must be non-negative. Got: %v. SQL: %v",
+			numRowsPerQueryPart,
+			querytypes.QueryAsString(sql, bindVariables))
+	}
+	if splitCount < 0 {
+		return NewTabletError(
+			ErrFail,
+			vtrpcpb.ErrorCode_BAD_INPUT,
+			"splitQuery: splitCount must be non-negative. Got: %v. SQL: %v",
+			splitCount,
+			querytypes.QueryAsString(sql, bindVariables))
+	}
+	if (splitCount == 0 && numRowsPerQueryPart == 0) ||
+		(splitCount != 0 && numRowsPerQueryPart != 0) {
+		return NewTabletError(
+			ErrFail,
+			vtrpcpb.ErrorCode_BAD_INPUT,
+			"splitQuery: exactly one of {numRowsPerQueryPart, splitCount} must be"+
+				" non zero. Got: numRowsPerQueryPart=%v, splitCount=%v. SQL: %v",
+			splitCount,
+			querytypes.QueryAsString(sql, bindVariables))
+	}
+	if algorithm != querypb.SplitQueryRequest_EQUAL_SPLITS &&
+		algorithm != querypb.SplitQueryRequest_FULL_SCAN {
+		return NewTabletError(
+			ErrFail,
+			vtrpcpb.ErrorCode_BAD_INPUT,
+			"splitquery: unsupported algorithm: %v. SQL: %v",
+			algorithm,
+			querytypes.QueryAsString(sql, bindVariables))
+	}
+	return nil
+}
+
+// splitQuerySQLExecuter implements splitquery.SQLExecuterInterface and allows the splitquery
+// package to send SQL statements to MySQL
+// TODO(erez): Find out what's the correct way of doing this.
+// We need to parse the query since we're dealing with bind-vars.
+type splitQuerySQLExecuter struct {
+	queryExecutor *QueryExecutor
+}
+
+// TODO(erez): Add an SQLExecute() to SQLExecuterInterface that gets a parsed query so that
+// we don't have to parse the query again here.
+func (se *splitQuerySQLExecuter) SQLExecute(
+	sql string, bindVariables map[string]interface{}) (*sqltypes.Result, error) {
+
+	ast, err := sqlparser.Parse(sql)
+	if err != nil {
+		return nil, fmt.Errorf("splitQuerySQLExecuter: parsing sql failed with: %v", err)
+	}
+	parsedQuery := sqlparser.GenerateParsedQuery(ast)
+
+	conn, err := se.queryExecutor.getConn(se.queryExecutor.qe.connPool)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+
+	// TODO(erez): Find out what 'buildStreamComment' is, and see if we need to use it or comment why
+	// we don't.
+	// We clone "bindVariables" since fullFetch() changes it.
+	return se.queryExecutor.fullFetch(
+		conn,
+		parsedQuery,
+		utils.CloneBindVariables(bindVariables),
+		nil /* buildStreamComment */)
+}
+
+// getSchemaForSplitQuery converts the given schemaInfo object into
+// the datastructure needed by the splitquery package: a map from a table name
+// to its corresponding schame.Table object.
+func getSchemaForSplitQuery(schemaInfo *SchemaInfo) map[string]*schema.Table {
+	// Get a snapshot of the schema.
+	var tableList []*schema.Table = schemaInfo.GetSchema()
+	result := make(map[string]*schema.Table, len(tableList))
+	for _, table := range tableList {
+		// TODO(erez): Panic if table.Name is already in 'result'.
+		result[table.Name] = table
+	}
+	return result
+}
+
+func createSplitQueryAlgorithmObject(
+	algorithm querypb.SplitQueryRequest_Algorithm,
+	splitParams *splitquery.SplitParams,
+	sqlExecuter splitquery.SQLExecuter) (splitquery.SplitAlgorithmInterface, error) {
+
+	switch algorithm {
+	case querypb.SplitQueryRequest_FULL_SCAN:
+		return splitquery.NewFullScanAlgorithm(splitParams, sqlExecuter)
+	case querypb.SplitQueryRequest_EQUAL_SPLITS:
+		return splitquery.NewEqualSplitsAlgorithm(splitParams, sqlExecuter)
+	default:
+		panic(fmt.Sprintf("Unknown algorithm enum: %+v", algorithm))
+	}
 }
 
 // StreamHealthRegister is part of queryservice.QueryService interface

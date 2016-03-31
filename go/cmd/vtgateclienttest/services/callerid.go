@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -150,4 +151,28 @@ func (c *callerIDClient) SplitQuery(ctx context.Context, keyspace string, sql st
 		return nil, err
 	}
 	return c.fallbackClient.SplitQuery(ctx, sql, keyspace, bindVariables, splitColumn, splitCount)
+}
+
+// TODO(erez): Rename after migration to SplitQuery V2 is done.
+func (c *callerIDClient) SplitQueryV2(
+	ctx context.Context,
+	keyspace string,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+	if ok, err := c.checkCallerID(ctx, sql); ok {
+		return nil, err
+	}
+	return c.fallbackClient.SplitQueryV2(
+		ctx,
+		sql,
+		keyspace,
+		bindVariables,
+		splitColumns,
+		splitCount,
+		numRowsPerQueryPart,
+		algorithm)
 }

@@ -288,7 +288,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 		if qre.qe.strictTableAcl {
 			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", callerID.Username, qre.plan.PlanID, qre.plan.TableName)
 			qre.qe.tableaclDenied.Add(tableACLStatsKey, 1)
-			qre.qe.accessCheckerLogger.Errorf("%s", errStr)
+			qre.qe.accessCheckerLogger.Infof("%s", errStr)
 			return NewTabletError(ErrFail, vtrpcpb.ErrorCode_PERMISSION_DENIED, "%s", errStr)
 		}
 		return nil

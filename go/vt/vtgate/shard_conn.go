@@ -22,6 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/txbuffer"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -169,7 +170,9 @@ func (sdc *ShardConn) Begin(ctx context.Context) (transactionID int64, err error
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var innerErr error
 		// Potentially buffer this transaction.
-		txbuffer.FakeBuffer(sdc.keyspace, sdc.shard, attemptNumber)
+		if bufferErr := txbuffer.FakeBuffer(sdc.keyspace, sdc.shard, attemptNumber); bufferErr != nil {
+			return bufferErr
+		}
 		transactionID, innerErr = conn.Begin(ctx)
 		attemptNumber++
 		return innerErr
@@ -199,6 +202,28 @@ func (sdc *ShardConn) SplitQuery(ctx context.Context, sql string, bindVariables 
 			Sql:           sql,
 			BindVariables: bindVariables,
 		}, splitColumn, splitCount)
+		return innerErr
+	}, 0, false)
+	return
+}
+
+// SplitQueryV2 splits a query into sub queries. The retry rules are the same as Execute.
+// TODO(erez): Rename to SplitQuery after the migration to SplitQuery V2 is done.
+func (sdc *ShardConn) SplitQueryV2(
+	ctx context.Context,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) (queries []querytypes.QuerySplit, err error) {
+
+	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
+		var innerErr error
+		queries, innerErr = conn.SplitQueryV2(ctx, querytypes.BoundQuery{
+			Sql:           sql,
+			BindVariables: bindVariables,
+		}, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 		return innerErr
 	}, 0, false)
 	return

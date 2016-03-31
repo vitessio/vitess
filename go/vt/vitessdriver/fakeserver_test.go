@@ -217,6 +217,21 @@ func (f *fakeVTGateService) SplitQuery(ctx context.Context, keyspace string, sql
 	return nil, nil
 }
 
+// SplitQueryV2 is part of the VTGateService interface
+// TODO(erez): Rename to SplitQuery after migration to SplitQuery V2 is done.
+func (f *fakeVTGateService) SplitQueryV2(
+	ctx context.Context,
+	keyspace string,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm,
+) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+	return nil, nil
+}
+
 // GetSrvKeyspace is part of the VTGateService interface
 func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	return &topodatapb.SrvKeyspace{}, nil

@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
@@ -148,6 +149,25 @@ func (conn *VTGateConn) Close() {
 // appending primary key range clauses to the original query
 func (conn *VTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	return conn.impl.SplitQuery(ctx, keyspace, query, bindVars, splitColumn, splitCount)
+}
+
+// SplitQueryV2 splits a query into smaller queries. It is mostly used by batch job frameworks
+// such as MapReduce. See the documentation for the vtgate.SplitQueryRequest protocol buffer message
+// in 'proto/vtgate.proto'.
+// TODO(erez): Rename to SplitQuery after the migration to SplitQuery V2 is done.
+func (conn *VTGateConn) SplitQueryV2(
+	ctx context.Context,
+	keyspace string,
+	query string,
+	bindVars map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm,
+) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+
+	return conn.impl.SplitQueryV2(
+		ctx, keyspace, query, bindVars, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 }
 
 // GetSrvKeyspace returns a topo.SrvKeyspace object.
@@ -333,6 +353,20 @@ type Impl interface {
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query.
 	SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error)
+
+	// SplitQuery splits a query into smaller queries. It is mostly used by batch job frameworks
+	// such as MapReduce. See the documentation for the vtgate.SplitQueryRequest protocol buffer
+	// message in 'proto/vtgate.proto'.
+	// TODO(erez): Rename to SplitQuery after the migration to SplitQuery V2 is done.
+	SplitQueryV2(
+		ctx context.Context,
+		keyspace string,
+		query string,
+		bindVars map[string]interface{},
+		splitColumns []string,
+		splitCount int64,
+		numRowsPerQueryPart int64,
+		algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error)
 
 	// GetSrvKeyspace returns a topo.SrvKeyspace.
 	GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error)
