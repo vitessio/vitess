@@ -76,7 +76,7 @@ type VSchema interface {
 
 // Build builds a plan for a query based on the specified vschema.
 // It's the main entry point for this package.
-func Build(query string, vschema *vindexes.VSchema) (*engine.Plan, error) {
+func Build(query string, vschema VSchema) (*engine.Plan, error) {
 	statement, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, err

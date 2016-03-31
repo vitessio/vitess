@@ -17,17 +17,19 @@ type requestContext struct {
 	ctx              context.Context
 	sql              string
 	bindVars         map[string]interface{}
+	keyspace         string
 	tabletType       topodatapb.TabletType
 	session          *vtgatepb.Session
 	notInTransaction bool
 	router           *Router
 }
 
-func newRequestContext(ctx context.Context, sql string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, router *Router) *requestContext {
+func newRequestContext(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, router *Router) *requestContext {
 	return &requestContext{
 		ctx:              ctx,
 		sql:              sql,
 		bindVars:         bindVars,
+		keyspace:         keyspace,
 		tabletType:       tabletType,
 		session:          session,
 		notInTransaction: notInTransaction,
@@ -36,7 +38,9 @@ func newRequestContext(ctx context.Context, sql string, bindVars map[string]inte
 }
 
 func (vc *requestContext) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
-	return vc.router.Execute(vc.ctx, query, bindvars, vc.tabletType, vc.session, false)
+	// We have to use an empty keyspace here, becasue vindexes that call back can reference
+	// any table.
+	return vc.router.Execute(vc.ctx, query, bindvars, "", vc.tabletType, vc.session, false)
 }
 
 func (vc *requestContext) ExecuteRoute(route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {

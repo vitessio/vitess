@@ -37,7 +37,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
-	result, err := vtg.server.Execute(ctx, string(request.Query.Sql), bv, request.TabletType, request.Session, request.NotInTransaction)
+	result, err := vtg.server.Execute(ctx, string(request.Query.Sql), bv, request.Keyspace, request.TabletType, request.Session, request.NotInTransaction)
 	return &vtgatepb.ExecuteResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: request.Session,
@@ -196,6 +196,7 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 	vtgErr := vtg.server.StreamExecute(ctx,
 		string(request.Query.Sql),
 		bv,
+		request.Keyspace,
 		request.TabletType,
 		func(value *sqltypes.Result) error {
 			return stream.Send(&vtgatepb.StreamExecuteResponse{

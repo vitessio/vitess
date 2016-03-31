@@ -45,14 +45,21 @@ func NewPlanner(vschema *vindexes.VSchema, cacheSize int) *Planner {
 
 // GetPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (plr *Planner) GetPlan(sql string) (*engine.Plan, error) {
+func (plr *Planner) GetPlan(sql, keyspace string) (*engine.Plan, error) {
 	if plr.vschema == nil {
 		return nil, errors.New("vschema not initialized")
 	}
-	if result, ok := plr.plans.Get(sql); ok {
+	key := sql
+	if keyspace != "" {
+		key = keyspace + ":" + sql
+	}
+	if result, ok := plr.plans.Get(key); ok {
 		return result.(*engine.Plan), nil
 	}
-	plan, err := planbuilder.Build(sql, plr.vschema)
+	plan, err := planbuilder.Build(sql, &wrappedVSchema{
+		vschema:  plr.vschema,
+		keyspace: keyspace,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -94,4 +101,16 @@ func (plr *Planner) ServeHTTP(response http.ResponseWriter, request *http.Reques
 	} else {
 		response.WriteHeader(http.StatusNotFound)
 	}
+}
+
+type wrappedVSchema struct {
+	vschema  *vindexes.VSchema
+	keyspace string
+}
+
+func (vs *wrappedVSchema) Find(keyspace, tablename string) (table *vindexes.Table, err error) {
+	if keyspace == "" {
+		keyspace = vs.keyspace
+	}
+	return vs.vschema.Find(keyspace, tablename)
 }

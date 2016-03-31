@@ -26,8 +26,8 @@ func newFallbackClient(fallback vtgateservice.VTGateService) fallbackClient {
 	return fallbackClient{fallback: fallback}
 }
 
-func (c fallbackClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
-	return c.fallback.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction)
+func (c fallbackClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
+	return c.fallback.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, notInTransaction)
 }
 
 func (c fallbackClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
@@ -54,8 +54,8 @@ func (c fallbackClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*
 	return c.fallback.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, session)
 }
 
-func (c fallbackClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
-	return c.fallback.StreamExecute(ctx, sql, bindVariables, tabletType, sendReply)
+func (c fallbackClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
+	return c.fallback.StreamExecute(ctx, sql, bindVariables, keyspace, tabletType, sendReply)
 }
 
 func (c fallbackClient) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
