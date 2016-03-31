@@ -152,24 +152,11 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-
 	bq, err := querytypes.Proto3ToBoundQuery(request.Query)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
-	splits := []querytypes.QuerySplit{}
-	splits, err = queryservice.CallCorrectSplitQuery(
-		q.server,
-		request.UseSplitQueryV2,
-		ctx,
-		request.Target,
-		bq.Sql,
-		bq.BindVariables,
-		request.SplitColumn,
-		request.SplitCount,
-		request.NumRowsPerQueryPart,
-		request.Algorithm,
-		request.SessionId)
+	splits, err := q.server.SplitQuery(ctx, request.Target, bq.Sql, bq.BindVariables, request.SplitColumn, request.SplitCount, request.SessionId)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
