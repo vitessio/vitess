@@ -371,7 +371,6 @@ public final class VTGateConn implements Closeable {
             }));
   }
 
-  // TODO(erez): Migrate to SplitQueryV2 after it's stable.
   public SQLFuture<List<SplitQueryResponse.Part>> splitQuery(
       Context ctx,
       String keyspace,
@@ -384,9 +383,8 @@ public final class VTGateConn implements Closeable {
         SplitQueryRequest.newBuilder()
             .setKeyspace(checkNotNull(keyspace))
             .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
-            .addSplitColumn(checkNotNull(splitColumn))
-            .setSplitCount(splitCount)
-            .setUseSplitQueryV2(false);
+            .setSplitColumn(checkNotNull(splitColumn))
+            .setSplitCount(splitCount);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
