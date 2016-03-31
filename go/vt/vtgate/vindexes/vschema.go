@@ -95,27 +95,21 @@ func buildKeyspaces(source *VSchemaFormal, vschema *VSchema) {
 func buildSequences(source *VSchemaFormal, vschema *VSchema) error {
 	for ksname, ks := range source.Keyspaces {
 		keyspace := vschema.Keyspaces[ksname].Keyspace
-		for tname, cname := range ks.Tables {
-			if cname == "" {
+		for tname, table := range ks.Tables {
+			if table.Type != "Sequence" {
 				continue
 			}
-			class, ok := ks.Classes[cname]
-			if !ok {
-				return fmt.Errorf("class %s not found for table %s", cname, tname)
+			t := &Table{
+				Name:       tname,
+				Keyspace:   keyspace,
+				IsSequence: true,
 			}
-			if class.Type == "Sequence" {
-				t := &Table{
-					Name:       tname,
-					Keyspace:   keyspace,
-					IsSequence: true,
-				}
-				if _, ok := vschema.tables[tname]; ok {
-					vschema.tables[tname] = nil
-				} else {
-					vschema.tables[tname] = t
-				}
-				vschema.Keyspaces[ksname].Tables[tname] = t
+			if _, ok := vschema.tables[tname]; ok {
+				vschema.tables[tname] = nil
+			} else {
+				vschema.tables[tname] = t
 			}
+			vschema.Keyspaces[ksname].Tables[tname] = t
 		}
 	}
 	return nil
@@ -138,12 +132,8 @@ func buildTables(source *VSchemaFormal, vschema *VSchema) error {
 			}
 			vindexes[vname] = vindex
 		}
-		for tname, cname := range ks.Tables {
-			class, ok := ks.Classes[cname]
-			if !ok && cname != "" {
-				return fmt.Errorf("class %s not found for table %s", cname, tname)
-			}
-			if class.Type == "Sequence" {
+		for tname, table := range ks.Tables {
+			if table.Type == "Sequence" {
 				continue
 			}
 			t := &Table{
@@ -159,10 +149,10 @@ func buildTables(source *VSchemaFormal, vschema *VSchema) error {
 			if !keyspace.Sharded {
 				continue
 			}
-			for i, ind := range class.ColVindexes {
+			for i, ind := range table.ColVindexes {
 				vindexInfo, ok := ks.Vindexes[ind.Name]
 				if !ok {
-					return fmt.Errorf("vindex %s not found for class %s", ind.Name, cname)
+					return fmt.Errorf("vindex %s not found for table %s", ind.Name, tname)
 				}
 				vindex := vindexes[ind.Name]
 				owned := false
@@ -179,10 +169,10 @@ func buildTables(source *VSchemaFormal, vschema *VSchema) error {
 				if i == 0 {
 					// Perform Primary vindex check.
 					if _, ok := columnVindex.Vindex.(Unique); !ok {
-						return fmt.Errorf("primary vindex %s is not Unique for class %s", ind.Name, cname)
+						return fmt.Errorf("primary vindex %s is not Unique for table %s", ind.Name, tname)
 					}
 					if owned {
-						return fmt.Errorf("primary vindex %s cannot be owned for class %s", ind.Name, cname)
+						return fmt.Errorf("primary vindex %s cannot be owned for table %s", ind.Name, tname)
 					}
 				}
 				t.ColVindexes = append(t.ColVindexes, columnVindex)
@@ -191,11 +181,11 @@ func buildTables(source *VSchemaFormal, vschema *VSchema) error {
 				}
 			}
 			t.Ordered = colVindexSorted(t.ColVindexes)
-			if class.Autoinc != nil {
-				t.Autoinc = &Autoinc{Col: class.Autoinc.Col, ColVindexNum: -1}
-				seq, ok := vschema.tables[class.Autoinc.Sequence]
+			if table.Autoinc != nil {
+				t.Autoinc = &Autoinc{Col: table.Autoinc.Col, ColVindexNum: -1}
+				seq, ok := vschema.tables[table.Autoinc.Sequence]
 				if !ok {
-					return fmt.Errorf("sequence %s not found for class %s", class.Autoinc.Sequence, cname)
+					return fmt.Errorf("sequence %s not found for table %s", table.Autoinc.Sequence, tname)
 				}
 				t.Autoinc.Sequence = seq
 				for i, cv := range t.ColVindexes {
@@ -278,8 +268,7 @@ type VSchemaFormal struct {
 type KeyspaceFormal struct {
 	Sharded  bool
 	Vindexes map[string]VindexFormal
-	Classes  map[string]ClassFormal
-	Tables   map[string]string
+	Tables   map[string]TableFormal
 }
 
 // VindexFormal is the info for each index as loaded from
@@ -290,9 +279,9 @@ type VindexFormal struct {
 	Owner  string
 }
 
-// ClassFormal is the info for each table class as loaded from
+// TableFormal is the info for each table as loaded from
 // the source.
-type ClassFormal struct {
+type TableFormal struct {
 	Type        string
 	ColVindexes []ColVindexFormal
 	Autoinc     *AutoincFormal

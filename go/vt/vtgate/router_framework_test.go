@@ -55,7 +55,7 @@ var routerVSchema = createTestVSchema(`
           "Type": "numeric"
         }
       },
-      "Classes": {
+      "Tables": {
         "user": {
           "ColVindexes": [
             {
@@ -67,10 +67,10 @@ var routerVSchema = createTestVSchema(`
               "Name": "name_user_map"
             }
           ],
-					"Autoinc" : {
-						"Col": "id",
-						"Sequence": "user_seq"
-					}
+          "Autoinc" : {
+            "Col": "id",
+            "Sequence": "user_seq"
+          }
         },
         "user_extra": {
           "ColVindexes": [
@@ -91,10 +91,10 @@ var routerVSchema = createTestVSchema(`
               "Name": "music_user_map"
             }
           ],
-					"Autoinc" : {
-						"Col": "id",
-						"Sequence": "user_seq"
-					}
+          "Autoinc" : {
+            "Col": "id",
+            "Sequence": "user_seq"
+          }
         },
         "music_extra": {
           "ColVindexes": [
@@ -136,34 +136,22 @@ var routerVSchema = createTestVSchema(`
             }
           ]
         }
-      },
-      "Tables": {
-        "user": "user",
-        "user_extra": "user_extra",
-        "music": "music",
-        "music_extra": "music_extra",
-        "music_extra_reversed": "music_extra_reversed",
-        "noauto_table": "noauto_table",
-        "ksid_table": "ksid_table"
       }
     },
     "TestBadSharding": {
       "Sharded": false,
       "Tables": {
-        "sharded_table": ""
+        "sharded_table": {}
       }
     },
     "TestUnsharded": {
       "Sharded": false,
-			"Classes": {
-				"seq": {
-					"Type": "Sequence"
-				}
-			},
       "Tables": {
-        "user_seq": "seq",
-        "music_user_map": "",
-        "name_user_map": ""
+        "user_seq": {
+          "Type": "Sequence"
+        },
+        "music_user_map": {},
+        "name_user_map": {}
       }
     }
   }
