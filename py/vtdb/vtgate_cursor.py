@@ -86,15 +86,25 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
       if entity_keyspace_id_map:
         raise dbexceptions.DatabaseError(
             'entity_keyspace_id_map is not allowed for write queries')
+    # FIXME(alainjobart): the entity_keyspace_id_map should be in the
+    # cursor, same as keyspace_ids, shards, keyranges, to avoid this hack.
+    if entity_keyspace_id_map:
+      shards = None
+      keyspace_ids = None
+      keyranges = None
+    else:
+      shards = self.shards
+      keyspace_ids = self.keyspace_ids
+      keyranges = self.keyranges
     self.results, self.rowcount, self.lastrowid, self.description = (
         self.connection._execute(  # pylint: disable=protected-access
             sql,
             bind_variables,
             tablet_type=self.tablet_type,
             keyspace_name=self.keyspace,
-            shards=self.shards,
-            keyspace_ids=self.keyspace_ids,
-            keyranges=self.keyranges,
+            shards=shards,
+            keyspace_ids=keyspace_ids,
+            keyranges=keyranges,
             entity_keyspace_id_map=entity_keyspace_id_map,
             entity_column_name=entity_column_name,
             not_in_transaction=not self.is_writable(),

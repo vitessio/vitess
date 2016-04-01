@@ -204,13 +204,15 @@ class VTGateConn
         return new VTGateTx($this->client, $response->getSession());
     }
 
+    // TODO(erez): Migrate to SplitQueryV2 after it's stable.
     public function splitQuery(Context $ctx, $keyspace, $query, array $bind_vars, $split_column, $split_count)
     {
         $request = new Proto\Vtgate\SplitQueryRequest();
         $request->setKeyspace($keyspace);
         $request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
-        $request->setSplitColumn($split_column);
+        $request->addSplitColumn($split_column);
         $request->setSplitCount($split_count);
+        $request->setUseSplitQueryV2(false);
         if ($ctx->getCallerId()) {
             $request->setCallerId($ctx->getCallerId());
         }

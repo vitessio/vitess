@@ -7,6 +7,7 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -82,60 +83,40 @@ func (fbc *fakeBinlogClient) Close() {
 }
 
 // ServeUpdateStream is part of the binlogplayer.Client interface
-func (fbc *fakeBinlogClient) ServeUpdateStream(ctx context.Context, position string) (chan *binlogdatapb.StreamEvent, binlogplayer.ErrFunc, error) {
-	return nil, nil, fmt.Errorf("Should never be called")
+func (fbc *fakeBinlogClient) ServeUpdateStream(ctx context.Context, position string) (binlogplayer.StreamEventStream, error) {
+	return nil, fmt.Errorf("Should never be called")
+}
+
+type testStreamEventAdapter struct {
+	c   chan *binlogdatapb.BinlogTransaction
+	ctx context.Context
+}
+
+func (t *testStreamEventAdapter) Recv() (*binlogdatapb.BinlogTransaction, error) {
+	select {
+	case bt := <-t.c:
+		return bt, nil
+	case <-t.ctx.Done():
+		return nil, t.ctx.Err()
+	}
 }
 
 // StreamTables is part of the binlogplayer.Client interface
-func (fbc *fakeBinlogClient) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset) (chan *binlogdatapb.BinlogTransaction, binlogplayer.ErrFunc, error) {
+func (fbc *fakeBinlogClient) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset) (binlogplayer.BinlogTransactionStream, error) {
 	actualTables := strings.Join(tables, ",")
 	if actualTables != fbc.expectedTables {
-		return nil, nil, fmt.Errorf("Got wrong tables %v, expected %v", actualTables, fbc.expectedTables)
+		return nil, fmt.Errorf("Got wrong tables %v, expected %v", actualTables, fbc.expectedTables)
 	}
-
-	c := make(chan *binlogdatapb.BinlogTransaction)
-	var finalErr error
-	go func() {
-		for {
-			select {
-			case bt := <-fbc.tablesChannel:
-				c <- bt
-			case <-ctx.Done():
-				finalErr = ctx.Err()
-				close(c)
-				return
-			}
-		}
-	}()
-	return c, func() error {
-		return finalErr
-	}, nil
+	return &testStreamEventAdapter{c: fbc.tablesChannel, ctx: ctx}, nil
 }
 
 // StreamKeyRange is part of the binlogplayer.Client interface
-func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset) (chan *binlogdatapb.BinlogTransaction, binlogplayer.ErrFunc, error) {
+func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset) (binlogplayer.BinlogTransactionStream, error) {
 	actualKeyRange := key.KeyRangeString(keyRange)
 	if actualKeyRange != fbc.expectedKeyRange {
-		return nil, nil, fmt.Errorf("Got wrong keyrange %v, expected %v", actualKeyRange, fbc.expectedKeyRange)
+		return nil, fmt.Errorf("Got wrong keyrange %v, expected %v", actualKeyRange, fbc.expectedKeyRange)
 	}
-
-	c := make(chan *binlogdatapb.BinlogTransaction)
-	var finalErr error
-	go func() {
-		for {
-			select {
-			case bt := <-fbc.keyRangeChannel:
-				c <- bt
-			case <-ctx.Done():
-				finalErr = ctx.Err()
-				close(c)
-				return
-			}
-		}
-	}()
-	return c, func() error {
-		return finalErr
-	}, nil
+	return &testStreamEventAdapter{c: fbc.keyRangeChannel, ctx: ctx}, nil
 }
 
 // fakeTabletConn implement TabletConn interface. We only care about the
@@ -158,8 +139,8 @@ func (ftc *fakeTabletConn) ExecuteBatch(ctx context.Context, queries []querytype
 }
 
 // StreamExecute is part of the TabletConn interface
-func (ftc *fakeTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
-	return nil, nil, fmt.Errorf("not implemented in this test")
+func (ftc *fakeTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
+	return nil, fmt.Errorf("not implemented in this test")
 }
 
 // Begin is part of the TabletConn interface
@@ -202,11 +183,6 @@ func (ftc *fakeTabletConn) Rollback2(ctx context.Context, transactionID int64) e
 	return fmt.Errorf("not implemented in this test")
 }
 
-// StreamExecute2 is part of the TabletConn interface
-func (ftc *fakeTabletConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
-	return nil, nil, fmt.Errorf("not implemented in this test")
-}
-
 // Close is part of the TabletConn interface
 func (ftc *fakeTabletConn) Close() {
 }
@@ -226,9 +202,20 @@ func (ftc *fakeTabletConn) SplitQuery(ctx context.Context, query querytypes.Boun
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
+// SplitQuery is part of the TabletConn interface
+func (ftc *fakeTabletConn) SplitQueryV2(
+	ctx context.Context,
+	query querytypes.BoundQuery,
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error) {
+	return nil, fmt.Errorf("not implemented in this test")
+}
+
 type streamHealthReader struct {
-	c       <-chan *querypb.StreamHealthResponse
-	errFunc tabletconn.ErrFunc
+	c   <-chan *querypb.StreamHealthResponse
+	err *error
 }
 
 // Recv implements tabletconn.StreamHealthReader.
@@ -236,7 +223,10 @@ type streamHealthReader struct {
 func (r *streamHealthReader) Recv() (*querypb.StreamHealthResponse, error) {
 	resp, ok := <-r.c
 	if !ok {
-		return nil, r.errFunc()
+		if *r.err == nil {
+			return nil, io.EOF
+		}
+		return nil, *r.err
 	}
 	return resp, nil
 }
@@ -262,8 +252,8 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context) (tabletconn.StreamH
 		}
 	}()
 	return &streamHealthReader{
-		c:       c,
-		errFunc: func() error { return finalErr },
+		c:   c,
+		err: &finalErr,
 	}, nil
 }
 

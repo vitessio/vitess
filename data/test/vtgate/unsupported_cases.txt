@@ -58,10 +58,6 @@
 "select id, (select id from user) from user"
 "unsupported: scatter subquery"
 
-# keyspace name
-"select * from user.user"
-"unsupported: keyspace name qualifier for tables"
-
 # natural join
 "select * from user natural join user_extra"
 "unsupported: natural join"
@@ -150,24 +146,12 @@
 "delete from user where col = (select id from main1)"
 "unsupported: subqueries in DML"
 
-# qualified table name in DMLs
-"update u.user set id = 1"
-"unsupported: compex table expression in DML"
-
 # update with no where clause
 "update user set val = 1"
 "unsupported: multi-shard where clause in DML"
 
 # delete from with no where clause
 "delete from user"
-"unsupported: multi-shard where clause in DML"
-
-# update KEYRANGE
-"update user set val = 1 where keyrange(1, 2)"
-"unsupported: multi-shard where clause in DML"
-
-# delete KEYRANGE
-"delete from user where keyrange(1, 2)"
 "unsupported: multi-shard where clause in DML"
 
 # update with primary id through IN clause
@@ -219,5 +203,5 @@
 "unsupported: subqueries in insert"
 
 # nextval not supported yet
-"select next value for t from user"
-"unsupported: NEXTVAL construct"
+"select next value from user"
+"unsupported: NEXT VALUE construct"

@@ -196,21 +196,30 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 }
 
 func testEchoStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
-	var qrc <-chan *sqltypes.Result
+	var stream sqltypes.ResultStream
 	var err error
+	var qr *sqltypes.Result
 
 	ctx := callerid.NewContext(context.Background(), callerID, nil)
 
-	qrc, _, err = conn.StreamExecute(ctx, echoPrefix+query, bindVars, tabletType)
-	checkEcho(t, "StreamExecute", <-qrc, err, map[string]string{
+	stream, err = conn.StreamExecute(ctx, echoPrefix+query, bindVars, tabletType)
+	if err != nil {
+		t.Fatal(err)
+	}
+	qr, err = stream.Recv()
+	checkEcho(t, "StreamExecute", qr, err, map[string]string{
 		"callerId":   callerIDEcho,
 		"query":      echoPrefix + query,
 		"bindVars":   bindVarsEcho,
 		"tabletType": tabletTypeEcho,
 	})
 
-	qrc, _, err = conn.StreamExecuteShards(ctx, echoPrefix+query, keyspace, shards, bindVars, tabletType)
-	checkEcho(t, "StreamExecuteShards", <-qrc, err, map[string]string{
+	stream, err = conn.StreamExecuteShards(ctx, echoPrefix+query, keyspace, shards, bindVars, tabletType)
+	if err != nil {
+		t.Fatal(err)
+	}
+	qr, err = stream.Recv()
+	checkEcho(t, "StreamExecuteShards", qr, err, map[string]string{
 		"callerId":   callerIDEcho,
 		"query":      echoPrefix + query,
 		"keyspace":   keyspace,
@@ -219,8 +228,12 @@ func testEchoStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"tabletType": tabletTypeEcho,
 	})
 
-	qrc, _, err = conn.StreamExecuteKeyspaceIds(ctx, echoPrefix+query, keyspace, keyspaceIDs, bindVars, tabletType)
-	checkEcho(t, "StreamExecuteKeyspaceIds", <-qrc, err, map[string]string{
+	stream, err = conn.StreamExecuteKeyspaceIds(ctx, echoPrefix+query, keyspace, keyspaceIDs, bindVars, tabletType)
+	if err != nil {
+		t.Fatal(err)
+	}
+	qr, err = stream.Recv()
+	checkEcho(t, "StreamExecuteKeyspaceIds", qr, err, map[string]string{
 		"callerId":    callerIDEcho,
 		"query":       echoPrefix + query,
 		"keyspace":    keyspace,
@@ -229,8 +242,12 @@ func testEchoStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"tabletType":  tabletTypeEcho,
 	})
 
-	qrc, _, err = conn.StreamExecuteKeyRanges(ctx, echoPrefix+query, keyspace, keyRanges, bindVars, tabletType)
-	checkEcho(t, "StreamExecuteKeyRanges", <-qrc, err, map[string]string{
+	stream, err = conn.StreamExecuteKeyRanges(ctx, echoPrefix+query, keyspace, keyRanges, bindVars, tabletType)
+	if err != nil {
+		t.Fatal(err)
+	}
+	qr, err = stream.Recv()
+	checkEcho(t, "StreamExecuteKeyRanges", qr, err, map[string]string{
 		"callerId":   callerIDEcho,
 		"query":      echoPrefix + query,
 		"keyspace":   keyspace,

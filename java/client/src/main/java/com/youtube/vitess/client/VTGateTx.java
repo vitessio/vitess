@@ -1,5 +1,7 @@
 package com.youtube.vitess.client;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
@@ -37,7 +39,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Manages a pending transaction.
+ * An asynchronous VTGate transaction session.
  *
  * <p>Because {@code VTGateTx} manages a session cookie, only one operation can be in flight
  * at a time on a given instance. The methods are {@code synchronized} only because the
@@ -47,24 +49,23 @@ import java.util.Map;
  * complete before calling any other methods on that {@code VTGateTx} instance.
  * An {@link IllegalStateException} will be thrown if this constraint is violated.
  *
- * <p>To use these calls synchronously, append {@code .checkedGet()}. For example:
+ * <p>All operations on {@code VTGateTx} are asynchronous, including those whose ultimate
+ * return type is {@link Void}, such as {@link #commit(Context)} and {@link #rollback(Context)}.
+ * You must still wait for the futures returned by these methods to complete and check the
+ * error on them (such as by calling {@code checkedGet()} before you can assume the operation
+ * has finished successfully.
  *
- * <blockquote><pre>
- * Cursor cursor = tx.execute(...).checkedGet();
- * </pre></blockquote>
+ * <p>If you prefer a synchronous API, you can use {@link VTGateBlockingConn#begin(Context)},
+ * which returns a {@link VTGateBlockingTx} instead.
  */
 public class VTGateTx {
   private final RpcClient client;
   private Session session;
   private SQLFuture<?> lastCall;
 
-  private VTGateTx(RpcClient client, Session session) {
-    this.client = client;
-    this.session = session;
-  }
-
-  public static VTGateTx withRpcClientAndSession(RpcClient client, Session session) {
-    return new VTGateTx(client, session);
+  VTGateTx(RpcClient client, Session session) {
+    this.client = checkNotNull(client);
+    setSession(checkNotNull(session));
   }
 
   public synchronized SQLFuture<Cursor> execute(

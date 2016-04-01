@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -26,10 +27,9 @@ import (
 
 // QueryResultReader will stream rows towards the output channel.
 type QueryResultReader struct {
-	Output      <-chan *sqltypes.Result
-	Fields      []*querypb.Field
-	conn        tabletconn.TabletConn
-	clientErrFn func() error
+	Output sqltypes.ResultStream
+	Fields []*querypb.Field
+	conn   tabletconn.TabletConn
 }
 
 // NewQueryResultReaderForTablet creates a new QueryResultReader for
@@ -53,22 +53,21 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 		return nil, err
 	}
 
-	sr, clientErrFn, err := conn.StreamExecute(ctx, sql, make(map[string]interface{}), 0)
+	stream, err := conn.StreamExecute(ctx, sql, make(map[string]interface{}), 0)
 	if err != nil {
 		return nil, err
 	}
 
 	// read the columns, or grab the error
-	cols, ok := <-sr
-	if !ok {
-		return nil, fmt.Errorf("Cannot read Fields for query '%v': %v", sql, clientErrFn())
+	cols, err := stream.Recv()
+	if err != nil {
+		return nil, fmt.Errorf("Cannot read Fields for query '%v': %v", sql, err)
 	}
 
 	return &QueryResultReader{
-		Output:      sr,
-		Fields:      cols.Fields,
-		conn:        conn,
-		clientErrFn: clientErrFn,
+		Output: stream,
+		Fields: cols.Fields,
+		conn:   conn,
 	}, nil
 }
 
@@ -113,52 +112,48 @@ func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAl
 // rows from a table that match the supplied KeyRange, ordered by
 // Primary Key. The returned columns are ordered with the Primary Key
 // columns in front.
-func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *topodatapb.TabletAlias, tableDefinition *tabletmanagerdatapb.TableDefinition, keyRange *topodatapb.KeyRange, keyspaceIDType topodatapb.KeyspaceIdType) (*QueryResultReader, error) {
+func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *topodatapb.TabletAlias, tableDefinition *tabletmanagerdatapb.TableDefinition, keyRange *topodatapb.KeyRange, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType) (*QueryResultReader, error) {
 	where := ""
 	if keyRange != nil {
-		switch keyspaceIDType {
+		switch shardingColumnType {
 		case topodatapb.KeyspaceIdType_UINT64:
 			if len(keyRange.Start) > 0 {
 				if len(keyRange.End) > 0 {
 					// have start & end
-					where = fmt.Sprintf("WHERE keyspace_id >= %v AND keyspace_id < %v ", uint64FromKeyspaceID(keyRange.Start), uint64FromKeyspaceID(keyRange.End))
+					where = fmt.Sprintf("WHERE %v >= %v AND %v < %v ", shardingColumnName, uint64FromKeyspaceID(keyRange.Start), shardingColumnName, uint64FromKeyspaceID(keyRange.End))
 				} else {
 					// have start only
-					where = fmt.Sprintf("WHERE keyspace_id >= %v ", uint64FromKeyspaceID(keyRange.Start))
+					where = fmt.Sprintf("WHERE %v >= %v ", shardingColumnName, uint64FromKeyspaceID(keyRange.Start))
 				}
 			} else {
 				if len(keyRange.End) > 0 {
 					// have end only
-					where = fmt.Sprintf("WHERE keyspace_id < %v ", uint64FromKeyspaceID(keyRange.End))
+					where = fmt.Sprintf("WHERE %v < %v ", shardingColumnName, uint64FromKeyspaceID(keyRange.End))
 				}
 			}
 		case topodatapb.KeyspaceIdType_BYTES:
 			if len(keyRange.Start) > 0 {
 				if len(keyRange.End) > 0 {
 					// have start & end
-					where = fmt.Sprintf("WHERE HEX(keyspace_id) >= '%v' AND HEX(keyspace_id) < '%v' ", hex.EncodeToString(keyRange.Start), hex.EncodeToString(keyRange.End))
+					where = fmt.Sprintf("WHERE HEX(%v) >= '%v' AND HEX(%v) < '%v' ", shardingColumnName, hex.EncodeToString(keyRange.Start), shardingColumnName, hex.EncodeToString(keyRange.End))
 				} else {
 					// have start only
-					where = fmt.Sprintf("WHERE HEX(keyspace_id) >= '%v' ", hex.EncodeToString(keyRange.Start))
+					where = fmt.Sprintf("WHERE HEX(%v) >= '%v' ", shardingColumnName, hex.EncodeToString(keyRange.Start))
 				}
 			} else {
 				if len(keyRange.End) > 0 {
 					// have end only
-					where = fmt.Sprintf("WHERE HEX(keyspace_id) < '%v' ", hex.EncodeToString(keyRange.End))
+					where = fmt.Sprintf("WHERE HEX(%v) < '%v' ", shardingColumnName, hex.EncodeToString(keyRange.End))
 				}
 			}
 		default:
-			return nil, fmt.Errorf("Unsupported KeyspaceIdType: %v", keyspaceIDType)
+			return nil, fmt.Errorf("Unsupported ShardingColumnType: %v", shardingColumnType)
 		}
 	}
 
 	sql := fmt.Sprintf("SELECT %v FROM %v %vORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, where, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
 	log.Infof("SQL query for %v/%v: %v", topoproto.TabletAliasString(tabletAlias), tableDefinition.Name, sql)
 	return NewQueryResultReaderForTablet(ctx, ts, tabletAlias, sql)
-}
-
-func (qrr *QueryResultReader) Error() error {
-	return qrr.clientErrFn()
 }
 
 // Close closes the connection to the tablet.
@@ -186,10 +181,10 @@ func NewRowReader(queryResultReader *QueryResultReader) *RowReader {
 // (nil, error) if an error occurred
 func (rr *RowReader) Next() ([]sqltypes.Value, error) {
 	if rr.currentResult == nil || rr.currentIndex == len(rr.currentResult.Rows) {
-		var ok bool
-		rr.currentResult, ok = <-rr.queryResultReader.Output
-		if !ok {
-			if err := rr.queryResultReader.Error(); err != nil {
+		var err error
+		rr.currentResult, err = rr.queryResultReader.Output.Recv()
+		if err != nil {
+			if err != io.EOF {
 				return nil, err
 			}
 			return nil, nil

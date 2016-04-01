@@ -6,7 +6,6 @@ package grpctmclient
 
 import (
 	"fmt"
-	"io"
 	"time"
 
 	"google.golang.org/grpc"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
@@ -637,40 +637,37 @@ func (client *Client) PromoteSlave(ctx context.Context, tablet *topo.TabletInfo)
 //
 // Backup related methods
 //
+type eventStreamAdapter struct {
+	stream tabletmanagerservicepb.TabletManager_BackupClient
+	cc     *grpc.ClientConn
+}
+
+func (e *eventStreamAdapter) Recv() (*logutilpb.Event, error) {
+	br, err := e.stream.Recv()
+	if err != nil {
+		e.cc.Close()
+		return nil, err
+	}
+	return br.Event, nil
+}
 
 // Backup is part of the tmclient.TabletManagerClient interface.
-func (client *Client) Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (<-chan *logutilpb.Event, tmclient.ErrFunc, error) {
+func (client *Client) Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (logutil.EventStream, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	logstream := make(chan *logutilpb.Event, 10)
 	stream, err := c.Backup(ctx, &tabletmanagerdatapb.BackupRequest{
 		Concurrency: int64(concurrency),
 	})
 	if err != nil {
 		cc.Close()
-		return nil, nil, err
+		return nil, err
 	}
-
-	var finalErr error
-	go func() {
-		for {
-			br, err := stream.Recv()
-			if err != nil {
-				if err != io.EOF {
-					finalErr = err
-				}
-				close(logstream)
-				return
-			}
-			logstream <- br.Event
-		}
-	}()
-	return logstream, func() error {
-		cc.Close()
-		return finalErr
+	return &eventStreamAdapter{
+		stream: stream,
+		cc:     cc,
 	}, nil
 }
 

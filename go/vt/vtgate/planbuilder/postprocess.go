@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 // This file has functions to analyze postprocessing
@@ -19,18 +20,18 @@ import (
 // and ensures that there are no subqueries. It also verifies that the
 // references don't addres an outer query. We only support group by
 // for unsharded or single shard routes.
-func pushGroupBy(groupBy sqlparser.GroupBy, plan planBuilder) error {
+func pushGroupBy(groupBy sqlparser.GroupBy, bldr builder) error {
 	if groupBy == nil {
 		return nil
 	}
-	route, ok := plan.(*routeBuilder)
+	rb, ok := bldr.(*route)
 	if !ok {
 		return errors.New("unsupported: complex join and group by")
 	}
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
-			_, isLocal, err := plan.Symtab().Find(node, true)
+			_, isLocal, err := bldr.Symtab().Find(node, true)
 			if err != nil {
 				return false, err
 			}
@@ -46,16 +47,16 @@ func pushGroupBy(groupBy sqlparser.GroupBy, plan planBuilder) error {
 	if err != nil {
 		return err
 	}
-	if route.IsSingle() {
-		route.SetGroupBy(groupBy)
+	if rb.IsSingle() {
+		rb.SetGroupBy(groupBy)
 		return nil
 	}
 	// It's a scatter route. We can allow group by if it references a
 	// column with a unique vindex.
 	for _, expr := range groupBy {
-		vindex := plan.Symtab().Vindex(expr, route, true)
-		if vindex != nil && IsUnique(vindex) {
-			route.SetGroupBy(groupBy)
+		vindex := bldr.Symtab().Vindex(expr, rb, true)
+		if vindex != nil && vindexes.IsUnique(vindex) {
+			rb.SetGroupBy(groupBy)
 			return nil
 		}
 	}
@@ -68,7 +69,7 @@ func pushGroupBy(groupBy sqlparser.GroupBy, plan planBuilder) error {
 // If column numbers were used to reference the columns, those numbers
 // are readjusted on push-down to match the numbers of the individual
 // queries.
-func pushOrderBy(orderBy sqlparser.OrderBy, plan planBuilder) error {
+func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 	if orderBy == nil {
 		return nil
 	}
@@ -78,12 +79,12 @@ func pushOrderBy(orderBy sqlparser.OrderBy, plan planBuilder) error {
 		// If we have to change the order by expression,
 		// we have to build a new node.
 		pushOrder := order
-		var route *routeBuilder
+		var rb *route
 		switch node := order.Expr.(type) {
 		case *sqlparser.ColName:
 			var isLocal bool
 			var err error
-			route, isLocal, err = plan.Symtab().Find(node, true)
+			rb, isLocal, err = bldr.Symtab().Find(node, true)
 			if err != nil {
 				return err
 			}
@@ -95,13 +96,13 @@ func pushOrderBy(orderBy sqlparser.OrderBy, plan planBuilder) error {
 			if err != nil {
 				return fmt.Errorf("error parsing order by clause: %s", string(node))
 			}
-			if num < 1 || num > int64(len(plan.Symtab().Colsyms)) {
+			if num < 1 || num > int64(len(bldr.Symtab().Colsyms)) {
 				return errors.New("order by column number out of range")
 			}
-			colsym := plan.Symtab().Colsyms[num-1]
-			route = colsym.Route()
+			colsym := bldr.Symtab().Colsyms[num-1]
+			rb = colsym.Route()
 			// We have to recompute the column number.
-			for num, s := range route.Colsyms {
+			for num, s := range rb.Colsyms {
 				if s == colsym {
 					pushOrder = &sqlparser.Order{
 						Expr:      sqlparser.NumVal(strconv.AppendInt(nil, int64(num+1), 10)),
@@ -115,43 +116,31 @@ func pushOrderBy(orderBy sqlparser.OrderBy, plan planBuilder) error {
 		default:
 			return errors.New("unsupported: complex expression in order by")
 		}
-		if route.Order() < routeNumber {
+		if rb.Order() < routeNumber {
 			return errors.New("unsupported: complex join and out of sequence order by")
 		}
-		if !route.IsSingle() {
+		if !rb.IsSingle() {
 			return errors.New("unsupported: scatter and order by")
 		}
-		routeNumber = route.Order()
-		if err := route.AddOrder(pushOrder); err != nil {
+		routeNumber = rb.Order()
+		if err := rb.AddOrder(pushOrder); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func pushLimit(limit *sqlparser.Limit, plan planBuilder) error {
+func pushLimit(limit *sqlparser.Limit, bldr builder) error {
 	if limit == nil {
 		return nil
 	}
-	route, ok := plan.(*routeBuilder)
+	rb, ok := bldr.(*route)
 	if !ok {
 		return errors.New("unsupported: limits with complex joins")
 	}
-	if !route.IsSingle() {
+	if !rb.IsSingle() {
 		return errors.New("unsupported: limits with scatter")
 	}
-	route.SetLimit(limit)
+	rb.SetLimit(limit)
 	return nil
-}
-
-// pushMisc pushes comments and 'for update' clauses
-// down to all routes.
-func pushMisc(sel *sqlparser.Select, plan planBuilder) {
-	switch plan := plan.(type) {
-	case *joinBuilder:
-		pushMisc(sel, plan.Left)
-		pushMisc(sel, plan.Right)
-	case *routeBuilder:
-		plan.SetMisc(sel.Comments, sel.Lock)
-	}
 }

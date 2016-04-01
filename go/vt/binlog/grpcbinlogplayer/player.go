@@ -5,7 +5,6 @@
 package grpcbinlogplayer
 
 import (
-	"io"
 	"time"
 
 	"golang.org/x/net/context"
@@ -41,95 +40,77 @@ func (client *client) Close() {
 	client.cc.Close()
 }
 
-func (client *client) ServeUpdateStream(ctx context.Context, position string) (chan *binlogdatapb.StreamEvent, binlogplayer.ErrFunc, error) {
-	response := make(chan *binlogdatapb.StreamEvent, 10)
+type serveUpdateStreamAdapter struct {
+	stream binlogservicepb.UpdateStream_StreamUpdateClient
+}
+
+func (s *serveUpdateStreamAdapter) Recv() (*binlogdatapb.StreamEvent, error) {
+	r, err := s.stream.Recv()
+	if err != nil {
+		return nil, err
+	}
+	return r.StreamEvent, nil
+}
+
+func (client *client) ServeUpdateStream(ctx context.Context, position string) (binlogplayer.StreamEventStream, error) {
 	query := &binlogdatapb.StreamUpdateRequest{
 		Position: position,
 	}
-
 	stream, err := client.c.StreamUpdate(ctx, query)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	var finalErr error
-	go func() {
-		for {
-			r, err := stream.Recv()
-			if err != nil {
-				if err != io.EOF {
-					finalErr = err
-				}
-				close(response)
-				return
-			}
-			response <- r.StreamEvent
-		}
-	}()
-	return response, func() error {
-		return finalErr
-	}, nil
+	return &serveUpdateStreamAdapter{stream}, nil
 }
 
-func (client *client) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset) (chan *binlogdatapb.BinlogTransaction, binlogplayer.ErrFunc, error) {
-	response := make(chan *binlogdatapb.BinlogTransaction, 10)
+type serveStreamKeyRangeAdapter struct {
+	stream binlogservicepb.UpdateStream_StreamKeyRangeClient
+}
+
+func (s *serveStreamKeyRangeAdapter) Recv() (*binlogdatapb.BinlogTransaction, error) {
+	r, err := s.stream.Recv()
+	if err != nil {
+		return nil, err
+	}
+	return r.BinlogTransaction, nil
+}
+
+func (client *client) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset) (binlogplayer.BinlogTransactionStream, error) {
 	query := &binlogdatapb.StreamKeyRangeRequest{
 		Position: position,
 		KeyRange: keyRange,
 		Charset:  charset,
 	}
-
 	stream, err := client.c.StreamKeyRange(ctx, query)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	var finalErr error
-	go func() {
-		for {
-			r, err := stream.Recv()
-			if err != nil {
-				if err != io.EOF {
-					finalErr = err
-				}
-				close(response)
-				return
-			}
-			response <- r.BinlogTransaction
-		}
-	}()
-	return response, func() error {
-		return finalErr
-	}, nil
+	return &serveStreamKeyRangeAdapter{stream}, nil
 }
 
-func (client *client) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset) (chan *binlogdatapb.BinlogTransaction, binlogplayer.ErrFunc, error) {
-	response := make(chan *binlogdatapb.BinlogTransaction, 10)
+type serveStreamTablesAdapter struct {
+	stream binlogservicepb.UpdateStream_StreamTablesClient
+}
+
+func (s *serveStreamTablesAdapter) Recv() (*binlogdatapb.BinlogTransaction, error) {
+	r, err := s.stream.Recv()
+	if err != nil {
+		return nil, err
+	}
+	return r.BinlogTransaction, nil
+}
+
+func (client *client) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset) (binlogplayer.BinlogTransactionStream, error) {
 	query := &binlogdatapb.StreamTablesRequest{
 		Position: position,
 		Tables:   tables,
 		Charset:  charset,
 	}
-
 	stream, err := client.c.StreamTables(ctx, query)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	var finalErr error
-	go func() {
-		for {
-			r, err := stream.Recv()
-			if err != nil {
-				if err != io.EOF {
-					finalErr = err
-				}
-				close(response)
-				return
-			}
-			response <- r.BinlogTransaction
-		}
-	}()
-	return response, func() error {
-		return finalErr
-	}, nil
+	return &serveStreamTablesAdapter{stream}, nil
 }
 
 // Registration as a factory

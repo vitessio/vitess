@@ -60,7 +60,7 @@ func TestLogEvent(t *testing.T) {
 			t.Errorf("ml.Events[%v].Value = %q, want %q", i, got, want)
 		}
 		if got, want := ml.Events[i].File, "logger_test.go"; got != want && ml.Events[i].Level != logutilpb.Level_CONSOLE {
-			t.Errorf("ml.Events[%v].File = %q, want %q", i, got, want)
+			t.Errorf("ml.Events[%v].File = %q (line = %v), want %q", i, got, ml.Events[i].Line, want)
 		}
 	}
 }
@@ -96,10 +96,10 @@ func TestChannelLogger(t *testing.T) {
 	cl.Warningf("test %v", 123)
 	cl.Errorf("test %v", 123)
 	cl.Printf("test %v", 123)
-	close(cl)
+	close(cl.C)
 
 	count := 0
-	for e := range cl {
+	for e := range cl.C {
 		if got, want := e.Value, "test 123"; got != want {
 			t.Errorf("e.Value = %q, want %q", got, want)
 		}
@@ -122,10 +122,10 @@ func TestTeeLogger(t *testing.T) {
 	tl.Warningf("test warningf %v %v", 2, 3)
 	tl.Errorf("test errorf %v %v", 3, 4)
 	tl.Printf("test printf %v %v", 4, 5)
-	close(cl)
+	close(cl.C)
 
 	clEvents := []*logutilpb.Event{}
-	for e := range cl {
+	for e := range cl.C {
 		clEvents = append(clEvents, e)
 	}
 

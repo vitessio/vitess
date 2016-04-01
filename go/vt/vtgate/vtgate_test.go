@@ -7,7 +7,9 @@ package vtgate
 import (
 	"encoding/hex"
 	"fmt"
+	"math"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -33,7 +35,7 @@ func init() {
     "TestUnsharded": {
       "Sharded": false,
       "Tables": {
-        "t1": ""
+        "t1": {}
       }
     }
   }
@@ -49,6 +51,7 @@ func TestVTGateExecute(t *testing.T) {
 	qr, err := rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
+		"",
 		topodatapb.TabletType_MASTER,
 		nil,
 		false)
@@ -66,6 +69,7 @@ func TestVTGateExecute(t *testing.T) {
 	rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
+		"",
 		topodatapb.TabletType_MASTER,
 		session,
 		false)
@@ -93,10 +97,41 @@ func TestVTGateExecute(t *testing.T) {
 	rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
+		"",
 		topodatapb.TabletType_MASTER,
 		session,
 		false)
 	rpcVTGate.Rollback(context.Background(), session)
+}
+
+func TestVTGateExecuteWithKeyspace(t *testing.T) {
+	sandbox := createSandbox(KsTestUnsharded)
+	sbc := &sandboxConn{}
+	sandbox.MapTestConn("0", sbc)
+	qr, err := rpcVTGate.Execute(context.Background(),
+		"select id from none",
+		nil,
+		KsTestUnsharded,
+		topodatapb.TabletType_MASTER,
+		nil,
+		false)
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+	if !reflect.DeepEqual(singleRowResult, qr) {
+		t.Errorf("want \n%+v, got \n%+v", singleRowResult, qr)
+	}
+	_, err = rpcVTGate.Execute(context.Background(),
+		"select id from none",
+		nil,
+		"aa",
+		topodatapb.TabletType_MASTER,
+		nil,
+		false)
+	want := "keyspace aa not found in vschema"
+	if err == nil || err.Error() != want {
+		t.Errorf("Execute: %v, want %s", err, want)
+	}
 }
 
 func TestVTGateExecuteShards(t *testing.T) {
@@ -530,6 +565,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 	err := rpcVTGate.StreamExecute(context.Background(),
 		"select id from t1",
 		nil,
+		"",
 		topodatapb.TabletType_MASTER,
 		func(r *sqltypes.Result) error {
 			qrs = append(qrs, r)
@@ -701,13 +737,18 @@ func TestVTGateSplitQuery(t *testing.T) {
 			t.Errorf("wrong split size, want \n%+v, got \n%+v", sandboxSQRowCount, split.Size)
 		}
 		if split.KeyRangePart.Keyspace != keyspace {
-			t.Errorf("wrong split size, want \n%+v, got \n%+v", keyspace, split.KeyRangePart.Keyspace)
+			t.Errorf("wrong keyspace, want \n%+v, got \n%+v", keyspace, split.KeyRangePart.Keyspace)
 		}
 		if len(split.KeyRangePart.KeyRanges) != 1 {
 			t.Errorf("wrong number of keyranges, want \n%+v, got \n%+v", 1, len(split.KeyRangePart.KeyRanges))
 		}
 		kr := key.KeyRangeString(split.KeyRangePart.KeyRanges[0])
 		actualSqlsByKeyRange[kr] = append(actualSqlsByKeyRange[kr], split.Query.Sql)
+	}
+	// Sort the sqls for each KeyRange so that we can compare them without
+	// regard to the order in which they were returned by the vtgate.
+	for _, sqlsForKeyRange := range actualSqlsByKeyRange {
+		sort.Strings(sqlsForKeyRange)
 	}
 	expectedSqlsByKeyRange := map[string][]string{}
 	for _, kr := range keyranges {
@@ -719,6 +760,159 @@ func TestVTGateSplitQuery(t *testing.T) {
 	}
 	if !reflect.DeepEqual(actualSqlsByKeyRange, expectedSqlsByKeyRange) {
 		t.Errorf("splits contain the wrong sqls and/or keyranges, got: %v, want: %v", actualSqlsByKeyRange, expectedSqlsByKeyRange)
+	}
+}
+
+// TODO(erez): Rename after migration to SplitQuery V2 is done.
+func TestVTGateSplitQueryV2Sharded(t *testing.T) {
+	keyspace := "TestVTGateSplitQuery"
+	keyranges, err := key.ParseShardingSpec(DefaultShardSpec)
+	if err != nil {
+		t.Fatalf("got: %v, want: nil", err)
+	}
+	s := createSandbox(keyspace)
+	for _, kr := range keyranges {
+		s.MapTestConn(key.KeyRangeString(kr), &sandboxConn{})
+	}
+	sql := "select col1, col2 from table"
+	bindVars := map[string]interface{}{"bv1": nil}
+	splitColumns := []string{"sc1", "sc2"}
+	algorithm := querypb.SplitQueryRequest_FULL_SCAN
+	type testCaseType struct {
+		splitCount          int64
+		numRowsPerQueryPart int64
+		algorithm           querypb.SplitQueryRequest_Algorithm
+	}
+	testCases := []testCaseType{
+		{splitCount: 100, numRowsPerQueryPart: 0},
+		{splitCount: 0, numRowsPerQueryPart: 123},
+	}
+	for _, testCase := range testCases {
+		splits, err := rpcVTGate.SplitQueryV2(
+			context.Background(),
+			keyspace,
+			sql,
+			bindVars,
+			splitColumns,
+			testCase.splitCount,
+			testCase.numRowsPerQueryPart,
+			algorithm)
+		if err != nil {
+			t.Errorf("got %v, want: nil. testCase: %+v", err, testCase)
+		}
+		// Total number of splits should be number of shards as our sandbox returns a single split
+		// for its fake implementation of SplitQuery.
+		if len(keyranges) != len(splits) {
+			t.Errorf("wrong number of splits, got %+v, want %+v. testCase:\n%+v",
+				len(splits), len(keyranges), testCase)
+		}
+		actualSqlsByKeyRange := map[string][]string{}
+		for _, split := range splits {
+			if split.KeyRangePart.Keyspace != keyspace {
+				t.Errorf("wrong keyspace, got \n%+v, want \n%+v. testCase:\n%+v",
+					keyspace, split.KeyRangePart.Keyspace, testCase)
+			}
+			if len(split.KeyRangePart.KeyRanges) != 1 {
+				t.Errorf("wrong number of keyranges, got \n%+v, want \n%+v. testCase:\n%+v",
+					1, len(split.KeyRangePart.KeyRanges), testCase)
+			}
+			kr := key.KeyRangeString(split.KeyRangePart.KeyRanges[0])
+			actualSqlsByKeyRange[kr] = append(actualSqlsByKeyRange[kr], split.Query.Sql)
+		}
+		expectedSqlsByKeyRange := map[string][]string{}
+		for _, kr := range keyranges {
+			perShardSplitCount := int64(math.Ceil(float64(testCase.splitCount) / float64(len(keyranges))))
+			shard := key.KeyRangeString(kr)
+			expectedSqlsByKeyRange[shard] = []string{
+				fmt.Sprintf(
+					"query:%v, splitColumns:%v, splitCount:%v,"+
+						" numRowsPerQueryPart:%v, algorithm:%v, shard:%v",
+					querytypes.BoundQuery{Sql: sql, BindVariables: bindVars},
+					splitColumns,
+					perShardSplitCount,
+					testCase.numRowsPerQueryPart,
+					algorithm,
+					shard,
+				),
+			}
+		}
+		if !reflect.DeepEqual(actualSqlsByKeyRange, expectedSqlsByKeyRange) {
+			t.Errorf(
+				"splits contain the wrong sqls and/or keyranges, "+
+					"got:\n%+v\n, want:\n%+v\n. testCase:\n%+v",
+				actualSqlsByKeyRange, expectedSqlsByKeyRange, testCase)
+		}
+	}
+}
+
+func TestVTGateSplitQueryV2Unsharded(t *testing.T) {
+	keyspace := KsTestUnsharded
+	s := getSandbox(keyspace)
+	if s == nil {
+		t.Fatalf("Can't find unsharded sandbox.")
+	}
+	s.MapTestConn("0", &sandboxConn{})
+	sql := "select col1, col2 from table"
+	bindVars := map[string]interface{}{"bv1": nil}
+	splitColumns := []string{"sc1", "sc2"}
+	algorithm := querypb.SplitQueryRequest_FULL_SCAN
+	type testCaseType struct {
+		splitCount          int64
+		numRowsPerQueryPart int64
+		algorithm           querypb.SplitQueryRequest_Algorithm
+	}
+	testCases := []testCaseType{
+		{splitCount: 100, numRowsPerQueryPart: 0},
+		{splitCount: 0, numRowsPerQueryPart: 123},
+	}
+	for _, testCase := range testCases {
+		splits, err := rpcVTGate.SplitQueryV2(
+			context.Background(),
+			keyspace,
+			sql,
+			bindVars,
+			splitColumns,
+			testCase.splitCount,
+			testCase.numRowsPerQueryPart,
+			algorithm)
+		if err != nil {
+			t.Errorf("got %v, want: nil. testCase: %+v", err, testCase)
+		}
+		// Total number of splits should be number of shards (1) as our sandbox returns a single split
+		// for its fake implementation of SplitQuery.
+		if 1 != len(splits) {
+			t.Errorf("wrong number of splits, got %+v, want %+v. testCase:\n%+v",
+				len(splits), 1, testCase)
+			continue
+		}
+		split := splits[0]
+		if split.KeyRangePart != nil {
+			t.Errorf("KeyRangePart should not be populated. Got:\n%+v\n, testCase:\n%+v\n",
+				keyspace, split.KeyRangePart)
+		}
+		if split.ShardPart.Keyspace != keyspace {
+			t.Errorf("wrong keyspace, got \n%+v, want \n%+v. testCase:\n%+v",
+				keyspace, split.ShardPart.Keyspace, testCase)
+		}
+		if len(split.ShardPart.Shards) != 1 {
+			t.Errorf("wrong number of shards, got \n%+v, want \n%+v. testCase:\n%+v",
+				1, len(split.ShardPart.Shards), testCase)
+		}
+		expectedShard := "0"
+		expectedSQL := fmt.Sprintf(
+			"query:%v, splitColumns:%v, splitCount:%v,"+
+				" numRowsPerQueryPart:%v, algorithm:%v, shard:%v",
+			querytypes.BoundQuery{Sql: sql, BindVariables: bindVars},
+			splitColumns,
+			testCase.splitCount,
+			testCase.numRowsPerQueryPart,
+			algorithm,
+			expectedShard,
+		)
+		if split.Query.Sql != expectedSQL {
+			t.Errorf("got:\n%v\n, want:\n%v\n, testCase:\n%+v",
+				split.Query.Sql, expectedSQL, testCase)
+		}
 	}
 }
 

@@ -16,20 +16,22 @@ import (
 
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
+	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 // Planner is used to compute the plan. It contains
 // the vschema, and has a cache of previous computed plans.
 type Planner struct {
-	vschema *planbuilder.VSchema
+	vschema *vindexes.VSchema
 	plans   *cache.LRUCache
 }
 
 var once sync.Once
 
 // NewPlanner creates a new planner for VTGate.
-func NewPlanner(vschema *planbuilder.VSchema, cacheSize int) *Planner {
+func NewPlanner(vschema *vindexes.VSchema, cacheSize int) *Planner {
 	plr := &Planner{
 		vschema: vschema,
 		plans:   cache.NewLRUCache(int64(cacheSize)),
@@ -43,14 +45,21 @@ func NewPlanner(vschema *planbuilder.VSchema, cacheSize int) *Planner {
 
 // GetPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (plr *Planner) GetPlan(sql string) (*planbuilder.Plan, error) {
+func (plr *Planner) GetPlan(sql, keyspace string) (*engine.Plan, error) {
 	if plr.vschema == nil {
 		return nil, errors.New("vschema not initialized")
 	}
-	if result, ok := plr.plans.Get(sql); ok {
-		return result.(*planbuilder.Plan), nil
+	key := sql
+	if keyspace != "" {
+		key = keyspace + ":" + sql
 	}
-	plan, err := planbuilder.BuildPlan(sql, plr.vschema)
+	if result, ok := plr.plans.Get(key); ok {
+		return result.(*engine.Plan), nil
+	}
+	plan, err := planbuilder.Build(sql, &wrappedVSchema{
+		vschema:  plr.vschema,
+		keyspace: keyspace,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -92,4 +101,16 @@ func (plr *Planner) ServeHTTP(response http.ResponseWriter, request *http.Reques
 	} else {
 		response.WriteHeader(http.StatusNotFound)
 	}
+}
+
+type wrappedVSchema struct {
+	vschema  *vindexes.VSchema
+	keyspace string
+}
+
+func (vs *wrappedVSchema) Find(keyspace, tablename string) (table *vindexes.Table, err error) {
+	if keyspace == "" {
+		keyspace = vs.keyspace
+	}
+	return vs.vschema.Find(keyspace, tablename)
 }

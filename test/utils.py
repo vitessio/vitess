@@ -86,7 +86,7 @@ def add_options(parser):
       '--skip-teardown', action='store_true',
       help='Leave the global processes running after the test is done.')
   parser.add_option('--mysql-flavor')
-  parser.add_option('--protocols-flavor', default='gorpc')
+  parser.add_option('--protocols-flavor', default='grpc')
   parser.add_option('--topo-server-flavor', default='zookeeper')
   parser.add_option('--vtgate-gateway-flavor', default='discoverygateway')
 
@@ -516,7 +516,6 @@ class VtGate(object):
         '-srv_topo_cache_ttl', cache_ttl,
         '-conn-timeout-total', timeout_total,
         '-conn-timeout-per-conn', timeout_per_conn,
-        '-bsonrpc_timeout', '5s',
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-gateway_implementation', vtgate_gateway_flavor().flavor(),
     ]
@@ -894,7 +893,8 @@ def wait_db_read_only(uid):
   raise e
 
 
-def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
+def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64',
+                       sharding_column_name='keyspace_id'):
   ks = run_vtctl_json(['GetSrvKeyspace', cell, keyspace])
   result = ''
   pmap = {}
@@ -923,7 +923,7 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
         'Mismatch in srv keyspace for cell %s keyspace %s, expected:\n%'
         's\ngot:\n%s' % (
             cell, keyspace, expected, result))
-  if 'keyspace_id' != ks.get('sharding_column_name'):
+  if sharding_column_name != ks.get('sharding_column_name'):
     raise Exception('Got wrong sharding_column_name in SrvKeyspace: %s' %
                     str(ks))
   if keyspace_id_type != keyrange_constants.PROTO3_KIT_TO_STRING[

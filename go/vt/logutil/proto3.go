@@ -10,11 +10,11 @@ import (
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 )
 
-// This file contains a few functions to help with proto3.  proto3
-// will eventually support timestamps, at which point we'll retire
-// this.
+// This file contains a few functions to help with proto3.
 
 // ProtoToTime converts a logutilpb.Time to a time.Time.
+// proto3 will eventually support timestamps, at which point we'll retire
+// this.
 //
 // A nil pointer is like the empty timestamp.
 func ProtoToTime(ts *logutilpb.Time) time.Time {
@@ -33,4 +33,12 @@ func TimeToProto(t time.Time) *logutilpb.Time {
 		Seconds:     seconds,
 		Nanoseconds: int32(nanos),
 	}
+}
+
+// EventStream is an interface used by RPC clients when the streaming
+// RPC returns a stream of log events.
+type EventStream interface {
+	// Recv returns the next event in the logs.
+	// If there are no more, it will return io.EOF.
+	Recv() (*logutilpb.Event, error)
 }
