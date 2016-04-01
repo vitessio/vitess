@@ -60,7 +60,6 @@ func (bh *CephBackupHandle) AddFile(filename string) (io.WriteCloser, error) {
 	go func() {
 		defer bh.waitGroup.Done()
 		// Give PutObject() the read end of the pipe.
-		fmt.Println(bucket, filename)
 		log1.Info(bucket, filename)
 		_, err := bh.client.PutObject(bucket, filename, reader, "application/octet-stream")
 		if err != nil {

@@ -14,6 +14,7 @@ import (
 	"os"
 	"path"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
 )
 
@@ -33,26 +34,30 @@ type FileBackupHandle struct {
 
 // Directory is part of the BackupHandle interface
 func (fbh *FileBackupHandle) Directory() string {
+	log.Infof("log1", fbh.dir, fbh.name, fbh.readOnly)
 	return fbh.dir
 }
 
 // Name is part of the BackupHandle interface
 func (fbh *FileBackupHandle) Name() string {
+	log.Infof("log2", fbh.dir, fbh.name, fbh.readOnly)
 	return fbh.name
 }
 
 // AddFile is part of the BackupHandle interface
 func (fbh *FileBackupHandle) AddFile(filename string) (io.WriteCloser, error) {
+	log.Infof("log3", fbh.dir, fbh.name, fbh.readOnly)
 	if fbh.readOnly {
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
-	fmt.Println("1o", "==", fbh.dir, "==", fbh.name, "==", filename, "==", *FileBackupStorageRoot)
+	//	fmt.Println("1o", "==", fbh.dir, "==", fbh.name, "==", filename, "==", *FileBackupStorageRoot)
 	p := path.Join(*FileBackupStorageRoot, fbh.dir, fbh.name, filename)
 	return os.Create(p)
 }
 
 // EndBackup is part of the BackupHandle interface
 func (fbh *FileBackupHandle) EndBackup() error {
+	log.Infof("log4", fbh.dir, fbh.name, fbh.readOnly)
 	if fbh.readOnly {
 		return fmt.Errorf("EndBackup cannot be called on read-only backup")
 	}
@@ -61,6 +66,7 @@ func (fbh *FileBackupHandle) EndBackup() error {
 
 // AbortBackup is part of the BackupHandle interface
 func (fbh *FileBackupHandle) AbortBackup() error {
+	log.Infof("log5", fbh.dir, fbh.name, fbh.readOnly)
 	if fbh.readOnly {
 		return fmt.Errorf("AbortBackup cannot be called on read-only backup")
 	}
@@ -69,6 +75,7 @@ func (fbh *FileBackupHandle) AbortBackup() error {
 
 // ReadFile is part of the BackupHandle interface
 func (fbh *FileBackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
+	log.Infof("log6", fbh.dir, fbh.name, fbh.readOnly)
 	if !fbh.readOnly {
 		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
 	}
@@ -92,6 +99,7 @@ func (fbs *FileBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHan
 	}
 
 	result := make([]backupstorage.BackupHandle, 0, len(fi))
+	var temp int64
 	for _, info := range fi {
 		if !info.IsDir() {
 			continue
@@ -99,6 +107,8 @@ func (fbs *FileBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHan
 		if info.Name() == "." || info.Name() == ".." {
 			continue
 		}
+		temp++
+		log.Infof(temp, fbs, dir, info.Name(), true)
 		result = append(result, &FileBackupHandle{
 			fbs:      fbs,
 			dir:      dir,
@@ -122,7 +132,9 @@ func (fbs *FileBackupStorage) StartBackup(dir, name string) (backupstorage.Backu
 	if err := os.Mkdir(p, os.ModePerm); err != nil {
 		return nil, err
 	}
-	fmt.Println(dir, "**", name)
+	var temp int64
+	//	fmt.Println(dir, "**", name)
+	log.Infof(temp, fbs, dir, true)
 	return &FileBackupHandle{
 		fbs:      fbs,
 		dir:      dir,

@@ -341,6 +341,7 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 				rec.RecordError(fmt.Errorf("cannot add file: %v", err))
 				return
 			}
+			//			defer func() { rec.RecordError(wc.Close()) }()
 			defer func() { rec.RecordError(wc.Close()) }()
 			dst := bufio.NewWriterSize(wc, 2*1024*1024)
 

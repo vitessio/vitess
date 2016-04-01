@@ -109,6 +109,7 @@ for uid_index in $uids; do
     -rowcache-bin $memcached_path \
     -rowcache-socket $VTDATAROOT/$tablet_dir/memcache.sock \
     -backup_storage_implementation ceph \
+    -restore_from_backup \
     -port $port \
     -grpc_port $grpc_port \
     -binlog_player_protocol grpc \
