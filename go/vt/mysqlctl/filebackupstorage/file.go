@@ -99,7 +99,6 @@ func (fbs *FileBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHan
 	}
 
 	result := make([]backupstorage.BackupHandle, 0, len(fi))
-	var temp int64
 	for _, info := range fi {
 		if !info.IsDir() {
 			continue
@@ -107,8 +106,6 @@ func (fbs *FileBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHan
 		if info.Name() == "." || info.Name() == ".." {
 			continue
 		}
-		temp++
-		log.Infof(temp, fbs, dir, info.Name(), true)
 		result = append(result, &FileBackupHandle{
 			fbs:      fbs,
 			dir:      dir,
@@ -132,9 +129,6 @@ func (fbs *FileBackupStorage) StartBackup(dir, name string) (backupstorage.Backu
 	if err := os.Mkdir(p, os.ModePerm); err != nil {
 		return nil, err
 	}
-	var temp int64
-	//	fmt.Println(dir, "**", name)
-	log.Infof(temp, fbs, dir, true)
 	return &FileBackupHandle{
 		fbs:      fbs,
 		dir:      dir,
