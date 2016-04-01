@@ -96,8 +96,6 @@ func (zkts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias
 		}
 		return nil, 0, err
 	}
-	fmt.Println(data, stat)
-	//	fmt.Println("4u2", data, stat)
 	tablet := &topodatapb.Tablet{}
 	if err := json.Unmarshal([]byte(data), tablet); err != nil {
 		return nil, 0, err

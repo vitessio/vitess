@@ -335,7 +335,6 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 			defer source.Close()
 			// open the destination file for writing, and a buffer
 			name := fmt.Sprintf("%v", i)
-			fmt.Println(name, "**", bh.Directory(), "**", bh.Name())
 			wc, err := bh.AddFile(name)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("cannot add file: %v", err))
