@@ -208,8 +208,17 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"secure": {
-			"File": "secure.py",
+		"encrypted_replication": {
+			"File": "encrypted_replication.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"encrypted_transport": {
+			"File": "encrypted_transport.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,

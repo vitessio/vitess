@@ -19,6 +19,7 @@ var (
 // and blocks until it the process gets a signal.
 func Run(port int) {
 	populateListeningURL()
+	createGRPCServer()
 	onRunHooks.Fire()
 	serveGRPC()
 
