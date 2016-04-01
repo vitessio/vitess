@@ -55,7 +55,7 @@ var routerVSchema = createTestVSchema(`
           "Type": "numeric"
         }
       },
-      "Classes": {
+      "Tables": {
         "user": {
           "ColVindexes": [
             {
@@ -67,10 +67,10 @@ var routerVSchema = createTestVSchema(`
               "Name": "name_user_map"
             }
           ],
-					"Autoinc" : {
-						"Col": "id",
-						"Sequence": "user_seq"
-					}
+          "Autoinc" : {
+            "Col": "id",
+            "Sequence": "user_seq"
+          }
         },
         "user_extra": {
           "ColVindexes": [
@@ -91,10 +91,10 @@ var routerVSchema = createTestVSchema(`
               "Name": "music_user_map"
             }
           ],
-					"Autoinc" : {
-						"Col": "id",
-						"Sequence": "user_seq"
-					}
+          "Autoinc" : {
+            "Col": "id",
+            "Sequence": "user_seq"
+          }
         },
         "music_extra": {
           "ColVindexes": [
@@ -136,34 +136,22 @@ var routerVSchema = createTestVSchema(`
             }
           ]
         }
-      },
-      "Tables": {
-        "user": "user",
-        "user_extra": "user_extra",
-        "music": "music",
-        "music_extra": "music_extra",
-        "music_extra_reversed": "music_extra_reversed",
-        "noauto_table": "noauto_table",
-        "ksid_table": "ksid_table"
       }
     },
     "TestBadSharding": {
       "Sharded": false,
       "Tables": {
-        "sharded_table": ""
+        "sharded_table": {}
       }
     },
     "TestUnsharded": {
       "Sharded": false,
-			"Classes": {
-				"seq": {
-					"Type": "Sequence"
-				}
-			},
       "Tables": {
-        "user_seq": "seq",
-        "music_user_map": "",
-        "name_user_map": ""
+        "user_seq": {
+          "Type": "Sequence"
+        },
+        "music_user_map": {},
+        "name_user_map": {}
       }
     }
   }
@@ -215,6 +203,7 @@ func routerExec(router *Router, sql string, bv map[string]interface{}) (*sqltype
 	return router.Execute(context.Background(),
 		sql,
 		bv,
+		"",
 		topodatapb.TabletType_MASTER,
 		nil,
 		false)
@@ -222,7 +211,7 @@ func routerExec(router *Router, sql string, bv map[string]interface{}) (*sqltype
 
 func routerStream(router *Router, sql string) (qr *sqltypes.Result, err error) {
 	results := make(chan *sqltypes.Result, 10)
-	err = router.StreamExecute(context.Background(), sql, nil, topodatapb.TabletType_MASTER, func(qr *sqltypes.Result) error {
+	err = router.StreamExecute(context.Background(), sql, nil, "", topodatapb.TabletType_MASTER, func(qr *sqltypes.Result) error {
 		results <- qr
 		return nil
 	})

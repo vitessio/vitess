@@ -14,15 +14,23 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
+// dmlFormatter strips out keyspace name from dmls.
+func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
+	switch node := node.(type) {
+	case *sqlparser.TableName:
+		node.Name.Format(buf)
+		return
+	}
+	node.Format(buf)
+}
+
 // buildUpdatePlan builds the instructions for an UPDATE statement.
-func buildUpdatePlan(upd *sqlparser.Update, vschema *vindexes.VSchema) (*engine.Route, error) {
+func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, error) {
 	route := &engine.Route{
 		Query: generateQuery(upd),
 	}
-	// We allow only one table in an update.
-	tablename := sqlparser.GetTableName(upd.Table)
 	var err error
-	route.Table, err = vschema.FindTable(tablename)
+	route.Table, err = vschema.Find(string(upd.Table.Qualifier), string(upd.Table.Name))
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +55,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema *vindexes.VSchema) (*engine.
 }
 
 func generateQuery(statement sqlparser.Statement) string {
-	buf := sqlparser.NewTrackedBuffer(nil)
+	buf := sqlparser.NewTrackedBuffer(dmlFormatter)
 	statement.Format(buf)
 	return buf.String()
 }
@@ -68,14 +76,12 @@ func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.C
 }
 
 // buildUpdatePlan builds the instructions for a DELETE statement.
-func buildDeletePlan(del *sqlparser.Delete, vschema *vindexes.VSchema) (*engine.Route, error) {
+func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, error) {
 	route := &engine.Route{
 		Query: generateQuery(del),
 	}
-	// We allow only one table in a delete.
-	tablename := sqlparser.GetTableName(del.Table)
 	var err error
-	route.Table, err = vschema.FindTable(tablename)
+	route.Table, err = vschema.Find(string(del.Table.Qualifier), string(del.Table.Name))
 	if err != nil {
 		return nil, err
 	}

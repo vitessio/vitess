@@ -36,7 +36,7 @@ type route struct {
 	ERoute *engine.Route
 }
 
-func newRoute(from sqlparser.TableExprs, eroute *engine.Route, table *vindexes.Table, vschema *vindexes.VSchema, alias, astName sqlparser.SQLName) *route {
+func newRoute(from sqlparser.TableExprs, eroute *engine.Route, table *vindexes.Table, vschema VSchema, alias, astName sqlparser.SQLName) *route {
 	// We have some circular pointer references here:
 	// The route points to the symtab idicating
 	// the symtab that should be used to resolve symbols

@@ -146,10 +146,6 @@
 "delete from user where col = (select id from main1)"
 "unsupported: subqueries in DML"
 
-# qualified table name in DMLs
-"update u.user set id = 1"
-"unsupported: compex table expression in DML"
-
 # update with no where clause
 "update user set val = 1"
 "unsupported: multi-shard where clause in DML"

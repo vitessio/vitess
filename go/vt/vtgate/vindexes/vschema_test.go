@@ -85,8 +85,8 @@ func TestUnshardedVSchema(t *testing.T) {
 	good := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
 			"unsharded": {
-				Tables: map[string]string{
-					"t1": "",
+				Tables: map[string]TableFormal{
+					"t1": {},
 				},
 			},
 		},
@@ -95,14 +95,23 @@ func TestUnshardedVSchema(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	ks := &Keyspace{
+		Name: "unsharded",
+	}
+	t1 := &Table{
+		Name:     "t1",
+		Keyspace: ks,
+	}
 	want := &VSchema{
-		Tables: map[string]*Table{
-			"t1": {
-				Name: "t1",
-				Keyspace: &Keyspace{
-					Name: "unsharded",
+		tables: map[string]*Table{
+			"t1": t1,
+		},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"unsharded": {
+				Keyspace: ks,
+				Tables: map[string]*Table{
+					"t1": t1,
 				},
-				ColVindexes: nil,
 			},
 		},
 	}
@@ -129,7 +138,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 						Owner: "t1",
 					},
 				},
-				Classes: map[string]ClassFormal{
+				Tables: map[string]TableFormal{
 					"t1": {
 						ColVindexes: []ColVindexFormal{
 							{
@@ -142,9 +151,6 @@ func TestShardedVSchemaOwned(t *testing.T) {
 						},
 					},
 				},
-				Tables: map[string]string{
-					"t1": "t1",
-				},
 			},
 		},
 	}
@@ -152,42 +158,52 @@ func TestShardedVSchemaOwned(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := &VSchema{
-		Tables: map[string]*Table{
-			"t1": {
-				Name: "t1",
-				Keyspace: &Keyspace{
-					Name:    "sharded",
-					Sharded: true,
+	ks := &Keyspace{
+		Name:    "sharded",
+		Sharded: true,
+	}
+	t1 := &Table{
+		Name:     "t1",
+		Keyspace: ks,
+		ColVindexes: []*ColVindex{
+			{
+				Col:  "c1",
+				Type: "stfu",
+				Name: "stfu1",
+				Vindex: &stFU{
+					name: "stfu1",
+					Params: map[string]interface{}{
+						"stfu1": 1,
+					},
 				},
-				ColVindexes: []*ColVindex{
-					{
-						Col:  "c1",
-						Type: "stfu",
-						Name: "stfu1",
-						Vindex: &stFU{
-							name: "stfu1",
-							Params: map[string]interface{}{
-								"stfu1": 1,
-							},
-						},
-					},
-					{
-						Col:    "c2",
-						Type:   "stln",
-						Name:   "stln1",
-						Owned:  true,
-						Vindex: &stLN{name: "stln1"},
-					},
+			},
+			{
+				Col:    "c2",
+				Type:   "stln",
+				Name:   "stln1",
+				Owned:  true,
+				Vindex: &stLN{name: "stln1"},
+			},
+		},
+	}
+	t1.Ordered = []*ColVindex{
+		t1.ColVindexes[1],
+		t1.ColVindexes[0],
+	}
+	t1.Owned = t1.ColVindexes[1:]
+	want := &VSchema{
+		tables: map[string]*Table{
+			"t1": t1,
+		},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"sharded": {
+				Keyspace: ks,
+				Tables: map[string]*Table{
+					"t1": t1,
 				},
 			},
 		},
 	}
-	want.Tables["t1"].Ordered = []*ColVindex{
-		want.Tables["t1"].ColVindexes[1],
-		want.Tables["t1"].ColVindexes[0],
-	}
-	want.Tables["t1"].Owned = want.Tables["t1"].ColVindexes[1:]
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)
 		wantjson, _ := json.Marshal(want)
@@ -210,7 +226,7 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 						Owner: "",
 					},
 				},
-				Classes: map[string]ClassFormal{
+				Tables: map[string]TableFormal{
 					"t1": {
 						ColVindexes: []ColVindexFormal{
 							{
@@ -223,9 +239,6 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 						},
 					},
 				},
-				Tables: map[string]string{
-					"t1": "t1",
-				},
 			},
 		},
 	}
@@ -233,36 +246,46 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := &VSchema{
-		Tables: map[string]*Table{
-			"t1": {
-				Name: "t1",
-				Keyspace: &Keyspace{
-					Name:    "sharded",
-					Sharded: true,
-				},
-				ColVindexes: []*ColVindex{
-					{
-						Col:    "c1",
-						Type:   "stlu",
-						Name:   "stlu1",
-						Owned:  false,
-						Vindex: &stLU{name: "stlu1"},
-					},
-					{
-						Col:    "c2",
-						Type:   "stfu",
-						Name:   "stfu1",
-						Owned:  false,
-						Vindex: &stFU{name: "stfu1"},
-					},
-				},
+	ks := &Keyspace{
+		Name:    "sharded",
+		Sharded: true,
+	}
+	t1 := &Table{
+		Name:     "t1",
+		Keyspace: ks,
+		ColVindexes: []*ColVindex{
+			{
+				Col:    "c1",
+				Type:   "stlu",
+				Name:   "stlu1",
+				Owned:  false,
+				Vindex: &stLU{name: "stlu1"},
+			},
+			{
+				Col:    "c2",
+				Type:   "stfu",
+				Name:   "stfu1",
+				Owned:  false,
+				Vindex: &stFU{name: "stfu1"},
 			},
 		},
 	}
-	want.Tables["t1"].Ordered = []*ColVindex{
-		want.Tables["t1"].ColVindexes[1],
-		want.Tables["t1"].ColVindexes[0],
+	t1.Ordered = []*ColVindex{
+		t1.ColVindexes[1],
+		t1.ColVindexes[0],
+	}
+	want := &VSchema{
+		tables: map[string]*Table{
+			"t1": t1,
+		},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"sharded": {
+				Keyspace: ks,
+				Tables: map[string]*Table{
+					"t1": t1,
+				},
+			},
+		},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("BuildVSchema:s\n%v, want\n%v", got, want)
@@ -283,39 +306,6 @@ func TestLoadVSchemaFail(t *testing.T) {
 	}
 }
 
-func TestBuildVSchemaClassNotFoundFail(t *testing.T) {
-	bad := VSchemaFormal{
-		Keyspaces: map[string]KeyspaceFormal{
-			"sharded": {
-				Sharded: true,
-				Vindexes: map[string]VindexFormal{
-					"stfu": {
-						Type: "stfu",
-					},
-				},
-				Classes: map[string]ClassFormal{
-					"notexist": {
-						ColVindexes: []ColVindexFormal{
-							{
-								Col:  "c1",
-								Name: "noexist",
-							},
-						},
-					},
-				},
-				Tables: map[string]string{
-					"t1": "t1",
-				},
-			},
-		},
-	}
-	_, err := BuildVSchema(&bad)
-	want := "class t1 not found for table t1"
-	if err == nil || err.Error() != want {
-		t.Errorf("BuildVSchema: %v, want %v", err, want)
-	}
-}
-
 func TestBuildVSchemaVindexNotFoundFail(t *testing.T) {
 	bad := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
@@ -326,7 +316,7 @@ func TestBuildVSchemaVindexNotFoundFail(t *testing.T) {
 						Type: "noexist",
 					},
 				},
-				Classes: map[string]ClassFormal{
+				Tables: map[string]TableFormal{
 					"t1": {
 						ColVindexes: []ColVindexFormal{
 							{
@@ -335,9 +325,6 @@ func TestBuildVSchemaVindexNotFoundFail(t *testing.T) {
 							},
 						},
 					},
-				},
-				Tables: map[string]string{
-					"t1": "t1",
 				},
 			},
 		},
@@ -359,7 +346,7 @@ func TestBuildVSchemaInvalidVindexFail(t *testing.T) {
 						Type: "stf",
 					},
 				},
-				Classes: map[string]ClassFormal{
+				Tables: map[string]TableFormal{
 					"t1": {
 						ColVindexes: []ColVindexFormal{
 							{
@@ -368,9 +355,6 @@ func TestBuildVSchemaInvalidVindexFail(t *testing.T) {
 							},
 						},
 					},
-				},
-				Tables: map[string]string{
-					"t1": "t1",
 				},
 			},
 		},
@@ -382,57 +366,121 @@ func TestBuildVSchemaInvalidVindexFail(t *testing.T) {
 	}
 }
 
-func TestBuildVSchemaDupTableFail(t *testing.T) {
-	bad := VSchemaFormal{
+func TestBuildVSchemaDupSeq(t *testing.T) {
+	good := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
-			"sharded": {
-				Sharded: true,
-				Vindexes: map[string]VindexFormal{
-					"stfu": {
-						Type: "stfu",
-					},
-				},
-				Classes: map[string]ClassFormal{
+			"ksa": {
+				Tables: map[string]TableFormal{
 					"t1": {
-						ColVindexes: []ColVindexFormal{
-							{
-								Col:  "c1",
-								Name: "stfu",
-							},
-						},
+						Type: "Sequence",
 					},
-				},
-				Tables: map[string]string{
-					"t1": "t1",
 				},
 			},
-			"sharded1": {
-				Sharded: true,
-				Vindexes: map[string]VindexFormal{
-					"stfu": {
-						Type: "stfu",
-					},
-				},
-				Classes: map[string]ClassFormal{
+			"ksb": {
+				Tables: map[string]TableFormal{
 					"t1": {
-						ColVindexes: []ColVindexFormal{
-							{
-								Col:  "c1",
-								Name: "stfu",
-							},
-						},
+						Type: "Sequence",
 					},
-				},
-				Tables: map[string]string{
-					"t1": "t1",
 				},
 			},
 		},
 	}
-	_, err := BuildVSchema(&bad)
-	want := "table t1 has multiple definitions"
-	if err == nil || err.Error() != want {
-		t.Errorf("BuildVSchema: %v, want %v", err, want)
+	ksa := &Keyspace{
+		Name: "ksa",
+	}
+	ksb := &Keyspace{
+		Name: "ksb",
+	}
+	got, _ := BuildVSchema(&good)
+	t1a := &Table{
+		Name:       "t1",
+		Keyspace:   ksa,
+		IsSequence: true,
+	}
+	t1b := &Table{
+		Name:       "t1",
+		Keyspace:   ksb,
+		IsSequence: true,
+	}
+	want := &VSchema{
+		tables: map[string]*Table{
+			"t1": nil,
+		},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"ksa": {
+				Keyspace: ksa,
+				Tables: map[string]*Table{
+					"t1": t1a,
+				},
+			},
+			"ksb": {
+				Keyspace: ksb,
+				Tables: map[string]*Table{
+					"t1": t1b,
+				},
+			},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		gotjson, _ := json.Marshal(got)
+		wantjson, _ := json.Marshal(want)
+		t.Errorf("BuildVSchema:s\n%s, want\n%s", gotjson, wantjson)
+	}
+}
+
+func TestBuildVSchemaDupTable(t *testing.T) {
+	good := VSchemaFormal{
+		Keyspaces: map[string]KeyspaceFormal{
+			"ksa": {
+				Tables: map[string]TableFormal{
+					"t1": {},
+				},
+			},
+			"ksb": {
+				Tables: map[string]TableFormal{
+					"t1": {},
+				},
+			},
+		},
+	}
+	got, _ := BuildVSchema(&good)
+	ksa := &Keyspace{
+		Name: "ksa",
+	}
+	t1a := &Table{
+		Name:     "t1",
+		Keyspace: ksa,
+	}
+	ksb := &Keyspace{
+		Name: "ksb",
+	}
+	t1b := &Table{
+		Name:     "t1",
+		Keyspace: ksb,
+	}
+	want := &VSchema{
+		tables: map[string]*Table{
+			"t1": nil,
+		},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"ksa": {
+				Keyspace: ksa,
+				Tables: map[string]*Table{
+					"t1": t1a,
+				},
+			},
+			"ksb": {
+				Keyspace: ksb,
+				Tables: map[string]*Table{
+					"t1": t1b,
+				},
+			},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		gotjson, _ := json.Marshal(got)
+		wantjson, _ := json.Marshal(want)
+		t.Errorf("BuildVSchema:s\n%s, want\n%s", gotjson, wantjson)
 	}
 }
 
@@ -446,7 +494,7 @@ func TestBuildVSchemaNoindexFail(t *testing.T) {
 						Type: "stfu",
 					},
 				},
-				Classes: map[string]ClassFormal{
+				Tables: map[string]TableFormal{
 					"t1": {
 						ColVindexes: []ColVindexFormal{
 							{
@@ -456,14 +504,11 @@ func TestBuildVSchemaNoindexFail(t *testing.T) {
 						},
 					},
 				},
-				Tables: map[string]string{
-					"t1": "t1",
-				},
 			},
 		},
 	}
 	_, err := BuildVSchema(&bad)
-	want := "vindex notexist not found for class t1"
+	want := "vindex notexist not found for table t1"
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
@@ -479,7 +524,7 @@ func TestBuildVSchemaNotUniqueFail(t *testing.T) {
 						Type: "stln",
 					},
 				},
-				Classes: map[string]ClassFormal{
+				Tables: map[string]TableFormal{
 					"t1": {
 						ColVindexes: []ColVindexFormal{
 							{
@@ -489,14 +534,11 @@ func TestBuildVSchemaNotUniqueFail(t *testing.T) {
 						},
 					},
 				},
-				Tables: map[string]string{
-					"t1": "t1",
-				},
 			},
 		},
 	}
 	_, err := BuildVSchema(&bad)
-	want := "primary vindex stln is not Unique for class t1"
+	want := "primary vindex stln is not Unique for table t1"
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
@@ -513,7 +555,7 @@ func TestBuildVSchemaPrimaryNonFunctionalFail(t *testing.T) {
 						Owner: "t1",
 					},
 				},
-				Classes: map[string]ClassFormal{
+				Tables: map[string]TableFormal{
 					"t1": {
 						ColVindexes: []ColVindexFormal{
 							{
@@ -523,14 +565,11 @@ func TestBuildVSchemaPrimaryNonFunctionalFail(t *testing.T) {
 						},
 					},
 				},
-				Tables: map[string]string{
-					"t1": "t1",
-				},
 			},
 		},
 	}
 	_, err := BuildVSchema(&bad)
-	want := "primary vindex stlu cannot be owned for class t1"
+	want := "primary vindex stlu cannot be owned for table t1"
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
@@ -540,13 +579,10 @@ func TestSequence(t *testing.T) {
 	good := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
 			"unsharded": {
-				Classes: map[string]ClassFormal{
+				Tables: map[string]TableFormal{
 					"seq": {
 						Type: "Sequence",
 					},
-				},
-				Tables: map[string]string{
-					"seq": "seq",
 				},
 			},
 			"sharded": {
@@ -559,7 +595,7 @@ func TestSequence(t *testing.T) {
 						},
 					},
 				},
-				Classes: map[string]ClassFormal{
+				Tables: map[string]TableFormal{
 					"t1": {
 						ColVindexes: []ColVindexFormal{
 							{
@@ -573,9 +609,6 @@ func TestSequence(t *testing.T) {
 						},
 					},
 				},
-				Tables: map[string]string{
-					"t1": "t1",
-				},
 			},
 		},
 	}
@@ -583,44 +616,61 @@ func TestSequence(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	ksu := &Keyspace{
+		Name: "unsharded",
+	}
+	kss := &Keyspace{
+		Name:    "sharded",
+		Sharded: true,
+	}
 	seq := &Table{
-		Name: "seq",
-		Keyspace: &Keyspace{
-			Name: "unsharded",
-		},
+		Name:       "seq",
+		Keyspace:   ksu,
 		IsSequence: true,
 	}
-	want := &VSchema{
-		Tables: map[string]*Table{
-			"seq": seq,
-			"t1": {
-				Name: "t1",
-				Keyspace: &Keyspace{
-					Name:    "sharded",
-					Sharded: true,
-				},
-				ColVindexes: []*ColVindex{
-					{
-						Col:  "c1",
-						Type: "stfu",
-						Name: "stfu1",
-						Vindex: &stFU{
-							name: "stfu1",
-							Params: map[string]interface{}{
-								"stfu1": 1,
-							},
-						},
+	t1 := &Table{
+		Name:     "t1",
+		Keyspace: kss,
+		ColVindexes: []*ColVindex{
+			{
+				Col:  "c1",
+				Type: "stfu",
+				Name: "stfu1",
+				Vindex: &stFU{
+					name: "stfu1",
+					Params: map[string]interface{}{
+						"stfu1": 1,
 					},
-				},
-				Autoinc: &Autoinc{
-					Col:      "c1",
-					Sequence: seq,
 				},
 			},
 		},
+		Autoinc: &Autoinc{
+			Col:      "c1",
+			Sequence: seq,
+		},
 	}
-	want.Tables["t1"].Ordered = []*ColVindex{
-		want.Tables["t1"].ColVindexes[0],
+	t1.Ordered = []*ColVindex{
+		t1.ColVindexes[0],
+	}
+	want := &VSchema{
+		tables: map[string]*Table{
+			"seq": seq,
+			"t1":  t1,
+		},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"unsharded": {
+				Keyspace: ksu,
+				Tables: map[string]*Table{
+					"seq": seq,
+				},
+			},
+			"sharded": {
+				Keyspace: kss,
+				Tables: map[string]*Table{
+					"t1": t1,
+				},
+			},
+		},
 	}
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)
@@ -630,11 +680,11 @@ func TestSequence(t *testing.T) {
 }
 
 func TestBadSequence(t *testing.T) {
-	good := VSchemaFormal{
+	bad := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
 			"sharded": {
 				Sharded: true,
-				Classes: map[string]ClassFormal{
+				Tables: map[string]TableFormal{
 					"t1": {
 						Autoinc: &AutoincFormal{
 							Col:      "c1",
@@ -642,15 +692,122 @@ func TestBadSequence(t *testing.T) {
 						},
 					},
 				},
-				Tables: map[string]string{
-					"t1": "t1",
+			},
+		},
+	}
+	_, err := BuildVSchema(&bad)
+	want := "sequence seq not found for table t1"
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildVSchema: %v, want %v", err, want)
+	}
+}
+
+func TestFind(t *testing.T) {
+	input := VSchemaFormal{
+		Keyspaces: map[string]KeyspaceFormal{
+			"ksa": {
+				Tables: map[string]TableFormal{
+					"ta": {},
+					"t1": {},
+				},
+			},
+			"ksb": {
+				Sharded: true,
+				Tables: map[string]TableFormal{
+					"tb": {},
+					"t1": {},
 				},
 			},
 		},
 	}
-	_, err := BuildVSchema(&good)
-	want := "sequence seq not found for class t1"
-	if err == nil || err.Error() != want {
-		t.Errorf("BuildVSchema: %v, want %v", err, want)
+	vschema, _ := BuildVSchema(&input)
+	_, err := vschema.Find("", "t1")
+	wantErr := "ambiguous table reference: t1"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("Find(\"\"): %v, want %s", err, wantErr)
+	}
+	_, err = vschema.Find("", "none")
+	wantErr = "table none not found"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("Find(\"\"): %v, want %s", err, wantErr)
+	}
+	got, err := vschema.Find("", "ta")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	ta := &Table{
+		Name: "ta",
+		Keyspace: &Keyspace{
+			Name: "ksa",
+		},
+	}
+	if !reflect.DeepEqual(got, ta) {
+		t.Errorf("Find(\"t1a\"): %+v, want %+v", got, ta)
+	}
+	got, err = vschema.Find("ksa", "ta")
+	if !reflect.DeepEqual(got, ta) {
+		t.Errorf("Find(\"t1a\"): %+v, want %+v", got, ta)
+	}
+	none := &Table{
+		Name: "none",
+		Keyspace: &Keyspace{
+			Name: "ksa",
+		},
+	}
+	got, err = vschema.Find("ksa", "none")
+	if !reflect.DeepEqual(got, none) {
+		t.Errorf("Find(\"t1a\"): %+v, want %+v", got, none)
+	}
+	_, err = vschema.Find("ksb", "none")
+	wantErr = "table none not found"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("Find(\"\"): %v, want %s", err, wantErr)
+	}
+	_, err = vschema.Find("none", "aa")
+	wantErr = "keyspace none not found in vschema"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("Find(\"\"): %v, want %s", err, wantErr)
+	}
+}
+
+func TestFindSingleKeyspace(t *testing.T) {
+	input := VSchemaFormal{
+		Keyspaces: map[string]KeyspaceFormal{
+			"ksa": {
+				Tables: map[string]TableFormal{
+					"ta": {},
+					"t1": {},
+				},
+			},
+		},
+	}
+	vschema, _ := BuildVSchema(&input)
+	none := &Table{
+		Name: "none",
+		Keyspace: &Keyspace{
+			Name: "ksa",
+		},
+	}
+	got, _ := vschema.Find("", "none")
+	if !reflect.DeepEqual(got, none) {
+		t.Errorf("Find(\"t1a\"): %+v, want %+v", got, none)
+	}
+	input = VSchemaFormal{
+		Keyspaces: map[string]KeyspaceFormal{
+			"ksb": {
+				Sharded: true,
+				Tables: map[string]TableFormal{
+					"tb": {},
+					"t1": {},
+				},
+			},
+		},
+	}
+	vschema, _ = BuildVSchema(&input)
+	_, err := vschema.Find("", "none")
+	wantErr := "table none not found"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("Find(\"\"): %v, want %s", err, wantErr)
 	}
 }

@@ -587,6 +587,85 @@ func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string
 	return allSplits, nil
 }
 
+// SplitQueryV2 scatters a SplitQueryV2 request to the shards whose names are given in 'shards'.
+// For every set of querytypes.QuerySplit's received from a shard, it applies the given
+// 'querySplitToPartFunc' function to convert each querytypes.QuerySplit into a
+// 'SplitQueryResponse_Part' message. Finally, it aggregates the obtained
+// SplitQueryResponse_Parts across all shards and returns the resulting slice.
+// TODO(erez): Remove 'scatterConn.SplitQuery' and rename this method to SplitQuery once
+// the migration to SplitQuery V2 is done.
+func (stc *ScatterConn) SplitQueryV2(
+	ctx context.Context,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	perShardSplitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm,
+	shards []string,
+	querySplitToQueryPartFunc func(
+		querySplit *querytypes.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error),
+	keyspace string) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+
+	tabletType := topodatapb.TabletType_RDONLY
+	// allParts will collect the query-parts from all the shards. It's protected
+	// by allPartsMutex.
+	var allParts []*vtgatepb.SplitQueryResponse_Part
+	var allPartsMutex sync.Mutex
+
+	allErrors := stc.multiGo(
+		ctx,
+		"SplitQuery",
+		keyspace,
+		shards,
+		tabletType,
+		NewSafeSession(&vtgatepb.Session{}),
+		false,
+		func(shard string, transactionID int64) error {
+			// Get all splits from this shard
+			querySplits, err := stc.gateway.SplitQueryV2(
+				ctx,
+				keyspace,
+				shard,
+				tabletType,
+				sql,
+				bindVariables,
+				splitColumns,
+				perShardSplitCount,
+				numRowsPerQueryPart,
+				algorithm)
+			if err != nil {
+				return err
+			}
+			parts := make([]*vtgatepb.SplitQueryResponse_Part, len(querySplits))
+			for i, querySplit := range querySplits {
+				parts[i], err = querySplitToQueryPartFunc(&querySplit, shard)
+				if err != nil {
+					return err
+				}
+			}
+			// Aggregate the parts from this shard into allParts.
+			allPartsMutex.Lock()
+			defer allPartsMutex.Unlock()
+			allParts = append(allParts, parts...)
+			return nil
+		},
+	)
+
+	if allErrors.HasErrors() {
+		err := allErrors.AggrError(stc.aggregateErrors)
+		return nil, err
+	}
+	// We shuffle the query-parts here. External frameworks like MapReduce may
+	// "deal" these jobs to workers in the order they are in the list. Without
+	// shuffling workers can be very unevenly distributed among
+	// the shards they query. E.g. all workers will first query the first shard,
+	// then most of them to the second shard, etc, which results with uneven
+	// load balancing among shards.
+	shuffleQueryParts(allParts)
+	return allParts, nil
+}
+
 // randomGenerator is the randomGenerator used for the randomness
 // of 'shuffleQueryParts'. It's initialized in 'init()' below.
 type shuffleQueryPartsRandomGeneratorInterface interface {

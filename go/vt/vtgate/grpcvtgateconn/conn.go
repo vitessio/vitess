@@ -396,11 +396,45 @@ func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query s
 	}
 
 	request := &vtgatepb.SplitQueryRequest{
-		CallerId:    callerid.EffectiveCallerIDFromContext(ctx),
-		Keyspace:    keyspace,
-		Query:       q,
-		SplitColumn: splitColumn,
-		SplitCount:  splitCount,
+		CallerId:            callerid.EffectiveCallerIDFromContext(ctx),
+		Keyspace:            keyspace,
+		Query:               q,
+		SplitColumn:         []string{splitColumn},
+		SplitCount:          splitCount,
+		NumRowsPerQueryPart: 0,
+		Algorithm:           querypb.SplitQueryRequest_EQUAL_SPLITS,
+		UseSplitQueryV2:     false,
+	}
+	response, err := conn.c.SplitQuery(ctx, request)
+	if err != nil {
+		return nil, vterrors.FromGRPCError(err)
+	}
+	return response.Splits, nil
+}
+
+func (conn *vtgateConn) SplitQueryV2(
+	ctx context.Context,
+	keyspace string,
+	query string,
+	bindVars map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+	q, err := querytypes.BoundQueryToProto3(query, bindVars)
+	if err != nil {
+		return nil, err
+	}
+
+	request := &vtgatepb.SplitQueryRequest{
+		CallerId:            callerid.EffectiveCallerIDFromContext(ctx),
+		Keyspace:            keyspace,
+		Query:               q,
+		SplitColumn:         splitColumns,
+		SplitCount:          splitCount,
+		NumRowsPerQueryPart: numRowsPerQueryPart,
+		Algorithm:           algorithm,
+		UseSplitQueryV2:     true,
 	}
 	response, err := conn.c.SplitQuery(ctx, request)
 	if err != nil {

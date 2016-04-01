@@ -19,20 +19,37 @@ func TestGatwayEndPointStatusAggregator(t *testing.T) {
 		TabletType: topodatapb.TabletType_REPLICA,
 		Name:       "n",
 		Addr:       "a",
-		qiChan:     make(chan *queryInfo, 10000),
 	}
 	t.Logf("aggr = GatwayEndPointStatusAggregator{k, s, replica, n, a}")
-	aggr.UpdateQueryInfo("", topodatapb.TabletType_REPLICA, 10*time.Millisecond, false)
-	aggr.processQueryInfo(<-aggr.qiChan)
-	t.Logf("aggr.UpdateQueryInfo(, replica, 10ms, false)")
+	qi := &queryInfo{
+		aggr:       aggr,
+		addr:       "",
+		tabletType: topodatapb.TabletType_REPLICA,
+		elapsed:    10 * time.Millisecond,
+		hasError:   false,
+	}
+	aggr.processQueryInfo(qi)
+	t.Logf("aggr.processQueryInfo(, replica, 10ms, false)")
 	aggr.resetNextSlot()
 	t.Logf("aggr.resetNextSlot()")
-	aggr.UpdateQueryInfo("", topodatapb.TabletType_REPLICA, 8*time.Millisecond, false)
-	aggr.processQueryInfo(<-aggr.qiChan)
-	t.Logf("aggr.UpdateQueryInfo(, replica, 8ms, false)")
-	aggr.UpdateQueryInfo("", topodatapb.TabletType_REPLICA, 3*time.Millisecond, true)
-	aggr.processQueryInfo(<-aggr.qiChan)
-	t.Logf("aggr.UpdateQueryInfo(, replica, 3ms, true)")
+	qi = &queryInfo{
+		aggr:       aggr,
+		addr:       "",
+		tabletType: topodatapb.TabletType_REPLICA,
+		elapsed:    8 * time.Millisecond,
+		hasError:   false,
+	}
+	aggr.processQueryInfo(qi)
+	t.Logf("aggr.processQueryInfo(, replica, 8ms, false)")
+	qi = &queryInfo{
+		aggr:       aggr,
+		addr:       "",
+		tabletType: topodatapb.TabletType_REPLICA,
+		elapsed:    3 * time.Millisecond,
+		hasError:   true,
+	}
+	aggr.processQueryInfo(qi)
+	t.Logf("aggr.processQueryInfo(, replica, 3ms, true)")
 	want := &GatewayEndPointCacheStatus{
 		Keyspace:   "k",
 		Shard:      "s",
@@ -53,12 +70,24 @@ func TestGatwayEndPointStatusAggregator(t *testing.T) {
 		aggr.resetNextSlot()
 	}
 	t.Logf("59 aggr.resetNextSlot()")
-	aggr.UpdateQueryInfo("b", topodatapb.TabletType_MASTER, 9*time.Millisecond, false)
-	aggr.processQueryInfo(<-aggr.qiChan)
-	t.Logf("aggr.UpdateQueryInfo(b, master, 9ms, false)")
-	aggr.UpdateQueryInfo("", topodatapb.TabletType_MASTER, 6*time.Millisecond, true)
-	aggr.processQueryInfo(<-aggr.qiChan)
-	t.Logf("aggr.UpdateQueryInfo(, master, 6ms, true)")
+	qi = &queryInfo{
+		aggr:       aggr,
+		addr:       "b",
+		tabletType: topodatapb.TabletType_MASTER,
+		elapsed:    9 * time.Millisecond,
+		hasError:   false,
+	}
+	aggr.processQueryInfo(qi)
+	t.Logf("aggr.processQueryInfo(b, master, 9ms, false)")
+	qi = &queryInfo{
+		aggr:       aggr,
+		addr:       "",
+		tabletType: topodatapb.TabletType_MASTER,
+		elapsed:    6 * time.Millisecond,
+		hasError:   true,
+	}
+	aggr.processQueryInfo(qi)
+	t.Logf("aggr.processQueryInfo(, master, 6ms, true)")
 	want = &GatewayEndPointCacheStatus{
 		Keyspace:   "k",
 		Shard:      "s",

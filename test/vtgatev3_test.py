@@ -126,7 +126,7 @@ vschema = '''{
           "Owner": "vt_music"
         }
       },
-      "Classes": {
+      "Tables": {
         "vt_user": {
           "ColVindexes": [
             {
@@ -203,29 +203,19 @@ vschema = '''{
             }
           ]
         }
-      },
-      "Tables": {
-        "vt_user": "vt_user",
-        "vt_user2": "vt_user2",
-        "vt_user_extra": "vt_user_extra",
-        "vt_music": "vt_music",
-        "vt_music_extra": "vt_music_extra",
-        "join_user": "join_user",
-        "join_user_extra": "join_user_extra"
       }
     },
     "lookup": {
       "Sharded": false,
-      "Classes" : {
-        "seq": {
-          "Type": "Sequence"
-        }
-      },
       "Tables": {
-        "vt_user_seq": "seq",
-        "vt_music_seq": "seq",
-        "music_user_map": "",
-        "name_user2_map": ""
+        "vt_user_seq": {
+          "Type": "Sequence"
+        },
+        "vt_music_seq": {
+          "Type": "Sequence"
+        },
+        "music_user_map": {},
+        "name_user2_map": {}
       }
     }
   }

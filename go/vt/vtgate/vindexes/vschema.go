@@ -6,7 +6,6 @@ package vindexes
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"sort"
@@ -16,7 +15,8 @@ import (
 // VSchema represents the denormalized version of VSchemaFormal,
 // used for building routing plans.
 type VSchema struct {
-	Tables map[string]*Table
+	tables    map[string]*Table
+	Keyspaces map[string]*KeyspaceSchema
 }
 
 // Table represnts a table in VSchema.
@@ -45,6 +45,12 @@ type ColVindex struct {
 	Vindex Vindex
 }
 
+// KeyspaceSchema contains the schema(table) for a keyspace.
+type KeyspaceSchema struct {
+	Keyspace *Keyspace
+	Tables   map[string]*Table
+}
+
 // Autoinc contains the auto-inc information for a table.
 type Autoinc struct {
 	Col      string
@@ -56,61 +62,62 @@ type Autoinc struct {
 
 // BuildVSchema builds a VSchema from a VSchemaFormal.
 func BuildVSchema(source *VSchemaFormal) (vschema *VSchema, err error) {
-	vschema = &VSchema{Tables: make(map[string]*Table)}
-	keyspaces := buildKeyspaces(source)
+	vschema = &VSchema{
+		tables:    make(map[string]*Table),
+		Keyspaces: make(map[string]*KeyspaceSchema),
+	}
+	buildKeyspaces(source, vschema)
 	// We have to build the sequences first to avoid
 	// forward reference errors.
-	err = buildSequences(source, vschema, keyspaces)
+	err = buildSequences(source, vschema)
 	if err != nil {
 		return nil, err
 	}
-	err = buildTables(source, vschema, keyspaces)
+	err = buildTables(source, vschema)
 	if err != nil {
 		return nil, err
 	}
 	return vschema, nil
 }
 
-func buildKeyspaces(source *VSchemaFormal) map[string]*Keyspace {
-	k := make(map[string]*Keyspace)
+func buildKeyspaces(source *VSchemaFormal, vschema *VSchema) {
 	for ksname, ks := range source.Keyspaces {
-		k[ksname] = &Keyspace{
-			Name:    ksname,
-			Sharded: ks.Sharded,
+		vschema.Keyspaces[ksname] = &KeyspaceSchema{
+			Keyspace: &Keyspace{
+				Name:    ksname,
+				Sharded: ks.Sharded,
+			},
+			Tables: make(map[string]*Table),
 		}
 	}
-	return k
 }
 
-func buildSequences(source *VSchemaFormal, vschema *VSchema, keyspaces map[string]*Keyspace) error {
+func buildSequences(source *VSchemaFormal, vschema *VSchema) error {
 	for ksname, ks := range source.Keyspaces {
-		keyspace := keyspaces[ksname]
-		for tname, cname := range ks.Tables {
-			if _, ok := vschema.Tables[tname]; ok {
-				return fmt.Errorf("table %s has multiple definitions", tname)
-			}
-			if cname == "" {
+		keyspace := vschema.Keyspaces[ksname].Keyspace
+		for tname, table := range ks.Tables {
+			if table.Type != "Sequence" {
 				continue
 			}
-			class, ok := ks.Classes[cname]
-			if !ok {
-				return fmt.Errorf("class %s not found for table %s", cname, tname)
+			t := &Table{
+				Name:       tname,
+				Keyspace:   keyspace,
+				IsSequence: true,
 			}
-			if class.Type == "Sequence" {
-				vschema.Tables[tname] = &Table{
-					Name:       tname,
-					Keyspace:   keyspace,
-					IsSequence: true,
-				}
+			if _, ok := vschema.tables[tname]; ok {
+				vschema.tables[tname] = nil
+			} else {
+				vschema.tables[tname] = t
 			}
+			vschema.Keyspaces[ksname].Tables[tname] = t
 		}
 	}
 	return nil
 }
 
-func buildTables(source *VSchemaFormal, vschema *VSchema, keyspaces map[string]*Keyspace) error {
+func buildTables(source *VSchemaFormal, vschema *VSchema) error {
 	for ksname, ks := range source.Keyspaces {
-		keyspace := keyspaces[ksname]
+		keyspace := vschema.Keyspaces[ksname].Keyspace
 		vindexes := make(map[string]Vindex)
 		for vname, vindexInfo := range ks.Vindexes {
 			vindex, err := CreateVindex(vindexInfo.Type, vname, vindexInfo.Params)
@@ -125,29 +132,27 @@ func buildTables(source *VSchemaFormal, vschema *VSchema, keyspaces map[string]*
 			}
 			vindexes[vname] = vindex
 		}
-		for tname, cname := range ks.Tables {
-			if t, ok := vschema.Tables[tname]; ok {
-				if t.IsSequence {
-					continue
-				}
-				return fmt.Errorf("table %s has multiple definitions", tname)
+		for tname, table := range ks.Tables {
+			if table.Type == "Sequence" {
+				continue
 			}
 			t := &Table{
 				Name:     tname,
 				Keyspace: keyspace,
 			}
+			if _, ok := vschema.tables[tname]; ok {
+				vschema.tables[tname] = nil
+			} else {
+				vschema.tables[tname] = t
+			}
+			vschema.Keyspaces[ksname].Tables[tname] = t
 			if !keyspace.Sharded {
-				vschema.Tables[tname] = t
 				continue
 			}
-			class, ok := ks.Classes[cname]
-			if !ok {
-				return fmt.Errorf("class %s not found for table %s", cname, tname)
-			}
-			for i, ind := range class.ColVindexes {
+			for i, ind := range table.ColVindexes {
 				vindexInfo, ok := ks.Vindexes[ind.Name]
 				if !ok {
-					return fmt.Errorf("vindex %s not found for class %s", ind.Name, cname)
+					return fmt.Errorf("vindex %s not found for table %s", ind.Name, tname)
 				}
 				vindex := vindexes[ind.Name]
 				owned := false
@@ -164,10 +169,10 @@ func buildTables(source *VSchemaFormal, vschema *VSchema, keyspaces map[string]*
 				if i == 0 {
 					// Perform Primary vindex check.
 					if _, ok := columnVindex.Vindex.(Unique); !ok {
-						return fmt.Errorf("primary vindex %s is not Unique for class %s", ind.Name, cname)
+						return fmt.Errorf("primary vindex %s is not Unique for table %s", ind.Name, tname)
 					}
 					if owned {
-						return fmt.Errorf("primary vindex %s cannot be owned for class %s", ind.Name, cname)
+						return fmt.Errorf("primary vindex %s cannot be owned for table %s", ind.Name, tname)
 					}
 				}
 				t.ColVindexes = append(t.ColVindexes, columnVindex)
@@ -176,11 +181,11 @@ func buildTables(source *VSchemaFormal, vschema *VSchema, keyspaces map[string]*
 				}
 			}
 			t.Ordered = colVindexSorted(t.ColVindexes)
-			if class.Autoinc != nil {
-				t.Autoinc = &Autoinc{Col: class.Autoinc.Col, ColVindexNum: -1}
-				seq, ok := vschema.Tables[class.Autoinc.Sequence]
+			if table.Autoinc != nil {
+				t.Autoinc = &Autoinc{Col: table.Autoinc.Col, ColVindexNum: -1}
+				seq, ok := vschema.tables[table.Autoinc.Sequence]
 				if !ok {
-					return fmt.Errorf("sequence %s not found for class %s", class.Autoinc.Sequence, cname)
+					return fmt.Errorf("sequence %s not found for table %s", table.Autoinc.Sequence, tname)
 				}
 				t.Autoinc.Sequence = seq
 				for i, cv := range t.ColVindexes {
@@ -190,21 +195,48 @@ func buildTables(source *VSchemaFormal, vschema *VSchema, keyspaces map[string]*
 					}
 				}
 			}
-			vschema.Tables[tname] = t
 		}
 	}
 	return nil
 }
 
-// FindTable returns a pointer to the Table if found.
-// Otherwise, it returns a reason, which is equivalent to an error.
-func (vschema *VSchema) FindTable(tablename string) (table *Table, err error) {
-	if tablename == "" {
-		return nil, errors.New("unsupported: compex table expression in DML")
+// Find returns a pointer to the Table. If a keyspace is specified, only tables
+// from that keyspace are searched. If the specified keyspace is unsharded
+// and no tables matched, it's considered valid: Find will construct a table
+// of that name and return it. If no kesypace is specified, then a table is returned
+// only if its name is unique across all keyspaces. If there is only one
+// keyspace in the vschema, and it's unsharded, then all table requests are considered
+// valid and belonging to that keyspace.
+func (vschema *VSchema) Find(keyspace, tablename string) (table *Table, err error) {
+	if keyspace == "" {
+		table, ok := vschema.tables[tablename]
+		if table == nil {
+			if ok {
+				return nil, fmt.Errorf("ambiguous table reference: %s", tablename)
+			}
+			if len(vschema.Keyspaces) != 1 {
+				return nil, fmt.Errorf("table %s not found", tablename)
+			}
+			// Loop happens only once.
+			for _, ks := range vschema.Keyspaces {
+				if ks.Keyspace.Sharded {
+					return nil, fmt.Errorf("table %s not found", tablename)
+				}
+				return &Table{Name: tablename, Keyspace: ks.Keyspace}, nil
+			}
+		}
+		return table, nil
 	}
-	table = vschema.Tables[tablename]
+	ks, ok := vschema.Keyspaces[keyspace]
+	if !ok {
+		return nil, fmt.Errorf("keyspace %s not found in vschema", keyspace)
+	}
+	table = ks.Tables[tablename]
 	if table == nil {
-		return nil, fmt.Errorf("table %s not found", tablename)
+		if ks.Keyspace.Sharded {
+			return nil, fmt.Errorf("table %s not found", tablename)
+		}
+		return &Table{Name: tablename, Keyspace: ks.Keyspace}, nil
 	}
 	return table, nil
 }
@@ -236,8 +268,7 @@ type VSchemaFormal struct {
 type KeyspaceFormal struct {
 	Sharded  bool
 	Vindexes map[string]VindexFormal
-	Classes  map[string]ClassFormal
-	Tables   map[string]string
+	Tables   map[string]TableFormal
 }
 
 // VindexFormal is the info for each index as loaded from
@@ -248,9 +279,9 @@ type VindexFormal struct {
 	Owner  string
 }
 
-// ClassFormal is the info for each table class as loaded from
+// TableFormal is the info for each table as loaded from
 // the source.
-type ClassFormal struct {
+type TableFormal struct {
 	Type        string
 	ColVindexes []ColVindexFormal
 	Autoinc     *AutoincFormal

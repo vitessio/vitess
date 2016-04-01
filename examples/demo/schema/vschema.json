@@ -28,7 +28,7 @@
           "Type": "numeric"
         }
       },
-      "Classes": {
+      "Tables": {
         "user": {
           "ColVindexes": [
             {
@@ -89,26 +89,18 @@
             }
           ]
         }
-      },
-      "Tables": {
-        "user": "user",
-        "user_extra": "user_extra",
-        "music": "music",
-        "music_extra": "music_extra",
-        "music_user_idx": "music_user_idx"
       }
     },
     "lookup": {
       "Sharded": false,
-      "Classes": {
-        "seq": {
-          "Type": "Sequence"
-        }
-      },
       "Tables": {
-        "user_seq": "seq",
-        "music_seq": "seq",
-        "name_user_idx": ""
+        "user_seq": {
+          "Type": "Sequence"
+        },
+        "music_seq": {
+          "Type": "Sequence"
+        },
+        "name_user_idx": {}
       }
     }
   }

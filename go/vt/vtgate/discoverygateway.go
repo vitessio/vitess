@@ -23,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/txbuffer"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -142,7 +143,9 @@ func (dg *discoveryGateway) Begin(ctx context.Context, keyspace string, shard st
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var innerErr error
 		// Potentially buffer this transaction.
-		txbuffer.FakeBuffer(keyspace, shard, attemptNumber)
+		if bufferErr := txbuffer.FakeBuffer(keyspace, shard, attemptNumber); bufferErr != nil {
+			return bufferErr
+		}
 		transactionID, innerErr = conn.Begin(ctx)
 		attemptNumber++
 		return innerErr
@@ -172,6 +175,31 @@ func (dg *discoveryGateway) SplitQuery(ctx context.Context, keyspace, shard stri
 			Sql:           sql,
 			BindVariables: bindVariables,
 		}, splitColumn, splitCount)
+		return innerErr
+	}, 0, false)
+	return
+}
+
+// SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
+// TODO(erez): Rename to SplitQuery after migration to SplitQuery V2.
+func (dg *discoveryGateway) SplitQueryV2(
+	ctx context.Context,
+	keyspace,
+	shard string,
+	tabletType topodatapb.TabletType,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) (queries []querytypes.QuerySplit, err error) {
+
+	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
+		var innerErr error
+		queries, innerErr = conn.SplitQueryV2(ctx, querytypes.BoundQuery{
+			Sql:           sql,
+			BindVariables: bindVariables,
+		}, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 		return innerErr
 	}, 0, false)
 	return
