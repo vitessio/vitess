@@ -80,12 +80,15 @@ func main() {
 
 	// creates and registers the query service
 	qsc := tabletserver.NewServer()
+	servenv.OnRun(func() {
+		qsc.Register()
+		addStatusParts(qsc)
+	})
 	servenv.OnClose(func() {
 		// We now leave the queryservice running during lameduck,
 		// so stop it in OnClose(), after lameduck is over.
 		qsc.StopService()
 	})
-	qsc.Register()
 
 	if *tableAclConfig != "" {
 		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
@@ -127,9 +130,6 @@ func main() {
 		exit.Return(1)
 	}
 
-	servenv.OnRun(func() {
-		addStatusParts(qsc)
-	})
 	servenv.OnClose(func() {
 		// We will still use the topo server during lameduck period
 		// to update our state, so closing it in OnClose()

@@ -5,6 +5,7 @@
 package grpctmclient
 
 import (
+	"flag"
 	"fmt"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
+	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -26,6 +28,13 @@ import (
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerservicepb "github.com/youtube/vitess/go/vt/proto/tabletmanagerservice"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+)
+
+var (
+	cert = flag.String("tablet_manager_grpc_cert", "", "the cert to use to connect")
+	key  = flag.String("tablet_manager_grpc_key", "", "the key to use to connect")
+	ca   = flag.String("tablet_manager_grpc_ca", "", "the server ca to use to validate servers when connecting")
+	name = flag.String("tablet_manager_grpc_server_name", "", "the server name to use to validate server certificate")
 )
 
 type timeoutError struct {
@@ -53,14 +62,16 @@ func (client *Client) dial(ctx context.Context, tablet *topo.TabletInfo) (*grpc.
 		}
 	}
 
-	var cc *grpc.ClientConn
-	var err error
 	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
-	if connectTimeout == 0 {
-		cc, err = grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock())
-	} else {
-		cc, err = grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(connectTimeout))
+	opt, err := grpcutils.ClientSecureDialOption(*cert, *key, *ca, *name)
+	if err != nil {
+		return nil, nil, err
 	}
+	opts := []grpc.DialOption{opt, grpc.WithBlock()}
+	if connectTimeout != 0 {
+		opts = append(opts, grpc.WithTimeout(connectTimeout))
+	}
+	cc, err := grpc.Dial(addr, opts...)
 	if err != nil {
 		return nil, nil, err
 	}
