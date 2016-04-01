@@ -1,6 +1,9 @@
 """Kubernetes environment."""
 
 import json
+import getpass
+import logging
+import os
 import subprocess
 import time
 
@@ -109,8 +112,59 @@ class K8sEnvironment(base_environment.BaseEnvironment):
             get_address_params + ['vtgate-%s' % cell], stderr=subprocess.STDOUT)
       self.vtgate_addrs[cell] = '%s:15001' % vtgate_addr
       self.vtgate_conns[cell] = vtgate_client.connect(
-           protocols_flavor.protocols_flavor().vtgate_python_protocol(),
-           self.vtgate_addrs[cell], 60)
+          protocols_flavor.protocols_flavor().vtgate_python_protocol(),
+          self.vtgate_addrs[cell], 60)
+
+  def create(self, **kwargs):
+    self.create_gke_cluster = (
+        kwargs.get('create_gke_cluster', 'false').lower() != 'false')
+    if self.create_gke_cluster and 'GKE_NUM_NODES' not in kwargs:
+      raise base_environment.VitessEnvironmentError(
+          'Must specify GKE_NUM_NODES')
+    if 'GKE_CLUSTER_NAME' not in kwargs:
+      kwargs['GKE_CLUSTER_NAME'] = getpass.getuser()
+    if 'VITESS_NAME' not in kwargs:
+      kwargs['VITESS_NAME'] = getpass.getuser()
+    kwargs['TEST_MODE'] = '1'
+    self.script_dir = os.path.join(os.environ['VTTOP'], 'examples/kubernetes')
+    try:
+      subprocess.check_output(['gcloud', 'config', 'list'])
+    except OSError:
+      raise base_environment.VitessEnvironmentError(
+          'gcloud not found, please install by visiting cloud.google.com')
+    if 'project' in kwargs:
+      logging.info('Setting project to %s', kwargs['project'])
+      subprocess.check_output(
+          ['gcloud', 'config', 'set', 'project', kwargs['project']])
+    project_name_json = json.loads(subprocess.check_output(
+        ['gcloud', 'config', 'list', 'project', '--format', 'json']))
+    project_name = project_name_json['core']['project']
+    logging.info('Current project name: %s', project_name)
+    for k, v in kwargs.iteritems():
+      os.environ[k] = v
+    cwd = os.getcwd()
+    os.chdir(self.script_dir)
+    if self.create_gke_cluster:
+      cluster_up_txt = subprocess.check_output(
+          'cluster-up.sh', stderr=subprocess.STDOUT)
+      logging.info(cluster_up_txt)
+    vitess_up_output = subprocess.check_output(
+        'vitess-up.sh', stderr=subprocess.STDOUT)
+    logging.info(vitess_up_output)
+    os.chdir(cwd)
+    self.use_named(kwargs['VITESS_NAME'])
+
+  def destroy(self):
+    cwd = os.getcwd()
+    os.chdir(self.script_dir)
+    vitess_down_output = subprocess.check_output(
+        'vitess-down.sh', stderr=subprocess.STDOUT)
+    logging.info(vitess_down_output)
+    if self.create_gke_cluster:
+      cluster_down_output = subprocess.check_output(
+          'cluster-down.sh', stderr=subprocess.STDOUT)
+      logging.info(cluster_down_output)
+    os.chdir(cwd)
 
   def get_vtgate_conn(self, cell):
     return self.vtgate_conns[cell]
