@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """Tests reparenting is picked up in topology."""
 
 import json
