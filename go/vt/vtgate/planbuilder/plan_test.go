@@ -91,10 +91,8 @@ func init() {
 }
 
 func TestPlan(t *testing.T) {
-	vschema, err := vindexes.LoadFile(locateFile("schema_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	vschema := loadSchema(t, "schema_test.json")
+
 	testFile(t, "from_cases.txt", vschema)
 	testFile(t, "filter_cases.txt", vschema)
 	testFile(t, "select_cases.txt", vschema)
@@ -105,11 +103,20 @@ func TestPlan(t *testing.T) {
 }
 
 func TestOne(t *testing.T) {
-	vschema, err := vindexes.LoadFile(locateFile("schema_test.json"))
+	vschema := loadSchema(t, "schema_test.json")
+	testFile(t, "onecase.txt", vschema)
+}
+
+func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
+	formal, err := vindexes.LoadFormal(locateFile(filename))
 	if err != nil {
 		t.Fatal(err)
 	}
-	testFile(t, "onecase.txt", vschema)
+	vschema, err := vindexes.BuildVSchema(formal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return vschema
 }
 
 func testFile(t *testing.T, filename string, vschema *vindexes.VSchema) {

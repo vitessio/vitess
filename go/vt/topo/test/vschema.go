@@ -10,11 +10,17 @@ import (
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // CheckVSchema runs the tests on the VSchema part of the API
 func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
-	got, err := ts.GetVSchema(ctx)
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
+		t.Fatalf("CreateKeyspace: %v", err)
+	}
+
+	got, err := ts.GetVSchema(ctx, "test_keyspace")
 	if err != nil {
 		t.Error(err)
 	}
@@ -23,35 +29,35 @@ func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
 		t.Errorf("GetVSchema: %s, want %s", got, want)
 	}
 
-	err = ts.SaveVSchema(ctx, `{ "Keyspaces": {}}`)
+	err = ts.SaveVSchema(ctx, "test_keyspace", `{ "Sharded": true }`)
 	if err != nil {
 		t.Error(err)
 	}
 
-	got, err = ts.GetVSchema(ctx)
+	got, err = ts.GetVSchema(ctx, "test_keyspace")
 	if err != nil {
 		t.Error(err)
 	}
-	want = `{ "Keyspaces": {}}`
+	want = `{ "Sharded": true }`
 	if got != want {
 		t.Errorf("GetVSchema: %s, want %s", got, want)
 	}
 
-	err = ts.SaveVSchema(ctx, `{ "Keyspaces": { "aa": { "Sharded": false}}}`)
+	err = ts.SaveVSchema(ctx, "test_keyspace", `{ "Sharded": false }`)
 	if err != nil {
 		t.Error(err)
 	}
 
-	got, err = ts.GetVSchema(ctx)
+	got, err = ts.GetVSchema(ctx, "test_keyspace")
 	if err != nil {
 		t.Error(err)
 	}
-	want = `{ "Keyspaces": { "aa": { "Sharded": false}}}`
+	want = `{ "Sharded": false }`
 	if got != want {
 		t.Errorf("GetVSchema: %s, want %s", got, want)
 	}
 
-	err = ts.SaveVSchema(ctx, "invalid")
+	err = ts.SaveVSchema(ctx, "test_keyspace", "invalid")
 	want = "Unmarshal failed:"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("SaveVSchema: %v, must start with %s", err, want)

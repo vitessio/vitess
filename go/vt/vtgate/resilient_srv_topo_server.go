@@ -286,6 +286,11 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, c
 	return result, err
 }
 
+// GetVSchema fetches the VSchema.
+func (server *ResilientSrvTopoServer) GetVSchema(ctx context.Context, keyspace string) (string, error) {
+	return server.topoServer.GetVSchema(ctx, keyspace)
+}
+
 func (server *ResilientSrvTopoServer) getSrvKeyspaceEntry(cell, keyspace string) *srvKeyspaceEntry {
 	// find the entry in the cache, add it if not there
 	key := cell + "." + keyspace

@@ -434,10 +434,11 @@ def poll_for_vars(
 
 
 def apply_vschema(vschema):
-  fname = os.path.join(environment.tmproot, 'vschema.json')
-  with open(fname, 'w') as f:
-    f.write(vschema)
-  run_vtctl(['ApplyVSchema', '-vschema_file', fname])
+  for k, v in vschema.iteritems():
+    fname = os.path.join(environment.tmproot, 'vschema.json')
+    with open(fname, 'w') as f:
+      f.write(v)
+    run_vtctl(['ApplyVSchema', '-vschema_file', fname, k])
 
 
 def wait_for_tablet_type(tablet_alias, expected_type, timeout=10):

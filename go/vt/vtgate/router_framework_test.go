@@ -5,183 +5,160 @@
 package vtgate
 
 import (
-	"io/ioutil"
-	"os"
 	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-var routerVSchema = createTestVSchema(`
+var routerVSchema = `
 {
-  "Keyspaces": {
-    "TestRouter": {
-      "Sharded": true,
-      "Vindexes": {
-        "user_index": {
-          "Type": "hash"
-        },
-        "music_user_map": {
-          "Type": "lookup_hash_unique",
-          "Owner": "music",
-          "Params": {
-            "Table": "music_user_map",
-            "From": "music_id",
-            "To": "user_id"
-          }
-        },
-        "name_user_map": {
-          "Type": "lookup_hash",
-          "Owner": "user",
-          "Params": {
-            "Table": "name_user_map",
-            "From": "name",
-            "To": "user_id"
-          }
-        },
-        "idx1": {
-          "Type": "hash"
-        },
-        "idx_noauto": {
-          "Type": "hash",
-          "Owner": "noauto_table"
-        },
-        "keyspace_id": {
-          "Type": "numeric"
-        }
-      },
-      "Tables": {
-        "user": {
-          "ColVindexes": [
-            {
-              "Col": "id",
-              "Name": "user_index"
-            },
-            {
-              "Col": "name",
-              "Name": "name_user_map"
-            }
-          ],
-          "Autoinc" : {
-            "Col": "id",
-            "Sequence": "user_seq"
-          }
-        },
-        "user_extra": {
-          "ColVindexes": [
-            {
-              "Col": "user_id",
-              "Name": "user_index"
-            }
-          ]
-        },
-        "music": {
-          "ColVindexes": [
-            {
-              "Col": "user_id",
-              "Name": "user_index"
-            },
-            {
-              "Col": "id",
-              "Name": "music_user_map"
-            }
-          ],
-          "Autoinc" : {
-            "Col": "id",
-            "Sequence": "user_seq"
-          }
-        },
-        "music_extra": {
-          "ColVindexes": [
-            {
-              "Col": "user_id",
-              "Name": "user_index"
-            },
-            {
-              "Col": "music_id",
-              "Name": "music_user_map"
-            }
-          ]
-        },
-        "music_extra_reversed": {
-          "ColVindexes": [
-            {
-              "Col": "music_id",
-              "Name": "music_user_map"
-            },
-            {
-              "Col": "user_id",
-              "Name": "user_index"
-            }
-          ]
-        },
-        "noauto_table": {
-          "ColVindexes": [
-            {
-              "Col": "id",
-              "Name": "idx_noauto"
-            }
-          ]
-        },
-        "ksid_table": {
-          "ColVindexes": [
-            {
-              "Col": "keyspace_id",
-              "Name": "keyspace_id"
-            }
-          ]
-        }
-      }
-    },
-    "TestBadSharding": {
-      "Sharded": false,
-      "Tables": {
-        "sharded_table": {}
-      }
-    },
-    "TestUnsharded": {
-      "Sharded": false,
-      "Tables": {
-        "user_seq": {
-          "Type": "Sequence"
-        },
-        "music_user_map": {},
-        "name_user_map": {}
-      }
-    }
-  }
+	"Sharded": true,
+	"Vindexes": {
+		"user_index": {
+			"Type": "hash"
+		},
+		"music_user_map": {
+			"Type": "lookup_hash_unique",
+			"Owner": "music",
+			"Params": {
+				"Table": "music_user_map",
+				"From": "music_id",
+				"To": "user_id"
+			}
+		},
+		"name_user_map": {
+			"Type": "lookup_hash",
+			"Owner": "user",
+			"Params": {
+				"Table": "name_user_map",
+				"From": "name",
+				"To": "user_id"
+			}
+		},
+		"idx1": {
+			"Type": "hash"
+		},
+		"idx_noauto": {
+			"Type": "hash",
+			"Owner": "noauto_table"
+		},
+		"keyspace_id": {
+			"Type": "numeric"
+		}
+	},
+	"Tables": {
+		"user": {
+			"ColVindexes": [
+				{
+					"Col": "id",
+					"Name": "user_index"
+				},
+				{
+					"Col": "name",
+					"Name": "name_user_map"
+				}
+			],
+			"Autoinc" : {
+				"Col": "id",
+				"Sequence": "user_seq"
+			}
+		},
+		"user_extra": {
+			"ColVindexes": [
+				{
+					"Col": "user_id",
+					"Name": "user_index"
+				}
+			]
+		},
+		"music": {
+			"ColVindexes": [
+				{
+					"Col": "user_id",
+					"Name": "user_index"
+				},
+				{
+					"Col": "id",
+					"Name": "music_user_map"
+				}
+			],
+			"Autoinc" : {
+				"Col": "id",
+				"Sequence": "user_seq"
+			}
+		},
+		"music_extra": {
+			"ColVindexes": [
+				{
+					"Col": "user_id",
+					"Name": "user_index"
+				},
+				{
+					"Col": "music_id",
+					"Name": "music_user_map"
+				}
+			]
+		},
+		"music_extra_reversed": {
+			"ColVindexes": [
+				{
+					"Col": "music_id",
+					"Name": "music_user_map"
+				},
+				{
+					"Col": "user_id",
+					"Name": "user_index"
+				}
+			]
+		},
+		"noauto_table": {
+			"ColVindexes": [
+				{
+					"Col": "id",
+					"Name": "idx_noauto"
+				}
+			]
+		},
+		"ksid_table": {
+			"ColVindexes": [
+				{
+					"Col": "keyspace_id",
+					"Name": "keyspace_id"
+				}
+			]
+		}
+	}
 }
-`)
-
-// createTestVSchema creates a vschema based on the JSON specs.
-// It panics on failure.
-func createTestVSchema(vschemaJSON string) *vindexes.VSchema {
-	f, err := ioutil.TempFile("", "vtgate_schema")
-	if err != nil {
-		panic(err)
+`
+var badVSchema = `
+{
+	"Sharded": false,
+	"Tables": {
+		"sharded_table": {}
 	}
-	fname := f.Name()
-	f.Close()
-	defer os.Remove(fname)
-
-	err = ioutil.WriteFile(fname, []byte(vschemaJSON), 0644)
-	if err != nil {
-		panic(err)
-	}
-	vschema, err := vindexes.LoadFile(fname)
-	if err != nil {
-		panic(err)
-	}
-	return vschema
 }
+`
+
+var unshardedVSchema = `
+{
+	"Sharded": false,
+	"Tables": {
+		"user_seq": {
+			"Type": "Sequence"
+		},
+		"music_user_map": {},
+		"name_user_map": {}
+	}
+}
+`
 
 func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxConn) {
 	s := createSandbox("TestRouter")
+	s.VSchema = routerVSchema
 	sbc1 = &sandboxConn{}
 	sbc2 = &sandboxConn{}
 	s.MapTestConn("-20", sbc1)
@@ -191,11 +168,14 @@ func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxConn) {
 	sbclookup = &sandboxConn{}
 	l.MapTestConn("0", sbclookup)
 
-	createSandbox("TestBadSharding")
+	bad := createSandbox("TestBadSharding")
+	bad.VSchema = badVSchema
+
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, nil, "")
-	router = NewRouter(serv, "aa", routerVSchema, "", scatterConn)
+	router = NewRouter(serv, "aa", "", scatterConn)
 	return router, sbc1, sbc2, sbclookup
 }
 

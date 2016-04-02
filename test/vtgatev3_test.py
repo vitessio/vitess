@@ -2,7 +2,6 @@
 # coding: utf-8
 
 import itertools
-import json
 import logging
 import unittest
 
@@ -99,9 +98,8 @@ user_id bigint,
 primary key (music_id)
 ) Engine=InnoDB'''
 
-vschema = '''{
-  "Keyspaces": {
-    "user": {
+vschema = {
+    'user': '''{
       "Sharded": true,
       "Vindexes": {
         "user_index": {
@@ -204,8 +202,8 @@ vschema = '''{
           ]
         }
       }
-    },
-    "lookup": {
+    }''',
+    'lookup': '''{
       "Sharded": false,
       "Tables": {
         "vt_user_seq": {
@@ -217,12 +215,8 @@ vschema = '''{
         "music_user_map": {},
         "name_user2_map": {}
       }
-    }
-  }
-}'''
-
-# Verify valid json
-json.loads(vschema)
+    }''',
+}
 
 
 def setUpModule():

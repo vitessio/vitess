@@ -787,13 +787,13 @@ func (tee *Tee) UnlockShardForAction(ctx context.Context, keyspace, shard, lockP
 }
 
 // SaveVSchema is part of the topo.Server interface
-func (tee *Tee) SaveVSchema(ctx context.Context, contents string) error {
-	err := tee.primary.SaveVSchema(ctx, contents)
+func (tee *Tee) SaveVSchema(ctx context.Context, keyspace, contents string) error {
+	err := tee.primary.SaveVSchema(ctx, keyspace, contents)
 	if err != nil {
 		return err
 	}
 
-	if err := tee.secondary.SaveVSchema(ctx, contents); err != nil {
+	if err := tee.secondary.SaveVSchema(ctx, keyspace, contents); err != nil {
 		// not critical enough to fail
 		log.Warningf("secondary.SaveVSchema() failed: %v", err)
 	}
@@ -801,6 +801,6 @@ func (tee *Tee) SaveVSchema(ctx context.Context, contents string) error {
 }
 
 // GetVSchema is part of the topo.Server interface
-func (tee *Tee) GetVSchema(ctx context.Context) (string, error) {
-	return tee.readFrom.GetVSchema(ctx)
+func (tee *Tee) GetVSchema(ctx context.Context, keyspace string) (string, error) {
+	return tee.readFrom.GetVSchema(ctx, keyspace)
 }

@@ -347,10 +347,10 @@ var commands = []commandGroup{
 				"Validates that the master permissions from shard 0 match those of all of the other tablets in the keyspace."},
 
 			{"GetVSchema", commandGetVSchema,
-				"",
+				"<keyspace>",
 				"Displays the VTGate routing schema."},
 			{"ApplyVSchema", commandApplyVSchema,
-				"{-vschema=<vschema> || -vschema_file=<vschema file>}",
+				"{-vschema=<vschema> || -vschema_file=<vschema file>} <keyspace>",
 				"Applies the VTGate routing schema."},
 		},
 	},
@@ -2056,7 +2056,8 @@ func commandGetVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	if subFlags.NArg() != 0 {
 		return fmt.Errorf("The GetVSchema command does not support any arguments.")
 	}
-	schema, err := wr.TopoServer().GetVSchema(ctx)
+	keyspace := subFlags.Arg(0)
+	schema, err := wr.TopoServer().GetVSchema(ctx, keyspace)
 	if err != nil {
 		return err
 	}
@@ -2081,7 +2082,8 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		}
 		s = string(schema)
 	}
-	return wr.TopoServer().SaveVSchema(ctx, s)
+	keyspace := subFlags.Arg(0)
+	return wr.TopoServer().SaveVSchema(ctx, keyspace, s)
 }
 
 func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

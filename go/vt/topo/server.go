@@ -312,12 +312,12 @@ type Impl interface {
 	//
 
 	// SaveVSchema saves the provided schema in the topo server.
-	SaveVSchema(context.Context, string) error
+	SaveVSchema(context.Context, string, string) error
 
 	// GetVSchema retrieves the schema from the topo server.
 	//
 	// If no schema has been previously saved, it should return "{}"
-	GetVSchema(ctx context.Context) (string, error)
+	GetVSchema(ctx context.Context, keyspace string) (string, error)
 }
 
 // Server is a wrapper type that can have extra methods.
@@ -330,11 +330,9 @@ type Server struct {
 // graph read-only calls used by clients to resolve serving addresses.
 type SrvTopoServer interface {
 	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
-
+	GetVSchema(ctx context.Context, keyspace string) (string, error)
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
-
 	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error)
-
 	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType) (*topodatapb.EndPoints, int64, error)
 }
 
