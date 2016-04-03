@@ -11,7 +11,6 @@ import traceback
 import unittest
 
 import environment
-from protocols_flavor import protocols_flavor
 import tablet
 import utils
 from vtdb import dbexceptions
@@ -72,8 +71,23 @@ CREATE_VT_FIELD_TYPES = '''create table vt_field_types (
   primary key(id)
 ) Engine=InnoDB'''
 
+CREATE_VT_SEQ = '''create table vt_seq (
+  id int,
+  next_id bigint,
+  cache bigint,
+  increment bigint,
+  primary key(id)
+) comment 'vitess_sequence' Engine=InnoDB'''
 
-create_tables = [CREATE_VT_INSERT_TEST, CREATE_VT_A, CREATE_VT_FIELD_TYPES]
+INIT_VT_SEQ = 'insert into vt_seq values(0, 1, 2, 2)'
+
+
+create_tables = [
+    CREATE_VT_INSERT_TEST,
+    CREATE_VT_A,
+    CREATE_VT_FIELD_TYPES,
+    CREATE_VT_SEQ,
+]
 pack_kid = struct.Struct('!Q').pack
 
 
@@ -109,6 +123,7 @@ def setUpModule():
 
 def tearDownModule():
   logging.debug('in tearDownModule')
+  utils.required_teardown()
   if utils.options.skip_teardown:
     return
   logging.debug('Tearing down the servers and setup')
@@ -243,15 +258,6 @@ def get_connection(timeout=10.0):
     raise
 
 
-def get_keyrange(shard_name):
-  kr = None
-  if shard_name == keyrange_constants.SHARD_ZERO:
-    kr = keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)
-  else:
-    kr = keyrange.KeyRange(shard_name)
-  return kr
-
-
 def _delete_all(shard_index, table_name):
   vtgate_conn = get_connection()
   # This write is to set up the test with fresh insert
@@ -260,7 +266,7 @@ def _delete_all(shard_index, table_name):
   vtgate_conn._execute(
       'delete from %s' % table_name, {},
       tablet_type='master', keyspace_name=KEYSPACE_NAME,
-      keyranges=[get_keyrange(SHARD_NAMES[shard_index])])
+      keyranges=[keyrange.KeyRange(SHARD_NAMES[shard_index])])
   vtgate_conn.commit()
 
 
@@ -278,7 +284,7 @@ def write_rows_to_shard(count, shard_index):
     cursor.begin()
     cursor.execute(
         'insert into vt_insert_test (msg, keyspace_id) '
-        'values (%(msg)s, %(keyspace_id)s)',
+        'values (:msg, :keyspace_id)',
         {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
     cursor.commit()
 
@@ -323,7 +329,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
   def setUp(self):
     super(TestCoreVTGateFunctions, self).setUp()
     self.shard_index = 1
-    self.keyrange = get_keyrange(SHARD_NAMES[self.shard_index])
+    self.keyrange = keyrange.KeyRange(SHARD_NAMES[self.shard_index])
     self.master_tablet = shard_1_master
     self.replica_tablet = shard_1_replica1
 
@@ -348,7 +354,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       cursor.begin()
       cursor.execute(
           'insert into vt_insert_test (msg, keyspace_id) '
-          'values (%(msg)s, %(keyspace_id)s)',
+          'values (:msg, :keyspace_id)',
           {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
       cursor.commit()
     cursor = vtgate_conn.cursor(
@@ -367,7 +373,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       # Fetch all rows in each shard
       cursor = vtgate_conn.cursor(
           tablet_type='master', keyspace=KEYSPACE_NAME,
-          keyranges=[get_keyrange(SHARD_NAMES[shard_index])])
+          keyranges=[keyrange.KeyRange(SHARD_NAMES[shard_index])])
       rowcount = cursor.execute('select * from vt_insert_test', {})
       # Verify row count
       self.assertEqual(rowcount, row_counts[shard_index])
@@ -378,7 +384,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     # Do a cross shard range query and assert all rows are fetched
     cursor = vtgate_conn.cursor(
         tablet_type='master', keyspace=KEYSPACE_NAME,
-        keyranges=[get_keyrange('75-95')])
+        keyranges=[keyrange.KeyRange('75-95')])
     rowcount = cursor.execute('select * from vt_insert_test', {})
     self.assertEqual(rowcount, row_counts[0] + row_counts[1])
 
@@ -396,7 +402,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       cursor.begin()
       cursor.execute(
           'insert into vt_insert_test (msg, keyspace_id) '
-          'values (%(msg)s, %(keyspace_id)s)',
+          'values (:msg, :keyspace_id)',
           {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
       cursor.commit()
     vtgate_conn.begin()
@@ -432,7 +438,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       cursor.begin()
       cursor.execute(
           'insert into vt_a (eid, id, keyspace_id) '
-          'values (%(eid)s, %(id)s, %(keyspace_id)s)',
+          'values (:eid, :id, :keyspace_id)',
           {'eid': x, 'id': x, 'keyspace_id': keyspace_id})
       cursor.commit()
     cursor = vtgate_conn.cursor(
@@ -457,7 +463,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       cursor.begin()
       cursor.execute(
           'insert into vt_insert_test (msg, keyspace_id) '
-          'values (%(msg)s, %(keyspace_id)s)',
+          'values (:msg, :keyspace_id)',
           {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
       cursor.commit()
     _delete_all(self.shard_index, 'vt_a')
@@ -470,7 +476,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       cursor.begin()
       cursor.execute(
           'insert into vt_a (eid, id, keyspace_id) '
-          'values (%(eid)s, %(id)s, %(keyspace_id)s)',
+          'values (:eid, :id, :keyspace_id)',
           {'eid': x, 'id': x, 'keyspace_id': keyspace_id})
       cursor.commit()
     kid_list = [pack_kid(kid) for kid in kid_list]
@@ -549,7 +555,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
                shards=None))
     cursor.executemany(
         sql='insert into vt_insert_test (msg, keyspace_id) '
-        'values (%(msg)s, %(keyspace_id)s)',
+        'values (:msg, :keyspace_id)',
         params_list=params_list)
     cursor.executemany(
         sql=None,
@@ -561,7 +567,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       keyspace_id = kid_list[x%len(kid_list)]
       sql = (
           'insert into vt_a (eid, id, keyspace_id) '
-          'values (%(eid)s, %(id)s, %(keyspace_id)s)')
+          'values (:eid, :id, :keyspace_id)')
       bind_variables = {'eid': x, 'id': x, 'keyspace_id': keyspace_id}
       keyspace = KEYSPACE_NAME
       keyspace_ids = [pack_kid(keyspace_id)]
@@ -690,14 +696,14 @@ class TestCoreVTGateFunctions(BaseTestCase):
         keyspace_id = kid_list[x]
         vtgate_conn._execute(
             'insert into vt_insert_test (msg, keyspace_id) '
-            'values (%(msg)s, %(keyspace_id)s)',
+            'values (:msg, :keyspace_id)',
             {'msg': 'test %s' % x, 'keyspace_id': keyspace_id},
             tablet_type=tablet_type, keyspace_name=KEYSPACE_NAME,
             keyspace_ids=[pack_kid(keyspace_id)])
       vtgate_conn.commit()
       vtgate_conn2 = get_connection()
       query = (
-          'select keyspace_id from vt_insert_test where keyspace_id = %(kid)s')
+          'select keyspace_id from vt_insert_test where keyspace_id = :kid')
       thd = threading.Thread(target=self._query_lots, args=(
           vtgate_conn2,
           query,
@@ -724,6 +730,28 @@ class TestCoreVTGateFunctions(BaseTestCase):
     except Exception, e:  # pylint: disable=broad-except
       self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
 
+  def test_sequence(self):
+    tablet_type = 'master'
+    try:
+      vtgate_conn = get_connection()
+      # Special-cased initialization of sequence to shard 0.
+      vtgate_conn.begin()
+      vtgate_conn._execute(
+          INIT_VT_SEQ, {'keyspace_id': 0},
+          tablet_type=tablet_type, keyspace_name=KEYSPACE_NAME,
+          keyspace_ids=[pack_kid(0)])
+      vtgate_conn.commit()
+      want = 1
+      for _ in xrange(10):
+        result, _, _, _ = vtgate_conn._execute(
+            'select next value for vt_seq', {},
+            tablet_type=tablet_type, keyspace_name=KEYSPACE_NAME,
+            keyspace_ids=[pack_kid(0)])
+        self.assertEqual(result[0][0], want)
+        want += 2
+    except Exception, e:  # pylint: disable=broad-except
+      self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
+
   def test_field_types(self):
     vtgate_conn = get_connection()
     _delete_all(self.shard_index, 'vt_field_types')
@@ -740,8 +768,8 @@ class TestCoreVTGateFunctions(BaseTestCase):
       cursor.execute(
           'insert into vt_field_types '
           '(uint_val, str_val, unicode_val, float_val, keyspace_id) '
-          'values (%(uint_val)s, %(str_val)s, %(unicode_val)s, '
-          '%(float_val)s, %(keyspace_id)s)',
+          'values (:uint_val, :str_val, :unicode_val, '
+          ':float_val, :keyspace_id)',
           {'uint_val': base_uint + x, 'str_val': 'str_%d' % x,
            'unicode_val': unicode('str_%d' % x), 'float_val': x * 1.2,
            'keyspace_id': keyspace_id})
@@ -766,7 +794,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       float_val_list.append(row.float_val)
 
     # iterable type checks - list, tuple, set are supported.
-    query = 'select * from vt_field_types where id in %(id_1)s'
+    query = 'select * from vt_field_types where id in ::id_1'
     rowcount = cursor.execute(query, {'id_1': id_list})
     self.assertEqual(rowcount, len(id_list), "rowcount doesn't match")
     rowcount = cursor.execute(query, {'id_1': tuple(id_list)})
@@ -779,7 +807,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
 
     # received field types same as input.
     # uint
-    query = 'select * from vt_field_types where uint_val in %(uint_val_1)s'
+    query = 'select * from vt_field_types where uint_val in ::uint_val_1'
     rowcount = cursor.execute(query, {'uint_val_1': uint_val_list})
     self.assertEqual(rowcount, len(uint_val_list), "rowcount doesn't match")
     for _, r in enumerate(cursor.results):
@@ -789,7 +817,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
           row.uint_val, base_uint, 'uint value not in correct range')
 
     # str
-    query = 'select * from vt_field_types where str_val in %(str_val_1)s'
+    query = 'select * from vt_field_types where str_val in ::str_val_1'
     rowcount = cursor.execute(query, {'str_val_1': str_val_list})
     self.assertEqual(rowcount, len(str_val_list), "rowcount doesn't match")
     for r in cursor.results:
@@ -798,7 +826,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
 
     # unicode str
     query = (
-        'select * from vt_field_types where unicode_val in %(unicode_val_1)s')
+        'select * from vt_field_types where unicode_val in ::unicode_val_1')
     rowcount = cursor.execute(query, {'unicode_val_1': unicode_val_list})
     self.assertEqual(
         rowcount, len(unicode_val_list), "rowcount doesn't match")
@@ -824,12 +852,10 @@ class TestFailures(BaseTestCase):
   def setUp(self):
     super(TestFailures, self).setUp()
     self.shard_index = 1
-    self.keyrange = get_keyrange(SHARD_NAMES[self.shard_index])
+    self.keyrange = keyrange.KeyRange(SHARD_NAMES[self.shard_index])
     self.master_tablet = shard_1_master
     self.master_tablet.kill_vttablet()
     self.tablet_start(self.master_tablet, 'replica')
-    utils.run_vtctl(['InitShardMaster', KEYSPACE_NAME+'/-80',
-                     shard_0_master.tablet_alias], auto_log=True)
     self.master_tablet.wait_for_vttablet_state('SERVING')
     self.replica_tablet = shard_1_replica1
     self.replica_tablet.kill_vttablet()
@@ -1077,11 +1103,7 @@ class TestFailures(BaseTestCase):
       # FIXME(alainjobart) add a method to get the session to vtgate_client,
       # instead of poking into it like this.
       logging.info('Shard session: %s', vtgate_conn.session)
-      if protocols_flavor().vtgate_python_protocol() == 'gorpc':
-        transaction_id = (
-            vtgate_conn.session['ShardSessions'][0]['TransactionId'])
-      else:
-        transaction_id = vtgate_conn.session.shard_sessions[0].transaction_id
+      transaction_id = vtgate_conn.session.shard_sessions[0].transaction_id
       self.assertTrue(transaction_id != 0)
     except Exception, e:  # pylint: disable=broad-except
       self.fail('Expected DatabaseError as exception, got %s' % str(e))
@@ -1447,7 +1469,7 @@ class TestFailures(BaseTestCase):
     vtgate_conn._execute(
         'delete from vt_a', {},
         tablet_type='master', keyspace_name=KEYSPACE_NAME,
-        keyranges=[get_keyrange(SHARD_NAMES[self.shard_index])])
+        keyranges=[keyrange.KeyRange(SHARD_NAMES[self.shard_index])])
     vtgate_conn.commit()
     eid_map = {}
     # start transaction
@@ -1464,7 +1486,7 @@ class TestFailures(BaseTestCase):
         eid_map[x] = str(keyspace_id)
         vtgate_conn._execute(
             'insert into vt_a (eid, id, keyspace_id) '
-            'values (%(eid)s, %(id)s, %(keyspace_id)s)',
+            'values (:eid, :id, :keyspace_id)',
             {'eid': x, 'id': x, 'keyspace_id': keyspace_id},
             tablet_type='master', keyspace_name=KEYSPACE_NAME,
             keyspace_ids=[pack_kid(keyspace_id)])
@@ -1492,7 +1514,7 @@ class TestFailures(BaseTestCase):
     waiting around till the request deadline expires.
     """
     tablet_type = 'replica'
-    keyranges = [get_keyrange(SHARD_NAMES[self.shard_index])]
+    keyranges = [keyrange.KeyRange(SHARD_NAMES[self.shard_index])]
     query = 'select * from vt_insert_test'
 
     # Execute a query to warm VtGate's caches for connections and endpoints
@@ -1711,7 +1733,7 @@ class TestExceptionLogging(BaseTestCase):
   def setUp(self):
     super(TestExceptionLogging, self).setUp()
     self.shard_index = 1
-    self.keyrange = get_keyrange(SHARD_NAMES[self.shard_index])
+    self.keyrange = keyrange.KeyRange(SHARD_NAMES[self.shard_index])
     self.master_tablet = shard_1_master
     self.replica_tablet = shard_1_replica1
     vtdb_logger.register_vtdb_logger(VTGateTestLogger())
@@ -1734,13 +1756,13 @@ class TestExceptionLogging(BaseTestCase):
       vtgate_conn.begin()
       vtgate_conn._execute(
           'insert into vt_a (eid, id, keyspace_id) '
-          'values (%(eid)s, %(id)s, %(keyspace_id)s)',
+          'values (:eid, :id, :keyspace_id)',
           {'eid': 1, 'id': 1, 'keyspace_id': keyspace_id},
           tablet_type='master', keyspace_name=KEYSPACE_NAME,
           keyspace_ids=[pack_kid(keyspace_id)])
       vtgate_conn._execute(
           'insert into vt_a (eid, id, keyspace_id) '
-          'values (%(eid)s, %(id)s, %(keyspace_id)s)',
+          'values (:eid, :id, :keyspace_id)',
           {'eid': 1, 'id': 1, 'keyspace_id': keyspace_id},
           tablet_type='master', keyspace_name=KEYSPACE_NAME,
           keyspace_ids=[pack_kid(keyspace_id)])

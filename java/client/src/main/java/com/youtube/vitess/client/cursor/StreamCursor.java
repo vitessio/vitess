@@ -11,10 +11,13 @@ import java.sql.SQLFeatureNotSupportedException;
 import java.util.Iterator;
 import java.util.List;
 
+import javax.annotation.concurrent.NotThreadSafe;
+
 /**
  * A {@link Cursor} that serves records from the sequence of {@link QueryResult} objects
  * represented by a {@link StreamIterator}.
  */
+@NotThreadSafe
 public class StreamCursor extends Cursor {
   private StreamIterator<QueryResult> streamIterator;
   private Iterator<Query.Row> rowIterator;

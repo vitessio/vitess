@@ -35,7 +35,8 @@ function zk_patch_mac() {
 
 go version 2>&1 >/dev/null || fail "Go is not installed or is not on \$PATH"
 
-. ./dev.env
+# Set up the proper GOPATH for go get below.
+source ./dev.env
 
 mkdir -p $VTROOT/dist
 mkdir -p $VTROOT/bin
@@ -65,7 +66,7 @@ fi
 # install gRPC C++ base, so we can install the python adapters.
 # this also installs protobufs
 grpc_dist=$VTROOT/dist/grpc
-grpc_ver=release-0_12_0
+grpc_ver=release-0_13_0
 if [ $SKIP_ROOT_INSTALLS == "True" ]; then
   echo "skipping grpc build, as root version was already installed."
 elif [[ -f $grpc_dist/.build_finished && "$(cat $grpc_dist/.build_finished)" == "$grpc_ver" ]]; then
@@ -75,22 +76,13 @@ else
   if [[ `uname -s` == "Darwin" && "$(brew list -1 | grep google-protobuf)" ]]; then
     brew unlink grpc/grpc/google-protobuf
   fi
-  # protobuf used to be a separate package, now we use the gRPC one
-  rm -rf $VTROOT/dist/protobuf
-  rm -rf $grpc_dist
-  mkdir -p $grpc_dist/usr/local/bin
-  mkdir -p $grpc_dist/usr/local/lib/python2.7/dist-packages
-  # The directory may not have existed yet, so it may not have been
-  # picked up by dev.env yet, but the install needs it to be in
-  # PYTHONPATH.
-  export PYTHONPATH=$(prepend_path $PYTHONPATH $grpc_dist/usr/local/lib/python2.7/dist-packages)
-  export PATH=$(prepend_path $PATH $grpc_dist/usr/local/bin)
-  export LD_LIBRARY_PATH=$(prepend_path $LD_LIBRARY_PATH $grpc_dist/usr/local/lib)
 
-  if [ `uname -s` == "Darwin" ]; then
-    # on OSX tox is installed in the following path
-    export PATH=$(prepend_path $PATH /usr/local/Cellar/python/2.7.11/Frameworks/Python.framework/Versions/2.7/bin)
-  fi
+  # protobuf used to be a separate package, now we use the gRPC one.
+  rm -rf $VTROOT/dist/protobuf
+
+  # Cleanup any existing data and re-create the directory.
+  rm -rf $grpc_dist
+  mkdir -p $grpc_dist
 
   ./travis/install_grpc.sh $grpc_dist || fail "gRPC build failed"
   echo "$grpc_ver" > $grpc_dist/.build_finished
@@ -99,6 +91,11 @@ else
   if [[ `uname -s` == "Darwin" && "$(brew list -1 | grep google-protobuf)" ]]; then
     brew link grpc/grpc/google-protobuf
   fi
+
+  # Add newly installed Python code to PYTHONPATH such that other Python module
+  # installations can reuse it. (Once bootstrap.sh has finished, run
+  # source dev.env instead to set the correct PYTHONPATH.)
+  export PYTHONPATH=$(prepend_path $PYTHONPATH $grpc_dist/usr/local/lib/python2.7/dist-packages)
 fi
 
 ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src
@@ -108,16 +105,19 @@ go install launchpad.net/gozk/zookeeper
 # (We use one go get command (and therefore one variable) for all repositories because this saves us several seconds of execution time.)
 repos="github.com/golang/glog \
        github.com/golang/lint/golint \
+       github.com/golang/mock/gomock \
+       github.com/golang/mock/mockgen \
        github.com/golang/protobuf/proto \
        github.com/golang/protobuf/protoc-gen-go \
+       github.com/olekukonko/tablewriter \
        github.com/tools/godep \
+       golang.org/x/crypto/ssh/terminal \
        golang.org/x/net/context \
        golang.org/x/oauth2/google \
        golang.org/x/tools/cmd/goimports \
-       google.golang.org/grpc \
        google.golang.org/cloud \
        google.golang.org/cloud/storage \
-       golang.org/x/crypto/ssh/terminal \
+       google.golang.org/grpc \
 "
 
 # Packages for uploading code coverage to coveralls.io (used by Travis CI).
@@ -139,9 +139,10 @@ ln -snf $VTTOP/py $VTROOT/py-vtdb
 ln -snf $VTTOP/go/zk/zkctl/zksrv.sh $VTROOT/bin/zksrv.sh
 ln -snf $VTTOP/test/vthook-test.sh $VTROOT/vthook/test.sh
 
-# install mysql
+# find mysql and prepare to use libmysqlclient
 if [ -z "$MYSQL_FLAVOR" ]; then
-  export MYSQL_FLAVOR=MariaDB
+  export MYSQL_FLAVOR=MySQL56
+  echo "MYSQL_FLAVOR environment variable not set. Using default: $MYSQL_FLAVOR"
 fi
 case "$MYSQL_FLAVOR" in
   "MySQL56")
@@ -178,16 +179,6 @@ if [ "$MYSQL_FLAVOR" == "MariaDB" ]; then
   echo "Libs:" "$($VT_MYSQL_ROOT/bin/mysql_config --libs_r | sed -r 's,-lmysqlclient(_r)?,-l:libmysqlclient.a -lstdc++,')" >> $VTROOT/lib/gomysql.pc
 else
   echo "Libs:" "$($VT_MYSQL_ROOT/bin/mysql_config --libs_r)" >> $VTROOT/lib/gomysql.pc
-fi
-
-# install bson
-bson_dist=$VTROOT/dist/py-vt-bson-0.3.2
-if [ -f $bson_dist/lib/python2.7/site-packages/bson/__init__.py ]; then
-  echo "skipping bson python build"
-else
-  cd $VTTOP/third_party/py/bson-0.3.2 && \
-    python ./setup.py install --prefix=$bson_dist && \
-    rm -r build
 fi
 
 # install mock

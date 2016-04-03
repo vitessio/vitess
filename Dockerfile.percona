@@ -1,0 +1,15 @@
+FROM vitess/bootstrap:percona
+
+# Clear out old tree from bootstrap image.
+USER root
+RUN rm -rf /vt/src/github.com/youtube/vitess
+
+# Re-copy sources from working tree
+COPY . /vt/src/github.com/youtube/vitess
+
+# Fix permissions
+RUN chown -R vitess:vitess /vt
+USER vitess
+
+# Build Vitess
+RUN make build

@@ -22,29 +22,39 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     python-dev \
     python-mysqldb \
     software-properties-common \
-    python-pip \
     virtualenv \
     unzip \
     && rm -rf /var/lib/apt/lists/*
 
+# Install newer pip
+# We can't use the apt package from jessie because it depends
+# on a version of python-six that's too old for gRPC.
+RUN curl -sL --connect-timeout 10 --retry 3 \
+    https://bootstrap.pypa.io/get-pip.py | python
+
 # Install PHP modules for running tests
-RUN mkdir -p /vt/bin && \
-    curl -sL https://phar.phpunit.de/phpunit-4.8.9.phar > /vt/bin/phpunit && \
+RUN export MAKEFLAGS="-j$(nproc)" && \
+    mkdir -p /vt/bin && \
+    curl -sL --connect-timeout 10 --retry 3 \
+        https://phar.phpunit.de/phpunit-4.8.9.phar > /vt/bin/phpunit && \
     chmod +x /vt/bin/phpunit && \
-    curl -sS https://getcomposer.org/installer | php -- --install-dir=/vt/bin --filename=composer && \
+    curl -sS --connect-timeout 10 --retry 3 \
+        https://getcomposer.org/installer | php -- --install-dir=/vt/bin --filename=composer && \
     pecl install xdebug && \
     echo "zend_extension=$(pecl config-get ext_dir default)/xdebug.so" > /etc/php5/cli/conf.d/20-xdebug.ini
 
 # Install Maven 3.1+
 RUN mkdir -p /vt/dist && \
     cd /vt/dist && \
-    curl -sL http://www.carfab.com/apachesoftware/maven/maven-3/3.3.3/binaries/apache-maven-3.3.3-bin.tar.gz | tar -xz && \
+    curl -sL --connect-timeout 10 --retry 3 \
+        http://www-us.apache.org/dist/maven/maven-3/3.3.3/binaries/apache-maven-3.3.3-bin.tar.gz | tar -xz && \
     mv apache-maven-3.3.3 maven
 
 # Install etcd v2.0
 RUN mkdir -p /go/src/github.com/coreos && \
     cd /go/src/github.com/coreos && \
-    curl -sL https://github.com/coreos/etcd/archive/v2.0.13.tar.gz | tar -xz && \
+    curl -sL --connect-timeout 10 --retry 3 \
+        https://github.com/coreos/etcd/archive/v2.0.13.tar.gz | tar -xz && \
     mv etcd-2.0.13 etcd && \
     go install github.com/coreos/etcd && \
     rm -rf /go/src/*
@@ -56,7 +66,7 @@ ENV GOTOP $VTTOP/go
 ENV PYTOP $VTTOP/py
 ENV VTDATAROOT $VTROOT/vtdataroot
 ENV VTPORTSTART 15000
-ENV PYTHONPATH $VTROOT/dist/py-mock-1.0.1/lib/python2.7/site-packages:$VTROOT/dist/py-vt-bson-0.3.2/lib/python2.7/site-packages:$VTROOT/py-vtdb
+ENV PYTHONPATH $VTROOT/dist/py-mock-1.0.1/lib/python2.7/site-packages:$VTROOT/py-vtdb
 ENV GOBIN $VTROOT/bin
 ENV GOPATH $VTROOT
 ENV PATH $VTROOT/bin:$VTROOT/dist/maven/bin:$PATH
@@ -75,13 +85,17 @@ COPY travis /vt/src/github.com/youtube/vitess/travis
 COPY composer.json composer.lock /vt/src/github.com/youtube/vitess/
 
 # Install gRPC (and protobuf) as root
-RUN $VTTOP/travis/install_grpc.sh
+RUN export MAKEFLAGS="-j$(nproc)" && \
+    cd /vt/dist && \
+    INSTALL_GRPC_PHP=`php-config --extension-dir` $VTTOP/travis/install_grpc.sh && \
+    echo 'extension=grpc.so' > /etc/php5/cli/conf.d/20-grpc.ini && \
+    rm -rf /vt/dist/grpc
 
 # Install gRPC PHP dependencies
-RUN pecl install grpc-beta && \
-    echo 'extension=grpc.so' > /etc/php5/cli/conf.d/20-grpc.ini && \
-    cd /vt/src/github.com/youtube/vitess && \
-    composer install
+RUN cd /vt/src/github.com/youtube/vitess && \
+    composer install && \
+    find php/vendor/grpc/grpc -mindepth 1 -maxdepth 1 ! -name src | xargs rm -rf && \
+    find php/vendor/grpc/grpc/src -mindepth 1 -maxdepth 1 ! -name php | xargs rm -rf
 
 # Create vitess user
 RUN groupadd -r vitess && useradd -r -g vitess vitess && \

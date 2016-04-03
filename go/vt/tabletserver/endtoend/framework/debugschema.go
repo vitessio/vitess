@@ -15,9 +15,9 @@ import (
 // on the 'Default' field of schema.TabletColumn. Otherwise,
 // we should just be able to decode the json output into a schema.Table.
 type Table struct {
-	Name      string
-	Columns   []TableColumn
-	CacheType int
+	Name    string
+	Columns []TableColumn
+	Type    int
 }
 
 // TableColumn contains info about a table's column.

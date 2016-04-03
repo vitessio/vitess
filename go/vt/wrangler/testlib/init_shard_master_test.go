@@ -122,6 +122,8 @@ func TestInitMasterShard(t *testing.T) {
 	if err := goodSlave2.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
 		t.Fatalf("goodSlave2.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
 	}
+	checkSemiSyncEnabled(t, true, true, master)
+	checkSemiSyncEnabled(t, false, true, goodSlave1, goodSlave2)
 }
 
 // TestInitMasterShardChecks makes sure the safety checks work

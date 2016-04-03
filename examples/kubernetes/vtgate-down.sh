@@ -13,7 +13,7 @@ source $script_root/env.sh
 
 for cell in $cells; do
   echo "Stopping vtgate replicationcontroller in cell $cell..."
-  $KUBECTL stop replicationcontroller vtgate-$cell --namespace=$VITESS_NAME
+  $KUBECTL delete replicationcontroller vtgate-$cell --namespace=$VITESS_NAME
 
   echo "Deleting vtgate service in cell $cell..."
   $KUBECTL delete service vtgate-$cell --namespace=$VITESS_NAME

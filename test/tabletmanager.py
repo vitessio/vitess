@@ -41,6 +41,7 @@ def setUpModule():
 
 
 def tearDownModule():
+  utils.required_teardown()
   if utils.options.skip_teardown:
     return
 
@@ -65,6 +66,7 @@ class TestTabletManager(unittest.TestCase):
     environment.topo_server().wipe()
     for t in [tablet_62344, tablet_62044]:
       t.reset_replication()
+      t.set_semi_sync_enabled(master=False)
       t.clean_dbs()
 
   def _check_srv_shard(self):
@@ -97,12 +99,12 @@ class TestTabletManager(unittest.TestCase):
 
     # make sure the query service is started right away
     qr = tablet_62344.execute('select * from vt_select_test')
-    self.assertEqual(len(qr['Rows']), 4,
+    self.assertEqual(len(qr['rows']), 4,
                      'expected 4 rows in vt_select_test: %s' % str(qr))
 
     # make sure direct dba queries work
     query_result = utils.run_vtctl_json(
-        ['ExecuteFetchAsDba', tablet_62344.tablet_alias,
+        ['ExecuteFetchAsDba', '-json', tablet_62344.tablet_alias,
          'select * from vt_test_keyspace.vt_select_test'])
     self.assertEqual(
         len(query_result['rows']), 4,
@@ -718,6 +720,27 @@ class TestTabletManager(unittest.TestCase):
     response = f.read()
     f.close()
     self.assertIn('not allowed', response)
+    tablet_62344.kill_vttablet()
+
+  def test_ignore_health_error(self):
+    tablet_62344.create_db('vt_test_keyspace')
+
+    # Starts unhealthy because of "no slave status" (not replicating).
+    tablet_62344.start_vttablet(
+        wait_for_state='NOT_SERVING', target_tablet_type='replica',
+        init_keyspace='test_keyspace', init_shard='0')
+
+    # Force it healthy.
+    utils.run_vtctl(['IgnoreHealthError', tablet_62344.tablet_alias,
+                     '.*no slave status.*'])
+    tablet_62344.wait_for_vttablet_state('SERVING')
+    self.check_healthz(tablet_62344, True)
+
+    # Turn off the force-healthy.
+    utils.run_vtctl(['IgnoreHealthError', tablet_62344.tablet_alias, ''])
+    tablet_62344.wait_for_vttablet_state('NOT_SERVING')
+    self.check_healthz(tablet_62344, False)
+
     tablet_62344.kill_vttablet()
 
 if __name__ == '__main__':

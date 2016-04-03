@@ -134,4 +134,5 @@ func TestReparentTablet(t *testing.T) {
 	if err := slave.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
 		t.Fatalf("slave.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
 	}
+	checkSemiSyncEnabled(t, false, true, slave)
 }

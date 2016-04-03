@@ -124,7 +124,7 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 	}
 	wg.Wait()
 	if er.HasErrors() {
-		return fmt.Errorf("Version diffs:\n%v", er.Error().Error())
+		return fmt.Errorf("Version diffs: %v", er.Error().Error())
 	}
 	return nil
 }
@@ -183,7 +183,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(ctx context.Context, keyspace string
 	}
 	wg.Wait()
 	if er.HasErrors() {
-		return fmt.Errorf("Version diffs:\n%v", er.Error().Error())
+		return fmt.Errorf("Version diffs: %v", er.Error().Error())
 	}
 	return nil
 }

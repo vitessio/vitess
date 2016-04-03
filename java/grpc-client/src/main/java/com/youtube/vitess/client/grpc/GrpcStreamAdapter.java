@@ -45,7 +45,7 @@ abstract class GrpcStreamAdapter<V, E>
   private boolean closed = false;
 
   @Override
-  public void onValue(V value) {
+  public void onNext(V value) {
     synchronized (this) {
       try {
         // Wait until the previous value has been consumed.

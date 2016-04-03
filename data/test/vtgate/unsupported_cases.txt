@@ -1,0 +1,207 @@
+# Unions
+"select * from user union select * from user_extra"
+"unsupported construct"
+
+# SET
+"set a=1"
+"unsupported construct"
+
+# DDL
+"create table a(id int)"
+"unsupported construct"
+
+# DBA statements
+"explain select * from user"
+"unsupported construct"
+
+# ',' operator for joins
+"select * from user, user_extra"
+"unsupported: ',' join operator"
+
+# union operations in subqueries (FROM)
+"select * from (select * from user union select * from user_extra) as t"
+"unsupported: union operator in subqueries"
+
+# union operations in subqueries (expressions)
+"select * from user where id in (select * from user union select * from user_extra)"
+"unsupported: union operator in subqueries"
+
+# subquery with join primitive (FROM)
+"select * from (select user.id from user join user_extra) as t"
+"unsupported: complex join in subqueries"
+
+# subquery with join primitive (expressions)
+"select * from user where id in (select user.id from user join user_extra)"
+"unsupported: complex join in subqueries"
+
+# subquery keyspace different from outer query
+"select * from user where id in (select m from main1)"
+"unsupported: subquery keyspace different from outer query"
+
+# scatter subquery
+"select * from user where id in (select id from user)"
+"unsupported: scatter subquery"
+
+# subquery does not depend on unique vindex of outer query
+"select id from user where id in (select user_id from user_extra where user_extra.user_id = user.col)"
+"unsupported: subquery does not depend on scatter outer query"
+
+# subquery does not depend on scatter outer query
+"select id from user where id in (select user_id from user_extra where user_extra.user_id = 4)"
+"unsupported: subquery does not depend on scatter outer query"
+
+# subquery and outer query route to different shards
+"select id from user where id = 5 and id in (select user_id from user_extra where user_extra.user_id = 4)"
+"unsupported: subquery and parent route to different shards"
+
+# scatter subquery in select
+"select id, (select id from user) from user"
+"unsupported: scatter subquery"
+
+# natural join
+"select * from user natural join user_extra"
+"unsupported: natural join"
+
+# natural left join
+"select * from user natural left join user_extra"
+"unsupported: natural left join"
+
+# natural right join
+"select * from user natural right join user_extra"
+"unsupported: natural right join"
+
+# left join with expressions
+"select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col"
+"unsupported: complex left join and column expressions"
+
+# left join with expressions, with three-way join (different code path)
+"select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col join user_extra e"
+"unsupported: complex left join and column expressions"
+
+# left join where clauses
+"select user.id from user left join user_extra on user.col = user_extra.col where user_extra.col = 5"
+"unsupported: complex left join and where claused"
+
+# * expresson not allowed for complex joins
+"select * from user join user_extra"
+"unsupported: '*' expression in complex join"
+
+# Aggregates and joins
+"select count(*) from user join user_extra"
+"unsupported: complex join with aggregates"
+
+# Aggregates and scatter
+"select count(*) from user"
+"unsupported: scatter with aggregates"
+
+# group by and joins
+"select user.id from user join user_extra group by id"
+"unsupported: complex join and group by"
+
+# Group by references outer query
+"select id from user where id = 5 having id in (select u.id from user u join user_extra e on u.id = e.user_id where u.id = 5 group by id)"
+"unsupported: subquery references outer query in group by"
+
+# Group by and scatter
+"select col from user group by col"
+"unsupported: scatter and group by"
+
+# subqueries not supported in group by
+"select id from user group by (select id from user_extra)"
+"unsupported: subqueries in group by expression"
+
+# Order by references outer query
+"select id from user where id = 5 having id in (select u.id from user u join user_extra e on u.id = e.user_id where u.id = 5 order by id)"
+"unsupported: subquery references outer query in order by"
+
+# Order by uses complex expression
+"select id from user order by id+1"
+"unsupported: complex expression in order by"
+
+# Order by for join, but sequce is too complex
+"select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 3 desc, 2 asc"
+"unsupported: complex join and out of sequence order by"
+
+# Order by for scatter routes
+"select col from user order by col"
+"unsupported: scatter and order by"
+
+# Order by and left join
+"select user.col1 as a, user_extra.col2 as b from user left join user_extra on user_extra.user_id = 5 where user.id = 5 order by 1, 2"
+"unsupported: complex left join and order by"
+
+# limit for joins
+"select user.col from user join user_extra limit 1"
+"unsupported: limits with complex joins"
+
+# limit for scatter
+"select col from user limit 1"
+"unsupported: limits with scatter"
+
+# subqueries in update
+"update user set col = (select id from main1)"
+"unsupported: subqueries in DML"
+
+# subqueries in delete
+"delete from user where col = (select id from main1)"
+"unsupported: subqueries in DML"
+
+# update with no where clause
+"update user set val = 1"
+"unsupported: multi-shard where clause in DML"
+
+# delete from with no where clause
+"delete from user"
+"unsupported: multi-shard where clause in DML"
+
+# update with primary id through IN clause
+"update user set val = 1 where id in (1, 2)"
+"unsupported: multi-shard where clause in DML"
+
+# delete from with primary id through IN clause
+"delete from user where id in (1, 2)"
+"unsupported: multi-shard where clause in DML"
+
+# update with non-unique key
+"update user set val = 1 where name = 'foo'"
+"unsupported: multi-shard where clause in DML"
+
+# delete from with primary id through IN clause
+"delete from user where name = 'foo'"
+"unsupported: multi-shard where clause in DML"
+
+# update with no index match
+"update user set val = 1 where user_id = 1"
+"unsupported: multi-shard where clause in DML"
+
+# delete from with no index match
+"delete from user where user_id = 1"
+"unsupported: multi-shard where clause in DML"
+
+# update by lookup with IN clause
+"update music set val = 1 where id in (1, 2)"
+"unsupported: multi-shard where clause in DML"
+
+# delete from by lookup with IN clause
+"delete from music where id in (1, 2)"
+"unsupported: multi-shard where clause in DML"
+
+# update changes index column
+"update music set id = 1 where id = 1"
+"unsupported: DML cannot change vindex column"
+
+# insert from select
+"insert into user(id) select 1 from dual"
+"unsupported: insert into select"
+
+# insert with multiple rows
+"insert into user(id) values (1), (2)"
+"unsupported: multi-row insert"
+
+# insert with subquery as value
+"insert into user(id) values (select 1 from dual)"
+"unsupported: subqueries in insert"
+
+# nextval not supported yet
+"select next value from user"
+"unsupported: NEXT VALUE construct"

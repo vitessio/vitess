@@ -169,6 +169,17 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 		return nil, err
 	}
 
+	// Check if it's a NEXT VALUE statement.
+	if _, ok := sel.SelectExprs[0].(sqlparser.Nextval); ok {
+		if tableInfo.Type != schema.Sequence {
+			return nil, fmt.Errorf("%s is not a sequence", tableName)
+		}
+		plan.PlanID = PlanNextval
+		plan.FieldQuery = nil
+		plan.FullQuery = nil
+		return plan, nil
+	}
+
 	// There are bind variables in the SELECT list
 	if plan.FieldQuery == nil {
 		plan.Reason = ReasonSelectList
@@ -187,7 +198,7 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 	}
 
 	// Further improvements possible only if table is row-cached
-	if tableInfo.CacheType == schema.CacheNone || tableInfo.CacheType == schema.CacheW {
+	if !tableInfo.IsReadCached() {
 		plan.Reason = ReasonNocache
 		return plan, nil
 	}
@@ -297,7 +308,7 @@ func analyzeSelectExprs(exprs sqlparser.SelectExprs, table *schema.Table) (selec
 			}
 			selects = append(selects, colIndex)
 		default:
-			panic("unreachable")
+			return nil, fmt.Errorf("unsupported construct: %s", sqlparser.String(expr))
 		}
 	}
 	return selects, nil
@@ -494,7 +505,7 @@ func getInsertPKValues(pkColumnNumbers []int, rowList sqlparser.Values, tableInf
 				return nil, errors.New("column count doesn't match value count")
 			}
 			node := row[columnNumber]
-			if !sqlparser.IsValue(node) {
+			if !sqlparser.IsNull(node) && !sqlparser.IsValue(node) {
 				return nil, nil
 			}
 			var err error

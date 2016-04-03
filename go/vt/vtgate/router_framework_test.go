@@ -11,29 +11,23 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
-	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-var routerSchema = createTestSchema(`
+var routerVSchema = createTestVSchema(`
 {
   "Keyspaces": {
     "TestRouter": {
       "Sharded": true,
       "Vindexes": {
         "user_index": {
-          "Type": "hash_autoinc",
-          "Owner": "user",
-          "Params": {
-            "Table": "user_idx",
-            "Column": "id"
-          }
+          "Type": "hash"
         },
         "music_user_map": {
-          "Type": "lookup_hash_unique_autoinc",
+          "Type": "lookup_hash_unique",
           "Owner": "music",
           "Params": {
             "Table": "music_user_map",
@@ -51,21 +45,7 @@ var routerSchema = createTestSchema(`
           }
         },
         "idx1": {
-          "Type": "hash_autoinc",
-          "Owner": "multi_autoinc_table",
-          "Params": {
-            "Table": "idx1",
-            "Column": "id1"
-          }
-        },
-        "idx2": {
-          "Type": "lookup_hash_autoinc",
-          "Owner": "multi_autoinc_table",
-          "Params": {
-            "Table": "idx2",
-            "From": "id",
-            "To": "val"
-          }
+          "Type": "hash"
         },
         "idx_noauto": {
           "Type": "hash",
@@ -75,7 +55,7 @@ var routerSchema = createTestSchema(`
           "Type": "numeric"
         }
       },
-      "Classes": {
+      "Tables": {
         "user": {
           "ColVindexes": [
             {
@@ -86,7 +66,11 @@ var routerSchema = createTestSchema(`
               "Col": "name",
               "Name": "name_user_map"
             }
-          ]
+          ],
+          "Autoinc" : {
+            "Col": "id",
+            "Sequence": "user_seq"
+          }
         },
         "user_extra": {
           "ColVindexes": [
@@ -106,7 +90,11 @@ var routerSchema = createTestSchema(`
               "Col": "id",
               "Name": "music_user_map"
             }
-          ]
+          ],
+          "Autoinc" : {
+            "Col": "id",
+            "Sequence": "user_seq"
+          }
         },
         "music_extra": {
           "ColVindexes": [
@@ -132,18 +120,6 @@ var routerSchema = createTestSchema(`
             }
           ]
         },
-        "multi_autoinc_table": {
-          "ColVindexes": [
-            {
-              "Col": "id1",
-              "Name": "idx1"
-            },
-            {
-              "Col": "id2",
-              "Name": "idx2"
-            }
-          ]
-        },
         "noauto_table": {
           "ColVindexes": [
             {
@@ -160,41 +136,31 @@ var routerSchema = createTestSchema(`
             }
           ]
         }
-      },
-      "Tables": {
-        "user": "user",
-        "user_extra": "user_extra",
-        "music": "music",
-        "music_extra": "music_extra",
-        "music_extra_reversed": "music_extra_reversed",
-        "multi_autoinc_table": "multi_autoinc_table",
-        "noauto_table": "noauto_table",
-        "ksid_table": "ksid_table"
       }
     },
     "TestBadSharding": {
       "Sharded": false,
       "Tables": {
-        "sharded_table": ""
+        "sharded_table": {}
       }
     },
     "TestUnsharded": {
       "Sharded": false,
       "Tables": {
-        "user_idx": "",
-        "music_user_map": "",
-        "name_user_map": "",
-        "idx1": "",
-        "idx2": ""
+        "user_seq": {
+          "Type": "Sequence"
+        },
+        "music_user_map": {},
+        "name_user_map": {}
       }
     }
   }
 }
 `)
 
-// createTestSchema creates a schema based on the JSON specs.
+// createTestVSchema creates a vschema based on the JSON specs.
 // It panics on failure.
-func createTestSchema(schemaJSON string) *planbuilder.Schema {
+func createTestVSchema(vschemaJSON string) *vindexes.VSchema {
 	f, err := ioutil.TempFile("", "vtgate_schema")
 	if err != nil {
 		panic(err)
@@ -203,15 +169,15 @@ func createTestSchema(schemaJSON string) *planbuilder.Schema {
 	f.Close()
 	defer os.Remove(fname)
 
-	err = ioutil.WriteFile(fname, []byte(schemaJSON), 0644)
+	err = ioutil.WriteFile(fname, []byte(vschemaJSON), 0644)
 	if err != nil {
 		panic(err)
 	}
-	schema, err := planbuilder.LoadFile(fname)
+	vschema, err := vindexes.LoadFile(fname)
 	if err != nil {
 		panic(err)
 	}
-	return schema
+	return vschema
 }
 
 func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxConn) {
@@ -229,7 +195,7 @@ func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxConn) {
 
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, nil, "")
-	router = NewRouter(serv, "aa", routerSchema, "", scatterConn)
+	router = NewRouter(serv, "aa", routerVSchema, "", scatterConn)
 	return router, sbc1, sbc2, sbclookup
 }
 
@@ -237,6 +203,7 @@ func routerExec(router *Router, sql string, bv map[string]interface{}) (*sqltype
 	return router.Execute(context.Background(),
 		sql,
 		bv,
+		"",
 		topodatapb.TabletType_MASTER,
 		nil,
 		false)
@@ -244,7 +211,7 @@ func routerExec(router *Router, sql string, bv map[string]interface{}) (*sqltype
 
 func routerStream(router *Router, sql string) (qr *sqltypes.Result, err error) {
 	results := make(chan *sqltypes.Result, 10)
-	err = router.StreamExecute(context.Background(), sql, nil, topodatapb.TabletType_MASTER, func(qr *sqltypes.Result) error {
+	err = router.StreamExecute(context.Background(), sql, nil, "", topodatapb.TabletType_MASTER, func(qr *sqltypes.Result) error {
 		results <- qr
 		return nil
 	})

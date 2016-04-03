@@ -86,18 +86,19 @@ func echoQueryResult(vals map[string]interface{}) *sqltypes.Result {
 	return qr
 }
 
-func (c *echoClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
+func (c *echoClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
 		return echoQueryResult(map[string]interface{}{
 			"callerId":         callerid.EffectiveCallerIDFromContext(ctx),
 			"query":            sql,
 			"bindVars":         bindVariables,
+			"keyspace":         keyspace,
 			"tabletType":       tabletType,
 			"session":          session,
 			"notInTransaction": notInTransaction,
 		}), nil
 	}
-	return c.fallbackClient.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction)
+	return c.fallbackClient.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, notInTransaction)
 }
 
 func (c *echoClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
@@ -205,17 +206,18 @@ func (c *echoClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtg
 	return c.fallbackClient.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, session)
 }
 
-func (c *echoClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
+func (c *echoClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
 	if strings.HasPrefix(sql, EchoPrefix) {
 		sendReply(echoQueryResult(map[string]interface{}{
 			"callerId":   callerid.EffectiveCallerIDFromContext(ctx),
 			"query":      sql,
 			"bindVars":   bindVariables,
+			"keyspace":   keyspace,
 			"tabletType": tabletType,
 		}))
 		return nil
 	}
-	return c.fallbackClient.StreamExecute(ctx, sql, bindVariables, tabletType, sendReply)
+	return c.fallbackClient.StreamExecute(ctx, sql, bindVariables, keyspace, tabletType, sendReply)
 }
 
 func (c *echoClient) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
@@ -282,4 +284,44 @@ func (c *echoClient) SplitQuery(ctx context.Context, keyspace string, sql string
 		}, nil
 	}
 	return c.fallback.SplitQuery(ctx, sql, keyspace, bindVariables, splitColumn, splitCount)
+}
+
+// TODO(erez): Rename after migration to SplitQuery V2 is done.
+func (c *echoClient) SplitQueryV2(
+	ctx context.Context,
+	keyspace string,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+
+	if strings.HasPrefix(sql, EchoPrefix) {
+		bv, err := querytypes.BindVariablesToProto3(bindVariables)
+		if err != nil {
+			return nil, err
+		}
+		return []*vtgatepb.SplitQueryResponse_Part{
+			{
+				Query: &querypb.BoundQuery{
+					Sql: fmt.Sprintf("%v:%v:%v:%v:%v",
+						sql, splitColumns, splitCount, numRowsPerQueryPart, algorithm),
+					BindVariables: bv,
+				},
+				KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
+					Keyspace: keyspace,
+				},
+			},
+		}, nil
+	}
+	return c.fallback.SplitQueryV2(
+		ctx,
+		sql,
+		keyspace,
+		bindVariables,
+		splitColumns,
+		splitCount,
+		numRowsPerQueryPart,
+		algorithm)
 }

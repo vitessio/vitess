@@ -9,10 +9,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/olekukonko/tablewriter"
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -34,17 +38,17 @@ func init() {
 	addCommand(queriesGroupName, command{
 		"VtGateExecute",
 		commandVtGateExecute,
-		"-server <vtgate> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] <sql>",
+		"-server <vtgate> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] [-json] <sql>",
 		"Executes the given SQL query with the provided bound variables against the vtgate server."})
 	addCommand(queriesGroupName, command{
 		"VtGateExecuteShards",
 		commandVtGateExecuteShards,
-		"-server <vtgate> -keyspace <keyspace> -shards <shard0>,<shard1>,... [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] <sql>",
+		"-server <vtgate> -keyspace <keyspace> -shards <shard0>,<shard1>,... [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] [-json] <sql>",
 		"Executes the given SQL query with the provided bound variables against the vtgate server. It is routed to the provided shards."})
 	addCommand(queriesGroupName, command{
 		"VtGateExecuteKeyspaceIds",
 		commandVtGateExecuteKeyspaceIds,
-		"-server <vtgate> -keyspace <keyspace> -keyspace_ids <ks1 in hex>,<k2 in hex>,... [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] <sql>",
+		"-server <vtgate> -keyspace <keyspace> -keyspace_ids <ks1 in hex>,<k2 in hex>,... [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] [-json] <sql>",
 		"Executes the given SQL query with the provided bound variables against the vtgate server. It is routed to the shards that contain the provided keyspace ids."})
 	addCommand(queriesGroupName, command{
 		"VtGateSplitQuery",
@@ -56,7 +60,7 @@ func init() {
 	addCommand(queriesGroupName, command{
 		"VtTabletExecute",
 		commandVtTabletExecute,
-		"[-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-transaction_id <transaction_id>] [-tablet_type <tablet_type>] -keyspace <keyspace> -shard <shard> <tablet alias> <sql>",
+		"[-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-transaction_id <transaction_id>] [-tablet_type <tablet_type>] [-json] -keyspace <keyspace> -shard <shard> <tablet alias> <sql>",
 		"Executes the given query on the given tablet."})
 	addCommand(queriesGroupName, command{
 		"VtTabletBegin",
@@ -125,6 +129,8 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	bindVariables := newBindvars(subFlags)
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vtgate client")
 	tabletType := subFlags.String("tablet_type", "master", "tablet type to query")
+	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -145,7 +151,11 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
-	return printJSON(wr, qr)
+	if *json {
+		return printJSON(wr.Logger(), qr)
+	}
+	printQueryResult(loggerWriter{wr.Logger()}, qr)
+	return nil
 }
 
 func commandVtGateExecuteShards(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -155,6 +165,8 @@ func commandVtGateExecuteShards(ctx context.Context, wr *wrangler.Wrangler, subF
 	tabletType := subFlags.String("tablet_type", "master", "tablet type to query")
 	keyspace := subFlags.String("keyspace", "", "keyspace to send query to")
 	shardsStr := subFlags.String("shards", "", "comma-separated list of shards to send query to")
+	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -179,7 +191,11 @@ func commandVtGateExecuteShards(ctx context.Context, wr *wrangler.Wrangler, subF
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
-	return printJSON(wr, qr)
+	if *json {
+		return printJSON(wr.Logger(), qr)
+	}
+	printQueryResult(loggerWriter{wr.Logger()}, qr)
+	return nil
 }
 
 func commandVtGateExecuteKeyspaceIds(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -189,6 +205,8 @@ func commandVtGateExecuteKeyspaceIds(ctx context.Context, wr *wrangler.Wrangler,
 	tabletType := subFlags.String("tablet_type", "master", "tablet type to query")
 	keyspace := subFlags.String("keyspace", "", "keyspace to send query to")
 	keyspaceIDsStr := subFlags.String("keyspace_ids", "", "comma-separated list of keyspace ids (in hex) that will map into shards to send query to")
+	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -220,7 +238,11 @@ func commandVtGateExecuteKeyspaceIds(ctx context.Context, wr *wrangler.Wrangler,
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
-	return printJSON(wr, qr)
+	if *json {
+		return printJSON(wr.Logger(), qr)
+	}
+	printQueryResult(loggerWriter{wr.Logger()}, qr)
+	return nil
 }
 
 func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -246,7 +268,7 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	if err != nil {
 		return fmt.Errorf("SplitQuery failed: %v", err)
 	}
-	return printJSON(wr, r)
+	return printJSON(wr.Logger(), r)
 }
 
 func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -256,6 +278,8 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	shard := subFlags.String("shard", "", "shard the tablet belongs to")
 	tabletType := subFlags.String("tablet_type", "unknown", "tablet type we expect from the tablet (use unknown to use sessionId)")
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
+	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -289,7 +313,11 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
-	return printJSON(wr, qr)
+	if *json {
+		return printJSON(wr.Logger(), qr)
+	}
+	printQueryResult(loggerWriter{wr.Logger()}, qr)
+	return nil
 }
 
 func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -333,7 +361,7 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	result := map[string]int64{
 		"transaction_id": transactionID,
 	}
-	return printJSON(wr, result)
+	return printJSON(wr.Logger(), result)
 }
 
 func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -447,14 +475,14 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
 
-	stream, errFunc, err := conn.StreamHealth(ctx)
+	stream, err := conn.StreamHealth(ctx)
 	if err != nil {
 		return err
 	}
 	for i := 0; i < *count; i++ {
-		shr, ok := <-stream
-		if !ok {
-			return fmt.Errorf("stream ended early: %v", errFunc())
+		shr, err := stream.Recv()
+		if err != nil {
+			return fmt.Errorf("stream ended early: %v", err)
 		}
 		data, err := json.Marshal(shr)
 		if err != nil {
@@ -464,4 +492,40 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 		}
 	}
 	return nil
+}
+
+// loggerWriter turns a Logger into a Writer by decorating it with a Write()
+// method that sends everything to Logger.Printf().
+type loggerWriter struct {
+	logutil.Logger
+}
+
+func (lw loggerWriter) Write(p []byte) (int, error) {
+	lw.Logger.Printf("%s", p)
+	return len(p), nil
+}
+
+// printQueryResult will pretty-print a QueryResult to the logger.
+func printQueryResult(writer io.Writer, qr *sqltypes.Result) {
+	table := tablewriter.NewWriter(writer)
+	table.SetAutoFormatHeaders(false)
+
+	// Make header.
+	header := make([]string, 0, len(qr.Fields))
+	for _, field := range qr.Fields {
+		header = append(header, field.Name)
+	}
+	table.SetHeader(header)
+
+	// Add rows.
+	for _, row := range qr.Rows {
+		vals := make([]string, 0, len(row))
+		for _, val := range row {
+			vals = append(vals, val.String())
+		}
+		table.Append(vals)
+	}
+
+	// Print table.
+	table.Render()
 }

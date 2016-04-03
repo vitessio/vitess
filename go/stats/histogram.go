@@ -7,7 +7,8 @@ package stats
 import (
 	"bytes"
 	"fmt"
-	"sync"
+
+	"github.com/youtube/vitess/go/sync2"
 )
 
 // Histogram tracks counts and totals while
@@ -18,16 +19,15 @@ type Histogram struct {
 	labels     []string
 	countLabel string
 	totalLabel string
+	hook       func(int64)
 
-	// mu controls buckets & total
-	mu      sync.Mutex
-	buckets []int64
-	total   int64
+	buckets []sync2.AtomicInt64
+	total   sync2.AtomicInt64
 }
 
 // NewHistogram creates a histogram with auto-generated labels
 // based on the cutoffs. The buckets are categorized using the
-// following criterion: cutoff[i-1] < value <= cutoff[i]. Anything
+// following criterion: cutoff[i-1] <= value < cutoff[i]. Anything
 // higher than the highest cutoff is labeled as "inf".
 func NewHistogram(name string, cutoffs []int64) *Histogram {
 	labels := make([]string, len(cutoffs)+1)
@@ -51,8 +51,7 @@ func NewGenericHistogram(name string, cutoffs []int64, labels []string, countLab
 		labels:     labels,
 		countLabel: countLabel,
 		totalLabel: totalLabel,
-		buckets:    make([]int64, len(labels)),
-		total:      0,
+		buckets:    make([]sync2.AtomicInt64, len(labels)),
 	}
 	if name != "" {
 		Publish(name, h)
@@ -60,81 +59,92 @@ func NewGenericHistogram(name string, cutoffs []int64, labels []string, countLab
 	return h
 }
 
+// Add adds a new measurement to the Histogram.
 func (h *Histogram) Add(value int64) {
 	for i := range h.labels {
-		if i == len(h.labels)-1 || value <= h.cutoffs[i] {
-			h.mu.Lock()
-			h.buckets[i] += 1
-			h.total += value
-			h.mu.Unlock()
-			return
+		if i == len(h.labels)-1 || value < h.cutoffs[i] {
+			h.buckets[i].Add(1)
+			h.total.Add(value)
+			break
 		}
+	}
+	if h.hook != nil {
+		h.hook(value)
 	}
 }
 
+// String returns a string representation of the Histogram.
+// Note that sum of all buckets may not be equal to the total temporarily,
+// because Add() increments bucket and total with two atomic operations.
 func (h *Histogram) String() string {
 	b, _ := h.MarshalJSON()
 	return string(b)
 }
 
+// MarshalJSON returns a JSON representation of the Histogram.
+// Note that sum of all buckets may not be equal to the total temporarily,
+// because Add() increments bucket and total with two atomic operations.
 func (h *Histogram) MarshalJSON() ([]byte, error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
 	b := bytes.NewBuffer(make([]byte, 0, 4096))
 	fmt.Fprintf(b, "{")
 	totalCount := int64(0)
 	for i, label := range h.labels {
-		totalCount += h.buckets[i]
+		totalCount += h.buckets[i].Get()
 		fmt.Fprintf(b, "\"%v\": %v, ", label, totalCount)
 	}
 	fmt.Fprintf(b, "\"%s\": %v, ", h.countLabel, totalCount)
-	fmt.Fprintf(b, "\"%s\": %v", h.totalLabel, h.total)
+	fmt.Fprintf(b, "\"%s\": %v", h.totalLabel, h.total.Get())
 	fmt.Fprintf(b, "}")
 	return b.Bytes(), nil
 }
 
+// Counts returns a map from labels to the current count in the Histogram for that label.
 func (h *Histogram) Counts() map[string]int64 {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
 	counts := make(map[string]int64, len(h.labels))
 	for i, label := range h.labels {
-		counts[label] = h.buckets[i]
+		counts[label] = h.buckets[i].Get()
 	}
 	return counts
 }
 
+// CountLabel returns the count label that was set when this Histogram was created.
 func (h *Histogram) CountLabel() string {
 	return h.countLabel
 }
 
+// Count returns the number of times Add has been called.
 func (h *Histogram) Count() (count int64) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	for _, v := range h.buckets {
-		count += v
+	for i := range h.buckets {
+		count += h.buckets[i].Get()
 	}
 	return
 }
 
+// TotalLabel returns the total label that was set when this Histogram was created.
 func (h *Histogram) TotalLabel() string {
 	return h.totalLabel
 }
 
+// Total returns the sum of all values that have been added to this Histogram.
 func (h *Histogram) Total() (total int64) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.total
+	return h.total.Get()
 }
 
+// Labels returns the labels that were set when this Histogram was created.
 func (h *Histogram) Labels() []string {
 	return h.labels
 }
 
+// Cutoffs returns the cutoffs that were set when this Histogram was created.
+func (h *Histogram) Cutoffs() []int64 {
+	return h.cutoffs
+}
+
+// Buckets returns a snapshot of the current values in all buckets.
 func (h *Histogram) Buckets() []int64 {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.buckets
+	buckets := make([]int64, len(h.buckets))
+	for i := range h.buckets {
+		buckets[i] = h.buckets[i].Get()
+	}
+	return buckets
 }

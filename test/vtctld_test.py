@@ -15,13 +15,11 @@ import utils
 # range '' - 80
 shard_0_master = tablet.Tablet()
 shard_0_replica = tablet.Tablet()
-shard_0_spare = tablet.Tablet()
 # range 80 - ''
 shard_1_master = tablet.Tablet()
 shard_1_replica = tablet.Tablet()
 # all tablets
-tablets = [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica,
-           shard_0_spare]
+tablets = [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]
 
 
 def setUpModule():
@@ -38,6 +36,7 @@ def setUpModule():
 
 
 def tearDownModule():
+  utils.required_teardown()
   if utils.options.skip_teardown:
     return
 
@@ -66,8 +65,7 @@ class TestVtctld(unittest.TestCase):
          'redirected_keyspace'])
 
     shard_0_master.init_tablet('master', 'test_keyspace', '-80')
-    shard_0_replica.init_tablet('spare', 'test_keyspace', '-80')
-    shard_0_spare.init_tablet('spare', 'test_keyspace', '-80')
+    shard_0_replica.init_tablet('replica', 'test_keyspace', '-80')
     shard_1_master.init_tablet('master', 'test_keyspace', '80-')
     shard_1_replica.init_tablet('replica', 'test_keyspace', '80-')
 
@@ -85,18 +83,11 @@ class TestVtctld(unittest.TestCase):
                                    target_tablet_type='replica',
                                    wait_for_state=None)
 
-    shard_0_spare.start_vttablet(wait_for_state=None,
-                                 extra_args=utils.vtctld.process_args())
-
     # wait for the right states
     for t in [shard_0_master, shard_1_master, shard_1_replica]:
       t.wait_for_vttablet_state('SERVING')
-    for t in [shard_0_replica, shard_0_spare]:
-      t.wait_for_vttablet_state('NOT_SERVING')
+    shard_0_replica.wait_for_vttablet_state('NOT_SERVING')
 
-    for t in [shard_0_master, shard_0_replica, shard_0_spare,
-              shard_1_master, shard_1_replica]:
-      t.reset_replication()
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/-80',
                      shard_0_master.tablet_alias], auto_log=True)
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/80-',
@@ -172,6 +163,20 @@ class TestVtctld(unittest.TestCase):
       if i == 1:
         break
     vtctld_connection.close()
+
+  def test_execute_fetch_as_dba(self):
+    """Make sure ExecuteFetchAsDba prints a human-readable table by default."""
+    # Use a simple example so we're not sensitive to alignment settings, etc.
+    # All we care is that it's the human-readable table, not JSON or protobuf.
+    out, _ = utils.run_vtctl(['ExecuteFetchAsDba', shard_0_replica.tablet_alias,
+                              'SELECT 1 AS a'], trap_output=True)
+    want = """+---+
+| a |
++---+
+| 1 |
++---+
+"""
+    self.assertEqual(want, out)
 
 if __name__ == '__main__':
   utils.main()

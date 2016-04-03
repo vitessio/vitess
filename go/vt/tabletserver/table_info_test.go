@@ -8,12 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
@@ -276,6 +278,29 @@ func TestTableInfoInvalidCardinalityInIndex(t *testing.T) {
 	}
 	if len(tableInfo.PKColumns) != 1 {
 		t.Fatalf("table should have one PK column although the cardinality is invalid")
+	}
+}
+
+func TestTableInfoSequence(t *testing.T) {
+	db := fakesqldb.Register()
+	for query, result := range getTestTableInfoQueries() {
+		db.AddQuery(query, result)
+	}
+	tableInfo, err := newTestTableInfo(nil, "USER_TABLE", "vitess_sequence", db)
+	if err != nil {
+		t.Fatalf("failed to create a test table info")
+	}
+	want := &TableInfo{
+		Table: &schema.Table{
+			Name: "test_table",
+			Type: schema.Sequence,
+		},
+	}
+	tableInfo.Columns = nil
+	tableInfo.Indexes = nil
+	tableInfo.PKColumns = nil
+	if !reflect.DeepEqual(tableInfo, want) {
+		t.Errorf("TableInfo:\n%#v, want\n%#v", tableInfo, want)
 	}
 }
 

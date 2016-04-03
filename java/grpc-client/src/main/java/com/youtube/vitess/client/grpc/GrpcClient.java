@@ -1,16 +1,8 @@
 package com.youtube.vitess.client.grpc;
 
-import io.grpc.ChannelImpl;
-import io.grpc.StatusRuntimeException;
-
-import java.io.IOException;
-import java.sql.SQLException;
-import java.sql.SQLIntegrityConstraintViolationException;
-import java.sql.SQLInvalidAuthorizationSpecException;
-import java.sql.SQLNonTransientException;
-import java.sql.SQLSyntaxErrorException;
-import java.sql.SQLTimeoutException;
-import java.sql.SQLTransientException;
+import com.google.common.util.concurrent.AsyncFunction;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
 
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.RpcClient;
@@ -49,21 +41,36 @@ import com.youtube.vitess.proto.Vtgate.StreamExecuteResponse;
 import com.youtube.vitess.proto.Vtgate.StreamExecuteShardsRequest;
 import com.youtube.vitess.proto.Vtgate.StreamExecuteShardsResponse;
 import com.youtube.vitess.proto.grpc.VitessGrpc;
-import com.youtube.vitess.proto.grpc.VitessGrpc.VitessBlockingStub;
+import com.youtube.vitess.proto.grpc.VitessGrpc.VitessFutureStub;
 import com.youtube.vitess.proto.grpc.VitessGrpc.VitessStub;
+
+import org.joda.time.Duration;
+
+import io.grpc.ManagedChannel;
+import io.grpc.StatusRuntimeException;
+
+import java.io.IOException;
+import java.sql.SQLException;
+import java.sql.SQLIntegrityConstraintViolationException;
+import java.sql.SQLInvalidAuthorizationSpecException;
+import java.sql.SQLNonTransientException;
+import java.sql.SQLSyntaxErrorException;
+import java.sql.SQLTimeoutException;
+import java.sql.SQLTransientException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * GrpcClient is a gRPC-based implementation of Vitess Rpcclient.
  */
 public class GrpcClient implements RpcClient {
-  private ChannelImpl channel;
-  private VitessStub asyncStub;
-  private VitessBlockingStub blockingStub;
+  private final ManagedChannel channel;
+  private final VitessStub asyncStub;
+  private final VitessFutureStub futureStub;
 
-  public GrpcClient(ChannelImpl channel) {
+  public GrpcClient(ManagedChannel channel) {
     this.channel = channel;
     asyncStub = VitessGrpc.newStub(channel);
-    blockingStub = VitessGrpc.newBlockingStub(channel);
+    futureStub = VitessGrpc.newFutureStub(channel);
   }
 
   @Override
@@ -72,190 +79,167 @@ public class GrpcClient implements RpcClient {
   }
 
   @Override
-  public ExecuteResponse execute(Context ctx, ExecuteRequest request) throws SQLException {
-    try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return blockingStub.execute(request);
-    } catch (Exception e) {
-      throw convertGrpcError(e);
-    }
-  }
-
-  @Override
-  public ExecuteShardsResponse executeShards(Context ctx, ExecuteShardsRequest request)
+  public ListenableFuture<ExecuteResponse> execute(Context ctx, ExecuteRequest request)
       throws SQLException {
-    try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return blockingStub.executeShards(request);
-    } catch (Exception e) {
-      throw convertGrpcError(e);
-    }
+    return Futures.catchingAsync(
+        getFutureStub(ctx).execute(request),
+        Exception.class,
+        new ExceptionConverter<ExecuteResponse>());
   }
 
   @Override
-  public ExecuteKeyspaceIdsResponse executeKeyspaceIds(
+  public ListenableFuture<ExecuteShardsResponse> executeShards(
+      Context ctx, ExecuteShardsRequest request) throws SQLException {
+    return Futures.catchingAsync(
+        getFutureStub(ctx).executeShards(request),
+        Exception.class,
+        new ExceptionConverter<ExecuteShardsResponse>());
+  }
+
+  @Override
+  public ListenableFuture<ExecuteKeyspaceIdsResponse> executeKeyspaceIds(
       Context ctx, ExecuteKeyspaceIdsRequest request) throws SQLException {
-    try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return blockingStub.executeKeyspaceIds(request);
-    } catch (Exception e) {
-      throw convertGrpcError(e);
-    }
+    return Futures.catchingAsync(
+        getFutureStub(ctx).executeKeyspaceIds(request),
+        Exception.class,
+        new ExceptionConverter<ExecuteKeyspaceIdsResponse>());
   }
 
   @Override
-  public ExecuteKeyRangesResponse executeKeyRanges(Context ctx, ExecuteKeyRangesRequest request)
-      throws SQLException {
-    try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return blockingStub.executeKeyRanges(request);
-    } catch (Exception e) {
-      throw convertGrpcError(e);
-    }
+  public ListenableFuture<ExecuteKeyRangesResponse> executeKeyRanges(
+      Context ctx, ExecuteKeyRangesRequest request) throws SQLException {
+    return Futures.catchingAsync(
+        getFutureStub(ctx).executeKeyRanges(request),
+        Exception.class,
+        new ExceptionConverter<ExecuteKeyRangesResponse>());
   }
 
   @Override
-  public ExecuteEntityIdsResponse executeEntityIds(Context ctx, ExecuteEntityIdsRequest request)
-      throws SQLException {
-    try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return blockingStub.executeEntityIds(request);
-    } catch (Exception e) {
-      throw convertGrpcError(e);
-    }
+  public ListenableFuture<ExecuteEntityIdsResponse> executeEntityIds(
+      Context ctx, ExecuteEntityIdsRequest request) throws SQLException {
+    return Futures.catchingAsync(
+        getFutureStub(ctx).executeEntityIds(request),
+        Exception.class,
+        new ExceptionConverter<ExecuteEntityIdsResponse>());
   }
 
   @Override
-  public ExecuteBatchShardsResponse executeBatchShards(
+  public ListenableFuture<ExecuteBatchShardsResponse> executeBatchShards(
       Context ctx, ExecuteBatchShardsRequest request) throws SQLException {
-    try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return blockingStub.executeBatchShards(request);
-    } catch (Exception e) {
-      throw convertGrpcError(e);
-    }
+    return Futures.catchingAsync(
+        getFutureStub(ctx).executeBatchShards(request),
+        Exception.class,
+        new ExceptionConverter<ExecuteBatchShardsResponse>());
   }
 
   @Override
-  public ExecuteBatchKeyspaceIdsResponse executeBatchKeyspaceIds(
+  public ListenableFuture<ExecuteBatchKeyspaceIdsResponse> executeBatchKeyspaceIds(
       Context ctx, ExecuteBatchKeyspaceIdsRequest request) throws SQLException {
-    try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return blockingStub.executeBatchKeyspaceIds(request);
-    } catch (Exception e) {
-      throw convertGrpcError(e);
-    }
+    return Futures.catchingAsync(
+        getFutureStub(ctx).executeBatchKeyspaceIds(request),
+        Exception.class,
+        new ExceptionConverter<ExecuteBatchKeyspaceIdsResponse>());
   }
 
   @Override
   public StreamIterator<QueryResult> streamExecute(Context ctx, StreamExecuteRequest request)
       throws SQLException {
-    try (GrpcContext gctx = new GrpcContext(ctx)) {
-      GrpcStreamAdapter<StreamExecuteResponse, QueryResult> adapter =
-          new GrpcStreamAdapter<StreamExecuteResponse, QueryResult>() {
-            @Override
-            QueryResult getResult(StreamExecuteResponse response) throws SQLException {
-              return response.getResult();
-            }
-          };
-      asyncStub.streamExecute(request, adapter);
-      return adapter;
-    } catch (Exception e) {
-      throw convertGrpcError(e);
-    }
+    GrpcStreamAdapter<StreamExecuteResponse, QueryResult> adapter =
+        new GrpcStreamAdapter<StreamExecuteResponse, QueryResult>() {
+          @Override
+          QueryResult getResult(StreamExecuteResponse response) throws SQLException {
+            return response.getResult();
+          }
+        };
+    getAsyncStub(ctx).streamExecute(request, adapter);
+    return adapter;
   }
 
   @Override
   public StreamIterator<QueryResult> streamExecuteShards(
       Context ctx, StreamExecuteShardsRequest request) throws SQLException {
-    try (GrpcContext gctx = new GrpcContext(ctx)) {
-      GrpcStreamAdapter<StreamExecuteShardsResponse, QueryResult> adapter =
-          new GrpcStreamAdapter<StreamExecuteShardsResponse, QueryResult>() {
-            @Override
-            QueryResult getResult(StreamExecuteShardsResponse response) throws SQLException {
-              return response.getResult();
-            }
-          };
-      asyncStub.streamExecuteShards(request, adapter);
-      return adapter;
-    } catch (Exception e) {
-      throw convertGrpcError(e);
-    }
+    GrpcStreamAdapter<StreamExecuteShardsResponse, QueryResult> adapter =
+        new GrpcStreamAdapter<StreamExecuteShardsResponse, QueryResult>() {
+          @Override
+          QueryResult getResult(StreamExecuteShardsResponse response) throws SQLException {
+            return response.getResult();
+          }
+        };
+    getAsyncStub(ctx).streamExecuteShards(request, adapter);
+    return adapter;
   }
 
   @Override
   public StreamIterator<QueryResult> streamExecuteKeyspaceIds(
       Context ctx, StreamExecuteKeyspaceIdsRequest request) throws SQLException {
-    try (GrpcContext gctx = new GrpcContext(ctx)) {
-      GrpcStreamAdapter<StreamExecuteKeyspaceIdsResponse, QueryResult> adapter =
-          new GrpcStreamAdapter<StreamExecuteKeyspaceIdsResponse, QueryResult>() {
-            @Override
-            QueryResult getResult(StreamExecuteKeyspaceIdsResponse response) throws SQLException {
-              return response.getResult();
-            }
-          };
-      asyncStub.streamExecuteKeyspaceIds(request, adapter);
-      return adapter;
-    } catch (Exception e) {
-      throw convertGrpcError(e);
-    }
+    GrpcStreamAdapter<StreamExecuteKeyspaceIdsResponse, QueryResult> adapter =
+        new GrpcStreamAdapter<StreamExecuteKeyspaceIdsResponse, QueryResult>() {
+          @Override
+          QueryResult getResult(StreamExecuteKeyspaceIdsResponse response) throws SQLException {
+            return response.getResult();
+          }
+        };
+    getAsyncStub(ctx).streamExecuteKeyspaceIds(request, adapter);
+    return adapter;
   }
 
   @Override
   public StreamIterator<QueryResult> streamExecuteKeyRanges(
       Context ctx, StreamExecuteKeyRangesRequest request) throws SQLException {
-    try (GrpcContext gctx = new GrpcContext(ctx)) {
-      GrpcStreamAdapter<StreamExecuteKeyRangesResponse, QueryResult> adapter =
-          new GrpcStreamAdapter<StreamExecuteKeyRangesResponse, QueryResult>() {
-            @Override
-            QueryResult getResult(StreamExecuteKeyRangesResponse response) throws SQLException {
-              return response.getResult();
-            }
-          };
-      asyncStub.streamExecuteKeyRanges(request, adapter);
-      return adapter;
-    } catch (Exception e) {
-      throw convertGrpcError(e);
-    }
+    GrpcStreamAdapter<StreamExecuteKeyRangesResponse, QueryResult> adapter =
+        new GrpcStreamAdapter<StreamExecuteKeyRangesResponse, QueryResult>() {
+          @Override
+          QueryResult getResult(StreamExecuteKeyRangesResponse response) throws SQLException {
+            return response.getResult();
+          }
+        };
+    getAsyncStub(ctx).streamExecuteKeyRanges(request, adapter);
+    return adapter;
   }
 
   @Override
-  public BeginResponse begin(Context ctx, BeginRequest request) throws SQLException {
-    try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return blockingStub.begin(request);
-    } catch (Exception e) {
-      throw convertGrpcError(e);
-    }
-  }
-
-  @Override
-  public CommitResponse commit(Context ctx, CommitRequest request) throws SQLException {
-    try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return blockingStub.commit(request);
-    } catch (Exception e) {
-      throw convertGrpcError(e);
-    }
-  }
-
-  @Override
-  public RollbackResponse rollback(Context ctx, RollbackRequest request) throws SQLException {
-    try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return blockingStub.rollback(request);
-    } catch (Exception e) {
-      throw convertGrpcError(e);
-    }
-  }
-
-  @Override
-  public SplitQueryResponse splitQuery(Context ctx, SplitQueryRequest request) throws SQLException {
-    try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return blockingStub.splitQuery(request);
-    } catch (Exception e) {
-      throw convertGrpcError(e);
-    }
-  }
-
-  @Override
-  public GetSrvKeyspaceResponse getSrvKeyspace(Context ctx, GetSrvKeyspaceRequest request)
+  public ListenableFuture<BeginResponse> begin(Context ctx, BeginRequest request)
       throws SQLException {
-    try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return blockingStub.getSrvKeyspace(request);
-    } catch (Exception e) {
-      throw convertGrpcError(e);
-    }
+    return Futures.catchingAsync(
+        getFutureStub(ctx).begin(request),
+        Exception.class,
+        new ExceptionConverter<BeginResponse>());
+  }
+
+  @Override
+  public ListenableFuture<CommitResponse> commit(Context ctx, CommitRequest request)
+      throws SQLException {
+    return Futures.catchingAsync(
+        getFutureStub(ctx).commit(request),
+        Exception.class,
+        new ExceptionConverter<CommitResponse>());
+  }
+
+  @Override
+  public ListenableFuture<RollbackResponse> rollback(Context ctx, RollbackRequest request)
+      throws SQLException {
+    return Futures.catchingAsync(
+        getFutureStub(ctx).rollback(request),
+        Exception.class,
+        new ExceptionConverter<RollbackResponse>());
+  }
+
+  @Override
+  public ListenableFuture<SplitQueryResponse> splitQuery(Context ctx, SplitQueryRequest request)
+      throws SQLException {
+    return Futures.catchingAsync(
+        getFutureStub(ctx).splitQuery(request),
+        Exception.class,
+        new ExceptionConverter<SplitQueryResponse>());
+  }
+
+  @Override
+  public ListenableFuture<GetSrvKeyspaceResponse> getSrvKeyspace(
+      Context ctx, GetSrvKeyspaceRequest request) throws SQLException {
+    return Futures.catchingAsync(
+        getFutureStub(ctx).getSrvKeyspace(request),
+        Exception.class,
+        new ExceptionConverter<GetSrvKeyspaceResponse>());
   }
 
   /**
@@ -278,11 +262,36 @@ public class GrpcClient implements RpcClient {
         default: // Covers e.g. UNKNOWN.
           String advice = "";
           if (e.getCause() instanceof java.nio.channels.ClosedChannelException) {
-            advice = "Failed to connect to vtgate. Make sure that vtgate is running and you are using the correct address. Details: ";
+            advice =
+                "Failed to connect to vtgate. Make sure that vtgate is running and you are using the correct address. Details: ";
           }
-          return new SQLNonTransientException("gRPC StatusRuntimeException: " + advice + e.toString(), e);
+          return new SQLNonTransientException(
+              "gRPC StatusRuntimeException: " + advice + e.toString(), e);
       }
     }
     return new SQLNonTransientException("gRPC error: " + e.toString(), e);
+  }
+
+  static class ExceptionConverter<V> implements AsyncFunction<Exception, V> {
+    @Override
+    public ListenableFuture<V> apply(Exception e) throws Exception {
+      throw convertGrpcError(e);
+    }
+  }
+
+  private VitessStub getAsyncStub(Context ctx) {
+    Duration timeout = ctx.getTimeout();
+    if (timeout == null) {
+      return asyncStub;
+    }
+    return asyncStub.withDeadlineAfter(timeout.getMillis(), TimeUnit.MILLISECONDS);
+  }
+
+  private VitessFutureStub getFutureStub(Context ctx) {
+    Duration timeout = ctx.getTimeout();
+    if (timeout == null) {
+      return futureStub;
+    }
+    return futureStub.withDeadlineAfter(timeout.getMillis(), TimeUnit.MILLISECONDS);
   }
 }

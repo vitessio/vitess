@@ -60,7 +60,7 @@ func TestLogEvent(t *testing.T) {
 			t.Errorf("ml.Events[%v].Value = %q, want %q", i, got, want)
 		}
 		if got, want := ml.Events[i].File, "logger_test.go"; got != want && ml.Events[i].Level != logutilpb.Level_CONSOLE {
-			t.Errorf("ml.Events[%v].File = %q, want %q", i, got, want)
+			t.Errorf("ml.Events[%v].File = %q (line = %v), want %q", i, got, ml.Events[i].Line, want)
 		}
 	}
 }
@@ -96,10 +96,10 @@ func TestChannelLogger(t *testing.T) {
 	cl.Warningf("test %v", 123)
 	cl.Errorf("test %v", 123)
 	cl.Printf("test %v", 123)
-	close(cl)
+	close(cl.C)
 
 	count := 0
-	for e := range cl {
+	for e := range cl.C {
 		if got, want := e.Value, "test 123"; got != want {
 			t.Errorf("e.Value = %q, want %q", got, want)
 		}
@@ -114,66 +114,43 @@ func TestChannelLogger(t *testing.T) {
 }
 
 func TestTeeLogger(t *testing.T) {
-	ml1 := NewMemoryLogger()
-	ml2 := NewMemoryLogger()
-	tl := NewTeeLogger(ml1, ml2)
+	ml := NewMemoryLogger()
+	cl := NewChannelLogger(10)
+	tl := NewTeeLogger(ml, cl)
+
 	tl.Infof("test infof %v %v", 1, 2)
 	tl.Warningf("test warningf %v %v", 2, 3)
 	tl.Errorf("test errorf %v %v", 3, 4)
 	tl.Printf("test printf %v %v", 4, 5)
-	tl.InfoDepth(0, "test infoDepth")
-	tl.WarningDepth(0, "test warningDepth")
-	tl.ErrorDepth(0, "test errorDepth")
-	for i, ml := range []*MemoryLogger{ml1, ml2} {
-		if len(ml.Events) != 7 {
-			t.Fatalf("Invalid ml%v size: %v", i+1, ml)
-		}
-		if ml.Events[0].Value != "test infof 1 2" {
-			t.Errorf("Invalid ml%v[0]: %v", i+1, ml.Events[0].Value)
-		}
-		if ml.Events[0].Level != logutilpb.Level_INFO {
-			t.Errorf("Invalid ml%v[0].level: %v", i+1, ml.Events[0].Level)
-		}
-		if ml.Events[1].Value != "test warningf 2 3" {
-			t.Errorf("Invalid ml%v[0]: %v", i+1, ml.Events[1].Value)
-		}
-		if ml.Events[1].Level != logutilpb.Level_WARNING {
-			t.Errorf("Invalid ml%v[0].level: %v", i+1, ml.Events[1].Level)
-		}
-		if ml.Events[2].Value != "test errorf 3 4" {
-			t.Errorf("Invalid ml%v[0]: %v", i+1, ml.Events[2].Value)
-		}
-		if ml.Events[2].Level != logutilpb.Level_ERROR {
-			t.Errorf("Invalid ml%v[0].level: %v", i+1, ml.Events[2].Level)
-		}
-		if ml.Events[3].Value != "test printf 4 5" {
-			t.Errorf("Invalid ml%v[0]: %v", i+1, ml.Events[3].Value)
-		}
-		if ml.Events[3].Level != logutilpb.Level_CONSOLE {
-			t.Errorf("Invalid ml%v[0].level: %v", i+1, ml.Events[3].Level)
-		}
-		if ml.Events[4].Value != "test infoDepth" {
-			t.Errorf("Invalid ml%v[0]: %v", i+1, ml.Events[4].Value)
-		}
-		if ml.Events[4].Level != logutilpb.Level_INFO {
-			t.Errorf("Invalid ml%v[0].level: %v", i+1, ml.Events[4].Level)
-		}
-		if ml.Events[5].Value != "test warningDepth" {
-			t.Errorf("Invalid ml%v[0]: %v", i+1, ml.Events[5].Value)
-		}
-		if ml.Events[5].Level != logutilpb.Level_WARNING {
-			t.Errorf("Invalid ml%v[0].level: %v", i+1, ml.Events[5].Level)
-		}
-		if ml.Events[6].Value != "test errorDepth" {
-			t.Errorf("Invalid ml%v[0]: %v", i+1, ml.Events[6].Value)
-		}
-		if ml.Events[6].Level != logutilpb.Level_ERROR {
-			t.Errorf("Invalid ml%v[0].level: %v", i+1, ml.Events[6].Level)
-		}
+	close(cl.C)
 
-		for j := range ml.Events {
-			if got, want := ml.Events[j].File, "logger_test.go"; got != want && ml.Events[j].Level != logutilpb.Level_CONSOLE {
-				t.Errorf("ml%v[%v].File = %q, want %q", i+1, j, got, want)
+	clEvents := []*logutilpb.Event{}
+	for e := range cl.C {
+		clEvents = append(clEvents, e)
+	}
+
+	wantEvents := []*logutilpb.Event{
+		{Level: logutilpb.Level_INFO, Value: "test infof 1 2"},
+		{Level: logutilpb.Level_WARNING, Value: "test warningf 2 3"},
+		{Level: logutilpb.Level_ERROR, Value: "test errorf 3 4"},
+		{Level: logutilpb.Level_CONSOLE, Value: "test printf 4 5"},
+	}
+	wantFile := "logger_test.go"
+
+	for i, events := range [][]*logutilpb.Event{ml.Events, clEvents} {
+		if got, want := len(events), len(wantEvents); got != want {
+			t.Fatalf("[%v] len(events) = %v, want %v", i, got, want)
+		}
+		for j, got := range events {
+			want := wantEvents[j]
+			if got.Level != want.Level {
+				t.Errorf("[%v] events[%v].Level = %s, want %s", i, j, got.Level, want.Level)
+			}
+			if got.Value != want.Value {
+				t.Errorf("[%v] events[%v].Value = %q, want %q", i, j, got.Value, want.Value)
+			}
+			if got.File != wantFile && got.Level != logutilpb.Level_CONSOLE {
+				t.Errorf("[%v] events[%v].File = %q, want %q", i, j, got.File, wantFile)
 			}
 		}
 	}

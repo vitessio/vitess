@@ -159,17 +159,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"python_client_grpc": {
-			"File": "python_client_test.py",
-			"Args": [
-			  "--protocols-flavor=grpc"
-			],
-			"Command": [],
-			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"reparent": {
 			"File": "reparent.py",
 			"Args": [],
@@ -322,7 +311,9 @@
 		},
 		"vtgatev2": {
 			"File": "vtgatev2_test.py",
-			"Args": [],
+			"Args": [
+				"--vtgate-gateway-flavor=shardgateway"
+			],
 			"Command": [],
 			"Manual": false,
 			"Shard": 1,

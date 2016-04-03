@@ -27,3 +27,10 @@ function add_list_bind_var($bound_query, $type, $key, $values)
     $entry->setValue($bv);
     $bound_query->addBindVariables($entry);
 }
+
+function make_field($name)
+{
+    $field = new Proto\Query\Field();
+    $field->setName($name);
+    return $field;
+}

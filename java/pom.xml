@@ -13,7 +13,6 @@
     <modules>
         <module>client</module>
         <module>example</module>
-        <module>gorpc</module>
         <module>grpc-client</module>
         <module>hadoop</module>
     </modules>
@@ -63,11 +62,11 @@
 
     <properties>
       <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-      <grpc.version>0.8.0</grpc.version>
-      <guava.version>18.0</guava.version>
+      <grpc.version>0.13.1</grpc.version>
+      <guava.version>19.0</guava.version>
       <junit.version>4.12</junit.version>
       <log4j.version>1.2.17</log4j.version>
-      <protobuf.java.version>3.0.0-alpha-3.1</protobuf.java.version>
+      <protobuf.java.version>3.0.0-beta-2</protobuf.java.version>
     </properties>
 
     <!-- define dependency versions -->

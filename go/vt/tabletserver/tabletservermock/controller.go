@@ -17,11 +17,20 @@ import (
 // BroadcastData is used by the mock Controller to send data
 // so the tests can check what was sent.
 type BroadcastData struct {
-	// TERTimestamp stores the last broadcast timestamp
+	// TERTimestamp stores the last broadcast timestamp.
 	TERTimestamp int64
 
-	// RealtimeStats stores the last broadcast stats
+	// RealtimeStats stores the last broadcast stats.
 	RealtimeStats querypb.RealtimeStats
+}
+
+// StateChange stores the state the controller changed to.
+// Tests can use this to verify that the state changed as expected.
+type StateChange struct {
+	// Serving is true when the QueryService is enabled.
+	Serving bool
+	// TabletType is the type of tablet e.g. REPLICA.
+	TabletType topodatapb.TabletType
 }
 
 // Controller is a mock tabletserver.Controller
@@ -46,6 +55,9 @@ type Controller struct {
 
 	// BroadcastData is a channel where we send BroadcastHealth data
 	BroadcastData chan *BroadcastData
+
+	// StateChanges has the list of state changes done by SetServingType().
+	StateChanges chan *StateChange
 }
 
 // NewController returns a mock of tabletserver.Controller
@@ -56,6 +68,7 @@ func NewController() *Controller {
 		IsHealthyError:      nil,
 		ReloadSchemaCount:   0,
 		BroadcastData:       make(chan *BroadcastData, 10),
+		StateChanges:        make(chan *StateChange, 10),
 	}
 }
 
@@ -79,12 +92,20 @@ func (tqsc *Controller) InitDBConfig(target querypb.Target, dbConfigs dbconfigs.
 }
 
 // SetServingType is part of the tabletserver.Controller interface
-func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) error {
+func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (bool, error) {
+	stateChanged := false
 	if tqsc.SetServingTypeError == nil {
+		stateChanged = tqsc.QueryServiceEnabled != serving || tqsc.CurrentTarget.TabletType != tabletType
 		tqsc.CurrentTarget.TabletType = tabletType
 		tqsc.QueryServiceEnabled = serving
 	}
-	return tqsc.SetServingTypeError
+	if stateChanged {
+		tqsc.StateChanges <- &StateChange{
+			Serving:    serving,
+			TabletType: tabletType,
+		}
+	}
+	return stateChanged, tqsc.SetServingTypeError
 }
 
 // IsServing is part of the tabletserver.Controller interface

@@ -15,31 +15,29 @@ func TestHistogram(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		h.Add(int64(i))
 	}
-	want := `{"1": 2, "5": 6, "inf": 10, "Count": 10, "Total": 45}`
+	want := `{"1": 1, "5": 5, "inf": 10, "Count": 10, "Total": 45}`
 	if h.String() != want {
-		t.Errorf("want %s, got %s", want, h.String())
+		t.Errorf("got %v, want %v", h.String(), want)
 	}
 	counts := h.Counts()
-	if counts["1"] != 2 {
-		t.Errorf("want 2, got %d", counts["1"])
+	counts["Count"] = h.Count()
+	counts["Total"] = h.Total()
+	for k, want := range map[string]int64{
+		"1":     1,
+		"5":     4,
+		"inf":   5,
+		"Count": 10,
+		"Total": 45,
+	} {
+		if got := counts[k]; got != want {
+			t.Errorf("histogram counts [%v]: got %d, want %d", k, got, want)
+		}
 	}
-	if counts["5"] != 4 {
-		t.Errorf("want 4, got %d", counts["2"])
+	if got, want := h.CountLabel(), "Count"; got != want {
+		t.Errorf("got %v, want %v", got, want)
 	}
-	if counts["inf"] != 4 {
-		t.Errorf("want 4, got %d", counts["inf"])
-	}
-	if h.Count() != 10 {
-		t.Errorf("want 10, got %d", h.Count())
-	}
-	if h.CountLabel() != "Count" {
-		t.Errorf("want Count, got %s", h.CountLabel())
-	}
-	if h.Total() != 45 {
-		t.Errorf("want 45, got %d", h.Total())
-	}
-	if h.TotalLabel() != "Total" {
-		t.Errorf("want Total, got %s", h.TotalLabel())
+	if got, want := h.TotalLabel(), "Total"; got != want {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }
 
@@ -53,8 +51,8 @@ func TestGenericHistogram(t *testing.T) {
 		"total",
 	)
 	want := `{"one": 0, "five": 0, "max": 0, "count": 0, "total": 0}`
-	if h.String() != want {
-		t.Errorf("want %s, got %s", want, h.String())
+	if got := h.String(); got != want {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }
 
@@ -67,11 +65,12 @@ func TestHistogramHook(t *testing.T) {
 		gotv = v.(*Histogram)
 	})
 
-	v := NewHistogram("hist2", []int64{1})
-	if gotname != "hist2" {
-		t.Errorf("want hist2, got %s", gotname)
+	name := "hist2"
+	v := NewHistogram(name, []int64{1})
+	if gotname != name {
+		t.Errorf("got %v; want %v", gotname, name)
 	}
 	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
+		t.Errorf("got %#v, want %#v", gotv, v)
 	}
 }

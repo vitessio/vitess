@@ -214,6 +214,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	sourceIsMaster := false
 	readOnly := true
 	var replicationPosition replication.Position
+	semiSyncMaster, semiSyncSlave := mysqld.SemiSyncEnabled()
 
 	// see if we need to restart replication after backup
 	logger.Infof("getting current replication status")
@@ -225,35 +226,35 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 		// keep going if we're the master, might be a degenerate case
 		sourceIsMaster = true
 	default:
-		return fmt.Errorf("cannot get slave status: %v", err)
+		return fmt.Errorf("can't get slave status: %v", err)
 	}
 
 	// get the read-only flag
 	readOnly, err = mysqld.IsReadOnly()
 	if err != nil {
-		return fmt.Errorf("cannot get read only status: %v", err)
+		return fmt.Errorf("can't get read-only status: %v", err)
 	}
 
 	// get the replication position
 	if sourceIsMaster {
 		if !readOnly {
-			logger.Infof("turning master read-onyl before backup")
+			logger.Infof("turning master read-only before backup")
 			if err = mysqld.SetReadOnly(true); err != nil {
-				return fmt.Errorf("cannot get read only status: %v", err)
+				return fmt.Errorf("can't set read-only status: %v", err)
 			}
 		}
 		replicationPosition, err = mysqld.MasterPosition()
 		if err != nil {
-			return fmt.Errorf("cannot get master position: %v", err)
+			return fmt.Errorf("can't get master position: %v", err)
 		}
 	} else {
 		if err = StopSlave(mysqld, hookExtraEnv); err != nil {
-			return fmt.Errorf("cannot stop slave: %v", err)
+			return fmt.Errorf("can't stop slave: %v", err)
 		}
 		var slaveStatus replication.Status
 		slaveStatus, err = mysqld.SlaveStatus()
 		if err != nil {
-			return fmt.Errorf("cannot get slave status: %v", err)
+			return fmt.Errorf("can't get slave status: %v", err)
 		}
 		replicationPosition = slaveStatus.Position
 	}
@@ -262,28 +263,38 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	// shutdown mysqld
 	err = mysqld.Shutdown(ctx, true)
 	if err != nil {
-		return fmt.Errorf("cannot shutdown mysqld: %v", err)
+		return fmt.Errorf("can't shutdown mysqld: %v", err)
 	}
 
 	// get the files to backup
 	fes, err := findFilesTobackup(mysqld.Cnf())
 	if err != nil {
-		return fmt.Errorf("cannot find files to backup: %v", err)
+		return fmt.Errorf("can't find files to backup: %v", err)
 	}
 	logger.Infof("found %v files to backup", len(fes))
 
 	// backup everything
 	if err := backupFiles(mysqld, logger, bh, fes, replicationPosition, backupConcurrency); err != nil {
-		return fmt.Errorf("cannot backup files: %v", err)
+		return fmt.Errorf("can't backup files: %v", err)
 	}
 
 	// Try to restart mysqld
 	err = mysqld.Start(ctx)
 	if err != nil {
-		return fmt.Errorf("cannot restart mysqld: %v", err)
+		return fmt.Errorf("can't restart mysqld: %v", err)
 	}
 
 	// Restore original mysqld state that we saved above.
+	if semiSyncMaster || semiSyncSlave {
+		// Only do this if one of them was on, since both being off could mean
+		// the plugin isn't even loaded, and the server variables don't exist.
+		logger.Infof("restoring semi-sync settings from before backup: master=%v, slave=%v",
+			semiSyncMaster, semiSyncSlave)
+		err := mysqld.SetSemiSyncEnabled(semiSyncMaster, semiSyncSlave)
+		if err != nil {
+			return err
+		}
+	}
 	if slaveStartRequired {
 		logger.Infof("restarting mysql replication")
 		if err := StartSlave(mysqld, hookExtraEnv); err != nil {

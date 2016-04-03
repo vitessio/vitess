@@ -63,10 +63,9 @@ fi
 # Pass a list of UID indices on the command line to override.
 uids=${@:-'0 1 2'}
 
+# Start all mysqlds in background.
 for uid_index in $uids; do
   uid=$[$uid_base + $uid_index]
-  port=$[$port_base + $uid_index]
-  grpc_port=$[$grpc_port_base + $uid_index]
   mysql_port=$[$mysql_port_base + $uid_index]
   printf -v alias '%s-%010d' $cell $uid
   printf -v tablet_dir 'vt_%010d' $uid
@@ -82,7 +81,19 @@ for uid_index in $uids; do
     -log_dir $VTDATAROOT/tmp \
     -tablet_uid $uid $dbconfig_flags \
     -mysql_port $mysql_port \
-    $action
+    $action &
+done
+
+# Wait for all mysqld to start up.
+wait
+
+# Start all vttablets in background.
+for uid_index in $uids; do
+  uid=$[$uid_base + $uid_index]
+  port=$[$port_base + $uid_index]
+  grpc_port=$[$grpc_port_base + $uid_index]
+  printf -v alias '%s-%010d' $cell $uid
+  printf -v tablet_dir 'vt_%010d' $uid
 
   echo "Starting vttablet for $alias..."
   $VTROOT/bin/vttablet \
@@ -94,6 +105,7 @@ for uid_index in $uids; do
     -target_tablet_type $tablet_type \
     -health_check_interval 5s \
     -enable-rowcache \
+    -enable_semi_sync \
     -rowcache-bin $memcached_path \
     -rowcache-socket $VTDATAROOT/$tablet_dir/memcache.sock \
     -backup_storage_implementation file \

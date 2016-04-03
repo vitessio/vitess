@@ -19,8 +19,10 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vtgate/txbuffer"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -147,28 +149,32 @@ func (sdc *ShardConn) ExecuteBatch(ctx context.Context, queries []querytypes.Bou
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same as Execute.
-func (sdc *ShardConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc) {
+func (sdc *ShardConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
 	var usedConn tabletconn.TabletConn
-	var erFunc tabletconn.ErrFunc
-	var results <-chan *sqltypes.Result
+	var stream sqltypes.ResultStream
 	err := sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var err error
-		results, erFunc, err = conn.StreamExecute(ctx, query, bindVars, transactionID)
+		stream, err = conn.StreamExecute(ctx, query, bindVars, transactionID)
 		usedConn = conn
 		return err
 	}, transactionID, true)
 	if err != nil {
-		return results, func() error { return err }
+		return nil, err
 	}
-	inTransaction := (transactionID != 0)
-	return results, func() error { return sdc.WrapError(erFunc(), usedConn.EndPoint(), inTransaction) }
+	return stream, nil
 }
 
 // Begin begins a transaction. The retry rules are the same as Execute.
 func (sdc *ShardConn) Begin(ctx context.Context) (transactionID int64, err error) {
+	attemptNumber := 0
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var innerErr error
+		// Potentially buffer this transaction.
+		if bufferErr := txbuffer.FakeBuffer(sdc.keyspace, sdc.shard, attemptNumber); bufferErr != nil {
+			return bufferErr
+		}
 		transactionID, innerErr = conn.Begin(ctx)
+		attemptNumber++
 		return innerErr
 	}, 0, false)
 	return transactionID, err
@@ -196,6 +202,28 @@ func (sdc *ShardConn) SplitQuery(ctx context.Context, sql string, bindVariables 
 			Sql:           sql,
 			BindVariables: bindVariables,
 		}, splitColumn, splitCount)
+		return innerErr
+	}, 0, false)
+	return
+}
+
+// SplitQueryV2 splits a query into sub queries. The retry rules are the same as Execute.
+// TODO(erez): Rename to SplitQuery after the migration to SplitQuery V2 is done.
+func (sdc *ShardConn) SplitQueryV2(
+	ctx context.Context,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) (queries []querytypes.QuerySplit, err error) {
+
+	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
+		var innerErr error
+		queries, innerErr = conn.SplitQueryV2(ctx, querytypes.BoundQuery{
+			Sql:           sql,
+			BindVariables: bindVariables,
+		}, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 		return innerErr
 	}, 0, false)
 	return

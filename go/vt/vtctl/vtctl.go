@@ -58,9 +58,9 @@ COMMAND ARGUMENT DEFINITIONS
   -- rdonly: A slaved copy of data for OLAP load patterns
   -- replica: A slaved copy of data ready to be promoted to master
   -- restore: A tablet that is restoring from a snapshot. Typically, this
-              happens at tablet startup, then it goes to its right state..
+              happens at tablet startup, then it goes to its right state.
   -- schema_apply: A slaved copy of data that had been serving query traffic
-                   but that is not applying a schema change. Following the
+                   but that is now applying a schema change. Following the
                    change, the tablet will revert to its serving type.
   -- snapshot_source: A slaved copy of data where mysqld is <b>not</b>
                       running and where Vitess is serving data files to
@@ -79,6 +79,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"sort"
@@ -90,6 +91,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/flagutil"
+	"github.com/youtube/vitess/go/sqltypes"
 	hk "github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -133,9 +135,7 @@ var commands = []commandGroup{
 		"Tablets", []command{
 			{"InitTablet", commandInitTablet,
 				"[-allow_update] [-allow_different_shard] [-allow_master_override] [-parent] [-db_name_override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-grpc_port=<port>] -keyspace=<keyspace> -shard=<shard> <tablet alias> <tablet type>",
-				"Initializes a tablet in the topology.\n" +
-					"Valid <tablet type> values are:\n" +
-					"  " + strings.Join(topoproto.MakeStringTypeList(topoproto.AllTabletTypes), " ")},
+				"Initializes a tablet in the topology.\n"},
 			{"GetTablet", commandGetTablet,
 				"<tablet alias>",
 				"Outputs a JSON structure that contains information about the Tablet."},
@@ -160,9 +160,7 @@ var commands = []commandGroup{
 			{"ChangeSlaveType", commandChangeSlaveType,
 				"[-dry-run] <tablet alias> <tablet type>",
 				"Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.\n" +
-					"NOTE: This command automatically updates the serving graph.\n" +
-					"Valid <tablet type> values are:\n" +
-					"  " + strings.Join(topoproto.MakeStringTypeList(topoproto.SlaveTabletTypes), " ")},
+					"NOTE: This command automatically updates the serving graph.\n"},
 			{"Ping", commandPing,
 				"<tablet alias>",
 				"Checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations."},
@@ -172,6 +170,9 @@ var commands = []commandGroup{
 			{"RunHealthCheck", commandRunHealthCheck,
 				"<tablet alias> <target tablet type>",
 				"Runs a health check on a remote tablet with the specified target type."},
+			{"IgnoreHealthError", commandIgnoreHealthError,
+				"<tablet alias> <ignore regexp>",
+				"Sets the regexp for health check errors to ignore on the specified tablet. The pattern has implicit ^$ anchors. Set to empty string or restart vttablet to stop ignoring anything."},
 			{"Sleep", commandSleep,
 				"<tablet alias> <duration>",
 				"Blocks the action queue on the specified tablet for the specified amount of time. This is typically used for testing."},
@@ -183,7 +184,7 @@ var commands = []commandGroup{
 				"Runs the specified hook on the given tablet. A hook is a script that resides in the $VTROOT/vthook directory. You can put any script into that directory and use this command to run that script.\n" +
 					"For this command, the param=value arguments are parameters that the command passes to the specified hook."},
 			{"ExecuteFetchAsDba", commandExecuteFetchAsDba,
-				"[--max_rows=10000] [--disable_binlogs] <tablet alias> <sql command>",
+				"[-max_rows=10000] [-disable_binlogs] [-json] <tablet alias> <sql command>",
 				"Runs the given SQL command as a DBA on the remote tablet."},
 		},
 	},
@@ -657,7 +658,7 @@ func commandGetTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, tabletInfo)
+	return printJSON(wr.Logger(), tabletInfo)
 }
 
 func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -897,6 +898,25 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	return wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo, servedType)
 }
 
+func commandIgnoreHealthError(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("The <tablet alias> and <ignore regexp> arguments are required for the IgnoreHealthError command.")
+	}
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	pattern := subFlags.Arg(1)
+	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return err
+	}
+	return wr.TabletManagerClient().IgnoreHealthError(ctx, tabletInfo, pattern)
+}
+
 func commandWaitForDrain(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	var cells flagutil.StringListValue
 	subFlags.Var(&cells, "cells", "Specifies a comma-separated list of cells to look for tablets")
@@ -967,20 +987,28 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	if err != nil {
 		return err
 	}
-	logStream, errFunc, err := wr.TabletManagerClient().Backup(ctx, tabletInfo, *concurrency)
+	stream, err := wr.TabletManagerClient().Backup(ctx, tabletInfo, *concurrency)
 	if err != nil {
 		return err
 	}
-	for e := range logStream {
-		logutil.LogEvent(wr.Logger(), e)
+	for {
+		e, err := stream.Recv()
+		switch err {
+		case nil:
+			logutil.LogEvent(wr.Logger(), e)
+		case io.EOF:
+			return nil
+		default:
+			return err
+		}
 	}
-	return errFunc()
 }
 
 func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	maxRows := subFlags.Int("max_rows", 10000, "Specifies the maximum number of rows to allow in reset")
 	disableBinlogs := subFlags.Bool("disable_binlogs", false, "Disables writing to binlogs during the query")
 	reloadSchema := subFlags.Bool("reload_schema", false, "Indicates whether the tablet schema will be reloaded after executing the SQL command. The default value is <code>false</code>, which indicates that the tablet schema will not be reloaded.")
+	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -994,11 +1022,16 @@ func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return err
 	}
 	query := subFlags.Arg(1)
-	qr, err := wr.ExecuteFetchAsDba(ctx, alias, query, *maxRows, *disableBinlogs, *reloadSchema)
+	qrproto, err := wr.ExecuteFetchAsDba(ctx, alias, query, *maxRows, *disableBinlogs, *reloadSchema)
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, qr)
+	qr := sqltypes.Proto3ToResult(qrproto)
+	if *json {
+		return printJSON(wr.Logger(), qr)
+	}
+	printQueryResult(loggerWriter{wr.Logger()}, qr)
+	return nil
 }
 
 func commandExecuteHook(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1018,7 +1051,7 @@ func commandExecuteHook(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, hr)
+	return printJSON(wr.Logger(), hr)
 }
 
 func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1065,7 +1098,7 @@ func commandGetShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, shardInfo)
+	return printJSON(wr.Logger(), shardInfo)
 }
 
 func commandRebuildShardGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1388,7 +1421,7 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 		return fmt.Errorf("cannot connect to tablet %v: %v", alias, err)
 	}
 
-	stream, errFunc, err := conn.StreamHealth(ctx)
+	stream, err := conn.StreamHealth(ctx)
 	if err != nil {
 		return fmt.Errorf("could not stream health records from tablet: %v err: %v", alias, err)
 	}
@@ -1397,32 +1430,34 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("context was done before filtered replication did catch up. Last seen delay: %v context Error: %v", lastSeenDelay, ctx.Err())
-		case shr, ok := <-stream:
-			if !ok {
-				return fmt.Errorf("stream ended early: %v", errFunc())
-			}
-			stats := shr.RealtimeStats
-			if stats == nil {
-				return fmt.Errorf("health record does not include RealtimeStats message. tablet: %v health record: %v", alias, shr)
-			}
-			if stats.HealthError != "" {
-				return fmt.Errorf("tablet is not healthy. tablet: %v health record: %v", alias, shr)
-			}
-			if stats.BinlogPlayersCount == 0 {
-				return fmt.Errorf("no filtered replication running on tablet: %v health record: %v", alias, shr)
-			}
-
-			delaySecs := stats.SecondsBehindMasterFilteredReplication
-			lastSeenDelay := time.Duration(delaySecs) * time.Second
-			if lastSeenDelay < 0 {
-				return fmt.Errorf("last seen delay should never be negative. tablet: %v delay: %v", alias, lastSeenDelay)
-			}
-			if lastSeenDelay <= *maxDelay {
-				wr.Logger().Printf("Filtered replication on tablet: %v has caught up. Last seen delay: %.1f seconds\n", alias, lastSeenDelay.Seconds())
-				return nil
-			}
-			wr.Logger().Printf("Waiting for filtered replication to catch up on tablet: %v Last seen delay: %.1f seconds\n", alias, lastSeenDelay.Seconds())
+		default:
 		}
+
+		shr, err := stream.Recv()
+		if err != nil {
+			return fmt.Errorf("stream ended early: %v", err)
+		}
+		stats := shr.RealtimeStats
+		if stats == nil {
+			return fmt.Errorf("health record does not include RealtimeStats message. tablet: %v health record: %v", alias, shr)
+		}
+		if stats.HealthError != "" {
+			return fmt.Errorf("tablet is not healthy. tablet: %v health record: %v", alias, shr)
+		}
+		if stats.BinlogPlayersCount == 0 {
+			return fmt.Errorf("no filtered replication running on tablet: %v health record: %v", alias, shr)
+		}
+
+		delaySecs := stats.SecondsBehindMasterFilteredReplication
+		lastSeenDelay := time.Duration(delaySecs) * time.Second
+		if lastSeenDelay < 0 {
+			return fmt.Errorf("last seen delay should never be negative. tablet: %v delay: %v", alias, lastSeenDelay)
+		}
+		if lastSeenDelay <= *maxDelay {
+			wr.Logger().Printf("Filtered replication on tablet: %v has caught up. Last seen delay: %.1f seconds\n", alias, lastSeenDelay.Seconds())
+			return nil
+		}
+		wr.Logger().Printf("Waiting for filtered replication to catch up on tablet: %v Last seen delay: %.1f seconds\n", alias, lastSeenDelay.Seconds())
 	}
 }
 
@@ -1552,7 +1587,7 @@ func commandGetKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, keyspaceInfo)
+	return printJSON(wr.Logger(), keyspaceInfo)
 }
 
 func commandGetKeyspaces(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1729,7 +1764,7 @@ func commandFindAllShardsInKeyspace(ctx context.Context, wr *wrangler.Wrangler, 
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, result)
+	return printJSON(wr.Logger(), result)
 }
 
 func commandValidate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1828,7 +1863,7 @@ func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 		}
 		return nil
 	}
-	return printJSON(wr, sd)
+	return printJSON(wr.Logger(), sd)
 }
 
 func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2061,7 +2096,7 @@ func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, srvKeyspace)
+	return printJSON(wr.Logger(), srvKeyspace)
 }
 
 func commandGetSrvKeyspaceNames(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2098,7 +2133,7 @@ func commandGetSrvShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, srvShard)
+	return printJSON(wr.Logger(), srvShard)
 }
 
 func commandGetEndPoints(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2121,7 +2156,7 @@ func commandGetEndPoints(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, endPoints)
+	return printJSON(wr.Logger(), endPoints)
 }
 
 func commandGetShardReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2140,7 +2175,7 @@ func commandGetShardReplication(ctx context.Context, wr *wrangler.Wrangler, subF
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, shardReplication)
+	return printJSON(wr.Logger(), shardReplication)
 }
 
 func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2221,14 +2256,13 @@ func sortReplicatingTablets(tablets []*topo.TabletInfo, stats []*replicationdata
 	return rtablets
 }
 
-// printJSON will print the JSON version of the structure to the logger
-// console output, or an error to the logger's Error channel.
-func printJSON(wr *wrangler.Wrangler, val interface{}) error {
+// printJSON will print the JSON version of the structure to the logger.
+func printJSON(logger logutil.Logger, val interface{}) error {
 	data, err := json.MarshalIndent(val, "", "  ")
 	if err != nil {
 		return fmt.Errorf("cannot marshal data: %v", err)
 	}
-	wr.Logger().Printf("%v\n", string(data))
+	logger.Printf("%v\n", string(data))
 	return nil
 }
 

@@ -1,5 +1,7 @@
 package com.youtube.vitess.client;
 
+import com.google.common.util.concurrent.ListenableFuture;
+
 import com.youtube.vitess.proto.Query.QueryResult;
 import com.youtube.vitess.proto.Vtgate.BeginRequest;
 import com.youtube.vitess.proto.Vtgate.BeginResponse;
@@ -37,62 +39,181 @@ import java.sql.SQLException;
  * RpcClient defines a set of methods to communicate with VTGates.
  */
 public interface RpcClient extends Closeable {
-  // execute sends a single query using the VTGate V3 API.
-  ExecuteResponse execute(Context ctx, ExecuteRequest request) throws SQLException;
-
-  // executeShards sends a single query to a set of shards.
-  ExecuteShardsResponse executeShards(Context ctx, ExecuteShardsRequest request)
+  /**
+   * Sends a single query using the VTGate V3 API.
+   *
+   * <p>See the
+   * <a href="https://github.com/youtube/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  ListenableFuture<ExecuteResponse> execute(Context ctx, ExecuteRequest request)
       throws SQLException;
 
-  // executeKeyspaceIds sends a query with a set of keyspace IDs.
-  ExecuteKeyspaceIdsResponse executeKeyspaceIds(Context ctx, ExecuteKeyspaceIdsRequest request)
+  /**
+   * Sends a single query to a set of shards.
+   *
+   * <p>See the
+   * <a href="https://github.com/youtube/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  ListenableFuture<ExecuteShardsResponse> executeShards(Context ctx, ExecuteShardsRequest request)
       throws SQLException;
 
-  // executeKeyRanges sends a query with a set of key ranges.
-  ExecuteKeyRangesResponse executeKeyRanges(Context ctx, ExecuteKeyRangesRequest request)
-      throws SQLException;
+  /**
+   * Sends a query with a set of keyspace IDs.
+   *
+   * <p>See the
+   * <a href="https://github.com/youtube/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  ListenableFuture<ExecuteKeyspaceIdsResponse> executeKeyspaceIds(
+      Context ctx, ExecuteKeyspaceIdsRequest request) throws SQLException;
 
-  // executeEntityIds sends a query with a set of entity IDs.
-  ExecuteEntityIdsResponse executeEntityIds(Context ctx, ExecuteEntityIdsRequest request)
-      throws SQLException;
+  /**
+   * Sends a query with a set of key ranges.
+   *
+   * <p>See the
+   * <a href="https://github.com/youtube/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  ListenableFuture<ExecuteKeyRangesResponse> executeKeyRanges(
+      Context ctx, ExecuteKeyRangesRequest request) throws SQLException;
 
-  // executeBatchShards sends a list of queries to a set of shards.
-  ExecuteBatchShardsResponse executeBatchShards(Context ctx, ExecuteBatchShardsRequest request)
-      throws SQLException;
+  /**
+   * Sends a query with a set of entity IDs.
+   *
+   * <p>See the
+   * <a href="https://github.com/youtube/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  ListenableFuture<ExecuteEntityIdsResponse> executeEntityIds(
+      Context ctx, ExecuteEntityIdsRequest request) throws SQLException;
 
-  // executeBatchKeyspaceIds sends a list of queries with keyspace ids as bind variables.
-  ExecuteBatchKeyspaceIdsResponse executeBatchKeyspaceIds(
+  /**
+   * Sends a list of queries to a set of shards.
+   *
+   * <p>See the
+   * <a href="https://github.com/youtube/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  ListenableFuture<ExecuteBatchShardsResponse> executeBatchShards(
+      Context ctx, ExecuteBatchShardsRequest request) throws SQLException;
+
+  /**
+   * Sends a list of queries with keyspace ids as bind variables.
+   *
+   * <p>See the
+   * <a href="https://github.com/youtube/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  ListenableFuture<ExecuteBatchKeyspaceIdsResponse> executeBatchKeyspaceIds(
       Context ctx, ExecuteBatchKeyspaceIdsRequest request) throws SQLException;
 
-  // streamExecute starts stream queries with the VTGate V3 API.
+  /**
+   * Starts stream queries with the VTGate V3 API.
+   *
+   * <p>Note: Streaming queries are not asynchronous, because they typically shouldn't
+   * be used from a latency-critical serving path anyway. This method will return as
+   * soon as the request is initiated, but StreamIterator methods will block until the
+   * next chunk of results is received from the server.
+   *
+   * <p>See the
+   * <a href="https://github.com/youtube/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
   StreamIterator<QueryResult> streamExecute(Context ctx, StreamExecuteRequest request)
       throws SQLException;
 
-  // streamExecuteShard starts stream queries with multiple shards.
+  /**
+   * Starts stream queries with multiple shards.
+   *
+   * <p>Note: Streaming queries are not asynchronous, because they typically shouldn't
+   * be used from a latency-critical serving path anyway. This method will return as
+   * soon as the request is initiated, but StreamIterator methods will block until the
+   * next chunk of results is received from the server.
+   *
+   * <p>See the
+   * <a href="https://github.com/youtube/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
   StreamIterator<QueryResult> streamExecuteShards(Context ctx, StreamExecuteShardsRequest request)
       throws SQLException;
 
-  // streamExecuteKeyspaceIds starts a list of stream queries with keyspace ids as bind variables.
+  /**
+   * Starts a list of stream queries with keyspace ids as bind variables.
+   *
+   * <p>Note: Streaming queries are not asynchronous, because they typically shouldn't
+   * be used from a latency-critical serving path anyway. This method will return as
+   * soon as the request is initiated, but StreamIterator methods will block until the
+   * next chunk of results is received from the server.
+   *
+   * <p>See the
+   * <a href="https://github.com/youtube/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
   StreamIterator<QueryResult> streamExecuteKeyspaceIds(
       Context ctx, StreamExecuteKeyspaceIdsRequest request) throws SQLException;
 
-  // streamExecuteKeyRanges starts stream query with a set of key ranges.
+  /**
+   * Starts stream query with a set of key ranges.
+   *
+   * <p>Note: Streaming queries are not asynchronous, because they typically shouldn't
+   * be used from a latency-critical serving path anyway. This method will return as
+   * soon as the request is initiated, but StreamIterator methods will block until the
+   * next chunk of results is received from the server.
+   *
+   * <p>See the
+   * <a href="https://github.com/youtube/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
   StreamIterator<QueryResult> streamExecuteKeyRanges(
       Context ctx, StreamExecuteKeyRangesRequest request) throws SQLException;
 
-  // begin starts a transaction.
-  BeginResponse begin(Context ctx, BeginRequest request) throws SQLException;
+  /**
+   * Starts a transaction.
+   *
+   * <p>See the
+   * <a href="https://github.com/youtube/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  ListenableFuture<BeginResponse> begin(Context ctx, BeginRequest request) throws SQLException;
 
-  // commit commits a transaction.
-  CommitResponse commit(Context ctx, CommitRequest request) throws SQLException;
+  /**
+   * Commits a transaction.
+   *
+   * <p>See the
+   * <a href="https://github.com/youtube/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  ListenableFuture<CommitResponse> commit(Context ctx, CommitRequest request) throws SQLException;
 
-  // rollback rolls back a pending transaction.
-  RollbackResponse rollback(Context ctx, RollbackRequest request) throws SQLException;
-
-  // splitQuery splits a query into smaller queries.
-  SplitQueryResponse splitQuery(Context ctx, SplitQueryRequest request) throws SQLException;
-
-  // getSrvKeyspace returns a list of serving keyspaces.
-  GetSrvKeyspaceResponse getSrvKeyspace(Context ctx, GetSrvKeyspaceRequest request)
+  /**
+   * Rolls back a pending transaction.
+   *
+   * <p>See the
+   * <a href="https://github.com/youtube/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  ListenableFuture<RollbackResponse> rollback(Context ctx, RollbackRequest request)
       throws SQLException;
+
+  /**
+   * Splits a query into smaller queries.
+   *
+   * <p>See the
+   * <a href="https://github.com/youtube/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  ListenableFuture<SplitQueryResponse> splitQuery(Context ctx, SplitQueryRequest request)
+      throws SQLException;
+
+  /**
+   * Returns a list of serving keyspaces.
+   *
+   * <p>See the
+   * <a href="https://github.com/youtube/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  ListenableFuture<GetSrvKeyspaceResponse> getSrvKeyspace(
+      Context ctx, GetSrvKeyspaceRequest request) throws SQLException;
 }

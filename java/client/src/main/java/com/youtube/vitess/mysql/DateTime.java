@@ -165,14 +165,14 @@ public class DateTime {
   public static String formatTime(Time value, Calendar cal) {
     long millis = value.getTime();
 
+    // Adjust for time zone.
+    millis += cal.get(Calendar.ZONE_OFFSET);
+
     String sign = "";
     if (millis < 0) {
       sign = "-";
       millis = -millis;
     }
-
-    // Adjust for time zone.
-    millis += cal.get(Calendar.ZONE_OFFSET);
 
     long hours = millis / HOURS_TO_MILLIS;
     millis -= hours * HOURS_TO_MILLIS;

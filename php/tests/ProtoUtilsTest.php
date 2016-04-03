@@ -61,4 +61,34 @@ class ProtoUtilsTest extends \PHPUnit_Framework_TestCase
 
         $this->assertEquals($expected, $actual);
     }
+
+    public function testRowValues()
+    {
+        $row = new Proto\Query\Row();
+        $row->setValues('onethree');
+        $row->setLengths([
+            3,
+            - 1, // MySQL NULL
+            5,
+            0
+        ]);
+        $fields = [
+            make_field('c1'),
+            make_field('c2'),
+            make_field('c3'),
+            make_field('c4')
+        ];
+        $expected = [
+            0 => 'one',
+            1 => null,
+            2 => 'three',
+            3 => '',
+            'c1' => 'one',
+            'c2' => null,
+            'c3' => 'three',
+            'c4' => ''
+        ];
+        $actual = ProtoUtils::RowValues($row, $fields);
+        $this->assertEquals($expected, $actual);
+    }
 }

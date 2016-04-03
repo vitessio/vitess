@@ -115,7 +115,7 @@ func keyspacesWithServedFrom(ctx context.Context, wr *wrangler.Wrangler) ([]stri
 	keyspaces, err := wr.TopoServer().GetKeyspaces(shortCtx)
 	cancel()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get list of keyspaces: %v", err)
 	}
 
 	wg := sync.WaitGroup{}
@@ -130,7 +130,7 @@ func keyspacesWithServedFrom(ctx context.Context, wr *wrangler.Wrangler) ([]stri
 			ki, err := wr.TopoServer().GetKeyspace(shortCtx, keyspace)
 			cancel()
 			if err != nil {
-				rec.RecordError(err)
+				rec.RecordError(fmt.Errorf("failed to get details for keyspace '%v': %v", keyspace, err))
 				return
 			}
 			if len(ki.ServedFroms) > 0 {
@@ -146,7 +146,7 @@ func keyspacesWithServedFrom(ctx context.Context, wr *wrangler.Wrangler) ([]stri
 		return nil, rec.Error()
 	}
 	if len(result) == 0 {
-		return nil, fmt.Errorf("There are no keyspaces with ServedFrom")
+		return nil, fmt.Errorf("there are no keyspaces with ServedFrom")
 	}
 	return result, nil
 }

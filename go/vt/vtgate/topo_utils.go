@@ -43,6 +43,19 @@ func mapKeyspaceIdsToShards(ctx context.Context, topoServ topo.SrvTopoServer, ce
 	return keyspace, res, nil
 }
 
+func getAnyShard(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspace string, tabletType topodatapb.TabletType) (ks, shard string, err error) {
+	keyspace, _, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
+	if err != nil {
+		return "", "", err
+	}
+	if len(allShards) == 0 {
+		return "", "", vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT,
+			fmt.Errorf("No shards found for this tabletType"),
+		)
+	}
+	return keyspace, allShards[0].Name, nil
+}
+
 func getKeyspaceShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspace string, tabletType topodatapb.TabletType) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error) {
 	srvKeyspace, err := topoServ.GetSrvKeyspace(ctx, cell, keyspace)
 	if err != nil {

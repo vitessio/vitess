@@ -86,9 +86,9 @@ def add_options(parser):
       '--skip-teardown', action='store_true',
       help='Leave the global processes running after the test is done.')
   parser.add_option('--mysql-flavor')
-  parser.add_option('--protocols-flavor', default='gorpc')
+  parser.add_option('--protocols-flavor', default='grpc')
   parser.add_option('--topo-server-flavor', default='zookeeper')
-  parser.add_option('--vtgate-gateway-flavor', default='shardgateway')
+  parser.add_option('--vtgate-gateway-flavor', default='discoverygateway')
 
 
 def set_options(opts):
@@ -192,15 +192,17 @@ def _add_proc(proc):
     print >> f, proc.pid, os.path.basename(proc.args[0])
 
 
-def kill_sub_processes():
-  # FIXME(alainjobart): this part is not really related to sub-processes,
-  # but it's a general clean-up. Maybe a utils.clean_up() might be better,
-  # as all integration tests end up running this anyway.
+def required_teardown():
+  """Required cleanup steps that can't be skipped with --skip-teardown."""
+  # We can't skip closing of gRPC connections, because the Python interpreter
+  # won't let us die if any connections are left open.
   global vtctld_connection
   if vtctld_connection:
     vtctld_connection.close()
     vtctld_connection = None
 
+
+def kill_sub_processes():
   for proc in pid_map.values():
     if proc.pid and proc.returncode is None:
       proc.kill()
@@ -372,13 +374,13 @@ def get_vars(port):
 
 # wait_for_vars will wait until we can actually get the vars from a process,
 # and if var is specified, will wait until that var is in vars
-def wait_for_vars(name, port, var=None):
-  timeout = 10.0
+def wait_for_vars(name, port, var=None, timeout=10.0):
   while True:
     v = get_vars(port)
     if v and (var is None or var in v):
       break
-    timeout = wait_step('waiting for /debug/vars of %s' % name, timeout)
+    timeout = wait_step('waiting for http://localhost:%d/debug/vars of %s'
+                        % (port, name), timeout)
 
 
 def poll_for_vars(
@@ -501,7 +503,8 @@ class VtGate(object):
   def start(self, cell='test_nj', retry_delay=1, retry_count=2,
             topo_impl=None, cache_ttl='1s',
             timeout_total='2s', timeout_per_conn='1s',
-            extra_args=None, tablets=None):
+            extra_args=None, tablets=None,
+            tablet_types_to_wait='MASTER,REPLICA'):
     """Start vtgate. Saves it into the global vtgate variable if not set yet."""
 
     args = environment.binary_args('vtgate') + [
@@ -513,12 +516,12 @@ class VtGate(object):
         '-srv_topo_cache_ttl', cache_ttl,
         '-conn-timeout-total', timeout_total,
         '-conn-timeout-per-conn', timeout_per_conn,
-        '-bsonrpc_timeout', '5s',
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-gateway_implementation', vtgate_gateway_flavor().flavor(),
-        '-tablet_types_to_wait', 'MASTER,REPLICA',
     ]
     args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
+    if tablet_types_to_wait:
+      args.extend(['-tablet_types_to_wait', tablet_types_to_wait])
     if protocols_flavor().vtgate_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
     if protocols_flavor().service_map():
@@ -583,13 +586,15 @@ class VtGate(object):
 
   def vtclient(self, sql, keyspace=None, shard=None, tablet_type='master',
                bindvars=None, streaming=False,
-               verbose=False, raise_on_error=True):
+               verbose=False, raise_on_error=True, json_output=False):
     """Uses the vtclient binary to send a query to vtgate."""
     protocol, addr = self.rpc_endpoint()
     args = environment.binary_args('vtclient') + [
         '-server', addr,
         '-tablet_type', tablet_type,
         '-vtgate_protocol', protocol]
+    if json_output:
+      args.append('-json')
     if keyspace:
       args.extend(['-keyspace', keyspace])
     if shard:
@@ -603,13 +608,14 @@ class VtGate(object):
     args.append(sql)
 
     out, err = run(args, raise_on_error=raise_on_error, trap_output=True)
-    out = out.splitlines()
+    if json_output:
+      return json.loads(out), err
     return out, err
 
   def execute(self, sql, tablet_type='master', bindvars=None):
     """Uses 'vtctl VtGateExecute' to execute a command."""
     _, addr = self.rpc_endpoint()
-    args = ['VtGateExecute',
+    args = ['VtGateExecute', '-json',
             '-server', addr,
             '-tablet_type', tablet_type]
     if bindvars:
@@ -621,7 +627,7 @@ class VtGate(object):
                      bindvars=None):
     """Uses 'vtctl VtGateExecuteShards' to execute a command."""
     _, addr = self.rpc_endpoint()
-    args = ['VtGateExecuteShards',
+    args = ['VtGateExecuteShards', '-json',
             '-server', addr,
             '-keyspace', keyspace,
             '-shards', shards,
@@ -887,7 +893,8 @@ def wait_db_read_only(uid):
   raise e
 
 
-def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
+def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64',
+                       sharding_column_name='keyspace_id'):
   ks = run_vtctl_json(['GetSrvKeyspace', cell, keyspace])
   result = ''
   pmap = {}
@@ -916,7 +923,7 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
         'Mismatch in srv keyspace for cell %s keyspace %s, expected:\n%'
         's\ngot:\n%s' % (
             cell, keyspace, expected, result))
-  if 'keyspace_id' != ks.get('sharding_column_name'):
+  if sharding_column_name != ks.get('sharding_column_name'):
     raise Exception('Got wrong sharding_column_name in SrvKeyspace: %s' %
                     str(ks))
   if keyspace_id_type != keyrange_constants.PROTO3_KIT_TO_STRING[
@@ -1152,6 +1159,7 @@ def uint64_to_hex(integer):
   if integer > (1<<64)-1 or integer < 0:
     raise ValueError('Integer out of range: %d' % integer)
   return '%016X' % integer
+
 
 def get_shard_name(shard, num_shards):
   """Returns an appropriate shard name, as a string.

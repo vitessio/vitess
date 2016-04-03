@@ -1,0 +1,846 @@
+# Single table sharded scatter
+"select col from user"
+{
+  "Original": "select col from user",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from user",
+    "FieldQuery": "select col from user where 1 != 1"
+  }
+}
+
+# Single table unsharded
+"select col from main1"
+{
+  "Original": "select col from main1",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select col from main1",
+    "FieldQuery": "select col from main1 where 1 != 1"
+  }
+}
+
+# Multi-table unsharded
+"select m1.col from main1 as m1 join main1 as m2"
+{
+  "Original": "select m1.col from main1 as m1 join main1 as m2",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select m1.col from main1 as m1 join main1 as m2",
+    "FieldQuery": "select m1.col from main1 as m1 join main1 as m2 where 1 != 1"
+  }
+}
+
+# Multi-table, multi-chunk
+"select music.col from user join music"
+{
+  "Original": "select music.col from user join music",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user",
+      "FieldQuery": "select 1 from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select music.col from music",
+      "FieldQuery": "select music.col from music where 1 != 1"
+    },
+    "Cols": [
+      1
+    ]
+  }
+}
+
+# Left join, single chunk
+"select m1.col from main1 as m1 left join main1 as m2 on m1.a=m2.b"
+{
+  "Original": "select m1.col from main1 as m1 left join main1 as m2 on m1.a=m2.b",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select m1.col from main1 as m1 left join main1 as m2 on m1.a = m2.b",
+    "FieldQuery": "select m1.col from main1 as m1 left join main1 as m2 on 1 != 1 where 1 != 1"
+  }
+}
+
+# Left join, multi-chunk
+"select u.col from user u left join main1 m on u.a = m.b"
+{
+  "Original": "select u.col from user u left join main1 m on u.a = m.b",
+  "Instructions": {
+    "Opcode": "LeftJoin",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select u.col, u.a from user as u",
+      "FieldQuery": "select u.col, u.a from user as u where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select 1 from main1 as m where m.b = :u_a",
+      "FieldQuery": "select 1 from main1 as m where 1 != 1",
+      "JoinVars": {
+        "u_a": {}
+      }
+    },
+    "Cols": [
+      -1
+    ],
+    "Vars": {
+      "u_a": 1
+    }
+  }
+}
+
+# Three-way left join
+"select user.col from user left join main1 as m1 on user.col = m1.co left join main1 as m2 on m1.col = m2.col"
+{
+  "Original": "select user.col from user left join main1 as m1 on user.col = m1.co left join main1 as m2 on m1.col = m2.col",
+  "Instructions": {
+    "Opcode": "LeftJoin",
+    "Left": {
+      "Opcode": "LeftJoin",
+      "Left": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select user.col from user",
+        "FieldQuery": "select user.col from user where 1 != 1"
+      },
+      "Right": {
+        "Opcode": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select m1.col from main1 as m1 where m1.co = :user_col",
+        "FieldQuery": "select m1.col from main1 as m1 where 1 != 1",
+        "JoinVars": {
+          "user_col": {}
+        }
+      },
+      "Cols": [
+        -1,
+        1
+      ],
+      "Vars": {
+        "user_col": 0
+      }
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select 1 from main1 as m2 where m2.col = :m1_col",
+      "FieldQuery": "select 1 from main1 as m2 where 1 != 1",
+      "JoinVars": {
+        "m1_col": {}
+      }
+    },
+    "Cols": [
+      -1
+    ],
+    "Vars": {
+      "m1_col": 1
+    }
+  }
+}
+
+# Three-way left join, right-associated
+"select user.col from user left join user_extra as e left join main1 as m1 on m1.col = e.col on user.col = e.col"
+{
+  "Original": "select user.col from user left join user_extra as e left join main1 as m1 on m1.col = e.col on user.col = e.col",
+  "Instructions": {
+    "Opcode": "LeftJoin",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col from user",
+      "FieldQuery": "select user.col from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "LeftJoin",
+      "Left": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select e.col from user_extra as e where e.col = :user_col",
+        "FieldQuery": "select e.col from user_extra as e where 1 != 1",
+        "JoinVars": {
+          "user_col": {}
+        }
+      },
+      "Right": {
+        "Opcode": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select 1 from main1 as m1 where m1.col = :e_col",
+        "FieldQuery": "select 1 from main1 as m1 where 1 != 1",
+        "JoinVars": {
+          "e_col": {}
+        }
+      },
+      "Vars": {
+        "e_col": 0
+      }
+    },
+    "Cols": [
+      -1
+    ],
+    "Vars": {
+      "user_col": 0
+    }
+  }
+}
+
+# Right join
+"select m1.col from main1 as m1 right join main1 as m2 on m1.a=m2.b"
+{
+  "Original": "select m1.col from main1 as m1 right join main1 as m2 on m1.a=m2.b",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select m1.col from main1 as m2 left join main1 as m1 on m1.a = m2.b",
+    "FieldQuery": "select m1.col from main1 as m2 left join main1 as m1 on 1 != 1 where 1 != 1"
+  }
+}
+
+# Right join with a join LHS
+"select m1.col from main1 as m1 join main1 as m2 right join main1 as m3 on m1.a=m2.b"
+{
+  "Original": "select m1.col from main1 as m1 join main1 as m2 right join main1 as m3 on m1.a=m2.b",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select m1.col from main1 as m3 left join (main1 as m1 join main1 as m2) on m1.a = m2.b",
+    "FieldQuery": "select m1.col from main1 as m3 left join (main1 as m1 join main1 as m2) on 1 != 1 where 1 != 1"
+  }
+}
+
+# Straight-join
+"select m1.col from main1 as m1 straight_join main1 as m2"
+{
+  "Original": "select m1.col from main1 as m1 straight_join main1 as m2",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select m1.col from main1 as m1 straight_join main1 as m2",
+    "FieldQuery": "select m1.col from main1 as m1 straight_join main1 as m2 where 1 != 1"
+  }
+}
+
+# Three-way join
+"select user.col from user join main1 as m1 join main1 as m2"
+{
+  "Original": "select user.col from user join main1 as m1 join main1 as m2",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select user.col from user",
+        "FieldQuery": "select user.col from user where 1 != 1"
+      },
+      "Right": {
+        "Opcode": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select 1 from main1 as m1",
+        "FieldQuery": "select 1 from main1 as m1 where 1 != 1"
+      },
+      "Cols": [
+        -1
+      ]
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select 1 from main1 as m2",
+      "FieldQuery": "select 1 from main1 as m2 where 1 != 1"
+    },
+    "Cols": [
+      -1
+    ]
+  }
+}
+
+# Parenthesized, single chunk
+"select user.col from user join (main1 as m1 join main1 as m2)"
+{
+  "Original": "select user.col from user join (main1 as m1 join main1 as m2)",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col from user",
+      "FieldQuery": "select user.col from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select 1 from (main1 as m1 join main1 as m2)",
+      "FieldQuery": "select 1 from (main1 as m1 join main1 as m2) where 1 != 1"
+    },
+    "Cols": [
+      -1
+    ]
+  }
+}
+
+# Parenthesized, multi-chunk
+"select user.col from user join (user as u1 join main1)"
+{
+  "Original": "select user.col from user join (user as u1 join main1)",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col from user",
+      "FieldQuery": "select user.col from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select 1 from user as u1",
+        "FieldQuery": "select 1 from user as u1 where 1 != 1"
+      },
+      "Right": {
+        "Opcode": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select 1 from main1",
+        "FieldQuery": "select 1 from main1 where 1 != 1"
+      }
+    },
+    "Cols": [
+      -1
+    ]
+  }
+}
+
+# index hints, make sure they're not stripped.
+"select user.col from user use index(a)"
+{
+  "Original": "select user.col from user use index(a)",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.col from user use index (a)",
+    "FieldQuery": "select user.col from user use index (a) where 1 != 1"
+  }
+}
+
+# mergeable sharded join on unique vindex
+"select user.col from user join user_extra on user.id = user_extra.user_id"
+{
+  "Original": "select user.col from user join user_extra on user.id = user_extra.user_id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.col from user join user_extra on user.id = user_extra.user_id",
+    "FieldQuery": "select user.col from user join user_extra where 1 != 1"
+  }
+}
+
+# mergeable sharded join on unique vindex, with a stray condition
+"select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id"
+{
+  "Original": "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id",
+    "FieldQuery": "select user.col from user join user_extra where 1 != 1"
+  }
+}
+
+# mergeable sharded join on unique vindex, swapped operands
+"select user.col from user join user_extra on user_extra.user_id = user.id"
+{
+  "Original": "select user.col from user join user_extra on user_extra.user_id = user.id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.col from user join user_extra on user_extra.user_id = user.id",
+    "FieldQuery": "select user.col from user join user_extra where 1 != 1"
+  }
+}
+
+# mergeable sharded join on unique vindex, and condition
+"select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id"
+{
+  "Original": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id",
+    "FieldQuery": "select user.col from user join user_extra where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 5
+  }
+}
+
+# sharded join on unique vindex, inequality
+"select user.col from user join user_extra on user.id < user_extra.user_id"
+{
+  "Original": "select user.col from user join user_extra on user.id \u003c user_extra.user_id",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col, user.id from user",
+      "FieldQuery": "select user.col, user.id from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user_extra where :user_id \u003c user_extra.user_id",
+      "FieldQuery": "select 1 from user_extra where 1 != 1",
+      "JoinVars": {
+        "user_id": {}
+      }
+    },
+    "Cols": [
+      -1
+    ],
+    "Vars": {
+      "user_id": 1
+    }
+  }
+}
+
+# sharded join, non-col reference RHS
+"select user.col from user join user_extra on user.id = 5"
+{
+  "Original": "select user.col from user join user_extra on user.id = 5",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col from user where user.id = 5",
+      "FieldQuery": "select user.col from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": 5
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user_extra",
+      "FieldQuery": "select 1 from user_extra where 1 != 1"
+    },
+    "Cols": [
+      -1
+    ]
+  }
+}
+
+# sharded join, non-col reference LHS
+"select user.col from user join user_extra on 5 = user.id"
+{
+  "Original": "select user.col from user join user_extra on 5 = user.id",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col from user where user.id = 5",
+      "FieldQuery": "select user.col from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": 5
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user_extra",
+      "FieldQuery": "select 1 from user_extra where 1 != 1"
+    },
+    "Cols": [
+      -1
+    ]
+  }
+}
+
+# sharded join, non-vindex col
+"select user.col from user join user_extra on user.id = user_extra.col"
+{
+  "Original": "select user.col from user join user_extra on user.id = user_extra.col",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col, user.id from user",
+      "FieldQuery": "select user.col, user.id from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user_extra where user_extra.col = :user_id",
+      "FieldQuery": "select 1 from user_extra where 1 != 1",
+      "JoinVars": {
+        "user_id": {}
+      }
+    },
+    "Cols": [
+      -1
+    ],
+    "Vars": {
+      "user_id": 1
+    }
+  }
+}
+
+# sharded join, non-unique vindex
+"select user.col from user_extra join user on user_extra.user_id = user.name"
+{
+  "Original": "select user.col from user_extra join user on user_extra.user_id = user.name",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user_extra.user_id from user_extra",
+      "FieldQuery": "select user_extra.user_id from user_extra where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectEqual",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col from user where user.name = :user_extra_user_id",
+      "FieldQuery": "select user.col from user where 1 != 1",
+      "Vindex": "name_user_map",
+      "Values": ":user_extra_user_id",
+      "JoinVars": {
+        "user_extra_user_id": {}
+      }
+    },
+    "Cols": [
+      1
+    ],
+    "Vars": {
+      "user_extra_user_id": 0
+    }
+  }
+}
+
+# subquery
+"select id from (select id, col from user where id = 5) as t"
+{
+  "Original": "select id from (select id, col from user where id = 5) as t",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id from (select id, col from user where id = 5) as t",
+    "FieldQuery": "select id from (select id, col from user where 1 != 1) as t where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 5
+  }
+}
+
+# subquery with join
+"select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id"
+{
+  "Original": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id",
+    "FieldQuery": "select t.id from (select id from user where 1 != 1) as t join user_extra where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 5
+  }
+}
+
+# subquery in RHS of join
+"select t.id from user_extra join (select id from user where id = 5) as t on t.id = user_extra.user_id"
+{
+  "Original": "select t.id from user_extra join (select id from user where id = 5) as t on t.id = user_extra.user_id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select t.id from user_extra join (select id from user where id = 5) as t on t.id = user_extra.user_id",
+    "FieldQuery": "select t.id from user_extra join (select id from user where 1 != 1) as t where 1 != 1"
+  }
+}
+
+# subquery in FROM with cross-shard join
+"select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.col"
+{
+  "Original": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.col",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select t.id from (select id from user where id = 5) as t",
+      "FieldQuery": "select t.id from (select id from user where 1 != 1) as t where 1 != 1",
+      "Vindex": "user_index",
+      "Values": 5
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user_extra where user_extra.col = :t_id",
+      "FieldQuery": "select 1 from user_extra where 1 != 1",
+      "JoinVars": {
+        "t_id": {}
+      }
+    },
+    "Cols": [
+      -1
+    ],
+    "Vars": {
+      "t_id": 0
+    }
+  }
+}
+
+# merge subqueries with single-shard routes
+"select u.col, e.col from (select col from user where id = 5) as u join (select col from user_extra where user_id = 5) as e"
+{
+  "Original": "select u.col, e.col from (select col from user where id = 5) as u join (select col from user_extra where user_id = 5) as e",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select u.col, e.col from (select col from user where id = 5) as u join (select col from user_extra where user_id = 5) as e",
+    "FieldQuery": "select u.col, e.col from (select col from user where 1 != 1) as u join (select col from user_extra where 1 != 1) as e where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 5
+  }
+}
+
+# keyspace-qualified queries
+"select user.user.col1, main.main1.col1 from user.user join main.main1 where main.main1.col2 = user.user.col2"
+{
+  "Original": "select user.user.col1, main.main1.col1 from user.user join main.main1 where main.main1.col2 = user.user.col2",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col1, user.col2 from user",
+      "FieldQuery": "select user.col1, user.col2 from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select main1.col1 from main1 where main1.col2 = :user_col2",
+      "FieldQuery": "select main1.col1 from main1 where 1 != 1",
+      "JoinVars": {
+        "user_col2": {}
+      }
+    },
+    "Cols": [
+      -1,
+      1
+    ],
+    "Vars": {
+      "user_col2": 1
+    }
+  }
+}
+
+# implicit table reference for unsharded keyspace
+"select main.foo.col from main.foo"
+{
+  "Original": "select main.foo.col from main.foo",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select foo.col from foo",
+    "FieldQuery": "select foo.col from foo where 1 != 1"
+  }
+}
+
+# implicit table reference for sharded keyspace
+"select user.foo.col from user.foo"
+"table foo not found"
+
+# duplicate symbols
+"select user.id from user join user"
+"duplicate symbol: user"
+
+# duplicate symbols for merging routes
+"select user.id from user join user_extra user on user.id = user.user_id"
+"duplicate symbol: user"
+
+# error in subquery
+"select c from (select count(*) from user) as t"
+"unsupported: scatter with aggregates"
+
+# non-existent table
+"select c from t"
+"table t not found"
+
+# non-existent table on left of join
+"select c from t join user"
+"table t not found"
+
+# non-existent table on right of join
+"select c from user join t"
+"table t not found"
+
+# complex on clause on join
+"select c from user join user_extra on user.id in (select id from user)"
+"unsupported: scatter subquery"
+
+# complex on clause on left join
+"select c from user left join user_extra on user.id in (select id from user)"
+"unsupported: scatter subquery"
+
+# merging routes, but complex on clause
+"select user.id from user join user_extra on user_extra.user_id = user.id and user.id in (select id from user)"
+"unsupported: scatter subquery"

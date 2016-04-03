@@ -8,10 +8,18 @@ import querypb "github.com/youtube/vitess/go/vt/proto/query"
 
 // Result represents a query result.
 type Result struct {
-	Fields       []*querypb.Field
-	RowsAffected uint64
-	InsertID     uint64
-	Rows         [][]Value
+	Fields       []*querypb.Field `json:"fields"`
+	RowsAffected uint64           `json:"rows_affected"`
+	InsertID     uint64           `json:"insert_id"`
+	Rows         [][]Value        `json:"rows"`
+}
+
+// ResultStream is an interface for receiving Result. It is used for
+// RPC interfaces.
+type ResultStream interface {
+	// Recv returns the next result on the stream.
+	// It will return io.EOF if the stream ended.
+	Recv() (*Result, error)
 }
 
 // Repair fixes the type info in the rows

@@ -266,6 +266,12 @@ class Tablet(object):
   def reset_replication(self):
     self.mquery('', mysql_flavor().reset_replication_commands())
 
+  def set_semi_sync_enabled(self, master=None, slave=None):
+    logging.debug('mysql(%s): setting semi-sync mode: master=%s, slave=%s',
+                  self.tablet_uid, master, slave)
+    self.mquery('',
+                mysql_flavor().set_semi_sync_enabled_commands(master, slave))
+
   def populate(self, dbname, create_sql, insert_sqls=None):
     self.create_db(dbname)
     if isinstance(create_sql, basestring):
@@ -342,6 +348,8 @@ class Tablet(object):
                   tablet_index=None,
                   start=False, dbname=None, parent=True, wait_for_start=True,
                   include_mysql_port=True, **kwargs):
+    """Initialize a tablet's record in topology."""
+
     self.tablet_type = tablet_type
     self.keyspace = keyspace
     self.shard = shard
@@ -399,7 +407,7 @@ class Tablet(object):
       extra_args=None, extra_env=None, include_mysql_port=True,
       init_tablet_type=None, init_keyspace=None,
       init_shard=None, init_db_name_override=None,
-      supports_backups=False, grace_period='1s'):
+      supports_backups=False, grace_period='1s', enable_semi_sync=True):
     """Starts a vttablet process, and returns it.
 
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -422,6 +430,8 @@ class Tablet(object):
     args.extend(['-binlog_player_healthcheck_retry_delay', '1s'])
     args.extend(['-binlog_player_retry_delay', '1s'])
     args.extend(['-pid_file', os.path.join(self.tablet_dir, 'vttablet.pid')])
+    if enable_semi_sync:
+      args.append('-enable_semi_sync')
     if self.use_mysqlctld:
       args.extend(
           ['-mysqlctl_socket', os.path.join(self.tablet_dir, 'mysqlctl.sock')])
@@ -722,7 +732,7 @@ class Tablet(object):
       the result of running vtctl command.
     """
     args = [
-        'VtTabletExecute',
+        'VtTabletExecute', '-json',
         '-keyspace', self.keyspace,
         '-shard', self.shard,
     ]

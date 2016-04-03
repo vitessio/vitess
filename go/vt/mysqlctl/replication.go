@@ -346,3 +346,39 @@ func (mysqld *Mysqld) DisableBinlogPlayback() error {
 	}
 	return flavor.DisableBinlogPlayback(mysqld)
 }
+
+// SetSemiSyncEnabled enables or disables semi-sync replication for
+// master and/or slave mode.
+func (mysqld *Mysqld) SetSemiSyncEnabled(master, slave bool) error {
+	log.Infof("Setting semi-sync mode: master=%v, slave=%v", master, slave)
+
+	// Convert bool to int.
+	var m, s int
+	if master {
+		m = 1
+	}
+	if slave {
+		s = 1
+	}
+
+	err := mysqld.ExecuteSuperQuery(
+		fmt.Sprintf(
+			"SET GLOBAL rpl_semi_sync_master_enabled = %v, GLOBAL rpl_semi_sync_slave_enabled = %v",
+			m, s))
+	if err != nil {
+		return fmt.Errorf("can't set semi-sync mode: %v; make sure plugins are loaded in my.cnf", err)
+	}
+	return nil
+}
+
+// SemiSyncEnabled returns whether semi-sync is enabled for master or slave.
+// If the semi-sync plugin is not loaded, we assume semi-sync is disabled.
+func (mysqld *Mysqld) SemiSyncEnabled() (master, slave bool) {
+	vars, err := mysqld.fetchVariables("rpl_semi_sync_%_enabled")
+	if err != nil {
+		return false, false
+	}
+	master = (vars["rpl_semi_sync_master_enabled"] == "ON")
+	slave = (vars["rpl_semi_sync_slave_enabled"] == "ON")
+	return master, slave
+}

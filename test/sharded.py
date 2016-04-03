@@ -33,6 +33,7 @@ def setUpModule():
 
 
 def tearDownModule():
+  utils.required_teardown()
   if utils.options.skip_teardown:
     return
 
@@ -172,12 +173,12 @@ class TestSharded(unittest.TestCase):
     sql = 'select id, msg from vt_select_test order by id'
 
     qr = shard_0_master.execute(sql)
-    self.assertEqual(qr['Rows'], [[1, 'test 1'],])
+    self.assertEqual(qr['rows'], [[1, 'test 1'],])
 
     qr = shard_1_master.execute(sql)
-    self.assertEqual(qr['Rows'], [[10, 'test 10'],])
+    self.assertEqual(qr['rows'], [[10, 'test 10'],])
 
-    _, stderr = utils.run_vtctl(['VtTabletExecute',
+    _, stderr = utils.run_vtctl(['VtTabletExecute', '-json',
                                  '-keyspace', 'test_keyspace',
                                  '-shard', '-90',
                                  shard_0_master.tablet_alias, sql],

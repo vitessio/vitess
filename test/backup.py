@@ -41,6 +41,7 @@ def setUpModule():
 
 
 def tearDownModule():
+  utils.required_teardown()
   if utils.options.skip_teardown:
     return
 
@@ -73,6 +74,7 @@ class TestBackup(unittest.TestCase):
     environment.topo_server().wipe()
     for t in [tablet_master, tablet_replica1, tablet_replica2]:
       t.reset_replication()
+      t.set_semi_sync_enabled(master=False)
       t.clean_dbs()
 
   _create_vt_insert_test = '''create table vt_insert_test (

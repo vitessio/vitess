@@ -4,9 +4,12 @@
 # It should be run from $VTTOP.
 
 # Dependencies:
-#   - PHP 5.3+
+#   - PHP 5.5+
 #   - PEAR
-#   - protoc-gen-php: http://www.grpc.io/docs/installation/php.html
+#   - gem (ruby)
+#   - protoc (protobuf)
+#   - protoc-gen-php:
+#     https://github.com/grpc/grpc/tree/master/src/php#php-protobuf-compiler
 
 set -e
 
@@ -40,4 +43,9 @@ done
 for stubfile in `find php/src/Vitess/Proto -name '*Stub.php'`; do
   clientfile=${stubfile/Stub/Client}
   mv $stubfile $clientfile
+done
+
+# Strip dates from generated files.
+for file in `find php/src -name '*.php'`; do
+  sed -i -r '/^\/\/   Date: /d' $file
 done

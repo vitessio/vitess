@@ -16,7 +16,7 @@
 <div class="row">
   <div class="col-md-4">
     <h2><i class="fa fa-share-alt"></i>&nbsp;Connection pooling</h2>
-    <p class="desc">Vitess eliminates the high-memory overhead of MySQL connections. Its BSON-based protocol lets Vitess servers easily handle thousands of connections at once.</p>
+    <p class="desc">Vitess eliminates the high-memory overhead of MySQL connections. Its gRPC-based protocol lets Vitess servers easily handle thousands of connections at once.</p>
 <!--<p><a class="btn btn-default" href="/user-guide/sharding.html">View details</a></p>-->
   </div>
   <div class="col-md-4">

@@ -8,7 +8,7 @@ MAKEFLAGS = -s
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build test clean unit_test unit_test_cover unit_test_race integration_test bson proto site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test php_test reshard_tests
+.PHONY: all build test clean unit_test unit_test_cover unit_test_race integration_test proto site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test php_test reshard_tests
 
 all: build test
 
@@ -87,9 +87,6 @@ php_test:
 	godep go install ./go/cmd/vtgateclienttest
 	phpunit php/tests
 
-bson:
-	go generate ./go/...
-
 # This rule rebuilds all the go files from the proto definitions for gRPC.
 # 1. list all proto files.
 # 2. remove 'proto/' prefix and '.proto' suffix.
@@ -105,14 +102,29 @@ docker_bootstrap:
 	docker/bootstrap/build.sh common
 	docker/bootstrap/build.sh mariadb
 	docker/bootstrap/build.sh mysql56
+	docker/bootstrap/build.sh percona
 
 docker_base:
 	# Fix permissions before copying files, to avoid AUFS bug.
 	chmod -R o=g *
 	docker build -t vitess/base .
 
+docker_base_percona:
+	chmod -R o=g *
+	docker build -f Dockerfile.percona -t vitess/base:percona .
+
+docker_base_mariadb:
+	chmod -R o=g *
+	docker build -f Dockerfile.mariadb -t vitess/base:mariadb .
+
 docker_lite:
 	cd docker/lite && ./build.sh
+
+docker_lite_mariadb:
+	cd docker/lite && ./build.sh mariadb
+
+docker_lite_percona:
+	cd docker/lite && ./build.sh percona
 
 docker_guestbook:
 	cd examples/kubernetes/guestbook && ./build.sh

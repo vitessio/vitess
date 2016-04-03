@@ -69,6 +69,7 @@ def setUpModule():
 
 
 def tearDownModule():
+  utils.required_teardown()
   if utils.options.skip_teardown:
     return
 
@@ -106,30 +107,28 @@ def setup_sharded_keyspace():
   utils.run_vtctl(['CreateKeyspace', SHARDED_KEYSPACE])
   utils.run_vtctl(['SetKeyspaceShardingInfo', '-force', SHARDED_KEYSPACE,
                    'keyspace_id', 'uint64'])
-  shard_0_master.init_tablet('master', keyspace=SHARDED_KEYSPACE, shard='-80')
-  shard_0_replica.init_tablet(
-      'replica', keyspace=SHARDED_KEYSPACE, shard='-80')
-  shard_1_master.init_tablet('master', keyspace=SHARDED_KEYSPACE, shard='80-')
-  shard_1_replica.init_tablet(
-      'replica', keyspace=SHARDED_KEYSPACE, shard='80-')
-
-  utils.run_vtctl(['RebuildKeyspaceGraph', SHARDED_KEYSPACE,], auto_log=True)
+  shard_0_master.start_vttablet(
+      wait_for_state=None, target_tablet_type='replica',
+      init_keyspace=SHARDED_KEYSPACE, init_shard='-80')
+  shard_0_replica.start_vttablet(
+      wait_for_state=None, target_tablet_type='replica',
+      init_keyspace=SHARDED_KEYSPACE, init_shard='-80')
+  shard_1_master.start_vttablet(
+      wait_for_state=None, target_tablet_type='replica',
+      init_keyspace=SHARDED_KEYSPACE, init_shard='80-')
+  shard_1_replica.start_vttablet(
+      wait_for_state=None, target_tablet_type='replica',
+      init_keyspace=SHARDED_KEYSPACE, init_shard='80-')
 
   for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
-    t.create_db('vt_test_keyspace_sharded')
-    t.mquery(shard_0_master.dbname, create_vt_insert_test)
-    t.start_vttablet(wait_for_state=None)
+    t.wait_for_vttablet_state('NOT_SERVING')
 
-  for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
-    t.wait_for_vttablet_state('SERVING')
-
-  utils.run_vtctl(['InitShardMaster', '%s/-80' % SHARDED_KEYSPACE,
+  utils.run_vtctl(['InitShardMaster', '-force', '%s/-80' % SHARDED_KEYSPACE,
                    shard_0_master.tablet_alias], auto_log=True)
-  utils.run_vtctl(['InitShardMaster', '%s/80-' % SHARDED_KEYSPACE,
+  utils.run_vtctl(['InitShardMaster', '-force', '%s/80-' % SHARDED_KEYSPACE,
                    shard_1_master.tablet_alias], auto_log=True)
-
-  utils.run_vtctl(['RebuildKeyspaceGraph', SHARDED_KEYSPACE],
-                  auto_log=True)
+  utils.run_vtctl(['ApplySchema', '-sql', create_vt_insert_test,
+                   SHARDED_KEYSPACE])
 
   utils.check_srv_keyspace('test_nj', SHARDED_KEYSPACE,
                            'Partitions(master): -80 80-\n'
@@ -141,26 +140,20 @@ def setup_unsharded_keyspace():
   utils.run_vtctl(['CreateKeyspace', UNSHARDED_KEYSPACE])
   utils.run_vtctl(['SetKeyspaceShardingInfo', '-force', UNSHARDED_KEYSPACE,
                    'keyspace_id', 'uint64'])
-  unsharded_master.init_tablet(
-      'master', keyspace=UNSHARDED_KEYSPACE, shard='0')
-  unsharded_replica.init_tablet(
-      'replica', keyspace=UNSHARDED_KEYSPACE, shard='0')
-
-  utils.run_vtctl(['RebuildKeyspaceGraph', UNSHARDED_KEYSPACE,], auto_log=True)
-
-  for t in [unsharded_master, unsharded_replica]:
-    t.create_db('vt_test_keyspace_unsharded')
-    t.mquery(unsharded_master.dbname, create_vt_insert_test)
-    t.start_vttablet(wait_for_state=None)
+  unsharded_master.start_vttablet(
+      wait_for_state=None, target_tablet_type='replica',
+      init_keyspace=UNSHARDED_KEYSPACE, init_shard='0')
+  unsharded_replica.start_vttablet(
+      wait_for_state=None, target_tablet_type='replica',
+      init_keyspace=UNSHARDED_KEYSPACE, init_shard='0')
 
   for t in [unsharded_master, unsharded_replica]:
-    t.wait_for_vttablet_state('SERVING')
+    t.wait_for_vttablet_state('NOT_SERVING')
 
-  utils.run_vtctl(['InitShardMaster', '%s/0' % UNSHARDED_KEYSPACE,
+  utils.run_vtctl(['InitShardMaster', '-force', '%s/0' % UNSHARDED_KEYSPACE,
                    unsharded_master.tablet_alias], auto_log=True)
-
-  utils.run_vtctl(['RebuildKeyspaceGraph', UNSHARDED_KEYSPACE],
-                  auto_log=True)
+  utils.run_vtctl(['ApplySchema', '-sql', create_vt_insert_test,
+                   UNSHARDED_KEYSPACE])
 
   utils.check_srv_keyspace('test_nj', UNSHARDED_KEYSPACE,
                            'Partitions(master): -\n'

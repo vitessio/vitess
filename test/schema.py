@@ -118,10 +118,13 @@ def _teardown_shard_2():
       ['DeleteShard', '-recursive', 'test_keyspace/2'], auto_log=True)
 
   for t in shard_2_tablets:
+    t.reset_replication()
+    t.set_semi_sync_enabled(master=False)
     t.clean_dbs()
 
 
 def tearDownModule():
+  utils.required_teardown()
   if utils.options.skip_teardown:
     return
 
@@ -290,7 +293,7 @@ class TestSchema(unittest.TestCase):
       shard_2_schema = self._get_schema(shard_2_master.tablet_alias)
       self.assertIn('utf8', shard_2_schema['database_schema'])
       utils.run_vtctl_json(
-          ['ExecuteFetchAsDba', shard_2_master.tablet_alias,
+          ['ExecuteFetchAsDba', '-json', shard_2_master.tablet_alias,
            'ALTER DATABASE vt_test_keyspace CHARACTER SET latin1'])
 
       _, stderr = utils.run_vtctl(['CopySchemaShard',

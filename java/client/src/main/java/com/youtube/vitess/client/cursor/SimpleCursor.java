@@ -4,17 +4,19 @@ import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Query.Field;
 import com.youtube.vitess.proto.Query.QueryResult;
 
-import java.sql.SQLDataException;
 import java.sql.SQLException;
 import java.util.Iterator;
 import java.util.List;
 
+import javax.annotation.concurrent.NotThreadSafe;
+
 /**
  * A {@link Cursor} that serves records from a single {@link QueryResult} object.
  */
+@NotThreadSafe
 public class SimpleCursor extends Cursor {
-  private QueryResult queryResult;
-  private Iterator<Query.Row> rowIterator;
+  private final QueryResult queryResult;
+  private final Iterator<Query.Row> rowIterator;
 
   public SimpleCursor(QueryResult queryResult) {
     this.queryResult = queryResult;
@@ -38,15 +40,11 @@ public class SimpleCursor extends Cursor {
 
   @Override
   public void close() throws Exception {
-    rowIterator = null;
+    // SimpleCursor doesn't need to do anything.
   }
 
   @Override
   public Row next() throws SQLException {
-    if (rowIterator == null) {
-      throw new SQLDataException("next() called on closed Cursor");
-    }
-
     if (rowIterator.hasNext()) {
       return new Row(getFieldMap(), rowIterator.next());
     }

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+"""Define abstractions for various MySQL flavors."""
 
 import environment
 import logging
@@ -27,6 +28,15 @@ class MysqlFlavor(object):
 
   def change_master_commands(self, host, port, pos):
     raise NotImplementedError()
+
+  def set_semi_sync_enabled_commands(self, master=None, slave=None):
+    """Returns commands to turn semi-sync on/off."""
+    cmds = []
+    if master is not None:
+      cmds.append("SET GLOBAL rpl_semi_sync_master_enabled = %d" % master)
+    if slave is not None:
+      cmds.append("SET GLOBAL rpl_semi_sync_slave_enabled = %d" % slave)
+    return cmds
 
   def extra_my_cnf(self):
     """Returns the path to an extra my_cnf file, or None."""
@@ -101,7 +111,7 @@ class MariaDB(MysqlFlavor):
       return gtid
 
   def change_master_commands(self, host, port, pos):
-    (_flavor, gtid) = pos.split("/")
+    gtid = pos.split("/")[1]
     return [
         "SET GLOBAL gtid_slave_pos = '%s'" % gtid,
         "CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, "
@@ -110,7 +120,7 @@ class MariaDB(MysqlFlavor):
 
 
 class MySQL56(MysqlFlavor):
-  """Overrides specific to MySQL 5.6"""
+  """Overrides specific to MySQL 5.6."""
 
   def master_position(self, tablet):
     gtid = tablet.mquery("", "SELECT @@GLOBAL.gtid_executed")[0][0]
@@ -135,7 +145,7 @@ class MySQL56(MysqlFlavor):
     return environment.vttop + "/config/mycnf/master_mysql56.cnf"
 
   def change_master_commands(self, host, port, pos):
-    (_flavor, gtid) = pos.split("/")
+    gtid = pos.split("/")[1]
     return [
         "RESET MASTER",
         "SET GLOBAL gtid_purged = '%s'" % gtid,
@@ -157,12 +167,17 @@ def mysql_flavor():
 
 
 def set_mysql_flavor(flavor):
+  """Set the object that will be returned by mysql_flavor().
+
+  If flavor is not specified, set it based on MYSQL_FLAVOR environment variable.
+  """
+
   global __mysql_flavor
 
   if not flavor:
     flavor = os.environ.get("MYSQL_FLAVOR", "MariaDB")
     # The environment variable might be set, but equal to "".
-    if flavor == "":
+    if not flavor:
       flavor = "MariaDB"
 
   # Set the environment variable explicitly in case we're overriding it via

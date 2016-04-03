@@ -38,6 +38,7 @@ def setUpModule():
 
 
 def tearDownModule():
+  utils.required_teardown()
   if utils.options.skip_teardown:
     return
 
@@ -66,6 +67,7 @@ class TestReparent(unittest.TestCase):
     environment.topo_server().wipe()
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
+      t.set_semi_sync_enabled(master=False)
       t.clean_dbs()
     super(TestReparent, self).tearDown()
 
@@ -319,13 +321,7 @@ class TestReparent(unittest.TestCase):
     self._check_master_cell('test_nj', shard_id, 'test_nj')
     self._check_master_cell('test_ny', shard_id, 'test_nj')
 
-    # Convert two replica to spare. That should leave only one node
-    # serving traffic, but still needs to appear in the replication
-    # graph.
-    utils.run_vtctl(['ChangeSlaveType', tablet_41983.tablet_alias, 'spare'])
-    utils.run_vtctl(['ChangeSlaveType', tablet_31981.tablet_alias, 'spare'])
     utils.validate_topology()
-    self._check_db_addr(shard_id, 'replica', tablet_62044.port)
 
     # Run this to make sure it succeeds.
     utils.run_vtctl(['ShardReplicationPositions', 'test_keyspace/' + shard_id],
@@ -568,13 +564,12 @@ class TestReparent(unittest.TestCase):
                              wait_for_start=False)
     tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
-    tablet_41983.init_tablet('spare', 'test_keyspace', shard_id, start=True,
+    tablet_41983.init_tablet('replica', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
 
     # wait for all tablets to start
-    for t in [tablet_62344, tablet_62044, tablet_31981]:
+    for t in [tablet_62344, tablet_62044, tablet_31981, tablet_41983]:
       t.wait_for_vttablet_state('SERVING')
-    tablet_41983.wait_for_vttablet_state('NOT_SERVING')
 
     # Recompute the shard layout node - until you do that, it might not be
     # valid.

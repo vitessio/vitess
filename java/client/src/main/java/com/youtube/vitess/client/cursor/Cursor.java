@@ -1,11 +1,17 @@
 package com.youtube.vitess.client.cursor;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.youtube.vitess.proto.Query.Field;
 import com.youtube.vitess.proto.Query.QueryResult;
 
 import java.sql.SQLDataException;
 import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
 import java.util.List;
+
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.NotThreadSafe;
 
 /**
  * Provides access to the result rows of a query.
@@ -24,26 +30,64 @@ import java.util.List;
  * However, two cursors from the same {@link com.youtube.vitess.client.VTGateConn VTGateConn} can be
  * accessed concurrently without additional synchronization.
  */
+@NotThreadSafe
 public abstract class Cursor implements AutoCloseable {
-  private FieldMap fieldMap;
+  /**
+   * A pre-built {@link FieldMap}, shared by each {@link Row}.
+   *
+   * <p>Although {@link Cursor} is not supposed to be used by multiple threads,
+   * the asynchronous API makes it unavoidable that a {@code Cursor} may be created
+   * in one thread and then sent to another. We therefore declare {@code fieldMap}
+   * as {@code volatile} to guarantee the value set by the constructor is seen by
+   * all threads.
+   */
+  private volatile FieldMap fieldMap;
 
+  /**
+   * Returns the number of rows affected.
+   *
+   * @throws SQLException if the server returns an error.
+   * @throws SQLFeatureNotSupportedException if the cursor type doesn't support this.
+   */
   public abstract long getRowsAffected() throws SQLException;
 
+  /**
+   * Returns the ID of the last insert.
+   *
+   * @throws SQLException if the server returns an error.
+   * @throws SQLFeatureNotSupportedException if the cursor type doesn't support this.
+   */
   public abstract long getInsertId() throws SQLException;
 
+  /**
+   * Returns the next {@link Row}, or {@code null} if there are no more rows.
+   *
+   * @throws SQLException if the server returns an error.
+   */
+  @Nullable
   public abstract Row next() throws SQLException;
 
+  /**
+   * Returns the list of fields.
+   *
+   * @throws SQLException if the server returns an error.
+   */
   public abstract List<Field> getFields() throws SQLException;
 
-  public int findColumn(String columnLabel) throws SQLException {
-    Integer columnIndex = getFieldMap().getIndex(columnLabel);
+  /**
+   * Returns the column index for a given column name.
+   *
+   * @throws SQLDataException if the column is not found.
+   */
+  public final int findColumn(String columnLabel) throws SQLException {
+    Integer columnIndex = getFieldMap().getIndex(checkNotNull(columnLabel));
     if (columnIndex == null) {
       throw new SQLDataException("column not found:" + columnLabel);
     }
     return columnIndex;
   }
 
-  protected FieldMap getFieldMap() throws SQLException {
+  protected final FieldMap getFieldMap() throws SQLException {
     if (fieldMap == null) {
       fieldMap = new FieldMap(getFields());
     }

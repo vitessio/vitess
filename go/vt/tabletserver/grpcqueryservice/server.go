@@ -5,8 +5,6 @@
 package grpcqueryservice
 
 import (
-	"sync"
-
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -154,11 +152,24 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
+
 	bq, err := querytypes.Proto3ToBoundQuery(request.Query)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
-	splits, err := q.server.SplitQuery(ctx, request.Target, bq.Sql, bq.BindVariables, request.SplitColumn, request.SplitCount, request.SessionId)
+	splits := []querytypes.QuerySplit{}
+	splits, err = queryservice.CallCorrectSplitQuery(
+		q.server,
+		request.UseSplitQueryV2,
+		ctx,
+		request.Target,
+		bq.Sql,
+		bq.BindVariables,
+		request.SplitColumn,
+		request.SplitCount,
+		request.NumRowsPerQueryPart,
+		request.Algorithm,
+		request.SessionId)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
@@ -174,25 +185,20 @@ func (q *query) StreamHealth(request *querypb.StreamHealthRequest, stream querys
 	defer q.server.HandlePanic(&err)
 
 	c := make(chan *querypb.StreamHealthResponse, 10)
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for shr := range c {
-			// we send until the client disconnects
-			if err := stream.Send(shr); err != nil {
-				return
-			}
-		}
-	}()
 
 	id, err := q.server.StreamHealthRegister(c)
 	if err != nil {
 		close(c)
-		wg.Wait()
 		return err
 	}
-	wg.Wait()
+
+	for shr := range c {
+		// we send until the client disconnects
+		if err := stream.Send(shr); err != nil {
+			break
+		}
+	}
+
 	return q.server.StreamHealthUnregister(id)
 }
 

@@ -5,6 +5,7 @@
 package tabletmanager
 
 import (
+	"flag"
 	"fmt"
 	"time"
 
@@ -18,6 +19,10 @@ import (
 
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+)
+
+var (
+	enableSemiSync = flag.Bool("enable_semi_sync", false, "Enable semi-sync when configuring replication, on master and replica tablets only (rdonly tablets will not ack).")
 )
 
 // SlaveStatus returns the replication status
@@ -72,6 +77,11 @@ func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position string,
 // replication or not (using hook if not).
 // Should be called under RPCWrapLock.
 func (agent *ActionAgent) StartSlave(ctx context.Context) error {
+	if *enableSemiSync {
+		if err := agent.enableSemiSync(false); err != nil {
+			return err
+		}
+	}
 	return mysqlctl.StartSlave(agent.MysqlDaemon, agent.hookExtraEnv())
 }
 
@@ -107,10 +117,16 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 		return "", err
 	}
 
+	// If using semi-sync, we need to enable it before going read-write.
+	if *enableSemiSync {
+		if err := agent.enableSemiSync(true); err != nil {
+			return "", err
+		}
+	}
+
 	// Set the server read-write, from now on we can accept real
 	// client writes. Note that if semi-sync replication is enabled,
-	// we'll still need some slaves to be able to commit
-	// transactions.
+	// we'll still need some slaves to be able to commit transactions.
 	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
 		return "", err
 	}
@@ -152,6 +168,13 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 		return err
 	}
 
+	// If using semi-sync, we need to enable it before connecting to master.
+	if *enableSemiSync {
+		if err := agent.enableSemiSync(false); err != nil {
+			return err
+		}
+	}
+
 	cmds, err := agent.MysqlDaemon.SetSlavePositionCommands(pos)
 	if err != nil {
 		return err
@@ -185,8 +208,17 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	// Now disallow queries, to make sure nobody is writing to the
 	// database.
 	tablet := agent.Tablet()
-	if err := agent.disallowQueries(tablet.Type, "DemoteMaster marks server rdonly"); err != nil {
+	// We don't care if the QueryService state actually changed because we'll
+	// let vtgate keep serving read traffic from this master (see comment below).
+	if _ /* state changed */, err := agent.disallowQueries(tablet.Type, "DemoteMaster marks server rdonly"); err != nil {
 		return "", fmt.Errorf("disallowQueries failed: %v", err)
+	}
+
+	// If using semi-sync, we need to disable master-side.
+	if *enableSemiSync {
+		if err := agent.enableSemiSync(false); err != nil {
+			return "", err
+		}
 	}
 
 	pos, err := agent.MysqlDaemon.DemoteMaster()
@@ -197,7 +229,7 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	// There is no serving graph update - the master tablet will
 	// be replaced. Even though writes may fail, reads will
 	// succeed. It will be less noisy to simply leave the entry
-	// until well promote the master.
+	// until we'll promote the master.
 }
 
 // PromoteSlaveWhenCaughtUp waits for this slave to be caught up on
@@ -225,6 +257,13 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 	pos, err = agent.MysqlDaemon.PromoteSlave(agent.hookExtraEnv())
 	if err != nil {
 		return "", err
+	}
+
+	// If using semi-sync, we need to enable it before going read-write.
+	if *enableSemiSync {
+		if err := agent.enableSemiSync(true); err != nil {
+			return "", err
+		}
 	}
 
 	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
@@ -263,6 +302,13 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 	}
 	if forceStartSlave {
 		shouldbeReplicating = true
+	}
+
+	// If using semi-sync, we need to enable it before connecting to master.
+	if *enableSemiSync {
+		if err := agent.enableSemiSync(false); err != nil {
+			return err
+		}
 	}
 
 	// Create the list of commands to set the master
@@ -347,6 +393,13 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
 		return "", err
 	}
 
+	// If using semi-sync, we need to enable it before going read-write.
+	if *enableSemiSync {
+		if err := agent.enableSemiSync(true); err != nil {
+			return "", err
+		}
+	}
+
 	// Set the server read-write
 	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
 		return "", err
@@ -357,4 +410,38 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
 	}
 
 	return replication.EncodePosition(pos), nil
+}
+
+func (agent *ActionAgent) isMasterEligible() (bool, error) {
+	switch agent.Tablet().Type {
+	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:
+		return true, nil
+	case topodatapb.TabletType_SPARE:
+		// If we're SPARE, it could be because healthcheck is enabled.
+		tt, err := topoproto.ParseTabletType(*targetTabletType)
+		if err != nil {
+			return false, fmt.Errorf("can't determine if tablet is master-eligible: currently SPARE and no -target_tablet_type flag specified")
+		}
+		if tt == topodatapb.TabletType_REPLICA {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (agent *ActionAgent) enableSemiSync(master bool) error {
+	// Only enable if we're eligible for becoming master (REPLICA type).
+	// Ineligible slaves (RDONLY) shouldn't ACK because we'll never promote them.
+	masterEligible, err := agent.isMasterEligible()
+	if err != nil {
+		return fmt.Errorf("can't enable semi-sync: %v", err)
+	}
+	if !masterEligible {
+		return nil
+	}
+
+	// Always enable slave-side since it doesn't hurt to keep it on for a master.
+	// The master-side needs to be off for a slave, or else it will get stuck.
+	return agent.MysqlDaemon.SetSemiSyncEnabled(master, true)
 }

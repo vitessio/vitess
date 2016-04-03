@@ -7,12 +7,13 @@ import struct
 import hashlib
 
 from flask import Flask
-app = Flask(__name__)
 
 from vtdb import vtgate_client
 
 # Register gRPC protocol.
 from vtdb import grpc_vtgate_client  # pylint: disable=unused-import
+
+app = Flask(__name__)
 
 # conn is the connection to vtgate.
 conn = None
@@ -71,7 +72,7 @@ def list_guestbook(page):
       keyspace_ids=[keyspace_id])
 
   cursor.execute(
-      'SELECT message FROM messages WHERE page=%(page)s'
+      'SELECT message FROM messages WHERE page=:page'
       ' ORDER BY time_created_ns',
       {'page': page})
   entries = [row[0] for row in cursor.fetchall()]
@@ -92,7 +93,7 @@ def add_entry(page, value):
   cursor.begin()
   cursor.execute(
       'INSERT INTO messages (page, time_created_ns, keyspace_id, message)'
-      ' VALUES (%(page)s, %(time_created_ns)s, %(keyspace_id)s, %(message)s)',
+      ' VALUES (:page, :time_created_ns, :keyspace_id, :message)',
       {
           'page': page,
           'time_created_ns': int(time.time() * 1e9),
@@ -102,9 +103,9 @@ def add_entry(page, value):
   cursor.commit()
 
   # Read the list back from master (critical read) because it's
-  # important that the user sees his own addition immediately.
+  # important that the user sees their own addition immediately.
   cursor.execute(
-      'SELECT message FROM messages WHERE page=%(page)s'
+      'SELECT message FROM messages WHERE page=:page'
       ' ORDER BY time_created_ns',
       {'page': page})
   entries = [row[0] for row in cursor.fetchall()]

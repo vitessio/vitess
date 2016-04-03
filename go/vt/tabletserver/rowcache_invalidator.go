@@ -18,7 +18,6 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"golang.org/x/net/context"
@@ -189,7 +188,7 @@ func (rci *RowcacheInvalidator) handleDMLEvent(event *binlogdatapb.StreamEvent) 
 	if tableInfo == nil {
 		panic(NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "Table %s not found", event.TableName))
 	}
-	if tableInfo.CacheType == schema.CacheNone {
+	if !tableInfo.IsCached() {
 		return
 	}
 
@@ -251,7 +250,7 @@ func (rci *RowcacheInvalidator) handleUnrecognizedEvent(sql string) {
 		rci.qe.queryServiceStats.InternalErrors.Add("Invalidation", 1)
 		return
 	}
-	if tableInfo.CacheType == schema.CacheNone {
+	if !tableInfo.IsCached() {
 		return
 	}
 

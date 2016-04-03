@@ -1,0 +1,57 @@
+# This is for trouble-shooting one-off failures.
+"select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col"
+{
+  "Original": "select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select u1.id, u1.col from user as u1",
+        "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1"
+      },
+      "Right": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select 1 from user as u2 where u2.col = :u1_col",
+        "FieldQuery": "select 1 from user as u2 where 1 != 1",
+        "JoinVars": {
+          "u1_col": {}
+        }
+      },
+      "Cols": [
+        -1,
+        -2
+      ],
+      "Vars": {
+        "u1_col": 1
+      }
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user as u3 where u3.col = :u1_col",
+      "FieldQuery": "select 1 from user as u3 where 1 != 1",
+      "JoinVars": {
+        "u1_col": {}
+      }
+    },
+    "Cols": [
+      -1
+    ],
+    "Vars": {
+      "u1_col": 1
+    }
+  }
+}

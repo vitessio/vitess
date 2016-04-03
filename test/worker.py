@@ -123,6 +123,7 @@ def setUpModule():
 
 
 def tearDownModule():
+  utils.required_teardown()
   if utils.options.skip_teardown:
     return
 
@@ -383,6 +384,7 @@ class TestBaseSplitClone(unittest.TestCase):
     for shard_tablet in [all_shard_tablets, shard_0_tablets, shard_1_tablets]:
       for t in shard_tablet.all_tablets:
         t.reset_replication()
+        t.set_semi_sync_enabled(master=False)
         t.clean_dbs()
         t.kill_vttablet()
         # we allow failures here as some tablets will be gone sometimes
@@ -419,12 +421,18 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
     6. Verify that the data was copied successfully to both new shards
 
     Args:
-      mysql_down: boolean, True iff we expect the MySQL instances on the
-        destination masters to be down.
+      mysql_down: boolean. If True, we take down the MySQL instances on the
+        destination masters at first, then bring them back and reparent away.
 
     Raises:
       AssertionError if things didn't go as expected.
     """
+    if mysql_down:
+      logging.debug('Shutting down mysqld on destination masters.')
+      utils.wait_procs(
+          [shard_0_master.shutdown_mysql(),
+           shard_1_master.shutdown_mysql()])
+
     worker_proc, worker_port, worker_rpc_port = utils.run_vtworker_bg(
         ['--cell', 'test_nj'],
         auto_log=True)
@@ -449,12 +457,21 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
           "expected vtworker to retry, but it didn't")
       logging.debug('Worker has resolved at least twice, starting reparent now')
 
-      # Original masters have no running MySQL, so need to force the reparent.
+      # Bring back masters. Since we test with semi-sync now, we need at least
+      # one replica for the new master. This test is already quite expensive,
+      # so we bring back the old master as a replica rather than having a third
+      # replica up the whole time.
+      logging.debug('Restarting mysqld on destination masters')
+      utils.wait_procs(
+          [shard_0_master.start_mysql(),
+           shard_1_master.start_mysql()])
+
+      # Reparent away from the old masters.
       utils.run_vtctl(
-          ['EmergencyReparentShard', 'test_keyspace/-80',
+          ['PlannedReparentShard', 'test_keyspace/-80',
            shard_0_replica.tablet_alias], auto_log=True)
       utils.run_vtctl(
-          ['EmergencyReparentShard', 'test_keyspace/80-',
+          ['PlannedReparentShard', 'test_keyspace/80-',
            shard_1_replica.tablet_alias], auto_log=True)
 
     else:
@@ -521,35 +538,6 @@ class TestReparentDuringWorkerCopy(TestBaseSplitCloneResiliency):
 
 
 class TestMysqlDownDuringWorkerCopy(TestBaseSplitCloneResiliency):
-
-  def setUp(self):
-    """Shuts down MySQL on the destination masters.
-
-    Also runs base setup.
-    """
-    try:
-      logging.debug('Starting base setup for MysqlDownDuringWorkerCopy')
-      super(TestMysqlDownDuringWorkerCopy, self).setUp()
-
-      logging.debug('Starting MysqlDownDuringWorkerCopy-specific setup')
-      utils.wait_procs(
-          [shard_0_master.shutdown_mysql(),
-           shard_1_master.shutdown_mysql()])
-      logging.debug('Finished MysqlDownDuringWorkerCopy-specific setup')
-    except:
-      self.tearDown()
-      raise
-
-  def tearDown(self):
-    """Restarts the MySQL processes that were killed during the setup."""
-    logging.debug('Starting MysqlDownDuringWorkerCopy-specific tearDown')
-    utils.wait_procs(
-        [shard_0_master.start_mysql(),
-         shard_1_master.start_mysql()])
-    logging.debug('Finished MysqlDownDuringWorkerCopy-specific tearDown')
-
-    super(TestMysqlDownDuringWorkerCopy, self).tearDown()
-    logging.debug('Finished base tearDown for MysqlDownDuringWorkerCopy')
 
   def test_mysql_down_during_worker_copy(self):
     """This test simulates MySQL being down on the destination masters."""

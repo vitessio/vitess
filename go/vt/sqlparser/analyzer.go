@@ -47,6 +47,15 @@ func IsValue(node ValExpr) bool {
 	return false
 }
 
+// IsNull returns true if the ValExpr is SQL NULL
+func IsNull(node ValExpr) bool {
+	switch node.(type) {
+	case *NullVal:
+		return true
+	}
+	return false
+}
+
 // HasINClause returns true if any of the conditions has an IN clause.
 func HasINClause(conditions []BoolExpr) bool {
 	for _, node := range conditions {

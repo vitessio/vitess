@@ -73,13 +73,16 @@ class VTGateClient(object):
   returned / passed in with every method that makes sense.
   """
 
-  def __init__(self, addr, timeout):
+  def __init__(self, addr, timeout, *pargs, **kwargs):
     """Initialize a vtgate connection.
 
     Args:
       addr: server address. Can be protocol dependent.
       timeout: connection timeout (float, in seconds).
+      *pargs: passed to super constructor.
+      **kwargs: passed to super constructor.
     """
+    super(VTGateClient, self).__init__(*pargs, **kwargs)
     self.addr = addr
     self.timeout = timeout
     # self.session is used by vtgate_utils.exponential_backoff_retry.
@@ -189,7 +192,6 @@ class VTGateClient(object):
     """Executes the given sql.
 
     FIXME(alainjobart): should take the session in.
-    FIXME(alainjobart): implementations have keyspace before tablet_type!
 
     Args:
       sql: query to execute.
