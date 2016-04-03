@@ -289,15 +289,11 @@ public class VitessStatement implements Statement {
     }
 
     public void setMaxRows(int max) throws SQLException {
-        /* Currently not used
         checkOpen();
         if (max < 0) {
             throw new SQLException(Constants.SQLExceptionMessages.ILLEGAL_VALUE_FOR + "max row");
         }
         this.maxRows = max;
-        */
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
     public int getQueryTimeout() throws SQLException {

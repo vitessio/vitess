@@ -351,7 +351,7 @@ import java.util.List;
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
 
         VitessStatement statement = new VitessStatement(mockConn);
-        Assert.assertEquals(5, statement.getQueryTimeout());
+        Assert.assertEquals(30, statement.getQueryTimeout());
     }
 
     @Test public void testSetQueryTimeout() throws SQLException {

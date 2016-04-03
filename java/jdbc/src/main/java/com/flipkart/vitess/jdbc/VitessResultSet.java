@@ -33,11 +33,11 @@ public class VitessResultSet implements ResultSet {
     private boolean closed = false;
     private Row row;
     private int currentRow;
+    private int maxRows;
     /**
      * Last column name index read
      */
     private int lastIndexRead = -1;
-    private boolean wasNullFlag;
 
     public VitessResultSet(Cursor cursor) throws SQLException {
         this(cursor, null);
@@ -56,6 +56,9 @@ public class VitessResultSet implements ResultSet {
             throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, e);
         }
         this.currentRow = 0;
+        if(null != vitessStatement) {
+            this.maxRows = vitessStatement.getMaxRows();
+        }
     }
 
     public VitessResultSet(String[] columnNames, Query.Type[] columnTypes, String[][] data)
@@ -135,6 +138,10 @@ public class VitessResultSet implements ResultSet {
     public boolean next() throws SQLException {
         checkOpen();
 
+        if(this.maxRows > 0 && this.currentRow >= this.maxRows) {
+            return false;
+        }
+
         this.row = this.cursor.next();
         ++this.currentRow;
 
@@ -163,7 +170,7 @@ public class VitessResultSet implements ResultSet {
         if (this.lastIndexRead == -1) {
             throw new SQLException(Constants.SQLExceptionMessages.NO_COLUMN_ACCESSED);
         }
-        return wasNullFlag;
+        return this.row.wasNull();
     }
 
     public String getString(int columnIndex) throws SQLException {
@@ -666,11 +673,10 @@ public class VitessResultSet implements ResultSet {
 
     private boolean isNull(int columnIndex) throws SQLException {
         if (null == this.row.getObject(columnIndex)) {
-            this.wasNullFlag = true;
+            return true;
         } else {
-            this.wasNullFlag = false;
+            return false;
         }
-        return this.wasNullFlag;
     }
 
     public InputStream getAsciiStream(int columnIndex) throws SQLException {
