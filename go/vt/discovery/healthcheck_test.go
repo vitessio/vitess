@@ -282,8 +282,7 @@ type fakeConn struct {
 }
 
 type streamHealthReader struct {
-	c       <-chan *querypb.StreamHealthResponse
-	errFunc tabletconn.ErrFunc
+	c <-chan *querypb.StreamHealthResponse
 }
 
 // Recv implements tabletconn.StreamHealthReader.
@@ -299,8 +298,7 @@ func (r *streamHealthReader) Recv() (*querypb.StreamHealthResponse, error) {
 // StreamHealth implements tabletconn.TabletConn.
 func (fc *fakeConn) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
 	return &streamHealthReader{
-		c:       fc.hcChan,
-		errFunc: func() error { return nil },
+		c: fc.hcChan,
 	}, nil
 }
 
@@ -325,13 +323,8 @@ func (fc *fakeConn) ExecuteBatch2(ctx context.Context, queries []querytypes.Boun
 }
 
 // StreamExecute implements tabletconn.TabletConn.
-func (fc *fakeConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
-	return nil, nil, fmt.Errorf("not implemented")
-}
-
-// StreamExecute2 implements tabletconn.TabletConn.
-func (fc *fakeConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
-	return fc.StreamExecute(ctx, query, bindVars, transactionID)
+func (fc *fakeConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 // Begin implements tabletconn.TabletConn.
@@ -366,6 +359,18 @@ func (fc *fakeConn) Rollback2(ctx context.Context, transactionID int64) error {
 
 // SplitQuery implements tabletconn.TabletConn.
 func (fc *fakeConn) SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+// SplitQueryV2 implements tabletconn.TabletConn.
+func (fc *fakeConn) SplitQueryV2(
+	ctx context.Context,
+	query querytypes.BoundQuery,
+	splitColumn []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm,
+) ([]querytypes.QuerySplit, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 

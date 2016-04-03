@@ -1,62 +1,47 @@
-// Copyright 2014, Google Inc. All rights reserved.
+// Copyright 2016, Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package planbuilder
+package engine
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
-
-// Plan represents the execution strategy for a given query.
-// For now it's a simple wrapper around the real instructions.
-// An instruction (aka primitive), tells VTGate how to execute
-// a single command. Primitives can be cascaded as long as
-// their inputs and outpus can be combined meaningfully.
-// For example, a Join can depend on another Join or a Route.
-// However, a Route cannot depend on another primitive.
-type Plan struct {
-	// Original is the original query.
-	Original string `json:",omitempty"`
-	// Instructions contains the instructions needed to
-	// fulfil the query. It's a tree of primitives.
-	Instructions Primitive `json:",omitempty"`
-}
-
-// Size is defined so that Plan can be given to a cache.LRUCache.
-// VTGate needs to maintain a cache of plans. It uses LRUCache, which
-// in turn requires its objects to define a Size function.
-func (pln *Plan) Size() int {
-	return 1
-}
-
-// Primitive is the interface that needs to be satisfied by
-// all primitives of a plan. For now, the primitives just
-// have to define an isPrimitive function that does nothing.
-type Primitive interface {
-	isPrimitive()
-}
 
 // Route represents the instructions to route a query to
 // one or many vttablets. The meaning and values for the
 // the fields are described in the RouteOpcode values comments.
 type Route struct {
 	Opcode     RouteOpcode
-	Keyspace   *Keyspace
+	Keyspace   *vindexes.Keyspace
 	Query      string
 	FieldQuery string
-	Vindex     Vindex
+	Vindex     vindexes.Vindex
 	Values     interface{}
 	JoinVars   map[string]struct{}
-	Table      *Table
+	Table      *vindexes.Table
 	Subquery   string
+	Generate   *Generate
 }
 
-func (rt *Route) isPrimitive() {}
+// Execute performs a non-streaming exec.
+func (rt *Route) Execute(vcursor VCursor, joinvars map[string]interface{}, wantields bool) (*sqltypes.Result, error) {
+	return vcursor.ExecuteRoute(rt, joinvars)
+}
+
+// StreamExecute performs a streaming exec.
+func (rt *Route) StreamExecute(vcursor VCursor, joinvars map[string]interface{}, wantfields bool, sendReply func(*sqltypes.Result) error) error {
+	return vcursor.StreamExecuteRoute(rt, joinvars, sendReply)
+}
+
+// GetFields fetches the field info.
+func (rt *Route) GetFields(vcursor VCursor, joinvars map[string]interface{}) (*sqltypes.Result, error) {
+	return vcursor.GetRouteFields(rt, joinvars)
+}
 
 // MarshalJSON serializes the Route into a JSON representation.
 // It's used for testing and diagnostics.
@@ -70,7 +55,7 @@ func (rt *Route) MarshalJSON() ([]byte, error) {
 	}
 	marshalRoute := struct {
 		Opcode     RouteOpcode         `json:",omitempty"`
-		Keyspace   *Keyspace           `json:",omitempty"`
+		Keyspace   *vindexes.Keyspace  `json:",omitempty"`
 		Query      string              `json:",omitempty"`
 		FieldQuery string              `json:",omitempty"`
 		Vindex     string              `json:",omitempty"`
@@ -78,6 +63,7 @@ func (rt *Route) MarshalJSON() ([]byte, error) {
 		JoinVars   map[string]struct{} `json:",omitempty"`
 		Table      string              `json:",omitempty"`
 		Subquery   string              `json:",omitempty"`
+		Generate   *Generate           `json:",omitempty"`
 	}{
 		Opcode:     rt.Opcode,
 		Keyspace:   rt.Keyspace,
@@ -88,8 +74,41 @@ func (rt *Route) MarshalJSON() ([]byte, error) {
 		JoinVars:   rt.JoinVars,
 		Table:      tname,
 		Subquery:   rt.Subquery,
+		Generate:   rt.Generate,
 	}
 	return json.Marshal(marshalRoute)
+}
+
+// Generate represents the instruction to generate
+// a value from a sequence. We cannot reuse a Route
+// for this because this needs to be always executed
+// outside a transaction.
+type Generate struct {
+	// Opcode can only be SelectUnsharded for now.
+	Opcode   RouteOpcode
+	Keyspace *vindexes.Keyspace
+	Query    string
+	// Value is the supplied value. A new value will be generated
+	// only if Value was NULL. Otherwise, the supplied value will
+	// be used.
+	Value interface{}
+}
+
+// MarshalJSON serializes Generate into a JSON representation.
+// It's used for testing and diagnostics.
+func (gen *Generate) MarshalJSON() ([]byte, error) {
+	jsongen := struct {
+		Opcode   RouteOpcode        `json:",omitempty"`
+		Keyspace *vindexes.Keyspace `json:",omitempty"`
+		Query    string             `json:",omitempty"`
+		Value    interface{}        `json:",omitempty"`
+	}{
+		Opcode:   gen.Opcode,
+		Keyspace: gen.Keyspace,
+		Query:    gen.Query,
+		Value:    prettyValue(gen.Value),
+	}
+	return json.Marshal(jsongen)
 }
 
 // prettyValue converts the Values field of a Route
@@ -168,15 +187,16 @@ const (
 	InsertUnsharded
 	// InsertUnsharded is for routing an insert statement
 	// to a single shard. Requires: A list of Values, one
-	// for each ColVindex.
+	// for each ColVindex. If the table has an Autoinc column,
+	// A Generate subplan must be created.
 	InsertSharded
 	// NumCodes is the total number of opcodes for routes.
 	NumCodes
 )
 
-// opcodeName must exactly match order of opcode constants.
-var opcodeName = [NumCodes]string{
-	"NoCode",
+// routeName must exactly match order of opcode constants.
+var routeName = [NumCodes]string{
+	"Error",
 	"SelectUnsharded",
 	"SelectEqualUnique",
 	"SelectEqual",
@@ -194,64 +214,11 @@ func (code RouteOpcode) String() string {
 	if code < 0 || code >= NumCodes {
 		return ""
 	}
-	return opcodeName[code]
+	return routeName[code]
 }
 
 // MarshalJSON serializes the RouteOpcode as a JSON string.
 // It's used for testing and diagnostics.
 func (code RouteOpcode) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
-}
-
-// Join specifies the parameters for a join primitive.
-type Join struct {
-	// IsLeft is true if it's a LEFT JOIN.
-	IsLeft bool `json:",omitempty"`
-	// Left and Right are the LHS and RHS primitives
-	// of the Join. They can be any primitive.
-	Left, Right Primitive `json:",omitempty"`
-	// Cols defines which columns from the left
-	// or right results should be used to build the
-	// return result. For results coming from the
-	// left query, the index values go as -1, -2, etc.
-	// For the right query, they're 1, 2, etc.
-	// If Cols is {-1, -2, 1, 2}, it means that
-	// the returned result will be {Left0, Left1, Right0, Right1}.
-	Cols []int `json:",omitempty"`
-	// Vars defines the list of JoinVars that need to
-	// be built from the LHS result before invoking
-	// the RHS subqquery.
-	Vars map[string]int `json:",omitempty"`
-}
-
-func (jn *Join) isPrimitive() {}
-
-// BuildPlan builds a plan for a query based on the specified vschema.
-// It's the main entry point for this package.
-func BuildPlan(query string, vschema *VSchema) (*Plan, error) {
-	statement, err := sqlparser.Parse(query)
-	if err != nil {
-		return nil, err
-	}
-	plan := &Plan{
-		Original: query,
-	}
-	switch statement := statement.(type) {
-	case *sqlparser.Select:
-		plan.Instructions, err = buildSelectPlan(statement, vschema)
-	case *sqlparser.Insert:
-		plan.Instructions, err = buildInsertPlan(statement, vschema)
-	case *sqlparser.Update:
-		plan.Instructions, err = buildUpdatePlan(statement, vschema)
-	case *sqlparser.Delete:
-		plan.Instructions, err = buildDeletePlan(statement, vschema)
-	case *sqlparser.Union, *sqlparser.Set, *sqlparser.DDL, *sqlparser.Other:
-		return nil, errors.New("unsupported construct")
-	default:
-		panic("unexpected statement type")
-	}
-	if err != nil {
-		return nil, err
-	}
-	return plan, nil
 }

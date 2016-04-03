@@ -2,13 +2,12 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package planbuilder
+package vindexes
 
 import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 // This file defines interfaces and registration for vindexes.
@@ -17,7 +16,7 @@ import (
 // in the current context and session of a VTGate request. Vindexes
 // can use this interface to execute lookup queries.
 type VCursor interface {
-	Execute(query *querytypes.BoundQuery) (*sqltypes.Result, error)
+	Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error)
 }
 
 // Vindex defines the interface required to register a vindex.
@@ -70,25 +69,12 @@ type Reversible interface {
 }
 
 // A Functional vindex is an index that can compute
-// the keyspace id from the id without a lookup. This
-// means that the creation of a functional vindex entry
-// does not take the keyspace id as input. In general,
-// the main reason to support creation functions for
-// functional indexes is for auto-generating ids.
+// the keyspace id from the id without a lookup.
 // A Functional vindex is also required to be Unique.
 // If it's not unique, we cannot determine the target shard
 // for an insert operation.
 type Functional interface {
-	Create(VCursor, interface{}) error
-	Delete(VCursor, []interface{}, []byte) error
 	Unique
-}
-
-// A FunctionalGenerator vindex is a Functional vindex
-// that can generate new ids.
-type FunctionalGenerator interface {
-	Functional
-	Generate(cursor VCursor) (id int64, err error)
 }
 
 // A Lookup vindex is one that needs to lookup
@@ -102,13 +88,6 @@ type FunctionalGenerator interface {
 type Lookup interface {
 	Create(VCursor, interface{}, []byte) error
 	Delete(VCursor, []interface{}, []byte) error
-}
-
-// A LookupGenerator vindex is a Lookup that can
-// generate new ids.
-type LookupGenerator interface {
-	Lookup
-	Generate(VCursor, []byte) (id int64, err error)
 }
 
 // A NewVindexFunc is a function that creates a Vindex based on the

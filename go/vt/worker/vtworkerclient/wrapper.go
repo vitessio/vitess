@@ -7,6 +7,7 @@ package vtworkerclient
 import (
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"golang.org/x/net/context"
@@ -30,19 +31,20 @@ func RunCommandAndWait(ctx context.Context, server string, args []string, recv f
 	defer client.Close()
 
 	// run the command
-	c, errFunc, err := client.ExecuteVtworkerCommand(ctx, args)
+	stream, err := client.ExecuteVtworkerCommand(ctx, args)
 	if err != nil {
 		return fmt.Errorf("Cannot execute remote command: %v", err)
 	}
 
-	// stream the result
-	for e := range c {
-		recv(e)
+	for {
+		e, err := stream.Recv()
+		switch err {
+		case nil:
+			recv(e)
+		case io.EOF:
+			return nil
+		default:
+			return fmt.Errorf("Remote error: %v", err)
+		}
 	}
-
-	// then display the overall error
-	if err = errFunc(); err != nil {
-		return fmt.Errorf("Remote error: %v", err)
-	}
-	return nil
 }

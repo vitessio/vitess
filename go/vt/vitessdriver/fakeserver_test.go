@@ -22,6 +22,7 @@ type fakeVTGateService struct {
 type queryExecute struct {
 	SQL              string
 	BindVariables    map[string]interface{}
+	Keyspace         string
 	TabletType       topodatapb.TabletType
 	Session          *vtgatepb.Session
 	NotInTransaction bool
@@ -36,7 +37,7 @@ type queryExecuteSpecificShard struct {
 }
 
 // Execute is part of the VTGateService interface
-func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
+func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	execCase, ok := execMap[sql]
 	if !ok {
 		return nil, fmt.Errorf("no match for: %s", sql)
@@ -44,6 +45,7 @@ func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariabl
 	query := &queryExecute{
 		SQL:              sql,
 		BindVariables:    bindVariables,
+		Keyspace:         keyspace,
 		TabletType:       tabletType,
 		Session:          session,
 		NotInTransaction: notInTransaction,
@@ -109,7 +111,7 @@ func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, queries
 }
 
 // StreamExecute is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
+func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
 	execCase, ok := execMap[sql]
 	if !ok {
 		return fmt.Errorf("no match for: %s", sql)
@@ -117,6 +119,7 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindV
 	query := &queryExecute{
 		SQL:           sql,
 		BindVariables: bindVariables,
+		Keyspace:      keyspace,
 		TabletType:    tabletType,
 	}
 	if !reflect.DeepEqual(query, execCase.execQuery) {
@@ -211,6 +214,21 @@ func (f *fakeVTGateService) Rollback(ctx context.Context, session *vtgatepb.Sess
 
 // SplitQuery is part of the VTGateService interface
 func (f *fakeVTGateService) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+	return nil, nil
+}
+
+// SplitQueryV2 is part of the VTGateService interface
+// TODO(erez): Rename to SplitQuery after migration to SplitQuery V2 is done.
+func (f *fakeVTGateService) SplitQueryV2(
+	ctx context.Context,
+	keyspace string,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm,
+) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	return nil, nil
 }
 

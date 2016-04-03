@@ -9,14 +9,13 @@ of the remote execution of vtworker commands.
 package grpcvtworkerserver
 
 import (
-	"sync"
-
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/worker"
 
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 	vtworkerdatapb "github.com/youtube/vitess/go/vt/proto/vtworkerdata"
 	vtworkerservicepb "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
 )
@@ -39,27 +38,18 @@ func (s *VtworkerServer) ExecuteVtworkerCommand(args *vtworkerdatapb.ExecuteVtwo
 	defer servenv.HandlePanic("vtworker", &err)
 
 	// Stream everything back what the Wrangler is logging.
-	logstream := logutil.NewChannelLogger(10)
+	logstream := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		// If the client disconnects, we will just fail
+		// to send the log events, but won't interrupt
+		// the command.
+		stream.Send(&vtworkerdatapb.ExecuteVtworkerCommandResponse{
+			Event: e,
+		})
+	})
 	// Let the Wrangler also log everything to the console (and thereby
 	// effectively to a logfile) to make sure that any information or errors
 	// is preserved in the logs in case the RPC or vtworker crashes.
 	logger := logutil.NewTeeLogger(logstream, logutil.NewConsoleLogger())
-
-	// send logs to the caller
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		for e := range logstream {
-			// Note we don't interrupt the loop here, as
-			// we still need to flush and finish the
-			// command, even if the channel to the client
-			// has been broken. We'll just keep trying.
-			stream.Send(&vtworkerdatapb.ExecuteVtworkerCommandResponse{
-				Event: e,
-			})
-		}
-		wg.Done()
-	}()
 
 	// create the wrangler
 	wr := s.wi.CreateWrangler(logger)
@@ -69,10 +59,6 @@ func (s *VtworkerServer) ExecuteVtworkerCommand(args *vtworkerdatapb.ExecuteVtwo
 	if err == nil && worker != nil && done != nil {
 		err = s.wi.WaitForCommand(worker, done)
 	}
-
-	// close the log channel, and wait for them all to be sent
-	close(logstream)
-	wg.Wait()
 
 	return err
 }

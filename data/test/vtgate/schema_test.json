@@ -4,11 +4,11 @@
       "Sharded": true,
       "Vindexes": {
         "user_index": {
-          "Type": "hash",
+          "Type": "hash_test",
           "Owner": "user"
         },
         "music_user_map": {
-          "Type": "lookup",
+          "Type": "lookup_test",
           "Owner": "music"
         },
         "name_user_map": {
@@ -20,7 +20,7 @@
           "Owner": "user"
         }
       },
-      "Classes": {
+      "Tables": {
         "user": {
           "ColVindexes": [
             {
@@ -35,7 +35,11 @@
               "Col": "costly",
               "Name": "costly_map"
             }
-          ]
+          ],
+          "Autoinc": {
+            "Col": "id",
+            "Sequence": "seq"
+          }
         },
         "user_extra": {
           "ColVindexes": [
@@ -43,7 +47,11 @@
               "Col": "user_id",
               "Name": "user_index"
             }
-          ]
+          ],
+          "Autoinc": {
+            "Col": "extra_id",
+            "Sequence": "seq"
+          }
         },
         "music": {
           "ColVindexes": [
@@ -69,17 +77,14 @@
             }
           ]
         }
-      },
-      "Tables": {
-        "user": "user",
-        "user_extra": "user_extra",
-        "music": "music",
-        "music_extra": "music_extra"
       }
     },
     "main": {
       "Tables": {
-        "main1": ""
+        "main1": {},
+        "seq": {
+          "Type": "Sequence"
+        }
       }
     }
   }

@@ -7,6 +7,7 @@ package vtgate
 import (
 	"flag"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -467,7 +468,20 @@ func (sbc *sandboxConn) ExecuteBatch2(ctx context.Context, queries []querytypes.
 	return sbc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 
-func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
+type streamExecuteAdapter struct {
+	result *sqltypes.Result
+	done   bool
+}
+
+func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
+	if a.done {
+		return nil, io.EOF
+	}
+	a.done = true
+	return a.result, nil
+}
+
+func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]interface{})
 	for k, v := range bindVars {
@@ -480,15 +494,12 @@ func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVar
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
-	ch := make(chan *sqltypes.Result, 1)
-	ch <- sbc.getNextResult()
-	close(ch)
 	err := sbc.getError()
-	return ch, func() error { return err }, err
-}
-
-func (sbc *sandboxConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
-	return sbc.StreamExecute(ctx, query, bindVars, transactionID)
+	if err != nil {
+		return nil, err
+	}
+	r := sbc.getNextResult()
+	return &streamExecuteAdapter{result: r}, nil
 }
 
 func (sbc *sandboxConn) Begin(ctx context.Context) (int64, error) {
@@ -547,6 +558,28 @@ func (sbc *sandboxConn) SplitQuery(ctx context.Context, query querytypes.BoundQu
 			RowCount:      sandboxSQRowCount,
 		}
 		splits = append(splits, split)
+	}
+	return splits, nil
+}
+
+// Fake SplitQuery returns a single QuerySplit whose 'sql' field describes the received arguments.
+// TODO(erez): Rename to SplitQuery after the migration to SplitQuery V2 is done.
+func (sbc *sandboxConn) SplitQueryV2(
+	ctx context.Context,
+	query querytypes.BoundQuery,
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error) {
+	// The sandbox stores the shard name in the endPoint Host field.
+	shard := sbc.endPoint.Host
+	splits := []querytypes.QuerySplit{
+		{
+			Sql: fmt.Sprintf(
+				"query:%v, splitColumns:%v, splitCount:%v,"+
+					" numRowsPerQueryPart:%v, algorithm:%v, shard:%v",
+				query, splitColumns, splitCount, numRowsPerQueryPart, algorithm, shard),
+		},
 	}
 	return splits, nil
 }

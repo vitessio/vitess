@@ -8,8 +8,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
 // Numeric defines a bit-pattern mapping of a uint64 to the KeyspaceId.
@@ -19,7 +17,7 @@ type Numeric struct {
 }
 
 // NewNumeric creates a Numeric vindex.
-func NewNumeric(name string, _ map[string]interface{}) (planbuilder.Vindex, error) {
+func NewNumeric(name string, _ map[string]interface{}) (Vindex, error) {
 	return &Numeric{name: name}, nil
 }
 
@@ -34,7 +32,7 @@ func (*Numeric) Cost() int {
 }
 
 // Verify returns true if id and ksid match.
-func (*Numeric) Verify(_ planbuilder.VCursor, id interface{}, ksid []byte) (bool, error) {
+func (*Numeric) Verify(_ VCursor, id interface{}, ksid []byte) (bool, error) {
 	var keybytes [8]byte
 	num, err := getNumber(id)
 	if err != nil {
@@ -45,7 +43,7 @@ func (*Numeric) Verify(_ planbuilder.VCursor, id interface{}, ksid []byte) (bool
 }
 
 // Map returns the associated keyspae ids for the given ids.
-func (*Numeric) Map(_ planbuilder.VCursor, ids []interface{}) ([][]byte, error) {
+func (*Numeric) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
 		num, err := getNumber(id)
@@ -60,7 +58,7 @@ func (*Numeric) Map(_ planbuilder.VCursor, ids []interface{}) ([][]byte, error) 
 }
 
 // ReverseMap returns the associated id for the ksid.
-func (*Numeric) ReverseMap(_ planbuilder.VCursor, ksid []byte) (interface{}, error) {
+func (*Numeric) ReverseMap(_ VCursor, ksid []byte) (interface{}, error) {
 	if len(ksid) != 8 {
 		return nil, fmt.Errorf("Numeric.ReverseMap: length of keyspace is not 8: %d", len(ksid))
 	}
@@ -68,5 +66,5 @@ func (*Numeric) ReverseMap(_ planbuilder.VCursor, ksid []byte) (interface{}, err
 }
 
 func init() {
-	planbuilder.Register("numeric", NewNumeric)
+	Register("numeric", NewNumeric)
 }

@@ -58,6 +58,7 @@ func TestFakeBuffer(t *testing.T) {
 		wantCalled bool
 		// expected value of BufferedTransactionAttempts
 		wantAttempted int
+		wantErr       error
 	}{
 		{
 			desc:             "enableFakeBuffer=False",
@@ -88,6 +89,7 @@ func TestFakeBuffer(t *testing.T) {
 			bufferedTransactions: *maxBufferSize,
 			// When the buffer is full, bufferedTransactionsAttempted should still be incremented
 			wantAttempted: 1,
+			wantErr:       errBufferFull,
 		},
 		{
 			desc:             "buffered successful",
@@ -107,7 +109,11 @@ func TestFakeBuffer(t *testing.T) {
 
 		*enableFakeTxBuffer = test.enableFakeBuffer
 
-		FakeBuffer(test.keyspace, test.shard, test.attemptNumber)
+		gotErr := FakeBuffer(test.keyspace, test.shard, test.attemptNumber)
+
+		if gotErr != test.wantErr {
+			t.Errorf("With %v, FakeBuffer() => %v; want: %v", test.desc, gotErr, test.wantErr)
+		}
 
 		if controller.called != test.wantCalled {
 			t.Errorf("With %v, FakeBuffer() => timeSleep.called: %v; want: %v",
@@ -162,23 +168,27 @@ func TestParallelFakeBuffer(t *testing.T) {
 
 		wg.Add(1)
 		finished := make(chan struct{})
+		var gotErr error
 		go func() {
 			defer wg.Done()
-			FakeBuffer(*bufferKeyspace, *bufferShard, 0)
+			gotErr = FakeBuffer(*bufferKeyspace, *bufferShard, 0)
 			close(finished)
 		}()
 
-		if wantFakeSleepCalled {
-			// the first maxBufferSize calls to FakeBuffer
-			// should call sleep, wait until they do
-			<-controller.blocked
-		} else {
-			// the rest should not block, wait until they're done
-			<-finished
+		// wait until either the gorouotine is blocked (because it's buffering) or until
+		// it's finished (because it shouldn't be buffered).
+		select {
+		case <-controller.blocked:
+		case <-finished:
 		}
 
 		if controller.called {
 			controllers = append(controllers, controller)
+		} else {
+			// if we didn't call fakeSleep, the buffer is full and should return an error saying so.
+			if gotErr != errBufferFull {
+				t.Errorf("On iteration %v, FakeBuffer() => %v; want: %v", i, gotErr, errBufferFull)
+			}
 		}
 
 		if controller.called != wantFakeSleepCalled {

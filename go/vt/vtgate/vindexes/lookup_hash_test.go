@@ -5,17 +5,61 @@
 package vindexes
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
-var lhm planbuilder.Vindex
+type vcursor struct {
+	mustFail bool
+	numRows  int
+	result   *sqltypes.Result
+	bq       *querytypes.BoundQuery
+}
+
+func (vc *vcursor) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
+	vc.bq = &querytypes.BoundQuery{
+		Sql:           query,
+		BindVariables: bindvars,
+	}
+	if vc.mustFail {
+		return nil, errors.New("execute failed")
+	}
+	switch {
+	case strings.HasPrefix(query, "select"):
+		if vc.result != nil {
+			return vc.result, nil
+		}
+		result := &sqltypes.Result{
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Int32,
+			}},
+			RowsAffected: uint64(vc.numRows),
+		}
+		for i := 0; i < vc.numRows; i++ {
+			result.Rows = append(result.Rows, []sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", i+1))),
+			})
+		}
+		return result, nil
+	case strings.HasPrefix(query, "insert"):
+		return &sqltypes.Result{InsertID: 1}, nil
+	case strings.HasPrefix(query, "delete"):
+		return &sqltypes.Result{}, nil
+	}
+	panic("unexpected")
+}
+
+var lhm Vindex
 
 func init() {
-	h, err := planbuilder.CreateVindex("lookup_hash", "nn", map[string]interface{}{"Table": "t", "From": "fromc", "To": "toc"})
+	h, err := CreateVindex("lookup_hash", "nn", map[string]interface{}{"Table": "t", "From": "fromc", "To": "toc"})
 	if err != nil {
 		panic(err)
 	}
@@ -30,7 +74,7 @@ func TestLookupHashCost(t *testing.T) {
 
 func TestLookupHashMap(t *testing.T) {
 	vc := &vcursor{numRows: 2}
-	got, err := lhm.(planbuilder.NonUnique).Map(vc, []interface{}{1, int32(2)})
+	got, err := lhm.(NonUnique).Map(vc, []interface{}{1, int32(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -59,7 +103,7 @@ func TestLookupHashVerify(t *testing.T) {
 
 func TestLookupHashCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lhm.(planbuilder.Lookup).Create(vc, 1, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err := lhm.(Lookup).Create(vc, 1, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -70,39 +114,32 @@ func TestLookupHashCreate(t *testing.T) {
 			"toc":   int64(1),
 		},
 	}
-	if !reflect.DeepEqual(vc.query, wantQuery) {
-		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
-	}
-}
-
-func TestLookupHashGenerate(t *testing.T) {
-	_, ok := lhm.(planbuilder.LookupGenerator)
-	if ok {
-		t.Errorf("lhm.(planbuilder.LookupGenerator): true, want false")
+	if !reflect.DeepEqual(vc.bq, wantQuery) {
+		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
 	}
 }
 
 func TestLookupHashReverse(t *testing.T) {
-	_, ok := lhm.(planbuilder.Reversible)
+	_, ok := lhm.(Reversible)
 	if ok {
-		t.Errorf("lhm.(planbuilder.Reversible): true, want false")
+		t.Errorf("lhm.(Reversible): true, want false")
 	}
 }
 
 func TestLookupHashDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := lhm.(planbuilder.Lookup).Delete(vc, []interface{}{1}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err := lhm.(Lookup).Delete(vc, []interface{}{1}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}
 	wantQuery := &querytypes.BoundQuery{
-		Sql: "delete from t where fromc in ::fromc and toc = :toc",
+		Sql: "delete from t where fromc = :fromc and toc = :toc",
 		BindVariables: map[string]interface{}{
-			"fromc": []interface{}{1},
+			"fromc": 1,
 			"toc":   int64(1),
 		},
 	}
-	if !reflect.DeepEqual(vc.query, wantQuery) {
-		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
+	if !reflect.DeepEqual(vc.bq, wantQuery) {
+		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
 	}
 }

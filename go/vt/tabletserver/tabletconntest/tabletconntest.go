@@ -7,7 +7,9 @@
 package tabletconntest
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"reflect"
 	"strings"
 	"testing"
@@ -411,13 +413,13 @@ var streamExecuteQueryResult2 = sqltypes.Result{
 func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
-	stream, errFunc, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
+	stream, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
 	if err != nil {
 		t.Fatalf("StreamExecute failed: %v", err)
 	}
-	qr, ok := <-stream
-	if !ok {
-		t.Fatalf("StreamExecute failed: cannot read result1")
+	qr, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("StreamExecute failed: cannot read result1: %v", err)
 	}
 	if len(qr.Rows) == 0 {
 		qr.Rows = nil
@@ -425,9 +427,9 @@ func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
 	if !reflect.DeepEqual(*qr, streamExecuteQueryResult1) {
 		t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, streamExecuteQueryResult1)
 	}
-	qr, ok = <-stream
-	if !ok {
-		t.Fatalf("StreamExecute failed: cannot read result2")
+	qr, err = stream.Recv()
+	if err != nil {
+		t.Fatalf("StreamExecute failed: cannot read result2: %v", err)
 	}
 	if len(qr.Fields) == 0 {
 		qr.Fields = nil
@@ -435,11 +437,8 @@ func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
 	if !reflect.DeepEqual(*qr, streamExecuteQueryResult2) {
 		t.Errorf("Unexpected result2 from StreamExecute: got %v wanted %v", qr, streamExecuteQueryResult2)
 	}
-	qr, ok = <-stream
-	if ok {
-		t.Fatalf("StreamExecute channel wasn't closed")
-	}
-	if err := errFunc(); err != nil {
+	qr, err = stream.Recv()
+	if err != io.EOF {
 		t.Fatalf("StreamExecute errFunc failed: %v", err)
 	}
 }
@@ -447,13 +446,13 @@ func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
 func testStreamExecuteError(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
-	stream, errFunc, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
+	stream, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
 	if err != nil {
 		t.Fatalf("StreamExecute failed: %v", err)
 	}
-	qr, ok := <-stream
-	if !ok {
-		t.Fatalf("StreamExecute failed: cannot read result1")
+	qr, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("StreamExecute failed: cannot read result1: %v", err)
 	}
 	if len(qr.Rows) == 0 {
 		qr.Rows = nil
@@ -464,11 +463,10 @@ func testStreamExecuteError(t *testing.T, conn tabletconn.TabletConn, fake *Fake
 	// signal to the server that the first result has been received
 	close(fake.errorWait)
 	// After 1 result, we expect to get an error (no more results).
-	qr, ok = <-stream
-	if ok {
+	qr, err = stream.Recv()
+	if err == nil {
 		t.Fatalf("StreamExecute channel wasn't closed")
 	}
-	err = errFunc()
 	verifyError(t, err, "StreamExecute")
 }
 
@@ -479,17 +477,13 @@ func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *Fak
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	fake.streamExecutePanicsEarly = true
-	stream, errFunc, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
+	stream, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
 	if err != nil {
 		if !strings.Contains(err.Error(), "caught test panic") {
 			t.Fatalf("unexpected panic error: %v", err)
 		}
 	} else {
-		_, ok := <-stream
-		if ok {
-			t.Fatalf("StreamExecute early panic should not return anything")
-		}
-		err = errFunc()
+		_, err := stream.Recv()
 		if err == nil || !strings.Contains(err.Error(), "caught test panic") {
 			t.Fatalf("unexpected panic error: %v", err)
 		}
@@ -497,13 +491,13 @@ func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *Fak
 
 	// late panic is after sending Fields
 	fake.streamExecutePanicsEarly = false
-	stream, errFunc, err = conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
+	stream, err = conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
 	if err != nil {
 		t.Fatalf("StreamExecute failed: %v", err)
 	}
-	qr, ok := <-stream
-	if !ok {
-		t.Fatalf("StreamExecute failed: cannot read result1")
+	qr, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("StreamExecute failed: cannot read result1: %v", err)
 	}
 	if len(qr.Rows) == 0 {
 		qr.Rows = nil
@@ -512,10 +506,7 @@ func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *Fak
 		t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, streamExecuteQueryResult1)
 	}
 	close(fake.panicWait)
-	if _, ok := <-stream; ok {
-		t.Fatalf("StreamExecute returned more results")
-	}
-	if err := errFunc(); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+	if _, err := stream.Recv(); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
 }
@@ -646,6 +637,52 @@ func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Targe
 	return splitQueryQuerySplitList, nil
 }
 
+// SplitQueryV2 is part of the queryservice.QueryService interface
+// TODO(erez): Rename to SplitQuery after migration to SplitQuery V2 is done.
+func (f *FakeQueryService) SplitQueryV2(
+	ctx context.Context,
+	target *querypb.Target,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm,
+	sessionID int64) ([]querytypes.QuerySplit, error) {
+
+	if f.hasError {
+		return nil, testTabletError
+	}
+	if f.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	f.checkSessionTargetCallerID(ctx, "SplitQuery", target, sessionID)
+	if !reflect.DeepEqual(querytypes.BoundQuery{
+		Sql:           sql,
+		BindVariables: bindVariables,
+	}, splitQueryV2BoundQuery) {
+		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v",
+			querytypes.QueryAsString(sql, bindVariables), splitQueryBoundQuery)
+	}
+	if !reflect.DeepEqual(splitColumns, splitQueryV2SplitColumns) {
+		f.t.Errorf("invalid SplitQuery.SplitColumn: got %v expected %v",
+			splitColumns, splitQueryV2SplitColumns)
+	}
+	if !reflect.DeepEqual(splitCount, splitQueryV2SplitCount) {
+		f.t.Errorf("invalid SplitQuery.SplitCount: got %v expected %v",
+			splitCount, splitQueryV2SplitCount)
+	}
+	if !reflect.DeepEqual(numRowsPerQueryPart, splitQueryV2NumRowsPerQueryPart) {
+		f.t.Errorf("invalid SplitQuery.numRowsPerQueryPart: got %v expected %v",
+			numRowsPerQueryPart, splitQueryV2NumRowsPerQueryPart)
+	}
+	if algorithm != splitQueryV2Algorithm {
+		f.t.Errorf("invalid SplitQuery.algorithm: got %v expected %v",
+			algorithm, splitQueryV2Algorithm)
+	}
+	return splitQueryQueryV2SplitList, nil
+}
+
 var splitQueryBoundQuery = querytypes.BoundQuery{
 	Sql: "splitQuery",
 	BindVariables: map[string]interface{}{
@@ -667,6 +704,32 @@ var splitQueryQuerySplitList = []querytypes.QuerySplit{
 	},
 }
 
+// TODO(erez): Rename to SplitQuery after migration to SplitQuery V2 is done.
+var splitQueryV2SplitColumns = []string{"nice_column_to_split"}
+
+const splitQueryV2SplitCount = 372
+
+var splitQueryV2BoundQuery = querytypes.BoundQuery{
+	Sql: "splitQuery",
+	BindVariables: map[string]interface{}{
+		"bind1": int64(43),
+	},
+}
+
+const splitQueryV2NumRowsPerQueryPart = 123
+const splitQueryV2Algorithm = querypb.SplitQueryRequest_FULL_SCAN
+
+var splitQueryQueryV2SplitList = []querytypes.QuerySplit{
+	{
+		Sql: "splitQuery",
+		BindVariables: map[string]interface{}{
+			"bind1":       int64(43),
+			"keyspace_id": int64(3333),
+		},
+		RowCount: 4456,
+	},
+}
+
 func testSplitQuery(t *testing.T, conn tabletconn.TabletConn) {
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
@@ -675,6 +738,26 @@ func testSplitQuery(t *testing.T, conn tabletconn.TabletConn) {
 		t.Fatalf("SplitQuery failed: %v", err)
 	}
 	if !reflect.DeepEqual(qsl, splitQueryQuerySplitList) {
+		t.Errorf("Unexpected result from SplitQuery: got %v wanted %v", qsl, splitQueryQuerySplitList)
+	}
+}
+
+// TODO(erez): Rename to SplitQuery after migration to SplitQuery V2 is done.
+func testSplitQueryV2(t *testing.T, conn tabletconn.TabletConn) {
+	ctx := context.Background()
+	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
+	qsl, err := conn.SplitQueryV2(
+		ctx,
+		splitQueryV2BoundQuery,
+		splitQueryV2SplitColumns,
+		splitQueryV2SplitCount,
+		splitQueryV2NumRowsPerQueryPart,
+		splitQueryV2Algorithm,
+	)
+	if err != nil {
+		t.Fatalf("SplitQuery failed: %v", err)
+	}
+	if !reflect.DeepEqual(qsl, splitQueryQueryV2SplitList) {
 		t.Errorf("Unexpected result from SplitQuery: got %v wanted %v", qsl, splitQueryQuerySplitList)
 	}
 }
@@ -717,7 +800,7 @@ var testStreamHealthErrorMsg = "to trigger a server error"
 // StreamHealthRegister is part of the queryservice.QueryService interface
 func (f *FakeQueryService) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
 	if f.hasError {
-		return 0, fmt.Errorf(testStreamHealthErrorMsg)
+		return 0, errors.New(testStreamHealthErrorMsg)
 	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))

@@ -16,9 +16,10 @@ from vtproto import topodata_pb2
 from vtproto import vtgate_pb2
 
 from vtdb import field_types
+from vtdb import keyrange_constants
+from vtdb import keyspace
 from vtdb import times
 from vtdb import vtgate_utils
-
 
 # conversions is a map of type to the conversion function that needs
 # to be used to convert the incoming array of bytes to the
@@ -89,6 +90,9 @@ class Proto3Connection(object):
   It assumes the derived object will contain a proto3 self.session object.
   """
 
+  def __init__(self):
+    self._effective_caller_id = None
+
   def _add_caller_id(self, request, caller_id):
     """Adds the vtgate_client.CallerID to the proto3 request, if any.
 
@@ -112,6 +116,15 @@ class Proto3Connection(object):
     """
     if self.session:
       request.session.CopyFrom(self.session)
+
+  def update_session(self, response):
+    """Updates the current session from the response, if it has one.
+
+    Args:
+      response: a proto3 response that may contain a session object.
+    """
+    if response.HasField('session') and response.session:
+      self.session = response.session
 
   def _convert_value(self, value, proto_value, allow_lists=False):
     """Convert a variable from python type to proto type+value.
@@ -204,10 +217,7 @@ class Proto3Connection(object):
       vtgate_utils.VitessError: if an error was set.
     """
     if error.code:
-      raise vtgate_utils.VitessError(exec_method, {
-          'Code': error.code,
-          'Message': error.message,
-      })
+      raise vtgate_utils.VitessError(exec_method, error.code, error.message)
 
   def build_conversions(self, qr_fields):
     """Builds an array of fields and conversions from a result fields.
@@ -251,6 +261,9 @@ class Proto3Connection(object):
   def begin_request(self, effective_caller_id):
     """Builds a vtgate_pb2.BeginRequest object.
 
+    Also remembers the effective caller id for next call to
+    commit_request or rollback_request.
+
     Args:
       effective_caller_id: optional vtgate_client.CallerID.
 
@@ -259,34 +272,37 @@ class Proto3Connection(object):
     """
     request = vtgate_pb2.BeginRequest()
     self._add_caller_id(request, effective_caller_id)
+    self._effective_caller_id = effective_caller_id
     return request
 
-  def commit_request(self, effective_caller_id):
+  def commit_request(self):
     """Builds a vtgate_pb2.CommitRequest object.
 
-    Args:
-      effective_caller_id: optional vtgate_client.CallerID.
+    Uses the effective_caller_id saved from begin_request().
+    It will also clear the saved effective_caller_id.
 
     Returns:
       A vtgate_pb2.CommitRequest object.
     """
     request = vtgate_pb2.CommitRequest()
-    self._add_caller_id(request, effective_caller_id)
+    self._add_caller_id(request, self._effective_caller_id)
     self._add_session(request)
+    self._effective_caller_id = None
     return request
 
-  def rollback_request(self, effective_caller_id):
+  def rollback_request(self):
     """Builds a vtgate_pb2.RollbackRequest object.
 
-    Args:
-      effective_caller_id: optional vtgate_client.CallerID.
+    Uses the effective_caller_id saved from begin_request().
+    It will also clear the saved effective_caller_id.
 
     Returns:
       A vtgate_pb2.RollbackRequest object.
     """
     request = vtgate_pb2.RollbackRequest()
-    self._add_caller_id(request, effective_caller_id)
+    self._add_caller_id(request, self._effective_caller_id)
     self._add_session(request)
+    self._effective_caller_id = None
     return request
 
   def execute_request_and_name(self, sql, bind_variables, tablet_type,
@@ -370,7 +386,7 @@ class Proto3Connection(object):
       lastrowid: auto-increment value for the last row inserted.
       fields: describes the field names and types.
     """
-    self.session = response.session
+    self.update_session(response)
     self._extract_rpc_error(exec_method, response.error)
     return self._get_rowset_from_query_result(response.result)
 
@@ -430,7 +446,7 @@ class Proto3Connection(object):
     Returns:
       rowsets: array of tuples as would be returned by an execute method.
     """
-    self.session = response.session
+    self.update_session(response)
     self._extract_rpc_error(exec_method, response.error)
 
     rowsets = []
@@ -459,31 +475,100 @@ class Proto3Connection(object):
 
     Returns:
       A vtgate_pb2.StreamExecuteXXXXRequest object.
+      A dict that contains the routing parameters.
       The name of the remote method called.
     """
 
     if shards is not None:
       request = vtgate_pb2.StreamExecuteShardsRequest(keyspace=keyspace_name)
       request.shards.extend(shards)
+      routing_kwargs = {'shards': shards}
       method_name = 'StreamExecuteShards'
 
     elif keyspace_ids is not None:
       request = vtgate_pb2.StreamExecuteKeyspaceIdsRequest(
           keyspace=keyspace_name)
       request.keyspace_ids.extend(keyspace_ids)
+      routing_kwargs = {'keyspace_ids': keyspace_ids}
       method_name = 'StreamExecuteKeyspaceIds'
 
     elif key_ranges is not None:
       request = vtgate_pb2.StreamExecuteKeyRangesRequest(keyspace=keyspace_name)
       self._add_key_ranges(request, key_ranges)
+      routing_kwargs = {'keyranges': key_ranges}
       method_name = 'StreamExecuteKeyRanges'
 
     else:
       request = vtgate_pb2.StreamExecuteRequest()
+      routing_kwargs = {}
       method_name = 'StreamExecute'
 
     request.query.sql = sql
     self._convert_bind_vars(bind_variables, request.query.bind_variables)
     request.tablet_type = topodata_pb2.TabletType.Value(tablet_type.upper())
     self._add_caller_id(request, effective_caller_id)
-    return request, method_name
+    return request, routing_kwargs, method_name
+
+  def srv_keyspace_proto3_to_old(self, sk):
+    """Converts a proto3 SrvKeyspace.
+
+    Args:
+      sk: proto3 SrvKeyspace.
+
+    Returns:
+      dict with converted values.
+    """
+    result = {}
+
+    if sk.sharding_column_name:
+      result['ShardingColumnName'] = sk.sharding_column_name
+
+    if sk.sharding_column_type == 1:
+      result['ShardingColumnType'] = keyrange_constants.KIT_UINT64
+    elif sk.sharding_column_type == 2:
+      result['ShardingColumnType'] = keyrange_constants.KIT_BYTES
+
+    sfmap = {}
+    for sf in sk.served_from:
+      tt = keyrange_constants.PROTO3_TABLET_TYPE_TO_STRING[sf.tablet_type]
+      sfmap[tt] = sf.keyspace
+    result['ServedFrom'] = sfmap
+
+    if sk.partitions:
+      pmap = {}
+      for p in sk.partitions:
+        tt = keyrange_constants.PROTO3_TABLET_TYPE_TO_STRING[p.served_type]
+        srs = []
+        for sr in p.shard_references:
+          result_sr = {
+              'Name': sr.name,
+          }
+          if sr.key_range:
+            result_sr['KeyRange'] = {
+                'Start': sr.key_range.start,
+                'End': sr.key_range.end,
+            }
+          srs.append(result_sr)
+        pmap[tt] = {
+            'ShardReferences': srs,
+        }
+      result['Partitions'] = pmap
+
+    if sk.split_shard_count:
+      result['SplitShardCount'] = sk.split_shard_count
+
+    return result
+
+  def keyspace_from_response(self, name, response):
+    """Builds a Keyspace object from the response of a GetSrvKeyspace call.
+
+    Args:
+      name: keyspace name.
+      response: a GetSrvKeyspaceResponse object.
+
+    Returns:
+      A keyspace.Keyspace object.
+    """
+    return keyspace.Keyspace(
+        name,
+        self.srv_keyspace_proto3_to_old(response.srv_keyspace))

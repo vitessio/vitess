@@ -7,33 +7,29 @@ package vitessdriver
 import (
 	"database/sql/driver"
 	"errors"
-	"io"
 
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
 
 // streamingRows creates a database/sql/driver compliant Row iterator
 // for a streaming query.
 type streamingRows struct {
-	qrc     <-chan *sqltypes.Result
-	errFunc vtgateconn.ErrFunc
-	failed  error
-	fields  []*querypb.Field
-	qr      *sqltypes.Result
-	index   int
-	cancel  context.CancelFunc
+	stream sqltypes.ResultStream
+	failed error
+	fields []*querypb.Field
+	qr     *sqltypes.Result
+	index  int
+	cancel context.CancelFunc
 }
 
-// newStreamingRows creates a new streamingRows from qrc and errFunc.
-func newStreamingRows(qrc <-chan *sqltypes.Result, errFunc vtgateconn.ErrFunc, cancel context.CancelFunc) driver.Rows {
+// newStreamingRows creates a new streamingRows from stream.
+func newStreamingRows(stream sqltypes.ResultStream, cancel context.CancelFunc) driver.Rows {
 	return &streamingRows{
-		qrc:     qrc,
-		errFunc: errFunc,
-		cancel:  cancel,
+		stream: stream,
+		cancel: cancel,
 	}
 }
 
@@ -79,9 +75,9 @@ func (ri *streamingRows) checkFields() {
 	if ri.fields != nil {
 		return
 	}
-	qr, ok := <-ri.qrc
-	if !ok {
-		ri.setErr()
+	qr, err := ri.stream.Recv()
+	if err != nil {
+		ri.setErr(err)
 		return
 	}
 	ri.fields = qr.Fields
@@ -92,19 +88,16 @@ func (ri *streamingRows) checkFields() {
 
 // fetchNext fetches the next packet from the channel.
 func (ri *streamingRows) fetchNext() {
-	qr, ok := <-ri.qrc
-	if !ok {
-		ri.setErr()
+	qr, err := ri.stream.Recv()
+	if err != nil {
+		ri.setErr(err)
 		return
 	}
 	ri.qr = qr
 }
 
-func (ri *streamingRows) setErr() {
-	ri.failed = io.EOF
-	if err := ri.errFunc(); err != nil {
-		ri.failed = err
-	}
+func (ri *streamingRows) setErr(err error) {
+	ri.failed = err
 	if ri.cancel != nil {
 		ri.cancel()
 	}

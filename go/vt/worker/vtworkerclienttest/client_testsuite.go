@@ -13,6 +13,7 @@ package vtworkerclienttest
 //       zookeeper) won't be drawn into production binaries as well.
 
 import (
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -51,40 +52,45 @@ func TestSuite(t *testing.T, wi *worker.Instance, c vtworkerclient.Client) {
 }
 
 func commandSucceeds(t *testing.T, client vtworkerclient.Client) {
-	logs, errFunc, err := client.ExecuteVtworkerCommand(context.Background(), []string{"Ping", "pong"})
+	stream, err := client.ExecuteVtworkerCommand(context.Background(), []string{"Ping", "pong"})
 	if err != nil {
 		t.Fatalf("Cannot execute remote command: %v", err)
 	}
 
-	count := 0
-	for e := range logs {
-		expected := "Ping command was called with message: 'pong'.\n"
-		if logutil.EventString(e) != expected {
-			t.Errorf("Got unexpected log line '%v' expected '%v'", e.String(), expected)
+	got, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("failed to get first line: %v", err)
+	}
+	expected := "Ping command was called with message: 'pong'.\n"
+	if logutil.EventString(got) != expected {
+		t.Errorf("Got unexpected log line '%v' expected '%v'", got.String(), expected)
+	}
+	got, err = stream.Recv()
+	if err != io.EOF {
+		t.Fatalf("Didn't get EOF as expected: %v", err)
+	}
+
+	stream, err = client.ExecuteVtworkerCommand(context.Background(), []string{"Reset"})
+	if err != nil {
+		t.Fatalf("Cannot execute remote command: %v", err)
+	}
+	for {
+		_, err := stream.Recv()
+		switch err {
+		case nil:
+			// next please!
+		case io.EOF:
+			// done with test
+			return
+		default:
+			// unexpected error
+			t.Fatalf("Cannot execute remote command: %v", err)
 		}
-		count++
-	}
-	if count != 1 {
-		t.Errorf("Didn't get expected log line only, got %v lines", count)
-	}
-
-	if err := errFunc(); err != nil {
-		t.Fatalf("Remote error: %v", err)
-	}
-
-	logs, errFunc, err = client.ExecuteVtworkerCommand(context.Background(), []string{"Reset"})
-	if err != nil {
-		t.Fatalf("Cannot execute remote command: %v", err)
-	}
-	for range logs {
-	}
-	if err := errFunc(); err != nil {
-		t.Fatalf("Cannot execute remote command: %v", err)
 	}
 }
 
 func commandErrors(t *testing.T, client vtworkerclient.Client) {
-	logs, errFunc, err := client.ExecuteVtworkerCommand(context.Background(), []string{"NonexistingCommand"})
+	stream, err := client.ExecuteVtworkerCommand(context.Background(), []string{"NonexistingCommand"})
 	// The expected error could already be seen now or after the output channel is closed.
 	// To avoid checking for the same error twice, we don't check it here yet.
 
@@ -94,11 +100,11 @@ func commandErrors(t *testing.T, client vtworkerclient.Client) {
 		// optional and do not test for it because not all RPC implementations send
 		// the output after an error.
 		for {
-			if _, ok := <-logs; !ok {
+			_, err = stream.Recv()
+			if err != nil {
 				break
 			}
 		}
-		err = errFunc()
 	}
 
 	expected := "unknown command: NonexistingCommand"
@@ -108,17 +114,14 @@ func commandErrors(t *testing.T, client vtworkerclient.Client) {
 }
 
 func commandPanics(t *testing.T, client vtworkerclient.Client) {
-	logs, errFunc, err := client.ExecuteVtworkerCommand(context.Background(), []string{"Panic"})
+	stream, err := client.ExecuteVtworkerCommand(context.Background(), []string{"Panic"})
 	// The expected error could already be seen now or after the output channel is closed.
 	// To avoid checking for the same error twice, we don't check it here yet.
 
 	if err == nil {
 		// Don't check for errors until the output channel is closed.
 		// No output expected in this case.
-		if e, ok := <-logs; ok {
-			t.Errorf("Got unexpected line for logs: %v", e.String())
-		}
-		err = errFunc()
+		_, err = stream.Recv()
 	}
 
 	expected := "uncaught vtworker panic: Panic command was called. This should be caught by the vtworker framework and logged as an error."
