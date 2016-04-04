@@ -48,6 +48,7 @@ import subprocess
 import unittest
 
 from vtdb import vtgate_client
+from vtdb import dbexceptions
 
 import environment
 import utils
@@ -58,6 +59,7 @@ shard_0_master = tablet.Tablet()
 shard_0_slave = tablet.Tablet()
 
 cert_dir = environment.tmproot + '/certs'
+table_acl_config = environment.tmproot + '/table_acl_config.json'
 
 
 def openssl(cmd):
@@ -267,11 +269,26 @@ class TestSecure(unittest.TestCase):
   """
 
   def test_secure(self):
+    with open(table_acl_config, 'w') as fd:
+      fd.write("""{
+      "table_groups": [
+          {
+             "table_names_or_prefixes": ["vt_insert_test"],
+             "readers": ["vtgate client 1"],
+             "writers": ["vtgate client 1"],
+             "admins": ["vtgate client 1"]
+          }
+      ]
+}
+""")
+
     # start the tablets
     shard_0_master.start_vttablet(
+        table_acl_config=table_acl_config,
         extra_args=server_extra_args('vttablet-server-instance',
                                      'vttablet-client'))
     shard_0_slave.start_vttablet(
+        table_acl_config=table_acl_config,
         extra_args=server_extra_args('vttablet-server-instance',
                                      'vttablet-client'))
 
@@ -293,17 +310,31 @@ class TestSecure(unittest.TestCase):
                          server_extra_args('vtgate-server-instance',
                                            'vtgate-client'))
 
+    # 'vtgate client 1' is authorized to access vt_insert_test
     protocol, addr = utils.vtgate.rpc_endpoint(python=True)
     conn = vtgate_client.connect(protocol, addr, 30.0,
                                  **python_client_kwargs('vtgate-client-1',
+                                                        'vtgate-server'))
+    cursor = conn.cursor(tablet_type='master', keyspace='test_keyspace',
+                         shards=['0'])
+    cursor.execute('select * from vt_insert_test', {})
+    conn.close()
+
+    # 'vtgate client 2' is not authorized to access vt_insert_test
+    conn = vtgate_client.connect(protocol, addr, 30.0,
+                                 **python_client_kwargs('vtgate-client-2',
                                                         'vtgate-server'))
     try:
       cursor = conn.cursor(tablet_type='master', keyspace='test_keyspace',
                            shards=['0'])
       cursor.execute('select * from vt_insert_test', {})
-    except Exception, e:  # pylint: disable=broad-except
-      self.fail('Execute failed w/ exception %s' % str(e))
+      self.fail('Execute went through')
+    except dbexceptions.DatabaseError, e:
+      s = str(e)
+      self.assertIn('table acl error', s)
+      self.assertIn('cannot run PASS_SELECT on table', s)
     conn.close()
+
 
 
 if __name__ == '__main__':
