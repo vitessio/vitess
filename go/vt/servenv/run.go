@@ -22,6 +22,7 @@ func Run(port int) {
 	createGRPCServer()
 	onRunHooks.Fire()
 	serveGRPC()
+	serveSocketFile()
 
 	l, err := proc.Listen(fmt.Sprintf("%v", port))
 	if err != nil {

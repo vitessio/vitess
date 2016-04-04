@@ -47,17 +47,31 @@ var (
 	GRPCServer *grpc.Server
 )
 
+// isGRPCEnabled returns true if gRPC server is set
+func isGRPCEnabled() bool {
+	if GRPCPort != nil && *GRPCPort != 0 {
+		return true
+	}
+
+	if SocketFile != nil && *SocketFile != "" {
+		return true
+	}
+
+	return false
+}
+
 // createGRPCServer create the gRPC server we will be using.
 // It has to be called after flags are parsed, but before
 // services register themselves.
 func createGRPCServer() {
 	// skip if not registered
-	if GRPCPort == nil || *GRPCPort == 0 {
+	if !isGRPCEnabled() {
+		log.Infof("Skipping gRPC server creation")
 		return
 	}
 
 	var opts []grpc.ServerOption
-	if *GRPCCert != "" && *GRPCKey != "" {
+	if GRPCPort != nil && *GRPCCert != "" && *GRPCKey != "" {
 		config := &tls.Config{}
 
 		// load the server cert and key
@@ -120,7 +134,7 @@ func RegisterGRPCFlags() {
 func GRPCCheckServiceMap(name string) bool {
 	// Silently fail individual services if gRPC is not enabled in
 	// the first place (either on a grpc port or on the socket file)
-	if (GRPCPort == nil || *GRPCPort == 0) && (SocketFile == nil || *SocketFile == "") {
+	if !isGRPCEnabled() {
 		return false
 	}
 
