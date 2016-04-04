@@ -19,59 +19,51 @@ import (
 
 // This file defines the interface and implementations of sharding key resolvers.
 
-// shardingKeyResolver defines the interface that needs to be satisifed to get a sharding
-// key from a database row.
-type shardingKeyResolver interface {
-	// shardingKey takes a table row, and returns the sharding key as bytes.
+// keyspaceIDResolver defines the interface that needs to be satisifed to get a
+// keyspace ID from a database row.
+type keyspaceIDResolver interface {
+	// keyspaceID takes a table row, and returns the keyspace id as bytes.
 	// It will return an error if no sharding key can be found.
-	shardingKey(tableName string, row []sqltypes.Value) ([]byte, error)
+	keyspaceID(row []sqltypes.Value) ([]byte, error)
 }
 
-// v2Resolver is the sharding key resolver that is used by VTGate V2 deployments.
+// v2Resolver is the keyspace id resolver that is used by VTGate V2 deployments.
 // In V2, the sharding key column name and type is the same for all tables,
-// and the sharding key value is stored in the database directly.
+// and the keyspace ID is stored in the sharding key database column.
 type v2Resolver struct {
-	keyspaceInfo               *topo.KeyspaceInfo
-	tableToShardingColumnIndex map[string]int
+	keyspaceInfo        *topo.KeyspaceInfo
+	shardingColumnIndex int
 }
 
-// newV2Resolver returns a shardingKeyResolver for a v2 keyspace.
+// newV2Resolver returns a keyspaceIDResolver for a v2 table.
 // V2 keyspaces have a preset sharding column name and type.
-func newV2Resolver(keyspaceInfo *topo.KeyspaceInfo, tableDefs []*tabletmanagerdatapb.TableDefinition) (shardingKeyResolver, error) {
+func newV2Resolver(keyspaceInfo *topo.KeyspaceInfo, td *tabletmanagerdatapb.TableDefinition) (keyspaceIDResolver, error) {
 	if keyspaceInfo.ShardingColumnName == "" {
 		return nil, errors.New("ShardingColumnName needs to be set for a v2 sharding key")
 	}
 	if keyspaceInfo.ShardingColumnType == topodatapb.KeyspaceIdType_UNSET {
 		return nil, errors.New("ShardingColumnType needs to be set for a v2 sharding key")
 	}
-	// Find the sharding key column index for each table.
-	tableToShardingColumnIndex := make(map[string]int)
-	for _, td := range tableDefs {
-		if td.Type == tmutils.TableBaseTable {
-			foundColumn := false
-			for i, name := range td.Columns {
-				if name == keyspaceInfo.ShardingColumnName {
-					foundColumn = true
-					tableToShardingColumnIndex[td.Name] = i
-					break
-				}
+	// Find the sharding key column index.
+	columnIndex := -1
+	if td.Type == tmutils.TableBaseTable {
+		for i, name := range td.Columns {
+			if name == keyspaceInfo.ShardingColumnName {
+				columnIndex = i
+				break
 			}
-			if !foundColumn {
-				return nil, fmt.Errorf("table %v doesn't have a column named '%v'", td.Name, keyspaceInfo.ShardingColumnName)
-			}
+		}
+		if columnIndex == -1 {
+			return nil, fmt.Errorf("table %v doesn't have a column named '%v'", td.Name, keyspaceInfo.ShardingColumnName)
 		}
 	}
 
-	return &v2Resolver{keyspaceInfo, tableToShardingColumnIndex}, nil
+	return &v2Resolver{keyspaceInfo, columnIndex}, nil
 }
 
-// shardingKey implements the shardingKeyResolver interface.
-func (r *v2Resolver) shardingKey(tableName string, row []sqltypes.Value) ([]byte, error) {
-	keyIndex, ok := r.tableToShardingColumnIndex[tableName]
-	if !ok {
-		return nil, fmt.Errorf("unable to get sharding key from table %v", tableName)
-	}
-	v := row[keyIndex]
+// keyspaceID implements the keyspaceIDResolver interface.
+func (r *v2Resolver) keyspaceID(row []sqltypes.Value) ([]byte, error) {
+	v := row[r.shardingColumnIndex]
 	switch r.keyspaceInfo.ShardingColumnType {
 	case topodatapb.KeyspaceIdType_BYTES:
 		return v.Raw(), nil
@@ -86,4 +78,4 @@ func (r *v2Resolver) shardingKey(tableName string, row []sqltypes.Value) ([]byte
 	}
 }
 
-// TODO(sougou): implement a V3 shardingKeyResolver, which takes advantage of a table's primary ColVindex.
+// TODO(sougou): implement a V3 keyspaceIDResolver, which takes advantage of a table's primary ColVindex.

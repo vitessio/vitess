@@ -16,16 +16,14 @@ import (
 // RowSplitter is a helper class to split rows into multiple
 // subsets targeted to different shards.
 type RowSplitter struct {
-	KeyResolver shardingKeyResolver
-	Table       string
+	KeyResolver keyspaceIDResolver
 	KeyRanges   []*topodatapb.KeyRange
 }
 
 // NewRowSplitter returns a new row splitter for the given shard distribution.
-func NewRowSplitter(shardInfos []*topo.ShardInfo, keyResolver shardingKeyResolver, table string) *RowSplitter {
+func NewRowSplitter(shardInfos []*topo.ShardInfo, keyResolver keyspaceIDResolver) *RowSplitter {
 	result := &RowSplitter{
 		KeyResolver: keyResolver,
-		Table:       table,
 		KeyRanges:   make([]*topodatapb.KeyRange, len(shardInfos)),
 	}
 	for i, si := range shardInfos {
@@ -42,7 +40,7 @@ func (rs *RowSplitter) StartSplit() [][][]sqltypes.Value {
 // Split will split the rows into subset for each distribution
 func (rs *RowSplitter) Split(result [][][]sqltypes.Value, rows [][]sqltypes.Value) error {
 	for _, row := range rows {
-		k, err := rs.KeyResolver.shardingKey(rs.Table, row)
+		k, err := rs.KeyResolver.keyspaceID(row)
 		if err != nil {
 			return err
 		}
