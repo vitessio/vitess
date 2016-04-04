@@ -312,7 +312,7 @@ type Impl interface {
 	//
 
 	// SaveVSchema saves the provided schema in the topo server.
-	SaveVSchema(context.Context, string, string) error
+	SaveVSchema(ctx context.Context, keyspace, vschema string) error
 
 	// GetVSchema retrieves the schema from the topo server.
 	//
