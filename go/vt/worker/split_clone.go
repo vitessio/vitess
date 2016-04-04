@@ -475,13 +475,12 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 			if *useV3ReshardingMode {
 				// TODO(sougou): instantiate a v3 key resolver here
 				return fmt.Errorf("v3 resharding mode is currently not fully supported. Please use v2 for now")
+			} else {
+				keyResolver, err = newV2Resolver(scw.keyspaceInfo, td)
+				if err != nil {
+					return fmt.Errorf("cannot resolving sharding keys for keyspace %v: %v", scw.keyspace, err)
+				}
 			}
-
-			keyResolver, err = newV2Resolver(scw.keyspaceInfo, td)
-			if err != nil {
-				return fmt.Errorf("cannot resolving sharding keys for keyspace %v: %v", scw.keyspace, err)
-			}
-
 			rowSplitter := NewRowSplitter(scw.destinationShards, keyResolver)
 
 			chunks, err := FindChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
@@ -610,7 +609,6 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	destinationWaitGroup.Wait()
 	return firstError
 }
-
 
 // processData pumps the data out of the provided QueryResultReader.
 // It returns any error the source encounters.
