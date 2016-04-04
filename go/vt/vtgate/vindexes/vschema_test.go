@@ -292,20 +292,6 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 	}
 }
 
-func TestLoadVSchemaFail(t *testing.T) {
-	_, err := LoadFile("bogus file name")
-	want := "ReadFile failed"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("LoadFile: \n%q, should start with \n%q", err, want)
-	}
-
-	_, err = NewVSchema([]byte("{,}"))
-	want = "Unmarshal failed"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("LoadFile: \n%q, should start with \n%q", err, want)
-	}
-}
-
 func TestBuildVSchemaVindexNotFoundFail(t *testing.T) {
 	bad := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
@@ -768,6 +754,51 @@ func TestFind(t *testing.T) {
 	wantErr = "keyspace none not found in vschema"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("Find(\"\"): %v, want %s", err, wantErr)
+	}
+}
+
+func TestValidate(t *testing.T) {
+	good := `
+	{
+		"Sharded": false,
+		"Tables": {
+			"t1": {
+				"Autoinc": {
+					"Col": "col",
+					"Sequence": "outside"
+				}
+			},
+			"t2": {}
+		}
+	}
+`
+	err := ValidateVSchema([]byte(good))
+	if err != nil {
+		t.Error(err)
+	}
+	bad1 := "{"
+	err = ValidateVSchema([]byte(bad1))
+	want := "Unmarshal failed"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Validate: %v, must start with %s", err, want)
+	}
+	bad2 := `
+	{
+		"Sharded": true,
+		"Vindexes": {
+			"hash": {
+				"Type": "absent"
+			}
+		},
+		"Tables": {
+			"t2": {}
+		}
+	}
+`
+	err = ValidateVSchema([]byte(bad2))
+	want = "vindexType absent not found"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Validate: %v, must start with %s", err, want)
 	}
 }
 

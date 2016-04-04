@@ -84,19 +84,16 @@ func main() {
 	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnParams, &dbcfgs.Repl)
 	servenv.OnClose(mysqld.Close)
 
-	// tablets configuration and init
-	initTabletMap(ts, *topology, mysqld, dbcfgs, mycnf)
-
 	// vschema
-	var vschema *vindexes.VSchema
-	if *vschemaFile != "" {
-		vschema, err = vindexes.LoadFile(*vschemaFile)
-		if err != nil {
-			log.Error(err)
-			exit.Return(1)
-		}
-		log.Infof("v3 is enabled: loaded vschema from file")
+	formal, err := vindexes.LoadFormal(*vschemaFile)
+	if err != nil {
+		log.Errorf("ReadFile failed: %v %v", *vschemaFile, err)
+		exit.Return(1)
 	}
+	log.Infof("v3 is enabled: loaded vschema from file")
+
+	// tablets configuration and init
+	initTabletMap(ts, *topology, mysqld, dbcfgs, formal, mycnf)
 
 	// vtgate configuration and init
 	resilientSrvTopoServer := vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
@@ -106,7 +103,7 @@ func main() {
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
 	}
-	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, vschema, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, tabletTypesToWait, 0 /*maxInFlight*/, "" /*testGateway*/)
+	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, tabletTypesToWait, 0 /*maxInFlight*/, "" /*testGateway*/)
 
 	// vtctld configuration and init
 	vtctld.InitVtctld(ts)

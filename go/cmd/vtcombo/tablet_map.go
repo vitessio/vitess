@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -25,6 +26,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -51,7 +53,7 @@ var tabletMap map[uint32]*tablet
 
 // initTabletMap creates the action agents and associated data structures
 // for all tablets
-func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
+func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, formal *vindexes.VSchemaFormal, mycnf *mysqlctl.Mycnf) {
 	tabletMap = make(map[uint32]*tablet)
 
 	ctx := context.Background()
@@ -95,6 +97,14 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 				log.Fatalf("CreateKeyspace(%v) failed: %v", keyspace, err)
 			}
 			keyspaceMap[keyspace] = true
+			kformal := formal.Keyspaces[keyspace]
+			data, err := json.Marshal(kformal)
+			if err != nil {
+				log.Fatalf("Marshal failed: %v", err)
+			}
+			if err := ts.SaveVSchema(ctx, keyspace, string(data)); err != nil {
+				log.Fatalf("SaveVSchema failed: %v", err)
+			}
 		}
 
 		// create the master

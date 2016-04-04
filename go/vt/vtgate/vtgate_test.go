@@ -29,19 +29,15 @@ import (
 // This file uses the sandbox_test framework.
 
 func init() {
-	vschema := createTestVSchema(`
+	getSandbox(KsTestUnsharded).VSchema = `
 {
-  "Keyspaces": {
-    "TestUnsharded": {
-      "Sharded": false,
-      "Tables": {
-        "t1": {}
-      }
-    }
-  }
+	"Sharded": false,
+	"Tables": {
+		"t1": {}
+	}
 }
-`)
-	Init(nil, topo.Server{}, new(sandboxTopo), vschema, "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, 0, "")
+`
+	Init(nil, topo.Server{}, new(sandboxTopo), "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, 0, "")
 }
 
 func TestVTGateExecute(t *testing.T) {

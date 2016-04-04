@@ -29,7 +29,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -96,7 +95,7 @@ type RegisterVTGate func(vtgateservice.VTGateService)
 var RegisterVTGates []RegisterVTGate
 
 // Init initializes VTGate server.
-func Init(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, vschema *vindexes.VSchema, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletTypesToWait []topodatapb.TabletType, maxInFlight int, testGateway string) *VTGate {
+func Init(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletTypesToWait []topodatapb.TabletType, maxInFlight int, testGateway string) *VTGate {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
@@ -121,7 +120,7 @@ func Init(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoSer
 		logStreamExecuteShards:      logutil.NewThrottledLogger("StreamExecuteShards", 5*time.Second),
 	}
 	// Resuse resolver's scatterConn.
-	rpcVTGate.router = NewRouter(serv, cell, vschema, "VTGateRouter", rpcVTGate.resolver.scatterConn)
+	rpcVTGate.router = NewRouter(serv, cell, "VTGateRouter", rpcVTGate.resolver.scatterConn)
 	normalErrors = stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType"})
 	infoErrors = stats.NewCounters("VtgateInfoErrorCounts")
 	internalErrors = stats.NewCounters("VtgateInternalErrorCounts")
