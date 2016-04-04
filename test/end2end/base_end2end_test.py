@@ -5,7 +5,6 @@ import optparse
 import unittest
 import sys
 
-import environment
 import utils
 
 _options = None
@@ -29,20 +28,31 @@ class BaseEnd2EndTest(unittest.TestCase):
     if not environment:
       logging.fatal('No environment type selected')
 
+    cls.created_environment = False
     if _options.name:
       cls.env = environment()
       cls.env.use_named(_options.name)
     elif _options.environment_params:
       cls.env = environment()
-      environment_params = dict((k, v) for k, v in (
-        param.split('=') for param in _options.test_params.split(',')))
+      environment_params = dict((k, v.replace(':', ',')) for k, v in (
+          param.split('=') for param in _options.environment_params.split(',')))
       cls.env.create(**environment_params)
+      cls.created_environment = True
     else:
       cls.create_default_local_environment()
     if not cls.env:
       logging.fatal('No test environment exists to test against!')
-    cls.test_params = dict((k, v) for k, v in (
-        param.split('=') for param in _options.test_params.split(',')))
+    if _options.test_params:
+      cls.test_params = dict((k, v.replace(':', ',')) for k, v in (
+          param.split('=') for param in _options.test_params.split(',')))
+    else:
+      cls.test_params = {}
+
+  @classmethod
+  def tearDownClass(cls):
+    if cls.created_environment:
+      logging.info('Tearing down environment')
+      cls.env.destroy()
 
   @classmethod
   def create_default_local_environment(cls):
@@ -61,9 +71,7 @@ def main():
                     default=None)
   utils.add_options(parser)
   global _options
-  _options, args = parser.parse_args()
+  _options, _ = parser.parse_args()
   del sys.argv[1:]
 
-  utils.set_log_level(_options.verbose)
-  utils.set_options(_options)
-  unittest.main()
+  utils.main()
