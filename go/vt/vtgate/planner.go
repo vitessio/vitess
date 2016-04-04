@@ -38,13 +38,13 @@ type Planner struct {
 var once sync.Once
 
 // NewPlanner creates a new planner for VTGate.
-func NewPlanner(serv topo.SrvTopoServer, cell string, cacheSize int) *Planner {
+func NewPlanner(ctx context.Context, serv topo.SrvTopoServer, cell string, cacheSize int) *Planner {
 	plr := &Planner{
 		serv:  serv,
 		cell:  cell,
 		plans: cache.NewLRUCache(int64(cacheSize)),
 	}
-	plr.LoadVSchema()
+	plr.LoadVSchema(ctx)
 	once.Do(func() {
 		http.Handle("/debug/query_plans", plr)
 		http.Handle("/debug/vschema", plr)
@@ -54,11 +54,11 @@ func NewPlanner(serv topo.SrvTopoServer, cell string, cacheSize int) *Planner {
 
 // LoadVSchema loads the VSchema from the topo. The function does
 // not return an error. It instead logs warnings on failure.
-func (plr *Planner) LoadVSchema() {
+func (plr *Planner) LoadVSchema(ctx context.Context) {
 	formal := &vindexes.VSchemaFormal{
 		Keyspaces: make(map[string]vindexes.KeyspaceFormal),
 	}
-	keyspaces, err := plr.serv.GetSrvKeyspaceNames(context.TODO(), plr.cell)
+	keyspaces, err := plr.serv.GetSrvKeyspaceNames(ctx, plr.cell)
 	if err != nil {
 		log.Warningf("Error loading vschema: could not read keyspaces: %v", err)
 		return
