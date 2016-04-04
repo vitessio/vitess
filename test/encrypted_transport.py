@@ -14,7 +14,7 @@ The security chains are setup the following way:
   * vttablet client CA
     * vttablet client 1 cert/key
   * vtgate server CA
-    * vtgate server instance cert/key
+    * vtgate server instance cert/key (common name is 'localhost')
   * vtgate client CA
     * vtgate client 1 cert/key
     * vtgate client 2 cert/key
@@ -28,10 +28,18 @@ process:            will check its peer is signed by:  for link:
   vtgate               vtgate client CA                  client -> vtgate
   client               vtgate server CA                  client -> vtgate
 
-Additionnally, the client certificate common name is used as immediate
+Additionnally, we have the following constraints:
+- the client certificate common name is used as immediate
 caller ID by vtgate, and forwarded to vttablet. This allows us to use
 table ACLs on the vttablet side.
-
+- the vtgate server certificate common name is set to 'localhost' so it matches
+the hostname dialed by the vtgate clients. This is not a requirement for the
+go client, that can set its expected server name. However, the python gRPC
+client doesn't have the ability to set the server name, so they must match.
+- the python client needs to have the full chain for the server validation
+(that is 'vtgate server CA' + 'root CA'). A go client doesn't. So we read both
+below when using the python client, but we only pass the intermediate cert
+to the go clients (for vtgate -> vttablet link).
 """
 
 import logging
@@ -99,8 +107,7 @@ def create_signed_cert(ca, serial, name, common_name):
            '-out', cert])
 
 
-def vttablet_extra_args(name):
-  ca = 'vttablet-client'
+def server_extra_args(name, ca):
   return [
       '-grpc_cert', cert_dir + '/' + name + '-cert.pem',
       '-grpc_key', cert_dir + '/' + name + '-key.pem',
@@ -126,6 +133,22 @@ def tabletconn_extra_args(name):
       '-tablet_grpc_ca', cert_dir + '/' + ca + '-cert.pem',
       '-tablet_grpc_server_name', 'vttablet server instance',
   ]
+
+
+def python_client_kwargs(name, ca):
+  with open(cert_dir + '/ca-cert.pem', 'r') as fd:
+    root_ca_contents = fd.read()
+  with open(cert_dir + '/' + ca + '-cert.pem', 'r') as fd:
+    ca_contents = fd.read()
+  with open(cert_dir + '/' + name + '-key.pem', 'r') as fd:
+    key_contents = fd.read()
+  with open(cert_dir + '/' + name + '-cert.pem', 'r') as fd:
+    cert_contents = fd.read()
+  return {
+      'root_certificates': root_ca_contents+ca_contents,
+      'private_key': key_contents,
+      'certificate_chain': cert_contents,
+  }
 
 
 def setUpModule():
@@ -179,7 +202,7 @@ def setUpModule():
                        'vttablet client 1')
 
     create_signed_cert('vtgate-server', '01', 'vtgate-server-instance',
-                       'vtgate server instance')
+                       'localhost')
 
     create_signed_cert('vtgate-client', '01', 'vtgate-client-1',
                        'vtgate client 1')
@@ -246,9 +269,11 @@ class TestSecure(unittest.TestCase):
   def test_secure(self):
     # start the tablets
     shard_0_master.start_vttablet(
-        extra_args=vttablet_extra_args('vttablet-server-instance'))
+        extra_args=server_extra_args('vttablet-server-instance',
+                                     'vttablet-client'))
     shard_0_slave.start_vttablet(
-        extra_args=vttablet_extra_args('vttablet-server-instance'))
+        extra_args=server_extra_args('vttablet-server-instance',
+                                     'vttablet-client'))
 
     # setup replication
     for t in [shard_0_master, shard_0_slave]:
@@ -264,10 +289,14 @@ class TestSecure(unittest.TestCase):
           'RunHealthCheck', t.tablet_alias, 'replica'])
 
     # start vtgate
-    utils.VtGate().start(extra_args=tabletconn_extra_args('vttablet-client-1'))
+    utils.VtGate().start(extra_args=tabletconn_extra_args('vttablet-client-1')+
+                         server_extra_args('vtgate-server-instance',
+                                           'vtgate-client'))
 
     protocol, addr = utils.vtgate.rpc_endpoint(python=True)
-    conn = vtgate_client.connect(protocol, addr, 30.0)
+    conn = vtgate_client.connect(protocol, addr, 30.0,
+                                 **python_client_kwargs('vtgate-client-1',
+                                                        'vtgate-server'))
     try:
       cursor = conn.cursor(tablet_type='master', keyspace='test_keyspace',
                            shards=['0'])
