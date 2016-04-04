@@ -397,16 +397,6 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
 
-	if *useV3ReshardingMode {
-		// TODO(sougou): instantiate a v3 key resolver here
-		return fmt.Errorf("v3 resharding mode is currently not fully supported. Please use v2 for now")
-	}
-
-	keyResolver, err := newV2Resolver(scw.keyspaceInfo, sourceSchemaDefinition.TableDefinitions)
-	if err != nil {
-		return fmt.Errorf("cannot resolving sharding keys for keyspace %v: %v", scw.keyspace, err)
-	}
-
 	scw.Mu.Lock()
 	scw.tableStatus = make([]*tableStatus, len(sourceSchemaDefinition.TableDefinitions))
 	for i, td := range sourceSchemaDefinition.TableDefinitions {
@@ -481,7 +471,18 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 				continue
 			}
 
-			rowSplitter := NewRowSplitter(scw.destinationShards, keyResolver, td.Name)
+			var keyResolver keyspaceIDResolver
+			if *useV3ReshardingMode {
+				// TODO(sougou): instantiate a v3 key resolver here
+				return fmt.Errorf("v3 resharding mode is currently not fully supported. Please use v2 for now")
+			}
+
+			keyResolver, err = newV2Resolver(scw.keyspaceInfo, td)
+			if err != nil {
+				return fmt.Errorf("cannot resolving sharding keys for keyspace %v: %v", scw.keyspace, err)
+			}
+
+			rowSplitter := NewRowSplitter(scw.destinationShards, keyResolver)
 
 			chunks, err := FindChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
 			if err != nil {
@@ -610,6 +611,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	return firstError
 }
 
+
 // processData pumps the data out of the provided QueryResultReader.
 // It returns any error the source encounters.
 func (scw *SplitCloneWorker) processData(ctx context.Context, td *tabletmanagerdatapb.TableDefinition, tableIndex int, qrr *QueryResultReader, rowSplitter *RowSplitter, insertChannels []chan string, destinationPackCount int) error {
@@ -634,7 +636,7 @@ func (scw *SplitCloneWorker) processData(ctx context.Context, td *tabletmanagerd
 			return nil
 		}
 
-		// Split the rows by sharding key, and insert each chunk into each destination
+		// Split the rows by keyspace ID, and insert each chunk into each destination
 		if err := rowSplitter.Split(sr, r.Rows); err != nil {
 			return fmt.Errorf("RowSplitter failed for table %v: %v", td.Name, err)
 		}
