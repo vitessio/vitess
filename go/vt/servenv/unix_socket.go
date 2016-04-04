@@ -13,16 +13,18 @@ import (
 )
 
 var (
-	// The flags used when calling RegisterDefaultSocketFileFlags.
+	// SocketFile has the flag used when calling
+	// RegisterDefaultSocketFileFlags.
 	SocketFile *string
 )
 
 // serveSocketFile listen to the named socket and serves RPCs on it.
-func serveSocketFile(name string) {
-	if name == "" {
+func serveSocketFile() {
+	if SocketFile == nil || *SocketFile == "" {
 		log.Infof("Not listening on socket file")
 		return
 	}
+	name := *SocketFile
 
 	// try to delete if file exists
 	if _, err := os.Stat(name); err == nil {
@@ -41,12 +43,7 @@ func serveSocketFile(name string) {
 }
 
 // RegisterDefaultSocketFileFlags registers the default flags for listening
-// to a socket. It also registers an OnRun callback to enable the listening
-// socket.
-// This needs to be called before flags are parsed.
+// to a socket. This needs to be called before flags are parsed.
 func RegisterDefaultSocketFileFlags() {
 	SocketFile = flag.String("socket_file", "", "Local unix socket file to listen on")
-	OnRun(func() {
-		serveSocketFile(*SocketFile)
-	})
 }
