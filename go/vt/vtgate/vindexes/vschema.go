@@ -67,17 +67,38 @@ func BuildVSchema(source *VSchemaFormal) (vschema *VSchema, err error) {
 		Keyspaces: make(map[string]*KeyspaceSchema),
 	}
 	buildKeyspaces(source, vschema)
-	// We have to build the sequences first to avoid
-	// forward reference errors.
-	err = buildSequences(source, vschema)
-	if err != nil {
-		return nil, err
-	}
 	err = buildTables(source, vschema)
 	if err != nil {
 		return nil, err
 	}
+	err = resolveAutoinc(source, vschema)
+	if err != nil {
+		return nil, err
+	}
 	return vschema, nil
+}
+
+// ValidateVSchema ensures that the the JSON representation
+// of the keyspace vschema are valid.
+// External references (like sequence) are not validated.
+func ValidateVSchema(input []byte) error {
+	var ks KeyspaceFormal
+	if err := json.Unmarshal(input, &ks); err != nil {
+		return fmt.Errorf("Unmarshal failed: %v %s %v", ks, input, err)
+	}
+	// We go through the motion of building the vschema,
+	// but just for this keyspace
+	formal := &VSchemaFormal{
+		Keyspaces: map[string]KeyspaceFormal{
+			"ks": ks,
+		},
+	}
+	vschema := &VSchema{
+		tables:    make(map[string]*Table),
+		Keyspaces: make(map[string]*KeyspaceSchema),
+	}
+	buildKeyspaces(formal, vschema)
+	return buildTables(formal, vschema)
 }
 
 func buildKeyspaces(source *VSchemaFormal, vschema *VSchema) {
@@ -90,29 +111,6 @@ func buildKeyspaces(source *VSchemaFormal, vschema *VSchema) {
 			Tables: make(map[string]*Table),
 		}
 	}
-}
-
-func buildSequences(source *VSchemaFormal, vschema *VSchema) error {
-	for ksname, ks := range source.Keyspaces {
-		keyspace := vschema.Keyspaces[ksname].Keyspace
-		for tname, table := range ks.Tables {
-			if table.Type != "Sequence" {
-				continue
-			}
-			t := &Table{
-				Name:       tname,
-				Keyspace:   keyspace,
-				IsSequence: true,
-			}
-			if _, ok := vschema.tables[tname]; ok {
-				vschema.tables[tname] = nil
-			} else {
-				vschema.tables[tname] = t
-			}
-			vschema.Keyspaces[ksname].Tables[tname] = t
-		}
-	}
-	return nil
 }
 
 func buildTables(source *VSchemaFormal, vschema *VSchema) error {
@@ -133,9 +131,6 @@ func buildTables(source *VSchemaFormal, vschema *VSchema) error {
 			vindexes[vname] = vindex
 		}
 		for tname, table := range ks.Tables {
-			if table.Type == "Sequence" {
-				continue
-			}
 			t := &Table{
 				Name:     tname,
 				Keyspace: keyspace,
@@ -146,8 +141,8 @@ func buildTables(source *VSchemaFormal, vschema *VSchema) error {
 				vschema.tables[tname] = t
 			}
 			vschema.Keyspaces[ksname].Tables[tname] = t
-			if !keyspace.Sharded {
-				continue
+			if table.Type == "Sequence" {
+				t.IsSequence = true
 			}
 			for i, ind := range table.ColVindexes {
 				vindexInfo, ok := ks.Vindexes[ind.Name]
@@ -181,18 +176,30 @@ func buildTables(source *VSchemaFormal, vschema *VSchema) error {
 				}
 			}
 			t.Ordered = colVindexSorted(t.ColVindexes)
-			if table.Autoinc != nil {
-				t.Autoinc = &Autoinc{Col: table.Autoinc.Col, ColVindexNum: -1}
-				seq, ok := vschema.tables[table.Autoinc.Sequence]
-				if !ok {
-					return fmt.Errorf("sequence %s not found for table %s", table.Autoinc.Sequence, tname)
-				}
-				t.Autoinc.Sequence = seq
-				for i, cv := range t.ColVindexes {
-					if t.Autoinc.Col == cv.Col {
-						t.Autoinc.ColVindexNum = i
-						break
-					}
+		}
+	}
+	return nil
+}
+
+func resolveAutoinc(source *VSchemaFormal, vschema *VSchema) error {
+	for ksname, ks := range source.Keyspaces {
+		ksvschema := vschema.Keyspaces[ksname]
+		for tname, table := range ks.Tables {
+			t := ksvschema.Tables[tname]
+			if table.Autoinc == nil {
+				continue
+			}
+			t.Autoinc = &Autoinc{Col: table.Autoinc.Col, ColVindexNum: -1}
+			seq := vschema.tables[table.Autoinc.Sequence]
+			// TODO(sougou): improve this search.
+			if seq == nil {
+				return fmt.Errorf("sequence %s not found for table %s", table.Autoinc.Sequence, tname)
+			}
+			t.Autoinc.Sequence = seq
+			for i, cv := range t.ColVindexes {
+				if t.Autoinc.Col == cv.Col {
+					t.Autoinc.ColVindexNum = i
+					break
 				}
 			}
 		}
@@ -300,20 +307,19 @@ type AutoincFormal struct {
 	Sequence string
 }
 
-// LoadFile creates a new VSchema from a JSON file.
-func LoadFile(filename string) (vschema *VSchema, err error) {
+// LoadFormal loads the JSON representation of VSchema from a file.
+func LoadFormal(filename string) (*VSchemaFormal, error) {
+	formal := &VSchemaFormal{}
+	if filename == "" {
+		return formal, nil
+	}
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
-		return nil, fmt.Errorf("ReadFile failed: %v %v", filename, err)
+		return nil, err
 	}
-	return NewVSchema(data)
-}
-
-// NewVSchema creates a new VSchema from a JSON byte array.
-func NewVSchema(data []byte) (vschema *VSchema, err error) {
-	var source VSchemaFormal
-	if err := json.Unmarshal(data, &source); err != nil {
-		return nil, fmt.Errorf("Unmarshal failed: %v %s %v", source, data, err)
+	err = json.Unmarshal(data, formal)
+	if err != nil {
+		return nil, err
 	}
-	return BuildVSchema(&source)
+	return formal, nil
 }

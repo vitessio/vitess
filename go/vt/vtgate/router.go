@@ -49,11 +49,11 @@ func newScatterParams(ks string, bv map[string]interface{}, shards []string) *sc
 }
 
 // NewRouter creates a new Router.
-func NewRouter(serv topo.SrvTopoServer, cell string, vschema *vindexes.VSchema, statsName string, scatterConn *ScatterConn) *Router {
+func NewRouter(serv topo.SrvTopoServer, cell, statsName string, scatterConn *ScatterConn) *Router {
 	return &Router{
 		serv:        serv,
 		cell:        cell,
-		planner:     NewPlanner(vschema, 5000),
+		planner:     NewPlanner(serv, cell, 5000),
 		scatterConn: scatterConn,
 	}
 }

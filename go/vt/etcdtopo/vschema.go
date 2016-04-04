@@ -11,13 +11,13 @@ This file contains the vschema management code for etcdtopo.Server
 */
 
 // SaveVSchema saves the JSON vschema into the topo.
-func (s *Server) SaveVSchema(ctx context.Context, vschema string) error {
-	_, err := vindexes.NewVSchema([]byte(vschema))
+func (s *Server) SaveVSchema(ctx context.Context, keyspace, vschema string) error {
+	err := vindexes.ValidateVSchema([]byte(vschema))
 	if err != nil {
 		return err
 	}
 
-	_, err = s.getGlobal().Set(vschemaPath, vschema, 0 /* ttl */)
+	_, err = s.getGlobal().Set(vschemaFilePath(keyspace), vschema, 0 /* ttl */)
 	if err != nil {
 		return convertError(err)
 	}
@@ -25,8 +25,8 @@ func (s *Server) SaveVSchema(ctx context.Context, vschema string) error {
 }
 
 // GetVSchema fetches the JSON vschema from the topo.
-func (s *Server) GetVSchema(ctx context.Context) (string, error) {
-	resp, err := s.getGlobal().Get(vschemaPath, false /* sort */, false /* recursive */)
+func (s *Server) GetVSchema(ctx context.Context, keyspace string) (string, error) {
+	resp, err := s.getGlobal().Get(vschemaFilePath(keyspace), false /* sort */, false /* recursive */)
 	if err != nil {
 		err = convertError(err)
 		if err == topo.ErrNoNode {

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/discovery"
@@ -19,14 +18,12 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
 	cell                  = flag.String("cell", "test_nj", "cell to use")
-	vschemaFile           = flag.String("vschema_file", "", "JSON vschema file")
 	retryDelay            = flag.Duration("retry-delay", 2*time.Millisecond, "retry delay")
 	retryCount            = flag.Int("retry-count", 2, "retry count")
 	connTimeoutTotal      = flag.Duration("conn-timeout-total", 3*time.Second, "vttablet connection timeout (total)")
@@ -61,30 +58,6 @@ func main() {
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
-	var vschema *vindexes.VSchema
-	if *vschemaFile != "" {
-		var err error
-		if vschema, err = vindexes.LoadFile(*vschemaFile); err != nil {
-			log.Error(err)
-			exit.Return(1)
-		}
-		log.Infof("v3 is enabled: loaded vschema from file: %v", *vschemaFile)
-	} else {
-		ctx := context.Background()
-		schemaJSON, err := ts.GetVSchema(ctx)
-		if err != nil {
-			log.Warningf("Skipping v3 initialization: GetVSchema failed: %v", err)
-			goto startServer
-		}
-		vschema, err = vindexes.NewVSchema([]byte(schemaJSON))
-		if err != nil {
-			log.Warningf("Skipping v3 initialization: GetVSchema failed: %v", err)
-			goto startServer
-		}
-		log.Infof("v3 is enabled: loaded vschema from topo")
-	}
-
-startServer:
 	resilientSrvTopoServer = vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
 
 	healthCheck = discovery.NewHealthCheck(*connTimeoutTotal, *healthCheckRetryDelay, *healthCheckTimeout, "" /* statsSuffix */)
@@ -100,7 +73,7 @@ startServer:
 			tabletTypes = append(tabletTypes, tt)
 		}
 	}
-	vtg := vtgate.Init(healthCheck, ts, resilientSrvTopoServer, vschema, *cell, *retryDelay, *retryCount, *connTimeoutTotal, *connTimeoutPerConn, *connLife, tabletTypes, *maxInFlight, *testGateway)
+	vtg := vtgate.Init(healthCheck, ts, resilientSrvTopoServer, *cell, *retryDelay, *retryCount, *connTimeoutTotal, *connTimeoutPerConn, *connLife, tabletTypes, *maxInFlight, *testGateway)
 
 	servenv.OnRun(func() {
 		addStatusParts(vtg)
