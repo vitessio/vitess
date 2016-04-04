@@ -70,7 +70,8 @@ func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
 		t.Errorf("SaveVSchema: %v, must start with %s", err, want)
 	}
 
-	// test GetShardNames
+	// Make sure the vschema is not returned as a shard name,
+	// because they share the same directory location.
 	shards, err := ts.GetShardNames(ctx, "test_keyspace")
 	if err != nil {
 		t.Errorf("GetShardNames: %v", err)
