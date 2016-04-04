@@ -2,7 +2,6 @@ package com.flipkart.vitess.jdbc.test;
 
 import com.flipkart.vitess.jdbc.VitessConnection;
 import com.flipkart.vitess.util.Constants;
-import com.sun.tools.javac.code.Attribute;
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.SQLFuture;
 import com.youtube.vitess.client.VTGateConn;

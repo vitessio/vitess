@@ -788,20 +788,19 @@ public class VitessConnection implements Connection {
                         isolationLevel =
                             MysqlDefs.mysqlConnectionTransactionMapping.get(transactionIsolation);
                     }
-                    String[] dbVersions = new String[3];
                     if (null != versionValue) {
-                        if (versionValue.indexOf("-") >= 0) {
-                            String[] versions = versionValue.split("-");
-                            if (versions[1].toLowerCase().startsWith("mariadb")) {
-                                dbEngine = "mariadb";
-                                dbVersions = versions[0].split("\\.", 3);
-                                productVersion = versions[0];
-                            }
+                        if(versionValue.toLowerCase().contains("mariadb")){
+                            dbEngine = "mariadb";
                         } else {
                             dbEngine = "mysql";
-                            dbVersions = versionValue.split("\\.", 3);
+                        }
+                        if (versionValue.indexOf("-") >= 0) {
+                            String[] versions = versionValue.split("-");
+                            productVersion = versions[0];
+                        } else {
                             productVersion = versionValue;
                         }
+                        String[] dbVersions = productVersion.split("\\.", 3);
                         majorVersion = dbVersions[0];
                         minorVersion = dbVersions[1];
                     }

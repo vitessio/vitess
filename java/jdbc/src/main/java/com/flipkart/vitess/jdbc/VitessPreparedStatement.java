@@ -146,7 +146,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
         }
 
-        if (null != cursor.getFields()) {
+        if (null != cursor.getFields() && cursor.getFields().size()!=0) {
             throw new SQLException(Constants.SQLExceptionMessages.SQL_RETURNED_RESULT_SET);
         }
 

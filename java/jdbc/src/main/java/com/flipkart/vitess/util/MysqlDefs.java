@@ -236,7 +236,7 @@ public final class MysqlDefs {
                 break;
 
             case MysqlDefs.FIELD_TYPE_LONGLONG:
-                jdbcType = Types.BIGINT;
+                jdbcType = MysqlDefs.FIELD_TYPE_LONGLONG;
 
                 break;
 
