@@ -175,7 +175,7 @@ func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxConn) {
 
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, nil, "")
-	router = NewRouter(serv, "aa", "", scatterConn)
+	router = NewRouter(context.Background(), serv, "aa", "", scatterConn)
 	return router, sbc1, sbc2, sbclookup
 }
 

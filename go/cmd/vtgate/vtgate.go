@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/net/context"
+
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/exit"
@@ -73,7 +75,7 @@ func main() {
 			tabletTypes = append(tabletTypes, tt)
 		}
 	}
-	vtg := vtgate.Init(healthCheck, ts, resilientSrvTopoServer, *cell, *retryDelay, *retryCount, *connTimeoutTotal, *connTimeoutPerConn, *connLife, tabletTypes, *maxInFlight, *testGateway)
+	vtg := vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, *cell, *retryDelay, *retryCount, *connTimeoutTotal, *connTimeoutPerConn, *connLife, tabletTypes, *maxInFlight, *testGateway)
 
 	servenv.OnRun(func() {
 		addStatusParts(vtg)
