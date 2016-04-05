@@ -224,14 +224,14 @@ class TestMasterBuffering(BaseTestCase):
   def setUp(self):
     super(TestMasterBuffering, self).setUp()
     restart_vtgate(extra_args=[
-        '-enable_fake_tx_buffer',
+        '-enable_fake_master_buffer',
         '-buffer_keyspace', KEYSPACE_NAME,
         '-buffer_shard', SHARD_NAMES[self.shard_index],
         '-fake_buffer_delay', '1ms',
         ])
 
   def get_sucessful_buffered_requests(self):
-    return utils.vtgate.get_vars()['BufferedTransactionsSuccessful']
+    return utils.vtgate.get_vars()['BufferedRequestsSuccessful']
 
   def test_tx_is_buffered(self):
     """Tests that for a transaction, we buffer exactly one request."""

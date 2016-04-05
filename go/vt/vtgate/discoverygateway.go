@@ -21,7 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vtgate/txbuffer"
+	"github.com/youtube/vitess/go/vt/vtgate/masterbuffer"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -261,13 +261,9 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 			continue
 		}
 
-		// Only buffer master requests that are not already in a transaction (including the Begin).
-		// Ongoing transactions will be killed during a master reparent.
-		if tabletType == topodatapb.TabletType_MASTER && !inTransaction {
-			// Potentially buffer this request.
-			if bufferErr := txbuffer.FakeBuffer(keyspace, shard, i); bufferErr != nil {
-				return bufferErr
-			}
+		// Potentially buffer this request.
+		if bufferErr := masterbuffer.FakeBuffer(keyspace, shard, tabletType, inTransaction, i); bufferErr != nil {
+			return bufferErr
 		}
 
 		err = action(conn)

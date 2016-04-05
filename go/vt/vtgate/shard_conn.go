@@ -19,7 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vtgate/txbuffer"
+	"github.com/youtube/vitess/go/vt/vtgate/masterbuffer"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -267,13 +267,9 @@ func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn
 			continue
 		}
 
-		// Only buffer master requests that are not already in a transaction (including the Begin).
-		// Ongoing transactions will be killed during a master reparent.
-		if sdc.tabletType == topodatapb.TabletType_MASTER && !inTransaction {
-			// Potentially buffer this request.
-			if bufferErr := txbuffer.FakeBuffer(sdc.keyspace, sdc.shard, i); bufferErr != nil {
-				return bufferErr
-			}
+		// Potentially buffer this request.
+		if bufferErr := masterbuffer.FakeBuffer(sdc.keyspace, sdc.shard, sdc.tabletType, inTransaction, i); bufferErr != nil {
+			return bufferErr
 		}
 
 		err = action(conn)

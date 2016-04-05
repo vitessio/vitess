@@ -3,16 +3,17 @@
 // license that can be found in the LICENSE file.
 
 /*
-Package txbuffer contains experimental logic to buffer transactions in VTGate.
-Only the Begin statement of transactions will be buffered.
+Package masterbuffer contains experimental logic to buffer master requests in VTGate.
+Only statements outside of transactinos will be buffered (including the initial Begin
+to start a transaction).
 
-The reason why it might be useful to buffer transactions is during failovers:
+The reason why it might be useful to buffer master requests is during failovers:
 the master vttablet can become unavailable for a few seconds. Upstream clients
 (e.g., web workers) might not retry on failures, and instead may prefer for VTGate to wait for
 a few seconds for the failover to complete. Thiis will block upstream callers for that time,
 but will not return transient errors during the buffering time.
 */
-package txbuffer
+package masterbuffer
 
 import (
 	"errors"
@@ -21,22 +22,23 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/stats"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 var (
-	enableFakeTxBuffer = flag.Bool("enable_fake_tx_buffer", false, "Enable fake transaction buffering.")
-	bufferKeyspace     = flag.String("buffer_keyspace", "", "The name of the keyspace to buffer transactions on.")
-	bufferShard        = flag.String("buffer_shard", "", "The name of the shard to buffer transactions on.")
-	maxBufferSize      = flag.Int("max_buffer_size", 10, "The maximum number of transactions to buffer at a time.")
-	fakeBufferDelay    = flag.Duration("fake_buffer_delay", 1*time.Second, "The amount of time that we should delay all transactions for, to fake a transaction buffer.")
+	enableFakeMasterBuffer = flag.Bool("enable_fake_master_buffer", false, "Enable fake master buffering.")
+	bufferKeyspace         = flag.String("buffer_keyspace", "", "The name of the keyspace to buffer master requests on.")
+	bufferShard            = flag.String("buffer_shard", "", "The name of the shard to buffer master requests on.")
+	maxBufferSize          = flag.Int("max_buffer_size", 10, "The maximum number of master requests to buffer at a time.")
+	fakeBufferDelay        = flag.Duration("fake_buffer_delay", 1*time.Second, "The amount of time that we should delay all master requests for, to fake a buffer.")
 
-	bufferedTransactionsAttempted  = stats.NewInt("BufferedTransactionsAttempted")
-	bufferedTransactionsSuccessful = stats.NewInt("BufferedTransactionsSuccessful")
-	// Use this lock when adding to the number of currently buffered transactions.
-	bufferMu             sync.Mutex
-	bufferedTransactions = stats.NewInt("BufferedTransactions")
+	bufferedRequestsAttempted  = stats.NewInt("BufferedRequestsAttempted")
+	bufferedRequestsSuccessful = stats.NewInt("BufferedRequestsSuccessful")
+	// Use this lock when adding to the number of currently buffered requests.
+	bufferMu         sync.Mutex
+	bufferedRequests = stats.NewInt("BufferedRequests")
 )
 
 // timeSleep can be mocked out in unit tests
@@ -45,36 +47,39 @@ var timeSleep = time.Sleep
 // errBufferFull is the error returned a buffer request is rejected because the buffer is full.
 var errBufferFull = vterrors.FromError(
 	vtrpcpb.ErrorCode_TRANSIENT_ERROR,
-	errors.New("transaction buffer full, rejecting request"),
+	errors.New("master request buffer full, rejecting request"),
 )
 
-// FakeBuffer will pretend to buffer new transactions in VTGate.
-// Transactions *will NOT actually be buffered*, they will just have a delayed start time.
-// This can be useful to understand what the impact of trasaction buffering will be
+// FakeBuffer will pretend to buffer master requests in VTGate.
+// Requests *will NOT actually be buffered*, they will just be delayed.
+// This can be useful to understand what the impact of master request buffering will be
 // on upstream callers. Once the impact is measured, it can be used to tweak parameter values
 // for the best behavior.
-// FakeBuffer should be called before the VtTablet Begin, otherwise it will increase transaction times.
-func FakeBuffer(keyspace, shard string, attemptNumber int) error {
-	// Only buffer on the first Begin attempt, not on possible retries.
-	if !*enableFakeTxBuffer || attemptNumber != 0 {
+// FakeBuffer should be called before a potential VtTablet Begin, otherwise it will increase transaction times.
+func FakeBuffer(keyspace, shard string, tabletType topodatapb.TabletType, inTransaction bool, attemptNumber int) error {
+	if !*enableFakeMasterBuffer {
+		return nil
+	}
+	// Don't buffer non-master traffic, requests that are inside transactions, or retries.
+	if tabletType != topodatapb.TabletType_MASTER || inTransaction || attemptNumber != 0 {
 		return nil
 	}
 	if keyspace != *bufferKeyspace || shard != *bufferShard {
 		return nil
 	}
-	bufferedTransactionsAttempted.Add(1)
+	bufferedRequestsAttempted.Add(1)
 
 	bufferMu.Lock()
-	if int(bufferedTransactions.Get()) >= *maxBufferSize {
+	if int(bufferedRequests.Get()) >= *maxBufferSize {
 		bufferMu.Unlock()
 		return errBufferFull
 	}
-	bufferedTransactions.Add(1)
+	bufferedRequests.Add(1)
 	bufferMu.Unlock()
 
-	defer bufferedTransactionsSuccessful.Add(1)
+	defer bufferedRequestsSuccessful.Add(1)
 	timeSleep(*fakeBufferDelay)
 	// Don't need to lock for this, as there's no race when decrementing the count
-	bufferedTransactions.Add(-1)
+	bufferedRequests.Add(-1)
 	return nil
 }
