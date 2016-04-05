@@ -9,13 +9,12 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
-var lhu planbuilder.Vindex
+var lhu Vindex
 
 func init() {
-	h, err := planbuilder.CreateVindex("lookup_hash_unique", "nn", map[string]interface{}{"Table": "t", "From": "fromc", "To": "toc"})
+	h, err := CreateVindex("lookup_hash_unique", "nn", map[string]interface{}{"Table": "t", "From": "fromc", "To": "toc"})
 	if err != nil {
 		panic(err)
 	}
@@ -30,7 +29,7 @@ func TestLookupHashUniqueCost(t *testing.T) {
 
 func TestLookupHashUniqueMap(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	got, err := lhu.(planbuilder.Unique).Map(vc, []interface{}{1, int32(2)})
+	got, err := lhu.(Unique).Map(vc, []interface{}{1, int32(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -56,7 +55,7 @@ func TestLookupHashUniqueVerify(t *testing.T) {
 
 func TestLookupHashUniqueCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lhu.(planbuilder.Lookup).Create(vc, 1, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err := lhu.(Lookup).Create(vc, 1, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -67,21 +66,21 @@ func TestLookupHashUniqueCreate(t *testing.T) {
 			"toc":   int64(1),
 		},
 	}
-	if !reflect.DeepEqual(vc.query, wantQuery) {
-		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
+	if !reflect.DeepEqual(vc.bq, wantQuery) {
+		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
 	}
 }
 
 func TestLookupHashUniqueReverse(t *testing.T) {
-	_, ok := lhu.(planbuilder.Reversible)
+	_, ok := lhu.(Reversible)
 	if ok {
-		t.Errorf("lhu.(planbuilder.Reversible): true, want false")
+		t.Errorf("lhu.(Reversible): true, want false")
 	}
 }
 
 func TestLookupHashUniqueDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := lhu.(planbuilder.Lookup).Delete(vc, []interface{}{1}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err := lhu.(Lookup).Delete(vc, []interface{}{1}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -92,7 +91,7 @@ func TestLookupHashUniqueDelete(t *testing.T) {
 			"toc":   int64(1),
 		},
 	}
-	if !reflect.DeepEqual(vc.query, wantQuery) {
-		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
+	if !reflect.DeepEqual(vc.bq, wantQuery) {
+		t.Errorf("vc.query = %#v, want %#v", vc.bq, wantQuery)
 	}
 }

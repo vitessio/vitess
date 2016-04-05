@@ -13,6 +13,8 @@ import (
 	"flag"
 	"time"
 
+	"golang.org/x/net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -23,7 +25,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctld"
 	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk/fakezk"
 
@@ -84,19 +86,16 @@ func main() {
 	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnParams, &dbcfgs.Repl)
 	servenv.OnClose(mysqld.Close)
 
-	// tablets configuration and init
-	initTabletMap(ts, *topology, mysqld, dbcfgs, mycnf)
-
 	// vschema
-	var vschema *planbuilder.VSchema
-	if *vschemaFile != "" {
-		vschema, err = planbuilder.LoadFile(*vschemaFile)
-		if err != nil {
-			log.Error(err)
-			exit.Return(1)
-		}
-		log.Infof("v3 is enabled: loaded vschema from file")
+	formal, err := vindexes.LoadFormal(*vschemaFile)
+	if err != nil {
+		log.Errorf("ReadFile failed: %v %v", *vschemaFile, err)
+		exit.Return(1)
 	}
+	log.Infof("v3 is enabled: loaded vschema from file")
+
+	// tablets configuration and init
+	initTabletMap(ts, *topology, mysqld, dbcfgs, formal, mycnf)
 
 	// vtgate configuration and init
 	resilientSrvTopoServer := vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
@@ -106,7 +105,7 @@ func main() {
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
 	}
-	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, vschema, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, tabletTypesToWait, 0 /*maxInFlight*/, "" /*testGateway*/)
+	vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, tabletTypesToWait, 0 /*maxInFlight*/, "" /*testGateway*/)
 
 	// vtctld configuration and init
 	vtctld.InitVtctld(ts)

@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
@@ -496,6 +498,8 @@ func TestSelectINFail(t *testing.T) {
 func TestSelectScatter(t *testing.T) {
 	// Special setup: Don't use createRouterEnv.
 	s := createSandbox("TestRouter")
+	s.VSchema = routerVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxConn
 	for _, shard := range shards {
@@ -505,7 +509,7 @@ func TestSelectScatter(t *testing.T) {
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
-	router := NewRouter(serv, "aa", routerVSchema, "", scatterConn)
+	router := NewRouter(context.Background(), serv, "aa", "", scatterConn)
 
 	_, err := routerExec(router, "select id from user", nil)
 	if err != nil {
@@ -525,6 +529,8 @@ func TestSelectScatter(t *testing.T) {
 func TestStreamSelectScatter(t *testing.T) {
 	// Special setup: Don't use createRouterEnv.
 	s := createSandbox("TestRouter")
+	s.VSchema = routerVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxConn
 	for _, shard := range shards {
@@ -534,7 +540,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
-	router := NewRouter(serv, "aa", routerVSchema, "", scatterConn)
+	router := NewRouter(context.Background(), serv, "aa", "", scatterConn)
 
 	sql := "select id from user"
 	result, err := routerStream(router, sql)
@@ -563,6 +569,8 @@ func TestStreamSelectScatter(t *testing.T) {
 func TestSelectScatterFail(t *testing.T) {
 	// Special setup: Don't use createRouterEnv.
 	s := createSandbox("TestRouter")
+	s.VSchema = routerVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	s.SrvKeyspaceMustFail = 1
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxConn
@@ -573,7 +581,7 @@ func TestSelectScatterFail(t *testing.T) {
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
-	router := NewRouter(serv, "aa", routerVSchema, "", scatterConn)
+	router := NewRouter(context.Background(), serv, "aa", "", scatterConn)
 
 	_, err := routerExec(router, "select id from user", nil)
 	want := "paramsSelectScatter: keyspace TestRouter fetch error: topo error GetSrvKeyspace"
@@ -936,7 +944,7 @@ func TestEmptyJoinRecursive(t *testing.T) {
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
 	}
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{

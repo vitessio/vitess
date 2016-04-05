@@ -7,6 +7,7 @@ package worker
 import (
 	"fmt"
 	"html/template"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -395,6 +396,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 		return fmt.Errorf("no tables matching the table filter in tablet %v", topoproto.TabletAliasString(scw.sourceAliases[0]))
 	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
+
 	scw.Mu.Lock()
 	scw.tableStatus = make([]*tableStatus, len(sourceSchemaDefinition.TableDefinitions))
 	for i, td := range sourceSchemaDefinition.TableDefinitions {
@@ -406,22 +408,9 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	scw.startTime = time.Now()
 	scw.Mu.Unlock()
 
-	// Find the column index for the sharding columns in all the databases, and count rows
-	columnIndexes := make([]int, len(sourceSchemaDefinition.TableDefinitions))
+	// Count rows for source tables
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
 		if td.Type == tmutils.TableBaseTable {
-			// find the column to split on
-			columnIndexes[tableIndex] = -1
-			for i, name := range td.Columns {
-				if name == scw.keyspaceInfo.ShardingColumnName {
-					columnIndexes[tableIndex] = i
-					break
-				}
-			}
-			if columnIndexes[tableIndex] == -1 {
-				return fmt.Errorf("table %v doesn't have a column named '%v'", td.Name, scw.keyspaceInfo.ShardingColumnName)
-			}
-
 			scw.tableStatus[tableIndex].mu.Lock()
 			scw.tableStatus[tableIndex].rowCount = td.RowCount
 			scw.tableStatus[tableIndex].mu.Unlock()
@@ -482,7 +471,17 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 				continue
 			}
 
-			rowSplitter := NewRowSplitter(scw.destinationShards, scw.keyspaceInfo.ShardingColumnType, columnIndexes[tableIndex])
+			var keyResolver keyspaceIDResolver
+			if *useV3ReshardingMode {
+				// TODO(sougou): instantiate a v3 key resolver here
+				return fmt.Errorf("v3 resharding mode is currently not fully supported. Please use v2 for now")
+			} else {
+				keyResolver, err = newV2Resolver(scw.keyspaceInfo, td)
+				if err != nil {
+					return fmt.Errorf("cannot resolving sharding keys for keyspace %v: %v", scw.keyspace, err)
+				}
+			}
+			rowSplitter := NewRowSplitter(scw.destinationShards, keyResolver)
 
 			chunks, err := FindChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
 			if err != nil {
@@ -510,7 +509,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 					defer qrr.Close()
 
 					// process the data
-					if err := scw.processData(td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount, ctx.Done()); err != nil {
+					if err := scw.processData(ctx, td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount); err != nil {
 						processError("processData failed: %v", err)
 					}
 					scw.tableStatus[tableIndex].threadDone()
@@ -613,61 +612,47 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 
 // processData pumps the data out of the provided QueryResultReader.
 // It returns any error the source encounters.
-func (scw *SplitCloneWorker) processData(td *tabletmanagerdatapb.TableDefinition, tableIndex int, qrr *QueryResultReader, rowSplitter *RowSplitter, insertChannels []chan string, destinationPackCount int, abort <-chan struct{}) error {
+func (scw *SplitCloneWorker) processData(ctx context.Context, td *tabletmanagerdatapb.TableDefinition, tableIndex int, qrr *QueryResultReader, rowSplitter *RowSplitter, insertChannels []chan string, destinationPackCount int) error {
 	baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
 	sr := rowSplitter.StartSplit()
 	packCount := 0
 
 	for {
-		select {
-		case r, ok := <-qrr.Output:
-			if !ok {
-				// we are done, see if there was an error
-				err := qrr.Error()
-				if err != nil {
-					return err
-				}
-
-				// send the remainder if any (ignoring
-				// the return value, we don't care
-				// here if we're aborted)
-				if packCount > 0 {
-					rowSplitter.Send(qrr.Fields, sr, baseCmd, insertChannels, abort)
-				}
-				return nil
+		r, err := qrr.Output.Recv()
+		if err != nil {
+			// we are done, see if there was an error
+			if err != io.EOF {
+				return err
 			}
 
-			// Split the rows by keyspace_id, and insert
-			// each chunk into each destination
-			if err := rowSplitter.Split(sr, r.Rows); err != nil {
-				return fmt.Errorf("RowSplitter failed for table %v: %v", td.Name, err)
+			// send the remainder if any (ignoring
+			// the return value, we don't care
+			// here if we're aborted)
+			if packCount > 0 {
+				rowSplitter.Send(qrr.Fields, sr, baseCmd, insertChannels, ctx.Done())
 			}
-			scw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
-
-			// see if we reach the destination pack count
-			packCount++
-			if packCount < destinationPackCount {
-				continue
-			}
-
-			// send the rows to be inserted
-			if aborted := rowSplitter.Send(qrr.Fields, sr, baseCmd, insertChannels, abort); aborted {
-				return nil
-			}
-
-			// and reset our row buffer
-			sr = rowSplitter.StartSplit()
-			packCount = 0
-
-		case <-abort:
 			return nil
 		}
-		// the abort case might be starved above, so we check again; this means that the loop
-		// will run at most once before the abort case is triggered.
-		select {
-		case <-abort:
-			return nil
-		default:
+
+		// Split the rows by keyspace ID, and insert each chunk into each destination
+		if err := rowSplitter.Split(sr, r.Rows); err != nil {
+			return fmt.Errorf("RowSplitter failed for table %v: %v", td.Name, err)
 		}
+		scw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
+
+		// see if we reach the destination pack count
+		packCount++
+		if packCount < destinationPackCount {
+			continue
+		}
+
+		// send the rows to be inserted
+		if aborted := rowSplitter.Send(qrr.Fields, sr, baseCmd, insertChannels, ctx.Done()); aborted {
+			return nil
+		}
+
+		// and reset our row buffer
+		sr = rowSplitter.StartSplit()
+		packCount = 0
 	}
 }

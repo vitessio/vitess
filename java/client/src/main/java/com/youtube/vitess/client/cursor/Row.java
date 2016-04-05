@@ -33,10 +33,12 @@ import javax.annotation.concurrent.NotThreadSafe;
  * the list of {@link Field}s from the corresponding
  * {@link com.youtube.vitess.proto.Query.QueryResult}.
  *
- * <p>Note that {@code columnIndex} values start at 1 for the first column,
- * since the methods on {@code Row} are intended to be compatible with those
- * on {@link java.sql.ResultSet} (which uses 1-based {@code columnIndex})
- * where possible.
+ * <p>Methods on {@code Row} are intended to be compatible with those on
+ * {@link java.sql.ResultSet} where possible.
+ * This means {@code columnIndex} values start at 1 for the first column,
+ * and {@code columnLabel} values are case-insensitive. If multiple columns
+ * have the same case-insensitive {@code columnLabel}, the earliest one will
+ * be returned.
  */
 @NotThreadSafe
 public class Row {
@@ -115,6 +117,8 @@ public class Row {
 
   /**
    * Returns 1-based column number.
+   *
+   * @param columnLabel case-insensitive column label
    */
   public int findColumn(String columnLabel) throws SQLException {
     Integer columnIndex = fieldMap.getIndex(columnLabel);
@@ -124,6 +128,9 @@ public class Row {
     return columnIndex;
   }
 
+  /**
+   * @param columnLabel case-insensitive column label
+   */
   public Object getObject(String columnLabel) throws SQLException {
     return getObject(findColumn(columnLabel));
   }
@@ -161,6 +168,8 @@ public class Row {
    *
    * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
    * or {@link #getObject(String,Class)}.
+   *
+   * @param columnLabel case-insensitive column label
    */
   public int getInt(String columnLabel) throws SQLException {
     return getInt(findColumn(columnLabel));
@@ -179,6 +188,9 @@ public class Row {
     return value == null ? 0 : value;
   }
 
+  /**
+   * @param columnLabel case-insensitive column label
+   */
   public UnsignedLong getULong(String columnLabel) throws SQLException {
     return getULong(findColumn(columnLabel));
   }
@@ -190,6 +202,9 @@ public class Row {
     return getObject(columnIndex, UnsignedLong.class);
   }
 
+  /**
+   * @param columnLabel case-insensitive column label
+   */
   public String getString(String columnLabel) throws SQLException {
     return getString(findColumn(columnLabel));
   }
@@ -206,6 +221,8 @@ public class Row {
    *
    * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
    * or {@link #getObject(String,Class)}.
+   *
+   * @param columnLabel case-insensitive column label
    */
   public long getLong(String columnLabel) throws SQLException {
     return getLong(findColumn(columnLabel));
@@ -229,6 +246,8 @@ public class Row {
    *
    * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
    * or {@link #getObject(String,Class)}.
+   *
+   * @param columnLabel case-insensitive column label
    */
   public double getDouble(String columnLabel) throws SQLException {
     return getDouble(findColumn(columnLabel));
@@ -252,6 +271,8 @@ public class Row {
    *
    * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
    * or {@link #getObject(String,Class)}.
+   *
+   * @param columnLabel case-insensitive column label
    */
   public float getFloat(String columnLabel) throws SQLException {
     return getFloat(findColumn(columnLabel));
@@ -272,6 +293,8 @@ public class Row {
 
   /**
    * Returns the column value as a {@link Date} with the default time zone.
+   *
+   * @param columnLabel case-insensitive column label
    */
   public Date getDate(String columnLabel) throws SQLException {
     return getDate(findColumn(columnLabel), Calendar.getInstance());
@@ -279,6 +302,8 @@ public class Row {
 
   /**
    * Returns the column value as a {@link Date} with the given {@link Calendar}.
+   *
+   * @param columnLabel case-insensitive column label
    */
   public Date getDate(String columnLabel, Calendar cal) throws SQLException {
     return getDate(findColumn(columnLabel), cal);
@@ -317,6 +342,8 @@ public class Row {
 
   /**
    * Returns the column value as {@link Time} with the default time zone.
+   *
+   * @param columnLabel case-insensitive column label
    */
   public Time getTime(String columnLabel) throws SQLException {
     return getTime(findColumn(columnLabel), Calendar.getInstance());
@@ -324,6 +351,8 @@ public class Row {
 
   /**
    * Returns the column value as {@link Time} with the given {@link Calendar}.
+   *
+   * @param columnLabel case-insensitive column label
    */
   public Time getTime(String columnLabel, Calendar cal) throws SQLException {
     return getTime(findColumn(columnLabel), cal);
@@ -362,6 +391,8 @@ public class Row {
 
   /**
    * Returns the column value as {@link Timestamp} with the default time zone.
+   *
+   * @param columnLabel case-insensitive column label
    */
   public Timestamp getTimestamp(String columnLabel) throws SQLException {
     return getTimestamp(findColumn(columnLabel), Calendar.getInstance());
@@ -369,6 +400,8 @@ public class Row {
 
   /**
    * Returns the column value as {@link Timestamp} with the given {@link Calendar}.
+   *
+   * @param columnLabel case-insensitive column label
    */
   public Timestamp getTimestamp(String columnLabel, Calendar cal) throws SQLException {
     return getTimestamp(findColumn(columnLabel), cal);
@@ -410,6 +443,9 @@ public class Row {
     }
   }
 
+  /**
+   * @param columnLabel case-insensitive column label
+   */
   public byte[] getBytes(String columnLabel) throws SQLException {
     return getBytes(findColumn(columnLabel));
   }
@@ -421,6 +457,9 @@ public class Row {
     return getObject(columnIndex, byte[].class);
   }
 
+  /**
+   * @param columnLabel case-insensitive column label
+   */
   public BigDecimal getBigDecimal(String columnLabel) throws SQLException {
     return getBigDecimal(findColumn(columnLabel));
   }
@@ -437,6 +476,8 @@ public class Row {
    *
    * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
    * or {@link #getObject(String,Class)}.
+   *
+   * @param columnLabel case-insensitive column label
    */
   public short getShort(String columnLabel) throws SQLException {
     return getShort(findColumn(columnLabel));
@@ -494,6 +535,7 @@ public class Row {
    * }
    * </pre></blockquote>
    *
+   * @param columnLabel case-insensitive column label
    * @throws SQLDataException if the type doesn't match the actual value.
    */
   public <T> T getObject(String columnLabel, Class<T> type) throws SQLException {

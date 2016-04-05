@@ -4,11 +4,11 @@
       "Sharded": true,
       "Vindexes": {
         "user_index": {
-          "Type": "hash",
+          "Type": "hash_test",
           "Owner": "user"
         },
         "music_user_map": {
-          "Type": "lookup",
+          "Type": "lookup_test",
           "Owner": "music"
         },
         "name_user_map": {
@@ -20,7 +20,7 @@
           "Owner": "user"
         }
       },
-      "Classes": {
+      "Tables": {
         "user": {
           "ColVindexes": [
             {
@@ -77,23 +77,14 @@
             }
           ]
         }
-      },
-      "Tables": {
-        "user": "user",
-        "user_extra": "user_extra",
-        "music": "music",
-        "music_extra": "music_extra"
       }
     },
     "main": {
-      "Classes": {
+      "Tables": {
+        "main1": {},
         "seq": {
           "Type": "Sequence"
         }
-      },
-      "Tables": {
-        "main1": "",
-        "seq": "seq"
       }
     }
   }

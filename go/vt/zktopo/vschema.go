@@ -5,13 +5,11 @@
 package zktopo
 
 import (
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
-	"golang.org/x/net/context"
-	// vindexes needs to be imported so that they register
-	// themselves against vtgate/planbuilder. This will allow
-	// us to sanity check the schema being uploaded.
-	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"path"
+
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/zk"
+	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 )
 
@@ -20,22 +18,24 @@ This file contains the vschema management code for zktopo.Server
 */
 
 const (
-	globalVSchemaPath = "/zk/global/vt/vschema"
+	vschemaPath = "vschema"
 )
 
 // SaveVSchema saves the JSON vschema into the topo.
-func (zkts *Server) SaveVSchema(ctx context.Context, vschema string) error {
-	_, err := planbuilder.NewVSchema([]byte(vschema))
+func (zkts *Server) SaveVSchema(ctx context.Context, keyspace, vschema string) error {
+	err := vindexes.ValidateVSchema([]byte(vschema))
 	if err != nil {
 		return err
 	}
-	_, err = zk.CreateOrUpdate(zkts.zconn, globalVSchemaPath, vschema, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
+	vschemaPath := path.Join(GlobalKeyspacesPath, keyspace, vschemaPath)
+	_, err = zk.CreateOrUpdate(zkts.zconn, vschemaPath, vschema, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
 	return err
 }
 
 // GetVSchema fetches the JSON vschema from the topo.
-func (zkts *Server) GetVSchema(ctx context.Context) (string, error) {
-	data, _, err := zkts.zconn.Get(globalVSchemaPath)
+func (zkts *Server) GetVSchema(ctx context.Context, keyspace string) (string, error) {
+	vschemaPath := path.Join(GlobalKeyspacesPath, keyspace, vschemaPath)
+	data, _, err := zkts.zconn.Get(vschemaPath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			return "{}", nil

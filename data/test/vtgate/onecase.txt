@@ -3,7 +3,9 @@
 {
   "Original": "select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col",
   "Instructions": {
+    "Opcode": "Join",
     "Left": {
+      "Opcode": "Join",
       "Left": {
         "Opcode": "SelectScatter",
         "Keyspace": {

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -24,6 +26,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -50,7 +53,7 @@ var tabletMap map[uint32]*tablet
 
 // initTabletMap creates the action agents and associated data structures
 // for all tablets
-func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
+func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, formal *vindexes.VSchemaFormal, mycnf *mysqlctl.Mycnf) {
 	tabletMap = make(map[uint32]*tablet)
 
 	ctx := context.Background()
@@ -94,6 +97,14 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 				log.Fatalf("CreateKeyspace(%v) failed: %v", keyspace, err)
 			}
 			keyspaceMap[keyspace] = true
+			kformal := formal.Keyspaces[keyspace]
+			data, err := json.Marshal(kformal)
+			if err != nil {
+				log.Fatalf("Marshal failed: %v", err)
+			}
+			if err := ts.SaveVSchema(ctx, keyspace, string(data)); err != nil {
+				log.Fatalf("SaveVSchema failed: %v", err)
+			}
 		}
 
 		// create the master
@@ -251,16 +262,32 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []query
 	return results, nil
 }
 
+type streamExecuteAdapter struct {
+	c   chan *sqltypes.Result
+	err *error
+}
+
+func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
+	r, ok := <-a.c
+	if !ok {
+		if *a.err == nil {
+			return nil, io.EOF
+		}
+		return nil, *a.err
+	}
+	return r, nil
+}
+
 // StreamExecute is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
+func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
 	bv, err := querytypes.BindVariablesToProto3(bindVars)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	bindVars, err = querytypes.Proto3ToBindVariables(bv)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	result := make(chan *sqltypes.Result, 10)
 	var finalErr error
@@ -282,9 +309,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 		close(result)
 	}()
 
-	return result, func() error {
-		return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
-	}, nil
+	return &streamExecuteAdapter{result, &finalErr}, nil
 }
 
 // Begin is part of tabletconn.TabletConn
@@ -347,9 +372,39 @@ func (itc *internalTabletConn) SplitQuery(ctx context.Context, query querytypes.
 	return splits, nil
 }
 
+// SplitQueryV2 is part of tabletconn.TabletConn
+// TODO(erez): Rename to SplitQuery once the migration to SplitQuery V2 is done.
+func (itc *internalTabletConn) SplitQueryV2(
+	ctx context.Context,
+	query querytypes.BoundQuery,
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error) {
+
+	splits, err := itc.tablet.qsc.QueryService().SplitQueryV2(
+		ctx,
+		&querypb.Target{
+			Keyspace:   itc.tablet.keyspace,
+			Shard:      itc.tablet.shard,
+			TabletType: itc.tablet.tabletType,
+		},
+		query.Sql,
+		query.BindVariables,
+		splitColumns,
+		splitCount,
+		numRowsPerQueryPart,
+		algorithm,
+		0 /* SessionID */)
+	if err != nil {
+		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
+	}
+	return splits, nil
+}
+
 type streamHealthReader struct {
-	c       <-chan *querypb.StreamHealthResponse
-	errFunc tabletconn.ErrFunc
+	c   <-chan *querypb.StreamHealthResponse
+	err *error
 }
 
 // Recv implements tabletconn.StreamHealthReader.
@@ -357,7 +412,7 @@ type streamHealthReader struct {
 func (r *streamHealthReader) Recv() (*querypb.StreamHealthResponse, error) {
 	resp, ok := <-r.c
 	if !ok {
-		return nil, r.errFunc()
+		return nil, *r.err
 	}
 	return resp, nil
 }
@@ -377,17 +432,17 @@ func (itc *internalTabletConn) StreamHealth(ctx context.Context) (tabletconn.Str
 		case <-ctx.Done():
 		}
 
+		// We populate finalErr before closing the channel.
+		// The consumer first waits on the channel closure,
+		// then read finalErr
 		finalErr = itc.tablet.qsc.QueryService().StreamHealthUnregister(id)
+		finalErr = tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
 		close(result)
 	}()
 
-	errFunc := func() error {
-		return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
-	}
-
 	return &streamHealthReader{
-		c:       result,
-		errFunc: errFunc,
+		c:   result,
+		err: &finalErr,
 	}, nil
 }
 

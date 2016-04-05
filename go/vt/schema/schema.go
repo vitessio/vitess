@@ -118,9 +118,14 @@ func (ta *Table) SetMysqlStats(tr, dl, il, df sqltypes.Value) {
 
 // Index contains info about a table index.
 type Index struct {
-	Name        string
-	Columns     []string
+	Name string
+	// Columns are the columns comprising the index.
+	Columns []string
+	// Cardinality[i] is the number of distinct values of Columns[i] in the
+	// table.
 	Cardinality []uint64
+	// DataColumns are the primary-key columns for secondary indices and
+	// all the columns for the primary-key index.
 	DataColumns []string
 }
 

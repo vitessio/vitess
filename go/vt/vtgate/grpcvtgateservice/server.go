@@ -37,7 +37,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
-	result, err := vtg.server.Execute(ctx, string(request.Query.Sql), bv, request.TabletType, request.Session, request.NotInTransaction)
+	result, err := vtg.server.Execute(ctx, string(request.Query.Sql), bv, request.Keyspace, request.TabletType, request.Session, request.NotInTransaction)
 	return &vtgatepb.ExecuteResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: request.Session,
@@ -196,6 +196,7 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 	vtgErr := vtg.server.StreamExecute(ctx,
 		string(request.Query.Sql),
 		bv,
+		request.Keyspace,
 		request.TabletType,
 		func(value *sqltypes.Result) error {
 			return stream.Send(&vtgatepb.StreamExecuteResponse{
@@ -333,12 +334,17 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *vtgatepb.SplitQueryR
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
-	splits, vtgErr := vtg.server.SplitQuery(ctx,
+	splits, vtgErr := vtgateservice.CallCorrectSplitQuery(
+		vtg.server,
+		request.UseSplitQueryV2,
+		ctx,
 		request.Keyspace,
 		string(request.Query.Sql),
 		bv,
 		request.SplitColumn,
-		request.SplitCount)
+		request.SplitCount,
+		request.NumRowsPerQueryPart,
+		request.Algorithm)
 	if vtgErr != nil {
 		return nil, vterrors.ToGRPCError(vtgErr)
 	}

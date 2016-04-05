@@ -38,7 +38,10 @@ type EqualSplitsAlgorithm struct {
 func NewEqualSplitsAlgorithm(splitParams *SplitParams, sqlExecuter SQLExecuter) (
 	*EqualSplitsAlgorithm, error) {
 
-	assertEqual(len(splitParams.splitColumns), len(splitParams.splitColumnTypes))
+	if len(splitParams.splitColumns) != len(splitParams.splitColumnTypes) {
+		panic(fmt.Sprintf("len(splitparams.splitColumns) != len(splitparams.splitColumnTypes): %v!=%v",
+			len(splitParams.splitColumns), len(splitParams.splitColumnTypes)))
+	}
 	if len(splitParams.splitColumns) != 1 {
 		return nil, fmt.Errorf("using the EQUAL_SPLITS algorithm in SplitQuery requires having"+
 			" exactly one split-column. Got split-columns: %v", splitParams.splitColumns)
@@ -149,7 +152,7 @@ func (a *EqualSplitsAlgorithm) executeMinMaxQuery() (minValue, maxValue sqltypes
 // where <table> is the table referenced in the original query (held in splitParams.sql).
 func buildMinMaxQuery(splitParams *SplitParams) string {
 	// The SplitParams constructor should have already checked that the FROM clause of the query
-	// is a simple table expression, so this type assertion should succeed.
+	// is a simple table expression, so this type-assertion should succeed.
 	tableName := sqlparser.GetTableName(
 		splitParams.selectAST.From[0].(*sqlparser.AliasedTableExpr).Expr)
 	if tableName == "" {

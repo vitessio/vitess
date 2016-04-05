@@ -5,6 +5,7 @@
 package goclienttest
 
 import (
+	"io"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -159,13 +160,21 @@ func testTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 	})
 }
 
-func getStreamError(qrChan <-chan *sqltypes.Result, errFunc vtgateconn.ErrFunc, err error) error {
+func getStreamError(stream sqltypes.ResultStream, err error) error {
 	if err != nil {
 		return err
 	}
-	for range qrChan {
+	for {
+		_, err := stream.Recv()
+		switch err {
+		case nil:
+			// keep going
+		case io.EOF:
+			return nil
+		default:
+			return err
+		}
 	}
-	return errFunc()
 }
 
 func checkExecuteErrors(t *testing.T, execute func(string) error) {

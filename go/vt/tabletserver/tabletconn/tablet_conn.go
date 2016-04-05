@@ -89,11 +89,12 @@ type TabletConn interface {
 	// ExecuteBatch executes a group of queries.
 	ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionId int64) ([]sqltypes.Result, error)
 
-	// StreamExecute executes a streaming query on vttablet. It returns a channel, ErrFunc and error.
-	// If error is non-nil, it means that the StreamExecute failed to send the request. Otherwise,
-	// you can pull values from the channel till it's closed. Following this, you can call ErrFunc
-	// to see if the stream ended normally or due to a failure.
-	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *sqltypes.Result, ErrFunc, error)
+	// StreamExecute executes a streaming query on vttablet. It
+	// returns a sqltypes.ResultStream to get results from. If
+	// error is non-nil, it means that the StreamExecute failed to
+	// send the request. Otherwise, you can pull values from the
+	// ResultStream until io.EOF, or any other error.
+	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (sqltypes.ResultStream, error)
 
 	// Transaction support
 	Begin(ctx context.Context) (transactionId int64, err error)
@@ -115,11 +116,20 @@ type TabletConn interface {
 	// appending primary key range clauses to the original query
 	SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error)
 
+	// SplitQuery splits a query into equally sized smaller queries by
+	// appending primary key range clauses to the original query
+	// TODO(erez): Remove SplitQuery and rename this to SplitQueryV2 once migration is done.
+	SplitQueryV2(
+		ctx context.Context,
+		query querytypes.BoundQuery,
+		splitColumns []string,
+		splitCount int64,
+		numRowsPerQueryPart int64,
+		algorithm querypb.SplitQueryRequest_Algorithm) (queries []querytypes.QuerySplit, err error)
+
 	// StreamHealth starts a streaming RPC for VTTablet health status updates.
 	StreamHealth(ctx context.Context) (StreamHealthReader, error)
 }
-
-type ErrFunc func() error
 
 var dialers = make(map[string]TabletDialer)
 

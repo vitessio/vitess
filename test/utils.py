@@ -434,10 +434,11 @@ def poll_for_vars(
 
 
 def apply_vschema(vschema):
-  fname = os.path.join(environment.tmproot, 'vschema.json')
-  with open(fname, 'w') as f:
-    f.write(vschema)
-  run_vtctl(['ApplyVSchema', '-vschema_file', fname])
+  for k, v in vschema.iteritems():
+    fname = os.path.join(environment.tmproot, 'vschema.json')
+    with open(fname, 'w') as f:
+      f.write(v)
+    run_vtctl(['ApplyVSchema', '-vschema_file', fname, k])
 
 
 def wait_for_tablet_type(tablet_alias, expected_type, timeout=10):
@@ -893,7 +894,8 @@ def wait_db_read_only(uid):
   raise e
 
 
-def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
+def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64',
+                       sharding_column_name='keyspace_id'):
   ks = run_vtctl_json(['GetSrvKeyspace', cell, keyspace])
   result = ''
   pmap = {}
@@ -922,7 +924,7 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
         'Mismatch in srv keyspace for cell %s keyspace %s, expected:\n%'
         's\ngot:\n%s' % (
             cell, keyspace, expected, result))
-  if 'keyspace_id' != ks.get('sharding_column_name'):
+  if sharding_column_name != ks.get('sharding_column_name'):
     raise Exception('Got wrong sharding_column_name in SrvKeyspace: %s' %
                     str(ks))
   if keyspace_id_type != keyrange_constants.PROTO3_KIT_TO_STRING[

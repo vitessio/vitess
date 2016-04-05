@@ -7,6 +7,7 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -138,8 +139,8 @@ func (ftc *fakeTabletConn) ExecuteBatch(ctx context.Context, queries []querytype
 }
 
 // StreamExecute is part of the TabletConn interface
-func (ftc *fakeTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
-	return nil, nil, fmt.Errorf("not implemented in this test")
+func (ftc *fakeTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
+	return nil, fmt.Errorf("not implemented in this test")
 }
 
 // Begin is part of the TabletConn interface
@@ -182,11 +183,6 @@ func (ftc *fakeTabletConn) Rollback2(ctx context.Context, transactionID int64) e
 	return fmt.Errorf("not implemented in this test")
 }
 
-// StreamExecute2 is part of the TabletConn interface
-func (ftc *fakeTabletConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
-	return nil, nil, fmt.Errorf("not implemented in this test")
-}
-
 // Close is part of the TabletConn interface
 func (ftc *fakeTabletConn) Close() {
 }
@@ -206,9 +202,20 @@ func (ftc *fakeTabletConn) SplitQuery(ctx context.Context, query querytypes.Boun
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
+// SplitQuery is part of the TabletConn interface
+func (ftc *fakeTabletConn) SplitQueryV2(
+	ctx context.Context,
+	query querytypes.BoundQuery,
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error) {
+	return nil, fmt.Errorf("not implemented in this test")
+}
+
 type streamHealthReader struct {
-	c       <-chan *querypb.StreamHealthResponse
-	errFunc tabletconn.ErrFunc
+	c   <-chan *querypb.StreamHealthResponse
+	err *error
 }
 
 // Recv implements tabletconn.StreamHealthReader.
@@ -216,7 +223,10 @@ type streamHealthReader struct {
 func (r *streamHealthReader) Recv() (*querypb.StreamHealthResponse, error) {
 	resp, ok := <-r.c
 	if !ok {
-		return nil, r.errFunc()
+		if *r.err == nil {
+			return nil, io.EOF
+		}
+		return nil, *r.err
 	}
 	return resp, nil
 }
@@ -242,8 +252,8 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context) (tabletconn.StreamH
 		}
 	}()
 	return &streamHealthReader{
-		c:       c,
-		errFunc: func() error { return finalErr },
+		c:   c,
+		err: &finalErr,
 	}, nil
 }
 

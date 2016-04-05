@@ -15,11 +15,14 @@ but will not return transient errors during the buffering time.
 package txbuffer
 
 import (
+	"errors"
 	"flag"
 	"sync"
 	"time"
 
 	"github.com/youtube/vitess/go/stats"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 var (
@@ -39,26 +42,32 @@ var (
 // timeSleep can be mocked out in unit tests
 var timeSleep = time.Sleep
 
+// errBufferFull is the error returned a buffer request is rejected because the buffer is full.
+var errBufferFull = vterrors.FromError(
+	vtrpcpb.ErrorCode_TRANSIENT_ERROR,
+	errors.New("transaction buffer full, rejecting request"),
+)
+
 // FakeBuffer will pretend to buffer new transactions in VTGate.
 // Transactions *will NOT actually be buffered*, they will just have a delayed start time.
 // This can be useful to understand what the impact of trasaction buffering will be
 // on upstream callers. Once the impact is measured, it can be used to tweak parameter values
 // for the best behavior.
 // FakeBuffer should be called before the VtTablet Begin, otherwise it will increase transaction times.
-func FakeBuffer(keyspace, shard string, attemptNumber int) {
+func FakeBuffer(keyspace, shard string, attemptNumber int) error {
 	// Only buffer on the first Begin attempt, not on possible retries.
 	if !*enableFakeTxBuffer || attemptNumber != 0 {
-		return
+		return nil
 	}
 	if keyspace != *bufferKeyspace || shard != *bufferShard {
-		return
+		return nil
 	}
 	bufferedTransactionsAttempted.Add(1)
 
 	bufferMu.Lock()
 	if int(bufferedTransactions.Get()) >= *maxBufferSize {
 		bufferMu.Unlock()
-		return
+		return errBufferFull
 	}
 	bufferedTransactions.Add(1)
 	bufferMu.Unlock()
@@ -67,4 +76,5 @@ func FakeBuffer(keyspace, shard string, attemptNumber int) {
 	timeSleep(*fakeBufferDelay)
 	// Don't need to lock for this, as there's no race when decrementing the count
 	bufferedTransactions.Add(-1)
+	return nil
 }
