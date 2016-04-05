@@ -36,13 +36,13 @@ try:
   # Insert something.
   print 'Inserting into master...'
   cursor = conn.cursor(
-      # tablet_type='master', keyspace='test_keyspace',
-      tablet_type='master', keyspace='test_ksp2',
+      tablet_type='master', keyspace='test_keyspace',
       keyranges=UNSHARDED, writable=True)
   cursor.begin()
-  cursor.execute(
-      'INSERT INTO test_table (msg) VALUES (:msg)',
-      {'msg': 'V is for speed'})
+  for x in xrange(1000):
+    cursor.execute(
+        'INSERT INTO test_table (msg) VALUES (:msg)',
+        {'msg': 'V is for speed'})
   cursor.commit()
 
   # Read it back from the master.
@@ -57,8 +57,7 @@ try:
   # Note that this may be behind master due to replication lag.
   print 'Reading from replica...'
   cursor = conn.cursor(
-      # tablet_type='replica', keyspace='test_ksp2', keyranges=UNSHARDED)
-      tablet_type='replica', keyspace='test_ksp2', keyranges=UNSHARDED)
+      tablet_type='replica', keyspace='test_keyspace', keyranges=UNSHARDED)
   cursor.execute('SELECT * FROM test_table', {})
   for row in cursor.fetchall():
     print row

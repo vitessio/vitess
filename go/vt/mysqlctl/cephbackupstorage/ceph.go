@@ -22,7 +22,7 @@ var (
 	//	bucket = flag.String("ceph_backup_storage_bucket", "", "Ceph Cloud Storage bucket to use for backups")
 
 	//	bucket = "raunaktestbucket"
-	bucket = "minio-bucket1"
+	bucket = "raunaktestbucket"
 	// root is a prefix added to all object names.
 //	root = flag.String("sd", "", "root prefix for all backup-related object names")
 )
@@ -158,7 +158,7 @@ func (bs *CephBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHand
 	doneCh := make(chan struct{})
 	// Loop in case results are returned in multiple batches.
 	dirTemp := dir
-	dir = "minio-bucket1"
+	dir = "raunaktestbucket"
 	var result []backupstorage.BackupHandle
 	for object := range c.ListObjects(dir, "", false, doneCh) {
 		if object.Err != nil {
@@ -181,7 +181,7 @@ func (bs *CephBackupStorage) StartBackup(dir, name string) (backupstorage.Backup
 	if err != nil {
 		return nil, err
 	}
-	dir = "minio-bucket1"
+	dir = "raunaktestbucket"
 
 	return &CephBackupHandle{
 		client:   c,
@@ -198,7 +198,7 @@ func (bs *CephBackupStorage) RemoveBackup(dir, name string) error {
 	if err != nil {
 		return err
 	}
-	dir = "minio-bucket1"
+	dir = "raunaktestbucket"
 	err = c.RemoveObject(dir, name)
 	if err != nil {
 		log.Fatalln(err)
@@ -234,7 +234,7 @@ func (bs *CephBackupStorage) client() (*minio.Client, error) {
 	if bs.client_ceph == nil {
 		accessKey := "439SQDG76BGBAM8ILSKR"
 		secretKey := "zu7wZxwJYKUHMf7KJISKFSbvUC546Ge3KO3qVXbT"
-		url := "10.47.2.3"
+		url := "10.33.85.72:8080"
 		ceph_client, err := minio.NewV2(url, accessKey, secretKey, true)
 		if err != nil {
 			return nil, err
