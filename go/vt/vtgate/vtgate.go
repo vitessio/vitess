@@ -133,9 +133,11 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 	errorsByKeyspace = stats.NewRates("ErrorsByKeyspace", stats.CounterForDimension(normalErrors, "Keyspace"), 15, 1*time.Minute)
 	errorsByDbType = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(normalErrors, "DbType"), 15, 1*time.Minute)
 
-	for _, f := range RegisterVTGates {
-		f(rpcVTGate)
-	}
+	servenv.OnRun(func() {
+		for _, f := range RegisterVTGates {
+			f(rpcVTGate)
+		}
+	})
 	return rpcVTGate
 }
 
