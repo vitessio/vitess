@@ -291,7 +291,7 @@ def write_rows_to_shard(count, shard_index):
 
 def restart_vtgate(extra_args=None):
   if extra_args is None:
-    extra_args = {}
+    extra_args = []
   port = utils.vtgate.port
   utils.vtgate.kill()
   utils.VtGate(port=port).start(
