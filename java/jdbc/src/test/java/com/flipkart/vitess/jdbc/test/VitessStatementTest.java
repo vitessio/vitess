@@ -127,7 +127,7 @@ import java.util.List;
         Cursor mockCursor = PowerMockito.mock(Cursor.class);
         SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
         SQLFuture mockSqlFutureVtGateTx = PowerMockito.mock(SQLFuture.class);
-        List<Query.Field> fieldList = new ArrayList<>();
+        List<Query.Field> fieldList = PowerMockito.mock(ArrayList.class);
 
         PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
         PowerMockito.when(mockConn.getVtGateTx()).thenReturn(mockVtGateTx);
@@ -175,6 +175,7 @@ import java.util.List;
 
             //cursor fields is not null
             PowerMockito.when(mockCursor.getFields()).thenReturn(fieldList);
+            PowerMockito.when(fieldList.isEmpty()).thenReturn(false);
             try {
                 statement.executeUpdate(sqlSelect);
                 Assert.fail("Should have thrown exception for field not null");

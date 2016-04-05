@@ -23,30 +23,20 @@ import java.util.logging.Logger;
  */
 public class VitessPreparedStatement extends VitessStatement implements PreparedStatement {
 
-    private final boolean USE_BIND_VARIABLES;
     /* Get actual class name to be printed on */
     private static Logger logger = Logger.getLogger(VitessPreparedStatement.class.getName());
     private final String sql;
-    private final Map<Integer, String> parameterMap;
     private final Map<String, Object> bindVariables;
 
-    public VitessPreparedStatement(VitessConnection vitessConnection, String sql)
-        throws SQLException {
-        this(vitessConnection, sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY, false);
+    public VitessPreparedStatement(VitessConnection vitessConnection, String sql) throws SQLException {
+        this(vitessConnection, sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
     }
 
     public VitessPreparedStatement(VitessConnection vitessConnection, String sql, int resultSetType,
-        int resultSetConcurrency) throws SQLException {
-        this(vitessConnection, sql, resultSetType, resultSetConcurrency, false);
-    }
-
-    public VitessPreparedStatement(VitessConnection vitessConnection, String sql, int resultSetType,
-        int resultSetConcurrency, boolean useBindVariables) throws SQLException {
+                                   int resultSetConcurrency) throws SQLException {
         super(vitessConnection, resultSetType, resultSetConcurrency);
         checkSQLNullOrEmpty(sql);
-        this.parameterMap = new HashMap<>();
         this.bindVariables = new HashMap<>();
-        this.USE_BIND_VARIABLES = useBindVariables;
         this.sql = sql;
     }
 
@@ -65,7 +55,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         showSql = StringUtils.startsWithIgnoreCaseAndWs(sql, Constants.SQL_SHOW);
         if (showSql) {
             String keyspace = this.vitessConnection.getKeyspace();
-            List<byte[]> keyspaceIds = Arrays.asList(new byte[] {1}); //To Hit any single shard
+            List<byte[]> keyspaceIds = Arrays.asList(new byte[]{1}); //To Hit any single shard
 
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
             cursor = vtGateConn
@@ -73,18 +63,10 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                 .checkedGet();
         } else {
             if (tabletType != Topodata.TabletType.MASTER || this.vitessConnection.getAutoCommit()) {
-                if (USE_BIND_VARIABLES) {
-                    Context context =
-                        this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                    cursor = vtGateConn.execute(context, this.sql, this.bindVariables, tabletType)
-                        .checkedGet();
-                } else {
-                    Context context =
-                        this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                    cursor = vtGateConn
-                        .execute(context, StringUtils.getSqlWithoutParameter(this.sql, parameterMap),
-                            null, tabletType).checkedGet();
-                }
+                Context context =
+                    this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                cursor = vtGateConn.execute(context, this.sql, this.bindVariables, tabletType)
+                    .checkedGet();
             } else {
                 VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
                 if (vtGateTx == null) {
@@ -94,8 +76,8 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                     this.vitessConnection.setVtGateTx(vtGateTx);
                 }
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                cursor = executeSQL(vtGateTx, USE_BIND_VARIABLES, context, this.sql, tabletType,
-                    this.bindVariables, this.parameterMap);
+                cursor = executeSQL(vtGateTx, context, this.sql, tabletType,
+                    this.bindVariables);
             }
         }
 
@@ -131,22 +113,22 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
 
         if (this.vitessConnection.getAutoCommit()) {
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-            cursor = executeSQL(vtGateTx, USE_BIND_VARIABLES, context, this.sql, tabletType,
-                this.bindVariables, this.parameterMap);
+            cursor = executeSQL(vtGateTx, context, this.sql, tabletType,
+                this.bindVariables);
             vtGateTx.commit(context).checkedGet();
             vtGateTx = null;
             this.vitessConnection.setVtGateTx(vtGateTx);
         } else {
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-            cursor = executeSQL(vtGateTx, USE_BIND_VARIABLES, context, this.sql, tabletType,
-                this.bindVariables, this.parameterMap);
+            cursor = executeSQL(vtGateTx, context, this.sql, tabletType,
+                this.bindVariables);
         }
 
         if (null == cursor) {
             throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
         }
 
-        if (null != cursor.getFields() && cursor.getFields().size()!=0) {
+        if (!(null == cursor.getFields() || cursor.getFields().isEmpty())) {
             throw new SQLException(Constants.SQLExceptionMessages.SQL_RETURNED_RESULT_SET);
         }
 
@@ -179,18 +161,14 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         showSql = StringUtils.startsWithIgnoreCaseAndWs(sql, Constants.SQL_SHOW);
 
         if (selectSql) {
-            if (USE_BIND_VARIABLES) {
-                Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                cursor =
-                    vtGateConn.streamExecute(context, this.sql, this.bindVariables, tabletType);
-            } else {
-                Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                cursor = vtGateConn.streamExecute(context,
-                    StringUtils.getSqlWithoutParameter(this.sql, this.parameterMap), null, tabletType);
-            }
+
+            Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+            cursor =
+                vtGateConn.streamExecute(context, this.sql, this.bindVariables, tabletType);
+
         } else if (showSql) {
             String keyspace = this.vitessConnection.getKeyspace();
-            List<byte[]> keyspaceIds = Arrays.asList(new byte[] {1}); //To Hit any single shard
+            List<byte[]> keyspaceIds = Arrays.asList(new byte[]{1}); //To Hit any single shard
 
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
 
@@ -206,8 +184,8 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             }
 
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-            cursor = executeSQL(vtGateTx, USE_BIND_VARIABLES, context, this.sql, tabletType,
-                this.bindVariables, this.parameterMap);
+            cursor = executeSQL(vtGateTx, context, this.sql, tabletType,
+                this.bindVariables);
 
             if (this.vitessConnection.getAutoCommit()) {
                 context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
@@ -220,7 +198,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
         }
 
-        if (null != cursor.getFields() && cursor.getFields().size() > 0) {
+        if (!(null == cursor.getFields() || cursor.getFields().isEmpty())) {
             this.vitessResultSet = new VitessResultSet(cursor, this);
             return true;
         } else {
@@ -231,82 +209,98 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
 
     public void clearParameters() throws SQLException {
         checkOpen();
-        this.parameterMap.clear();
         this.bindVariables.clear();
     }
 
     public void setNull(int parameterIndex, int sqlType) throws SQLException {
-        setMapVariable(parameterIndex, "NULL", null);
+        checkOpen();
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, null);
     }
 
     public void setBoolean(int parameterIndex, boolean x) throws SQLException {
-        setMapVariable(parameterIndex, x ? String.valueOf(1) : String.valueOf(0), x);
+        checkOpen();
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
     }
 
     public void setByte(int parameterIndex, byte x) throws SQLException {
-        setMapVariable(parameterIndex, String.valueOf(x), x);
+        checkOpen();
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
     }
 
     public void setShort(int parameterIndex, short x) throws SQLException {
-        setMapVariable(parameterIndex, String.valueOf(x), x);
+        checkOpen();
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
     }
 
     public void setInt(int parameterIndex, int x) throws SQLException {
-        setMapVariable(parameterIndex, String.valueOf(x), x);
+        checkOpen();
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
     }
 
     public void setLong(int parameterIndex, long x) throws SQLException {
-        setMapVariable(parameterIndex, String.valueOf(x), x);
+        checkOpen();
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
     }
 
     public void setFloat(int parameterIndex, float x) throws SQLException {
-        setMapVariable(parameterIndex, String.valueOf(x), x);
+        checkOpen();
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
     }
 
     public void setDouble(int parameterIndex, double x) throws SQLException {
-        setMapVariable(parameterIndex, String.valueOf(x), x);
+        checkOpen();
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
     }
 
     public void setBigDecimal(int parameterIndex, BigDecimal x) throws SQLException {
-        setMapVariable(parameterIndex, x.toPlainString(), x);
+        checkOpen();
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
     }
 
     public void setString(int parameterIndex, String x) throws SQLException {
-        setMapVariable(parameterIndex, convertToStringLiteral(x), x);
+        checkOpen();
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
     }
 
     public void setBytes(int parameterIndex, byte[] x) throws SQLException {
-        setMapVariable(parameterIndex, convertToStringLiteral(new String(x)), x);
+        checkOpen();
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
     }
 
     public void setDate(int parameterIndex, Date x) throws SQLException {
+        checkOpen();
         String date = DateTime.formatDate(x);
-        setMapVariable(parameterIndex, convertToStringLiteral(date), date);
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, date);
     }
 
     public void setTime(int parameterIndex, Time x) throws SQLException {
+        checkOpen();
         String time = DateTime.formatTime(x);
-        setMapVariable(parameterIndex, convertToStringLiteral(time), time);
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, time);
     }
 
     public void setTimestamp(int parameterIndex, Timestamp x) throws SQLException {
+        checkOpen();
         String timeStamp = DateTime.formatTimestamp(x);
-        setMapVariable(parameterIndex, convertToStringLiteral(timeStamp), timeStamp);
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, timeStamp);
     }
 
     public void setDate(int parameterIndex, Date x, Calendar cal) throws SQLException {
+        checkOpen();
         String date = DateTime.formatDate(x, cal);
-        setMapVariable(parameterIndex, convertToStringLiteral(date), date);
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, date);
     }
 
     public void setTime(int parameterIndex, Time x, Calendar cal) throws SQLException {
+        checkOpen();
         String time = DateTime.formatTime(x, cal);
-        setMapVariable(parameterIndex, convertToStringLiteral(time), time);
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, time);
     }
 
     public void setTimestamp(int parameterIndex, Timestamp x, Calendar cal) throws SQLException {
+        checkOpen();
         String timeStamp = DateTime.formatTimestamp(x, cal);
-        setMapVariable(parameterIndex, convertToStringLiteral(timeStamp), timeStamp);
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, timeStamp);
     }
 
     public void setObject(int parameterIndex, Object x) throws SQLException {
@@ -346,26 +340,17 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
 
     // Methods Private to this class
 
-    private void setMapVariable(int parameterIndex, String str, Object x) throws SQLException {
-        checkOpen();
-        if (USE_BIND_VARIABLES) {
-            this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
-        } else {
-            this.parameterMap.put(parameterIndex, str);
-        }
+    private void setMapVariable(int parameterIndex, Object x) throws SQLException {
+
     }
 
-    private Cursor executeSQL(VTGateTx vtGateTx, final boolean useBindVariables,
-        final Context context, final String sql, final Topodata.TabletType tabletType,
-        final Map<String, Object> bindVariables, Map<Integer, String> parameterMap)
+    private Cursor executeSQL(VTGateTx vtGateTx,
+                              final Context context, final String sql, final Topodata.TabletType tabletType,
+                              final Map<String, Object> bindVariables)
         throws SQLException {
-        if (useBindVariables) {
-            return vtGateTx.execute(context, sql, bindVariables, tabletType).checkedGet();
-        } else {
-            return vtGateTx
-                .execute(context, StringUtils.getSqlWithoutParameter(sql, parameterMap), null, tabletType)
-                .checkedGet();
-        }
+
+        return vtGateTx.execute(context, sql, bindVariables, tabletType).checkedGet();
+
     }
 
     private String convertToStringLiteral(String value) {

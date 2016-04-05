@@ -108,7 +108,7 @@ import java.util.TimeZone;
             //select on replica with bind variables
             preparedStatement =
                 new VitessPreparedStatement(mockConn, sqlSelect, ResultSet.TYPE_FORWARD_ONLY,
-                    ResultSet.CONCUR_READ_ONLY, true);
+                    ResultSet.CONCUR_READ_ONLY);
             PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.REPLICA);
             rs = preparedStatement.executeQuery();
             Assert.assertEquals(-1, preparedStatement.getUpdateCount());
@@ -147,7 +147,7 @@ import java.util.TimeZone;
         Cursor mockCursor = PowerMockito.mock(Cursor.class);
         SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
         SQLFuture mockSqlFutureVtGateTx = PowerMockito.mock(SQLFuture.class);
-        List<Query.Field> fieldList = new ArrayList<>();
+        List<Query.Field> fieldList = PowerMockito.mock(ArrayList.class);
 
         PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
         PowerMockito.when(mockConn.getVtGateTx()).thenReturn(mockVtGateTx);
@@ -183,7 +183,7 @@ import java.util.TimeZone;
             PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.MASTER);
             preparedStatement =
                 new VitessPreparedStatement(mockConn, sqlUpdate, ResultSet.TYPE_FORWARD_ONLY,
-                    ResultSet.CONCUR_READ_ONLY, true);
+                    ResultSet.CONCUR_READ_ONLY);
             int updateCount = preparedStatement.executeUpdate();
             Assert.assertEquals(0, updateCount);
 
@@ -200,6 +200,7 @@ import java.util.TimeZone;
 
             //cursor fields is not null
             PowerMockito.when(mockCursor.getFields()).thenReturn(fieldList);
+            PowerMockito.when(fieldList.isEmpty()).thenReturn(false);
             try {
                 preparedStatement.executeUpdate();
                 Assert.fail("Should have thrown exception for field not null");
@@ -257,7 +258,7 @@ import java.util.TimeZone;
 
         VitessPreparedStatement preparedStatement =
             new VitessPreparedStatement(mockConn, sqlSelect, ResultSet.TYPE_FORWARD_ONLY,
-                ResultSet.CONCUR_READ_ONLY, true);
+                ResultSet.CONCUR_READ_ONLY);
         try {
 
             int fieldSize = 5;

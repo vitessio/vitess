@@ -140,7 +140,7 @@ public class VitessStatement implements Statement {
             throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
         }
 
-        if (null != cursor.getFields()) {
+        if (!(null == cursor.getFields() || cursor.getFields().isEmpty())) {
             throw new SQLException(Constants.SQLExceptionMessages.SQL_RETURNED_RESULT_SET);
         }
 
@@ -209,7 +209,7 @@ public class VitessStatement implements Statement {
             throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
         }
 
-        if (null != cursor.getFields() && cursor.getFields().size() > 0) {
+        if (!(null == cursor.getFields() || cursor.getFields().isEmpty())) {
             this.vitessResultSet = new VitessResultSet(cursor, this);
             return true;
         } else {
