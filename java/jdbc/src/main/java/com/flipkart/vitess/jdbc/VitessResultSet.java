@@ -56,7 +56,7 @@ public class VitessResultSet implements ResultSet {
             throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, e);
         }
         this.currentRow = 0;
-        if(null != vitessStatement) {
+        if (null != vitessStatement) {
             this.maxRows = vitessStatement.getMaxRows();
         }
     }
@@ -97,7 +97,7 @@ public class VitessResultSet implements ResultSet {
     }
 
     public VitessResultSet(String[] columnNames, Query.Type[] columnTypes,
-        ArrayList<ArrayList<String>> data) throws SQLException {
+                           ArrayList<ArrayList<String>> data) throws SQLException {
 
         if (columnNames.length != columnTypes.length) {
             throw new SQLException(Constants.SQLExceptionMessages.INVALID_RESULT_SET);
@@ -138,7 +138,7 @@ public class VitessResultSet implements ResultSet {
     public boolean next() throws SQLException {
         checkOpen();
 
-        if(this.maxRows > 0 && this.currentRow >= this.maxRows) {
+        if (this.maxRows > 0 && this.currentRow >= this.maxRows) {
             return false;
         }
 
@@ -208,9 +208,7 @@ public class VitessResultSet implements ResultSet {
         try {
             bool = Integer.valueOf(boolString);
         } catch (NumberFormatException nfe) {
-            if (null != boolString && "true".equalsIgnoreCase(boolString.trim()))
-                return true;
-            return false;
+            return null != boolString && "true".equalsIgnoreCase(boolString.trim());
         }
         return bool > 0;
     }
@@ -672,11 +670,7 @@ public class VitessResultSet implements ResultSet {
     }
 
     private boolean isNull(int columnIndex) throws SQLException {
-        if (null == this.row.getObject(columnIndex)) {
-            return true;
-        } else {
-            return false;
-        }
+        return null == this.row.getObject(columnIndex);
     }
 
     public InputStream getAsciiStream(int columnIndex) throws SQLException {

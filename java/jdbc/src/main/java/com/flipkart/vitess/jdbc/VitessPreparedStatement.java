@@ -117,7 +117,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                 this.bindVariables);
             vtGateTx.commit(context).checkedGet();
             vtGateTx = null;
-            this.vitessConnection.setVtGateTx(vtGateTx);
+            this.vitessConnection.setVtGateTx(null);
         } else {
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
             cursor = executeSQL(vtGateTx, context, this.sql, tabletType,
@@ -340,10 +340,6 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
 
     // Methods Private to this class
 
-    private void setMapVariable(int parameterIndex, Object x) throws SQLException {
-
-    }
-
     private Cursor executeSQL(VTGateTx vtGateTx,
                               final Context context, final String sql, final Topodata.TabletType tabletType,
                               final Map<String, Object> bindVariables)
@@ -351,14 +347,6 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
 
         return vtGateTx.execute(context, sql, bindVariables, tabletType).checkedGet();
 
-    }
-
-    private String convertToStringLiteral(String value) {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append(Constants.LITERAL_SINGLE_QUOTE);
-        stringBuilder.append(value);
-        stringBuilder.append(Constants.LITERAL_SINGLE_QUOTE);
-        return stringBuilder.toString();
     }
 
     //Methods which are currently not supported

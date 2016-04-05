@@ -33,7 +33,7 @@ public class StringUtils {
      */
 
     public static boolean startsWithIgnoreCaseAndWs(String searchIn, String searchFor,
-        int beginPos) {
+                                                    int beginPos) {
         if (null == searchIn) {
             return true;
         }
@@ -116,7 +116,7 @@ public class StringUtils {
             {
                 signalCount++;
             } else if (c == cchar
-                    && signalCount % 2 == 0) {// check if the ? is really the parameter
+                && signalCount % 2 == 0) {// check if the ? is really the parameter
                 num++;
                 if (num == paramLoc) {
                     charIndex = i;

@@ -1,8 +1,6 @@
 package com.flipkart.vitess.jdbc;
 
-import com.flipkart.vitess.util.CommonUtils;
 import com.flipkart.vitess.util.Constants;
-import com.flipkart.vitess.util.StringUtils;
 import com.youtube.vitess.proto.Topodata;
 
 import java.io.UnsupportedEncodingException;
@@ -149,7 +147,6 @@ public class VitessJDBCUrl {
 
         if (index != -1) {
             String paramString = url.substring(index + 1, url.length());
-            url = url.substring(0, index);
 
             StringTokenizer queryParams = new StringTokenizer(paramString, "&"); //$NON-NLS-1$
 
@@ -173,9 +170,7 @@ public class VitessJDBCUrl {
                     && parameter.length() > 0)) {
                     try {
                         info.put(parameter, URLDecoder.decode(value, "UTF-8"));
-                    } catch (UnsupportedEncodingException badEncoding) {
-                        info.put(parameter, URLDecoder.decode(value));
-                    } catch (NoSuchMethodError nsme) {
+                    } catch (UnsupportedEncodingException | NoSuchMethodError badEncoding) {
                         info.put(parameter, URLDecoder.decode(value));
                     }
                 }

@@ -10,7 +10,7 @@ public class DBProperties {
     private int isolationLevel;
 
     public DBProperties(String productversion, String majorVersion, String minorVersion,
-        int isolationLevel) {
+                        int isolationLevel) {
 
         this.productversion = productversion;
         this.majorVersion = majorVersion;

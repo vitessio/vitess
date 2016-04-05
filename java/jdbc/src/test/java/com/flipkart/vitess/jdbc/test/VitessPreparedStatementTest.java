@@ -27,13 +27,16 @@ import java.util.TimeZone;
 /**
  * Created by harshit.gangal on 09/02/16.
  */
-@RunWith(PowerMockRunner.class) @PrepareForTest(VTGateConn.class) public class VitessPreparedStatementTest {
+@RunWith(PowerMockRunner.class)
+@PrepareForTest(VTGateConn.class)
+public class VitessPreparedStatementTest {
 
     private String sqlSelect = "select 1 from test_table";
     private String sqlShow = "show tables";
     private String sqlUpdate = "update test_table set msg = null";
 
-    @Test public void testStatementExecute() throws SQLException {
+    @Test
+    public void testStatementExecute() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         VitessPreparedStatement preparedStatement;
         try {
@@ -64,7 +67,8 @@ import java.util.TimeZone;
         }
     }
 
-    @Test public void testExecuteQuery() throws SQLException {
+    @Test
+    public void testExecuteQuery() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
@@ -140,7 +144,8 @@ import java.util.TimeZone;
         }
     }
 
-    @Test public void testExecuteUpdate() throws SQLException {
+    @Test
+    public void testExecuteUpdate() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
@@ -223,7 +228,8 @@ import java.util.TimeZone;
         }
     }
 
-    @Test public void testExecute() throws SQLException {
+    @Test
+    public void testExecute() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
@@ -297,7 +303,8 @@ import java.util.TimeZone;
         }
     }
 
-    @Test public void testGetUpdateCount() throws SQLException {
+    @Test
+    public void testGetUpdateCount() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
@@ -337,7 +344,8 @@ import java.util.TimeZone;
         }
     }
 
-    @Test public void testSetParameters() throws Exception {
+    @Test
+    public void testSetParameters() throws Exception {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         VitessPreparedStatement preparedStatement =
             new VitessPreparedStatement(mockConn, sqlSelect);

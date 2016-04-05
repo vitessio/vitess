@@ -63,14 +63,16 @@ public class VitessResultSetMetadataTest {
         return this.fieldList;
     }
 
-    @Test public void testgetColumnCount() throws SQLException {
+    @Test
+    public void testgetColumnCount() throws SQLException {
 
         List<Query.Field> fieldList = getFieldList();
         VitessResultSetMetaData vitessResultSetMetadata = new VitessResultSetMetaData(fieldList);
         Assert.assertEquals(28, vitessResultSetMetadata.getColumnCount());
     }
 
-    @Test public void testgetColumnName() throws SQLException {
+    @Test
+    public void testgetColumnName() throws SQLException {
 
         List<Query.Field> fieldList = getFieldList();
         VitessResultSetMetaData vitessResultSetMetadata = new VitessResultSetMetaData(fieldList);
@@ -79,7 +81,8 @@ public class VitessResultSetMetadataTest {
         }
     }
 
-    @Test public void testgetColumnTypeName() throws SQLException {
+    @Test
+    public void testgetColumnTypeName() throws SQLException {
 
         List<Query.Field> fieldList = getFieldList();
         VitessResultSetMetaData vitessResultSetMetadata = new VitessResultSetMetaData(fieldList);
@@ -113,7 +116,8 @@ public class VitessResultSetMetadataTest {
         Assert.assertEquals("TUPLE", vitessResultSetMetadata.getColumnTypeName(28));
     }
 
-    @Test public void testgetColumnType() throws SQLException {
+    @Test
+    public void testgetColumnType() throws SQLException {
 
         List<Query.Field> fieldList = getFieldList();
         VitessResultSetMetaData vitessResultSetMetadata = new VitessResultSetMetaData(fieldList);
@@ -159,7 +163,8 @@ public class VitessResultSetMetadataTest {
         }
     }
 
-    @Test public void testgetColumnLabel() throws SQLException {
+    @Test
+    public void testgetColumnLabel() throws SQLException {
         List<Query.Field> fieldList = getFieldList();
         VitessResultSetMetaData vitessResultSetMetaData = new VitessResultSetMetaData(fieldList);
         for (int i = 1; i <= vitessResultSetMetaData.getColumnCount(); i++) {
@@ -167,7 +172,8 @@ public class VitessResultSetMetadataTest {
         }
     }
 
-    @Test public void isReadOnlyTest() throws SQLException {
+    @Test
+    public void isReadOnlyTest() throws SQLException {
         List<Query.Field> fieldList = getFieldList();
         VitessResultSetMetaData vitessResultSetMetadata = new VitessResultSetMetaData(fieldList);
         for (int i = 1; i <= vitessResultSetMetadata.getColumnCount(); i++) {
@@ -177,7 +183,8 @@ public class VitessResultSetMetadataTest {
         }
     }
 
-    @Test public void getColumnClassNameTest() throws SQLException {
+    @Test
+    public void getColumnClassNameTest() throws SQLException {
         List<Query.Field> fieldList = getFieldList();
         VitessResultSetMetaData vitessResultSetMetadata = new VitessResultSetMetaData(fieldList);
         for (int i = 1; i <= vitessResultSetMetadata.getColumnCount(); i++) {
@@ -185,7 +192,8 @@ public class VitessResultSetMetadataTest {
         }
     }
 
-    @Test public void getSchemaNameTest() throws SQLException {
+    @Test
+    public void getSchemaNameTest() throws SQLException {
         List<Query.Field> fieldList = getFieldList();
         VitessResultSetMetaData vitessResultSetMetaData = new VitessResultSetMetaData(fieldList);
         Assert.assertEquals(vitessResultSetMetaData.getSchemaName(1), null);

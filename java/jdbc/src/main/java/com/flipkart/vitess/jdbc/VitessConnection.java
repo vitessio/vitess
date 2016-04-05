@@ -7,8 +7,6 @@ import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.VTGateConn;
 import com.youtube.vitess.client.VTGateTx;
 import com.youtube.vitess.proto.Topodata;
-import com.youtube.vitess.proto.Vtrpc;
-import org.joda.time.Duration;
 
 import java.sql.*;
 import java.util.*;
@@ -48,7 +46,7 @@ public class VitessConnection implements Connection {
     public VitessConnection(String url, Properties info) throws SQLException {
 
         try {
-            this.vitessJDBCUrl = new VitessJDBCUrl(url,info);
+            this.vitessJDBCUrl = new VitessJDBCUrl(url, info);
             this.vTGateConnections = new VitessVTGateManager.VTGateConnections(vitessJDBCUrl);
             this.closed = false;
             this.dbProperties = null;
@@ -348,7 +346,7 @@ public class VitessConnection implements Connection {
      * @throws SQLException
      */
     public PreparedStatement prepareStatement(String sql, int resultSetType,
-        int resultSetConcurrency) throws SQLException {
+                                              int resultSetConcurrency) throws SQLException {
         VitessPreparedStatement vitessPreparedStatement;
 
         checkOpen();
@@ -488,7 +486,8 @@ public class VitessConnection implements Connection {
             }
 
             executor.execute(new Runnable() {
-                @Override public void run() {
+                @Override
+                public void run() {
                     try {
                         close();
                     } catch (SQLException e) {
@@ -678,13 +677,13 @@ public class VitessConnection implements Connection {
     }
 
     public Statement createStatement(int resultSetType, int resultSetConcurrency,
-        int resultSetHoldability) throws SQLException {
+                                     int resultSetHoldability) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
     public PreparedStatement prepareStatement(String sql, int resultSetType,
-        int resultSetConcurrency, int resultSetHoldability) throws SQLException {
+                                              int resultSetConcurrency, int resultSetHoldability) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
@@ -700,7 +699,7 @@ public class VitessConnection implements Connection {
      * @throws SQLException
      */
     public CallableStatement prepareCall(String sql, int resultSetType, int resultSetConcurrency,
-        int resultSetHoldability) throws SQLException {
+                                         int resultSetHoldability) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
@@ -763,11 +762,11 @@ public class VitessConnection implements Connection {
     }
 
     private String initializeDBProperties() throws SQLException {
-        HashMap<String, String> dbVariables = new HashMap<String, String>();
+        HashMap<String, String> dbVariables = new HashMap<>();
         String dbEngine = null;
 
         if (null == this.databaseMetaData) {
-            String versionValue = "";
+            String versionValue;
             if (null == dbEngine) {
                 ResultSet resultSet = null;
                 VitessStatement vitessStatement = new VitessStatement(this);
@@ -789,12 +788,12 @@ public class VitessConnection implements Connection {
                             MysqlDefs.mysqlConnectionTransactionMapping.get(transactionIsolation);
                     }
                     if (null != versionValue) {
-                        if(versionValue.toLowerCase().contains("mariadb")){
+                        if (versionValue.toLowerCase().contains("mariadb")) {
                             dbEngine = "mariadb";
                         } else {
                             dbEngine = "mysql";
                         }
-                        if (versionValue.indexOf("-") >= 0) {
+                        if (versionValue.contains("-")) {
                             String[] versions = versionValue.split("-");
                             productVersion = versions[0];
                         } else {
@@ -822,7 +821,7 @@ public class VitessConnection implements Connection {
     }
 
     public Context createContext(long deadlineAfter) {
-        return CommonUtils.createContext(this.vitessJDBCUrl.getUsername(),deadlineAfter);
+        return CommonUtils.createContext(this.vitessJDBCUrl.getUsername(), deadlineAfter);
     }
 
 

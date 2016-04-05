@@ -1,17 +1,15 @@
 package com.flipkart.vitess.jdbc.test;
 
-import com.flipkart.vitess.jdbc.VitessConnection;
 import com.flipkart.vitess.jdbc.VitessJDBCUrl;
 import com.flipkart.vitess.jdbc.VitessVTGateManager;
-import com.youtube.vitess.client.*;
+import com.youtube.vitess.client.Context;
+import com.youtube.vitess.client.RpcClient;
+import com.youtube.vitess.client.VTGateConn;
 import com.youtube.vitess.client.grpc.GrpcClientFactory;
 import com.youtube.vitess.proto.Vtrpc;
 import org.joda.time.Duration;
 import org.junit.Assert;
 import org.junit.Test;
-import org.mockito.BDDMockito;
-import org.mockito.Matchers;
-import org.powermock.api.mockito.PowerMockito;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -34,20 +32,23 @@ public class VitessVTGateManagerTest {
         return conn;
     }
 
-    @Test public void testVtGateConnectionsConstructorMultipleVtGateConnections()
+    @Test
+    public void testVtGateConnectionsConstructorMultipleVtGateConnections()
         throws SQLException, NoSuchFieldException, IllegalAccessException, IOException {
         VitessVTGateManager.close();
         Properties info = new Properties();
         info.setProperty("username", "user");
         VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
-            "jdbc:vitess://10.33.17.231:15991:xyz,10.33.17.232:15991:xyz,10.33.17.233:15991/shipment/shipment?tabletType=master",
+            "jdbc:vitess://10.33.17.231:15991:xyz,10.33.17.232:15991:xyz,10.33.17" +
+                ".233:15991/shipment/shipment?tabletType=master",
             info);
         VitessVTGateManager.VTGateConnections vtGateConnections =
             new VitessVTGateManager.VTGateConnections(vitessJDBCUrl);
 
         info.setProperty("username", "user");
         VitessJDBCUrl vitessJDBCUrl1 = new VitessJDBCUrl(
-            "jdbc:vitess://10.33.17.231:15991:xyz,10.33.17.232:15991:xyz,11.33.17.233:15991/shipment/shipment?tabletType=master",
+            "jdbc:vitess://10.33.17.231:15991:xyz,10.33.17.232:15991:xyz,11.33.17" +
+                ".233:15991/shipment/shipment?tabletType=master",
             info);
         VitessVTGateManager.VTGateConnections vtGateConnections1 =
             new VitessVTGateManager.VTGateConnections(vitessJDBCUrl1);
@@ -61,13 +62,15 @@ public class VitessVTGateManagerTest {
         VitessVTGateManager.close();
     }
 
-    @Test public void testVtGateConnectionsConstructor()
+    @Test
+    public void testVtGateConnectionsConstructor()
         throws SQLException, NoSuchFieldException, IllegalAccessException, IOException {
         VitessVTGateManager.close();
         Properties info = new Properties();
         info.setProperty("username", "user");
         VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
-            "jdbc:vitess://10.33.17.231:15991:xyz,10.33.17.232:15991:xyz,10.33.17.233:15991/shipment/shipment?tabletType=master",
+            "jdbc:vitess://10.33.17.231:15991:xyz,10.33.17.232:15991:xyz,10.33.17" +
+                ".233:15991/shipment/shipment?tabletType=master",
             info);
         VitessVTGateManager.VTGateConnections vtGateConnections =
             new VitessVTGateManager.VTGateConnections(vitessJDBCUrl);

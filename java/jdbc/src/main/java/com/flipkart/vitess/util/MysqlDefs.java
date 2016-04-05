@@ -19,7 +19,8 @@ import java.util.Map;
 public final class MysqlDefs {
     public static final int FIELD_TYPE_BLOB = 252;
     /**
-     * Used to indicate that the server sent no field-level character set information, so the driver should use the connection-level character encoding instead.
+     * Used to indicate that the server sent no field-level character set information, so the driver should use the
+     * connection-level character encoding instead.
      */
     public static final int NO_CHARSET_INFO = -1;
     static final int COM_BINLOG_DUMP = 18;

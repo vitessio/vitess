@@ -18,12 +18,12 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     private static final String DRIVER_NAME = "Vitess MySQL JDBC Driver";
     private static Logger logger = Logger.getLogger(VitessMySQLDatabaseMetadata.class.getName());
     private static String mysqlKeywordsThatArentSQL92;
-    private static int maxBufferSize = '\uffff';
+    private int maxBufferSize = '\uffff';
 
     static {
 
         String[] allMySQLKeywords =
-            new String[] {"ACCESSIBLE", "ADD", "ALL", "ALTER", "ANALYZE", "AND", "AS", "ASC",
+            new String[]{"ACCESSIBLE", "ADD", "ALL", "ALTER", "ANALYZE", "AND", "AS", "ASC",
                 "ASENSITIVE", "BEFORE", "BETWEEN", "BIGINT", "BINARY", "BLOB", "BOTH", "BY", "CALL",
                 "CASCADE", "CASE", "CHANGE", "CHAR", "CHARACTER", "CHECK", "COLLATE", "COLUMN",
                 "CONDITION", "CONNECTION", "CONSTRAINT", "CONTINUE", "CONVERT", "CREATE", "CROSS",
@@ -54,7 +54,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 "UTC_TIMESTAMP", "VALUES", "VARBINARY", "VARCHAR", "VARCHARACTER", "VARYING",
                 "WHEN", "WHERE", "WHILE", "WITH", "WRITE", "X509", "XOR", "YEAR_MONTH", "ZEROFILL"};
         String[] sql92Keywords =
-            new String[] {"ABSOLUTE", "EXEC", "OVERLAPS", "ACTION", "EXECUTE", "PAD", "ADA",
+            new String[]{"ABSOLUTE", "EXEC", "OVERLAPS", "ACTION", "EXECUTE", "PAD", "ADA",
                 "EXISTS", "PARTIAL", "ADD", "EXTERNAL", "PASCAL", "ALL", "EXTRACT", "POSITION",
                 "ALLOCATE", "FALSE", "PRECISION", "ALTER", "FETCH", "PREPARE", "AND", "FIRST",
                 "PRESERVE", "ANY", "FLOAT", "PRIMARY", "ARE", "FOR", "PRIOR", "AS", "FOREIGN",
@@ -86,15 +86,14 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 "WRITE", "ESCAPE", "OUTER", "YEAR", "EXCEPT", "OUTPUT", "ZONE", "EXCEPTION"};
         TreeMap mySQLKeywordMap = new TreeMap();
 
-        for (int sql92KeywordMap = 0;
-             sql92KeywordMap < allMySQLKeywords.length; ++sql92KeywordMap) {
-            mySQLKeywordMap.put(allMySQLKeywords[sql92KeywordMap], null);
+        for (String allMySQLKeyword : allMySQLKeywords) {
+            mySQLKeywordMap.put(allMySQLKeyword, null);
         }
 
         HashMap sql92KeywordMap = new HashMap(sql92Keywords.length);
 
-        for (int it = 0; it < sql92Keywords.length; ++it) {
-            sql92KeywordMap.put(sql92Keywords[it], null);
+        for (String sql92Keyword : sql92Keywords) {
+            sql92KeywordMap.put(sql92Keyword, null);
         }
 
         Iterator sql92KeywordIterator = sql92KeywordMap.keySet().iterator();
@@ -291,8 +290,9 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         }
     }
 
+    @SuppressWarnings("StringBufferReplaceableByString")
     public ResultSet getTables(String catalog, String schemaPattern, String tableNamePattern,
-        String[] types) throws SQLException {
+                               String[] types) throws SQLException {
         ResultSet resultSet = null;
         VitessStatement vitessStatement = null;
         boolean reportTables = false;
@@ -301,7 +301,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         boolean reportSystemViews = false;
         boolean reportLocalTemporaries = false;
         final SortedMap<TableMetaDataKey, ArrayList<String>> sortedRows =
-            new TreeMap<TableMetaDataKey, ArrayList<String>>();
+            new TreeMap<>();
 
         if (null == tableNamePattern) {
             tableNamePattern = "%";
@@ -309,44 +309,37 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         if (null == catalog || catalog.length() == 0) {
             catalog = this.connection.getCatalog();
         }
-        ArrayList<ArrayList<String>> data = new ArrayList<ArrayList<String>>();
+        ArrayList<ArrayList<String>> data = new ArrayList<>();
         try {
             vitessStatement = new VitessStatement(this.connection);
-            StringBuilder getTablesQB = new StringBuilder();
-            getTablesQB.append("SHOW FULL TABLES FROM ");
-            getTablesQB.append(this.quotedId);
-            getTablesQB.append(catalog);
-            getTablesQB.append(this.quotedId);
-            getTablesQB.append(" LIKE \'");
-            getTablesQB.append(tableNamePattern);
-            getTablesQB.append("\'");
-            resultSet = vitessStatement.executeQuery(getTablesQB.toString());
+            resultSet = vitessStatement.executeQuery("SHOW FULL TABLES FROM " + this.quotedId + catalog + this
+                .quotedId + " LIKE \'" + tableNamePattern + "\'");
 
             if (null == types || types.length == 0) {
                 reportTables = reportViews =
                     reportSystemTables = reportSystemViews = reportLocalTemporaries = true;
             } else {
-                for (int i = 0; i < types.length; i++) {
-                    if (TableType.TABLE.equalsTo(types[i])) {
+                for (String type : types) {
+                    if (TableType.TABLE.equalsTo(type)) {
                         reportTables = true;
 
-                    } else if (TableType.VIEW.equalsTo(types[i])) {
+                    } else if (TableType.VIEW.equalsTo(type)) {
                         reportViews = true;
 
-                    } else if (TableType.SYSTEM_TABLE.equalsTo(types[i])) {
+                    } else if (TableType.SYSTEM_TABLE.equalsTo(type)) {
                         reportSystemTables = true;
 
-                    } else if (TableType.SYSTEM_VIEW.equalsTo(types[i])) {
+                    } else if (TableType.SYSTEM_VIEW.equalsTo(type)) {
                         reportSystemViews = true;
 
-                    } else if (TableType.LOCAL_TEMPORARY.equalsTo(types[i])) {
+                    } else if (TableType.LOCAL_TEMPORARY.equalsTo(type)) {
                         reportLocalTemporaries = true;
                     }
                 }
             }
 
             int typeColumnIndex = 0;
-            boolean hasTableTypes = false;
+            boolean hasTableTypes;
             try {
                 typeColumnIndex = resultSet.findColumn("table_type");
                 hasTableTypes = true;
@@ -358,9 +351,9 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                     hasTableTypes = false;
                 }
             }
-            ArrayList<String> row = null;
+
             while (resultSet.next()) {
-                row = new ArrayList<String>();
+                ArrayList<String> row = new ArrayList<>();
                 row.add(0, catalog);
                 row.add(1, null);
                 row.add(2, resultSet.getString(1));
@@ -453,11 +446,11 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             }
         }
         String[] columnNames =
-            new String[] {"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "TABLE_TYPE", "REMARKS",
+            new String[]{"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "TABLE_TYPE", "REMARKS",
                 "TYPE_CAT", "TYPE_SCHEM", "TYPE_NAME", "SELF_REFERENCING_COL_NAME",
                 "REF_GENERATION"};
         Query.Type[] columnTypes =
-            new Query.Type[] {Query.Type.VARCHAR, Query.Type.VARCHAR, Query.Type.VARCHAR,
+            new Query.Type[]{Query.Type.VARCHAR, Query.Type.VARCHAR, Query.Type.VARCHAR,
                 Query.Type.VARCHAR, Query.Type.VARCHAR, Query.Type.VARCHAR, Query.Type.VARCHAR,
                 Query.Type.VARCHAR, Query.Type.VARCHAR, Query.Type.VARCHAR};
 
@@ -467,7 +460,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     public ResultSet getSchemas() throws SQLException {
         String[] columnNames = {"TABLE_SCHEM", "TABLE_CATALOG"};
         Query.Type[] columnType = {Query.Type.CHAR, Query.Type.CHAR};
-        return new VitessResultSet(columnNames, columnType, new String[][] {});
+        return new VitessResultSet(columnNames, columnType, new String[][]{});
     }
 
     public ResultSet getCatalogs() throws SQLException {
@@ -478,7 +471,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         vitessStatement = new VitessStatement(this.connection);
         resultSet = vitessStatement.executeQuery(getCatalogQB);
 
-        ArrayList<String> row = new ArrayList<String>();
+        ArrayList<String> row = new ArrayList<>();
         ArrayList<ArrayList<String>> data = new ArrayList<>();
         while (resultSet.next()) {
             row.add(resultSet.getString(1));
@@ -486,14 +479,14 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         Collections.sort(row);
         ArrayList<String> resultAsList = null;
         for (String result : row) {
-            resultAsList = new ArrayList<String>();
+            resultAsList = new ArrayList<>();
             resultAsList.add(result);
             data.add(resultAsList);
         }
         resultSet.close();
         vitessStatement.close();
-        String[] columnName = new String[] {"TABLE_CAT"};
-        Query.Type[] columntype = new Query.Type[] {Query.Type.CHAR};
+        String[] columnName = new String[]{"TABLE_CAT"};
+        Query.Type[] columntype = new Query.Type[]{Query.Type.CHAR};
         return new VitessResultSet(columnName, columntype, data);
     }
 
@@ -501,13 +494,14 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         String[] columnNames = {"table_type"};
         Query.Type[] columnType = {Query.Type.VARCHAR};
         String[][] data =
-            new String[][] {{"LOCAL TEMPORARY"}, {"SYSTEM TABLES"}, {"SYSTEM VIEW"}, {"TABLE"},
+            new String[][]{{"LOCAL TEMPORARY"}, {"SYSTEM TABLES"}, {"SYSTEM VIEW"}, {"TABLE"},
                 {"VIEW"}};
         return new VitessResultSet(columnNames, columnType, data);
     }
 
+    @SuppressWarnings("StringBufferReplaceableByString")
     public ResultSet getColumns(String catalog, String schemaPattern, String tableNamePattern,
-        String columnNamePattern) throws SQLException {
+                                String columnNamePattern) throws SQLException {
         ResultSet resultSet = null;
         VitessStatement vitessStatement = new VitessStatement(this.connection);
         ArrayList<ArrayList<String>> data = new ArrayList<>();
@@ -519,7 +513,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             catalog = this.connection.getCatalog();
         }
         try {
-            ArrayList<String> tableList = new ArrayList<String>();
+            ArrayList<String> tableList = new ArrayList<>();
             ResultSet tables = null;
             if (null == tableNamePattern) {
                 try {
@@ -549,39 +543,19 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             for (String tableName : tableList) {
                 resultSet = null;
                 try {
-                    StringBuilder getColumnsQB = new StringBuilder();
-                    getColumnsQB.append("SHOW FULL COLUMNS FROM ");
-                    getColumnsQB.append(this.quotedId);
-                    getColumnsQB.append(tableName);
-                    getColumnsQB.append(this.quotedId);
-                    getColumnsQB.append(" FROM ");
-                    getColumnsQB.append(this.quotedId);
-                    getColumnsQB.append(catalog);
-                    getColumnsQB.append(this.quotedId);
-                    getColumnsQB.append(" LIKE ");
-                    getColumnsQB.append(Constants.LITERAL_SINGLE_QUOTE);
-                    getColumnsQB.append(columnNamePattern);
-                    getColumnsQB.append(Constants.LITERAL_SINGLE_QUOTE);
 
                     // Return correct ordinals if column name pattern is not '%'
-                    // Currently, MySQL doesn't show enough data to do this, so we do it the 'hard' way...Once _SYSTEM tables are in, this should be
+                    // Currently, MySQL doesn't show enough data to do this, so we do it the 'hard' way...Once
+                    // _SYSTEM tables are in, this should be
                     // much easier
                     boolean fixUpOrdinalsRequired = false;
                     Map<String, Integer> ordinalFixUpMap = null;
                     if (!columnNamePattern.equals("%")) {
                         fixUpOrdinalsRequired = true;
-                        StringBuilder fullColumnQB = new StringBuilder();
-                        fullColumnQB.append("SHOW FULL COLUMNS FROM ");
-                        fullColumnQB.append(this.quotedId);
-                        fullColumnQB.append(tableName);
-                        fullColumnQB.append(this.quotedId);
-                        fullColumnQB.append(" FROM ");
-                        fullColumnQB.append(this.quotedId);
-                        fullColumnQB.append(catalog);
-                        fullColumnQB.append(this.quotedId);
                         vitessStatement = new VitessStatement(this.connection);
-                        resultSet = vitessStatement.executeQuery(fullColumnQB.toString());
-                        ordinalFixUpMap = new HashMap<String, Integer>();
+                        resultSet = vitessStatement.executeQuery("SHOW FULL COLUMNS FROM " + this.quotedId +
+                            tableName + this.quotedId + " FROM " + this.quotedId + catalog + this.quotedId);
+                        ordinalFixUpMap = new HashMap<>();
 
                         int fullOrdinalPos = 1;
                         while (resultSet.next()) {
@@ -589,11 +563,13 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                             ordinalFixUpMap.put(fullOrdColName, Integer.valueOf(fullOrdinalPos++));
                         }
                     }
-                    resultSet = vitessStatement.executeQuery(getColumnsQB.toString());
+                    resultSet = vitessStatement.executeQuery("SHOW FULL COLUMNS FROM " + this.quotedId + tableName +
+                        this.quotedId + " FROM " + this.quotedId + catalog + this.quotedId + " LIKE " + Constants
+                        .LITERAL_SINGLE_QUOTE + columnNamePattern + Constants.LITERAL_SINGLE_QUOTE);
                     int ordPos = 1;
                     ArrayList<String> row = null;
                     while (resultSet.next()) {
-                        row = new ArrayList<String>();
+                        row = new ArrayList<>();
                         row.add(0, catalog);
                         row.add(1, null);
                         row.add(2, tableName);
@@ -707,7 +683,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         }
 
         String[] columnNames =
-            new String[] {"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "COLUMN_NAME", "DATA_TYPE",
+            new String[]{"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "COLUMN_NAME", "DATA_TYPE",
                 "TYPE_NAME", "COLUMN_SIZE", "BUFFER_LENGTH", "DECIMAL_DIGITS", "NUM_PREC_RADIX",
                 "NULLABLE", "REMARKS", "COLUMN_DEF", "SQL_DATA_TYPE", "SQL_DATETIME_SUB",
                 "CHAR_OCTET_LENGTH", "ORDINAL_POSITION", "IS_NULLABLE", "SCOPE_CATALOG",
@@ -715,7 +691,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 "IS_GENERATEDCOLUMN"};
 
         Query.Type[] columnType =
-            new Query.Type[] {Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR,
+            new Query.Type[]{Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR,
                 Query.Type.INT32, Query.Type.CHAR, Query.Type.INT32, Query.Type.INT32,
                 Query.Type.INT32, Query.Type.INT32, Query.Type.INT32, Query.Type.CHAR,
                 Query.Type.CHAR, Query.Type.INT32, Query.Type.INT32, Query.Type.INT32,
@@ -726,19 +702,20 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public ResultSet getColumnPrivileges(String catalog, String schema, String table,
-        String columnNamePattern) throws SQLException {
+                                         String columnNamePattern) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
     public ResultSet getTablePrivileges(String catalog, String schemaPattern,
-        String tableNamePattern) throws SQLException {
+                                        String tableNamePattern) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
+    @SuppressWarnings("StringBufferReplaceableByString")
     public ResultSet getBestRowIdentifier(String catalog, String schema, String table, int scope,
-        boolean nullable) throws SQLException {
+                                          boolean nullable) throws SQLException {
         ResultSet resultSet = null;
         VitessStatement vitessStatement = new VitessStatement(this.connection);
 
@@ -747,30 +724,22 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         }
 
         String[] columnName =
-            new String[] {"SCOPE", "COLUMN_NAME", "DATA_TYPE", "TYPE_NAME", "COLUMN_SIZE",
+            new String[]{"SCOPE", "COLUMN_NAME", "DATA_TYPE", "TYPE_NAME", "COLUMN_SIZE",
                 "BUFFER_LENGTH", "DECIMAL_DIGITS", "PSEUDO_COLUMN"};
 
         Query.Type[] columnType =
-            new Query.Type[] {Query.Type.INT16, Query.Type.CHAR, Query.Type.INT32, Query.Type.CHAR,
+            new Query.Type[]{Query.Type.INT16, Query.Type.CHAR, Query.Type.INT32, Query.Type.CHAR,
                 Query.Type.INT32, Query.Type.INT32, Query.Type.INT16, Query.Type.INT16};
 
         ArrayList<ArrayList<String>> data = new ArrayList<>();
 
         try {
-            StringBuffer bestRowIdentifierQB = new StringBuffer();
-            bestRowIdentifierQB.append("SHOW COLUMNS FROM ");
-            bestRowIdentifierQB.append(this.quotedId);
-            bestRowIdentifierQB.append(table);
-            bestRowIdentifierQB.append(this.quotedId);
-            bestRowIdentifierQB.append(" FROM ");
-            bestRowIdentifierQB.append(this.quotedId);
-            bestRowIdentifierQB.append(catalog);
-            bestRowIdentifierQB.append(this.quotedId);
-            resultSet = vitessStatement.executeQuery(bestRowIdentifierQB.toString());
+            resultSet = vitessStatement.executeQuery("SHOW COLUMNS FROM " + this.quotedId + table + this.quotedId + "" +
+                " FROM " + this.quotedId + catalog + this.quotedId);
 
             ArrayList<String> row = null;
             while (resultSet.next()) {
-                row = new ArrayList<String>();
+                row = new ArrayList<>();
                 String keyType = resultSet.getString("Key");
                 if (keyType != null && StringUtils.startsWithIgnoreCase(keyType, "PRI")) {
                     row.add(Integer.toString(DatabaseMetaData.bestRowSession));
@@ -785,9 +754,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                         int maxLength;
                         for (
                             maxLength = 0; tokenizer.hasMoreTokens();
-                            maxLength = Math.max(maxLength, tokenizer.nextToken().length() - 2)) {
+                            maxLength = Math.max(maxLength, tokenizer.nextToken().length() - 2))
                             ;
-                        }
 
                         size = maxLength;
                         decimals = 0;
@@ -832,6 +800,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
+    @SuppressWarnings("StringBufferReplaceableByString")
     public ResultSet getPrimaryKeys(String catalog, String schema, String table)
         throws SQLException {
 
@@ -843,21 +812,14 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         ArrayList<ArrayList<String>> sortedData = new ArrayList<>();
         try {
 
-            StringBuilder getPrimaryKeysQB = new StringBuilder("SHOW KEYS FROM ");
-            getPrimaryKeysQB.append(this.quotedId);
-            getPrimaryKeysQB.append(table);
-            getPrimaryKeysQB.append(this.quotedId);
-            getPrimaryKeysQB.append(" FROM ");
-            getPrimaryKeysQB.append(this.quotedId);
-            getPrimaryKeysQB.append(catalog);
-            getPrimaryKeysQB.append(this.quotedId);
-            resultSet = vitessStatement.executeQuery(getPrimaryKeysQB.toString());
+            resultSet = vitessStatement.executeQuery("SHOW KEYS FROM " + this.quotedId + table + this.quotedId + " " +
+                "FROM " + this.quotedId + catalog + this.quotedId);
 
-            TreeMap<String, ArrayList<String>> sortMap = new TreeMap<String, ArrayList<String>>();
+            TreeMap<String, ArrayList<String>> sortMap = new TreeMap<>();
             ArrayList<String> row = null;
             while (resultSet.next()) {
                 String keyType = resultSet.getString("Key_name");
-                row = new ArrayList<String>();
+                row = new ArrayList<>();
                 if (null != keyType) {
                     if (keyType.equalsIgnoreCase("PRIMARY") || keyType.equalsIgnoreCase("PRI")) {
                         row.add(0, (catalog == null) ? "" : catalog);
@@ -888,10 +850,10 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         }
 
         String[] columnNames =
-            new String[] {"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "COLUMN_NAME", "KEY_SEQ",
+            new String[]{"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "COLUMN_NAME", "KEY_SEQ",
                 "PK_NAME"};
         Query.Type[] columnType =
-            new Query.Type[] {Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR,
+            new Query.Type[]{Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR,
                 Query.Type.INT16, Query.Type.CHAR};
 
         return new VitessResultSet(columnNames, columnType, sortedData);
@@ -910,7 +872,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public ResultSet getCrossReference(String parentCatalog, String parentSchema,
-        String parentTable, String foreignCatalog, String foreignSchema, String foreignTable)
+                                       String parentTable, String foreignCatalog, String foreignSchema, String
+                                           foreignTable)
         throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
@@ -1014,29 +977,22 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         return new VitessResultSet(columnNames, columnTypes, data);
     }
 
+    @SuppressWarnings("StringBufferReplaceableByString")
     public ResultSet getIndexInfo(String catalog, String schema, String table, boolean unique,
-        boolean approximate) throws SQLException {
+                                  boolean approximate) throws SQLException {
 
         ArrayList<ArrayList<String>> data = new ArrayList<>();
         final SortedMap<IndexMetaDataKey, ArrayList<String>> sortedRows =
-            new TreeMap<IndexMetaDataKey, ArrayList<String>>();
+            new TreeMap<>();
         VitessStatement vitessStatement = new VitessStatement(this.connection);
         ResultSet resultSet = null;
         try {
-            StringBuilder getIndexInfoQB = new StringBuilder();
-            getIndexInfoQB.append("SHOW INDEX FROM ");
-            getIndexInfoQB.append(this.quotedId);
-            getIndexInfoQB.append(table);
-            getIndexInfoQB.append(this.quotedId);
-            getIndexInfoQB.append(" FROM ");
-            getIndexInfoQB.append(this.quotedId);
-            getIndexInfoQB.append(catalog);
-            getIndexInfoQB.append(this.quotedId);
-            resultSet = vitessStatement.executeQuery(getIndexInfoQB.toString());
+            resultSet = vitessStatement.executeQuery("SHOW INDEX FROM " + this.quotedId + table + this.quotedId + " " +
+                "FROM " + this.quotedId + catalog + this.quotedId);
 
             ArrayList<String> row = null;
             while (resultSet.next()) {
-                row = new ArrayList<String>();
+                row = new ArrayList<>();
                 row.add(0, catalog);
                 row.add(1, null);
                 row.add(2, resultSet.getString("Table"));
@@ -1080,12 +1036,12 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 vitessStatement.close();
             }
         }
-        String[] columnName = new String[] {"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "Non_unique",
+        String[] columnName = new String[]{"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "Non_unique",
             "INDEX_QUALIFIER", "INDEX_NAME", "TYPE", "ORDINAL_POSITION", "COLUMN_NAME",
             "ASC_OR_DESC", "CARDINALITY", "PAGES", "FILTER_CONDITION"};
 
         Query.Type[] columnType =
-            new Query.Type[] {Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.BIT,
+            new Query.Type[]{Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.BIT,
                 Query.Type.CHAR, Query.Type.CHAR, Query.Type.INT16, Query.Type.INT16,
                 Query.Type.CHAR, Query.Type.CHAR, Query.Type.INT32, Query.Type.INT32,
                 Query.Type.CHAR};
@@ -1126,14 +1082,14 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public ResultSet getUDTs(String catalog, String schemaPattern, String typeNamePattern,
-        int[] types) throws SQLException {
+                             int[] types) throws SQLException {
         String[] columnNames =
             {"TYPE_CAT", "TYPE_SCHEM", "TYPE_NAME", "CLASS_NAME", "DATA_TYPE", "REMARKS",
                 "BASE_TYPE"};
         Query.Type[] columnType =
             {Query.Type.VARCHAR, Query.Type.INT32, Query.Type.VARCHAR, Query.Type.VARCHAR,
                 Query.Type.INT32, Query.Type.VARCHAR, Query.Type.INT16};
-        return new VitessResultSet(columnNames, columnType, new String[][] {});
+        return new VitessResultSet(columnNames, columnType, new String[][]{});
     }
 
     public ResultSet getSuperTypes(String catalog, String schemaPattern, String typeNamePattern)
@@ -1144,7 +1100,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         Query.Type[] columnType =
             {Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR,
                 Query.Type.CHAR};
-        return new VitessResultSet(columnNames, columnType, new String[][] {});
+        return new VitessResultSet(columnNames, columnType, new String[][]{});
     }
 
     public ResultSet getSuperTables(String catalog, String schemaPattern, String tableNamePattern)
@@ -1152,11 +1108,11 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         String[] columnNames = {"TABLE_CAT", "TYPE_SCHEM", "TABLE_NAME", "SUPERTABLE_NAME"};
         Query.Type[] columnType =
             {Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR};
-        return new VitessResultSet(columnNames, columnType, new String[][] {});
+        return new VitessResultSet(columnNames, columnType, new String[][]{});
     }
 
     public ResultSet getAttributes(String catalog, String schemaPattern, String typeNamePattern,
-        String attributeNamePattern) throws SQLException {
+                                   String attributeNamePattern) throws SQLException {
 
         String[] columnNames =
             {"TYPE_CAT", "TYPE_SCHEM", "TYPE_NAME", "ATTR_NAME", "DATA_TYPE", "ATTR_TYPE_NAME",
@@ -1169,7 +1125,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 Query.Type.INT32, Query.Type.CHAR, Query.Type.CHAR, Query.Type.INT32,
                 Query.Type.INT32, Query.Type.INT32, Query.Type.INT32, Query.Type.CHAR,
                 Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.INT16};
-        return new VitessResultSet(columnNames, columnType, new String[][] {});
+        return new VitessResultSet(columnNames, columnType, new String[][]{});
     }
 
     public int getSQLStateType() throws SQLException {
@@ -1188,14 +1144,14 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     public ResultSet getSchemas(String catalog, String schemaPattern) throws SQLException {
         String[] columnNames = {"TABLE_CAT", "TABLE_CATALOG"};
         Query.Type[] columnType = {Query.Type.CHAR, Query.Type.CHAR};
-        return new VitessResultSet(columnNames, columnType, new String[][] {});
+        return new VitessResultSet(columnNames, columnType, new String[][]{});
     }
 
     public ResultSet getClientInfoProperties() throws SQLException {
         String[] columnNames = {"NAME", "MAX_LEN", "DEFAULT_VALUE", "DESCRIPTION"};
         Query.Type[] columnType =
             {Query.Type.VARCHAR, Query.Type.INT32, Query.Type.VARCHAR, Query.Type.VARCHAR};
-        return new VitessResultSet(columnNames, columnType, new String[][] {});
+        return new VitessResultSet(columnNames, columnType, new String[][]{});
     }
 
     public ResultSet getFunctions(String catalog, String schemaPattern, String functionNamePattern)
@@ -1205,13 +1161,13 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public ResultSet getFunctionColumns(String catalog, String schemaPattern,
-        String functionNamePattern, String columnNamePattern) throws SQLException {
+                                        String functionNamePattern, String columnNamePattern) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
     public ResultSet getPseudoColumns(String catalog, String schemaPattern, String tableNamePattern,
-        String columnNamePattern) throws SQLException {
+                                      String columnNamePattern) throws SQLException {
         String[] columnNames =
             {"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "COLUMN_NAME", "DATA_TYPE", "COLUMN_SIZE",
                 "DECIMAL_DIGITS", "NUM_PREC_RADIX", "COLUMN_USAGE", "REMARKS", "CHAR_OCTET_LENGTH",
@@ -1220,7 +1176,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             {Query.Type.VARCHAR, Query.Type.VARCHAR, Query.Type.VARCHAR, Query.Type.VARCHAR,
                 Query.Type.INT32, Query.Type.INT32, Query.Type.INT32, Query.Type.INT32,
                 Query.Type.VARCHAR, Query.Type.VARCHAR, Query.Type.INT32, Query.Type.VARCHAR};
-        return new VitessResultSet(columnNames, columnType, new String[][] {});
+        return new VitessResultSet(columnNames, columnType, new String[][]{});
     }
 
     public <T> T unwrap(Class<T> iface) throws SQLException {
@@ -1236,7 +1192,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
      */
     protected enum TableType {
         LOCAL_TEMPORARY("LOCAL TEMPORARY"), SYSTEM_TABLE("SYSTEM TABLE"), SYSTEM_VIEW(
-            "SYSTEM VIEW"), TABLE("TABLE", new String[] {"BASE TABLE"}), VIEW("VIEW"), UNKNOWN(
+            "SYSTEM VIEW"), TABLE("TABLE", new String[]{"BASE TABLE"}), VIEW("VIEW"), UNKNOWN(
             "UNKNOWN");
 
         private String name;
@@ -1326,7 +1282,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             return this.tableName.compareTo(tablesKey.tableName);
         }
 
-        @Override public boolean equals(Object obj) {
+        @Override
+        public boolean equals(Object obj) {
             if (null == obj) {
                 return false;
             }
@@ -1353,7 +1310,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         Short columnOrdinalPosition;
 
         IndexMetaDataKey(boolean columnNonUnique, short columnType, String columnIndexName,
-            short columnOrdinalPosition) {
+                         short columnOrdinalPosition) {
             this.columnNonUnique = columnNonUnique;
             this.columnType = columnType;
             this.columnIndexName = columnIndexName;
@@ -1377,7 +1334,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             return this.columnOrdinalPosition.compareTo(indexInfoKey.columnOrdinalPosition);
         }
 
-        @Override public boolean equals(Object obj) {
+        @Override
+        public boolean equals(Object obj) {
             if (null == obj) {
                 return false;
             }
@@ -1604,16 +1562,20 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             this.numPrecRadix = 10;
 
             if (nullabilityInfo != null) {
-                if (nullabilityInfo.equals("YES")) {
-                    this.nullability = DatabaseMetaData.columnNullable;
-                    this.isNullable = "YES";
+                switch (nullabilityInfo) {
+                    case "YES":
+                        this.nullability = DatabaseMetaData.columnNullable;
+                        this.isNullable = "YES";
 
-                } else if (nullabilityInfo.equals("UNKNOWN")) {
-                    this.nullability = DatabaseMetaData.columnNullableUnknown;
-                    this.isNullable = "";
-                } else {
-                    this.nullability = DatabaseMetaData.columnNoNulls;
-                    this.isNullable = "NO";
+                        break;
+                    case "UNKNOWN":
+                        this.nullability = DatabaseMetaData.columnNullableUnknown;
+                        this.isNullable = "";
+                        break;
+                    default:
+                        this.nullability = DatabaseMetaData.columnNoNulls;
+                        this.isNullable = "NO";
+                        break;
                 }
             } else {
                 this.nullability = DatabaseMetaData.columnNoNulls;
