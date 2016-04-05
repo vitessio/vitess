@@ -6,6 +6,7 @@
 package grpcvtgateconn
 
 import (
+	"flag"
 	"io"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
+	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -22,6 +24,13 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtgateservicepb "github.com/youtube/vitess/go/vt/proto/vtgateservice"
+)
+
+var (
+	cert = flag.String("vtgate_grpc_cert", "", "the cert to use to connect")
+	key  = flag.String("vtgate_grpc_key", "", "the key to use to connect")
+	ca   = flag.String("vtgate_grpc_ca", "", "the server ca to use to validate servers when connecting")
+	name = flag.String("vtgate_grpc_server_name", "", "the server name to use to validate server certificate")
 )
 
 func init() {
@@ -34,7 +43,11 @@ type vtgateConn struct {
 }
 
 func dial(ctx context.Context, addr string, timeout time.Duration) (vtgateconn.Impl, error) {
-	cc, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(timeout))
+	opt, err := grpcutils.ClientSecureDialOption(*cert, *key, *ca, *name)
+	if err != nil {
+		return nil, err
+	}
+	cc, err := grpc.Dial(addr, opt, grpc.WithBlock(), grpc.WithTimeout(timeout))
 	if err != nil {
 		return nil, err
 	}

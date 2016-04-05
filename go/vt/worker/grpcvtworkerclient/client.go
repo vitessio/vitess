@@ -6,9 +6,11 @@
 package grpcvtworkerclient
 
 import (
+	"flag"
 	"time"
 
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -18,6 +20,13 @@ import (
 	vtworkerservicepb "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
 )
 
+var (
+	cert = flag.String("vtworker_client_grpc_cert", "", "the cert to use to connect")
+	key  = flag.String("vtworker_client_grpc_key", "", "the key to use to connect")
+	ca   = flag.String("vtworker_client_grpc_ca", "", "the server ca to use to validate servers when connecting")
+	name = flag.String("vtworker_client_grpc_server_name", "", "the server name to use to validate server certificate")
+)
+
 type gRPCVtworkerClient struct {
 	cc *grpc.ClientConn
 	c  vtworkerservicepb.VtworkerClient
@@ -25,7 +34,11 @@ type gRPCVtworkerClient struct {
 
 func gRPCVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworkerclient.Client, error) {
 	// create the RPC client
-	cc, err := grpc.Dial(addr, grpc.WithInsecure())
+	opt, err := grpcutils.ClientSecureDialOption(*cert, *key, *ca, *name)
+	if err != nil {
+		return nil, err
+	}
+	cc, err := grpc.Dial(addr, opt, grpc.WithBlock(), grpc.WithTimeout(dialTimeout))
 	if err != nil {
 		return nil, err
 	}
