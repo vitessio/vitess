@@ -142,29 +142,27 @@ class K8sEnvironment(base_environment.BaseEnvironment):
     logging.info('Current project name: %s', project_name)
     for k, v in kwargs.iteritems():
       os.environ[k] = v
-    cwd = os.getcwd()
-    os.chdir(self.script_dir)
     if self.create_gke_cluster:
       cluster_up_txt = subprocess.check_output(
-          'cluster-up.sh', stderr=subprocess.STDOUT)
+          [os.path.join(self.script_dir, 'cluster-up.sh')],
+          cwd=self.script_dir, stderr=subprocess.STDOUT)
       logging.info(cluster_up_txt)
     vitess_up_output = subprocess.check_output(
-        'vitess-up.sh', stderr=subprocess.STDOUT)
+        [os.path.join(self.script_dir, 'vitess-up.sh')],
+        cwd=self.script_dir, stderr=subprocess.STDOUT)
     logging.info(vitess_up_output)
-    os.chdir(cwd)
     self.use_named(kwargs['VITESS_NAME'])
 
   def destroy(self):
-    cwd = os.getcwd()
-    os.chdir(self.script_dir)
     vitess_down_output = subprocess.check_output(
-        'vitess-down.sh', stderr=subprocess.STDOUT)
+        [os.path.join(self.script_dir, 'vitess-down.sh')],
+        cwd=self.script_dir, stderr=subprocess.STDOUT)
     logging.info(vitess_down_output)
     if self.create_gke_cluster:
       cluster_down_output = subprocess.check_output(
-          'cluster-down.sh', stderr=subprocess.STDOUT)
+          [os.path.join(self.script_dir, 'cluster-down.sh')],
+          cwd=self.script_dir, stderr=subprocess.STDOUT)
       logging.info(cluster_down_output)
-    os.chdir(cwd)
 
   def get_vtgate_conn(self, cell):
     return self.vtgate_conns[cell]
