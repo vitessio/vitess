@@ -9,7 +9,7 @@ features.
 The following diagram represents all the RPCs we use in a Vitess cluster:
 
 <div style="overflow-x: scroll">
-<img src="https://raw.githubusercontent.com/youtube/vitess/master/doc/VitessTransportSecurityModel.svg" alt="Vitess Transport Security Model Diagram" width="400" height="300"/>
+<img src="http://vitess.io/images/VitessTransportSecurityModel.svg" alt="Vitess Transport Security Model Diagram" width="400" height="300"/>
 </div>
 
 There are two main categories:
