@@ -166,15 +166,9 @@ func (sdc *ShardConn) StreamExecute(ctx context.Context, query string, bindVars 
 
 // Begin begins a transaction. The retry rules are the same as Execute.
 func (sdc *ShardConn) Begin(ctx context.Context) (transactionID int64, err error) {
-	attemptNumber := 0
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		// Potentially buffer this transaction.
-		if bufferErr := txbuffer.FakeBuffer(sdc.keyspace, sdc.shard, attemptNumber); bufferErr != nil {
-			return bufferErr
-		}
 		transactionID, innerErr = conn.Begin(ctx)
-		attemptNumber++
 		return innerErr
 	}, 0, false)
 	return transactionID, err
@@ -272,6 +266,16 @@ func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn
 			time.Sleep(sdc.retryDelay)
 			continue
 		}
+
+		// Only buffer master requests that are not already in a transaction (including the Begin).
+		// Ongoing transactions will be killed during a master reparent.
+		if sdc.tabletType == topodatapb.TabletType_MASTER && !inTransaction {
+			// Potentially buffer this request.
+			if bufferErr := txbuffer.FakeBuffer(sdc.keyspace, sdc.shard, i); bufferErr != nil {
+				return bufferErr
+			}
+		}
+
 		err = action(conn)
 		if sdc.canRetry(ctx, err, transactionID, conn, isStreaming) {
 			continue

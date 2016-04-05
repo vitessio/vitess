@@ -214,6 +214,8 @@ class BaseTestCase(unittest.TestCase):
     logging.info('Start: %s.', '.'.join(self.id().split('.')[-2:]))
 
 
+# TODO(liguo): once we have the final master buffering code in place, these
+# tests should verify that we only buffer when the master is unavailable.
 class TestMasterBuffering(BaseTestCase):
 
   shard_index = 0
@@ -225,14 +227,14 @@ class TestMasterBuffering(BaseTestCase):
         '-enable_fake_tx_buffer',
         '-buffer_keyspace', KEYSPACE_NAME,
         '-buffer_shard', SHARD_NAMES[self.shard_index],
-        'fake_buffer_delay', '1ms',
+        '-fake_buffer_delay', '1ms',
         ])
 
   def get_sucessful_buffered_requests(self):
     return utils.vtgate.get_vars()['BufferedTransactionsSuccessful']
 
   def test_tx_is_buffered(self):
-    """Tests for for a new transaction, we buffer the request exactly once."""
+    """Tests that for a transaction, we buffer exactly one request."""
     vtgate_conn = get_connection()
     kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
     keyspace_id = kid_list[0]
@@ -256,21 +258,21 @@ class TestMasterBuffering(BaseTestCase):
     # buffer one request (the Begin to the vttablet).
     self.assertEqual(num_buffered, 1)
 
-  # def test_master_read_is_buffered(self):
-  #   """Tests that we buffer master reads."""
-  #   vtgate_conn = get_connection()
-  #   kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
-  #   keyspace_id = kid_list[0]
+  def test_master_read_is_buffered(self):
+    """Tests that we buffer master reads."""
+    vtgate_conn = get_connection()
+    kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
+    keyspace_id = kid_list[0]
 
-  #   initial_buffered = self.get_sucessful_buffered_requests()
+    initial_buffered = self.get_sucessful_buffered_requests()
 
-  #   cursor = vtgate_conn.cursor(
-  #       tablet_type='master', keyspace=KEYSPACE_NAME,
-  #       keyspace_ids=[pack_kid(keyspace_id)])
-  #   cursor.execute('select * from vt_insert_test', {})
+    cursor = vtgate_conn.cursor(
+        tablet_type='master', keyspace=KEYSPACE_NAME,
+        keyspace_ids=[pack_kid(keyspace_id)])
+    cursor.execute('select * from vt_insert_test', {})
 
-  #   num_buffered = self.get_sucessful_buffered_requests() - initial_buffered
-  #   self.assertEqual(num_buffered, 1)
+    num_buffered = self.get_sucessful_buffered_requests() - initial_buffered
+    self.assertEqual(num_buffered, 1)
 
   def test_replica_read_is_not_buffered(self):
     """Tests that we do not buffer replica reads."""
