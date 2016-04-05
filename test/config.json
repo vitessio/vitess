@@ -127,6 +127,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"master_buffering": {
+			"File": "master_buffering_test.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"mysqlctl": {
 			"File": "mysqlctl.py",
 			"Args": [],
