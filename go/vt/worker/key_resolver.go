@@ -44,18 +44,19 @@ func newV2Resolver(keyspaceInfo *topo.KeyspaceInfo, td *tabletmanagerdatapb.Tabl
 	if keyspaceInfo.ShardingColumnType == topodatapb.KeyspaceIdType_UNSET {
 		return nil, errors.New("ShardingColumnType needs to be set for a v2 sharding key")
 	}
+	if td.Type != tmutils.TableBaseTable {
+		return nil, fmt.Errorf("a keyspaceID resolver can only be created for a base table, got %v", td.Type)
+	}
 	// Find the sharding key column index.
 	columnIndex := -1
-	if td.Type == tmutils.TableBaseTable {
-		for i, name := range td.Columns {
-			if name == keyspaceInfo.ShardingColumnName {
-				columnIndex = i
-				break
-			}
+	for i, name := range td.Columns {
+		if name == keyspaceInfo.ShardingColumnName {
+			columnIndex = i
+			break
 		}
-		if columnIndex == -1 {
-			return nil, fmt.Errorf("table %v doesn't have a column named '%v'", td.Name, keyspaceInfo.ShardingColumnName)
-		}
+	}
+	if columnIndex == -1 {
+		return nil, fmt.Errorf("table %v doesn't have a column named '%v'", td.Name, keyspaceInfo.ShardingColumnName)
 	}
 
 	return &v2Resolver{keyspaceInfo, columnIndex}, nil
