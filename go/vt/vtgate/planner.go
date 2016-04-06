@@ -102,6 +102,7 @@ func (plr *Planner) WatchVSchema(ctx context.Context) {
 		plr.mu.Lock()
 		plr.vschema = vschema
 		plr.mu.Unlock()
+		plr.plans.Clear()
 	}
 
 	for _, keyspace := range keyspaces {
