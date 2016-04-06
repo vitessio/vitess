@@ -30,7 +30,7 @@ build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
-	godep go install $(VT_GO_PARALLEL) -ldflags "$(tools/build_version_flags.sh)" ./go/...
+	go install $(VT_GO_PARALLEL) -ldflags "$(tools/build_version_flags.sh)" ./go/...
 
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
@@ -52,13 +52,13 @@ clean_pkg:
 
 unit_test: build
 	echo $$(date): Running unit tests
-	godep go test $(VT_GO_PARALLEL) ./go/...
+	go test $(VT_GO_PARALLEL) ./go/...
 
 # Run the code coverage tools, compute aggregate.
 # If you want to improve in a directory, run:
 #   go test -coverprofile=coverage.out && go tool cover -html=coverage.out
 unit_test_cover: build
-	godep go test $(VT_GO_PARALLEL) -cover ./go/... | misc/parse_cover.py
+	go test $(VT_GO_PARALLEL) -cover ./go/... | misc/parse_cover.py
 
 unit_test_race: build
 	tools/unit_test_race.sh
@@ -73,18 +73,18 @@ SHELL = /bin/bash
 
 # Run the following tests after making worker changes.
 worker_test:
-	godep go test ./go/vt/worker/
+	go test ./go/vt/worker/
 	go run test.go -docker=false -tag=worker_test
 
 site_integration_test:
 	go run test.go -docker=false -tag=site_test
 
 java_test:
-	godep go install ./go/cmd/vtgateclienttest
+	go install ./go/cmd/vtgateclienttest
 	mvn -f java/pom.xml clean verify
 
 php_test:
-	godep go install ./go/cmd/vtgateclienttest
+	go install ./go/cmd/vtgateclienttest
 	phpunit php/tests
 
 # This rule rebuilds all the go files from the proto definitions for gRPC.
