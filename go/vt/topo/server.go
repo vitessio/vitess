@@ -348,13 +348,15 @@ type Server struct {
 }
 
 // SrvTopoServer is a subset of Server that only contains the serving
-// graph read-only calls used by clients to resolve serving addresses.
+// graph read-only calls used by clients to resolve serving addresses,
+// and how to get VSchema. It is mostly used by our discovery modules,
+// and by vtgate.
 type SrvTopoServer interface {
 	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
-	GetVSchema(ctx context.Context, keyspace string) (string, error)
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
 	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error)
 	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType) (*topodatapb.EndPoints, int64, error)
+	WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan string, err error)
 }
 
 // Registry for Server implementations.
