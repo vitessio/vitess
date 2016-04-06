@@ -132,6 +132,9 @@ docker_guestbook:
 docker_etcd:
 	cd docker/etcd-lite && ./build.sh
 
+docker_publish_site:
+	docker build -f docker/publish-site/Dockerfile -t vitess/publish-site .
+
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.
 # Example: $ make docker_test flavor=mariadb
