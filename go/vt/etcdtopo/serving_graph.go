@@ -12,9 +12,10 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -306,7 +307,7 @@ func (s *Server) WatchSrvKeyspace(ctx context.Context, cellName, keyspace string
 		}
 
 		// re-check for stop here to be safe, in case the
-		// getEndPoints took a long time
+		// Get took a long time
 		select {
 		case <-stop:
 			return

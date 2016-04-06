@@ -246,7 +246,7 @@ type Impl interface {
 	// If the underlying topo.Server encounters an error watching the node,
 	// it should retry on a regular basis until it can succeed.
 	// The initial error returned by this method is meant to catch
-	// the obvious bad cases (invalid cell, invalid tabletType, ...)
+	// the obvious bad cases (invalid cell, ...)
 	// that are never going to work. Mutiple notifications with the
 	// same contents may be sent (for instance, when the serving graph
 	// is rebuilt, but the content of SrvKeyspace is the same,
@@ -312,12 +312,33 @@ type Impl interface {
 	//
 
 	// SaveVSchema saves the provided schema in the topo server.
+	// The underlying implementation must verify the VSchema by calling
+	// vindexes.ValidateVSchema.
+	// FIXME(alainjobart) add a Server.SaveVSchema method that
+	// does the verification, remove the verification from the impls.
 	SaveVSchema(ctx context.Context, keyspace, vschema string) error
 
 	// GetVSchema retrieves the schema from the topo server.
 	//
 	// If no schema has been previously saved, it should return "{}"
 	GetVSchema(ctx context.Context, keyspace string) (string, error)
+
+	// WatchVSchema returns a channel that receives notifications
+	// every time the VSchema for the given keyspace changes.
+	// It should receive a notification with the initial value fairly
+	// quickly after this is set. A value of "{}" means the VSchema
+	// object doesn't exist or is empty. To stop watching this
+	// VSchema object, cancel the context.
+	// If the underlying topo.Server encounters an error watching the node,
+	// it should retry on a regular basis until it can succeed.
+	// The initial error returned by this method is meant to catch
+	// the obvious bad cases (invalid keyspace, ...)
+	// that are never going to work. Mutiple notifications with the
+	// same contents may be sent (for instance, when the VSchema
+	// is changed, but the content of the JSON file is the same,
+	// the object version will change, most likely triggering the
+	// notification, but the content hasn't changed).
+	WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan string, err error)
 }
 
 // Server is a wrapper type that can have extra methods.

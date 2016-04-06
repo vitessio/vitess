@@ -80,3 +80,94 @@ func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
 		t.Errorf(`GetShardNames: want [ "b0-c0" ], got %v`, shards)
 	}
 }
+
+// CheckWatchVSchema makes sure WatchVSchema works as expected
+func CheckWatchVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
+	keyspace := "test_keyspace"
+
+	// start watching, should get nil first
+	ctx, cancel := context.WithCancel(ctx)
+	notifications, err := ts.WatchVSchema(ctx, keyspace)
+	if err != nil {
+		t.Fatalf("WatchVSchema failed: %v", err)
+	}
+	vs, ok := <-notifications
+	if !ok || vs != "{}" {
+		t.Fatalf("first value is wrong: %v %v", vs, ok)
+	}
+
+	// update the VSchema, should get a notification
+	newContents := `{ "Sharded": false }`
+	if err := ts.SaveVSchema(ctx, keyspace, newContents); err != nil {
+		t.Fatalf("SaveVSchema failed: %v", err)
+	}
+	for {
+		vs, ok := <-notifications
+		if !ok {
+			t.Fatalf("watch channel is closed???")
+		}
+		if vs == "{}" {
+			// duplicate notification of the first value, that's OK
+			continue
+		}
+		// non-empty value, that one should be ours
+		if vs != newContents {
+			t.Fatalf("first value is wrong: got %v expected %v", vs, newContents)
+		}
+		break
+	}
+
+	// empty the VSchema, should get a notification
+	if err := ts.SaveVSchema(ctx, keyspace, "{}"); err != nil {
+		t.Fatalf("SaveVSchema failed: %v", err)
+	}
+	for {
+		vs, ok := <-notifications
+		if !ok {
+			t.Fatalf("watch channel is closed???")
+		}
+		if vs == "{}" {
+			break
+		}
+
+		// duplicate notification of the first value, that's OK,
+		// but value better be good.
+		if vs != newContents {
+			t.Fatalf("duplicate notification value is bad: %v", vs)
+		}
+	}
+
+	// re-create the value, a bit different, should get a notification
+	newContents = `{ "Sharded": true }`
+	if err := ts.SaveVSchema(ctx, keyspace, newContents); err != nil {
+		t.Fatalf("SaveVSchema failed: %v", err)
+	}
+	for {
+		vs, ok := <-notifications
+		if !ok {
+			t.Fatalf("watch channel is closed???")
+		}
+		if vs == "{}" {
+			// duplicate notification of the closed value, that's OK
+			continue
+		}
+		// non-empty value, that one should be ours
+		if vs != newContents {
+			t.Fatalf("value after delete / re-create is wrong: %v", vs)
+		}
+		break
+	}
+
+	// close the context, should eventually get a closed
+	// notifications channel too
+	cancel()
+	for {
+		vs, ok := <-notifications
+		if !ok {
+			break
+		}
+		if vs != newContents {
+			t.Fatalf("duplicate notification value is bad: %v", vs)
+		}
+	}
+}

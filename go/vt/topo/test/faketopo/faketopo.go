@@ -233,3 +233,10 @@ func (ft FakeTopo) SaveVSchema(context.Context, string, string) error {
 func (ft FakeTopo) GetVSchema(ctx context.Context, keyspace string) (string, error) {
 	return "", errNotImplemented
 }
+
+// WatchVSchema implements topo.Server.WatchSrvKeyspace
+func (ft FakeTopo) WatchVSchema(ctx context.Context, keyspace string) (<-chan string, error) {
+	return nil, errNotImplemented
+}
+
+var _ topo.Impl = (*FakeTopo)(nil) // compile-time interface check
