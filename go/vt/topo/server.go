@@ -312,10 +312,6 @@ type Impl interface {
 	//
 
 	// SaveVSchema saves the provided schema in the topo server.
-	// The underlying implementation must verify the VSchema by calling
-	// vindexes.ValidateVSchema.
-	// FIXME(alainjobart) add a Server.SaveVSchema method that
-	// does the verification, remove the verification from the impls.
 	SaveVSchema(ctx context.Context, keyspace, vschema string) error
 
 	// GetVSchema retrieves the schema from the topo server.

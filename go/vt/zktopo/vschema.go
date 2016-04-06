@@ -12,7 +12,6 @@ import (
 	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/zk"
 )
 
@@ -26,12 +25,8 @@ const (
 
 // SaveVSchema saves the JSON vschema into the topo.
 func (zkts *Server) SaveVSchema(ctx context.Context, keyspace, vschema string) error {
-	err := vindexes.ValidateVSchema([]byte(vschema))
-	if err != nil {
-		return err
-	}
 	vschemaPath := path.Join(GlobalKeyspacesPath, keyspace, vschemaPath)
-	_, err = zk.CreateOrUpdate(zkts.zconn, vschemaPath, vschema, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
+	_, err := zk.CreateOrUpdate(zkts.zconn, vschemaPath, vschema, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
 	return err
 }
 
