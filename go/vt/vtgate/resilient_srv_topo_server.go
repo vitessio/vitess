@@ -218,7 +218,7 @@ func filterUnhealthyServers(endPoints *topodatapb.EndPoints) *topodatapb.EndPoin
 }
 
 // NewResilientSrvTopoServer creates a new ResilientSrvTopoServer
-// based on the provided SrvTopoServer.
+// based on the provided topo.Server.
 func NewResilientSrvTopoServer(base topo.Server, counterPrefix string) *ResilientSrvTopoServer {
 	return &ResilientSrvTopoServer{
 		topoServer:         base,
@@ -286,9 +286,9 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, c
 	return result, err
 }
 
-// GetVSchema fetches the VSchema.
-func (server *ResilientSrvTopoServer) GetVSchema(ctx context.Context, keyspace string) (string, error) {
-	return server.topoServer.GetVSchema(ctx, keyspace)
+// WatchVSchema is part of the SrvTopoServer API
+func (server *ResilientSrvTopoServer) WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan string, err error) {
+	return server.topoServer.WatchVSchema(ctx, keyspace)
 }
 
 func (server *ResilientSrvTopoServer) getSrvKeyspaceEntry(cell, keyspace string) *srvKeyspaceEntry {
