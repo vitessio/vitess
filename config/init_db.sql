@@ -40,5 +40,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
   ON *.* TO 'vt_filtered'@'localhost';
 
+# User for Orchestrator (https://github.com/outbrain/orchestrator).
+GRANT SUPER, PROCESS, REPLICATION SLAVE
+  ON *.* TO 'orc_client_user'@'%' IDENTIFIED BY 'orc_client_user_password';
+
 FLUSH PRIVILEGES;
 
