@@ -64,7 +64,8 @@ func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
 		t.Errorf("GetVSchema: %s, want %s", got, want)
 	}
 
-	err = ts.SaveVSchema(ctx, "test_keyspace", "invalid")
+	tts := topo.Server{Impl: ts}
+	err = tts.SaveVSchema(ctx, "test_keyspace", "invalid")
 	want = "Unmarshal failed:"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("SaveVSchema: %v, must start with %s", err, want)

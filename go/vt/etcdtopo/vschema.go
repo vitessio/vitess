@@ -8,7 +8,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 /*
@@ -17,12 +16,7 @@ This file contains the vschema management code for etcdtopo.Server
 
 // SaveVSchema saves the JSON vschema into the topo.
 func (s *Server) SaveVSchema(ctx context.Context, keyspace, vschema string) error {
-	err := vindexes.ValidateVSchema([]byte(vschema))
-	if err != nil {
-		return err
-	}
-
-	_, err = s.getGlobal().Set(vschemaFilePath(keyspace), vschema, 0 /* ttl */)
+	_, err := s.getGlobal().Set(vschemaFilePath(keyspace), vschema, 0 /* ttl */)
 	if err != nil {
 		return convertError(err)
 	}
