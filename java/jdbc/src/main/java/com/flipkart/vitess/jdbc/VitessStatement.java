@@ -177,7 +177,7 @@ public class VitessStatement implements Statement {
 
         if (selectSql) {
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-            cursor = vtGateConn.streamExecute(context, sql, null, tabletType);
+            cursor = vtGateConn.execute(context, sql, null, tabletType).checkedGet();
         } else if (showSql) {
 
 

@@ -164,8 +164,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
 
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
             cursor =
-                vtGateConn.streamExecute(context, this.sql, this.bindVariables, tabletType);
-
+                vtGateConn.execute(context, this.sql, this.bindVariables, tabletType).checkedGet();
         } else if (showSql) {
             String keyspace = this.vitessConnection.getKeyspace();
             List<byte[]> keyspaceIds = Arrays.asList(new byte[]{1}); //To Hit any single shard
