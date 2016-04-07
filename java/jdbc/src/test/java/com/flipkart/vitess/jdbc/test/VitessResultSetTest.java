@@ -489,7 +489,8 @@ public class VitessResultSetTest {
         VitessResultSet vitessResultSet = new VitessResultSet(cursor);
         vitessResultSet.next();
         // Need to implement AssertEquivalant
-        //Assert.assertEquals((InputStream)(new ByteArrayInputStream("HELLO TDS TEAM".getBytes())), vitessResultSet.getAsciiStream(19));
+        //Assert.assertEquals((InputStream)(new ByteArrayInputStream("HELLO TDS TEAM".getBytes())), vitessResultSet
+        // .getAsciiStream(19));
     }
 
 }

@@ -241,8 +241,8 @@ public class VitessPreparedStatementTest {
         PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
         PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.MASTER);
         PowerMockito.when(mockVtGateConn
-            .streamExecute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockCursor);
+            .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockVtGateConn
             .executeKeyspaceIds(Matchers.any(Context.class), Matchers.anyString(),
                 Matchers.anyString(), Matchers.anyCollection(), Matchers.anyMap(),
