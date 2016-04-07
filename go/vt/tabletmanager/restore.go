@@ -50,14 +50,26 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 	pos, err := mysqlctl.Restore(ctx, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv())
 	switch err {
 	case nil:
+		// Populate local_metadata before starting replication,
+		// so it's there before we start announcing ourself.
+		if err := agent.populateLocalMetadata(ctx); err != nil {
+			return err
+		}
+
 		// Reconnect to master.
 		if err := agent.startReplication(ctx, pos); err != nil {
 			return err
 		}
 	case mysqlctl.ErrNoBackup:
 		log.Infof("Auto-restore is enabled, but no backups were found. Starting up empty.")
+		if err := agent.populateLocalMetadata(ctx); err != nil {
+			return err
+		}
 	case mysqlctl.ErrExistingDB:
 		log.Infof("Auto-restore is enabled, but mysqld already contains data. Assuming vttablet was just restarted.")
+		if err := agent.populateLocalMetadata(ctx); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("Can't restore backup: %v", err)
 	}
