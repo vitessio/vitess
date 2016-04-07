@@ -98,9 +98,6 @@ else
   export PYTHONPATH=$(prepend_path $PYTHONPATH $grpc_dist/usr/local/lib/python2.7/dist-packages)
 fi
 
-ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src
-go install launchpad.net/gozk/zookeeper
-
 # Download third-party Go libraries.
 # (We use one go get command (and therefore one variable) for all repositories because this saves us several seconds of execution time.)
 repos="github.com/golang/glog \

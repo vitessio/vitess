@@ -790,6 +790,25 @@
   }
 }
 
+# implicit table reference for unsharded keyspace
+"select main.foo.col from main.foo"
+{
+  "Original": "select main.foo.col from main.foo",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select foo.col from foo",
+    "FieldQuery": "select foo.col from foo where 1 != 1"
+  }
+}
+
+# implicit table reference for sharded keyspace
+"select user.foo.col from user.foo"
+"table foo not found"
+
 # duplicate symbols
 "select user.id from user join user"
 "duplicate symbol: user"

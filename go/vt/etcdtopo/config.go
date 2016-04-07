@@ -23,7 +23,6 @@ const (
 	tabletsDirPath     = rootPath + "/tablets"
 	replicationDirPath = rootPath + "/replication"
 	servingDirPath     = rootPath + "/ns"
-	vschemaPath        = rootPath + "/vschema"
 
 	// Magic file names. Directories in etcd cannot have data. Files whose names
 	// begin with '_' are hidden from directory listings.
@@ -35,6 +34,8 @@ const (
 	srvKeyspaceFilename      = dataFilename
 	srvShardFilename         = dataFilename
 	endPointsFilename        = dataFilename
+
+	vschemaFilename = "_VSchema"
 )
 
 var (
@@ -55,6 +56,10 @@ func keyspaceDirPath(keyspace string) string {
 
 func keyspaceFilePath(keyspace string) string {
 	return path.Join(keyspaceDirPath(keyspace), keyspaceFilename)
+}
+
+func vschemaFilePath(keyspace string) string {
+	return path.Join(keyspaceDirPath(keyspace), vschemaFilename)
 }
 
 func shardsDirPath(keyspace string) string {

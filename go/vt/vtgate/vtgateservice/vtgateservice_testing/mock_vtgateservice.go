@@ -33,15 +33,15 @@ func (_m *MockVTGateService) EXPECT() *_MockVTGateServiceRecorder {
 	return _m.recorder
 }
 
-func (_m *MockVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodata.TabletType, session *vtgate.Session, notInTransaction bool) (*sqltypes.Result, error) {
-	ret := _m.ctrl.Call(_m, "Execute", ctx, sql, bindVariables, tabletType, session, notInTransaction)
+func (_m *MockVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodata.TabletType, session *vtgate.Session, notInTransaction bool) (*sqltypes.Result, error) {
+	ret := _m.ctrl.Call(_m, "Execute", ctx, sql, bindVariables, keyspace, tabletType, session, notInTransaction)
 	ret0, _ := ret[0].(*sqltypes.Result)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-func (_mr *_MockVTGateServiceRecorder) Execute(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "Execute", arg0, arg1, arg2, arg3, arg4, arg5)
+func (_mr *_MockVTGateServiceRecorder) Execute(arg0, arg1, arg2, arg3, arg4, arg5, arg6 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Execute", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 }
 
 func (_m *MockVTGateService) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodata.TabletType, session *vtgate.Session, notInTransaction bool) (*sqltypes.Result, error) {
@@ -110,14 +110,14 @@ func (_mr *_MockVTGateServiceRecorder) ExecuteBatchKeyspaceIds(arg0, arg1, arg2,
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "ExecuteBatchKeyspaceIds", arg0, arg1, arg2, arg3, arg4)
 }
 
-func (_m *MockVTGateService) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodata.TabletType, sendReply func(*sqltypes.Result) error) error {
-	ret := _m.ctrl.Call(_m, "StreamExecute", ctx, sql, bindVariables, tabletType, sendReply)
+func (_m *MockVTGateService) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodata.TabletType, sendReply func(*sqltypes.Result) error) error {
+	ret := _m.ctrl.Call(_m, "StreamExecute", ctx, sql, bindVariables, keyspace, tabletType, sendReply)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-func (_mr *_MockVTGateServiceRecorder) StreamExecute(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "StreamExecute", arg0, arg1, arg2, arg3, arg4)
+func (_mr *_MockVTGateServiceRecorder) StreamExecute(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "StreamExecute", arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 func (_m *MockVTGateService) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodata.TabletType, sendReply func(*sqltypes.Result) error) error {

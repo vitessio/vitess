@@ -21,7 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vtgate/txbuffer"
+	"github.com/youtube/vitess/go/vt/vtgate/masterbuffer"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -139,15 +139,9 @@ func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard s
 // Begin starts a transaction for the specified keyspace, shard, and tablet type.
 // It returns the transaction ID.
 func (dg *discoveryGateway) Begin(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType) (transactionID int64, err error) {
-	attemptNumber := 0
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		// Potentially buffer this transaction.
-		if bufferErr := txbuffer.FakeBuffer(keyspace, shard, attemptNumber); bufferErr != nil {
-			return bufferErr
-		}
 		transactionID, innerErr = conn.Begin(ctx)
-		attemptNumber++
 		return innerErr
 	}, 0, false)
 	return transactionID, err
@@ -266,6 +260,12 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 			invalidEndPoints[discovery.EndPointToMapKey(endPoint)] = true
 			continue
 		}
+
+		// Potentially buffer this request.
+		if bufferErr := masterbuffer.FakeBuffer(keyspace, shard, tabletType, inTransaction, i); bufferErr != nil {
+			return bufferErr
+		}
+
 		err = action(conn)
 		if dg.canRetry(ctx, err, transactionID, isStreaming) {
 			invalidEndPoints[discovery.EndPointToMapKey(endPoint)] = true

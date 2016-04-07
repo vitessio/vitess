@@ -45,7 +45,7 @@ var ksToSandbox map[string]*sandbox
 func createSandbox(keyspace string) *sandbox {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
-	s := &sandbox{}
+	s := &sandbox{VSchema: "{}"}
 	s.Reset()
 	ksToSandbox[keyspace] = s
 	return s
@@ -99,6 +99,7 @@ type sandbox struct {
 	SrvKeyspaceCallback func()
 
 	TestConns map[string]map[uint32]tabletconn.TabletConn
+	VSchema   string
 }
 
 func (s *sandbox) Reset() {
@@ -281,6 +282,13 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 	}
 
 	return createShardedSrvKeyspace(sand.ShardSpec, sand.KeyspaceServedFrom)
+}
+
+func (sct *sandboxTopo) WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan string, err error) {
+	result := make(chan string, 1)
+	value := getSandbox(keyspace).VSchema
+	result <- value
+	return result, nil
 }
 
 func (sct *sandboxTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error) {

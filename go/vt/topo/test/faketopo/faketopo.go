@@ -225,11 +225,18 @@ func (ft FakeTopo) UnlockShardForAction(ctx context.Context, keyspace, shard, lo
 }
 
 // SaveVSchema implements topo.Server.
-func (ft FakeTopo) SaveVSchema(context.Context, string) error {
+func (ft FakeTopo) SaveVSchema(context.Context, string, string) error {
 	return errNotImplemented
 }
 
 // GetVSchema implements topo.Server.
-func (ft FakeTopo) GetVSchema(ctx context.Context) (string, error) {
+func (ft FakeTopo) GetVSchema(ctx context.Context, keyspace string) (string, error) {
 	return "", errNotImplemented
 }
+
+// WatchVSchema implements topo.Server.WatchSrvKeyspace
+func (ft FakeTopo) WatchVSchema(ctx context.Context, keyspace string) (<-chan string, error) {
+	return nil, errNotImplemented
+}
+
+var _ topo.Impl = (*FakeTopo)(nil) // compile-time interface check

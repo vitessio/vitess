@@ -74,13 +74,14 @@ func (f *fakeVTGateService) checkCallerID(ctx context.Context, name string) {
 type queryExecute struct {
 	SQL              string
 	BindVariables    map[string]interface{}
+	Keyspace         string
 	TabletType       topodatapb.TabletType
 	Session          *vtgatepb.Session
 	NotInTransaction bool
 }
 
 // Execute is part of the VTGateService interface
-func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
+func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	if f.hasError {
 		return nil, errTestVtGateError
 	}
@@ -95,6 +96,7 @@ func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariabl
 	query := &queryExecute{
 		SQL:              sql,
 		BindVariables:    bindVariables,
+		Keyspace:         keyspace,
 		TabletType:       tabletType,
 		Session:          session,
 		NotInTransaction: notInTransaction,
@@ -370,7 +372,7 @@ func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, queries
 }
 
 // StreamExecute is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
+func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -382,6 +384,7 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindV
 	query := &queryExecute{
 		SQL:           sql,
 		BindVariables: bindVariables,
+		Keyspace:      keyspace,
 		TabletType:    tabletType,
 	}
 	if !reflect.DeepEqual(query, execCase.execQuery) {

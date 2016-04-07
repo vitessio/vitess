@@ -29,19 +29,15 @@ import (
 // This file uses the sandbox_test framework.
 
 func init() {
-	vschema := createTestVSchema(`
+	getSandbox(KsTestUnsharded).VSchema = `
 {
-  "Keyspaces": {
-    "TestUnsharded": {
-      "Sharded": false,
-      "Tables": {
-        "t1": ""
-      }
-    }
-  }
+	"Sharded": false,
+	"Tables": {
+		"t1": {}
+	}
 }
-`)
-	Init(nil, topo.Server{}, new(sandboxTopo), vschema, "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, 0, "")
+`
+	Init(context.Background(), nil, topo.Server{}, new(sandboxTopo), "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, 0, "")
 }
 
 func TestVTGateExecute(t *testing.T) {
@@ -51,6 +47,7 @@ func TestVTGateExecute(t *testing.T) {
 	qr, err := rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
+		"",
 		topodatapb.TabletType_MASTER,
 		nil,
 		false)
@@ -68,6 +65,7 @@ func TestVTGateExecute(t *testing.T) {
 	rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
+		"",
 		topodatapb.TabletType_MASTER,
 		session,
 		false)
@@ -95,10 +93,41 @@ func TestVTGateExecute(t *testing.T) {
 	rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
+		"",
 		topodatapb.TabletType_MASTER,
 		session,
 		false)
 	rpcVTGate.Rollback(context.Background(), session)
+}
+
+func TestVTGateExecuteWithKeyspace(t *testing.T) {
+	sandbox := createSandbox(KsTestUnsharded)
+	sbc := &sandboxConn{}
+	sandbox.MapTestConn("0", sbc)
+	qr, err := rpcVTGate.Execute(context.Background(),
+		"select id from none",
+		nil,
+		KsTestUnsharded,
+		topodatapb.TabletType_MASTER,
+		nil,
+		false)
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+	if !reflect.DeepEqual(singleRowResult, qr) {
+		t.Errorf("want \n%+v, got \n%+v", singleRowResult, qr)
+	}
+	_, err = rpcVTGate.Execute(context.Background(),
+		"select id from none",
+		nil,
+		"aa",
+		topodatapb.TabletType_MASTER,
+		nil,
+		false)
+	want := "keyspace aa not found in vschema"
+	if err == nil || err.Error() != want {
+		t.Errorf("Execute: %v, want %s", err, want)
+	}
 }
 
 func TestVTGateExecuteShards(t *testing.T) {
@@ -532,6 +561,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 	err := rpcVTGate.StreamExecute(context.Background(),
 		"select id from t1",
 		nil,
+		"",
 		topodatapb.TabletType_MASTER,
 		func(r *sqltypes.Result) error {
 			qrs = append(qrs, r)

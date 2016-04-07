@@ -49,22 +49,22 @@ func newScatterParams(ks string, bv map[string]interface{}, shards []string) *sc
 }
 
 // NewRouter creates a new Router.
-func NewRouter(serv topo.SrvTopoServer, cell string, vschema *vindexes.VSchema, statsName string, scatterConn *ScatterConn) *Router {
+func NewRouter(ctx context.Context, serv topo.SrvTopoServer, cell, statsName string, scatterConn *ScatterConn) *Router {
 	return &Router{
 		serv:        serv,
 		cell:        cell,
-		planner:     NewPlanner(vschema, 5000),
+		planner:     NewPlanner(ctx, serv, cell, 5000),
 		scatterConn: scatterConn,
 	}
 }
 
 // Execute routes a non-streaming query.
-func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
+func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
-	vcursor := newRequestContext(ctx, sql, bindVars, tabletType, session, notInTransaction, rtr)
-	plan, err := rtr.planner.GetPlan(sql)
+	vcursor := newRequestContext(ctx, sql, bindVars, keyspace, tabletType, session, notInTransaction, rtr)
+	plan, err := rtr.planner.GetPlan(sql, keyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -72,12 +72,12 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 }
 
 // StreamExecute executes a streaming query.
-func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
+func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
-	vcursor := newRequestContext(ctx, sql, bindVars, tabletType, nil, false, rtr)
-	plan, err := rtr.planner.GetPlan(sql)
+	vcursor := newRequestContext(ctx, sql, bindVars, keyspace, tabletType, nil, false, rtr)
+	plan, err := rtr.planner.GetPlan(sql, keyspace)
 	if err != nil {
 		return err
 	}

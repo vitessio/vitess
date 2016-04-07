@@ -19,8 +19,10 @@ var (
 // and blocks until it the process gets a signal.
 func Run(port int) {
 	populateListeningURL()
+	createGRPCServer()
 	onRunHooks.Fire()
 	serveGRPC()
+	serveSocketFile()
 
 	l, err := proc.Listen(fmt.Sprintf("%v", port))
 	if err != nil {

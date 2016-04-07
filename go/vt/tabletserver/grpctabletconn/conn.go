@@ -5,6 +5,7 @@
 package grpctabletconn
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
+	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"golang.org/x/net/context"
@@ -24,6 +26,13 @@ import (
 )
 
 const protocolName = "grpc"
+
+var (
+	cert = flag.String("tablet_grpc_cert", "", "the cert to use to connect")
+	key  = flag.String("tablet_grpc_key", "", "the key to use to connect")
+	ca   = flag.String("tablet_grpc_ca", "", "the server ca to use to validate servers when connecting")
+	name = flag.String("tablet_grpc_server_name", "", "the server name to use to validate server certificate")
+)
 
 func init() {
 	tabletconn.RegisterDialer(protocolName, DialTablet)
@@ -46,7 +55,11 @@ type gRPCQueryClient struct {
 func DialTablet(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 	// create the RPC client
 	addr := netutil.JoinHostPort(endPoint.Host, endPoint.PortMap["grpc"])
-	cc, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(timeout))
+	opt, err := grpcutils.ClientSecureDialOption(*cert, *key, *ca, *name)
+	if err != nil {
+		return nil, err
+	}
+	cc, err := grpc.Dial(addr, opt, grpc.WithBlock(), grpc.WithTimeout(timeout))
 	if err != nil {
 		return nil, err
 	}

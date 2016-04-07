@@ -4,7 +4,8 @@ import base_environment
 
 
 class AwsEnvironment(base_environment.BaseEnvironment):
-  """Environment for AWS clusters."""
+  """Environment for AWS clusters.  CURRENTLY UNSUPPORTED."""
+
   def __init__(self):
     super(AwsEnvironment, self).__init__()
 
