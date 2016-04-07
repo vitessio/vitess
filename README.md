@@ -1,5 +1,8 @@
 [![Build Status](https://travis-ci.org/youtube/vitess.svg?branch=master)](https://travis-ci.org/youtube/vitess/builds)
 [![codebeat](https://codebeat.co/badges/0d74f7ec-17d8-4b5a-b00e-cf8194cab5b5)](https://codebeat.co/projects/github-com-youtube-vitess)
+[![Go Report Card](https://goreportcard.com/report/github.com/youtube/vitess)](https://goreportcard.com/report/github.com/youtube/vitess)
+
+
 
 # Vitess 
 
