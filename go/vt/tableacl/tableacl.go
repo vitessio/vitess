@@ -67,6 +67,20 @@ var currentACL tableACL
 var aclCallback func()
 
 // Init initiates table ACLs.
+//
+// The config file can be binary-proto-encoded, or json-encoded.
+// In the json case, it looks like this:
+//
+// {
+//   "table_groups": [
+//     {
+//       "table_names_or_prefixes": ["name1"],
+//       "readers": ["client1"],
+//       "writers": ["client1"],
+//       "admins": ["client1"]
+//     }
+//   ]
+// }
 func Init(configFile string, aclCB func()) error {
 	aclCallback = aclCB
 	if configFile != "" {
@@ -98,13 +112,7 @@ func InitFromProto(config *tableaclpb.Config) (err error) {
 	return load(config)
 }
 
-// load loads configurations from a JSON byte array
-//
-// Sample configuration
-// []byte (`{
-//	<table name or table name prefix>: {"READER": "*", "WRITER": "<u2>,<u4>...","ADMIN": "<u5>"},
-//	<table name or table name prefix>: {"ADMIN": "<u5>"}
-//}`)
+// load loads configurations from a proto-defined Config
 func load(config *tableaclpb.Config) error {
 	var entries aclEntries
 	for _, group := range config.TableGroups {

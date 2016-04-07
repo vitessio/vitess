@@ -246,7 +246,7 @@ type Impl interface {
 	// If the underlying topo.Server encounters an error watching the node,
 	// it should retry on a regular basis until it can succeed.
 	// The initial error returned by this method is meant to catch
-	// the obvious bad cases (invalid cell, invalid tabletType, ...)
+	// the obvious bad cases (invalid cell, ...)
 	// that are never going to work. Mutiple notifications with the
 	// same contents may be sent (for instance, when the serving graph
 	// is rebuilt, but the content of SrvKeyspace is the same,
@@ -318,6 +318,23 @@ type Impl interface {
 	//
 	// If no schema has been previously saved, it should return "{}"
 	GetVSchema(ctx context.Context, keyspace string) (string, error)
+
+	// WatchVSchema returns a channel that receives notifications
+	// every time the VSchema for the given keyspace changes.
+	// It should receive a notification with the initial value fairly
+	// quickly after this is set. A value of "{}" means the VSchema
+	// object doesn't exist or is empty. To stop watching this
+	// VSchema object, cancel the context.
+	// If the underlying topo.Server encounters an error watching the node,
+	// it should retry on a regular basis until it can succeed.
+	// The initial error returned by this method is meant to catch
+	// the obvious bad cases (invalid keyspace, ...)
+	// that are never going to work. Mutiple notifications with the
+	// same contents may be sent (for instance, when the VSchema
+	// is changed, but the content of the JSON file is the same,
+	// the object version will change, most likely triggering the
+	// notification, but the content hasn't changed).
+	WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan string, err error)
 }
 
 // Server is a wrapper type that can have extra methods.
@@ -327,13 +344,15 @@ type Server struct {
 }
 
 // SrvTopoServer is a subset of Server that only contains the serving
-// graph read-only calls used by clients to resolve serving addresses.
+// graph read-only calls used by clients to resolve serving addresses,
+// and how to get VSchema. It is mostly used by our discovery modules,
+// and by vtgate.
 type SrvTopoServer interface {
 	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
-	GetVSchema(ctx context.Context, keyspace string) (string, error)
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
 	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error)
 	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType) (*topodatapb.EndPoints, int64, error)
+	WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan string, err error)
 }
 
 // Registry for Server implementations.

@@ -284,8 +284,11 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 	return createShardedSrvKeyspace(sand.ShardSpec, sand.KeyspaceServedFrom)
 }
 
-func (sct *sandboxTopo) GetVSchema(ctx context.Context, keyspace string) (string, error) {
-	return getSandbox(keyspace).VSchema, nil
+func (sct *sandboxTopo) WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan string, err error) {
+	result := make(chan string, 1)
+	value := getSandbox(keyspace).VSchema
+	result <- value
+	return result, nil
 }
 
 func (sct *sandboxTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error) {
