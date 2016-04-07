@@ -2,12 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package txbuffer
+package masterbuffer
 
 import (
 	"sync"
 	"testing"
 	"time"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // fakeSleepController is used to control a fake sleepFunc
@@ -48,21 +50,33 @@ func TestFakeBuffer(t *testing.T) {
 	*bufferShard = bufferedShard
 
 	for _, test := range []struct {
-		desc                 string
-		enableFakeBuffer     bool
-		keyspace             string
-		shard                string
-		attemptNumber        int
-		bufferedTransactions int
-		// was this transaction buffered?
+		desc             string
+		enableFakeBuffer bool
+		keyspace         string
+		shard            string
+		tabletType       topodatapb.TabletType
+		inTransaction    bool
+		attemptNumber    int
+		bufferedRequests int
+		// was this request buffered?
 		wantCalled bool
-		// expected value of BufferedTransactionAttempts
+		// expected value of BufferedRequestsAttempts
 		wantAttempted int
 		wantErr       error
 	}{
 		{
 			desc:             "enableFakeBuffer=False",
 			enableFakeBuffer: false,
+		},
+		{
+			desc:             "tabletType=REPLICA",
+			enableFakeBuffer: true,
+			tabletType:       topodatapb.TabletType_REPLICA,
+		},
+		{
+			desc:             "inTransaction=True",
+			enableFakeBuffer: true,
+			inTransaction:    true,
 		},
 		{
 			desc:             "attemptNumber != 0",
@@ -82,12 +96,12 @@ func TestFakeBuffer(t *testing.T) {
 			shard:            unbufferedShard,
 		},
 		{
-			desc:                 "buffer full",
-			enableFakeBuffer:     true,
-			keyspace:             bufferedKeyspace,
-			shard:                bufferedShard,
-			bufferedTransactions: *maxBufferSize,
-			// When the buffer is full, bufferedTransactionsAttempted should still be incremented
+			desc:             "buffer full",
+			enableFakeBuffer: true,
+			keyspace:         bufferedKeyspace,
+			shard:            bufferedShard,
+			bufferedRequests: *maxBufferSize,
+			// When the buffer is full, bufferedRequestsAttempted should still be incremented
 			wantAttempted: 1,
 			wantErr:       errBufferFull,
 		},
@@ -103,13 +117,19 @@ func TestFakeBuffer(t *testing.T) {
 		controller := &fakeSleepController{}
 		timeSleep = createFakeSleep(controller)
 		// reset counters
-		bufferedTransactionsAttempted.Set(0)
-		bufferedTransactionsSuccessful.Set(0)
-		bufferedTransactions.Set(int64(test.bufferedTransactions))
+		bufferedRequestsAttempted.Set(0)
+		bufferedRequestsSuccessful.Set(0)
+		bufferedRequests.Set(int64(test.bufferedRequests))
 
-		*enableFakeTxBuffer = test.enableFakeBuffer
+		*enableFakeMasterBuffer = test.enableFakeBuffer
 
-		gotErr := FakeBuffer(test.keyspace, test.shard, test.attemptNumber)
+		var tabletType topodatapb.TabletType
+		// Default to MASTER tablet type.
+		if test.tabletType == topodatapb.TabletType_UNKNOWN {
+			tabletType = topodatapb.TabletType_MASTER
+		}
+
+		gotErr := FakeBuffer(test.keyspace, test.shard, tabletType, test.inTransaction, test.attemptNumber)
 
 		if gotErr != test.wantErr {
 			t.Errorf("With %v, FakeBuffer() => %v; want: %v", test.desc, gotErr, test.wantErr)
@@ -120,15 +140,15 @@ func TestFakeBuffer(t *testing.T) {
 				test.desc, controller.called, test.wantCalled)
 		}
 
-		if bufferedTransactionsAttempted.Get() != int64(test.wantAttempted) {
-			t.Errorf("With %v, FakeBuffer() => BufferedTransactionsAttempted got: %v; want: %v",
-				test.desc, bufferedTransactionsAttempted.Get(), test.wantAttempted)
+		if bufferedRequestsAttempted.Get() != int64(test.wantAttempted) {
+			t.Errorf("With %v, FakeBuffer() => bufferedRequestsAttempted got: %v; want: %v",
+				test.desc, bufferedRequestsAttempted.Get(), test.wantAttempted)
 		}
 
-		if (!test.wantCalled && (bufferedTransactionsSuccessful.Get() == 1)) ||
-			(test.wantCalled && (bufferedTransactionsSuccessful.Get() != 1)) {
-			t.Errorf("With %v, FakeBuffer() => BufferedTransactionsSuccessful got: %v; want: 1",
-				test.desc, bufferedTransactionsSuccessful.Get())
+		if (!test.wantCalled && (bufferedRequestsSuccessful.Get() == 1)) ||
+			(test.wantCalled && (bufferedRequestsSuccessful.Get() != 1)) {
+			t.Errorf("With %v, FakeBuffer() => bufferedRequestsSuccessful got: %v; want: 1",
+				test.desc, bufferedRequestsSuccessful.Get())
 		}
 	}
 }
@@ -147,11 +167,11 @@ func TestParallelFakeBuffer(t *testing.T) {
 
 	*bufferKeyspace = bufferedKeyspace
 	*bufferShard = bufferedShard
-	*enableFakeTxBuffer = true
+	*enableFakeMasterBuffer = true
 
 	// reset counters
-	bufferedTransactionsAttempted.Set(0)
-	bufferedTransactionsSuccessful.Set(0)
+	bufferedRequestsAttempted.Set(0)
+	bufferedRequestsSuccessful.Set(0)
 
 	var controllers []*fakeSleepController
 	var wg sync.WaitGroup
@@ -171,7 +191,7 @@ func TestParallelFakeBuffer(t *testing.T) {
 		var gotErr error
 		go func() {
 			defer wg.Done()
-			gotErr = FakeBuffer(*bufferKeyspace, *bufferShard, 0)
+			gotErr = FakeBuffer(*bufferKeyspace, *bufferShard, topodatapb.TabletType_MASTER, false, 0)
 			close(finished)
 		}()
 
@@ -196,19 +216,19 @@ func TestParallelFakeBuffer(t *testing.T) {
 				i, controller.called, wantFakeSleepCalled)
 		}
 
-		if int(bufferedTransactionsAttempted.Get()) != i {
-			t.Errorf("On iteration %v, FakeBuffer() => BufferedTransactionsAttempted got: %v; want: %v",
-				i, bufferedTransactionsAttempted.Get(), i)
+		if int(bufferedRequestsAttempted.Get()) != i {
+			t.Errorf("On iteration %v, FakeBuffer() => bufferedRequestsAttempted got: %v; want: %v",
+				i, bufferedRequestsAttempted.Get(), i)
 		}
 
-		if int(bufferedTransactions.Get()) != min(i, *maxBufferSize) {
-			t.Errorf("On iteration %v, FakeBuffer() => BufferedTransactions got: %v; want: %v",
-				i, bufferedTransactions.Get(), min(i, *maxBufferSize))
+		if int(bufferedRequests.Get()) != min(i, *maxBufferSize) {
+			t.Errorf("On iteration %v, FakeBuffer() => bufferedRequests got: %v; want: %v",
+				i, bufferedRequests.Get(), min(i, *maxBufferSize))
 		}
 
-		if int(bufferedTransactionsSuccessful.Get()) != 0 {
-			t.Errorf("On iteration %v, FakeBuffer() => BufferedTransactionsSuccessful got: %v; want: 0",
-				i, bufferedTransactionsSuccessful.Get())
+		if int(bufferedRequestsSuccessful.Get()) != 0 {
+			t.Errorf("On iteration %v, FakeBuffer() => bufferedRequestsSuccessful got: %v; want: 0",
+				i, bufferedRequestsSuccessful.Get())
 		}
 	}
 
@@ -218,12 +238,12 @@ func TestParallelFakeBuffer(t *testing.T) {
 	}
 	wg.Wait()
 
-	if int(bufferedTransactionsSuccessful.Get()) != *maxBufferSize {
-		t.Errorf("After all FakeBuffer() calls are done, BufferedTransactionsSuccessful got: %v; want: %v",
-			bufferedTransactionsSuccessful.Get(), *maxBufferSize)
+	if int(bufferedRequestsSuccessful.Get()) != *maxBufferSize {
+		t.Errorf("After all FakeBuffer() calls are done, bufferedRequestsSuccessful got: %v; want: %v",
+			bufferedRequestsSuccessful.Get(), *maxBufferSize)
 	}
-	if int(bufferedTransactions.Get()) != 0 {
-		t.Errorf("After all FakeBuffer() calls are done, BufferedTransactions got: %v; want: %v",
-			bufferedTransactions.Get(), 0)
+	if int(bufferedRequests.Get()) != 0 {
+		t.Errorf("After all FakeBuffer() calls are done, bufferedRequests got: %v; want: %v",
+			bufferedRequests.Get(), 0)
 	}
 }

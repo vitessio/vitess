@@ -5,7 +5,7 @@
 
 set -e
 
-go list -f '{{if len .TestGoFiles}}godep go test $(VT_GO_PARALLEL) -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}{{end    }}' ./go/... | xargs -i sh -c {} | tee unit_test_goveralls.txt
+go list -f '{{if len .TestGoFiles}}go test $(VT_GO_PARALLEL) -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}{{end    }}' ./go/... | xargs -i sh -c {} | tee unit_test_goveralls.txt
 gover ./go/
 # -shallow ensures that goveralls does not return with a failure \
 # if Coveralls returns a 500 http error or higher (e.g. when the site is in read-only mode). \

@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/youtube/vitess",
-	"GoVersion": "go1.4.1",
+	"GoVersion": "go1.5",
 	"Packages": [
 		"./go/stats/influxdbbackend",
 		"./go/vt/etcdtopo"
