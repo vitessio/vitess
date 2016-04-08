@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
@@ -507,7 +509,7 @@ func TestSelectScatter(t *testing.T) {
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
-	router := NewRouter(serv, "aa", "", scatterConn)
+	router := NewRouter(context.Background(), serv, "aa", "", scatterConn)
 
 	_, err := routerExec(router, "select id from user", nil)
 	if err != nil {
@@ -538,7 +540,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
-	router := NewRouter(serv, "aa", "", scatterConn)
+	router := NewRouter(context.Background(), serv, "aa", "", scatterConn)
 
 	sql := "select id from user"
 	result, err := routerStream(router, sql)
@@ -579,7 +581,7 @@ func TestSelectScatterFail(t *testing.T) {
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
-	router := NewRouter(serv, "aa", "", scatterConn)
+	router := NewRouter(context.Background(), serv, "aa", "", scatterConn)
 
 	_, err := routerExec(router, "select id from user", nil)
 	want := "paramsSelectScatter: keyspace TestRouter fetch error: topo error GetSrvKeyspace"

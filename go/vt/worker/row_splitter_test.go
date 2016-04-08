@@ -41,7 +41,10 @@ func TestRowSplitterUint64(t *testing.T) {
 		si("40", "c0"),
 		si("c0", ""),
 	}
-	rs := NewRowSplitter(shards, topodatapb.KeyspaceIdType_UINT64, 1)
+	ks := &topodatapb.Keyspace{ShardingColumnType: topodatapb.KeyspaceIdType_UINT64}
+	ki := &topo.KeyspaceInfo{Keyspace: ks}
+	resolver := &v2Resolver{ki, 1}
+	rs := NewRowSplitter(shards, resolver)
 
 	// rows in different shards
 	row0 := []sqltypes.Value{
@@ -94,7 +97,10 @@ func TestRowSplitterString(t *testing.T) {
 		siBytes("E", "L"),
 		siBytes("L", ""),
 	}
-	rs := NewRowSplitter(shards, topodatapb.KeyspaceIdType_BYTES, 1)
+	ks := &topodatapb.Keyspace{ShardingColumnType: topodatapb.KeyspaceIdType_BYTES}
+	ki := &topo.KeyspaceInfo{Keyspace: ks}
+	resolver := &v2Resolver{ki, 1}
+	rs := NewRowSplitter(shards, resolver)
 
 	// rows in different shards
 	row0 := []sqltypes.Value{

@@ -7,6 +7,8 @@ package grpcvtgateservice
 
 import (
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/peer"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
@@ -20,6 +22,11 @@ import (
 
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtgateservicepb "github.com/youtube/vitess/go/vt/proto/vtgateservice"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+)
+
+const (
+	unsecureClient = "unsecure grpc client"
 )
 
 // VTGate is the public structure that is exported via gRPC
@@ -27,12 +34,45 @@ type VTGate struct {
 	server vtgateservice.VTGateService
 }
 
+// immediateCallerID tries to extract the common name of the certificate
+// that was used to connect to vtgate. If it fails for any reason,
+// it will return unsecureClient. That immediate caller id is then inserted
+// into a Context, and will be used when talking to vttablet.
+// vttablet in turn can use table ACLs to validate access is authorized.
+func immediateCallerID(ctx context.Context) string {
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return unsecureClient
+	}
+	if p.AuthInfo == nil {
+		return unsecureClient
+	}
+	tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
+	if !ok {
+		return unsecureClient
+	}
+	if len(tlsInfo.State.VerifiedChains) < 1 {
+		return unsecureClient
+	}
+	if len(tlsInfo.State.VerifiedChains[0]) < 1 {
+		return unsecureClient
+	}
+	cert := tlsInfo.State.VerifiedChains[0][0]
+	return cert.Subject.CommonName
+}
+
+// withCallerIDContext creates a context that extracts what we need
+// from the incoming call and can be forwarded for use when talking to vttablet.
+func withCallerIDContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerID) context.Context {
+	return callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		effectiveCallerID,
+		callerid.NewImmediateCallerID(immediateCallerID(ctx)))
+}
+
 // Execute is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest) (response *vtgatepb.ExecuteResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		request.CallerId,
-		callerid.NewImmediateCallerID("grpc client"))
+	ctx = withCallerIDContext(ctx, request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
@@ -48,9 +88,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 // ExecuteShards is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) ExecuteShards(ctx context.Context, request *vtgatepb.ExecuteShardsRequest) (response *vtgatepb.ExecuteShardsResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		request.CallerId,
-		callerid.NewImmediateCallerID("grpc client"))
+	ctx = withCallerIDContext(ctx, request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
@@ -73,9 +111,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, request *vtgatepb.ExecuteS
 // ExecuteKeyspaceIds is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *vtgatepb.ExecuteKeyspaceIdsRequest) (response *vtgatepb.ExecuteKeyspaceIdsResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		request.CallerId,
-		callerid.NewImmediateCallerID("grpc client"))
+	ctx = withCallerIDContext(ctx, request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
@@ -98,9 +134,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *vtgatepb.Exe
 // ExecuteKeyRanges is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *vtgatepb.ExecuteKeyRangesRequest) (response *vtgatepb.ExecuteKeyRangesResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		request.CallerId,
-		callerid.NewImmediateCallerID("grpc client"))
+	ctx = withCallerIDContext(ctx, request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
@@ -123,9 +157,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *vtgatepb.Execu
 // ExecuteEntityIds is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *vtgatepb.ExecuteEntityIdsRequest) (response *vtgatepb.ExecuteEntityIdsResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		request.CallerId,
-		callerid.NewImmediateCallerID("grpc client"))
+	ctx = withCallerIDContext(ctx, request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
@@ -149,9 +181,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *vtgatepb.Execu
 // ExecuteBatchShards is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, request *vtgatepb.ExecuteBatchShardsRequest) (response *vtgatepb.ExecuteBatchShardsResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		request.CallerId,
-		callerid.NewImmediateCallerID("grpc client"))
+	ctx = withCallerIDContext(ctx, request.CallerId)
 	result, err := vtg.server.ExecuteBatchShards(ctx,
 		request.Queries,
 		request.TabletType,
@@ -168,9 +198,7 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, request *vtgatepb.Exe
 // vtgateservice.VTGateService method
 func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *vtgatepb.ExecuteBatchKeyspaceIdsRequest) (response *vtgatepb.ExecuteBatchKeyspaceIdsResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		request.CallerId,
-		callerid.NewImmediateCallerID("grpc client"))
+	ctx = withCallerIDContext(ctx, request.CallerId)
 	result, err := vtg.server.ExecuteBatchKeyspaceIds(ctx,
 		request.Queries,
 		request.TabletType,
@@ -186,9 +214,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *vtgatep
 // StreamExecute is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream vtgateservicepb.Vitess_StreamExecuteServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
-		request.CallerId,
-		callerid.NewImmediateCallerID("grpc client"))
+	ctx := withCallerIDContext(stream.Context(), request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return vterrors.ToGRPCError(err)
@@ -209,9 +235,7 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 // StreamExecuteShards is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) StreamExecuteShards(request *vtgatepb.StreamExecuteShardsRequest, stream vtgateservicepb.Vitess_StreamExecuteShardsServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
-		request.CallerId,
-		callerid.NewImmediateCallerID("grpc client"))
+	ctx := withCallerIDContext(stream.Context(), request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return vterrors.ToGRPCError(err)
@@ -234,9 +258,7 @@ func (vtg *VTGate) StreamExecuteShards(request *vtgatepb.StreamExecuteShardsRequ
 // vtgateservice.VTGateService method
 func (vtg *VTGate) StreamExecuteKeyspaceIds(request *vtgatepb.StreamExecuteKeyspaceIdsRequest, stream vtgateservicepb.Vitess_StreamExecuteKeyspaceIdsServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
-		request.CallerId,
-		callerid.NewImmediateCallerID("grpc client"))
+	ctx := withCallerIDContext(stream.Context(), request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return vterrors.ToGRPCError(err)
@@ -259,9 +281,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(request *vtgatepb.StreamExecuteKeysp
 // vtgateservice.VTGateService method
 func (vtg *VTGate) StreamExecuteKeyRanges(request *vtgatepb.StreamExecuteKeyRangesRequest, stream vtgateservicepb.Vitess_StreamExecuteKeyRangesServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
-		request.CallerId,
-		callerid.NewImmediateCallerID("grpc client"))
+	ctx := withCallerIDContext(stream.Context(), request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return vterrors.ToGRPCError(err)
@@ -283,9 +303,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(request *vtgatepb.StreamExecuteKeyRang
 // Begin is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) Begin(ctx context.Context, request *vtgatepb.BeginRequest) (response *vtgatepb.BeginResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		request.CallerId,
-		callerid.NewImmediateCallerID("grpc client"))
+	ctx = withCallerIDContext(ctx, request.CallerId)
 	session, vtgErr := vtg.server.Begin(ctx)
 	if vtgErr == nil {
 		return &vtgatepb.BeginResponse{
@@ -298,9 +316,7 @@ func (vtg *VTGate) Begin(ctx context.Context, request *vtgatepb.BeginRequest) (r
 // Commit is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) Commit(ctx context.Context, request *vtgatepb.CommitRequest) (response *vtgatepb.CommitResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		request.CallerId,
-		callerid.NewImmediateCallerID("grpc client"))
+	ctx = withCallerIDContext(ctx, request.CallerId)
 	vtgErr := vtg.server.Commit(ctx, request.Session)
 	response = &vtgatepb.CommitResponse{}
 	if vtgErr == nil {
@@ -312,9 +328,7 @@ func (vtg *VTGate) Commit(ctx context.Context, request *vtgatepb.CommitRequest) 
 // Rollback is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) Rollback(ctx context.Context, request *vtgatepb.RollbackRequest) (response *vtgatepb.RollbackResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		request.CallerId,
-		callerid.NewImmediateCallerID("grpc client"))
+	ctx = withCallerIDContext(ctx, request.CallerId)
 	vtgErr := vtg.server.Rollback(ctx, request.Session)
 	response = &vtgatepb.RollbackResponse{}
 	if vtgErr == nil {
@@ -327,9 +341,7 @@ func (vtg *VTGate) Rollback(ctx context.Context, request *vtgatepb.RollbackReque
 func (vtg *VTGate) SplitQuery(ctx context.Context, request *vtgatepb.SplitQueryRequest) (response *vtgatepb.SplitQueryResponse, err error) {
 
 	defer vtg.server.HandlePanic(&err)
-	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		request.CallerId,
-		callerid.NewImmediateCallerID("grpc client"))
+	ctx = withCallerIDContext(ctx, request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)

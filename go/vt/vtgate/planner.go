@@ -38,13 +38,14 @@ type Planner struct {
 var once sync.Once
 
 // NewPlanner creates a new planner for VTGate.
-func NewPlanner(serv topo.SrvTopoServer, cell string, cacheSize int) *Planner {
+// It will watch the vschema in the topology until the ctx is closed.
+func NewPlanner(ctx context.Context, serv topo.SrvTopoServer, cell string, cacheSize int) *Planner {
 	plr := &Planner{
 		serv:  serv,
 		cell:  cell,
 		plans: cache.NewLRUCache(int64(cacheSize)),
 	}
-	plr.LoadVSchema()
+	plr.WatchVSchema(ctx)
 	once.Do(func() {
 		http.Handle("/debug/query_plans", plr)
 		http.Handle("/debug/vschema", plr)
@@ -52,40 +53,81 @@ func NewPlanner(serv topo.SrvTopoServer, cell string, cacheSize int) *Planner {
 	return plr
 }
 
-// LoadVSchema loads the VSchema from the topo. The function does
+// WatchVSchema watches the VSchema from the topo. The function does
 // not return an error. It instead logs warnings on failure.
-func (plr *Planner) LoadVSchema() {
-	formal := &vindexes.VSchemaFormal{
-		Keyspaces: make(map[string]vindexes.KeyspaceFormal),
-	}
-	keyspaces, err := plr.serv.GetSrvKeyspaceNames(context.TODO(), plr.cell)
+// We get the list of keyspaces to watch at the beginning (because it's easier)
+// and we don't watch that. So when adding a new keyspace, for now,
+// vtgate needs to be restarted (after having rebuilt the serving graph).
+// This could be fixed by adding a WatchSrvKeyspaceNames API to topo.Server,
+// and when it triggers we'd diff the values, and terminate the missing
+// SrvKeyspaces, and start watching the new SrvKeyspaces.
+func (plr *Planner) WatchVSchema(ctx context.Context) {
+	keyspaces, err := plr.serv.GetSrvKeyspaceNames(ctx, plr.cell)
 	if err != nil {
 		log.Warningf("Error loading vschema: could not read keyspaces: %v", err)
 		return
 	}
-	for _, keyspace := range keyspaces {
-		formal.Keyspaces[keyspace] = vindexes.KeyspaceFormal{}
-		kschema, err := plr.serv.GetVSchema(context.TODO(), keyspace)
-		if err != nil {
-			log.Warningf("Error loading vschema for keyspace: %s: %v", keyspace, err)
-			continue
-		}
+
+	// we will wait until we get the first value for each keyspace
+	// before returning
+	var wg sync.WaitGroup
+
+	// mu protects formal
+	var mu sync.Mutex
+	formal := &vindexes.VSchemaFormal{
+		Keyspaces: make(map[string]vindexes.KeyspaceFormal),
+	}
+	processKeyspace := func(keyspace, kschema string) {
+		// Note we use a closure here to allow for defer()
+		// to work properly, and also to let the caller
+		// do more things even if this fails.
+
+		// unpack the new VSchema, or skip it
 		var kformal vindexes.KeyspaceFormal
-		err = json.Unmarshal([]byte(kschema), &kformal)
-		if err != nil {
-			log.Warningf("Error unmarshalling vschema for keyspace: %s: %v", keyspace, err)
-			continue
+		if err := json.Unmarshal([]byte(kschema), &kformal); err != nil {
+			log.Warningf("Error unmarshalling vschema for keyspace %s: %v", keyspace, err)
+			return
 		}
+
+		// rebuild the new component
+		mu.Lock()
+		defer mu.Unlock()
 		formal.Keyspaces[keyspace] = kformal
+		vschema, err := vindexes.BuildVSchema(formal)
+		if err != nil {
+			log.Warningf("Error creating VSchema: %v", err)
+			return
+		}
+
+		plr.mu.Lock()
+		plr.vschema = vschema
+		plr.mu.Unlock()
+		plr.plans.Clear()
 	}
-	vschema, err := vindexes.BuildVSchema(formal)
-	if err != nil {
-		log.Warningf("Error creating VSchema: %v", err)
-		return
+
+	for _, keyspace := range keyspaces {
+		wg.Add(1)
+		go func(keyspace string) {
+			gotFirstValue := false
+
+			notifications, err := plr.serv.WatchVSchema(ctx, keyspace)
+			if err != nil {
+				log.Warningf("Error watching vschema for keyspace %s, will not watch it: %v", keyspace, err)
+				return
+			}
+
+			for kschema := range notifications {
+				processKeyspace(keyspace, kschema)
+
+				if !gotFirstValue {
+					gotFirstValue = true
+					wg.Done()
+				}
+			}
+		}(keyspace)
 	}
-	plr.mu.Lock()
-	plr.vschema = vschema
-	plr.mu.Unlock()
+
+	wg.Wait()
 }
 
 // VSchema returns the VSchema.

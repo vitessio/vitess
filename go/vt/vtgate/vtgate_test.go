@@ -37,7 +37,7 @@ func init() {
 	}
 }
 `
-	Init(nil, topo.Server{}, new(sandboxTopo), "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, 0, "")
+	Init(context.Background(), nil, topo.Server{}, new(sandboxTopo), "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, 0, "")
 }
 
 func TestVTGateExecute(t *testing.T) {

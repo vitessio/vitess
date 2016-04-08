@@ -95,7 +95,7 @@ type RegisterVTGate func(vtgateservice.VTGateService)
 var RegisterVTGates []RegisterVTGate
 
 // Init initializes VTGate server.
-func Init(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletTypesToWait []topodatapb.TabletType, maxInFlight int, testGateway string) *VTGate {
+func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletTypesToWait []topodatapb.TabletType, maxInFlight int, testGateway string) *VTGate {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
@@ -120,7 +120,7 @@ func Init(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoSer
 		logStreamExecuteShards:      logutil.NewThrottledLogger("StreamExecuteShards", 5*time.Second),
 	}
 	// Resuse resolver's scatterConn.
-	rpcVTGate.router = NewRouter(serv, cell, "VTGateRouter", rpcVTGate.resolver.scatterConn)
+	rpcVTGate.router = NewRouter(ctx, serv, cell, "VTGateRouter", rpcVTGate.resolver.scatterConn)
 	normalErrors = stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType"})
 	infoErrors = stats.NewCounters("VtgateInfoErrorCounts")
 	internalErrors = stats.NewCounters("VtgateInternalErrorCounts")
@@ -133,9 +133,11 @@ func Init(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoSer
 	errorsByKeyspace = stats.NewRates("ErrorsByKeyspace", stats.CounterForDimension(normalErrors, "Keyspace"), 15, 1*time.Minute)
 	errorsByDbType = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(normalErrors, "DbType"), 15, 1*time.Minute)
 
-	for _, f := range RegisterVTGates {
-		f(rpcVTGate)
-	}
+	servenv.OnRun(func() {
+		for _, f := range RegisterVTGates {
+			f(rpcVTGate)
+		}
+	})
 	return rpcVTGate
 }
 

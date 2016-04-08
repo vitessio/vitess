@@ -13,6 +13,8 @@ import (
 	"flag"
 	"time"
 
+	"golang.org/x/net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -103,7 +105,7 @@ func main() {
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
 	}
-	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, tabletTypesToWait, 0 /*maxInFlight*/, "" /*testGateway*/)
+	vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, tabletTypesToWait, 0 /*maxInFlight*/, "" /*testGateway*/)
 
 	// vtctld configuration and init
 	vtctld.InitVtctld(ts)

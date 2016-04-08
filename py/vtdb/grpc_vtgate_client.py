@@ -38,9 +38,24 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
   """A direct gRPC connection to the vtgate query service, using proto3.
   """
 
-  def __init__(self, addr, timeout, **kwargs):
+  def __init__(self, addr, timeout,
+               root_certificates=None, private_key=None, certificate_chain=None,
+               **kwargs):
+    """Creates a new GRPCVTGateConnection.
+
+    Args:
+      addr: address to connect to.
+      timeout: connection time out.
+      root_certificates: PEM_encoded root certificates.
+      private_key: PEM-encoded private key.
+      certificate_chain: PEM-encoded certificate chain.
+      **kwargs: passed up.
+    """
     super(GRPCVTGateConnection, self).__init__(addr, timeout, **kwargs)
     self.stub = None
+    self.root_certificates = root_certificates
+    self.private_key = private_key
+    self.certificate_chain = certificate_chain
     self.logger_object = vtdb_logger.get_logger()
 
   def dial(self):
@@ -48,7 +63,13 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       self.stub.close()
 
     p = urlparse('http://' + self.addr)
-    channel = implementations.insecure_channel(p.hostname, p.port)
+
+    if self.root_certificates or self.private_key or self.certificate_chain:
+      creds = implementations.ssl_channel_credentials(
+          self.root_certificates, self.private_key, self.certificate_chain)
+      channel = implementations.secure_channel(p.hostname, p.port, creds)
+    else:
+      channel = implementations.insecure_channel(p.hostname, p.port)
     self.stub = vtgateservice_pb2.beta_create_Vitess_stub(channel)
 
   def close(self):
