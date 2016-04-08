@@ -1,5 +1,7 @@
 package com.flipkart.vitess.jdbc.test;
 
+import com.google.common.util.concurrent.Futures;
+
 import com.flipkart.vitess.jdbc.VitessConnection;
 import com.flipkart.vitess.util.Constants;
 import com.youtube.vitess.client.Context;
@@ -129,7 +131,7 @@ public class VitessConnectionTest {
         vitessConnection.setAutoCommit(false);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
         vitessConnection.setVtGateTx(mockVtGateTx);
-        SQLFuture<Void> v = null;
+        SQLFuture<Void> v = new SQLFuture<>(Futures.<Void>immediateFuture(null));
         PowerMockito.when(mockVtGateTx.commit(Matchers.any(Context.class))).thenReturn(v);
         vitessConnection.commit();
         Assert.assertEquals(null, vitessConnection.getVtGateTx());
@@ -155,7 +157,7 @@ public class VitessConnectionTest {
         vitessConnection.setAutoCommit(false);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
         vitessConnection.setVtGateTx(mockVtGateTx);
-        SQLFuture<Void> v = null;
+        SQLFuture<Void> v = new SQLFuture<>(Futures.<Void>immediateFuture(null));
         PowerMockito.when(mockVtGateTx.commit(Matchers.any(Context.class))).thenReturn(v);
         vitessConnection.commit();
         Assert.assertEquals(null, vitessConnection.getVtGateTx());
@@ -181,7 +183,7 @@ public class VitessConnectionTest {
         vitessConnection.setAutoCommit(false);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
         vitessConnection.setVtGateTx(mockVtGateTx);
-        SQLFuture<Void> v = null;
+        SQLFuture<Void> v = new SQLFuture<>(Futures.<Void>immediateFuture(null));
         PowerMockito.when(mockVtGateTx.rollback(Matchers.any(Context.class))).thenReturn(v);
         vitessConnection.close();
         Assert.assertEquals(true, vitessConnection.isClosed());
