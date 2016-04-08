@@ -1135,7 +1135,7 @@ func testStreamExecuteError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fak
 	if err == nil {
 		t.Fatalf("StreamExecute channel wasn't closed")
 	}
-	verifyErrorString(t, err, "StreamExecute")
+	verifyError(t, err, "StreamExecute")
 }
 
 func testStreamExecutePanic(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -1215,7 +1215,7 @@ func testStreamExecuteShardsError(t *testing.T, conn *vtgateconn.VTGateConn, fak
 	if err == nil {
 		t.Fatalf("StreamExecuteShards channel wasn't closed")
 	}
-	verifyErrorString(t, err, "StreamExecuteShards")
+	verifyError(t, err, "StreamExecuteShards")
 }
 
 func testStreamExecuteShardsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -1295,7 +1295,7 @@ func testStreamExecuteKeyRangesError(t *testing.T, conn *vtgateconn.VTGateConn, 
 	if err == nil {
 		t.Fatalf("StreamExecuteKeyRanges channel wasn't closed")
 	}
-	verifyErrorString(t, err, "StreamExecuteKeyRanges")
+	verifyError(t, err, "StreamExecuteKeyRanges")
 }
 
 func testStreamExecuteKeyRangesPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -1375,7 +1375,7 @@ func testStreamExecuteKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn
 	if err == nil {
 		t.Fatalf("StreamExecuteKeyspaceIds channel wasn't closed")
 	}
-	verifyErrorString(t, err, "StreamExecuteKeyspaceIds")
+	verifyError(t, err, "StreamExecuteKeyspaceIds")
 }
 
 func testStreamExecuteKeyspaceIdsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
