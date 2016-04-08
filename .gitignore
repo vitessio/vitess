@@ -49,3 +49,5 @@ _test/
 # site-local example files
 /examples/kubernetes/config.sh
 
+#pom generated file
+/java/jdbc/dependency-reduced-pom.xml
