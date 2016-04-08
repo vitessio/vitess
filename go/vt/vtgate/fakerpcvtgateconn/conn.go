@@ -376,21 +376,6 @@ func (conn *FakeVTGateConn) Rollback(ctx context.Context, session interface{}) e
 	return nil
 }
 
-// Begin2 please see vtgateconn.Impl.Begin2
-func (conn *FakeVTGateConn) Begin2(ctx context.Context) (interface{}, error) {
-	return conn.Begin(ctx)
-}
-
-// Commit2 please see vtgateconn.Impl.Commit2
-func (conn *FakeVTGateConn) Commit2(ctx context.Context, session interface{}) error {
-	return conn.Commit(ctx, session)
-}
-
-// Rollback2 please see vtgateconn.Impl.Rollback2
-func (conn *FakeVTGateConn) Rollback2(ctx context.Context, session interface{}) error {
-	return conn.Rollback(ctx, session)
-}
-
 // SplitQuery please see vtgateconn.Impl.SplitQuery
 func (conn *FakeVTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	response, ok := conn.splitQueryMap[getSplitQueryKey(keyspace, query, splitColumn, splitCount)]

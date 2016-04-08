@@ -34,10 +34,9 @@ type fakeVTGateService struct {
 	t        *testing.T
 	panics   bool
 	hasError bool
-	// If True, calls to Begin/2 will always succeed. This is necessary so that
+	// If True, calls to Begin will always succeed. This is necessary so that
 	// we can test subsequent calls in the transaction (e.g., Commit, Rollback).
 	forceBeginSuccess bool
-	hasCallerID       bool
 	errorWait         chan struct{}
 }
 
@@ -57,9 +56,6 @@ func newContext() context.Context {
 }
 
 func (f *fakeVTGateService) checkCallerID(ctx context.Context, name string) {
-	if !f.hasCallerID {
-		return
-	}
 	ef := callerid.EffectiveCallerIDFromContext(ctx)
 	if ef == nil {
 		f.t.Errorf("no effective caller id for %v", name)
@@ -700,10 +696,9 @@ func (f *fakeVTGateService) GetSrvShard(ctx context.Context, keyspace, shard str
 // CreateFakeServer returns the fake server for the tests
 func CreateFakeServer(t *testing.T) vtgateservice.VTGateService {
 	return &fakeVTGateService{
-		t:           t,
-		panics:      false,
-		hasCallerID: true,
-		errorWait:   make(chan struct{}),
+		t:         t,
+		panics:    false,
+		errorWait: make(chan struct{}),
 	}
 }
 
@@ -746,29 +741,17 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testStreamExecuteShards(t, conn)
 	testStreamExecuteKeyRanges(t, conn)
 	testStreamExecuteKeyspaceIds(t, conn)
-	fs.hasCallerID = false
 	testTxPass(t, conn)
 	testTxFail(t, conn)
-	fs.hasCallerID = true
-	testTx2Pass(t, conn)
-	testTx2Fail(t, conn)
 	testSplitQuery(t, conn)
 	testSplitQueryV2(t, conn)
 	testGetSrvKeyspace(t, conn)
 
 	// force a panic at every call, then test that works
 	fs.panics = true
-
-	fs.hasCallerID = false
 	testBeginPanic(t, conn)
 	testCommitPanic(t, conn, fs)
 	testRollbackPanic(t, conn, fs)
-
-	fs.hasCallerID = true
-	testBegin2Panic(t, conn)
-	testCommit2Panic(t, conn, fs)
-	testRollback2Panic(t, conn, fs)
-
 	testExecutePanic(t, conn)
 	testExecuteShardsPanic(t, conn)
 	testExecuteKeyspaceIdsPanic(t, conn)
@@ -797,17 +780,9 @@ func TestErrorSuite(t *testing.T, fakeServer vtgateservice.VTGateService) {
 
 	// return an error for every call, make sure they're handled properly
 	fs.hasError = true
-
-	fs.hasCallerID = false
 	testBeginError(t, conn)
 	testCommitError(t, conn, fs)
 	testRollbackError(t, conn, fs)
-
-	fs.hasCallerID = true
-	testBegin2Error(t, conn)
-	testCommit2Error(t, conn, fs)
-	testRollback2Error(t, conn, fs)
-
 	testExecuteError(t, conn, fs)
 	testExecuteShardsError(t, conn, fs)
 	testExecuteKeyspaceIdsError(t, conn, fs)
@@ -1160,7 +1135,7 @@ func testStreamExecuteError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fak
 	if err == nil {
 		t.Fatalf("StreamExecute channel wasn't closed")
 	}
-	verifyErrorString(t, err, "StreamExecute")
+	verifyError(t, err, "StreamExecute")
 }
 
 func testStreamExecutePanic(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -1240,7 +1215,7 @@ func testStreamExecuteShardsError(t *testing.T, conn *vtgateconn.VTGateConn, fak
 	if err == nil {
 		t.Fatalf("StreamExecuteShards channel wasn't closed")
 	}
-	verifyErrorString(t, err, "StreamExecuteShards")
+	verifyError(t, err, "StreamExecuteShards")
 }
 
 func testStreamExecuteShardsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -1320,7 +1295,7 @@ func testStreamExecuteKeyRangesError(t *testing.T, conn *vtgateconn.VTGateConn, 
 	if err == nil {
 		t.Fatalf("StreamExecuteKeyRanges channel wasn't closed")
 	}
-	verifyErrorString(t, err, "StreamExecuteKeyRanges")
+	verifyError(t, err, "StreamExecuteKeyRanges")
 }
 
 func testStreamExecuteKeyRangesPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -1400,7 +1375,7 @@ func testStreamExecuteKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn
 	if err == nil {
 		t.Fatalf("StreamExecuteKeyspaceIds channel wasn't closed")
 	}
-	verifyErrorString(t, err, "StreamExecuteKeyspaceIds")
+	verifyError(t, err, "StreamExecuteKeyspaceIds")
 }
 
 func testStreamExecuteKeyspaceIdsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -1520,114 +1495,10 @@ func testTxPass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 }
 
-// Same as testTxPass, but with Begin2/Commit2/Rollback2 instead
-func testTx2Pass(t *testing.T, conn *vtgateconn.VTGateConn) {
-	ctx := newContext()
-	execCase := execMap["txRequest"]
-
-	// Execute
-	tx, err := conn.Begin2(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-	_, err = tx.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
-	if err != nil {
-		t.Error(err)
-	}
-	err = tx.Commit2(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// ExecuteShards
-	tx, err = conn.Begin2(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-	_, err = tx.ExecuteShards(ctx, execCase.shardQuery.SQL, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, execCase.shardQuery.TabletType)
-	if err != nil {
-		t.Error(err)
-	}
-	err = tx.Rollback2(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// ExecuteKeyspaceIds
-	tx, err = conn.Begin2(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-	_, err = tx.ExecuteKeyspaceIds(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, execCase.keyspaceIDQuery.KeyspaceIds, execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType)
-	if err != nil {
-		t.Error(err)
-	}
-	err = tx.Rollback2(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// ExecuteKeyRanges
-	tx, err = conn.Begin2(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-	_, err = tx.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, execCase.keyRangeQuery.KeyRanges, execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
-	if err != nil {
-		t.Error(err)
-	}
-	err = tx.Rollback2(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// ExecuteEntityIds
-	tx, err = conn.Begin2(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-	_, err = tx.ExecuteEntityIds(ctx, execCase.entityIdsQuery.SQL, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, execCase.entityIdsQuery.TabletType)
-	if err != nil {
-		t.Error(err)
-	}
-	err = tx.Rollback2(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// ExecuteBatchShards
-	tx, err = conn.Begin2(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-	_, err = tx.ExecuteBatchShards(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType)
-	if err != nil {
-		t.Error(err)
-	}
-	err = tx.Rollback2(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// ExecuteBatchKeyspaceIds
-	tx, err = conn.Begin2(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType)
-	if err != nil {
-		t.Error(err)
-	}
-	err = tx.Rollback2(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-}
-
 func testBeginError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	_, err := conn.Begin(ctx)
-	verifyErrorString(t, err, "Begin")
+	verifyError(t, err, "Begin")
 }
 
 func testCommitError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
@@ -1641,7 +1512,7 @@ func testCommitError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGate
 		t.Error(err)
 	}
 	err = tx.Commit(ctx)
-	verifyErrorString(t, err, "Commit")
+	verifyError(t, err, "Commit")
 }
 
 func testRollbackError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
@@ -1655,41 +1526,7 @@ func testRollbackError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGa
 		t.Error(err)
 	}
 	err = tx.Rollback(ctx)
-	verifyErrorString(t, err, "Rollback")
-}
-
-func testBegin2Error(t *testing.T, conn *vtgateconn.VTGateConn) {
-	ctx := newContext()
-	_, err := conn.Begin2(ctx)
-	verifyError(t, err, "Begin2")
-}
-
-func testCommit2Error(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
-	ctx := newContext()
-
-	fake.forceBeginSuccess = true
-	tx, err := conn.Begin2(ctx)
-	fake.forceBeginSuccess = false
-
-	if err != nil {
-		t.Error(err)
-	}
-	err = tx.Commit2(ctx)
-	verifyError(t, err, "Commit2")
-}
-
-func testRollback2Error(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
-	ctx := newContext()
-
-	fake.forceBeginSuccess = true
-	tx, err := conn.Begin2(ctx)
-	fake.forceBeginSuccess = false
-
-	if err != nil {
-		t.Error(err)
-	}
-	err = tx.Rollback2(ctx)
-	verifyError(t, err, "Rollback2")
+	verifyError(t, err, "Rollback")
 }
 
 func testBeginPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -1723,40 +1560,6 @@ func testRollbackPanic(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGa
 		t.Error(err)
 	}
 	err = tx.Rollback(ctx)
-	expectPanic(t, err)
-}
-
-func testBegin2Panic(t *testing.T, conn *vtgateconn.VTGateConn) {
-	ctx := newContext()
-	_, err := conn.Begin2(ctx)
-	expectPanic(t, err)
-}
-
-func testCommit2Panic(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
-	ctx := newContext()
-
-	fake.forceBeginSuccess = true
-	tx, err := conn.Begin2(ctx)
-	fake.forceBeginSuccess = false
-
-	if err != nil {
-		t.Error(err)
-	}
-	err = tx.Commit2(ctx)
-	expectPanic(t, err)
-}
-
-func testRollback2Panic(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
-	ctx := newContext()
-
-	fake.forceBeginSuccess = true
-	tx, err := conn.Begin2(ctx)
-	fake.forceBeginSuccess = false
-
-	if err != nil {
-		t.Error(err)
-	}
-	err = tx.Rollback2(ctx)
 	expectPanic(t, err)
 }
 
@@ -1830,83 +1633,6 @@ func testTxFail(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Error(err)
 	}
 	err = tx.Rollback(ctx)
-	want = "rollback: session mismatch"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Rollback: %v, want %v", err, want)
-	}
-}
-
-// Same as testTxFail, but with Begin2/Commit2/Rollback2 instead
-func testTx2Fail(t *testing.T, conn *vtgateconn.VTGateConn) {
-	ctx := newContext()
-	tx, err := conn.Begin2(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-	err = tx.Commit2(ctx)
-	want := "commit: session mismatch"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Commit2: %v, want %v", err, want)
-	}
-
-	_, err = tx.Execute(ctx, "", nil, topodatapb.TabletType_REPLICA)
-	want = "execute: not in transaction"
-	if err == nil || err.Error() != want {
-		t.Errorf("Execute: %v, want %v", err, want)
-	}
-
-	_, err = tx.ExecuteShards(ctx, "", "", nil, nil, topodatapb.TabletType_REPLICA)
-	want = "executeShards: not in transaction"
-	if err == nil || err.Error() != want {
-		t.Errorf("ExecuteShards: %v, want %v", err, want)
-	}
-
-	_, err = tx.ExecuteKeyspaceIds(ctx, "", "", nil, nil, topodatapb.TabletType_REPLICA)
-	want = "executeKeyspaceIds: not in transaction"
-	if err == nil || err.Error() != want {
-		t.Errorf("ExecuteShards: %v, want %v", err, want)
-	}
-
-	_, err = tx.ExecuteKeyRanges(ctx, "", "", nil, nil, topodatapb.TabletType_REPLICA)
-	want = "executeKeyRanges: not in transaction"
-	if err == nil || err.Error() != want {
-		t.Errorf("ExecuteShards: %v, want %v", err, want)
-	}
-
-	_, err = tx.ExecuteEntityIds(ctx, "", "", "", nil, nil, topodatapb.TabletType_REPLICA)
-	want = "executeEntityIds: not in transaction"
-	if err == nil || err.Error() != want {
-		t.Errorf("ExecuteShards: %v, want %v", err, want)
-	}
-
-	_, err = tx.ExecuteBatchShards(ctx, nil, topodatapb.TabletType_REPLICA)
-	want = "executeBatchShards: not in transaction"
-	if err == nil || err.Error() != want {
-		t.Errorf("ExecuteShards: %v, want %v", err, want)
-	}
-
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, topodatapb.TabletType_REPLICA)
-	want = "executeBatchKeyspaceIds: not in transaction"
-	if err == nil || err.Error() != want {
-		t.Errorf("ExecuteShards: %v, want %v", err, want)
-	}
-
-	err = tx.Commit2(ctx)
-	want = "commit: not in transaction"
-	if err == nil || err.Error() != want {
-		t.Errorf("Commit: %v, want %v", err, want)
-	}
-
-	err = tx.Rollback2(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-
-	tx, err = conn.Begin2(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-	err = tx.Rollback2(ctx)
 	want = "rollback: session mismatch"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Rollback: %v, want %v", err, want)
