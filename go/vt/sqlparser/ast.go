@@ -220,11 +220,9 @@ type Union struct {
 
 // Union.Type
 const (
-	UnionStr     = "union"
-	UnionAllStr  = "union all"
-	SetMinusStr  = "minus"
-	ExceptStr    = "except"
-	IntersectStr = "intersect"
+	UnionStr         = "union"
+	UnionAllStr      = "union all"
+	UnionDistinctStr = "union distinct"
 )
 
 // Format formats the node.

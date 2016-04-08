@@ -71,7 +71,7 @@ func forceEOF(yylex interface{}) {
 }
 
 %token LEX_ERROR
-%left <empty> UNION MINUS EXCEPT INTERSECT
+%left <empty> UNION
 %token <empty> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT FOR
 %token <empty> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK
 %token <empty> VALUES LAST_INSERT_ID
@@ -336,17 +336,9 @@ union_op:
   {
     $$ = UnionAllStr
   }
-| MINUS
+| UNION DISTINCT
   {
-    $$ = SetMinusStr
-  }
-| EXCEPT
-  {
-    $$ = ExceptStr
-  }
-| INTERSECT
-  {
-    $$ = IntersectStr
+    $$ = UnionDistinctStr
   }
 
 distinct_opt:
