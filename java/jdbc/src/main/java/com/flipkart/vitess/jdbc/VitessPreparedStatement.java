@@ -353,7 +353,6 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
 
     public void setObject(int parameterIndex, Object parameterObject, int targetSqlType,
         int scaleOrLength) throws SQLException {
-        checkOpen();
         if (null == parameterObject) {
             setNull(parameterIndex, Types.OTHER);
         } else {
@@ -611,94 +610,92 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
 
     private void setNumericObject(int parameterIndex, Object parameterObj, int targetSqlType,
         int scale) throws SQLException {
-        Number parameterAsNum;
+        Number numberParam;
         if (parameterObj instanceof Boolean) {
-            parameterAsNum =
+            numberParam =
                 ((Boolean) parameterObj).booleanValue() ? Integer.valueOf(1) : Integer.valueOf(0);
         } else if (parameterObj instanceof String) {
             switch (targetSqlType) {
                 case Types.BIT:
                     if ("1".equals(parameterObj) || "0".equals(parameterObj)) {
-                        parameterAsNum = Integer.valueOf((String) parameterObj);
+                        numberParam = Integer.valueOf((String) parameterObj);
                     } else {
                         boolean parameterAsBoolean = "true".equalsIgnoreCase((String) parameterObj);
-
-                        parameterAsNum =
-                            parameterAsBoolean ? Integer.valueOf(1) : Integer.valueOf(0);
+                        numberParam = parameterAsBoolean ? Integer.valueOf(1) : Integer.valueOf(0);
                     }
                     break;
 
                 case Types.TINYINT:
                 case Types.SMALLINT:
                 case Types.INTEGER:
-                    parameterAsNum = Integer.valueOf((String) parameterObj);
+                    numberParam = Integer.valueOf((String) parameterObj);
                     break;
 
                 case Types.BIGINT:
-                    parameterAsNum = Long.valueOf((String) parameterObj);
+                    numberParam = Long.valueOf((String) parameterObj);
                     break;
 
                 case Types.REAL:
-                    parameterAsNum = Float.valueOf((String) parameterObj);
+                    numberParam = Float.valueOf((String) parameterObj);
                     break;
 
                 case Types.FLOAT:
                 case Types.DOUBLE:
-                    parameterAsNum = Double.valueOf((String) parameterObj);
+                    numberParam = Double.valueOf((String) parameterObj);
                     break;
 
                 case Types.DECIMAL:
                 case Types.NUMERIC:
                 default:
-                    parameterAsNum = new java.math.BigDecimal((String) parameterObj);
+                    numberParam = new java.math.BigDecimal((String) parameterObj);
             }
         } else {
-            parameterAsNum = (Number) parameterObj;
+            numberParam = (Number) parameterObj;
         }
         switch (targetSqlType) {
             case Types.BIT:
             case Types.TINYINT:
             case Types.SMALLINT:
             case Types.INTEGER:
-                setInt(parameterIndex, parameterAsNum.intValue());
+                setInt(parameterIndex, numberParam.intValue());
                 break;
 
             case Types.BIGINT:
-                setLong(parameterIndex, parameterAsNum.longValue());
+                setLong(parameterIndex, numberParam.longValue());
                 break;
 
             case Types.REAL:
-                setFloat(parameterIndex, parameterAsNum.floatValue());
+                setFloat(parameterIndex, numberParam.floatValue());
                 break;
 
             case Types.FLOAT:
             case Types.DOUBLE:
-                setDouble(parameterIndex, parameterAsNum.doubleValue());
+                setDouble(parameterIndex, numberParam.doubleValue());
                 break;
 
             case Types.DECIMAL:
             case Types.NUMERIC:
 
-                if (parameterAsNum instanceof java.math.BigDecimal) {
+                if (numberParam instanceof java.math.BigDecimal) {
                     BigDecimal scaledBigDecimal = null;
                     try {
-                        scaledBigDecimal = ((java.math.BigDecimal) parameterAsNum).setScale(scale);
+                        scaledBigDecimal = ((java.math.BigDecimal) numberParam).setScale(scale);
                     } catch (ArithmeticException ex) {
                         try {
-                            scaledBigDecimal = ((java.math.BigDecimal) parameterAsNum)
+                            scaledBigDecimal = ((java.math.BigDecimal) numberParam)
                                 .setScale(scale, BigDecimal.ROUND_HALF_UP);
                         } catch (ArithmeticException arEx) {
                             throw new SQLException("Can't set the scale of '" + scale +
-                                "' for Decimal Argument" + parameterAsNum);
+                                "' for Decimal Argument" + numberParam);
                         }
                     }
                     setBigDecimal(parameterIndex, scaledBigDecimal);
-                } else if (parameterAsNum instanceof java.math.BigInteger) {
+                } else if (numberParam instanceof java.math.BigInteger) {
                     setBigDecimal(parameterIndex,
-                        new java.math.BigDecimal((java.math.BigInteger) parameterAsNum, scale));
+                        new java.math.BigDecimal((java.math.BigInteger) numberParam, scale));
                 } else {
                     setBigDecimal(parameterIndex,
-                        new java.math.BigDecimal(parameterAsNum.doubleValue()));
+                        new java.math.BigDecimal(numberParam.doubleValue()));
                 }
                 break;
         }
