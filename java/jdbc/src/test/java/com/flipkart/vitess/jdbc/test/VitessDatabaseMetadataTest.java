@@ -1133,7 +1133,7 @@ public class VitessDatabaseMetadataTest {
         ResultSet actualResultSet = vitessDatabaseMetaData.getTables("vt", null, null, null);
         ResultSet expectedResultSet = new VitessResultSet(mockedCursor);
 
-        Assert.assertEquals(compareResultSets(actualResultSet, expectedResultSet), true);
+        assertResultSetEquals(actualResultSet, expectedResultSet);
     }
 
     @Test
@@ -1248,7 +1248,7 @@ public class VitessDatabaseMetadataTest {
         ResultSet actualResultSet = vitessDatabaseMetaData.getColumns("TestDB1", null, null, null);
         ResultSet expectedResultSet = new VitessResultSet(expectedCursor);
 
-        Assert.assertEquals(compareResultSets(actualResultSet, expectedResultSet), true);
+        assertResultSetEquals(actualResultSet, expectedResultSet);
     }
 
     @Test
@@ -1301,7 +1301,7 @@ public class VitessDatabaseMetadataTest {
         ResultSet expectedResultSet = vitessDatabaseMetaData.getPrimaryKeys("vt", null, "shipment");
         ResultSet actualResultSet = new VitessResultSet(expectedcursor);
 
-        Assert.assertEquals(compareResultSets(actualResultSet, expectedResultSet), true);
+        assertResultSetEquals(actualResultSet, expectedResultSet);
     }
 
     @Test
@@ -1367,107 +1367,72 @@ public class VitessDatabaseMetadataTest {
             vitessDatabaseMetaData.getIndexInfo("vt", null, "shipment", true, false);
         ResultSet expectedResultSet = new VitessResultSet(expectedcursor);
 
-        Assert.assertEquals(compareResultSets(actualResultSet, expectedResultSet), true);
+        assertResultSetEquals(actualResultSet, expectedResultSet);
     }
 
-    private boolean compareResultSets(ResultSet actualResultSet, ResultSet expectedResultSet)
+    private void assertResultSetEquals(ResultSet actualResultSet, ResultSet expectedResultSet)
         throws SQLException {
-        boolean areResultSetsEqual = true;
         ResultSetMetaData actualResultSetMetadata = actualResultSet.getMetaData();
         ResultSetMetaData expectedResultSetMetadata = expectedResultSet.getMetaData();
         //Column Count Comparison
-        if (actualResultSetMetadata.getColumnCount() != expectedResultSetMetadata
-            .getColumnCount()) {
-            areResultSetsEqual = false;
-        }
+        Assert.assertEquals(expectedResultSetMetadata.getColumnCount(), actualResultSetMetadata
+            .getColumnCount());
         //Column Type Comparison
-        if (areResultSetsEqual) {
-            for (int i = 0; i < actualResultSetMetadata.getColumnCount(); i++) {
-                if (actualResultSetMetadata.getColumnType(i + 1) != expectedResultSetMetadata
-                    .getColumnType(i + 1)) {
-                    areResultSetsEqual = false;
-                    break;
-                }
-            }
+        for (int i = 0; i < expectedResultSetMetadata.getColumnCount(); i++) {
+            Assert.assertEquals(expectedResultSetMetadata.getColumnType(i + 1),
+                actualResultSetMetadata.getColumnType(i + 1));
         }
+        
         //Actual Values Comparison
-        if (areResultSetsEqual) {
-            try {
-                while (actualResultSet.next() && expectedResultSet.next()) {
-                    for (int i = 0; i < actualResultSetMetadata.getColumnCount(); i++) {
-                        switch (actualResultSetMetadata.getColumnType(i + 1)) {
-                            case Types.TINYINT:
-                            case Types.SMALLINT:
-                            case Types.INTEGER:
-                                if (actualResultSet.getInt(i + 1) != expectedResultSet
-                                    .getInt(i + 1)) {
-                                    return false;
-                                }
-                                break;
-                            case Types.BIGINT:
-                                if (actualResultSet.getLong(i + 1) != expectedResultSet
-                                    .getLong(i + 1)) {
-                                    return false;
-                                }
-                                break;
-                            case Types.FLOAT:
-                                if (actualResultSet.getFloat(i + 1) != expectedResultSet
-                                    .getFloat(i + 1)) {
-                                    return false;
-                                }
-                            case Types.DOUBLE:
-                                if (actualResultSet.getDouble(i + 1) != expectedResultSet
-                                    .getDouble(i + 1)) {
-                                    return false;
-                                }
-                            case Types.TIME:
-                                if (actualResultSet.getTime(i + 1) != expectedResultSet
-                                    .getTime(i + 1)) {
-                                    return false;
-                                }
-                                break;
-                            case Types.TIMESTAMP:
-                                if (actualResultSet.getTimestamp(i + 1) != expectedResultSet
-                                    .getTimestamp(i + 1)) {
-                                    return false;
-                                }
-                                break;
-                            case Types.DATE:
-                                if (actualResultSet.getDate(i + 1) != expectedResultSet
-                                    .getDate(i + 1)) {
-                                    return false;
-                                }
-                                break;
-                            case Types.BLOB:
-                                if (actualResultSet.getBlob(i + 1) != expectedResultSet
-                                    .getBlob(i + 1)) {
-                                    return false;
-                                }
-                                break;
-                            case Types.BINARY:
-                            case Types.LONGVARBINARY:
-                                if (actualResultSet.getBytes(i + 1) != expectedResultSet
-                                    .getBytes(i + 1)) {
-                                    return false;
-                                }
-                                break;
-                            default:
-                                if (null == actualResultSet.getString(i + 1)
-                                    && null == expectedResultSet.getString(i + 1))
-                                    break;
-                                if (!actualResultSet.getString(i + 1)
-                                    .equals(expectedResultSet.getString(i + 1))) {
-                                    return false;
-                                }
-                        }
-                    }
+        while (expectedResultSet.next() && actualResultSet.next()) {
+            for (int i = 0; i < expectedResultSetMetadata.getColumnCount(); i++) {
+                switch (expectedResultSetMetadata.getColumnType(i + 1)) {
+                    case Types.TINYINT:
+                    case Types.SMALLINT:
+                    case Types.INTEGER:
+                        Assert.assertEquals(expectedResultSet.getInt(i + 1),
+                            actualResultSet.getInt(i + 1));
+                        break;
+                    case Types.BIGINT:
+                        Assert.assertEquals(expectedResultSet.getLong(i + 1),
+                            actualResultSet.getLong(i + 1));
+                        break;
+                    case Types.FLOAT:
+                        Assert.assertEquals(expectedResultSet.getFloat(i + 1),
+                            actualResultSet.getFloat(i + 1), 0.1);
+                        break;
+                    case Types.DOUBLE:
+                        Assert.assertEquals(expectedResultSet.getDouble(i + 1),
+                            actualResultSet.getDouble(i + 1), 0.1);
+                        break;
+                    case Types.TIME:
+                        Assert.assertEquals(expectedResultSet.getTime(i + 1),
+                            actualResultSet.getTime(i + 1));
+                        break;
+                    case Types.TIMESTAMP:
+                        Assert.assertEquals(expectedResultSet.getTimestamp(i + 1),
+                            actualResultSet.getTimestamp(i + 1));
+                        break;
+                    case Types.DATE:
+                        Assert.assertEquals(expectedResultSet.getDate(i + 1),
+                            actualResultSet.getDate(i + 1));
+                        break;
+                    case Types.BLOB:
+                        Assert.assertEquals(expectedResultSet.getBlob(i + 1),
+                            actualResultSet.getBlob(i + 1));
+                        break;
+                    case Types.BINARY:
+                    case Types.LONGVARBINARY:
+                        Assert.assertEquals(expectedResultSet.getBytes(i + 1),
+                            actualResultSet.getBytes(i + 1));
+                        break;
+                    default:
+                        Assert.assertEquals(expectedResultSet.getString(i + 1),
+                            actualResultSet.getString(i + 1));
+                        break;
                 }
-
-            } catch (SQLException ex) {
-                areResultSetsEqual = false;
             }
         }
-        return areResultSetsEqual;
     }
 
 }

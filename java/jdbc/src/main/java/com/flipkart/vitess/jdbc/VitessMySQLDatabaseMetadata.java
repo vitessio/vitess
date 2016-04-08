@@ -1507,6 +1507,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                     this.columnSize = Integer.valueOf(10);
                     this.decimalDigits = Integer.valueOf(0);
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "bigint")) {
+                    this.dataType = Types.BIGINT;
                     this.columnSize = Integer.valueOf(isUnsigned ? 20 : 19);
                     this.decimalDigits = Integer.valueOf(0);
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "int24")) {
