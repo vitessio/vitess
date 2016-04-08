@@ -33,7 +33,7 @@ public class StringUtils {
      */
 
     public static boolean startsWithIgnoreCaseAndWs(String searchIn, String searchFor,
-                                                    int beginPos) {
+        int beginPos) {
         if (null == searchIn) {
             return true;
         }
@@ -106,7 +106,7 @@ public class StringUtils {
      * @return
      */
     private static int getCharIndexFromSqlByParamLocation(final String sql, final char cchar,
-                                                          final int paramLoc) {
+        final int paramLoc) {
         int signalCount = 0;
         int charIndex = -1;
         int num = 0;
@@ -127,5 +127,34 @@ public class StringUtils {
         return charIndex;
     }
 
+    /**
+     * Adds '+' to decimal numbers that are positive (MySQL doesn't understand
+     * them otherwise
+     *
+     * @param decimalString The value as a string
+     * @return String the string with a '+' added (if needed)
+     */
+    public static String fixDecimalExponent(String decimalString) {
+        int ePos = decimalString.indexOf('E');
 
+        if (ePos == -1) {
+            ePos = decimalString.indexOf('e');
+        }
+
+        if (ePos != -1) {
+            if (decimalString.length() > (ePos + 1)) {
+                char maybeMinusChar = decimalString.charAt(ePos + 1);
+
+                if (maybeMinusChar != '-' && maybeMinusChar != '+') {
+                    StringBuilder strBuilder = new StringBuilder(decimalString.length() + 1);
+                    strBuilder.append(decimalString.substring(0, ePos + 1));
+                    strBuilder.append('+');
+                    strBuilder.append(decimalString.substring(ePos + 1, decimalString.length()));
+                    decimalString = strBuilder.toString();
+                }
+            }
+        }
+
+        return decimalString;
+    }
 }

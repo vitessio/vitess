@@ -11,10 +11,14 @@ import com.youtube.vitess.proto.Topodata;
 
 import java.io.InputStream;
 import java.io.Reader;
+import java.io.StringReader;
 import java.math.BigDecimal;
 import java.net.URL;
 import java.sql.*;
 import java.sql.Date;
+import java.text.DateFormat;
+import java.text.ParsePosition;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.logging.Logger;
 
@@ -28,12 +32,13 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
     private final String sql;
     private final Map<String, Object> bindVariables;
 
-    public VitessPreparedStatement(VitessConnection vitessConnection, String sql) throws SQLException {
+    public VitessPreparedStatement(VitessConnection vitessConnection, String sql)
+        throws SQLException {
         this(vitessConnection, sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
     }
 
     public VitessPreparedStatement(VitessConnection vitessConnection, String sql, int resultSetType,
-                                   int resultSetConcurrency) throws SQLException {
+        int resultSetConcurrency) throws SQLException {
         super(vitessConnection, resultSetType, resultSetConcurrency);
         checkSQLNullOrEmpty(sql);
         this.bindVariables = new HashMap<>();
@@ -55,7 +60,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         showSql = StringUtils.startsWithIgnoreCaseAndWs(sql, Constants.SQL_SHOW);
         if (showSql) {
             String keyspace = this.vitessConnection.getKeyspace();
-            List<byte[]> keyspaceIds = Arrays.asList(new byte[]{1}); //To Hit any single shard
+            List<byte[]> keyspaceIds = Arrays.asList(new byte[] {1}); //To Hit any single shard
 
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
             cursor = vtGateConn
@@ -63,8 +68,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                 .checkedGet();
         } else {
             if (tabletType != Topodata.TabletType.MASTER || this.vitessConnection.getAutoCommit()) {
-                Context context =
-                    this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
                 cursor = vtGateConn.execute(context, this.sql, this.bindVariables, tabletType)
                     .checkedGet();
             } else {
@@ -76,7 +80,8 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                     this.vitessConnection.setVtGateTx(vtGateTx);
                 }
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                cursor = vtGateTx.execute(context, this.sql, this.bindVariables, tabletType).checkedGet();
+                cursor = vtGateTx.execute(context, this.sql, this.bindVariables, tabletType)
+                    .checkedGet();
             }
         }
 
@@ -112,12 +117,14 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
 
         if (this.vitessConnection.getAutoCommit()) {
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-            cursor = vtGateTx.execute(context, this.sql, this.bindVariables, tabletType).checkedGet();
+            cursor =
+                vtGateTx.execute(context, this.sql, this.bindVariables, tabletType).checkedGet();
             vtGateTx.commit(context).checkedGet();
             this.vitessConnection.setVtGateTx(null);
         } else {
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-            cursor = vtGateTx.execute(context, this.sql, this.bindVariables, tabletType).checkedGet();
+            cursor =
+                vtGateTx.execute(context, this.sql, this.bindVariables, tabletType).checkedGet();
         }
 
         if (null == cursor) {
@@ -160,7 +167,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             String keyspace = this.vitessConnection.getKeyspace();
 
             //To Hit any single shard
-            List<byte[]> keyspaceIds = Arrays.asList(new byte[]{1});
+            List<byte[]> keyspaceIds = Arrays.asList(new byte[] {1});
 
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
             cursor = vtGateConn
@@ -344,10 +351,122 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
-    public void setObject(int parameterIndex, Object x, int targetSqlType, int scaleOrLength)
-        throws SQLException {
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+    public void setObject(int parameterIndex, Object parameterObject, int targetSqlType,
+        int scaleOrLength) throws SQLException {
+        checkOpen();
+        if (null == parameterObject) {
+            setNull(parameterIndex, Types.OTHER);
+        } else {
+            try {
+                switch (targetSqlType) {
+                    case Types.BOOLEAN:
+                        if (parameterObject instanceof Boolean) {
+                            setBoolean(parameterIndex, ((Boolean) parameterObject).booleanValue());
+                            break;
+                        } else if (parameterObject instanceof String) {
+                            setBoolean(parameterIndex,
+                                "true".equalsIgnoreCase((String) parameterObject) || !"0"
+                                    .equalsIgnoreCase((String) parameterObject));
+                            break;
+                        } else if (parameterObject instanceof Number) {
+                            int intValue = ((Number) parameterObject).intValue();
+                            setBoolean(parameterIndex, intValue != 0);
+                            break;
+                        } else {
+                            throw new SQLException(
+                                "Conversion from" + parameterObject.getClass().getName() +
+                                    "to Types.Boolean is not Possible");
+                        }
+                    case Types.BIT:
+                    case Types.TINYINT:
+                    case Types.SMALLINT:
+                    case Types.INTEGER:
+                    case Types.BIGINT:
+                    case Types.REAL:
+                    case Types.FLOAT:
+                    case Types.DOUBLE:
+                    case Types.DECIMAL:
+                    case Types.NUMERIC:
+                        setNumericObject(parameterIndex, parameterObject, targetSqlType,
+                            scaleOrLength);
+                        break;
+                    case Types.CHAR:
+                    case Types.VARCHAR:
+                    case Types.LONGVARCHAR:
+                        if (parameterObject instanceof BigDecimal) {
+                            setString(parameterIndex,
+                                (StringUtils.fixDecimalExponent((parameterObject).toString())));
+                        } else {
+                            setString(parameterIndex, parameterObject.toString());
+                        }
+                        break;
+                    case Types.CLOB:
+                        if (parameterObject instanceof Clob) {
+                            setClob(parameterIndex, (Clob) parameterObject);
+                        } else {
+                            setString(parameterIndex, parameterObject.toString());
+                        }
+                        break;
+                    case Types.BINARY:
+                    case Types.VARBINARY:
+                    case Types.LONGVARBINARY:
+                    case Types.BLOB:
+                        if (parameterObject instanceof Blob) {
+                            setBlob(parameterIndex, (Blob) parameterObject);
+                        } else {
+                            setBytes(parameterIndex, (byte[]) parameterObject);
+                        }
+                        break;
+                    case Types.DATE:
+                    case Types.TIMESTAMP:
+                        java.util.Date parameterAsDate;
+                        if (parameterObject instanceof String) {
+                            ParsePosition pp = new ParsePosition(0);
+                            DateFormat sdf = new SimpleDateFormat(
+                                getDateTimePattern((String) parameterObject, false), Locale.US);
+                            parameterAsDate = sdf.parse((String) parameterObject, pp);
+                        } else {
+                            parameterAsDate = (java.util.Date) parameterObject;
+                        }
+                        switch (targetSqlType) {
+                            case Types.DATE:
+                                if (parameterAsDate instanceof Date) {
+                                    setDate(parameterIndex, (Date) parameterAsDate);
+                                } else {
+                                    setDate(parameterIndex, new Date(parameterAsDate.getTime()));
+                                }
+                                break;
+                            case Types.TIMESTAMP:
+                                if (parameterAsDate instanceof Timestamp) {
+                                    setTimestamp(parameterIndex, (Timestamp) parameterAsDate);
+                                } else {
+                                    setTimestamp(parameterIndex,
+                                        new Timestamp(parameterAsDate.getTime()));
+                                }
+                                break;
+                        }
+                        break;
+                    case Types.TIME:
+                        if (parameterObject instanceof String) {
+                            DateFormat sdf = new SimpleDateFormat(
+                                getDateTimePattern((String) parameterObject, true), Locale.US);
+                            setTime(parameterIndex,
+                                new Time(sdf.parse((String) parameterObject).getTime()));
+                        } else if (parameterObject instanceof Timestamp) {
+                            Timestamp timestamp = (Timestamp) parameterObject;
+                            setTime(parameterIndex, new Time(timestamp.getTime()));
+                        } else {
+                            setTime(parameterIndex, (Time) parameterObject);
+                        }
+                        break;
+                    default:
+                        throw new SQLFeatureNotSupportedException(
+                            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+                }
+            } catch (Exception ex) {
+                throw new SQLException(ex);
+            }
+        }
     }
 
     public void setAsciiStream(int parameterIndex, InputStream x, long length) throws SQLException {
@@ -480,8 +599,292 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
-    public void setObject(int parameterIndex, Object x, int targetSqlType) throws SQLException {
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+    public void setObject(int parameterIndex, Object parameterObject, int targetSqlType)
+        throws SQLException {
+        if (!(parameterObject instanceof BigDecimal)) {
+            setObject(parameterIndex, parameterObject, targetSqlType, 0);
+        } else {
+            setObject(parameterIndex, parameterObject, targetSqlType,
+                ((BigDecimal) parameterObject).scale());
+        }
+    }
+
+    private void setNumericObject(int parameterIndex, Object parameterObj, int targetSqlType,
+        int scale) throws SQLException {
+        Number parameterAsNum;
+        if (parameterObj instanceof Boolean) {
+            parameterAsNum =
+                ((Boolean) parameterObj).booleanValue() ? Integer.valueOf(1) : Integer.valueOf(0);
+        } else if (parameterObj instanceof String) {
+            switch (targetSqlType) {
+                case Types.BIT:
+                    if ("1".equals(parameterObj) || "0".equals(parameterObj)) {
+                        parameterAsNum = Integer.valueOf((String) parameterObj);
+                    } else {
+                        boolean parameterAsBoolean = "true".equalsIgnoreCase((String) parameterObj);
+
+                        parameterAsNum =
+                            parameterAsBoolean ? Integer.valueOf(1) : Integer.valueOf(0);
+                    }
+                    break;
+
+                case Types.TINYINT:
+                case Types.SMALLINT:
+                case Types.INTEGER:
+                    parameterAsNum = Integer.valueOf((String) parameterObj);
+                    break;
+
+                case Types.BIGINT:
+                    parameterAsNum = Long.valueOf((String) parameterObj);
+                    break;
+
+                case Types.REAL:
+                    parameterAsNum = Float.valueOf((String) parameterObj);
+                    break;
+
+                case Types.FLOAT:
+                case Types.DOUBLE:
+                    parameterAsNum = Double.valueOf((String) parameterObj);
+                    break;
+
+                case Types.DECIMAL:
+                case Types.NUMERIC:
+                default:
+                    parameterAsNum = new java.math.BigDecimal((String) parameterObj);
+            }
+        } else {
+            parameterAsNum = (Number) parameterObj;
+        }
+        switch (targetSqlType) {
+            case Types.BIT:
+            case Types.TINYINT:
+            case Types.SMALLINT:
+            case Types.INTEGER:
+                setInt(parameterIndex, parameterAsNum.intValue());
+                break;
+
+            case Types.BIGINT:
+                setLong(parameterIndex, parameterAsNum.longValue());
+                break;
+
+            case Types.REAL:
+                setFloat(parameterIndex, parameterAsNum.floatValue());
+                break;
+
+            case Types.FLOAT:
+            case Types.DOUBLE:
+                setDouble(parameterIndex, parameterAsNum.doubleValue());
+                break;
+
+            case Types.DECIMAL:
+            case Types.NUMERIC:
+
+                if (parameterAsNum instanceof java.math.BigDecimal) {
+                    BigDecimal scaledBigDecimal = null;
+                    try {
+                        scaledBigDecimal = ((java.math.BigDecimal) parameterAsNum).setScale(scale);
+                    } catch (ArithmeticException ex) {
+                        try {
+                            scaledBigDecimal = ((java.math.BigDecimal) parameterAsNum)
+                                .setScale(scale, BigDecimal.ROUND_HALF_UP);
+                        } catch (ArithmeticException arEx) {
+                            throw new SQLException("Can't set the scale of '" + scale +
+                                "' for Decimal Argument" + parameterAsNum);
+                        }
+                    }
+                    setBigDecimal(parameterIndex, scaledBigDecimal);
+                } else if (parameterAsNum instanceof java.math.BigInteger) {
+                    setBigDecimal(parameterIndex,
+                        new java.math.BigDecimal((java.math.BigInteger) parameterAsNum, scale));
+                } else {
+                    setBigDecimal(parameterIndex,
+                        new java.math.BigDecimal(parameterAsNum.doubleValue()));
+                }
+                break;
+        }
+    }
+
+    /*
+     * DateTime Format Parsing Logic from Mysql JDBC
+     */
+    private final String getDateTimePattern(String dt, boolean toTime) throws Exception {
+        int dtLength = (dt != null) ? dt.length() : 0;
+
+        if ((dtLength >= 8) && (dtLength <= 10)) {
+            int dashCount = 0;
+            boolean isDateOnly = true;
+
+            for (int i = 0; i < dtLength; i++) {
+                char c = dt.charAt(i);
+
+                if (!Character.isDigit(c) && (c != '-')) {
+                    isDateOnly = false;
+
+                    break;
+                }
+
+                if (c == '-') {
+                    dashCount++;
+                }
+            }
+
+            if (isDateOnly && (dashCount == 2)) {
+                return "yyyy-MM-dd";
+            }
+        }
+
+        // Special case - time-only
+        boolean colonsOnly = true;
+        for (int i = 0; i < dtLength; i++) {
+            char c = dt.charAt(i);
+
+            if (!Character.isDigit(c) && (c != ':')) {
+                colonsOnly = false;
+
+                break;
+            }
+        }
+
+        if (colonsOnly) {
+            return "HH:mm:ss";
+        }
+
+        int n;
+        int z;
+        int count;
+        int maxvecs;
+        char c;
+        char separator;
+        StringReader reader = new StringReader(dt + " ");
+        ArrayList<Object[]> vec = new ArrayList<>();
+        ArrayList<Object[]> vecRemovelist = new ArrayList<>();
+        Object[] nv = new Object[3];
+        Object[] v;
+        nv[0] = Character.valueOf('y');
+        nv[1] = new StringBuilder();
+        nv[2] = Integer.valueOf(0);
+        vec.add(nv);
+
+        if (toTime) {
+            nv = new Object[3];
+            nv[0] = Character.valueOf('h');
+            nv[1] = new StringBuilder();
+            nv[2] = Integer.valueOf(0);
+            vec.add(nv);
+        }
+
+        while ((z = reader.read()) != -1) {
+            separator = (char) z;
+            maxvecs = vec.size();
+
+            for (count = 0; count < maxvecs; count++) {
+                v = vec.get(count);
+                n = ((Integer) v[2]).intValue();
+                c = getSuccessor(((Character) v[0]).charValue(), n);
+
+                if (!Character.isLetterOrDigit(separator)) {
+                    if ((c == ((Character) v[0]).charValue()) && (c != 'S')) {
+                        vecRemovelist.add(v);
+                    } else {
+                        ((StringBuilder) v[1]).append(separator);
+
+                        if ((c == 'X') || (c == 'Y')) {
+                            v[2] = Integer.valueOf(4);
+                        }
+                    }
+                } else {
+                    if (c == 'X') {
+                        c = 'y';
+                        nv = new Object[3];
+                        nv[1] = (new StringBuilder((v[1]).toString())).append('M');
+                        nv[0] = Character.valueOf('M');
+                        nv[2] = Integer.valueOf(1);
+                        vec.add(nv);
+                    } else if (c == 'Y') {
+                        c = 'M';
+                        nv = new Object[3];
+                        nv[1] = (new StringBuilder((v[1]).toString())).append('d');
+                        nv[0] = Character.valueOf('d');
+                        nv[2] = Integer.valueOf(1);
+                        vec.add(nv);
+                    }
+
+                    ((StringBuilder) v[1]).append(c);
+                    if (c == ((Character) v[0]).charValue()) {
+                        v[2] = Integer.valueOf(n + 1);
+                    } else {
+                        v[0] = Character.valueOf(c);
+                        v[2] = Integer.valueOf(1);
+                    }
+                }
+            }
+
+            int size = vecRemovelist.size();
+            for (int i = 0; i < size; i++) {
+                v = vecRemovelist.get(i);
+                vec.remove(v);
+            }
+            vecRemovelist.clear();
+        }
+
+        int size = vec.size();
+        for (int i = 0; i < size; i++) {
+            v = vec.get(i);
+            c = ((Character) v[0]).charValue();
+            n = ((Integer) v[2]).intValue();
+
+            boolean bk = getSuccessor(c, n) != c;
+            boolean atEnd = (((c == 's') || (c == 'm') || ((c == 'h') && toTime)) && bk);
+            boolean finishesAtDate = (bk && (c == 'd') && !toTime);
+            boolean containsEnd = ((v[1]).toString().indexOf('W') != -1);
+
+            if ((!atEnd && !finishesAtDate) || (containsEnd)) {
+                vecRemovelist.add(v);
+            }
+        }
+
+        size = vecRemovelist.size();
+
+        for (int i = 0; i < size; i++) {
+            vec.remove(vecRemovelist.get(i));
+        }
+
+        vecRemovelist.clear();
+        v = vec.get(0); // might throw exception
+
+        StringBuilder format = (StringBuilder) v[1];
+        format.setLength(format.length() - 1);
+
+        return format.toString();
+    }
+
+    private final char getSuccessor(char c, int n) {
+        return ((c == 'y') && (n == 2)) ?
+            'X' :
+            (((c == 'y') && (n < 4)) ?
+                'y' :
+                ((c == 'y') ?
+                    'M' :
+                    (((c == 'M') && (n == 2)) ?
+                        'Y' :
+                        (((c == 'M') && (n < 3)) ?
+                            'M' :
+                            ((c == 'M') ?
+                                'd' :
+                                (((c == 'd') && (n < 2)) ?
+                                    'd' :
+                                    ((c == 'd') ?
+                                        'H' :
+                                        (((c == 'H') && (n < 2)) ?
+                                            'H' :
+                                            ((c == 'H') ?
+                                                'm' :
+                                                (((c == 'm') && (n < 2)) ?
+                                                    'm' :
+                                                    ((c == 'm') ?
+                                                        's' :
+                                                        (((c == 's') && (n < 2)) ?
+                                                            's' :
+                                                            'W'))))))))))));
     }
 }
