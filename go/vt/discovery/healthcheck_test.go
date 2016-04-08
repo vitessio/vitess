@@ -332,29 +332,14 @@ func (fc *fakeConn) Begin(ctx context.Context) (int64, error) {
 	return 0, fmt.Errorf("not implemented")
 }
 
-// Begin2 implements tabletconn.TabletConn.
-func (fc *fakeConn) Begin2(ctx context.Context) (int64, error) {
-	return fc.Begin(ctx)
-}
-
 // Commit implements tabletconn.TabletConn.
 func (fc *fakeConn) Commit(ctx context.Context, transactionID int64) error {
 	return fmt.Errorf("not implemented")
 }
 
-// Commit2 implements tabletconn.TabletConn.
-func (fc *fakeConn) Commit2(ctx context.Context, transactionID int64) error {
-	return fc.Commit(ctx, transactionID)
-}
-
 // Rollback implements tabletconn.TabletConn.
 func (fc *fakeConn) Rollback(ctx context.Context, transactionID int64) error {
 	return fmt.Errorf("not implemented")
-}
-
-// Rollback2 implements tabletconn.TabletConn.
-func (fc *fakeConn) Rollback2(ctx context.Context, transactionID int64) error {
-	return fc.Rollback(ctx, transactionID)
 }
 
 // SplitQuery implements tabletconn.TabletConn.
