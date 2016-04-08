@@ -390,18 +390,6 @@ func (conn *vtgateConn) Rollback(ctx context.Context, session interface{}) error
 	return vterrors.FromGRPCError(err)
 }
 
-func (conn *vtgateConn) Begin2(ctx context.Context) (interface{}, error) {
-	return conn.Begin(ctx)
-}
-
-func (conn *vtgateConn) Commit2(ctx context.Context, session interface{}) error {
-	return conn.Commit(ctx, session)
-}
-
-func (conn *vtgateConn) Rollback2(ctx context.Context, session interface{}) error {
-	return conn.Rollback(ctx, session)
-}
-
 func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
