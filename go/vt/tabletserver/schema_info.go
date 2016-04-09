@@ -394,7 +394,7 @@ func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string)
 		si.cachePool,
 	)
 	if err != nil {
-		// This can happen if DDLs race with each other.
+		si.recordSchemaError(err, tableName)
 		return
 	}
 	// table_rows, data_length, index_length
