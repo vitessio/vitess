@@ -107,6 +107,9 @@ func forceEOF(yylex interface{}) {
 %token <empty> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING
 %token <empty> SHOW DESCRIBE EXPLAIN
 
+// MySQL reserved words that are unused by this grammar will map to this token.
+%token <empty> UNUSED
+
 %type <statement> command
 %type <selStmt> select_statement
 %type <statement> insert_statement update_statement delete_statement set_statement
@@ -1106,6 +1109,8 @@ non_rename_operation:
 | DROP
   { $$ = struct{}{} }
 | ORDER
+  { $$ = struct{}{} }
+| UNUSED
   { $$ = struct{}{} }
 | ID
   { $$ = struct{}{} }
