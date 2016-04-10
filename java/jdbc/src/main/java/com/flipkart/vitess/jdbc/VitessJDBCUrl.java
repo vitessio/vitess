@@ -88,9 +88,7 @@ public class VitessJDBCUrl {
         this.tabletType = getTabletType(tabletType);
 
         String executeType = info.getProperty(Constants.Property.EXECUTE_TYPE);
-        if (null == executeType) {
-            executeType = Constants.DEFAULT_EXECUTE_TYPE;
-        }
+
         this.executeType = executeType;
         this.url = url;
     }
@@ -123,8 +121,14 @@ public class VitessJDBCUrl {
         this.catalog = catalog;
     }
 
-    public String getExecuteType() {
-        return executeType;
+    public Constants.QueryExecuteType getExecuteType() {
+        switch (this.executeType) {
+            case "simple":
+                return Constants.QueryExecuteType.SIMPLE;
+            case "stream":
+                return Constants.QueryExecuteType.STREAM;
+        }
+        return Constants.DEFAULT_EXECUTE_TYPE;
     }
 
     /**

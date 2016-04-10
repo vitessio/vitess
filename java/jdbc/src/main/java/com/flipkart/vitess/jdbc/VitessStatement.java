@@ -76,7 +76,11 @@ public class VitessStatement implements Statement {
         } else {
             if (tabletType != Topodata.TabletType.MASTER || this.vitessConnection.getAutoCommit()) {
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                cursor = vtGateConn.execute(context, sql, null, tabletType).checkedGet();
+                if(Constants.QueryExecuteType.SIMPLE == vitessConnection.getExecuteTypeParam()){
+                    cursor = vtGateConn.execute(context, sql, null, tabletType).checkedGet();
+                } else {
+                    cursor = vtGateConn.streamExecute(context, sql, null, tabletType);
+                }
             } else {
                 VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
                 if (null == vtGateTx) {
@@ -86,6 +90,7 @@ public class VitessStatement implements Statement {
                     this.vitessConnection.setVtGateTx(vtGateTx);
                 }
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                /* Stream query is not suppose to run in a txn. */
                 cursor = vtGateTx.execute(context, sql, null, tabletType).checkedGet();
             }
         }
