@@ -168,21 +168,6 @@ func (ftc *fakeTabletConn) ExecuteBatch2(ctx context.Context, queries []querytyp
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
-// Begin2 is part of the TabletConn interface
-func (ftc *fakeTabletConn) Begin2(ctx context.Context) (transactionID int64, err error) {
-	return 0, fmt.Errorf("not implemented in this test")
-}
-
-// Commit2 is part of the TabletConn interface
-func (ftc *fakeTabletConn) Commit2(ctx context.Context, transactionID int64) error {
-	return fmt.Errorf("not implemented in this test")
-}
-
-// Rollback2 is part of the TabletConn interface
-func (ftc *fakeTabletConn) Rollback2(ctx context.Context, transactionID int64) error {
-	return fmt.Errorf("not implemented in this test")
-}
-
 // Close is part of the TabletConn interface
 func (ftc *fakeTabletConn) Close() {
 }
