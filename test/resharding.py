@@ -572,6 +572,7 @@ primary key (name)
                         '--exclude_tables', 'unrelated',
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
+                        '--min_healthy_rdonly_endpoints', '1',
                         'test_keyspace/80-'],
                        auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly1.tablet_alias,
@@ -619,8 +620,10 @@ primary key (name)
     # rdonly tablets so discovery works)
     utils.run_vtctl(['RunHealthCheck', shard_3_rdonly1.tablet_alias, 'rdonly'])
     logging.debug('Running vtworker SplitDiff')
-    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', '--exclude_tables',
-                        'unrelated', 'test_keyspace/c0-'],
+    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
+                        '--exclude_tables', 'unrelated',
+                        '--min_healthy_rdonly_endpoints', '1',
+                        'test_keyspace/c0-'],
                        auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly1.tablet_alias, 'rdonly'],
                     auto_log=True)
@@ -783,8 +786,10 @@ primary key (name)
 
     # use vtworker to compare the data again
     logging.debug('Running vtworker SplitDiff')
-    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', '--exclude_tables',
-                        'unrelated', 'test_keyspace/c0-'],
+    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
+                        '--exclude_tables', 'unrelated',
+                        '--min_healthy_rdonly_endpoints', '1',
+                        'test_keyspace/c0-'],
                        auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly1.tablet_alias, 'rdonly'],
                     auto_log=True)

@@ -17,6 +17,7 @@ type HorizontalReshardingTask struct {
 
 // Run is part of the Task interface.
 func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*automationpb.TaskContainer, string, error) {
+	// Required parameters.
 	// Example: test_keyspace
 	keyspace := parameters["keyspace"]
 	// Example: 10-20
@@ -28,13 +29,19 @@ func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*automat
 	// Example: localhost:15001
 	vtworkerEndpoint := parameters["vtworker_endpoint"]
 
+	// Optional parameters.
+	// Example: unrelated1,unrelated2
+	excludeTables := parameters["exclude_tables"]
+	// Example: 1
+	minHealthyRdonlyEndPoints := parameters["min_healthy_rdonly_endpoints"]
+
 	var newTasks []*automationpb.TaskContainer
 	copySchemaTasks := NewTaskContainer()
 	for _, destShard := range destShards {
 		AddTask(copySchemaTasks, "CopySchemaShardTask", map[string]string{
 			"source_keyspace_and_shard": topoproto.KeyspaceShardString(keyspace, sourceShards[0]),
 			"dest_keyspace_and_shard":   topoproto.KeyspaceShardString(keyspace, destShard),
-			"exclude_tables":            parameters["exclude_tables"],
+			"exclude_tables":            excludeTables,
 			"vtctld_endpoint":           vtctldEndpoint,
 		})
 	}
@@ -44,9 +51,11 @@ func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*automat
 	for _, sourceShard := range sourceShards {
 		// TODO(mberlin): Add a semaphore as argument to limit the parallism.
 		AddTask(splitCloneTasks, "SplitCloneTask", map[string]string{
-			"keyspace":          keyspace,
-			"source_shard":      sourceShard,
-			"vtworker_endpoint": vtworkerEndpoint,
+			"keyspace":                     keyspace,
+			"source_shard":                 sourceShard,
+			"vtworker_endpoint":            vtworkerEndpoint,
+			"exclude_tables":               excludeTables,
+			"min_healthy_rdonly_endpoints": minHealthyRdonlyEndPoints,
 		})
 	}
 	newTasks = append(newTasks, splitCloneTasks)
@@ -67,9 +76,11 @@ func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*automat
 	for _, destShard := range destShards {
 		splitDiffTask := NewTaskContainer()
 		AddTask(splitDiffTask, "SplitDiffTask", map[string]string{
-			"keyspace":          keyspace,
-			"dest_shard":        destShard,
-			"vtworker_endpoint": vtworkerEndpoint,
+			"keyspace":                     keyspace,
+			"dest_shard":                   destShard,
+			"vtworker_endpoint":            vtworkerEndpoint,
+			"exclude_tables":               excludeTables,
+			"min_healthy_rdonly_endpoints": minHealthyRdonlyEndPoints,
 		})
 		newTasks = append(newTasks, splitDiffTask)
 	}
@@ -98,5 +109,5 @@ func (t *HorizontalReshardingTask) RequiredParameters() []string {
 
 // OptionalParameters is part of the Task interface.
 func (t *HorizontalReshardingTask) OptionalParameters() []string {
-	return []string{"exclude_tables"}
+	return []string{"exclude_tables", "min_healthy_rdonly_endpoints"}
 }

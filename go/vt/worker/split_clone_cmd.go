@@ -62,6 +62,8 @@ const splitCloneHTML2 = `
         <INPUT type="text" id="minTableSizeForSplit" name="minTableSizeForSplit" value="{{.DefaultMinTableSizeForSplit}}"></BR>
       <LABEL for="destinationWriterCount">Destination Writer Count: </LABEL>
         <INPUT type="text" id="destinationWriterCount" name="destinationWriterCount" value="{{.DefaultDestinationWriterCount}}"></BR>
+      <LABEL for="minHealthyRdonlyEndPoints">Minimum Number of required healthy RDONLY tablets: </LABEL>
+        <INPUT type="text" id="minHealthyRdonlyEndPoints" name="minHealthyRdonlyEndPoints" value="{{.DefaultMinHealthyRdonlyEndPoints}}"></BR>
       <INPUT type="hidden" name="keyspace" value="{{.Keyspace}}"/>
       <INPUT type="hidden" name="shard" value="{{.Shard}}"/>
       <INPUT type="submit" value="Clone"/>
@@ -87,6 +89,7 @@ func commandSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagS
 	destinationPackCount := subFlags.Int("destination_pack_count", defaultDestinationPackCount, "number of packets to pack in one destination insert")
 	minTableSizeForSplit := subFlags.Int("min_table_size_for_split", defaultMinTableSizeForSplit, "tables bigger than this size on disk in bytes will be split into source_reader_count chunks if possible")
 	destinationWriterCount := subFlags.Int("destination_writer_count", defaultDestinationWriterCount, "number of concurrent RPCs to execute on the destination")
+	minHealthyRdonlyEndPoints := subFlags.Int("min_healthy_rdonly_endpoints", defaultMinHealthyRdonlyEndPoints, "minimum number of healthy rdonly endpoints before taking out one")
 	if err := subFlags.Parse(args); err != nil {
 		return nil, err
 	}
@@ -103,7 +106,7 @@ func commandSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagS
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	worker, err := NewSplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, *strategy, *sourceReaderCount, *destinationPackCount, uint64(*minTableSizeForSplit), *destinationWriterCount)
+	worker, err := NewSplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, *strategy, *sourceReaderCount, *destinationPackCount, uint64(*minTableSizeForSplit), *destinationWriterCount, *minHealthyRdonlyEndPoints)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create split clone worker: %v", err)
 	}
@@ -184,6 +187,7 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 		result["DefaultDestinationPackCount"] = fmt.Sprintf("%v", defaultDestinationPackCount)
 		result["DefaultMinTableSizeForSplit"] = fmt.Sprintf("%v", defaultMinTableSizeForSplit)
 		result["DefaultDestinationWriterCount"] = fmt.Sprintf("%v", defaultDestinationWriterCount)
+		result["DefaultMinHealthyRdonlyEndPoints"] = fmt.Sprintf("%v", defaultMinHealthyRdonlyEndPoints)
 		return nil, splitCloneTemplate2, result, nil
 	}
 
@@ -213,9 +217,14 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot parse destinationWriterCount: %s", err)
 	}
+	minHealthyRdonlyEndPointsStr := r.FormValue("minHealthyRdonlyEndPoints")
+	minHealthyRdonlyEndPoints, err := strconv.ParseInt(minHealthyRdonlyEndPointsStr, 0, 64)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("cannot parse minHealthyRdonlyEndPoints: %s", err)
+	}
 
 	// start the clone job
-	wrk, err := NewSplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, strategy, int(sourceReaderCount), int(destinationPackCount), uint64(minTableSizeForSplit), int(destinationWriterCount))
+	wrk, err := NewSplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, strategy, int(sourceReaderCount), int(destinationPackCount), uint64(minTableSizeForSplit), int(destinationWriterCount), int(minHealthyRdonlyEndPoints))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot create worker: %v", err)
 	}

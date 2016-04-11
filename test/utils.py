@@ -764,7 +764,6 @@ def _get_vtworker_cmd(clargs, auto_log=False):
   rpc_port = port
   args = environment.binary_args('vtworker') + [
       '-log_dir', environment.vtlogroot,
-      '-min_healthy_rdonly_endpoints', '1',
       '-port', str(port),
       # use a long resolve TTL because of potential race conditions with doing
       # an EmergencyReparent and resolving the master (as EmergencyReparent
