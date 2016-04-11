@@ -172,13 +172,19 @@ func TestTypeToMySQL(t *testing.T) {
 }
 
 func TestTypeFlexibility(t *testing.T) {
-	v := MySQLToType(1, mysqlBinary>>16)
+	v, err := MySQLToType(1, mysqlBinary>>16)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if v != Int8 {
 		t.Errorf("conversion: %v, want %v", v, Int8)
 	}
 	var typ int64
 	for typ = 249; typ <= 252; typ++ {
-		v = MySQLToType(typ, mysqlBinary>>16)
+		v, err := MySQLToType(typ, mysqlBinary>>16)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if v != Blob {
 			t.Errorf("conversion: %v, want %v", v, Blob)
 		}
@@ -186,12 +192,9 @@ func TestTypeFlexibility(t *testing.T) {
 }
 
 func TestTypePanic(t *testing.T) {
-	defer func() {
-		err := recover().(error)
-		want := "Could not map: 15 to a vitess type"
-		if err == nil || err.Error() != want {
-			t.Errorf("Error: %v, want %v", err, want)
-		}
-	}()
-	_ = MySQLToType(15, 0)
+	_, err := MySQLToType(15, 0)
+	want := "unsupported type: 15"
+	if err == nil || err.Error() != want {
+		t.Errorf("MySQLToType: %v, want %s", err, want)
+	}
 }

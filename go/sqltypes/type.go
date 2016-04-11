@@ -185,19 +185,18 @@ var typeToMySQL = map[querypb.Type]struct {
 }
 
 // MySQLToType computes the vitess type from mysql type and flags.
-// The function panics if the type is unrecognized.
-func MySQLToType(mysqlType, flags int64) querypb.Type {
+func MySQLToType(mysqlType, flags int64) (typ querypb.Type, err error) {
 	result, ok := mysqlToType[mysqlType]
 	if !ok {
-		panic(fmt.Errorf("Could not map: %d to a vitess type", mysqlType))
+		return 0, fmt.Errorf("unsupported type: %d", mysqlType)
 	}
 
 	converted := (flags << 16) & relevantFlags
 	modified, ok := modifier[int64(result)|converted]
 	if ok {
-		return modified
+		return modified, nil
 	}
-	return result
+	return result, nil
 }
 
 // TypeToMySQL returns the equivalent mysql type and flag for a vitess type.
