@@ -122,11 +122,13 @@ public class VitessJDBCUrl {
     }
 
     public Constants.QueryExecuteType getExecuteType() {
-        switch (this.executeType) {
-            case "simple":
-                return Constants.QueryExecuteType.SIMPLE;
-            case "stream":
-                return Constants.QueryExecuteType.STREAM;
+        if (this.executeType != null){
+            switch (this.executeType) {
+                case "simple":
+                    return Constants.QueryExecuteType.SIMPLE;
+                case "stream":
+                    return Constants.QueryExecuteType.STREAM;
+            }
         }
         return Constants.DEFAULT_EXECUTE_TYPE;
     }
