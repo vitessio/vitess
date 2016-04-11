@@ -88,7 +88,7 @@ public class VitessDriverTest {
         Assert.assertEquals(driverPropertyInfos[4].description, Constants.EXECUTE_TYPE_DESC);
         Assert.assertEquals(driverPropertyInfos[4].required, false);
         Assert.assertEquals(driverPropertyInfos[4].name, Constants.Property.EXECUTE_TYPE);
-        Assert.assertEquals(driverPropertyInfos[4].value, "stream");
+        Assert.assertEquals(driverPropertyInfos[4].value, Constants.QueryExecuteType.STREAM.toString());
 
         Assert.assertEquals(driverPropertyInfos[5].description, Constants.VITESS_DB_NAME);
         Assert.assertEquals(driverPropertyInfos[5].required, true);

@@ -79,7 +79,7 @@ public class VitessDriver implements Driver {
             dpi[3].description = Constants.VITESS_TABLET_TYPE;
 
             dpi[4] = new DriverPropertyInfo(Constants.Property.EXECUTE_TYPE,
-                vitessJDBCUrl.getExecuteType());
+                vitessJDBCUrl.getExecuteType().toString());
             dpi[4].required = false;
             dpi[4].description = Constants.EXECUTE_TYPE_DESC;
 
