@@ -44,7 +44,8 @@ func NewEqualSplitsAlgorithm(splitParams *SplitParams, sqlExecuter SQLExecuter) 
 	}
 	if len(splitParams.splitColumns) != 1 {
 		return nil, fmt.Errorf("using the EQUAL_SPLITS algorithm in SplitQuery requires having"+
-			" exactly one split-column. Got split-columns: %v", splitParams.splitColumns)
+			" exactly one split-column. Got split-columns: %v",
+			splitParams.splitColumns)
 	}
 	if !sqltypes.IsFloat(splitParams.splitColumnTypes[0]) &&
 		!sqltypes.IsIntegral(splitParams.splitColumnTypes[0]) {
