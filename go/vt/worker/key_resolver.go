@@ -49,15 +49,10 @@ func newV2Resolver(keyspaceInfo *topo.KeyspaceInfo, td *tabletmanagerdatapb.Tabl
 	if td.Type != tmutils.TableBaseTable {
 		return nil, fmt.Errorf("a keyspaceID resolver can only be created for a base table, got %v", td.Type)
 	}
+
 	// Find the sharding key column index.
-	columnIndex := -1
-	for i, name := range td.Columns {
-		if name == keyspaceInfo.ShardingColumnName {
-			columnIndex = i
-			break
-		}
-	}
-	if columnIndex == -1 {
+	columnIndex, ok := tmutils.TableDefinitionGetColumn(td, keyspaceInfo.ShardingColumnName)
+	if !ok {
 		return nil, fmt.Errorf("table %v doesn't have a column named '%v'", td.Name, keyspaceInfo.ShardingColumnName)
 	}
 
@@ -109,14 +104,8 @@ func newV3Resolver(logger logutil.Logger, keyspaceSchema *vindexes.KeyspaceSchem
 		}
 
 		// Find the sharding key column index.
-		columnIndex := -1
-		for i, name := range td.Columns {
-			if name == colVindex.Col {
-				columnIndex = i
-				break
-			}
-		}
-		if columnIndex == -1 {
+		columnIndex, ok := tmutils.TableDefinitionGetColumn(td, colVindex.Col)
+		if !ok {
 			logger.Warningf("table %v has a Vindex on unknown column %v, not using this Vindex", td.Name, colVindex.Col)
 			continue
 		}
