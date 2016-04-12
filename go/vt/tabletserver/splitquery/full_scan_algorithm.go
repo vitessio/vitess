@@ -47,7 +47,7 @@ func NewFullScanAlgorithm(
 	splitParams *SplitParams, sqlExecuter SQLExecuter) (*FullScanAlgorithm, error) {
 
 	if !splitParams.areSplitColumnsPrimaryKey() {
-		return nil, fmt.Errorf("splitquery: Using the FULL_SCAN algorithm requires split columns to be"+
+		return nil, fmt.Errorf("Using the FULL_SCAN algorithm requires split columns to be"+
 			" the primary key. Got: %+v", splitParams)
 	}
 	result := &FullScanAlgorithm{

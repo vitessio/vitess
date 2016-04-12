@@ -28,12 +28,13 @@ import (
 type SplitDiffWorker struct {
 	StatusWorker
 
-	wr            *wrangler.Wrangler
-	cell          string
-	keyspace      string
-	shard         string
-	excludeTables []string
-	cleaner       *wrangler.Cleaner
+	wr                        *wrangler.Wrangler
+	cell                      string
+	keyspace                  string
+	shard                     string
+	excludeTables             []string
+	minHealthyRdonlyEndPoints int
+	cleaner                   *wrangler.Cleaner
 
 	// all subsequent fields are protected by the mutex
 
@@ -51,15 +52,16 @@ type SplitDiffWorker struct {
 }
 
 // NewSplitDiffWorker returns a new SplitDiffWorker object.
-func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string) Worker {
+func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, minHealthyRdonlyEndPoints int) Worker {
 	return &SplitDiffWorker{
-		StatusWorker:  NewStatusWorker(),
-		wr:            wr,
-		cell:          cell,
-		keyspace:      keyspace,
-		shard:         shard,
-		excludeTables: excludeTables,
-		cleaner:       &wrangler.Cleaner{},
+		StatusWorker:              NewStatusWorker(),
+		wr:                        wr,
+		cell:                      cell,
+		keyspace:                  keyspace,
+		shard:                     shard,
+		excludeTables:             excludeTables,
+		minHealthyRdonlyEndPoints: minHealthyRdonlyEndPoints,
+		cleaner:                   &wrangler.Cleaner{},
 	}
 }
 
@@ -187,7 +189,7 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 
 	// find an appropriate endpoint in destination shard
 	var err error
-	sdw.destinationAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, sdw.shard)
+	sdw.destinationAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, sdw.shard, sdw.minHealthyRdonlyEndPoints)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", sdw.cell, sdw.keyspace, sdw.shard, err)
 	}
@@ -195,7 +197,7 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 	// find an appropriate endpoint in the source shards
 	sdw.sourceAliases = make([]*topodatapb.TabletAlias, len(sdw.shardInfo.SourceShards))
 	for i, ss := range sdw.shardInfo.SourceShards {
-		sdw.sourceAliases[i], err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, ss.Shard)
+		sdw.sourceAliases[i], err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, ss.Shard, sdw.minHealthyRdonlyEndPoints)
 		if err != nil {
 			return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", sdw.cell, sdw.keyspace, ss.Shard, err)
 		}

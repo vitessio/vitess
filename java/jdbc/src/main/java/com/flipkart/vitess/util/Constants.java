@@ -32,7 +32,7 @@ public class Constants {
     public static final String LITERAL_S = "s";
     public static final String SQL_SHOW = "show";
     public static final String VITESS_KEYSPACE = "Keyspace name in Vitess Server";
-    public static final String DEFAULT_EXECUTE_TYPE = "simple";
+    public static final Constants.QueryExecuteType DEFAULT_EXECUTE_TYPE = QueryExecuteType.SIMPLE;
     public static final String EXECUTE_TYPE_DESC = "Query execution type: simple or stream \n";
     public static final String USERNAME_DESC = "Username used for ACL validation \n";
 
@@ -108,5 +108,10 @@ public class Constants {
         public static final String KEYSPACE = "KEYSPACE";
         public static final String USERNAME = "userName";
         public static final String EXECUTE_TYPE = "executeType";
+    }
+
+    public enum QueryExecuteType {
+        SIMPLE,
+        STREAM
     }
 }

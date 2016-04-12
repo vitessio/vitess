@@ -567,6 +567,10 @@ public class VitessConnection implements Connection {
         return this.vitessJDBCUrl.getUrl();
     }
 
+    public Constants.QueryExecuteType getExecuteTypeParam() {
+        return this.vitessJDBCUrl.getExecuteType();
+    }
+
     /**
      * Register a Statement instance as open.
      *

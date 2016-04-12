@@ -62,13 +62,11 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* union all */ 1 from t union all select 1 from t",
 	}, {
-		input: "select /* minus */ 1 from t minus select 1 from t",
-	}, {
-		input: "select /* except */ 1 from t except select 1 from t",
-	}, {
-		input: "select /* intersect */ 1 from t intersect select 1 from t",
+		input: "select /* union distinct */ 1 from t union distinct select 1 from t",
 	}, {
 		input: "select /* distinct */ distinct 1 from t",
+	}, {
+		input: "select /* straight_join */ straight_join 1 from t",
 	}, {
 		input: "select /* for update */ 1 from t for update",
 	}, {

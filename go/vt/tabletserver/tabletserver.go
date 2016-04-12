@@ -867,9 +867,22 @@ func (tsv *TabletServer) SplitQueryV2(
 	splitCount int64,
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm,
-	sessionID int64) (splits []querytypes.QuerySplit, err error) {
+	sessionID int64,
+) (splits []querytypes.QuerySplit, err error) {
+	logStats := newLogStats("SplitQuery", ctx)
+	logStats.OriginalSQL = sql
+	logStats.BindVariables = bindVariables
+	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
+	if err = tsv.startRequest(target, sessionID, false, false); err != nil {
+		return nil, err
+	}
+	// We don't set a timeout for SplitQueryV2.
+	// SplitQuery using the Full Scan algorithm can take a while and
+	// we don't expect too many of these queries to run concurrently.
+	defer tsv.endRequest(false)
 
 	if err := validateSplitQueryParameters(
+		target,
 		sql,
 		bindVariables,
 		splitColumns,
@@ -879,77 +892,51 @@ func (tsv *TabletServer) SplitQueryV2(
 		sessionID); err != nil {
 		return nil, err
 	}
-
-	// TODO(erez): ASSERT/Check that we are a rdonly tablet.
-	logStats := newLogStats("SplitQuery", ctx)
-	logStats.OriginalSQL = sql
-	logStats.BindVariables = bindVariables
-	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
-	if err = tsv.startRequest(target, sessionID, false, false); err != nil {
-		return nil, err
-	}
-	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
-	defer func() {
-		cancel()
-		tsv.endRequest(false)
-	}()
-
 	schema := getSchemaForSplitQuery(tsv.qe.schemaInfo)
-	var splitParams *splitquery.SplitParams
-	switch {
-	case numRowsPerQueryPart != 0 && splitCount == 0:
-		splitParams, err = splitquery.NewSplitParamsGivenNumRowsPerQueryPart(
-			sql, bindVariables, splitColumns, numRowsPerQueryPart, schema)
-	case numRowsPerQueryPart == 0 && splitCount != 0:
-		splitParams, err = splitquery.NewSplitParamsGivenSplitCount(
-			sql, bindVariables, splitColumns, splitCount, schema)
-	default:
-		panic(fmt.Sprintf("Exactly one of {numRowsPerQueryPart, splitCount} must be"+
-			" non zero. This should have already been caught by 'validateSplitQueryParameters' and "+
-			" returned as an error. Got: numRowsPerQueryPart=%v, splitCount=%v. SQL: %v",
-			numRowsPerQueryPart,
-			splitCount,
-			querytypes.QueryAsString(sql, bindVariables)))
-	}
-	// TODO(erez): Make the splitquery package return tabletserver errors.
+	splitParams, err := createSplitParams(
+		sql, bindVariables, splitColumns, splitCount, numRowsPerQueryPart, schema)
 	if err != nil {
 		return nil, err
 	}
-
 	defer func(start time.Time) {
+		splitTableName := splitParams.GetSplitTableName()
 		addUserTableQueryStats(
-			tsv.qe.queryServiceStats,
-			ctx,
-			splitParams.GetSplitTableName(),
-			"SplitQuery",
-			int64(time.Now().Sub(start)))
+			tsv.qe.queryServiceStats, ctx, splitTableName, "SplitQuery", int64(time.Now().Sub(start)))
 	}(time.Now())
-
-	sqlExecuter := &splitQuerySQLExecuter{
-		queryExecutor: &QueryExecutor{
-			ctx:      ctx,
-			logStats: logStats,
-			qe:       tsv.qe,
-		},
+	sqlExecuter, err := newSplitQuerySQLExecuter(ctx, logStats, tsv.qe)
+	if err != nil {
+		return nil, err
 	}
+	defer sqlExecuter.done()
 	algorithmObject, err := createSplitQueryAlgorithmObject(algorithm, splitParams, sqlExecuter)
 	if err != nil {
 		return nil, err
 	}
-	// TODO(erez): Make the splitquery package use Vitess error codes.
-	return splitquery.NewSplitter(splitParams, algorithmObject).Split()
+	result, err := splitquery.NewSplitter(splitParams, algorithmObject).Split()
+	return result, splitQueryToTabletError(err)
 }
 
 // validateSplitQueryParameters perform some validations on the SplitQuery parameters
 // returns an error that can be returned to the user if a validation fails.
 func validateSplitQueryParameters(
+	target *querypb.Target,
 	sql string,
 	bindVariables map[string]interface{},
 	splitColumns []string,
 	splitCount int64,
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm,
-	sessionID int64) error {
+	sessionID int64,
+) error {
+	// Check that the caller requested a RDONLY tablet.
+	// Since we're called by VTGate this should not normally be violated.
+	if target.TabletType != topodatapb.TabletType_RDONLY {
+		return NewTabletError(
+			ErrFail,
+			vtrpcpb.ErrorCode_BAD_INPUT,
+			"SplitQuery must be called with a RDONLY tablet. TableType passed is: %v",
+			target.TabletType)
+	}
 	if numRowsPerQueryPart < 0 {
 		return NewTabletError(
 			ErrFail,
@@ -988,36 +975,81 @@ func validateSplitQueryParameters(
 	return nil
 }
 
-// splitQuerySQLExecuter implements splitquery.SQLExecuterInterface and allows the splitquery
-// package to send SQL statements to MySQL
-// TODO(erez): Find out what's the correct way of doing this.
-// We need to parse the query since we're dealing with bind-vars.
-type splitQuerySQLExecuter struct {
-	queryExecutor *QueryExecutor
+func createSplitParams(
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	schema map[string]*schema.Table,
+) (*splitquery.SplitParams, error) {
+	switch {
+	case numRowsPerQueryPart != 0 && splitCount == 0:
+		splitParams, err := splitquery.NewSplitParamsGivenNumRowsPerQueryPart(
+			sql, bindVariables, splitColumns, numRowsPerQueryPart, schema)
+		return splitParams, splitQueryToTabletError(err)
+	case numRowsPerQueryPart == 0 && splitCount != 0:
+		splitParams, err := splitquery.NewSplitParamsGivenSplitCount(
+			sql, bindVariables, splitColumns, splitCount, schema)
+		return splitParams, splitQueryToTabletError(err)
+	default:
+		panic(fmt.Sprintf("Exactly one of {numRowsPerQueryPart, splitCount} must be"+
+			" non zero. This should have already been caught by 'validateSplitQueryParameters' and "+
+			" returned as an error. Got: numRowsPerQueryPart=%v, splitCount=%v. SQL: %v",
+			numRowsPerQueryPart,
+			splitCount,
+			querytypes.QueryAsString(sql, bindVariables)))
+	}
 }
 
-// TODO(erez): Add an SQLExecute() to SQLExecuterInterface that gets a parsed query so that
-// we don't have to parse the query again here.
-func (se *splitQuerySQLExecuter) SQLExecute(
-	sql string, bindVariables map[string]interface{}) (*sqltypes.Result, error) {
+// splitQuerySQLExecuter implements splitquery.SQLExecuterInterface and allows the splitquery
+// package to send SQL statements to MySQL
+type splitQuerySQLExecuter struct {
+	queryExecutor *QueryExecutor
+	conn          *DBConn
+}
 
+// Constructs a new splitQuerySQLExecuter object. The 'done' method must be called on
+// the object after it's no longer used, to recycle the database connection.
+func newSplitQuerySQLExecuter(
+	ctx context.Context, logStats *LogStats, queryEngine *QueryEngine,
+) (*splitQuerySQLExecuter, error) {
+	queryExecutor := &QueryExecutor{
+		ctx:      ctx,
+		logStats: logStats,
+		qe:       queryEngine,
+	}
+	result := &splitQuerySQLExecuter{
+		queryExecutor: queryExecutor,
+	}
+	var err error
+	result.conn, err = queryExecutor.getConn(queryExecutor.qe.connPool)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (se *splitQuerySQLExecuter) done() {
+	se.conn.Recycle()
+}
+
+// SQLExecute is part of the SQLExecuter interface.
+func (se *splitQuerySQLExecuter) SQLExecute(
+	sql string, bindVariables map[string]interface{},
+) (*sqltypes.Result, error) {
+	// We need to parse the query since we're dealing with bind-vars.
+	// TODO(erez): Add an SQLExecute() to SQLExecuterInterface that gets a parsed query so that
+	// we don't have to parse the query again here.
 	ast, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, fmt.Errorf("splitQuerySQLExecuter: parsing sql failed with: %v", err)
 	}
 	parsedQuery := sqlparser.GenerateParsedQuery(ast)
 
-	conn, err := se.queryExecutor.getConn(se.queryExecutor.qe.connPool)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Recycle()
-
-	// TODO(erez): Find out what 'buildStreamComment' is, and see if we need to use it or comment why
-	// we don't.
 	// We clone "bindVariables" since fullFetch() changes it.
 	return se.queryExecutor.fullFetch(
-		conn,
+		se.conn,
 		parsedQuery,
 		utils.CloneBindVariables(bindVariables),
 		nil /* buildStreamComment */)
@@ -1050,6 +1082,16 @@ func createSplitQueryAlgorithmObject(
 	default:
 		panic(fmt.Sprintf("Unknown algorithm enum: %+v", algorithm))
 	}
+}
+
+// splitQueryToTabletError converts the given error assumed to be returned from the
+// splitquery-package into a TabletError suitablet to be returned to the caller.
+// It returns nil if 'err' is nil.
+func splitQueryToTabletError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "splitquery: %v", err)
 }
 
 // StreamHealthRegister is part of queryservice.QueryService interface

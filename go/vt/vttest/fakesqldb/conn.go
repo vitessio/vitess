@@ -228,8 +228,8 @@ func (conn *Conn) Shutdown() {
 }
 
 // Fields returns the current fields description for the query
-func (conn *Conn) Fields() []*querypb.Field {
-	return make([]*querypb.Field, 0)
+func (conn *Conn) Fields() ([]*querypb.Field, error) {
+	return make([]*querypb.Field, 0), nil
 }
 
 // ID returns the connection id.

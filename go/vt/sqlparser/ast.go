@@ -116,6 +116,7 @@ func (*Union) iSelectStatement()  {}
 type Select struct {
 	Comments    Comments
 	Distinct    string
+	Hints       string
 	SelectExprs SelectExprs
 	From        TableExprs
 	Where       *Where
@@ -128,7 +129,8 @@ type Select struct {
 
 // Select.Distinct
 const (
-	DistinctStr = "distinct "
+	DistinctStr      = "distinct "
+	StraightJoinHint = "straight_join "
 )
 
 // Select.Lock
@@ -139,8 +141,8 @@ const (
 
 // Format formats the node.
 func (node *Select) Format(buf *TrackedBuffer) {
-	buf.Myprintf("select %v%s%v from %v%v%v%v%v%v%s",
-		node.Comments, node.Distinct, node.SelectExprs,
+	buf.Myprintf("select %v%s%s%v from %v%v%v%v%v%v%s",
+		node.Comments, node.Distinct, node.Hints, node.SelectExprs,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
 		node.Limit, node.Lock)
@@ -218,11 +220,9 @@ type Union struct {
 
 // Union.Type
 const (
-	UnionStr     = "union"
-	UnionAllStr  = "union all"
-	SetMinusStr  = "minus"
-	ExceptStr    = "except"
-	IntersectStr = "intersect"
+	UnionStr         = "union"
+	UnionAllStr      = "union all"
+	UnionDistinctStr = "union distinct"
 )
 
 // Format formats the node.
