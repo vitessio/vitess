@@ -5,7 +5,6 @@
 package worker
 
 import (
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -473,15 +472,9 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 			return fmt.Errorf("cannot load VSchema for keyspace %v: %v", scw.keyspace, err)
 		}
 
-		var kformal vindexes.KeyspaceFormal
-		if err := json.Unmarshal([]byte(kschema), &kformal); err != nil {
-			return fmt.Errorf("error unmarshalling vschema for keyspace %s: %v", scw.keyspace, err)
-		}
-
-		formal := &vindexes.VSchemaFormal{
-			Keyspaces: map[string]vindexes.KeyspaceFormal{
-				scw.keyspace: kformal,
-			},
+		formal, err := vindexes.VSchemaFormalForKeyspace([]byte(kschema), scw.keyspace)
+		if err != nil {
+			return fmt.Errorf("error building formal vschema for keyspace %s: %v", scw.keyspace, err)
 		}
 		vschema, err := vindexes.BuildVSchema(formal)
 		if err != nil {
