@@ -2,6 +2,7 @@ package com.flipkart.vitess.jdbc.test;
 
 import com.flipkart.vitess.jdbc.VitessConnection;
 import com.flipkart.vitess.jdbc.VitessPreparedStatement;
+import com.flipkart.vitess.util.Constants;
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.SQLFuture;
 import com.youtube.vitess.client.VTGateConn;
@@ -80,6 +81,7 @@ import java.util.*;
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
                 Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockConn.getVtGateTx()).thenReturn(null);
+        PowerMockito.when(mockConn.getExecuteTypeParam()).thenReturn(Constants.QueryExecuteType.SIMPLE);
         PowerMockito.when(mockVtGateConn.begin(Matchers.any(Context.class)))
             .thenReturn(mockSqlFutureVtGateTx);
         PowerMockito.when(mockVtGateTx
@@ -139,7 +141,89 @@ import java.util.*;
         }
     }
 
-    @Test public void testExecuteUpdate() throws SQLException {
+    @Test public void testExecuteQueryWithStream() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+        VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
+        VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
+        Cursor mockCursor = PowerMockito.mock(Cursor.class);
+        SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
+        SQLFuture mockSqlFutureVtGateTx = PowerMockito.mock(SQLFuture.class);
+
+        PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+        PowerMockito.when(mockVtGateConn
+                .executeKeyspaceIds(Matchers.any(Context.class), Matchers.anyString(),
+                        Matchers.anyString(), Matchers.anyCollection(), Matchers.anyMap(),
+                        Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+        PowerMockito.when(mockVtGateConn
+                .streamExecute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                        Matchers.any(Topodata.TabletType.class))).thenReturn(mockCursor);
+        PowerMockito.when(mockVtGateConn
+                .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                        Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+        PowerMockito.when(mockConn.getVtGateTx()).thenReturn(null);
+        PowerMockito.when(mockVtGateConn.begin(Matchers.any(Context.class)))
+                .thenReturn(mockSqlFutureVtGateTx);
+        PowerMockito.when(mockVtGateTx
+                .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                        Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
+        PowerMockito.when(mockSqlFutureVtGateTx.checkedGet()).thenReturn(mockVtGateTx);
+        PowerMockito.when(mockConn.getExecuteTypeParam()).thenReturn(Constants.QueryExecuteType.STREAM);
+
+        VitessPreparedStatement preparedStatement;
+        try {
+
+            //Empty Sql Statement
+            try {
+                new VitessPreparedStatement(mockConn, "");
+                Assert.fail("Should have thrown exception for empty sql");
+            } catch (SQLException ex) {
+                Assert.assertEquals("SQL statement is not valid", ex.getMessage());
+            }
+
+            //show query
+            preparedStatement = new VitessPreparedStatement(mockConn, sqlShow);
+            ResultSet rs = preparedStatement.executeQuery();
+            Assert.assertEquals(-1, preparedStatement.getUpdateCount());
+
+            //select on replica with bind variables
+            preparedStatement =
+                    new VitessPreparedStatement(mockConn, sqlSelect, ResultSet.TYPE_FORWARD_ONLY,
+                            ResultSet.CONCUR_READ_ONLY);
+            PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.REPLICA);
+            rs = preparedStatement.executeQuery();
+            Assert.assertEquals(-1, preparedStatement.getUpdateCount());
+
+            //select on replica without bind variables
+            preparedStatement =
+                    new VitessPreparedStatement(mockConn, sqlSelect, ResultSet.TYPE_FORWARD_ONLY,
+                            ResultSet.CONCUR_READ_ONLY);
+            rs = preparedStatement.executeQuery();
+            Assert.assertEquals(-1, preparedStatement.getUpdateCount());
+
+
+            //select on master
+            PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.MASTER);
+            rs = preparedStatement.executeQuery();
+            Assert.assertEquals(-1, preparedStatement.getUpdateCount());
+
+            try {
+                //when returned cursor is null
+                PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(null);
+                preparedStatement.executeQuery();
+                Assert.fail("Should have thrown exception for cursor null");
+            } catch (SQLException ex) {
+                Assert.assertEquals("Failed to execute this method", ex.getMessage());
+            }
+
+        } catch (SQLException e) {
+            Assert.fail("Test failed " + e.getMessage());
+        }
+    }
+
+
+    @Test
+    public void testExecuteUpdate() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
@@ -236,6 +320,7 @@ import java.util.*;
         PowerMockito.when(mockVtGateConn
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
                 Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+        PowerMockito.when(mockConn.getExecuteTypeParam()).thenReturn(Constants.QueryExecuteType.SIMPLE);
         PowerMockito.when(mockVtGateConn
             .executeKeyspaceIds(Matchers.any(Context.class), Matchers.anyString(),
                 Matchers.anyString(), Matchers.anyCollection(), Matchers.anyMap(),

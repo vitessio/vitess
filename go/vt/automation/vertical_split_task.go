@@ -18,6 +18,7 @@ type VerticalSplitTask struct {
 
 // Run is part of the Task interface.
 func (t *VerticalSplitTask) Run(parameters map[string]string) ([]*automationpb.TaskContainer, string, error) {
+	// Required parameters.
 	// Example: source_keyspace
 	sourceKeyspace := parameters["source_keyspace"]
 	// Example: destination_keyspace
@@ -31,14 +32,18 @@ func (t *VerticalSplitTask) Run(parameters map[string]string) ([]*automationpb.T
 	// Example: localhost:15001
 	vtworkerEndpoint := parameters["vtworker_endpoint"]
 
+	// Optional parameters.
+	// Example: 1
+	minHealthyRdonlyEndPoints := parameters["min_healthy_rdonly_endpoints"]
+
 	var newTasks []*automationpb.TaskContainer
 	copySchemaTasks := NewTaskContainer()
 	for _, shard := range shards {
 		AddTask(copySchemaTasks, "CopySchemaShardTask", map[string]string{
 			"source_keyspace_and_shard": topoproto.KeyspaceShardString(sourceKeyspace, shard),
 			"dest_keyspace_and_shard":   topoproto.KeyspaceShardString(destKeyspace, shard),
-			"tables":                    tables,
 			"vtctld_endpoint":           vtctldEndpoint,
+			"tables":                    tables,
 		})
 	}
 	newTasks = append(newTasks, copySchemaTasks)
@@ -47,10 +52,11 @@ func (t *VerticalSplitTask) Run(parameters map[string]string) ([]*automationpb.T
 	for _, shard := range shards {
 		// TODO(mberlin): Add a semaphore as argument to limit the parallism.
 		AddTask(vSplitCloneTasks, "VerticalSplitCloneTask", map[string]string{
-			"dest_keyspace":     destKeyspace,
-			"shard":             shard,
-			"tables":            tables,
-			"vtworker_endpoint": vtworkerEndpoint,
+			"dest_keyspace":                destKeyspace,
+			"shard":                        shard,
+			"tables":                       tables,
+			"vtworker_endpoint":            vtworkerEndpoint,
+			"min_healthy_rdonly_endpoints": minHealthyRdonlyEndPoints,
 		})
 	}
 	newTasks = append(newTasks, vSplitCloneTasks)
@@ -71,9 +77,10 @@ func (t *VerticalSplitTask) Run(parameters map[string]string) ([]*automationpb.T
 	for _, shard := range shards {
 		vSplitDiffTask := NewTaskContainer()
 		AddTask(vSplitDiffTask, "VerticalSplitDiffTask", map[string]string{
-			"dest_keyspace":     destKeyspace,
-			"shard":             shard,
-			"vtworker_endpoint": vtworkerEndpoint,
+			"dest_keyspace":                destKeyspace,
+			"shard":                        shard,
+			"vtworker_endpoint":            vtworkerEndpoint,
+			"min_healthy_rdonly_endpoints": minHealthyRdonlyEndPoints,
 		})
 		newTasks = append(newTasks, vSplitDiffTask)
 	}
@@ -102,5 +109,5 @@ func (t *VerticalSplitTask) RequiredParameters() []string {
 
 // OptionalParameters is part of the Task interface.
 func (t *VerticalSplitTask) OptionalParameters() []string {
-	return []string{""}
+	return []string{"min_healthy_rdonly_endpoints"}
 }

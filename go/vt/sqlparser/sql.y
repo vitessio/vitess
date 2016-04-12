@@ -71,7 +71,7 @@ func forceEOF(yylex interface{}) {
 }
 
 %token LEX_ERROR
-%left <empty> UNION MINUS EXCEPT INTERSECT
+%left <empty> UNION
 %token <empty> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT FOR
 %token <empty> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK
 %token <empty> VALUES LAST_INSERT_ID
@@ -107,6 +107,9 @@ func forceEOF(yylex interface{}) {
 %token <empty> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING
 %token <empty> SHOW DESCRIBE EXPLAIN
 
+// MySQL reserved words that are unused by this grammar will map to this token.
+%token <empty> UNUSED
+
 %type <statement> command
 %type <selStmt> select_statement
 %type <statement> insert_statement update_statement delete_statement set_statement
@@ -114,7 +117,7 @@ func forceEOF(yylex interface{}) {
 %type <statement> analyze_statement other_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op
-%type <str> distinct_opt
+%type <str> distinct_opt straight_join_opt
 %type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
 %type <expr> expression
@@ -186,9 +189,9 @@ command:
 | other_statement
 
 select_statement:
-  SELECT comment_opt distinct_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
+  SELECT comment_opt distinct_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
   {
-    $$ = &Select{Comments: Comments($2), Distinct: $3, SelectExprs: $4, From: $6, Where: NewWhere(WhereStr, $7), GroupBy: GroupBy($8), Having: NewWhere(HavingStr, $9), OrderBy: $10, Limit: $11, Lock: $12}
+    $$ = &Select{Comments: Comments($2), Distinct: $3, Hints: $4, SelectExprs: $5, From: $7, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10), OrderBy: $11, Limit: $12, Lock: $13}
   }
 | SELECT comment_opt NEXT sql_id for_from table_name
   {
@@ -336,17 +339,9 @@ union_op:
   {
     $$ = UnionAllStr
   }
-| MINUS
+| UNION DISTINCT
   {
-    $$ = SetMinusStr
-  }
-| EXCEPT
-  {
-    $$ = ExceptStr
-  }
-| INTERSECT
-  {
-    $$ = IntersectStr
+    $$ = UnionDistinctStr
   }
 
 distinct_opt:
@@ -356,6 +351,15 @@ distinct_opt:
 | DISTINCT
   {
     $$ = DistinctStr
+  }
+
+straight_join_opt:
+  {
+    $$ = ""
+  }
+| STRAIGHT_JOIN
+  {
+    $$ = StraightJoinHint
   }
 
 select_expression_list:
@@ -1105,6 +1109,8 @@ non_rename_operation:
 | DROP
   { $$ = struct{}{} }
 | ORDER
+  { $$ = struct{}{} }
+| UNUSED
   { $$ = struct{}{} }
 | ID
   { $$ = struct{}{} }

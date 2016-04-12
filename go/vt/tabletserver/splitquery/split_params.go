@@ -63,7 +63,7 @@ func NewSplitParamsGivenNumRowsPerQueryPart(
 	numRowsPerQueryPart int64,
 	schema map[string]*schema.Table) (*SplitParams, error) {
 	if numRowsPerQueryPart <= 0 {
-		return nil, fmt.Errorf("splitquery: numRowsPerQueryPart must be positive. Got: %v",
+		return nil, fmt.Errorf("numRowsPerQueryPart must be positive. Got: %v",
 			numRowsPerQueryPart)
 	}
 	result, err := newSplitParams(sql, bindVariables, splitColumns, schema)
@@ -104,7 +104,7 @@ func NewSplitParamsGivenSplitCount(
 	schema map[string]*schema.Table) (*SplitParams, error) {
 
 	if splitCount <= 0 {
-		return nil, fmt.Errorf("splitquery: splitCount must be positive. Got: %v",
+		return nil, fmt.Errorf("splitCount must be positive. Got: %v",
 			splitCount)
 	}
 	result, err := newSplitParams(sql, bindVariables, splitColumns, schema)
@@ -116,8 +116,8 @@ func NewSplitParamsGivenSplitCount(
 	return result, nil
 }
 
-func (splitParams *SplitParams) GetSplitTableName() string {
-	return splitParams.splitTableSchema.Name
+func (sp *SplitParams) GetSplitTableName() string {
+	return sp.splitTableSchema.Name
 }
 
 // newSplitParams validates and initializes all the fields except splitCount and
@@ -127,31 +127,31 @@ func newSplitParams(sql string, bindVariables map[string]interface{}, splitColum
 
 	statement, err := sqlparser.Parse(sql)
 	if err != nil {
-		return nil, fmt.Errorf("splitquery: failed parsing query: '%v', err: '%v'", sql, err)
+		return nil, fmt.Errorf("failed parsing query: '%v', err: '%v'", sql, err)
 	}
 	selectAST, ok := statement.(*sqlparser.Select)
 	if !ok {
-		return nil, fmt.Errorf("splitquery: not a select statement")
+		return nil, fmt.Errorf("not a select statement")
 	}
 	if selectAST.Distinct != "" || selectAST.GroupBy != nil ||
 		selectAST.Having != nil || len(selectAST.From) != 1 ||
 		selectAST.OrderBy != nil || selectAST.Limit != nil ||
 		selectAST.Lock != "" {
-		return nil, fmt.Errorf("splitquery: unsupported query: %v", sql)
+		return nil, fmt.Errorf("unsupported query: %v", sql)
 	}
 	var aliasedTableExpr *sqlparser.AliasedTableExpr
 	aliasedTableExpr, ok = selectAST.From[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return nil, fmt.Errorf("splitquery: unsupported FROM clause in query: %v", sql)
+		return nil, fmt.Errorf("unsupported FROM clause in query: %v", sql)
 	}
 	tableName := sqlparser.GetTableName(aliasedTableExpr.Expr)
 	if tableName == "" {
-		return nil, fmt.Errorf("splitquery: unsupported FROM clause in query"+
+		return nil, fmt.Errorf("unsupported FROM clause in query"+
 			" (must be a simple table expression): %v", sql)
 	}
 	tableSchema, ok := schema[tableName]
 	if tableSchema == nil {
-		return nil, fmt.Errorf("splitquery: can't find table in schema")
+		return nil, fmt.Errorf("can't find table in schema")
 	}
 	if len(splitColumns) == 0 {
 		splitColumns = getPrimaryKeyColumns(tableSchema)
@@ -160,7 +160,7 @@ func newSplitParams(sql string, bindVariables map[string]interface{}, splitColum
 		}
 	}
 	if !areColumnsAPrefixOfAnIndex(splitColumns, tableSchema) {
-		return nil, fmt.Errorf("splitquery: split-columns must be a prefix of the columns composing"+
+		return nil, fmt.Errorf("split-columns must be a prefix of the columns composing"+
 			" an index. Sql: %v, split-columns: %v", sql, splitColumns)
 	}
 	// Get the split-columns types.

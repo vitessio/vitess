@@ -57,7 +57,11 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 	defer dbc.CloseResult()
 
 	// first call the callback with the fields
-	err = callback(&sqltypes.Result{Fields: dbc.Fields()})
+	flds, err := dbc.Fields()
+	if err != nil {
+		return err
+	}
+	err = callback(&sqltypes.Result{Fields: flds})
 	if err != nil {
 		return fmt.Errorf("stream send error: %v", err)
 	}

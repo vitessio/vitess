@@ -68,8 +68,12 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         } else {
             if (tabletType != Topodata.TabletType.MASTER || this.vitessConnection.getAutoCommit()) {
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                cursor = vtGateConn.execute(context, this.sql, this.bindVariables, tabletType)
-                    .checkedGet();
+                if(Constants.QueryExecuteType.SIMPLE == vitessConnection.getExecuteTypeParam()){
+                    cursor = vtGateConn.execute(context, this.sql, this.bindVariables, tabletType)
+                            .checkedGet();
+                } else {
+                    cursor = vtGateConn.streamExecute(context, this.sql, this.bindVariables, tabletType);
+                }
             } else {
                 VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
                 if (vtGateTx == null) {
