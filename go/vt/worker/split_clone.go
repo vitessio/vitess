@@ -506,7 +506,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 
 			var keyResolver keyspaceIDResolver
 			if *useV3ReshardingMode {
-				keyResolver, err = newV3Resolver(scw.wr.Logger(), keyspaceSchema, td)
+				keyResolver, err = newV3Resolver(keyspaceSchema, td)
 				if err != nil {
 					return fmt.Errorf("cannot resolve v3 sharding keys for keyspace %v: %v", scw.keyspace, err)
 				}

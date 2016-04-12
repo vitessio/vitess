@@ -11,7 +11,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -85,7 +84,7 @@ type v3Resolver struct {
 }
 
 // newV3Resolver returns a keyspaceIDResolver for a v3 table.
-func newV3Resolver(logger logutil.Logger, keyspaceSchema *vindexes.KeyspaceSchema, td *tabletmanagerdatapb.TableDefinition) (keyspaceIDResolver, error) {
+func newV3Resolver(keyspaceSchema *vindexes.KeyspaceSchema, td *tabletmanagerdatapb.TableDefinition) (keyspaceIDResolver, error) {
 	if td.Type != tmutils.TableBaseTable {
 		return nil, fmt.Errorf("a keyspaceID resolver can only be created for a base table, got %v", td.Type)
 	}
@@ -93,30 +92,30 @@ func newV3Resolver(logger logutil.Logger, keyspaceSchema *vindexes.KeyspaceSchem
 	if !ok {
 		return nil, fmt.Errorf("no vschema definition for table %v", td.Name)
 	}
-	// find the first Unique Vindex of cost 0 or 1
-	for _, colVindex := range tableSchema.ColVindexes {
-		if colVindex.Vindex.Cost() > 1 {
-			continue
-		}
-		unique, ok := colVindex.Vindex.(vindexes.Unique)
-		if !ok {
-			continue
-		}
-
-		// Find the sharding key column index.
-		columnIndex, ok := tmutils.TableDefinitionGetColumn(td, colVindex.Col)
-		if !ok {
-			logger.Warningf("table %v has a Vindex on unknown column %v, not using this Vindex", td.Name, colVindex.Col)
-			continue
-		}
-
-		return &v3Resolver{
-			shardingColumnIndex: columnIndex,
-			vindex:              unique,
-		}, nil
+	// the primary vindex is most likely the sharding key, and has to
+	// be unique.
+	if len(tableSchema.ColVindexes) == 0 {
+		return nil, fmt.Errorf("no vindex definition for table %v", td.Name)
+	}
+	colVindex := tableSchema.ColVindexes[0]
+	if colVindex.Vindex.Cost() > 1 {
+		return nil, fmt.Errorf("primary vindex cost is too high for table %v", td.Name)
+	}
+	unique, ok := colVindex.Vindex.(vindexes.Unique)
+	if !ok {
+		return nil, fmt.Errorf("primary vindex is not unique for table %v", td.Name)
 	}
 
-	return nil, fmt.Errorf("no appropriate Vindex for table %v", td.Name)
+	// Find the sharding key column index.
+	columnIndex, ok := tmutils.TableDefinitionGetColumn(td, colVindex.Col)
+	if !ok {
+		return nil, fmt.Errorf("table %v has a Vindex on unknown column %v", td.Name, colVindex.Col)
+	}
+
+	return &v3Resolver{
+		shardingColumnIndex: columnIndex,
+		vindex:              unique,
+	}, nil
 }
 
 // keyspaceID implements the keyspaceIDResolver interface.
