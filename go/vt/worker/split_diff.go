@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
@@ -387,6 +388,29 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 		sdw.wr.Logger().Infof("Schema match, good.")
 	}
 
+	// read the vschema if needed
+	var keyspaceSchema *vindexes.KeyspaceSchema
+	if *useV3ReshardingMode {
+		kschema, err := sdw.wr.TopoServer().GetVSchema(ctx, sdw.keyspace)
+		if err != nil {
+			return fmt.Errorf("cannot load VSchema for keyspace %v: %v", sdw.keyspace, err)
+		}
+
+		formal, err := vindexes.VSchemaFormalForKeyspace([]byte(kschema), sdw.keyspace)
+		if err != nil {
+			return fmt.Errorf("error building formal vschema for keyspace %s: %v", sdw.keyspace, err)
+		}
+		vschema, err := vindexes.BuildVSchema(formal)
+		if err != nil {
+			return fmt.Errorf("cannot build vschema for keyspace %v: %v", sdw.keyspace, err)
+		}
+		var ok bool
+		keyspaceSchema, ok = vschema.Keyspaces[sdw.keyspace]
+		if !ok {
+			return fmt.Errorf("no VSchema for keyspace %v", sdw.keyspace)
+		}
+	}
+
 	// run the diffs, 8 at a time
 	sdw.wr.Logger().Infof("Running the diffs...")
 	sem := sync2.NewSemaphore(8, 0)
@@ -412,7 +436,12 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 				sdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
-			sourceQueryResultReader, err := TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.sourceAliases[0], tableDefinition, overlap, sdw.keyspaceInfo.ShardingColumnName, sdw.keyspaceInfo.ShardingColumnType)
+
+			// FIXME(alainjobart): this only works for splits, not
+			// merges, as we assume we need to filter the source
+			// and get the full destination.
+
+			sourceQueryResultReader, err := TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.sourceAliases[0], tableDefinition, overlap, keyspaceSchema, sdw.keyspaceInfo.ShardingColumnName, sdw.keyspaceInfo.ShardingColumnType)
 			if err != nil {
 				newErr := fmt.Errorf("TableScanByKeyRange(source) failed: %v", err)
 				rec.RecordError(newErr)
@@ -421,7 +450,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			}
 			defer sourceQueryResultReader.Close()
 
-			destinationQueryResultReader, err := TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, tableDefinition, nil, sdw.keyspaceInfo.ShardingColumnName, sdw.keyspaceInfo.ShardingColumnType)
+			destinationQueryResultReader, err := TableScan(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, tableDefinition)
 			if err != nil {
 				newErr := fmt.Errorf("TableScanByKeyRange(destination) failed: %v", err)
 				rec.RecordError(newErr)

@@ -15,10 +15,12 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
@@ -71,6 +73,36 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 	}, nil
 }
 
+// v3KeyRangeFilter is a sqltypes.ResultStream implementation that filters
+// the underlying results to match the keyrange using a v3 resolver.
+type v3KeyRangeFilter struct {
+	input    sqltypes.ResultStream
+	resolver *v3Resolver
+	keyRange *topodatapb.KeyRange
+}
+
+// Recv is part of sqltypes.ResultStream interface
+func (f *v3KeyRangeFilter) Recv() (*sqltypes.Result, error) {
+	r, err := f.input.Recv()
+	if err != nil {
+		return nil, err
+	}
+
+	rows := make([][]sqltypes.Value, 0, len(r.Rows))
+	for _, row := range r.Rows {
+		ksid, err := f.resolver.keyspaceID(row)
+		if err != nil {
+			return nil, err
+		}
+
+		if key.KeyRangeContains(f.keyRange, ksid) {
+			rows = append(rows, row)
+		}
+	}
+	r.Rows = rows
+	return r, nil
+}
+
 // orderedColumns returns the list of columns:
 // - first the primary key columns in the right order
 // - then the rest of the columns
@@ -112,46 +144,67 @@ func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAl
 // rows from a table that match the supplied KeyRange, ordered by
 // Primary Key. The returned columns are ordered with the Primary Key
 // columns in front.
-func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *topodatapb.TabletAlias, tableDefinition *tabletmanagerdatapb.TableDefinition, keyRange *topodatapb.KeyRange, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType) (*QueryResultReader, error) {
-	where := ""
-	// TODO(aaijazi): this currently only works with V2 style sharding keys.
-	// We should add FilteredQueryResultReader that will do a full table scan, with client-side
-	// filtering to remove rows that don't map to the keyrange that we want.
-	if keyRange != nil {
-		switch shardingColumnType {
-		case topodatapb.KeyspaceIdType_UINT64:
-			if len(keyRange.Start) > 0 {
-				if len(keyRange.End) > 0 {
-					// have start & end
-					where = fmt.Sprintf("WHERE %v >= %v AND %v < %v ", shardingColumnName, uint64FromKeyspaceID(keyRange.Start), shardingColumnName, uint64FromKeyspaceID(keyRange.End))
-				} else {
-					// have start only
-					where = fmt.Sprintf("WHERE %v >= %v ", shardingColumnName, uint64FromKeyspaceID(keyRange.Start))
-				}
-			} else {
-				if len(keyRange.End) > 0 {
-					// have end only
-					where = fmt.Sprintf("WHERE %v < %v ", shardingColumnName, uint64FromKeyspaceID(keyRange.End))
-				}
-			}
-		case topodatapb.KeyspaceIdType_BYTES:
-			if len(keyRange.Start) > 0 {
-				if len(keyRange.End) > 0 {
-					// have start & end
-					where = fmt.Sprintf("WHERE HEX(%v) >= '%v' AND HEX(%v) < '%v' ", shardingColumnName, hex.EncodeToString(keyRange.Start), shardingColumnName, hex.EncodeToString(keyRange.End))
-				} else {
-					// have start only
-					where = fmt.Sprintf("WHERE HEX(%v) >= '%v' ", shardingColumnName, hex.EncodeToString(keyRange.Start))
-				}
-			} else {
-				if len(keyRange.End) > 0 {
-					// have end only
-					where = fmt.Sprintf("WHERE HEX(%v) < '%v' ", shardingColumnName, hex.EncodeToString(keyRange.End))
-				}
-			}
-		default:
-			return nil, fmt.Errorf("Unsupported ShardingColumnType: %v", shardingColumnType)
+// If keyspaceSchema is passed in, we go into v3 mode, and we ask for all
+// source data, and filter here. Otherwise we stick with v2 mode, where we can
+// ask the source tablet to do the filtering.
+func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *topodatapb.TabletAlias, tableDefinition *tabletmanagerdatapb.TableDefinition, keyRange *topodatapb.KeyRange, keyspaceSchema *vindexes.KeyspaceSchema, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType) (*QueryResultReader, error) {
+	if keyspaceSchema != nil {
+		// switch to v3 mode.
+		keyResolver, err := newV3ResolverFromColumnList(keyspaceSchema, tableDefinition.Name, orderedColumns(tableDefinition))
+		if err != nil {
+			return nil, fmt.Errorf("cannot resolve v3 sharding keys for table %v: %v", tableDefinition.Name, err)
 		}
+
+		// full table scan
+		scan, err := TableScan(ctx, log, ts, tabletAlias, tableDefinition)
+		if err != nil {
+			return nil, err
+		}
+
+		// with extra filter
+		scan.Output = &v3KeyRangeFilter{
+			input:    scan.Output,
+			resolver: keyResolver.(*v3Resolver),
+			keyRange: keyRange,
+		}
+		return scan, nil
+	}
+
+	// in v2 mode, we can do the filtering at the source
+	where := ""
+	switch shardingColumnType {
+	case topodatapb.KeyspaceIdType_UINT64:
+		if len(keyRange.Start) > 0 {
+			if len(keyRange.End) > 0 {
+				// have start & end
+				where = fmt.Sprintf("WHERE %v >= %v AND %v < %v ", shardingColumnName, uint64FromKeyspaceID(keyRange.Start), shardingColumnName, uint64FromKeyspaceID(keyRange.End))
+			} else {
+				// have start only
+				where = fmt.Sprintf("WHERE %v >= %v ", shardingColumnName, uint64FromKeyspaceID(keyRange.Start))
+			}
+		} else {
+			if len(keyRange.End) > 0 {
+				// have end only
+				where = fmt.Sprintf("WHERE %v < %v ", shardingColumnName, uint64FromKeyspaceID(keyRange.End))
+			}
+		}
+	case topodatapb.KeyspaceIdType_BYTES:
+		if len(keyRange.Start) > 0 {
+			if len(keyRange.End) > 0 {
+				// have start & end
+				where = fmt.Sprintf("WHERE HEX(%v) >= '%v' AND HEX(%v) < '%v' ", shardingColumnName, hex.EncodeToString(keyRange.Start), shardingColumnName, hex.EncodeToString(keyRange.End))
+			} else {
+				// have start only
+				where = fmt.Sprintf("WHERE HEX(%v) >= '%v' ", shardingColumnName, hex.EncodeToString(keyRange.Start))
+			}
+		} else {
+			if len(keyRange.End) > 0 {
+				// have end only
+				where = fmt.Sprintf("WHERE HEX(%v) < '%v' ", shardingColumnName, hex.EncodeToString(keyRange.End))
+			}
+		}
+	default:
+		return nil, fmt.Errorf("Unsupported ShardingColumnType: %v", shardingColumnType)
 	}
 
 	sql := fmt.Sprintf("SELECT %v FROM %v %vORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, where, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
@@ -183,7 +236,7 @@ func NewRowReader(queryResultReader *QueryResultReader) *RowReader {
 // (nil, nil) for EOF
 // (nil, error) if an error occurred
 func (rr *RowReader) Next() ([]sqltypes.Value, error) {
-	if rr.currentResult == nil || rr.currentIndex == len(rr.currentResult.Rows) {
+	for rr.currentResult == nil || rr.currentIndex == len(rr.currentResult.Rows) {
 		var err error
 		rr.currentResult, err = rr.queryResultReader.Output.Recv()
 		if err != nil {
