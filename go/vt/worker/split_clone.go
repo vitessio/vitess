@@ -5,6 +5,7 @@
 package worker
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -21,6 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/worker/events"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
@@ -463,6 +465,35 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 		}(si.ShardName(), insertChannels[shardIndex])
 	}
 
+	// read the vschema if needed
+	var keyspaceSchema *vindexes.KeyspaceSchema
+	if *useV3ReshardingMode {
+		kschema, err := scw.wr.TopoServer().GetVSchema(ctx, scw.keyspace)
+		if err != nil {
+			return fmt.Errorf("cannot load VSchema for keyspace %v: %v", scw.keyspace, err)
+		}
+
+		var kformal vindexes.KeyspaceFormal
+		if err := json.Unmarshal([]byte(kschema), &kformal); err != nil {
+			return fmt.Errorf("error unmarshalling vschema for keyspace %s: %v", scw.keyspace, err)
+		}
+
+		formal := &vindexes.VSchemaFormal{
+			Keyspaces: map[string]vindexes.KeyspaceFormal{
+				scw.keyspace: kformal,
+			},
+		}
+		vschema, err := vindexes.BuildVSchema(formal)
+		if err != nil {
+			return fmt.Errorf("cannot build vschema for keyspace %v: %v", scw.keyspace, err)
+		}
+		var ok bool
+		keyspaceSchema, ok = vschema.Keyspaces[scw.keyspace]
+		if !ok {
+			return fmt.Errorf("no VSchema for keyspace %v", scw.keyspace)
+		}
+	}
+
 	// Now for each table, read data chunks and send them to all
 	// insertChannels
 	sourceWaitGroup := sync.WaitGroup{}
@@ -475,12 +506,14 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 
 			var keyResolver keyspaceIDResolver
 			if *useV3ReshardingMode {
-				// TODO(sougou): instantiate a v3 key resolver here
-				return fmt.Errorf("v3 resharding mode is currently not fully supported. Please use v2 for now")
+				keyResolver, err = newV3Resolver(scw.wr.Logger(), keyspaceSchema, td)
+				if err != nil {
+					return fmt.Errorf("cannot resolve v3 sharding keys for keyspace %v: %v", scw.keyspace, err)
+				}
 			} else {
 				keyResolver, err = newV2Resolver(scw.keyspaceInfo, td)
 				if err != nil {
-					return fmt.Errorf("cannot resolving sharding keys for keyspace %v: %v", scw.keyspace, err)
+					return fmt.Errorf("cannot resolve sharding keys for keyspace %v: %v", scw.keyspace, err)
 				}
 			}
 			rowSplitter := NewRowSplitter(scw.destinationShards, keyResolver)

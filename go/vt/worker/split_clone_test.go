@@ -254,17 +254,52 @@ func DestinationsFactory(t *testing.T, insertCount int64) func() (dbconnpool.Poo
 	}
 }
 
-func TestSplitClone(t *testing.T) {
+func testSplitClone(t *testing.T, v3 bool) {
+	*useV3ReshardingMode = v3
 	db := fakesqldb.Register()
 	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	ctx := context.Background()
 	wi := NewInstance(ctx, ts, "cell1", time.Second)
 
-	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{
-		ShardingColumnName: "keyspace_id",
-		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
-	}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
+	if v3 {
+		// FIXME(alainjobart): ShardingColumnName and ShardingColumnType
+		// are not used by v3 split_clone, but they are required
+		// by tabletmanager to setup the rules. We have b/27901260
+		// open internally to fix this.
+		if err := ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{
+			ShardingColumnName: "keyspace_id",
+			ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+		}); err != nil {
+			t.Fatalf("CreateKeyspace v3 failed: %v", err)
+		}
+
+		if err := ts.SaveVSchema(ctx, "ks", `{
+  "Sharded": true,
+  "Vindexes": {
+    "table1_index": {
+      "Type": "numeric"
+    }
+  },
+  "Tables": {
+    "table1": {
+      "ColVindexes": [
+        {
+          "Col": "keyspace_id",
+          "Name": "table1_index"
+        }
+      ]
+    }
+  }
+}`); err != nil {
+			t.Fatalf("SaveVSchema v3 failed: %v", err)
+		}
+	} else {
+		if err := ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{
+			ShardingColumnName: "keyspace_id",
+			ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+		}); err != nil {
+			t.Fatalf("CreateKeyspace v2 failed: %v", err)
+		}
 	}
 
 	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
@@ -361,7 +396,7 @@ func TestSplitClone(t *testing.T) {
 	status := wrk.StatusAsText()
 	t.Logf("Got status: %v", status)
 	if err != nil || wrk.State != WorkerStateDone {
-		t.Errorf("Worker run failed")
+		t.Fatalf("Worker run failed: %v", err)
 	}
 
 	if statsDestinationAttemptedResolves.String() != "3" {
@@ -373,4 +408,12 @@ func TestSplitClone(t *testing.T) {
 	if statsRetryCounters.String() != "{\"ReadOnly\": 2}" {
 		t.Errorf("Wrong statsRetryCounters: wanted %v, got %v", "{\"ReadOnly\": 2}", statsRetryCounters.String())
 	}
+}
+
+func TestSplitCloneV2(t *testing.T) {
+	testSplitClone(t, false)
+}
+
+func TestSplitCloneV3(t *testing.T) {
+	testSplitClone(t, true)
 }

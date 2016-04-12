@@ -19,7 +19,7 @@ type VSchema struct {
 	Keyspaces map[string]*KeyspaceSchema
 }
 
-// Table represnts a table in VSchema.
+// Table represents a table in VSchema.
 type Table struct {
 	IsSequence  bool
 	Name        string
