@@ -19,7 +19,7 @@ type VSchema struct {
 	Keyspaces map[string]*KeyspaceSchema
 }
 
-// Table represnts a table in VSchema.
+// Table represents a table in VSchema.
 type Table struct {
 	IsSequence  bool
 	Name        string
@@ -78,21 +78,31 @@ func BuildVSchema(source *VSchemaFormal) (vschema *VSchema, err error) {
 	return vschema, nil
 }
 
+// VSchemaFormalForKeyspace returns a VSchemaFormal for the single keyspace
+// based on the JSON input.
+func VSchemaFormalForKeyspace(input []byte, name string) (*VSchemaFormal, error) {
+	var ks KeyspaceFormal
+	if err := json.Unmarshal(input, &ks); err != nil {
+		return nil, fmt.Errorf("Unmarshal failed: %v %s %v", ks, input, err)
+	}
+
+	return &VSchemaFormal{
+		Keyspaces: map[string]KeyspaceFormal{
+			name: ks,
+		},
+	}, nil
+}
+
 // ValidateVSchema ensures that the the JSON representation
 // of the keyspace vschema are valid.
 // External references (like sequence) are not validated.
 func ValidateVSchema(input []byte) error {
-	var ks KeyspaceFormal
-	if err := json.Unmarshal(input, &ks); err != nil {
-		return fmt.Errorf("Unmarshal failed: %v %s %v", ks, input, err)
+	formal, err := VSchemaFormalForKeyspace(input, "ks")
+	if err != nil {
+		return err
 	}
 	// We go through the motion of building the vschema,
 	// but just for this keyspace
-	formal := &VSchemaFormal{
-		Keyspaces: map[string]KeyspaceFormal{
-			"ks": ks,
-		},
-	}
 	vschema := &VSchema{
 		tables:    make(map[string]*Table),
 		Keyspaces: make(map[string]*KeyspaceSchema),
