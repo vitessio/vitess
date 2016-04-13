@@ -6,6 +6,7 @@ package automation
 
 import (
 	"bytes"
+	"fmt"
 	"time"
 
 	log "github.com/golang/glog"
@@ -21,25 +22,41 @@ import (
 // messages is concatenated into one output string.
 func ExecuteVtctl(ctx context.Context, server string, args []string) (string, error) {
 	var output bytes.Buffer
+	loggerToBufferFunc := createLoggerEventToBufferFunction(&output)
+	outputLogger := newOutputLogger(loggerToBufferFunc)
 
-	log.Infof("Executing remote vtctl command: %v server: %v", args, server)
+	startMsg := fmt.Sprintf("Executing remote vtctl command: %v server: %v", args, server)
+	outputLogger.Infof(startMsg)
+	log.Info(startMsg)
 	err := vtctlclient.RunCommandAndWait(
 		ctx, server, args,
 		// TODO(mberlin): Should these values be configurable as flags?
 		30*time.Second, // dialTimeout
 		time.Hour,      // actionTimeout
-		CreateLoggerEventToBufferFunction(&output))
-	log.Infof("Executed remote vtctl command: %v server: %v err: %v output (starting on next line):\n%v", args, server, err, output.String())
+		createLoggerEventToBufferFunction(&output))
+	endMsg := fmt.Sprintf("Executed remote vtctl command: %v server: %v err: %v", args, server, err)
+	outputLogger.Infof(endMsg)
+	// Log full output to log file (but not to the buffer).
+	log.Infof("%v output (starting on next line):\n%v", endMsg, output.String())
 
 	return output.String(), err
 }
 
-// CreateLoggerEventToBufferFunction returns a function to add LoggerEvent
+// createLoggerEventToBufferFunction returns a function to add LoggerEvent
 // structs to a given buffer, one line per event.
 // The buffer can be used to return a multi-line string with all events.
-func CreateLoggerEventToBufferFunction(output *bytes.Buffer) func(*logutilpb.Event) {
+func createLoggerEventToBufferFunction(output *bytes.Buffer) func(*logutilpb.Event) {
 	return func(e *logutilpb.Event) {
 		logutil.EventToBuffer(e, output)
 		output.WriteRune('\n')
 	}
+}
+
+// newOutputLogger returns a logger which makes it easy to log to a bytes.Buffer
+// output. When calling this function, pass in the result of
+// createLoggerEventToBufferFunction().
+func newOutputLogger(loggerToBufferFunc func(*logutilpb.Event)) logutil.Logger {
+	return logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		loggerToBufferFunc(e)
+	})
 }

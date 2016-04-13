@@ -33,10 +33,10 @@ const _ = proto.ProtoPackageIsVersion1
 type ErrorCode int32
 
 const (
-	// SUCCESS is returned from a successful call
+	// SUCCESS is returned from a successful call.
 	ErrorCode_SUCCESS ErrorCode = 0
 	// CANCELLED means that the context was cancelled (and noticed in the app layer,
-	// as opposed to the RPC layer)
+	// as opposed to the RPC layer).
 	ErrorCode_CANCELLED ErrorCode = 1
 	// UNKNOWN_ERROR includes:
 	// 1. MySQL error codes that we don't explicitly handle.
@@ -50,7 +50,7 @@ const (
 	// DEADLINE_EXCEEDED is returned when an action is taking longer than a given timeout.
 	ErrorCode_DEADLINE_EXCEEDED ErrorCode = 4
 	// INTEGRITY_ERROR is returned on integrity error from MySQL, usually due to
-	// duplicate primary keys
+	// duplicate primary keys.
 	ErrorCode_INTEGRITY_ERROR ErrorCode = 5
 	// PERMISSION_DENIED errors are returned when a user requests access to something
 	// that they don't have permissions for.
@@ -82,8 +82,8 @@ const (
 	// Examples of scenarios where INTERNAL_ERROR is returned:
 	//  1. Something is not configured correctly internally.
 	//  2. A necessary resource is not available, and we don't expect it to become available by itself.
-	//  3. A sanity check fails
-	//  4. Some other internal error occurs
+	//  3. A sanity check fails.
+	//  4. Some other internal error occurs.
 	// Clients should not retry immediately, as there is little chance of success.
 	// However, it's acceptable for retries to happen internally, for example to
 	// multiple backends, in case only a subset of backend are not functional.
