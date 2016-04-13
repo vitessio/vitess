@@ -179,7 +179,7 @@ func (bs *CephBackupStorage) RemoveBackup(dir, name string) error {
 	//      return nil
 	var arr []string
 	doneCh := make(chan struct{})
-	for object := range c.ListObjects(bucket, fullName, true, doneCh) {
+	for object := range c.ListObjects(*bucket, fullName, true, doneCh) {
 		if object.Err != nil {
 			return object.Err
 		}
@@ -190,7 +190,7 @@ func (bs *CephBackupStorage) RemoveBackup(dir, name string) error {
 		wg.Add(1)
 		go func(j int) {
 			defer wg.Done()
-			err = c.RemoveObject(bucket, arr[j])
+			err = c.RemoveObject(*bucket, arr[j])
 			if err != nil {
 				log.Fatalln(err)
 			}
