@@ -66,7 +66,6 @@ func (bh *CephBackupHandle) AddFile(filename string) (io.WriteCloser, error) {
 		object := objName(bh.dir, bh.name, filename)
 		_, err := bh.client.PutObject(*bucket, object, reader, "application/octet-stream")
 		if err != nil {
-			fmt.Println("Error with io.Pipe")
 			// Signal the writer that an error occurred, in case it's not done writing yet.
 			reader.CloseWithError(err)
 			// In case the error happened after the writer finished, we need to remember it.
@@ -207,7 +206,6 @@ func (bs *CephBackupStorage) Close() error {
 	defer bs.mu.Unlock()
 
 	if bs._client != nil {
-		// If client.Close() fails, we still clear bs._client, so we know to create
 		// a new client the next time one is needed.
 		bs._client = nil
 	}
@@ -220,17 +218,18 @@ func (bs *CephBackupStorage) client() (*minio.Client, error) {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
-	configFile, err := os.Open(*configFilePath)
-	defer configFile.Close()
-	if err != nil {
-		return nil, fmt.Errorf("file not present : %v", err)
-	}
-	jsonParser := json.NewDecoder(configFile)
-	if err = jsonParser.Decode(&StorageConfig); err != nil {
-		return nil, fmt.Errorf("Error parsing the json file : %v", err)
-	}
-	*bucket = StorageConfig.Bucket
 	if bs._client == nil {
+		configFile, err := os.Open(*configFilePath)
+		defer configFile.Close()
+		if err != nil {
+			return nil, fmt.Errorf("file not present : %v", err)
+		}
+		jsonParser := json.NewDecoder(configFile)
+		if err = jsonParser.Decode(&StorageConfig); err != nil {
+			return nil, fmt.Errorf("Error parsing the json file : %v", err)
+		}
+
+		*bucket = StorageConfig.Bucket
 		accessKey := StorageConfig.AccessKey
 		secretKey := StorageConfig.SecretKey
 		url := StorageConfig.EndPoint
