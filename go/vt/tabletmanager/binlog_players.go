@@ -26,7 +26,6 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
@@ -573,28 +572,23 @@ func (blm *BinlogPlayerMap) RunUntil(ctx context.Context, blpPositionList []*tab
 	}
 	log.Infof("Starting map of binlog players until position")
 
-	// find the exact stop position for all players, to be sure
-	// we're not doing anything wrong
-	posMap := make(map[uint32]string)
-	for _, bpc := range blm.players {
-		blpPos := tmutils.FindBlpPositionByID(blpPositionList, bpc.sourceShard.Uid)
-		if blpPos == nil {
-			return fmt.Errorf("No binlog position passed in for player Uid %v", bpc.sourceShard.Uid)
+	// We may not start all players, but this is OK
+	startedPlayers := make([]*BinlogPlayerController, len(blpPositionList))
+	for i, blpPosition := range blpPositionList {
+		bpc, ok := blm.players[blpPosition.Uid]
+		if !ok {
+			return fmt.Errorf("no binlog player for Uid %v", blpPosition.Uid)
 		}
-		posMap[bpc.sourceShard.Uid] = blpPos.Position
-	}
-
-	// start all the players giving them where to stop
-	for _, bpc := range blm.players {
-		if err := bpc.StartUntil(ctx, posMap[bpc.sourceShard.Uid]); err != nil {
+		if err := bpc.StartUntil(ctx, blpPosition.Position); err != nil {
 			return err
 		}
+		startedPlayers[i] = bpc
 	}
 
-	// wait for all players to be stopped, or timeout
+	// Wait for all started players to be stopped, or timeout.
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
-	for _, bpc := range blm.players {
+	for _, bpc := range startedPlayers {
 		wg.Add(1)
 		go func(bpc *BinlogPlayerController) {
 			if err := bpc.WaitForStop(waitTimeout); err != nil {

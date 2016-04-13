@@ -22,11 +22,13 @@ func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string,
 	}
 
 	// Insert their KeyRange in the SourceShards array.
-	// We use a linear 0-based id, that matches what mysqlctld/split.go
+	// We use a linear 0-based id, that matches what worker/split_clone.go
 	// inserts into _vt.blp_checkpoint.
+	// We want to guarantee sourceShards[i] is using sources[i],
+	// So iterating over the sourceTablets map would be a bad idea.
 	sourceShards := make([]*topodatapb.Shard_SourceShard, len(sourceTablets))
-	i := 0
-	for _, ti := range sourceTablets {
+	for i, alias := range sources {
+		ti := sourceTablets[*alias]
 		sourceShards[i] = &topodatapb.Shard_SourceShard{
 			Uid:      uint32(i),
 			Keyspace: ti.Keyspace,
@@ -34,7 +36,6 @@ func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string,
 			KeyRange: ti.KeyRange,
 			Tables:   tables,
 		}
-		i++
 	}
 
 	// Update the shard with the new source shards.

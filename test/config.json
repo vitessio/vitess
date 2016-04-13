@@ -98,6 +98,28 @@
 				"worker_test"
 			]
 		},
+		"merge_sharding": {
+			"File": "merge_sharding.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
+		},
+		"merge_sharding_bytes": {
+			"File": "merge_sharding_bytes.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
+		},
 		"java": {
 			"File": "",
 			"Args": [],
