@@ -21,6 +21,8 @@ import (
 var (
 	// bucket is where the backups will go.
 	bucket = flag.String("ceph_backup_storage_bucket", "", "Ceph Cloud Storage bucket to use for backups")
+	// configFilePath is where the configs/credentials for backups will be stored.
+	configFilePath = flag.String("ceph_config_location", "ceph_backup_config.json", "take backup configuration for backup")
 )
 
 var StorageConfig struct {
@@ -171,7 +173,7 @@ func (bs *CephBackupStorage) RemoveBackup(dir, name string) error {
 		return err
 	}
 	fullName := objName(dir, name, "")
-	//	err = c.RemoveObject(bucket, fullName)
+	//	err = c.RemoveObject(*bucket, fullName)
 	//      if err != nil {
 	//              return err
 	//      }
@@ -218,13 +220,14 @@ func (bs *CephBackupStorage) client() (*minio.Client, error) {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
-	configFile, err := os.Open("config.json")
+	configFile, err := os.Open(*configFilePath)
+	defer configFile.Close()
 	if err != nil {
-		return nil, fmt.Errorf("file not present : %v", err.Error())
+		return nil, fmt.Errorf("file not present : %v", err)
 	}
 	jsonParser := json.NewDecoder(configFile)
 	if err = jsonParser.Decode(&StorageConfig); err != nil {
-		return nil, fmt.Errorf("Error aprsing the json file : %v", err.Error())
+		return nil, fmt.Errorf("Error parsing the json file : %v", err)
 	}
 	*bucket = StorageConfig.Bucket
 	if bs._client == nil {
