@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"sort"
 	"strings"
@@ -170,10 +171,31 @@ func (bs *CephBackupStorage) RemoveBackup(dir, name string) error {
 		return err
 	}
 	fullName := objName(dir, name, "")
-	err = c.RemoveObject(*bucket, fullName)
-	if err != nil {
-		return err
+	//	err = c.RemoveObject(bucket, fullName)
+	//      if err != nil {
+	//              return err
+	//      }
+	//      return nil
+	var arr []string
+	doneCh := make(chan struct{})
+	for object := range c.ListObjects(bucket, fullName, true, doneCh) {
+		if object.Err != nil {
+			return object.Err
+		}
+		arr = append(arr, object.Key)
 	}
+	var wg sync.WaitGroup
+	for j := range arr {
+		wg.Add(1)
+		go func(j int) {
+			defer wg.Done()
+			err = c.RemoveObject(bucket, arr[j])
+			if err != nil {
+				log.Fatalln(err)
+			}
+		}(j)
+	}
+	wg.Wait()
 	return nil
 }
 

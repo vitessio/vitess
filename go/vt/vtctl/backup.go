@@ -46,6 +46,7 @@ func commandListBackups(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	bhs, err := bs.ListBackups(bucket)
+	defer bs.Close()
 	if err != nil {
 		return err
 	}
@@ -74,5 +75,6 @@ func commandRemoveBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
+	defer bs.Close()
 	return bs.RemoveBackup(bucket, name)
 }
