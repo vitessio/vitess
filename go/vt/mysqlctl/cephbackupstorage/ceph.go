@@ -20,9 +20,10 @@ import (
 
 var (
 	// bucket is where the backups will go.
-	bucket = flag.String("ceph_backup_storage_bucket", "", "Ceph Cloud Storage bucket to use for backups")
+	bucket string
 	// configFilePath is where the configs/credentials for backups will be stored.
-	configFilePath = flag.String("ceph_config_location", "ceph_backup_config.json", "take backup configuration for backup")
+	ceph_backup_storage_config = flag.String("ceph_config_location", "ceph_backup_config.json",
+		"Path to JSON config file for ceph backup storage")
 )
 
 var StorageConfig struct {
@@ -64,7 +65,7 @@ func (bh *CephBackupHandle) AddFile(filename string) (io.WriteCloser, error) {
 		defer bh.waitGroup.Done()
 		// Give PutObject() the read end of the pipe.
 		object := objName(bh.dir, bh.name, filename)
-		_, err := bh.client.PutObject(*bucket, object, reader, "application/octet-stream")
+		_, err := bh.client.PutObject(bucket, object, reader, "application/octet-stream")
 		if err != nil {
 			// Signal the writer that an error occurred, in case it's not done writing yet.
 			reader.CloseWithError(err)
@@ -100,7 +101,7 @@ func (bh *CephBackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
 	}
 	object := objName(bh.dir, bh.name, filename)
-	return bh.client.GetObject(*bucket, object)
+	return bh.client.GetObject(bucket, object)
 }
 
 // CephBackupStorage implements BackupStorage for Ceph Cloud Storage.
@@ -124,7 +125,7 @@ func (bs *CephBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHand
 	searchPrefix := objName(dir, "")
 
 	doneCh := make(chan struct{})
-	for object := range c.ListObjects(*bucket, searchPrefix, false, doneCh) {
+	for object := range c.ListObjects(bucket, searchPrefix, false, doneCh) {
 		if object.Err != nil {
 			return nil, object.Err
 		}
@@ -172,31 +173,26 @@ func (bs *CephBackupStorage) RemoveBackup(dir, name string) error {
 		return err
 	}
 	fullName := objName(dir, name, "")
-	//	err = c.RemoveObject(*bucket, fullName)
+	//	err = c.RemoveObject(bucket, fullName)
 	//      if err != nil {
 	//              return err
 	//      }
 	//      return nil
 	var arr []string
 	doneCh := make(chan struct{})
-	for object := range c.ListObjects(*bucket, fullName, true, doneCh) {
+	defer close(doneCh)
+	for object := range c.ListObjects(bucket, fullName, true, doneCh) {
 		if object.Err != nil {
 			return object.Err
 		}
 		arr = append(arr, object.Key)
 	}
-	var wg sync.WaitGroup
-	for j := range arr {
-		wg.Add(1)
-		go func(j int) {
-			defer wg.Done()
-			err = c.RemoveObject(*bucket, arr[j])
-			if err != nil {
-				log.Fatalln(err)
-			}
-		}(j)
+	for _, obj := range arr {
+		err = c.RemoveObject(bucket, obj)
+		if err != nil {
+			log.Fatalln(err)
+		}
 	}
-	wg.Wait()
 	return nil
 }
 
@@ -219,17 +215,17 @@ func (bs *CephBackupStorage) client() (*minio.Client, error) {
 	defer bs.mu.Unlock()
 
 	if bs._client == nil {
-		configFile, err := os.Open(*configFilePath)
-		defer configFile.Close()
+		configFile, err := os.Open(*ceph_backup_storage_config)
 		if err != nil {
 			return nil, fmt.Errorf("file not present : %v", err)
 		}
+		defer configFile.Close()
 		jsonParser := json.NewDecoder(configFile)
 		if err = jsonParser.Decode(&StorageConfig); err != nil {
 			return nil, fmt.Errorf("Error parsing the json file : %v", err)
 		}
 
-		*bucket = StorageConfig.Bucket
+		bucket = StorageConfig.Bucket
 		accessKey := StorageConfig.AccessKey
 		secretKey := StorageConfig.SecretKey
 		url := StorageConfig.EndPoint
