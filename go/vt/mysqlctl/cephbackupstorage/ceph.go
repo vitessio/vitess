@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"sort"
 	"strings"
@@ -190,7 +189,7 @@ func (bs *CephBackupStorage) RemoveBackup(dir, name string) error {
 	for _, obj := range arr {
 		err = c.RemoveObject(bucket, obj)
 		if err != nil {
-			log.Fatalln(err)
+			return err
 		}
 	}
 	return nil
