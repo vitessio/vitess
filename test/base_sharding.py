@@ -111,6 +111,23 @@ class BaseShardingTest(object):
                      stream_health['realtime_stats'].get(
                          'seconds_behind_master_filtered_replication', 0))
 
+  def check_destination_master(self, tablet_obj, source_shards):
+    """Performs multiple checks on a destination master.
+
+    Combines the following:
+      - wait_for_binlog_player_count
+      - check_binlog_player_vars
+      - check_stream_health_equals_binlog_player_vars
+
+    Args:
+      tablet_obj: the tablet to check.
+      source_shards: the shards to check we are replicating from.
+    """
+    tablet_obj.wait_for_binlog_player_count(len(source_shards))
+    self.check_binlog_player_vars(tablet_obj, source_shards)
+    self.check_stream_health_equals_binlog_player_vars(tablet_obj,
+                                                       len(source_shards))
+
   def check_running_binlog_player(self, tablet_obj, query, transaction,
                                   extra_text=None):
     """Checks binlog player is running and showing in status.

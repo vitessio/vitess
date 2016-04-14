@@ -181,7 +181,7 @@ class TestResharding(unittest.TestCase, base_sharding.BaseShardingTest):
     else:
       t = 'bigint(20) unsigned'
     create_table_template = '''create table %s(
-id bigint auto_increment,
+id bigint not null,
 msg varchar(64),
 custom_sharding_key ''' + t + ''' not null,
 primary key (id),
@@ -520,16 +520,11 @@ primary key (name)
                      'test_keyspace'], auto_log=True)
 
     # check the binlog players are running and exporting vars
-    shard_2_master.wait_for_binlog_player_count(1)
-    shard_3_master.wait_for_binlog_player_count(1)
-    self.check_binlog_player_vars(shard_2_master, ['test_keyspace/80-'])
-    self.check_binlog_player_vars(shard_3_master, ['test_keyspace/80-'])
+    self.check_destination_master(shard_2_master, ['test_keyspace/80-'])
+    self.check_destination_master(shard_3_master, ['test_keyspace/80-'])
 
     # check that binlog server exported the stats vars
     self.check_binlog_server_vars(shard_1_slave1, horizontal=True)
-
-    self.check_stream_health_equals_binlog_player_vars(shard_2_master, 1)
-    self.check_stream_health_equals_binlog_player_vars(shard_3_master, 1)
 
     # testing filtered replication: insert a bunch of data on shard 1,
     # check we get most of it after a few seconds, wait for binlog server

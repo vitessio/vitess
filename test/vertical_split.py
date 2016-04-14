@@ -366,10 +366,8 @@ index by_msg (msg)
     self._check_values(destination_master, 'vt_destination_keyspace', 'view1',
                        self.moving1_first, 100)
 
-    # check the binlog player is running
-    destination_master.wait_for_binlog_player_count(1)
-    self.check_binlog_player_vars(destination_master, ['source_keyspace/0'])
-    self.check_stream_health_equals_binlog_player_vars(destination_master, 1)
+    # check the binlog player is running and exporting vars
+    self.check_destination_master(destination_master, ['source_keyspace/0'])
 
     # check that binlog server exported the stats vars
     self.check_binlog_server_vars(source_replica, horizontal=False)

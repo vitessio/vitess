@@ -80,7 +80,7 @@ class TestInitialSharding(unittest.TestCase, base_sharding.BaseShardingTest):
   # create_schema will create the same schema on the keyspace
   def _create_schema(self):
     create_table_template = '''create table %s(
-id bigint auto_increment,
+id bigint not null,
 msg varchar(64),
 primary key (id),
 index by_msg (msg)
@@ -398,12 +398,8 @@ index by_msg (msg)
 
     # check the binlog players are running
     logging.debug('Waiting for binlog players to start on new masters...')
-    shard_0_master.wait_for_binlog_player_count(1)
-    shard_1_master.wait_for_binlog_player_count(1)
-    self.check_binlog_player_vars(shard_0_master, ['test_keyspace/0'])
-    self.check_binlog_player_vars(shard_1_master, ['test_keyspace/0'])
-    self.check_stream_health_equals_binlog_player_vars(shard_0_master, 1)
-    self.check_stream_health_equals_binlog_player_vars(shard_1_master, 1)
+    self.check_destination_master(shard_0_master, ['test_keyspace/0'])
+    self.check_destination_master(shard_1_master, ['test_keyspace/0'])
 
     # check that binlog server exported the stats vars
     self.check_binlog_server_vars(shard_replica, horizontal=True)

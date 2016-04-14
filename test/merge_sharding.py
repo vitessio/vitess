@@ -89,7 +89,7 @@ class TestMergeSharding(unittest.TestCase, base_sharding.BaseShardingTest):
     else:
       t = 'bigint(20) unsigned'
     create_table_template = '''create table %s(
-id bigint,
+id bigint not null,
 msg varchar(64),
 custom_sharding_key ''' + t + ''' not null,
 primary key (id),
@@ -344,10 +344,8 @@ index by_msg (msg)
     utils.run_vtctl(['ValidateSchemaKeyspace', 'test_keyspace'], auto_log=True)
 
     # check binlog player variables
-    shard_dest_master.wait_for_binlog_player_count(2)
-    self.check_binlog_player_vars(shard_dest_master,
+    self.check_destination_master(shard_dest_master,
                                   ['test_keyspace/-40', 'test_keyspace/40-80'])
-    self.check_stream_health_equals_binlog_player_vars(shard_dest_master, 2)
 
     # check that binlog server exported the stats vars
     self.check_binlog_server_vars(shard_0_replica, horizontal=True)
