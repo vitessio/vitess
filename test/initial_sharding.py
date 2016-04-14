@@ -460,6 +460,8 @@ index by_msg (msg)
     # make sure rdonly tablets are back to serving before hitting vtgate.
     for t in [shard_0_rdonly1, shard_1_rdonly1]:
       t.wait_for_vttablet_state('SERVING')
+    utils.vtgate.wait_for_endpoints('test_keyspace.-80.rdonly', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.80-.rdonly', 1)
 
     # check the Map Reduce API works correctly, should use ExecuteKeyRanges
     # on both destination shards now.
@@ -542,6 +544,7 @@ index by_msg (msg)
     # kill everything else
     tablet.kill_tablets([shard_0_master, shard_0_replica, shard_0_rdonly1,
                          shard_1_master, shard_1_replica, shard_1_rdonly1])
+
 
 if __name__ == '__main__':
   utils.main()

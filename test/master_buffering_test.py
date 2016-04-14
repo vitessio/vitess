@@ -13,7 +13,6 @@ from vtdb import vtgate_client
 import environment
 import tablet
 import utils
-from vtgate_gateway_flavor.gateway import vtgate_gateway_flavor
 
 
 shard_0_master = tablet.Tablet()
@@ -143,15 +142,12 @@ def setup_vtgate(port=None, extra_args=None):
   utils.VtGate(port=port).start(
       extra_args=extra_args,
       tablets=[shard_0_master, shard_0_replica1])
-  if vtgate_gateway_flavor().flavor() != 'shardgateway':
-    wait_for_vars(
-        vtgate_gateway_flavor().connection_count_vars(),
-        '%s.%s.master' % (KEYSPACE_NAME, SHARD_NAMES[0]),
-        1)
-    wait_for_vars(
-        vtgate_gateway_flavor().connection_count_vars(),
-        '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[0]),
-        1)
+  utils.vtgate.wait_for_endpoints(
+      '%s.%s.master' % (KEYSPACE_NAME, SHARD_NAMES[0]),
+      1)
+  utils.vtgate.wait_for_endpoints(
+      '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[0]),
+      1)
 
 
 def initial_writes(shard_index, writes_keyrange):
@@ -286,18 +282,6 @@ class TestMasterBuffering(BaseTestCase):
         )
     num_buffered = self.get_sucessful_buffered_requests() - initial_buffered
     self.assertEqual(num_buffered, 0)
-
-
-# Wait for the key in the var to become value.
-def wait_for_vars(var, key, value):
-  timeout = 20.0
-  while True:
-    v = utils.get_vars(utils.vtgate.port)
-    if v and var in v and key in v[var] and v[var][key] == value:
-      break
-    timeout = utils.wait_step(
-        'waiting for /debug/vars of %s/%s' % (var, key),
-        timeout)
 
 
 if __name__ == '__main__':
