@@ -1,0 +1,3 @@
+[submodule "php/pdo"]
+	path = php/pdo
+	url = https://github.com/pixelfederation/vitess-php-pdo.git

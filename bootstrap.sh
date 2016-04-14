@@ -43,6 +43,9 @@ mkdir -p $VTROOT/bin
 mkdir -p $VTROOT/lib
 mkdir -p $VTROOT/vthook
 
+echo "Updating git submodules..."
+git submodule update --init
+
 # install zookeeper
 zk_ver=3.4.6
 zk_dist=$VTROOT/dist/vt-zookeeper-$zk_ver
