@@ -110,3 +110,37 @@ class BaseShardingTest(object):
     self.assertEqual(blp_stats['BinlogPlayerSecondsBehindMaster'],
                      stream_health['realtime_stats'].get(
                          'seconds_behind_master_filtered_replication', 0))
+
+  def check_running_binlog_player(self, tablet_obj, query, transaction,
+                                  extra_text=None):
+    """Checks binlog player is running and showing in status.
+
+    Args:
+      tablet_obj: the tablet to check.
+      query: number of expected queries.
+      transaction: number of expected transactions.
+      extra_text: if present, look for it in status too.
+    """
+    status = tablet_obj.get_status()
+    self.assertIn('Binlog player state: Running', status)
+    self.assertIn(
+        '<td><b>All</b>: %d<br><b>Query</b>: %d<br>'
+        '<b>Transaction</b>: %d<br></td>' % (query+transaction, query,
+                                             transaction), status)
+    self.assertIn('</html>', status)
+    if extra_text:
+      self.assertIn(extra_text, status)
+
+  def check_no_binlog_player(self, tablet_obj):
+    """Checks no binlog player is running.
+
+    Also checks the tablet is not showing any binlog player in its status page.
+
+    Args:
+      tablet_obj: the tablet to check.
+    """
+    tablet_obj.wait_for_binlog_player_count(0)
+
+    status = tablet_obj.get_status()
+    self.assertIn('No binlog player is running', status)
+    self.assertIn('</html>', status)

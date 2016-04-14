@@ -403,13 +403,8 @@ index by_msg (msg)
     utils.pause('Good time to test vtworker for diffs')
 
     # get status for destination master tablet, make sure we have it all
-    destination_master_status = destination_master.get_status()
-    self.assertIn('Binlog player state: Running', destination_master_status)
-    self.assertIn('moving.*', destination_master_status)
-    self.assertIn(
-        '<td><b>All</b>: 1000<br><b>Query</b>: 700<br>'
-        '<b>Transaction</b>: 300<br></td>', destination_master_status)
-    self.assertIn('</html>', destination_master_status)
+    self.check_running_binlog_player(destination_master, 700, 300,
+                                     extra_text='moving.*')
 
     # check query service is off on destination master, as filtered
     # replication is enabled. Even health check should not interfere.
@@ -520,7 +515,7 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_rdonly2, ['moving.*', 'view1'])
 
     # check the binlog player is gone now
-    destination_master.wait_for_binlog_player_count(0)
+    self.check_no_binlog_player(destination_master)
 
     # check the stats are correct
     self._check_stats()

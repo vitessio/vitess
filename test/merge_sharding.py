@@ -401,12 +401,7 @@ index by_msg (msg)
                      'rdonly'], auto_log=True)
 
     # get status for the destination master tablet, make sure we have it all
-    shard_dest_master_status = shard_dest_master.get_status()
-    self.assertIn('Binlog player state: Running', shard_dest_master_status)
-    self.assertIn(
-        '<td><b>All</b>: 4000<br><b>Query</b>: 3000<br>'
-        '<b>Transaction</b>: 1000<br></td>', shard_dest_master_status)
-    self.assertIn('</html>', shard_dest_master_status)
+    self.check_running_binlog_player(shard_dest_master, 3000, 1000)
 
     # check destination master query service is not running
     utils.check_tablet_query_service(self, shard_dest_master, False, False)
@@ -454,12 +449,7 @@ index by_msg (msg)
     utils.check_tablet_query_service(self, shard_1_master, False, True)
 
     # check the binlog players are gone now
-    shard_dest_master.wait_for_binlog_player_count(0)
-
-    # get status for the destination master tablet, make sure it's good
-    shard_dest_master_status = shard_dest_master.get_status()
-    self.assertIn('No binlog player is running', shard_dest_master_status)
-    self.assertIn('</html>', shard_dest_master_status)
+    self.check_no_binlog_player(shard_dest_master)
 
     # kill the original tablets in the original shards
     tablet.kill_tablets([shard_0_master, shard_0_replica, shard_0_rdonly,

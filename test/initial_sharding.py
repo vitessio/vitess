@@ -444,6 +444,10 @@ index by_msg (msg)
 
     utils.pause('Good time to test vtworker for diffs')
 
+    # get status for the destination master tablet, make sure we have it all
+    self.check_running_binlog_player(shard_0_master, 2000, 2000)
+    self.check_running_binlog_player(shard_1_master, 6000, 2000)
+
     # check we can't migrate the master just yet
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'master'],
                     expect_fail=True)
@@ -520,8 +524,8 @@ index by_msg (msg)
                              keyspace_id_type=keyspace_id_type)
 
     # check the binlog players are gone now
-    shard_0_master.wait_for_binlog_player_count(0)
-    shard_1_master.wait_for_binlog_player_count(0)
+    self.check_no_binlog_player(shard_0_master)
+    self.check_no_binlog_player(shard_1_master)
 
     # make sure we can't delete a shard with tablets
     utils.run_vtctl(['DeleteShard', 'test_keyspace/0'], expect_fail=True)
