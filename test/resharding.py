@@ -368,11 +368,8 @@ primary key (name)
       value = self._check_lots(count, base=base)
       if value >= threshold:
         return value
-      if timeout == 0:
-        self.fail('timeout waiting for %d%% of the data' % threshold)
-      logging.debug('sleeping until we get %d%%', threshold)
-      time.sleep(1)
-      timeout -= 1
+      timeout = utils.wait_step('waiting for %d%% of the data' % threshold,
+                                timeout, sleep_time=1)
 
   # _check_lots_not_present makes sure no data is in the wrong shard
   def _check_lots_not_present(self, count, base=0):
