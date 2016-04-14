@@ -4,15 +4,17 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-# This test simulates the first time a database has to be split:
-# - we start with a keyspace with a single shard and a single table
-# - we add and populate the sharding key
-# - we set the sharding key in the topology
-# - we clone into 2 instances
-# - we enable filtered replication
-# - we move all serving types
-# - we remove the source tablets
-# - we remove the original shard
+"""This test simulates the first time a database has to be split.
+
+- we start with a keyspace with a single shard and a single table
+- we add and populate the sharding key
+- we set the sharding key in the topology
+- we clone into 2 instances
+- we enable filtered replication
+- we move all serving types
+- we remove the source tablets
+- we remove the original shard
+"""
 
 import struct
 
@@ -21,6 +23,7 @@ import unittest
 
 from vtdb import keyrange_constants
 
+import base_sharding
 import environment
 import tablet
 import utils
@@ -43,22 +46,15 @@ shard_1_master = tablet.Tablet()
 shard_1_replica = tablet.Tablet()
 shard_1_rdonly1 = tablet.Tablet()
 
+all_tablets = [shard_master, shard_replica, shard_rdonly1,
+               shard_0_master, shard_0_replica, shard_0_rdonly1,
+               shard_1_master, shard_1_replica, shard_1_rdonly1]
+
 
 def setUpModule():
   try:
     environment.topo_server().setup()
-
-    setup_procs = [
-        shard_master.init_mysql(),
-        shard_replica.init_mysql(),
-        shard_rdonly1.init_mysql(),
-        shard_0_master.init_mysql(),
-        shard_0_replica.init_mysql(),
-        shard_0_rdonly1.init_mysql(),
-        shard_1_master.init_mysql(),
-        shard_1_replica.init_mysql(),
-        shard_1_rdonly1.init_mysql(),
-        ]
+    setup_procs = [t.init_mysql() for t in all_tablets]
     utils.wait_procs(setup_procs)
   except:
     tearDownModule()
@@ -70,35 +66,16 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
 
-  teardown_procs = [
-      shard_master.teardown_mysql(),
-      shard_replica.teardown_mysql(),
-      shard_rdonly1.teardown_mysql(),
-      shard_0_master.teardown_mysql(),
-      shard_0_replica.teardown_mysql(),
-      shard_0_rdonly1.teardown_mysql(),
-      shard_1_master.teardown_mysql(),
-      shard_1_replica.teardown_mysql(),
-      shard_1_rdonly1.teardown_mysql(),
-      ]
+  teardown_procs = [t.teardown_mysql() for t in all_tablets]
   utils.wait_procs(teardown_procs, raise_on_error=False)
-
   environment.topo_server().teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
-
-  shard_master.remove_tree()
-  shard_replica.remove_tree()
-  shard_rdonly1.remove_tree()
-  shard_0_master.remove_tree()
-  shard_0_replica.remove_tree()
-  shard_0_rdonly1.remove_tree()
-  shard_1_master.remove_tree()
-  shard_1_replica.remove_tree()
-  shard_1_rdonly1.remove_tree()
+  for t in all_tablets:
+    t.remove_tree()
 
 
-class TestInitialSharding(unittest.TestCase):
+class TestInitialSharding(unittest.TestCase, base_sharding.BaseShardingTest):
 
   # create_schema will create the same schema on the keyspace
   def _create_schema(self):
@@ -423,6 +400,13 @@ index by_msg (msg)
     logging.debug('Waiting for binlog players to start on new masters...')
     shard_0_master.wait_for_binlog_player_count(1)
     shard_1_master.wait_for_binlog_player_count(1)
+    self.check_binlog_player_vars(shard_0_master, ['test_keyspace/0'])
+    self.check_binlog_player_vars(shard_1_master, ['test_keyspace/0'])
+    self.check_stream_health_equals_binlog_player_vars(shard_0_master, 1)
+    self.check_stream_health_equals_binlog_player_vars(shard_1_master, 1)
+
+    # check that binlog server exported the stats vars
+    self.check_binlog_server_vars(shard_replica, horizontal=True)
 
     # testing filtered replication: insert a bunch of data on shard 1,
     # check we get most of it after a few seconds, wait for binlog server
@@ -436,6 +420,12 @@ index by_msg (msg)
       self._check_lots_timeout(1000, 100, 20)
     logging.debug('Checking no data was sent the wrong way')
     self._check_lots_not_present(1000)
+    self.check_binlog_player_vars(shard_0_master, ['test_keyspace/0'],
+                                  seconds_behind_master_max=30)
+    self.check_binlog_player_vars(shard_1_master, ['test_keyspace/0'],
+                                  seconds_behind_master_max=30)
+    self.check_binlog_server_vars(shard_replica, horizontal=True,
+                                  min_statements=1000, min_transactions=1000)
 
     # use vtworker to compare the data
     logging.debug('Running vtworker SplitDiff for -80')

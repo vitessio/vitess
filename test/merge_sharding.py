@@ -20,6 +20,7 @@ import unittest
 
 from vtdb import keyrange_constants
 
+import base_sharding
 import environment
 import tablet
 import utils
@@ -56,7 +57,6 @@ all_tablets = [shard_0_master, shard_0_replica, shard_0_rdonly,
 def setUpModule():
   try:
     environment.topo_server().setup()
-
     setup_procs = [t.init_mysql() for t in all_tablets]
     utils.Vtctld().start()
     utils.wait_procs(setup_procs)
@@ -72,16 +72,14 @@ def tearDownModule():
 
   teardown_procs = [t.teardown_mysql() for t in all_tablets]
   utils.wait_procs(teardown_procs, raise_on_error=False)
-
   environment.topo_server().teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
-
   for t in all_tablets:
     t.remove_tree()
 
 
-class TestMergeSharding(unittest.TestCase):
+class TestMergeSharding(unittest.TestCase, base_sharding.BaseShardingTest):
 
   # create_schema will create the same schema on the keyspace
   # then insert some values
@@ -243,81 +241,7 @@ index by_msg (msg)
       timeout = utils.wait_step('waiting for %d%% of the data' % threshold,
                                 timeout, sleep_time=1)
 
-  def _check_binlog_server_vars(self, tablet_obj):
-    v = utils.get_vars(tablet_obj.port)
-    self.assertIn('UpdateStreamKeyRangeStatements', v)
-    self.assertIn('UpdateStreamKeyRangeTransactions', v)
-
-  def _check_binlog_player_vars(self, tablet_obj, seconds_behind_master_max=0):
-    v = utils.get_vars(tablet_obj.port)
-    self.assertIn('BinlogPlayerMapSize', v)
-    self.assertIn('BinlogPlayerSecondsBehindMaster', v)
-    self.assertIn('BinlogPlayerSecondsBehindMasterMap', v)
-    self.assertIn('BinlogPlayerSourceShardNameMap', v)
-    self.assertIn('0', v['BinlogPlayerSourceShardNameMap'])
-    self.assertIn('1', v['BinlogPlayerSourceShardNameMap'])
-    shards = sorted([v['BinlogPlayerSourceShardNameMap']['0'],
-                     v['BinlogPlayerSourceShardNameMap']['1']])
-    self.assertEquals(shards, ['test_keyspace/-40', 'test_keyspace/40-80'])
-    self.assertIn('BinlogPlayerSourceTabletAliasMap', v)
-    self.assertIn('0', v['BinlogPlayerSourceTabletAliasMap'])
-    self.assertIn('1', v['BinlogPlayerSourceTabletAliasMap'])
-    if seconds_behind_master_max != 0:
-      self.assertTrue(
-          v['BinlogPlayerSecondsBehindMaster'] <
-          seconds_behind_master_max,
-          'BinlogPlayerSecondsBehindMaster is too high: %d > %d' % (
-              v['BinlogPlayerSecondsBehindMaster'],
-              seconds_behind_master_max))
-      self.assertTrue(
-          v['BinlogPlayerSecondsBehindMasterMap']['0'] <
-          seconds_behind_master_max,
-          'BinlogPlayerSecondsBehindMasterMap is too high: %d > %d' % (
-              v['BinlogPlayerSecondsBehindMasterMap']['0'],
-              seconds_behind_master_max))
-
-  def _check_stream_health_equals_binlog_player_vars(self, tablet_obj):
-    blp_stats = utils.get_vars(tablet_obj.port)
-    # Enforce health check because it's not running by default as
-    # tablets are not started with it.
-    utils.run_vtctl(['RunHealthCheck', tablet_obj.tablet_alias, 'replica'])
-    stream_health = utils.run_vtctl_json(['VtTabletStreamHealth',
-                                          '-count', '1',
-                                          tablet_obj.tablet_alias])
-    logging.debug('Got health: %s', str(stream_health))
-    self.assertNotIn('serving', stream_health)
-    self.assertIn('realtime_stats', stream_health)
-    self.assertNotIn('health_error', stream_health['realtime_stats'])
-    # count is > 0 and therefore not omitted by the Go JSON marshaller.
-    self.assertIn('binlog_players_count', stream_health['realtime_stats'])
-    self.assertEqual(blp_stats['BinlogPlayerMapSize'],
-                     stream_health['realtime_stats']['binlog_players_count'])
-    self.assertEqual(blp_stats['BinlogPlayerSecondsBehindMaster'],
-                     stream_health['realtime_stats'].get(
-                         'seconds_behind_master_filtered_replication', 0))
-
-  def _test_keyrange_constraints(self):
-    with self.assertRaisesRegexp(
-        Exception, '.*enforce custom_sharding_key range.*'):
-      shard_0_master.execute(
-          "insert into resharding1(id, msg, custom_sharding_key) "
-          " values(1, 'msg', :custom_sharding_key)",
-          bindvars={'custom_sharding_key': 0x9000000000000000},
-      )
-    with self.assertRaisesRegexp(
-        Exception, '.*enforce custom_sharding_key range.*'):
-      shard_0_master.execute(
-          "update resharding1 set msg = 'msg' where id = 1",
-          bindvars={'custom_sharding_key': 0x9000000000000000},
-      )
-    with self.assertRaisesRegexp(
-        Exception, '.*enforce custom_sharding_key range.*'):
-      shard_0_master.execute(
-          'delete from resharding1 where id = 1',
-          bindvars={'custom_sharding_key': 0x9000000000000000},
-      )
-
-  def test_resharding(self):
+  def test_merge_sharding(self):
     utils.run_vtctl(['CreateKeyspace',
                      '--sharding_column_name', 'custom_sharding_key',
                      '--sharding_column_type', keyspace_id_type,
@@ -421,13 +345,13 @@ index by_msg (msg)
 
     # check binlog player variables
     shard_dest_master.wait_for_binlog_player_count(2)
-    self._check_binlog_player_vars(shard_dest_master)
+    self.check_binlog_player_vars(shard_dest_master,
+                                  ['test_keyspace/-40', 'test_keyspace/40-80'])
+    self.check_stream_health_equals_binlog_player_vars(shard_dest_master, 2)
 
     # check that binlog server exported the stats vars
-    self._check_binlog_server_vars(shard_0_replica)
-    self._check_binlog_server_vars(shard_1_replica)
-
-    self._check_stream_health_equals_binlog_player_vars(shard_dest_master)
+    self.check_binlog_server_vars(shard_0_replica, horizontal=True)
+    self.check_binlog_server_vars(shard_1_replica, horizontal=True)
 
     # testing filtered replication: insert a bunch of data on shard 0 and 1,
     # check we get most of it after a few seconds, wait for binlog server
@@ -441,8 +365,13 @@ index by_msg (msg)
       # already anyway.
       logging.debug('Checking all data goes through eventually')
       self._check_lots_timeout(1000, 100, 30)
-    self._check_binlog_player_vars(shard_dest_master,
-                                   seconds_behind_master_max=30)
+    self.check_binlog_player_vars(shard_dest_master,
+                                  ['test_keyspace/-40', 'test_keyspace/40-80'],
+                                  seconds_behind_master_max=30)
+    self.check_binlog_server_vars(shard_0_replica, horizontal=True,
+                                  min_statements=1000, min_transactions=1000)
+    self.check_binlog_server_vars(shard_1_replica, horizontal=True,
+                                  min_statements=1000, min_transactions=1000)
 
     # use vtworker to compare the data (after health-checking the destination
     # rdonly tablets so discovery works)
