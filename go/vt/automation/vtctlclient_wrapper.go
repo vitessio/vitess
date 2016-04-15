@@ -20,22 +20,41 @@ import (
 
 // ExecuteVtctl runs vtctl using vtctlclient. The stream of Event
 // messages is concatenated into one output string.
+// Additionally, the start and the end of the command will be logged to make
+// it easier to debug which command was executed and how long it took.
 func ExecuteVtctl(ctx context.Context, server string, args []string) (string, error) {
+	return executeVtctl(ctx, server, args, true /* addHeaderAndFooter */)
+}
+
+// ExecuteVtctlWithoutHeaderAndFooter runs vtctl using vtctlclient. The stream
+// of Event messages is concatenated into one output string.
+// Unlike ExecuteVtctl, the header and footer log are omitted from the output.
+func ExecuteVtctlWithoutHeaderAndFooter(ctx context.Context, server string, args []string) (string, error) {
+	return executeVtctl(ctx, server, args, false /* addHeaderAndFooter */)
+}
+
+func executeVtctl(ctx context.Context, server string, args []string, addHeaderAndFooter bool) (string, error) {
 	var output bytes.Buffer
 	loggerToBufferFunc := createLoggerEventToBufferFunction(&output)
 	outputLogger := newOutputLogger(loggerToBufferFunc)
 
 	startMsg := fmt.Sprintf("Executing remote vtctl command: %v server: %v", args, server)
-	outputLogger.Infof(startMsg)
+	if addHeaderAndFooter {
+		outputLogger.Infof(startMsg)
+	}
 	log.Info(startMsg)
+
 	err := vtctlclient.RunCommandAndWait(
 		ctx, server, args,
 		// TODO(mberlin): Should these values be configurable as flags?
 		30*time.Second, // dialTimeout
 		time.Hour,      // actionTimeout
 		createLoggerEventToBufferFunction(&output))
+
 	endMsg := fmt.Sprintf("Executed remote vtctl command: %v server: %v err: %v", args, server, err)
-	outputLogger.Infof(endMsg)
+	if addHeaderAndFooter {
+		outputLogger.Infof(endMsg)
+	}
 	// Log full output to log file (but not to the buffer).
 	log.Infof("%v output (starting on next line):\n%v", endMsg, output.String())
 
