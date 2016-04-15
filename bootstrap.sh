@@ -107,6 +107,7 @@ repos="github.com/golang/glog \
        github.com/golang/protobuf/proto \
        github.com/golang/protobuf/protoc-gen-go \
        github.com/olekukonko/tablewriter \
+       github.com/minio/minio-go \
        github.com/tools/godep \
        golang.org/x/crypto/ssh/terminal \
        golang.org/x/net/context \
