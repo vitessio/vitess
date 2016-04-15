@@ -110,8 +110,7 @@ repos="github.com/golang/glog \
        github.com/golang/protobuf/proto \
        github.com/golang/protobuf/protoc-gen-go \
        github.com/olekukonko/tablewriter \
-       github.com/minio/minio-go \
-       github.com/tools/godep \
+       github.com/kardianos/govendor \
        golang.org/x/crypto/ssh/terminal \
        golang.org/x/net/context \
        golang.org/x/oauth2/google \
@@ -133,6 +132,9 @@ else
 fi
 
 go get -u $repos || fail "Failed to download some Go dependencies with 'go get'. Please re-run bootstrap.sh in case of transient errors."
+
+# Download dependencies that are version-pinned via govendor.
+govendor sync || fail "Failed to download/update dependencies with govendor. Please re-run bootstrap.sh in case of transient errors."
 
 ln -snf $VTTOP/config $VTROOT/config
 ln -snf $VTTOP/data $VTROOT/data

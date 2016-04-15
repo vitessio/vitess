@@ -1,0 +1,23 @@
+{
+	"comment": "",
+	"ignore": "",
+	"package": [
+		{
+			"checksumSHA1": "uHYYdl624/j2tsU9fFFN62wZ2JM=",
+			"path": "github.com/coreos/go-etcd/etcd",
+			"revision": "f02171fbd43c7b9b53ce8679b03235a1ef3c7b12",
+			"revisionTime": "2015-04-16T20:55:17Z",
+			"version": "=v2.0.0",
+			"versionExact": "v2.0.0"
+		},
+		{
+			"checksumSHA1": "fe0NspvyJjx6DhmTjIpO0zmR+kg=",
+			"path": "github.com/influxdb/influxdb/client",
+			"revision": "afde71eb1740fd763ab9450e1f700ba0e53c36d0",
+			"revisionTime": "2014-12-28T19:15:54Z",
+			"version": "=v0.8.8",
+			"versionExact": "v0.8.8"
+		}
+	],
+	"rootPath": "github.com/youtube/vitess"
+}

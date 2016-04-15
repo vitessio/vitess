@@ -84,6 +84,7 @@ COPY third_party /vt/src/github.com/youtube/vitess/third_party
 COPY tools /vt/src/github.com/youtube/vitess/tools
 COPY travis /vt/src/github.com/youtube/vitess/travis
 COPY composer.json composer.lock /vt/src/github.com/youtube/vitess/
+COPY vendor/vendor.json /vt/src/github.com/youtube/vitess/vendor/
 
 # Install gRPC (and protobuf) as root
 RUN export MAKEFLAGS="-j$(nproc)" && \
