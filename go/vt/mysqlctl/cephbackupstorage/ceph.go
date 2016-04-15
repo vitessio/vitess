@@ -21,7 +21,7 @@ var (
 	// bucket is where the backups will go.
 	bucket string
 	// configFilePath is where the configs/credentials for backups will be stored.
-	ceph_backup_storage_config = flag.String("ceph_config_location", "ceph_backup_config.json",
+	configFilePath = flag.String("ceph_backup_storage_config", "ceph_backup_config.json",
 		"Path to JSON config file for ceph backup storage")
 )
 
@@ -214,7 +214,7 @@ func (bs *CephBackupStorage) client() (*minio.Client, error) {
 	defer bs.mu.Unlock()
 
 	if bs._client == nil {
-		configFile, err := os.Open(*ceph_backup_storage_config)
+		configFile, err := os.Open(*configFilePath)
 		if err != nil {
 			return nil, fmt.Errorf("file not present : %v", err)
 		}
