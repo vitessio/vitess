@@ -575,7 +575,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 				return err
 			}
 
-			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, time.Now().Unix(), flags))
+			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(uint32(shardIndex), status.Position, time.Now().Unix(), flags))
 		}
 
 		for _, si := range scw.destinationShards {

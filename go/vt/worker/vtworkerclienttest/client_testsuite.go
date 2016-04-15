@@ -6,11 +6,12 @@
 // RPC implementation of the vtworkerclient interface must be tested.
 package vtworkerclienttest
 
-// NOTE: This file is not test-only code because it is referenced by tests in
-//			 other packages and therefore it has to be regularly visible.
+// NOTE: This file is not test-only code because it is referenced by
+// tests in other packages and therefore it has to be regularly
+// visible.
 
-// NOTE: This code is in its own package such that its dependencies (e.g.
-//       zookeeper) won't be drawn into production binaries as well.
+// NOTE: This code is in its own package such that its dependencies
+// (e.g.  zookeeper) won't be drawn into production binaries as well.
 
 import (
 	"fmt"

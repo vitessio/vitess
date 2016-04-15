@@ -14,6 +14,7 @@ from vtdb import keyrange
 from vtdb import keyrange_constants
 from vtdb import vtgate_client
 
+import base_sharding
 import environment
 import tablet
 import utils
@@ -30,21 +31,15 @@ destination_replica = tablet.Tablet()
 destination_rdonly1 = tablet.Tablet()
 destination_rdonly2 = tablet.Tablet()
 
+all_tablets = [source_master, source_replica, source_rdonly1, source_rdonly2,
+               destination_master, destination_replica, destination_rdonly1,
+               destination_rdonly2]
+
 
 def setUpModule():
   try:
     environment.topo_server().setup()
-
-    setup_procs = [
-        source_master.init_mysql(),
-        source_replica.init_mysql(),
-        source_rdonly1.init_mysql(),
-        source_rdonly2.init_mysql(),
-        destination_master.init_mysql(),
-        destination_replica.init_mysql(),
-        destination_rdonly1.init_mysql(),
-        destination_rdonly2.init_mysql(),
-        ]
+    setup_procs = [t.init_mysql() for t in all_tablets]
     utils.Vtctld().start()
     utils.wait_procs(setup_procs)
   except:
@@ -59,33 +54,16 @@ def tearDownModule():
 
   if utils.vtgate:
     utils.vtgate.kill()
-  teardown_procs = [
-      source_master.teardown_mysql(),
-      source_replica.teardown_mysql(),
-      source_rdonly1.teardown_mysql(),
-      source_rdonly2.teardown_mysql(),
-      destination_master.teardown_mysql(),
-      destination_replica.teardown_mysql(),
-      destination_rdonly1.teardown_mysql(),
-      destination_rdonly2.teardown_mysql(),
-  ]
+  teardown_procs = [t.teardown_mysql() for t in all_tablets]
   utils.wait_procs(teardown_procs, raise_on_error=False)
-
   environment.topo_server().teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
-
-  source_master.remove_tree()
-  source_replica.remove_tree()
-  source_rdonly1.remove_tree()
-  source_rdonly2.remove_tree()
-  destination_master.remove_tree()
-  destination_replica.remove_tree()
-  destination_rdonly1.remove_tree()
-  destination_rdonly2.remove_tree()
+  for t in all_tablets:
+    t.remove_tree()
 
 
-class TestVerticalSplit(unittest.TestCase):
+class TestVerticalSplit(unittest.TestCase, base_sharding.BaseShardingTest):
 
   def setUp(self):
     self.insert_index = 0
@@ -388,8 +366,11 @@ index by_msg (msg)
     self._check_values(destination_master, 'vt_destination_keyspace', 'view1',
                        self.moving1_first, 100)
 
-    # check the binlog players is running
-    destination_master.wait_for_binlog_player_count(1)
+    # check the binlog player is running and exporting vars
+    self.check_destination_master(destination_master, ['source_keyspace/0'])
+
+    # check that binlog server exported the stats vars
+    self.check_binlog_server_vars(source_replica, horizontal=False)
 
     # add values to source, make sure they're replicated
     moving1_first_add1 = self._insert_values('moving1', 100)
@@ -399,6 +380,10 @@ index by_msg (msg)
                                'moving1', moving1_first_add1, 100)
     self._check_values_timeout(destination_master, 'vt_destination_keyspace',
                                'moving2', moving2_first_add1, 100)
+    self.check_binlog_player_vars(destination_master, ['source_keyspace/0'],
+                                  seconds_behind_master_max=30)
+    self.check_binlog_server_vars(source_replica, horizontal=False,
+                                  min_statements=100, min_transactions=100)
 
     # use vtworker to compare the data
     for t in [destination_rdonly1, destination_rdonly2]:
@@ -416,13 +401,8 @@ index by_msg (msg)
     utils.pause('Good time to test vtworker for diffs')
 
     # get status for destination master tablet, make sure we have it all
-    destination_master_status = destination_master.get_status()
-    self.assertIn('Binlog player state: Running', destination_master_status)
-    self.assertIn('moving.*', destination_master_status)
-    self.assertIn(
-        '<td><b>All</b>: 1000<br><b>Query</b>: 700<br>'
-        '<b>Transaction</b>: 300<br></td>', destination_master_status)
-    self.assertIn('</html>', destination_master_status)
+    self.check_running_binlog_player(destination_master, 700, 300,
+                                     extra_text='moving.*')
 
     # check query service is off on destination master, as filtered
     # replication is enabled. Even health check should not interfere.
@@ -533,7 +513,7 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_rdonly2, ['moving.*', 'view1'])
 
     # check the binlog player is gone now
-    destination_master.wait_for_binlog_player_count(0)
+    self.check_no_binlog_player(destination_master)
 
     # check the stats are correct
     self._check_stats()
