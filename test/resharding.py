@@ -18,7 +18,7 @@ effects, like:
 - tests a destination shard master failover while replication is running.
 - tests a filtered replication source replacement while filtered replication
   is running.
-- tests SourceShadrAdd and ShourceShardDelete.
+- tests 'vtctl SourceShardAdd' and 'vtctl SourceShardDelete'.
 - makes sure the key range rules are properly enforced on masters.
 """
 

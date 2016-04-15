@@ -379,8 +379,8 @@ def wait_for_vars(name, port, var=None, key=None, value=None, timeout=10.0):
     name: nickname for the process.
     port: process port to look at.
     var: if specified, waits for var in vars.
-    key: if specified, waits for vars[var]==value.
-    value: if key if specified, waits for vars[var]==value.
+    key: if specified, waits for vars[var][key]==value.
+    value: if key if specified, waits for vars[var][key]==value.
     timeout: how long to wait.
   """
   text = 'waiting for http://localhost:%d/debug/vars of %s' % (port, name)
