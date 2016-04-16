@@ -554,7 +554,8 @@ $ kubectl get service guestbook
 # guestbook   10.67.242.247   3.4.5.6         80/TCP    1m
 ```
 
-If the status shows `loadBalancer: {}`, it may just need more time.
+If the `EXTERNAL-IP` is still empty, give it a few minutes to create
+the external load balancer and check again.
 
 Once the pods are running, the GuestBook app should be accessible
 from the load balancer's external IP. In the example above, it would be at
