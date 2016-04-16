@@ -856,7 +856,7 @@ Applies the VTGate routing schema.
 
 #### Example
 
-<pre class="command-example">ApplyVSchema {-vschema=&lt;vschema&gt; || -vschema_file=&lt;vschema file&gt;}</pre>
+<pre class="command-example">ApplyVSchema {-vschema=&lt;vschema&gt; || -vschema_file=&lt;vschema file&gt;} &lt;keyspace&gt;</pre>
 
 #### Flags
 
@@ -866,8 +866,13 @@ Applies the VTGate routing schema.
 | vschema_file | string | Identifies the VTGate routing schema file |
 
 
+#### Arguments
+
+* <code>&lt;keyspace&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables. Vitess distributes keyspace shards into multiple machines and provides an SQL interface to query the data. The argument value must be a string that does not contain whitespace.
+
 #### Errors
 
+* The <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;ApplyVSchema&gt;</code> command. This error occurs if the command is not called with exactly one argument.
 * Either the <code>&lt;vschema&gt;</code> or <code>&lt;vschema&gt;</code>File flag must be specified when calling the <code>&lt;ApplyVSchema&gt;</code> command.
 
 
@@ -946,9 +951,17 @@ Displays the full schema for a tablet, or just the schema for the specified tabl
 
 Displays the VTGate routing schema.
 
+#### Example
+
+<pre class="command-example">GetVSchema &lt;keyspace&gt;</pre>
+
+#### Arguments
+
+* <code>&lt;keyspace&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables. Vitess distributes keyspace shards into multiple machines and provides an SQL interface to query the data. The argument value must be a string that does not contain whitespace.
+
 #### Errors
 
-* The <code>&lt;GetVSchema&gt;</code> command does not support any arguments. This error occurs if the command is not called with exactly 0 arguments.
+* The <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;GetVSchema&gt;</code> command. This error occurs if the command is not called with exactly one argument.
 
 
 ### ReloadSchema

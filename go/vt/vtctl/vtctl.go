@@ -75,6 +75,7 @@ COMMAND ARGUMENT DEFINITIONS
 package vtctl
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -2053,15 +2054,20 @@ func commandGetVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if subFlags.NArg() != 0 {
-		return fmt.Errorf("The GetVSchema command does not support any arguments.")
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("The <keyspace> argument is required for the GetVSchema command.")
 	}
 	keyspace := subFlags.Arg(0)
 	schema, err := wr.TopoServer().GetVSchema(ctx, keyspace)
 	if err != nil {
 		return err
 	}
-	wr.Logger().Printf("%s\n", schema)
+	buf := &bytes.Buffer{}
+	err = json.Indent(buf, []byte(schema), "", "  ")
+	if err != nil {
+		wr.Logger().Printf("%s\n", schema)
+	}
+	wr.Logger().Printf("%s\n", buf.String())
 	return nil
 }
 
@@ -2070,6 +2076,9 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	vschemaFile := subFlags.String("vschema_file", "", "Identifies the VTGate routing schema file")
 	if err := subFlags.Parse(args); err != nil {
 		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("The <keyspace> argument is required for the ApplyVSchema command.")
 	}
 	if (*vschema == "") == (*vschemaFile == "") {
 		return fmt.Errorf("Either the vschema or vschemaFile flag must be specified when calling the ApplyVSchema command.")
