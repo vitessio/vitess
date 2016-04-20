@@ -3,6 +3,8 @@
 import glob
 import logging
 import os
+import random
+import struct
 
 from vttest import environment
 from vttest import vt_processes
@@ -11,11 +13,26 @@ from vttest import vt_processes
 class LocalDatabase(object):
   """Set up a local Vitess database."""
 
-  def __init__(self, shards, schema_dir, vschema, mysql_only, web_dir=None):
+  def __init__(self,
+               shards,
+               schema_dir,
+               vschema,
+               mysql_only,
+               initialize_with_random_data,
+               rng_seed,
+               min_table_shard_size,
+               max_table_shard_size,
+               null_probability,
+               web_dir=None):
     self.shards = shards
     self.schema_dir = schema_dir
     self.vschema = vschema
     self.mysql_only = mysql_only
+    self.initialize_with_random_data = initialize_with_random_data
+    self.rng = random.Random(rng_seed)
+    self.min_table_shard_size = min_table_shard_size
+    self.max_table_shard_size = max_table_shard_size
+    self.null_probability = null_probability
     self.web_dir = web_dir
 
   def setup(self):
@@ -27,6 +44,8 @@ class LocalDatabase(object):
     self.mysql_db.setup()
     self.create_databases()
     self.load_schema()
+    if self.initialize_with_random_data:
+      self.populate_with_random_data()
     if self.mysql_only:
       return
 
@@ -71,7 +90,17 @@ class LocalDatabase(object):
     return result
 
   def mysql_execute(self, queries, db_name=''):
-    """Execute queries directly on MySQL."""
+    """Execute queries directly on MySQL.
+
+    The queries will be executed in a single transaction.
+
+    Args:
+      queries: A list of strings. The SQL statements to execute.
+      db_name: The database name to use.
+
+    Returns:
+      The results of the last query as a list of row tuples.
+    """
     conn = self.mysql_db.connect(db_name)
     cursor = conn.cursor()
 
@@ -80,6 +109,8 @@ class LocalDatabase(object):
     result = cursor.fetchall()
 
     cursor.close()
+    # Commit all of the queries.
+    conn.commit()
     conn.close()
     return result
 
@@ -122,6 +153,153 @@ class LocalDatabase(object):
         for shard in self.shards:
           if shard.keyspace == keyspace:
             self.mysql_execute(cmds, db_name=shard.db_name)
+
+  def populate_with_random_data(self):
+    """Populates all shards with randomly generated data."""
+
+    for shard in self.shards:
+      self.populate_shard_with_random_data(shard.db_name)
+
+  def populate_shard_with_random_data(self, db_name):
+    """Populates the given database with randomly generated data.
+
+    Every table in the database is populated.
+
+    Args:
+      db_name: The shard database name (string).
+    """
+
+    tables = self.mysql_execute(['SHOW TABLES'], db_name)
+    for table in tables:
+      self.populate_table_with_random_data(db_name, table[0])
+
+  # The number of rows inserted in a single INSERT statement.
+  batch_insert_size = 1000
+
+  def populate_table_with_random_data(self, db_name, table_name):
+    """Populates the given table with randomly generated data.
+
+    Queries the database for the table schema and then populates
+    the columns with randomly generated data.
+
+    Args:
+      db_name: The shard database name (string).
+      table_name: The name of the table to populate (string).
+    """
+
+    field_infos = self.mysql_execute(['DESCRIBE %s' % table_name], db_name)
+    num_rows = self.rng.randint(self.min_table_shard_size,
+                                self.max_table_shard_size)
+    rows = []
+    for _ in xrange(num_rows):
+      row = []
+      for field_info in field_infos:
+        field_type = field_info[1]
+        field_allow_nulls = (field_info[2] == 'YES')
+        row.append(
+            self.generate_random_field(
+                table_name, field_type, field_allow_nulls))
+      rows.append(row)
+
+    # Insert 'rows' into the database in batches of size
+    # self.batch_insert_size
+    field_names = [field_info[0] for field_info in field_infos]
+    for index in xrange(0, len(rows), self.batch_insert_size):
+      self.batch_insert(db_name,
+                        table_name,
+                        field_names,
+                        rows[index:index + self.batch_insert_size])
+
+  def batch_insert(self, db_name, table_name, field_names, rows):
+    """Inserts the rows in 'rows' into 'table_name' of database 'db_name'.
+
+    Args:
+      db_name: The name of the database containing the table.
+      table_name: The name of the table to populate.
+      field_names: The list of the field names in the table.
+      rows: A list of tuples with each tuple containing
+          the string representations of the fields.
+          The order of the representation must match the order of the field
+          names listed in 'field_names'.
+    """
+
+    field_names_string = ','.join(field_names)
+    values_string = ','.join(['(' + ','.join(row) +')' for row in rows])
+    # We use "INSERT IGNORE" to ignore duplicate key errors.
+    insert_query = ('INSERT IGNORE INTO %s (%s) VALUES %s' %
+                    (table_name, field_names_string, values_string))
+    self.mysql_execute([insert_query], db_name)
+
+  def generate_random_field(self, table_name, field_type, field_allows_nulls):
+    """Generates a random field string representation.
+
+    By 'string representation' we mean a string that is suitable to be a part
+    of an 'INSERT INTO' SQL statement.
+
+    Args:
+      table_name: The name of the table that will contain the generated field
+          value. Only used for a descriptive exception message in case of
+          an error.
+      field_type: The field_type as given by a "DESCRIBE <table>" SQL statement.
+      field_allows_nulls: Should be 'true' if this field allows NULLS.
+
+    Returns:
+      The random field.
+
+    Raises:
+      Exception: If 'field_type' is not supported.
+    """
+
+    value = None
+    if field_type.startswith('tinyint'):
+      value = self.random_integer(field_type, 1)
+    elif field_type.startswith('smallint'):
+      value = self.random_integer(field_type, 2)
+    elif field_type.startswith('mediumint'):
+      value = self.random_integer(field_type, 3)
+    elif field_type.startswith('int'):
+      value = self.random_integer(field_type, 4)
+    elif field_type.startswith('bigint'):
+      value = self.random_integer(field_type, 8)
+    elif field_type.startswith('float'):
+      value = self.random_float()
+    elif field_type.startswith('double'):
+      value = self.random_double()
+    else:
+      raise Exception('Populating random data in field type: %s is not yet '
+                      'supported. (table: %s)' % (field_type, table_name))
+    if field_allows_nulls and self.true_with_probability(self.null_probability):
+      return 'NULL'
+    return value
+
+  def true_with_probability(self, true_probability):
+    """Returns a pseudo-random boolean.
+
+    Args:
+      true_probability: The probability to use for returning 'true'.
+    Returns:
+      The value 'true' is with probability 'true_probability'.
+    """
+
+    return self.rng.uniform(0, 1) < true_probability
+
+  def random_integer(self, field_type, num_bytes):
+    num_bits = 8*num_bytes
+    if field_type.endswith('unsigned'):
+      return '%d' % (self.rng.randint(0, 2**num_bits-1))
+    return '%d' % (self.rng.randint(-2**(num_bits-1), 2**(num_bits-1)-1))
+
+  def random_float(self):
+    # Interpret a random 32-bit string as a float.
+    rand_float = struct.unpack(
+        'f', struct.pack('I', self.rng.randint(0, 2**4-1)))[0]
+    return '%.10e' % rand_float
+
+  def random_double(self):
+    # Interpret a random 64-bit string as a double.
+    rand_double = struct.unpack(
+        'd', struct.pack('Q', self.rng.randint(0, 2**4-1)))[0]
+    return '%.10e' % rand_double
 
   def get_sql_commands_from_file(self, filename, source_root=None):
     """Given a file, extract an array of commands from the file.

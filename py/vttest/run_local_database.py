@@ -32,11 +32,10 @@ from vttest import vt_processes
 shard_exp = re.compile(r'(.+)/(.+):(.+)')
 
 
-def main(port, topology, schema_dir, vschema, mysql_only,
-         web_dir=None):
+def main(cmdline_options):
   shards = []
 
-  for shard in topology.split(','):
+  for shard in cmdline_options.topology.split(','):
     m = shard_exp.match(shard)
     if m:
       shards.append(
@@ -45,9 +44,18 @@ def main(port, topology, schema_dir, vschema, mysql_only,
       sys.stderr.write('invalid --shard flag format: %s\n' % shard)
       sys.exit(1)
 
-  environment.base_port = port
-  with local_database.LocalDatabase(shards, schema_dir, vschema, mysql_only,
-                                    web_dir=web_dir) as local_db:
+  environment.base_port = cmdline_options.port
+  with local_database.LocalDatabase(
+      shards,
+      cmdline_options.schema_dir,
+      cmdline_options.vschema,
+      cmdline_options.mysql_only,
+      cmdline_options.initialize_with_random_data,
+      cmdline_options.rng_seed,
+      cmdline_options.min_table_shard_size,
+      cmdline_options.max_table_shard_size,
+      cmdline_options.null_probability,
+      web_dir=cmdline_options.web_dir) as local_db:
     print json.dumps(local_db.config())
     sys.stdout.flush()
     try:
@@ -92,6 +100,32 @@ if __name__ == '__main__':
       ' Also, the output specifies the mysql unix socket'
       ' instead of the vtgate port.')
   parser.add_option(
+      '-r', '--initialize_with_random_data', action='store_true',
+      help='If this flag is each table-shard will be initialized'
+      ' with random data. See also the "rng_seed" and "min_shard_size"'
+      ' and "max_shard_size" flags.')
+  parser.add_option(
+      '-d', '--rng_seed', type='int', default=123,
+      help='The random number generator seed to use when initializing'
+      ' with random data (see also --initialize_with_random_data).'
+      ' Multiple runs with the same seed will result with the same'
+      ' initial data.')
+  parser.add_option(
+      '-x', '--min_table_shard_size', type='int', default=1000,
+      help='The minimum number of initial rows in a table shard. Ignored if'
+      '--initialize_with_random_data is false. The actual number is chosen'
+      ' randomly.')
+  parser.add_option(
+      '-y', '--max_table_shard_size', type='int', default=10000,
+      help='The maximum number of initial rows in a table shard. Ignored if'
+      '--initialize_with_random_data is false. The actual number is chosen'
+      ' randomly')
+  parser.add_option(
+      '-n', '--null_probability', type='float', default=0.1,
+      help='The probability to initialize a field with "NULL" '
+      ' if --initialize_with_random_data is true. Only applies to fields'
+      ' that can contain NULL values.')
+  parser.add_option(
       '-w', '--web_dir',
       help='location of the vtctld web server files.')
   parser.add_option(
@@ -105,5 +139,4 @@ if __name__ == '__main__':
   # or default to MariaDB.
   mysql_flavor.set_mysql_flavor(None)
 
-  main(options.port, options.topology, options.schema_dir, options.vschema,
-       options.mysql_only, web_dir=options.web_dir)
+  main(options)
