@@ -108,7 +108,6 @@ fi
 gotools=" \
        github.com/golang/lint/golint \
        github.com/golang/mock/mockgen \
-       github.com/golang/protobuf/protoc-gen-go \
        github.com/kardianos/govendor \
        golang.org/x/tools/cmd/goimports \
 "
