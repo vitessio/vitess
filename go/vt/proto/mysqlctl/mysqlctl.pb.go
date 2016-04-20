@@ -100,7 +100,7 @@ var _ grpc.ClientConn
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion1
+const _ = grpc.SupportPackageIsVersion2
 
 // Client API for MysqlCtl service
 
@@ -157,40 +157,58 @@ func RegisterMysqlCtlServer(s *grpc.Server, srv MysqlCtlServer) {
 	s.RegisterService(&_MysqlCtl_serviceDesc, srv)
 }
 
-func _MysqlCtl_Start_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _MysqlCtl_Start_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StartRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(MysqlCtlServer).Start(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(MysqlCtlServer).Start(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mysqlctl.MysqlCtl/Start",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MysqlCtlServer).Start(ctx, req.(*StartRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _MysqlCtl_Shutdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _MysqlCtl_Shutdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ShutdownRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(MysqlCtlServer).Shutdown(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(MysqlCtlServer).Shutdown(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mysqlctl.MysqlCtl/Shutdown",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MysqlCtlServer).Shutdown(ctx, req.(*ShutdownRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _MysqlCtl_RunMysqlUpgrade_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _MysqlCtl_RunMysqlUpgrade_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RunMysqlUpgradeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(MysqlCtlServer).RunMysqlUpgrade(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(MysqlCtlServer).RunMysqlUpgrade(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mysqlctl.MysqlCtl/RunMysqlUpgrade",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MysqlCtlServer).RunMysqlUpgrade(ctx, req.(*RunMysqlUpgradeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 var _MysqlCtl_serviceDesc = grpc.ServiceDesc{

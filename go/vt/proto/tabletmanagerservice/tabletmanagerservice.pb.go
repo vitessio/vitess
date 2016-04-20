@@ -37,7 +37,7 @@ var _ grpc.ClientConn
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion1
+const _ = grpc.SupportPackageIsVersion2
 
 // Client API for TabletManager service
 
@@ -638,472 +638,706 @@ func RegisterTabletManagerServer(s *grpc.Server, srv TabletManagerServer) {
 	s.RegisterService(&_TabletManager_serviceDesc, srv)
 }
 
-func _TabletManager_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.PingRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).Ping(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).Ping(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/Ping",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).Ping(ctx, req.(*tabletmanagerdata.PingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_Sleep_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_Sleep_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.SleepRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).Sleep(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).Sleep(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/Sleep",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).Sleep(ctx, req.(*tabletmanagerdata.SleepRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_ExecuteHook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_ExecuteHook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.ExecuteHookRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).ExecuteHook(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).ExecuteHook(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/ExecuteHook",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).ExecuteHook(ctx, req.(*tabletmanagerdata.ExecuteHookRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_GetSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_GetSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.GetSchemaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).GetSchema(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).GetSchema(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/GetSchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).GetSchema(ctx, req.(*tabletmanagerdata.GetSchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_GetPermissions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_GetPermissions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.GetPermissionsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).GetPermissions(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).GetPermissions(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/GetPermissions",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).GetPermissions(ctx, req.(*tabletmanagerdata.GetPermissionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_SetReadOnly_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_SetReadOnly_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.SetReadOnlyRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).SetReadOnly(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).SetReadOnly(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/SetReadOnly",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).SetReadOnly(ctx, req.(*tabletmanagerdata.SetReadOnlyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_SetReadWrite_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_SetReadWrite_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.SetReadWriteRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).SetReadWrite(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).SetReadWrite(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/SetReadWrite",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).SetReadWrite(ctx, req.(*tabletmanagerdata.SetReadWriteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_ChangeType_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_ChangeType_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.ChangeTypeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).ChangeType(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).ChangeType(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/ChangeType",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).ChangeType(ctx, req.(*tabletmanagerdata.ChangeTypeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_RefreshState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_RefreshState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.RefreshStateRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).RefreshState(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).RefreshState(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/RefreshState",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).RefreshState(ctx, req.(*tabletmanagerdata.RefreshStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.RunHealthCheckRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).RunHealthCheck(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).RunHealthCheck(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/RunHealthCheck",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).RunHealthCheck(ctx, req.(*tabletmanagerdata.RunHealthCheckRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_IgnoreHealthError_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_IgnoreHealthError_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.IgnoreHealthErrorRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).IgnoreHealthError(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).IgnoreHealthError(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/IgnoreHealthError",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).IgnoreHealthError(ctx, req.(*tabletmanagerdata.IgnoreHealthErrorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_ReloadSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_ReloadSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.ReloadSchemaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).ReloadSchema(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).ReloadSchema(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/ReloadSchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).ReloadSchema(ctx, req.(*tabletmanagerdata.ReloadSchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_PreflightSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_PreflightSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.PreflightSchemaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).PreflightSchema(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).PreflightSchema(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/PreflightSchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).PreflightSchema(ctx, req.(*tabletmanagerdata.PreflightSchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_ApplySchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_ApplySchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.ApplySchemaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).ApplySchema(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).ApplySchema(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/ApplySchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).ApplySchema(ctx, req.(*tabletmanagerdata.ApplySchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_ExecuteFetchAsDba_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_ExecuteFetchAsDba_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.ExecuteFetchAsDbaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).ExecuteFetchAsDba(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).ExecuteFetchAsDba(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/ExecuteFetchAsDba",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).ExecuteFetchAsDba(ctx, req.(*tabletmanagerdata.ExecuteFetchAsDbaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_ExecuteFetchAsApp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_ExecuteFetchAsApp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.ExecuteFetchAsAppRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).ExecuteFetchAsApp(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).ExecuteFetchAsApp(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/ExecuteFetchAsApp",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).ExecuteFetchAsApp(ctx, req.(*tabletmanagerdata.ExecuteFetchAsAppRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_SlaveStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_SlaveStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.SlaveStatusRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).SlaveStatus(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).SlaveStatus(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/SlaveStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).SlaveStatus(ctx, req.(*tabletmanagerdata.SlaveStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_MasterPosition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_MasterPosition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.MasterPositionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).MasterPosition(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).MasterPosition(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/MasterPosition",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).MasterPosition(ctx, req.(*tabletmanagerdata.MasterPositionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_StopSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_StopSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.StopSlaveRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).StopSlave(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).StopSlave(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/StopSlave",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).StopSlave(ctx, req.(*tabletmanagerdata.StopSlaveRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_StopSlaveMinimum_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_StopSlaveMinimum_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.StopSlaveMinimumRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).StopSlaveMinimum(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).StopSlaveMinimum(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/StopSlaveMinimum",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).StopSlaveMinimum(ctx, req.(*tabletmanagerdata.StopSlaveMinimumRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_StartSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_StartSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.StartSlaveRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).StartSlave(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).StartSlave(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/StartSlave",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).StartSlave(ctx, req.(*tabletmanagerdata.StartSlaveRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_TabletExternallyReparented_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_TabletExternallyReparented_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.TabletExternallyReparentedRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).TabletExternallyReparented(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).TabletExternallyReparented(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/TabletExternallyReparented",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).TabletExternallyReparented(ctx, req.(*tabletmanagerdata.TabletExternallyReparentedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_TabletExternallyElected_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_TabletExternallyElected_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.TabletExternallyElectedRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).TabletExternallyElected(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).TabletExternallyElected(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/TabletExternallyElected",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).TabletExternallyElected(ctx, req.(*tabletmanagerdata.TabletExternallyElectedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_GetSlaves_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_GetSlaves_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.GetSlavesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).GetSlaves(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).GetSlaves(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/GetSlaves",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).GetSlaves(ctx, req.(*tabletmanagerdata.GetSlavesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_WaitBlpPosition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_WaitBlpPosition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.WaitBlpPositionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).WaitBlpPosition(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).WaitBlpPosition(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/WaitBlpPosition",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).WaitBlpPosition(ctx, req.(*tabletmanagerdata.WaitBlpPositionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_StopBlp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_StopBlp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.StopBlpRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).StopBlp(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).StopBlp(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/StopBlp",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).StopBlp(ctx, req.(*tabletmanagerdata.StopBlpRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_StartBlp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_StartBlp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.StartBlpRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).StartBlp(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).StartBlp(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/StartBlp",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).StartBlp(ctx, req.(*tabletmanagerdata.StartBlpRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_RunBlpUntil_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_RunBlpUntil_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.RunBlpUntilRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).RunBlpUntil(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).RunBlpUntil(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/RunBlpUntil",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).RunBlpUntil(ctx, req.(*tabletmanagerdata.RunBlpUntilRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_ResetReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_ResetReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.ResetReplicationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).ResetReplication(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).ResetReplication(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/ResetReplication",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).ResetReplication(ctx, req.(*tabletmanagerdata.ResetReplicationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_InitMaster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_InitMaster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.InitMasterRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).InitMaster(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).InitMaster(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/InitMaster",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).InitMaster(ctx, req.(*tabletmanagerdata.InitMasterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_PopulateReparentJournal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_PopulateReparentJournal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.PopulateReparentJournalRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).PopulateReparentJournal(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).PopulateReparentJournal(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/PopulateReparentJournal",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).PopulateReparentJournal(ctx, req.(*tabletmanagerdata.PopulateReparentJournalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_InitSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_InitSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.InitSlaveRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).InitSlave(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).InitSlave(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/InitSlave",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).InitSlave(ctx, req.(*tabletmanagerdata.InitSlaveRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_DemoteMaster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_DemoteMaster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.DemoteMasterRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).DemoteMaster(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).DemoteMaster(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/DemoteMaster",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).DemoteMaster(ctx, req.(*tabletmanagerdata.DemoteMasterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_PromoteSlaveWhenCaughtUp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_PromoteSlaveWhenCaughtUp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.PromoteSlaveWhenCaughtUpRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).PromoteSlaveWhenCaughtUp(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).PromoteSlaveWhenCaughtUp(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/PromoteSlaveWhenCaughtUp",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).PromoteSlaveWhenCaughtUp(ctx, req.(*tabletmanagerdata.PromoteSlaveWhenCaughtUpRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_SlaveWasPromoted_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_SlaveWasPromoted_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.SlaveWasPromotedRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).SlaveWasPromoted(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).SlaveWasPromoted(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/SlaveWasPromoted",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).SlaveWasPromoted(ctx, req.(*tabletmanagerdata.SlaveWasPromotedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_SetMaster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_SetMaster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.SetMasterRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).SetMaster(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).SetMaster(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/SetMaster",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).SetMaster(ctx, req.(*tabletmanagerdata.SetMasterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_SlaveWasRestarted_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_SlaveWasRestarted_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.SlaveWasRestartedRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).SlaveWasRestarted(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).SlaveWasRestarted(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/SlaveWasRestarted",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).SlaveWasRestarted(ctx, req.(*tabletmanagerdata.SlaveWasRestartedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_StopReplicationAndGetStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_StopReplicationAndGetStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.StopReplicationAndGetStatusRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).StopReplicationAndGetStatus(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).StopReplicationAndGetStatus(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/StopReplicationAndGetStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).StopReplicationAndGetStatus(ctx, req.(*tabletmanagerdata.StopReplicationAndGetStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_PromoteSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _TabletManager_PromoteSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.PromoteSlaveRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(TabletManagerServer).PromoteSlave(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(TabletManagerServer).PromoteSlave(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/PromoteSlave",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).PromoteSlave(ctx, req.(*tabletmanagerdata.PromoteSlaveRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _TabletManager_Backup_Handler(srv interface{}, stream grpc.ServerStream) error {

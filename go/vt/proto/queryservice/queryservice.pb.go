@@ -37,7 +37,7 @@ var _ grpc.ClientConn
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion1
+const _ = grpc.SupportPackageIsVersion2
 
 // Client API for Query service
 
@@ -242,40 +242,58 @@ func RegisterQueryServer(s *grpc.Server, srv QueryServer) {
 	s.RegisterService(&_Query_serviceDesc, srv)
 }
 
-func _Query_GetSessionId_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Query_GetSessionId_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(query.GetSessionIdRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(QueryServer).GetSessionId(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(QueryServer).GetSessionId(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/queryservice.Query/GetSessionId",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).GetSessionId(ctx, req.(*query.GetSessionIdRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_Execute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Query_Execute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(query.ExecuteRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(QueryServer).Execute(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(QueryServer).Execute(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/queryservice.Query/Execute",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).Execute(ctx, req.(*query.ExecuteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_ExecuteBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Query_ExecuteBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(query.ExecuteBatchRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(QueryServer).ExecuteBatch(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(QueryServer).ExecuteBatch(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/queryservice.Query/ExecuteBatch",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).ExecuteBatch(ctx, req.(*query.ExecuteBatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Query_StreamExecute_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -299,52 +317,76 @@ func (x *queryStreamExecuteServer) Send(m *query.StreamExecuteResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Query_Begin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Query_Begin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(query.BeginRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(QueryServer).Begin(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(QueryServer).Begin(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/queryservice.Query/Begin",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).Begin(ctx, req.(*query.BeginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_Commit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Query_Commit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(query.CommitRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(QueryServer).Commit(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(QueryServer).Commit(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/queryservice.Query/Commit",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).Commit(ctx, req.(*query.CommitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_Rollback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Query_Rollback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(query.RollbackRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(QueryServer).Rollback(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(QueryServer).Rollback(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/queryservice.Query/Rollback",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).Rollback(ctx, req.(*query.RollbackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_SplitQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Query_SplitQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(query.SplitQueryRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(QueryServer).SplitQuery(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(QueryServer).SplitQuery(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/queryservice.Query/SplitQuery",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).SplitQuery(ctx, req.(*query.SplitQueryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Query_StreamHealth_Handler(srv interface{}, stream grpc.ServerStream) error {
