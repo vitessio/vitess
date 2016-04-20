@@ -85,10 +85,10 @@ env:
     #       We should always utilize all 5 slots because the cost of the setup is high (up to one minute).
     # NOTE: Use "" if you specify a space separated list of multiple targets.
     - TEST_MATRIX="-shard 0"
-    - TEST_MATRIX="-shard 1"
-    - TEST_MATRIX="-shard 2"
-    - TEST_MATRIX="-shard 3"
-    - TEST_MATRIX="-shard 4"
+      #- TEST_MATRIX="-shard 1"
+      #- TEST_MATRIX="-shard 2"
+      #- TEST_MATRIX="-shard 3"
+      #    - TEST_MATRIX="-shard 4"
 before_install:
   - travis/download_mariadb.sh
   - travis/php_init.sh
@@ -97,6 +97,8 @@ install:
   - ./bootstrap.sh
 before_script:
   - source dev.env
+  - echo $GO15VENDOREXPERIMENT
+  - ls -alR /home/travis/gopath/src/github.com/golang/
   # Travis only tests. Run only on the first shard.
   # Part of "before_script" because in "script" the job would not fail immediately if a command fails.
   - |
