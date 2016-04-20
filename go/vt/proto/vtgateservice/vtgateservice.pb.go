@@ -37,7 +37,7 @@ var _ grpc.ClientConn
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion1
+const _ = grpc.SupportPackageIsVersion2
 
 // Client API for Vitess service
 
@@ -421,88 +421,130 @@ func RegisterVitessServer(s *grpc.Server, srv VitessServer) {
 	s.RegisterService(&_Vitess_serviceDesc, srv)
 }
 
-func _Vitess_Execute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Vitess_Execute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtgate.ExecuteRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(VitessServer).Execute(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(VitessServer).Execute(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtgateservice.Vitess/Execute",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VitessServer).Execute(ctx, req.(*vtgate.ExecuteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Vitess_ExecuteShards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Vitess_ExecuteShards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtgate.ExecuteShardsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(VitessServer).ExecuteShards(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(VitessServer).ExecuteShards(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtgateservice.Vitess/ExecuteShards",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VitessServer).ExecuteShards(ctx, req.(*vtgate.ExecuteShardsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Vitess_ExecuteKeyspaceIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Vitess_ExecuteKeyspaceIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtgate.ExecuteKeyspaceIdsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(VitessServer).ExecuteKeyspaceIds(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(VitessServer).ExecuteKeyspaceIds(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtgateservice.Vitess/ExecuteKeyspaceIds",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VitessServer).ExecuteKeyspaceIds(ctx, req.(*vtgate.ExecuteKeyspaceIdsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Vitess_ExecuteKeyRanges_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Vitess_ExecuteKeyRanges_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtgate.ExecuteKeyRangesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(VitessServer).ExecuteKeyRanges(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(VitessServer).ExecuteKeyRanges(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtgateservice.Vitess/ExecuteKeyRanges",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VitessServer).ExecuteKeyRanges(ctx, req.(*vtgate.ExecuteKeyRangesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Vitess_ExecuteEntityIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Vitess_ExecuteEntityIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtgate.ExecuteEntityIdsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(VitessServer).ExecuteEntityIds(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(VitessServer).ExecuteEntityIds(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtgateservice.Vitess/ExecuteEntityIds",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VitessServer).ExecuteEntityIds(ctx, req.(*vtgate.ExecuteEntityIdsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Vitess_ExecuteBatchShards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Vitess_ExecuteBatchShards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtgate.ExecuteBatchShardsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(VitessServer).ExecuteBatchShards(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(VitessServer).ExecuteBatchShards(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtgateservice.Vitess/ExecuteBatchShards",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VitessServer).ExecuteBatchShards(ctx, req.(*vtgate.ExecuteBatchShardsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Vitess_ExecuteBatchKeyspaceIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Vitess_ExecuteBatchKeyspaceIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtgate.ExecuteBatchKeyspaceIdsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(VitessServer).ExecuteBatchKeyspaceIds(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(VitessServer).ExecuteBatchKeyspaceIds(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtgateservice.Vitess/ExecuteBatchKeyspaceIds",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VitessServer).ExecuteBatchKeyspaceIds(ctx, req.(*vtgate.ExecuteBatchKeyspaceIdsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Vitess_StreamExecute_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -589,64 +631,94 @@ func (x *vitessStreamExecuteKeyRangesServer) Send(m *vtgate.StreamExecuteKeyRang
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Vitess_Begin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Vitess_Begin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtgate.BeginRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(VitessServer).Begin(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(VitessServer).Begin(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtgateservice.Vitess/Begin",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VitessServer).Begin(ctx, req.(*vtgate.BeginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Vitess_Commit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Vitess_Commit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtgate.CommitRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(VitessServer).Commit(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(VitessServer).Commit(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtgateservice.Vitess/Commit",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VitessServer).Commit(ctx, req.(*vtgate.CommitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Vitess_Rollback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Vitess_Rollback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtgate.RollbackRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(VitessServer).Rollback(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(VitessServer).Rollback(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtgateservice.Vitess/Rollback",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VitessServer).Rollback(ctx, req.(*vtgate.RollbackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Vitess_SplitQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Vitess_SplitQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtgate.SplitQueryRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(VitessServer).SplitQuery(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(VitessServer).SplitQuery(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtgateservice.Vitess/SplitQuery",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VitessServer).SplitQuery(ctx, req.(*vtgate.SplitQueryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Vitess_GetSrvKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Vitess_GetSrvKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtgate.GetSrvKeyspaceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(VitessServer).GetSrvKeyspace(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(VitessServer).GetSrvKeyspace(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtgateservice.Vitess/GetSrvKeyspace",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VitessServer).GetSrvKeyspace(ctx, req.(*vtgate.GetSrvKeyspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 var _Vitess_serviceDesc = grpc.ServiceDesc{

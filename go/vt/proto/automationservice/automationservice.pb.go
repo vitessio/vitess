@@ -37,7 +37,7 @@ var _ grpc.ClientConn
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion1
+const _ = grpc.SupportPackageIsVersion2
 
 // Client API for Automation service
 
@@ -89,28 +89,40 @@ func RegisterAutomationServer(s *grpc.Server, srv AutomationServer) {
 	s.RegisterService(&_Automation_serviceDesc, srv)
 }
 
-func _Automation_EnqueueClusterOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Automation_EnqueueClusterOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(automation.EnqueueClusterOperationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(AutomationServer).EnqueueClusterOperation(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(AutomationServer).EnqueueClusterOperation(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/automationservice.Automation/EnqueueClusterOperation",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutomationServer).EnqueueClusterOperation(ctx, req.(*automation.EnqueueClusterOperationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Automation_GetClusterOperationDetails_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Automation_GetClusterOperationDetails_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(automation.GetClusterOperationDetailsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(AutomationServer).GetClusterOperationDetails(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(AutomationServer).GetClusterOperationDetails(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/automationservice.Automation/GetClusterOperationDetails",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutomationServer).GetClusterOperationDetails(ctx, req.(*automation.GetClusterOperationDetailsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 var _Automation_serviceDesc = grpc.ServiceDesc{
