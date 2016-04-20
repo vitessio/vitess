@@ -121,10 +121,7 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client) {
 		firstLineReceived := false
 		for {
 			if _, err := stream.Recv(); err != nil {
-				if vterrors.RecoverVtErrorCode(err) != vtrpcpb.ErrorCode_CANCELLED &&
-					// TODO(mberlin): Remove the line below when the internal error
-					// translation is fixed.
-					vterrors.RecoverVtErrorCode(err) != vtrpcpb.ErrorCode_INTEGRITY_ERROR {
+				if vterrors.RecoverVtErrorCode(err) != vtrpcpb.ErrorCode_CANCELLED {
 					blockErr = fmt.Errorf("Block command should only error due to cancelled context: %v", err)
 				}
 				// Stream has finished.
