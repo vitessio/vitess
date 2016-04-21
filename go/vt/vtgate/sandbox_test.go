@@ -489,7 +489,7 @@ func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 	return a.result, nil
 }
 
-func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
+func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]interface{})
 	for k, v := range bindVars {

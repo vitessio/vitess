@@ -63,12 +63,7 @@ func TestShardConnExecuteBatch(t *testing.T) {
 func TestShardConnExecuteStream(t *testing.T) {
 	testShardConnGeneric(t, "TestShardConnExecuteStream", true, func() error {
 		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteStream", "0", topodatapb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
-		_, err := sdc.StreamExecute(context.Background(), "query", nil, 0)
-		return err
-	})
-	testShardConnTransact(t, "TestShardConnExecuteStream", func() error {
-		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteStream", "0", topodatapb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
-		_, err := sdc.StreamExecute(context.Background(), "query", nil, 1)
+		_, err := sdc.StreamExecute(context.Background(), "query", nil)
 		return err
 	})
 }
@@ -305,7 +300,7 @@ func TestShardConnStreamingRetry(t *testing.T) {
 	sbc := &sandboxConn{mustFailRetry: 1}
 	s.MapTestConn("0", sbc)
 	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnStreamingRetry", "0", topodatapb.TabletType_REPLICA, 10*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
-	_, err := sdc.StreamExecute(context.Background(), "query", nil, 0)
+	_, err := sdc.StreamExecute(context.Background(), "query", nil)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -321,7 +316,7 @@ func TestShardConnStreamingRetry(t *testing.T) {
 	sbc = &sandboxConn{mustFailFatal: 1}
 	s.MapTestConn("0", sbc)
 	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnStreamingRetry", "0", topodatapb.TabletType_REPLICA, 10*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
-	_, err = sdc.StreamExecute(context.Background(), "query", nil, 0)
+	_, err = sdc.StreamExecute(context.Background(), "query", nil)
 	want := "shard, host: TestShardConnStreamingRetry.0.replica, host:\"0\" port_map:<key:\"vt\" value:1 > , fatal: err"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %v, got %v", want, err)

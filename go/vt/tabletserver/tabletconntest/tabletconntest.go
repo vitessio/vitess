@@ -382,8 +382,6 @@ var streamExecuteBindVars = map[string]interface{}{
 	"bind1": int64(93848000),
 }
 
-const streamExecuteTransactionID int64 = 6789992
-
 var streamExecuteQueryResult1 = sqltypes.Result{
 	Fields: []*querypb.Field{
 		{
@@ -413,7 +411,7 @@ var streamExecuteQueryResult2 = sqltypes.Result{
 func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
-	stream, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
+	stream, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars)
 	if err != nil {
 		t.Fatalf("StreamExecute failed: %v", err)
 	}
@@ -446,7 +444,7 @@ func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
 func testStreamExecuteError(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
-	stream, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
+	stream, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars)
 	if err != nil {
 		t.Fatalf("StreamExecute failed: %v", err)
 	}
@@ -477,7 +475,7 @@ func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *Fak
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	fake.streamExecutePanicsEarly = true
-	stream, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
+	stream, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars)
 	if err != nil {
 		if !strings.Contains(err.Error(), "caught test panic") {
 			t.Fatalf("unexpected panic error: %v", err)
@@ -491,7 +489,7 @@ func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *Fak
 
 	// late panic is after sending Fields
 	fake.streamExecutePanicsEarly = false
-	stream, err = conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
+	stream, err = conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars)
 	if err != nil {
 		t.Fatalf("StreamExecute failed: %v", err)
 	}

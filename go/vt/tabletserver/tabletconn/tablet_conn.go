@@ -94,7 +94,7 @@ type TabletConn interface {
 	// error is non-nil, it means that the StreamExecute failed to
 	// send the request. Otherwise, you can pull values from the
 	// ResultStream until io.EOF, or any other error.
-	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (sqltypes.ResultStream, error)
+	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error)
 
 	// Transaction support
 	Begin(ctx context.Context) (transactionId int64, err error)

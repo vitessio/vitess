@@ -55,7 +55,7 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 		return nil, err
 	}
 
-	stream, err := conn.StreamExecute(ctx, sql, make(map[string]interface{}), 0)
+	stream, err := conn.StreamExecute(ctx, sql, make(map[string]interface{}))
 	if err != nil {
 		return nil, err
 	}
