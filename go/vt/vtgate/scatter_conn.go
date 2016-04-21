@@ -38,7 +38,7 @@ type ScatterConn struct {
 	testGateway          Gateway // test health checking module
 }
 
-// shardActionTransactionFunc defines the contract for a shard action
+// shardActionFunc defines the contract for a shard action
 // outside of a transaction. Every such function executes the
 // necessary action on a shard, sends the results to sResults, and
 // return an error if any.  multiGo is capable of executing
@@ -48,11 +48,12 @@ type shardActionFunc func(shard string) error
 
 // shardActionTransactionFunc defines the contract for a shard action
 // that may be in a transaction. Every such function executes the
-// necessary action on a shard, sends the results to sResults, and
-// return an error if any.  multiGoTransaction is capable of executing
-// multiple shardActionTransactionFunc actions in parallel and
-// consolidating the results and errors for the caller.
-type shardActionTransactionFunc func(shard string, transactionID int64) error
+// necessary action on a shard (with an optional Begin call), aggregates
+// the results, and return an error if any.
+// multiGoTransaction is capable of executing multiple
+// shardActionTransactionFunc actions in parallel and consolidating
+// the results and errors for the caller.
+type shardActionTransactionFunc func(shard string, shouldBegin bool, transactionID int64) (int64, error)
 
 // NewScatterConn creates a new ScatterConn. All input parameters are passed through
 // for creating the appropriate connections.
@@ -98,12 +99,6 @@ func (stc *ScatterConn) startAction(name, keyspace, shard string, tabletType top
 	statsKey := []string{name, keyspace, shard, strings.ToLower(tabletType.String())}
 	startTime := time.Now()
 	return startTime, statsKey
-}
-
-func (stc *ScatterConn) startActionTransaction(ctx context.Context, name, keyspace, shard string, tabletType topodatapb.TabletType, session *SafeSession, notInTransaction bool) (time.Time, []string, int64, error) {
-	startTime, statsKey := stc.startAction(name, keyspace, shard, tabletType)
-	transactionID, err := stc.updateSession(ctx, keyspace, shard, tabletType, session, notInTransaction)
-	return startTime, statsKey, transactionID, err
 }
 
 func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.AllErrorRecorder, statsKey []string, err *error) {
@@ -160,16 +155,24 @@ func (stc *ScatterConn) Execute(
 		tabletType,
 		session,
 		notInTransaction,
-		func(shard string, transactionID int64) error {
+		func(shard string, shouldBegin bool, transactionID int64) (int64, error) {
+			if shouldBegin {
+				var err error
+				transactionID, err = stc.gateway.Begin(ctx, keyspace, shard, tabletType)
+				if err != nil {
+					return 0, err
+				}
+			}
+
 			innerqr, err := stc.gateway.Execute(ctx, keyspace, shard, tabletType, query, bindVars, transactionID)
 			if err != nil {
-				return err
+				return transactionID, err
 			}
 
 			mu.Lock()
 			defer mu.Unlock()
 			appendResult(qr, innerqr)
-			return nil
+			return transactionID, nil
 		})
 
 	if allErrors.HasErrors() {
@@ -204,16 +207,24 @@ func (stc *ScatterConn) ExecuteMulti(
 		tabletType,
 		session,
 		notInTransaction,
-		func(shard string, transactionID int64) error {
+		func(shard string, shouldBegin bool, transactionID int64) (int64, error) {
+			if shouldBegin {
+				var err error
+				transactionID, err = stc.gateway.Begin(ctx, keyspace, shard, tabletType)
+				if err != nil {
+					return 0, err
+				}
+			}
+
 			innerqr, err := stc.gateway.Execute(ctx, keyspace, shard, tabletType, query, shardVars[shard], transactionID)
 			if err != nil {
-				return err
+				return transactionID, err
 			}
 
 			mu.Lock()
 			defer mu.Unlock()
 			appendResult(qr, innerqr)
-			return nil
+			return transactionID, nil
 		})
 
 	if allErrors.HasErrors() {
@@ -247,18 +258,26 @@ func (stc *ScatterConn) ExecuteEntityIds(
 		tabletType,
 		session,
 		notInTransaction,
-		func(shard string, transactionID int64) error {
+		func(shard string, shouldBegin bool, transactionID int64) (int64, error) {
+			if shouldBegin {
+				var err error
+				transactionID, err = stc.gateway.Begin(ctx, keyspace, shard, tabletType)
+				if err != nil {
+					return 0, err
+				}
+			}
+
 			sql := sqls[shard]
 			bindVar := bindVars[shard]
 			innerqr, err := stc.gateway.Execute(ctx, keyspace, shard, tabletType, sql, bindVar, transactionID)
 			if err != nil {
-				return err
+				return transactionID, err
 			}
 
 			mu.Lock()
 			defer mu.Unlock()
 			appendResult(qr, innerqr)
-			return nil
+			return transactionID, nil
 		})
 	if allErrors.HasErrors() {
 		stc.rollbackIfNeeded(ctx, allErrors, session)
@@ -302,16 +321,34 @@ func (stc *ScatterConn) ExecuteBatch(
 		go func(req *shardBatchRequest) {
 			defer wg.Done()
 
-			startTime, statsKey, transactionID, err := stc.startActionTransaction(ctx, "ExecuteBatch", req.Keyspace, req.Shard, tabletType, session, false)
+			var err error
+			startTime, statsKey := stc.startAction("ExecuteBatch", req.Keyspace, req.Shard, tabletType)
 			defer stc.endAction(startTime, allErrors, statsKey, &err)
-			if err != nil {
-				return
-			}
 
+			shouldBegin, transactionID := transactionInfo(req.Keyspace, req.Shard, tabletType, session, false)
 			var innerqrs []sqltypes.Result
-			innerqrs, err = stc.gateway.ExecuteBatch(ctx, req.Keyspace, req.Shard, tabletType, req.Queries, asTransaction, transactionID)
-			if err != nil {
-				return
+			if shouldBegin {
+				transactionID, err = stc.gateway.Begin(ctx, req.Keyspace, req.Shard, tabletType)
+				if err != nil {
+					return
+				}
+				innerqrs, err = stc.gateway.ExecuteBatch(ctx, req.Keyspace, req.Shard, tabletType, req.Queries, asTransaction, transactionID)
+				if err != nil {
+					return
+				}
+				session.Append(&vtgatepb.Session_ShardSession{
+					Target: &querypb.Target{
+						Keyspace:   req.Keyspace,
+						Shard:      req.Shard,
+						TabletType: tabletType,
+					},
+					TransactionId: transactionID,
+				})
+			} else {
+				innerqrs, err = stc.gateway.ExecuteBatch(ctx, req.Keyspace, req.Shard, tabletType, req.Queries, asTransaction, transactionID)
+				if err != nil {
+					return
+				}
 			}
 
 			resMutex.Lock()
@@ -827,12 +864,22 @@ func (stc *ScatterConn) multiGoTransaction(
 	}
 
 	oneShard := func(shard string) {
-		startTime, statsKey, transactionID, err := stc.startActionTransaction(ctx, name, keyspace, shard, tabletType, session, notInTransaction)
+		var err error
+		startTime, statsKey := stc.startAction(name, keyspace, shard, tabletType)
 		defer stc.endAction(startTime, allErrors, statsKey, &err)
-		if err != nil {
-			return
+
+		shouldBegin, transactionID := transactionInfo(keyspace, shard, tabletType, session, notInTransaction)
+		transactionID, err = action(shard, shouldBegin, transactionID)
+		if shouldBegin && transactionID != 0 {
+			session.Append(&vtgatepb.Session_ShardSession{
+				Target: &querypb.Target{
+					Keyspace:   keyspace,
+					Shard:      shard,
+					TabletType: tabletType,
+				},
+				TransactionId: transactionID,
+			})
 		}
-		err = action(shard, transactionID)
 	}
 
 	if len(shardMap) == 1 {
@@ -855,15 +902,17 @@ func (stc *ScatterConn) multiGoTransaction(
 	return allErrors
 }
 
-func (stc *ScatterConn) updateSession(
-	ctx context.Context,
+// transactionInfo looks at the current session, and returns:
+// - shouldBegin: if we should call 'Begin' to get a transactionID
+// - transactionID: the transactionID to use, or 0 if not in a transaction.
+func transactionInfo(
 	keyspace, shard string,
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
-) (transactionID int64, err error) {
+) (shouldBegin bool, transactionID int64) {
 	if !session.InTransaction() {
-		return 0, nil
+		return false, 0
 	}
 	// No need to protect ourselves from the race condition between
 	// Find and Append. The higher level functions ensure that no
@@ -871,27 +920,16 @@ func (stc *ScatterConn) updateSession(
 	// this at the same time.
 	transactionID = session.Find(keyspace, shard, tabletType)
 	if transactionID != 0 {
-		return transactionID, nil
+		return false, transactionID
 	}
 	// We are in a transaction at higher level,
 	// but client requires not to start a transaction for this query.
 	// If a transaction was started on this conn, we will use it (as above).
 	if notInTransaction {
-		return 0, nil
+		return false, 0
 	}
-	transactionID, err = stc.gateway.Begin(ctx, keyspace, shard, tabletType)
-	if err != nil {
-		return 0, err
-	}
-	session.Append(&vtgatepb.Session_ShardSession{
-		Target: &querypb.Target{
-			Keyspace:   keyspace,
-			Shard:      shard,
-			TabletType: tabletType,
-		},
-		TransactionId: transactionID,
-	})
-	return transactionID, nil
+
+	return true, 0
 }
 
 func getShards(shardVars map[string]map[string]interface{}) []string {
