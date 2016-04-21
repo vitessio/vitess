@@ -89,9 +89,7 @@ php_test:
 
 # TODO(mberlin): Remove the manual copy once govendor supports a way to
 # install vendor'd programs: https://github.com/kardianos/govendor/issues/117
-install_protoc-gen-go: $(GOPATH)/bin/protoc-gen-go
-
-$(GOPATH)/bin/protoc-gen-go:
+install_protoc-gen-go:
 	mkdir -p $${GOPATH}/src/github.com/golang/
 	cp -au vendor/github.com/golang/protobuf $${GOPATH}/src/github.com/golang/
 	go install github.com/golang/protobuf/protoc-gen-go
