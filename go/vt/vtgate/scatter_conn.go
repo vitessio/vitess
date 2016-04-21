@@ -381,7 +381,7 @@ func (stc *ScatterConn) StreamExecute(
 		NewSafeSession(nil),
 		false,
 		func(shard string, transactionID int64) error {
-			stream, err := stc.gateway.StreamExecute(ctx, keyspace, shard, tabletType, query, bindVars, transactionID)
+			stream, err := stc.gateway.StreamExecute(ctx, keyspace, shard, tabletType, query, bindVars)
 			return stc.processOneStreamingResult(&mu, stream, err, &replyErr, &fieldSent, sendReply)
 		})
 	if replyErr != nil {
@@ -415,7 +415,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		NewSafeSession(nil),
 		false,
 		func(shard string, transactionID int64) error {
-			stream, err := stc.gateway.StreamExecute(ctx, keyspace, shard, tabletType, query, shardVars[shard], transactionID)
+			stream, err := stc.gateway.StreamExecute(ctx, keyspace, shard, tabletType, query, shardVars[shard])
 			return stc.processOneStreamingResult(&mu, stream, err, &replyErr, &fieldSent, sendReply)
 		})
 	if replyErr != nil {

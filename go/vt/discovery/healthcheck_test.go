@@ -323,7 +323,7 @@ func (fc *fakeConn) ExecuteBatch2(ctx context.Context, queries []querytypes.Boun
 }
 
 // StreamExecute implements tabletconn.TabletConn.
-func (fc *fakeConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
+func (fc *fakeConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 

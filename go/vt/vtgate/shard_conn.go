@@ -149,15 +149,15 @@ func (sdc *ShardConn) ExecuteBatch(ctx context.Context, queries []querytypes.Bou
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same as Execute.
-func (sdc *ShardConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
+func (sdc *ShardConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
 	var usedConn tabletconn.TabletConn
 	var stream sqltypes.ResultStream
 	err := sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var err error
-		stream, err = conn.StreamExecute(ctx, query, bindVars, transactionID)
+		stream, err = conn.StreamExecute(ctx, query, bindVars)
 		usedConn = conn
 		return err
-	}, transactionID, true)
+	}, 0, true)
 	if err != nil {
 		return nil, err
 	}

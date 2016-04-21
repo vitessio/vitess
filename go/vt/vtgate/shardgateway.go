@@ -116,8 +116,8 @@ func (sg *shardGateway) ExecuteBatch(ctx context.Context, keyspace string, shard
 }
 
 // StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
-func (sg *shardGateway) StreamExecute(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
-	return sg.getConnection(ctx, keyspace, shard, tabletType).StreamExecute(ctx, query, bindVars, transactionID)
+func (sg *shardGateway) StreamExecute(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
+	return sg.getConnection(ctx, keyspace, shard, tabletType).StreamExecute(ctx, query, bindVars)
 }
 
 // Begin starts a transaction for the specified keyspace, shard, and tablet type.
