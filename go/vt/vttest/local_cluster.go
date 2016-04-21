@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqldb"
 )
 
@@ -149,6 +150,8 @@ func (hdl *Handle) run(port int, topo, schemaDir string, mysqlOnly, verbose bool
 	if err != nil {
 		return err
 	}
+	log.Infof("executing: %v --port %v --topology %v",
+		launcher, strconv.Itoa(port), topo)
 	hdl.cmd = exec.Command(
 		launcher,
 		"--port", strconv.Itoa(port),
@@ -177,7 +180,12 @@ func (hdl *Handle) run(port int, topo, schemaDir string, mysqlOnly, verbose bool
 	if err != nil {
 		return err
 	}
-	return decoder.Decode(&hdl.Data)
+	err = decoder.Decode(&hdl.Data)
+	if err != nil {
+		err = fmt.Errorf(
+			"Error (%v) parsing JSON output from command: %v.", err, launcher)
+	}
+	return err
 }
 
 // randomPort returns a random number between 10k & 30k.
