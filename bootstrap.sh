@@ -108,7 +108,6 @@ fi
 gotools=" \
        github.com/golang/lint/golint \
        github.com/golang/mock/mockgen \
-       github.com/golang/protobuf/protoc-gen-go \
        github.com/kardianos/govendor \
        golang.org/x/tools/cmd/goimports \
 "
@@ -131,6 +130,8 @@ go get -u $gotools || fail "Failed to download some Go tools with 'go get'. Plea
 #
 # To add a new dependency, run:
 #   govendor fetch <package_path>
+#
+# Existing dependencies can be updated to the latest version with 'fetch' as well.
 #
 # Then:
 #   git add vendor/vendor.json
