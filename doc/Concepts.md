@@ -16,31 +16,24 @@ When a database is
 a keyspace maps to multiple MySQL databases. In that case, a read operation
 fetches the necessary data from one of the shards.
 
-## Keyspace id
-A *keyspace ID* (keyspace_id) is a column that identifies the primary entity
-of a keyspace. For example, a keyspace might identify a user, a video, a
-product, or a purchase. The keyspace ID(s) that you use in your database
-depend on the type of data that you are storing.
+## Keyspace ID
 
-To shard a database, all of the tables in a keyspace must contain a
-<code>keyspace_id</code> column. Vitess sharding ensures that all rows that have
-a common keyspace ID are always placed in the same shard.
+The *keyspace ID* is the value that is used to decide on which shard a given
+record lives. [Range-based Sharding](http://vitess.io/user-guide/sharding.html#range-based-sharding)
+refers to creating shards that each cover a particular range of keyspace IDs.
 
-The <code>keyspace_id</code> column does not need to be in the primary key or even an index
-for the table. The Vitess tools will either walk through all the rows (to copy
-data during dynamic resharding for instance), or not use the keyspace_id.
+Often, the keyspace ID is computed as the hash of some column in your data,
+such as the user ID. This would result in randomly spreading users across
+the range-based shards, a technique called
+[consistent hashing](https://en.wikipedia.org/wiki/Consistent_hashing).
+Using this technique means you can split a given shard by replacing it with two
+or more new shards that combine to cover the original range of keyspace IDs,
+without having to move any records in other shards.
 
-If you do not intend to shard a database, you do not have to designated a
-keyspace ID. However, you must designate a keyspace ID if you decide to
-shard a currently unsharded database.
-
-A keyspace ID can be an unsigned number or a binary character column
-(<code>unsigned bigint</code> or <code>varbinary</code> in MySQL tables).
-Other data types are not allowed due to ambiguous equality or inequality rules.
-
-<div style="display:none">
-TODO: keyspace ID rules must be solidified once VTGate features are finalized.
-</div>
+Previously, our resharding process required each table to store this value as a
+`keyspace_id` column because it was computed by the application. However, this
+column is no longer necessary when you allow VTGate to compute the keyspace ID
+for you, for example by using a `hash` vindex.
 
 ## Shard
 
