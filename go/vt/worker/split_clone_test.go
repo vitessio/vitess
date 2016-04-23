@@ -5,7 +5,6 @@
 package worker
 
 import (
-	"flag"
 	"fmt"
 	"strconv"
 	"strings"
@@ -335,19 +334,6 @@ func testSplitClone(t *testing.T, v3 bool) {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
-	subFlags := flag.NewFlagSet("SplitClone", flag.ContinueOnError)
-	gwrk, err := commandSplitClone(wi, wi.wr, subFlags, []string{
-		"-source_reader_count", "10",
-		"-destination_pack_count", "4",
-		"-min_table_size_for_split", "1",
-		"-destination_writer_count", "10",
-		"ks/-80",
-	})
-	if err != nil {
-		t.Errorf("Worker creation failed: %v", err)
-	}
-	wrk := gwrk.(*SplitCloneWorker)
-
 	for _, sourceRdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2} {
 		sourceRdonly.FakeMysqlDaemon.Schema = &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "",
@@ -392,10 +378,24 @@ func testSplitClone(t *testing.T, v3 bool) {
 	// Only wait 1 ms between retries, so that the test passes faster
 	*executeFetchRetryTime = (1 * time.Millisecond)
 
-	err = wrk.Run(ctx)
-	status := wrk.StatusAsText()
-	t.Logf("Got status: %v", status)
-	if err != nil || wrk.State != WorkerStateDone {
+	// Run the vtworker command.
+	args := []string{
+		"SplitClone",
+		"-source_reader_count", "10",
+		"-destination_pack_count", "4",
+		"-min_table_size_for_split", "1",
+		"-destination_writer_count", "10",
+		"ks/-80"}
+	worker, done, err := wi.RunCommand(args, wi.wr, false /* runFromCli */)
+	if err != nil {
+		t.Fatalf("Worker creation failed: %v", err)
+	}
+	if err := wi.WaitForCommand(worker, done); err != nil {
+		t.Fatalf("Worker failed: %v", err)
+	}
+
+	t.Logf("Got status: %v", worker.StatusAsText())
+	if worker.(*SplitCloneWorker).State != WorkerStateDone {
 		t.Fatalf("Worker run failed: %v", err)
 	}
 

@@ -5,7 +5,6 @@
 package worker
 
 import (
-	"flag"
 	"fmt"
 	"strings"
 	"testing"
@@ -151,17 +150,6 @@ func TestVerticalSplitDiff(t *testing.T) {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
-	// We need to use FakeTabletManagerClient because we don't
-	// have a good way to fake the binlog player yet, which is
-	// necessary for synchronizing replication.
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient())
-	subFlags := flag.NewFlagSet("VerticalSplitDiff", flag.ContinueOnError)
-	gwrk, err := commandVerticalSplitDiff(wi, wr, subFlags, []string{"destination_ks/0"})
-	if err != nil {
-		t.Fatalf("commandVerticalSplitDiff failed: %v", err)
-	}
-	wrk := gwrk.(*VerticalSplitDiffWorker)
-
 	for _, rdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2, destRdonly1, destRdonly2} {
 		// both source and destination have the table definition for 'moving1'.
 		// source also has "staying1" while destination has "extra1".
@@ -198,10 +186,22 @@ func TestVerticalSplitDiff(t *testing.T) {
 		})
 	}
 
-	err = wrk.Run(ctx)
-	status := wrk.StatusAsText()
-	t.Logf("Got status: %v", status)
-	if err != nil || wrk.State != WorkerStateDone {
-		t.Errorf("Worker run failed")
+	// Run the vtworker command.
+	args := []string{"VerticalSplitDiff", "destination_ks/0"}
+	// We need to use FakeTabletManagerClient because we don't
+	// have a good way to fake the binlog player yet, which is
+	// necessary for synchronizing replication.
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient())
+	worker, done, err := wi.RunCommand(args, wr, false /* runFromCli */)
+	if err != nil {
+		t.Fatalf("Worker creation failed: %v", err)
+	}
+	if err := wi.WaitForCommand(worker, done); err != nil {
+		t.Fatalf("Worker failed: %v", err)
+	}
+
+	t.Logf("Got status: %v", worker.StatusAsText())
+	if worker.(*VerticalSplitDiffWorker).State != WorkerStateDone {
+		t.Fatalf("Worker run failed")
 	}
 }

@@ -5,7 +5,6 @@
 package worker
 
 import (
-	"flag"
 	"fmt"
 	"strings"
 	"testing"
@@ -268,23 +267,10 @@ func testSplitDiff(t *testing.T, v3 bool) {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
-	subFlags := flag.NewFlagSet("SplitDiff", flag.ContinueOnError)
-	// We need to use FakeTabletManagerClient because we don't
-	// have a good way to fake the binlog player yet, which is
-	// necessary for synchronizing replication.
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient())
 	excludedTable := "excludedTable1"
-	gwrk, err := commandSplitDiff(wi, wr, subFlags, []string{
-		"-exclude_tables", excludedTable,
-		"ks/-40",
-	})
-	if err != nil {
-		t.Fatalf("commandSplitDiff failed: %v", err)
-	}
-	wrk := gwrk.(*SplitDiffWorker)
 
 	for _, rdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2, leftRdonly1, leftRdonly2} {
-		// The destination only has hald the data.
+		// The destination only has half the data.
 		// For v2, we do filtering at the SQl level.
 		// For v3, we do it in the client.
 		// So in any case, we need real data.
@@ -334,11 +320,27 @@ func testSplitDiff(t *testing.T, v3 bool) {
 		v3:            v3,
 	})
 
-	err = wrk.Run(ctx)
-	status := wrk.StatusAsText()
-	t.Logf("Got status: %v", status)
-	if err != nil || wrk.State != WorkerStateDone {
-		t.Errorf("Worker run failed: %v", err)
+	// Run the vtworker command.
+	args := []string{
+		"SplitDiff",
+		"-exclude_tables", excludedTable,
+		"ks/-40",
+	}
+	// We need to use FakeTabletManagerClient because we don't
+	// have a good way to fake the binlog player yet, which is
+	// necessary for synchronizing replication.
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient())
+	worker, done, err := wi.RunCommand(args, wr, false /* runFromCli */)
+	if err != nil {
+		t.Fatalf("Worker creation failed: %v", err)
+	}
+	if err := wi.WaitForCommand(worker, done); err != nil {
+		t.Fatalf("Worker failed: %v", err)
+	}
+
+	t.Logf("Got status: %v", worker.StatusAsText())
+	if worker.(*SplitDiffWorker).State != WorkerStateDone {
+		t.Fatalf("Worker run failed: %v", err)
 	}
 }
 
