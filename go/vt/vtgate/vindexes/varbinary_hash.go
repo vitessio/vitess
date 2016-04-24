@@ -54,5 +54,5 @@ func (vind *Varbinary) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
 }
 
 func init() {
-	Register("varbinary_hash", NewVarbinary)
+	Register("varbinaryHash", NewVarbinary)
 }

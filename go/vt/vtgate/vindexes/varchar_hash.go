@@ -29,6 +29,7 @@ func (vind *Varchar) Cost() int {
 
 // Verify returns true if id maps to ksid.
 func (vind *Varchar) Verify(_ VCursor, id interface{}, ksid []byte) (bool, error) {
+
 	data, err := getHash(id)
 	if err != nil {
 		return false, fmt.Errorf("Varchar_hash.Verify: %v", err)
@@ -66,5 +67,5 @@ func (vind *Varchar) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
 }
 
 func init() {
-	Register("varchar_hash", NewVarchar)
+	Register("varcharHash", NewVarchar)
 }
