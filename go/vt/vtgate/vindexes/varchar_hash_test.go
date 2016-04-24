@@ -18,10 +18,6 @@ func TestVarcharHashCost(t *testing.T) {
 }
 
 func TestVarcharMap(t *testing.T) {
-	/*const sample  = "TEST"
-	for i := 0; i < len(sample); i++ {
-		fmt.Printf("%x ", sample[i])
-	}*/
 	got, err := varcharHash.(Unique).Map(nil, []interface{}{"TEST", "test", "TeSt"})
 	if err != nil {
 		t.Error(err)
