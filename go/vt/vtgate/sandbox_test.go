@@ -345,7 +345,6 @@ type sandboxConn struct {
 	mustFailConn   int
 	mustFailTxPool int
 	mustFailNotTx  int
-	mustDelay      time.Duration
 
 	// A callback to tweak the behavior on each conn call
 	onConnUse func(*sandboxConn)
@@ -440,9 +439,6 @@ func (sbc *sandboxConn) Execute(ctx context.Context, query string, bindVars map[
 		Sql:           query,
 		BindVariables: bv,
 	})
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
-	}
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
@@ -457,9 +453,6 @@ func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []querytypes.B
 	sbc.ExecCount.Add(1)
 	if asTransaction {
 		sbc.AsTransactionCount.Add(1)
-	}
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
 	}
 	if err := sbc.getError(); err != nil {
 		return nil, err
@@ -499,9 +492,6 @@ func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVar
 		Sql:           query,
 		BindVariables: bv,
 	})
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
-	}
 	err := sbc.getError()
 	if err != nil {
 		return nil, err
@@ -512,9 +502,6 @@ func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVar
 
 func (sbc *sandboxConn) Begin(ctx context.Context) (int64, error) {
 	sbc.BeginCount.Add(1)
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
-	}
 	err := sbc.getError()
 	if err != nil {
 		return 0, err
@@ -524,17 +511,11 @@ func (sbc *sandboxConn) Begin(ctx context.Context) (int64, error) {
 
 func (sbc *sandboxConn) Commit(ctx context.Context, transactionID int64) error {
 	sbc.CommitCount.Add(1)
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
-	}
 	return sbc.getError()
 }
 
 func (sbc *sandboxConn) Rollback(ctx context.Context, transactionID int64) error {
 	sbc.RollbackCount.Add(1)
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
-	}
 	return sbc.getError()
 }
 
