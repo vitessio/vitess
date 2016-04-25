@@ -23,7 +23,7 @@ func TestVarBinaryMap(t *testing.T) {
 		t.Error(err)
 	}
 	want := [][]byte{
-		[]byte("\x07\x0a\x00\x04\x74\x65\x73\x74"),
+		[]byte("\x7a\x75\x95\xf9\xce\x67\xb6\xf9"),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
@@ -31,7 +31,7 @@ func TestVarBinaryMap(t *testing.T) {
 }
 
 func TestVarBinaryVerify(t *testing.T) {
-	success, err := varbinaryHash.Verify(nil, []byte("\x74\x65\x73\x74"), []byte("\x07\x0a\x00\x04\x74\x65\x73\x74"))
+	success, err := varbinaryHash.Verify(nil, []byte("\x74\x65\x73\x74"), []byte("\x7a\x75\x95\xf9\xce\x67\xb6\xf9"))
 	if err != nil {
 		t.Error(err)
 	}

@@ -28,23 +28,18 @@ func (vind *Varbinary) Cost() int {
 
 // Verify returns true if id maps to ksid.
 func (vind *Varbinary) Verify(_ VCursor, id interface{}, ksid []byte) (bool, error) {
-	data, err := getHashBinary(id)
+	data, err := binHash(id, false)
 	if err != nil {
 		return false, fmt.Errorf("Varbinary_hash.Verify: %v", err)
 	}
 	return bytes.Compare(data, ksid) == 0, nil
 }
 
-func getHashBinary(v interface{}) ([]byte, error) {
-	val, err := GetBytes(v)
-	return val, err
-}
-
 // Map returns the corresponding KeyspaceId values for the given ids.
 func (vind *Varbinary) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
-		data, err := getHashBinary(id)
+		data, err := binHash(id, false)
 		if err != nil {
 			return nil, fmt.Errorf("VarBinary_hash.Map :%v", err)
 		}
