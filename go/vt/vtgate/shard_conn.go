@@ -188,6 +188,30 @@ func (sdc *ShardConn) Rollback(ctx context.Context, transactionID int64) (err er
 	}, transactionID, false)
 }
 
+// BeginExecute executes a begin and non-streaming query on
+// vttablet. If there are connection errors, it retries retryCount
+// times before failing. It does not retry if the connection is in the
+// middle of a transaction.
+func (sdc *ShardConn) BeginExecute(ctx context.Context, query string, bindVars map[string]interface{}) (qr *sqltypes.Result, transactionID int64, err error) {
+	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
+		var innerErr error
+		qr, transactionID, innerErr = conn.BeginExecute(ctx, query, bindVars)
+		return innerErr
+	}, 0, false)
+	return qr, transactionID, err
+}
+
+// BeginExecuteBatch executes a begin and a group of queries. The
+// retry rules are the same as BeginExecute.
+func (sdc *ShardConn) BeginExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool) (qrs []sqltypes.Result, transactionID int64, err error) {
+	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
+		var innerErr error
+		qrs, transactionID, innerErr = conn.BeginExecuteBatch(ctx, queries, asTransaction)
+		return innerErr
+	}, 0, false)
+	return qrs, transactionID, err
+}
+
 // SplitQuery splits a query into sub queries. The retry rules are the same as Execute.
 func (sdc *ShardConn) SplitQuery(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) (queries []querytypes.QuerySplit, err error) {
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {

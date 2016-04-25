@@ -156,17 +156,19 @@ func (stc *ScatterConn) Execute(
 		session,
 		notInTransaction,
 		func(shard string, shouldBegin bool, transactionID int64) (int64, error) {
+			var innerqr *sqltypes.Result
 			if shouldBegin {
 				var err error
-				transactionID, err = stc.gateway.Begin(ctx, keyspace, shard, tabletType)
+				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, keyspace, shard, tabletType, query, bindVars)
 				if err != nil {
-					return 0, err
+					return transactionID, err
 				}
-			}
-
-			innerqr, err := stc.gateway.Execute(ctx, keyspace, shard, tabletType, query, bindVars, transactionID)
-			if err != nil {
-				return transactionID, err
+			} else {
+				var err error
+				innerqr, err = stc.gateway.Execute(ctx, keyspace, shard, tabletType, query, bindVars, transactionID)
+				if err != nil {
+					return transactionID, err
+				}
 			}
 
 			mu.Lock()
@@ -208,17 +210,19 @@ func (stc *ScatterConn) ExecuteMulti(
 		session,
 		notInTransaction,
 		func(shard string, shouldBegin bool, transactionID int64) (int64, error) {
+			var innerqr *sqltypes.Result
 			if shouldBegin {
 				var err error
-				transactionID, err = stc.gateway.Begin(ctx, keyspace, shard, tabletType)
+				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, keyspace, shard, tabletType, query, shardVars[shard])
 				if err != nil {
-					return 0, err
+					return transactionID, err
 				}
-			}
-
-			innerqr, err := stc.gateway.Execute(ctx, keyspace, shard, tabletType, query, shardVars[shard], transactionID)
-			if err != nil {
-				return transactionID, err
+			} else {
+				var err error
+				innerqr, err = stc.gateway.Execute(ctx, keyspace, shard, tabletType, query, shardVars[shard], transactionID)
+				if err != nil {
+					return transactionID, err
+				}
 			}
 
 			mu.Lock()
@@ -259,19 +263,22 @@ func (stc *ScatterConn) ExecuteEntityIds(
 		session,
 		notInTransaction,
 		func(shard string, shouldBegin bool, transactionID int64) (int64, error) {
-			if shouldBegin {
-				var err error
-				transactionID, err = stc.gateway.Begin(ctx, keyspace, shard, tabletType)
-				if err != nil {
-					return 0, err
-				}
-			}
-
 			sql := sqls[shard]
 			bindVar := bindVars[shard]
-			innerqr, err := stc.gateway.Execute(ctx, keyspace, shard, tabletType, sql, bindVar, transactionID)
-			if err != nil {
-				return transactionID, err
+			var innerqr *sqltypes.Result
+
+			if shouldBegin {
+				var err error
+				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, keyspace, shard, tabletType, sql, bindVar)
+				if err != nil {
+					return transactionID, err
+				}
+			} else {
+				var err error
+				innerqr, err = stc.gateway.Execute(ctx, keyspace, shard, tabletType, sql, bindVar, transactionID)
+				if err != nil {
+					return transactionID, err
+				}
 			}
 
 			mu.Lock()
@@ -328,22 +335,20 @@ func (stc *ScatterConn) ExecuteBatch(
 			shouldBegin, transactionID := transactionInfo(req.Keyspace, req.Shard, tabletType, session, false)
 			var innerqrs []sqltypes.Result
 			if shouldBegin {
-				transactionID, err = stc.gateway.Begin(ctx, req.Keyspace, req.Shard, tabletType)
+				innerqrs, transactionID, err = stc.gateway.BeginExecuteBatch(ctx, req.Keyspace, req.Shard, tabletType, req.Queries, asTransaction)
+				if transactionID != 0 {
+					session.Append(&vtgatepb.Session_ShardSession{
+						Target: &querypb.Target{
+							Keyspace:   req.Keyspace,
+							Shard:      req.Shard,
+							TabletType: tabletType,
+						},
+						TransactionId: transactionID,
+					})
+				}
 				if err != nil {
 					return
 				}
-				innerqrs, err = stc.gateway.ExecuteBatch(ctx, req.Keyspace, req.Shard, tabletType, req.Queries, asTransaction, transactionID)
-				if err != nil {
-					return
-				}
-				session.Append(&vtgatepb.Session_ShardSession{
-					Target: &querypb.Target{
-						Keyspace:   req.Keyspace,
-						Shard:      req.Shard,
-						TabletType: tabletType,
-					},
-					TransactionId: transactionID,
-				})
 			} else {
 				innerqrs, err = stc.gateway.ExecuteBatch(ctx, req.Keyspace, req.Shard, tabletType, req.Queries, asTransaction, transactionID)
 				if err != nil {

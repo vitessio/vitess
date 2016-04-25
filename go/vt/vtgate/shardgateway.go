@@ -136,6 +136,18 @@ func (sg *shardGateway) Rollback(ctx context.Context, keyspace string, shard str
 	return sg.getConnection(ctx, keyspace, shard, tabletType).Rollback(ctx, transactionID)
 }
 
+// BeginExecute executes a begin and the non-streaming query for the
+// specified keyspace, shard, and tablet type.
+func (sg *shardGateway) BeginExecute(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error) {
+	return sg.getConnection(ctx, keyspace, shard, tabletType).BeginExecute(ctx, query, bindVars)
+}
+
+// BeginExecuteBatch executes a begin and a group of queries for the
+// specified keyspace, shard, and tablet type.
+func (sg *shardGateway) BeginExecuteBatch(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+	return sg.getConnection(ctx, keyspace, shard, tabletType).BeginExecuteBatch(ctx, queries, asTransaction)
+}
+
 // SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
 func (sg *shardGateway) SplitQuery(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, sql string, bindVars map[string]interface{}, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
 	return sg.getConnection(ctx, keyspace, shard, tabletType).SplitQuery(ctx, sql, bindVars, splitColumn, splitCount)
