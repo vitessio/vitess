@@ -51,12 +51,12 @@ func GetBytes(key interface{}, toLower bool) ([]byte, error) {
 }
 
 func binHash(key interface{}, toLower bool) ([]byte, error) {
-	source, err := GetBytes(key,toLower)
+	source, err := GetBytes(key, toLower)
 	if err != nil {
 		return nil, fmt.Errorf("unexpected data type for binHash: %T", key)
 	}
 	dest := make([]byte, len(source))
-	block3DES.Encrypt(dest, bytes.ToLower(source))
+	block3DES.Encrypt(dest, source)
 	return dest, nil
 }
 
