@@ -345,6 +345,26 @@ func (itc *internalTabletConn) Rollback(ctx context.Context, transactionID int64
 	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 }
 
+// BeginExecute is part of tabletconn.TabletConn
+func (itc *internalTabletConn) BeginExecute(ctx context.Context, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error) {
+	transactionID, err := itc.Begin(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	result, err := itc.Execute(ctx, query, bindVars, transactionID)
+	return result, transactionID, err
+}
+
+// BeginExecuteBatch is part of tabletconn.TabletConn
+func (itc *internalTabletConn) BeginExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+	transactionID, err := itc.Begin(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	results, err := itc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
+	return results, transactionID, err
+}
+
 // Close is part of tabletconn.TabletConn
 func (itc *internalTabletConn) Close() {
 }

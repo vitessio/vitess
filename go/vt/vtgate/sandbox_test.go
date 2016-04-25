@@ -445,10 +445,6 @@ func (sbc *sandboxConn) Execute(ctx context.Context, query string, bindVars map[
 	return sbc.getNextResult(), nil
 }
 
-func (sbc *sandboxConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
-	return sbc.Execute(ctx, query, bindVars, transactionID)
-}
-
 func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	sbc.ExecCount.Add(1)
 	if asTransaction {
@@ -463,10 +459,6 @@ func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []querytypes.B
 		result = append(result, *(sbc.getNextResult()))
 	}
 	return result, nil
-}
-
-func (sbc *sandboxConn) ExecuteBatch2(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
-	return sbc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 
 type streamExecuteAdapter struct {
@@ -517,6 +509,24 @@ func (sbc *sandboxConn) Commit(ctx context.Context, transactionID int64) error {
 func (sbc *sandboxConn) Rollback(ctx context.Context, transactionID int64) error {
 	sbc.RollbackCount.Add(1)
 	return sbc.getError()
+}
+
+func (sbc *sandboxConn) BeginExecute(ctx context.Context, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error) {
+	transactionID, err := sbc.Begin(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	result, err := sbc.Execute(ctx, query, bindVars, transactionID)
+	return result, transactionID, err
+}
+
+func (sbc *sandboxConn) BeginExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+	transactionID, err := sbc.Begin(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	results, err := sbc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
+	return results, transactionID, err
 }
 
 var sandboxSQRowCount = int64(10)

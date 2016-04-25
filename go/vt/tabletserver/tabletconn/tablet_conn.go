@@ -29,8 +29,13 @@ const (
 )
 
 const (
+	// ConnClosed is returned when the underlying connection was closed.
 	ConnClosed = OperationalError("vttablet: Connection Closed")
-	Cancelled  = OperationalError("vttablet: Context Cancelled")
+
+	// Cancelled can be returned if the user canceled the request.
+	// FIXME(alainjobart): this seems wrong, if anything, we should rely
+	// on context being canceled, or just use context.Canceled.
+	Cancelled = OperationalError("vttablet: Context Cancelled")
 )
 
 var (
@@ -84,10 +89,10 @@ type TabletDialer func(ctx context.Context, endPoint *topodatapb.EndPoint, keysp
 // not be concurrently used across goroutines.
 type TabletConn interface {
 	// Execute executes a non-streaming query on vttablet.
-	Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (*sqltypes.Result, error)
+	Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error)
 
 	// ExecuteBatch executes a group of queries.
-	ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionId int64) ([]sqltypes.Result, error)
+	ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error)
 
 	// StreamExecute executes a streaming query on vttablet. It
 	// returns a sqltypes.ResultStream to get results from. If
@@ -97,9 +102,15 @@ type TabletConn interface {
 	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error)
 
 	// Transaction support
-	Begin(ctx context.Context) (transactionId int64, err error)
-	Commit(ctx context.Context, transactionId int64) error
-	Rollback(ctx context.Context, transactionId int64) error
+	Begin(ctx context.Context) (transactionID int64, err error)
+	Commit(ctx context.Context, transactionID int64) error
+	Rollback(ctx context.Context, transactionID int64) error
+
+	// Combo RPC calls: they execute both a Begin and another call.
+	// Note even if error is set, transactionID may be returned
+	// and different than zero, if the Begin part worked.
+	BeginExecute(ctx context.Context, query string, bindVars map[string]interface{}) (result *sqltypes.Result, transactionID int64, err error)
+	BeginExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool) (results []sqltypes.Result, transactionID int64, err error)
 
 	// Close must be called for releasing resources.
 	Close()

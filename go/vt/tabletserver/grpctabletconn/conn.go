@@ -263,6 +263,90 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) 
 	return nil
 }
 
+// BeginExecute starts a transaction and runs an Execute.
+func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, query string, bindVars map[string]interface{}) (result *sqltypes.Result, transactionID int64, err error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return nil, 0, tabletconn.ConnClosed
+	}
+
+	breq := &querypb.BeginRequest{
+		Target:            conn.target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		SessionId:         conn.sessionID,
+	}
+	br, err := conn.c.Begin(ctx, breq)
+	if err != nil {
+		return nil, 0, tabletconn.TabletErrorFromGRPC(err)
+	}
+	transactionID = br.TransactionId
+
+	q, err := querytypes.BoundQueryToProto3(query, bindVars)
+	if err != nil {
+		return nil, transactionID, err
+	}
+
+	ereq := &querypb.ExecuteRequest{
+		Target:            conn.target,
+		EffectiveCallerId: breq.EffectiveCallerId,
+		ImmediateCallerId: breq.ImmediateCallerId,
+		Query:             q,
+		TransactionId:     transactionID,
+		SessionId:         conn.sessionID,
+	}
+	er, err := conn.c.Execute(ctx, ereq)
+	if err != nil {
+		return nil, transactionID, tabletconn.TabletErrorFromGRPC(err)
+	}
+	return sqltypes.Proto3ToResult(er.Result), transactionID, nil
+
+}
+
+// BeginExecuteBatch starts a transaction and runs an ExecuteBatch.
+func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool) (results []sqltypes.Result, transactionID int64, err error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return nil, 0, tabletconn.ConnClosed
+	}
+
+	breq := &querypb.BeginRequest{
+		Target:            conn.target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		SessionId:         conn.sessionID,
+	}
+	br, err := conn.c.Begin(ctx, breq)
+	if err != nil {
+		return nil, 0, tabletconn.TabletErrorFromGRPC(err)
+	}
+	transactionID = br.TransactionId
+
+	ereq := &querypb.ExecuteBatchRequest{
+		Target:            conn.target,
+		EffectiveCallerId: breq.EffectiveCallerId,
+		ImmediateCallerId: breq.ImmediateCallerId,
+		Queries:           make([]*querypb.BoundQuery, len(queries)),
+		AsTransaction:     asTransaction,
+		TransactionId:     transactionID,
+		SessionId:         conn.sessionID,
+	}
+	for i, q := range queries {
+		qq, err := querytypes.BoundQueryToProto3(q.Sql, q.BindVariables)
+		if err != nil {
+			return nil, transactionID, err
+		}
+		ereq.Queries[i] = qq
+	}
+	ebr, err := conn.c.ExecuteBatch(ctx, ereq)
+	if err != nil {
+		return nil, transactionID, tabletconn.TabletErrorFromGRPC(err)
+	}
+	return sqltypes.Proto3ToResults(ebr.Results), transactionID, nil
+}
+
 // SplitQuery is the stub for TabletServer.SplitQuery RPC
 // TODO(erez): Remove this method and rename SplitQueryV2 to SplitQuery once
 // the migration to SplitQuery V2 is done.
