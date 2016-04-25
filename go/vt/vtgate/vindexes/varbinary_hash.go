@@ -26,9 +26,18 @@ func (vind *Varbinary) Cost() int {
 	return 1
 }
 
+func getVarbinaryHash(key interface{}) ([]byte, error) {
+	source, ok := key.([]byte)
+	if !ok {
+		return nil, fmt.Errorf("unexpected data type for binHash: %T", key)
+	}
+	val, error := binHash(source)
+	return val, error
+}
+
 // Verify returns true if id maps to ksid.
 func (vind *Varbinary) Verify(_ VCursor, id interface{}, ksid []byte) (bool, error) {
-	data, err := binHash(id, false)
+	data, err := getVarbinaryHash(id)
 	if err != nil {
 		return false, fmt.Errorf("Varbinary_hash.Verify: %v", err)
 	}
@@ -39,7 +48,7 @@ func (vind *Varbinary) Verify(_ VCursor, id interface{}, ksid []byte) (bool, err
 func (vind *Varbinary) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
-		data, err := binHash(id, false)
+		data, err := getVarbinaryHash(id)
 		if err != nil {
 			return nil, fmt.Errorf("VarBinary_hash.Map :%v", err)
 		}
