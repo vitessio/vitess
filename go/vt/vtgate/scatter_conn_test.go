@@ -444,8 +444,8 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	{
 		execCount0 := sbc0.ExecCount.Get()
 		execCount1 := sbc1.ExecCount.Get()
-		if execCount0 != 1 || execCount1 != 3 {
-			t.Errorf("want 1/3, got %d/%d", execCount0, execCount1)
+		if execCount0 != 1 || execCount1 != 1 {
+			t.Errorf("want 1/1, got %d/%d", execCount0, execCount1)
 		}
 	}
 	if commitCount := sbc0.CommitCount.Get(); commitCount != 0 {
@@ -484,8 +484,8 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	{
 		execCount0 := sbc0.ExecCount.Get()
 		execCount1 := sbc1.ExecCount.Get()
-		if execCount0 != 3 || execCount1 != 1 {
-			t.Errorf("want 3/1, got %d/%d", execCount0, execCount1)
+		if execCount0 != 1 || execCount1 != 1 {
+			t.Errorf("want 1/1, got %d/%d", execCount0, execCount1)
 		}
 	}
 	if commitCount := sbc0.CommitCount.Get(); commitCount != 1 {
@@ -524,8 +524,8 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	{
 		execCount0 := sbc0.ExecCount.Get()
 		execCount1 := sbc1.ExecCount.Get()
-		if execCount0 != 4 || execCount1 != 1 {
-			t.Errorf("want 4/1, got %d/%d", execCount0, execCount1)
+		if execCount0 != 2 || execCount1 != 1 {
+			t.Errorf("want 2/1, got %d/%d", execCount0, execCount1)
 		}
 	}
 	if commitCount := sbc0.CommitCount.Get(); commitCount != 1 {

@@ -143,8 +143,8 @@ func testShardConnGeneric(t *testing.T, name string, streaming bool, f func() er
 		t.Errorf("want 2, got %v", s.DialCounter)
 	}
 	// Ensure we executed 2 times before failing.
-	if execCount := sbc.ExecCount.Get(); execCount != 2 {
-		t.Errorf("want 2, got %v", execCount)
+	if count := sbc.ExecCount.Get() + sbc.BeginCount.Get(); count != 2 {
+		t.Errorf("want 2, got %v", count)
 	}
 
 	// retry error (one failure)
@@ -160,8 +160,8 @@ func testShardConnGeneric(t *testing.T, name string, streaming bool, f func() er
 		t.Errorf("want 2, got %v", s.DialCounter)
 	}
 	// Ensure we executed twice (second one succeeded)
-	if execCount := sbc.ExecCount.Get(); execCount != 2 {
-		t.Errorf("want 2, got %v", execCount)
+	if count := sbc.ExecCount.Get() + sbc.BeginCount.Get(); count != 2 {
+		t.Errorf("want 2, got %v", count)
 	}
 
 	// fatal error (one failure)
@@ -187,8 +187,8 @@ func testShardConnGeneric(t *testing.T, name string, streaming bool, f func() er
 		t.Errorf("want %v, got %v", wantCounter, s.DialCounter)
 	}
 	// Ensure we executed twice (second one succeeded)
-	if execCount := sbc.ExecCount.Get(); execCount != int64(wantCounter) {
-		t.Errorf("want %v, got %v", wantCounter, execCount)
+	if count := sbc.ExecCount.Get() + sbc.BeginCount.Get(); count != int64(wantCounter) {
+		t.Errorf("want %v, got %v", wantCounter, count)
 	}
 
 	// server error
@@ -203,8 +203,8 @@ func testShardConnGeneric(t *testing.T, name string, streaming bool, f func() er
 		t.Errorf("want 1, got %v", s.DialCounter)
 	}
 	// Ensure we did not re-execute.
-	if execCount := sbc.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
+	if count := sbc.ExecCount.Get() + sbc.BeginCount.Get(); count != 1 {
+		t.Errorf("want 1, got %v", count)
 	}
 
 	// conn error (one failure)
@@ -223,8 +223,8 @@ func testShardConnGeneric(t *testing.T, name string, streaming bool, f func() er
 		t.Errorf("want 1, got %v", s.DialCounter)
 	}
 	// Ensure we did not re-execute.
-	if execCount := sbc.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
+	if count := sbc.ExecCount.Get() + sbc.BeginCount.Get(); count != 1 {
+		t.Errorf("want 1, got %v", count)
 	}
 
 	// no failures
@@ -238,8 +238,8 @@ func testShardConnGeneric(t *testing.T, name string, streaming bool, f func() er
 	if s.DialCounter != 1 {
 		t.Errorf("want 1, got %v", s.DialCounter)
 	}
-	if execCount := sbc.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
+	if count := sbc.ExecCount.Get() + sbc.BeginCount.Get(); count != 1 {
+		t.Errorf("want 1, got %v", count)
 	}
 }
 
@@ -254,8 +254,8 @@ func testShardConnTransact(t *testing.T, name string, f func() error) {
 		t.Errorf("want %s, got %v", want, err)
 	}
 	// Should not retry if we're in transaction
-	if execCount := sbc.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
+	if count := sbc.BeginCount.Get() + sbc.ExecCount.Get() + sbc.CommitCount.Get() + sbc.RollbackCount.Get(); count != 1 {
+		t.Errorf("want 1, got %v", count)
 	}
 
 	// conn error
@@ -268,8 +268,8 @@ func testShardConnTransact(t *testing.T, name string, f func() error) {
 		t.Errorf("want %s, got %v", want, err)
 	}
 	// Should not retry if we're in transaction
-	if execCount := sbc.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
+	if count := sbc.ExecCount.Get() + sbc.CommitCount.Get() + sbc.RollbackCount.Get(); count != 1 {
+		t.Errorf("want 1, got %v", count)
 	}
 }
 
@@ -289,8 +289,8 @@ func TestShardConnBeginOther(t *testing.T) {
 		t.Errorf("want 1, got %v", s.DialCounter)
 	}
 	// Account for 1 call to Begin.
-	if execCount := sbc.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
+	if count := sbc.BeginCount.Get(); count != 1 {
+		t.Errorf("want 1, got %v", count)
 	}
 }
 

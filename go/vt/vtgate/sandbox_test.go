@@ -511,7 +511,6 @@ func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVar
 }
 
 func (sbc *sandboxConn) Begin(ctx context.Context) (int64, error) {
-	sbc.ExecCount.Add(1)
 	sbc.BeginCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -524,7 +523,6 @@ func (sbc *sandboxConn) Begin(ctx context.Context) (int64, error) {
 }
 
 func (sbc *sandboxConn) Commit(ctx context.Context, transactionID int64) error {
-	sbc.ExecCount.Add(1)
 	sbc.CommitCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -533,7 +531,6 @@ func (sbc *sandboxConn) Commit(ctx context.Context, transactionID int64) error {
 }
 
 func (sbc *sandboxConn) Rollback(ctx context.Context, transactionID int64) error {
-	sbc.ExecCount.Add(1)
 	sbc.RollbackCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
