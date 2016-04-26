@@ -739,6 +739,7 @@ class Tablet(object):
         'VtTabletExecute', '-json',
         '-keyspace', self.keyspace,
         '-shard', self.shard,
+        '-tablet_type', self.tablet_type,
     ]
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
@@ -760,6 +761,7 @@ class Tablet(object):
         'VtTabletBegin',
         '-keyspace', self.keyspace,
         '-shard', self.shard,
+        '-tablet_type', self.tablet_type,
         self.tablet_alias,
     ]
     result = utils.run_vtctl_json(args, auto_log=auto_log)
@@ -779,6 +781,7 @@ class Tablet(object):
         'VtTabletCommit',
         '-keyspace', self.keyspace,
         '-shard', self.shard,
+        '-tablet_type', self.tablet_type,
         self.tablet_alias,
         str(transaction_id),
     ]
@@ -798,6 +801,7 @@ class Tablet(object):
         'VtTabletRollback',
         '-keyspace', self.keyspace,
         '-shard', self.shard,
+        '-tablet_type', self.tablet_type,
         self.tablet_alias,
         str(transaction_id),
     ]
