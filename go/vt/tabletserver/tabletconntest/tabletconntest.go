@@ -32,9 +32,6 @@ import (
 type FakeQueryService struct {
 	t *testing.T
 
-	// if set, we check target, if not set we check sessionId
-	checkTarget bool
-
 	// these fields are used to simulate and synchronize on errors
 	hasError      bool
 	hasBeginError bool
@@ -145,14 +142,8 @@ const testAsTransaction bool = true
 const testSessionID int64 = 5678
 
 func (f *FakeQueryService) checkSessionTargetCallerID(ctx context.Context, name string, target *querypb.Target, sessionID int64) {
-	if f.checkTarget {
-		if !reflect.DeepEqual(target, testTarget) {
-			f.t.Errorf("invalid Target for %v: got %#v expected %#v", name, target, testTarget)
-		}
-	} else {
-		if sessionID != testSessionID {
-			f.t.Errorf("invalid sessionID for %v: got %v expected %v", name, sessionID, testSessionID)
-		}
+	if !reflect.DeepEqual(target, testTarget) {
+		f.t.Errorf("invalid Target for %v: got %#v expected %#v", name, target, testTarget)
 	}
 
 	ef := callerid.EffectiveCallerIDFromContext(ctx)
@@ -1059,26 +1050,12 @@ func TestSuite(t *testing.T, protocol string, endPoint *topodatapb.EndPoint, fak
 	// make sure we use the right client
 	*tabletconn.TabletProtocol = protocol
 
-	// create a connection, using sessionId
+	// create a connection
 	ctx := context.Background()
-	conn, err := tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, topodatapb.TabletType_UNKNOWN, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, topodatapb.TabletType_REPLICA, 30*time.Second)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
-	fake.checkTarget = false
-
-	// run the tests
-	for _, c := range tests {
-		c(t, conn, fake)
-	}
-
-	// create a new connection that expects the target
-	conn.Close()
-	conn, err = tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, topodatapb.TabletType_REPLICA, 30*time.Second)
-	if err != nil {
-		t.Fatalf("dial failed: %v", err)
-	}
-	fake.checkTarget = true
 
 	// run the tests
 	for _, c := range tests {

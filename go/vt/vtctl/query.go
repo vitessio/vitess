@@ -469,8 +469,8 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 		return fmt.Errorf("cannot get EndPoint from tablet record: %v", err)
 	}
 
-	// pass in a non-UNKNOWN tablet type to not use sessionId
-	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", topodatapb.TabletType_MASTER, *connectTimeout)
+	// tablet type is unused for StreamHealth, use UNKNOWN
+	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", topodatapb.TabletType_UNKNOWN, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}

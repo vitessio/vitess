@@ -44,11 +44,10 @@ type gRPCQueryClient struct {
 	endPoint *topodatapb.EndPoint
 
 	// mu protects the next fields
-	mu        sync.RWMutex
-	cc        *grpc.ClientConn
-	c         queryservicepb.QueryClient
-	sessionID int64
-	target    *querypb.Target
+	mu     sync.RWMutex
+	cc     *grpc.ClientConn
+	c      queryservicepb.QueryClient
+	target *querypb.Target
 }
 
 // DialTablet creates and initializes gRPCQueryClient.
@@ -69,25 +68,11 @@ func DialTablet(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, sh
 		endPoint: endPoint,
 		cc:       cc,
 		c:        c,
-	}
-	if tabletType == topodatapb.TabletType_UNKNOWN {
-		// we use session
-		gsir, err := c.GetSessionId(ctx, &querypb.GetSessionIdRequest{
-			Keyspace: keyspace,
-			Shard:    shard,
-		})
-		if err != nil {
-			cc.Close()
-			return nil, err
-		}
-		result.sessionID = gsir.SessionId
-	} else {
-		// we use target
-		result.target = &querypb.Target{
+		target: &querypb.Target{
 			Keyspace:   keyspace,
 			Shard:      shard,
 			TabletType: tabletType,
-		}
+		},
 	}
 
 	return result, nil
@@ -112,7 +97,6 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		Query:             q,
 		TransactionId:     transactionID,
-		SessionId:         conn.sessionID,
 	}
 	er, err := conn.c.Execute(ctx, req)
 	if err != nil {
@@ -136,7 +120,6 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []queryty
 		Queries:           make([]*querypb.BoundQuery, len(queries)),
 		AsTransaction:     asTransaction,
 		TransactionId:     transactionID,
-		SessionId:         conn.sessionID,
 	}
 	for i, q := range queries {
 		qq, err := querytypes.BoundQueryToProto3(q.Sql, q.BindVariables)
@@ -189,7 +172,6 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		Query:             q,
-		SessionId:         conn.sessionID,
 	}
 	stream, err := conn.c.StreamExecute(ctx, req)
 	if err != nil {
@@ -210,7 +192,6 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context) (transactionID int64, er
 		Target:            conn.target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-		SessionId:         conn.sessionID,
 	}
 	br, err := conn.c.Begin(ctx, req)
 	if err != nil {
@@ -232,7 +213,6 @@ func (conn *gRPCQueryClient) Commit(ctx context.Context, transactionID int64) er
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		TransactionId:     transactionID,
-		SessionId:         conn.sessionID,
 	}
 	_, err := conn.c.Commit(ctx, req)
 	if err != nil {
@@ -254,7 +234,6 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) 
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		TransactionId:     transactionID,
-		SessionId:         conn.sessionID,
 	}
 	_, err := conn.c.Rollback(ctx, req)
 	if err != nil {
@@ -275,7 +254,6 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, query string, bin
 		Target:            conn.target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-		SessionId:         conn.sessionID,
 	}
 	br, err := conn.c.Begin(ctx, breq)
 	if err != nil {
@@ -294,7 +272,6 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, query string, bin
 		ImmediateCallerId: breq.ImmediateCallerId,
 		Query:             q,
 		TransactionId:     transactionID,
-		SessionId:         conn.sessionID,
 	}
 	er, err := conn.c.Execute(ctx, ereq)
 	if err != nil {
@@ -316,7 +293,6 @@ func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, queries []qu
 		Target:            conn.target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-		SessionId:         conn.sessionID,
 	}
 	br, err := conn.c.Begin(ctx, breq)
 	if err != nil {
@@ -331,7 +307,6 @@ func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, queries []qu
 		Queries:           make([]*querypb.BoundQuery, len(queries)),
 		AsTransaction:     asTransaction,
 		TransactionId:     transactionID,
-		SessionId:         conn.sessionID,
 	}
 	for i, q := range queries {
 		qq, err := querytypes.BoundQueryToProto3(q.Sql, q.BindVariables)
@@ -372,7 +347,6 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query querytypes.Bo
 		NumRowsPerQueryPart: 0,
 		Algorithm:           querypb.SplitQueryRequest_EQUAL_SPLITS,
 		UseSplitQueryV2:     false,
-		SessionId:           conn.sessionID,
 	}
 	sqr, err := conn.c.SplitQuery(ctx, req)
 	if err != nil {
@@ -415,7 +389,6 @@ func (conn *gRPCQueryClient) SplitQueryV2(
 		NumRowsPerQueryPart: numRowsPerQueryPart,
 		Algorithm:           algorithm,
 		UseSplitQueryV2:     true,
-		SessionId:           conn.sessionID,
 	}
 	sqr, err := conn.c.SplitQuery(ctx, req)
 	if err != nil {
@@ -441,7 +414,6 @@ func (conn *gRPCQueryClient) Close() {
 		return
 	}
 
-	conn.sessionID = 0
 	cc := conn.cc
 	conn.cc = nil
 	cc.Close()
@@ -451,9 +423,6 @@ func (conn *gRPCQueryClient) Close() {
 func (conn *gRPCQueryClient) SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error {
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
-	if conn.target == nil {
-		return fmt.Errorf("cannot set target on sessionId based conn")
-	}
 	if tabletType == topodatapb.TabletType_UNKNOWN {
 		return fmt.Errorf("cannot set tablet type to UNKNOWN")
 	}
