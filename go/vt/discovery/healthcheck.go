@@ -232,7 +232,9 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, en
 
 // connect creates connection to the endpoint and starts streaming.
 func (hcc *healthCheckConn) connect(hc *HealthCheckImpl, endPoint *topodatapb.EndPoint) (tabletconn.StreamHealthReader, error) {
-	conn, err := tabletconn.GetDialer()(hcc.ctx, endPoint, "" /*keyspace*/, "" /*shard*/, topodatapb.TabletType_RDONLY, hc.connTimeout)
+	// Keyspace, shard and tabletType are not known yet, but they're unused
+	// by StreamHealth. We'll use SetTarget later to set them.
+	conn, err := tabletconn.GetDialer()(hcc.ctx, endPoint, "" /*keyspace*/, "" /*shard*/, topodatapb.TabletType_UNKNOWN, hc.connTimeout)
 	if err != nil {
 		return nil, err
 	}

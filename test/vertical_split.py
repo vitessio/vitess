@@ -129,11 +129,13 @@ class TestVerticalSplit(unittest.TestCase, base_sharding.BaseShardingTest):
                              'ServedFrom(rdonly): source_keyspace\n'
                              'ServedFrom(replica): source_keyspace\n')
 
-    # reparent to make the tablets work
+    # reparent to make the tablets work (we use health check, fix their types)
     utils.run_vtctl(['InitShardMaster', '-force', 'source_keyspace/0',
                      source_master.tablet_alias], auto_log=True)
+    source_master.tablet_type = 'master'
     utils.run_vtctl(['InitShardMaster', '-force', 'destination_keyspace/0',
                      destination_master.tablet_alias], auto_log=True)
+    destination_master.tablet_type = 'master'
 
     for t in all_setup_tablets:
       t.wait_for_vttablet_state('SERVING')
@@ -284,6 +286,7 @@ index by_msg (msg)
         _, stderr = utils.run_vtctl(['VtTabletExecute', '-json',
                                      '-keyspace', t.keyspace,
                                      '-shard', t.shard,
+                                     '-tablet_type', t.tablet_type,
                                      t.tablet_alias,
                                      'select count(1) from %s' % table],
                                     expect_fail=True)

@@ -158,14 +158,14 @@ func (ftc *fakeTabletConn) Rollback(ctx context.Context, transactionID int64) er
 	return fmt.Errorf("not implemented in this test")
 }
 
-// Execute2 is part of the TabletConn interface
-func (ftc *fakeTabletConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
-	return nil, fmt.Errorf("not implemented in this test")
+// BeginExecute is part of the TabletConn interface
+func (ftc *fakeTabletConn) BeginExecute(ctx context.Context, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error) {
+	return nil, 0, fmt.Errorf("not implemented in this test")
 }
 
-// ExecuteBatch2 is part of the TabletConn interface
-func (ftc *fakeTabletConn) ExecuteBatch2(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
-	return nil, fmt.Errorf("not implemented in this test")
+// BeginExecuteBatch is part of the TabletConn interface
+func (ftc *fakeTabletConn) BeginExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+	return nil, 0, fmt.Errorf("not implemented in this test")
 }
 
 // Close is part of the TabletConn interface

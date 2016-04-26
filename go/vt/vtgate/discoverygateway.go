@@ -161,6 +161,28 @@ func (dg *discoveryGateway) Rollback(ctx context.Context, keyspace, shard string
 	}, transactionID, false)
 }
 
+// BeginExecute executes a begin and the non-streaming query for the
+// specified keyspace, shard, and tablet type.
+func (dg *discoveryGateway) BeginExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}) (qr *sqltypes.Result, transactionID int64, err error) {
+	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
+		var innerErr error
+		qr, transactionID, innerErr = conn.BeginExecute(ctx, query, bindVars)
+		return innerErr
+	}, 0, false)
+	return qr, transactionID, err
+}
+
+// BeginExecuteBatch executes a begin and a group of queries for the
+// specified keyspace, shard, and tablet type.
+func (dg *discoveryGateway) BeginExecuteBatch(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, queries []querytypes.BoundQuery, asTransaction bool) (qrs []sqltypes.Result, transactionID int64, err error) {
+	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
+		var innerErr error
+		qrs, transactionID, innerErr = conn.BeginExecuteBatch(ctx, queries, asTransaction)
+		return innerErr
+	}, 0, false)
+	return qrs, transactionID, err
+}
+
 // SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
 func (dg *discoveryGateway) SplitQuery(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) (queries []querytypes.QuerySplit, err error) {
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {

@@ -49,8 +49,7 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 		return nil, err
 	}
 
-	// use sessionId for now
-	conn, err := tabletconn.GetDialer()(ctx, endPoint, tablet.Keyspace, tablet.Shard, topodatapb.TabletType_UNKNOWN, *remoteActionsTimeout)
+	conn, err := tabletconn.GetDialer()(ctx, endPoint, tablet.Keyspace, tablet.Shard, tablet.Type, *remoteActionsTimeout)
 	if err != nil {
 		return nil, err
 	}

@@ -87,9 +87,8 @@ func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias 
 		return err
 	}
 
-	// Pass in a tablet type that is not UNKNOWN, so we don't ask
-	// for sessionId.
-	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", topodatapb.TabletType_MASTER, 30*time.Second)
+	// TabletType is unused for StreamHealth, use UNKNOWN
+	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", topodatapb.TabletType_UNKNOWN, 30*time.Second)
 	if err != nil {
 		return err
 	}

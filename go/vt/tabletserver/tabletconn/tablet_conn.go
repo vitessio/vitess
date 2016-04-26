@@ -29,8 +29,13 @@ const (
 )
 
 const (
+	// ConnClosed is returned when the underlying connection was closed.
 	ConnClosed = OperationalError("vttablet: Connection Closed")
-	Cancelled  = OperationalError("vttablet: Context Cancelled")
+
+	// Cancelled can be returned if the user canceled the request.
+	// FIXME(alainjobart): this seems wrong, if anything, we should rely
+	// on context being canceled, or just use context.Canceled.
+	Cancelled = OperationalError("vttablet: Context Cancelled")
 )
 
 var (
@@ -73,21 +78,20 @@ type StreamHealthReader interface {
 // TabletDialer represents a function that will return a TabletConn
 // object that can communicate with a tablet.
 //
-// We support two modes of operation:
-// 1 - using GetSessionId (right after dialing) to get a sessionId.
-// 2 - using Target with each call (and never calling GetSessionId).
-// If tabletType is set to UNKNOWN, we'll use mode 1.
-// Mode 1 is being deprecated.
+// keyspace, shard and tabletType are remembered and used as Target.
+// Use SetTarget to update them later.
+// If the TabletDialer is used for StreamHealth only, then keyspace, shard
+// and tabletType won't be used.
 type TabletDialer func(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (TabletConn, error)
 
 // TabletConn defines the interface for a vttablet client. It should
 // not be concurrently used across goroutines.
 type TabletConn interface {
 	// Execute executes a non-streaming query on vttablet.
-	Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (*sqltypes.Result, error)
+	Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error)
 
 	// ExecuteBatch executes a group of queries.
-	ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionId int64) ([]sqltypes.Result, error)
+	ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error)
 
 	// StreamExecute executes a streaming query on vttablet. It
 	// returns a sqltypes.ResultStream to get results from. If
@@ -97,16 +101,21 @@ type TabletConn interface {
 	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error)
 
 	// Transaction support
-	Begin(ctx context.Context) (transactionId int64, err error)
-	Commit(ctx context.Context, transactionId int64) error
-	Rollback(ctx context.Context, transactionId int64) error
+	Begin(ctx context.Context) (transactionID int64, err error)
+	Commit(ctx context.Context, transactionID int64) error
+	Rollback(ctx context.Context, transactionID int64) error
+
+	// Combo RPC calls: they execute both a Begin and another call.
+	// Note even if error is set, transactionID may be returned
+	// and different than zero, if the Begin part worked.
+	BeginExecute(ctx context.Context, query string, bindVars map[string]interface{}) (result *sqltypes.Result, transactionID int64, err error)
+	BeginExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool) (results []sqltypes.Result, transactionID int64, err error)
 
 	// Close must be called for releasing resources.
 	Close()
 
 	// SetTarget can be called to change the target used for
-	// subsequent calls. Can only be called if tabletType was not
-	// set to UNKNOWN in TabletDialer.
+	// subsequent calls.
 	SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error
 
 	// GetEndPoint returns the end point info.

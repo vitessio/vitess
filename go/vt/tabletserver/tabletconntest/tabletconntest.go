@@ -30,15 +30,21 @@ import (
 
 // FakeQueryService has the server side of this fake
 type FakeQueryService struct {
-	t                        *testing.T
-	hasError                 bool
+	t *testing.T
+
+	// these fields are used to simulate and synchronize on errors
+	hasError      bool
+	hasBeginError bool
+	tabletError   *tabletserver.TabletError
+	errorWait     chan struct{}
+
+	// these fields are used to simulate and synchronize on panics
 	panics                   bool
 	streamExecutePanicsEarly bool
 	panicWait                chan struct{}
-	errorWait                chan struct{}
 
-	// if set, we check target, if not set we check sessionId
-	checkTarget bool
+	// expectedTransactionID is what transactionID to expect for Execute
+	expectedTransactionID int64
 }
 
 // HandlePanic is part of the queryservice.QueryService interface
@@ -48,40 +54,70 @@ func (f *FakeQueryService) HandlePanic(err *error) {
 	}
 }
 
-const expectedErrMatch string = "error: generic error"
-const expectedCode vtrpcpb.ErrorCode = vtrpcpb.ErrorCode_BAD_INPUT
+// testErrorHelper will check one instance of each error type,
+// to make sure we propagate the errors properly.
+func testErrorHelper(t *testing.T, f *FakeQueryService, name string, ef func(context.Context) error) {
+	errors := []*tabletserver.TabletError{
+		// ErrFail is associated with a number of errors
+		tabletserver.NewTabletError(tabletserver.ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "generic error"),
+		tabletserver.NewTabletError(tabletserver.ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "uncaught panic"),
+		tabletserver.NewTabletError(tabletserver.ErrFail, vtrpcpb.ErrorCode_UNAUTHENTICATED, "missing caller id"),
+		tabletserver.NewTabletError(tabletserver.ErrFail, vtrpcpb.ErrorCode_PERMISSION_DENIED, "table acl error: nil acl"),
 
-var testTabletError = tabletserver.NewTabletError(tabletserver.ErrFail, expectedCode, "generic error")
+		// ErrRetry is always associated with QUERY_NOT_SERVED
+		tabletserver.NewTabletError(tabletserver.ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Query disallowed due to rule: %v", "cool rule"),
 
-// Verifies the returned error has the properties that we expect.
-func verifyError(t *testing.T, err error, method string) {
-	if err == nil {
-		t.Errorf("%s was expecting an error, didn't get one", method)
-		return
+		// ErrFatal is always associated with INTERNAL_ERROR
+		tabletserver.NewTabletError(tabletserver.ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not verify strict mode"),
+
+		// ErrTxPoolFull is always associated with RESOURCE_EXHAUSTED
+		tabletserver.NewTabletError(tabletserver.ErrTxPoolFull, vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, "Transaction pool connection limit exceeded"),
+
+		// ErrNotInTx is always associated with NOT_IN_TX
+		tabletserver.NewTabletError(tabletserver.ErrNotInTx, vtrpcpb.ErrorCode_NOT_IN_TX, "Transaction 12"),
 	}
-	code := vterrors.RecoverVtErrorCode(err)
-	if code != expectedCode {
-		t.Errorf("Unexpected server code from %s: got %v, wanted %v", method, code, expectedCode)
+	for _, e := range errors {
+		f.tabletError = e
+		ctx := context.Background()
+		err := ef(ctx)
+		if err == nil {
+			t.Errorf("error wasn't returned for %v?", name)
+			continue
+		}
+
+		// First we check the vtrpc code is right.
+		code := vterrors.RecoverVtErrorCode(err)
+		if code != e.ErrorCode {
+			t.Errorf("unexpected server code from %v: got %v, wanted %v", name, code, e.ErrorCode)
+		}
+		sError, ok := err.(*tabletconn.ServerError)
+		if !ok {
+			t.Errorf("error wasn't a tabletconn.ServerError for %v?", name)
+			continue
+		}
+
+		// Then we check the code is right. This depends on
+		// the values for tabletserver.TabletError.ErrorType
+		// and tabletconn.ServerError.Code using the same values.
+		if sError.Code != e.ErrorType {
+			t.Errorf("unexpected ServerError code from %v: got %v, wanted %v", name, sError.Code, e.ErrorType)
+		}
+
+		// and last we check we preserve the text, with the right prefix
+		if !strings.Contains(err.Error(), e.Prefix()+e.Message) {
+			t.Errorf("client error message '%v' for %v doesn't contain expected server text message '%v'", err.Error(), name, e.Prefix()+e.Message)
+		}
 	}
-	verifyErrorExceptServerCode(t, err, method)
+	f.tabletError = nil
 }
 
-func verifyErrorExceptServerCode(t *testing.T, err error, method string) {
-	if err == nil {
-		t.Errorf("%s was expecting an error, didn't get one", method)
-		return
+func testPanicHelper(t *testing.T, f *FakeQueryService, name string, pf func(context.Context) error) {
+	f.panics = true
+	ctx := context.Background()
+	if err := pf(ctx); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error for %v: %v", name, err)
 	}
-
-	if se, ok := err.(*tabletconn.ServerError); ok {
-		if se.Code != tabletconn.ERR_NORMAL {
-			t.Errorf("Unexpected error code from %s: got %v, wanted %v", method, se.Code, tabletconn.ERR_NORMAL)
-		}
-	} else {
-		t.Errorf("Unexpected error type from %s: got %v, wanted *tabletconn.ServerError", method, reflect.TypeOf(err))
-	}
-	if !strings.Contains(err.Error(), expectedErrMatch) {
-		t.Errorf("Unexpected error from %s: got %v, wanted err containing %v", method, err, expectedErrMatch)
-	}
+	f.panics = false
 }
 
 // testTarget is the target we use for this test
@@ -103,17 +139,9 @@ var testVTGateCallerID = &querypb.VTGateCallerID{
 
 const testAsTransaction bool = true
 
-const testSessionID int64 = 5678
-
-func (f *FakeQueryService) checkSessionTargetCallerID(ctx context.Context, name string, target *querypb.Target, sessionID int64) {
-	if f.checkTarget {
-		if !reflect.DeepEqual(target, testTarget) {
-			f.t.Errorf("invalid Target for %v: got %#v expected %#v", name, target, testTarget)
-		}
-	} else {
-		if sessionID != testSessionID {
-			f.t.Errorf("invalid sessionID for %v: got %v expected %v", name, sessionID, testSessionID)
-		}
+func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string, target *querypb.Target) {
+	if !reflect.DeepEqual(target, testTarget) {
+		f.t.Errorf("invalid Target for %v: got %#v expected %#v", name, target, testTarget)
 	}
 
 	ef := callerid.EffectiveCallerIDFromContext(ctx)
@@ -137,30 +165,25 @@ func (f *FakeQueryService) checkSessionTargetCallerID(ctx context.Context, name 
 
 // GetSessionId is part of the queryservice.QueryService interface
 func (f *FakeQueryService) GetSessionId(keyspace, shard string) (int64, error) {
-	if keyspace != testTarget.Keyspace {
-		f.t.Errorf("invalid keyspace: got %v expected %v", keyspace, testTarget.Keyspace)
-	}
-	if shard != testTarget.Shard {
-		f.t.Errorf("invalid shard: got %v expected %v", shard, testTarget.Shard)
-	}
-	return testSessionID, nil
+	f.t.Fatal("GetSessionId should not be called any more")
+	return 0, nil
 }
 
 // Begin is part of the queryservice.QueryService interface
 func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, sessionID int64) (int64, error) {
-	if f.hasError {
-		return 0, testTabletError
+	if f.hasBeginError {
+		return 0, f.tabletError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	f.checkSessionTargetCallerID(ctx, "Begin", target, sessionID)
+	f.checkTargetCallerID(ctx, "Begin", target)
 	return beginTransactionID, nil
 }
 
 const beginTransactionID int64 = 9990
 
-func testBegin(t *testing.T, conn tabletconn.TabletConn) {
+func testBegin(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	transactionID, err := conn.Begin(ctx)
@@ -172,28 +195,31 @@ func testBegin(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
-func testBeginError(t *testing.T, conn tabletconn.TabletConn) {
-	ctx := context.Background()
-	_, err := conn.Begin(ctx)
-	verifyError(t, err, "Begin")
+func testBeginError(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	f.hasBeginError = true
+	testErrorHelper(t, f, "Begin", func(ctx context.Context) error {
+		_, err := conn.Begin(ctx)
+		return err
+	})
+	f.hasBeginError = false
 }
 
-func testBeginPanics(t *testing.T, conn tabletconn.TabletConn) {
-	ctx := context.Background()
-	if _, err := conn.Begin(ctx); err == nil || !strings.Contains(err.Error(), "caught test panic") {
-		t.Fatalf("unexpected panic error: %v", err)
-	}
+func testBeginPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	testPanicHelper(t, f, "Begin", func(ctx context.Context) error {
+		_, err := conn.Begin(ctx)
+		return err
+	})
 }
 
 // Commit is part of the queryservice.QueryService interface
 func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) error {
 	if f.hasError {
-		return testTabletError
+		return f.tabletError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	f.checkSessionTargetCallerID(ctx, "Commit", target, sessionID)
+	f.checkTargetCallerID(ctx, "Commit", target)
 	if transactionID != commitTransactionID {
 		f.t.Errorf("Commit: invalid TransactionId: got %v expected %v", transactionID, commitTransactionID)
 	}
@@ -202,7 +228,7 @@ func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, s
 
 const commitTransactionID int64 = 999044
 
-func testCommit(t *testing.T, conn tabletconn.TabletConn) {
+func testCommit(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	err := conn.Commit(ctx, commitTransactionID)
@@ -211,28 +237,29 @@ func testCommit(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
-func testCommitError(t *testing.T, conn tabletconn.TabletConn) {
-	ctx := context.Background()
-	err := conn.Commit(ctx, commitTransactionID)
-	verifyError(t, err, "Commit")
+func testCommitError(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	f.hasError = true
+	testErrorHelper(t, f, "Commit", func(ctx context.Context) error {
+		return conn.Commit(ctx, commitTransactionID)
+	})
+	f.hasError = false
 }
 
-func testCommitPanics(t *testing.T, conn tabletconn.TabletConn) {
-	ctx := context.Background()
-	if err := conn.Commit(ctx, commitTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
-		t.Fatalf("unexpected panic error: %v", err)
-	}
+func testCommitPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	testPanicHelper(t, f, "Commit", func(ctx context.Context) error {
+		return conn.Commit(ctx, commitTransactionID)
+	})
 }
 
 // Rollback is part of the queryservice.QueryService interface
 func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) error {
 	if f.hasError {
-		return testTabletError
+		return f.tabletError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	f.checkSessionTargetCallerID(ctx, "Rollback", target, sessionID)
+	f.checkTargetCallerID(ctx, "Rollback", target)
 	if transactionID != rollbackTransactionID {
 		f.t.Errorf("Rollback: invalid TransactionId: got %v expected %v", transactionID, rollbackTransactionID)
 	}
@@ -241,7 +268,7 @@ func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target,
 
 const rollbackTransactionID int64 = 999044
 
-func testRollback(t *testing.T, conn tabletconn.TabletConn) {
+func testRollback(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	err := conn.Rollback(ctx, rollbackTransactionID)
@@ -250,23 +277,23 @@ func testRollback(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
-func testRollbackError(t *testing.T, conn tabletconn.TabletConn) {
-	ctx := context.Background()
-	err := conn.Rollback(ctx, commitTransactionID)
-	verifyError(t, err, "Rollback")
+func testRollbackError(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	f.hasError = true
+	testErrorHelper(t, f, "Rollback", func(ctx context.Context) error {
+		return conn.Rollback(ctx, commitTransactionID)
+	})
 }
 
-func testRollbackPanics(t *testing.T, conn tabletconn.TabletConn) {
-	ctx := context.Background()
-	if err := conn.Rollback(ctx, rollbackTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
-		t.Fatalf("unexpected panic error: %v", err)
-	}
+func testRollbackPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	testPanicHelper(t, f, "Rollback", func(ctx context.Context) error {
+		return conn.Rollback(ctx, rollbackTransactionID)
+	})
 }
 
 // Execute is part of the queryservice.QueryService interface
 func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID, transactionID int64) (*sqltypes.Result, error) {
 	if f.hasError {
-		return nil, testTabletError
+		return nil, f.tabletError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -277,9 +304,9 @@ func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, 
 	if !reflect.DeepEqual(bindVariables, executeBindVars) {
 		f.t.Errorf("invalid Execute.BindVariables: got %v expected %v", bindVariables, executeBindVars)
 	}
-	f.checkSessionTargetCallerID(ctx, "Execute", target, sessionID)
-	if transactionID != executeTransactionID {
-		f.t.Errorf("invalid Execute.TransactionId: got %v expected %v", transactionID, executeTransactionID)
+	f.checkTargetCallerID(ctx, "Execute", target)
+	if transactionID != f.expectedTransactionID {
+		f.t.Errorf("invalid Execute.TransactionId: got %v expected %v", transactionID, f.expectedTransactionID)
 	}
 	return &executeQueryResult, nil
 }
@@ -317,7 +344,8 @@ var executeQueryResult = sqltypes.Result{
 	},
 }
 
-func testExecute(t *testing.T, conn tabletconn.TabletConn) {
+func testExecute(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	f.expectedTransactionID = executeTransactionID
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	qr, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionID)
@@ -329,17 +357,68 @@ func testExecute(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
-func testExecuteError(t *testing.T, conn tabletconn.TabletConn) {
-	ctx := context.Background()
-	_, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionID)
-	verifyError(t, err, "Execute")
+func testExecuteError(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	f.hasError = true
+	testErrorHelper(t, f, "Execute", func(ctx context.Context) error {
+		_, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionID)
+		return err
+	})
+	f.hasError = false
 }
 
-func testExecutePanics(t *testing.T, conn tabletconn.TabletConn) {
+func testExecutePanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	testPanicHelper(t, f, "Execute", func(ctx context.Context) error {
+		_, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionID)
+		return err
+	})
+}
+
+func testBeginExecute(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	f.expectedTransactionID = beginTransactionID
 	ctx := context.Background()
-	if _, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
-		t.Fatalf("unexpected panic error: %v", err)
+	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
+	qr, transactionID, err := conn.BeginExecute(ctx, executeQuery, executeBindVars)
+	if err != nil {
+		t.Fatalf("BeginExecute failed: %v", err)
 	}
+	if transactionID != beginTransactionID {
+		t.Errorf("Unexpected result from BeginExecute: got %v wanted %v", transactionID, beginTransactionID)
+	}
+	if !reflect.DeepEqual(*qr, executeQueryResult) {
+		t.Errorf("Unexpected result from BeginExecute: got %v wanted %v", qr, executeQueryResult)
+	}
+}
+
+func testBeginExecuteErrorInBegin(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	f.hasBeginError = true
+	testErrorHelper(t, f, "BeginExecute.Begin", func(ctx context.Context) error {
+		_, transactionID, err := conn.BeginExecute(ctx, executeQuery, executeBindVars)
+		if transactionID != 0 {
+			t.Errorf("Unexpected transactionID from BeginExecute: got %v wanted 0", transactionID)
+		}
+		return err
+	})
+	f.hasBeginError = false
+}
+
+func testBeginExecuteErrorInExecute(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	f.hasError = true
+	testErrorHelper(t, f, "BeginExecute.Execute", func(ctx context.Context) error {
+		ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
+		_, transactionID, err := conn.BeginExecute(ctx, executeQuery, executeBindVars)
+		if transactionID != beginTransactionID {
+			t.Errorf("Unexpected transactionID from BeginExecute: got %v wanted %v", transactionID, beginTransactionID)
+		}
+		return err
+	})
+	f.hasError = false
+}
+
+func testBeginExecutePanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	testPanicHelper(t, f, "BeginExecute", func(ctx context.Context) error {
+		_, _, err := conn.BeginExecute(ctx, executeQuery, executeBindVars)
+		return err
+	})
 }
 
 // StreamExecute is part of the queryservice.QueryService interface
@@ -353,22 +432,21 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Ta
 	if !reflect.DeepEqual(bindVariables, streamExecuteBindVars) {
 		f.t.Errorf("invalid StreamExecute.BindVariables: got %v expected %v", bindVariables, streamExecuteBindVars)
 	}
-	f.checkSessionTargetCallerID(ctx, "StreamExecute", target, sessionID)
+	f.checkTargetCallerID(ctx, "StreamExecute", target)
 	if err := sendReply(&streamExecuteQueryResult1); err != nil {
 		f.t.Errorf("sendReply1 failed: %v", err)
 	}
 	if f.panics && !f.streamExecutePanicsEarly {
 		// wait until the client gets the response, then panics
 		<-f.panicWait
-		f.panicWait = make(chan struct{}) // for next test
 		panic(fmt.Errorf("test-triggered panic late"))
 	}
 	if f.hasError {
-		// wait until the client has the response, since all streaming implementation may not
-		// send previous messages if an error has been triggered.
+		// wait until the client has the response, since all
+		// streaming implementation may not send previous
+		// messages if an error has been triggered.
 		<-f.errorWait
-		f.errorWait = make(chan struct{}) // for next test
-		return testTabletError
+		return f.tabletError
 	}
 	if err := sendReply(&streamExecuteQueryResult2); err != nil {
 		f.t.Errorf("sendReply2 failed: %v", err)
@@ -408,7 +486,7 @@ var streamExecuteQueryResult2 = sqltypes.Result{
 	},
 }
 
-func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
+func testStreamExecute(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	stream, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars)
@@ -441,78 +519,81 @@ func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
-func testStreamExecuteError(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
-	ctx := context.Background()
-	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
-	stream, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars)
-	if err != nil {
-		t.Fatalf("StreamExecute failed: %v", err)
-	}
-	qr, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("StreamExecute failed: cannot read result1: %v", err)
-	}
-	if len(qr.Rows) == 0 {
-		qr.Rows = nil
-	}
-	if !reflect.DeepEqual(*qr, streamExecuteQueryResult1) {
-		t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, streamExecuteQueryResult1)
-	}
-	// signal to the server that the first result has been received
-	close(fake.errorWait)
-	// After 1 result, we expect to get an error (no more results).
-	qr, err = stream.Recv()
-	if err == nil {
-		t.Fatalf("StreamExecute channel wasn't closed")
-	}
-	verifyError(t, err, "StreamExecute")
+func testStreamExecuteError(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	f.hasError = true
+	testErrorHelper(t, f, "StreamExecute", func(ctx context.Context) error {
+		f.errorWait = make(chan struct{})
+		ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
+		stream, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars)
+		if err != nil {
+			t.Fatalf("StreamExecute failed: %v", err)
+		}
+		qr, err := stream.Recv()
+		if err != nil {
+			t.Fatalf("StreamExecute failed: cannot read result1: %v", err)
+		}
+		if len(qr.Rows) == 0 {
+			qr.Rows = nil
+		}
+		if !reflect.DeepEqual(*qr, streamExecuteQueryResult1) {
+			t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, streamExecuteQueryResult1)
+		}
+		// signal to the server that the first result has been received
+		close(f.errorWait)
+		// After 1 result, we expect to get an error (no more results).
+		qr, err = stream.Recv()
+		if err == nil {
+			t.Fatalf("StreamExecute channel wasn't closed")
+		}
+		return err
+	})
+	f.hasError = false
 }
 
-func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
+func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
 	// early panic is before sending the Fields, that is returned
 	// by the StreamExecute call itself, or as the first error
 	// by ErrFunc
-	ctx := context.Background()
-	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
-	fake.streamExecutePanicsEarly = true
-	stream, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars)
-	if err != nil {
-		if !strings.Contains(err.Error(), "caught test panic") {
-			t.Fatalf("unexpected panic error: %v", err)
+	f.streamExecutePanicsEarly = true
+	testPanicHelper(t, f, "StreamExecute.Early", func(ctx context.Context) error {
+		ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
+		stream, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars)
+		if err != nil {
+			return err
 		}
-	} else {
-		_, err := stream.Recv()
-		if err == nil || !strings.Contains(err.Error(), "caught test panic") {
-			t.Fatalf("unexpected panic error: %v", err)
-		}
-	}
+		_, err = stream.Recv()
+		return err
+	})
 
 	// late panic is after sending Fields
-	fake.streamExecutePanicsEarly = false
-	stream, err = conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars)
-	if err != nil {
-		t.Fatalf("StreamExecute failed: %v", err)
-	}
-	qr, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("StreamExecute failed: cannot read result1: %v", err)
-	}
-	if len(qr.Rows) == 0 {
-		qr.Rows = nil
-	}
-	if !reflect.DeepEqual(*qr, streamExecuteQueryResult1) {
-		t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, streamExecuteQueryResult1)
-	}
-	close(fake.panicWait)
-	if _, err := stream.Recv(); err == nil || !strings.Contains(err.Error(), "caught test panic") {
-		t.Fatalf("unexpected panic error: %v", err)
-	}
+	f.streamExecutePanicsEarly = false
+	testPanicHelper(t, f, "StreamExecute.Late", func(ctx context.Context) error {
+		f.panicWait = make(chan struct{})
+		ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
+		stream, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars)
+		if err != nil {
+			t.Fatalf("StreamExecute failed: %v", err)
+		}
+		qr, err := stream.Recv()
+		if err != nil {
+			t.Fatalf("StreamExecute failed: cannot read result1: %v", err)
+		}
+		if len(qr.Rows) == 0 {
+			qr.Rows = nil
+		}
+		if !reflect.DeepEqual(*qr, streamExecuteQueryResult1) {
+			t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, streamExecuteQueryResult1)
+		}
+		close(f.panicWait)
+		_, err = stream.Recv()
+		return err
+	})
 }
 
 // ExecuteBatch is part of the queryservice.QueryService interface
 func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, sessionID int64, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	if f.hasError {
-		return nil, testTabletError
+		return nil, f.tabletError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -520,12 +601,12 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Tar
 	if !reflect.DeepEqual(queries, executeBatchQueries) {
 		f.t.Errorf("invalid ExecuteBatch.Queries: got %v expected %v", queries, executeBatchQueries)
 	}
-	f.checkSessionTargetCallerID(ctx, "ExecuteBatch", target, sessionID)
+	f.checkTargetCallerID(ctx, "ExecuteBatch", target)
 	if asTransaction != testAsTransaction {
 		f.t.Errorf("invalid ExecuteBatch.AsTransaction: got %v expected %v", asTransaction, testAsTransaction)
 	}
-	if transactionID != executeBatchTransactionID {
-		f.t.Errorf("invalid ExecuteBatch.TransactionId: got %v expected %v", transactionID, executeBatchTransactionID)
+	if transactionID != f.expectedTransactionID {
+		f.t.Errorf("invalid ExecuteBatch.TransactionId: got %v expected %v", transactionID, f.expectedTransactionID)
 	}
 	return executeBatchQueryResultList, nil
 }
@@ -586,7 +667,8 @@ var executeBatchQueryResultList = []sqltypes.Result{
 	},
 }
 
-func testExecuteBatch(t *testing.T, conn tabletconn.TabletConn) {
+func testExecuteBatch(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	f.expectedTransactionID = executeBatchTransactionID
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	qrl, err := conn.ExecuteBatch(ctx, executeBatchQueries, true, executeBatchTransactionID)
@@ -598,28 +680,79 @@ func testExecuteBatch(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
-func testExecuteBatchError(t *testing.T, conn tabletconn.TabletConn) {
-	ctx := context.Background()
-	_, err := conn.ExecuteBatch(ctx, executeBatchQueries, true, executeBatchTransactionID)
-	verifyError(t, err, "ExecuteBatch")
+func testExecuteBatchError(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	f.hasError = true
+	testErrorHelper(t, f, "ExecuteBatch", func(ctx context.Context) error {
+		_, err := conn.ExecuteBatch(ctx, executeBatchQueries, true, executeBatchTransactionID)
+		return err
+	})
+	f.hasError = true
 }
 
-func testExecuteBatchPanics(t *testing.T, conn tabletconn.TabletConn) {
+func testExecuteBatchPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	testPanicHelper(t, f, "ExecuteBatch", func(ctx context.Context) error {
+		_, err := conn.ExecuteBatch(ctx, executeBatchQueries, true, executeBatchTransactionID)
+		return err
+	})
+}
+
+func testBeginExecuteBatch(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	f.expectedTransactionID = beginTransactionID
 	ctx := context.Background()
-	if _, err := conn.ExecuteBatch(ctx, executeBatchQueries, true, executeBatchTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
-		t.Fatalf("unexpected panic error: %v", err)
+	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
+	qrl, transactionID, err := conn.BeginExecuteBatch(ctx, executeBatchQueries, true)
+	if err != nil {
+		t.Fatalf("BeginExecuteBatch failed: %v", err)
 	}
+	if transactionID != beginTransactionID {
+		t.Errorf("Unexpected result from BeginExecuteBatch: got %v wanted %v", transactionID, beginTransactionID)
+	}
+	if !reflect.DeepEqual(qrl, executeBatchQueryResultList) {
+		t.Errorf("Unexpected result from ExecuteBatch: got %v wanted %v", qrl, executeBatchQueryResultList)
+	}
+}
+
+func testBeginExecuteBatchErrorInBegin(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	f.hasBeginError = true
+	testErrorHelper(t, f, "BeginExecuteBatch.Begin", func(ctx context.Context) error {
+		_, transactionID, err := conn.BeginExecuteBatch(ctx, executeBatchQueries, true)
+		if transactionID != 0 {
+			t.Errorf("Unexpected transactionID from BeginExecuteBatch: got %v wanted 0", transactionID)
+		}
+		return err
+	})
+	f.hasBeginError = false
+}
+
+func testBeginExecuteBatchErrorInExecuteBatch(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	f.hasError = true
+	testErrorHelper(t, f, "BeginExecute.ExecuteBatch", func(ctx context.Context) error {
+		ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
+		_, transactionID, err := conn.BeginExecuteBatch(ctx, executeBatchQueries, true)
+		if transactionID != beginTransactionID {
+			t.Errorf("Unexpected transactionID from BeginExecuteBatch: got %v wanted %v", transactionID, beginTransactionID)
+		}
+		return err
+	})
+	f.hasError = false
+}
+
+func testBeginExecuteBatchPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	testPanicHelper(t, f, "BeginExecuteBatch", func(ctx context.Context) error {
+		_, _, err := conn.BeginExecuteBatch(ctx, executeBatchQueries, true)
+		return err
+	})
 }
 
 // SplitQuery is part of the queryservice.QueryService interface
 func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, sessionID int64) ([]querytypes.QuerySplit, error) {
 	if f.hasError {
-		return nil, testTabletError
+		return nil, f.tabletError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	f.checkSessionTargetCallerID(ctx, "SplitQuery", target, sessionID)
+	f.checkTargetCallerID(ctx, "SplitQuery", target)
 	if !reflect.DeepEqual(querytypes.BoundQuery{
 		Sql:           sql,
 		BindVariables: bindVariables,
@@ -649,12 +782,12 @@ func (f *FakeQueryService) SplitQueryV2(
 	sessionID int64) ([]querytypes.QuerySplit, error) {
 
 	if f.hasError {
-		return nil, testTabletError
+		return nil, f.tabletError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	f.checkSessionTargetCallerID(ctx, "SplitQuery", target, sessionID)
+	f.checkTargetCallerID(ctx, "SplitQueryV2", target)
 	if !reflect.DeepEqual(querytypes.BoundQuery{
 		Sql:           sql,
 		BindVariables: bindVariables,
@@ -728,7 +861,7 @@ var splitQueryQueryV2SplitList = []querytypes.QuerySplit{
 	},
 }
 
-func testSplitQuery(t *testing.T, conn tabletconn.TabletConn) {
+func testSplitQuery(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	qsl, err := conn.SplitQuery(ctx, splitQueryBoundQuery, splitQuerySplitColumn, splitQuerySplitCount)
@@ -741,7 +874,7 @@ func testSplitQuery(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // TODO(erez): Rename to SplitQuery after migration to SplitQuery V2 is done.
-func testSplitQueryV2(t *testing.T, conn tabletconn.TabletConn) {
+func testSplitQueryV2(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	qsl, err := conn.SplitQueryV2(
@@ -760,17 +893,20 @@ func testSplitQueryV2(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
-func testSplitQueryError(t *testing.T, conn tabletconn.TabletConn) {
-	ctx := context.Background()
-	_, err := conn.SplitQuery(ctx, splitQueryBoundQuery, splitQuerySplitColumn, splitQuerySplitCount)
-	verifyError(t, err, "SplitQuery")
+func testSplitQueryError(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	f.hasError = true
+	testErrorHelper(t, f, "SplitQuery", func(ctx context.Context) error {
+		_, err := conn.SplitQuery(ctx, splitQueryBoundQuery, splitQuerySplitColumn, splitQuerySplitCount)
+		return err
+	})
+	f.hasError = false
 }
 
-func testSplitQueryPanics(t *testing.T, conn tabletconn.TabletConn) {
-	ctx := context.Background()
-	if _, err := conn.SplitQuery(ctx, splitQueryBoundQuery, splitQuerySplitColumn, splitQuerySplitCount); err == nil || !strings.Contains(err.Error(), "caught test panic") {
-		t.Fatalf("unexpected panic error: %v", err)
-	}
+func testSplitQueryPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	testPanicHelper(t, f, "SplitQuery", func(ctx context.Context) error {
+		_, err := conn.SplitQuery(ctx, splitQueryBoundQuery, splitQuerySplitColumn, splitQuerySplitCount)
+		return err
+	})
 }
 
 // this test is a bit of a hack: we write something on the channel
@@ -812,7 +948,7 @@ func (f *FakeQueryService) StreamHealthUnregister(int) error {
 	return nil
 }
 
-func testStreamHealth(t *testing.T, conn tabletconn.TabletConn) {
+func testStreamHealth(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
 	ctx := context.Background()
 
 	stream, err := conn.StreamHealth(ctx)
@@ -830,7 +966,8 @@ func testStreamHealth(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
-func testStreamHealthError(t *testing.T, conn tabletconn.TabletConn) {
+func testStreamHealthError(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	f.hasError = true
 	ctx := context.Background()
 	stream, err := conn.StreamHealth(ctx)
 	if err != nil {
@@ -840,119 +977,83 @@ func testStreamHealthError(t *testing.T, conn tabletconn.TabletConn) {
 	if err == nil || !strings.Contains(err.Error(), testStreamHealthErrorMsg) {
 		t.Fatalf("StreamHealth failed with the wrong error: %v", err)
 	}
+	f.hasError = false
 }
 
-func testStreamHealthPanics(t *testing.T, conn tabletconn.TabletConn) {
-	ctx := context.Background()
-	stream, err := conn.StreamHealth(ctx)
-	if err != nil {
-		t.Fatalf("StreamHealth failed: %v", err)
-	}
-	_, err = stream.Recv()
-	if err == nil || !strings.Contains(err.Error(), "caught test panic") {
-		t.Fatalf("unexpected panic error: %v", err)
-	}
+func testStreamHealthPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	testPanicHelper(t, f, "StreamHealth", func(ctx context.Context) error {
+		stream, err := conn.StreamHealth(ctx)
+		if err != nil {
+			t.Fatalf("StreamHealth failed: %v", err)
+		}
+		_, err = stream.Recv()
+		return err
+	})
 }
 
 // CreateFakeServer returns the fake server for the tests
 func CreateFakeServer(t *testing.T) *FakeQueryService {
 	return &FakeQueryService{
-		t:      t,
-		panics: false,
-		streamExecutePanicsEarly: false,
-		panicWait:                make(chan struct{}),
-		errorWait:                make(chan struct{}),
+		t: t,
 	}
 }
 
 // TestSuite runs all the tests
 func TestSuite(t *testing.T, protocol string, endPoint *topodatapb.EndPoint, fake *FakeQueryService) {
+	tests := []func(*testing.T, tabletconn.TabletConn, *FakeQueryService){
+		// positive test cases
+		testBegin,
+		testCommit,
+		testRollback,
+		testExecute,
+		testBeginExecute,
+		testStreamExecute,
+		testExecuteBatch,
+		testBeginExecuteBatch,
+		testSplitQuery,
+		testStreamHealth,
+
+		// error test cases
+		testBeginError,
+		testCommitError,
+		testRollbackError,
+		testExecuteError,
+		testBeginExecuteErrorInBegin,
+		testBeginExecuteErrorInExecute,
+		testStreamExecuteError,
+		testExecuteBatchError,
+		testBeginExecuteBatchErrorInBegin,
+		testBeginExecuteBatchErrorInExecuteBatch,
+		testSplitQueryError,
+		testStreamHealthError,
+
+		// panic test cases
+		testBeginPanics,
+		testCommitPanics,
+		testRollbackPanics,
+		testExecutePanics,
+		testBeginExecutePanics,
+		testStreamExecutePanics,
+		testExecuteBatchPanics,
+		testBeginExecuteBatchPanics,
+		testSplitQueryPanics,
+		testStreamHealthPanics,
+	}
+
 	// make sure we use the right client
 	*tabletconn.TabletProtocol = protocol
 
-	// create a connection, using sessionId
+	// create a connection
 	ctx := context.Background()
-	conn, err := tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, topodatapb.TabletType_UNKNOWN, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, topodatapb.TabletType_REPLICA, 30*time.Second)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
-	fake.checkTarget = false
 
 	// run the tests
-	testBegin(t, conn)
-	testCommit(t, conn)
-	testRollback(t, conn)
-	testExecute(t, conn)
-	testStreamExecute(t, conn)
-	testExecuteBatch(t, conn)
-	testSplitQuery(t, conn)
-	testStreamHealth(t, conn)
-
-	// fake should return an error, make sure errors are handled properly
-	fake.hasError = true
-	testBeginError(t, conn)
-	testCommitError(t, conn)
-	testRollbackError(t, conn)
-	testExecuteError(t, conn)
-	testStreamExecuteError(t, conn, fake)
-	testExecuteBatchError(t, conn)
-	testSplitQueryError(t, conn)
-	testStreamHealthError(t, conn)
-	fake.hasError = false
-
-	// force panics, make sure they're caught
-	fake.panics = true
-	testBeginPanics(t, conn)
-	testCommitPanics(t, conn)
-	testRollbackPanics(t, conn)
-	testExecutePanics(t, conn)
-	testStreamExecutePanics(t, conn, fake)
-	testExecuteBatchPanics(t, conn)
-	testSplitQueryPanics(t, conn)
-	testStreamHealthPanics(t, conn)
-	fake.panics = false
-
-	// create a new connection that expects the target
-	conn.Close()
-	conn, err = tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, topodatapb.TabletType_REPLICA, 30*time.Second)
-	if err != nil {
-		t.Fatalf("dial failed: %v", err)
+	for _, c := range tests {
+		c(t, conn, fake)
 	}
-	fake.checkTarget = true
-
-	// run the tests
-	testBegin(t, conn)
-	testCommit(t, conn)
-	testRollback(t, conn)
-	testExecute(t, conn)
-	testStreamExecute(t, conn)
-	testExecuteBatch(t, conn)
-	testSplitQuery(t, conn)
-	testStreamHealth(t, conn)
-
-	// fake should return an error, make sure errors are handled properly
-	fake.hasError = true
-	testBeginError(t, conn)
-	testCommitError(t, conn)
-	testRollbackError(t, conn)
-	testExecuteError(t, conn)
-	testStreamExecuteError(t, conn, fake)
-	testExecuteBatchError(t, conn)
-	testSplitQueryError(t, conn)
-	testStreamHealthError(t, conn)
-	fake.hasError = false
-
-	// force panics, make sure they're caught
-	fake.panics = true
-	testBeginPanics(t, conn)
-	testCommitPanics(t, conn)
-	testRollbackPanics(t, conn)
-	testExecutePanics(t, conn)
-	testStreamExecutePanics(t, conn, fake)
-	testExecuteBatchPanics(t, conn)
-	testSplitQueryPanics(t, conn)
-	testStreamHealthPanics(t, conn)
-	fake.panics = false
 
 	// and we're done
 	conn.Close()

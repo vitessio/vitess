@@ -276,7 +276,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	bindVariables := newBindvars(subFlags)
 	keyspace := subFlags.String("keyspace", "", "keyspace the tablet belongs to")
 	shard := subFlags.String("shard", "", "shard the tablet belongs to")
-	tabletType := subFlags.String("tablet_type", "unknown", "tablet type we expect from the tablet (use unknown to use sessionId)")
+	tabletType := subFlags.String("tablet_type", "unknown", "tablet type we expect from the tablet")
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
 
@@ -323,7 +323,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	keyspace := subFlags.String("keyspace", "", "keyspace the tablet belongs to")
 	shard := subFlags.String("shard", "", "shard the tablet belongs to")
-	tabletType := subFlags.String("tablet_type", "unknown", "tablet type we expect from the tablet (use unknown to use sessionId)")
+	tabletType := subFlags.String("tablet_type", "unknown", "tablet type we expect from the tablet")
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -367,7 +367,7 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	keyspace := subFlags.String("keyspace", "", "keyspace the tablet belongs to")
 	shard := subFlags.String("shard", "", "shard the tablet belongs to")
-	tabletType := subFlags.String("tablet_type", "unknown", "tablet type we expect from the tablet (use unknown to use sessionId)")
+	tabletType := subFlags.String("tablet_type", "unknown", "tablet type we expect from the tablet")
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -408,7 +408,7 @@ func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	keyspace := subFlags.String("keyspace", "", "keyspace the tablet belongs to")
 	shard := subFlags.String("shard", "", "shard the tablet belongs to")
-	tabletType := subFlags.String("tablet_type", "unknown", "tablet type we expect from the tablet (use unknown to use sessionId)")
+	tabletType := subFlags.String("tablet_type", "unknown", "tablet type we expect from the tablet")
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -469,8 +469,8 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 		return fmt.Errorf("cannot get EndPoint from tablet record: %v", err)
 	}
 
-	// pass in a non-UNKNOWN tablet type to not use sessionId
-	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", topodatapb.TabletType_MASTER, *connectTimeout)
+	// tablet type is unused for StreamHealth, use UNKNOWN
+	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", topodatapb.TabletType_UNKNOWN, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
