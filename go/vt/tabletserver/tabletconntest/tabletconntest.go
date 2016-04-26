@@ -139,7 +139,7 @@ var testVTGateCallerID = &querypb.VTGateCallerID{
 
 const testAsTransaction bool = true
 
-func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string, target *querypb.Target, sessionID int64) {
+func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string, target *querypb.Target) {
 	if !reflect.DeepEqual(target, testTarget) {
 		f.t.Errorf("invalid Target for %v: got %#v expected %#v", name, target, testTarget)
 	}
@@ -177,7 +177,7 @@ func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, se
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	f.checkTargetCallerID(ctx, "Begin", target, sessionID)
+	f.checkTargetCallerID(ctx, "Begin", target)
 	return beginTransactionID, nil
 }
 
@@ -219,7 +219,7 @@ func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, s
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	f.checkTargetCallerID(ctx, "Commit", target, sessionID)
+	f.checkTargetCallerID(ctx, "Commit", target)
 	if transactionID != commitTransactionID {
 		f.t.Errorf("Commit: invalid TransactionId: got %v expected %v", transactionID, commitTransactionID)
 	}
@@ -259,7 +259,7 @@ func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target,
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	f.checkTargetCallerID(ctx, "Rollback", target, sessionID)
+	f.checkTargetCallerID(ctx, "Rollback", target)
 	if transactionID != rollbackTransactionID {
 		f.t.Errorf("Rollback: invalid TransactionId: got %v expected %v", transactionID, rollbackTransactionID)
 	}
@@ -304,7 +304,7 @@ func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, 
 	if !reflect.DeepEqual(bindVariables, executeBindVars) {
 		f.t.Errorf("invalid Execute.BindVariables: got %v expected %v", bindVariables, executeBindVars)
 	}
-	f.checkTargetCallerID(ctx, "Execute", target, sessionID)
+	f.checkTargetCallerID(ctx, "Execute", target)
 	if transactionID != f.expectedTransactionID {
 		f.t.Errorf("invalid Execute.TransactionId: got %v expected %v", transactionID, f.expectedTransactionID)
 	}
@@ -432,7 +432,7 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Ta
 	if !reflect.DeepEqual(bindVariables, streamExecuteBindVars) {
 		f.t.Errorf("invalid StreamExecute.BindVariables: got %v expected %v", bindVariables, streamExecuteBindVars)
 	}
-	f.checkTargetCallerID(ctx, "StreamExecute", target, sessionID)
+	f.checkTargetCallerID(ctx, "StreamExecute", target)
 	if err := sendReply(&streamExecuteQueryResult1); err != nil {
 		f.t.Errorf("sendReply1 failed: %v", err)
 	}
@@ -601,7 +601,7 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Tar
 	if !reflect.DeepEqual(queries, executeBatchQueries) {
 		f.t.Errorf("invalid ExecuteBatch.Queries: got %v expected %v", queries, executeBatchQueries)
 	}
-	f.checkTargetCallerID(ctx, "ExecuteBatch", target, sessionID)
+	f.checkTargetCallerID(ctx, "ExecuteBatch", target)
 	if asTransaction != testAsTransaction {
 		f.t.Errorf("invalid ExecuteBatch.AsTransaction: got %v expected %v", asTransaction, testAsTransaction)
 	}
@@ -752,7 +752,7 @@ func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Targe
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	f.checkTargetCallerID(ctx, "SplitQuery", target, sessionID)
+	f.checkTargetCallerID(ctx, "SplitQuery", target)
 	if !reflect.DeepEqual(querytypes.BoundQuery{
 		Sql:           sql,
 		BindVariables: bindVariables,
@@ -787,7 +787,7 @@ func (f *FakeQueryService) SplitQueryV2(
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	f.checkTargetCallerID(ctx, "SplitQueryV2", target, sessionID)
+	f.checkTargetCallerID(ctx, "SplitQueryV2", target)
 	if !reflect.DeepEqual(querytypes.BoundQuery{
 		Sql:           sql,
 		BindVariables: bindVariables,
