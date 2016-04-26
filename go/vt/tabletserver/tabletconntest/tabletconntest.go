@@ -139,9 +139,7 @@ var testVTGateCallerID = &querypb.VTGateCallerID{
 
 const testAsTransaction bool = true
 
-const testSessionID int64 = 5678
-
-func (f *FakeQueryService) checkSessionTargetCallerID(ctx context.Context, name string, target *querypb.Target, sessionID int64) {
+func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string, target *querypb.Target, sessionID int64) {
 	if !reflect.DeepEqual(target, testTarget) {
 		f.t.Errorf("invalid Target for %v: got %#v expected %#v", name, target, testTarget)
 	}
@@ -167,13 +165,8 @@ func (f *FakeQueryService) checkSessionTargetCallerID(ctx context.Context, name 
 
 // GetSessionId is part of the queryservice.QueryService interface
 func (f *FakeQueryService) GetSessionId(keyspace, shard string) (int64, error) {
-	if keyspace != testTarget.Keyspace {
-		f.t.Errorf("invalid keyspace: got %v expected %v", keyspace, testTarget.Keyspace)
-	}
-	if shard != testTarget.Shard {
-		f.t.Errorf("invalid shard: got %v expected %v", shard, testTarget.Shard)
-	}
-	return testSessionID, nil
+	f.t.Fatal("GetSessionId should not be called any more")
+	return 0, nil
 }
 
 // Begin is part of the queryservice.QueryService interface
@@ -184,7 +177,7 @@ func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, se
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	f.checkSessionTargetCallerID(ctx, "Begin", target, sessionID)
+	f.checkTargetCallerID(ctx, "Begin", target, sessionID)
 	return beginTransactionID, nil
 }
 
@@ -226,7 +219,7 @@ func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, s
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	f.checkSessionTargetCallerID(ctx, "Commit", target, sessionID)
+	f.checkTargetCallerID(ctx, "Commit", target, sessionID)
 	if transactionID != commitTransactionID {
 		f.t.Errorf("Commit: invalid TransactionId: got %v expected %v", transactionID, commitTransactionID)
 	}
@@ -266,7 +259,7 @@ func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target,
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	f.checkSessionTargetCallerID(ctx, "Rollback", target, sessionID)
+	f.checkTargetCallerID(ctx, "Rollback", target, sessionID)
 	if transactionID != rollbackTransactionID {
 		f.t.Errorf("Rollback: invalid TransactionId: got %v expected %v", transactionID, rollbackTransactionID)
 	}
@@ -292,7 +285,7 @@ func testRollbackError(t *testing.T, conn tabletconn.TabletConn, f *FakeQuerySer
 }
 
 func testRollbackPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
-	testPanicHelper(t, f, "Commit", func(ctx context.Context) error {
+	testPanicHelper(t, f, "Rollback", func(ctx context.Context) error {
 		return conn.Rollback(ctx, rollbackTransactionID)
 	})
 }
@@ -311,7 +304,7 @@ func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, 
 	if !reflect.DeepEqual(bindVariables, executeBindVars) {
 		f.t.Errorf("invalid Execute.BindVariables: got %v expected %v", bindVariables, executeBindVars)
 	}
-	f.checkSessionTargetCallerID(ctx, "Execute", target, sessionID)
+	f.checkTargetCallerID(ctx, "Execute", target, sessionID)
 	if transactionID != f.expectedTransactionID {
 		f.t.Errorf("invalid Execute.TransactionId: got %v expected %v", transactionID, f.expectedTransactionID)
 	}
@@ -374,7 +367,7 @@ func testExecuteError(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryServ
 }
 
 func testExecutePanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
-	testPanicHelper(t, f, "Commit", func(ctx context.Context) error {
+	testPanicHelper(t, f, "Execute", func(ctx context.Context) error {
 		_, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionID)
 		return err
 	})
@@ -422,7 +415,7 @@ func testBeginExecuteErrorInExecute(t *testing.T, conn tabletconn.TabletConn, f 
 }
 
 func testBeginExecutePanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
-	testPanicHelper(t, f, "Commit", func(ctx context.Context) error {
+	testPanicHelper(t, f, "BeginExecute", func(ctx context.Context) error {
 		_, _, err := conn.BeginExecute(ctx, executeQuery, executeBindVars)
 		return err
 	})
@@ -439,7 +432,7 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Ta
 	if !reflect.DeepEqual(bindVariables, streamExecuteBindVars) {
 		f.t.Errorf("invalid StreamExecute.BindVariables: got %v expected %v", bindVariables, streamExecuteBindVars)
 	}
-	f.checkSessionTargetCallerID(ctx, "StreamExecute", target, sessionID)
+	f.checkTargetCallerID(ctx, "StreamExecute", target, sessionID)
 	if err := sendReply(&streamExecuteQueryResult1); err != nil {
 		f.t.Errorf("sendReply1 failed: %v", err)
 	}
@@ -608,7 +601,7 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Tar
 	if !reflect.DeepEqual(queries, executeBatchQueries) {
 		f.t.Errorf("invalid ExecuteBatch.Queries: got %v expected %v", queries, executeBatchQueries)
 	}
-	f.checkSessionTargetCallerID(ctx, "ExecuteBatch", target, sessionID)
+	f.checkTargetCallerID(ctx, "ExecuteBatch", target, sessionID)
 	if asTransaction != testAsTransaction {
 		f.t.Errorf("invalid ExecuteBatch.AsTransaction: got %v expected %v", asTransaction, testAsTransaction)
 	}
@@ -745,7 +738,7 @@ func testBeginExecuteBatchErrorInExecuteBatch(t *testing.T, conn tabletconn.Tabl
 }
 
 func testBeginExecuteBatchPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
-	testPanicHelper(t, f, "Begin", func(ctx context.Context) error {
+	testPanicHelper(t, f, "BeginExecuteBatch", func(ctx context.Context) error {
 		_, _, err := conn.BeginExecuteBatch(ctx, executeBatchQueries, true)
 		return err
 	})
@@ -759,7 +752,7 @@ func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Targe
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	f.checkSessionTargetCallerID(ctx, "SplitQuery", target, sessionID)
+	f.checkTargetCallerID(ctx, "SplitQuery", target, sessionID)
 	if !reflect.DeepEqual(querytypes.BoundQuery{
 		Sql:           sql,
 		BindVariables: bindVariables,
@@ -794,7 +787,7 @@ func (f *FakeQueryService) SplitQueryV2(
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	f.checkSessionTargetCallerID(ctx, "SplitQuery", target, sessionID)
+	f.checkTargetCallerID(ctx, "SplitQueryV2", target, sessionID)
 	if !reflect.DeepEqual(querytypes.BoundQuery{
 		Sql:           sql,
 		BindVariables: bindVariables,
