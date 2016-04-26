@@ -39,14 +39,13 @@ func NewEqualSplitsAlgorithm(splitParams *SplitParams, sqlExecuter SQLExecuter) 
 	*EqualSplitsAlgorithm, error) {
 
 	if len(splitParams.splitColumns) != len(splitParams.splitColumnTypes) {
-		panic(fmt.Sprintf("len(splitparams.splitColumns) != len(splitparams.splitColumnTypes): %v!=%v",
+		panic(fmt.Sprintf("len(splitParams.splitColumns) != len(splitParams.splitColumnTypes): %v!=%v",
 			len(splitParams.splitColumns), len(splitParams.splitColumnTypes)))
 	}
-	if len(splitParams.splitColumns) != 1 {
-		return nil, fmt.Errorf("using the EQUAL_SPLITS algorithm in SplitQuery requires having"+
-			" exactly one split-column. Got split-columns: %v",
-			splitParams.splitColumns)
+	if len(splitParams.splitColumns) == 0 {
+		panic(fmt.Sprintf("len(splitParams.splitColumns) == 0"))
 	}
+	// This algorithm only uses the first splitColumn.
 	if !sqltypes.IsFloat(splitParams.splitColumnTypes[0]) &&
 		!sqltypes.IsIntegral(splitParams.splitColumnTypes[0]) {
 		return nil, fmt.Errorf("using the EQUAL_SPLITS algorithm in SplitQuery requires having"+
