@@ -34,10 +34,25 @@ type Handle struct {
 	dbname string
 }
 
+// InitDataOptions contain the command line arguments that configure
+// initialization of vttest with random data. See the documentation of
+// the corresponding command line flags in py/vttest/run_local_database.py
+// for the meaning of each field. If a field is nil, the flag will not be
+// specified when running 'run_local_database.py' and the default value for
+// the flag will be used.
+type InitDataOptions struct {
+	rngSeed           *int
+	minTableShardSize *int
+	maxTableShardSize *int
+	nullProbability   *float64
+}
+
 // LaunchVitess launches a vitess test cluster.
-func LaunchVitess(topo, schemaDir string, verbose bool) (hdl *Handle, err error) {
+func LaunchVitess(
+	topo, schemaDir string, verbose bool, initDataOptions *InitDataOptions,
+) (hdl *Handle, err error) {
 	hdl = &Handle{}
-	err = hdl.run(randomPort(), topo, schemaDir, false, verbose)
+	err = hdl.run(randomPort(), topo, schemaDir, false, verbose, initDataOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +94,13 @@ func LaunchMySQL(dbName, schema string, verbose bool) (hdl *Handle, err error) {
 			return nil, err
 		}
 	}
-	err = hdl.run(randomPort(), fmt.Sprintf("%s/0:%s", dbName, dbName), schemaDir, true, verbose)
+	err = hdl.run(
+		randomPort(),
+		fmt.Sprintf("%s/0:%s", dbName, dbName),
+		schemaDir,
+		true,
+		verbose,
+		nil /* initDataOptions */)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +166,14 @@ func (hdl *Handle) MySQLConnParams() (sqldb.ConnParams, error) {
 	return params, nil
 }
 
-func (hdl *Handle) run(port int, topo, schemaDir string, mysqlOnly, verbose bool) error {
+func (hdl *Handle) run(
+	port int,
+	topo string,
+	schemaDir string,
+	mysqlOnly bool,
+	verbose bool,
+	initDataOptions *InitDataOptions,
+) error {
 	launcher, err := launcherPath()
 	if err != nil {
 		return err
@@ -165,6 +193,9 @@ func (hdl *Handle) run(port int, topo, schemaDir string, mysqlOnly, verbose bool
 	}
 	if verbose {
 		hdl.cmd.Args = append(hdl.cmd.Args, "--verbose")
+	}
+	if initDataOptions != nil {
+		hdl.cmd.Args = initDataOptions.appendArgs(hdl.cmd.Args)
 	}
 	hdl.cmd.Stderr = os.Stderr
 	stdout, err := hdl.cmd.StdoutPipe()
@@ -186,6 +217,23 @@ func (hdl *Handle) run(port int, topo, schemaDir string, mysqlOnly, verbose bool
 			"Error (%v) parsing JSON output from command: %v.", err, launcher)
 	}
 	return err
+}
+
+func (i *InitDataOptions) appendArgs(args []string) []string {
+	args = append(args, "--initialize_with_random_data")
+	if i.rngSeed != nil {
+		args = append(args, "--rng_seed", fmt.Sprintf("%v", *i.rngSeed))
+	}
+	if i.minTableShardSize != nil {
+		args = append(args, "--min_table_shard_size", fmt.Sprintf("%v", *i.minTableShardSize))
+	}
+	if i.maxTableShardSize != nil {
+		args = append(args, "--max_table_shard_size", fmt.Sprintf("%v", *i.maxTableShardSize))
+	}
+	if i.nullProbability != nil {
+		args = append(args, "--null_probability", fmt.Sprintf("%v", *i.nullProbability))
+	}
+	return args
 }
 
 // randomPort returns a random number between 10k & 30k.
