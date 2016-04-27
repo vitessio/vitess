@@ -254,6 +254,15 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 		scw.destinationShards = os.Left
 	}
 
+	// Verify that filtered replication is not already enabled.
+	for _, si := range scw.destinationShards {
+		if len(si.SourceShards) > 0 {
+			return fmt.Errorf("destination shard %v/%v has filtered replication already enabled from a previous resharding (ShardInfo is set)."+
+				" This requires manual intervention e.g. use vtctl SourceShardDelete to remove it",
+				si.Keyspace(), si.ShardName())
+		}
+	}
+
 	// validate all serving types
 	servingTypes := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 	for _, st := range servingTypes {
