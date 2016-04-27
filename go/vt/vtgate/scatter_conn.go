@@ -19,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
@@ -761,8 +760,9 @@ func (stc *ScatterConn) GetGatewayCacheStatus() GatewayEndPointCacheStatusList {
 }
 
 // ScatterConnError is the ScatterConn specific error.
+// It implements vterrors.VtError.
 type ScatterConnError struct {
-	Code int
+	Retryable bool
 	// Preserve the original errors, so that we don't need to parse the error string.
 	Errs []error
 	// serverCode is the error code to use for all the server errors in aggregate
@@ -774,7 +774,10 @@ func (e *ScatterConnError) Error() string {
 }
 
 // VtErrorCode returns the underlying Vitess error code
-func (e *ScatterConnError) VtErrorCode() vtrpcpb.ErrorCode { return e.serverCode }
+// This is part of vterrors.VtError interface.
+func (e *ScatterConnError) VtErrorCode() vtrpcpb.ErrorCode {
+	return e.serverCode
+}
 
 func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	if len(errors) == 0 {
@@ -783,20 +786,13 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	allRetryableError := true
 	for _, e := range errors {
 		connError, ok := e.(*ShardConnError)
-		if !ok || (connError.Code != tabletconn.ERR_RETRY && connError.Code != tabletconn.ERR_FATAL) || connError.InTransaction {
+		if !ok || (connError.EndPointCode != vtrpcpb.ErrorCode_QUERY_NOT_SERVED && connError.EndPointCode != vtrpcpb.ErrorCode_INTERNAL_ERROR) || connError.InTransaction {
 			allRetryableError = false
 			break
 		}
 	}
-	var code int
-	if allRetryableError {
-		code = tabletconn.ERR_RETRY
-	} else {
-		code = tabletconn.ERR_NORMAL
-	}
-
 	return &ScatterConnError{
-		Code:       code,
+		Retryable:  allRetryableError,
 		Errs:       errors,
 		serverCode: aggregateVtGateErrorCodes(errors),
 	}

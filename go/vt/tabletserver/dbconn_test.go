@@ -10,10 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
-	"golang.org/x/net/context"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestDBConnExec(t *testing.T) {
@@ -50,7 +53,7 @@ func TestDBConnExec(t *testing.T) {
 	db.EnableConnFail()
 	_, err = dbConn.Exec(ctx, sql, 1, false)
 	db.DisableConnFail()
-	testUtils.checkTabletError(t, err, ErrFatal, "")
+	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_INTERNAL_ERROR, "")
 }
 
 func TestDBConnKill(t *testing.T) {
@@ -69,7 +72,7 @@ func TestDBConnKill(t *testing.T) {
 	// Kill failed because we are not able to connect to the database
 	db.EnableConnFail()
 	err = dbConn.Kill("test kill")
-	testUtils.checkTabletError(t, err, ErrFail, "Failed to get conn from dba pool")
+	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Failed to get conn from dba pool")
 	db.DisableConnFail()
 
 	// Kill succeed
@@ -86,7 +89,7 @@ func TestDBConnKill(t *testing.T) {
 	// Kill failed because "kill query_id" failed
 	db.AddRejectedQuery(newKillQuery, errRejected)
 	err = dbConn.Kill("test kill")
-	testUtils.checkTabletError(t, err, ErrFail, "Could not kill query")
+	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not kill query")
 
 }
 

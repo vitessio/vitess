@@ -148,13 +148,13 @@ func (axp *TxPool) Begin(ctx context.Context) int64 {
 			panic(err)
 		case pools.ErrTimeout:
 			axp.LogActive()
-			panic(NewTabletError(ErrTxPoolFull, vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, "Transaction pool connection limit exceeded"))
+			panic(NewTabletError(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, "Transaction pool connection limit exceeded"))
 		}
-		panic(NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err))
+		panic(NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err))
 	}
 	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
 		conn.Recycle()
-		panic(NewTabletErrorSQL(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err))
+		panic(NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err))
 	}
 	transactionID := axp.lastID.Add(1)
 	axp.activePool.Register(
@@ -183,7 +183,7 @@ func (axp *TxPool) SafeCommit(ctx context.Context, transactionID int64) (invalid
 	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
 	if _, fetchErr := conn.Exec(ctx, "commit", 1, false); fetchErr != nil {
 		conn.Close()
-		err = NewTabletErrorSQL(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, fetchErr)
+		err = NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, fetchErr)
 	}
 	return
 }
@@ -195,7 +195,7 @@ func (axp *TxPool) Rollback(ctx context.Context, transactionID int64) {
 	axp.txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
 	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
 		conn.Close()
-		panic(NewTabletErrorSQL(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err))
+		panic(NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err))
 	}
 }
 
@@ -204,7 +204,7 @@ func (axp *TxPool) Rollback(ctx context.Context, transactionID int64) {
 func (axp *TxPool) Get(transactionID int64) (conn *TxConnection) {
 	v, err := axp.activePool.Get(transactionID, "for query")
 	if err != nil {
-		panic(NewTabletError(ErrNotInTx, vtrpcpb.ErrorCode_NOT_IN_TX, "Transaction %d: %v", transactionID, err))
+		panic(NewTabletError(vtrpcpb.ErrorCode_NOT_IN_TX, "Transaction %d: %v", transactionID, err))
 	}
 	return v.(*TxConnection)
 }
@@ -284,9 +284,9 @@ func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wa
 	if err != nil {
 		if IsConnErr(err) {
 			txc.pool.checker.CheckMySQL()
-			return nil, NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+			return nil, NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 		}
-		return nil, NewTabletErrorSQL(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
+		return nil, NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
 	}
 	return r, nil
 }

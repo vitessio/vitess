@@ -16,7 +16,6 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
@@ -65,16 +64,15 @@ func (res *Resolver) InitializeConnections(ctx context.Context) error {
 	return res.scatterConn.InitializeConnections(ctx)
 }
 
-// isConnError will be true if the error comes from the connection layer (ShardConn or
-// ScatterConn). The error code from the conn error is also returned.
-func isConnError(err error) (int, bool) {
+// isRetryableError will be true if the error should be retried.
+func isRetryableError(err error) bool {
 	switch e := err.(type) {
 	case *ScatterConnError:
-		return e.Code, true
+		return e.Retryable
 	case *ShardConnError:
-		return e.Code, true
+		return e.EndPointCode == vtrpcpb.ErrorCode_QUERY_NOT_SERVED
 	default:
-		return 0, false
+		return false
 	}
 }
 
@@ -142,7 +140,7 @@ func (res *Resolver) Execute(
 			tabletType,
 			NewSafeSession(session),
 			notInTransaction)
-		if connErrorCode, ok := isConnError(err); ok && connErrorCode == tabletconn.ERR_RETRY {
+		if isRetryableError(err) {
 			resharding := false
 			newKeyspace, newShards, err := mapToShards(keyspace)
 			if err != nil {
@@ -205,7 +203,7 @@ func (res *Resolver) ExecuteEntityIds(
 			tabletType,
 			NewSafeSession(session),
 			notInTransaction)
-		if connErrorCode, ok := isConnError(err); ok && connErrorCode == tabletconn.ERR_RETRY {
+		if isRetryableError(err) {
 			resharding := false
 			newKeyspace, newShardIDMap, err := mapEntityIdsToShards(
 				ctx,
@@ -281,7 +279,7 @@ func (res *Resolver) ExecuteBatch(
 		}
 		// If lower level retries failed, check if there was a resharding event
 		// and retry again if needed.
-		if connErrorCode, ok := isConnError(err); ok && connErrorCode == tabletconn.ERR_RETRY {
+		if isRetryableError(err) {
 			newBatchRequest, buildErr := buildBatchRequest()
 			if buildErr != nil {
 				return nil, buildErr

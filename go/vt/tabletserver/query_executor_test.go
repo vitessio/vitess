@@ -11,21 +11,23 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
-	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestQueryExecutorPlanDDL(t *testing.T) {
@@ -85,8 +87,8 @@ func TestQueryExecutorPlanPassDmlStrictMode(t *testing.T) {
 	if !ok {
 		t.Fatalf("got: %v, want: a TabletError", tabletError)
 	}
-	if tabletError.ErrorType != ErrFail {
-		t.Fatalf("got: %s, want: ErrFail", getTabletErrorString(ErrFail))
+	if tabletError.ErrorCode != vtrpcpb.ErrorCode_BAD_INPUT {
+		t.Fatalf("got: %s, want: BAD_INPUT", tabletError.ErrorCode)
 	}
 }
 
@@ -125,8 +127,8 @@ func TestQueryExecutorPlanPassDmlStrictModeAutoCommit(t *testing.T) {
 	if !ok {
 		t.Fatalf("got: %v, want: *TabletError", tabletError)
 	}
-	if tabletError.ErrorType != ErrFail {
-		t.Fatalf("got: %s, want: ErrFail", getTabletErrorString(ErrFail))
+	if tabletError.ErrorCode != vtrpcpb.ErrorCode_BAD_INPUT {
+		t.Fatalf("got: %s, want: BAD_INPUT", tabletError.ErrorCode)
 	}
 }
 
@@ -437,8 +439,8 @@ func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 	if !ok {
 		t.Fatalf("got: %v, want: *TabletError", err)
 	}
-	if got.ErrorType != ErrFail {
-		t.Fatalf("got: %s, want: ErrFail", getTabletErrorString(got.ErrorType))
+	if got.ErrorCode != vtrpcpb.ErrorCode_BAD_INPUT {
+		t.Fatalf("got: %s, want: BAD_INPUT", got.ErrorCode)
 	}
 }
 
@@ -740,8 +742,8 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	if !ok {
 		t.Fatalf("got: %v, want: *TabletError", err)
 	}
-	if tabletError.ErrorType != ErrFail {
-		t.Fatalf("got: %s, want: ErrFail", getTabletErrorString(tabletError.ErrorType))
+	if tabletError.ErrorCode != vtrpcpb.ErrorCode_PERMISSION_DENIED {
+		t.Fatalf("got: %s, want: PERMISSION_DENIED", tabletError.ErrorCode)
 	}
 }
 
@@ -793,8 +795,8 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	if !ok {
 		t.Fatalf("got: %v, want: *TabletError", err)
 	}
-	if tabletError.ErrorType != ErrFail {
-		t.Fatalf("got: %s, want: ErrFail", getTabletErrorString(tabletError.ErrorType))
+	if tabletError.ErrorCode != vtrpcpb.ErrorCode_PERMISSION_DENIED {
+		t.Fatalf("got: %s, want: PERMISSION_DENIED", tabletError.ErrorCode)
 	}
 	if !strings.Contains(tabletError.Error(), "table acl error") {
 		t.Fatalf("got %s, want tablet errorL table acl error", tabletError.Error())
@@ -931,8 +933,8 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	if !ok {
 		t.Fatalf("got: %v, want: *TabletError", err)
 	}
-	if got.ErrorType != ErrFail {
-		t.Fatalf("got: %s, want: ErrFail", getTabletErrorString(got.ErrorType))
+	if got.ErrorCode != vtrpcpb.ErrorCode_BAD_INPUT {
+		t.Fatalf("got: %s, want: BAD_INPUT", got.ErrorCode)
 	}
 }
 
@@ -990,8 +992,8 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	if !ok {
 		t.Fatalf("got: %v, want: *TabletError", err)
 	}
-	if got.ErrorType != ErrRetry {
-		t.Fatalf("got: %s, want: ErrRetry", getTabletErrorString(got.ErrorType))
+	if got.ErrorCode != vtrpcpb.ErrorCode_QUERY_NOT_SERVED {
+		t.Fatalf("got: %s, want: QUERY_NOT_SERVED", got.ErrorCode)
 	}
 }
 

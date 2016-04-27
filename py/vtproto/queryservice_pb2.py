@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='queryservice.proto',
   package='queryservice',
   syntax='proto3',
-  serialized_pb=_b('\n\x12queryservice.proto\x12\x0cqueryservice\x1a\x0bquery.proto2\xe9\x04\n\x05Query\x12I\n\x0cGetSessionId\x12\x1a.query.GetSessionIdRequest\x1a\x1b.query.GetSessionIdResponse\"\x00\x12:\n\x07\x45xecute\x12\x15.query.ExecuteRequest\x1a\x16.query.ExecuteResponse\"\x00\x12I\n\x0c\x45xecuteBatch\x12\x1a.query.ExecuteBatchRequest\x1a\x1b.query.ExecuteBatchResponse\"\x00\x12N\n\rStreamExecute\x12\x1b.query.StreamExecuteRequest\x1a\x1c.query.StreamExecuteResponse\"\x00\x30\x01\x12\x34\n\x05\x42\x65gin\x12\x13.query.BeginRequest\x1a\x14.query.BeginResponse\"\x00\x12\x37\n\x06\x43ommit\x12\x14.query.CommitRequest\x1a\x15.query.CommitResponse\"\x00\x12=\n\x08Rollback\x12\x16.query.RollbackRequest\x1a\x17.query.RollbackResponse\"\x00\x12\x43\n\nSplitQuery\x12\x18.query.SplitQueryRequest\x1a\x19.query.SplitQueryResponse\"\x00\x12K\n\x0cStreamHealth\x12\x1a.query.StreamHealthRequest\x1a\x1b.query.StreamHealthResponse\"\x00\x30\x01\x62\x06proto3')
+  serialized_pb=_b('\n\x12queryservice.proto\x12\x0cqueryservice\x1a\x0bquery.proto2\x8e\x06\n\x05Query\x12I\n\x0cGetSessionId\x12\x1a.query.GetSessionIdRequest\x1a\x1b.query.GetSessionIdResponse\"\x00\x12:\n\x07\x45xecute\x12\x15.query.ExecuteRequest\x1a\x16.query.ExecuteResponse\"\x00\x12I\n\x0c\x45xecuteBatch\x12\x1a.query.ExecuteBatchRequest\x1a\x1b.query.ExecuteBatchResponse\"\x00\x12N\n\rStreamExecute\x12\x1b.query.StreamExecuteRequest\x1a\x1c.query.StreamExecuteResponse\"\x00\x30\x01\x12\x34\n\x05\x42\x65gin\x12\x13.query.BeginRequest\x1a\x14.query.BeginResponse\"\x00\x12\x37\n\x06\x43ommit\x12\x14.query.CommitRequest\x1a\x15.query.CommitResponse\"\x00\x12=\n\x08Rollback\x12\x16.query.RollbackRequest\x1a\x17.query.RollbackResponse\"\x00\x12I\n\x0c\x42\x65ginExecute\x12\x1a.query.BeginExecuteRequest\x1a\x1b.query.BeginExecuteResponse\"\x00\x12X\n\x11\x42\x65ginExecuteBatch\x12\x1f.query.BeginExecuteBatchRequest\x1a .query.BeginExecuteBatchResponse\"\x00\x12\x43\n\nSplitQuery\x12\x18.query.SplitQueryRequest\x1a\x19.query.SplitQueryResponse\"\x00\x12K\n\x0cStreamHealth\x12\x1a.query.StreamHealthRequest\x1a\x1b.query.StreamHealthResponse\"\x00\x30\x01\x62\x06proto3')
   ,
   dependencies=[query__pb2.DESCRIPTOR,])
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
@@ -57,6 +57,12 @@ class BetaQueryServicer(object):
     raise NotImplementedError()
   @abc.abstractmethod
   def Rollback(self, request, context):
+    raise NotImplementedError()
+  @abc.abstractmethod
+  def BeginExecute(self, request, context):
+    raise NotImplementedError()
+  @abc.abstractmethod
+  def BeginExecuteBatch(self, request, context):
     raise NotImplementedError()
   @abc.abstractmethod
   def SplitQuery(self, request, context):
@@ -96,6 +102,14 @@ class BetaQueryStub(object):
     raise NotImplementedError()
   Rollback.future = None
   @abc.abstractmethod
+  def BeginExecute(self, request, timeout):
+    raise NotImplementedError()
+  BeginExecute.future = None
+  @abc.abstractmethod
+  def BeginExecuteBatch(self, request, timeout):
+    raise NotImplementedError()
+  BeginExecuteBatch.future = None
+  @abc.abstractmethod
   def SplitQuery(self, request, timeout):
     raise NotImplementedError()
   SplitQuery.future = None
@@ -122,8 +136,14 @@ def beta_create_Query_server(servicer, pool=None, pool_size=None, default_timeou
   import query_pb2
   import query_pb2
   import query_pb2
+  import query_pb2
+  import query_pb2
+  import query_pb2
+  import query_pb2
   request_deserializers = {
     ('queryservice.Query', 'Begin'): query_pb2.BeginRequest.FromString,
+    ('queryservice.Query', 'BeginExecute'): query_pb2.BeginExecuteRequest.FromString,
+    ('queryservice.Query', 'BeginExecuteBatch'): query_pb2.BeginExecuteBatchRequest.FromString,
     ('queryservice.Query', 'Commit'): query_pb2.CommitRequest.FromString,
     ('queryservice.Query', 'Execute'): query_pb2.ExecuteRequest.FromString,
     ('queryservice.Query', 'ExecuteBatch'): query_pb2.ExecuteBatchRequest.FromString,
@@ -135,6 +155,8 @@ def beta_create_Query_server(servicer, pool=None, pool_size=None, default_timeou
   }
   response_serializers = {
     ('queryservice.Query', 'Begin'): query_pb2.BeginResponse.SerializeToString,
+    ('queryservice.Query', 'BeginExecute'): query_pb2.BeginExecuteResponse.SerializeToString,
+    ('queryservice.Query', 'BeginExecuteBatch'): query_pb2.BeginExecuteBatchResponse.SerializeToString,
     ('queryservice.Query', 'Commit'): query_pb2.CommitResponse.SerializeToString,
     ('queryservice.Query', 'Execute'): query_pb2.ExecuteResponse.SerializeToString,
     ('queryservice.Query', 'ExecuteBatch'): query_pb2.ExecuteBatchResponse.SerializeToString,
@@ -146,6 +168,8 @@ def beta_create_Query_server(servicer, pool=None, pool_size=None, default_timeou
   }
   method_implementations = {
     ('queryservice.Query', 'Begin'): face_utilities.unary_unary_inline(servicer.Begin),
+    ('queryservice.Query', 'BeginExecute'): face_utilities.unary_unary_inline(servicer.BeginExecute),
+    ('queryservice.Query', 'BeginExecuteBatch'): face_utilities.unary_unary_inline(servicer.BeginExecuteBatch),
     ('queryservice.Query', 'Commit'): face_utilities.unary_unary_inline(servicer.Commit),
     ('queryservice.Query', 'Execute'): face_utilities.unary_unary_inline(servicer.Execute),
     ('queryservice.Query', 'ExecuteBatch'): face_utilities.unary_unary_inline(servicer.ExecuteBatch),
@@ -177,8 +201,14 @@ def beta_create_Query_stub(channel, host=None, metadata_transformer=None, pool=N
   import query_pb2
   import query_pb2
   import query_pb2
+  import query_pb2
+  import query_pb2
+  import query_pb2
+  import query_pb2
   request_serializers = {
     ('queryservice.Query', 'Begin'): query_pb2.BeginRequest.SerializeToString,
+    ('queryservice.Query', 'BeginExecute'): query_pb2.BeginExecuteRequest.SerializeToString,
+    ('queryservice.Query', 'BeginExecuteBatch'): query_pb2.BeginExecuteBatchRequest.SerializeToString,
     ('queryservice.Query', 'Commit'): query_pb2.CommitRequest.SerializeToString,
     ('queryservice.Query', 'Execute'): query_pb2.ExecuteRequest.SerializeToString,
     ('queryservice.Query', 'ExecuteBatch'): query_pb2.ExecuteBatchRequest.SerializeToString,
@@ -190,6 +220,8 @@ def beta_create_Query_stub(channel, host=None, metadata_transformer=None, pool=N
   }
   response_deserializers = {
     ('queryservice.Query', 'Begin'): query_pb2.BeginResponse.FromString,
+    ('queryservice.Query', 'BeginExecute'): query_pb2.BeginExecuteResponse.FromString,
+    ('queryservice.Query', 'BeginExecuteBatch'): query_pb2.BeginExecuteBatchResponse.FromString,
     ('queryservice.Query', 'Commit'): query_pb2.CommitResponse.FromString,
     ('queryservice.Query', 'Execute'): query_pb2.ExecuteResponse.FromString,
     ('queryservice.Query', 'ExecuteBatch'): query_pb2.ExecuteBatchResponse.FromString,
@@ -201,6 +233,8 @@ def beta_create_Query_stub(channel, host=None, metadata_transformer=None, pool=N
   }
   cardinalities = {
     'Begin': cardinality.Cardinality.UNARY_UNARY,
+    'BeginExecute': cardinality.Cardinality.UNARY_UNARY,
+    'BeginExecuteBatch': cardinality.Cardinality.UNARY_UNARY,
     'Commit': cardinality.Cardinality.UNARY_UNARY,
     'Execute': cardinality.Cardinality.UNARY_UNARY,
     'ExecuteBatch': cardinality.Cardinality.UNARY_UNARY,

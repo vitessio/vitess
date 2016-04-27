@@ -19,16 +19,6 @@ import (
 )
 
 const (
-	// Refer to tabletserver/tablet_error.go for a more detailed explanation on
-	// what these errors mean from the VtTablet perspective.
-	ERR_NORMAL = iota
-	ERR_RETRY
-	ERR_FATAL
-	ERR_TX_POOL_FULL
-	ERR_NOT_IN_TX
-)
-
-const (
 	// ConnClosed is returned when the underlying connection was closed.
 	ConnClosed = OperationalError("vttablet: Connection Closed")
 
@@ -44,17 +34,17 @@ var (
 )
 
 // ServerError represents an error that was returned from
-// a vttablet server.
+// a vttablet server. it implements vterrors.VtError.
 type ServerError struct {
-	Code int
-	Err  string
+	Err string
 	// ServerCode is the error code that we got from the server.
 	ServerCode vtrpcpb.ErrorCode
 }
 
 func (e *ServerError) Error() string { return e.Err }
 
-// VtErrorCode returns the underlying Vitess error code
+// VtErrorCode returns the underlying Vitess error code.
+// This makes ServerError implement vterrors.VtError.
 func (e *ServerError) VtErrorCode() vtrpcpb.ErrorCode { return e.ServerCode }
 
 // OperationalError represents an error due to a failure to

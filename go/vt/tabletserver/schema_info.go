@@ -176,12 +176,12 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 	defer conn.Recycle()
 
 	if strictMode && !conn.VerifyStrict() {
-		panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not verify strict mode"))
+		panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not verify strict mode"))
 	}
 
 	tableData, err := conn.Exec(ctx, baseShowTables, maxTableCount, false)
 	if err != nil {
-		panic(PrefixTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err, "Could not get table list: "))
+		panic(PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err, "Could not get table list: "))
 	}
 
 	tables := make(map[string]*TableInfo, len(tableData.Rows)+1)
@@ -219,7 +219,7 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 
 	// Fail if we can't load the schema for any tables, but we know that some tables exist. This points to a configuration problem.
 	if len(tableData.Rows) != 0 && len(tables) == 1 { // len(tables) is always at least 1 because of the "dual" table
-		panic(NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not get schema for any tables"))
+		panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not get schema for any tables"))
 	}
 	func() {
 		si.mu.Lock()
@@ -238,7 +238,7 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 
 // Records an error that occurs when getting the schema for a table.
 func (si *SchemaInfo) recordSchemaError(err error, tableName string) {
-	terr := PrefixTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
+	terr := PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
 		fmt.Sprintf("Could not load schema for table %s: ", tableName))
 	log.Error(terr)
 	si.queryServiceStats.InternalErrors.Add("Schema", 1)
@@ -349,14 +349,14 @@ func (si *SchemaInfo) mysqlTime(ctx context.Context) int64 {
 	defer conn.Recycle()
 	tm, err := conn.Exec(ctx, "select unix_timestamp()", 1, false)
 	if err != nil {
-		panic(PrefixTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, "Could not get MySQL time: "))
+		panic(PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, "Could not get MySQL time: "))
 	}
 	if len(tm.Rows) != 1 || len(tm.Rows[0]) != 1 || tm.Rows[0][0].IsNull() {
-		panic(NewTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "Unexpected result for MySQL time: %+v", tm.Rows))
+		panic(NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "Unexpected result for MySQL time: %+v", tm.Rows))
 	}
 	t, err := strconv.ParseInt(tm.Rows[0][0].String(), 10, 64)
 	if err != nil {
-		panic(NewTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "Could not parse time %+v: %v", tm, err))
+		panic(NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "Could not parse time %+v: %v", tm, err))
 	}
 	return t
 }
@@ -476,7 +476,7 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *LogStats, sql strin
 	}
 	splan, err := planbuilder.GetExecPlan(sql, GetTable)
 	if err != nil {
-		panic(PrefixTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, ""))
+		panic(PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, ""))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
 	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName)
@@ -492,7 +492,7 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *LogStats, sql strin
 			r, err := conn.Exec(ctx, sql, 1, true)
 			logStats.AddRewrittenSQL(sql, start)
 			if err != nil {
-				panic(PrefixTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, "Error fetching fields: "))
+				panic(PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, "Error fetching fields: "))
 			}
 			plan.Fields = r.Fields
 		}
@@ -518,7 +518,7 @@ func (si *SchemaInfo) GetStreamPlan(sql string) *ExecPlan {
 	}
 	splan, err := planbuilder.GetStreamExecPlan(sql, GetTable)
 	if err != nil {
-		panic(PrefixTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, ""))
+		panic(PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, ""))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
 	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName)
@@ -563,7 +563,7 @@ func (si *SchemaInfo) peekQuery(sql string) *ExecPlan {
 // SetQueryCacheCap sets the query cache capacity.
 func (si *SchemaInfo) SetQueryCacheCap(size int) {
 	if size <= 0 {
-		panic(NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "cache size %v out of range", size))
+		panic(NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "cache size %v out of range", size))
 	}
 	si.queries.SetCapacity(int64(size))
 }
