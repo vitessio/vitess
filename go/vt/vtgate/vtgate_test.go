@@ -24,6 +24,7 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // This file uses the sandbox_test framework.
@@ -915,8 +916,8 @@ func TestVTGateSplitQueryV2Unsharded(t *testing.T) {
 func TestIsErrorCausedByVTGate(t *testing.T) {
 	unknownError := fmt.Errorf("unknown error")
 	serverError := &tabletconn.ServerError{
-		Code: tabletconn.ERR_RETRY,
-		Err:  "vttablet: retry: error message",
+		ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
+		Err:        "vttablet: retry: error message",
 	}
 	shardConnUnknownErr := &ShardConnError{Err: unknownError}
 	shardConnServerErr := &ShardConnError{Err: serverError}

@@ -19,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
@@ -787,7 +786,7 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	allRetryableError := true
 	for _, e := range errors {
 		connError, ok := e.(*ShardConnError)
-		if !ok || (connError.Code != tabletconn.ERR_RETRY && connError.Code != tabletconn.ERR_FATAL) || connError.InTransaction {
+		if !ok || (connError.EndPointCode != vtrpcpb.ErrorCode_QUERY_NOT_SERVED && connError.EndPointCode != vtrpcpb.ErrorCode_INTERNAL_ERROR) || connError.InTransaction {
 			allRetryableError = false
 			break
 		}

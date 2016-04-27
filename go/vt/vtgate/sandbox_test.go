@@ -381,7 +381,6 @@ func (sbc *sandboxConn) getError() error {
 	if sbc.mustFailRetry > 0 {
 		sbc.mustFailRetry--
 		return &tabletconn.ServerError{
-			Code:       tabletconn.ERR_RETRY,
 			Err:        "retry: err",
 			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
 		}
@@ -389,7 +388,6 @@ func (sbc *sandboxConn) getError() error {
 	if sbc.mustFailFatal > 0 {
 		sbc.mustFailFatal--
 		return &tabletconn.ServerError{
-			Code:       tabletconn.ERR_FATAL,
 			Err:        "fatal: err",
 			ServerCode: vtrpcpb.ErrorCode_INTERNAL_ERROR,
 		}
@@ -397,7 +395,6 @@ func (sbc *sandboxConn) getError() error {
 	if sbc.mustFailServer > 0 {
 		sbc.mustFailServer--
 		return &tabletconn.ServerError{
-			Code:       tabletconn.ERR_NORMAL,
 			Err:        "error: err",
 			ServerCode: vtrpcpb.ErrorCode_BAD_INPUT,
 		}
@@ -409,7 +406,6 @@ func (sbc *sandboxConn) getError() error {
 	if sbc.mustFailTxPool > 0 {
 		sbc.mustFailTxPool--
 		return &tabletconn.ServerError{
-			Code:       tabletconn.ERR_TX_POOL_FULL,
 			Err:        "tx_pool_full: err",
 			ServerCode: vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED,
 		}
@@ -417,7 +413,6 @@ func (sbc *sandboxConn) getError() error {
 	if sbc.mustFailNotTx > 0 {
 		sbc.mustFailNotTx--
 		return &tabletconn.ServerError{
-			Code:       tabletconn.ERR_NOT_IN_TX,
 			Err:        "not_in_tx: err",
 			ServerCode: vtrpcpb.ErrorCode_NOT_IN_TX,
 		}

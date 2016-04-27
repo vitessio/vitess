@@ -99,7 +99,6 @@ func NewShardConn(ctx context.Context, serv topo.SrvTopoServer, cell, keyspace, 
 // ShardConnError is the shard conn specific error.
 // It implements vterrors.VtError.
 type ShardConnError struct {
-	Code            int
 	ShardIdentifier string
 	InTransaction   bool
 	// Preserve the original error, so that we don't need to parse the error string.
@@ -426,24 +425,26 @@ func (sdc *ShardConn) canRetry(ctx context.Context, err error, transactionID int
 	default:
 	}
 	if serverError, ok := err.(*tabletconn.ServerError); ok {
-		switch serverError.Code {
-		case tabletconn.ERR_FATAL:
-			// Do not retry on fatal error for streaming query.
+		switch serverError.ServerCode {
+		case vtrpcpb.ErrorCode_INTERNAL_ERROR:
+			// Do not retry on internal error for streaming query.
 			// For streaming query, vttablet sends:
-			// - RETRY, if streaming is not started yet;
-			// - FATAL, if streaming is broken halfway.
-			// For non-streaming query, handle as ERR_RETRY.
+			// - QUERY_NOT_SERVED, if streaming is not started yet;
+			// - INTERNAL_ERROR, if streaming is broken halfway.
+			// For non-streaming query, handle as QUERY_NOT_SERVED.
 			if isStreaming {
 				return false
 			}
 			fallthrough
-		case tabletconn.ERR_RETRY:
-			// Retry on RETRY and FATAL if not in a transaction.
+		case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
+			// Retry on QUERY_NOT_SERVED and
+			// INTERNAL_ERROR if not in a transaction.
 			inTransaction := (transactionID != 0)
 			sdc.markDown(conn, err.Error())
 			return !inTransaction
 		default:
-			// Not retry for TX_POOL_FULL and normal server errors.
+			// Not retry for RESOURCE_EXHAUSTED and normal
+			// server errors.
 			return false
 		}
 	}
@@ -473,8 +474,8 @@ func (sdc *ShardConn) markDown(conn tabletconn.TabletConn, reason string) {
 	sdc.conn = nil
 }
 
-// WrapError returns ShardConnError which preserves the original error code if possible,
-// adds the connection context
+// WrapError returns ShardConnError which preserves the original error code
+// if possible, adds the connection context
 // and adds a bit to determine whether the keyspace/shard needs to be
 // re-resolved for a potential sharding event.
 func (sdc *ShardConn) WrapError(in error, endPoint *topodatapb.EndPoint, inTransaction bool) (wrapped error) {
@@ -482,18 +483,10 @@ func (sdc *ShardConn) WrapError(in error, endPoint *topodatapb.EndPoint, inTrans
 		return nil
 	}
 	shardIdentifier := fmt.Sprintf("%s.%s.%s, %+v", sdc.keyspace, sdc.shard, strings.ToLower(sdc.tabletType.String()), endPoint)
-	code := tabletconn.ERR_NORMAL
-	serverError, ok := in.(*tabletconn.ServerError)
-	if ok {
-		code = serverError.Code
-	}
-
-	shardConnErr := &ShardConnError{
-		Code:            code,
+	return &ShardConnError{
 		ShardIdentifier: shardIdentifier,
 		InTransaction:   inTransaction,
 		Err:             in,
 		EndPointCode:    vterrors.RecoverVtErrorCode(in),
 	}
-	return shardConnErr
 }

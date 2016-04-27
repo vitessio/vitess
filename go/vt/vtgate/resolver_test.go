@@ -21,6 +21,7 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // This file uses the sandbox_test framework.
@@ -548,12 +549,13 @@ func TestIsRetryableError(t *testing.T) {
 		{fmt.Errorf("generic error"), false},
 		{&ScatterConnError{Retryable: true}, true},
 		{&ScatterConnError{Retryable: false}, false},
-		{&ShardConnError{Code: tabletconn.ERR_RETRY}, true},
-		{&ShardConnError{Code: 9}, false},
+		{&ShardConnError{EndPointCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED}, true},
+		{&ShardConnError{EndPointCode: vtrpcpb.ErrorCode_INTERNAL_ERROR}, false},
 		// tabletconn.ServerError will not come directly here,
 		// they'll be wrapped in ScatterConnError or ShardConnError.
-		{&tabletconn.ServerError{Code: tabletconn.ERR_RETRY}, false},
-		{&tabletconn.ServerError{Code: 9}, false},
+		// So they can't be retried as is.
+		{&tabletconn.ServerError{ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED}, false},
+		{&tabletconn.ServerError{ServerCode: vtrpcpb.ErrorCode_PERMISSION_DENIED}, false},
 	}
 
 	for _, tt := range connErrorTests {

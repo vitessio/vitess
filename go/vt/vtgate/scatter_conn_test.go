@@ -399,7 +399,7 @@ func TestScatterConnError(t *testing.T) {
 	err := &ScatterConnError{
 		Retryable: false,
 		Errs: []error{
-			&ShardConnError{Code: 10, Err: &tabletconn.ServerError{Err: "tabletconn error"}},
+			&ShardConnError{EndPointCode: vtrpcpb.ErrorCode_PERMISSION_DENIED, Err: &tabletconn.ServerError{Err: "tabletconn error"}},
 			fmt.Errorf("generic error"),
 			tabletconn.ConnClosed,
 		},

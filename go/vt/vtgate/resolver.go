@@ -16,7 +16,6 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
@@ -71,7 +70,7 @@ func isRetryableError(err error) bool {
 	case *ScatterConnError:
 		return e.Retryable
 	case *ShardConnError:
-		return e.Code == tabletconn.ERR_RETRY
+		return e.EndPointCode == vtrpcpb.ErrorCode_QUERY_NOT_SERVED
 	default:
 		return false
 	}
