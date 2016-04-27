@@ -58,23 +58,23 @@ func (f *FakeQueryService) HandlePanic(err *error) {
 // to make sure we propagate the errors properly.
 func testErrorHelper(t *testing.T, f *FakeQueryService, name string, ef func(context.Context) error) {
 	errors := []*tabletserver.TabletError{
-		// ErrFail is associated with a number of errors
-		tabletserver.NewTabletError(tabletserver.ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "generic error"),
-		tabletserver.NewTabletError(tabletserver.ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "uncaught panic"),
-		tabletserver.NewTabletError(tabletserver.ErrFail, vtrpcpb.ErrorCode_UNAUTHENTICATED, "missing caller id"),
-		tabletserver.NewTabletError(tabletserver.ErrFail, vtrpcpb.ErrorCode_PERMISSION_DENIED, "table acl error: nil acl"),
+		// A few generic errors
+		tabletserver.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "generic error"),
+		tabletserver.NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "uncaught panic"),
+		tabletserver.NewTabletError(vtrpcpb.ErrorCode_UNAUTHENTICATED, "missing caller id"),
+		tabletserver.NewTabletError(vtrpcpb.ErrorCode_PERMISSION_DENIED, "table acl error: nil acl"),
 
-		// ErrRetry is always associated with QUERY_NOT_SERVED
-		tabletserver.NewTabletError(tabletserver.ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Query disallowed due to rule: %v", "cool rule"),
+		// Client will retry on this specific error
+		tabletserver.NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Query disallowed due to rule: %v", "cool rule"),
 
-		// ErrFatal is always associated with INTERNAL_ERROR
-		tabletserver.NewTabletError(tabletserver.ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not verify strict mode"),
+		// Client may retry on another server on this specific error
+		tabletserver.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not verify strict mode"),
 
-		// ErrTxPoolFull is always associated with RESOURCE_EXHAUSTED
-		tabletserver.NewTabletError(tabletserver.ErrTxPoolFull, vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, "Transaction pool connection limit exceeded"),
+		// This is usually transaction pool full
+		tabletserver.NewTabletError(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, "Transaction pool connection limit exceeded"),
 
-		// ErrNotInTx is always associated with NOT_IN_TX
-		tabletserver.NewTabletError(tabletserver.ErrNotInTx, vtrpcpb.ErrorCode_NOT_IN_TX, "Transaction 12"),
+		// Transaction expired or was unknown
+		tabletserver.NewTabletError(vtrpcpb.ErrorCode_NOT_IN_TX, "Transaction 12"),
 	}
 	for _, e := range errors {
 		f.tabletError = e

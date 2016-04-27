@@ -106,7 +106,7 @@ func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
 	// If there's a problem with getting a connection out of the pool, that is
 	// probably not due to the query itself. The query might succeed on a different
 	// tablet.
-	panic(NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err))
+	panic(NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err))
 }
 
 // NewQueryEngine creates a new QueryEngine.
@@ -242,7 +242,7 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs, schemaOverrides []Sch
 		strictMode = true
 	}
 	if !strictMode && qe.config.RowCache.Enabled {
-		panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Rowcache cannot be enabled when queryserver-config-strict-mode is false"))
+		panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Rowcache cannot be enabled when queryserver-config-strict-mode is false"))
 	}
 	if qe.config.RowCache.Enabled {
 		qe.cachePool.Open()
@@ -341,7 +341,7 @@ func (qe *QueryEngine) Commit(ctx context.Context, logStats *LogStats, transacti
 // ClearRowcache invalidates all items in the rowcache.
 func (qe *QueryEngine) ClearRowcache(ctx context.Context) error {
 	if qe.cachePool.IsClosed() {
-		return NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "rowcache is not up")
+		return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "rowcache is not up")
 	}
 	conn := qe.cachePool.Get(ctx)
 	defer func() { qe.cachePool.Put(conn) }()
@@ -349,7 +349,7 @@ func (qe *QueryEngine) ClearRowcache(ctx context.Context) error {
 	if err := conn.FlushAll(); err != nil {
 		conn.Close()
 		conn = nil
-		return NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "%s", err)
+		return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "%s", err)
 	}
 	return nil
 }

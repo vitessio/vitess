@@ -94,7 +94,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		switch qre.plan.PlanID {
 		case planbuilder.PlanPassDML:
 			if qre.qe.strictMode.Get() != 0 {
-				return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "DML too complex")
+				return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "DML too complex")
 			}
 			reply, err = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 		case planbuilder.PlanInsertPK:
@@ -116,7 +116,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		switch qre.plan.PlanID {
 		case planbuilder.PlanPassSelect:
 			if qre.plan.Reason == planbuilder.ReasonLock {
-				return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "Disallowed outside transaction")
+				return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "Disallowed outside transaction")
 			}
 			reply, err = qre.execSelect()
 		case planbuilder.PlanPKIn:
@@ -134,7 +134,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			reply, err = qre.execSQL(conn, qre.query, true)
 		default:
 			if qre.qe.autoCommit.Get() == 0 {
-				return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT,
+				return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT,
 					"unsupported query outside transaction: %s", qre.query)
 			}
 			reply, err = qre.execDmlAutoCommit()
@@ -180,7 +180,7 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 		switch qre.plan.PlanID {
 		case planbuilder.PlanPassDML:
 			if qre.qe.strictMode.Get() != 0 {
-				return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "DML too complex")
+				return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "DML too complex")
 			}
 			reply, err = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 		case planbuilder.PlanInsertPK:
@@ -194,7 +194,7 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 		case planbuilder.PlanUpsertPK:
 			reply, err = qre.execUpsertPK(conn, invalidator)
 		default:
-			return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "unsupported query: %s", qre.query)
+			return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "unsupported query: %s", qre.query)
 		}
 		return reply, err
 	})
@@ -239,9 +239,9 @@ func (qre *QueryExecutor) checkPermissions() error {
 	action, desc := qre.plan.Rules.getAction(remoteAddr, username, qre.bindVars)
 	switch action {
 	case QRFail:
-		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "Query disallowed due to rule: %s", desc)
+		return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "Query disallowed due to rule: %s", desc)
 	case QRFailRetry:
-		return NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Query disallowed due to rule: %s", desc)
+		return NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Query disallowed due to rule: %s", desc)
 	}
 
 	// Check for SuperUser calling directly to VTTablet (e.g. VTWorker)
@@ -253,7 +253,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 	callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 	if callerID == nil {
 		if qre.qe.strictTableAcl {
-			return NewTabletError(ErrFail, vtrpcpb.ErrorCode_UNAUTHENTICATED, "missing caller id")
+			return NewTabletError(vtrpcpb.ErrorCode_UNAUTHENTICATED, "missing caller id")
 		}
 		return nil
 	}
@@ -270,7 +270,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 	}
 
 	if qre.plan.Authorized == nil {
-		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_PERMISSION_DENIED, "table acl error: nil acl")
+		return NewTabletError(vtrpcpb.ErrorCode_PERMISSION_DENIED, "table acl error: nil acl")
 	}
 	tableACLStatsKey := []string{
 		qre.plan.TableName,
@@ -289,7 +289,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", callerID.Username, qre.plan.PlanID, qre.plan.TableName)
 			qre.qe.tableaclDenied.Add(tableACLStatsKey, 1)
 			qre.qe.accessCheckerLogger.Infof("%s", errStr)
-			return NewTabletError(ErrFail, vtrpcpb.ErrorCode_PERMISSION_DENIED, "%s", errStr)
+			return NewTabletError(vtrpcpb.ErrorCode_PERMISSION_DENIED, "%s", errStr)
 		}
 		return nil
 	}
@@ -300,7 +300,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 	ddlPlan := planbuilder.DDLParse(qre.query)
 	if ddlPlan.Action == "" {
-		return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "DDL is not understood")
+		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "DDL is not understood")
 	}
 
 	txid := qre.qe.txPool.Begin(qre.ctx)
@@ -409,8 +409,8 @@ func (qre *QueryExecutor) execSubquery() (*sqltypes.Result, error) {
 func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value, limit int64) (*sqltypes.Result, error) {
 	if qre.plan.Fields == nil {
 		// TODO(aaijazi): Is this due to a bad query, or an internal error? We might want to change
-		// this to ErrFail and ErrorCode_BAD_INPUT instead.
-		return nil, NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "query plan.Fields is empty")
+		// this to ErrorCode_BAD_INPUT instead.
+		return nil, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "query plan.Fields is empty")
 	}
 	result := &sqltypes.Result{Fields: qre.plan.Fields}
 	if len(pkRows) == 0 || limit == 0 {
@@ -571,7 +571,7 @@ func (qre *QueryExecutor) execInsertSubquery(conn poolConn) (*sqltypes.Result, e
 		return &sqltypes.Result{RowsAffected: 0}, nil
 	}
 	if len(qre.plan.ColumnNumbers) != len(innerRows[0]) {
-		return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "Subquery length does not match column list")
+		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "Subquery length does not match column list")
 	}
 	pkRows := make([][]sqltypes.Value, len(innerRows))
 	for i, innerRow := range innerRows {
@@ -697,7 +697,7 @@ func parseInt64(v interface{}) (int64, error) {
 	if ival, ok := v.(int64); ok {
 		return ival, nil
 	}
-	return -1, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "got %v, want int64", v)
+	return -1, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "got %v, want int64", v)
 }
 
 func parseFloat64(v interface{}) (float64, error) {
@@ -707,7 +707,7 @@ func parseFloat64(v interface{}) (float64, error) {
 	if fval, ok := v.(float64); ok {
 		return fval, nil
 	}
-	return -1, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "got %v, want int64 or float64", v)
+	return -1, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "got %v, want int64 or float64", v)
 }
 
 func parseDuration(v interface{}) (time.Duration, error) {
@@ -749,7 +749,7 @@ func (qre *QueryExecutor) getConn(pool *ConnPool) (*DBConn, error) {
 	case ErrConnPoolClosed:
 		return nil, err
 	}
-	return nil, NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+	return nil, NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 }
 
 func (qre *QueryExecutor) qFetch(logStats *LogStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
@@ -764,7 +764,7 @@ func (qre *QueryExecutor) qFetch(logStats *LogStats, parsedQuery *sqlparser.Pars
 		conn, err := qre.qe.connPool.Get(qre.ctx)
 		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 		if err != nil {
-			q.Err = NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+			q.Err = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 		} else {
 			defer conn.Recycle()
 			q.Result, q.Err = qre.execSQL(conn, sql, false)
@@ -810,7 +810,7 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	bindVars["#maxLimit"] = qre.qe.maxResultSize.Get() + 1
 	sql, err := parsedQuery.GenerateQuery(bindVars)
 	if err != nil {
-		return "", NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "%s", err)
+		return "", NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%s", err)
 	}
 	if buildStreamComment != nil {
 		sql = append(sql, buildStreamComment...)
@@ -831,7 +831,7 @@ func (qre *QueryExecutor) execStreamSQL(conn *DBConn, sql string, callback func(
 	qre.logStats.AddRewrittenSQL(sql, start)
 	if err != nil {
 		// MySQL error that isn't due to a connection issue
-		return NewTabletErrorSQL(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
+		return NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
 	}
 	return nil
 }
