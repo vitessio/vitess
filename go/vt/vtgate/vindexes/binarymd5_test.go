@@ -1,6 +1,10 @@
 package vindexes
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/youtube/vitess/go/sqltypes"
+)
 
 var binVindex Vindex
 
@@ -43,5 +47,18 @@ func TestBinaryMD5(t *testing.T) {
 		if !ok {
 			t.Errorf("Verify(%#v): false, want true", tcase.in)
 		}
+	}
+}
+
+func TestSQLValue(t *testing.T) {
+	val := sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("Test"))
+	got, err := binVindex.(Unique).Map(nil, []interface{}{val})
+	if err != nil {
+		t.Error(err)
+	}
+	out := string(got[0])
+	want := "\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["
+	if out != want {
+		t.Errorf("Map(%#v): %#v, want %#v", val, out, want)
 	}
 }

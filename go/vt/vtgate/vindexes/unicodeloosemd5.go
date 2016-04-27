@@ -55,15 +55,18 @@ func (vind *UnicodeLooseMD5) Map(_ VCursor, ids []interface{}) ([][]byte, error)
 }
 
 func unicodeHash(key interface{}) ([]byte, error) {
-	source, ok := key.([]byte)
-	if !ok {
-		return nil, fmt.Errorf("unexpected data type for binHash: %T", key)
+	source, err := getBytes(key)
+	if err != nil {
+		return nil, err
 	}
 	return binHash(normalize(source)), nil
 }
 
 func normalize(in []byte) []byte {
+	// Ref: http://dev.mysql.com/doc/refman/5.6/en/char.html.
+	// Trailing spaces are ignored by MySQL.
 	in = bytes.TrimRight(in, " ")
+
 	// We use the collation key which can be used to
 	// perform lexical comparisons.
 	return normalizer.Key(new(collate.Buffer), in)
@@ -72,10 +75,16 @@ func normalize(in []byte) []byte {
 var normalizer *collate.Collator
 
 func init() {
-	// Specifying the locale as english makes the collator work
-	// with no language-specific rules. collate.Loose makes the
-	// collator normalize the characters to their base versions,
-	// that is without diacritics, capitals, or widths.
+	// Ref: http://www.unicode.org/reports/tr10/#Introduction.
+	// Unicode seems to define a universal (or default) order.
+	// But various locales have conflicting order,
+	// which they have the right to override.
+	// Unfortunately, the Go library requires you to specify a locale.
+	// So, I chose English assuming that it won't override
+	// the Unicode universal order. But I couldn't find an easy
+	// way to verify this.
+	// Also, the locale differences are not an issue for level 1,
+	// because the conservative comparison makes them all equal.
 	normalizer = collate.New(language.English, collate.Loose)
 	Register("unicode_loose_md5", MewUnicodeLooseMD5)
 }

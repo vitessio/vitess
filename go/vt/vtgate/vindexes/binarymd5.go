@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto/md5"
 	"fmt"
+
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 // BinaryMD5 is a vindex that hashes binary bits to a keyspace id.
@@ -49,11 +51,21 @@ func (vind *BinaryMD5) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
 }
 
 func binHashKey(key interface{}) ([]byte, error) {
-	source, ok := key.([]byte)
-	if !ok {
-		return nil, fmt.Errorf("unexpected data type for binHash: %T", key)
+	source, err := getBytes(key)
+	if err != nil {
+		return nil, err
 	}
 	return binHash(source), nil
+}
+
+func getBytes(key interface{}) ([]byte, error) {
+	switch v := key.(type) {
+	case []byte:
+		return v, nil
+	case sqltypes.Value:
+		return v.Raw(), nil
+	}
+	return nil, fmt.Errorf("unexpected data type for binHash: %T", key)
 }
 
 func binHash(source []byte) []byte {

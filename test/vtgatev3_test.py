@@ -66,6 +66,12 @@ email varchar(64),
 primary key (user_id)
 ) Engine=InnoDB'''
 
+create_join_name_info = '''create table join_name_info (
+name varchar(128),
+info varchar(128),
+primary key (name)
+) Engine=InnoDB'''
+
 create_vt_user_seq = '''create table vt_user_seq (
   id int,
   next_id bigint,
@@ -104,6 +110,9 @@ vschema = {
       "Vindexes": {
         "user_index": {
           "Type": "hash"
+        },
+        "unicode_hash": {
+          "Type": "unicode_loose_md5"
         },
         "name_user2_map": {
           "Type": "lookup_hash",
@@ -200,6 +209,14 @@ vschema = {
               "Name": "user_index"
             }
           ]
+        },
+        "join_name_info": {
+          "ColVindexes": [
+            {
+              "Col": "name",
+              "Name": "unicode_hash"
+            }
+          ]
         }
       }
     }''',
@@ -241,6 +258,7 @@ def setUpModule():
             create_vt_music_extra,
             create_join_user,
             create_join_user_extra,
+            create_join_name_info,
             ],
         )
     keyspace_env.launch(
@@ -801,6 +819,11 @@ class TestVTGateFunctions(unittest.TestCase):
         'insert into join_user_extra (user_id, email) '
         'values (:user_id, :email)',
         {'user_id': 2, 'email': 'email2'})
+    self.execute_on_master(
+        vtgate_conn,
+        'insert into join_name_info (name, info) '
+        'values (:name, :info)',
+        {'name': 'name1', 'info': 'name test'})
     vtgate_conn.commit()
     result = self.execute_on_master(
         vtgate_conn,
@@ -873,6 +896,20 @@ class TestVTGateFunctions(unittest.TestCase):
           ('name', self.string_type),
           ('user_id', self.int_type),
           ('email', self.string_type)]))
+    result = self.execute_on_master(
+        vtgate_conn,
+        'select u.id, u.name, n.info '
+        'from join_user u join join_name_info n on u.name = n.name '
+        'where u.id = 1',
+        {})
+    self.assertEqual(
+        result,
+        ([(1L, 'name1', 'name test')],
+         1,
+         0,
+         [('id', self.int_type),
+          ('name', self.string_type),
+          ('info', self.string_type)]))
     vtgate_conn.begin()
     self.execute_on_master(
         vtgate_conn,
