@@ -68,24 +68,55 @@ func (plr *Planner) WatchVSchema(ctx context.Context) {
 		return
 	}
 
-	// we will wait until we get the first value for each keyspace
-	// before returning
-	var wg sync.WaitGroup
-
 	// mu protects formal
 	var mu sync.Mutex
 	formal := &vindexes.VSchemaFormal{
 		Keyspaces: make(map[string]vindexes.KeyspaceFormal),
 	}
+
+	notifications := make(map[string]<-chan string)
+	for _, keyspace := range keyspaces {
+		n, err := plr.serv.WatchVSchema(ctx, keyspace)
+		if err != nil {
+			log.Warningf("Error watching vschema for keyspace %s (will not watch it): %v", keyspace, err)
+			continue
+		}
+
+		firstValue, ok := <-n
+		if !ok {
+			log.Warningf("Error getting first value for keyspace %s (will not watch it): %v", keyspace, err)
+			continue
+		}
+
+		// unpack the first value, save it
+		var kformal vindexes.KeyspaceFormal
+		if err := json.Unmarshal([]byte(firstValue), &kformal); err != nil {
+			log.Warningf("Error unmarshalling vschema for keyspace %s (will keep watching it): %v", keyspace, err)
+		} else {
+			formal.Keyspaces[keyspace] = kformal
+		}
+
+		notifications[keyspace] = n
+	}
+
+	// we got the initial set of values, now build the first version
+	vschema, err := vindexes.BuildVSchema(formal)
+	if err != nil {
+		log.Warningf("Error creating initial VSchema (will keep watching keyspaces): %v", err)
+	} else {
+		plr.mu.Lock()
+		plr.vschema = vschema
+		plr.mu.Unlock()
+	}
+
 	processKeyspace := func(keyspace, kschema string) error {
 		// Note we use a closure here to allow for defer()
-		// to work properly, and also to let the caller
-		// do more things even if this fails.
+		// to work properly
 
 		// unpack the new VSchema, or skip it
 		var kformal vindexes.KeyspaceFormal
 		if err := json.Unmarshal([]byte(kschema), &kformal); err != nil {
-			return fmt.Errorf("Error unmarshalling vschema for keyspace %s: %v", keyspace, err)
+			return fmt.Errorf("Error unmarshalling vschema for keyspace %s (will wait for a better version): %v", keyspace, err)
 		}
 
 		// rebuild the new component
@@ -94,7 +125,7 @@ func (plr *Planner) WatchVSchema(ctx context.Context) {
 		formal.Keyspaces[keyspace] = kformal
 		vschema, err := vindexes.BuildVSchema(formal)
 		if err != nil {
-			return fmt.Errorf("Error creating VSchema: %v", err)
+			return fmt.Errorf("Error creating VSchema (will try again when newer parts come in): %v", err)
 		}
 
 		plr.mu.Lock()
@@ -105,43 +136,16 @@ func (plr *Planner) WatchVSchema(ctx context.Context) {
 		return nil
 	}
 
-	lastValueIndex := len(keyspaces) - 1
-	for i, keyspace := range keyspaces {
-		wg.Add(1)
-		go func(i int, keyspace string) {
-			gotFirstValue := false
-
-			notifications, err := plr.serv.WatchVSchema(ctx, keyspace)
-			if err != nil {
-				log.Warningf("Error watching vschema for keyspace %s, will not watch it: %v", keyspace, err)
-				wg.Done()
-				return
-			}
-
-			for kschema := range notifications {
-				err := processKeyspace(keyspace, kschema)
-
-				if !gotFirstValue {
-					gotFirstValue = true
-
-					// only log the last error, as other
-					// errors may need the next values
-					if err != nil && i == lastValueIndex {
-						log.Warningf("%v", err)
-					}
-
-					wg.Done()
-				} else {
-					// always log a refresh that fails
-					if err != nil {
-						log.Warningf("%v", err)
-					}
+	// start the background watches
+	for keyspace, n := range notifications {
+		go func(keyspace string, n <-chan string) {
+			for kschema := range n {
+				if err := processKeyspace(keyspace, kschema); err != nil {
+					log.Warning("%v", err)
 				}
 			}
-		}(i, keyspace)
+		}(keyspace, n)
 	}
-
-	wg.Wait()
 }
 
 // VSchema returns the VSchema.
