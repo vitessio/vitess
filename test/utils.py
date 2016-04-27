@@ -537,6 +537,7 @@ class VtGate(object):
         '-conn-timeout-per-conn', timeout_per_conn,
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-gateway_implementation', vtgate_gateway_flavor().flavor(),
+        '-tablet_grpc_combine_begin_execute',
     ]
     args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
     if tablet_types_to_wait:

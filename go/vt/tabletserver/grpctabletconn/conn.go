@@ -28,10 +28,11 @@ import (
 const protocolName = "grpc"
 
 var (
-	cert = flag.String("tablet_grpc_cert", "", "the cert to use to connect")
-	key  = flag.String("tablet_grpc_key", "", "the key to use to connect")
-	ca   = flag.String("tablet_grpc_ca", "", "the server ca to use to validate servers when connecting")
-	name = flag.String("tablet_grpc_server_name", "", "the server name to use to validate server certificate")
+	cert  = flag.String("tablet_grpc_cert", "", "the cert to use to connect")
+	key   = flag.String("tablet_grpc_key", "", "the key to use to connect")
+	ca    = flag.String("tablet_grpc_ca", "", "the server ca to use to validate servers when connecting")
+	name  = flag.String("tablet_grpc_server_name", "", "the server name to use to validate server certificate")
+	combo = flag.Bool("tablet_grpc_combine_begin_execute", false, "combines Begin and Execute / ExecuteBatch calls in one when possible")
 )
 
 func init() {
@@ -250,6 +251,30 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, query string, bin
 		return nil, 0, tabletconn.ConnClosed
 	}
 
+	q, err := querytypes.BoundQueryToProto3(query, bindVars)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if *combo {
+		// If combo is enabled, we combine both calls
+		req := &querypb.BeginExecuteRequest{
+			Target:            conn.target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			Query:             q,
+		}
+		reply, err := conn.c.BeginExecute(ctx, req)
+		if err != nil {
+			return nil, 0, tabletconn.TabletErrorFromGRPC(err)
+		}
+		if reply.Error != nil {
+			return nil, reply.TransactionId, tabletconn.TabletErrorFromRPCError(reply.Error)
+		}
+		return sqltypes.Proto3ToResult(reply.Result), reply.TransactionId, nil
+	}
+
+	// Begin part.
 	breq := &querypb.BeginRequest{
 		Target:            conn.target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
@@ -261,11 +286,7 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, query string, bin
 	}
 	transactionID = br.TransactionId
 
-	q, err := querytypes.BoundQueryToProto3(query, bindVars)
-	if err != nil {
-		return nil, transactionID, err
-	}
-
+	// Execute part.
 	ereq := &querypb.ExecuteRequest{
 		Target:            conn.target,
 		EffectiveCallerId: breq.EffectiveCallerId,
@@ -287,6 +308,33 @@ func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, queries []qu
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
 		return nil, 0, tabletconn.ConnClosed
+	}
+
+	if *combo {
+		// If combo is enabled, we combine both calls
+		req := &querypb.BeginExecuteBatchRequest{
+			Target:            conn.target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			Queries:           make([]*querypb.BoundQuery, len(queries)),
+			AsTransaction:     asTransaction,
+		}
+		for i, q := range queries {
+			qq, err := querytypes.BoundQueryToProto3(q.Sql, q.BindVariables)
+			if err != nil {
+				return nil, transactionID, err
+			}
+			req.Queries[i] = qq
+		}
+
+		reply, err := conn.c.BeginExecuteBatch(ctx, req)
+		if err != nil {
+			return nil, 0, tabletconn.TabletErrorFromGRPC(err)
+		}
+		if reply.Error != nil {
+			return nil, reply.TransactionId, tabletconn.TabletErrorFromRPCError(reply.Error)
+		}
+		return sqltypes.Proto3ToResults(reply.Results), reply.TransactionId, nil
 	}
 
 	breq := &querypb.BeginRequest{
