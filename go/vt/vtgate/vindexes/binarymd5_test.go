@@ -2,19 +2,19 @@ package vindexes
 
 import "testing"
 
-var varbinaryHash Vindex
+var binVindex Vindex
 
 func init() {
-	varbinaryHash, _ = CreateVindex("varbinaryHash", "vch", nil)
+	binVindex, _ = CreateVindex("binary_md5", "vch", nil)
 }
 
-func TestVarbinaryHashCost(t *testing.T) {
-	if varbinaryHash.Cost() != 1 {
-		t.Errorf("Cost(): %d, want 1", varbinaryHash.Cost())
+func TestBinaryMD5Cost(t *testing.T) {
+	if binVindex.Cost() != 1 {
+		t.Errorf("Cost(): %d, want 1", binVindex.Cost())
 	}
 }
 
-func TestVarBinaryMap(t *testing.T) {
+func TestBinaryMD5(t *testing.T) {
 	tcases := []struct {
 		in, out string
 	}{{
@@ -28,7 +28,7 @@ func TestVarBinaryMap(t *testing.T) {
 		out: "\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za[",
 	}}
 	for _, tcase := range tcases {
-		got, err := varbinaryHash.(Unique).Map(nil, []interface{}{[]byte(tcase.in)})
+		got, err := binVindex.(Unique).Map(nil, []interface{}{[]byte(tcase.in)})
 		if err != nil {
 			t.Error(err)
 		}
@@ -36,7 +36,7 @@ func TestVarBinaryMap(t *testing.T) {
 		if out != tcase.out {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}
-		ok, err := varbinaryHash.Verify(nil, []byte(tcase.in), []byte(tcase.out))
+		ok, err := binVindex.Verify(nil, []byte(tcase.in), []byte(tcase.out))
 		if err != nil {
 			t.Error(err)
 		}

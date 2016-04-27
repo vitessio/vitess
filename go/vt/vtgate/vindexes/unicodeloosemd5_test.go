@@ -2,19 +2,19 @@ package vindexes
 
 import "testing"
 
-var utf8cihash Vindex
+var charVindex Vindex
 
 func init() {
-	utf8cihash, _ = CreateVindex("utf8cihash", "utf8ch", nil)
+	charVindex, _ = CreateVindex("unicode_loose_md5", "utf8ch", nil)
 }
 
-func TestVarcharHashCost(t *testing.T) {
-	if utf8cihash.Cost() != 1 {
-		t.Errorf("Cost(): %d, want 1", utf8cihash.Cost())
+func TestUnicodeLosseMD5Cost(t *testing.T) {
+	if charVindex.Cost() != 1 {
+		t.Errorf("Cost(): %d, want 1", charVindex.Cost())
 	}
 }
 
-func TestVarcharMap(t *testing.T) {
+func TestUnicodeLosseMD5(t *testing.T) {
 	tcases := []struct {
 		in, out string
 	}{{
@@ -40,7 +40,7 @@ func TestVarcharMap(t *testing.T) {
 		out: "\xac\x0f\x91y\xf5\x1d\xb8\u007f\xe8\xec\xc0\xcf@ʹz",
 	}}
 	for _, tcase := range tcases {
-		got, err := utf8cihash.(Unique).Map(nil, []interface{}{[]byte(tcase.in)})
+		got, err := charVindex.(Unique).Map(nil, []interface{}{[]byte(tcase.in)})
 		if err != nil {
 			t.Error(err)
 		}
@@ -48,7 +48,7 @@ func TestVarcharMap(t *testing.T) {
 		if out != tcase.out {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}
-		ok, err := utf8cihash.Verify(nil, []byte(tcase.in), []byte(tcase.out))
+		ok, err := charVindex.Verify(nil, []byte(tcase.in), []byte(tcase.out))
 		if err != nil {
 			t.Error(err)
 		}
