@@ -6,6 +6,9 @@
         "hash": {
           "Type": "hash"
         },
+        "unicode_loose_md5": {
+          "Type": "unicode_loose_md5"
+        },
         "name_user_idx": {
           "Type": "lookup_hash",
           "Params": {
@@ -78,6 +81,14 @@
             {
               "Col": "keyspace_id",
               "Name": "keyspace_idx"
+            }
+          ]
+        },
+        "name_info": {
+          "ColVindexes": [
+            {
+              "Col": "name",
+              "Name": "unicode_loose_md5"
             }
           ]
         },
