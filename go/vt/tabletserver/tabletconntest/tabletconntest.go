@@ -85,22 +85,17 @@ func testErrorHelper(t *testing.T, f *FakeQueryService, name string, ef func(con
 			continue
 		}
 
-		// First we check the vtrpc code is right.
+		// First we check the recoverable vtrpc code is right.
 		code := vterrors.RecoverVtErrorCode(err)
 		if code != e.ErrorCode {
 			t.Errorf("unexpected server code from %v: got %v, wanted %v", name, code, e.ErrorCode)
 		}
-		sError, ok := err.(*tabletconn.ServerError)
-		if !ok {
+
+		// Double-check we always get a ServerError, although
+		// we don't really care that much.
+		if _, ok := err.(*tabletconn.ServerError); !ok {
 			t.Errorf("error wasn't a tabletconn.ServerError for %v?", name)
 			continue
-		}
-
-		// Then we check the code is right. This depends on
-		// the values for tabletserver.TabletError.ErrorType
-		// and tabletconn.ServerError.Code using the same values.
-		if sError.Code != e.ErrorType {
-			t.Errorf("unexpected ServerError code from %v: got %v, wanted %v", name, sError.Code, e.ErrorType)
 		}
 
 		// and last we check we preserve the text, with the right prefix
