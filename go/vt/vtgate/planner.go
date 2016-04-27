@@ -77,7 +77,7 @@ func (plr *Planner) WatchVSchema(ctx context.Context) {
 	formal := &vindexes.VSchemaFormal{
 		Keyspaces: make(map[string]vindexes.KeyspaceFormal),
 	}
-	processKeyspace := func(keyspace, kschema string) {
+	processKeyspace := func(keyspace, kschema string) error {
 		// Note we use a closure here to allow for defer()
 		// to work properly, and also to let the caller
 		// do more things even if this fails.
@@ -85,8 +85,7 @@ func (plr *Planner) WatchVSchema(ctx context.Context) {
 		// unpack the new VSchema, or skip it
 		var kformal vindexes.KeyspaceFormal
 		if err := json.Unmarshal([]byte(kschema), &kformal); err != nil {
-			log.Warningf("Error unmarshalling vschema for keyspace %s: %v", keyspace, err)
-			return
+			return fmt.Errorf("Error unmarshalling vschema for keyspace %s: %v", keyspace, err)
 		}
 
 		// rebuild the new component
@@ -95,36 +94,51 @@ func (plr *Planner) WatchVSchema(ctx context.Context) {
 		formal.Keyspaces[keyspace] = kformal
 		vschema, err := vindexes.BuildVSchema(formal)
 		if err != nil {
-			log.Warningf("Error creating VSchema: %v", err)
-			return
+			return fmt.Errorf("Error creating VSchema: %v", err)
 		}
 
 		plr.mu.Lock()
 		plr.vschema = vschema
 		plr.mu.Unlock()
 		plr.plans.Clear()
+
+		return nil
 	}
 
-	for _, keyspace := range keyspaces {
+	lastValueIndex := len(keyspaces) - 1
+	for i, keyspace := range keyspaces {
 		wg.Add(1)
-		go func(keyspace string) {
+		go func(i int, keyspace string) {
 			gotFirstValue := false
 
 			notifications, err := plr.serv.WatchVSchema(ctx, keyspace)
 			if err != nil {
 				log.Warningf("Error watching vschema for keyspace %s, will not watch it: %v", keyspace, err)
+				wg.Done()
 				return
 			}
 
 			for kschema := range notifications {
-				processKeyspace(keyspace, kschema)
+				err := processKeyspace(keyspace, kschema)
 
 				if !gotFirstValue {
 					gotFirstValue = true
+
+					// only log the last error, as other
+					// errors may need the next values
+					if err != nil && i == lastValueIndex {
+						log.Warningf("%v", err)
+					}
+
 					wg.Done()
+				} else {
+					// always log a refresh that fails
+					if err != nil {
+						log.Warningf("%v", err)
+					}
 				}
 			}
-		}(keyspace)
+		}(i, keyspace)
 	}
 
 	wg.Wait()
