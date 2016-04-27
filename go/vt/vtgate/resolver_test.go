@@ -547,7 +547,8 @@ func TestIsConnError(t *testing.T) {
 		outBool bool
 	}{
 		{fmt.Errorf("generic error"), 0, false},
-		{&ScatterConnError{Code: 9}, 9, true},
+		{&ScatterConnError{Retryable: true}, tabletconn.ERR_RETRY, true},
+		{&ScatterConnError{Retryable: false}, tabletconn.ERR_NORMAL, true},
 		{&ShardConnError{Code: 9}, 9, true},
 		{&tabletconn.ServerError{Code: 9}, 0, false},
 	}

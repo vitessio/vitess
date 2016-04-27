@@ -761,8 +761,9 @@ func (stc *ScatterConn) GetGatewayCacheStatus() GatewayEndPointCacheStatusList {
 }
 
 // ScatterConnError is the ScatterConn specific error.
+// It implements vterrors.VtError.
 type ScatterConnError struct {
-	Code int
+	Retryable bool
 	// Preserve the original errors, so that we don't need to parse the error string.
 	Errs []error
 	// serverCode is the error code to use for all the server errors in aggregate
@@ -774,7 +775,10 @@ func (e *ScatterConnError) Error() string {
 }
 
 // VtErrorCode returns the underlying Vitess error code
-func (e *ScatterConnError) VtErrorCode() vtrpcpb.ErrorCode { return e.serverCode }
+// This is part of vterrors.VtError interface.
+func (e *ScatterConnError) VtErrorCode() vtrpcpb.ErrorCode {
+	return e.serverCode
+}
 
 func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	if len(errors) == 0 {
@@ -788,15 +792,8 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 			break
 		}
 	}
-	var code int
-	if allRetryableError {
-		code = tabletconn.ERR_RETRY
-	} else {
-		code = tabletconn.ERR_NORMAL
-	}
-
 	return &ScatterConnError{
-		Code:       code,
+		Retryable:  allRetryableError,
 		Errs:       errors,
 		serverCode: aggregateVtGateErrorCodes(errors),
 	}

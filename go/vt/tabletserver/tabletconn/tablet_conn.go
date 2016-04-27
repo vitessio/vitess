@@ -44,7 +44,7 @@ var (
 )
 
 // ServerError represents an error that was returned from
-// a vttablet server.
+// a vttablet server. it implements vterrors.VtError.
 type ServerError struct {
 	Code int
 	Err  string
@@ -54,7 +54,8 @@ type ServerError struct {
 
 func (e *ServerError) Error() string { return e.Err }
 
-// VtErrorCode returns the underlying Vitess error code
+// VtErrorCode returns the underlying Vitess error code.
+// This makes ServerError implement vterrors.VtError.
 func (e *ServerError) VtErrorCode() vtrpcpb.ErrorCode { return e.ServerCode }
 
 // OperationalError represents an error due to a failure to

@@ -397,7 +397,7 @@ func TestScatterConnClose(t *testing.T) {
 
 func TestScatterConnError(t *testing.T) {
 	err := &ScatterConnError{
-		Code: 12,
+		Retryable: false,
 		Errs: []error{
 			&ShardConnError{Code: 10, Err: &tabletconn.ServerError{Err: "tabletconn error"}},
 			fmt.Errorf("generic error"),

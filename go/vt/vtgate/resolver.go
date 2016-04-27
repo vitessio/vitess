@@ -70,7 +70,10 @@ func (res *Resolver) InitializeConnections(ctx context.Context) error {
 func isConnError(err error) (int, bool) {
 	switch e := err.(type) {
 	case *ScatterConnError:
-		return e.Code, true
+		if e.Retryable {
+			return tabletconn.ERR_RETRY, true
+		}
+		return tabletconn.ERR_NORMAL, true
 	case *ShardConnError:
 		return e.Code, true
 	default:

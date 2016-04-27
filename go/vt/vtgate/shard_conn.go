@@ -97,6 +97,7 @@ func NewShardConn(ctx context.Context, serv topo.SrvTopoServer, cell, keyspace, 
 }
 
 // ShardConnError is the shard conn specific error.
+// It implements vterrors.VtError.
 type ShardConnError struct {
 	Code            int
 	ShardIdentifier string
@@ -114,8 +115,11 @@ func (e *ShardConnError) Error() string {
 	return fmt.Sprintf("shard, host: %s, %v", e.ShardIdentifier, e.Err)
 }
 
-// VtErrorCode returns the underlying Vitess error code
-func (e *ShardConnError) VtErrorCode() vtrpcpb.ErrorCode { return e.EndPointCode }
+// VtErrorCode returns the underlying Vitess error code.
+// This is part of vterrors.VtError interface.
+func (e *ShardConnError) VtErrorCode() vtrpcpb.ErrorCode {
+	return e.EndPointCode
+}
 
 // Dial creates tablet connection and connects to the vttablet.
 // It is not necessary to call this function before serving queries,
