@@ -540,24 +540,27 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	}
 }
 
-func TestIsConnError(t *testing.T) {
+func TestIsRetryableError(t *testing.T) {
 	var connErrorTests = []struct {
 		in      error
-		outCode int
 		outBool bool
 	}{
-		{fmt.Errorf("generic error"), 0, false},
-		{&ScatterConnError{Retryable: true}, tabletconn.ERR_RETRY, true},
-		{&ScatterConnError{Retryable: false}, tabletconn.ERR_NORMAL, true},
-		{&ShardConnError{Code: 9}, 9, true},
-		{&tabletconn.ServerError{Code: 9}, 0, false},
+		{fmt.Errorf("generic error"), false},
+		{&ScatterConnError{Retryable: true}, true},
+		{&ScatterConnError{Retryable: false}, false},
+		{&ShardConnError{Code: tabletconn.ERR_RETRY}, true},
+		{&ShardConnError{Code: 9}, false},
+		// tabletconn.ServerError will not come directly here,
+		// they'll be wrapped in ScatterConnError or ShardConnError.
+		{&tabletconn.ServerError{Code: tabletconn.ERR_RETRY}, false},
+		{&tabletconn.ServerError{Code: 9}, false},
 	}
 
 	for _, tt := range connErrorTests {
-		gotCode, gotBool := isConnError(tt.in)
-		if (gotCode != tt.outCode) || (gotBool != tt.outBool) {
-			t.Errorf("isConnError(%v) => (%v, %v), want (%v, %v)",
-				tt.in, gotCode, gotBool, tt.outCode, tt.outBool)
+		gotBool := isRetryableError(tt.in)
+		if gotBool != tt.outBool {
+			t.Errorf("isConnError(%v) => %v, want %v",
+				tt.in, gotBool, tt.outBool)
 		}
 	}
 }
