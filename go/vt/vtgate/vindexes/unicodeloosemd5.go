@@ -63,6 +63,7 @@ func unicodeHash(key interface{}) ([]byte, error) {
 }
 
 func normalize(in []byte) []byte {
+	in = bytes.TrimRight(in, " ")
 	// We use the collation key which can be used to
 	// perform lexical comparisons.
 	return normalizer.Key(new(collate.Buffer), in)

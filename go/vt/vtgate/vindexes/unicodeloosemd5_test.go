@@ -33,6 +33,15 @@ func TestUnicodeLosseMD5(t *testing.T) {
 		in:  "Bést",
 		out: "²3.Os\xd0\aA\x02bIpo/\xb6",
 	}, {
+		in:  "Test ",
+		out: "\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5",
+	}, {
+		in:  " Test",
+		out: "\xa2\xe3Q\\~\x8d\xf1\xff\xd2\xcc\xfc\x11Ʊ\x9d\xd1",
+	}, {
+		in:  "Test\t",
+		out: "\x82Em\xd8z\x9cz\x02\xb1\xc2\x05kZ\xba\xa2r",
+	}, {
 		in:  "TéstLooong",
 		out: "\x96\x83\xe1+\x80C\f\xd4S\xf5\xdfߺ\x81ɥ",
 	}, {
@@ -76,6 +85,15 @@ func TestNormalization(t *testing.T) {
 	}, {
 		in:  "Bést",
 		out: "\x16\x05\x16L\x17\xf3\x18\x16",
+	}, {
+		in:  "Test ",
+		out: "\x18\x16\x16L\x17\xf3\x18\x16",
+	}, {
+		in:  " Test",
+		out: "\x01\t\x18\x16\x16L\x17\xf3\x18\x16",
+	}, {
+		in:  "Test\t",
+		out: "\x18\x16\x16L\x17\xf3\x18\x16\x01\x00",
 	}, {
 		in:  "TéstLooong",
 		out: "\x18\x16\x16L\x17\xf3\x18\x16\x17\x11\x17q\x17q\x17q\x17O\x16\x91",
