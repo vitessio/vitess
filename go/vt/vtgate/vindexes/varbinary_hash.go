@@ -2,6 +2,7 @@ package vindexes
 
 import (
 	"bytes"
+	"crypto/md5"
 	"fmt"
 )
 
@@ -31,8 +32,7 @@ func getVarbinaryHash(key interface{}) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("unexpected data type for binHash: %T", key)
 	}
-	val, error := binHash(source)
-	return val, error
+	return binHash(source), nil
 }
 
 // Verify returns true if id maps to ksid.
@@ -55,6 +55,11 @@ func (vind *Varbinary) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
 		out = append(out, data)
 	}
 	return out, nil
+}
+
+func binHash(source []byte) []byte {
+	sum := md5.Sum(source)
+	return sum[:]
 }
 
 func init() {

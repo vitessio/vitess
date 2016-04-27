@@ -1,9 +1,6 @@
 package vindexes
 
-import (
-	"reflect"
-	"testing"
-)
+import "testing"
 
 var varbinaryHash Vindex
 
@@ -18,24 +15,33 @@ func TestVarbinaryHashCost(t *testing.T) {
 }
 
 func TestVarBinaryMap(t *testing.T) {
-	got, err := varbinaryHash.(Unique).Map(nil, []interface{}{[]byte("\x74\x65\x73\x74\x74\x65\x73\x74")})
-	if err != nil {
-		t.Error(err)
-	}
-	want := [][]byte{
-		[]byte("\x45\x23\x56\x06\x86\xef\x04\x91"),
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
-}
-
-func TestVarBinaryVerify(t *testing.T) {
-	success, err := varbinaryHash.Verify(nil, []byte("\x74\x65\x73\x74\x74\x65\x73\x74"), []byte("\x45\x23\x56\x06\x86\xef\x04\x91"))
-	if err != nil {
-		t.Error(err)
-	}
-	if !success {
-		t.Errorf("Verify(): %+v, want true", success)
+	tcases := []struct {
+		in, out string
+	}{{
+		in:  "Test",
+		out: "\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za[",
+	}, {
+		in:  "TEST",
+		out: "\x03;\xd9K\x11h\xd7\xe4\xf0\xd6D\xc3\xc9^5\xbf",
+	}, {
+		in:  "Test",
+		out: "\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za[",
+	}}
+	for _, tcase := range tcases {
+		got, err := varbinaryHash.(Unique).Map(nil, []interface{}{[]byte(tcase.in)})
+		if err != nil {
+			t.Error(err)
+		}
+		out := string(got[0])
+		if out != tcase.out {
+			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
+		}
+		ok, err := varbinaryHash.Verify(nil, []byte(tcase.in), []byte(tcase.out))
+		if err != nil {
+			t.Error(err)
+		}
+		if !ok {
+			t.Errorf("Verify(%#v): false, want true", tcase.in)
+		}
 	}
 }

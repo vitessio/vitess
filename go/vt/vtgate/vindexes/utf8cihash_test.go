@@ -1,9 +1,6 @@
 package vindexes
 
-import (
-	"reflect"
-	"testing"
-)
+import "testing"
 
 var utf8cihash Vindex
 
@@ -17,30 +14,79 @@ func TestVarcharHashCost(t *testing.T) {
 	}
 }
 
-//TestVarcharMap checks if the [upper/lower/mixed]case strings return the same hash
-//eg: TESTTEST, testtest,TeStteST
 func TestVarcharMap(t *testing.T) {
-	got, err := utf8cihash.(Unique).Map(nil, []interface{}{[]byte("\x55\x45\x54\x55\x55\x45\x54\x55"), []byte("\x75\x65\x74\x75\x75\x65\x74\x75"),
-		[]byte("\x55\x65\x54\x75\x75\x65\x54\x55")})
-	if err != nil {
-		t.Error(err)
-	}
-	want := [][]byte{
-		[]byte("\xf7\xaa\x9a\x46\xc9\x20\x85\x65"),
-		[]byte("\xf7\xaa\x9a\x46\xc9\x20\x85\x65"),
-		[]byte("\xf7\xaa\x9a\x46\xc9\x20\x85\x65"),
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
+	tcases := []struct {
+		in, out string
+	}{{
+		in:  "Test",
+		out: "\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5",
+	}, {
+		in:  "TEST",
+		out: "\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5",
+	}, {
+		in:  "Te\u0301st",
+		out: "\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5",
+	}, {
+		in:  "Tést",
+		out: "\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5",
+	}, {
+		in:  "Bést",
+		out: "²3.Os\xd0\aA\x02bIpo/\xb6",
+	}, {
+		in:  "TéstLooong",
+		out: "\x96\x83\xe1+\x80C\f\xd4S\xf5\xdfߺ\x81ɥ",
+	}, {
+		in:  "T",
+		out: "\xac\x0f\x91y\xf5\x1d\xb8\u007f\xe8\xec\xc0\xcf@ʹz",
+	}}
+	for _, tcase := range tcases {
+		got, err := utf8cihash.(Unique).Map(nil, []interface{}{[]byte(tcase.in)})
+		if err != nil {
+			t.Error(err)
+		}
+		out := string(got[0])
+		if out != tcase.out {
+			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
+		}
+		ok, err := utf8cihash.Verify(nil, []byte(tcase.in), []byte(tcase.out))
+		if err != nil {
+			t.Error(err)
+		}
+		if !ok {
+			t.Errorf("Verify(%#v): false, want true", tcase.in)
+		}
 	}
 }
 
-func TestVarCharVerify(t *testing.T) {
-	success, err := utf8cihash.Verify(nil, []byte("\x55\x45\x54\x55\x55\x45\x54\x55"), []byte("\xf7\xaa\x9a\x46\xc9\x20\x85\x65"))
-	if err != nil {
-		t.Error(err)
-	}
-	if !success {
-		t.Errorf("Verify(): %+v, want true", success)
+func TestNormalization(t *testing.T) {
+	tcases := []struct {
+		in, out string
+	}{{
+		in:  "Test",
+		out: "\x18\x16\x16L\x17\xf3\x18\x16",
+	}, {
+		in:  "TEST",
+		out: "\x18\x16\x16L\x17\xf3\x18\x16",
+	}, {
+		in:  "Te\u0301st",
+		out: "\x18\x16\x16L\x17\xf3\x18\x16",
+	}, {
+		in:  "Tést",
+		out: "\x18\x16\x16L\x17\xf3\x18\x16",
+	}, {
+		in:  "Bést",
+		out: "\x16\x05\x16L\x17\xf3\x18\x16",
+	}, {
+		in:  "TéstLooong",
+		out: "\x18\x16\x16L\x17\xf3\x18\x16\x17\x11\x17q\x17q\x17q\x17O\x16\x91",
+	}, {
+		in:  "T",
+		out: "\x18\x16",
+	}}
+	for _, tcase := range tcases {
+		out := string(normalize([]byte(tcase.in)))
+		if out != tcase.out {
+			t.Errorf("normalize(%#v): %#v, want %#v", tcase.in, out, tcase.out)
+		}
 	}
 }

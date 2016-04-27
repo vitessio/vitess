@@ -3,6 +3,9 @@ package vindexes
 import (
 	"bytes"
 	"fmt"
+
+	"golang.org/x/text/collate"
+	"golang.org/x/text/language"
 )
 
 // UTF8cihash defines vindex that hashes an varchar to a KeyspaceId
@@ -40,14 +43,11 @@ func getutf8cihash(key interface{}) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("unexpected data type for binHash: %T", key)
 	}
-	val, error  := binHash(bytes.ToLower(source))
-	return val, error
+	return binHash(normalize(source)), nil
 }
 
-func binHash(source []byte) ([]byte, error) {
-	dest := make([]byte, len(source))
-	block3DES.Encrypt(dest, source)
-	return dest, nil
+func normalize(in []byte) []byte {
+	return normalizer.Key(new(collate.Buffer), in)
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
@@ -63,6 +63,9 @@ func (vind *UTF8cihash) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
 	return out, nil
 }
 
+var normalizer *collate.Collator
+
 func init() {
+	normalizer = collate.New(language.English, collate.Loose)
 	Register("utf8cihash", Newutf8cihash)
 }
