@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"text/template"
 	"time"
 
@@ -77,79 +76,6 @@ func resolveReloadTabletsForShard(ctx context.Context, keyspace, shard string, w
 			keyspace, shard, err)
 	}
 	return reloadAliases, reloadTablets, nil
-}
-
-// tableStatus keeps track of the status for a given table
-type tableStatus struct {
-	name   string
-	isView bool
-
-	// all subsequent fields are protected by the mutex
-	mu             sync.Mutex
-	rowCount       uint64 // set to approximate value, until copy ends
-	copiedRows     uint64 // actual count of copied rows
-	threadCount    int    // how many concurrent threads will copy the data
-	threadsStarted int    // how many threads have started
-	threadsDone    int    // how many threads are done
-}
-
-func (ts *tableStatus) setThreadCount(threadCount int) {
-	ts.mu.Lock()
-	ts.threadCount = threadCount
-	ts.mu.Unlock()
-}
-
-func (ts *tableStatus) threadStarted() {
-	ts.mu.Lock()
-	ts.threadsStarted++
-	ts.mu.Unlock()
-}
-
-func (ts *tableStatus) threadDone() {
-	ts.mu.Lock()
-	ts.threadsDone++
-	ts.mu.Unlock()
-}
-
-func (ts *tableStatus) addCopiedRows(copiedRows int) {
-	ts.mu.Lock()
-	ts.copiedRows += uint64(copiedRows)
-	if ts.copiedRows > ts.rowCount {
-		// since rowCount is not accurate, update it if we go past it.
-		ts.rowCount = ts.copiedRows
-	}
-	ts.mu.Unlock()
-}
-
-func formatTableStatuses(tableStatuses []*tableStatus, startTime time.Time) ([]string, time.Time) {
-	copiedRows := uint64(0)
-	rowCount := uint64(0)
-	result := make([]string, len(tableStatuses))
-	for i, ts := range tableStatuses {
-		ts.mu.Lock()
-		if ts.isView {
-			// views are not copied
-			result[i] = fmt.Sprintf("%v is a view", ts.name)
-		} else if ts.threadsStarted == 0 {
-			// we haven't started yet
-			result[i] = fmt.Sprintf("%v: copy not started (estimating %v rows)", ts.name, ts.rowCount)
-		} else if ts.threadsDone == ts.threadCount {
-			// we are done with the copy
-			result[i] = fmt.Sprintf("%v: copy done, copied %v rows", ts.name, ts.rowCount)
-		} else {
-			// copy is running
-			result[i] = fmt.Sprintf("%v: copy running using %v threads (%v/%v rows)", ts.name, ts.threadsStarted-ts.threadsDone, ts.copiedRows, ts.rowCount)
-		}
-		copiedRows += ts.copiedRows
-		rowCount += ts.rowCount
-		ts.mu.Unlock()
-	}
-	now := time.Now()
-	if rowCount == 0 || copiedRows == 0 {
-		return result, now
-	}
-	eta := now.Add(time.Duration(float64(now.Sub(startTime)) * float64(rowCount) / float64(copiedRows)))
-	return result, eta
 }
 
 var errExtract = regexp.MustCompile(`\(errno (\d+)\)`)

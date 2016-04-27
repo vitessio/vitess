@@ -47,8 +47,6 @@ type SplitCloneWorker struct {
 	minHealthyRdonlyEndPoints int
 	cleaner                   *wrangler.Cleaner
 
-	// all subsequent fields are protected by the mutex
-
 	// populated during WorkerStateInit, read-only after that
 	keyspaceInfo      *topo.KeyspaceInfo
 	sourceShards      []*topo.ShardInfo
@@ -59,8 +57,8 @@ type SplitCloneWorker struct {
 	sourceTablets []*topo.TabletInfo
 
 	// populated during WorkerStateCopy
-	tableStatus []*tableStatus
-	startTime   time.Time
+	// tableStatusList holds the status for each table.
+	tableStatusList tableStatusList
 	// aliases of tablets that need to have their schema reloaded.
 	// Only populated once, read-only after that.
 	reloadAliases [][]*topodatapb.TabletAlias
@@ -127,20 +125,20 @@ func (scw *SplitCloneWorker) formatSources() string {
 
 // StatusAsHTML implements the Worker interface
 func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
-	scw.Mu.Lock()
-	defer scw.Mu.Unlock()
+	state := scw.State()
+
 	result := "<b>Working on:</b> " + scw.keyspace + "/" + scw.shard + "</br>\n"
-	result += "<b>State:</b> " + scw.State.String() + "</br>\n"
-	switch scw.State {
+	result += "<b>State:</b> " + state.String() + "</br>\n"
+	switch state {
 	case WorkerStateCopy:
 		result += "<b>Running</b>:</br>\n"
 		result += "<b>Copying from</b>: " + scw.formatSources() + "</br>\n"
-		statuses, eta := formatTableStatuses(scw.tableStatus, scw.startTime)
+		statuses, eta := scw.tableStatusList.format()
 		result += "<b>ETA</b>: " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
 	case WorkerStateDone:
 		result += "<b>Success</b>:</br>\n"
-		statuses, _ := formatTableStatuses(scw.tableStatus, scw.startTime)
+		statuses, _ := scw.tableStatusList.format()
 		result += strings.Join(statuses, "</br>\n")
 	}
 
@@ -149,20 +147,20 @@ func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
 
 // StatusAsText implements the Worker interface
 func (scw *SplitCloneWorker) StatusAsText() string {
-	scw.Mu.Lock()
-	defer scw.Mu.Unlock()
+	state := scw.State()
+
 	result := "Working on: " + scw.keyspace + "/" + scw.shard + "\n"
-	result += "State: " + scw.State.String() + "\n"
-	switch scw.State {
+	result += "State: " + state.String() + "\n"
+	switch state {
 	case WorkerStateCopy:
 		result += "Running:\n"
 		result += "Copying from: " + scw.formatSources() + "\n"
-		statuses, eta := formatTableStatuses(scw.tableStatus, scw.startTime)
+		statuses, eta := scw.tableStatusList.format()
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
 	case WorkerStateDone:
 		result += "Success:\n"
-		statuses, _ := formatTableStatuses(scw.tableStatus, scw.startTime)
+		statuses, _ := scw.tableStatusList.format()
 		result += strings.Join(statuses, "\n")
 	}
 	return result
@@ -408,30 +406,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 		return fmt.Errorf("no tables matching the table filter in tablet %v", topoproto.TabletAliasString(scw.sourceAliases[0]))
 	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
-
-	scw.Mu.Lock()
-	scw.tableStatus = make([]*tableStatus, len(sourceSchemaDefinition.TableDefinitions))
-	for i, td := range sourceSchemaDefinition.TableDefinitions {
-		scw.tableStatus[i] = &tableStatus{
-			name:     td.Name,
-			rowCount: td.RowCount * uint64(len(scw.sourceAliases)),
-		}
-	}
-	scw.startTime = time.Now()
-	scw.Mu.Unlock()
-
-	// Count rows for source tables
-	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
-		if td.Type == tmutils.TableBaseTable {
-			scw.tableStatus[tableIndex].mu.Lock()
-			scw.tableStatus[tableIndex].rowCount = td.RowCount
-			scw.tableStatus[tableIndex].mu.Unlock()
-		} else {
-			scw.tableStatus[tableIndex].mu.Lock()
-			scw.tableStatus[tableIndex].isView = true
-			scw.tableStatus[tableIndex].mu.Unlock()
-		}
-	}
+	scw.tableStatusList.initialize(sourceSchemaDefinition)
 
 	// In parallel, setup the channels to send SQL data chunks to for each destination tablet:
 	//
@@ -524,7 +499,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			scw.tableStatus[tableIndex].setThreadCount(len(chunks) - 1)
+			scw.tableStatusList.setThreadCount(tableIndex, len(chunks)-1)
 
 			for chunkIndex := 0; chunkIndex < len(chunks)-1; chunkIndex++ {
 				sourceWaitGroup.Add(1)
@@ -534,7 +509,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 					sema.Acquire()
 					defer sema.Release()
 
-					scw.tableStatus[tableIndex].threadStarted()
+					scw.tableStatusList.threadStarted(tableIndex)
 
 					// build the query, and start the streaming
 					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, scw.sourceAliases[shardIndex].String())
@@ -549,7 +524,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 					if err := scw.processData(ctx, td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount); err != nil {
 						processError("processData failed: %v", err)
 					}
-					scw.tableStatus[tableIndex].threadDone()
+					scw.tableStatusList.threadDone(tableIndex)
 				}(td, tableIndex, chunkIndex)
 			}
 		}
@@ -675,7 +650,7 @@ func (scw *SplitCloneWorker) processData(ctx context.Context, td *tabletmanagerd
 		if err := rowSplitter.Split(sr, r.Rows); err != nil {
 			return fmt.Errorf("RowSplitter failed for table %v: %v", td.Name, err)
 		}
-		scw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
+		scw.tableStatusList.addCopiedRows(tableIndex, len(r.Rows))
 
 		// see if we reach the destination pack count
 		packCount++

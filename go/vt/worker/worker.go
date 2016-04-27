@@ -21,10 +21,13 @@ import (
 
 // Worker is the base interface for all long running workers.
 type Worker interface {
-	// StatusAsHTML returns the current worker status in HTML
+	// State returns the current state using the internal representation.
+	State() StatusWorkerState
+
+	// StatusAsHTML returns the current worker status in HTML.
 	StatusAsHTML() template.HTML
 
-	// StatusAsText returns the current worker status in plain text
+	// StatusAsText returns the current worker status in plain text.
 	StatusAsText() string
 
 	// Run is the main entry point for the worker. It will be
