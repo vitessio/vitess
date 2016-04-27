@@ -386,17 +386,8 @@ func testSplitClone(t *testing.T, v3 bool) {
 		"-min_table_size_for_split", "1",
 		"-destination_writer_count", "10",
 		"ks/-80"}
-	worker, done, err := wi.RunCommand(args, wi.wr, false /* runFromCli */)
-	if err != nil {
-		t.Fatalf("Worker creation failed: %v", err)
-	}
-	if err := wi.WaitForCommand(worker, done); err != nil {
-		t.Fatalf("Worker failed: %v", err)
-	}
-
-	t.Logf("Got status: %v", worker.StatusAsText())
-	if worker.(*SplitCloneWorker).State != WorkerStateDone {
-		t.Fatalf("Worker run failed: %v", err)
+	if err := runCommand(t, wi, wi.wr, args); err != nil {
+		t.Fatal(err)
 	}
 
 	if statsDestinationAttemptedResolves.String() != "3" {

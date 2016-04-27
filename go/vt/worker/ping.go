@@ -32,11 +32,11 @@ func NewPingWorker(wr *wrangler.Wrangler, message string) (Worker, error) {
 
 // StatusAsHTML implements the Worker interface
 func (pw *PingWorker) StatusAsHTML() template.HTML {
-	pw.Mu.Lock()
-	defer pw.Mu.Unlock()
+	state := pw.State()
+
 	result := "<b>Ping Command with message:</b> '" + pw.message + "'</br>\n"
-	result += "<b>State:</b> " + pw.State.String() + "</br>\n"
-	switch pw.State {
+	result += "<b>State:</b> " + state.String() + "</br>\n"
+	switch state {
 	case WorkerStateCopy:
 		result += "<b>Running</b>:</br>\n"
 		result += "Logging message: '" + pw.message + "'</br>\n"
@@ -50,11 +50,11 @@ func (pw *PingWorker) StatusAsHTML() template.HTML {
 
 // StatusAsText implements the Worker interface.
 func (pw *PingWorker) StatusAsText() string {
-	pw.Mu.Lock()
-	defer pw.Mu.Unlock()
+	state := pw.State()
+
 	result := "Ping Command with message: '" + pw.message + "'\n"
-	result += "State: " + pw.State.String() + "\n"
-	switch pw.State {
+	result += "State: " + state.String() + "\n"
+	switch state {
 	case WorkerStateCopy:
 		result += "Logging message: '" + pw.message + "'\n"
 	case WorkerStateDone:

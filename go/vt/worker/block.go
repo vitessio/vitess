@@ -30,11 +30,11 @@ func NewBlockWorker(wr *wrangler.Wrangler) (Worker, error) {
 
 // StatusAsHTML implements the Worker interface.
 func (bw *BlockWorker) StatusAsHTML() template.HTML {
-	bw.Mu.Lock()
-	defer bw.Mu.Unlock()
+	state := bw.State()
+
 	result := "<b>Block Command</b> (blocking infinitely until context is cancelled)</br>\n"
-	result += "<b>State:</b> " + bw.State.String() + "</br>\n"
-	switch bw.State {
+	result += "<b>State:</b> " + state.String() + "</br>\n"
+	switch state {
 	case WorkerStateCopy:
 		result += "<b>Running (blocking)</b></br>\n"
 	case WorkerStateDone:
@@ -46,11 +46,11 @@ func (bw *BlockWorker) StatusAsHTML() template.HTML {
 
 // StatusAsText implements the Worker interface.
 func (bw *BlockWorker) StatusAsText() string {
-	bw.Mu.Lock()
-	defer bw.Mu.Unlock()
+	state := bw.State()
+
 	result := "Block Command\n"
-	result += "State: " + bw.State.String() + "\n"
-	switch bw.State {
+	result += "State: " + state.String() + "\n"
+	switch state {
 	case WorkerStateCopy:
 		result += "Running (blocking)\n"
 	case WorkerStateDone:

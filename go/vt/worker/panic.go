@@ -30,11 +30,11 @@ func NewPanicWorker(wr *wrangler.Wrangler) (Worker, error) {
 
 // StatusAsHTML implements the Worker interface
 func (pw *PanicWorker) StatusAsHTML() template.HTML {
-	pw.Mu.Lock()
-	defer pw.Mu.Unlock()
+	state := pw.State()
+
 	result := "<b>Panic Command</br>\n"
-	result += "<b>State:</b> " + pw.State.String() + "</br>\n"
-	switch pw.State {
+	result += "<b>State:</b> " + state.String() + "</br>\n"
+	switch state {
 	case WorkerStateDone:
 		result += "<b>Success</b>:</br>\n"
 		result += "panic() should have been executed and logged by the vtworker framework.</br>\n"
@@ -45,11 +45,11 @@ func (pw *PanicWorker) StatusAsHTML() template.HTML {
 
 // StatusAsText implements the Worker interface.
 func (pw *PanicWorker) StatusAsText() string {
-	pw.Mu.Lock()
-	defer pw.Mu.Unlock()
+	state := pw.State()
+
 	result := "Panic Command\n"
-	result += "State: " + pw.State.String() + "\n"
-	switch pw.State {
+	result += "State: " + state.String() + "\n"
+	switch state {
 	case WorkerStateDone:
 		result += "panic() should have been executed and logged by the vtworker framework.\n"
 	}

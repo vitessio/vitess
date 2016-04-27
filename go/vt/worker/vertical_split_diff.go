@@ -34,8 +34,6 @@ type VerticalSplitDiffWorker struct {
 	minHealthyRdonlyEndPoints int
 	cleaner                   *wrangler.Cleaner
 
-	// all subsequent fields are protected by the mutex
-
 	// populated during WorkerStateInit, read-only after that
 	keyspaceInfo *topo.KeyspaceInfo
 	shardInfo    *topo.ShardInfo
@@ -64,11 +62,11 @@ func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard str
 
 // StatusAsHTML is part of the Worker interface.
 func (vsdw *VerticalSplitDiffWorker) StatusAsHTML() template.HTML {
-	vsdw.Mu.Lock()
-	defer vsdw.Mu.Unlock()
+	state := vsdw.State()
+
 	result := "<b>Working on:</b> " + vsdw.keyspace + "/" + vsdw.shard + "</br>\n"
-	result += "<b>State:</b> " + vsdw.State.String() + "</br>\n"
-	switch vsdw.State {
+	result += "<b>State:</b> " + state.String() + "</br>\n"
+	switch state {
 	case WorkerStateDiff:
 		result += "<b>Running</b>:</br>\n"
 	case WorkerStateDone:
@@ -80,11 +78,11 @@ func (vsdw *VerticalSplitDiffWorker) StatusAsHTML() template.HTML {
 
 // StatusAsText is part of the Worker interface.
 func (vsdw *VerticalSplitDiffWorker) StatusAsText() string {
-	vsdw.Mu.Lock()
-	defer vsdw.Mu.Unlock()
+	state := vsdw.State()
+
 	result := "Working on: " + vsdw.keyspace + "/" + vsdw.shard + "\n"
-	result += "State: " + vsdw.State.String() + "\n"
-	switch vsdw.State {
+	result += "State: " + state.String() + "\n"
+	switch state {
 	case WorkerStateDiff:
 		result += "Running...\n"
 	case WorkerStateDone:

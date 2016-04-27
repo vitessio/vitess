@@ -343,17 +343,8 @@ func TestVerticalSplitClone(t *testing.T) {
 		"-destination_writer_count", "10",
 		"destination_ks/0",
 	}
-	worker, done, err := wi.RunCommand(args, wi.wr, false /* runFromCli */)
-	if err != nil {
-		t.Fatalf("Worker creation failed: %v", err)
-	}
-	if err := wi.WaitForCommand(worker, done); err != nil {
-		t.Fatalf("Worker failed: %v", err)
-	}
-
-	t.Logf("Got status: %v", worker.StatusAsText())
-	if worker.(*VerticalSplitCloneWorker).State != WorkerStateDone {
-		t.Fatalf("Worker run failed")
+	if err := runCommand(t, wi, wi.wr, args); err != nil {
+		t.Fatal(err)
 	}
 
 	if statsDestinationAttemptedResolves.String() != "2" {

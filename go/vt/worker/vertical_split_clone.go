@@ -47,8 +47,6 @@ type VerticalSplitCloneWorker struct {
 	minHealthyRdonlyEndPoints int
 	cleaner                   *wrangler.Cleaner
 
-	// all subsequent fields are protected by the StatusWorker mutex
-
 	// populated during WorkerStateInit, read-only after that
 	sourceKeyspace string
 
@@ -57,8 +55,8 @@ type VerticalSplitCloneWorker struct {
 	sourceTablet *topo.TabletInfo
 
 	// populated during WorkerStateCopy
-	tableStatus []*tableStatus
-	startTime   time.Time
+	// tableStatusList holds the status for each table.
+	tableStatusList tableStatusList
 	// aliases of tablets that need to have their schema reloaded.
 	// Only populated once, read-only after that.
 	reloadAliases []*topodatapb.TabletAlias
@@ -118,20 +116,20 @@ func (vscw *VerticalSplitCloneWorker) setErrorState(err error) {
 
 // StatusAsHTML implements the Worker interface
 func (vscw *VerticalSplitCloneWorker) StatusAsHTML() template.HTML {
-	vscw.Mu.Lock()
-	defer vscw.Mu.Unlock()
+	state := vscw.State()
+
 	result := "<b>Working on:</b> " + vscw.destinationKeyspace + "/" + vscw.destinationShard + "</br>\n"
-	result += "<b>State:</b> " + vscw.State.String() + "</br>\n"
-	switch vscw.State {
+	result += "<b>State:</b> " + state.String() + "</br>\n"
+	switch state {
 	case WorkerStateCopy:
 		result += "<b>Running</b>:</br>\n"
 		result += "<b>Copying from</b>: " + topoproto.TabletAliasString(vscw.sourceAlias) + "</br>\n"
-		statuses, eta := formatTableStatuses(vscw.tableStatus, vscw.startTime)
+		statuses, eta := vscw.tableStatusList.format()
 		result += "<b>ETA</b>: " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
 	case WorkerStateDone:
 		result += "<b>Success</b>:</br>\n"
-		statuses, _ := formatTableStatuses(vscw.tableStatus, vscw.startTime)
+		statuses, _ := vscw.tableStatusList.format()
 		result += strings.Join(statuses, "</br>\n")
 	}
 
@@ -140,20 +138,20 @@ func (vscw *VerticalSplitCloneWorker) StatusAsHTML() template.HTML {
 
 // StatusAsText implements the Worker interface
 func (vscw *VerticalSplitCloneWorker) StatusAsText() string {
-	vscw.Mu.Lock()
-	defer vscw.Mu.Unlock()
+	state := vscw.State()
+
 	result := "Working on: " + vscw.destinationKeyspace + "/" + vscw.destinationShard + "\n"
-	result += "State: " + vscw.State.String() + "\n"
-	switch vscw.State {
+	result += "State: " + state.String() + "\n"
+	switch state {
 	case WorkerStateCopy:
 		result += "Running:\n"
 		result += "Copying from: " + topoproto.TabletAliasString(vscw.sourceAlias) + "\n"
-		statuses, eta := formatTableStatuses(vscw.tableStatus, vscw.startTime)
+		statuses, eta := vscw.tableStatusList.format()
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
 	case WorkerStateDone:
 		result += "Success:\n"
-		statuses, _ := formatTableStatuses(vscw.tableStatus, vscw.startTime)
+		statuses, _ := vscw.tableStatusList.format()
 		result += strings.Join(statuses, "\n")
 	}
 	return result
@@ -354,27 +352,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 		return fmt.Errorf("no tables matching the table filter")
 	}
 	vscw.wr.Logger().Infof("Source tablet has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
-	vscw.Mu.Lock()
-	vscw.tableStatus = make([]*tableStatus, len(sourceSchemaDefinition.TableDefinitions))
-	for i, td := range sourceSchemaDefinition.TableDefinitions {
-		vscw.tableStatus[i] = &tableStatus{
-			name:     td.Name,
-			rowCount: td.RowCount,
-		}
-	}
-	vscw.startTime = time.Now()
-	vscw.Mu.Unlock()
-
-	// Count rows
-	for i, td := range sourceSchemaDefinition.TableDefinitions {
-		vscw.tableStatus[i].mu.Lock()
-		if td.Type == tmutils.TableBaseTable {
-			vscw.tableStatus[i].rowCount = td.RowCount
-		} else {
-			vscw.tableStatus[i].isView = true
-		}
-		vscw.tableStatus[i].mu.Unlock()
-	}
+	vscw.tableStatusList.initialize(sourceSchemaDefinition)
 
 	// In parallel, setup the channels to send SQL data chunks to
 	// for each destination tablet.
@@ -428,7 +406,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		vscw.tableStatus[tableIndex].setThreadCount(len(chunks) - 1)
+		vscw.tableStatusList.setThreadCount(tableIndex, len(chunks)-1)
 
 		for chunkIndex := 0; chunkIndex < len(chunks)-1; chunkIndex++ {
 			sourceWaitGroup.Add(1)
@@ -438,7 +416,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 				sema.Acquire()
 				defer sema.Release()
 
-				vscw.tableStatus[tableIndex].threadStarted()
+				vscw.tableStatusList.threadStarted(tableIndex)
 
 				// build the query, and start the streaming
 				selectSQL := buildSQLFromChunks(vscw.wr, td, chunks, chunkIndex, topoproto.TabletAliasString(vscw.sourceAlias))
@@ -453,7 +431,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 				if err := vscw.processData(ctx, td, tableIndex, qrr, insertChannel, vscw.destinationPackCount); err != nil {
 					processError("QueryResultReader failed: %v", err)
 				}
-				vscw.tableStatus[tableIndex].threadDone()
+				vscw.tableStatusList.threadDone(tableIndex)
 			}(td, tableIndex, chunkIndex)
 		}
 	}
@@ -565,7 +543,7 @@ func (vscw *VerticalSplitCloneWorker) processData(ctx context.Context, td *table
 
 		// add the rows to our current result
 		rows = append(rows, r.Rows...)
-		vscw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
+		vscw.tableStatusList.addCopiedRows(tableIndex, len(r.Rows))
 
 		// see if we reach the destination pack count
 		packCount++

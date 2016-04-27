@@ -192,16 +192,7 @@ func TestVerticalSplitDiff(t *testing.T) {
 	// have a good way to fake the binlog player yet, which is
 	// necessary for synchronizing replication.
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient())
-	worker, done, err := wi.RunCommand(args, wr, false /* runFromCli */)
-	if err != nil {
-		t.Fatalf("Worker creation failed: %v", err)
-	}
-	if err := wi.WaitForCommand(worker, done); err != nil {
-		t.Fatalf("Worker failed: %v", err)
-	}
-
-	t.Logf("Got status: %v", worker.StatusAsText())
-	if worker.(*VerticalSplitDiffWorker).State != WorkerStateDone {
-		t.Fatalf("Worker run failed")
+	if err := runCommand(t, wi, wr, args); err != nil {
+		t.Fatal(err)
 	}
 }

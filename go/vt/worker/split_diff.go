@@ -38,8 +38,6 @@ type SplitDiffWorker struct {
 	minHealthyRdonlyEndPoints int
 	cleaner                   *wrangler.Cleaner
 
-	// all subsequent fields are protected by the mutex
-
 	// populated during WorkerStateInit, read-only after that
 	keyspaceInfo *topo.KeyspaceInfo
 	shardInfo    *topo.ShardInfo
@@ -70,11 +68,11 @@ func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, sou
 
 // StatusAsHTML is part of the Worker interface
 func (sdw *SplitDiffWorker) StatusAsHTML() template.HTML {
-	sdw.Mu.Lock()
-	defer sdw.Mu.Unlock()
+	state := sdw.State()
+
 	result := "<b>Working on:</b> " + sdw.keyspace + "/" + sdw.shard + "</br>\n"
-	result += "<b>State:</b> " + sdw.State.String() + "</br>\n"
-	switch sdw.State {
+	result += "<b>State:</b> " + state.String() + "</br>\n"
+	switch state {
 	case WorkerStateDiff:
 		result += "<b>Running...</b></br>\n"
 	case WorkerStateDone:
@@ -86,11 +84,11 @@ func (sdw *SplitDiffWorker) StatusAsHTML() template.HTML {
 
 // StatusAsText is part of the Worker interface
 func (sdw *SplitDiffWorker) StatusAsText() string {
-	sdw.Mu.Lock()
-	defer sdw.Mu.Unlock()
+	state := sdw.State()
+
 	result := "Working on: " + sdw.keyspace + "/" + sdw.shard + "\n"
-	result += "State: " + sdw.State.String() + "\n"
-	switch sdw.State {
+	result += "State: " + state.String() + "\n"
+	switch state {
 	case WorkerStateDiff:
 		result += "Running...\n"
 	case WorkerStateDone:
