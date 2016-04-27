@@ -243,6 +243,14 @@ func (vscw *VerticalSplitCloneWorker) init(ctx context.Context) error {
 	}
 	vscw.sourceKeyspace = servedFrom
 
+	// Verify that filtered replication is not already enabled.
+	destShardInfo, err := vscw.wr.TopoServer().GetShard(ctx, vscw.destinationKeyspace, vscw.destinationShard)
+	if len(destShardInfo.SourceShards) > 0 {
+		return fmt.Errorf("destination shard %v/%v has filtered replication already enabled from a previous resharding (ShardInfo is set)."+
+			" This requires manual intervention e.g. use vtctl SourceShardDelete to remove it",
+			vscw.destinationKeyspace, vscw.destinationShard)
+	}
+
 	return nil
 }
 
