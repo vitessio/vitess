@@ -251,7 +251,7 @@ func TestInsertSharded(t *testing.T) {
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
 			"_id":         int64(1),
-			"_name":       "myname",
+			"_name":       []byte("myname"),
 			"__seq":       int64(1),
 		},
 	}}
@@ -264,7 +264,7 @@ func TestInsertSharded(t *testing.T) {
 	wantQueries = []querytypes.BoundQuery{{
 		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
 		BindVariables: map[string]interface{}{
-			"name":    "myname",
+			"name":    []byte("myname"),
 			"user_id": int64(1),
 		},
 	}}
@@ -284,7 +284,7 @@ func TestInsertSharded(t *testing.T) {
 			"keyspace_id": "N\xb1\x90ɢ\xfa\x16\x9c",
 			"_id":         int64(3),
 			"__seq":       int64(3),
-			"_name":       "myname2",
+			"_name":       []byte("myname2"),
 		},
 	}}
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
@@ -296,7 +296,7 @@ func TestInsertSharded(t *testing.T) {
 	wantQueries = []querytypes.BoundQuery{{
 		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
 		BindVariables: map[string]interface{}{
-			"name":    "myname2",
+			"name":    []byte("myname2"),
 			"user_id": int64(3),
 		},
 	}}
@@ -325,7 +325,7 @@ func TestInsertGenerator(t *testing.T) {
 			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
 			"_id":         int64(1),
 			"__seq":       int64(1),
-			"_name":       "myname",
+			"_name":       []byte("myname"),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
@@ -337,7 +337,7 @@ func TestInsertGenerator(t *testing.T) {
 	}, {
 		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
 		BindVariables: map[string]interface{}{
-			"name":    "myname",
+			"name":    []byte("myname"),
 			"user_id": int64(1),
 		},
 	}}
