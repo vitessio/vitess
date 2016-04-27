@@ -360,9 +360,6 @@ func (rtr *Router) resolveKeys(vals []interface{}, bindVars map[string]interface
 				return nil, fmt.Errorf("could not find bind var %s", v)
 			}
 		}
-		if v, ok := val.([]byte); ok {
-			val = string(v)
-		}
 		keys = append(keys, val)
 	}
 	return keys, nil
