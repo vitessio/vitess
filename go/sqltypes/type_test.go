@@ -171,27 +171,137 @@ func TestTypeToMySQL(t *testing.T) {
 	}
 }
 
-func TestTypeFlexibility(t *testing.T) {
-	v, err := MySQLToType(1, mysqlBinary>>16)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if v != Int8 {
-		t.Errorf("conversion: %v, want %v", v, Int8)
-	}
-	var typ int64
-	for typ = 249; typ <= 252; typ++ {
-		v, err := MySQLToType(typ, mysqlBinary>>16)
+func TestMySQLToType(t *testing.T) {
+	testcases := []struct {
+		intype  int64
+		inflags int64
+		outtype querypb.Type
+	}{{
+		intype:  1,
+		outtype: Int8,
+	}, {
+		intype:  1,
+		inflags: originalUnsigned,
+		outtype: Uint8,
+	}, {
+		intype:  2,
+		outtype: Int16,
+	}, {
+		intype:  2,
+		inflags: originalUnsigned,
+		outtype: Uint16,
+	}, {
+		intype:  3,
+		outtype: Int32,
+	}, {
+		intype:  3,
+		inflags: originalUnsigned,
+		outtype: Uint32,
+	}, {
+		intype:  4,
+		outtype: Float32,
+	}, {
+		intype:  5,
+		outtype: Float64,
+	}, {
+		intype:  6,
+		outtype: Null,
+	}, {
+		intype:  7,
+		outtype: Timestamp,
+	}, {
+		intype:  8,
+		outtype: Int64,
+	}, {
+		intype:  8,
+		inflags: originalUnsigned,
+		outtype: Uint64,
+	}, {
+		intype:  9,
+		outtype: Int24,
+	}, {
+		intype:  9,
+		inflags: originalUnsigned,
+		outtype: Uint24,
+	}, {
+		intype:  10,
+		outtype: Date,
+	}, {
+		intype:  11,
+		outtype: Time,
+	}, {
+		intype:  12,
+		outtype: Datetime,
+	}, {
+		intype:  13,
+		outtype: Year,
+	}, {
+		intype:  16,
+		outtype: Bit,
+	}, {
+		intype:  246,
+		outtype: Decimal,
+	}, {
+		intype:  249,
+		outtype: Text,
+	}, {
+		intype:  250,
+		outtype: Text,
+	}, {
+		intype:  251,
+		outtype: Text,
+	}, {
+		intype:  252,
+		outtype: Text,
+	}, {
+		intype:  252,
+		inflags: originalBinary,
+		outtype: Blob,
+	}, {
+		intype:  253,
+		outtype: VarChar,
+	}, {
+		intype:  253,
+		inflags: originalBinary,
+		outtype: VarBinary,
+	}, {
+		intype:  254,
+		outtype: Char,
+	}, {
+		intype:  254,
+		inflags: originalBinary,
+		outtype: Binary,
+	}, {
+		intype:  254,
+		inflags: originalEnum,
+		outtype: Enum,
+	}, {
+		intype:  254,
+		inflags: originalSet,
+		outtype: Set,
+	}, {
+		// Binary flag must be ignored.
+		intype:  8,
+		inflags: originalUnsigned | originalBinary,
+		outtype: Uint64,
+	}, {
+		// Unsigned flag must be ignored
+		intype:  252,
+		inflags: originalUnsigned | originalBinary,
+		outtype: Blob,
+	}}
+	for _, tcase := range testcases {
+		got, err := MySQLToType(tcase.intype, tcase.inflags)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
-		if v != Blob {
-			t.Errorf("conversion: %v, want %v", v, Blob)
+		if got != tcase.outtype {
+			t.Errorf("MySQLToType(%d, %x): %v, want %v", tcase.intype, tcase.inflags, got, tcase.outtype)
 		}
 	}
 }
 
-func TestTypePanic(t *testing.T) {
+func TestTypeError(t *testing.T) {
 	_, err := MySQLToType(15, 0)
 	want := "unsupported type: 15"
 	if err == nil || err.Error() != want {
