@@ -81,7 +81,7 @@ public class VitessStatement implements Statement {
         showSql = StringUtils.startsWithIgnoreCaseAndWs(sql, Constants.SQL_SHOW);
         if (showSql) {
             String keyspace = this.vitessConnection.getKeyspace();
-            List<byte[]> keyspaceIds = Arrays.asList(new byte[]{1}); //To Hit any single shard
+            List<byte[]> keyspaceIds = Arrays.asList(new byte[] {1}); //To Hit any single shard
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
 
             cursor =
@@ -468,7 +468,7 @@ public class VitessStatement implements Statement {
 
         if (showSql) {
             String keyspace = this.vitessConnection.getKeyspace();
-            List<byte[]> keyspaceIds = Arrays.asList(new byte[]{1}); //To Hit any single shard
+            List<byte[]> keyspaceIds = Arrays.asList(new byte[] {1}); //To Hit any single shard
 
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
             cursor =

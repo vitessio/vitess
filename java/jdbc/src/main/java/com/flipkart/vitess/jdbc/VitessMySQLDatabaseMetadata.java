@@ -22,7 +22,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     static {
 
         String[] allMySQLKeywords =
-            new String[]{"ACCESSIBLE", "ADD", "ALL", "ALTER", "ANALYZE", "AND", "AS", "ASC",
+            new String[] {"ACCESSIBLE", "ADD", "ALL", "ALTER", "ANALYZE", "AND", "AS", "ASC",
                 "ASENSITIVE", "BEFORE", "BETWEEN", "BIGINT", "BINARY", "BLOB", "BOTH", "BY", "CALL",
                 "CASCADE", "CASE", "CHANGE", "CHAR", "CHARACTER", "CHECK", "COLLATE", "COLUMN",
                 "CONDITION", "CONNECTION", "CONSTRAINT", "CONTINUE", "CONVERT", "CREATE", "CROSS",
@@ -53,7 +53,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 "UTC_TIMESTAMP", "VALUES", "VARBINARY", "VARCHAR", "VARCHARACTER", "VARYING",
                 "WHEN", "WHERE", "WHILE", "WITH", "WRITE", "X509", "XOR", "YEAR_MONTH", "ZEROFILL"};
         String[] sql92Keywords =
-            new String[]{"ABSOLUTE", "EXEC", "OVERLAPS", "ACTION", "EXECUTE", "PAD", "ADA",
+            new String[] {"ABSOLUTE", "EXEC", "OVERLAPS", "ACTION", "EXECUTE", "PAD", "ADA",
                 "EXISTS", "PARTIAL", "ADD", "EXTERNAL", "PASCAL", "ALL", "EXTRACT", "POSITION",
                 "ALLOCATE", "FALSE", "PRECISION", "ALTER", "FETCH", "PREPARE", "AND", "FIRST",
                 "PRESERVE", "ANY", "FLOAT", "PRIMARY", "ARE", "FOR", "PRIOR", "AS", "FOREIGN",
@@ -447,11 +447,11 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             }
         }
         String[] columnNames =
-            new String[]{"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "TABLE_TYPE", "REMARKS",
+            new String[] {"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "TABLE_TYPE", "REMARKS",
                 "TYPE_CAT", "TYPE_SCHEM", "TYPE_NAME", "SELF_REFERENCING_COL_NAME",
                 "REF_GENERATION"};
         Query.Type[] columnTypes =
-            new Query.Type[]{Query.Type.VARCHAR, Query.Type.VARCHAR, Query.Type.VARCHAR,
+            new Query.Type[] {Query.Type.VARCHAR, Query.Type.VARCHAR, Query.Type.VARCHAR,
                 Query.Type.VARCHAR, Query.Type.VARCHAR, Query.Type.VARCHAR, Query.Type.VARCHAR,
                 Query.Type.VARCHAR, Query.Type.VARCHAR, Query.Type.VARCHAR};
 
@@ -461,7 +461,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     public ResultSet getSchemas() throws SQLException {
         String[] columnNames = {"TABLE_SCHEM", "TABLE_CATALOG"};
         Query.Type[] columnType = {Query.Type.CHAR, Query.Type.CHAR};
-        return new VitessResultSet(columnNames, columnType, new String[][]{});
+        return new VitessResultSet(columnNames, columnType, new String[][] {});
     }
 
     public ResultSet getCatalogs() throws SQLException {
@@ -486,8 +486,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         }
         resultSet.close();
         vitessStatement.close();
-        String[] columnName = new String[]{"TABLE_CAT"};
-        Query.Type[] columntype = new Query.Type[]{Query.Type.CHAR};
+        String[] columnName = new String[] {"TABLE_CAT"};
+        Query.Type[] columntype = new Query.Type[] {Query.Type.CHAR};
         return new VitessResultSet(columnName, columntype, data);
     }
 
@@ -495,7 +495,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         String[] columnNames = {"table_type"};
         Query.Type[] columnType = {Query.Type.VARCHAR};
         String[][] data =
-            new String[][]{{"LOCAL TEMPORARY"}, {"SYSTEM TABLES"}, {"SYSTEM VIEW"}, {"TABLE"},
+            new String[][] {{"LOCAL TEMPORARY"}, {"SYSTEM TABLES"}, {"SYSTEM VIEW"}, {"TABLE"},
                 {"VIEW"}};
         return new VitessResultSet(columnNames, columnType, data);
     }
@@ -689,7 +689,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         }
 
         String[] columnNames =
-            new String[]{"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "COLUMN_NAME", "DATA_TYPE",
+            new String[] {"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "COLUMN_NAME", "DATA_TYPE",
                 "TYPE_NAME", "COLUMN_SIZE", "BUFFER_LENGTH", "DECIMAL_DIGITS", "NUM_PREC_RADIX",
                 "NULLABLE", "REMARKS", "COLUMN_DEF", "SQL_DATA_TYPE", "SQL_DATETIME_SUB",
                 "CHAR_OCTET_LENGTH", "ORDINAL_POSITION", "IS_NULLABLE", "SCOPE_CATALOG",
@@ -697,7 +697,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 "IS_GENERATEDCOLUMN"};
 
         Query.Type[] columnType =
-            new Query.Type[]{Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR,
+            new Query.Type[] {Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR,
                 Query.Type.INT32, Query.Type.CHAR, Query.Type.INT32, Query.Type.INT32,
                 Query.Type.INT32, Query.Type.INT32, Query.Type.INT32, Query.Type.CHAR,
                 Query.Type.CHAR, Query.Type.INT32, Query.Type.INT32, Query.Type.INT32,
@@ -731,11 +731,11 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         }
 
         String[] columnName =
-            new String[]{"SCOPE", "COLUMN_NAME", "DATA_TYPE", "TYPE_NAME", "COLUMN_SIZE",
+            new String[] {"SCOPE", "COLUMN_NAME", "DATA_TYPE", "TYPE_NAME", "COLUMN_SIZE",
                 "BUFFER_LENGTH", "DECIMAL_DIGITS", "PSEUDO_COLUMN"};
 
         Query.Type[] columnType =
-            new Query.Type[]{Query.Type.INT16, Query.Type.CHAR, Query.Type.INT32, Query.Type.CHAR,
+            new Query.Type[] {Query.Type.INT16, Query.Type.CHAR, Query.Type.INT32, Query.Type.CHAR,
                 Query.Type.INT32, Query.Type.INT32, Query.Type.INT16, Query.Type.INT16};
 
         ArrayList<ArrayList<String>> data = new ArrayList<>();
@@ -848,11 +848,11 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             }
         }
         String[] columnNames =
-            new String[]{"SCOPE", "COLUMN_NAME", "DATA_TYPE", "TYPE_NAME", "COLUMN_SIZE",
+            new String[] {"SCOPE", "COLUMN_NAME", "DATA_TYPE", "TYPE_NAME", "COLUMN_SIZE",
                 "BUFFER_LENGTH", "DECIMAL_DIGITS", "PSEUDO_COLUMN"};
 
         Query.Type[] columnType =
-            new Query.Type[]{Query.Type.INT16, Query.Type.CHAR, Query.Type.INT32, Query.Type.CHAR,
+            new Query.Type[] {Query.Type.INT16, Query.Type.CHAR, Query.Type.INT32, Query.Type.CHAR,
                 Query.Type.INT32, Query.Type.INT32, Query.Type.INT16, Query.Type.INT16};
         return new VitessResultSet(columnNames, columnType, data);
     }
@@ -908,10 +908,10 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         }
 
         String[] columnNames =
-            new String[]{"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "COLUMN_NAME", "KEY_SEQ",
+            new String[] {"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "COLUMN_NAME", "KEY_SEQ",
                 "PK_NAME"};
         Query.Type[] columnType =
-            new Query.Type[]{Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR,
+            new Query.Type[] {Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR,
                 Query.Type.INT16, Query.Type.CHAR};
 
         return new VitessResultSet(columnNames, columnType, sortedData);
@@ -1096,12 +1096,12 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             }
         }
         String[] columnName =
-            new String[]{"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "Non_unique", "INDEX_QUALIFIER",
+            new String[] {"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "Non_unique", "INDEX_QUALIFIER",
                 "INDEX_NAME", "TYPE", "ORDINAL_POSITION", "COLUMN_NAME", "ASC_OR_DESC",
                 "CARDINALITY", "PAGES", "FILTER_CONDITION"};
 
         Query.Type[] columnType =
-            new Query.Type[]{Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.BIT,
+            new Query.Type[] {Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.BIT,
                 Query.Type.CHAR, Query.Type.CHAR, Query.Type.INT16, Query.Type.INT16,
                 Query.Type.CHAR, Query.Type.CHAR, Query.Type.INT32, Query.Type.INT32,
                 Query.Type.CHAR};
@@ -1149,7 +1149,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         Query.Type[] columnType =
             {Query.Type.VARCHAR, Query.Type.INT32, Query.Type.VARCHAR, Query.Type.VARCHAR,
                 Query.Type.INT32, Query.Type.VARCHAR, Query.Type.INT16};
-        return new VitessResultSet(columnNames, columnType, new String[][]{});
+        return new VitessResultSet(columnNames, columnType, new String[][] {});
     }
 
     public ResultSet getSuperTypes(String catalog, String schemaPattern, String typeNamePattern)
@@ -1160,7 +1160,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         Query.Type[] columnType =
             {Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR,
                 Query.Type.CHAR};
-        return new VitessResultSet(columnNames, columnType, new String[][]{});
+        return new VitessResultSet(columnNames, columnType, new String[][] {});
     }
 
     public ResultSet getSuperTables(String catalog, String schemaPattern, String tableNamePattern)
@@ -1168,7 +1168,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         String[] columnNames = {"TABLE_CAT", "TYPE_SCHEM", "TABLE_NAME", "SUPERTABLE_NAME"};
         Query.Type[] columnType =
             {Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR};
-        return new VitessResultSet(columnNames, columnType, new String[][]{});
+        return new VitessResultSet(columnNames, columnType, new String[][] {});
     }
 
     public ResultSet getAttributes(String catalog, String schemaPattern, String typeNamePattern,
@@ -1185,7 +1185,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 Query.Type.INT32, Query.Type.CHAR, Query.Type.CHAR, Query.Type.INT32,
                 Query.Type.INT32, Query.Type.INT32, Query.Type.INT32, Query.Type.CHAR,
                 Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.INT16};
-        return new VitessResultSet(columnNames, columnType, new String[][]{});
+        return new VitessResultSet(columnNames, columnType, new String[][] {});
     }
 
     public int getSQLStateType() throws SQLException {
@@ -1204,14 +1204,14 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     public ResultSet getSchemas(String catalog, String schemaPattern) throws SQLException {
         String[] columnNames = {"TABLE_CAT", "TABLE_CATALOG"};
         Query.Type[] columnType = {Query.Type.CHAR, Query.Type.CHAR};
-        return new VitessResultSet(columnNames, columnType, new String[][]{});
+        return new VitessResultSet(columnNames, columnType, new String[][] {});
     }
 
     public ResultSet getClientInfoProperties() throws SQLException {
         String[] columnNames = {"NAME", "MAX_LEN", "DEFAULT_VALUE", "DESCRIPTION"};
         Query.Type[] columnType =
             {Query.Type.VARCHAR, Query.Type.INT32, Query.Type.VARCHAR, Query.Type.VARCHAR};
-        return new VitessResultSet(columnNames, columnType, new String[][]{});
+        return new VitessResultSet(columnNames, columnType, new String[][] {});
     }
 
     public ResultSet getFunctions(String catalog, String schemaPattern, String functionNamePattern)
@@ -1236,7 +1236,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             {Query.Type.VARCHAR, Query.Type.VARCHAR, Query.Type.VARCHAR, Query.Type.VARCHAR,
                 Query.Type.INT32, Query.Type.INT32, Query.Type.INT32, Query.Type.INT32,
                 Query.Type.VARCHAR, Query.Type.VARCHAR, Query.Type.INT32, Query.Type.VARCHAR};
-        return new VitessResultSet(columnNames, columnType, new String[][]{});
+        return new VitessResultSet(columnNames, columnType, new String[][] {});
     }
 
     public <T> T unwrap(Class<T> iface) throws SQLException {
@@ -1252,7 +1252,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
      */
     protected enum TableType {
         LOCAL_TEMPORARY("LOCAL TEMPORARY"), SYSTEM_TABLE("SYSTEM TABLE"), SYSTEM_VIEW(
-            "SYSTEM VIEW"), TABLE("TABLE", new String[]{"BASE TABLE"}), VIEW("VIEW"), UNKNOWN(
+            "SYSTEM VIEW"), TABLE("TABLE", new String[] {"BASE TABLE"}), VIEW("VIEW"), UNKNOWN(
             "UNKNOWN");
 
         private String name;
