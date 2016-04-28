@@ -17,6 +17,7 @@ import com.youtube.vitess.proto.Vtgate.BoundShardQuery;
 import com.youtube.vitess.proto.Vtgate.ExecuteEntityIdsRequest.EntityId;
 import com.youtube.vitess.proto.Vtrpc.RPCError;
 
+import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.SQLInvalidAuthorizationSpecException;
@@ -25,7 +26,6 @@ import java.sql.SQLSyntaxErrorException;
 import java.sql.SQLTimeoutException;
 import java.sql.SQLTransientException;
 import java.util.Iterator;
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -39,7 +39,8 @@ public class Proto {
   /**
    * Throws the proper SQLException for an error returned by VTGate.
    *
-   * <p>Errors returned by Vitess are documented in the
+   * <p>
+   * Errors returned by Vitess are documented in the
    * <a href="https://github.com/youtube/vitess/blob/master/proto/vtrpc.proto">vtrpc proto</a>.
    */
   public static void checkError(RPCError error) throws SQLException {
@@ -187,6 +188,7 @@ public class Proto {
     TypedValue(Object value) {
       if (value == null) {
         this.type = Query.Type.NULL_TYPE;
+        this.value = ByteString.EMPTY;
       } else if (value instanceof String) {
         // String
         this.type = Query.Type.VARCHAR;
@@ -213,8 +215,7 @@ public class Proto {
       } else if (value instanceof Boolean) {
         // Boolean
         this.type = Query.Type.INT64;
-        this.value =
-            ByteString.copyFromUtf8(((boolean) value) ? "1" : "0");
+        this.value = ByteString.copyFromUtf8(((boolean) value) ? "1" : "0");
       } else if (value instanceof BigDecimal) {
         // BigDecimal
         BigDecimal bigDecimal = (BigDecimal) value;
