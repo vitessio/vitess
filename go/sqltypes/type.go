@@ -99,14 +99,10 @@ const (
 // bit-shift the mysql flags by two byte so we
 // can merge them with the mysql or vitess types.
 const (
-	originalUnsigned = 32
-	originalBinary   = 128
-	originalEnum     = 256
-	originalSet      = 2048
-	mysqlUnsigned    = originalUnsigned << 16
-	mysqlBinary      = originalBinary << 16
-	mysqlEnum        = originalEnum << 16
-	mysqlSet         = originalSet << 16
+	mysqlUnsigned = 32
+	mysqlBinary   = 128
+	mysqlEnum     = 256
+	mysqlSet      = 2048
 )
 
 // If you add to this map, make sure you add a test case
@@ -140,7 +136,6 @@ var mysqlToType = map[int64]querypb.Type{
 // on the type. This allows us to ignore stray flags
 // that MySQL occasionally sets.
 func modifyType(typ querypb.Type, flags int64) querypb.Type {
-	flags = flags << 16
 	switch typ {
 	case Int8:
 		if flags&mysqlUnsigned != 0 {
@@ -239,5 +234,5 @@ var typeToMySQL = map[querypb.Type]struct {
 // TypeToMySQL returns the equivalent mysql type and flag for a vitess type.
 func TypeToMySQL(typ querypb.Type) (mysqlType, flags int64) {
 	val := typeToMySQL[typ]
-	return val.typ, val.flags >> 16
+	return val.typ, val.flags
 }

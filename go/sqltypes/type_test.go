@@ -159,15 +159,15 @@ func TestTypeToMySQL(t *testing.T) {
 	if v != 16 {
 		t.Errorf("Bit: %d, want 16", v)
 	}
-	if f != mysqlUnsigned>>16 {
-		t.Errorf("Bit flag: %x, want %x", f, mysqlUnsigned>>16)
+	if f != mysqlUnsigned {
+		t.Errorf("Bit flag: %x, want %x", f, mysqlUnsigned)
 	}
 	v, f = TypeToMySQL(Date)
 	if v != 10 {
 		t.Errorf("Bit: %d, want 10", v)
 	}
-	if f != mysqlBinary>>16 {
-		t.Errorf("Bit flag: %x, want %x", f, mysqlBinary>>16)
+	if f != mysqlBinary {
+		t.Errorf("Bit flag: %x, want %x", f, mysqlBinary)
 	}
 }
 
@@ -181,21 +181,21 @@ func TestMySQLToType(t *testing.T) {
 		outtype: Int8,
 	}, {
 		intype:  1,
-		inflags: originalUnsigned,
+		inflags: mysqlUnsigned,
 		outtype: Uint8,
 	}, {
 		intype:  2,
 		outtype: Int16,
 	}, {
 		intype:  2,
-		inflags: originalUnsigned,
+		inflags: mysqlUnsigned,
 		outtype: Uint16,
 	}, {
 		intype:  3,
 		outtype: Int32,
 	}, {
 		intype:  3,
-		inflags: originalUnsigned,
+		inflags: mysqlUnsigned,
 		outtype: Uint32,
 	}, {
 		intype:  4,
@@ -214,14 +214,14 @@ func TestMySQLToType(t *testing.T) {
 		outtype: Int64,
 	}, {
 		intype:  8,
-		inflags: originalUnsigned,
+		inflags: mysqlUnsigned,
 		outtype: Uint64,
 	}, {
 		intype:  9,
 		outtype: Int24,
 	}, {
 		intype:  9,
-		inflags: originalUnsigned,
+		inflags: mysqlUnsigned,
 		outtype: Uint24,
 	}, {
 		intype:  10,
@@ -255,39 +255,39 @@ func TestMySQLToType(t *testing.T) {
 		outtype: Text,
 	}, {
 		intype:  252,
-		inflags: originalBinary,
+		inflags: mysqlBinary,
 		outtype: Blob,
 	}, {
 		intype:  253,
 		outtype: VarChar,
 	}, {
 		intype:  253,
-		inflags: originalBinary,
+		inflags: mysqlBinary,
 		outtype: VarBinary,
 	}, {
 		intype:  254,
 		outtype: Char,
 	}, {
 		intype:  254,
-		inflags: originalBinary,
+		inflags: mysqlBinary,
 		outtype: Binary,
 	}, {
 		intype:  254,
-		inflags: originalEnum,
+		inflags: mysqlEnum,
 		outtype: Enum,
 	}, {
 		intype:  254,
-		inflags: originalSet,
+		inflags: mysqlSet,
 		outtype: Set,
 	}, {
 		// Binary flag must be ignored.
 		intype:  8,
-		inflags: originalUnsigned | originalBinary,
+		inflags: mysqlUnsigned | mysqlBinary,
 		outtype: Uint64,
 	}, {
 		// Unsigned flag must be ignored
 		intype:  252,
-		inflags: originalUnsigned | originalBinary,
+		inflags: mysqlUnsigned | mysqlBinary,
 		outtype: Blob,
 	}}
 	for _, tcase := range testcases {
