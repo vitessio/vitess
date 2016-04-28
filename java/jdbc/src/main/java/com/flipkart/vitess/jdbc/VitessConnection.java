@@ -346,7 +346,7 @@ public class VitessConnection implements Connection {
      * @throws SQLException
      */
     public PreparedStatement prepareStatement(String sql, int resultSetType,
-                                              int resultSetConcurrency) throws SQLException {
+        int resultSetConcurrency) throws SQLException {
         VitessPreparedStatement vitessPreparedStatement;
 
         checkOpen();
@@ -486,8 +486,7 @@ public class VitessConnection implements Connection {
             }
 
             executor.execute(new Runnable() {
-                @Override
-                public void run() {
+                @Override public void run() {
                     try {
                         close();
                     } catch (SQLException e) {
@@ -687,13 +686,13 @@ public class VitessConnection implements Connection {
     }
 
     public Statement createStatement(int resultSetType, int resultSetConcurrency,
-                                     int resultSetHoldability) throws SQLException {
+        int resultSetHoldability) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
     public PreparedStatement prepareStatement(String sql, int resultSetType,
-                                              int resultSetConcurrency, int resultSetHoldability) throws SQLException {
+        int resultSetConcurrency, int resultSetHoldability) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
@@ -709,7 +708,7 @@ public class VitessConnection implements Connection {
      * @throws SQLException
      */
     public CallableStatement prepareCall(String sql, int resultSetType, int resultSetConcurrency,
-                                         int resultSetHoldability) throws SQLException {
+        int resultSetHoldability) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }

@@ -40,7 +40,7 @@ public class VitessStatement implements Statement {
     }
 
     public VitessStatement(VitessConnection vitessConnection, int resultSetType,
-                           int resultSetConcurrency) {
+        int resultSetConcurrency) {
         this.vitessConnection = vitessConnection;
         this.vitessResultSet = null;
         this.resultSetType = resultSetType;

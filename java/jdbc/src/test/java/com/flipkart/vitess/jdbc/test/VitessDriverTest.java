@@ -19,11 +19,11 @@ public class VitessDriverTest {
 
     private static VitessDriver driver = new VitessDriver();
 
-    String dbURL = "jdbc:vitess://localhost:9000/shipment/vt_shipment?tabletType=master&executeType=stream&userName" +
-        "=user";
+    String dbURL =
+        "jdbc:vitess://localhost:9000/shipment/vt_shipment?tabletType=master&executeType=stream&userName"
+            + "=user";
 
-    @BeforeClass
-    public static void setUp() {
+    @BeforeClass public static void setUp() {
         // load Vitess driver
         try {
             Class.forName("com.flipkart.vitess.jdbc.VitessDriver");
@@ -32,8 +32,7 @@ public class VitessDriverTest {
         }
     }
 
-    @Test
-    public void testConnect() {
+    @Test public void testConnect() {
         try {
             VitessConnection connection =
                 (VitessConnection) DriverManager.getConnection(dbURL, null);
@@ -43,8 +42,7 @@ public class VitessDriverTest {
         }
     }
 
-    @Test
-    public void testAcceptsURL() {
+    @Test public void testAcceptsURL() {
         try {
             Assert.assertEquals(true, driver.acceptsURL(dbURL));
         } catch (SQLException e) {
@@ -52,18 +50,17 @@ public class VitessDriverTest {
         }
     }
 
-    @Test
-    public void testAcceptsMalformedURL() {
+    @Test public void testAcceptsMalformedURL() {
         try {
-            String url = "jdbc:MalfromdedUrl://localhost:9000/shipment/vt_shipment?tabletType=master";
+            String url =
+                "jdbc:MalfromdedUrl://localhost:9000/shipment/vt_shipment?tabletType=master";
             Assert.assertEquals(false, driver.acceptsURL(url));
         } catch (SQLException e) {
             Assert.fail("SQLException Not Expected");
         }
     }
 
-    @Test
-    public void testGetPropertyInfo() throws SQLException {
+    @Test public void testGetPropertyInfo() throws SQLException {
         DriverPropertyInfo[] driverPropertyInfos = driver.getPropertyInfo(dbURL, null);
         Assert.assertEquals(driverPropertyInfos[0].description, Constants.VITESS_HOST);
         Assert.assertEquals(driverPropertyInfos[0].required, true);
@@ -88,7 +85,8 @@ public class VitessDriverTest {
         Assert.assertEquals(driverPropertyInfos[4].description, Constants.EXECUTE_TYPE_DESC);
         Assert.assertEquals(driverPropertyInfos[4].required, false);
         Assert.assertEquals(driverPropertyInfos[4].name, Constants.Property.EXECUTE_TYPE);
-        Assert.assertEquals(driverPropertyInfos[4].value, Constants.QueryExecuteType.STREAM.toString());
+        Assert.assertEquals(driverPropertyInfos[4].value,
+            Constants.QueryExecuteType.STREAM.toString());
 
         Assert.assertEquals(driverPropertyInfos[5].description, Constants.VITESS_DB_NAME);
         Assert.assertEquals(driverPropertyInfos[5].required, true);
@@ -103,18 +101,15 @@ public class VitessDriverTest {
 
     }
 
-    @Test
-    public void testGetMajorVersion() {
+    @Test public void testGetMajorVersion() {
         Assert.assertEquals(driver.getMajorVersion(), Constants.DRIVER_MAJOR_VERSION);
     }
 
-    @Test
-    public void testGetMinorVersion() {
+    @Test public void testGetMinorVersion() {
         Assert.assertEquals(driver.getMinorVersion(), Constants.DRIVER_MINOR_VERSION);
     }
 
-    @Test
-    public void testJdbcCompliant() {
+    @Test public void testJdbcCompliant() {
         Assert.assertEquals(false, driver.jdbcCompliant());
     }
 

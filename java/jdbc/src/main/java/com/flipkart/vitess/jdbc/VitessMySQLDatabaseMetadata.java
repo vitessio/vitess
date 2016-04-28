@@ -291,9 +291,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         }
     }
 
-    @SuppressWarnings("StringBufferReplaceableByString")
-    public ResultSet getTables(String catalog,
-                               String schemaPattern, String tableNamePattern, String[] types) throws SQLException {
+    @SuppressWarnings("StringBufferReplaceableByString") public ResultSet getTables(String catalog,
+        String schemaPattern, String tableNamePattern, String[] types) throws SQLException {
         ResultSet resultSet = null;
         VitessStatement vitessStatement = null;
         boolean reportTables = false;
@@ -500,9 +499,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         return new VitessResultSet(columnNames, columnType, data);
     }
 
-    @SuppressWarnings("StringBufferReplaceableByString")
-    public ResultSet getColumns(String catalog,
-                                String schemaPattern, String tableNamePattern, String columnNamePattern)
+    @SuppressWarnings("StringBufferReplaceableByString") public ResultSet getColumns(String catalog,
+        String schemaPattern, String tableNamePattern, String columnNamePattern)
         throws SQLException {
         ResultSet resultSet = null;
         VitessStatement vitessStatement = new VitessStatement(this.connection);
@@ -708,19 +706,18 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public ResultSet getColumnPrivileges(String catalog, String schema, String table,
-                                         String columnNamePattern) throws SQLException {
+        String columnNamePattern) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
     public ResultSet getTablePrivileges(String catalog, String schemaPattern,
-                                        String tableNamePattern) throws SQLException {
+        String tableNamePattern) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
-    @SuppressWarnings("StringBufferReplaceableByString")
-    public ResultSet getBestRowIdentifier(
+    @SuppressWarnings("StringBufferReplaceableByString") public ResultSet getBestRowIdentifier(
         String catalog, String schema, String table, int scope, boolean nullable)
         throws SQLException {
         ResultSet resultSet = null;
@@ -857,8 +854,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         return new VitessResultSet(columnNames, columnType, data);
     }
 
-    @SuppressWarnings("StringBufferReplaceableByString")
-    public ResultSet getPrimaryKeys(
+    @SuppressWarnings("StringBufferReplaceableByString") public ResultSet getPrimaryKeys(
         String catalog, String schema, String table) throws SQLException {
 
         if (null == table) {
@@ -930,8 +926,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public ResultSet getCrossReference(String parentCatalog, String parentSchema,
-                                       String parentTable, String foreignCatalog, String foreignSchema, String
-                                           foreignTable)
+        String parentTable, String foreignCatalog, String foreignSchema, String foreignTable)
         throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
@@ -1035,8 +1030,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         return new VitessResultSet(columnNames, columnTypes, data);
     }
 
-    @SuppressWarnings("StringBufferReplaceableByString")
-    public ResultSet getIndexInfo(
+    @SuppressWarnings("StringBufferReplaceableByString") public ResultSet getIndexInfo(
         String catalog, String schema, String table, boolean unique, boolean approximate)
         throws SQLException {
 
@@ -1142,7 +1136,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public ResultSet getUDTs(String catalog, String schemaPattern, String typeNamePattern,
-                             int[] types) throws SQLException {
+        int[] types) throws SQLException {
         String[] columnNames =
             {"TYPE_CAT", "TYPE_SCHEM", "TYPE_NAME", "CLASS_NAME", "DATA_TYPE", "REMARKS",
                 "BASE_TYPE"};
@@ -1172,7 +1166,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public ResultSet getAttributes(String catalog, String schemaPattern, String typeNamePattern,
-                                   String attributeNamePattern) throws SQLException {
+        String attributeNamePattern) throws SQLException {
 
         String[] columnNames =
             {"TYPE_CAT", "TYPE_SCHEM", "TYPE_NAME", "ATTR_NAME", "DATA_TYPE", "ATTR_TYPE_NAME",
@@ -1221,13 +1215,13 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public ResultSet getFunctionColumns(String catalog, String schemaPattern,
-                                        String functionNamePattern, String columnNamePattern) throws SQLException {
+        String functionNamePattern, String columnNamePattern) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
     public ResultSet getPseudoColumns(String catalog, String schemaPattern, String tableNamePattern,
-                                      String columnNamePattern) throws SQLException {
+        String columnNamePattern) throws SQLException {
         String[] columnNames =
             {"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "COLUMN_NAME", "DATA_TYPE", "COLUMN_SIZE",
                 "DECIMAL_DIGITS", "NUM_PREC_RADIX", "COLUMN_USAGE", "REMARKS", "CHAR_OCTET_LENGTH",
@@ -1342,8 +1336,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             return this.tableName.compareTo(tablesKey.tableName);
         }
 
-        @Override
-        public boolean equals(Object obj) {
+        @Override public boolean equals(Object obj) {
             if (null == obj) {
                 return false;
             }
@@ -1370,7 +1363,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
         Short columnOrdinalPosition;
 
         IndexMetaDataKey(boolean columnNonUnique, short columnType, String columnIndexName,
-                         short columnOrdinalPosition) {
+            short columnOrdinalPosition) {
             this.columnNonUnique = columnNonUnique;
             this.columnType = columnType;
             this.columnIndexName = columnIndexName;
@@ -1394,8 +1387,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             return this.columnOrdinalPosition.compareTo(indexInfoKey.columnOrdinalPosition);
         }
 
-        @Override
-        public boolean equals(Object obj) {
+        @Override public boolean equals(Object obj) {
             if (null == obj) {
                 return false;
             }

@@ -99,7 +99,7 @@ public class VitessResultSet implements ResultSet {
     }
 
     public VitessResultSet(String[] columnNames, Query.Type[] columnTypes,
-                           ArrayList<ArrayList<String>> data) throws SQLException {
+        ArrayList<ArrayList<String>> data) throws SQLException {
 
         if (columnNames.length != columnTypes.length) {
             throw new SQLException(Constants.SQLExceptionMessages.INVALID_RESULT_SET);

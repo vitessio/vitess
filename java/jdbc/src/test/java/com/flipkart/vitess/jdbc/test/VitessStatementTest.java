@@ -28,9 +28,7 @@ import java.util.List;
  * Created by harshit.gangal on 19/01/16.
  */
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest(VTGateConn.class)
-public class VitessStatementTest {
+@RunWith(PowerMockRunner.class) @PrepareForTest(VTGateConn.class) public class VitessStatementTest {
 
     private String sqlSelect = "select 1 from test_table";
     private String sqlShow = "show tables";
@@ -38,8 +36,7 @@ public class VitessStatementTest {
     private String sqlInsert = "insert into test_table(msg) values ('abc')";
 
 
-    @Test
-    public void testGetConnection() {
+    @Test public void testGetConnection() {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
 
         VitessStatement statement = new VitessStatement(mockConn);
@@ -50,8 +47,7 @@ public class VitessStatementTest {
         }
     }
 
-    @Test
-    public void testGetResultSet() {
+    @Test public void testGetResultSet() {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         VitessStatement statement = new VitessStatement(mockConn);
         try {
@@ -61,8 +57,7 @@ public class VitessStatementTest {
         }
     }
 
-    @Test
-    public void testExecuteQuery() throws SQLException {
+    @Test public void testExecuteQuery() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
@@ -82,7 +77,8 @@ public class VitessStatementTest {
             .executeKeyspaceIds(Matchers.any(Context.class), Matchers.anyString(),
                 Matchers.anyString(), Matchers.anyCollection(), Matchers.anyMap(),
                 Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
-        PowerMockito.when(mockConn.getExecuteTypeParam()).thenReturn(Constants.QueryExecuteType.SIMPLE);
+        PowerMockito.when(mockConn.getExecuteTypeParam())
+            .thenReturn(Constants.QueryExecuteType.SIMPLE);
         PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
         PowerMockito.when(mockSqlFutureVtGateTx.checkedGet()).thenReturn(mockVtGateTx);
         PowerMockito.when(mockCursor.getFields()).thenReturn(null);
@@ -130,8 +126,7 @@ public class VitessStatementTest {
         }
     }
 
-    @Test
-    public void testExecuteQueryWithStreamExecuteType() throws SQLException {
+    @Test public void testExecuteQueryWithStreamExecuteType() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
@@ -151,7 +146,8 @@ public class VitessStatementTest {
             .executeKeyspaceIds(Matchers.any(Context.class), Matchers.anyString(),
                 Matchers.anyString(), Matchers.anyCollection(), Matchers.anyMap(),
                 Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
-        PowerMockito.when(mockConn.getExecuteTypeParam()).thenReturn(Constants.QueryExecuteType.STREAM);
+        PowerMockito.when(mockConn.getExecuteTypeParam())
+            .thenReturn(Constants.QueryExecuteType.STREAM);
         PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
         PowerMockito.when(mockSqlFutureVtGateTx.checkedGet()).thenReturn(mockVtGateTx);
         PowerMockito.when(mockCursor.getFields()).thenReturn(null);
@@ -200,8 +196,7 @@ public class VitessStatementTest {
     }
 
 
-    @Test
-    public void testExecuteUpdate() throws SQLException {
+    @Test public void testExecuteUpdate() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
@@ -279,8 +274,7 @@ public class VitessStatementTest {
         }
     }
 
-    @Test
-    public void testExecute() throws SQLException {
+    @Test public void testExecute() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
@@ -306,7 +300,8 @@ public class VitessStatementTest {
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
                 Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockConn.getAutoCommit()).thenReturn(true);
-        PowerMockito.when(mockConn.getExecuteTypeParam()).thenReturn(Constants.QueryExecuteType.SIMPLE);
+        PowerMockito.when(mockConn.getExecuteTypeParam())
+            .thenReturn(Constants.QueryExecuteType.SIMPLE);
         PowerMockito.when(mockVtGateTx.commit(Matchers.any(Context.class)))
             .thenReturn(mockSqlFutureCursor);
 
@@ -350,8 +345,7 @@ public class VitessStatementTest {
         }
     }
 
-    @Test
-    public void testGetUpdateCount() throws SQLException {
+    @Test public void testGetUpdateCount() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
@@ -390,8 +384,7 @@ public class VitessStatementTest {
         }
     }
 
-    @Test
-    public void testClose() throws Exception {
+    @Test public void testClose() throws Exception {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
         Cursor mockCursor = PowerMockito.mock(Cursor.class);
@@ -402,7 +395,8 @@ public class VitessStatementTest {
         PowerMockito.when(mockVtGateConn
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
                 Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
-        PowerMockito.when(mockConn.getExecuteTypeParam()).thenReturn(Constants.QueryExecuteType.SIMPLE);
+        PowerMockito.when(mockConn.getExecuteTypeParam())
+            .thenReturn(Constants.QueryExecuteType.SIMPLE);
         PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
 
         VitessStatement statement = new VitessStatement(mockConn);
@@ -420,16 +414,14 @@ public class VitessStatementTest {
         }
     }
 
-    @Test
-    public void testGetMaxFieldSize() throws SQLException {
+    @Test public void testGetMaxFieldSize() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
 
         VitessStatement statement = new VitessStatement(mockConn);
         Assert.assertEquals(65535, statement.getMaxFieldSize());
     }
 
-    @Test
-    public void testGetMaxRows() throws SQLException {
+    @Test public void testGetMaxRows() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
 
         VitessStatement statement = new VitessStatement(mockConn);
@@ -446,16 +438,14 @@ public class VitessStatementTest {
 
     }
 
-    @Test
-    public void testGetQueryTimeout() throws SQLException {
+    @Test public void testGetQueryTimeout() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
 
         VitessStatement statement = new VitessStatement(mockConn);
         Assert.assertEquals(30, statement.getQueryTimeout());
     }
 
-    @Test
-    public void testSetQueryTimeout() throws SQLException {
+    @Test public void testSetQueryTimeout() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
 
         VitessStatement statement = new VitessStatement(mockConn);
@@ -472,48 +462,42 @@ public class VitessStatementTest {
         }
     }
 
-    @Test
-    public void testGetWarnings() throws SQLException {
+    @Test public void testGetWarnings() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
 
         VitessStatement statement = new VitessStatement(mockConn);
         Assert.assertNull(statement.getWarnings());
     }
 
-    @Test
-    public void testGetFetchDirection() throws SQLException {
+    @Test public void testGetFetchDirection() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
 
         VitessStatement statement = new VitessStatement(mockConn);
         Assert.assertEquals(ResultSet.FETCH_FORWARD, statement.getFetchDirection());
     }
 
-    @Test
-    public void testGetFetchSize() throws SQLException {
+    @Test public void testGetFetchSize() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
 
         VitessStatement statement = new VitessStatement(mockConn);
         Assert.assertEquals(0, statement.getFetchSize());
     }
 
-    @Test
-    public void testGetResultSetConcurrency() throws SQLException {
+    @Test public void testGetResultSetConcurrency() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
 
         VitessStatement statement = new VitessStatement(mockConn);
         Assert.assertEquals(ResultSet.CONCUR_READ_ONLY, statement.getResultSetConcurrency());
     }
 
-    @Test
-    public void testGetResultSetType() throws SQLException {
+    @Test public void testGetResultSetType() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
 
         VitessStatement statement = new VitessStatement(mockConn);
         Assert.assertEquals(ResultSet.TYPE_FORWARD_ONLY, statement.getResultSetType());
     }
 
-    @Test
-    public void testIsClosed() throws SQLException {
+    @Test public void testIsClosed() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
 
         VitessStatement statement = new VitessStatement(mockConn);
@@ -522,8 +506,7 @@ public class VitessStatementTest {
         Assert.assertTrue(statement.isClosed());
     }
 
-    @Test
-    public void testAutoGeneratedKeys() throws SQLException {
+    @Test public void testAutoGeneratedKeys() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
@@ -555,7 +538,8 @@ public class VitessStatementTest {
             long expectedGeneratedId = 121;
             int expectedAffectedRows = 1;
             PowerMockito.when(mockCursor.getInsertId()).thenReturn(expectedGeneratedId);
-            PowerMockito.when(mockCursor.getRowsAffected()).thenReturn(Long.valueOf(expectedAffectedRows));
+            PowerMockito.when(mockCursor.getRowsAffected())
+                .thenReturn(Long.valueOf(expectedAffectedRows));
 
             //Executing Insert Statement
             int updateCount = statement.executeUpdate(sqlInsert, Statement.RETURN_GENERATED_KEYS);
@@ -572,9 +556,9 @@ public class VitessStatementTest {
                 statement.getGeneratedKeys();
                 Assert.fail("Should have thrown exception for not setting autoGeneratedKey flag");
             } catch (SQLException ex) {
-                Assert.assertEquals("Generated keys not requested. You need to specify Statement" +
-                    ".RETURN_GENERATED_KEYS to Statement.executeUpdate() or Connection.prepareStatement()", ex
-                    .getMessage());
+                Assert.assertEquals("Generated keys not requested. You need to specify Statement"
+                    + ".RETURN_GENERATED_KEYS to Statement.executeUpdate() or Connection.prepareStatement()",
+                    ex.getMessage());
             }
 
             //Fetching Generated Keys on update query

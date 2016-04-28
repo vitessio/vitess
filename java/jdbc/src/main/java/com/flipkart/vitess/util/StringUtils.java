@@ -35,7 +35,7 @@ public class StringUtils {
      */
 
     public static boolean startsWithIgnoreCaseAndWs(String searchIn, String searchFor,
-                                                    int beginPos) {
+        int beginPos) {
         if (null == searchIn) {
             return true;
         }
@@ -108,7 +108,7 @@ public class StringUtils {
      * @return
      */
     private static int getCharIndexFromSqlByParamLocation(final String sql, final char cchar,
-                                                          final int paramLoc) {
+        final int paramLoc) {
         int signalCount = 0;
         int charIndex = -1;
         int num = 0;

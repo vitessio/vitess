@@ -68,8 +68,8 @@ public class VitessDriver implements Driver {
             dpi[1].required = false;
             dpi[1].description = Constants.VITESS_PORT;
 
-            dpi[2] = new DriverPropertyInfo(Constants.Property.KEYSPACE,
-                vitessJDBCUrl.getKeyspace());
+            dpi[2] =
+                new DriverPropertyInfo(Constants.Property.KEYSPACE, vitessJDBCUrl.getKeyspace());
             dpi[2].required = true;
             dpi[2].description = Constants.VITESS_KEYSPACE;
 
@@ -83,13 +83,12 @@ public class VitessDriver implements Driver {
             dpi[4].required = false;
             dpi[4].description = Constants.EXECUTE_TYPE_DESC;
 
-            dpi[5] = new DriverPropertyInfo(Constants.Property.DBNAME,
-                vitessJDBCUrl.getCatalog());
+            dpi[5] = new DriverPropertyInfo(Constants.Property.DBNAME, vitessJDBCUrl.getCatalog());
             dpi[5].required = true;
             dpi[5].description = Constants.VITESS_DB_NAME;
 
-            dpi[6] = new DriverPropertyInfo(Constants.Property.USERNAME,
-                vitessJDBCUrl.getUsername());
+            dpi[6] =
+                new DriverPropertyInfo(Constants.Property.USERNAME, vitessJDBCUrl.getUsername());
             dpi[6].required = false;
             dpi[6].description = Constants.USERNAME_DESC;
 
