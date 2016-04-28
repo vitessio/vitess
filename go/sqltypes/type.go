@@ -103,12 +103,27 @@ const (
 	mysqlBinary   = 128 << 16
 	mysqlEnum     = 256 << 16
 	mysqlSet      = 2048 << 16
-
-	relevantFlags = mysqlUnsigned |
-		mysqlBinary |
-		mysqlEnum |
-		mysqlSet
 )
+
+// convertFlags converts the mysql flags into the bit-shifted
+// version. It also normalizes it by removing stray bits.
+// This allows us to treat the result as a value.
+func convertFlags(flags int64) int64 {
+	flags = flags << 16
+	if flags&mysqlUnsigned != 0 {
+		return mysqlUnsigned
+	}
+	if flags&mysqlBinary != 0 {
+		return mysqlBinary
+	}
+	if flags&mysqlEnum != 0 {
+		return mysqlEnum
+	}
+	if flags&mysqlSet != 0 {
+		return mysqlSet
+	}
+	return 0
+}
 
 // If you add to this map, make sure you add a test case
 // in tabletserver/endtoend.
@@ -191,7 +206,7 @@ func MySQLToType(mysqlType, flags int64) (typ querypb.Type, err error) {
 		return 0, fmt.Errorf("unsupported type: %d", mysqlType)
 	}
 
-	converted := (flags << 16) & relevantFlags
+	converted := convertFlags(flags)
 	modified, ok := modifier[int64(result)|converted]
 	if ok {
 		return modified, nil
