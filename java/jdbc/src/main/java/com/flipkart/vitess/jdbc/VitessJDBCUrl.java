@@ -69,7 +69,8 @@ public class VitessJDBCUrl {
         if (!m.find()) {
             throw new SQLException(Constants.SQLExceptionMessages.MALFORMED_URL);
         }
-        this.username = (m.group(3) == null ? info.getProperty(Constants.Property.USERNAME) : m.group(3));
+        this.username =
+            (m.group(3) == null ? info.getProperty(Constants.Property.USERNAME) : m.group(3));
         // Will add password property once its supported from vitess
         // this.password = (m.group(5) == null ? info.getProperty("password") : m.group(5));
         String postUrl = m.group(6);
@@ -122,7 +123,7 @@ public class VitessJDBCUrl {
     }
 
     public Constants.QueryExecuteType getExecuteType() {
-        if (this.executeType != null){
+        if (this.executeType != null) {
             switch (this.executeType) {
                 case "simple":
                     return Constants.QueryExecuteType.SIMPLE;

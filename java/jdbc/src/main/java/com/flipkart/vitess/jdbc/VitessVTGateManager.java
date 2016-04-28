@@ -95,7 +95,7 @@ public class VitessVTGateManager {
      * @param username
      */
     private static void updateVtGateConnHashMap(String identifier, String hostname, int port,
-                                                String username) {
+        String username) {
         vtGateConnHashMap.put(identifier, getVtGateConn(hostname, port, username));
     }
 
@@ -106,8 +106,7 @@ public class VitessVTGateManager {
             try {
                 vtGateConn.close();
             } catch (IOException e) {
-                exception =
-                    new SQLException(e.getMessage(), e);
+                exception = new SQLException(e.getMessage(), e);
             }
         }
         vtGateConnHashMap.clear();

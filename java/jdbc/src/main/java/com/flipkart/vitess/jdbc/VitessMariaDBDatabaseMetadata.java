@@ -62,24 +62,36 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public String getSQLKeywords() throws SQLException {
-        return "ACCESSIBLE," + "ANALYZE," + "ASENSITIVE," + "BEFORE," + "BIGINT," + "BINARY," + "BLOB," + "CALL," +
-            "CHANGE," + "CONDITION," + "DATABASE," + "DATABASES," + "DAY_HOUR," + "DAY_MICROSECOND," + "DAY_MINUTE,"
-            + "DAY_SECOND," + "DELAYED," + "DETERMINISTIC," + "DISTINCTROW," + "DIV," + "DUAL," + "EACH," + "ELSEIF,"
-            + "ENCLOSED," + "ESCAPED," + "EXIT," + "EXPLAIN," + "FLOAT4," + "FLOAT8," + "FORCE," + "FULLTEXT," +
-            "HIGH_PRIORITY," + "HOUR_MICROSECOND," + "HOUR_MINUTE," + "HOUR_SECOND," + "IF," + "IGNORE," + "INFILE,"
-            + "INOUT," + "INT1," + "INT2," + "INT3," + "INT4," + "INT8," + "ITERATE," + "KEY," + "KEYS," + "KILL," +
-            "LEAVE," + "LIMIT," + "LINEAR," + "LINES," + "LOAD," + "LOCALTIME," + "LOCALTIMESTAMP," + "LOCK," +
-            "LONG," + "LONGBLOB," + "LONGTEXT," + "LOOP," + "LOW_PRIORITY," + "MEDIUMBLOB," + "MEDIUMINT," +
-            "MEDIUMTEXT," + "MIDDLEINT," + "MINUTE_MICROSECOND," + "MINUTE_SECOND," + "MOD," + "MODIFIES," +
-            "NO_WRITE_TO_BINLOG," + "OPTIMIZE," + "OPTIONALLY," + "OUT," + "OUTFILE," + "PURGE," + "RANGE," + "READS," +
-            "" + "READ_ONLY," + "READ_WRITE," + "REGEXP," + "RELEASE," + "RENAME," + "REPEAT," + "REPLACE," +
-            "REQUIRE," + "RETURN," + "RLIKE," + "SCHEMAS," + "SECOND_MICROSECOND," + "SENSITIVE," + "SEPARATOR," +
-            "SHOW," + "SPATIAL," + "SPECIFIC," + "SQLEXCEPTION," + "SQL_BIG_RESULT," + "SQL_CALC_FOUND_ROWS," +
-            "SQL_SMALL_RESULT," + "SSL," + "STARTING," + "STRAIGHT_JOIN," + "TERMINATED," + "TINYBLOB," + "TINYINT,"
-            + "TINYTEXT," + "TRIGGER," + "UNDO," + "UNLOCK," + "UNSIGNED," + "USE," + "UTC_DATE," + "UTC_TIME," +
-            "UTC_TIMESTAMP," + "VARBINARY," + "VARCHARACTER," + "WHILE," + "X509," + "XOR," + "YEAR_MONTH," +
-            "ZEROFILL," + "GENERAL," + "IGNORE_SERVER_IDS," + "MASTER_HEARTBEAT_PERIOD," + "MAXVALUE," + "RESIGNAL,"
-            + "SIGNAL" + "SLOW";
+        return "ACCESSIBLE," + "ANALYZE," + "ASENSITIVE," + "BEFORE," + "BIGINT," + "BINARY,"
+            + "BLOB," + "CALL," +
+            "CHANGE," + "CONDITION," + "DATABASE," + "DATABASES," + "DAY_HOUR," + "DAY_MICROSECOND,"
+            + "DAY_MINUTE," + "DAY_SECOND," + "DELAYED," + "DETERMINISTIC," + "DISTINCTROW,"
+            + "DIV," + "DUAL," + "EACH," + "ELSEIF," + "ENCLOSED," + "ESCAPED," + "EXIT,"
+            + "EXPLAIN," + "FLOAT4," + "FLOAT8," + "FORCE," + "FULLTEXT," +
+            "HIGH_PRIORITY," + "HOUR_MICROSECOND," + "HOUR_MINUTE," + "HOUR_SECOND," + "IF,"
+            + "IGNORE," + "INFILE," + "INOUT," + "INT1," + "INT2," + "INT3," + "INT4," + "INT8,"
+            + "ITERATE," + "KEY," + "KEYS," + "KILL," +
+            "LEAVE," + "LIMIT," + "LINEAR," + "LINES," + "LOAD," + "LOCALTIME," + "LOCALTIMESTAMP,"
+            + "LOCK," +
+            "LONG," + "LONGBLOB," + "LONGTEXT," + "LOOP," + "LOW_PRIORITY," + "MEDIUMBLOB,"
+            + "MEDIUMINT," +
+            "MEDIUMTEXT," + "MIDDLEINT," + "MINUTE_MICROSECOND," + "MINUTE_SECOND," + "MOD,"
+            + "MODIFIES," +
+            "NO_WRITE_TO_BINLOG," + "OPTIMIZE," + "OPTIONALLY," + "OUT," + "OUTFILE," + "PURGE,"
+            + "RANGE," + "READS," +
+            "" + "READ_ONLY," + "READ_WRITE," + "REGEXP," + "RELEASE," + "RENAME," + "REPEAT,"
+            + "REPLACE," +
+            "REQUIRE," + "RETURN," + "RLIKE," + "SCHEMAS," + "SECOND_MICROSECOND," + "SENSITIVE,"
+            + "SEPARATOR," +
+            "SHOW," + "SPATIAL," + "SPECIFIC," + "SQLEXCEPTION," + "SQL_BIG_RESULT,"
+            + "SQL_CALC_FOUND_ROWS," +
+            "SQL_SMALL_RESULT," + "SSL," + "STARTING," + "STRAIGHT_JOIN," + "TERMINATED,"
+            + "TINYBLOB," + "TINYINT," + "TINYTEXT," + "TRIGGER," + "UNDO," + "UNLOCK,"
+            + "UNSIGNED," + "USE," + "UTC_DATE," + "UTC_TIME," +
+            "UTC_TIMESTAMP," + "VARBINARY," + "VARCHARACTER," + "WHILE," + "X509," + "XOR,"
+            + "YEAR_MONTH," +
+            "ZEROFILL," + "GENERAL," + "IGNORE_SERVER_IDS," + "MASTER_HEARTBEAT_PERIOD,"
+            + "MAXVALUE," + "RESIGNAL," + "SIGNAL" + "SLOW";
     }
 
     public boolean supportsConvert() throws SQLException {
@@ -236,7 +248,7 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public ResultSet getTables(String catalog, String schemaPattern, String tableNamePattern,
-                               String[] types) throws SQLException {
+        String[] types) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
@@ -257,25 +269,25 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public ResultSet getColumns(String catalog, String schemaPattern, String tableNamePattern,
-                                String columnNamePattern) throws SQLException {
+        String columnNamePattern) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
     public ResultSet getColumnPrivileges(String catalog, String schema, String table,
-                                         String columnNamePattern) throws SQLException {
+        String columnNamePattern) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
     public ResultSet getTablePrivileges(String catalog, String schemaPattern,
-                                        String tableNamePattern) throws SQLException {
+        String tableNamePattern) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
     public ResultSet getBestRowIdentifier(String catalog, String schema, String table, int scope,
-                                          boolean nullable) throws SQLException {
+        boolean nullable) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
@@ -305,8 +317,7 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public ResultSet getCrossReference(String parentCatalog, String parentSchema,
-                                       String parentTable, String foreignCatalog, String foreignSchema, String
-                                           foreignTable)
+        String parentTable, String foreignCatalog, String foreignSchema, String foreignTable)
         throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
@@ -411,7 +422,7 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public ResultSet getIndexInfo(String catalog, String schema, String table, boolean unique,
-                                  boolean approximate) throws SQLException {
+        boolean approximate) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
@@ -449,7 +460,7 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public ResultSet getUDTs(String catalog, String schemaPattern, String typeNamePattern,
-                             int[] types) throws SQLException {
+        int[] types) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
@@ -471,7 +482,7 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public ResultSet getAttributes(String catalog, String schemaPattern, String typeNamePattern,
-                                   String attributeNamePattern) throws SQLException {
+        String attributeNamePattern) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
@@ -510,13 +521,13 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public ResultSet getFunctionColumns(String catalog, String schemaPattern,
-                                        String functionNamePattern, String columnNamePattern) throws SQLException {
+        String functionNamePattern, String columnNamePattern) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
     public ResultSet getPseudoColumns(String catalog, String schemaPattern, String tableNamePattern,
-                                      String columnNamePattern) throws SQLException {
+        String columnNamePattern) throws SQLException {
         return connection.createStatement().executeQuery("SELECT ' ' TABLE_CAT, ' ' TABLE_SCHEM,"
             + "' ' TABLE_NAME, ' ' COLUMN_NAME, 0 DATA_TYPE, 0 COLUMN_SIZE, 0 DECIMAL_DIGITS,"
             + "10 NUM_PREC_RADIX, ' ' COLUMN_USAGE,  ' ' REMARKS, 0 CHAR_OCTET_LENGTH, 'YES' IS_NULLABLE FROM DUAL "

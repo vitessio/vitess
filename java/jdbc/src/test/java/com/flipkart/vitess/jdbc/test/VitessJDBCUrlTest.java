@@ -12,8 +12,7 @@ import java.util.Properties;
  */
 public class VitessJDBCUrlTest {
 
-    @Test
-    public void testURLwithUserNamePwd() throws Exception {
+    @Test public void testURLwithUserNamePwd() throws Exception {
         Properties info = new Properties();
         VitessJDBCUrl vitessJDBCUrl =
             new VitessJDBCUrl("jdbc:vitess://user:password@10.33.17.231:15991/shipment/shipment",
@@ -25,8 +24,7 @@ public class VitessJDBCUrlTest {
     }
 
 
-    @Test
-    public void testURLwithoutUserNamePwd() throws Exception {
+    @Test public void testURLwithoutUserNamePwd() throws Exception {
         Properties info = new Properties();
         VitessJDBCUrl vitessJDBCUrl =
             new VitessJDBCUrl("jdbc:vitess://10.33.17.231:15991/shipment/shipment", info);
@@ -36,8 +34,7 @@ public class VitessJDBCUrlTest {
         Assert.assertEquals(null, vitessJDBCUrl.getUsername());
     }
 
-    @Test
-    public void testURLwithUserNamePwdinParams() throws Exception {
+    @Test public void testURLwithUserNamePwdinParams() throws Exception {
         Properties info = new Properties();
         VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
             "jdbc:vitess://10.33.17.231:15991/shipment/shipment?userName=user&password=password",
@@ -48,8 +45,7 @@ public class VitessJDBCUrlTest {
         Assert.assertEquals("user", vitessJDBCUrl.getUsername());
     }
 
-    @Test
-    public void testURLwithUserNamePwdinProperties() throws Exception {
+    @Test public void testURLwithUserNamePwdinProperties() throws Exception {
         Properties info = new Properties();
         info.setProperty("userName", "user");
         info.setProperty("password", "password");
@@ -61,15 +57,13 @@ public class VitessJDBCUrlTest {
         Assert.assertEquals("user", vitessJDBCUrl.getUsername());
     }
 
-    @Test
-    public void testURLwithUserNamePwdMultipleHost() throws Exception {
+    @Test public void testURLwithUserNamePwdMultipleHost() throws Exception {
         Properties info = new Properties();
         info.setProperty("userName", "user");
         info.setProperty("password", "password");
         VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
-            "jdbc:vitess://10.33.17.231:15991,10.33.17.232:15991,10.33.17" +
-                ".233:15991/shipment/shipment?TABLET_TYPE=master",
-            info);
+            "jdbc:vitess://10.33.17.231:15991,10.33.17.232:15991,10.33.17"
+                + ".233:15991/shipment/shipment?TABLET_TYPE=master", info);
         Assert.assertEquals(3, vitessJDBCUrl.getHostInfos().size());
         Assert.assertEquals("10.33.17.231", vitessJDBCUrl.getHostInfos().get(0).getHostname());
         Assert.assertEquals(15991, vitessJDBCUrl.getHostInfos().get(0).getPort());
@@ -81,19 +75,16 @@ public class VitessJDBCUrlTest {
         Assert.assertEquals("user", vitessJDBCUrl.getUsername());
     }
 
-    @Test
-    public void testMulitpleJDBCURlURLwithUserNamePwdMultipleHost() throws Exception {
+    @Test public void testMulitpleJDBCURlURLwithUserNamePwdMultipleHost() throws Exception {
         Properties info = new Properties();
         info.setProperty("userName", "user");
         info.setProperty("password", "password");
         VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
-            "jdbc:vitess://10.33.17.231:15991:xyz,10.33.17.232:15991:xyz,10.33.17" +
-                ".233:15991:xyz/shipment/shipment?TABLET_TYPE=master",
-            info);
+            "jdbc:vitess://10.33.17.231:15991:xyz,10.33.17.232:15991:xyz,10.33.17"
+                + ".233:15991:xyz/shipment/shipment?TABLET_TYPE=master", info);
         VitessJDBCUrl vitessJDBCUrl1 = new VitessJDBCUrl(
-            "jdbc:vitess://11.33.17.231:15001:xyz,11.33.17.232:15001:xyz,11.33.17" +
-                ".233:15001:xyz/shipment/shipment?TABLET_TYPE=master",
-            info);
+            "jdbc:vitess://11.33.17.231:15001:xyz,11.33.17.232:15001:xyz,11.33.17"
+                + ".233:15001:xyz/shipment/shipment?TABLET_TYPE=master", info);
         Assert.assertEquals(3, vitessJDBCUrl.getHostInfos().size());
         Assert.assertEquals(3, vitessJDBCUrl1.getHostInfos().size());
         Assert.assertEquals("10.33.17.231", vitessJDBCUrl.getHostInfos().get(0).getHostname());
