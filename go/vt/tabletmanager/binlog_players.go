@@ -276,9 +276,10 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	}
 
 	// Find the server list from the health check
-	addrs := bpc.healthCheck.GetEndPointStatsFromTarget(bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topodatapb.TabletType_REPLICA)
+	addrs := discovery.RemoveUnhealthyEndpoints(
+		bpc.healthCheck.GetEndPointStatsFromTarget(bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topodatapb.TabletType_REPLICA))
 	if len(addrs) == 0 {
-		return fmt.Errorf("can't find any source tablet for %v %v %v", bpc.cell, bpc.sourceShard.String(), topodatapb.TabletType_REPLICA)
+		return fmt.Errorf("can't find any healthy source tablet for %v %v %v", bpc.cell, bpc.sourceShard.String(), topodatapb.TabletType_REPLICA)
 	}
 	newServerIndex := rand.Intn(len(addrs))
 	endPoint := addrs[newServerIndex].EndPoint
