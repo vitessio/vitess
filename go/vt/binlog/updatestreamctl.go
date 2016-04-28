@@ -299,8 +299,8 @@ func (updateStream *UpdateStreamImpl) StreamTables(position string, tables []str
 
 	// Calls cascade like this: binlog.Streamer->TablesFilterFunc->func(*binlogdatapb.BinlogTransaction)->sendReply
 	f := TablesFilterFunc(tables, func(reply *binlogdatapb.BinlogTransaction) error {
-		keyrangeStatements.Add(int64(len(reply.Statements)))
-		keyrangeTransactions.Add(1)
+		tablesStatements.Add(int64(len(reply.Statements)))
+		tablesTransactions.Add(1)
 		return sendReply(reply)
 	})
 	bls := NewStreamer(updateStream.dbname, updateStream.mysqld, charset, pos, f)

@@ -43,11 +43,7 @@ func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
 
 func TestDiscoveryGatewayExecuteStream(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, true, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
-		_, err := dg.StreamExecute(context.Background(), keyspace, shard, tabletType, "query", nil, 0)
-		return err
-	})
-	testDiscoveryGatewayTransact(t, true, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
-		_, err := dg.StreamExecute(context.Background(), keyspace, shard, tabletType, "query", nil, 1)
+		_, err := dg.StreamExecute(context.Background(), keyspace, shard, tabletType, "query", nil)
 		return err
 	})
 }

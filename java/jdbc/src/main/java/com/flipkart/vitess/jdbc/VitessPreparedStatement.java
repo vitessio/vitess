@@ -15,6 +15,9 @@ import java.math.BigDecimal;
 import java.net.URL;
 import java.sql.*;
 import java.sql.Date;
+import java.text.DateFormat;
+import java.text.ParsePosition;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.logging.Logger;
 
@@ -28,7 +31,8 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
     private final String sql;
     private final Map<String, Object> bindVariables;
 
-    public VitessPreparedStatement(VitessConnection vitessConnection, String sql) throws SQLException {
+    public VitessPreparedStatement(VitessConnection vitessConnection, String sql)
+        throws SQLException {
         this(vitessConnection, sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
     }
 
@@ -88,7 +92,8 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                     cursor = vtGateConn.execute(context, this.sql, this.bindVariables, tabletType)
                         .checkedGet();
                 } else {
-                    cursor = vtGateConn.streamExecute(context, this.sql, this.bindVariables, tabletType);
+                    cursor =
+                        vtGateConn.streamExecute(context, this.sql, this.bindVariables, tabletType);
                 }
             } else {
                 VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
@@ -99,7 +104,8 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                     this.vitessConnection.setVtGateTx(vtGateTx);
                 }
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                cursor = vtGateTx.execute(context, this.sql, this.bindVariables, tabletType).checkedGet();
+                cursor = vtGateTx.execute(context, this.sql, this.bindVariables, tabletType)
+                    .checkedGet();
             }
         }
 
@@ -135,12 +141,14 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
 
         if (this.vitessConnection.getAutoCommit()) {
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-            cursor = vtGateTx.execute(context, this.sql, this.bindVariables, tabletType).checkedGet();
+            cursor =
+                vtGateTx.execute(context, this.sql, this.bindVariables, tabletType).checkedGet();
             vtGateTx.commit(context).checkedGet();
             this.vitessConnection.setVtGateTx(null);
         } else {
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-            cursor = vtGateTx.execute(context, this.sql, this.bindVariables, tabletType).checkedGet();
+            cursor =
+                vtGateTx.execute(context, this.sql, this.bindVariables, tabletType).checkedGet();
         }
 
         if (null == cursor) {
@@ -371,10 +379,123 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
-    public void setObject(int parameterIndex, Object x, int targetSqlType, int scaleOrLength)
-        throws SQLException {
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+    public void setObject(int parameterIndex, Object parameterObject, int targetSqlType,
+                          int scaleOrLength) throws SQLException {
+        if (null == parameterObject) {
+            setNull(parameterIndex, Types.OTHER);
+        } else {
+            try {
+                switch (targetSqlType) {
+                    case Types.BOOLEAN:
+                        if (parameterObject instanceof Boolean) {
+                            setBoolean(parameterIndex, ((Boolean) parameterObject).booleanValue());
+                            break;
+                        } else if (parameterObject instanceof String) {
+                            setBoolean(parameterIndex,
+                                "true".equalsIgnoreCase((String) parameterObject) || !"0"
+                                    .equalsIgnoreCase((String) parameterObject));
+                            break;
+                        } else if (parameterObject instanceof Number) {
+                            int intValue = ((Number) parameterObject).intValue();
+                            setBoolean(parameterIndex, intValue != 0);
+                            break;
+                        } else {
+                            throw new SQLException(
+                                "Conversion from" + parameterObject.getClass().getName() +
+                                    "to Types.Boolean is not Possible");
+                        }
+                    case Types.BIT:
+                    case Types.TINYINT:
+                    case Types.SMALLINT:
+                    case Types.INTEGER:
+                    case Types.BIGINT:
+                    case Types.REAL:
+                    case Types.FLOAT:
+                    case Types.DOUBLE:
+                    case Types.DECIMAL:
+                    case Types.NUMERIC:
+                        setNumericObject(parameterIndex, parameterObject, targetSqlType,
+                            scaleOrLength);
+                        break;
+                    case Types.CHAR:
+                    case Types.VARCHAR:
+                    case Types.LONGVARCHAR:
+                        if (parameterObject instanceof BigDecimal) {
+                            setString(parameterIndex,
+                                (StringUtils.fixDecimalExponent((parameterObject).toString())));
+                        } else {
+                            setString(parameterIndex, parameterObject.toString());
+                        }
+                        break;
+                    case Types.CLOB:
+                        if (parameterObject instanceof Clob) {
+                            setClob(parameterIndex, (Clob) parameterObject);
+                        } else {
+                            setString(parameterIndex, parameterObject.toString());
+                        }
+                        break;
+                    case Types.BINARY:
+                    case Types.VARBINARY:
+                    case Types.LONGVARBINARY:
+                    case Types.BLOB:
+                        if (parameterObject instanceof Blob) {
+                            setBlob(parameterIndex, (Blob) parameterObject);
+                        } else {
+                            setBytes(parameterIndex, (byte[]) parameterObject);
+                        }
+                        break;
+                    case Types.DATE:
+                    case Types.TIMESTAMP:
+                        java.util.Date parameterAsDate;
+                        if (parameterObject instanceof String) {
+                            ParsePosition pp = new ParsePosition(0);
+                            DateFormat sdf = new SimpleDateFormat(
+                                StringUtils.getDateTimePattern((String) parameterObject, false),
+                                Locale.US);
+                            parameterAsDate = sdf.parse((String) parameterObject, pp);
+                        } else {
+                            parameterAsDate = (java.util.Date) parameterObject;
+                        }
+                        switch (targetSqlType) {
+                            case Types.DATE:
+                                if (parameterAsDate instanceof Date) {
+                                    setDate(parameterIndex, (Date) parameterAsDate);
+                                } else {
+                                    setDate(parameterIndex, new Date(parameterAsDate.getTime()));
+                                }
+                                break;
+                            case Types.TIMESTAMP:
+                                if (parameterAsDate instanceof Timestamp) {
+                                    setTimestamp(parameterIndex, (Timestamp) parameterAsDate);
+                                } else {
+                                    setTimestamp(parameterIndex,
+                                        new Timestamp(parameterAsDate.getTime()));
+                                }
+                                break;
+                        }
+                        break;
+                    case Types.TIME:
+                        if (parameterObject instanceof String) {
+                            DateFormat sdf = new SimpleDateFormat(
+                                StringUtils.getDateTimePattern((String) parameterObject, true),
+                                Locale.US);
+                            setTime(parameterIndex,
+                                new Time(sdf.parse((String) parameterObject).getTime()));
+                        } else if (parameterObject instanceof Timestamp) {
+                            Timestamp timestamp = (Timestamp) parameterObject;
+                            setTime(parameterIndex, new Time(timestamp.getTime()));
+                        } else {
+                            setTime(parameterIndex, (Time) parameterObject);
+                        }
+                        break;
+                    default:
+                        throw new SQLFeatureNotSupportedException(
+                            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+                }
+            } catch (Exception ex) {
+                throw new SQLException(ex);
+            }
+        }
     }
 
     public void setAsciiStream(int parameterIndex, InputStream x, long length) throws SQLException {
@@ -507,8 +628,106 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
-    public void setObject(int parameterIndex, Object x, int targetSqlType) throws SQLException {
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+    public void setObject(int parameterIndex, Object parameterObject, int targetSqlType)
+        throws SQLException {
+        if (!(parameterObject instanceof BigDecimal)) {
+            setObject(parameterIndex, parameterObject, targetSqlType, 0);
+        } else {
+            setObject(parameterIndex, parameterObject, targetSqlType,
+                ((BigDecimal) parameterObject).scale());
+        }
+    }
+
+    private void setNumericObject(int parameterIndex, Object parameterObj, int targetSqlType,
+                                  int scale) throws SQLException {
+        Number numberParam;
+        if (parameterObj instanceof Boolean) {
+            numberParam =
+                ((Boolean) parameterObj).booleanValue() ? Integer.valueOf(1) : Integer.valueOf(0);
+        } else if (parameterObj instanceof String) {
+            switch (targetSqlType) {
+                case Types.BIT:
+                    if ("1".equals(parameterObj) || "0".equals(parameterObj)) {
+                        numberParam = Integer.valueOf((String) parameterObj);
+                    } else {
+                        boolean parameterAsBoolean = "true".equalsIgnoreCase((String) parameterObj);
+                        numberParam = parameterAsBoolean ? Integer.valueOf(1) : Integer.valueOf(0);
+                    }
+                    break;
+
+                case Types.TINYINT:
+                case Types.SMALLINT:
+                case Types.INTEGER:
+                    numberParam = Integer.valueOf((String) parameterObj);
+                    break;
+
+                case Types.BIGINT:
+                    numberParam = Long.valueOf((String) parameterObj);
+                    break;
+
+                case Types.REAL:
+                    numberParam = Float.valueOf((String) parameterObj);
+                    break;
+
+                case Types.FLOAT:
+                case Types.DOUBLE:
+                    numberParam = Double.valueOf((String) parameterObj);
+                    break;
+
+                case Types.DECIMAL:
+                case Types.NUMERIC:
+                default:
+                    numberParam = new java.math.BigDecimal((String) parameterObj);
+            }
+        } else {
+            numberParam = (Number) parameterObj;
+        }
+        switch (targetSqlType) {
+            case Types.BIT:
+            case Types.TINYINT:
+            case Types.SMALLINT:
+            case Types.INTEGER:
+                setInt(parameterIndex, numberParam.intValue());
+                break;
+
+            case Types.BIGINT:
+                setLong(parameterIndex, numberParam.longValue());
+                break;
+
+            case Types.REAL:
+                setFloat(parameterIndex, numberParam.floatValue());
+                break;
+
+            case Types.FLOAT:
+            case Types.DOUBLE:
+                setDouble(parameterIndex, numberParam.doubleValue());
+                break;
+
+            case Types.DECIMAL:
+            case Types.NUMERIC:
+
+                if (numberParam instanceof java.math.BigDecimal) {
+                    BigDecimal scaledBigDecimal = null;
+                    try {
+                        scaledBigDecimal = ((java.math.BigDecimal) numberParam).setScale(scale);
+                    } catch (ArithmeticException ex) {
+                        try {
+                            scaledBigDecimal = ((java.math.BigDecimal) numberParam)
+                                .setScale(scale, BigDecimal.ROUND_HALF_UP);
+                        } catch (ArithmeticException arEx) {
+                            throw new SQLException("Can't set the scale of '" + scale +
+                                "' for Decimal Argument" + numberParam);
+                        }
+                    }
+                    setBigDecimal(parameterIndex, scaledBigDecimal);
+                } else if (numberParam instanceof java.math.BigInteger) {
+                    setBigDecimal(parameterIndex,
+                        new java.math.BigDecimal((java.math.BigInteger) numberParam, scale));
+                } else {
+                    setBigDecimal(parameterIndex,
+                        new java.math.BigDecimal(numberParam.doubleValue()));
+                }
+                break;
+        }
     }
 }

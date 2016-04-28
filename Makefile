@@ -87,12 +87,19 @@ php_test:
 	go install ./go/cmd/vtgateclienttest
 	phpunit php/tests
 
+# TODO(mberlin): Remove the manual copy once govendor supports a way to
+# install vendor'd programs: https://github.com/kardianos/govendor/issues/117
+install_protoc-gen-go:
+	mkdir -p $${GOPATH}/src/github.com/golang/
+	cp -au vendor/github.com/golang/protobuf $${GOPATH}/src/github.com/golang/
+	go install github.com/golang/protobuf/protoc-gen-go
+
 # This rule rebuilds all the go files from the proto definitions for gRPC.
 # 1. list all proto files.
 # 2. remove 'proto/' prefix and '.proto' suffix.
 # 3. (go) run protoc for each proto and put in go/vt/proto/${proto_file_name}/
 # 4. (python) run protoc for each proto and put in py/vtproto/
-proto:
+proto: install_protoc-gen-go
 	find proto -maxdepth 1 -name '*.proto' -print | sed 's/^proto\///' | sed 's/\.proto//' | xargs -I{} $$VTROOT/dist/grpc/usr/local/bin/protoc -Iproto proto/{}.proto --go_out=plugins=grpc:go/vt/proto/{}
 	find go/vt/proto -name "*.pb.go" | xargs sed --in-place -r -e 's,import ([a-z0-9_]+) ".",import \1 "github.com/youtube/vitess/go/vt/proto/\1",g'
 	find proto -maxdepth 1 -name '*.proto' -print | sed 's/^proto\///' | sed 's/\.proto//' | xargs -I{} $$VTROOT/dist/grpc/usr/local/bin/protoc -Iproto proto/{}.proto --python_out=py/vtproto --grpc_out=py/vtproto --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/usr/local/bin/grpc_python_plugin

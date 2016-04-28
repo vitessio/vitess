@@ -11,6 +11,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -57,7 +58,7 @@ type eventStreamAdapter struct {
 func (e *eventStreamAdapter) Recv() (*logutilpb.Event, error) {
 	le, err := e.stream.Recv()
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPCError(err)
 	}
 	return le.Event, nil
 }
@@ -70,7 +71,7 @@ func (client *gRPCVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, ar
 
 	stream, err := client.c.ExecuteVtworkerCommand(ctx, query)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPCError(err)
 	}
 	return &eventStreamAdapter{stream}, nil
 }

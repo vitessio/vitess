@@ -10,7 +10,7 @@ import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
-// This files contains the necessary methods to send and receive errors
+// This file contains the necessary methods to send and receive errors
 // as payloads of proto3 structures. It converts VitessError to and from
 // vtrpcpb.Error. Use these methods when a RPC call can return both
 // data and an error.
@@ -27,7 +27,7 @@ func FromVtRPCError(rpcErr *vtrpcpb.RPCError) error {
 	}
 }
 
-// VtRPCErrorFromVtError convert from a VtError to a vtrpcpb.RPCError
+// VtRPCErrorFromVtError converts from a VtError to a vtrpcpb.RPCError.
 func VtRPCErrorFromVtError(err error) *vtrpcpb.RPCError {
 	if err == nil {
 		return nil

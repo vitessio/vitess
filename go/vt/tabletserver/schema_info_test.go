@@ -14,13 +14,16 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
-	"golang.org/x/net/context"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestSchemaInfoStrictMode(t *testing.T) {
@@ -39,7 +42,7 @@ func TestSchemaInfoStrictMode(t *testing.T) {
 		t,
 		"schema info Open should fail because of underlying "+
 			"connection cannot verify strict mode",
-		ErrFatal,
+		vtrpcpb.ErrorCode_INTERNAL_ERROR,
 	)
 	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, true)
 }
@@ -62,7 +65,7 @@ func TestSchemaInfoOpenFailedDueToMissMySQLTime(t *testing.T) {
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because of it could not get MySQL time",
-		ErrFail,
+		vtrpcpb.ErrorCode_UNKNOWN_ERROR,
 	)
 	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, false)
 }
@@ -85,7 +88,7 @@ func TestSchemaInfoOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because of incorrect MySQL row number",
-		ErrFail,
+		vtrpcpb.ErrorCode_UNKNOWN_ERROR,
 	)
 	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, false)
 }
@@ -108,7 +111,7 @@ func TestSchemaInfoOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because it could not get MySQL time",
-		ErrFail,
+		vtrpcpb.ErrorCode_UNKNOWN_ERROR,
 	)
 	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, false)
 }
@@ -131,7 +134,7 @@ func TestSchemaInfoOpenFailedDueToExecErr(t *testing.T) {
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because conn.Exec failed",
-		ErrFail,
+		vtrpcpb.ErrorCode_UNKNOWN_ERROR,
 	)
 	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, false)
 }
@@ -160,7 +163,7 @@ func TestSchemaInfoOpenFailedDueToTableInfoErr(t *testing.T) {
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because NewTableInfo failed",
-		ErrFail,
+		vtrpcpb.ErrorCode_INTERNAL_ERROR,
 	)
 	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, false)
 }
@@ -383,7 +386,7 @@ func TestSchemaInfoGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info GetPlan should fail because of empty query",
-		ErrFail,
+		vtrpcpb.ErrorCode_UNKNOWN_ERROR,
 	)
 	schemaInfo.GetPlan(ctx, logStats, "")
 }
@@ -406,7 +409,7 @@ func TestSchemaInfoQueryCacheFailDueToInvalidCacheSize(t *testing.T) {
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info SetQueryCacheSize should use a positive size",
-		ErrFail,
+		vtrpcpb.ErrorCode_BAD_INPUT,
 	)
 	schemaInfo.SetQueryCacheCap(0)
 }
@@ -917,36 +920,20 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 	}
 }
 
-func handleAndVerifyTabletError(t *testing.T, msg string, tabletErrType int) {
+func handleAndVerifyTabletError(t *testing.T, msg string, tabletErrCode vtrpcpb.ErrorCode) {
 	err := recover()
 	if err == nil {
 		t.Fatalf(msg)
 	}
-	verifyTabletError(t, err, tabletErrType)
+	verifyTabletError(t, err, tabletErrCode)
 }
 
-func verifyTabletError(t *testing.T, err interface{}, tabletErrType int) {
+func verifyTabletError(t *testing.T, err interface{}, tabletErrCode vtrpcpb.ErrorCode) {
 	tabletError, ok := err.(*TabletError)
 	if !ok {
 		t.Fatalf("should return a TabletError, but got err: %v", err)
 	}
-	if tabletError.ErrorType != tabletErrType {
-		t.Fatalf("should return a TabletError with error type: %s", getTabletErrorString(tabletErrType))
+	if tabletError.ErrorCode != tabletErrCode {
+		t.Fatalf("got a TabletError with error code %s but wanted %s", tabletError.ErrorCode, tabletErrCode)
 	}
-}
-
-func getTabletErrorString(tabletErrorType int) string {
-	switch tabletErrorType {
-	case ErrFail:
-		return "ErrFail"
-	case ErrRetry:
-		return "ErrRetry"
-	case ErrFatal:
-		return "ErrFatal"
-	case ErrTxPoolFull:
-		return "ErrTxPoolFull"
-	case ErrNotInTx:
-		return "ErrNotInTx"
-	}
-	return ""
 }

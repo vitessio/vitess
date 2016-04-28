@@ -348,6 +348,7 @@ class TestBaseSplitClone(unittest.TestCase):
     logging.debug('Running vtworker SplitDiff for %s', keyspace_shard)
     _, _ = utils.run_vtworker(
         ['-cell', 'test_nj', 'SplitDiff',
+         '--min_healthy_rdonly_endpoints', '1',
          keyspace_shard], auto_log=True)
 
   def setUp(self):
@@ -442,6 +443,7 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
          '--source_reader_count', '1',
          '--destination_pack_count', '1',
          '--destination_writer_count', '1',
+         '--min_healthy_rdonly_endpoints', '1',
          'test_keyspace/0'],
         worker_rpc_port)
 
@@ -591,6 +593,25 @@ class TestVtworkerWebinterface(unittest.TestCase):
       self.assertIn(
           'This worker is idle.', status_after_reset,
           '/status does not indicate that the reset was successful')
+
+
+class TestMinHealthyRdonlyEndpoints(TestBaseSplitCloneResiliency):
+
+  def split_clone_fails_not_enough_health_rdonly_tablets(self):
+    """Verify vtworker errors if there aren't enough healthy RDONLY tablets."""
+
+    stdout, _ = utils.run_vtworker(
+        ['-cell', 'test_nj',
+         '--wait_for_healthy_rdonly_endpoints_timeout', '1s',
+         'SplitClone',
+         '--min_healthy_rdonly_endpoints', '2',
+         'test_keyspace/0'],
+        auto_log=True,
+        expect_fail=True)
+    self.assertIn(stdout, 'findTargets() failed: FindWorkerTablet() failed for'
+                  ' test_nj/test_keyspace/0: not enough healthy rdonly'
+                  ' endpoints to choose from in (test_nj,test_keyspace/0),'
+                  ' have 1 healthy ones, need at least 2')
 
 
 def add_test_options(parser):

@@ -383,15 +383,11 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
 1.  **Initialize MySQL databases**
 
     Once all the tablets show up, you're ready to initialize the underlying
-    MySQL databases. First, rebuild the keyspace to propagate the new shard:
-
-    ``` sh
-    vitess/examples/kubernetes$ ./kvtctl.sh RebuildKeyspaceGraph test_keyspace
-    ```
+    MySQL databases.
 
     **Note:** Many `vtctlclient` commands produce no output on success.
 
-    Next, designate one of the tablets to be the initial master. Vitess will
+    First, designate one of the tablets to be the initial master. Vitess will
     automatically connect the other slaves' mysqld instances so that they start
     replicating from the master's mysqld. This is also when the default database
     is created. Since our keyspace is named `test_keyspace`, the MySQL database
@@ -444,7 +440,6 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     CREATE TABLE messages (
       page BIGINT(20) UNSIGNED,
       time_created_ns BIGINT(20) UNSIGNED,
-      keyspace_id BIGINT(20) UNSIGNED,
       message VARCHAR(10000),
       PRIMARY KEY (page, time_created_ns)
     ) ENGINE=InnoDB
@@ -462,11 +457,10 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     #   "TableDefinitions": [
     #     {
     #       "Name": "messages",
-    #       "Schema": "CREATE TABLE `messages` (\n  `page` bigint(20) unsigned NOT NULL DEFAULT '0',\n  `time_created_ns` bigint(20) unsigned NOT NULL DEFAULT '0',\n  `keyspace_id` bigint(20) unsigned DEFAULT NULL,\n  `message` varchar(10000) DEFAULT NULL,\n  PRIMARY KEY (`page`,`time_created_ns`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
+    #       "Schema": "CREATE TABLE `messages` (\n  `page` bigint(20) unsigned NOT NULL DEFAULT '0',\n  `time_created_ns` bigint(20) unsigned NOT NULL DEFAULT '0',\n  `message` varchar(10000) DEFAULT NULL,\n  PRIMARY KEY (`page`,`time_created_ns`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
     #       "Columns": [
     #         "page",
     #         "time_created_ns",
-    #         "keyspace_id",
     #         "message"
     #       ],
     # ...
@@ -554,18 +548,14 @@ limit it to specific instances.
 Then, get the external IP of the load balancer for the GuestBook service:
 
 ``` sh
-$ kubectl get -o yaml service guestbook
+$ kubectl get service guestbook
 ### example output:
-# apiVersion: v1
-# kind: Service
-# ...
-# status:
-#   loadBalancer:
-#     ingress:
-#     - ip: 3.4.5.6
+# NAME        CLUSTER-IP      EXTERNAL-IP     PORT(S)   AGE
+# guestbook   10.67.242.247   3.4.5.6         80/TCP    1m
 ```
 
-If the status shows `loadBalancer: {}`, it may just need more time.
+If the `EXTERNAL-IP` is still empty, give it a few minutes to create
+the external load balancer and check again.
 
 Once the pods are running, the GuestBook app should be accessible
 from the load balancer's external IP. In the example above, it would be at
@@ -584,32 +574,11 @@ You can also inspect the data stored by the app:
 ``` sh
 vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000100 "SELECT * FROM messages"
 ### example output:
-# {
-#   "Fields": [],
-#   "RowsAffected": 3,
-#   "InsertId": 0,
-#   "Rows": [
-#     [
-#       "42",
-#       "1435441767473414912",
-#       "9080723075667090943",
-#       "First!"
-#     ],
-#     [
-#       "42",
-#       "1435441772740816128",
-#       "9080723075667090943",
-#       "Message 2"
-#     ],
-#     [
-#       "42",
-#       "1435441778454107904",
-#       "9080723075667090943",
-#       "Message 3"
-#     ]
-#   ],
-#   "Err": null
-# }
+# +------+---------------------+---------+
+# | page |   time_created_ns   | message |
+# +------+---------------------+---------+
+# |   42 | 1460771336286560000 | Hello   |
+# +------+---------------------+---------+
 ```
 
 The [GuestBook source code]

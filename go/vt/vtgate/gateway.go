@@ -41,7 +41,7 @@ type Gateway interface {
 	ExecuteBatch(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error)
 
 	// StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
-	StreamExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error)
+	StreamExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error)
 
 	// Begin starts a transaction for the specified keyspace, shard, and tablet type.
 	// It returns the transaction ID.
@@ -52,6 +52,14 @@ type Gateway interface {
 
 	// Rollback rolls back the current transaction for the specified keyspace, shard, and tablet type.
 	Rollback(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, transactionID int64) error
+
+	// BeginExecute executes a begin and the non-streaming query
+	// for the specified keyspace, shard, and tablet type.
+	BeginExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error)
+
+	// BeginExecuteBatch executes a begin and a group of queries
+	// for the specified keyspace, shard, and tablet type.
+	BeginExecuteBatch(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error)
 
 	// SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
 	SplitQuery(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error)

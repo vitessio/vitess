@@ -18,12 +18,11 @@ import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
+import java.lang.reflect.Field;
 import java.math.BigDecimal;
+import java.sql.Date;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.List;
-import java.util.TimeZone;
+import java.util.*;
 
 /**
  * Created by harshit.gangal on 09/02/16.
@@ -87,7 +86,8 @@ public class VitessPreparedStatementTest {
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
                 Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockConn.getVtGateTx()).thenReturn(null);
-        PowerMockito.when(mockConn.getExecuteTypeParam()).thenReturn(Constants.QueryExecuteType.SIMPLE);
+        PowerMockito.when(mockConn.getExecuteTypeParam())
+            .thenReturn(Constants.QueryExecuteType.SIMPLE);
         PowerMockito.when(mockVtGateConn.begin(Matchers.any(Context.class)))
             .thenReturn(mockSqlFutureVtGateTx);
         PowerMockito.when(mockVtGateTx
@@ -175,7 +175,8 @@ public class VitessPreparedStatementTest {
                 Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
         PowerMockito.when(mockSqlFutureVtGateTx.checkedGet()).thenReturn(mockVtGateTx);
-        PowerMockito.when(mockConn.getExecuteTypeParam()).thenReturn(Constants.QueryExecuteType.STREAM);
+        PowerMockito.when(mockConn.getExecuteTypeParam())
+            .thenReturn(Constants.QueryExecuteType.STREAM);
 
         VitessPreparedStatement preparedStatement;
         try {
@@ -328,7 +329,8 @@ public class VitessPreparedStatementTest {
         PowerMockito.when(mockVtGateConn
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
                 Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
-        PowerMockito.when(mockConn.getExecuteTypeParam()).thenReturn(Constants.QueryExecuteType.SIMPLE);
+        PowerMockito.when(mockConn.getExecuteTypeParam())
+            .thenReturn(Constants.QueryExecuteType.SIMPLE);
         PowerMockito.when(mockVtGateConn
             .executeKeyspaceIds(Matchers.any(Context.class), Matchers.anyString(),
                 Matchers.anyString(), Matchers.anyCollection(), Matchers.anyMap(),
@@ -442,13 +444,13 @@ public class VitessPreparedStatementTest {
         Long longValue = Long.MAX_VALUE;
         Float floatValue = Float.MAX_VALUE;
         Double doubleValue = Double.MAX_VALUE;
-        BigDecimal bigDecimalValue = BigDecimal.TEN;
+        BigDecimal bigDecimalValue = new BigDecimal(3.14159265358979323846);
+        BigDecimal expectedDecimalValue = new BigDecimal("3.14159");
         String stringValue = "vitess";
         byte[] bytesValue = stringValue.getBytes();
         Date dateValue = new Date(0);
         Time timeValue = new Time(0);
         Timestamp timestampValue = new Timestamp(0);
-
 
         preparedStatement.setNull(1, Types.INTEGER);
         preparedStatement.setBoolean(2, boolValue);
@@ -482,13 +484,69 @@ public class VitessPreparedStatementTest {
         preparedStatement.setObject(29, timestampValue);
         preparedStatement.setObject(30, 'a');
         preparedStatement.setObject(31, null);
+        preparedStatement.setObject(32, boolValue, Types.BOOLEAN, 0);
+        preparedStatement.setObject(33, shortValue, Types.SMALLINT, 0);
+        preparedStatement.setObject(34, longValue, Types.BIGINT, 0);
+        preparedStatement.setObject(35, floatValue, Types.DOUBLE, 2);
+        preparedStatement.setObject(36, doubleValue, Types.DOUBLE, 3);
+        preparedStatement.setObject(37, bigDecimalValue, Types.DECIMAL, 5);
+        preparedStatement.setObject(38, stringValue, Types.VARCHAR, 0);
+        preparedStatement.setObject(39, dateValue, Types.DATE, 0);
+        preparedStatement.setObject(40, timeValue, Types.TIME, 0);
+        preparedStatement.setObject(41, timestampValue, Types.TIMESTAMP, 0);
         try {
-            preparedStatement.setObject(32, bytesValue);
+            preparedStatement.setObject(42, bytesValue);
             Assert.fail("Shown have thrown exception for not able to set byte[] parameter");
         } catch (SQLException ex) {
             Assert.assertEquals("Cannot infer the SQL type to use for an instance of byte[]",
                 ex.getMessage());
         }
+        Field bindVariablesMap = preparedStatement.getClass().getDeclaredField("bindVariables");
+        bindVariablesMap.setAccessible(true);
+        Map<String, Object> bindVariables =
+            (Map<String, Object>) bindVariablesMap.get(preparedStatement);
+        Assert.assertEquals(null, bindVariables.get("v1"));
+        Assert.assertEquals(boolValue, bindVariables.get("v2"));
+        Assert.assertEquals(byteValue, bindVariables.get("v3"));
+        Assert.assertEquals(shortValue, bindVariables.get("v4"));
+        Assert.assertEquals(intValue, bindVariables.get("v5"));
+        Assert.assertEquals(longValue, bindVariables.get("v6"));
+        Assert.assertEquals(floatValue, bindVariables.get("v7"));
+        Assert.assertEquals(doubleValue, bindVariables.get("v8"));
+        Assert.assertEquals(bigDecimalValue, bindVariables.get("v9"));
+        Assert.assertEquals(stringValue, bindVariables.get("v10"));
+        Assert.assertEquals(bytesValue, bindVariables.get("v11"));
+        Assert.assertEquals(dateValue.toString(), bindVariables.get("v12"));
+        Assert.assertEquals(timeValue.toString(), bindVariables.get("v13"));
+        Assert.assertEquals(timestampValue.toString(), bindVariables.get("v14"));
+        Assert.assertEquals(dateValue.toString(), bindVariables.get("v15"));
+        Assert.assertEquals(timeValue.toString(), bindVariables.get("v16"));
+        Assert.assertEquals(timestampValue.toString(), bindVariables.get("v17"));
+        Assert.assertEquals(boolValue, bindVariables.get("v18"));
+        Assert.assertEquals(byteValue, bindVariables.get("v19"));
+        Assert.assertEquals(shortValue, bindVariables.get("v20"));
+        Assert.assertEquals(intValue, bindVariables.get("v21"));
+        Assert.assertEquals(longValue, bindVariables.get("v22"));
+        Assert.assertEquals(floatValue, bindVariables.get("v23"));
+        Assert.assertEquals(doubleValue, bindVariables.get("v24"));
+        Assert.assertEquals(bigDecimalValue, bindVariables.get("v25"));
+        Assert.assertEquals(stringValue, bindVariables.get("v26"));
+        Assert.assertEquals(dateValue.toString(), bindVariables.get("v27"));
+        Assert.assertEquals(timeValue.toString(), bindVariables.get("v28"));
+        Assert.assertEquals(timestampValue.toString(), bindVariables.get("v29"));
+        Assert.assertEquals("a", bindVariables.get("v30"));
+        Assert.assertEquals(null, bindVariables.get("v31"));
+        Assert.assertEquals(boolValue, bindVariables.get("v32"));
+        Assert.assertEquals(shortValue.intValue(), bindVariables.get("v33"));
+        Assert.assertEquals(longValue, bindVariables.get("v34"));
+        Assert.assertEquals((double) floatValue, (double) bindVariables.get("v35"), 0.1);
+        Assert.assertEquals(doubleValue, (double) bindVariables.get("v36"), 0.1);
+        Assert.assertEquals(expectedDecimalValue, bindVariables.get("v37"));
+        Assert.assertEquals(stringValue, bindVariables.get("v38"));
+        Assert.assertEquals(dateValue.toString(), bindVariables.get("v39"));
+        Assert.assertEquals(timeValue.toString(), bindVariables.get("v40"));
+        Assert.assertEquals(timestampValue.toString(), bindVariables.get("v41"));
+
         preparedStatement.clearParameters();
     }
 

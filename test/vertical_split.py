@@ -14,6 +14,7 @@ from vtdb import keyrange
 from vtdb import keyrange_constants
 from vtdb import vtgate_client
 
+import base_sharding
 import environment
 import tablet
 import utils
@@ -30,21 +31,15 @@ destination_replica = tablet.Tablet()
 destination_rdonly1 = tablet.Tablet()
 destination_rdonly2 = tablet.Tablet()
 
+all_tablets = [source_master, source_replica, source_rdonly1, source_rdonly2,
+               destination_master, destination_replica, destination_rdonly1,
+               destination_rdonly2]
+
 
 def setUpModule():
   try:
     environment.topo_server().setup()
-
-    setup_procs = [
-        source_master.init_mysql(),
-        source_replica.init_mysql(),
-        source_rdonly1.init_mysql(),
-        source_rdonly2.init_mysql(),
-        destination_master.init_mysql(),
-        destination_replica.init_mysql(),
-        destination_rdonly1.init_mysql(),
-        destination_rdonly2.init_mysql(),
-        ]
+    setup_procs = [t.init_mysql() for t in all_tablets]
     utils.Vtctld().start()
     utils.wait_procs(setup_procs)
   except:
@@ -59,33 +54,16 @@ def tearDownModule():
 
   if utils.vtgate:
     utils.vtgate.kill()
-  teardown_procs = [
-      source_master.teardown_mysql(),
-      source_replica.teardown_mysql(),
-      source_rdonly1.teardown_mysql(),
-      source_rdonly2.teardown_mysql(),
-      destination_master.teardown_mysql(),
-      destination_replica.teardown_mysql(),
-      destination_rdonly1.teardown_mysql(),
-      destination_rdonly2.teardown_mysql(),
-  ]
+  teardown_procs = [t.teardown_mysql() for t in all_tablets]
   utils.wait_procs(teardown_procs, raise_on_error=False)
-
   environment.topo_server().teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
-
-  source_master.remove_tree()
-  source_replica.remove_tree()
-  source_rdonly1.remove_tree()
-  source_rdonly2.remove_tree()
-  destination_master.remove_tree()
-  destination_replica.remove_tree()
-  destination_rdonly1.remove_tree()
-  destination_rdonly2.remove_tree()
+  for t in all_tablets:
+    t.remove_tree()
 
 
-class TestVerticalSplit(unittest.TestCase):
+class TestVerticalSplit(unittest.TestCase, base_sharding.BaseShardingTest):
 
   def setUp(self):
     self.insert_index = 0
@@ -151,11 +129,13 @@ class TestVerticalSplit(unittest.TestCase):
                              'ServedFrom(rdonly): source_keyspace\n'
                              'ServedFrom(replica): source_keyspace\n')
 
-    # reparent to make the tablets work
+    # reparent to make the tablets work (we use health check, fix their types)
     utils.run_vtctl(['InitShardMaster', '-force', 'source_keyspace/0',
                      source_master.tablet_alias], auto_log=True)
+    source_master.tablet_type = 'master'
     utils.run_vtctl(['InitShardMaster', '-force', 'destination_keyspace/0',
                      destination_master.tablet_alias], auto_log=True)
+    destination_master.tablet_type = 'master'
 
     for t in all_setup_tablets:
       t.wait_for_vttablet_state('SERVING')
@@ -306,6 +286,7 @@ index by_msg (msg)
         _, stderr = utils.run_vtctl(['VtTabletExecute', '-json',
                                      '-keyspace', t.keyspace,
                                      '-shard', t.shard,
+                                     '-tablet_type', t.tablet_type,
                                      t.tablet_alias,
                                      'select count(1) from %s' % table],
                                     expect_fail=True)
@@ -372,6 +353,7 @@ index by_msg (msg)
                         '--tables', 'moving.*,view1',
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
+                        '--min_healthy_rdonly_endpoints', '1',
                         'destination_keyspace/0'],
                        auto_log=True)
     # One of the two source rdonly tablets went spare after the clone.
@@ -387,8 +369,11 @@ index by_msg (msg)
     self._check_values(destination_master, 'vt_destination_keyspace', 'view1',
                        self.moving1_first, 100)
 
-    # check the binlog players is running
-    destination_master.wait_for_binlog_player_count(1)
+    # check the binlog player is running and exporting vars
+    self.check_destination_master(destination_master, ['source_keyspace/0'])
+
+    # check that binlog server exported the stats vars
+    self.check_binlog_server_vars(source_replica, horizontal=False)
 
     # add values to source, make sure they're replicated
     moving1_first_add1 = self._insert_values('moving1', 100)
@@ -398,12 +383,17 @@ index by_msg (msg)
                                'moving1', moving1_first_add1, 100)
     self._check_values_timeout(destination_master, 'vt_destination_keyspace',
                                'moving2', moving2_first_add1, 100)
+    self.check_binlog_player_vars(destination_master, ['source_keyspace/0'],
+                                  seconds_behind_master_max=30)
+    self.check_binlog_server_vars(source_replica, horizontal=False,
+                                  min_statements=100, min_transactions=100)
 
     # use vtworker to compare the data
     for t in [destination_rdonly1, destination_rdonly2]:
       utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
     logging.debug('Running vtworker VerticalSplitDiff')
     utils.run_vtworker(['-cell', 'test_nj', 'VerticalSplitDiff',
+                        '--min_healthy_rdonly_endpoints', '1',
                         'destination_keyspace/0'], auto_log=True)
     # One of each source and dest rdonly tablet went spare after the diff.
     # Force a healthcheck on all four to get them back to "rdonly".
@@ -414,13 +404,8 @@ index by_msg (msg)
     utils.pause('Good time to test vtworker for diffs')
 
     # get status for destination master tablet, make sure we have it all
-    destination_master_status = destination_master.get_status()
-    self.assertIn('Binlog player state: Running', destination_master_status)
-    self.assertIn('moving.*', destination_master_status)
-    self.assertIn(
-        '<td><b>All</b>: 1000<br><b>Query</b>: 700<br>'
-        '<b>Transaction</b>: 300<br></td>', destination_master_status)
-    self.assertIn('</html>', destination_master_status)
+    self.check_running_binlog_player(destination_master, 700, 300,
+                                     extra_text='moving.*')
 
     # check query service is off on destination master, as filtered
     # replication is enabled. Even health check should not interfere.
@@ -531,7 +516,7 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_rdonly2, ['moving.*', 'view1'])
 
     # check the binlog player is gone now
-    destination_master.wait_for_binlog_player_count(0)
+    self.check_no_binlog_player(destination_master)
 
     # check the stats are correct
     self._check_stats()

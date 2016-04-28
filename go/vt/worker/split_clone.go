@@ -21,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/worker/events"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
@@ -33,19 +34,18 @@ import (
 type SplitCloneWorker struct {
 	StatusWorker
 
-	wr                     *wrangler.Wrangler
-	cell                   string
-	keyspace               string
-	shard                  string
-	excludeTables          []string
-	strategy               *splitStrategy
-	sourceReaderCount      int
-	destinationPackCount   int
-	minTableSizeForSplit   uint64
-	destinationWriterCount int
-	cleaner                *wrangler.Cleaner
-
-	// all subsequent fields are protected by the mutex
+	wr                        *wrangler.Wrangler
+	cell                      string
+	keyspace                  string
+	shard                     string
+	excludeTables             []string
+	strategy                  *splitStrategy
+	sourceReaderCount         int
+	destinationPackCount      int
+	minTableSizeForSplit      uint64
+	destinationWriterCount    int
+	minHealthyRdonlyEndPoints int
+	cleaner                   *wrangler.Cleaner
 
 	// populated during WorkerStateInit, read-only after that
 	keyspaceInfo      *topo.KeyspaceInfo
@@ -57,8 +57,8 @@ type SplitCloneWorker struct {
 	sourceTablets []*topo.TabletInfo
 
 	// populated during WorkerStateCopy
-	tableStatus []*tableStatus
-	startTime   time.Time
+	// tableStatusList holds the status for each table.
+	tableStatusList tableStatusList
 	// aliases of tablets that need to have their schema reloaded.
 	// Only populated once, read-only after that.
 	reloadAliases [][]*topodatapb.TabletAlias
@@ -75,24 +75,25 @@ type SplitCloneWorker struct {
 }
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
-func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
+func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyEndPoints int) (Worker, error) {
 	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
 	}
 	return &SplitCloneWorker{
-		StatusWorker:           NewStatusWorker(),
-		wr:                     wr,
-		cell:                   cell,
-		keyspace:               keyspace,
-		shard:                  shard,
-		excludeTables:          excludeTables,
-		strategy:               strategy,
-		sourceReaderCount:      sourceReaderCount,
-		destinationPackCount:   destinationPackCount,
-		minTableSizeForSplit:   minTableSizeForSplit,
-		destinationWriterCount: destinationWriterCount,
-		cleaner:                &wrangler.Cleaner{},
+		StatusWorker:              NewStatusWorker(),
+		wr:                        wr,
+		cell:                      cell,
+		keyspace:                  keyspace,
+		shard:                     shard,
+		excludeTables:             excludeTables,
+		strategy:                  strategy,
+		sourceReaderCount:         sourceReaderCount,
+		destinationPackCount:      destinationPackCount,
+		minTableSizeForSplit:      minTableSizeForSplit,
+		destinationWriterCount:    destinationWriterCount,
+		minHealthyRdonlyEndPoints: minHealthyRdonlyEndPoints,
+		cleaner:                   &wrangler.Cleaner{},
 
 		ev: &events.SplitClone{
 			Cell:          cell,
@@ -124,20 +125,20 @@ func (scw *SplitCloneWorker) formatSources() string {
 
 // StatusAsHTML implements the Worker interface
 func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
-	scw.Mu.Lock()
-	defer scw.Mu.Unlock()
+	state := scw.State()
+
 	result := "<b>Working on:</b> " + scw.keyspace + "/" + scw.shard + "</br>\n"
-	result += "<b>State:</b> " + scw.State.String() + "</br>\n"
-	switch scw.State {
+	result += "<b>State:</b> " + state.String() + "</br>\n"
+	switch state {
 	case WorkerStateCopy:
 		result += "<b>Running</b>:</br>\n"
 		result += "<b>Copying from</b>: " + scw.formatSources() + "</br>\n"
-		statuses, eta := formatTableStatuses(scw.tableStatus, scw.startTime)
+		statuses, eta := scw.tableStatusList.format()
 		result += "<b>ETA</b>: " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
 	case WorkerStateDone:
 		result += "<b>Success</b>:</br>\n"
-		statuses, _ := formatTableStatuses(scw.tableStatus, scw.startTime)
+		statuses, _ := scw.tableStatusList.format()
 		result += strings.Join(statuses, "</br>\n")
 	}
 
@@ -146,20 +147,20 @@ func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
 
 // StatusAsText implements the Worker interface
 func (scw *SplitCloneWorker) StatusAsText() string {
-	scw.Mu.Lock()
-	defer scw.Mu.Unlock()
+	state := scw.State()
+
 	result := "Working on: " + scw.keyspace + "/" + scw.shard + "\n"
-	result += "State: " + scw.State.String() + "\n"
-	switch scw.State {
+	result += "State: " + state.String() + "\n"
+	switch state {
 	case WorkerStateCopy:
 		result += "Running:\n"
 		result += "Copying from: " + scw.formatSources() + "\n"
-		statuses, eta := formatTableStatuses(scw.tableStatus, scw.startTime)
+		statuses, eta := scw.tableStatusList.format()
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
 	case WorkerStateDone:
 		result += "Success:\n"
-		statuses, _ := formatTableStatuses(scw.tableStatus, scw.startTime)
+		statuses, _ := scw.tableStatusList.format()
 		result += strings.Join(statuses, "\n")
 	}
 	return result
@@ -251,6 +252,15 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 		scw.destinationShards = os.Left
 	}
 
+	// Verify that filtered replication is not already enabled.
+	for _, si := range scw.destinationShards {
+		if len(si.SourceShards) > 0 {
+			return fmt.Errorf("destination shard %v/%v has filtered replication already enabled from a previous resharding (ShardInfo is set)."+
+				" This requires manual intervention e.g. use vtctl SourceShardDelete to remove it",
+				si.Keyspace(), si.ShardName())
+		}
+	}
+
 	// validate all serving types
 	servingTypes := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 	for _, st := range servingTypes {
@@ -280,7 +290,7 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	// find an appropriate endpoint in the source shards
 	scw.sourceAliases = make([]*topodatapb.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
-		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName())
+		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyEndPoints)
 		if err != nil {
 			return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
 		}
@@ -396,30 +406,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 		return fmt.Errorf("no tables matching the table filter in tablet %v", topoproto.TabletAliasString(scw.sourceAliases[0]))
 	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
-
-	scw.Mu.Lock()
-	scw.tableStatus = make([]*tableStatus, len(sourceSchemaDefinition.TableDefinitions))
-	for i, td := range sourceSchemaDefinition.TableDefinitions {
-		scw.tableStatus[i] = &tableStatus{
-			name:     td.Name,
-			rowCount: td.RowCount * uint64(len(scw.sourceAliases)),
-		}
-	}
-	scw.startTime = time.Now()
-	scw.Mu.Unlock()
-
-	// Count rows for source tables
-	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
-		if td.Type == tmutils.TableBaseTable {
-			scw.tableStatus[tableIndex].mu.Lock()
-			scw.tableStatus[tableIndex].rowCount = td.RowCount
-			scw.tableStatus[tableIndex].mu.Unlock()
-		} else {
-			scw.tableStatus[tableIndex].mu.Lock()
-			scw.tableStatus[tableIndex].isView = true
-			scw.tableStatus[tableIndex].mu.Unlock()
-		}
-	}
+	scw.tableStatusList.initialize(sourceSchemaDefinition)
 
 	// In parallel, setup the channels to send SQL data chunks to for each destination tablet:
 	//
@@ -461,6 +448,29 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 		}(si.ShardName(), insertChannels[shardIndex])
 	}
 
+	// read the vschema if needed
+	var keyspaceSchema *vindexes.KeyspaceSchema
+	if *useV3ReshardingMode {
+		kschema, err := scw.wr.TopoServer().GetVSchema(ctx, scw.keyspace)
+		if err != nil {
+			return fmt.Errorf("cannot load VSchema for keyspace %v: %v", scw.keyspace, err)
+		}
+
+		formal, err := vindexes.VSchemaFormalForKeyspace([]byte(kschema), scw.keyspace)
+		if err != nil {
+			return fmt.Errorf("error building formal vschema for keyspace %s: %v", scw.keyspace, err)
+		}
+		vschema, err := vindexes.BuildVSchema(formal)
+		if err != nil {
+			return fmt.Errorf("cannot build vschema for keyspace %v: %v", scw.keyspace, err)
+		}
+		var ok bool
+		keyspaceSchema, ok = vschema.Keyspaces[scw.keyspace]
+		if !ok {
+			return fmt.Errorf("no VSchema for keyspace %v", scw.keyspace)
+		}
+	}
+
 	// Now for each table, read data chunks and send them to all
 	// insertChannels
 	sourceWaitGroup := sync.WaitGroup{}
@@ -473,12 +483,14 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 
 			var keyResolver keyspaceIDResolver
 			if *useV3ReshardingMode {
-				// TODO(sougou): instantiate a v3 key resolver here
-				return fmt.Errorf("v3 resharding mode is currently not fully supported. Please use v2 for now")
+				keyResolver, err = newV3ResolverFromTableDefinition(keyspaceSchema, td)
+				if err != nil {
+					return fmt.Errorf("cannot resolve v3 sharding keys for keyspace %v: %v", scw.keyspace, err)
+				}
 			} else {
 				keyResolver, err = newV2Resolver(scw.keyspaceInfo, td)
 				if err != nil {
-					return fmt.Errorf("cannot resolving sharding keys for keyspace %v: %v", scw.keyspace, err)
+					return fmt.Errorf("cannot resolve sharding keys for keyspace %v: %v", scw.keyspace, err)
 				}
 			}
 			rowSplitter := NewRowSplitter(scw.destinationShards, keyResolver)
@@ -487,7 +499,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			scw.tableStatus[tableIndex].setThreadCount(len(chunks) - 1)
+			scw.tableStatusList.setThreadCount(tableIndex, len(chunks)-1)
 
 			for chunkIndex := 0; chunkIndex < len(chunks)-1; chunkIndex++ {
 				sourceWaitGroup.Add(1)
@@ -497,7 +509,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 					sema.Acquire()
 					defer sema.Release()
 
-					scw.tableStatus[tableIndex].threadStarted()
+					scw.tableStatusList.threadStarted(tableIndex)
 
 					// build the query, and start the streaming
 					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, scw.sourceAliases[shardIndex].String())
@@ -512,7 +524,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 					if err := scw.processData(ctx, td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount); err != nil {
 						processError("processData failed: %v", err)
 					}
-					scw.tableStatus[tableIndex].threadDone()
+					scw.tableStatusList.threadDone(tableIndex)
 				}(td, tableIndex, chunkIndex)
 			}
 		}
@@ -547,7 +559,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 				return err
 			}
 
-			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, time.Now().Unix(), flags))
+			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(uint32(shardIndex), status.Position, time.Now().Unix(), flags))
 		}
 
 		for _, si := range scw.destinationShards {
@@ -638,7 +650,7 @@ func (scw *SplitCloneWorker) processData(ctx context.Context, td *tabletmanagerd
 		if err := rowSplitter.Split(sr, r.Rows); err != nil {
 			return fmt.Errorf("RowSplitter failed for table %v: %v", td.Name, err)
 		}
-		scw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
+		scw.tableStatusList.addCopiedRows(tableIndex, len(r.Rows))
 
 		// see if we reach the destination pack count
 		packCount++

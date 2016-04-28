@@ -1164,17 +1164,20 @@ type SplitQueryRequest struct {
 	// by the shards are merged and returned to the caller.
 	// Two algorithms are supported:
 	//  EQUAL_SPLITS
-	//    If this algorithm is used then only one split_column is allowed.
-	//    Additionally, the split_column must have numeric type (integral or
-	//    floating point). The algorithm works by taking the interval [min, max],
-	//    where min and max are the minimum and maximum values of of the
-	//    split_column column in the table-shard, respectively, and
-	//    partitioning it into split_count sub-intervals of equal size.
-	//    The added WHERE clause of each query-part restricts that part to rows
-	//    whose value in split_column belongs to a particular sub-interval.
-	//    This is fast, but requires that the distribution of values of
-	//    split_column be uniform in [min, max], for the number of rows
-	//    returned by each query part to be roughly the same.
+	//    If this algorithm is selected then only the first 'split_column' given
+	//    is used (or the first primary key column if the 'split_column' field is
+	//    empty). In the rest of this algorithm's description, we refer to
+	//    this column as "the split column".
+	//    The split column must have numeric type (integral or floating point).
+	//    The algorithm works by taking the interval [min, max], where min and
+	//    max are the minimum and maximum values of the split column in
+	//    the table-shard, respectively, and partitioning it into 'split_count'
+	//    sub-intervals of equal size. The added WHERE clause of each query-part
+	//    restricts that part to rows whose value in the split column belongs to
+	//    a particular sub-interval. This is fast, but requires that the
+	//    distribution of values of the split column be uniform in [min, max]
+	//    for the number of rows returned by each query part to be roughly the
+	//    same.
 	//  FULL_SCAN
 	//    If this algorithm is used then the split_column must be the primary key
 	//    columns (in order).

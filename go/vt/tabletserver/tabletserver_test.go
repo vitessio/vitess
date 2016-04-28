@@ -393,7 +393,7 @@ func TestTabletServerAllSchemaFailure(t *testing.T) {
 	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	defer tsv.StopService()
 	// tabletsever shouldn't start if it can't access schema for any tables
-	testUtils.checkTabletError(t, err, ErrFail, "could not get schema for any tables")
+	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not get schema for any tables")
 }
 
 func TestTabletServerCheckMysql(t *testing.T) {
@@ -776,7 +776,7 @@ func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	_, err = tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{}, tsv.sessionID, false, 0)
-	verifyTabletError(t, err, ErrFail)
+	verifyTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT)
 }
 
 func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
@@ -798,7 +798,7 @@ func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
 			BindVariables: nil,
 		},
 	}, tsv.sessionID, true, 1)
-	verifyTabletError(t, err, ErrFail)
+	verifyTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT)
 }
 
 func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
@@ -1061,7 +1061,7 @@ func TestTabletServerSplitQueryV2(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := querypb.Target{TabletType: topodatapb.TabletType_RDONLY}
 	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -1071,7 +1071,7 @@ func TestTabletServerSplitQueryV2(t *testing.T) {
 	sql := "select * from test_table where count > :count"
 	splits, err := tsv.SplitQueryV2(
 		ctx,
-		nil, /* target */
+		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
 		sql,
 		nil,        /* bindVariables */
 		[]string{}, /* splitColumns */
@@ -1137,7 +1137,7 @@ func TestTabletServerSplitQueryV2InvalidQuery(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := querypb.Target{TabletType: topodatapb.TabletType_RDONLY}
 	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -1148,7 +1148,7 @@ func TestTabletServerSplitQueryV2InvalidQuery(t *testing.T) {
 	sql := "select * from test_table where count > :count limit 10"
 	_, err = tsv.SplitQueryV2(
 		ctx,
-		nil, /* target */
+		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
 		sql,
 		nil,        /* bindVariables */
 		[]string{}, /* splitColumns */
@@ -1216,7 +1216,7 @@ func TestTabletServerSplitQueryV2InvalidParams(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := querypb.Target{TabletType: topodatapb.TabletType_RDONLY}
 	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -1226,7 +1226,7 @@ func TestTabletServerSplitQueryV2InvalidParams(t *testing.T) {
 	sql := "select * from test_table where count > :count"
 	_, err = tsv.SplitQueryV2(
 		ctx,
-		nil, /* target */
+		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
 		sql,
 		nil,        /* bindVariables */
 		[]string{}, /* splitColumns */
@@ -1264,7 +1264,7 @@ func TestHandleExecTabletError(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	defer tsv.handleExecError("select * from test_table", nil, &err, logStats)
-	panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "tablet error"))
+	panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "tablet error"))
 }
 
 func TestTerseErrors1(t *testing.T) {
@@ -1282,7 +1282,7 @@ func TestTerseErrors1(t *testing.T) {
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
 	defer tsv.handleExecError("select * from test_table", nil, &err, logStats)
-	panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "tablet error"))
+	panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "tablet error"))
 }
 
 func TestTerseErrors2(t *testing.T) {
@@ -1301,7 +1301,7 @@ func TestTerseErrors2(t *testing.T) {
 	tsv.config.TerseErrors = true
 	defer tsv.handleExecError("select * from test_table", map[string]interface{}{"a": 1}, &err, logStats)
 	panic(&TabletError{
-		ErrorType: ErrFail,
+		ErrorCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
 		Message:   "msg",
 		SQLError:  10,
 	})
@@ -1323,7 +1323,7 @@ func TestTerseErrors3(t *testing.T) {
 	tsv.config.TerseErrors = true
 	defer tsv.handleExecError("select * from test_table", nil, &err, logStats)
 	panic(&TabletError{
-		ErrorType: ErrFail,
+		ErrorCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
 		Message:   "msg",
 		SQLError:  10,
 	})

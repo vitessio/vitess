@@ -14,9 +14,12 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/logutil"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 )
@@ -42,6 +45,7 @@ type Instance struct {
 	currentContext      context.Context
 	currentCancelFunc   context.CancelFunc
 	lastRunError        error
+	lastRunStopTime     time.Time
 
 	// backgroundContext is context.Background() from main() which has to be plumbed through.
 	backgroundContext      context.Context
@@ -69,14 +73,35 @@ func (wi *Instance) CreateWrangler(logger logutil.Logger) *wrangler.Wrangler {
 func (wi *Instance) setAndStartWorker(wrk Worker, wr *wrangler.Wrangler) (chan struct{}, error) {
 	wi.currentWorkerMutex.Lock()
 	defer wi.currentWorkerMutex.Unlock()
+
+	if wi.currentContext != nil {
+		return nil, vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR,
+			fmt.Errorf("A worker job is already in progress: %v", wi.currentWorker))
+	}
+
 	if wi.currentWorker != nil {
-		return nil, fmt.Errorf("A worker is already in progress: %v", wi.currentWorker)
+		// During the grace period, we answer with a retryable error.
+		const gracePeriod = 1 * time.Minute
+		gracePeriodEnd := time.Now().Add(gracePeriod)
+		if wi.lastRunStopTime.Before(gracePeriodEnd) {
+			return nil, vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR,
+				fmt.Errorf("A worker job was recently stopped (%f seconds ago): %v",
+					time.Now().Sub(wi.lastRunStopTime).Seconds(),
+					wi.currentWorker))
+		}
+
+		// QUERY_NOT_SERVED = FailedPrecondition => manual resolution required.
+		return nil, vterrors.FromError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
+			fmt.Errorf("The worker job was stopped %.1f minutes ago, but not reset. You have to reset it manually. Job: %v",
+				time.Now().Sub(wi.lastRunStopTime).Minutes(),
+				wi.currentWorker))
 	}
 
 	wi.currentWorker = wrk
 	wi.currentMemoryLogger = logutil.NewMemoryLogger()
 	wi.currentContext, wi.currentCancelFunc = context.WithCancel(wi.backgroundContext)
 	wi.lastRunError = nil
+	wi.lastRunStopTime = time.Unix(0, 0)
 	done := make(chan struct{})
 	wranglerLogger := wr.Logger()
 	if wr == wi.wr {
@@ -95,13 +120,15 @@ func (wi *Instance) setAndStartWorker(wrk Worker, wr *wrangler.Wrangler) (chan s
 		defer func() {
 			// The recovery code is a copy of servenv.HandlePanic().
 			if x := recover(); x != nil {
-				err = fmt.Errorf("uncaught %v panic: %v", "vtworker", x)
+				log.Errorf("uncaught vtworker panic: %v\n%s", x, tb.Stack(4))
+				err = fmt.Errorf("uncaught vtworker panic: %v", x)
 			}
 
 			wi.currentWorkerMutex.Lock()
 			wi.currentContext = nil
 			wi.currentCancelFunc = nil
 			wi.lastRunError = err
+			wi.lastRunStopTime = time.Now()
 			wi.currentWorkerMutex.Unlock()
 			close(done)
 		}()
@@ -118,15 +145,20 @@ func (wi *Instance) InstallSignalHandlers() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
-		s := <-sigChan
-		// we got a signal, notify our modules
-		wi.currentWorkerMutex.Lock()
-		defer wi.currentWorkerMutex.Unlock()
-		if wi.currentCancelFunc != nil {
-			wi.currentCancelFunc()
-		} else {
-			log.Infof("Shutting down idle worker after receiving signal: %v", s)
-			os.Exit(0)
+		for s := range sigChan {
+			// We got a signal, notify our modules.
+			// Use an extra function to properly unlock using defer.
+			func() {
+				wi.currentWorkerMutex.Lock()
+				defer wi.currentWorkerMutex.Unlock()
+				if wi.currentCancelFunc != nil {
+					log.Infof("Trying to cancel current worker after receiving signal: %v", s)
+					wi.currentCancelFunc()
+				} else {
+					log.Infof("Shutting down idle worker after receiving signal: %v", s)
+					os.Exit(0)
+				}
+			}()
 		}
 	}()
 }
@@ -148,4 +180,23 @@ func (wi *Instance) Reset() error {
 	}
 
 	return errors.New("worker still executing")
+}
+
+// Cancel calls the cancel function of the current vtworker job.
+// It returns true, if a job was running. False otherwise.
+// NOTE: Cancel won't reset the state as well. Use Reset() to do so.
+func (wi *Instance) Cancel() bool {
+	wi.currentWorkerMutex.Lock()
+
+	if wi.currentWorker == nil || wi.currentCancelFunc == nil {
+		wi.currentWorkerMutex.Unlock()
+		return false
+	}
+
+	cancel := wi.currentCancelFunc
+	wi.currentWorkerMutex.Unlock()
+
+	cancel()
+
+	return true
 }

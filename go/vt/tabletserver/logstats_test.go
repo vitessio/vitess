@@ -10,9 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callinfo"
-	"golang.org/x/net/context"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestLogStats(t *testing.T) {
@@ -108,7 +111,7 @@ func TestLogStatsErrorStr(t *testing.T) {
 	}
 	errStr := "unknown error"
 	logStats.Error = &TabletError{
-		ErrorType: ErrFail,
+		ErrorCode: vtrpcpb.ErrorCode_UNKNOWN_ERROR,
 		Message:   errStr,
 	}
 	if !strings.Contains(logStats.ErrorStr(), errStr) {

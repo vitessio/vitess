@@ -121,15 +121,15 @@ func (dg *discoveryGateway) ExecuteBatch(ctx context.Context, keyspace, shard st
 }
 
 // StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
+func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
 	var usedConn tabletconn.TabletConn
 	var stream sqltypes.ResultStream
 	err := dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var err error
-		stream, err = conn.StreamExecute(ctx, query, bindVars, transactionID)
+		stream, err = conn.StreamExecute(ctx, query, bindVars)
 		usedConn = conn
 		return err
-	}, transactionID, true)
+	}, 0, true)
 	if err != nil {
 		return nil, err
 	}
@@ -159,6 +159,28 @@ func (dg *discoveryGateway) Rollback(ctx context.Context, keyspace, shard string
 	return dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		return conn.Rollback(ctx, transactionID)
 	}, transactionID, false)
+}
+
+// BeginExecute executes a begin and the non-streaming query for the
+// specified keyspace, shard, and tablet type.
+func (dg *discoveryGateway) BeginExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}) (qr *sqltypes.Result, transactionID int64, err error) {
+	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
+		var innerErr error
+		qr, transactionID, innerErr = conn.BeginExecute(ctx, query, bindVars)
+		return innerErr
+	}, 0, false)
+	return qr, transactionID, err
+}
+
+// BeginExecuteBatch executes a begin and a group of queries for the
+// specified keyspace, shard, and tablet type.
+func (dg *discoveryGateway) BeginExecuteBatch(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, queries []querytypes.BoundQuery, asTransaction bool) (qrs []sqltypes.Result, transactionID int64, err error) {
+	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
+		var innerErr error
+		qrs, transactionID, innerErr = conn.BeginExecuteBatch(ctx, queries, asTransaction)
+		return innerErr
+	}, 0, false)
+	return qrs, transactionID, err
 }
 
 // SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
@@ -290,23 +312,25 @@ func (dg *discoveryGateway) canRetry(ctx context.Context, err error, transaction
 	default:
 	}
 	if serverError, ok := err.(*tabletconn.ServerError); ok {
-		switch serverError.Code {
-		case tabletconn.ERR_FATAL:
+		switch serverError.ServerCode {
+		case vtrpcpb.ErrorCode_INTERNAL_ERROR:
 			// Do not retry on fatal error for streaming query.
 			// For streaming query, vttablet sends:
-			// - RETRY, if streaming is not started yet;
-			// - FATAL, if streaming is broken halfway.
-			// For non-streaming query, handle as ERR_RETRY.
+			// - QUERY_NOT_SERVED, if streaming is not started yet;
+			// - INTERNAL_ERROR, if streaming is broken halfway.
+			// For non-streaming query, handle as QUERY_NOT_SERVED.
 			if isStreaming {
 				return false
 			}
 			fallthrough
-		case tabletconn.ERR_RETRY:
-			// Retry on RETRY and FATAL if not in a transaction.
+		case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
+			// Retry on QUERY_NOT_SERVED and
+			// INTERNAL_ERROR if not in a transaction.
 			inTransaction := (transactionID != 0)
 			return !inTransaction
 		default:
-			// Not retry for TX_POOL_FULL and normal server errors.
+			// Not retry for RESOURCE_EXHAUSTED and normal
+			// server errors.
 			return false
 		}
 	}
@@ -376,18 +400,11 @@ func WrapError(in error, keyspace, shard string, tabletType topodatapb.TabletTyp
 		return nil
 	}
 	shardIdentifier := fmt.Sprintf("%s.%s.%s, %+v", keyspace, shard, strings.ToLower(tabletType.String()), endPoint)
-	code := tabletconn.ERR_NORMAL
-	serverError, ok := in.(*tabletconn.ServerError)
-	if ok {
-		code = serverError.Code
-	}
 
-	shardConnErr := &ShardConnError{
-		Code:            code,
+	return &ShardConnError{
 		ShardIdentifier: shardIdentifier,
 		InTransaction:   inTransaction,
 		Err:             in,
 		EndPointCode:    vterrors.RecoverVtErrorCode(in),
 	}
-	return shardConnErr
 }

@@ -43,6 +43,9 @@ mkdir -p $VTROOT/bin
 mkdir -p $VTROOT/lib
 mkdir -p $VTROOT/vthook
 
+echo "Updating git submodules..."
+git submodule update --init
+
 # install zookeeper
 zk_ver=3.4.6
 zk_dist=$VTROOT/dist/vt-zookeeper-$zk_ver
@@ -98,37 +101,45 @@ else
   export PYTHONPATH=$(prepend_path $PYTHONPATH $grpc_dist/usr/local/lib/python2.7/dist-packages)
 fi
 
-# Download third-party Go libraries.
-# (We use one go get command (and therefore one variable) for all repositories because this saves us several seconds of execution time.)
-repos="github.com/golang/glog \
+# Install third-party Go tools used as part of the development workflow.
+#
+# DO NOT ADD LIBRARY DEPENDENCIES HERE. Instead use govendor as described below.
+#
+gotools=" \
        github.com/golang/lint/golint \
-       github.com/golang/mock/gomock \
        github.com/golang/mock/mockgen \
-       github.com/golang/protobuf/proto \
-       github.com/golang/protobuf/protoc-gen-go \
-       github.com/olekukonko/tablewriter \
-       github.com/tools/godep \
-       golang.org/x/crypto/ssh/terminal \
-       golang.org/x/net/context \
-       golang.org/x/oauth2/google \
+       github.com/kardianos/govendor \
        golang.org/x/tools/cmd/goimports \
-       google.golang.org/cloud \
-       google.golang.org/cloud/storage \
-       google.golang.org/grpc \
 "
 
-# Packages for uploading code coverage to coveralls.io (used by Travis CI).
-repos+=" github.com/modocache/gover github.com/mattn/goveralls"
+# Tools for uploading code coverage to coveralls.io (used by Travis CI).
+gotools+=" github.com/modocache/gover github.com/mattn/goveralls"
 # The cover tool needs to be installed into the Go toolchain, so it will fail
 # if Go is installed somewhere that requires root access.
 source tools/shell_functions.inc
 if goversion_min 1.4; then
-  repos+=" golang.org/x/tools/cmd/cover"
+  gotools+=" golang.org/x/tools/cmd/cover"
 else
-  repos+=" code.google.com/p/go.tools/cmd/cover"
+  gotools+=" code.google.com/p/go.tools/cmd/cover"
 fi
 
-go get -u $repos || fail "Failed to download some Go dependencies with 'go get'. Please re-run bootstrap.sh in case of transient errors."
+echo "Installing dev tools with 'go get'..."
+go get -u $gotools || fail "Failed to download some Go tools with 'go get'. Please re-run bootstrap.sh in case of transient errors."
+
+# Download dependencies that are version-pinned via govendor.
+#
+# To add a new dependency, run:
+#   govendor fetch <package_path>
+#
+# Existing dependencies can be updated to the latest version with 'fetch' as well.
+#
+# Then:
+#   git add vendor/vendor.json
+#   git commit
+#
+# See https://github.com/kardianos/govendor for more options.
+echo "Updating govendor dependencies..."
+govendor sync || fail "Failed to download/update dependencies with govendor. Please re-run bootstrap.sh in case of transient errors."
 
 ln -snf $VTTOP/config $VTROOT/config
 ln -snf $VTTOP/data $VTROOT/data

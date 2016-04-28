@@ -345,7 +345,6 @@ type sandboxConn struct {
 	mustFailConn   int
 	mustFailTxPool int
 	mustFailNotTx  int
-	mustDelay      time.Duration
 
 	// A callback to tweak the behavior on each conn call
 	onConnUse func(*sandboxConn)
@@ -382,7 +381,6 @@ func (sbc *sandboxConn) getError() error {
 	if sbc.mustFailRetry > 0 {
 		sbc.mustFailRetry--
 		return &tabletconn.ServerError{
-			Code:       tabletconn.ERR_RETRY,
 			Err:        "retry: err",
 			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
 		}
@@ -390,7 +388,6 @@ func (sbc *sandboxConn) getError() error {
 	if sbc.mustFailFatal > 0 {
 		sbc.mustFailFatal--
 		return &tabletconn.ServerError{
-			Code:       tabletconn.ERR_FATAL,
 			Err:        "fatal: err",
 			ServerCode: vtrpcpb.ErrorCode_INTERNAL_ERROR,
 		}
@@ -398,7 +395,6 @@ func (sbc *sandboxConn) getError() error {
 	if sbc.mustFailServer > 0 {
 		sbc.mustFailServer--
 		return &tabletconn.ServerError{
-			Code:       tabletconn.ERR_NORMAL,
 			Err:        "error: err",
 			ServerCode: vtrpcpb.ErrorCode_BAD_INPUT,
 		}
@@ -410,7 +406,6 @@ func (sbc *sandboxConn) getError() error {
 	if sbc.mustFailTxPool > 0 {
 		sbc.mustFailTxPool--
 		return &tabletconn.ServerError{
-			Code:       tabletconn.ERR_TX_POOL_FULL,
 			Err:        "tx_pool_full: err",
 			ServerCode: vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED,
 		}
@@ -418,7 +413,6 @@ func (sbc *sandboxConn) getError() error {
 	if sbc.mustFailNotTx > 0 {
 		sbc.mustFailNotTx--
 		return &tabletconn.ServerError{
-			Code:       tabletconn.ERR_NOT_IN_TX,
 			Err:        "not_in_tx: err",
 			ServerCode: vtrpcpb.ErrorCode_NOT_IN_TX,
 		}
@@ -440,26 +434,16 @@ func (sbc *sandboxConn) Execute(ctx context.Context, query string, bindVars map[
 		Sql:           query,
 		BindVariables: bv,
 	})
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
-	}
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
 	return sbc.getNextResult(), nil
 }
 
-func (sbc *sandboxConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
-	return sbc.Execute(ctx, query, bindVars, transactionID)
-}
-
 func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	sbc.ExecCount.Add(1)
 	if asTransaction {
 		sbc.AsTransactionCount.Add(1)
-	}
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
 	}
 	if err := sbc.getError(); err != nil {
 		return nil, err
@@ -470,10 +454,6 @@ func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []querytypes.B
 		result = append(result, *(sbc.getNextResult()))
 	}
 	return result, nil
-}
-
-func (sbc *sandboxConn) ExecuteBatch2(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
-	return sbc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 
 type streamExecuteAdapter struct {
@@ -489,7 +469,7 @@ func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 	return a.result, nil
 }
 
-func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
+func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]interface{})
 	for k, v := range bindVars {
@@ -499,9 +479,6 @@ func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVar
 		Sql:           query,
 		BindVariables: bv,
 	})
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
-	}
 	err := sbc.getError()
 	if err != nil {
 		return nil, err
@@ -511,11 +488,7 @@ func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVar
 }
 
 func (sbc *sandboxConn) Begin(ctx context.Context) (int64, error) {
-	sbc.ExecCount.Add(1)
 	sbc.BeginCount.Add(1)
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
-	}
 	err := sbc.getError()
 	if err != nil {
 		return 0, err
@@ -524,21 +497,31 @@ func (sbc *sandboxConn) Begin(ctx context.Context) (int64, error) {
 }
 
 func (sbc *sandboxConn) Commit(ctx context.Context, transactionID int64) error {
-	sbc.ExecCount.Add(1)
 	sbc.CommitCount.Add(1)
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
-	}
 	return sbc.getError()
 }
 
 func (sbc *sandboxConn) Rollback(ctx context.Context, transactionID int64) error {
-	sbc.ExecCount.Add(1)
 	sbc.RollbackCount.Add(1)
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
-	}
 	return sbc.getError()
+}
+
+func (sbc *sandboxConn) BeginExecute(ctx context.Context, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error) {
+	transactionID, err := sbc.Begin(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	result, err := sbc.Execute(ctx, query, bindVars, transactionID)
+	return result, transactionID, err
+}
+
+func (sbc *sandboxConn) BeginExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+	transactionID, err := sbc.Begin(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	results, err := sbc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
+	return results, transactionID, err
 }
 
 var sandboxSQRowCount = int64(10)

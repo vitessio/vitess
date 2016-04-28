@@ -372,15 +372,33 @@ def get_vars(port):
     raise
 
 
-# wait_for_vars will wait until we can actually get the vars from a process,
-# and if var is specified, will wait until that var is in vars
-def wait_for_vars(name, port, var=None, timeout=10.0):
+def wait_for_vars(name, port, var=None, key=None, value=None, timeout=10.0):
+  """Waits for the vars of a process, and optional values.
+
+  Args:
+    name: nickname for the process.
+    port: process port to look at.
+    var: if specified, waits for var in vars.
+    key: if specified, waits for vars[var][key]==value.
+    value: if key if specified, waits for vars[var][key]==value.
+    timeout: how long to wait.
+  """
+  text = 'waiting for http://localhost:%d/debug/vars of %s' % (port, name)
+  if var:
+    text += ' value %s' % var
+    if key:
+      text += ' key %s:%s' % (key, value)
   while True:
     v = get_vars(port)
-    if v and (var is None or var in v):
-      break
-    timeout = wait_step('waiting for http://localhost:%d/debug/vars of %s'
-                        % (port, name), timeout)
+    if v:
+      if var is None:
+        break
+      if var in v:
+        if key is None:
+          break
+        if key in v[var] and v[var][key] == value:
+          break
+    timeout = wait_step(text, timeout)
 
 
 def poll_for_vars(
@@ -519,6 +537,7 @@ class VtGate(object):
         '-conn-timeout-per-conn', timeout_per_conn,
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-gateway_implementation', vtgate_gateway_flavor().flavor(),
+        '-tablet_grpc_combine_begin_execute',
     ]
     args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
     if tablet_types_to_wait:
@@ -650,6 +669,20 @@ class VtGate(object):
     args.append(sql)
     return run_vtctl_json(args)
 
+  def wait_for_endpoints(self, name, count, timeout=20.0):
+    """waits until vtgate gets endpoints.
+
+    Args:
+      name: name of the endpoint, in the form: 'keyspace.shard.type'.
+      count: how many endpoints to wait for.
+      timeout: how long to wait.
+    """
+    if vtgate_gateway_flavor().flavor() == 'shardgateway':
+      return
+    wait_for_vars('vtgate', self.port,
+                  var=vtgate_gateway_flavor().connection_count_vars(),
+                  key=name, value=count, timeout=timeout)
+
 
 # vtctl helpers
 # The modes are not all equivalent, and we don't really thrive for it.
@@ -764,7 +797,6 @@ def _get_vtworker_cmd(clargs, auto_log=False):
   rpc_port = port
   args = environment.binary_args('vtworker') + [
       '-log_dir', environment.vtlogroot,
-      '-min_healthy_rdonly_endpoints', '1',
       '-port', str(port),
       # use a long resolve TTL because of potential race conditions with doing
       # an EmergencyReparent and resolving the master (as EmergencyReparent

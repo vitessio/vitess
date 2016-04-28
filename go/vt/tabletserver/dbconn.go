@@ -64,17 +64,17 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 			return r, nil
 		case !IsConnErr(err):
 			// MySQL error that isn't due to a connection issue
-			return nil, NewTabletErrorSQL(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
+			return nil, NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
 		case attempt == 2:
 			// If the MySQL connection is bad, we assume that there is nothing wrong with
 			// the query itself, and retrying it might succeed. The MySQL connection might
 			// fix itself, or the query could succeed on a different VtTablet.
-			return nil, NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+			return nil, NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 		}
 		err2 := dbc.reconnect()
 		if err2 != nil {
 			dbc.pool.checker.CheckMySQL()
-			return nil, NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+			return nil, NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 		}
 	}
 	panic("unreachable")
@@ -176,7 +176,7 @@ func (dbc *DBConn) Kill(reason string) error {
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
 		// TODO(aaijazi): Find the right error code for an internal error that we don't want to retry
-		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Failed to get conn from dba pool: %v", err)
+		return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Failed to get conn from dba pool: %v", err)
 	}
 	defer killConn.Recycle()
 	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
@@ -184,7 +184,7 @@ func (dbc *DBConn) Kill(reason string) error {
 	if err != nil {
 		log.Errorf("Could not kill query %s: %v", dbc.Current(), err)
 		// TODO(aaijazi): Find the right error code for an internal error that we don't want to retry
-		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not kill query %s: %v", dbc.Current(), err)
+		return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not kill query %s: %v", dbc.Current(), err)
 	}
 	return nil
 }

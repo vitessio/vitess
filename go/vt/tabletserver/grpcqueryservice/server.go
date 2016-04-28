@@ -145,6 +145,70 @@ func (q *query) Rollback(ctx context.Context, request *querypb.RollbackRequest) 
 	return &querypb.RollbackResponse{}, nil
 }
 
+// BeginExecute is part of the queryservice.QueryServer interface
+func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteRequest) (response *querypb.BeginExecuteResponse, err error) {
+	defer q.server.HandlePanic(&err)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
+	if err != nil {
+		return nil, tabletserver.ToGRPCError(err)
+	}
+
+	// Begin part
+	transactionID, err := q.server.Begin(ctx, request.Target, 0)
+	if err != nil {
+		return nil, tabletserver.ToGRPCError(err)
+	}
+
+	// Execute part
+	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, bv, 0, transactionID)
+	if err != nil {
+		return &querypb.BeginExecuteResponse{
+			Error:         tabletserver.ToRPCError(err),
+			TransactionId: transactionID,
+		}, nil
+	}
+	return &querypb.BeginExecuteResponse{
+		Result:        sqltypes.ResultToProto3(result),
+		TransactionId: transactionID,
+	}, nil
+}
+
+// BeginExecuteBatch is part of the queryservice.QueryServer interface
+func (q *query) BeginExecuteBatch(ctx context.Context, request *querypb.BeginExecuteBatchRequest) (response *querypb.BeginExecuteBatchResponse, err error) {
+	defer q.server.HandlePanic(&err)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	bql, err := querytypes.Proto3ToBoundQueryList(request.Queries)
+	if err != nil {
+		return nil, tabletserver.ToGRPCError(err)
+	}
+
+	// Begin part
+	transactionID, err := q.server.Begin(ctx, request.Target, 0)
+	if err != nil {
+		return nil, tabletserver.ToGRPCError(err)
+	}
+
+	// ExecuteBatch part
+	results, err := q.server.ExecuteBatch(ctx, request.Target, bql, 0, request.AsTransaction, transactionID)
+	if err != nil {
+		return &querypb.BeginExecuteBatchResponse{
+			Error:         tabletserver.ToRPCError(err),
+			TransactionId: transactionID,
+		}, nil
+	}
+	return &querypb.BeginExecuteBatchResponse{
+		Results:       sqltypes.ResultsToProto3(results),
+		TransactionId: transactionID,
+	}, nil
+}
+
 // SplitQuery is part of the queryservice.QueryServer interface
 func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryRequest) (response *querypb.SplitQueryResponse, err error) {
 	defer q.server.HandlePanic(&err)

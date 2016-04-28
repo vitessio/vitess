@@ -159,7 +159,7 @@ func TestMemcacheStatsTabletError(t *testing.T) {
 	memcacheStats := NewMemcacheStats(
 		statsPrefix, 100*time.Second, enableMain, queryServiceStats,
 		func(key string) string {
-			panic(NewTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "unknown tablet error"))
+			panic(NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "unknown tablet error"))
 		},
 	)
 	errCountBefore := queryServiceStats.InternalErrors.Counts()["MemcacheStats"]

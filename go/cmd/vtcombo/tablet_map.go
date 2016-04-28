@@ -280,7 +280,7 @@ func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 
 // StreamExecute is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
+func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
 	bv, err := querytypes.BindVariablesToProto3(bindVars)
 	if err != nil {
 		return nil, err
@@ -343,6 +343,26 @@ func (itc *internalTabletConn) Rollback(ctx context.Context, transactionID int64
 		TabletType: itc.tablet.tabletType,
 	}, 0, transactionID)
 	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
+}
+
+// BeginExecute is part of tabletconn.TabletConn
+func (itc *internalTabletConn) BeginExecute(ctx context.Context, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error) {
+	transactionID, err := itc.Begin(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	result, err := itc.Execute(ctx, query, bindVars, transactionID)
+	return result, transactionID, err
+}
+
+// BeginExecuteBatch is part of tabletconn.TabletConn
+func (itc *internalTabletConn) BeginExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+	transactionID, err := itc.Begin(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	results, err := itc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
+	return results, transactionID, err
 }
 
 // Close is part of tabletconn.TabletConn

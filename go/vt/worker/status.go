@@ -73,6 +73,7 @@ func (wi *Instance) InitStatusHandling() {
 		logger := wi.currentMemoryLogger
 		ctx := wi.currentContext
 		err := wi.lastRunError
+		stopTime := wi.lastRunStopTime
 		wi.currentWorkerMutex.Unlock()
 
 		data := make(map[string]interface{})
@@ -83,6 +84,7 @@ func (wi *Instance) InitStatusHandling() {
 				if err != nil {
 					status += template.HTML(fmt.Sprintf("<br>\nEnded with an error: %v<br>\n", err))
 				}
+				status += template.HTML(fmt.Sprintf("<br>\n<b>End Time:</b> %v<br>\n", stopTime))
 			}
 			data["Status"] = status
 			if logger != nil {
@@ -121,20 +123,12 @@ func (wi *Instance) InitStatusHandling() {
 			return
 		}
 
-		wi.currentWorkerMutex.Lock()
-
-		// no worker, or not running, we go to the menu
-		if wi.currentWorker == nil || wi.currentCancelFunc == nil {
-			wi.currentWorkerMutex.Unlock()
+		if wi.Cancel() {
+			// We cancelled the running worker. Go back to the status page.
+			http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
+		} else {
+			// No worker, or not running, we go to the menu.
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-			return
 		}
-
-		// otherwise, cancel the running worker and go back to the status page
-		cancel := wi.currentCancelFunc
-		wi.currentWorkerMutex.Unlock()
-		cancel()
-		http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
-
 	})
 }

@@ -25,6 +25,17 @@ const (
 	TableView = "VIEW"
 )
 
+// TableDefinitionGetColumn returns the index of a column inside a
+// TableDefinition.
+func TableDefinitionGetColumn(td *tabletmanagerdatapb.TableDefinition, name string) (index int, ok bool) {
+	for i, n := range td.Columns {
+		if name == n {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
 // TableDefinitions is a list of TableDefinition, for sorting
 type TableDefinitions []*tabletmanagerdatapb.TableDefinition
 

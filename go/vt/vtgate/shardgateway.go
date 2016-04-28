@@ -116,8 +116,8 @@ func (sg *shardGateway) ExecuteBatch(ctx context.Context, keyspace string, shard
 }
 
 // StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
-func (sg *shardGateway) StreamExecute(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (sqltypes.ResultStream, error) {
-	return sg.getConnection(ctx, keyspace, shard, tabletType).StreamExecute(ctx, query, bindVars, transactionID)
+func (sg *shardGateway) StreamExecute(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
+	return sg.getConnection(ctx, keyspace, shard, tabletType).StreamExecute(ctx, query, bindVars)
 }
 
 // Begin starts a transaction for the specified keyspace, shard, and tablet type.
@@ -134,6 +134,18 @@ func (sg *shardGateway) Commit(ctx context.Context, keyspace string, shard strin
 // Rollback rolls back the current transaction for the specified keyspace, shard, and tablet type.
 func (sg *shardGateway) Rollback(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, transactionID int64) error {
 	return sg.getConnection(ctx, keyspace, shard, tabletType).Rollback(ctx, transactionID)
+}
+
+// BeginExecute executes a begin and the non-streaming query for the
+// specified keyspace, shard, and tablet type.
+func (sg *shardGateway) BeginExecute(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error) {
+	return sg.getConnection(ctx, keyspace, shard, tabletType).BeginExecute(ctx, query, bindVars)
+}
+
+// BeginExecuteBatch executes a begin and a group of queries for the
+// specified keyspace, shard, and tablet type.
+func (sg *shardGateway) BeginExecuteBatch(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+	return sg.getConnection(ctx, keyspace, shard, tabletType).BeginExecuteBatch(ctx, queries, asTransaction)
 }
 
 // SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.

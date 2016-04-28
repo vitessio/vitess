@@ -9,6 +9,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -231,7 +232,9 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, en
 
 // connect creates connection to the endpoint and starts streaming.
 func (hcc *healthCheckConn) connect(hc *HealthCheckImpl, endPoint *topodatapb.EndPoint) (tabletconn.StreamHealthReader, error) {
-	conn, err := tabletconn.GetDialer()(hcc.ctx, endPoint, "" /*keyspace*/, "" /*shard*/, topodatapb.TabletType_RDONLY, hc.connTimeout)
+	// Keyspace, shard and tabletType are not known yet, but they're unused
+	// by StreamHealth. We'll use SetTarget later to set them.
+	conn, err := tabletconn.GetDialer()(hcc.ctx, endPoint, "" /*keyspace*/, "" /*shard*/, topodatapb.TabletType_UNKNOWN, hc.connTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -640,10 +643,11 @@ func (epcs *EndPointsCacheStatus) StatusAsHTML() template.HTML {
 			extra = fmt.Sprintf(" (RepLag: %v)", eps.Stats.SecondsBehindMaster)
 		}
 		name := eps.Name
+		addr := netutil.JoinHostPort(eps.EndPoint.Host, vtPort)
 		if name == "" {
-			name = fmt.Sprintf("%v:%d", eps.EndPoint.Host, vtPort)
+			name = addr
 		}
-		epLinks = append(epLinks, fmt.Sprintf(`<a href="http://%v:%d" style="color:%v">%v</a>%v`, eps.EndPoint.Host, vtPort, color, name, extra))
+		epLinks = append(epLinks, fmt.Sprintf(`<a href="http://%s" style="color:%v">%v</a>%v`, addr, color, name, extra))
 	}
 	return template.HTML(strings.Join(epLinks, "<br>"))
 }
@@ -725,9 +729,9 @@ func (hc *HealthCheckImpl) Close() error {
 func EndPointToMapKey(endPoint *topodatapb.EndPoint) string {
 	parts := make([]string, 0, 1)
 	for name, port := range endPoint.PortMap {
-		parts = append(parts, name+":"+fmt.Sprintf("%d", port))
+		parts = append(parts, netutil.JoinHostPort(name, port))
 	}
 	sort.Strings(parts)
 	parts = append([]string{endPoint.Host}, parts...)
-	return strings.Join(parts, ":")
+	return strings.Join(parts, ",")
 }

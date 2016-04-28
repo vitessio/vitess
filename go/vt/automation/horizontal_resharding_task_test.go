@@ -14,11 +14,15 @@ func TestHorizontalReshardingTaskEmittedTasks(t *testing.T) {
 	reshardingTask := &HorizontalReshardingTask{}
 
 	parameters := map[string]string{
+		// Required parameters.
 		"keyspace":          "test_keyspace",
 		"source_shard_list": "10-20",
 		"dest_shard_list":   "10-18,18-20",
 		"vtctld_endpoint":   "localhost:15000",
 		"vtworker_endpoint": "localhost:15001",
+		// Optional parameters.
+		"exclude_tables":               "unrelated1,unrelated2",
+		"min_healthy_rdonly_endpoints": "1",
 	}
 
 	err := validateParameters(reshardingTask, parameters)

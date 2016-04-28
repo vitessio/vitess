@@ -15,6 +15,7 @@ import (
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 // This file defines the interface and implementations of sharding key resolvers.
@@ -47,15 +48,10 @@ func newV2Resolver(keyspaceInfo *topo.KeyspaceInfo, td *tabletmanagerdatapb.Tabl
 	if td.Type != tmutils.TableBaseTable {
 		return nil, fmt.Errorf("a keyspaceID resolver can only be created for a base table, got %v", td.Type)
 	}
+
 	// Find the sharding key column index.
-	columnIndex := -1
-	for i, name := range td.Columns {
-		if name == keyspaceInfo.ShardingColumnName {
-			columnIndex = i
-			break
-		}
-	}
-	if columnIndex == -1 {
+	columnIndex, ok := tmutils.TableDefinitionGetColumn(td, keyspaceInfo.ShardingColumnName)
+	if !ok {
 		return nil, fmt.Errorf("table %v doesn't have a column named '%v'", td.Name, keyspaceInfo.ShardingColumnName)
 	}
 
@@ -79,4 +75,97 @@ func (r *v2Resolver) keyspaceID(row []sqltypes.Value) ([]byte, error) {
 	}
 }
 
-// TODO(sougou): implement a V3 keyspaceIDResolver, which takes advantage of a table's primary ColVindex.
+// v3Resolver is the keyspace id resolver that is used by VTGate V3 deployments.
+// In V3, we use the VSchema to find a Unique VIndex of cost 0 or 1 for each
+// table.
+type v3Resolver struct {
+	shardingColumnIndex int
+	vindex              vindexes.Unique
+}
+
+// newV3ResolverFromTableDefinition returns a keyspaceIDResolver for a v3 table.
+func newV3ResolverFromTableDefinition(keyspaceSchema *vindexes.KeyspaceSchema, td *tabletmanagerdatapb.TableDefinition) (keyspaceIDResolver, error) {
+	if td.Type != tmutils.TableBaseTable {
+		return nil, fmt.Errorf("a keyspaceID resolver can only be created for a base table, got %v", td.Type)
+	}
+	tableSchema, ok := keyspaceSchema.Tables[td.Name]
+	if !ok {
+		return nil, fmt.Errorf("no vschema definition for table %v", td.Name)
+	}
+	// the primary vindex is most likely the sharding key, and has to
+	// be unique.
+	if len(tableSchema.ColVindexes) == 0 {
+		return nil, fmt.Errorf("no vindex definition for table %v", td.Name)
+	}
+	colVindex := tableSchema.ColVindexes[0]
+	if colVindex.Vindex.Cost() > 1 {
+		return nil, fmt.Errorf("primary vindex cost is too high for table %v", td.Name)
+	}
+	unique, ok := colVindex.Vindex.(vindexes.Unique)
+	if !ok {
+		return nil, fmt.Errorf("primary vindex is not unique for table %v", td.Name)
+	}
+
+	// Find the sharding key column index.
+	columnIndex, ok := tmutils.TableDefinitionGetColumn(td, colVindex.Col)
+	if !ok {
+		return nil, fmt.Errorf("table %v has a Vindex on unknown column %v", td.Name, colVindex.Col)
+	}
+
+	return &v3Resolver{
+		shardingColumnIndex: columnIndex,
+		vindex:              unique,
+	}, nil
+}
+
+// newV3ResolverFromColumnList returns a keyspaceIDResolver for a v3 table.
+func newV3ResolverFromColumnList(keyspaceSchema *vindexes.KeyspaceSchema, name string, columns []string) (keyspaceIDResolver, error) {
+	tableSchema, ok := keyspaceSchema.Tables[name]
+	if !ok {
+		return nil, fmt.Errorf("no vschema definition for table %v", name)
+	}
+	// the primary vindex is most likely the sharding key, and has to
+	// be unique.
+	if len(tableSchema.ColVindexes) == 0 {
+		return nil, fmt.Errorf("no vindex definition for table %v", name)
+	}
+	colVindex := tableSchema.ColVindexes[0]
+	if colVindex.Vindex.Cost() > 1 {
+		return nil, fmt.Errorf("primary vindex cost is too high for table %v", name)
+	}
+	unique, ok := colVindex.Vindex.(vindexes.Unique)
+	if !ok {
+		return nil, fmt.Errorf("primary vindex is not unique for table %v", name)
+	}
+
+	// Find the sharding key column index.
+	columnIndex := -1
+	for i, n := range columns {
+		if n == colVindex.Col {
+			columnIndex = i
+			break
+		}
+	}
+	if columnIndex == -1 {
+		return nil, fmt.Errorf("table %v has a Vindex on unknown column %v", name, colVindex.Col)
+	}
+
+	return &v3Resolver{
+		shardingColumnIndex: columnIndex,
+		vindex:              unique,
+	}, nil
+}
+
+// keyspaceID implements the keyspaceIDResolver interface.
+func (r *v3Resolver) keyspaceID(row []sqltypes.Value) ([]byte, error) {
+	v := row[r.shardingColumnIndex]
+	ids := []interface{}{v}
+	ksids, err := r.vindex.Map(nil, ids)
+	if err != nil {
+		return nil, err
+	}
+	if len(ksids) != 1 {
+		return nil, fmt.Errorf("maping row to keyspace id returned an invalid array of keyspace ids: %v", ksids)
+	}
+	return ksids[0], nil
+}

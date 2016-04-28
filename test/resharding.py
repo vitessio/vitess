@@ -4,6 +4,24 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
+"""This test covers a resharding scenario of an already sharded keyspace.
+
+We start with shards -80 and 80-. We then split 80- into 80-c0 and c0-.
+
+This test is the main resharding test. It not only tests the regular resharding
+workflow for an horizontal split, but also a lot of error cases and side
+effects, like:
+- migrating the traffic one cell at a time.
+- migrating rdonly traffic back and forth.
+- making sure we can't migrate the master until replica and rdonly are migrated.
+- has a background thread to insert data during migration.
+- tests a destination shard master failover while replication is running.
+- tests a filtered replication source replacement while filtered replication
+  is running.
+- tests 'vtctl SourceShardAdd' and 'vtctl SourceShardDelete'.
+- makes sure the key range rules are properly enforced on masters.
+"""
+
 import struct
 import threading
 import time
@@ -15,6 +33,7 @@ from vtproto import topodata_pb2
 
 from vtdb import keyrange_constants
 
+import base_sharding
 import environment
 import tablet
 import utils
@@ -44,27 +63,17 @@ shard_3_master = tablet.Tablet()
 shard_3_replica = tablet.Tablet()
 shard_3_rdonly1 = tablet.Tablet()
 
+all_tablets = [shard_0_master, shard_0_replica, shard_0_ny_rdonly,
+               shard_1_master, shard_1_slave1, shard_1_slave2,
+               shard_1_ny_rdonly, shard_1_rdonly1,
+               shard_2_master, shard_2_replica1, shard_2_replica2,
+               shard_3_master, shard_3_replica, shard_3_rdonly1]
+
 
 def setUpModule():
   try:
     environment.topo_server().setup()
-
-    setup_procs = [
-        shard_0_master.init_mysql(),
-        shard_0_replica.init_mysql(),
-        shard_0_ny_rdonly.init_mysql(),
-        shard_1_master.init_mysql(),
-        shard_1_slave1.init_mysql(),
-        shard_1_slave2.init_mysql(),
-        shard_1_ny_rdonly.init_mysql(),
-        shard_1_rdonly1.init_mysql(),
-        shard_2_master.init_mysql(),
-        shard_2_replica1.init_mysql(),
-        shard_2_replica2.init_mysql(),
-        shard_3_master.init_mysql(),
-        shard_3_replica.init_mysql(),
-        shard_3_rdonly1.init_mysql(),
-        ]
+    setup_procs = [t.init_mysql() for t in all_tablets]
     utils.Vtctld().start()
     utils.wait_procs(setup_procs)
   except:
@@ -77,42 +86,13 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
 
-  teardown_procs = [
-      shard_0_master.teardown_mysql(),
-      shard_0_replica.teardown_mysql(),
-      shard_0_ny_rdonly.teardown_mysql(),
-      shard_1_master.teardown_mysql(),
-      shard_1_slave1.teardown_mysql(),
-      shard_1_slave2.teardown_mysql(),
-      shard_1_ny_rdonly.teardown_mysql(),
-      shard_1_rdonly1.teardown_mysql(),
-      shard_2_master.teardown_mysql(),
-      shard_2_replica1.teardown_mysql(),
-      shard_2_replica2.teardown_mysql(),
-      shard_3_master.teardown_mysql(),
-      shard_3_replica.teardown_mysql(),
-      shard_3_rdonly1.teardown_mysql(),
-      ]
+  teardown_procs = [t.teardown_mysql() for t in all_tablets]
   utils.wait_procs(teardown_procs, raise_on_error=False)
-
   environment.topo_server().teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
-
-  shard_0_master.remove_tree()
-  shard_0_replica.remove_tree()
-  shard_0_ny_rdonly.remove_tree()
-  shard_1_master.remove_tree()
-  shard_1_slave1.remove_tree()
-  shard_1_slave2.remove_tree()
-  shard_1_ny_rdonly.remove_tree()
-  shard_1_rdonly1.remove_tree()
-  shard_2_master.remove_tree()
-  shard_2_replica1.remove_tree()
-  shard_2_replica2.remove_tree()
-  shard_3_master.remove_tree()
-  shard_3_replica.remove_tree()
-  shard_3_rdonly1.remove_tree()
+  for t in all_tablets:
+    t.remove_tree()
 
 
 # InsertThread will insert a value into the timestamps table, and then
@@ -191,7 +171,7 @@ class MonitorLagThread(threading.Thread):
       logging.exception('MonitorLagThread got exception.')
 
 
-class TestResharding(unittest.TestCase):
+class TestResharding(unittest.TestCase, base_sharding.BaseShardingTest):
 
   # create_schema will create the same schema on the keyspace
   # then insert some values
@@ -201,7 +181,7 @@ class TestResharding(unittest.TestCase):
     else:
       t = 'bigint(20) unsigned'
     create_table_template = '''create table %s(
-id bigint auto_increment,
+id bigint not null,
 msg varchar(64),
 custom_sharding_key ''' + t + ''' not null,
 primary key (id),
@@ -368,11 +348,8 @@ primary key (name)
       value = self._check_lots(count, base=base)
       if value >= threshold:
         return value
-      if timeout == 0:
-        self.fail('timeout waiting for %d%% of the data' % threshold)
-      logging.debug('sleeping until we get %d%%', threshold)
-      time.sleep(1)
-      timeout -= 1
+      timeout = utils.wait_step('waiting for %d%% of the data' % threshold,
+                                timeout, sleep_time=1)
 
   # _check_lots_not_present makes sure no data is in the wrong shard
   def _check_lots_not_present(self, count, base=0):
@@ -383,56 +360,6 @@ primary key (name)
       self._check_value(shard_2_replica2, 'resharding1', 20000 + base + i,
                         'msg-range2-%d' % i, 0xE000000000000000 + base + i,
                         should_be_here=False)
-
-  def _check_binlog_server_vars(self, tablet_obj):
-    v = utils.get_vars(tablet_obj.port)
-    self.assertIn('UpdateStreamKeyRangeStatements', v)
-    self.assertIn('UpdateStreamKeyRangeTransactions', v)
-
-  def _check_binlog_player_vars(self, tablet_obj, seconds_behind_master_max=0):
-    v = utils.get_vars(tablet_obj.port)
-    self.assertIn('BinlogPlayerMapSize', v)
-    self.assertIn('BinlogPlayerSecondsBehindMaster', v)
-    self.assertIn('BinlogPlayerSecondsBehindMasterMap', v)
-    self.assertIn('BinlogPlayerSourceShardNameMap', v)
-    self.assertIn('0', v['BinlogPlayerSourceShardNameMap'])
-    self.assertEquals(
-        v['BinlogPlayerSourceShardNameMap']['0'], 'test_keyspace/80-')
-    self.assertIn('BinlogPlayerSourceTabletAliasMap', v)
-    self.assertIn('0', v['BinlogPlayerSourceTabletAliasMap'])
-    if seconds_behind_master_max != 0:
-      self.assertTrue(
-          v['BinlogPlayerSecondsBehindMaster'] <
-          seconds_behind_master_max,
-          'BinlogPlayerSecondsBehindMaster is too high: %d > %d' % (
-              v['BinlogPlayerSecondsBehindMaster'],
-              seconds_behind_master_max))
-      self.assertTrue(
-          v['BinlogPlayerSecondsBehindMasterMap']['0'] <
-          seconds_behind_master_max,
-          'BinlogPlayerSecondsBehindMasterMap is too high: %d > %d' % (
-              v['BinlogPlayerSecondsBehindMasterMap']['0'],
-              seconds_behind_master_max))
-
-  def _check_stream_health_equals_binlog_player_vars(self, tablet_obj):
-    blp_stats = utils.get_vars(tablet_obj.port)
-    # Enforce health check because it's not running by default as
-    # tablets are not started with it.
-    utils.run_vtctl(['RunHealthCheck', tablet_obj.tablet_alias, 'replica'])
-    stream_health = utils.run_vtctl_json(['VtTabletStreamHealth',
-                                          '-count', '1',
-                                          tablet_obj.tablet_alias])
-    logging.debug('Got health: %s', str(stream_health))
-    self.assertNotIn('serving', stream_health)
-    self.assertIn('realtime_stats', stream_health)
-    self.assertNotIn('health_error', stream_health['realtime_stats'])
-    # count is > 0 and therefore not omitted by the Go JSON marshaller.
-    self.assertIn('binlog_players_count', stream_health['realtime_stats'])
-    self.assertEqual(blp_stats['BinlogPlayerMapSize'],
-                     stream_health['realtime_stats']['binlog_players_count'])
-    self.assertEqual(blp_stats['BinlogPlayerSecondsBehindMaster'],
-                     stream_health['realtime_stats'].get(
-                         'seconds_behind_master_filtered_replication', 0))
 
   def _test_keyrange_constraints(self):
     with self.assertRaisesRegexp(
@@ -556,6 +483,11 @@ primary key (name)
         keyspace_id_type=keyspace_id_type,
         sharding_column_name='custom_sharding_key')
 
+    # disable shard_1_slave2, so we're sure filtered replication will go
+    # from shard_1_slave1
+    utils.run_vtctl(['ChangeSlaveType', shard_1_slave2.tablet_alias, 'spare'])
+    shard_1_slave2.wait_for_vttablet_state('NOT_SERVING')
+
     # the worker will do everything. We test with source_reader_count=10
     # (down from default=20) as connection pool is not big enough for 20.
     # min_table_size_for_split is set to 1 as to force a split even on the
@@ -572,6 +504,7 @@ primary key (name)
                         '--exclude_tables', 'unrelated',
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
+                        '--min_healthy_rdonly_endpoints', '1',
                         'test_keyspace/80-'],
                        auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly1.tablet_alias,
@@ -587,16 +520,11 @@ primary key (name)
                      'test_keyspace'], auto_log=True)
 
     # check the binlog players are running and exporting vars
-    shard_2_master.wait_for_binlog_player_count(1)
-    shard_3_master.wait_for_binlog_player_count(1)
-    self._check_binlog_player_vars(shard_2_master)
-    self._check_binlog_player_vars(shard_3_master)
+    self.check_destination_master(shard_2_master, ['test_keyspace/80-'])
+    self.check_destination_master(shard_3_master, ['test_keyspace/80-'])
 
     # check that binlog server exported the stats vars
-    self._check_binlog_server_vars(shard_1_slave1)
-
-    self._check_stream_health_equals_binlog_player_vars(shard_2_master)
-    self._check_stream_health_equals_binlog_player_vars(shard_3_master)
+    self.check_binlog_server_vars(shard_1_slave1, horizontal=True)
 
     # testing filtered replication: insert a bunch of data on shard 1,
     # check we get most of it after a few seconds, wait for binlog server
@@ -612,15 +540,21 @@ primary key (name)
       self._check_lots_timeout(1000, 100, 20)
     logging.debug('Checking no data was sent the wrong way')
     self._check_lots_not_present(1000)
-    self._check_binlog_player_vars(shard_2_master, seconds_behind_master_max=30)
-    self._check_binlog_player_vars(shard_3_master, seconds_behind_master_max=30)
+    self.check_binlog_player_vars(shard_2_master, ['test_keyspace/80-'],
+                                  seconds_behind_master_max=30)
+    self.check_binlog_player_vars(shard_3_master, ['test_keyspace/80-'],
+                                  seconds_behind_master_max=30)
+    self.check_binlog_server_vars(shard_1_slave1, horizontal=True,
+                                  min_statements=1000, min_transactions=1000)
 
     # use vtworker to compare the data (after health-checking the destination
     # rdonly tablets so discovery works)
     utils.run_vtctl(['RunHealthCheck', shard_3_rdonly1.tablet_alias, 'rdonly'])
     logging.debug('Running vtworker SplitDiff')
-    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', '--exclude_tables',
-                        'unrelated', 'test_keyspace/c0-'],
+    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
+                        '--exclude_tables', 'unrelated',
+                        '--min_healthy_rdonly_endpoints', '1',
+                        'test_keyspace/c0-'],
                        auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly1.tablet_alias, 'rdonly'],
                     auto_log=True)
@@ -629,13 +563,9 @@ primary key (name)
 
     utils.pause('Good time to test vtworker for diffs')
 
-    # get status for a destination master tablet, make sure we have it all
-    shard_2_master_status = shard_2_master.get_status()
-    self.assertIn('Binlog player state: Running', shard_2_master_status)
-    self.assertIn(
-        '<td><b>All</b>: 6000<br><b>Query</b>: 4000<br>'
-        '<b>Transaction</b>: 2000<br></td>', shard_2_master_status)
-    self.assertIn('</html>', shard_2_master_status)
+    # get status for destination master tablets, make sure we have it all
+    self.check_running_binlog_player(shard_2_master, 4000, 2000)
+    self.check_running_binlog_player(shard_3_master, 4000, 2000)
 
     # start a thread to insert data into shard_1 in the background
     # with current time, and monitor the delay
@@ -658,6 +588,8 @@ primary key (name)
     self._insert_lots(1000, base=1000)
     logging.debug('Checking 80 percent of data was sent quickly')
     self._check_lots_timeout(1000, 80, 5, base=1000)
+    self.check_binlog_server_vars(shard_1_slave2, horizontal=True,
+                                  min_statements=800, min_transactions=800)
 
     # check we can't migrate the master just yet
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'master'],
@@ -783,8 +715,10 @@ primary key (name)
 
     # use vtworker to compare the data again
     logging.debug('Running vtworker SplitDiff')
-    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', '--exclude_tables',
-                        'unrelated', 'test_keyspace/c0-'],
+    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
+                        '--exclude_tables', 'unrelated',
+                        '--min_healthy_rdonly_endpoints', '1',
+                        'test_keyspace/c0-'],
                        auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly1.tablet_alias, 'rdonly'],
                     auto_log=True)
@@ -826,13 +760,8 @@ primary key (name)
     utils.check_tablet_query_service(self, shard_1_master, False, True)
 
     # check the binlog players are gone now
-    shard_2_master.wait_for_binlog_player_count(0)
-    shard_3_master.wait_for_binlog_player_count(0)
-
-    # get status for a destination master tablet, make sure it's good
-    shard_2_master_status = shard_2_master.get_status()
-    self.assertIn('No binlog player is running', shard_2_master_status)
-    self.assertIn('</html>', shard_2_master_status)
+    self.check_no_binlog_player(shard_2_master)
+    self.check_no_binlog_player(shard_3_master)
 
     # delete the original tablets in the original shard
     tablet.kill_tablets([shard_1_master, shard_1_slave1, shard_1_slave2,
