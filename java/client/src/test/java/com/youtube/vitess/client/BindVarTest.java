@@ -25,6 +25,8 @@ public class BindVarTest {
   @Parameters
   public static Collection<Object[]> testParams() {
     Object[][] params = {
+      // SQL NULL
+      {null, BindVariable.newBuilder().setType(Query.Type.NULL_TYPE).build()},
       // String
       {
         "hello world",
