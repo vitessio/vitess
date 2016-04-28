@@ -97,6 +97,8 @@ public class Constants {
         public static final String DBNAME_REQUIRED =
             "Database name is required in the connection url";
         public static final String RESULT_SET_INIT_ERROR = "ResultSet initialization error";
+        public static final String GENERATED_KEYS_NOT_REQUESTED = "Generated keys not requested. You need to specify " +
+            "Statement.RETURN_GENERATED_KEYS to Statement.executeUpdate() or Connection.prepareStatement()";
     }
 
 

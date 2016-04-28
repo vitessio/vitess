@@ -1382,7 +1382,7 @@ public class VitessDatabaseMetadataTest {
             Assert.assertEquals(expectedResultSetMetadata.getColumnType(i + 1),
                 actualResultSetMetadata.getColumnType(i + 1));
         }
-        
+
         //Actual Values Comparison
         while (expectedResultSet.next() && actualResultSet.next()) {
             for (int i = 0; i < expectedResultSetMetadata.getColumnCount(); i++) {

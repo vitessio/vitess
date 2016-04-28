@@ -122,7 +122,7 @@ public class VitessJDBCUrl {
     }
 
     public Constants.QueryExecuteType getExecuteType() {
-        if (this.executeType != null){
+        if (this.executeType != null) {
             switch (this.executeType) {
                 case "simple":
                     return Constants.QueryExecuteType.SIMPLE;

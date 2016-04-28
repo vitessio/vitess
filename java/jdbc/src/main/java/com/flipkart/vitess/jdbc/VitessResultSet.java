@@ -74,17 +74,19 @@ public class VitessResultSet implements ResultSet {
                     .setType(columnTypes[columnCounter]);
             queryResultBuilder.addFields(queryField.build());
         }
-        for (String[] rowData : data) {
+        if (null != data) {
+            for (String[] rowData : data) {
 
-            Query.Row.Builder queryRow = Query.Row.newBuilder();
-            StringBuilder sb = new StringBuilder();
-            for (String aRowData : rowData) {
-                sb.append(aRowData);
-                queryRow.addLengths(aRowData.length());
+                Query.Row.Builder queryRow = Query.Row.newBuilder();
+                StringBuilder sb = new StringBuilder();
+                for (String aRowData : rowData) {
+                    sb.append(aRowData);
+                    queryRow.addLengths(aRowData.length());
+                }
+                queryRow.setValues(ByteString.copyFromUtf8(sb.toString()));
+                queryResultBuilder.addRows(queryRow);
+                sb.delete(0, sb.length());
             }
-            queryRow.setValues(ByteString.copyFromUtf8(sb.toString()));
-            queryResultBuilder.addRows(queryRow);
-            sb.delete(0, sb.length());
         }
         this.cursor = new SimpleCursor(queryResultBuilder.build());
         this.vitessStatement = null;
