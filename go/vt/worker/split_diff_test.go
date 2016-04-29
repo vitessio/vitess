@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
@@ -30,11 +30,10 @@ import (
 // destinationTabletServer is a local QueryService implementation to
 // support the tests
 type destinationTabletServer struct {
-	queryservice.ErrorQueryService
-	t             *testing.T
+	t *testing.T
+
+	*fakes.StreamHealthQueryService
 	excludedTable string
-	keyspace      string
-	shard         string
 }
 
 func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
@@ -90,28 +89,12 @@ func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *qu
 	return nil
 }
 
-func (sq *destinationTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
-	c <- &querypb.StreamHealthResponse{
-		Target: &querypb.Target{
-			Keyspace:   sq.keyspace,
-			Shard:      sq.shard,
-			TabletType: topodatapb.TabletType_RDONLY,
-		},
-		Serving: true,
-		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMaster: 1,
-		},
-	}
-	return 0, nil
-}
-
 // sourceTabletServer is a local QueryService implementation to support the tests
 type sourceTabletServer struct {
-	queryservice.ErrorQueryService
-	t             *testing.T
+	t *testing.T
+
+	*fakes.StreamHealthQueryService
 	excludedTable string
-	keyspace      string
-	shard         string
 	v3            bool
 }
 
@@ -169,21 +152,6 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 		}
 	}
 	return nil
-}
-
-func (sq *sourceTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
-	c <- &querypb.StreamHealthResponse{
-		Target: &querypb.Target{
-			Keyspace:   sq.keyspace,
-			Shard:      sq.shard,
-			TabletType: topodatapb.TabletType_RDONLY,
-		},
-		Serving: true,
-		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMaster: 1,
-		},
-	}
-	return 0, nil
 }
 
 // TODO(aaijazi): Create a test in which source and destination data does not match
@@ -293,32 +261,26 @@ func testSplitDiff(t *testing.T, v3 bool) {
 		}
 	}
 
-	grpcqueryservice.RegisterForTest(leftRdonly1.RPCServer, &destinationTabletServer{
-		t:             t,
-		excludedTable: excludedTable,
-		keyspace:      leftRdonly1.Tablet.Keyspace,
-		shard:         leftRdonly1.Tablet.Shard,
-	})
-	grpcqueryservice.RegisterForTest(leftRdonly2.RPCServer, &destinationTabletServer{
-		t:             t,
-		excludedTable: excludedTable,
-		keyspace:      leftRdonly2.Tablet.Keyspace,
-		shard:         leftRdonly2.Tablet.Shard,
-	})
-	grpcqueryservice.RegisterForTest(sourceRdonly1.RPCServer, &sourceTabletServer{
-		t:             t,
-		excludedTable: excludedTable,
-		keyspace:      sourceRdonly1.Tablet.Keyspace,
-		shard:         sourceRdonly1.Tablet.Shard,
-		v3:            v3,
-	})
-	grpcqueryservice.RegisterForTest(sourceRdonly2.RPCServer, &sourceTabletServer{
-		t:             t,
-		excludedTable: excludedTable,
-		keyspace:      sourceRdonly2.Tablet.Keyspace,
-		shard:         sourceRdonly2.Tablet.Shard,
-		v3:            v3,
-	})
+	for _, sourceRdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2} {
+		qs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
+		qs.AddDefaultHealthResponse()
+		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &sourceTabletServer{
+			t: t,
+			StreamHealthQueryService: qs,
+			excludedTable:            excludedTable,
+			v3:                       v3,
+		})
+	}
+
+	for _, destRdonly := range []*testlib.FakeTablet{leftRdonly1, leftRdonly2} {
+		qs := fakes.NewStreamHealthQueryService(destRdonly.Target())
+		qs.AddDefaultHealthResponse()
+		grpcqueryservice.RegisterForTest(destRdonly.RPCServer, &destinationTabletServer{
+			t: t,
+			StreamHealthQueryService: qs,
+			excludedTable:            excludedTable,
+		})
+	}
 
 	// Run the vtworker command.
 	args := []string{

@@ -11,7 +11,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
@@ -23,7 +23,7 @@ import (
 
 // streamHealthTabletServer is a local QueryService implementation to support the tests
 type streamHealthTabletServer struct {
-	queryservice.ErrorQueryService
+	fakes.ErrorQueryService
 	t *testing.T
 
 	// streamHealthMutex protects all the following fields
