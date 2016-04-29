@@ -16,7 +16,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // Worker is the base interface for all long running workers.
@@ -36,38 +35,34 @@ type Worker interface {
 	Run(context.Context) error
 }
 
-// Resolver is an interface that should be implemented by any workers that need to
-// resolve the topology.
-type Resolver interface {
-	// ResolveDestinationMasters forces the worker to (re)resolve the topology and update
-	// the destination masters that it knows about.
-	ResolveDestinationMasters(ctx context.Context) error
-
-	// GetDestinationMaster returns the most recently resolved destination master for a particular shard.
-	GetDestinationMaster(shardName string) (*topo.TabletInfo, error)
-}
-
 var (
-	resolveTTL            = flag.Duration("resolve_ttl", 15*time.Second, "Amount of time that a topo resolution can be cached for")
 	executeFetchRetryTime = flag.Duration("executefetch_retry_time", 30*time.Second, "Amount of time we should wait before retrying ExecuteFetch calls")
 	remoteActionsTimeout  = flag.Duration("remote_actions_timeout", time.Minute, "Amount of time to wait for remote actions (like replication stop, ...)")
 	useV3ReshardingMode   = flag.Bool("use_v3_resharding_mode", false, "True iff the workers should use V3-style resharding, which doesn't require a preset sharding key column.")
 
+	healthCheckTopologyRefresh = flag.Duration("worker_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
+	healthcheckRetryDelay      = flag.Duration("worker_healthcheck_retry_delay", 5*time.Second, "delay before retrying a failed healthcheck")
+	healthCheckTimeout         = flag.Duration("worker_healthcheck_timeout", time.Minute, "the health check timeout period")
+
 	statsState = stats.NewString("WorkerState")
-	// the number of times that the worker attempst to reresolve the masters
-	statsDestinationAttemptedResolves = stats.NewInt("WorkerDestinationAttemptedResolves")
-	// the number of times that the worker actually hits the topo server, i.e., they don't
-	// use a cached topology
-	statsDestinationActualResolves = stats.NewInt("WorkerDestinationActualResolves")
-	statsRetryCounters             = stats.NewCounters("WorkerRetryCount")
+	// statsRetryCount is the total number of times a query to vttablet had to be retried.
+	statsRetryCount = stats.NewInt("WorkerRetryCount")
+	// statsRetryCount groups the number of retries by category e.g. "TimeoutError" or "Readonly".
+	statsRetryCounters = stats.NewCounters("WorkerRetryCounters")
+)
+
+const (
+	retryCategoryReadOnly          = "ReadOnly"
+	retryCategoryTimeoutError      = "TimeoutError"
+	retryCategoryConnectionError   = "ConnectionError"
+	retryCategoryNoMasterAvailable = "NoMasterAvailable"
 )
 
 // resetVars resets the debug variables that are meant to provide information on a
 // per-run basis. This should be called at the beginning of each worker run.
 func resetVars() {
 	statsState.Set("")
-	statsDestinationAttemptedResolves.Set(0)
-	statsDestinationActualResolves.Set(0)
+	statsRetryCount.Set(0)
 	statsRetryCounters.Reset()
 }
 

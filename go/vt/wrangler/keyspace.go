@@ -485,7 +485,7 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout time.Duration) error {
 	hc := discovery.NewHealthCheck(healthCheckTimeout /* connectTimeout */, healthcheckRetryDelay, healthCheckTimeout, cell)
 	defer hc.Close()
-	watcher := discovery.NewShardReplicationWatcher(wr.TopoServer(), hc, cell, keyspace, shard, healthCheckTopologyRefresh, 5 /* topoReadConcurrency */)
+	watcher := discovery.NewShardReplicationWatcher(wr.TopoServer(), hc, cell, keyspace, shard, healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 	defer watcher.Stop()
 
 	if err := discovery.WaitForEndPoints(ctx, hc, cell, keyspace, shard, []topodatapb.TabletType{servedType}); err != nil {
@@ -554,11 +554,7 @@ func formatEndpointStats(eps *discovery.EndPointStats) string {
 	if webPort, ok := eps.EndPoint.PortMap["vt"]; ok {
 		webURL = fmt.Sprintf("http://%v:%d/", eps.EndPoint.Host, webPort)
 	}
-	alias := &topodatapb.TabletAlias{
-		Cell: eps.Cell,
-		Uid:  eps.EndPoint.Uid,
-	}
-	return fmt.Sprintf("%v: %v stats: %v", topoproto.TabletAliasString(alias), webURL, eps.Stats)
+	return fmt.Sprintf("%v: %v stats: %v", topoproto.TabletAliasString(eps.Alias()), webURL, eps.Stats)
 }
 
 // MigrateServedFrom is used during vertical splits to migrate a
