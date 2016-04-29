@@ -42,7 +42,7 @@ func GetCurrentMaster(epsList []*EndPointStats) []*EndPointStats {
 		}
 	}
 	if master == nil {
-		return []*EndPointStats{}
+		return nil
 	}
 
 	return []*EndPointStats{master}

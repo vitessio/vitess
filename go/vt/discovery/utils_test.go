@@ -62,7 +62,7 @@ func TestGetCurrentMaster(t *testing.T) {
 		{
 			desc:  "zero masters remains zero",
 			input: []*EndPointStats{replica(1), rdonly(2)},
-			want:  []*EndPointStats{},
+			want:  nil,
 		},
 		{
 			desc:  "single master",
