@@ -5,36 +5,41 @@
 # as root in the image.
 set -ex
 
+# Import prepend_path function.
+dir="$(dirname "${BASH_SOURCE[0]}")"
+source "${dir}/../tools/shell_functions.inc"
+if [ $? -ne 0 ]; then
+  echo "failed to load ../tools/shell_functions.inc"
+  return 1
+fi
+
 # grpc_dist can be empty, in which case we just install to the default paths
 grpc_dist="$1"
-if [ "$grpc_dist" != "" ]; then
+if [ -n "$grpc_dist" ]; then
   cd $grpc_dist
 fi
 
-# for python, we'll need the latest virtualenv and tox.
-# running gRPC requires the six package, any version will do.
-if [ "$grpc_dist" != "" ]; then
-  pip install --upgrade --root $grpc_dist --ignore-installed virtualenv tox
-  pip install --root $grpc_dist --ignore-installed six
+# Python requires a very recent version of virtualenv.
+if [ -n "$grpc_dist" ]; then
+  # Create a virtualenv, which also creates a virualenv-boxed pip.
+  virtualenv $grpc_dist/usr/local
+  $grpc_dist/usr/local/bin/pip install --upgrade --ignore-installed virtualenv
 else
-  pip install --upgrade virtualenv tox
-  pip install six
+  # system wide installations require an explicit upgrade of
+  # certain gRPC Python dependencies e.g. "six" on Debian Jessie.
+  pip install --upgrade --ignore-installed six
 fi
 
 # clone the repository, setup the submodules
 git clone https://github.com/grpc/grpc.git
 cd grpc
-git checkout release-0_12_0
+git checkout release-0_13_0
 git submodule update --init
 
-# on OSX beta-1 doesn't work, it has to be built in version beta-2
+# OSX specific setting + dependencies
 if [ `uname -s` == "Darwin" ]; then
-  cd third_party/protobuf
-  git checkout v3.0.0-beta-2
-  cd ../..
-
-  # grpc with protobuf beta-2 fix (https://github.com/jtattermusch/grpc/commit/da717f464d667aca410f3a0ddeaa7ab45d34b7d3)
-  sed -i -- 's/GetUmbrellaClassName/GetReflectionClassName/g' ./src/compiler/csharp_generator.cc
+  export GRPC_PYTHON_BUILD_WITH_CYTHON=1
+  $grpc_dist/usr/local/bin/pip install Cython
 fi
 
 # build everything
@@ -42,50 +47,48 @@ make
 
 # install protobuf side (it was already built by the 'make' earlier)
 cd third_party/protobuf
-if [ "$grpc_dist" != "" ]; then
+if [ -n "$grpc_dist" ]; then
   make install prefix=$grpc_dist/usr/local
 else
   make install
-fi
-
-# build and install python protobuf side
-cd python
-if [ "$grpc_dist" != "" ]; then
-  python setup.py build --cpp_implementation
-  python setup.py install --cpp_implementation --root=$grpc_dist
-else
-  python setup.py build --cpp_implementation
-  python setup.py install --cpp_implementation
 fi
 
 # now install grpc itself
-cd ../../..
-if [ "$grpc_dist" != "" ]; then
+cd ../..
+if [ -n "$grpc_dist" ]; then
   make install prefix=$grpc_dist/usr/local
+
+  # Add bin directory to the path such that gRPC python won't complain that
+  # it cannot find "grpc_python_plugin".
+  export PATH=$(prepend_path $PATH $grpc_dist/usr/local/bin)
 else
   make install
 fi
 
+# Pin the protobuf python dependency to a specific version which is >=3.0.0a3.
+#
+# This prevents us from running into the bug that the protobuf package with the
+# version "3.0.0-alpha-1" is treated as newer than "3.0.0a3" (alpha-3).
+# See: https://github.com/google/protobuf/issues/855
+# Also discussed here: https://github.com/grpc/grpc/issues/5534
+# In particular, we hit this issue on Travis.
+sed -i -e 's/protobuf>=3.0.0a3/protobuf==3.0.0a3/' setup.py
+
 # and now build and install gRPC python libraries
-# Note: running this twice as the first run exists
-# with 'build_data' not found error. Seems the python
-# libraries still work though.
-CONFIG=opt ./tools/run_tests/build_python.sh || CONFIG=opt ./tools/run_tests/build_python.sh
-if [ "$grpc_dist" != "" ]; then
-  CFLAGS=-I$grpc_dist/include LDFLAGS=-L$grpc_dist/lib pip install src/python/grpcio --root $grpc_dist
+# (Dependencies like protobuf python will be installed automatically.)
+if [ -n "$grpc_dist" ]; then
+  $grpc_dist/usr/local/bin/pip install .
 else
-  pip install src/python/grpcio
+  pip install .
 fi
 
-# Build PHP extension, only in Travis.
-if [ "$TRAVIS" == "true" ]; then
+# Build PHP extension, only if requested.
+if [ -n "$INSTALL_GRPC_PHP" ]; then
   echo "Building gRPC PHP extension..."
-  eval "$(phpenv init -)"
-  cd $grpc_dist/grpc/src/php/ext/grpc
+  cd src/php/ext/grpc
   phpize
   ./configure --enable-grpc=$grpc_dist/usr/local
   make
-  mkdir -p $HOME/.phpenv/lib
-  mv modules/grpc.so $HOME/.phpenv/lib/
-  echo "extension=$HOME/.phpenv/lib/grpc.so" > ~/.phpenv/versions/$(phpenv global)/etc/conf.d/grpc.ini
+  mkdir -p $INSTALL_GRPC_PHP
+  mv modules/grpc.so $INSTALL_GRPC_PHP
 fi

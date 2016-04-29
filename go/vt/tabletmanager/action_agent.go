@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"regexp"
 	"sync"
 	"time"
 
@@ -129,6 +130,10 @@ type ActionAgent struct {
 
 	// last time we ran TabletExternallyReparented
 	_tabletExternallyReparentedTime time.Time
+
+	// _ignoreHealthErrorExpr can be set by RPC to selectively disable certain
+	// healthcheck errors. It should only be accessed while holding actionMutex.
+	_ignoreHealthErrorExpr *regexp.Regexp
 }
 
 func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
@@ -223,7 +228,9 @@ func NewActionAgent(
 	}
 
 	// register the RPC services from the agent
-	agent.registerQueryService()
+	servenv.OnRun(func() {
+		agent.registerQueryService()
+	})
 
 	// two cases then:
 	// - restoreFromBackup is set: we restore, then initHealthCheck, all
@@ -500,8 +507,10 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 	// but it has to be before updateState below that may use it)
 	if initUpdateStream {
 		us := binlog.NewUpdateStream(agent.MysqlDaemon, agent.DBConfigs.App.DbName)
-		us.RegisterService()
 		agent.UpdateStream = us
+		servenv.OnRun(func() {
+			us.RegisterService()
+		})
 	}
 	servenv.OnTerm(func() {
 		// Disable UpdateStream (if any) upon entering lameduck.

@@ -27,13 +27,12 @@ import (
 type VerticalSplitDiffWorker struct {
 	StatusWorker
 
-	wr       *wrangler.Wrangler
-	cell     string
-	keyspace string
-	shard    string
-	cleaner  *wrangler.Cleaner
-
-	// all subsequent fields are protected by the mutex
+	wr                        *wrangler.Wrangler
+	cell                      string
+	keyspace                  string
+	shard                     string
+	minHealthyRdonlyEndPoints int
+	cleaner                   *wrangler.Cleaner
 
 	// populated during WorkerStateInit, read-only after that
 	keyspaceInfo *topo.KeyspaceInfo
@@ -49,24 +48,25 @@ type VerticalSplitDiffWorker struct {
 }
 
 // NewVerticalSplitDiffWorker returns a new VerticalSplitDiffWorker object.
-func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string) Worker {
+func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, minHealthyRdonlyEndPoints int) Worker {
 	return &VerticalSplitDiffWorker{
 		StatusWorker: NewStatusWorker(),
 		wr:           wr,
 		cell:         cell,
 		keyspace:     keyspace,
 		shard:        shard,
-		cleaner:      &wrangler.Cleaner{},
+		minHealthyRdonlyEndPoints: minHealthyRdonlyEndPoints,
+		cleaner:                   &wrangler.Cleaner{},
 	}
 }
 
 // StatusAsHTML is part of the Worker interface.
 func (vsdw *VerticalSplitDiffWorker) StatusAsHTML() template.HTML {
-	vsdw.Mu.Lock()
-	defer vsdw.Mu.Unlock()
+	state := vsdw.State()
+
 	result := "<b>Working on:</b> " + vsdw.keyspace + "/" + vsdw.shard + "</br>\n"
-	result += "<b>State:</b> " + vsdw.State.String() + "</br>\n"
-	switch vsdw.State {
+	result += "<b>State:</b> " + state.String() + "</br>\n"
+	switch state {
 	case WorkerStateDiff:
 		result += "<b>Running</b>:</br>\n"
 	case WorkerStateDone:
@@ -78,11 +78,11 @@ func (vsdw *VerticalSplitDiffWorker) StatusAsHTML() template.HTML {
 
 // StatusAsText is part of the Worker interface.
 func (vsdw *VerticalSplitDiffWorker) StatusAsText() string {
-	vsdw.Mu.Lock()
-	defer vsdw.Mu.Unlock()
+	state := vsdw.State()
+
 	result := "Working on: " + vsdw.keyspace + "/" + vsdw.shard + "\n"
-	result += "State: " + vsdw.State.String() + "\n"
-	switch vsdw.State {
+	result += "State: " + state.String() + "\n"
+	switch state {
 	case WorkerStateDiff:
 		result += "Running...\n"
 	case WorkerStateDone:
@@ -189,13 +189,13 @@ func (vsdw *VerticalSplitDiffWorker) findTargets(ctx context.Context) error {
 
 	// find an appropriate endpoint in destination shard
 	var err error
-	vsdw.destinationAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.keyspace, vsdw.shard)
+	vsdw.destinationAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.keyspace, vsdw.shard, vsdw.minHealthyRdonlyEndPoints)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", vsdw.cell, vsdw.keyspace, vsdw.shard, err)
 	}
 
 	// find an appropriate endpoint in the source shard
-	vsdw.sourceAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard)
+	vsdw.sourceAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard, vsdw.minHealthyRdonlyEndPoints)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard, err)
 	}
@@ -336,7 +336,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 
 	vsdw.wr.Logger().Infof("Gathering schema information...")
 	wg := sync.WaitGroup{}
-	rec := concurrency.AllErrorRecorder{}
+	rec := &concurrency.AllErrorRecorder{}
 	wg.Add(1)
 	go func() {
 		var err error
@@ -366,8 +366,8 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 
 	// Check the schema
 	vsdw.wr.Logger().Infof("Diffing the schema...")
-	rec = concurrency.AllErrorRecorder{}
-	tmutils.DiffSchema("destination", vsdw.destinationSchemaDefinition, "source", vsdw.sourceSchemaDefinition, &rec)
+	rec = &concurrency.AllErrorRecorder{}
+	tmutils.DiffSchema("destination", vsdw.destinationSchemaDefinition, "source", vsdw.sourceSchemaDefinition, rec)
 	if rec.HasErrors() {
 		vsdw.wr.Logger().Warningf("Different schemas: %v", rec.Error())
 	} else {
@@ -389,7 +389,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 			if err != nil {
 				newErr := fmt.Errorf("TableScan(source) failed: %v", err)
 				rec.RecordError(newErr)
-				vsdw.wr.Logger().Errorf(newErr.Error())
+				vsdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
 			defer sourceQueryResultReader.Close()
@@ -398,7 +398,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 			if err != nil {
 				newErr := fmt.Errorf("TableScan(destination) failed: %v", err)
 				rec.RecordError(newErr)
-				vsdw.wr.Logger().Errorf(newErr.Error())
+				vsdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
 			defer destinationQueryResultReader.Close()
@@ -407,7 +407,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 			if err != nil {
 				newErr := fmt.Errorf("NewRowDiffer() failed: %v", err)
 				rec.RecordError(newErr)
-				vsdw.wr.Logger().Errorf(newErr.Error())
+				vsdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
 
@@ -418,7 +418,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 				if report.HasDifferences() {
 					err := fmt.Errorf("Table %v has differences: %v", tableDefinition.Name, report.String())
 					rec.RecordError(err)
-					vsdw.wr.Logger().Errorf(err.Error())
+					vsdw.wr.Logger().Errorf("%v", err)
 				} else {
 					vsdw.wr.Logger().Infof("Table %v checks out (%v rows processed, %v qps)", tableDefinition.Name, report.processedRows, report.processingQPS)
 				}

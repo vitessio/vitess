@@ -14,9 +14,12 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
-	"golang.org/x/net/context"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestCachePoolWithEmptyBinary(t *testing.T) {
@@ -253,7 +256,7 @@ func TestCachePoolFailToStartBecauseCacheServiceWasDown(t *testing.T) {
 	cachePool.idleTimeout = idleTimeout
 	// any memcache calls should fail
 	cache.EnableCacheServiceError()
-	defer testUtils.checkTabletErrorWithRecover(t, ErrFatal, "can't communicate with cache service")
+	defer testUtils.checkTabletErrorWithRecover(t, vtrpcpb.ErrorCode_INTERNAL_ERROR, "can't communicate with cache service")
 	cachePool.Open()
 }
 

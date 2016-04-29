@@ -21,10 +21,13 @@ import (
 
 // Worker is the base interface for all long running workers.
 type Worker interface {
-	// StatusAsHTML returns the current worker status in HTML
+	// State returns the current state using the internal representation.
+	State() StatusWorkerState
+
+	// StatusAsHTML returns the current worker status in HTML.
 	StatusAsHTML() template.HTML
 
-	// StatusAsText returns the current worker status in plain text
+	// StatusAsText returns the current worker status in plain text.
 	StatusAsText() string
 
 	// Run is the main entry point for the worker. It will be
@@ -48,6 +51,7 @@ var (
 	resolveTTL            = flag.Duration("resolve_ttl", 15*time.Second, "Amount of time that a topo resolution can be cached for")
 	executeFetchRetryTime = flag.Duration("executefetch_retry_time", 30*time.Second, "Amount of time we should wait before retrying ExecuteFetch calls")
 	remoteActionsTimeout  = flag.Duration("remote_actions_timeout", time.Minute, "Amount of time to wait for remote actions (like replication stop, ...)")
+	useV3ReshardingMode   = flag.Bool("use_v3_resharding_mode", false, "True iff the workers should use V3-style resharding, which doesn't require a preset sharding key column.")
 
 	statsState = stats.NewString("WorkerState")
 	// the number of times that the worker attempst to reresolve the masters

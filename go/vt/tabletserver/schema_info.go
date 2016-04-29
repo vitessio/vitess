@@ -176,12 +176,12 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 	defer conn.Recycle()
 
 	if strictMode && !conn.VerifyStrict() {
-		panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not verify strict mode"))
+		panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not verify strict mode"))
 	}
 
 	tableData, err := conn.Exec(ctx, baseShowTables, maxTableCount, false)
 	if err != nil {
-		panic(PrefixTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err, "Could not get table list: "))
+		panic(PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err, "Could not get table list: "))
 	}
 
 	tables := make(map[string]*TableInfo, len(tableData.Rows)+1)
@@ -219,7 +219,7 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 
 	// Fail if we can't load the schema for any tables, but we know that some tables exist. This points to a configuration problem.
 	if len(tableData.Rows) != 0 && len(tables) == 1 { // len(tables) is always at least 1 because of the "dual" table
-		panic(NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not get schema for any tables"))
+		panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not get schema for any tables"))
 	}
 	func() {
 		si.mu.Lock()
@@ -238,7 +238,7 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 
 // Records an error that occurs when getting the schema for a table.
 func (si *SchemaInfo) recordSchemaError(err error, tableName string) {
-	terr := PrefixTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
+	terr := PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
 		fmt.Sprintf("Could not load schema for table %s: ", tableName))
 	log.Error(terr)
 	si.queryServiceStats.InternalErrors.Add("Schema", 1)
@@ -263,10 +263,10 @@ func (si *SchemaInfo) override() {
 		}
 		switch override.Cache.Type {
 		case "RW":
-			table.CacheType = schema.CacheRW
+			table.Type = schema.CacheRW
 			table.Cache = NewRowCache(table, si.cachePool)
 		case "W":
-			table.CacheType = schema.CacheW
+			table.Type = schema.CacheW
 			if override.Cache.Table == "" {
 				log.Warningf("Incomplete cache specs: %v", override)
 				continue
@@ -349,14 +349,14 @@ func (si *SchemaInfo) mysqlTime(ctx context.Context) int64 {
 	defer conn.Recycle()
 	tm, err := conn.Exec(ctx, "select unix_timestamp()", 1, false)
 	if err != nil {
-		panic(PrefixTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, "Could not get MySQL time: "))
+		panic(PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, "Could not get MySQL time: "))
 	}
 	if len(tm.Rows) != 1 || len(tm.Rows[0]) != 1 || tm.Rows[0][0].IsNull() {
-		panic(NewTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "Unexpected result for MySQL time: %+v", tm.Rows))
+		panic(NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "Unexpected result for MySQL time: %+v", tm.Rows))
 	}
 	t, err := strconv.ParseInt(tm.Rows[0][0].String(), 10, 64)
 	if err != nil {
-		panic(NewTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "Could not parse time %+v: %v", tm, err))
+		panic(NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "Could not parse time %+v: %v", tm, err))
 	}
 	return t
 }
@@ -394,7 +394,7 @@ func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string)
 		si.cachePool,
 	)
 	if err != nil {
-		// This can happen if DDLs race with each other.
+		si.recordSchemaError(err, tableName)
 		return
 	}
 	// table_rows, data_length, index_length
@@ -412,10 +412,15 @@ func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string)
 	}
 	si.tables[tableName] = tableInfo
 
-	if tableInfo.CacheType == schema.CacheNone {
+	switch tableInfo.Type {
+	case schema.CacheNone:
 		log.Infof("Initialized table: %s", tableName)
-	} else {
+	case schema.CacheRW:
 		log.Infof("Initialized cached table: %s, prefix: %s", tableName, tableInfo.Cache.prefix)
+	case schema.CacheW:
+		log.Infof("Initialized write-only cached table: %s, prefix: %s", tableName, tableInfo.Cache.prefix)
+	case schema.Sequence:
+		log.Infof("Initialized sequence: %s", tableName)
 	}
 
 	// If the table has an override, re-apply all overrides.
@@ -471,7 +476,7 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *LogStats, sql strin
 	}
 	splan, err := planbuilder.GetExecPlan(sql, GetTable)
 	if err != nil {
-		panic(PrefixTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, ""))
+		panic(PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, ""))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
 	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName)
@@ -487,7 +492,7 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *LogStats, sql strin
 			r, err := conn.Exec(ctx, sql, 1, true)
 			logStats.AddRewrittenSQL(sql, start)
 			if err != nil {
-				panic(PrefixTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, "Error fetching fields: "))
+				panic(PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, "Error fetching fields: "))
 			}
 			plan.Fields = r.Fields
 		}
@@ -513,7 +518,7 @@ func (si *SchemaInfo) GetStreamPlan(sql string) *ExecPlan {
 	}
 	splan, err := planbuilder.GetStreamExecPlan(sql, GetTable)
 	if err != nil {
-		panic(PrefixTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, ""))
+		panic(PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, ""))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
 	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName)
@@ -558,7 +563,7 @@ func (si *SchemaInfo) peekQuery(sql string) *ExecPlan {
 // SetQueryCacheCap sets the query cache capacity.
 func (si *SchemaInfo) SetQueryCacheCap(size int) {
 	if size <= 0 {
-		panic(NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "cache size %v out of range", size))
+		panic(NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "cache size %v out of range", size))
 	}
 	si.queries.SetCapacity(int64(size))
 }
@@ -590,7 +595,7 @@ func (si *SchemaInfo) getRowcacheStats() map[string]int64 {
 	defer si.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range si.tables {
-		if v.CacheType != schema.CacheNone {
+		if v.IsCached() {
 			hits, absent, misses, _ := v.Stats()
 			tstats[k+".Hits"] = hits
 			tstats[k+".Absent"] = absent
@@ -605,7 +610,7 @@ func (si *SchemaInfo) getRowcacheInvalidations() map[string]int64 {
 	defer si.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range si.tables {
-		if v.CacheType != schema.CacheNone {
+		if v.IsCached() {
 			_, _, _, invalidations := v.Stats()
 			tstats[k] = invalidations
 		}
@@ -780,7 +785,7 @@ func (si *SchemaInfo) handleHTTPTableStats(response http.ResponseWriter, request
 		si.mu.Lock()
 		defer si.mu.Unlock()
 		for k, v := range si.tables {
-			if v.CacheType != schema.CacheNone {
+			if v.IsCached() {
 				temp.hits, temp.absent, temp.misses, temp.invalidations = v.Stats()
 				tstats[k] = temp
 				totals.hits += temp.hits

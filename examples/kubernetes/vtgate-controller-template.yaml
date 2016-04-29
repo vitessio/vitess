@@ -43,7 +43,10 @@ spec:
               -port 15001
               -grpc_port 15991
               -tablet_protocol grpc
-              -service_map 'bsonrpc-vt-vtgateservice,grpc-vtgateservice'
+              -service_map 'grpc-vtgateservice'
+              -cells_to_watch {{cell}}
+              -tablet_types_to_wait MASTER,REPLICA
+              -gateway_implementation discoverygateway
               -cell {{cell}}" vitess
       volumes:
         - name: syslog

@@ -21,6 +21,12 @@ tags
 /Godeps/_workspace/pkg
 /Godeps/_workspace/bin
 
+# Go vendored libs
+# Match two levels deep so we can un-ignore specific repos, like below.
+/vendor/*/*/
+# Un-ignore gozk since it has local modifications.
+!/vendor/launchpad.net/gozk/
+
 # C build dirs
 **/build
 
@@ -49,3 +55,5 @@ _test/
 # site-local example files
 /examples/kubernetes/config.sh
 
+#pom generated file
+/java/jdbc/dependency-reduced-pom.xml

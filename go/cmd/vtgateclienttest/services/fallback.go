@@ -10,6 +10,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
@@ -26,8 +27,8 @@ func newFallbackClient(fallback vtgateservice.VTGateService) fallbackClient {
 	return fallbackClient{fallback: fallback}
 }
 
-func (c fallbackClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
-	return c.fallback.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction)
+func (c fallbackClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
+	return c.fallback.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, notInTransaction)
 }
 
 func (c fallbackClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
@@ -54,8 +55,8 @@ func (c fallbackClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*
 	return c.fallback.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, session)
 }
 
-func (c fallbackClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
-	return c.fallback.StreamExecute(ctx, sql, bindVariables, tabletType, sendReply)
+func (c fallbackClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
+	return c.fallback.StreamExecute(ctx, sql, bindVariables, keyspace, tabletType, sendReply)
 }
 
 func (c fallbackClient) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
@@ -84,6 +85,21 @@ func (c fallbackClient) Rollback(ctx context.Context, session *vtgatepb.Session)
 
 func (c fallbackClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	return c.fallback.SplitQuery(ctx, sql, keyspace, bindVariables, splitColumn, splitCount)
+}
+
+// TODO(erez): Rename after migration to SplitQuery V2 is done.
+func (c fallbackClient) SplitQueryV2(
+	ctx context.Context,
+	keyspace string,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm,
+) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+	return c.fallback.SplitQueryV2(
+		ctx, sql, keyspace, bindVariables, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 }
 
 func (c fallbackClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {

@@ -19,8 +19,10 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vtgate/masterbuffer"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -95,8 +97,8 @@ func NewShardConn(ctx context.Context, serv topo.SrvTopoServer, cell, keyspace, 
 }
 
 // ShardConnError is the shard conn specific error.
+// It implements vterrors.VtError.
 type ShardConnError struct {
-	Code            int
 	ShardIdentifier string
 	InTransaction   bool
 	// Preserve the original error, so that we don't need to parse the error string.
@@ -112,8 +114,11 @@ func (e *ShardConnError) Error() string {
 	return fmt.Sprintf("shard, host: %s, %v", e.ShardIdentifier, e.Err)
 }
 
-// VtErrorCode returns the underlying Vitess error code
-func (e *ShardConnError) VtErrorCode() vtrpcpb.ErrorCode { return e.EndPointCode }
+// VtErrorCode returns the underlying Vitess error code.
+// This is part of vterrors.VtError interface.
+func (e *ShardConnError) VtErrorCode() vtrpcpb.ErrorCode {
+	return e.EndPointCode
+}
 
 // Dial creates tablet connection and connects to the vttablet.
 // It is not necessary to call this function before serving queries,
@@ -147,21 +152,19 @@ func (sdc *ShardConn) ExecuteBatch(ctx context.Context, queries []querytypes.Bou
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same as Execute.
-func (sdc *ShardConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc) {
+func (sdc *ShardConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
 	var usedConn tabletconn.TabletConn
-	var erFunc tabletconn.ErrFunc
-	var results <-chan *sqltypes.Result
+	var stream sqltypes.ResultStream
 	err := sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var err error
-		results, erFunc, err = conn.StreamExecute(ctx, query, bindVars, transactionID)
+		stream, err = conn.StreamExecute(ctx, query, bindVars)
 		usedConn = conn
 		return err
-	}, transactionID, true)
+	}, 0, true)
 	if err != nil {
-		return results, func() error { return err }
+		return nil, err
 	}
-	inTransaction := (transactionID != 0)
-	return results, func() error { return sdc.WrapError(erFunc(), usedConn.EndPoint(), inTransaction) }
+	return stream, nil
 }
 
 // Begin begins a transaction. The retry rules are the same as Execute.
@@ -188,6 +191,30 @@ func (sdc *ShardConn) Rollback(ctx context.Context, transactionID int64) (err er
 	}, transactionID, false)
 }
 
+// BeginExecute executes a begin and non-streaming query on
+// vttablet. If there are connection errors, it retries retryCount
+// times before failing. It does not retry if the connection is in the
+// middle of a transaction.
+func (sdc *ShardConn) BeginExecute(ctx context.Context, query string, bindVars map[string]interface{}) (qr *sqltypes.Result, transactionID int64, err error) {
+	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
+		var innerErr error
+		qr, transactionID, innerErr = conn.BeginExecute(ctx, query, bindVars)
+		return innerErr
+	}, 0, false)
+	return qr, transactionID, err
+}
+
+// BeginExecuteBatch executes a begin and a group of queries. The
+// retry rules are the same as BeginExecute.
+func (sdc *ShardConn) BeginExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool) (qrs []sqltypes.Result, transactionID int64, err error) {
+	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
+		var innerErr error
+		qrs, transactionID, innerErr = conn.BeginExecuteBatch(ctx, queries, asTransaction)
+		return innerErr
+	}, 0, false)
+	return qrs, transactionID, err
+}
+
 // SplitQuery splits a query into sub queries. The retry rules are the same as Execute.
 func (sdc *ShardConn) SplitQuery(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) (queries []querytypes.QuerySplit, err error) {
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
@@ -196,6 +223,28 @@ func (sdc *ShardConn) SplitQuery(ctx context.Context, sql string, bindVariables 
 			Sql:           sql,
 			BindVariables: bindVariables,
 		}, splitColumn, splitCount)
+		return innerErr
+	}, 0, false)
+	return
+}
+
+// SplitQueryV2 splits a query into sub queries. The retry rules are the same as Execute.
+// TODO(erez): Rename to SplitQuery after the migration to SplitQuery V2 is done.
+func (sdc *ShardConn) SplitQueryV2(
+	ctx context.Context,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) (queries []querytypes.QuerySplit, err error) {
+
+	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
+		var innerErr error
+		queries, innerErr = conn.SplitQueryV2(ctx, querytypes.BoundQuery{
+			Sql:           sql,
+			BindVariables: bindVariables,
+		}, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 		return innerErr
 	}, 0, false)
 	return
@@ -244,6 +293,12 @@ func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn
 			time.Sleep(sdc.retryDelay)
 			continue
 		}
+
+		// Potentially buffer this request.
+		if bufferErr := masterbuffer.FakeBuffer(sdc.keyspace, sdc.shard, sdc.tabletType, inTransaction, i); bufferErr != nil {
+			return bufferErr
+		}
+
 		err = action(conn)
 		if sdc.canRetry(ctx, err, transactionID, conn, isStreaming) {
 			continue
@@ -317,7 +372,7 @@ func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletCon
 	allErrors := new(concurrency.AllErrorRecorder)
 	for _, endPoint := range endPoints {
 		perConnStartTime := time.Now()
-		conn, err = tabletconn.GetDialer()(ctx, endPoint, sdc.keyspace, sdc.shard, topodatapb.TabletType_UNKNOWN, perConnTimeout)
+		conn, err = tabletconn.GetDialer()(ctx, endPoint, sdc.keyspace, sdc.shard, sdc.tabletType, perConnTimeout)
 		if err == nil {
 			sdc.connectTimings.Record([]string{sdc.keyspace, sdc.shard, strings.ToLower(sdc.tabletType.String())}, perConnStartTime)
 			sdc.mu.Lock()
@@ -370,24 +425,26 @@ func (sdc *ShardConn) canRetry(ctx context.Context, err error, transactionID int
 	default:
 	}
 	if serverError, ok := err.(*tabletconn.ServerError); ok {
-		switch serverError.Code {
-		case tabletconn.ERR_FATAL:
-			// Do not retry on fatal error for streaming query.
+		switch serverError.ServerCode {
+		case vtrpcpb.ErrorCode_INTERNAL_ERROR:
+			// Do not retry on internal error for streaming query.
 			// For streaming query, vttablet sends:
-			// - RETRY, if streaming is not started yet;
-			// - FATAL, if streaming is broken halfway.
-			// For non-streaming query, handle as ERR_RETRY.
+			// - QUERY_NOT_SERVED, if streaming is not started yet;
+			// - INTERNAL_ERROR, if streaming is broken halfway.
+			// For non-streaming query, handle as QUERY_NOT_SERVED.
 			if isStreaming {
 				return false
 			}
 			fallthrough
-		case tabletconn.ERR_RETRY:
-			// Retry on RETRY and FATAL if not in a transaction.
+		case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
+			// Retry on QUERY_NOT_SERVED and
+			// INTERNAL_ERROR if not in a transaction.
 			inTransaction := (transactionID != 0)
 			sdc.markDown(conn, err.Error())
 			return !inTransaction
 		default:
-			// Not retry for TX_POOL_FULL and normal server errors.
+			// Not retry for RESOURCE_EXHAUSTED and normal
+			// server errors.
 			return false
 		}
 	}
@@ -417,8 +474,8 @@ func (sdc *ShardConn) markDown(conn tabletconn.TabletConn, reason string) {
 	sdc.conn = nil
 }
 
-// WrapError returns ShardConnError which preserves the original error code if possible,
-// adds the connection context
+// WrapError returns ShardConnError which preserves the original error code
+// if possible, adds the connection context
 // and adds a bit to determine whether the keyspace/shard needs to be
 // re-resolved for a potential sharding event.
 func (sdc *ShardConn) WrapError(in error, endPoint *topodatapb.EndPoint, inTransaction bool) (wrapped error) {
@@ -426,18 +483,10 @@ func (sdc *ShardConn) WrapError(in error, endPoint *topodatapb.EndPoint, inTrans
 		return nil
 	}
 	shardIdentifier := fmt.Sprintf("%s.%s.%s, %+v", sdc.keyspace, sdc.shard, strings.ToLower(sdc.tabletType.String()), endPoint)
-	code := tabletconn.ERR_NORMAL
-	serverError, ok := in.(*tabletconn.ServerError)
-	if ok {
-		code = serverError.Code
-	}
-
-	shardConnErr := &ShardConnError{
-		Code:            code,
+	return &ShardConnError{
 		ShardIdentifier: shardIdentifier,
 		InTransaction:   inTransaction,
 		Err:             in,
 		EndPointCode:    vterrors.RecoverVtErrorCode(in),
 	}
-	return shardConnErr
 }

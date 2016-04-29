@@ -5,7 +5,6 @@
 package worker
 
 import (
-	"flag"
 	"fmt"
 	"strings"
 	"testing"
@@ -72,6 +71,10 @@ func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *qu
 	// Send the values
 	ksids := []uint64{0x2000000000000000, 0x6000000000000000}
 	for i := 0; i < 100; i++ {
+		// skip the out-of-range values
+		if i%2 == 1 {
+			continue
+		}
 		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				{
@@ -109,6 +112,7 @@ type sourceTabletServer struct {
 	excludedTable string
 	keyspace      string
 	shard         string
+	v3            bool
 }
 
 func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
@@ -116,8 +120,8 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 		sq.t.Errorf("Split Diff operation on source should skip the excluded table: %v query: %v", sq.excludedTable, sql)
 	}
 
-	// we test for a keyspace_id where clause, except for on views.
-	if !strings.Contains(sql, "view") {
+	// we test for a keyspace_id where clause, except for v3
+	if !sq.v3 {
 		if hasKeyspace := strings.Contains(sql, "WHERE keyspace_id < 0x4000000000000000"); hasKeyspace != true {
 			sq.t.Errorf("Sql query on source should contain a keyspace_id WHERE clause; query received: %v", sql)
 		}
@@ -148,6 +152,10 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 	// Send the values
 	ksids := []uint64{0x2000000000000000, 0x6000000000000000}
 	for i := 0; i < 100; i++ {
+		if !sq.v3 && i%2 == 1 {
+			// for v2, filtering is done at SQL layer
+			continue
+		}
 		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				{
@@ -180,17 +188,52 @@ func (sq *sourceTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealt
 
 // TODO(aaijazi): Create a test in which source and destination data does not match
 
-func TestSplitDiff(t *testing.T) {
+func testSplitDiff(t *testing.T, v3 bool) {
+	*useV3ReshardingMode = v3
 	db := fakesqldb.Register()
 	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	ctx := context.Background()
 	wi := NewInstance(ctx, ts, "cell1", time.Second)
 
-	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{
-		ShardingColumnName: "keyspace_id",
-		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
-	}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
+	if v3 {
+		// FIXME(alainjobart): ShardingColumnName and ShardingColumnType
+		// are not used by v3 split_clone, but they are required
+		// by tabletmanager to setup the rules. We have b/27901260
+		// open internally to fix this.
+		if err := ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{
+			ShardingColumnName: "keyspace_id",
+			ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+		}); err != nil {
+			t.Fatalf("CreateKeyspace v3 failed: %v", err)
+		}
+
+		if err := ts.SaveVSchema(ctx, "ks", `{
+  "Sharded": true,
+  "Vindexes": {
+    "table1_index": {
+      "Type": "numeric"
+    }
+  },
+  "Tables": {
+    "table1": {
+      "ColVindexes": [
+        {
+          "Col": "keyspace_id",
+          "Name": "table1_index"
+        }
+      ]
+    }
+  }
+}`); err != nil {
+			t.Fatalf("SaveVSchema v3 failed: %v", err)
+		}
+	} else {
+		if err := ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{
+			ShardingColumnName: "keyspace_id",
+			ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+		}); err != nil {
+			t.Fatalf("CreateKeyspace failed: %v", err)
+		}
 	}
 
 	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
@@ -224,26 +267,13 @@ func TestSplitDiff(t *testing.T) {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
-	subFlags := flag.NewFlagSet("SplitDiff", flag.ContinueOnError)
-	// We need to use FakeTabletManagerClient because we don't
-	// have a good way to fake the binlog player yet, which is
-	// necessary for synchronizing replication.
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient())
 	excludedTable := "excludedTable1"
-	gwrk, err := commandSplitDiff(wi, wr, subFlags, []string{
-		"-exclude_tables", excludedTable,
-		"ks/-40",
-	})
-	if err != nil {
-		t.Fatalf("commandSplitDiff failed: %v", err)
-	}
-	wrk := gwrk.(*SplitDiffWorker)
 
 	for _, rdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2, leftRdonly1, leftRdonly2} {
-		// In reality, the destinations *shouldn't* have identical data to the source - instead, we should see
-		// the data split into left and right. However, if we do that in this test, we would really just be
-		// testing our fake SQL logic, since we do the data filtering in SQL.
-		// To simplify things, just assume that both sides have identical data.
+		// The destination only has half the data.
+		// For v2, we do filtering at the SQl level.
+		// For v3, we do it in the client.
+		// So in any case, we need real data.
 		rdonly.FakeMysqlDaemon.Schema = &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "",
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
@@ -258,10 +288,6 @@ func TestSplitDiff(t *testing.T) {
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              tmutils.TableBaseTable,
-				},
-				{
-					Name: "view1",
-					Type: tmutils.TableView,
 				},
 			},
 		}
@@ -284,18 +310,35 @@ func TestSplitDiff(t *testing.T) {
 		excludedTable: excludedTable,
 		keyspace:      sourceRdonly1.Tablet.Keyspace,
 		shard:         sourceRdonly1.Tablet.Shard,
+		v3:            v3,
 	})
 	grpcqueryservice.RegisterForTest(sourceRdonly2.RPCServer, &sourceTabletServer{
 		t:             t,
 		excludedTable: excludedTable,
 		keyspace:      sourceRdonly2.Tablet.Keyspace,
 		shard:         sourceRdonly2.Tablet.Shard,
+		v3:            v3,
 	})
 
-	err = wrk.Run(ctx)
-	status := wrk.StatusAsText()
-	t.Logf("Got status: %v", status)
-	if err != nil || wrk.State != WorkerStateDone {
-		t.Errorf("Worker run failed")
+	// Run the vtworker command.
+	args := []string{
+		"SplitDiff",
+		"-exclude_tables", excludedTable,
+		"ks/-40",
 	}
+	// We need to use FakeTabletManagerClient because we don't
+	// have a good way to fake the binlog player yet, which is
+	// necessary for synchronizing replication.
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient())
+	if err := runCommand(t, wi, wr, args); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSplitDiffv2(t *testing.T) {
+	testSplitDiff(t, false)
+}
+
+func TestSplitDiffv3(t *testing.T) {
+	testSplitDiff(t, true)
 }

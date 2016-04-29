@@ -5,12 +5,11 @@
 package goclienttest
 
 import (
-	"strings"
+	"io"
 	"testing"
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/sqltypes"
 
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -161,13 +160,21 @@ func testTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 	})
 }
 
-func getStreamError(qrChan <-chan *sqltypes.Result, errFunc vtgateconn.ErrFunc, err error) error {
+func getStreamError(stream sqltypes.ResultStream, err error) error {
 	if err != nil {
 		return err
 	}
-	for range qrChan {
+	for {
+		_, err := stream.Recv()
+		switch err {
+		case nil:
+			// keep going
+		case io.EOF:
+			return nil
+		default:
+			return err
+		}
 	}
-	return errFunc()
 }
 
 func checkExecuteErrors(t *testing.T, execute func(string) error) {
@@ -233,10 +240,6 @@ func checkError(t *testing.T, err error, query, errStr string, errCode vtrpcpb.E
 	case *vterrors.VitessError:
 		if got, want := vtErr.VtErrorCode(), errCode; got != want {
 			t.Errorf("[%v] error code = %v, want %v", query, got, want)
-		}
-	case rpcplus.ServerError:
-		if !strings.Contains(string(vtErr), errStr) {
-			t.Errorf("[%v] error = %q, want contains %q", query, vtErr, errStr)
 		}
 	default:
 		t.Errorf("[%v] unrecognized error type: %T, error: %#v", query, err, err)

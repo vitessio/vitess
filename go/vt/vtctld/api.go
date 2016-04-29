@@ -229,29 +229,4 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 		schemamanager.Run(ctx,
 			schemamanager.NewUIController(req.SQL, req.Keyspace, w), executor)
 	})
-
-	// VSchema
-	http.HandleFunc(apiPrefix+"vschema/", func(w http.ResponseWriter, r *http.Request) {
-		// Save VSchema
-		if r.Method == "POST" {
-			vschema, err := ioutil.ReadAll(r.Body)
-			if err != nil {
-				httpErrorf(w, r, "can't read request body: %v", err)
-				return
-			}
-			if err := ts.SaveVSchema(ctx, string(vschema)); err != nil {
-				httpErrorf(w, r, "can't save vschema: %v", err)
-			}
-			return
-		}
-
-		// Get VSchema
-		vschema, err := ts.GetVSchema(ctx)
-		if err != nil {
-			httpErrorf(w, r, "can't get vschema: %v", err)
-			return
-		}
-		w.Header().Set("Content-Type", jsonContentType)
-		w.Write([]byte(vschema))
-	})
 }

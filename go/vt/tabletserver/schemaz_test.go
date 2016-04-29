@@ -25,15 +25,15 @@ func TestSchamazHandler(t *testing.T) {
 
 	tableA.AddColumn("column1", sqltypes.Int64, sqltypes.MakeTrusted(sqltypes.Int32, []byte("0")), "auto_increment")
 	tableA.AddIndex("index1").AddColumn("index_column", 1000)
-	tableA.CacheType = schema.CacheRW
+	tableA.Type = schema.CacheRW
 
 	tableB.AddColumn("column2", sqltypes.VarChar, sqltypes.MakeString([]byte("NULL")), "")
 	tableB.AddIndex("index2").AddColumn("index_column2", 200)
-	tableB.CacheType = schema.CacheW
+	tableB.Type = schema.CacheW
 
 	tableC.AddColumn("column3", sqltypes.VarChar, sqltypes.MakeString([]byte("")), "")
 	tableC.AddIndex("index3").AddColumn("index_column3", 500)
-	tableC.CacheType = schema.CacheNone
+	tableC.Type = schema.CacheNone
 
 	tables := []*schema.Table{
 		tableA, tableB, tableC,

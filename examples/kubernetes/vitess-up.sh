@@ -95,8 +95,7 @@ export KUBECTL='kubectl'
 go get github.com/youtube/vitess/go/cmd/vtctlclient
 
 echo "****************************"
-echo "*Creating vitess cluster:"
-echo "*  Zone: $GKE_ZONE"
+echo "*Creating vitess cluster: $VITESS_NAME"
 echo "*  Shards: $SHARDS"
 echo "*  Tablets per shard: $TABLETS_PER_SHARD"
 echo "*  Rdonly per shard: $RDONLY_COUNT"

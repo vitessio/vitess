@@ -35,7 +35,7 @@ class MysqlFlavor(object):
     if master is not None:
       cmds.append("SET GLOBAL rpl_semi_sync_master_enabled = %d" % master)
     if slave is not None:
-      cmds.append("SET GLOBAL rpl_semi_sync_slave_enabled = %d" % master)
+      cmds.append("SET GLOBAL rpl_semi_sync_slave_enabled = %d" % slave)
     return cmds
 
   def extra_my_cnf(self):

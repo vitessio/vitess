@@ -722,5 +722,26 @@ class TestTabletManager(unittest.TestCase):
     self.assertIn('not allowed', response)
     tablet_62344.kill_vttablet()
 
+  def test_ignore_health_error(self):
+    tablet_62344.create_db('vt_test_keyspace')
+
+    # Starts unhealthy because of "no slave status" (not replicating).
+    tablet_62344.start_vttablet(
+        wait_for_state='NOT_SERVING', target_tablet_type='replica',
+        init_keyspace='test_keyspace', init_shard='0')
+
+    # Force it healthy.
+    utils.run_vtctl(['IgnoreHealthError', tablet_62344.tablet_alias,
+                     '.*no slave status.*'])
+    tablet_62344.wait_for_vttablet_state('SERVING')
+    self.check_healthz(tablet_62344, True)
+
+    # Turn off the force-healthy.
+    utils.run_vtctl(['IgnoreHealthError', tablet_62344.tablet_alias, ''])
+    tablet_62344.wait_for_vttablet_state('NOT_SERVING')
+    self.check_healthz(tablet_62344, False)
+
+    tablet_62344.kill_vttablet()
+
 if __name__ == '__main__':
   utils.main()

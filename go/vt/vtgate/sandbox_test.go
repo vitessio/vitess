@@ -7,6 +7,7 @@ package vtgate
 import (
 	"flag"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -44,7 +45,7 @@ var ksToSandbox map[string]*sandbox
 func createSandbox(keyspace string) *sandbox {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
-	s := &sandbox{}
+	s := &sandbox{VSchema: "{}"}
 	s.Reset()
 	ksToSandbox[keyspace] = s
 	return s
@@ -98,6 +99,7 @@ type sandbox struct {
 	SrvKeyspaceCallback func()
 
 	TestConns map[string]map[uint32]tabletconn.TabletConn
+	VSchema   string
 }
 
 func (s *sandbox) Reset() {
@@ -282,6 +284,13 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 	return createShardedSrvKeyspace(sand.ShardSpec, sand.KeyspaceServedFrom)
 }
 
+func (sct *sandboxTopo) WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan string, err error) {
+	result := make(chan string, 1)
+	value := getSandbox(keyspace).VSchema
+	result <- value
+	return result, nil
+}
+
 func (sct *sandboxTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error) {
 	return nil, fmt.Errorf("Unsupported")
 }
@@ -336,7 +345,6 @@ type sandboxConn struct {
 	mustFailConn   int
 	mustFailTxPool int
 	mustFailNotTx  int
-	mustDelay      time.Duration
 
 	// A callback to tweak the behavior on each conn call
 	onConnUse func(*sandboxConn)
@@ -373,7 +381,6 @@ func (sbc *sandboxConn) getError() error {
 	if sbc.mustFailRetry > 0 {
 		sbc.mustFailRetry--
 		return &tabletconn.ServerError{
-			Code:       tabletconn.ERR_RETRY,
 			Err:        "retry: err",
 			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
 		}
@@ -381,7 +388,6 @@ func (sbc *sandboxConn) getError() error {
 	if sbc.mustFailFatal > 0 {
 		sbc.mustFailFatal--
 		return &tabletconn.ServerError{
-			Code:       tabletconn.ERR_FATAL,
 			Err:        "fatal: err",
 			ServerCode: vtrpcpb.ErrorCode_INTERNAL_ERROR,
 		}
@@ -389,7 +395,6 @@ func (sbc *sandboxConn) getError() error {
 	if sbc.mustFailServer > 0 {
 		sbc.mustFailServer--
 		return &tabletconn.ServerError{
-			Code:       tabletconn.ERR_NORMAL,
 			Err:        "error: err",
 			ServerCode: vtrpcpb.ErrorCode_BAD_INPUT,
 		}
@@ -401,7 +406,6 @@ func (sbc *sandboxConn) getError() error {
 	if sbc.mustFailTxPool > 0 {
 		sbc.mustFailTxPool--
 		return &tabletconn.ServerError{
-			Code:       tabletconn.ERR_TX_POOL_FULL,
 			Err:        "tx_pool_full: err",
 			ServerCode: vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED,
 		}
@@ -409,7 +413,6 @@ func (sbc *sandboxConn) getError() error {
 	if sbc.mustFailNotTx > 0 {
 		sbc.mustFailNotTx--
 		return &tabletconn.ServerError{
-			Code:       tabletconn.ERR_NOT_IN_TX,
 			Err:        "not_in_tx: err",
 			ServerCode: vtrpcpb.ErrorCode_NOT_IN_TX,
 		}
@@ -431,26 +434,16 @@ func (sbc *sandboxConn) Execute(ctx context.Context, query string, bindVars map[
 		Sql:           query,
 		BindVariables: bv,
 	})
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
-	}
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
 	return sbc.getNextResult(), nil
 }
 
-func (sbc *sandboxConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
-	return sbc.Execute(ctx, query, bindVars, transactionID)
-}
-
 func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	sbc.ExecCount.Add(1)
 	if asTransaction {
 		sbc.AsTransactionCount.Add(1)
-	}
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
 	}
 	if err := sbc.getError(); err != nil {
 		return nil, err
@@ -463,11 +456,20 @@ func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []querytypes.B
 	return result, nil
 }
 
-func (sbc *sandboxConn) ExecuteBatch2(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
-	return sbc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
+type streamExecuteAdapter struct {
+	result *sqltypes.Result
+	done   bool
 }
 
-func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
+func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
+	if a.done {
+		return nil, io.EOF
+	}
+	a.done = true
+	return a.result, nil
+}
+
+func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]interface{})
 	for k, v := range bindVars {
@@ -477,26 +479,16 @@ func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVar
 		Sql:           query,
 		BindVariables: bv,
 	})
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
-	}
-	ch := make(chan *sqltypes.Result, 1)
-	ch <- sbc.getNextResult()
-	close(ch)
 	err := sbc.getError()
-	return ch, func() error { return err }, err
-}
-
-func (sbc *sandboxConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
-	return sbc.StreamExecute(ctx, query, bindVars, transactionID)
+	if err != nil {
+		return nil, err
+	}
+	r := sbc.getNextResult()
+	return &streamExecuteAdapter{result: r}, nil
 }
 
 func (sbc *sandboxConn) Begin(ctx context.Context) (int64, error) {
-	sbc.ExecCount.Add(1)
 	sbc.BeginCount.Add(1)
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
-	}
 	err := sbc.getError()
 	if err != nil {
 		return 0, err
@@ -504,34 +496,32 @@ func (sbc *sandboxConn) Begin(ctx context.Context) (int64, error) {
 	return sbc.TransactionID.Add(1), nil
 }
 
-func (sbc *sandboxConn) Begin2(ctx context.Context) (int64, error) {
-	return sbc.Begin(ctx)
-}
-
 func (sbc *sandboxConn) Commit(ctx context.Context, transactionID int64) error {
-	sbc.ExecCount.Add(1)
 	sbc.CommitCount.Add(1)
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
-	}
 	return sbc.getError()
-}
-
-func (sbc *sandboxConn) Commit2(ctx context.Context, transactionID int64) error {
-	return sbc.Commit(ctx, transactionID)
 }
 
 func (sbc *sandboxConn) Rollback(ctx context.Context, transactionID int64) error {
-	sbc.ExecCount.Add(1)
 	sbc.RollbackCount.Add(1)
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
-	}
 	return sbc.getError()
 }
 
-func (sbc *sandboxConn) Rollback2(ctx context.Context, transactionID int64) error {
-	return sbc.Rollback(ctx, transactionID)
+func (sbc *sandboxConn) BeginExecute(ctx context.Context, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error) {
+	transactionID, err := sbc.Begin(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	result, err := sbc.Execute(ctx, query, bindVars, transactionID)
+	return result, transactionID, err
+}
+
+func (sbc *sandboxConn) BeginExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+	transactionID, err := sbc.Begin(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	results, err := sbc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
+	return results, transactionID, err
 }
 
 var sandboxSQRowCount = int64(10)
@@ -551,9 +541,31 @@ func (sbc *sandboxConn) SplitQuery(ctx context.Context, query querytypes.BoundQu
 	return splits, nil
 }
 
-// StreamHealth does nothing
-func (sbc *sandboxConn) StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, tabletconn.ErrFunc, error) {
-	return nil, nil, fmt.Errorf("Not implemented in test")
+// Fake SplitQuery returns a single QuerySplit whose 'sql' field describes the received arguments.
+// TODO(erez): Rename to SplitQuery after the migration to SplitQuery V2 is done.
+func (sbc *sandboxConn) SplitQueryV2(
+	ctx context.Context,
+	query querytypes.BoundQuery,
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error) {
+	// The sandbox stores the shard name in the endPoint Host field.
+	shard := sbc.endPoint.Host
+	splits := []querytypes.QuerySplit{
+		{
+			Sql: fmt.Sprintf(
+				"query:%v, splitColumns:%v, splitCount:%v,"+
+					" numRowsPerQueryPart:%v, algorithm:%v, shard:%v",
+				query, splitColumns, splitCount, numRowsPerQueryPart, algorithm, shard),
+		},
+	}
+	return splits, nil
+}
+
+// StreamHealth is not implemented.
+func (sbc *sandboxConn) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
+	return nil, fmt.Errorf("Not implemented in test")
 }
 
 // Close does not change ExecCount

@@ -34,7 +34,6 @@ def setUpModule():
 
     setup_procs = [t.init_mysql() for t in all_tablets]
     utils.Vtctld().start()
-    utils.VtGate().start()
     utils.wait_procs(setup_procs)
   except:
     tearDownModule()
@@ -65,7 +64,7 @@ class TestCustomSharding(unittest.TestCase):
     return vtgate_client.connect(protocol, addr, 30.0)
 
   def _insert_data(self, shard, start, count, table='data'):
-    sql = 'insert into ' + table + '(id, name) values (%(id)s, %(name)s)'
+    sql = 'insert into ' + table + '(id, name) values (:id, :name)'
     conn = self._vtdb_conn()
     cursor = conn.cursor(
         tablet_type='master', keyspace='test_keyspace',
@@ -82,7 +81,7 @@ class TestCustomSharding(unittest.TestCase):
     conn.close()
 
   def _check_data(self, shard, start, count, table='data'):
-    sql = 'select name from ' + table + ' where id=%(id)s'
+    sql = 'select name from ' + table + ' where id=:id'
     conn = self._vtdb_conn()
     cursor = conn.cursor(
         tablet_type='master', keyspace='test_keyspace',
@@ -107,21 +106,23 @@ class TestCustomSharding(unittest.TestCase):
     from both shards again.
     """
 
-    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
-
     # start the first shard only for now
-    shard_0_master.init_tablet('master', 'test_keyspace', '0')
-    shard_0_replica.init_tablet('replica', 'test_keyspace', '0')
-    shard_0_rdonly.init_tablet('rdonly', 'test_keyspace', '0')
+    shard_0_master.start_vttablet(
+        wait_for_state=None, target_tablet_type='replica',
+        init_keyspace='test_keyspace', init_shard='0')
+    shard_0_replica.start_vttablet(
+        wait_for_state=None, target_tablet_type='replica',
+        init_keyspace='test_keyspace', init_shard='0')
+    shard_0_rdonly.start_vttablet(
+        wait_for_state=None, target_tablet_type='rdonly',
+        init_keyspace='test_keyspace', init_shard='0')
     for t in [shard_0_master, shard_0_replica, shard_0_rdonly]:
-      t.create_db('vt_test_keyspace')
-      t.start_vttablet(wait_for_state=None)
+      t.wait_for_vttablet_state('NOT_SERVING')
+
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
+                     shard_0_master.tablet_alias], auto_log=True)
     for t in [shard_0_master, shard_0_replica, shard_0_rdonly]:
       t.wait_for_vttablet_state('SERVING')
-
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
-                     shard_0_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     self._check_shards_count_in_srv_keyspace(1)
     s = utils.run_vtctl_json(['GetShard', 'test_keyspace/0'])
@@ -140,38 +141,37 @@ primary key (id)
     for t in [shard_0_master, shard_0_replica, shard_0_rdonly]:
       utils.run_vtctl(['ReloadSchema', t.tablet_alias], auto_log=True)
 
-    # insert data on shard 0
-    self._insert_data('0', 100, 10)
-
-    # re-read shard 0 data
-    self._check_data('0', 100, 10)
-
     # create shard 1
-    shard_1_master.init_tablet('master', 'test_keyspace', '1')
-    shard_1_replica.init_tablet('replica', 'test_keyspace', '1')
-    shard_1_rdonly.init_tablet('rdonly', 'test_keyspace', '1')
-    for t in [shard_1_master, shard_1_replica, shard_1_rdonly]:
-      t.start_vttablet(wait_for_state=None)
+    shard_1_master.start_vttablet(
+        wait_for_state=None, target_tablet_type='replica',
+        init_keyspace='test_keyspace', init_shard='1')
+    shard_1_replica.start_vttablet(
+        wait_for_state=None, target_tablet_type='replica',
+        init_keyspace='test_keyspace', init_shard='1')
+    shard_1_rdonly.start_vttablet(
+        wait_for_state=None, target_tablet_type='rdonly',
+        init_keyspace='test_keyspace', init_shard='1')
     for t in [shard_1_master, shard_1_replica, shard_1_rdonly]:
       t.wait_for_vttablet_state('NOT_SERVING')
     s = utils.run_vtctl_json(['GetShard', 'test_keyspace/1'])
     self.assertEqual(len(s['served_types']), 3)
 
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/1',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/1',
                      shard_1_master.tablet_alias], auto_log=True)
+    for t in [shard_1_master, shard_1_replica, shard_1_rdonly]:
+      t.wait_for_vttablet_state('SERVING')
     utils.run_vtctl(['CopySchemaShard', shard_0_rdonly.tablet_alias,
                      'test_keyspace/1'], auto_log=True)
-    for t in [shard_1_master, shard_1_replica, shard_1_rdonly]:
-      utils.run_vtctl(['RefreshState', t.tablet_alias], auto_log=True)
-      t.wait_for_vttablet_state('SERVING')
 
-    # rebuild the keyspace serving graph now that the new shard was added
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+    # must start vtgate after tablets are up, or else wait until 1min refresh
+    utils.VtGate().start()
 
-    # insert data on shard 1
+    # insert and check data on shard 0
+    self._insert_data('0', 100, 10)
+    self._check_data('0', 100, 10)
+
+    # insert and check data on shard 1
     self._insert_data('1', 200, 10)
-
-    # re-read shard 1 data
     self._check_data('1', 200, 10)
 
     # create a second table on all shards

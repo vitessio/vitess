@@ -12,7 +12,6 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
-	"reflect"
 	"sync"
 	"time"
 
@@ -39,11 +38,13 @@ var (
 	unhealthyThreshold  = flag.Duration("unhealthy_threshold", defaultUnhealthyThreshold, "replication lag  after which a replica is considered unhealthy")
 )
 
-// HealthRecord records one run of the health checker
+// HealthRecord records one run of the health checker.
 type HealthRecord struct {
-	Error            error
-	ReplicationDelay time.Duration
 	Time             time.Time
+	Error            error
+	IgnoredError     error
+	IgnoreErrorExpr  string
+	ReplicationDelay time.Duration
 }
 
 // Class returns a human-readable one word version of the health state.
@@ -58,7 +59,7 @@ func (r *HealthRecord) Class() string {
 	}
 }
 
-// HTML returns a html version to be displayed on UIs
+// HTML returns an HTML version to be displayed on UIs.
 func (r *HealthRecord) HTML() template.HTML {
 	switch {
 	case r.Error != nil:
@@ -66,11 +67,36 @@ func (r *HealthRecord) HTML() template.HTML {
 	case r.ReplicationDelay > *degradedThreshold:
 		return template.HTML(fmt.Sprintf("unhappy: %v behind on replication", r.ReplicationDelay))
 	default:
+		html := "healthy"
 		if r.ReplicationDelay > 0 {
-			return template.HTML(fmt.Sprintf("healthy: only %v behind on replication", r.ReplicationDelay))
+			html += fmt.Sprintf(": only %v behind on replication", r.ReplicationDelay)
 		}
-		return template.HTML("healthy")
+		if r.IgnoredError != nil {
+			html += fmt.Sprintf(" (ignored error: %v, matches expression: %v)", r.IgnoredError, r.IgnoreErrorExpr)
+		}
+		return template.HTML(html)
 	}
+}
+
+// Degraded returns true if the replication delay is beyond degradedThreshold.
+func (r *HealthRecord) Degraded() bool {
+	return r.ReplicationDelay > *degradedThreshold
+}
+
+// ErrorString returns Error as a string.
+func (r *HealthRecord) ErrorString() string {
+	if r.Error == nil {
+		return ""
+	}
+	return r.Error.Error()
+}
+
+// IgnoredErrorString returns IgnoredError as a string.
+func (r *HealthRecord) IgnoredErrorString() string {
+	if r.IgnoredError == nil {
+		return ""
+	}
+	return r.IgnoredError.Error()
 }
 
 // IsDuplicate implements history.Deduplicable
@@ -79,12 +105,10 @@ func (r *HealthRecord) IsDuplicate(other interface{}) bool {
 	if !ok {
 		return false
 	}
-	if !reflect.DeepEqual(r.Error, rother.Error) {
-		return false
-	}
-	unhealthy := r.ReplicationDelay > *degradedThreshold
-	unhealthyOther := rother.ReplicationDelay > *degradedThreshold
-	return (unhealthy && unhealthyOther) || (!unhealthy && !unhealthyOther)
+	return r.ErrorString() == rother.ErrorString() &&
+		r.IgnoredErrorString() == rother.IgnoredErrorString() &&
+		r.IgnoreErrorExpr == rother.IgnoreErrorExpr &&
+		r.Degraded() == rother.Degraded()
 }
 
 // ConfigHTML returns a formatted summary of health checking config values.
@@ -150,6 +174,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 	agent.mutex.Lock()
 	tablet := proto.Clone(agent._tablet).(*topodatapb.Tablet)
 	tabletControl := proto.Clone(agent._tabletControl).(*topodatapb.Shard_TabletControl)
+	ignoreErrorExpr := agent._ignoreHealthErrorExpr
 	agent.mutex.Unlock()
 
 	// figure out if we should be running the query service
@@ -164,6 +189,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 	}
 
 	// run the health check
+	record := &HealthRecord{}
 	isSlaveType := true
 	if tablet.Type == topodatapb.TabletType_MASTER {
 		isSlaveType = false
@@ -171,6 +197,12 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 	// Remember the health error as healthErr to be sure we don't accidentally
 	// overwrite it with some other err.
 	replicationDelay, healthErr := agent.HealthReporter.Report(isSlaveType, shouldBeServing)
+	if healthErr != nil && ignoreErrorExpr != nil &&
+		ignoreErrorExpr.MatchString(healthErr.Error()) {
+		record.IgnoredError = healthErr
+		record.IgnoreErrorExpr = ignoreErrorExpr.String()
+		healthErr = nil
+	}
 	health := make(map[string]string)
 	if healthErr == nil {
 		if replicationDelay > *unhealthyThreshold {
@@ -202,33 +234,30 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 			}
 
 			// If starting queryservice fails, that's our new reason for being unhealthy.
-			healthErr = agent.allowQueries(desiredType)
+			//
+			// We don't care if the QueryService state actually changed because we'll
+			// broadcast the latest health status after this immediately anway.
+			_ /* state changed */, healthErr = agent.allowQueries(desiredType)
 		}
 	} else {
 		if isServing {
 			// We are not healthy or should not be running the query service.
 			//
-			// We do NOT enter lameduck in this case, because we should only hit this
-			// in the following scenarios:
-			//
-			// * Healthcheck fails: We're probably serving errors anyway, so no point.
-			// * Replication lag exceeds unhealthy threshold: This is very rare, so it
-			//   isn't worth optimizing the potential 1s of errors away. It will also
-			//   go away when vtgate is the only one looking at lag.
-			// * We're in a special state where queryservice should be disabled
-			//   despite being non-SPARE: This is not a live serving instance anyway.
-			agent.disallowQueries(tablet.Type,
+			// We don't care if the QueryService state actually changed because we'll
+			// broadcast the latest health status after this immediately anway.
+			_ /* state changed */, err := agent.disallowQueries(tablet.Type,
 				fmt.Sprintf("health-check failure(%v)", healthErr),
 			)
+			if err != nil {
+				log.Errorf("disallowQueries failed: %v", err)
+			}
 		}
 	}
 
 	// save the health record
-	record := &HealthRecord{
-		Error:            healthErr,
-		ReplicationDelay: replicationDelay,
-		Time:             time.Now(),
-	}
+	record.Time = time.Now()
+	record.Error = healthErr
+	record.ReplicationDelay = replicationDelay
 	agent.History.Add(record)
 
 	// try to figure out the mysql port if we don't have it yet

@@ -20,7 +20,7 @@ var (
 			<th>Table</th>
 			<th>Columns</th>
 			<th>Indexes</th>
-			<th>CacheType</th>
+			<th>Type</th>
 			<th>TableRows</th>
 			<th>DataLength</th>
 			<th>IndexLength</th>
@@ -32,7 +32,7 @@ var (
 			<td>{{.Name}}</td>
 			<td>{{range .Columns}}{{.Name}}: {{.Type}}, {{if .IsAuto}}autoinc{{end}}, {{.Default}}<br>{{end}}</td>
 			<td>{{range .Indexes}}{{.Name}}: ({{range .Columns}}{{.}},{{end}}), ({{range .Cardinality}}{{.}},{{end}})<br>{{end}}</td>
-			<td>{{index $top.CacheType .CacheType}}</td>
+			<td>{{index $top.Type .Type}}</td>
 			<td>{{.TableRows.Get}}</td>
 			<td>{{.DataLength.Get}}</td>
 			<td>{{.IndexLength.Get}}</td>
@@ -75,10 +75,10 @@ func schemazHandler(tables []*schema.Table, w http.ResponseWriter, r *http.Reque
 	}
 	sort.Sort(&sorter)
 	envelope := struct {
-		CacheType []string
-		Table     *schema.Table
+		Type  []string
+		Table *schema.Table
 	}{
-		CacheType: []string{"none", "read-write", "write-only"},
+		Type: []string{"none", "read-write", "write-only", "sequence"},
 	}
 	for _, Value := range sorter.rows {
 		envelope.Table = Value

@@ -130,6 +130,7 @@ create table vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, s
 create table vitess_fracts(id int, deci decimal(5,2), num numeric(5,2), f float, d double, primary key(id)) comment 'vitess_nocache';
 create table vitess_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb)) comment 'vitess_nocache';
 create table vitess_misc(id int, b bit(8), d date, dt datetime, t time, primary key(id)) comment 'vitess_nocache';
+create table vitess_unsupported(id int, pt point, primary key(id));
 
 create table vitess_part1(key1 bigint, key2 bigint, data1 int, primary key(key1, key2));
 create unique index vitess_key2 on vitess_part1(key2);
@@ -139,6 +140,9 @@ insert into vitess_part1 values(10, 1, 1);
 insert into vitess_part1 values(10, 2, 2);
 insert into vitess_part2 values(1, 3);
 insert into vitess_part2 values(2, 4);
+
+create table vitess_seq(id int, next_id bigint, cache bigint, increment bigint, primary key(id)) comment 'vitess_sequence';
+insert into vitess_seq values(0, 1, 3, 2);
 
 create table vitess_acl_no_access(key1 bigint, key2 bigint, primary key(key1));
 create table vitess_acl_read_only(key1 bigint, key2 bigint, primary key(key1));
@@ -187,6 +191,13 @@ var tableACLConfig = `{
     {
       "name": "vitess_test",
       "table_names_or_prefixes": ["vitess_test"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_seq",
+      "table_names_or_prefixes": ["vitess_seq"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]

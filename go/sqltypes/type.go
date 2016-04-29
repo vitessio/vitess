@@ -99,15 +99,10 @@ const (
 // bit-shift the mysql flags by two byte so we
 // can merge them with the mysql or vitess types.
 const (
-	mysqlUnsigned = 32 << 16
-	mysqlBinary   = 128 << 16
-	mysqlEnum     = 256 << 16
-	mysqlSet      = 2048 << 16
-
-	relevantFlags = mysqlUnsigned |
-		mysqlBinary |
-		mysqlEnum |
-		mysqlSet
+	mysqlUnsigned = 32
+	mysqlBinary   = 128
+	mysqlEnum     = 256
+	mysqlSet      = 2048
 )
 
 // If you add to this map, make sure you add a test case
@@ -136,17 +131,69 @@ var mysqlToType = map[int64]querypb.Type{
 	254: Char,
 }
 
-var modifier = map[int64]querypb.Type{
-	int64(Int8) | mysqlUnsigned:  Uint8,
-	int64(Int16) | mysqlUnsigned: Uint16,
-	int64(Int32) | mysqlUnsigned: Uint32,
-	int64(Int64) | mysqlUnsigned: Uint64,
-	int64(Int24) | mysqlUnsigned: Uint24,
-	int64(Text) | mysqlBinary:    Blob,
-	int64(VarChar) | mysqlBinary: VarBinary,
-	int64(Char) | mysqlBinary:    Binary,
-	int64(Char) | mysqlEnum:      Enum,
-	int64(Char) | mysqlSet:       Set,
+// modifyType modifies the vitess type based on the
+// mysql flag. The function checks specific flags based
+// on the type. This allows us to ignore stray flags
+// that MySQL occasionally sets.
+func modifyType(typ querypb.Type, flags int64) querypb.Type {
+	switch typ {
+	case Int8:
+		if flags&mysqlUnsigned != 0 {
+			return Uint8
+		}
+		return Int8
+	case Int16:
+		if flags&mysqlUnsigned != 0 {
+			return Uint16
+		}
+		return Int16
+	case Int32:
+		if flags&mysqlUnsigned != 0 {
+			return Uint32
+		}
+		return Int32
+	case Int64:
+		if flags&mysqlUnsigned != 0 {
+			return Uint64
+		}
+		return Int64
+	case Int24:
+		if flags&mysqlUnsigned != 0 {
+			return Uint24
+		}
+		return Int24
+	case Text:
+		if flags&mysqlBinary != 0 {
+			return Blob
+		}
+		return Text
+	case VarChar:
+		if flags&mysqlBinary != 0 {
+			return VarBinary
+		}
+		return VarChar
+	case Char:
+		if flags&mysqlBinary != 0 {
+			return Binary
+		}
+		if flags&mysqlEnum != 0 {
+			return Enum
+		}
+		if flags&mysqlSet != 0 {
+			return Set
+		}
+		return Char
+	}
+	return typ
+}
+
+// MySQLToType computes the vitess type from mysql type and flags.
+func MySQLToType(mysqlType, flags int64) (typ querypb.Type, err error) {
+	result, ok := mysqlToType[mysqlType]
+	if !ok {
+		return 0, fmt.Errorf("unsupported type: %d", mysqlType)
+	}
+	return modifyType(result, flags), nil
 }
 
 // typeToMySQL is the reverse of mysqlToType.
@@ -184,24 +231,8 @@ var typeToMySQL = map[querypb.Type]struct {
 	Set:       {typ: 254, flags: mysqlSet},
 }
 
-// MySQLToType computes the vitess type from mysql type and flags.
-// The function panics if the type is unrecognized.
-func MySQLToType(mysqlType, flags int64) querypb.Type {
-	result, ok := mysqlToType[mysqlType]
-	if !ok {
-		panic(fmt.Errorf("Could not map: %d to a vitess type", mysqlType))
-	}
-
-	converted := (flags << 16) & relevantFlags
-	modified, ok := modifier[int64(result)|converted]
-	if ok {
-		return modified
-	}
-	return result
-}
-
 // TypeToMySQL returns the equivalent mysql type and flag for a vitess type.
 func TypeToMySQL(typ querypb.Type) (mysqlType, flags int64) {
 	val := typeToMySQL[typ]
-	return val.typ, val.flags >> 16
+	return val.typ, val.flags
 }

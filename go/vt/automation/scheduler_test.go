@@ -76,8 +76,8 @@ func waitForClusterOperation(t *testing.T, scheduler *Scheduler, id string, expe
 				}
 			}
 			if expectedOutputLastTask != "" {
-				if got := lastTc.ParallelTasks[len(lastTc.ParallelTasks)-1].Output; got != expectedOutputLastTask {
-					t.Fatalf("ClusterOperation finished but did not return expected output. got: %v want: %v Full ClusterOperation details: %v", got, expectedOutputLastTask, proto.MarshalTextString(getDetailsResponse.ClusterOp))
+				if got := lastTc.ParallelTasks[len(lastTc.ParallelTasks)-1].Output; !strings.Contains(got, expectedOutputLastTask) {
+					t.Fatalf("ClusterOperation finished but did not contain expected output. got: %v want: %v Full ClusterOperation details: %v", got, expectedOutputLastTask, proto.MarshalTextString(getDetailsResponse.ClusterOp))
 				}
 			}
 			if expectedErrorLastTask != "" {

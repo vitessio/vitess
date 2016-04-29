@@ -6,45 +6,45 @@ go:
 addons:
   apt:
     sources:
-    - ubuntu-toolchain-r-test
+      - ubuntu-toolchain-r-test
     packages:
-    # NOTE: When you add a dependency, don't forget to add comment why it's necessary.
-    - automake
-    - libtool
-    - memcached
-    - php5-cli
-    - php5-dev
-    - python-dev
-    - python-mysqldb
-    - python-pip
-    - libssl-dev
-    - g++-4.8
-    - gcc-4.8
-    - git
-    - pkg-config
-    # installs libaio1 which is required by MariaDB 10.0 server package
-    - libaio-dev
-    # required by travis script below to measure CPU and memory usage
-    - time
-    # Optional dependency. Without a running syslog daemon, Vitess will keep complaining that it could not log events and spam the logs.
-    - rsyslog
+      # NOTE: When you add a dependency, don't forget to add comment why it's necessary.
+      - automake
+      - libtool
+      - memcached
+      - php5-cli
+      - php5-dev
+      - python-dev
+      - python-mysqldb
+      - python-pip
+      - libssl-dev
+      - g++-4.8
+      - gcc-4.8
+      - git
+      - pkg-config
+      - python-virtualenv
+      # installs libaio1 which is required by MariaDB 10.0 server package
+      - libaio-dev
+      # required by travis script below to measure CPU and memory usage
+      - time
+      # Optional dependency. Without a running syslog daemon, Vitess will keep complaining that it could not log events and spam the logs.
+      - rsyslog
 # Cache directories of dependencies which are built by bootstrap.sh
 cache:
   directories:
-  # Cache downloaded and extracted MariaDB 10.0 packages.
-  - $MYSQL_ROOT
-  # Cache bootstrapped dependencies (e.g. protobuf and gRPC).
-  - $HOME/gopath/dist/grpc/.build_finished
-  - $HOME/gopath/dist/grpc/usr/local
-  - $HOME/gopath/dist/py-mock-1.0.1/.build_finished
-  - $HOME/gopath/dist/py-mock-1.0.1/lib/python2.7/site-packages
-  - $HOME/gopath/dist/py-vt-bson-0.3.2/lib/python2.7/site-packages
-  - $HOME/gopath/dist/vt-zookeeper-3.4.6/.build_finished
-  - $HOME/gopath/dist/vt-zookeeper-3.4.6/include
-  - $HOME/gopath/dist/vt-zookeeper-3.4.6/lib
-  # Maven repository for Java dependencies.
-  - $HOME/.m2
-  - $HOME/.phpenv
+    # Cache downloaded and extracted MariaDB 10.0 packages.
+    - $MYSQL_ROOT
+    # Cache bootstrapped dependencies (e.g. protobuf and gRPC).
+    - $HOME/gopath/dist/grpc/.build_finished
+    - $HOME/gopath/dist/grpc/usr/local
+    - $HOME/gopath/dist/py-mock-1.0.1/.build_finished
+    - $HOME/gopath/dist/py-mock-1.0.1/lib/python2.7/site-packages
+    - $HOME/gopath/dist/vt-zookeeper-3.4.6/.build_finished
+    - $HOME/gopath/dist/vt-zookeeper-3.4.6/include
+    - $HOME/gopath/dist/vt-zookeeper-3.4.6/lib
+    # Maven repository for Java dependencies.
+    - $HOME/.m2
+    - $HOME/.phpenv
 before_cache:
   # Travis CI caching doesn't work with this symlink. Just delete it.
   - rm $HOME/gopath/bin/zksrv.sh
@@ -59,6 +59,7 @@ before_cache:
   # Don't cache unnecessary PHP files.
   - rm $HOME/.phpenv/versions/*/sbin/*
   - rm $HOME/.phpenv/versions/*/bin/php-cgi
+  - rm $HOME/.phpenv/shims/php-cgi
   - find $HOME/.phpenv/vendor/grpc/grpc -mindepth 1 -maxdepth 1 ! -name src | xargs rm -rf
   - find $HOME/.phpenv/vendor/grpc/grpc/src -mindepth 1 -maxdepth 1 ! -name php | xargs rm -rf
 env:
@@ -72,11 +73,12 @@ env:
     # Run go build and test with -p 4 (i.e. up to 4 packages are compiled/tested in parallel).
     # As of 07/2015 this value works best in a Travis CI container.
     - VT_GO_PARALLEL=4
-    - PATH="$HOME/.phpenv/bin:$HOME/gopath/dist/protobuf/bin:$PATH"
+    - PATH="$HOME/.phpenv/bin:$PATH"
     # Add -follow to TEST_FLAGS below to print as the test runs, to diagnose stuck tests.
     - TEST_FLAGS="-docker=false -timeout=5m -print-log -remote-stats=http://enisoc.com:15123/travis/stats"
     - CC=gcc-4.8
     - CXX=g++-4.8
+    - INSTALL_GRPC_PHP="$HOME/.phpenv/lib"
   matrix:
     # NOTE: Travis CI schedules up to 5 tests simultaneously.
     #       All our tests should be spread out as evenly as possible across these 5 slots.
@@ -91,6 +93,7 @@ before_install:
   - travis/download_mariadb.sh
   - travis/php_init.sh
 install:
+  - eval "$(phpenv init -)"
   - ./bootstrap.sh
 before_script:
   - source dev.env
@@ -101,7 +104,6 @@ before_script:
       travis/check_make_proto.sh
     fi
 script:
-  - eval "$(phpenv init -)"
   # Log GOMAXPROCS (should be 2 as of 07/2015).
   - go run travis/log_gomaxprocs.go
   - go run test.go $TEST_FLAGS $TEST_MATRIX

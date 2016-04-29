@@ -4,7 +4,6 @@ import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Query.Field;
 import com.youtube.vitess.proto.Query.QueryResult;
 
-import java.sql.SQLDataException;
 import java.sql.SQLException;
 import java.util.Iterator;
 import java.util.List;

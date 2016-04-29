@@ -6,9 +6,12 @@
 package grpcvtworkerclient
 
 import (
-	"io"
+	"flag"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -18,6 +21,13 @@ import (
 	vtworkerservicepb "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
 )
 
+var (
+	cert = flag.String("vtworker_client_grpc_cert", "", "the cert to use to connect")
+	key  = flag.String("vtworker_client_grpc_key", "", "the key to use to connect")
+	ca   = flag.String("vtworker_client_grpc_ca", "", "the server ca to use to validate servers when connecting")
+	name = flag.String("vtworker_client_grpc_server_name", "", "the server name to use to validate server certificate")
+)
+
 type gRPCVtworkerClient struct {
 	cc *grpc.ClientConn
 	c  vtworkerservicepb.VtworkerClient
@@ -25,7 +35,11 @@ type gRPCVtworkerClient struct {
 
 func gRPCVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworkerclient.Client, error) {
 	// create the RPC client
-	cc, err := grpc.Dial(addr, grpc.WithInsecure())
+	opt, err := grpcutils.ClientSecureDialOption(*cert, *key, *ca, *name)
+	if err != nil {
+		return nil, err
+	}
+	cc, err := grpc.Dial(addr, opt, grpc.WithBlock(), grpc.WithTimeout(dialTimeout))
 	if err != nil {
 		return nil, err
 	}
@@ -37,35 +51,29 @@ func gRPCVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworker
 	}, nil
 }
 
+type eventStreamAdapter struct {
+	stream vtworkerservicepb.Vtworker_ExecuteVtworkerCommandClient
+}
+
+func (e *eventStreamAdapter) Recv() (*logutilpb.Event, error) {
+	le, err := e.stream.Recv()
+	if err != nil {
+		return nil, vterrors.FromGRPCError(err)
+	}
+	return le.Event, nil
+}
+
 // ExecuteVtworkerCommand is part of the VtworkerClient interface.
-func (client *gRPCVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutilpb.Event, vtworkerclient.ErrFunc, error) {
+func (client *gRPCVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (logutil.EventStream, error) {
 	query := &vtworkerdatapb.ExecuteVtworkerCommandRequest{
 		Args: args,
 	}
 
 	stream, err := client.c.ExecuteVtworkerCommand(ctx, query)
 	if err != nil {
-		return nil, nil, err
+		return nil, vterrors.FromGRPCError(err)
 	}
-
-	results := make(chan *logutilpb.Event, 1)
-	var finalError error
-	go func() {
-		for {
-			le, err := stream.Recv()
-			if err != nil {
-				if err != io.EOF {
-					finalError = err
-				}
-				close(results)
-				return
-			}
-			results <- le.Event
-		}
-	}()
-	return results, func() error {
-		return finalError
-	}, nil
+	return &eventStreamAdapter{stream}, nil
 }
 
 // Close is part of the VtworkerClient interface.

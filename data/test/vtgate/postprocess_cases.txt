@@ -1,0 +1,343 @@
+# Group by unsharded
+"select col1, col2 from main1 group by col2"
+{
+  "Original": "select col1, col2 from main1 group by col2",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select col1, col2 from main1 group by col2",
+    "FieldQuery": "select col1, col2 from main1 where 1 != 1"
+  }
+}
+
+# Group by on unique sharded
+"select col1, col2 from user where id = 1 group by col2"
+{
+  "Original": "select col1, col2 from user where id = 1 group by col2",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col1, col2 from user where id = 1 group by col2",
+    "FieldQuery": "select col1, col2 from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 1
+  }
+}
+
+# Group by on unique vindex
+"select col1, id from user group by id"
+{
+  "Original": "select col1, id from user group by id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col1, id from user group by id",
+    "FieldQuery": "select col1, id from user where 1 != 1"
+  }
+}
+
+# Group by references non-existent col
+"select id from user group by col"
+"symbol col not found"
+
+# HAVING multi-route
+"select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1"
+{
+  "Original": "select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col1 as a, user.col2 from user having 1 = 1 and a = 1 and a = user.col2",
+      "FieldQuery": "select user.col1 as a, user.col2 from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user_extra.col3 from user_extra having user_extra.col3 = 1",
+      "FieldQuery": "select user_extra.col3 from user_extra where 1 != 1"
+    },
+    "Cols": [
+      -1,
+      -2,
+      1
+    ]
+  }
+}
+
+# Correlated subquery in having clause.
+# We're testing to make sure that the inner 'id' finds the outer id of the select.
+# The subquery query needs to be a join. Otherwise, unqualified references bind to the default inner table.
+"select id, col from user having col in (select user_extra.col from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = id)"
+{
+  "Original": "select id, col from user having col in (select user_extra.col from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = id)",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id, col from user having col in (select user_extra.col from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = id)",
+    "FieldQuery": "select id, col from user where 1 != 1"
+  }
+}
+
+# Correlated subquery in having clause, subquery also has having clause, even more rare case.
+# We're testing to make sure that the inner 'id' finds the outer id of the select. The code path
+# is different for the having clause. So, we have a separate test case for it.
+"select id, col from user having col in (select user_extra.col extra_col, user.id as user_id from user join user_extra on user.id = user_extra.user_id having user_id = id and extra_col = col)"
+{
+  "Original": "select id, col from user having col in (select user_extra.col extra_col, user.id as user_id from user join user_extra on user.id = user_extra.user_id having user_id = id and extra_col = col)",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id, col from user having col in (select user_extra.col as extra_col, user.id as user_id from user join user_extra on user.id = user_extra.user_id having user_id = id and extra_col = col)",
+    "FieldQuery": "select id, col from user where 1 != 1"
+  }
+}
+
+# Correlated subquery in having clause, subquery also has having clause, even more rare case.
+# We're looking for symbol not found error this time.
+"select id, col from user having col in (select user_extra.col, user.id as user_id from user join user_extra on user.id = user_extra.user_id having user_id = notthere)"
+"symbol notthere not found"
+
+# ORDER BY uses column numbers
+"select col from user where id = 1 order by 1"
+{
+  "Original": "select col from user where id = 1 order by 1",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from user where id = 1 order by 1 asc",
+    "FieldQuery": "select col from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 1
+  }
+}
+
+# ORDER BY for join
+"select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a asc, user.col2 desc, music.col3 asc"
+{
+  "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a asc, user.col2 desc, music.col3 asc",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by a asc, user.col2 desc",
+      "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": 1
+    },
+    "Right": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select music.col3 from music where music.id = :user_id order by music.col3 asc",
+      "FieldQuery": "select music.col3 from music where 1 != 1",
+      "Vindex": "music_user_map",
+      "Values": ":user_id",
+      "JoinVars": {
+        "user_id": {}
+      }
+    },
+    "Cols": [
+      -1,
+      -2,
+      1
+    ],
+    "Vars": {
+      "user_id": 2
+    }
+  }
+}
+
+# ORDER BY for join, using column numbers
+"select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 2 desc, 3 asc"
+{
+  "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 2 desc, 3 asc",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by 1 asc, 2 desc",
+      "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": 1
+    },
+    "Right": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select music.col3 from music where music.id = :user_id order by 1 asc",
+      "FieldQuery": "select music.col3 from music where 1 != 1",
+      "Vindex": "music_user_map",
+      "Values": ":user_id",
+      "JoinVars": {
+        "user_id": {}
+      }
+    },
+    "Cols": [
+      -1,
+      -2,
+      1
+    ],
+    "Vars": {
+      "user_id": 2
+    }
+  }
+}
+
+# Order by, '*' expression
+"select * from user where id = 5 order by col"
+{
+  "Original": "select * from user where id = 5 order by col",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user where id = 5 order by col asc",
+    "FieldQuery": "select * from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 5
+  }
+}
+
+# Order by, qualified '*' expression
+"select user.* from user where id = 5 order by user.col"
+{
+  "Original": "select user.* from user where id = 5 order by user.col",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.* from user where id = 5 order by user.col asc",
+    "FieldQuery": "select user.* from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 5
+  }
+}
+
+# Order by, '*' expression with qualified reference
+"select * from user where id = 5 order by user.col"
+{
+  "Original": "select * from user where id = 5 order by user.col",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user where id = 5 order by user.col asc",
+    "FieldQuery": "select * from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 5
+  }
+}
+
+# Order by, '*' expression in a subquery
+"select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)"
+{
+  "Original": "select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select u.id, u.col from user as u where u.col in (select * from user where user.id = u.id order by col asc)",
+      "FieldQuery": "select u.id, u.col from user as u where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select e.id from user_extra as e where e.col = :u_col",
+      "FieldQuery": "select e.id from user_extra as e where 1 != 1",
+      "JoinVars": {
+        "u_col": {}
+      }
+    },
+    "Cols": [
+      -1,
+      1
+    ],
+    "Vars": {
+      "u_col": 1
+    }
+  }
+}
+
+# Order by, qualified '*' expression, name mismatched.
+"select user.* from user where id = 5 order by e.col"
+"symbol e.col not found"
+
+# Order by, invalid column number
+"select col from user order by 1.1"
+"error parsing order by clause: 1.1"
+
+# Order by, invalid column name
+"select col from user order by aa"
+"symbol aa not found"
+
+# Order by, out of range column number
+"select col from user order by 2"
+"order by column number out of range"
+
+# LIMIT
+"select col1 from user where id = 1 limit 1"
+{
+  "Original": "select col1 from user where id = 1 limit 1",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col1 from user where id = 1 limit 1",
+    "FieldQuery": "select col1 from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 1
+  }
+}

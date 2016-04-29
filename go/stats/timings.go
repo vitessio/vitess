@@ -10,15 +10,21 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/youtube/vitess/go/sync2"
 )
 
 // Timings is meant to tracks timing data
 // by named categories as well as histograms.
 type Timings struct {
-	mu         sync.Mutex
-	totalCount int64
-	totalTime  int64
+	totalCount sync2.AtomicInt64
+	totalTime  sync2.AtomicInt64
+
+	// mu protects get and set of hook and the map.
+	// Modification to the value in the map is not protected.
+	mu         sync.RWMutex
 	histograms map[string]*Histogram
+	hook       func(string, time.Duration)
 }
 
 // NewTimings creates a new Timings object, and publishes it if name is set.
@@ -38,18 +44,30 @@ func NewTimings(name string, categories ...string) *Timings {
 
 // Add will add a new value to the named histogram.
 func (t *Timings) Add(name string, elapsed time.Duration) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
+	// Get existing Histogram.
+	t.mu.RLock()
 	hist, ok := t.histograms[name]
+	hook := t.hook
+	t.mu.RUnlock()
+
+	// Create Histogram if it does not exist.
 	if !ok {
-		hist = NewGenericHistogram("", bucketCutoffs, bucketLabels, "Count", "Time")
-		t.histograms[name] = hist
+		t.mu.Lock()
+		hist, ok = t.histograms[name]
+		if !ok {
+			hist = NewGenericHistogram("", bucketCutoffs, bucketLabels, "Count", "Time")
+			t.histograms[name] = hist
+		}
+		t.mu.Unlock()
 	}
+
 	elapsedNs := int64(elapsed)
 	hist.Add(elapsedNs)
-	t.totalCount++
-	t.totalTime += elapsedNs
+	t.totalCount.Add(1)
+	t.totalTime.Add(elapsedNs)
+	if hook != nil {
+		hook(name, elapsed)
+	}
 }
 
 // Record is a convenience function that records completion
@@ -60,18 +78,19 @@ func (t *Timings) Record(name string, startTime time.Time) {
 
 // String is for expvar.
 func (t *Timings) String() string {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 
 	tm := struct {
 		TotalCount int64
 		TotalTime  int64
 		Histograms map[string]*Histogram
 	}{
-		t.totalCount,
-		t.totalTime,
+		t.totalCount.Get(),
+		t.totalTime.Get(),
 		t.histograms,
 	}
+
 	data, err := json.Marshal(tm)
 	if err != nil {
 		data, _ = json.Marshal(err.Error())
@@ -81,8 +100,8 @@ func (t *Timings) String() string {
 
 // Histograms returns a map pointing at the histograms.
 func (t *Timings) Histograms() (h map[string]*Histogram) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	h = make(map[string]*Histogram, len(t.histograms))
 	for k, v := range t.histograms {
 		h[k] = v
@@ -92,32 +111,34 @@ func (t *Timings) Histograms() (h map[string]*Histogram) {
 
 // Count returns the total count for all values.
 func (t *Timings) Count() int64 {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.totalCount
+	return t.totalCount.Get()
 }
 
 // Time returns the total time elapsed for all values.
 func (t *Timings) Time() int64 {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.totalTime
+	return t.totalTime.Get()
 }
 
 // Counts returns the total count for each value.
 func (t *Timings) Counts() map[string]int64 {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 
 	counts := make(map[string]int64, len(t.histograms)+1)
 	for k, v := range t.histograms {
 		counts[k] = v.Count()
 	}
-	counts["All"] = t.totalCount
+	counts["All"] = t.totalCount.Get()
 	return counts
 }
 
-var bucketCutoffs = []int64{0.0005 * 1e9, 0.001 * 1e9, 0.005 * 1e9, 0.010 * 1e9, 0.050 * 1e9, 0.100 * 1e9, 0.500 * 1e9, 1.000 * 1e9, 5.000 * 1e9, 10.00 * 1e9}
+// Cutoffs returns the cutoffs used in the component histograms.
+// Do not change the returned slice.
+func (t *Timings) Cutoffs() []int64 {
+	return bucketCutoffs
+}
+
+var bucketCutoffs = []int64{5e5, 1e6, 5e6, 1e7, 5e7, 1e8, 5e8, 1e9, 5e9, 1e10}
 
 var bucketLabels []string
 
@@ -169,4 +190,10 @@ func (mt *MultiTimings) Record(names []string, startTime time.Time) {
 		panic("MultiTimings: wrong number of values in Record")
 	}
 	mt.Timings.Record(strings.Join(names, "."), startTime)
+}
+
+// Cutoffs returns the cutoffs used in the component histograms.
+// Do not change the returned slice.
+func (mt *MultiTimings) Cutoffs() []int64 {
+	return bucketCutoffs
 }

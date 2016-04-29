@@ -87,15 +87,14 @@ func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias 
 		return err
 	}
 
-	// Pass in a tablet type that is not UNKNOWN, so we don't ask
-	// for sessionId.
-	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", topodatapb.TabletType_MASTER, 30*time.Second)
+	// TabletType is unused for StreamHealth, use UNKNOWN
+	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", topodatapb.TabletType_UNKNOWN, 30*time.Second)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
 
-	stream, errFunc, err := conn.StreamHealth(ctx)
+	stream, err := conn.StreamHealth(ctx)
 	if err != nil {
 		return err
 	}
@@ -105,20 +104,22 @@ func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias 
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case result, ok := <-stream:
-			if !ok {
-				return errFunc()
-			}
+		default:
+		}
 
-			th.mu.Lock()
-			th.result = result
-			th.mu.Unlock()
+		result, err := stream.Recv()
+		if err != nil {
+			return err
+		}
 
-			if first {
-				// We got the first result, so we're ready to be accessed.
-				close(th.ready)
-				first = false
-			}
+		th.mu.Lock()
+		th.result = result
+		th.mu.Unlock()
+
+		if first {
+			// We got the first result, so we're ready to be accessed.
+			close(th.ready)
+			first = false
 		}
 	}
 

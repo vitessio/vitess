@@ -27,10 +27,12 @@ func main() {
 	servenv.Init()
 
 	// The implementation chain.
-	s := services.CreateServices()
-	for _, f := range vtgate.RegisterVTGates {
-		f(s)
-	}
+	servenv.OnRun(func() {
+		s := services.CreateServices()
+		for _, f := range vtgate.RegisterVTGates {
+			f(s)
+		}
+	})
 
 	servenv.RunDefault()
 }

@@ -597,11 +597,15 @@ class Tablet(object):
     mysql_sock = os.path.join(self.tablet_dir, 'mysql.sock')
     mysqlctl_sock = os.path.join(self.tablet_dir, 'mysqlctl.sock')
     while True:
-      if os.path.exists(mysql_sock) and os.path.exists(mysqlctl_sock):
+      wait_for = []
+      if not os.path.exists(mysql_sock):
+        wait_for.append(mysql_sock)
+      if not os.path.exists(mysqlctl_sock):
+        wait_for.append(mysqlctl_sock)
+      if not wait_for:
         return
-      timeout = utils.wait_step(
-          'waiting for mysql and mysqlctl socket files: %s %s' %
-          (mysql_sock, mysqlctl_sock), timeout)
+      timeout = utils.wait_step('waiting for socket files: %s' % str(wait_for),
+                                timeout, sleep_time=2.0)
 
   def _add_dbconfigs(self, args, repl_extra_flags=None):
     if repl_extra_flags is None:
@@ -735,6 +739,7 @@ class Tablet(object):
         'VtTabletExecute', '-json',
         '-keyspace', self.keyspace,
         '-shard', self.shard,
+        '-tablet_type', self.tablet_type,
     ]
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
@@ -756,6 +761,7 @@ class Tablet(object):
         'VtTabletBegin',
         '-keyspace', self.keyspace,
         '-shard', self.shard,
+        '-tablet_type', self.tablet_type,
         self.tablet_alias,
     ]
     result = utils.run_vtctl_json(args, auto_log=auto_log)
@@ -775,6 +781,7 @@ class Tablet(object):
         'VtTabletCommit',
         '-keyspace', self.keyspace,
         '-shard', self.shard,
+        '-tablet_type', self.tablet_type,
         self.tablet_alias,
         str(transaction_id),
     ]
@@ -794,6 +801,7 @@ class Tablet(object):
         'VtTabletRollback',
         '-keyspace', self.keyspace,
         '-shard', self.shard,
+        '-tablet_type', self.tablet_type,
         self.tablet_alias,
         str(transaction_id),
     ]

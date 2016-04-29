@@ -56,7 +56,10 @@ def main():
   sp = start_vitess()
   try:
     start_http_server(options.port)
-    raw_input('\nPress enter to exit.')
+    raw_input('\n'
+              'Demo is running at: http://localhost:%d/\n'
+              '\n'
+              'Press enter to exit.\n' % options.port)
   finally:
     stop_vitess(sp)
 

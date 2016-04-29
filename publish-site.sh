@@ -1,6 +1,6 @@
 #! /bin/bash 
 
-set -e 
+set -e
 
 git checkout gh-pages
 
@@ -38,10 +38,14 @@ do
 done
 
 # compile to html pages
-cd vitess.io
-bundle install
-bundle exec jekyll build
-cd ..
+if [[ "$1" == "--docker" ]]; then
+  docker run -ti --name=vitess_publish_site -v $PWD/vitess.io:/in vitess/publish-site bash -c \
+    'cp -R /in /out && cd /out && bundle install && bundle exec jekyll build'
+  docker cp vitess_publish_site:/out/. vitess.io/
+  docker rm vitess_publish_site
+else
+  (cd vitess.io && bundle install && bundle exec jekyll build)
+fi
 
 # clean up
 rm -rf doc

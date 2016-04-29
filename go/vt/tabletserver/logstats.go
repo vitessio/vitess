@@ -105,7 +105,7 @@ func (stats *LogStats) RewrittenSQL() string {
 }
 
 // SizeOfResponse returns the approximate size of the response in
-// bytes (this does not take in account BSON encoding). It will return
+// bytes (this does not take in account protocol encoding). It will return
 // 0 for streaming requests.
 func (stats *LogStats) SizeOfResponse() int {
 	if stats.Rows == nil {

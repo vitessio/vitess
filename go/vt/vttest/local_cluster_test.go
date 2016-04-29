@@ -17,7 +17,7 @@ import (
 )
 
 func TestVitess(t *testing.T) {
-	hdl, err := LaunchVitess("test_keyspace/0:test_keyspace", "", false)
+	hdl, err := LaunchVitess("test_keyspace/0:test_keyspace", "", false, nil /* initDataOptions */)
 	if err != nil {
 		t.Error(err)
 		return

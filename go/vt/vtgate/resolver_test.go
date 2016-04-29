@@ -21,6 +21,7 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // This file uses the sandbox_test framework.
@@ -540,23 +541,28 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	}
 }
 
-func TestIsConnError(t *testing.T) {
+func TestIsRetryableError(t *testing.T) {
 	var connErrorTests = []struct {
 		in      error
-		outCode int
 		outBool bool
 	}{
-		{fmt.Errorf("generic error"), 0, false},
-		{&ScatterConnError{Code: 9}, 9, true},
-		{&ShardConnError{Code: 9}, 9, true},
-		{&tabletconn.ServerError{Code: 9}, 0, false},
+		{fmt.Errorf("generic error"), false},
+		{&ScatterConnError{Retryable: true}, true},
+		{&ScatterConnError{Retryable: false}, false},
+		{&ShardConnError{EndPointCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED}, true},
+		{&ShardConnError{EndPointCode: vtrpcpb.ErrorCode_INTERNAL_ERROR}, false},
+		// tabletconn.ServerError will not come directly here,
+		// they'll be wrapped in ScatterConnError or ShardConnError.
+		// So they can't be retried as is.
+		{&tabletconn.ServerError{ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED}, false},
+		{&tabletconn.ServerError{ServerCode: vtrpcpb.ErrorCode_PERMISSION_DENIED}, false},
 	}
 
 	for _, tt := range connErrorTests {
-		gotCode, gotBool := isConnError(tt.in)
-		if (gotCode != tt.outCode) || (gotBool != tt.outBool) {
-			t.Errorf("isConnError(%v) => (%v, %v), want (%v, %v)",
-				tt.in, gotCode, gotBool, tt.outCode, tt.outBool)
+		gotBool := isRetryableError(tt.in)
+		if gotBool != tt.outBool {
+			t.Errorf("isConnError(%v) => %v, want %v",
+				tt.in, gotBool, tt.outBool)
 		}
 	}
 }

@@ -14,6 +14,14 @@ type Result struct {
 	Rows         [][]Value        `json:"rows"`
 }
 
+// ResultStream is an interface for receiving Result. It is used for
+// RPC interfaces.
+type ResultStream interface {
+	// Recv returns the next result on the stream.
+	// It will return io.EOF if the stream ended.
+	Recv() (*Result, error)
+}
+
 // Repair fixes the type info in the rows
 // to conform to the supplied field types.
 func (result *Result) Repair(fields []*querypb.Field) {

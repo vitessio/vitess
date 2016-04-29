@@ -1,14 +1,24 @@
 package com.youtube.vitess.client.cursor;
 
-import com.google.common.collect.ImmutableMap;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import com.google.common.collect.ImmutableList;
 
 import com.youtube.vitess.proto.Query.Field;
+
+import org.apache.commons.collections4.map.CaseInsensitiveMap;
 
 import java.util.List;
 import java.util.Map;
 
+import javax.annotation.Nullable;
+
 /**
  * A wrapper for {@code List<Field>} that also facilitates lookup by field name.
+ *
+ * <p>Lookups by field name are case-insensitive, as in {@link java.sql.ResultSet}.
+ * If multiple fields have the same name, the earliest one will be returned.
  *
  * <p>The field name maps to an index, rather than a Field, because that same
  * index is also used to find the value in a separate list.
@@ -17,28 +27,48 @@ public class FieldMap {
   private final List<Field> fields;
   private final Map<String, Integer> indexMap;
 
-  public FieldMap(List<Field> fields) {
-    ImmutableMap.Builder<String, Integer> builder = new ImmutableMap.Builder<>();
-    for (int i = 0; i < fields.size(); i++) {
-      builder.put(fields.get(i).getName(), i);
+  public FieldMap(Iterable<Field> fields) {
+    this.fields = ImmutableList.copyOf(checkNotNull(fields));
+
+    indexMap = new CaseInsensitiveMap<String, Integer>();
+    // columnIndex is 1-based.
+    int columnIndex = 1;
+    for (Field field : this.fields) {
+      String columnLabel = field.getName();
+      // If multiple columns have the same name,
+      // prefer the earlier one as JDBC ResultSet does.
+      if (!indexMap.containsKey(columnLabel)) {
+        indexMap.put(columnLabel, columnIndex);
+      }
+      ++columnIndex;
     }
-    indexMap = builder.build();
-    this.fields = fields;
   }
 
   public List<Field> getList() {
     return fields;
   }
 
-  public Map<String, Integer> getIndexMap() {
-    return indexMap;
+  /**
+   * Returns the {@link Field} for a 1-based column index.
+   *
+   * @param columnIndex 1-based column number (0 is invalid)
+   */
+  public Field get(int columnIndex) {
+    // columnIndex is 1-based.
+    checkArgument(columnIndex >= 1, "columnIndex out of range: %s", columnIndex);
+    return fields.get(columnIndex - 1);
   }
 
-  public Field get(int i) {
-    return fields.get(i);
-  }
-
-  public Integer getIndex(String fieldName) {
-    return indexMap.get(fieldName);
+  /**
+   * Returns the 1-based index for a column label.
+   *
+   * <p>If multiple columns have the same label,
+   * the earlier one is returned.
+   *
+   * @param columnLabel case-insensitive column label
+   */
+  @Nullable
+  public Integer getIndex(String columnLabel) {
+    return indexMap.get(columnLabel);
   }
 }

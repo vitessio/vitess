@@ -1,5 +1,4 @@
 <?php
-
 namespace Vitess;
 
 use Vitess\Proto\Vtrpc\ErrorCode;
@@ -19,7 +18,10 @@ class ProtoUtils
 {
 
     /**
-     * @param $response
+     * Throws the appropriate exception for the "partial error" in a response.
+     *
+     * @param mixed $response
+     *            any protobuf response message that may have a "partial error"
      *
      * @throws Error\BadInput
      * @throws Error\DeadlineExceeded
@@ -52,6 +54,7 @@ class ProtoUtils
     }
 
     /**
+     *
      * @param string $query
      * @param array $vars
      *
@@ -74,6 +77,7 @@ class ProtoUtils
     }
 
     /**
+     *
      * @param mixed $value
      *
      * @return Query\BindVariable
@@ -154,6 +158,7 @@ class ProtoUtils
     }
 
     /**
+     *
      * @param mixed $proto
      * @param array $queries
      */
@@ -165,6 +170,7 @@ class ProtoUtils
     }
 
     /**
+     *
      * @param string $hex
      *
      * @return string
@@ -175,6 +181,7 @@ class ProtoUtils
     }
 
     /**
+     *
      * @param string $start
      * @param string $end
      *
@@ -189,6 +196,7 @@ class ProtoUtils
     }
 
     /**
+     *
      * @param mixed $proto
      * @param array $key_ranges
      */
@@ -200,6 +208,7 @@ class ProtoUtils
     }
 
     /**
+     *
      * @param string $keyspace_id
      * @param mixed $value
      *
@@ -219,6 +228,7 @@ class ProtoUtils
     }
 
     /**
+     *
      * @param mixed $proto
      * @param array $entity_keyspace_ids
      */
@@ -230,10 +240,11 @@ class ProtoUtils
     }
 
     /**
+     *
      * @param string $query
-     * @param $bind_vars
+     * @param mixed $bind_vars
      * @param string $keyspace
-     * @param $shards
+     * @param mixed $shards
      *
      * @return BoundShardQuery
      */
@@ -247,10 +258,11 @@ class ProtoUtils
     }
 
     /**
+     *
      * @param string $query
-     * @param $bind_vars
+     * @param mixed $bind_vars
      * @param string $keyspace
-     * @param $keyspace_ids
+     * @param mixed $keyspace_ids
      *
      * @return BoundKeyspaceIdQuery
      */
@@ -264,6 +276,7 @@ class ProtoUtils
     }
 
     /**
+     *
      * @param Query\Row $row
      * @param Query\Field[] $fields
      *
@@ -278,20 +291,25 @@ class ProtoUtils
         // See the docs for the Row message in query.proto.
         $start = 0;
         $buf = $row->getValues();
+        $buflen = strlen($buf);
         $lengths = $row->getLengths();
 
         foreach ($lengths as $key => $len) {
             $fieldKey = $fields[$key]->getName();
-            $val = null;
 
-            if ($len < 0) {
-                // This indicates a MySQL NULL value,
-                // to distinguish it from a zero-length string.
-                $val = NULL;
-            } else {
-                $val = substr($buf, $start, $len);
-                if ($val === FALSE || strlen($val) !== $len) {
-                    throw new Exception('Index out of bounds while decoding Row values');
+            // $len < 0 indicates a MySQL NULL value,
+            // to distinguish it from a zero-length string.
+            $val = null;
+            if ($len >= 0) {
+                if ($start == $buflen) {
+                    // Different PHP versions treat this case differently in
+                    // substr(), so we handle it manually.
+                    $val = '';
+                } else {
+                    $val = substr($buf, $start, $len);
+                    if ($val === FALSE || strlen($val) !== $len) {
+                        throw new Exception("Index out of bounds while decoding Row values (start=$start, len=$len). Raw protobuf: " . var_export($row, TRUE));
+                    }
                 }
 
                 $start += $len;

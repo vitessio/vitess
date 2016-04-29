@@ -101,7 +101,7 @@ type drv struct {
 //
 // Example for a JSON string:
 //
-//   {"protocol": "gorpc", "address": "localhost:1111", "tablet_type": "master", "timeout": 1000000000}
+//   {"protocol": "grpc", "address": "localhost:1111", "tablet_type": "master", "timeout": 1000000000}
 //
 // For a description of the available fields, see the Configuration struct.
 // Note: In the JSON string, timeout has to be specified in nanoseconds.
@@ -301,18 +301,17 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), s.c.Timeout)
 
 	if s.c.Streaming {
-		var qrc <-chan *sqltypes.Result
-		var errFunc vtgateconn.ErrFunc
+		var stream sqltypes.ResultStream
 		var err error
 		if s.c.useExecuteShards() {
-			qrc, errFunc, err = s.c.vtgateConn.StreamExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletTypeProto)
+			stream, err = s.c.vtgateConn.StreamExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletTypeProto)
 		} else {
-			qrc, errFunc, err = s.c.vtgateConn.StreamExecute(ctx, s.query, makeBindVars(args), s.c.tabletTypeProto)
+			stream, err = s.c.vtgateConn.StreamExecute(ctx, s.query, makeBindVars(args), s.c.tabletTypeProto)
 		}
 		if err != nil {
 			return nil, err
 		}
-		return newStreamingRows(qrc, errFunc, cancel), nil
+		return newStreamingRows(stream, cancel), nil
 	}
 	// Do not cancel in case of a streaming query. It will do it itself.
 	defer cancel()

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -45,8 +46,12 @@ const splitDiffHTML2 = `
   <p>Shard involved: {{.Keyspace}}/{{.Shard}}</p>
   <h1>Split Diff Action</h1>
     <form action="/Diffs/SplitDiff" method="post">
+      <LABEL for="sourceUID">Source shard UID: </LABEL>
+        <INPUT type="text" id="sourceUID" name="sourceUID" value="{{.DefaultSourceUID}}"></BR>
       <LABEL for="excludeTables">Exclude Tables: </LABEL>
         <INPUT type="text" id="excludeTables" name="excludeTables" value=""></BR>
+      <LABEL for="minHealthyRdonlyEndPoints">Minimum Number of required healthy RDONLY tablets: </LABEL>
+        <INPUT type="text" id="minHealthyRdonlyEndPoints" name="minHealthyRdonlyEndPoints" value="{{.DefaultMinHealthyRdonlyEndPoints}}"></BR>
       <INPUT type="hidden" name="keyspace" value="{{.Keyspace}}"/>
       <INPUT type="hidden" name="shard" value="{{.Shard}}"/>
       <INPUT type="submit" name="submit" value="Split Diff"/>
@@ -58,7 +63,9 @@ var splitDiffTemplate = mustParseTemplate("splitDiff", splitDiffHTML)
 var splitDiffTemplate2 = mustParseTemplate("splitDiff2", splitDiffHTML2)
 
 func commandSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
+	sourceUID := subFlags.Int("source_uid", 0, "uid of the source shard to run the diff against")
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
+	minHealthyRdonlyEndPoints := subFlags.Int("min_healthy_rdonly_endpoints", defaultMinHealthyRdonlyEndPoints, "minimum number of healthy rdonly endpoints before taking out one")
 	if err := subFlags.Parse(args); err != nil {
 		return nil, err
 	}
@@ -74,7 +81,7 @@ func commandSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSe
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	return NewSplitDiffWorker(wr, wi.cell, keyspace, shard, excludeTableArray), nil
+	return NewSplitDiffWorker(wr, wi.cell, keyspace, shard, uint32(*sourceUID), excludeTableArray, *minHealthyRdonlyEndPoints), nil
 }
 
 // shardsWithSources returns all the shards that have SourceShards set
@@ -84,7 +91,7 @@ func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string
 	keyspaces, err := wr.TopoServer().GetKeyspaces(shortCtx)
 	cancel()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get list of keyspaces: %v", err)
 	}
 
 	wg := sync.WaitGroup{}
@@ -99,7 +106,7 @@ func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string
 			shards, err := wr.TopoServer().GetShardNames(shortCtx, keyspace)
 			cancel()
 			if err != nil {
-				rec.RecordError(err)
+				rec.RecordError(fmt.Errorf("failed to get list of shards for keyspace '%v': %v", keyspace, err))
 				return
 			}
 			for _, shard := range shards {
@@ -110,7 +117,7 @@ func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string
 					si, err := wr.TopoServer().GetShard(shortCtx, keyspace, shard)
 					cancel()
 					if err != nil {
-						rec.RecordError(err)
+						rec.RecordError(fmt.Errorf("failed to get details for shard '%v': %v", topoproto.KeyspaceShardString(keyspace, shard), err))
 						return
 					}
 
@@ -132,7 +139,7 @@ func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string
 		return nil, rec.Error()
 	}
 	if len(result) == 0 {
-		return nil, fmt.Errorf("There are no shards with SourceShards")
+		return nil, fmt.Errorf("there are no shards with SourceShards")
 	}
 	return result, nil
 }
@@ -162,18 +169,30 @@ func interactiveSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.Wrangl
 		result := make(map[string]interface{})
 		result["Keyspace"] = keyspace
 		result["Shard"] = shard
+		result["DefaultSourceUID"] = "0"
+		result["DefaultMinHealthyRdonlyEndPoints"] = fmt.Sprintf("%v", defaultMinHealthyRdonlyEndPoints)
 		return nil, splitDiffTemplate2, result, nil
 	}
 
 	// Process input form.
+	sourceUIDStr := r.FormValue("sourceUID")
+	sourceUID, err := strconv.ParseInt(sourceUIDStr, 0, 64)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("cannot parse sourceUID: %s", err)
+	}
 	excludeTables := r.FormValue("excludeTables")
 	var excludeTableArray []string
 	if excludeTables != "" {
 		excludeTableArray = strings.Split(excludeTables, ",")
 	}
+	minHealthyRdonlyEndPointsStr := r.FormValue("minHealthyRdonlyEndPoints")
+	minHealthyRdonlyEndPoints, err := strconv.ParseInt(minHealthyRdonlyEndPointsStr, 0, 64)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("cannot parse minHealthyRdonlyEndPoints: %s", err)
+	}
 
 	// start the diff job
-	wrk := NewSplitDiffWorker(wr, wi.cell, keyspace, shard, excludeTableArray)
+	wrk := NewSplitDiffWorker(wr, wi.cell, keyspace, shard, uint32(sourceUID), excludeTableArray, int(minHealthyRdonlyEndPoints))
 	return wrk, nil, nil, nil
 }
 

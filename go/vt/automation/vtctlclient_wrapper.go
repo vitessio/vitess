@@ -6,6 +6,7 @@ package automation
 
 import (
 	"bytes"
+	"fmt"
 	"time"
 
 	log "github.com/golang/glog"
@@ -19,27 +20,62 @@ import (
 
 // ExecuteVtctl runs vtctl using vtctlclient. The stream of Event
 // messages is concatenated into one output string.
+// Additionally, the start and the end of the command will be logged to make
+// it easier to debug which command was executed and how long it took.
 func ExecuteVtctl(ctx context.Context, server string, args []string) (string, error) {
-	var output bytes.Buffer
+	return executeVtctl(ctx, server, args, true /* addHeaderAndFooter */)
+}
 
-	log.Infof("Executing remote vtctl command: %v server: %v", args, server)
+// ExecuteVtctlWithoutHeaderAndFooter runs vtctl using vtctlclient. The stream
+// of Event messages is concatenated into one output string.
+// Unlike ExecuteVtctl, the header and footer log are omitted from the output.
+func ExecuteVtctlWithoutHeaderAndFooter(ctx context.Context, server string, args []string) (string, error) {
+	return executeVtctl(ctx, server, args, false /* addHeaderAndFooter */)
+}
+
+func executeVtctl(ctx context.Context, server string, args []string, addHeaderAndFooter bool) (string, error) {
+	var output bytes.Buffer
+	loggerToBufferFunc := createLoggerEventToBufferFunction(&output)
+	outputLogger := newOutputLogger(loggerToBufferFunc)
+
+	startMsg := fmt.Sprintf("Executing remote vtctl command: %v server: %v", args, server)
+	if addHeaderAndFooter {
+		outputLogger.Infof(startMsg)
+	}
+	log.Info(startMsg)
+
 	err := vtctlclient.RunCommandAndWait(
 		ctx, server, args,
 		// TODO(mberlin): Should these values be configurable as flags?
 		30*time.Second, // dialTimeout
 		time.Hour,      // actionTimeout
-		CreateLoggerEventToBufferFunction(&output))
-	log.Infof("Executed remote vtctl command: %v server: %v err: %v output (starting on next line):\n%v", args, server, err, output.String())
+		createLoggerEventToBufferFunction(&output))
+
+	endMsg := fmt.Sprintf("Executed remote vtctl command: %v server: %v err: %v", args, server, err)
+	if addHeaderAndFooter {
+		outputLogger.Infof(endMsg)
+	}
+	// Log full output to log file (but not to the buffer).
+	log.Infof("%v output (starting on next line):\n%v", endMsg, output.String())
 
 	return output.String(), err
 }
 
-// CreateLoggerEventToBufferFunction returns a function to add LoggerEvent
+// createLoggerEventToBufferFunction returns a function to add LoggerEvent
 // structs to a given buffer, one line per event.
 // The buffer can be used to return a multi-line string with all events.
-func CreateLoggerEventToBufferFunction(output *bytes.Buffer) func(*logutilpb.Event) {
+func createLoggerEventToBufferFunction(output *bytes.Buffer) func(*logutilpb.Event) {
 	return func(e *logutilpb.Event) {
 		logutil.EventToBuffer(e, output)
 		output.WriteRune('\n')
 	}
+}
+
+// newOutputLogger returns a logger which makes it easy to log to a bytes.Buffer
+// output. When calling this function, pass in the result of
+// createLoggerEventToBufferFunction().
+func newOutputLogger(loggerToBufferFunc func(*logutilpb.Event)) logutil.Logger {
+	return logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		loggerToBufferFunc(e)
+	})
 }

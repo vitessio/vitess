@@ -62,13 +62,11 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* union all */ 1 from t union all select 1 from t",
 	}, {
-		input: "select /* minus */ 1 from t minus select 1 from t",
-	}, {
-		input: "select /* except */ 1 from t except select 1 from t",
-	}, {
-		input: "select /* intersect */ 1 from t intersect select 1 from t",
+		input: "select /* union distinct */ 1 from t union distinct select 1 from t",
 	}, {
 		input: "select /* distinct */ distinct 1 from t",
+	}, {
+		input: "select /* straight_join */ straight_join 1 from t",
 	}, {
 		input: "select /* for update */ 1 from t for update",
 	}, {
@@ -87,6 +85,11 @@ func TestValid(t *testing.T) {
 		output: "select /* keyword column alias */ a as `by` from t",
 	}, {
 		input: "select /* a.* */ a.* from t",
+	}, {
+		input:  "select next value for t",
+		output: "select next value from t",
+	}, {
+		input: "select next value from t",
 	}, {
 		input: "select /* `By`.* */ `By`.* from t",
 	}, {
@@ -192,8 +195,6 @@ func TestValid(t *testing.T) {
 		input: "select /* false */ 1 from t where false",
 	}, {
 		input: "select /* exists */ 1 from t where exists (select 1 from t)",
-	}, {
-		input: "select /* keyrange */ 1 from t where keyrange(1, 2)",
 	}, {
 		input: "select /* (boolean) */ 1 from t where not (a = b)",
 	}, {
@@ -305,6 +306,8 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* a.b */ a.b from t",
 	}, {
+		input: "select /* a.b.c */ a.b.c from t",
+	}, {
 		input:  "select /* keyword a.b */ `By`.`bY` from t",
 		output: "select /* keyword a.b */ `By`.`by` from t",
 	}, {
@@ -378,6 +381,8 @@ func TestValid(t *testing.T) {
 		output: "select /* binary unary */ a - -b from t",
 	}, {
 		input: "select /* - - */ - -b from t",
+	}, {
+		input: "select /* interval */ adddate('2008-01-02', interval 31 day) from t",
 	}, {
 		input: "select /* dual */ 1 from dual",
 	}, {
@@ -547,6 +552,13 @@ func TestValid(t *testing.T) {
 		if out != tcase.output {
 			t.Errorf("out: %s, want %s", out, tcase.output)
 		}
+		// This test just exercises the tree walking functionality.
+		// There's no way automated way to verify that a node calls
+		// all its children. But we can examine code coverage and
+		// ensure that all WalkSubtree functions were called.
+		Walk(func(node SQLNode) (bool, error) {
+			return true, nil
+		}, tree)
 	}
 }
 
@@ -639,7 +651,7 @@ func TestCaseSensitivity(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
-	validSQL := []struct {
+	invalidSQL := []struct {
 		input  string
 		output string
 	}{{
@@ -720,8 +732,11 @@ func TestErrors(t *testing.T) {
 	}, {
 		input:  "select * from a natural join b on c = d",
 		output: "syntax error at position 34 near 'on'",
+	}, {
+		input:  "select next id from a",
+		output: "expecting value after next at position 23",
 	}}
-	for _, tcase := range validSQL {
+	for _, tcase := range invalidSQL {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}

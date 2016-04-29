@@ -13,6 +13,19 @@ toc: true
 share: false
 ---
 
+## Percona Live 2016
+
+[Sugu](https://github.com/sougou) and [Anthony](https://github.com/enisoc)
+showed what it looks like to use Vitess now that
+[Keyspace IDs](http://vitess.io/overview/concepts.html#keyspace-id) can be
+completely hidden from the application. They gave a live demo of
+[resharding the Guestbook sample app](http://vitess.io/user-guide/sharding-kubernetes.html),
+which now knows nothing about shards, and explained how new features in VTGate
+make all of this possible.
+
+<iframe src="http://docs.google.com/gview?url=http://vitess.io/resources/percona-2016.pdf&embedded=true" style="width:643px; height:379px; margin-top: 20px;" frameborder="0"></iframe>
+<div style="text-align: right; width: 100%; margin-bottom:20px"><a href="http://vitess.io/resources/percona-2016.pdf">download slides</a></div>
+
 ## CoreOS Meetup, January 2016
 
 Vitess team member [Anthony Yeh](https://github.com/enisoc)'s talk at

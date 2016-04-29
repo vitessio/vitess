@@ -86,9 +86,9 @@ def add_options(parser):
       '--skip-teardown', action='store_true',
       help='Leave the global processes running after the test is done.')
   parser.add_option('--mysql-flavor')
-  parser.add_option('--protocols-flavor', default='gorpc')
+  parser.add_option('--protocols-flavor', default='grpc')
   parser.add_option('--topo-server-flavor', default='zookeeper')
-  parser.add_option('--vtgate-gateway-flavor', default='shardgateway')
+  parser.add_option('--vtgate-gateway-flavor', default='discoverygateway')
 
 
 def set_options(opts):
@@ -372,15 +372,33 @@ def get_vars(port):
     raise
 
 
-# wait_for_vars will wait until we can actually get the vars from a process,
-# and if var is specified, will wait until that var is in vars
-def wait_for_vars(name, port, var=None):
-  timeout = 10.0
+def wait_for_vars(name, port, var=None, key=None, value=None, timeout=10.0):
+  """Waits for the vars of a process, and optional values.
+
+  Args:
+    name: nickname for the process.
+    port: process port to look at.
+    var: if specified, waits for var in vars.
+    key: if specified, waits for vars[var][key]==value.
+    value: if key if specified, waits for vars[var][key]==value.
+    timeout: how long to wait.
+  """
+  text = 'waiting for http://localhost:%d/debug/vars of %s' % (port, name)
+  if var:
+    text += ' value %s' % var
+    if key:
+      text += ' key %s:%s' % (key, value)
   while True:
     v = get_vars(port)
-    if v and (var is None or var in v):
-      break
-    timeout = wait_step('waiting for /debug/vars of %s' % name, timeout)
+    if v:
+      if var is None:
+        break
+      if var in v:
+        if key is None:
+          break
+        if key in v[var] and v[var][key] == value:
+          break
+    timeout = wait_step(text, timeout)
 
 
 def poll_for_vars(
@@ -434,10 +452,11 @@ def poll_for_vars(
 
 
 def apply_vschema(vschema):
-  fname = os.path.join(environment.tmproot, 'vschema.json')
-  with open(fname, 'w') as f:
-    f.write(vschema)
-  run_vtctl(['ApplyVSchema', '-vschema_file', fname])
+  for k, v in vschema.iteritems():
+    fname = os.path.join(environment.tmproot, 'vschema.json')
+    with open(fname, 'w') as f:
+      f.write(v)
+    run_vtctl(['ApplyVSchema', '-vschema_file', fname, k])
 
 
 def wait_for_tablet_type(tablet_alias, expected_type, timeout=10):
@@ -503,7 +522,8 @@ class VtGate(object):
   def start(self, cell='test_nj', retry_delay=1, retry_count=2,
             topo_impl=None, cache_ttl='1s',
             timeout_total='2s', timeout_per_conn='1s',
-            extra_args=None, tablets=None):
+            extra_args=None, tablets=None,
+            tablet_types_to_wait='MASTER,REPLICA'):
     """Start vtgate. Saves it into the global vtgate variable if not set yet."""
 
     args = environment.binary_args('vtgate') + [
@@ -515,12 +535,13 @@ class VtGate(object):
         '-srv_topo_cache_ttl', cache_ttl,
         '-conn-timeout-total', timeout_total,
         '-conn-timeout-per-conn', timeout_per_conn,
-        '-bsonrpc_timeout', '5s',
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-gateway_implementation', vtgate_gateway_flavor().flavor(),
-        '-tablet_types_to_wait', 'MASTER,REPLICA',
+        '-tablet_grpc_combine_begin_execute',
     ]
     args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
+    if tablet_types_to_wait:
+      args.extend(['-tablet_types_to_wait', tablet_types_to_wait])
     if protocols_flavor().vtgate_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
     if protocols_flavor().service_map():
@@ -648,6 +669,20 @@ class VtGate(object):
     args.append(sql)
     return run_vtctl_json(args)
 
+  def wait_for_endpoints(self, name, count, timeout=20.0):
+    """waits until vtgate gets endpoints.
+
+    Args:
+      name: name of the endpoint, in the form: 'keyspace.shard.type'.
+      count: how many endpoints to wait for.
+      timeout: how long to wait.
+    """
+    if vtgate_gateway_flavor().flavor() == 'shardgateway':
+      return
+    wait_for_vars('vtgate', self.port,
+                  var=vtgate_gateway_flavor().connection_count_vars(),
+                  key=name, value=count, timeout=timeout)
+
 
 # vtctl helpers
 # The modes are not all equivalent, and we don't really thrive for it.
@@ -762,7 +797,6 @@ def _get_vtworker_cmd(clargs, auto_log=False):
   rpc_port = port
   args = environment.binary_args('vtworker') + [
       '-log_dir', environment.vtlogroot,
-      '-min_healthy_rdonly_endpoints', '1',
       '-port', str(port),
       # use a long resolve TTL because of potential race conditions with doing
       # an EmergencyReparent and resolving the master (as EmergencyReparent
@@ -892,7 +926,8 @@ def wait_db_read_only(uid):
   raise e
 
 
-def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
+def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64',
+                       sharding_column_name='keyspace_id'):
   ks = run_vtctl_json(['GetSrvKeyspace', cell, keyspace])
   result = ''
   pmap = {}
@@ -921,7 +956,7 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
         'Mismatch in srv keyspace for cell %s keyspace %s, expected:\n%'
         's\ngot:\n%s' % (
             cell, keyspace, expected, result))
-  if 'keyspace_id' != ks.get('sharding_column_name'):
+  if sharding_column_name != ks.get('sharding_column_name'):
     raise Exception('Got wrong sharding_column_name in SrvKeyspace: %s' %
                     str(ks))
   if keyspace_id_type != keyrange_constants.PROTO3_KIT_TO_STRING[

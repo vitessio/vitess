@@ -22,8 +22,7 @@ import (
 )
 
 var (
-	// EnableSemiSync is exported for use by vt/wrangler/testlib.
-	EnableSemiSync = flag.Bool("enable_semi_sync", false, "Enable semi-sync when configuring replication, on master and replica tablets only (rdonly tablets will not ack).")
+	enableSemiSync = flag.Bool("enable_semi_sync", false, "Enable semi-sync when configuring replication, on master and replica tablets only (rdonly tablets will not ack).")
 )
 
 // SlaveStatus returns the replication status
@@ -78,7 +77,7 @@ func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position string,
 // replication or not (using hook if not).
 // Should be called under RPCWrapLock.
 func (agent *ActionAgent) StartSlave(ctx context.Context) error {
-	if *EnableSemiSync {
+	if *enableSemiSync {
 		if err := agent.enableSemiSync(false); err != nil {
 			return err
 		}
@@ -119,7 +118,7 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 	}
 
 	// If using semi-sync, we need to enable it before going read-write.
-	if *EnableSemiSync {
+	if *enableSemiSync {
 		if err := agent.enableSemiSync(true); err != nil {
 			return "", err
 		}
@@ -170,7 +169,7 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 	}
 
 	// If using semi-sync, we need to enable it before connecting to master.
-	if *EnableSemiSync {
+	if *enableSemiSync {
 		if err := agent.enableSemiSync(false); err != nil {
 			return err
 		}
@@ -209,12 +208,14 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	// Now disallow queries, to make sure nobody is writing to the
 	// database.
 	tablet := agent.Tablet()
-	if err := agent.disallowQueries(tablet.Type, "DemoteMaster marks server rdonly"); err != nil {
+	// We don't care if the QueryService state actually changed because we'll
+	// let vtgate keep serving read traffic from this master (see comment below).
+	if _ /* state changed */, err := agent.disallowQueries(tablet.Type, "DemoteMaster marks server rdonly"); err != nil {
 		return "", fmt.Errorf("disallowQueries failed: %v", err)
 	}
 
 	// If using semi-sync, we need to disable master-side.
-	if *EnableSemiSync {
+	if *enableSemiSync {
 		if err := agent.enableSemiSync(false); err != nil {
 			return "", err
 		}
@@ -228,7 +229,7 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	// There is no serving graph update - the master tablet will
 	// be replaced. Even though writes may fail, reads will
 	// succeed. It will be less noisy to simply leave the entry
-	// until well promote the master.
+	// until we'll promote the master.
 }
 
 // PromoteSlaveWhenCaughtUp waits for this slave to be caught up on
@@ -259,7 +260,7 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 	}
 
 	// If using semi-sync, we need to enable it before going read-write.
-	if *EnableSemiSync {
+	if *enableSemiSync {
 		if err := agent.enableSemiSync(true); err != nil {
 			return "", err
 		}
@@ -304,7 +305,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 	}
 
 	// If using semi-sync, we need to enable it before connecting to master.
-	if *EnableSemiSync {
+	if *enableSemiSync {
 		if err := agent.enableSemiSync(false); err != nil {
 			return err
 		}
@@ -393,7 +394,7 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
 	}
 
 	// If using semi-sync, we need to enable it before going read-write.
-	if *EnableSemiSync {
+	if *enableSemiSync {
 		if err := agent.enableSemiSync(true); err != nil {
 			return "", err
 		}

@@ -14,7 +14,7 @@ import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
-// ConcatenateErrors aggregates an array of errors into a single error by string concatenation
+// ConcatenateErrors aggregates an array of errors into a single error by string concatenation.
 func ConcatenateErrors(errors []error) error {
 	errStrs := make([]string, 0, len(errors))
 	for _, e := range errors {
@@ -25,12 +25,12 @@ func ConcatenateErrors(errors []error) error {
 	return fmt.Errorf("%v", strings.Join(errStrs, "\n"))
 }
 
-// VtError is implemented by any type that exposes a vtrpcpb.ErrorCode
+// VtError is implemented by any type that exposes a vtrpcpb.ErrorCode.
 type VtError interface {
 	VtErrorCode() vtrpcpb.ErrorCode
 }
 
-// RecoverVtErrorCode attempts to recover a vtrpcpb.ErrorCode from an error
+// RecoverVtErrorCode attempts to recover a vtrpcpb.ErrorCode from an error.
 func RecoverVtErrorCode(err error) vtrpcpb.ErrorCode {
 	if vtErr, ok := err.(VtError); ok {
 		return vtErr.VtErrorCode()
@@ -38,9 +38,9 @@ func RecoverVtErrorCode(err error) vtrpcpb.ErrorCode {
 	return vtrpcpb.ErrorCode_UNKNOWN_ERROR
 }
 
-// VitessError is the error type that we use internally for passing structured errors
+// VitessError is the error type that we use internally for passing structured errors.
 type VitessError struct {
-	// Error code of the Vitess error
+	// Error code of the Vitess error.
 	Code vtrpcpb.ErrorCode
 	// Error message that should be returned. This allows us to change an error message
 	// without losing the underlying error. For example, if you have an error like
@@ -62,7 +62,7 @@ func (e *VitessError) Error() string {
 	return e.Message
 }
 
-// VtErrorCode returns the underlying Vitess error code
+// VtErrorCode returns the underlying Vitess error code.
 func (e *VitessError) VtErrorCode() vtrpcpb.ErrorCode {
 	return e.Code
 }
@@ -75,6 +75,19 @@ func (e *VitessError) AsString() string {
 	return fmt.Sprintf("Code: %v, err: %v", e.Code, e.err)
 }
 
+// FromError returns a VitessError with the supplied error code by wrapping an
+// existing error.
+// Use this method also when you want to create a VitessError without a custom
+// message. For example:
+//	 err := vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR,
+//     errors.New("no valid endpoint"))
+func FromError(code vtrpcpb.ErrorCode, err error) error {
+	return &VitessError{
+		Code: code,
+		err:  err,
+	}
+}
+
 // NewVitessError returns a VitessError backed error with the given arguments.
 // Useful for preserving an underlying error while creating a new error message.
 func NewVitessError(code vtrpcpb.ErrorCode, err error, format string, args ...interface{}) error {
@@ -82,15 +95,6 @@ func NewVitessError(code vtrpcpb.ErrorCode, err error, format string, args ...in
 		Code:    code,
 		Message: fmt.Sprintf(format, args...),
 		err:     err,
-	}
-}
-
-// FromError returns a VitessError with the supplied error code by wrapping an
-// existing error.
-func FromError(code vtrpcpb.ErrorCode, err error) error {
-	return &VitessError{
-		Code: code,
-		err:  err,
 	}
 }
 

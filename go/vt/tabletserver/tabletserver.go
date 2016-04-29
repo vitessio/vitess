@@ -23,8 +23,12 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/splitquery"
+	"github.com/youtube/vitess/go/vt/utils"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -233,7 +237,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbconfigs dbconfigs
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state != StateNotConnected {
-		return NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "InitDBConfig failed, current state: %d", tsv.state)
+		return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "InitDBConfig failed, current state: %d", tsv.state)
 	}
 	tsv.target = target
 	tsv.dbconfigs = dbconfigs
@@ -251,7 +255,8 @@ func (tsv *TabletServer) StartService(target querypb.Target, dbconfigs dbconfigs
 	if err != nil {
 		return err
 	}
-	return tsv.SetServingType(tabletType, true, nil)
+	_ /* state changed */, err = tsv.SetServingType(tabletType, true, nil)
+	return err
 }
 
 // EnterLameduck causes tabletserver to enter the lameduck state. This
@@ -278,23 +283,24 @@ const (
 // stops internal services as deemed necessary. The tabletType determines the
 // primary serving type, while alsoAllow specifies other tablet types that
 // should also be honored for serving.
-func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) error {
+// Returns true if the state of QueryService or the tablet type changed.
+func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (bool, error) {
 	defer tsv.ExitLameduck()
 
 	action, err := tsv.decideAction(tabletType, serving, alsoAllow)
 	if err != nil {
-		return err
+		return false /* state did not change */, err
 	}
 	switch action {
 	case actionNone:
-		return nil
+		return false /* state did not change */, nil
 	case actionFullStart:
-		return tsv.fullStart()
+		return true /* state changed */, tsv.fullStart()
 	case actionServeNewType:
-		return tsv.serveNewType()
+		return true /* state changed */, tsv.serveNewType()
 	case actionGracefulStop:
 		tsv.gracefulStop()
-		return nil
+		return true /* state changed */, nil
 	}
 	panic("unreachable")
 }
@@ -335,7 +341,7 @@ func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving 
 		tsv.setState(StateTransitioning)
 		return actionServeNewType, nil
 	case StateTransitioning, StateShuttingDown:
-		return actionNone, NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "cannot SetServingType, current state: %s", tsv.state)
+		return actionNone, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "cannot SetServingType, current state: %s", tsv.state)
 	default:
 		panic("uncreachable")
 	}
@@ -541,13 +547,13 @@ func (tsv *TabletServer) GetSessionId(keyspace, shard string) (int64, error) {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state != StateServing {
-		return 0, NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
+		return 0, NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
 	}
 	if keyspace != tsv.dbconfigs.App.Keyspace {
-		return 0, NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Keyspace mismatch, expecting %v, received %v", tsv.dbconfigs.App.Keyspace, keyspace)
+		return 0, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Keyspace mismatch, expecting %v, received %v", tsv.dbconfigs.App.Keyspace, keyspace)
 	}
 	if strings.ToLower(shard) != strings.ToLower(tsv.dbconfigs.App.Shard) {
-		return 0, NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Shard mismatch, expecting %v, received %v", tsv.dbconfigs.App.Shard, shard)
+		return 0, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Shard mismatch, expecting %v, received %v", tsv.dbconfigs.App.Shard, shard)
 	}
 	return tsv.sessionID, nil
 }
@@ -637,13 +643,12 @@ func (tsv *TabletServer) handleExecErrorNoPanic(sql string, bindVariables map[st
 	if !ok {
 		log.Errorf("Uncaught panic for %v:\n%v\n%s", querytypes.QueryAsString(sql, bindVariables), err, tb.Stack(4))
 		tsv.qe.queryServiceStats.InternalErrors.Add("Panic", 1)
-		terr = NewTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for %v", err, querytypes.QueryAsString(sql, bindVariables))
+		terr = NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for %v", err, querytypes.QueryAsString(sql, bindVariables))
 		return terr
 	}
 	var myError error
 	if tsv.config.TerseErrors && terr.SQLError != 0 && len(bindVariables) != 0 {
 		myError = &TabletError{
-			ErrorType: terr.ErrorType,
 			SQLError:  terr.SQLError,
 			ErrorCode: terr.ErrorCode,
 			Message:   fmt.Sprintf("(errno %d) during query: %s", terr.SQLError, sql),
@@ -655,13 +660,21 @@ func (tsv *TabletServer) handleExecErrorNoPanic(sql string, bindVariables map[st
 
 	logMethod := log.Warningf
 	// Suppress or demote some errors in logs
-	switch terr.ErrorType {
-	case ErrRetry, ErrTxPoolFull:
+	switch terr.ErrorCode {
+	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED, vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED:
 		return myError
-	case ErrFatal:
+	case vtrpcpb.ErrorCode_INTERNAL_ERROR:
 		logMethod = log.Errorf
+	case vtrpcpb.ErrorCode_NOT_IN_TX:
+		// keep as warning
+	default:
+		// default is when we think the query itself is
+		// problematic. This doesn't indicate a system or
+		// component wide degradation, so we log to INFO.
+		logMethod = log.Infof
 	}
-	// We want to suppress/demote some MySQL error codes (regardless of the ErrorType)
+	// We want to suppress/demote some MySQL error codes
+	// (regardless of the ErrorType)
 	switch terr.SQLError {
 	case mysql.ErrDupEntry:
 		return myError
@@ -749,10 +762,10 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 // transaction. If AsTransaction is true, TransactionId must be 0.
 func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, sessionID int64, asTransaction bool, transactionID int64) (results []sqltypes.Result, err error) {
 	if len(queries) == 0 {
-		return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "Empty query list")
+		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "Empty query list")
 	}
 	if asTransaction && transactionID != 0 {
-		return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "cannot start a new transaction in the scope of an existing one")
+		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "cannot start a new transaction in the scope of an existing one")
 	}
 
 	allowShutdown := (transactionID != 0)
@@ -795,6 +808,8 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 
 // SplitQuery splits a query + bind variables into smaller queries that return a
 // subset of rows from the original query.
+// TODO(erez): Remove this method and rename SplitQueryV2 to SplitQuery once we migrate to
+// SplitQuery V2.
 func (tsv *TabletServer) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, sessionID int64) (splits []querytypes.QuerySplit, err error) {
 	logStats := newLogStats("SplitQuery", ctx)
 	logStats.OriginalSQL = sql
@@ -812,7 +827,7 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *querypb.Target,
 	splitter := NewQuerySplitter(sql, bindVariables, splitColumn, splitCount, tsv.qe.schemaInfo)
 	err = splitter.validateQuery()
 	if err != nil {
-		return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "splitQuery: query validation error: %s, request: %v", err, querytypes.QueryAsString(sql, bindVariables))
+		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "splitQuery: query validation error: %s, request: %v", err, querytypes.QueryAsString(sql, bindVariables))
 	}
 
 	defer func(start time.Time) {
@@ -837,9 +852,244 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *querypb.Target,
 	}
 	splits, err = splitter.split(columnType, pkMinMax)
 	if err != nil {
-		return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "splitQuery: query split error: %s, request: %v", err, querytypes.QueryAsString(sql, bindVariables))
+		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "splitQuery: query split error: %s, request: %v", err, querytypes.QueryAsString(sql, bindVariables))
 	}
 	return splits, nil
+}
+
+// SplitQueryV2 splits a query + bind variables into smaller queries that return a
+// subset of rows from the original query. This is the new version that supports multiple
+// split columns and multiple split algortihms.
+// See the documentation of SplitQueryRequest in proto/vtgate.proto for more details.
+func (tsv *TabletServer) SplitQueryV2(
+	ctx context.Context,
+	target *querypb.Target,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm,
+	sessionID int64,
+) (splits []querytypes.QuerySplit, err error) {
+	logStats := newLogStats("SplitQuery", ctx)
+	logStats.OriginalSQL = sql
+	logStats.BindVariables = bindVariables
+	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
+	if err = tsv.startRequest(target, sessionID, false, false); err != nil {
+		return nil, err
+	}
+	// We don't set a timeout for SplitQueryV2.
+	// SplitQuery using the Full Scan algorithm can take a while and
+	// we don't expect too many of these queries to run concurrently.
+	defer tsv.endRequest(false)
+
+	if err := validateSplitQueryParameters(
+		target,
+		sql,
+		bindVariables,
+		splitColumns,
+		splitCount,
+		numRowsPerQueryPart,
+		algorithm,
+		sessionID); err != nil {
+		return nil, err
+	}
+	schema := getSchemaForSplitQuery(tsv.qe.schemaInfo)
+	splitParams, err := createSplitParams(
+		sql, bindVariables, splitColumns, splitCount, numRowsPerQueryPart, schema)
+	if err != nil {
+		return nil, err
+	}
+	defer func(start time.Time) {
+		splitTableName := splitParams.GetSplitTableName()
+		addUserTableQueryStats(
+			tsv.qe.queryServiceStats, ctx, splitTableName, "SplitQuery", int64(time.Now().Sub(start)))
+	}(time.Now())
+	sqlExecuter, err := newSplitQuerySQLExecuter(ctx, logStats, tsv.qe)
+	if err != nil {
+		return nil, err
+	}
+	defer sqlExecuter.done()
+	algorithmObject, err := createSplitQueryAlgorithmObject(algorithm, splitParams, sqlExecuter)
+	if err != nil {
+		return nil, err
+	}
+	result, err := splitquery.NewSplitter(splitParams, algorithmObject).Split()
+	return result, splitQueryToTabletError(err)
+}
+
+// validateSplitQueryParameters perform some validations on the SplitQuery parameters
+// returns an error that can be returned to the user if a validation fails.
+func validateSplitQueryParameters(
+	target *querypb.Target,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	algorithm querypb.SplitQueryRequest_Algorithm,
+	sessionID int64,
+) error {
+	// Check that the caller requested a RDONLY tablet.
+	// Since we're called by VTGate this should not normally be violated.
+	if target.TabletType != topodatapb.TabletType_RDONLY {
+		return NewTabletError(
+			vtrpcpb.ErrorCode_BAD_INPUT,
+			"SplitQuery must be called with a RDONLY tablet. TableType passed is: %v",
+			target.TabletType)
+	}
+	if numRowsPerQueryPart < 0 {
+		return NewTabletError(
+			vtrpcpb.ErrorCode_BAD_INPUT,
+			"splitQuery: numRowsPerQueryPart must be non-negative. Got: %v. SQL: %v",
+			numRowsPerQueryPart,
+			querytypes.QueryAsString(sql, bindVariables))
+	}
+	if splitCount < 0 {
+		return NewTabletError(
+			vtrpcpb.ErrorCode_BAD_INPUT,
+			"splitQuery: splitCount must be non-negative. Got: %v. SQL: %v",
+			splitCount,
+			querytypes.QueryAsString(sql, bindVariables))
+	}
+	if (splitCount == 0 && numRowsPerQueryPart == 0) ||
+		(splitCount != 0 && numRowsPerQueryPart != 0) {
+		return NewTabletError(
+			vtrpcpb.ErrorCode_BAD_INPUT,
+			"splitQuery: exactly one of {numRowsPerQueryPart, splitCount} must be"+
+				" non zero. Got: numRowsPerQueryPart=%v, splitCount=%v. SQL: %v",
+			splitCount,
+			querytypes.QueryAsString(sql, bindVariables))
+	}
+	if algorithm != querypb.SplitQueryRequest_EQUAL_SPLITS &&
+		algorithm != querypb.SplitQueryRequest_FULL_SCAN {
+		return NewTabletError(
+			vtrpcpb.ErrorCode_BAD_INPUT,
+			"splitquery: unsupported algorithm: %v. SQL: %v",
+			algorithm,
+			querytypes.QueryAsString(sql, bindVariables))
+	}
+	return nil
+}
+
+func createSplitParams(
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumns []string,
+	splitCount int64,
+	numRowsPerQueryPart int64,
+	schema map[string]*schema.Table,
+) (*splitquery.SplitParams, error) {
+	switch {
+	case numRowsPerQueryPart != 0 && splitCount == 0:
+		splitParams, err := splitquery.NewSplitParamsGivenNumRowsPerQueryPart(
+			sql, bindVariables, splitColumns, numRowsPerQueryPart, schema)
+		return splitParams, splitQueryToTabletError(err)
+	case numRowsPerQueryPart == 0 && splitCount != 0:
+		splitParams, err := splitquery.NewSplitParamsGivenSplitCount(
+			sql, bindVariables, splitColumns, splitCount, schema)
+		return splitParams, splitQueryToTabletError(err)
+	default:
+		panic(fmt.Sprintf("Exactly one of {numRowsPerQueryPart, splitCount} must be"+
+			" non zero. This should have already been caught by 'validateSplitQueryParameters' and "+
+			" returned as an error. Got: numRowsPerQueryPart=%v, splitCount=%v. SQL: %v",
+			numRowsPerQueryPart,
+			splitCount,
+			querytypes.QueryAsString(sql, bindVariables)))
+	}
+}
+
+// splitQuerySQLExecuter implements splitquery.SQLExecuterInterface and allows the splitquery
+// package to send SQL statements to MySQL
+type splitQuerySQLExecuter struct {
+	queryExecutor *QueryExecutor
+	conn          *DBConn
+}
+
+// Constructs a new splitQuerySQLExecuter object. The 'done' method must be called on
+// the object after it's no longer used, to recycle the database connection.
+func newSplitQuerySQLExecuter(
+	ctx context.Context, logStats *LogStats, queryEngine *QueryEngine,
+) (*splitQuerySQLExecuter, error) {
+	queryExecutor := &QueryExecutor{
+		ctx:      ctx,
+		logStats: logStats,
+		qe:       queryEngine,
+	}
+	result := &splitQuerySQLExecuter{
+		queryExecutor: queryExecutor,
+	}
+	var err error
+	result.conn, err = queryExecutor.getConn(queryExecutor.qe.connPool)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (se *splitQuerySQLExecuter) done() {
+	se.conn.Recycle()
+}
+
+// SQLExecute is part of the SQLExecuter interface.
+func (se *splitQuerySQLExecuter) SQLExecute(
+	sql string, bindVariables map[string]interface{},
+) (*sqltypes.Result, error) {
+	// We need to parse the query since we're dealing with bind-vars.
+	// TODO(erez): Add an SQLExecute() to SQLExecuterInterface that gets a parsed query so that
+	// we don't have to parse the query again here.
+	ast, err := sqlparser.Parse(sql)
+	if err != nil {
+		return nil, fmt.Errorf("splitQuerySQLExecuter: parsing sql failed with: %v", err)
+	}
+	parsedQuery := sqlparser.GenerateParsedQuery(ast)
+
+	// We clone "bindVariables" since fullFetch() changes it.
+	return se.queryExecutor.fullFetch(
+		se.conn,
+		parsedQuery,
+		utils.CloneBindVariables(bindVariables),
+		nil /* buildStreamComment */)
+}
+
+// getSchemaForSplitQuery converts the given schemaInfo object into
+// the datastructure needed by the splitquery package: a map from a table name
+// to its corresponding schame.Table object.
+func getSchemaForSplitQuery(schemaInfo *SchemaInfo) map[string]*schema.Table {
+	// Get a snapshot of the schema.
+	tableList := schemaInfo.GetSchema()
+	result := make(map[string]*schema.Table, len(tableList))
+	for _, table := range tableList {
+		// TODO(erez): Panic if table.Name is already in 'result'.
+		result[table.Name] = table
+	}
+	return result
+}
+
+func createSplitQueryAlgorithmObject(
+	algorithm querypb.SplitQueryRequest_Algorithm,
+	splitParams *splitquery.SplitParams,
+	sqlExecuter splitquery.SQLExecuter) (splitquery.SplitAlgorithmInterface, error) {
+
+	switch algorithm {
+	case querypb.SplitQueryRequest_FULL_SCAN:
+		return splitquery.NewFullScanAlgorithm(splitParams, sqlExecuter)
+	case querypb.SplitQueryRequest_EQUAL_SPLITS:
+		return splitquery.NewEqualSplitsAlgorithm(splitParams, sqlExecuter)
+	default:
+		panic(fmt.Sprintf("Unknown algorithm enum: %+v", algorithm))
+	}
+}
+
+// splitQueryToTabletError converts the given error assumed to be returned from the
+// splitquery-package into a TabletError suitablet to be returned to the caller.
+// It returns nil if 'err' is nil.
+func splitQueryToTabletError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "splitquery: %v", err)
 }
 
 // StreamHealthRegister is part of queryservice.QueryService interface
@@ -910,16 +1160,16 @@ func (tsv *TabletServer) startRequest(target *querypb.Target, sessionID int64, i
 	if (isBegin || allowShutdown) && tsv.state == StateShuttingDown {
 		goto verifySession
 	}
-	return NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
+	return NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
 
 verifySession:
 	if target != nil {
 		// a valid target can be used instead of a valid session
 		if target.Keyspace != tsv.target.Keyspace {
-			return NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid keyspace %v", target.Keyspace)
+			return NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid keyspace %v", target.Keyspace)
 		}
 		if target.Shard != tsv.target.Shard {
-			return NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid shard %v", target.Shard)
+			return NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid shard %v", target.Shard)
 		}
 		if target.TabletType != tsv.target.TabletType {
 			for _, otherType := range tsv.alsoAllow {
@@ -927,12 +1177,12 @@ verifySession:
 					goto ok
 				}
 			}
-			return NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
+			return NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
 		}
 		goto ok
 	}
 	if sessionID != tsv.sessionID {
-		return NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid session Id %v", sessionID)
+		return NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid session Id %v", sessionID)
 	}
 
 ok:
@@ -1119,7 +1369,7 @@ func getColumnType(qre *QueryExecutor, columnName, tableName string) (querypb.Ty
 		return sqltypes.Null, err
 	}
 	if result == nil || len(result.Fields) != 1 {
-		return sqltypes.Null, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "failed to get column type for column: %v, invalid result: %v", columnName, result)
+		return sqltypes.Null, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "failed to get column type for column: %v, invalid result: %v", columnName, result)
 	}
 	return result.Fields[0].Type, nil
 }

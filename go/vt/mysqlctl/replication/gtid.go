@@ -5,13 +5,8 @@
 package replication
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"strings"
-
-	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/bytes2"
 )
 
 // GTID represents a Global Transaction ID, also known as Transaction Group ID.
@@ -100,99 +95,4 @@ func MustDecodeGTID(s string) GTID {
 		panic(err)
 	}
 	return gtid
-}
-
-// GTIDField is a concrete struct that contains a GTID interface value. This can
-// be used as a field inside marshalable structs, which cannot contain interface
-// values because there would be no way to know which concrete type to
-// instantiate upon unmarshaling.
-//
-// Note: GTIDField should not implement GTID, because it would tend to create
-// subtle bugs. For example, the compiler would allow something like this:
-//
-//   GTIDField{googleGTID{1234}} == googleGTID{1234}
-//
-// But it would evaluate to false (because the underlying types don't match),
-// which is probably not what was expected.
-type GTIDField struct {
-	Value GTID
-}
-
-// String returns a string representation of the underlying GTID. If the
-// GTID value is nil, it returns "<nil>" in the style of Sprintf("%v", nil).
-func (gf GTIDField) String() string {
-	if gf.Value == nil {
-		return "<nil>"
-	}
-	return gf.Value.String()
-}
-
-// MarshalBson bson-encodes GTIDField.
-func (gf GTIDField) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
-	bson.EncodeOptionalPrefix(buf, bson.Object, key)
-
-	lenWriter := bson.NewLenWriter(buf)
-
-	if gf.Value != nil {
-		// The name of the bson field is the MySQL flavor.
-		bson.EncodeString(buf, gf.Value.Flavor(), gf.Value.String())
-	}
-
-	lenWriter.Close()
-}
-
-// UnmarshalBson bson-decodes into GTIDField.
-func (gf *GTIDField) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	switch kind {
-	case bson.EOO, bson.Object:
-		// valid
-	case bson.Null:
-		return
-	default:
-		panic(bson.NewBsonError("unexpected kind %v for GTIDField", kind))
-	}
-	bson.Next(buf, 4)
-
-	// We expect exactly zero or one fields in this bson object.
-	kind = bson.NextByte(buf)
-	if kind == bson.EOO {
-		// The GTID was nil, nothing to do.
-		return
-	}
-
-	// The field name is the MySQL flavor.
-	flavor := bson.ReadCString(buf)
-	value := bson.DecodeString(buf, kind)
-
-	// Check for and consume the end byte.
-	if kind = bson.NextByte(buf); kind != bson.EOO {
-		panic(bson.NewBsonError("too many fields for GTIDField"))
-	}
-
-	// Parse the value.
-	gtid, err := ParseGTID(flavor, value)
-	if err != nil {
-		panic(bson.NewBsonError("invalid value %v for GTIDField: %v", value, err))
-	}
-	gf.Value = gtid
-}
-
-// MarshalJSON implements encoding/json.Marshaler.
-func (gf GTIDField) MarshalJSON() ([]byte, error) {
-	return json.Marshal(EncodeGTID(gf.Value))
-}
-
-// UnmarshalJSON implements encoding/json.Unmarshaler.
-func (gf *GTIDField) UnmarshalJSON(buf []byte) error {
-	var s string
-	err := json.Unmarshal(buf, &s)
-	if err != nil {
-		return err
-	}
-
-	gf.Value, err = DecodeGTID(s)
-	if err != nil {
-		return err
-	}
-	return nil
 }

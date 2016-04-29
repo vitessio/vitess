@@ -549,8 +549,8 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 			for _, eps := range notDrainedHealtyTablets {
 				l = append(l, formatEndpointStats(eps))
 			}
-			return fmt.Errorf("%v: WaitForDrain failed for %v tablets in %v/%v. Only %d/%d tablets were drained. err: %v List of tablets which were not drained:\n%v",
-				cell, servedType, keyspace, shard, len(drainedHealthyTablets), healthyTabletsCount, ctx.Err(), strings.Join(l, "\n"))
+			return fmt.Errorf("%v: WaitForDrain failed for %v tablets in %v/%v. Only %d/%d tablets were drained. err: %v List of tablets which were not drained: %v",
+				cell, servedType, keyspace, shard, len(drainedHealthyTablets), healthyTabletsCount, ctx.Err(), strings.Join(l, ";"))
 		case <-timer.C:
 		}
 	}

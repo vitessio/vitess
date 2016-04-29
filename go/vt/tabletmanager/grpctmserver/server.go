@@ -5,7 +5,6 @@
 package grpctmserver
 
 import (
-	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -21,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerservicepb "github.com/youtube/vitess/go/vt/proto/tabletmanagerservice"
 )
@@ -132,6 +132,14 @@ func (s *server) RunHealthCheck(ctx context.Context, request *tabletmanagerdatap
 	return response, s.agent.RPCWrap(ctx, actionnode.TabletActionRunHealthCheck, request, response, func() error {
 		s.agent.RunHealthCheck(ctx, request.TabletType)
 		return nil
+	})
+}
+
+func (s *server) IgnoreHealthError(ctx context.Context, request *tabletmanagerdatapb.IgnoreHealthErrorRequest) (*tabletmanagerdatapb.IgnoreHealthErrorResponse, error) {
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response := &tabletmanagerdatapb.IgnoreHealthErrorResponse{}
+	return response, s.agent.RPCWrap(ctx, actionnode.TabletActionIgnoreHealthError, request, response, func() error {
+		return s.agent.IgnoreHealthError(ctx, request.Pattern)
 	})
 }
 
@@ -440,28 +448,16 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 	ctx := callinfo.GRPCCallInfo(stream.Context())
 	return s.agent.RPCWrapLockAction(ctx, actionnode.TabletActionBackup, request, nil, true, func() error {
 		// create a logger, send the result back to the caller
-		logger := logutil.NewChannelLogger(10)
-		wg := sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			for e := range logger {
-				// Note we don't interrupt the loop here, as
-				// we still need to flush and finish the
-				// command, even if the channel to the client
-				// has been broken. We'll just keep trying
-				// to send.
-				stream.Send(&tabletmanagerdatapb.BackupResponse{
-					Event: e,
-				})
+		logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+			// If the client disconnects, we will just fail
+			// to send the log events, but won't interrupt
+			// the backup.
+			stream.Send(&tabletmanagerdatapb.BackupResponse{
+				Event: e,
+			})
+		})
 
-			}
-			wg.Done()
-		}()
-
-		err := s.agent.Backup(ctx, int(request.Concurrency), logger)
-		close(logger)
-		wg.Wait()
-		return err
+		return s.agent.Backup(ctx, int(request.Concurrency), logger)
 	})
 }
 

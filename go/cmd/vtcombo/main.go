@@ -13,6 +13,8 @@ import (
 	"flag"
 	"time"
 
+	"golang.org/x/net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -23,7 +25,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctld"
 	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk/fakezk"
 
@@ -39,7 +41,7 @@ var (
 	topology           = flag.String("topology", "", "Define which shards exist in the test topology in the form <keyspace>/<shardrange>:<dbname>,... The dbname must be unique among all shards, since they share a MySQL instance in the test environment.")
 	shardingColumnName = flag.String("sharding_column_name", "keyspace_id", "Specifies the column to use for sharding operations")
 	shardingColumnType = flag.String("sharding_column_type", "uint64", "Specifies the type of the column to use for sharding operations")
-	vschema            = flag.String("vschema", "", "vschema file")
+	vschemaFile        = flag.String("vschema", "", "vschema file")
 
 	ts topo.Server
 )
@@ -84,19 +86,16 @@ func main() {
 	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnParams, &dbcfgs.Repl)
 	servenv.OnClose(mysqld.Close)
 
-	// tablets configuration and init
-	initTabletMap(ts, *topology, mysqld, dbcfgs, mycnf)
-
 	// vschema
-	var schema *planbuilder.Schema
-	if *vschema != "" {
-		schema, err = planbuilder.LoadFile(*vschema)
-		if err != nil {
-			log.Error(err)
-			exit.Return(1)
-		}
-		log.Infof("v3 is enabled: loaded schema from file")
+	formal, err := vindexes.LoadFormal(*vschemaFile)
+	if err != nil {
+		log.Errorf("ReadFile failed: %v %v", *vschemaFile, err)
+		exit.Return(1)
 	}
+	log.Infof("v3 is enabled: loaded vschema from file")
+
+	// tablets configuration and init
+	initTabletMap(ts, *topology, mysqld, dbcfgs, formal, mycnf)
 
 	// vtgate configuration and init
 	resilientSrvTopoServer := vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
@@ -106,7 +105,7 @@ func main() {
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
 	}
-	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, schema, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, tabletTypesToWait, 0 /*maxInFlight*/, "" /*testGateway*/)
+	vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, tabletTypesToWait, 0 /*maxInFlight*/, "" /*testGateway*/)
 
 	// vtctld configuration and init
 	vtctld.InitVtctld(ts)

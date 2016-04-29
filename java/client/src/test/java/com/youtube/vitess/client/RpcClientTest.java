@@ -44,12 +44,13 @@ public abstract class RpcClientTest {
   protected static RpcClient client;
 
   private Context ctx;
-  private VTGateConn conn;
+  private VTGateBlockingConn conn;
 
   @Before
   public void setUp() {
     ctx = Context.getDefault().withDeadlineAfter(Duration.millis(5000)).withCallerId(CALLER_ID);
-    conn = new VTGateConn(client);
+    // Test VTGateConn via the synchronous VTGateBlockingConn wrapper.
+    conn = new VTGateBlockingConn(client);
   }
 
   private static final String ECHO_PREFIX = "echo://";
@@ -118,19 +119,6 @@ public abstract class RpcClientTest {
   private static final String CALLER_ID_ECHO =
       "principal:\"test_principal\" component:\"test_component\" subcomponent:\"test_subcomponent\" ";
 
-  private static Map<String, String> getEcho(SQLFuture<?> future) throws Exception {
-    Object obj = future.checkedGet();
-    if (obj instanceof Cursor) {
-      return getEcho((Cursor) obj);
-    }
-    if (obj instanceof List<?>) {
-      @SuppressWarnings("unchecked") // by specification
-      List<Cursor> results = (List<Cursor>) obj;
-      return getEcho(results.get(0));
-    }
-    throw new Exception("unknown type");
-  }
-
   private static Map<String, String> getEcho(Cursor cursor) throws Exception {
     Map<String, String> values = new HashMap<String, String>();
     Map<String, Object> rawValues = new HashMap<String, Object>();
@@ -139,12 +127,14 @@ public abstract class RpcClientTest {
     List<Field> fields = cursor.getFields();
     Row row = cursor.next();
     Assert.assertNotNull(row);
-    for (int i = 0; i < fields.size(); i++) {
-      byte[] bytes = row.getBytes(i);
+    int columnIndex = 1;
+    for (Field field : fields) {
+      byte[] bytes = row.getBytes(columnIndex);
       if (bytes != null) {
-        values.put(fields.get(i).getName(), new String(row.getBytes(i), StandardCharsets.UTF_8));
+        values.put(field.getName(), new String(row.getBytes(columnIndex), StandardCharsets.UTF_8));
       }
-      rawValues.put(fields.get(i).getName(), row.getObject(i));
+      rawValues.put(field.getName(), row.getObject(columnIndex));
+      ++columnIndex;
     }
     Assert.assertNull(cursor.next()); // There should only be one row.
     cursor.close();
@@ -221,11 +211,12 @@ public abstract class RpcClientTest {
     echo =
         getEcho(
             conn.executeBatchShards(
-                ctx,
-                Arrays.asList(
-                    Proto.bindShardQuery(KEYSPACE, SHARDS, ECHO_PREFIX + QUERY, BIND_VARS)),
-                TABLET_TYPE,
-                true));
+                    ctx,
+                    Arrays.asList(
+                        Proto.bindShardQuery(KEYSPACE, SHARDS, ECHO_PREFIX + QUERY, BIND_VARS)),
+                    TABLET_TYPE,
+                    true)
+                .get(0));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -237,12 +228,13 @@ public abstract class RpcClientTest {
     echo =
         getEcho(
             conn.executeBatchKeyspaceIds(
-                ctx,
-                Arrays.asList(
-                    Proto.bindKeyspaceIdQuery(
-                        KEYSPACE, KEYSPACE_IDS, ECHO_PREFIX + QUERY, BIND_VARS)),
-                TABLET_TYPE,
-                true));
+                    ctx,
+                    Arrays.asList(
+                        Proto.bindKeyspaceIdQuery(
+                            KEYSPACE, KEYSPACE_IDS, ECHO_PREFIX + QUERY, BIND_VARS)),
+                    TABLET_TYPE,
+                    true)
+                .get(0));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -300,9 +292,9 @@ public abstract class RpcClientTest {
   public void testEchoTransactionExecute() throws Exception {
     Map<String, String> echo;
 
-    VTGateTx tx = conn.begin(ctx).checkedGet();
+    VTGateBlockingTx tx = conn.begin(ctx);
 
-    echo = getEcho(tx.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE).checkedGet());
+    echo = getEcho(tx.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
@@ -369,15 +361,16 @@ public abstract class RpcClientTest {
     Assert.assertEquals("false", echo.get("notInTransaction"));
 
     tx.rollback(ctx);
-    tx = conn.begin(ctx).checkedGet();
+    tx = conn.begin(ctx);
 
     echo =
         getEcho(
             tx.executeBatchShards(
-                ctx,
-                Arrays.asList(
-                    Proto.bindShardQuery(KEYSPACE, SHARDS, ECHO_PREFIX + QUERY, BIND_VARS)),
-                TABLET_TYPE));
+                    ctx,
+                    Arrays.asList(
+                        Proto.bindShardQuery(KEYSPACE, SHARDS, ECHO_PREFIX + QUERY, BIND_VARS)),
+                    TABLET_TYPE)
+                .get(0));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -390,11 +383,12 @@ public abstract class RpcClientTest {
     echo =
         getEcho(
             tx.executeBatchKeyspaceIds(
-                ctx,
-                Arrays.asList(
-                    Proto.bindKeyspaceIdQuery(
-                        KEYSPACE, KEYSPACE_IDS, ECHO_PREFIX + QUERY, BIND_VARS)),
-                TABLET_TYPE));
+                    ctx,
+                    Arrays.asList(
+                        Proto.bindKeyspaceIdQuery(
+                            KEYSPACE, KEYSPACE_IDS, ECHO_PREFIX + QUERY, BIND_VARS)),
+                    TABLET_TYPE)
+                .get(0));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -416,9 +410,7 @@ public abstract class RpcClientTest {
                 SplitQueryResponse.KeyRangePart.newBuilder().setKeyspace(KEYSPACE).build())
             .build();
     SplitQueryResponse.Part actual =
-        conn.splitQuery(ctx, KEYSPACE, ECHO_PREFIX + QUERY, BIND_VARS, "split_column", 123)
-            .checkedGet()
-            .get(0);
+        conn.splitQuery(ctx, KEYSPACE, ECHO_PREFIX + QUERY, BIND_VARS, "split_column", 123).get(0);
     Assert.assertEquals(expected, actual);
   }
 
@@ -451,7 +443,7 @@ public abstract class RpcClientTest {
                     .build())
             .setSplitShardCount(128)
             .build();
-    SrvKeyspace actual = conn.getSrvKeyspace(ctx, "big").checkedGet();
+    SrvKeyspace actual = conn.getSrvKeyspace(ctx, "big");
     Assert.assertEquals(expected, actual);
   }
 
@@ -493,7 +485,7 @@ public abstract class RpcClientTest {
   }
 
   abstract class TransactionExecutable {
-    abstract void execute(VTGateTx tx, String query) throws Exception;
+    abstract void execute(VTGateBlockingTx tx, String query) throws Exception;
   }
 
   void checkTransactionExecuteErrors(TransactionExecutable exe) throws Exception {
@@ -501,7 +493,7 @@ public abstract class RpcClientTest {
       Class<?> cls = EXECUTE_ERRORS.get(error);
 
       try {
-        VTGateTx tx = conn.begin(ctx).checkedGet();
+        VTGateBlockingTx tx = conn.begin(ctx);
         String query = ERROR_PREFIX + error;
         exe.execute(tx, query);
         Assert.fail("no exception thrown for " + query);
@@ -510,7 +502,7 @@ public abstract class RpcClientTest {
       }
 
       // Don't close the transaction on partial error.
-      VTGateTx tx = conn.begin(ctx).checkedGet();
+      VTGateBlockingTx tx = conn.begin(ctx);
       try {
         String query = PARTIAL_ERROR_PREFIX + error;
         exe.execute(tx, query);
@@ -522,7 +514,7 @@ public abstract class RpcClientTest {
       tx.rollback(ctx);
 
       // Close the transaction on partial error.
-      tx = conn.begin(ctx).checkedGet();
+      tx = conn.begin(ctx);
       try {
         String query = PARTIAL_ERROR_PREFIX + error + "/close transaction";
         exe.execute(tx, query);
@@ -547,30 +539,28 @@ public abstract class RpcClientTest {
         new Executable() {
           @Override
           void execute(String query) throws Exception {
-            conn.execute(ctx, query, BIND_VARS, TABLET_TYPE).checkedGet();
+            conn.execute(ctx, query, BIND_VARS, TABLET_TYPE);
           }
         });
     checkExecuteErrors(
         new Executable() {
           @Override
           void execute(String query) throws Exception {
-            conn.executeShards(ctx, query, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE).checkedGet();
+            conn.executeShards(ctx, query, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE);
           }
         });
     checkExecuteErrors(
         new Executable() {
           @Override
           void execute(String query) throws Exception {
-            conn.executeKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE)
-                .checkedGet();
+            conn.executeKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE);
           }
         });
     checkExecuteErrors(
         new Executable() {
           @Override
           void execute(String query) throws Exception {
-            conn.executeKeyRanges(ctx, query, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE)
-                .checkedGet();
+            conn.executeKeyRanges(ctx, query, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE);
           }
         });
     checkExecuteErrors(
@@ -578,8 +568,7 @@ public abstract class RpcClientTest {
           @Override
           void execute(String query) throws Exception {
             conn.executeEntityIds(
-                    ctx, query, KEYSPACE, "column1", ENTITY_KEYSPACE_IDS, BIND_VARS, TABLET_TYPE)
-                .checkedGet();
+                ctx, query, KEYSPACE, "column1", ENTITY_KEYSPACE_IDS, BIND_VARS, TABLET_TYPE);
           }
         });
     checkExecuteErrors(
@@ -587,11 +576,10 @@ public abstract class RpcClientTest {
           @Override
           void execute(String query) throws Exception {
             conn.executeBatchShards(
-                    ctx,
-                    Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS, query, BIND_VARS)),
-                    TABLET_TYPE,
-                    true)
-                .checkedGet();
+                ctx,
+                Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS, query, BIND_VARS)),
+                TABLET_TYPE,
+                true);
           }
         });
     checkExecuteErrors(
@@ -599,12 +587,10 @@ public abstract class RpcClientTest {
           @Override
           void execute(String query) throws Exception {
             conn.executeBatchKeyspaceIds(
-                    ctx,
-                    Arrays.asList(
-                        Proto.bindKeyspaceIdQuery(KEYSPACE, KEYSPACE_IDS, query, BIND_VARS)),
-                    TABLET_TYPE,
-                    true)
-                .checkedGet();
+                ctx,
+                Arrays.asList(Proto.bindKeyspaceIdQuery(KEYSPACE, KEYSPACE_IDS, query, BIND_VARS)),
+                TABLET_TYPE,
+                true);
           }
         });
   }
@@ -649,63 +635,57 @@ public abstract class RpcClientTest {
     checkTransactionExecuteErrors(
         new TransactionExecutable() {
           @Override
-          void execute(VTGateTx tx, String query) throws Exception {
-            tx.execute(ctx, query, BIND_VARS, TABLET_TYPE).checkedGet();
+          void execute(VTGateBlockingTx tx, String query) throws Exception {
+            tx.execute(ctx, query, BIND_VARS, TABLET_TYPE);
           }
         });
     checkTransactionExecuteErrors(
         new TransactionExecutable() {
           @Override
-          void execute(VTGateTx tx, String query) throws Exception {
-            tx.executeShards(ctx, query, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE).checkedGet();
+          void execute(VTGateBlockingTx tx, String query) throws Exception {
+            tx.executeShards(ctx, query, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE);
           }
         });
     checkTransactionExecuteErrors(
         new TransactionExecutable() {
           @Override
-          void execute(VTGateTx tx, String query) throws Exception {
-            tx.executeKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE)
-                .checkedGet();
+          void execute(VTGateBlockingTx tx, String query) throws Exception {
+            tx.executeKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE);
           }
         });
     checkTransactionExecuteErrors(
         new TransactionExecutable() {
           @Override
-          void execute(VTGateTx tx, String query) throws Exception {
-            tx.executeKeyRanges(ctx, query, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE)
-                .checkedGet();
+          void execute(VTGateBlockingTx tx, String query) throws Exception {
+            tx.executeKeyRanges(ctx, query, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE);
           }
         });
     checkTransactionExecuteErrors(
         new TransactionExecutable() {
           @Override
-          void execute(VTGateTx tx, String query) throws Exception {
+          void execute(VTGateBlockingTx tx, String query) throws Exception {
             tx.executeEntityIds(
-                    ctx, query, KEYSPACE, "column1", ENTITY_KEYSPACE_IDS, BIND_VARS, TABLET_TYPE)
-                .checkedGet();
+                ctx, query, KEYSPACE, "column1", ENTITY_KEYSPACE_IDS, BIND_VARS, TABLET_TYPE);
           }
         });
     checkTransactionExecuteErrors(
         new TransactionExecutable() {
           @Override
-          void execute(VTGateTx tx, String query) throws Exception {
+          void execute(VTGateBlockingTx tx, String query) throws Exception {
             tx.executeBatchShards(
-                    ctx,
-                    Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS, query, BIND_VARS)),
-                    TABLET_TYPE)
-                .checkedGet();
+                ctx,
+                Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS, query, BIND_VARS)),
+                TABLET_TYPE);
           }
         });
     checkTransactionExecuteErrors(
         new TransactionExecutable() {
           @Override
-          void execute(VTGateTx tx, String query) throws Exception {
+          void execute(VTGateBlockingTx tx, String query) throws Exception {
             tx.executeBatchKeyspaceIds(
-                    ctx,
-                    Arrays.asList(
-                        Proto.bindKeyspaceIdQuery(KEYSPACE, KEYSPACE_IDS, query, BIND_VARS)),
-                    TABLET_TYPE)
-                .checkedGet();
+                ctx,
+                Arrays.asList(Proto.bindKeyspaceIdQuery(KEYSPACE, KEYSPACE_IDS, query, BIND_VARS)),
+                TABLET_TYPE);
           }
         });
   }

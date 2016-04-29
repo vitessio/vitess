@@ -6,7 +6,6 @@
 package sqltypes
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -14,8 +13,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/hack"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
@@ -306,32 +303,6 @@ func (v Value) IsText() bool {
 // IsBinary returns true if Value is binary.
 func (v Value) IsBinary() bool {
 	return IsBinary(v.typ)
-}
-
-// MarshalBson marshals Value into bson.
-func (v Value) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
-	if key == "" {
-		lenWriter := bson.NewLenWriter(buf)
-		defer lenWriter.Close()
-		key = bson.MAGICTAG
-	}
-	if v.IsNull() {
-		bson.EncodePrefix(buf, bson.Null, key)
-	} else {
-		bson.EncodeBinary(buf, key, v.val)
-	}
-}
-
-// UnmarshalBson unmarshals from bson.
-func (v *Value) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	if kind == bson.EOO {
-		bson.Next(buf, 4)
-		kind = bson.NextByte(buf)
-		bson.ReadCString(buf)
-	}
-	if kind != bson.Null {
-		*v = MakeString(bson.DecodeBinary(buf, kind))
-	}
 }
 
 // MarshalJSON should only be used for testing.

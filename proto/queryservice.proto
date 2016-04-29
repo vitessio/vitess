@@ -36,6 +36,12 @@ service Query {
   // Rollback a transaction.
   rpc Rollback(query.RollbackRequest) returns (query.RollbackResponse) {};
 
+  // BeginExecute executes a begin and the specified SQL query.
+  rpc BeginExecute(query.BeginExecuteRequest) returns (query.BeginExecuteResponse) {};
+
+  // BeginExecuteBatch executes a begin and a list of queries.
+  rpc BeginExecuteBatch(query.BeginExecuteBatchRequest) returns (query.BeginExecuteBatchResponse) {};
+
   // SplitQuery is the API to facilitate MapReduce-type iterations
   // over large data sets (like full table dumps).
   rpc SplitQuery(query.SplitQueryRequest) returns (query.SplitQueryResponse) {};

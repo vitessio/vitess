@@ -144,7 +144,7 @@ def prog_compile(name):
     return
   compiled_progs.append(name)
   logging.debug('Compiling %s', name)
-  run(['godep', 'go', 'install'], cwd=os.path.join(vttop, 'go', 'cmd', name))
+  run(['go', 'install'], cwd=os.path.join(vttop, 'go', 'cmd', name))
 
 
 # binary management: returns the full path for a binary this should
@@ -200,11 +200,6 @@ def setup_protocol_flavor(flavor):
     import grpc_protocols_flavor  # pylint: disable=g-import-not-at-top
     protocols_flavor.set_protocols_flavor(
         grpc_protocols_flavor.GRpcProtocolsFlavor())
-
-  elif flavor == 'gorpc':
-    import gorpc_protocols_flavor  # pylint: disable=g-import-not-at-top
-    protocols_flavor.set_protocols_flavor(
-        gorpc_protocols_flavor.GoRpcProtocolsFlavor())
 
   else:
     logging.error('Unknown protocols flavor %s', flavor)

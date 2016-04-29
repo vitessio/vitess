@@ -63,13 +63,8 @@ func TestShardConnExecuteBatch(t *testing.T) {
 func TestShardConnExecuteStream(t *testing.T) {
 	testShardConnGeneric(t, "TestShardConnExecuteStream", true, func() error {
 		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteStream", "0", topodatapb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
-		_, errfunc := sdc.StreamExecute(context.Background(), "query", nil, 0)
-		return errfunc()
-	})
-	testShardConnTransact(t, "TestShardConnExecuteStream", func() error {
-		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteStream", "0", topodatapb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
-		_, errfunc := sdc.StreamExecute(context.Background(), "query", nil, 1)
-		return errfunc()
+		_, err := sdc.StreamExecute(context.Background(), "query", nil)
+		return err
 	})
 }
 
@@ -148,8 +143,8 @@ func testShardConnGeneric(t *testing.T, name string, streaming bool, f func() er
 		t.Errorf("want 2, got %v", s.DialCounter)
 	}
 	// Ensure we executed 2 times before failing.
-	if execCount := sbc.ExecCount.Get(); execCount != 2 {
-		t.Errorf("want 2, got %v", execCount)
+	if count := sbc.ExecCount.Get() + sbc.BeginCount.Get(); count != 2 {
+		t.Errorf("want 2, got %v", count)
 	}
 
 	// retry error (one failure)
@@ -165,8 +160,8 @@ func testShardConnGeneric(t *testing.T, name string, streaming bool, f func() er
 		t.Errorf("want 2, got %v", s.DialCounter)
 	}
 	// Ensure we executed twice (second one succeeded)
-	if execCount := sbc.ExecCount.Get(); execCount != 2 {
-		t.Errorf("want 2, got %v", execCount)
+	if count := sbc.ExecCount.Get() + sbc.BeginCount.Get(); count != 2 {
+		t.Errorf("want 2, got %v", count)
 	}
 
 	// fatal error (one failure)
@@ -192,8 +187,8 @@ func testShardConnGeneric(t *testing.T, name string, streaming bool, f func() er
 		t.Errorf("want %v, got %v", wantCounter, s.DialCounter)
 	}
 	// Ensure we executed twice (second one succeeded)
-	if execCount := sbc.ExecCount.Get(); execCount != int64(wantCounter) {
-		t.Errorf("want %v, got %v", wantCounter, execCount)
+	if count := sbc.ExecCount.Get() + sbc.BeginCount.Get(); count != int64(wantCounter) {
+		t.Errorf("want %v, got %v", wantCounter, count)
 	}
 
 	// server error
@@ -208,8 +203,8 @@ func testShardConnGeneric(t *testing.T, name string, streaming bool, f func() er
 		t.Errorf("want 1, got %v", s.DialCounter)
 	}
 	// Ensure we did not re-execute.
-	if execCount := sbc.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
+	if count := sbc.ExecCount.Get() + sbc.BeginCount.Get(); count != 1 {
+		t.Errorf("want 1, got %v", count)
 	}
 
 	// conn error (one failure)
@@ -228,8 +223,8 @@ func testShardConnGeneric(t *testing.T, name string, streaming bool, f func() er
 		t.Errorf("want 1, got %v", s.DialCounter)
 	}
 	// Ensure we did not re-execute.
-	if execCount := sbc.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
+	if count := sbc.ExecCount.Get() + sbc.BeginCount.Get(); count != 1 {
+		t.Errorf("want 1, got %v", count)
 	}
 
 	// no failures
@@ -243,8 +238,8 @@ func testShardConnGeneric(t *testing.T, name string, streaming bool, f func() er
 	if s.DialCounter != 1 {
 		t.Errorf("want 1, got %v", s.DialCounter)
 	}
-	if execCount := sbc.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
+	if count := sbc.ExecCount.Get() + sbc.BeginCount.Get(); count != 1 {
+		t.Errorf("want 1, got %v", count)
 	}
 }
 
@@ -259,8 +254,8 @@ func testShardConnTransact(t *testing.T, name string, f func() error) {
 		t.Errorf("want %s, got %v", want, err)
 	}
 	// Should not retry if we're in transaction
-	if execCount := sbc.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
+	if count := sbc.BeginCount.Get() + sbc.ExecCount.Get() + sbc.CommitCount.Get() + sbc.RollbackCount.Get(); count != 1 {
+		t.Errorf("want 1, got %v", count)
 	}
 
 	// conn error
@@ -273,8 +268,8 @@ func testShardConnTransact(t *testing.T, name string, f func() error) {
 		t.Errorf("want %s, got %v", want, err)
 	}
 	// Should not retry if we're in transaction
-	if execCount := sbc.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
+	if count := sbc.ExecCount.Get() + sbc.CommitCount.Get() + sbc.RollbackCount.Get(); count != 1 {
+		t.Errorf("want 1, got %v", count)
 	}
 }
 
@@ -294,8 +289,8 @@ func TestShardConnBeginOther(t *testing.T) {
 		t.Errorf("want 1, got %v", s.DialCounter)
 	}
 	// Account for 1 call to Begin.
-	if execCount := sbc.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
+	if count := sbc.BeginCount.Get(); count != 1 {
+		t.Errorf("want 1, got %v", count)
 	}
 }
 
@@ -305,8 +300,7 @@ func TestShardConnStreamingRetry(t *testing.T) {
 	sbc := &sandboxConn{mustFailRetry: 1}
 	s.MapTestConn("0", sbc)
 	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnStreamingRetry", "0", topodatapb.TabletType_REPLICA, 10*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
-	_, errfunc := sdc.StreamExecute(context.Background(), "query", nil, 0)
-	err := errfunc()
+	_, err := sdc.StreamExecute(context.Background(), "query", nil)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -322,8 +316,7 @@ func TestShardConnStreamingRetry(t *testing.T) {
 	sbc = &sandboxConn{mustFailFatal: 1}
 	s.MapTestConn("0", sbc)
 	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnStreamingRetry", "0", topodatapb.TabletType_REPLICA, 10*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
-	_, errfunc = sdc.StreamExecute(context.Background(), "query", nil, 0)
-	err = errfunc()
+	_, err = sdc.StreamExecute(context.Background(), "query", nil)
 	want := "shard, host: TestShardConnStreamingRetry.0.replica, host:\"0\" port_map:<key:\"vt\" value:1 > , fatal: err"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %v, got %v", want, err)

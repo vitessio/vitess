@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
@@ -263,8 +262,8 @@ func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 	queryStartTime := time.Now()
 	qr, err := blp.dbClient.ExecuteFetch(sql, 0, false)
 	blp.blplStats.Timings.Record(BlplQuery, queryStartTime)
-	if time.Now().Sub(queryStartTime) > SlowQueryThreshold {
-		log.Infof("SLOW QUERY '%s'", sql)
+	if d := time.Now().Sub(queryStartTime); d > SlowQueryThreshold {
+		log.Infof("SLOW QUERY (took %.2fs) '%s'", d.Seconds(), sql)
 	}
 	return qr, err
 }
@@ -335,19 +334,41 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 		}()
 	}
 
-	var responseChan chan *binlogdatapb.BinlogTransaction
-	var errFunc ErrFunc
+	var stream BinlogTransactionStream
 	if len(blp.tables) > 0 {
-		responseChan, errFunc, err = blplClient.StreamTables(ctx, replication.EncodePosition(blp.position), blp.tables, blp.defaultCharset)
+		stream, err = blplClient.StreamTables(ctx, replication.EncodePosition(blp.position), blp.tables, blp.defaultCharset)
 	} else {
-		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, replication.EncodePosition(blp.position), blp.keyRange, blp.defaultCharset)
+		stream, err = blplClient.StreamKeyRange(ctx, replication.EncodePosition(blp.position), blp.keyRange, blp.defaultCharset)
 	}
 	if err != nil {
 		log.Errorf("Error sending streaming query to binlog server: %v", err)
 		return fmt.Errorf("error sending streaming query to binlog server: %v", err)
 	}
 
-	for response := range responseChan {
+	for {
+		// get the response
+		response, err := stream.Recv()
+		if err != nil {
+			switch err {
+			case context.Canceled:
+				return nil
+			default:
+				// if the context is canceled, we
+				// return nil (some RPC
+				// implementations will remap the
+				// context error to their own errors)
+				select {
+				case <-ctx.Done():
+					if ctx.Err() == context.Canceled {
+						return nil
+					}
+				default:
+				}
+				return fmt.Errorf("Error received from Stream %v", err)
+			}
+		}
+
+		// process the transaction
 		for {
 			ok, err = blp.processTransaction(response)
 			if err != nil {
@@ -365,24 +386,6 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 			log.Infof("Retrying txn")
 			time.Sleep(1 * time.Second)
 		}
-	}
-	switch err := errFunc(); err {
-	case nil:
-		return io.EOF
-	case context.Canceled:
-		return nil
-	default:
-		// if the context is canceled, we return nil (some RPC
-		// implementations will remap the context error to their own
-		// errors)
-		select {
-		case <-ctx.Done():
-			if ctx.Err() == context.Canceled {
-				return nil
-			}
-		default:
-		}
-		return fmt.Errorf("Error received from ServeBinlog %v", err)
 	}
 }
 
