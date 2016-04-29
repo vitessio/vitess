@@ -798,11 +798,6 @@ def _get_vtworker_cmd(clargs, auto_log=False):
   args = environment.binary_args('vtworker') + [
       '-log_dir', environment.vtlogroot,
       '-port', str(port),
-      # use a long resolve TTL because of potential race conditions with doing
-      # an EmergencyReparent and resolving the master (as EmergencyReparent
-      # will delete the old master before updating the shard record with the
-      # new master)
-      '-resolve_ttl', '10s',
       '-executefetch_retry_time', '1s',
       '-tablet_manager_protocol',
       protocols_flavor().tablet_manager_protocol(),

@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -55,6 +56,18 @@ type SplitCloneWorker struct {
 	// populated during WorkerStateFindTargets, read-only after that
 	sourceAliases []*topodatapb.TabletAlias
 	sourceTablets []*topo.TabletInfo
+	// healthCheck tracks the health of all MASTER and REPLICA tablets.
+	// It must be closed at the end of the command.
+	healthCheck discovery.HealthCheck
+	// destinationShardWatchers contains a TopologyWatcher for each destination
+	// shard. It updates the list of endpoints in the healthcheck if replicas are
+	// added/removed.
+	// Each watcher must be stopped at the end of the command.
+	destinationShardWatchers []*discovery.TopologyWatcher
+	// destinationDbNames stores for each destination keyspace/shard the MySQL
+	// database name.
+	// Example Map Entry: test_keyspace/-80 => vt_test_keyspace
+	destinationDbNames map[string]string
 
 	// populated during WorkerStateCopy
 	// tableStatusList holds the status for each table.
@@ -65,13 +78,6 @@ type SplitCloneWorker struct {
 	reloadTablets []map[topodatapb.TabletAlias]*topo.TabletInfo
 
 	ev *events.SplitClone
-
-	// Mutex to protect fields that might change when (re)resolving topology.
-	// TODO(aaijazi): we might want to have a Mutex per shard. Having a single mutex
-	// could become a bottleneck, as it needs to be locked for every ExecuteFetch.
-	resolveMu                  sync.Mutex
-	destinationShardsToTablets map[string]*topo.TabletInfo
-	resolveTime                time.Time
 }
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
@@ -94,6 +100,8 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 		destinationWriterCount:    destinationWriterCount,
 		minHealthyRdonlyEndPoints: minHealthyRdonlyEndPoints,
 		cleaner:                   &wrangler.Cleaner{},
+
+		destinationDbNames: make(map[string]string),
 
 		ev: &events.SplitClone{
 			Cell:          cell,
@@ -169,9 +177,13 @@ func (scw *SplitCloneWorker) StatusAsText() string {
 // Run implements the Worker interface
 func (scw *SplitCloneWorker) Run(ctx context.Context) error {
 	resetVars()
+
+	// Run the command.
 	err := scw.run(ctx)
 
+	// Cleanup.
 	scw.setState(WorkerStateCleanUp)
+	// Reverse any changes e.g. setting the tablet type of a source RDONLY tablet.
 	cerr := scw.cleaner.CleanUp(scw.wr)
 	if cerr != nil {
 		if err != nil {
@@ -180,6 +192,17 @@ func (scw *SplitCloneWorker) Run(ctx context.Context) error {
 			err = cerr
 		}
 	}
+
+	// Stop healthcheck.
+	for _, watcher := range scw.destinationShardWatchers {
+		watcher.Stop()
+	}
+	if scw.healthCheck != nil {
+		if err := scw.healthCheck.Close(); err != nil {
+			scw.wr.Logger().Errorf("HealthCheck.Close() failed: %v", err)
+		}
+	}
+
 	if err != nil {
 		scw.setErrorState(err)
 		return err
@@ -322,49 +345,45 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 		action.TabletType = topodatapb.TabletType_SPARE
 	}
 
-	return scw.ResolveDestinationMasters(ctx)
-}
-
-// ResolveDestinationMasters implements the Resolver interface.
-// It will attempt to resolve all shards and update scw.destinationShardsToTablets;
-// if it is unable to do so, it will not modify scw.destinationShardsToTablets at all.
-func (scw *SplitCloneWorker) ResolveDestinationMasters(ctx context.Context) error {
-	statsDestinationAttemptedResolves.Add(1)
-	destinationShardsToTablets := make(map[string]*topo.TabletInfo)
-
-	// Allow at most one resolution request at a time; if there are concurrent requests, only
-	// one of them will actually hit the topo server.
-	scw.resolveMu.Lock()
-	defer scw.resolveMu.Unlock()
-
-	// If the last resolution was fresh enough, return it.
-	if time.Now().Sub(scw.resolveTime) < *resolveTTL {
-		return nil
-	}
-
+	// Initialize healthcheck and add destination shards to it.
+	scw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout, "" /* statsSuffix */)
 	for _, si := range scw.destinationShards {
-		ti, err := resolveDestinationShardMaster(ctx, si.Keyspace(), si.ShardName(), scw.wr)
-		if err != nil {
-			return err
-		}
-		destinationShardsToTablets[si.ShardName()] = ti
+		watcher := discovery.NewShardReplicationWatcher(scw.wr.TopoServer(), scw.healthCheck,
+			scw.cell, si.Keyspace(), si.ShardName(),
+			*healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
+		scw.destinationShardWatchers = append(scw.destinationShardWatchers, watcher)
 	}
-	scw.destinationShardsToTablets = destinationShardsToTablets
-	// save the time of the last successful resolution
-	scw.resolveTime = time.Now()
-	statsDestinationActualResolves.Add(1)
-	return nil
-}
 
-// GetDestinationMaster implements the Resolver interface
-func (scw *SplitCloneWorker) GetDestinationMaster(shardName string) (*topo.TabletInfo, error) {
-	scw.resolveMu.Lock()
-	ti, ok := scw.destinationShardsToTablets[shardName]
-	scw.resolveMu.Unlock()
-	if !ok {
-		return nil, fmt.Errorf("no tablet found for destination shard %v", shardName)
+	// Make sure we find a master for each destination shard and log it.
+	scw.wr.Logger().Infof("Finding a MASTER tablet for each destination shard...")
+	for _, si := range scw.destinationShards {
+		waitCtx, waitCancel := context.WithTimeout(ctx, 10*time.Second)
+		defer waitCancel()
+		if err := discovery.WaitForEndPoints(waitCtx, scw.healthCheck,
+			scw.cell, si.Keyspace(), si.ShardName(), []topodatapb.TabletType{topodatapb.TabletType_MASTER}); err != nil {
+			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v: %v", si.Keyspace(), si.ShardName(), err)
+		}
+		masters := discovery.GetCurrentMaster(
+			scw.healthCheck.GetEndPointStatsFromTarget(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER))
+		if len(masters) == 0 {
+			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v in HealthCheck: empty EndPointStats list", si.Keyspace(), si.ShardName())
+		}
+		master := masters[0]
+
+		// Get the MySQL database name of the tablet.
+		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		ti, err := scw.wr.TopoServer().GetTablet(shortCtx, master.Alias())
+		cancel()
+		if err != nil {
+			return fmt.Errorf("cannot get the TabletInfo for destination master (%v) to find out its db name: %v", topoproto.TabletAliasString(master.Alias()), err)
+		}
+		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
+		scw.destinationDbNames[keyspaceAndShard] = ti.DbName()
+
+		scw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Alias()), si.Keyspace(), si.ShardName())
 	}
-	return ti, nil
+	scw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The HealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
+	return nil
 }
 
 // Find all tablets on all destination shards. This should be done immediately before reloading
@@ -435,17 +454,19 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 		// destinationWriterCount go routines reading from it.
 		insertChannels[shardIndex] = make(chan string, scw.destinationWriterCount*2)
 
-		go func(shardName string, insertChannel chan string) {
+		go func(keyspace, shard string, insertChannel chan string) {
 			for j := 0; j < scw.destinationWriterCount; j++ {
 				destinationWaitGroup.Add(1)
 				go func() {
 					defer destinationWaitGroup.Done()
-					if err := executeFetchLoop(ctx, scw.wr, scw, shardName, insertChannel); err != nil {
+
+					keyspaceAndShard := topoproto.KeyspaceShardString(keyspace, shard)
+					if err := executeFetchLoop(ctx, scw.wr, scw.healthCheck, keyspace, shard, scw.destinationDbNames[keyspaceAndShard], insertChannel); err != nil {
 						processError("executeFetchLoop failed: %v", err)
 					}
 				}()
 			}
-		}(si.ShardName(), insertChannels[shardIndex])
+		}(si.Keyspace(), si.ShardName(), insertChannels[shardIndex])
 	}
 
 	// read the vschema if needed
@@ -564,13 +585,14 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 
 		for _, si := range scw.destinationShards {
 			destinationWaitGroup.Add(1)
-			go func(shardName string) {
+			go func(keyspace, shard string) {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Making and populating blp_checkpoint table")
-				if err := runSQLCommands(ctx, scw.wr, scw, shardName, queries); err != nil {
+				keyspaceAndShard := topoproto.KeyspaceShardString(keyspace, shard)
+				if err := runSQLCommands(ctx, scw.wr, scw.healthCheck, keyspace, shard, scw.destinationDbNames[keyspaceAndShard], queries); err != nil {
 					processError("blp_checkpoint queries failed: %v", err)
 				}
-			}(si.ShardName())
+			}(si.Keyspace(), si.ShardName())
 		}
 		destinationWaitGroup.Wait()
 		if firstError != nil {

@@ -187,7 +187,7 @@ func (mc *MultiCounters) Set(names []string, value int64) {
 // MultiCountersFunc is a multidimensional CountersFunc implementation
 // where names of categories are compound names made with joining
 // multiple strings with '.'.  Since the map is returned by the
-// function, we assume it's in the rigth format (meaning each key is
+// function, we assume it's in the right format (meaning each key is
 // of the form 'aaa.bbb.ccc' with as many elements as there are in
 // Labels).
 type MultiCountersFunc struct {

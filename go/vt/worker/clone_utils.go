@@ -16,6 +16,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -28,32 +29,6 @@ import (
 //
 // This file contains utility functions for clone workers.
 //
-
-// Does a topo lookup for a single shard, and returns the tablet record of the master tablet.
-func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (*topo.TabletInfo, error) {
-	var ti *topo.TabletInfo
-	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	si, err := wr.TopoServer().GetShard(shortCtx, keyspace, shard)
-	cancel()
-	if err != nil {
-		return ti, fmt.Errorf("unable to resolve destination shard %v/%v", keyspace, shard)
-	}
-
-	if !si.HasMaster() {
-		return ti, fmt.Errorf("no master in destination shard %v/%v", keyspace, shard)
-	}
-
-	wr.Logger().Infof("Found target master alias %v in shard %v/%v", topoproto.TabletAliasString(si.MasterAlias), keyspace, shard)
-
-	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	ti, err = wr.TopoServer().GetTablet(shortCtx, si.MasterAlias)
-	cancel()
-	if err != nil {
-		return ti, fmt.Errorf("unable to get master tablet from alias %v in shard %v/%v: %v",
-			topoproto.TabletAliasString(si.MasterAlias), keyspace, shard, err)
-	}
-	return ti, nil
-}
 
 // Does a topo lookup for a single shard, and returns:
 //	1. Slice of all tablet aliases for the shard.
@@ -84,75 +59,108 @@ var errExtract = regexp.MustCompile(`\(errno (\d+)\)`)
 // If will keep retrying the ExecuteFetch (for a finite but longer duration) if it fails due to a timeout or a
 // retriable application error.
 //
-// executeFetchWithRetries will also re-resolve the topology after errors, to be resistant to a reparent.
-// It takes in a tablet record that it will initially attempt to write to, and will return the final tablet
-// record that it used.
-func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, r Resolver, shard string, command string) (*topo.TabletInfo, error) {
+// executeFetchWithRetries will always get the current MASTER tablet from the
+// healthcheck instance. If no MASTER is available, it will keep retrying.
+func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, healthCheck discovery.HealthCheck, keyspace, shard, command string) error {
 	retryDuration := 2 * time.Hour
-	// We should keep retrying up until the retryCtx runs out
+	// We should keep retrying up until the retryCtx runs out.
 	retryCtx, retryCancel := context.WithTimeout(ctx, retryDuration)
 	defer retryCancel()
 	// Is this current attempt a retry of a previous attempt?
 	isRetry := false
 	for {
-		tryCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
-		_, err := wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, ti, command, 0)
-		cancel()
-		if err == nil {
-			// success!
-			return ti, nil
+		var master *discovery.EndPointStats
+		var err error
+
+		// Get the current master from the HealthCheck.
+		masters := discovery.GetCurrentMaster(
+			healthCheck.GetEndPointStatsFromTarget(keyspace, shard, topodatapb.TabletType_MASTER))
+		if len(masters) == 0 {
+			wr.Logger().Warningf("ExecuteFetch failed for keyspace/shard %v/%v because no MASTER is available; will retry until there is MASTER again", keyspace, shard)
+			statsRetryCount.Add(1)
+			statsRetryCounters.Add(retryCategoryNoMasterAvailable, 1)
+			goto retry
 		}
-		// If the ExecuteFetch call failed because of an application error, we will try to figure out why.
-		// We need to extract the MySQL error number, and will attempt to retry if we think the error is recoverable.
-		match := errExtract.FindStringSubmatch(err.Error())
-		var errNo string
-		if len(match) == 2 {
-			errNo = match[1]
-		}
-		switch {
-		case wr.TabletManagerClient().IsTimeoutError(err):
-			wr.Logger().Warningf("ExecuteFetch failed on %v; will retry because it was a timeout error: %v", ti, err)
-			statsRetryCounters.Add("TimeoutError", 1)
-		case errNo == "1290":
-			wr.Logger().Warningf("ExecuteFetch failed on %v; will reresolve and retry because it's due to a MySQL read-only error: %v", ti, err)
-			statsRetryCounters.Add("ReadOnly", 1)
-		case errNo == "2002" || errNo == "2006":
-			wr.Logger().Warningf("ExecuteFetch failed on %v; will reresolve and retry because it's due to a MySQL connection error: %v", ti, err)
-			statsRetryCounters.Add("ConnectionError", 1)
-		case errNo == "1062":
-			if !isRetry {
-				return ti, fmt.Errorf("ExecuteFetch failed on %v on the first attempt; not retrying as this is not a recoverable error: %v", ti, err)
+		master = masters[0]
+
+		// Run the command.
+		{
+			tryCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
+			_, err = wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, endPointToTabletInfo(master), command, 0)
+			cancel()
+
+			if err == nil {
+				// success!
+				return nil
 			}
-			wr.Logger().Infof("ExecuteFetch failed on %v with a duplicate entry error; marking this as a success, because of the likelihood that this query has already succeeded before being retried: %v", ti, err)
-			return ti, nil
-		default:
-			// Unknown error
-			return ti, err
+
+			succeeded, finalErr := checkError(wr, err, isRetry, master, keyspace, shard)
+			if succeeded {
+				// We can ignore the error and don't have to retry.
+				return nil
+			}
+			if finalErr != nil {
+				// Non-retryable error.
+				return finalErr
+			}
 		}
-		t := time.NewTimer(*executeFetchRetryTime)
-		// don't leak memory if the timer isn't triggered
-		defer t.Stop()
+
+	retry:
+		masterAlias := "no-master-was-available"
+		if master != nil {
+			masterAlias = topoproto.TabletAliasString(master.Alias())
+		}
+		tabletString := fmt.Sprintf("%v (%v/%v)", masterAlias, keyspace, shard)
 
 		select {
 		case <-retryCtx.Done():
 			if retryCtx.Err() == context.DeadlineExceeded {
-				return ti, fmt.Errorf("failed to connect to destination tablet %v after retrying for %v", ti, retryDuration)
+				return fmt.Errorf("failed to connect to destination tablet %v after retrying for %v", tabletString, retryDuration)
 			}
-			return ti, fmt.Errorf("interrupted while trying to run %v on tablet %v", command, ti)
-		case <-t.C:
-			// Re-resolve and retry 30s after the failure
-			err = r.ResolveDestinationMasters(ctx)
-			if err != nil {
-				return ti, fmt.Errorf("unable to re-resolve masters for ExecuteFetch, due to: %v", err)
-			}
-			ti, err = r.GetDestinationMaster(shard)
-			if err != nil {
-				// At this point, we probably don't have a valid tablet record to return
-				return nil, fmt.Errorf("unable to run ExecuteFetch due to: %v", err)
-			}
+			return fmt.Errorf("interrupted while trying to run %v on tablet %v", command, tabletString)
+		case <-time.After(*executeFetchRetryTime):
+			// Retry 30s after the failure using the current master seen by the HealthCheck.
 		}
 		isRetry = true
 	}
+}
+
+// checkError returns true if the error can be ignored and the command
+// succeeded, false if the error is retryable and a non-nil error if the
+// command must not be retried.
+func checkError(wr *wrangler.Wrangler, err error, isRetry bool, master *discovery.EndPointStats, keyspace, shard string) (bool, error) {
+	tabletString := fmt.Sprintf("%v (%v/%v)", topoproto.TabletAliasString(master.Alias()), keyspace, shard)
+	// If the ExecuteFetch call failed because of an application error, we will try to figure out why.
+	// We need to extract the MySQL error number, and will attempt to retry if we think the error is recoverable.
+	match := errExtract.FindStringSubmatch(err.Error())
+	var errNo string
+	if len(match) == 2 {
+		errNo = match[1]
+	}
+	switch {
+	case wr.TabletManagerClient().IsTimeoutError(err):
+		wr.Logger().Warningf("ExecuteFetch failed on %v; will retry because it was a timeout error: %v", tabletString, err)
+		statsRetryCount.Add(1)
+		statsRetryCounters.Add(retryCategoryTimeoutError, 1)
+	case errNo == "1290":
+		wr.Logger().Warningf("ExecuteFetch failed on %v; will reresolve and retry because it's due to a MySQL read-only error: %v", tabletString, err)
+		statsRetryCount.Add(1)
+		statsRetryCounters.Add(retryCategoryReadOnly, 1)
+	case errNo == "2002" || errNo == "2006":
+		wr.Logger().Warningf("ExecuteFetch failed on %v; will reresolve and retry because it's due to a MySQL connection error: %v", tabletString, err)
+		statsRetryCount.Add(1)
+		statsRetryCounters.Add(retryCategoryConnectionError, 1)
+	case errNo == "1062":
+		if !isRetry {
+			return false, fmt.Errorf("ExecuteFetch failed on %v on the first attempt; not retrying as this is not a recoverable error: %v", tabletString, err)
+		}
+		wr.Logger().Infof("ExecuteFetch failed on %v with a duplicate entry error; marking this as a success, because of the likelihood that this query has already succeeded before being retried: %v", tabletString, err)
+		return true, nil
+	default:
+		// Unknown error.
+		return false, err
+	}
+	return false, nil
 }
 
 // fillStringTemplate returns the string template filled
@@ -166,20 +174,14 @@ func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 }
 
 // runSQLCommands will send the sql commands to the remote tablet.
-func runSQLCommands(ctx context.Context, wr *wrangler.Wrangler, r Resolver, shard string, commands []string) error {
-	ti, err := r.GetDestinationMaster(shard)
-	if err != nil {
-		return fmt.Errorf("runSQLCommands failed: %v", err)
-	}
-
+func runSQLCommands(ctx context.Context, wr *wrangler.Wrangler, healthCheck discovery.HealthCheck, keyspace, shard, dbName string, commands []string) error {
 	for _, command := range commands {
-		command, err := fillStringTemplate(command, map[string]string{"DatabaseName": ti.DbName()})
+		command, err := fillStringTemplate(command, map[string]string{"DatabaseName": dbName})
 		if err != nil {
 			return fmt.Errorf("fillStringTemplate failed: %v", err)
 		}
 
-		ti, err = executeFetchWithRetries(ctx, wr, ti, r, shard, command)
-		if err != nil {
+		if err := executeFetchWithRetries(ctx, wr, healthCheck, keyspace, shard, command); err != nil {
 			return err
 		}
 	}
@@ -359,11 +361,7 @@ func makeValueString(fields []*querypb.Field, rows [][]sqltypes.Value) string {
 
 // executeFetchLoop loops over the provided insertChannel
 // and sends the commands to the provided tablet.
-func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, r Resolver, shard string, insertChannel chan string) error {
-	ti, err := r.GetDestinationMaster(shard)
-	if err != nil {
-		return fmt.Errorf("executeFetchLoop failed: %v", err)
-	}
+func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, healthCheck discovery.HealthCheck, keyspace, shard, dbName string, insertChannel chan string) error {
 	for {
 		select {
 		case cmd, ok := <-insertChannel:
@@ -371,9 +369,8 @@ func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, r Resolver, sh
 				// no more to read, we're done
 				return nil
 			}
-			cmd = "INSERT INTO `" + ti.DbName() + "`." + cmd
-			ti, err = executeFetchWithRetries(ctx, wr, ti, r, shard, cmd)
-			if err != nil {
+			cmd = "INSERT INTO `" + dbName + "`." + cmd
+			if err := executeFetchWithRetries(ctx, wr, healthCheck, keyspace, shard, cmd); err != nil {
 				return fmt.Errorf("ExecuteFetch failed: %v", err)
 			}
 		case <-ctx.Done():
@@ -383,4 +380,22 @@ func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, r Resolver, sh
 			return nil
 		}
 	}
+}
+
+// endPointToTabletInfo converts an EndPointStats object from the discovery
+// package into a TabletInfo object. The latter one is required by several
+// TabletManagerClient API calls.
+// Note that this is a best-effort conversion and won't result into the same
+// result as a call to topo.GetTablet().
+// Note: We assume that "eps" is immutable and we can reference its data.
+func endPointToTabletInfo(eps *discovery.EndPointStats) *topo.TabletInfo {
+	return topo.NewTabletInfo(&topodatapb.Tablet{
+		Alias:     eps.Alias(),
+		Hostname:  eps.EndPoint.Host,
+		PortMap:   eps.EndPoint.PortMap,
+		HealthMap: eps.EndPoint.HealthMap,
+		Keyspace:  eps.Target.Keyspace,
+		Shard:     eps.Target.Shard,
+		Type:      eps.Target.TabletType,
+	}, -1 /* version */)
 }
