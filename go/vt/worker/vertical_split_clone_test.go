@@ -200,6 +200,10 @@ func TestVerticalSplitClone(t *testing.T) {
 	defer destMasterFakeDb.verifyAllExecutedOrFail()
 	destMaster.FakeMysqlDaemon.DbAppConnectionFactory = destMasterFakeDb.getFactory()
 
+	// Fake stream health reponses because vtworker needs them to find the master.
+	qs := fakes.NewStreamHealthQueryService(destMaster.Target())
+	qs.AddDefaultHealthResponse()
+	grpcqueryservice.RegisterForTest(destMaster.RPCServer, qs)
 	// Only wait 1 ms between retries, so that the test passes faster
 	*executeFetchRetryTime = (1 * time.Millisecond)
 
@@ -217,13 +221,12 @@ func TestVerticalSplitClone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if statsDestinationAttemptedResolves.String() != "2" {
-		t.Errorf("Wrong statsDestinationAttemptedResolves: wanted %v, got %v", "2", statsDestinationAttemptedResolves.String())
+	wantRetryCount := int64(1)
+	if got := statsRetryCount.Get(); got != wantRetryCount {
+		t.Errorf("Wrong statsRetryCounter: got %v, wanted %v", got, wantRetryCount)
 	}
-	if statsDestinationActualResolves.String() != "1" {
-		t.Errorf("Wrong statsDestinationActualResolves: wanted %v, got %v", "1", statsDestinationActualResolves.String())
-	}
-	if statsRetryCounters.String() != "{\"ReadOnly\": 1}" {
-		t.Errorf("Wrong statsRetryCounters: wanted %v, got %v", "{\"ReadOnly\": 1}", statsRetryCounters.String())
+	wantRetryReadOnlyCount := int64(1)
+	if got := statsRetryCounters.Counts()[retryCategoryReadOnly]; got != wantRetryReadOnlyCount {
+		t.Errorf("Wrong statsRetryCounters: got %v, wanted %v", got, wantRetryReadOnlyCount)
 	}
 }

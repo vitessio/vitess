@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -53,6 +54,18 @@ type VerticalSplitCloneWorker struct {
 	// populated during WorkerStateFindTargets, read-only after that
 	sourceAlias  *topodatapb.TabletAlias
 	sourceTablet *topo.TabletInfo
+	// healthCheck tracks the health of all MASTER and REPLICA tablets.
+	// It must be closed at the end of the command.
+	healthCheck discovery.HealthCheck
+	// destinationShardWatchers contains a TopologyWatcher for each destination
+	// shard. It updates the list of endpoints in the healthcheck if replicas are
+	// added/removed.
+	// Each watcher must be stopped at the end of the command.
+	destinationShardWatchers []*discovery.TopologyWatcher
+	// destinationDbNames stores for each destination keyspace/shard the MySQL
+	// database name.
+	// Example Map Entry: test_keyspace/-80 => vt_test_keyspace
+	destinationDbNames map[string]string
 
 	// populated during WorkerStateCopy
 	// tableStatusList holds the status for each table.
@@ -63,11 +76,6 @@ type VerticalSplitCloneWorker struct {
 	reloadTablets map[topodatapb.TabletAlias]*topo.TabletInfo
 
 	ev *events.VerticalSplitClone
-
-	// Mutex to protect fields that might change when (re)resolving topology.
-	resolveMu                  sync.Mutex
-	destinationShardsToTablets map[string]*topo.TabletInfo
-	resolveTime                time.Time
 }
 
 // NewVerticalSplitCloneWorker returns a new VerticalSplitCloneWorker object.
@@ -93,6 +101,8 @@ func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspac
 		destinationWriterCount:    destinationWriterCount,
 		minHealthyRdonlyEndPoints: minHealthyRdonlyEndPoints,
 		cleaner:                   &wrangler.Cleaner{},
+
+		destinationDbNames: make(map[string]string),
 
 		ev: &events.VerticalSplitClone{
 			Cell:     cell,
@@ -160,9 +170,13 @@ func (vscw *VerticalSplitCloneWorker) StatusAsText() string {
 // Run implements the Worker interface
 func (vscw *VerticalSplitCloneWorker) Run(ctx context.Context) error {
 	resetVars()
+
+	// Run the command.
 	err := vscw.run(ctx)
 
+	// Cleanup.
 	vscw.setState(WorkerStateCleanUp)
+	// Reverse any changes e.g. setting the tablet type of a source RDONLY tablet.
 	cerr := vscw.cleaner.CleanUp(vscw.wr)
 	if cerr != nil {
 		if err != nil {
@@ -171,6 +185,17 @@ func (vscw *VerticalSplitCloneWorker) Run(ctx context.Context) error {
 			err = cerr
 		}
 	}
+
+	// Stop healthcheck.
+	for _, watcher := range vscw.destinationShardWatchers {
+		watcher.Stop()
+	}
+	if vscw.healthCheck != nil {
+		if err := vscw.healthCheck.Close(); err != nil {
+			vscw.wr.Logger().Errorf("HealthCheck.Close() failed: %v", err)
+		}
+	}
+
 	if err != nil {
 		vscw.setErrorState(err)
 		return err
@@ -290,44 +315,41 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	}
 	action.TabletType = topodatapb.TabletType_SPARE
 
-	return vscw.ResolveDestinationMasters(ctx)
-}
+	// Initialize healthcheck and add destination shards to it.
+	vscw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout, "" /* statsSuffix */)
+	watcher := discovery.NewShardReplicationWatcher(vscw.wr.TopoServer(), vscw.healthCheck,
+		vscw.cell, vscw.destinationKeyspace, vscw.destinationShard,
+		*healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
+	vscw.destinationShardWatchers = append(vscw.destinationShardWatchers, watcher)
 
-// ResolveDestinationMasters implements the Resolver interface.
-// It will attempt to resolve all shards and update vscw.destinationShardsToTablets;
-// if it is unable to do so, it will not modify vscw.destinationShardsToTablets at all.
-func (vscw *VerticalSplitCloneWorker) ResolveDestinationMasters(ctx context.Context) error {
-	statsDestinationAttemptedResolves.Add(1)
-	// Allow at most one resolution request at a time; if there are concurrent requests, only
-	// one of them will actualy hit the topo server.
-	vscw.resolveMu.Lock()
-	defer vscw.resolveMu.Unlock()
-
-	// If the last resolution was fresh enough, return it.
-	if time.Now().Sub(vscw.resolveTime) < *resolveTTL {
-		return nil
+	// Make sure we find a master for each destination shard and log it.
+	vscw.wr.Logger().Infof("Finding a MASTER tablet for each destination shard...")
+	waitCtx, waitCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer waitCancel()
+	if err := discovery.WaitForEndPoints(waitCtx, vscw.healthCheck,
+		vscw.cell, vscw.destinationKeyspace, vscw.destinationShard, []topodatapb.TabletType{topodatapb.TabletType_MASTER}); err != nil {
+		return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v: %v", vscw.destinationKeyspace, vscw.destinationShard, err)
 	}
+	masters := discovery.GetCurrentMaster(
+		vscw.healthCheck.GetEndPointStatsFromTarget(vscw.destinationKeyspace, vscw.destinationShard, topodatapb.TabletType_MASTER))
+	if len(masters) == 0 {
+		return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v in HealthCheck: empty EndPointStats list", vscw.destinationKeyspace, vscw.destinationShard)
+	}
+	master := masters[0]
 
-	ti, err := resolveDestinationShardMaster(ctx, vscw.destinationKeyspace, vscw.destinationShard, vscw.wr)
+	// Get the MySQL database name of the tablet.
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	ti, err := vscw.wr.TopoServer().GetTablet(shortCtx, master.Alias())
+	cancel()
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot get the TabletInfo for destination master (%v) to find out its db name: %v", topoproto.TabletAliasString(master.Alias()), err)
 	}
-	vscw.destinationShardsToTablets = map[string]*topo.TabletInfo{vscw.destinationShard: ti}
-	// save the time of the last successful resolution
-	vscw.resolveTime = time.Now()
-	statsDestinationActualResolves.Add(1)
-	return nil
-}
+	keyspaceAndShard := topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)
+	vscw.destinationDbNames[keyspaceAndShard] = ti.DbName()
 
-// GetDestinationMaster implements the Resolver interface
-func (vscw *VerticalSplitCloneWorker) GetDestinationMaster(shardName string) (*topo.TabletInfo, error) {
-	vscw.resolveMu.Lock()
-	defer vscw.resolveMu.Unlock()
-	ti, ok := vscw.destinationShardsToTablets[shardName]
-	if !ok {
-		return nil, fmt.Errorf("no tablet found for destination shard %v", shardName)
-	}
-	return ti, nil
+	vscw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Alias()), vscw.destinationKeyspace, vscw.destinationShard)
+	vscw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The HealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
+	return nil
 }
 
 // Find all tablets on the destination shard. This should be done immediately before reloading
@@ -389,18 +411,17 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	// destinationWriterCount go routines reading from it.
 	insertChannel := make(chan string, vscw.destinationWriterCount*2)
 
-	go func(shardName string, insertChannel chan string) {
-		for j := 0; j < vscw.destinationWriterCount; j++ {
-			destinationWaitGroup.Add(1)
-			go func() {
-				defer destinationWaitGroup.Done()
+	for j := 0; j < vscw.destinationWriterCount; j++ {
+		destinationWaitGroup.Add(1)
+		go func() {
+			defer destinationWaitGroup.Done()
 
-				if err := executeFetchLoop(ctx, vscw.wr, vscw, shardName, insertChannel); err != nil {
-					processError("executeFetchLoop failed: %v", err)
-				}
-			}()
-		}
-	}(vscw.destinationShard, insertChannel)
+			keyspaceAndShard := topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)
+			if err := executeFetchLoop(ctx, vscw.wr, vscw.healthCheck, vscw.destinationKeyspace, vscw.destinationShard, vscw.destinationDbNames[keyspaceAndShard], insertChannel); err != nil {
+				processError("executeFetchLoop failed: %v", err)
+			}
+		}()
+	}
 
 	// Now for each table, read data chunks and send them to insertChannel
 	sourceWaitGroup := sync.WaitGroup{}
@@ -470,15 +491,11 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 			flags = binlogplayer.BlpFlagDontStart
 		}
 		queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, time.Now().Unix(), flags))
-		destinationWaitGroup.Add(1)
-		go func(shardName string) {
-			defer destinationWaitGroup.Done()
-			vscw.wr.Logger().Infof("Making and populating blp_checkpoint table")
-			if err := runSQLCommands(ctx, vscw.wr, vscw, shardName, queries); err != nil {
-				processError("blp_checkpoint queries failed: %v", err)
-			}
-		}(vscw.destinationShard)
-		destinationWaitGroup.Wait()
+		vscw.wr.Logger().Infof("Making and populating blp_checkpoint table")
+		keyspaceAndShard := topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)
+		if err := runSQLCommands(ctx, vscw.wr, vscw.healthCheck, vscw.destinationKeyspace, vscw.destinationShard, vscw.destinationDbNames[keyspaceAndShard], queries); err != nil {
+			processError("blp_checkpoint queries failed: %v", err)
+		}
 		if firstError != nil {
 			return firstError
 		}

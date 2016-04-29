@@ -459,9 +459,13 @@ primary key (name)
 
     # start vttablet on the split shards (no db created,
     # so they're all not serving)
+    # Start masters with enabled healthcheck (necessary for resolving the
+    # destination master).
+    shard_2_master.start_vttablet(wait_for_state=None,
+                                  target_tablet_type='replica')
     shard_3_master.start_vttablet(wait_for_state=None,
                                   target_tablet_type='replica')
-    for t in [shard_2_master, shard_2_replica1, shard_2_replica2,
+    for t in [shard_2_replica1, shard_2_replica2,
               shard_3_replica, shard_3_rdonly1]:
       t.start_vttablet(wait_for_state=None)
     for t in [shard_2_master, shard_2_replica1, shard_2_replica2,
@@ -483,6 +487,11 @@ primary key (name)
         keyspace_id_type=keyspace_id_type,
         sharding_column_name='custom_sharding_key')
 
+    # TODO(mberlin): Use a different approach for the same effect because this
+    #                one doesn't work when the healthcheck is enabled on the
+    #                tablet. In that case the healthcheck will race with the
+    #                test and convert the SPARE tablet back to REPLICA the next
+    #                time it runs.
     # disable shard_1_slave2, so we're sure filtered replication will go
     # from shard_1_slave1
     utils.run_vtctl(['ChangeSlaveType', shard_1_slave2.tablet_alias, 'spare'])

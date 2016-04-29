@@ -448,16 +448,14 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
         worker_rpc_port)
 
     if mysql_down:
-      # If MySQL is down, we wait until resolving at least twice (to verify that
-      # we do reresolve and retry due to MySQL being down).
-      worker_vars = utils.poll_for_vars(
+      # If MySQL is down, we wait until vtworker retried at least once to make
+      # sure it reached the point where a write failed due to MySQL being down.
+      # There should be two retries at least, one for each destination shard.
+      utils.poll_for_vars(
           'vtworker', worker_port,
-          'WorkerDestinationActualResolves >= 2',
-          condition_fn=lambda v: v.get('WorkerDestinationActualResolves') >= 2)
-      self.assertNotEqual(
-          worker_vars['WorkerRetryCount'], {},
-          "expected vtworker to retry, but it didn't")
-      logging.debug('Worker has resolved at least twice, starting reparent now')
+          'WorkerRetryCount >= 2',
+          condition_fn=lambda v: v.get('WorkerRetryCount') >= 2)
+      logging.debug('Worker has retried at least twice, starting reparent now')
 
       # Bring back masters. Since we test with semi-sync now, we need at least
       # one replica for the new master. This test is already quite expensive,
@@ -480,19 +478,20 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
       # NOTE: There is a race condition around this:
       #   It's possible that the SplitClone vtworker command finishes before the
       #   PlannedReparentShard vtctl command, which we start below, succeeds.
-      #   Then the test would fail because vtworker did not have to resolve the
-      #   master tablet again (due to the missing reparent).
+      #   Then the test would fail because vtworker did not have to retry.
       #
       # To workaround this, the test takes a parameter to increase the number of
       # rows that the worker has to copy (with the idea being to slow the worker
       # down).
       # You should choose a value for num_insert_rows, such that this test
       # passes for your environment (trial-and-error...)
+      # Make sure that vtworker got past the point where it picked a master
+      # for each destination shard ("finding targets" state).
       utils.poll_for_vars(
           'vtworker', worker_port,
-          'WorkerDestinationActualResolves >= 1',
-          condition_fn=lambda v: v.get('WorkerDestinationActualResolves') >= 1)
-      logging.debug('Worker has resolved at least once, starting reparent now')
+          'WorkerState == copying the data',
+          condition_fn=lambda v: v.get('WorkerState') == 'copying the data')
+      logging.debug('Worker is in copy state, starting reparent now')
 
       utils.run_vtctl(
           ['PlannedReparentShard', 'test_keyspace/-80',
@@ -503,10 +502,10 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
 
     utils.wait_procs([workerclient_proc])
 
-    # Verify that we were forced to reresolve and retry.
+    # Verify that we were forced to re-resolve and retry.
     worker_vars = utils.get_vars(worker_port)
-    self.assertGreater(worker_vars['WorkerDestinationActualResolves'], 1)
-    self.assertGreater(worker_vars['WorkerDestinationAttemptedResolves'], 1)
+    # There should be two retries at least, one for each destination shard.
+    self.assertGreater(worker_vars['WorkerRetryCount'], 1)
     self.assertNotEqual(worker_vars['WorkerRetryCount'], {},
                         "expected vtworker to retry, but it didn't")
     utils.kill_sub_process(worker_proc, soft=True)
@@ -585,7 +584,7 @@ class TestVtworkerWebinterface(unittest.TestCase):
       status = urllib2.urlopen(worker_base_url + '/status').read()
       self.assertIn(
           "Ping command was called with message: 'pong'", status,
-          'Command did not log output to /status')
+          'Command did not log output to /status: %s' % status)
 
       # Reset the job.
       urllib2.urlopen(worker_base_url + '/reset').read()
