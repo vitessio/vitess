@@ -1,3 +1,30 @@
+// Package discovery provides a way to discover all tablets e.g. within a
+// specific shard and monitor their current health.
+//
+// Use the HealthCheck object to query for tablets (in this package also
+// referred to as endpoints) and their health.
+//
+// For an example how to use the HealthCheck object, see worker/topo_utils.go.
+//
+// Tablets have to be manually added to the HealthCheck using AddEndPoint().
+// Alternatively, use a Watcher implementation which will constantly watch
+// a source (e.g. the topology) and add and remove tablets as they are
+// added or removed from the source.
+// For a Watcher example have a look at NewShardReplicationWatcher().
+//
+// Note that the getter functions GetEndPointStatsFrom* will always return
+// an unfiltered list of all known tablets.
+// Use the helper functions in utils.go to filter them e.g.
+// RemoveUnhealthyEndpoints() or GetCurrentMaster().
+// replicationlag.go contains a more advanced health filter which is used by
+// vtgate.
+//
+// Internally, the HealthCheck module is connected to each tablet and has a
+// streaming RPC (StreamHealth) open to receive periodic health infos.
+//
+// NOTE: This requires that the health check is enabled on the tablet.
+// As of 04/2016 you enable the health check by setting the vttablet flag
+// --target_tablet_type to the tablet's type i.e. REPLICA or RDONLY.
 package discovery
 
 import (
