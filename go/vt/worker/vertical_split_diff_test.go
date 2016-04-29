@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
@@ -30,10 +30,9 @@ import (
 // verticalDiffTabletServer is a local QueryService implementation to
 // support the tests
 type verticalDiffTabletServer struct {
-	queryservice.ErrorQueryService
-	t        *testing.T
-	keyspace string
-	shard    string
+	t *testing.T
+
+	*fakes.StreamHealthQueryService
 }
 
 func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
@@ -77,21 +76,6 @@ func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *q
 		}
 	}
 	return nil
-}
-
-func (sq *verticalDiffTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
-	c <- &querypb.StreamHealthResponse{
-		Target: &querypb.Target{
-			Keyspace:   sq.keyspace,
-			Shard:      sq.shard,
-			TabletType: topodatapb.TabletType_RDONLY,
-		},
-		Serving: true,
-		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMaster: 1,
-		},
-	}
-	return 0, nil
 }
 
 // TODO(aaijazi): Create a test in which source and destination data does not match
@@ -179,10 +163,11 @@ func TestVerticalSplitDiff(t *testing.T) {
 				},
 			},
 		}
+		qs := fakes.NewStreamHealthQueryService(rdonly.Target())
+		qs.AddDefaultHealthResponse()
 		grpcqueryservice.RegisterForTest(rdonly.RPCServer, &verticalDiffTabletServer{
-			t:        t,
-			keyspace: rdonly.Tablet.Keyspace,
-			shard:    rdonly.Tablet.Shard,
+			t: t,
+			StreamHealthQueryService: qs,
 		})
 	}
 

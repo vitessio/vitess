@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
@@ -28,12 +28,11 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// verticalTabletServer is a local QueryService implementation to support the tests
+// verticalTabletServer is a local QueryService implementation to support the tests.
 type verticalTabletServer struct {
-	queryservice.ErrorQueryService
-	t        *testing.T
-	keyspace string
-	shard    string
+	t *testing.T
+
+	*fakes.StreamHealthQueryService
 }
 
 func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
@@ -84,21 +83,6 @@ func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *query
 		}
 	}
 	return nil
-}
-
-func (sq *verticalTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
-	c <- &querypb.StreamHealthResponse{
-		Target: &querypb.Target{
-			Keyspace:   sq.keyspace,
-			Shard:      sq.shard,
-			TabletType: topodatapb.TabletType_RDONLY,
-		},
-		Serving: true,
-		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMaster: 1,
-		},
-	}
-	return 0, nil
 }
 
 // VerticalFakePoolConnection implements dbconnpool.PoolConnection
@@ -314,10 +298,11 @@ func TestVerticalSplitClone(t *testing.T) {
 			"STOP SLAVE",
 			"START SLAVE",
 		}
+		qs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
+		qs.AddDefaultHealthResponse()
 		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &verticalTabletServer{
-			t:        t,
-			keyspace: sourceRdonly.Tablet.Keyspace,
-			shard:    sourceRdonly.Tablet.Shard,
+			t: t,
+			StreamHealthQueryService: qs,
 		})
 	}
 
