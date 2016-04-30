@@ -101,9 +101,9 @@ public class VitessResultSetTest {
                 .addLengths("1".length()).addLengths("val123".length())
                 .addLengths("val123".length()).setValues(ByteString
                     .copyFromUtf8("-5050-2300023000-100100-100100-1000100024.52100.432016-02-06 " +
-                            "14:15:162016-02-0612:34:562016-02-06 14:15:1620161234.56789HELLO TDS TEAMHELLO TDS TEAMHELLO"
-                            +
-                            " TDS TEAMHELLO TDS TEAMNHELLO TDS TEAM1val123val123"))).build());
+                        "14:15:162016-02-0612:34:562016-02-06 14:15:1620161234.56789HELLO TDS TEAMHELLO TDS TEAMHELLO"
+                        +
+                        " TDS TEAMHELLO TDS TEAMNHELLO TDS TEAM1val123val123"))).build());
         return cursor;
     }
 

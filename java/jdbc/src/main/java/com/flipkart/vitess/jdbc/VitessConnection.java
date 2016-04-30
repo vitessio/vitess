@@ -129,11 +129,12 @@ public class VitessConnection implements Connection {
      */
     public void commit() throws SQLException {
         checkOpen();
-        checkTransaction();
         checkAutoCommit(Constants.SQLExceptionMessages.COMMIT_WHEN_AUTO_COMMIT_TRUE);
         try {
-            Context context = createContext(Constants.CONNECTION_TIMEOUT);
-            this.vtGateTx.commit(context).checkedGet();
+            if (isInTransaction()) {
+                Context context = createContext(Constants.CONNECTION_TIMEOUT);
+                this.vtGateTx.commit(context).checkedGet();
+            }
         } finally {
             this.vtGateTx = null;
         }
@@ -147,11 +148,12 @@ public class VitessConnection implements Connection {
      */
     public void rollback() throws SQLException {
         checkOpen();
-        checkTransaction();
         checkAutoCommit(Constants.SQLExceptionMessages.ROLLBACK_WHEN_AUTO_COMMIT_TRUE);
         try {
-            Context context = createContext(Constants.CONNECTION_TIMEOUT);
-            this.vtGateTx.rollback(context).checkedGet();
+            if (isInTransaction()) {
+                Context context = createContext(Constants.CONNECTION_TIMEOUT);
+                this.vtGateTx.rollback(context).checkedGet();
+            }
         } finally {
             this.vtGateTx = null;
         }
@@ -546,10 +548,8 @@ public class VitessConnection implements Connection {
         }
     }
 
-    private void checkTransaction() throws SQLException {
-        if (null == this.vtGateTx) {
-            throw new SQLException(Constants.SQLExceptionMessages.TX_CLOSED);
-        }
+    private boolean isInTransaction() throws SQLException {
+        return null != this.vtGateTx;
     }
 
     public VTGateConn getVtGateConn() {
