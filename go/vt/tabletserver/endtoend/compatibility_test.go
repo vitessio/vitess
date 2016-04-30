@@ -138,6 +138,31 @@ func TestInts(t *testing.T) {
 	if !reflect.DeepEqual(*qr, want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
 	}
+	// This test was added because the following query causes mysql to
+	// return flags with both binary and unsigned set. The test ensures
+	// that a Uint64 is produced in spite of the stray binary flag.
+	qr, err = client.Execute("select max(bigu) from vitess_ints", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	want = sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "max(bigu)",
+				Type: sqltypes.Uint64,
+			},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.MakeTrusted(sqltypes.Uint64, []byte("18446744073709551615")),
+			},
+		},
+	}
+	if !reflect.DeepEqual(*qr, want) {
+		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
+	}
 }
 
 func TestFractionals(t *testing.T) {

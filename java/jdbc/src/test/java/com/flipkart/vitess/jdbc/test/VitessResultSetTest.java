@@ -258,6 +258,7 @@ public class VitessResultSetTest {
         VitessResultSet vitessResultSet = new VitessResultSet(cursor);
         vitessResultSet.next();
         Assert.assertEquals(-50, vitessResultSet.getByte(1));
+        Assert.assertEquals(1, vitessResultSet.getByte(25));
     }
 
     @Test public void testgetShort() throws SQLException {
@@ -378,6 +379,7 @@ public class VitessResultSetTest {
         VitessResultSet vitessResultSet = new VitessResultSet(cursor);
         vitessResultSet.next();
         Assert.assertEquals(-50, vitessResultSet.getByte("col1"));
+        Assert.assertEquals(1, vitessResultSet.getByte("col25"));
     }
 
     @Test public void testgetShortbyColumnLabel() throws SQLException {

@@ -220,13 +220,18 @@ public class VitessResultSet implements ResultSet {
         byte value;
 
         preAccessor(columnIndex);
-
         if (isNull(columnIndex)) {
             return 0;
         }
 
-        byteString = this.getString(columnIndex);
+        //If the return column type is of byte,
+        // return byte otherwise typecast
+        Object object = this.row.getObject(columnIndex);
+        if(object instanceof Byte) {
+            return (byte) object;
+        }
 
+        byteString = this.getString(columnIndex);
         try {
             value = Byte.parseByte(byteString);
         } catch (NumberFormatException nfe) {
@@ -368,13 +373,17 @@ public class VitessResultSet implements ResultSet {
         byte[] value;
 
         preAccessor(columnIndex);
-
         if (isNull(columnIndex)) {
             return null;
         }
+        //If the return column type is of byte[],
+        // return byte[] otherwise typecast
+        Object object = this.row.getObject(columnIndex);
+        if(object instanceof byte[]) {
+            return (byte[]) object;
+        }
 
         bytesString = this.getString(columnIndex);
-
         try {
             value = bytesString.getBytes();
         } catch (Exception ex) {

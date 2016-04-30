@@ -12,11 +12,10 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
@@ -25,46 +24,6 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
-
-// fakeQueryService is a QueryService implementation which allows to send
-// custom StreamHealthResponse messages by adding them to a channel.
-// Note that it only works with one connected client because messages going
-// into "healthResponses" are not duplicated to all clients.
-type fakeQueryService struct {
-	queryservice.ErrorQueryService
-	healthResponses chan *querypb.StreamHealthResponse
-	target          querypb.Target
-}
-
-func newFakeQueryService(target querypb.Target) *fakeQueryService {
-	return &fakeQueryService{
-		healthResponses: make(chan *querypb.StreamHealthResponse, 10),
-		target:          target,
-	}
-}
-
-// StreamHealthRegister implements the QueryService interface.
-// It sends all queued and future healthResponses to the connected client e.g.
-// the healthcheck module.
-func (q *fakeQueryService) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
-	go func() {
-		for shr := range q.healthResponses {
-			c <- shr
-		}
-	}()
-	return 0, nil
-}
-
-// addHealthResponse adds a mocked health response to the buffer channel.
-func (q *fakeQueryService) addHealthResponse(qps float64) {
-	q.healthResponses <- &querypb.StreamHealthResponse{
-		Target:  proto.Clone(&q.target).(*querypb.Target),
-		Serving: true,
-		RealtimeStats: &querypb.RealtimeStats{
-			Qps: qps,
-		},
-	}
-}
 
 type drainDirective int
 
@@ -123,8 +82,8 @@ func testWaitForDrain(t *testing.T, desc, cells string, drain drainDirective, ex
 		Shard:      shard,
 		TabletType: topodatapb.TabletType_REPLICA,
 	}
-	fqs1 := newFakeQueryService(target)
-	fqs2 := newFakeQueryService(target)
+	fqs1 := fakes.NewStreamHealthQueryService(target)
+	fqs2 := fakes.NewStreamHealthQueryService(target)
 	grpcqueryservice.RegisterForTest(t1.RPCServer, fqs1)
 	grpcqueryservice.RegisterForTest(t2.RPCServer, fqs2)
 
@@ -143,8 +102,8 @@ func testWaitForDrain(t *testing.T, desc, cells string, drain drainDirective, ex
 	}
 
 	// QPS = 1.0. Tablets are not drained yet.
-	fqs1.addHealthResponse(1.0)
-	fqs2.addHealthResponse(1.0)
+	fqs1.AddHealthResponseWithQPS(1.0)
+	fqs2.AddHealthResponseWithQPS(1.0)
 
 	var le *logutilpb.Event
 	for {
@@ -163,14 +122,14 @@ func testWaitForDrain(t *testing.T, desc, cells string, drain drainDirective, ex
 	}
 
 	if drain&DrainCell1 != 0 {
-		fqs1.addHealthResponse(0.0)
+		fqs1.AddHealthResponseWithQPS(0.0)
 	} else {
-		fqs1.addHealthResponse(2.0)
+		fqs1.AddHealthResponseWithQPS(2.0)
 	}
 	if drain&DrainCell2 != 0 {
-		fqs2.addHealthResponse(0.0)
+		fqs2.AddHealthResponseWithQPS(0.0)
 	} else {
-		fqs2.addHealthResponse(2.0)
+		fqs2.AddHealthResponseWithQPS(2.0)
 	}
 
 	// If a cell was drained, rate should go below <0.0 now.

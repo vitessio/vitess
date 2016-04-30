@@ -27,6 +27,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 	// import the gRPC client implementation for tablet manager
@@ -214,6 +215,15 @@ func (ft *FakeTablet) StopActionLoop(t *testing.T) {
 	ft.Agent = nil
 	ft.Listener = nil
 	ft.HTTPListener = nil
+}
+
+// Target returns the keyspace/shard/type info of this tablet as Target.
+func (ft *FakeTablet) Target() querypb.Target {
+	return querypb.Target{
+		Keyspace:   ft.Tablet.Keyspace,
+		Shard:      ft.Tablet.Shard,
+		TabletType: ft.Tablet.Type,
+	}
 }
 
 func init() {
