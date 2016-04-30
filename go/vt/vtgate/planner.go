@@ -141,7 +141,7 @@ func (plr *Planner) WatchVSchema(ctx context.Context) {
 		go func(keyspace string, n <-chan string) {
 			for kschema := range n {
 				if err := processKeyspace(keyspace, kschema); err != nil {
-					log.Warning("%v", err)
+					log.Warningf("%v", err)
 				}
 			}
 		}(keyspace, n)
