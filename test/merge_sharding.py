@@ -301,8 +301,12 @@ index by_msg (msg)
 
     # start vttablet on the split shards (no db created,
     # so they're all not serving)
-    for t in [shard_dest_master, shard_dest_replica, shard_dest_rdonly]:
+    for t in [shard_dest_replica, shard_dest_rdonly]:
       t.start_vttablet(wait_for_state=None)
+    # Start masters with enabled healthcheck (necessary for resolving the
+    # destination master).
+    shard_dest_master.start_vttablet(wait_for_state=None,
+                                     target_tablet_type='replica')
     for t in [shard_dest_master, shard_dest_replica, shard_dest_rdonly]:
       t.wait_for_vttablet_state('NOT_SERVING')
 

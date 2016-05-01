@@ -29,6 +29,9 @@ type FakePoolConnection struct {
 	mu                        sync.Mutex
 	expectedExecuteFetch      []ExpectedExecuteFetch
 	expectedExecuteFetchIndex int
+	// Infinite is true when executed queries beyond our expectation list should
+	// respond with the last entry from the list.
+	infinite bool
 }
 
 // ExpectedExecuteFetch defines for an expected query the to be faked output.
@@ -38,6 +41,9 @@ type ExpectedExecuteFetch struct {
 	WantFields  bool
 	QueryResult *sqltypes.Result
 	Error       error
+	// AfterFunc is a callback which is executed while the query is executed i.e.,
+	// before the fake responds to the client.
+	AfterFunc func()
 }
 
 // NewFakePoolConnectionQuery creates a new fake database.
@@ -48,6 +54,13 @@ func NewFakePoolConnectionQuery(t *testing.T, name string) *FakePoolConnection {
 
 func (f *FakePoolConnection) addExpectedExecuteFetch(entry ExpectedExecuteFetch) {
 	f.addExpectedExecuteFetchAtIndex(appendEntry, entry)
+}
+
+func (f *FakePoolConnection) enableInfinite() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.infinite = true
 }
 
 // addExpectedExecuteFetchAtIndex inserts a new entry at index.
@@ -87,6 +100,35 @@ func (f *FakePoolConnection) addExpectedQueryAtIndex(index int, query string, er
 	})
 }
 
+// getEntry returns the expected entry at "index". If index is out of bounds,
+// the return value will be nil.
+func (f *FakePoolConnection) getEntry(index int) *ExpectedExecuteFetch {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if index < 0 || index >= len(f.expectedExecuteFetch) {
+		return nil
+	}
+
+	return &f.expectedExecuteFetch[index]
+}
+
+func (f *FakePoolConnection) deleteAllEntriesAfterIndex(index int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if index < 0 || index >= len(f.expectedExecuteFetch) {
+		return
+	}
+
+	if index+1 < f.expectedExecuteFetchIndex {
+		// Don't delete entries which were already answered.
+		return
+	}
+
+	f.expectedExecuteFetch = f.expectedExecuteFetch[:index+1]
+}
+
 // verifyAllExecutedOrFail checks that all expected queries where actually
 // received and executed. If not, it will let the test fail.
 func (f *FakePoolConnection) verifyAllExecutedOrFail() {
@@ -110,6 +152,11 @@ func (f *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields 
 	defer f.mu.Unlock()
 
 	index := f.expectedExecuteFetchIndex
+	if f.infinite && index == len(f.expectedExecuteFetch) {
+		// Although we already executed all queries, we'll continue to answer the
+		// last one in the infinite mode.
+		index--
+	}
 	if index >= len(f.expectedExecuteFetch) {
 		f.t.Errorf("%v: got unexpected out of bound fetch: %v >= %v", f.name, index, len(f.expectedExecuteFetch))
 		return nil, errors.New("unexpected out of bound fetch")
@@ -117,6 +164,15 @@ func (f *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields 
 	entry := f.expectedExecuteFetch[index]
 
 	f.expectedExecuteFetchIndex++
+	// If the infinite mode is on, reverse the increment and keep the index at
+	// len(f.expectedExecuteFetch).
+	if f.infinite && f.expectedExecuteFetchIndex > len(f.expectedExecuteFetch) {
+		f.expectedExecuteFetchIndex--
+	}
+
+	if entry.AfterFunc != nil {
+		defer entry.AfterFunc()
+	}
 
 	expected := entry.Query
 	if strings.HasSuffix(expected, "*") {
