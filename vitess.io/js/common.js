@@ -1,26 +1,6 @@
-// Jquery UI for tabbed panes
-$.getScript("https://ajax.googleapis.com/ajax/libs/jqueryui/1.10.4/jquery-ui.min.js", function(){
-  setupTabs();
-});
-
-// Add the 'external' class to every outbound link on the site.
-// The css will add a small right arrow after the link.
-$('a').filter(function() {
-   return this.hostname && this.hostname !== location.hostname;
-}).addClass("external");
-
-//Set up tabs
-function setupTabs(rootElement) {
-  rootElement = rootElement || document;
-  var tabs = $(rootElement).find('div.tabs');
-  if(tabs.length > 0) {
-    tabs.tabs();
-  }
-};
-
-window.addEventListener('scroll', handleScroll);
-
 // Make the table of contents
+// Fix the left and right nav so they remain visible while scrolling
+// Highlight current section in TOC with ScrollSpy
 $(document).ready(function() {
   $('#toc').toc({ listType: 'ul' });
 
@@ -51,34 +31,22 @@ $(document).ready(function() {
 
 });
 
-
-
 // Prettyprint
 $('pre').addClass("prettyprint");
 $.getScript("https://cdn.rawgit.com/google/code-prettify/master/loader/run_prettify.js", function(){
 });
 
+// Collapsible side menus
 $.getScript("/js/jquery.collapsible.js", function() {
   highlightActive();
   $('.submenu').collapsible();
 });
 
-  var previous = -1;
-  function handleScroll(event) {
-    var current = document.body.scrollTop;
-    if (current >= 80 && previous < 80) {
-      document.body.className = document.body.className + ' scrolled';
-    } else if (current < 80 && previous >= 80) {
-      document.body.className = document.body.className.replace(' scrolled', '');
-    }
-    previous = current;
-    var activeTocLinks = $('.active');
-    if (activeTocLinks.length > 1) {
-      for (var i = 0; i < (activeTocLinks.length - 1); i++) {
-        activeTocLinks[i].className = '';
-      }
-    }
-  }
+// Add the 'external' class to every outbound link on the site.
+// This class is not set in the default CSS.
+//$('a').filter(function() {
+//   return this.hostname && this.hostname !== location.hostname;
+//}).addClass("external");
 
 // TOC script
 // https://github.com/ghiculescu/jekyll-table-of-contents
