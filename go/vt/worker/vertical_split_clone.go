@@ -417,8 +417,9 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 			defer destinationWaitGroup.Done()
 
 			keyspaceAndShard := topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)
-			if err := executeFetchLoop(ctx, vscw.wr, vscw.healthCheck, vscw.destinationKeyspace, vscw.destinationShard, vscw.destinationDbNames[keyspaceAndShard], insertChannel); err != nil {
-				processError("executeFetchLoop failed: %v", err)
+			executor := newExecutor(vscw.wr, vscw.healthCheck, vscw.destinationKeyspace, vscw.destinationShard)
+			if err := executor.fetchLoop(ctx, vscw.destinationDbNames[keyspaceAndShard], insertChannel); err != nil {
+				processError("executer.FetchLoop failed: %v", err)
 			}
 		}()
 	}

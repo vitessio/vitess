@@ -461,8 +461,9 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 					defer destinationWaitGroup.Done()
 
 					keyspaceAndShard := topoproto.KeyspaceShardString(keyspace, shard)
-					if err := executeFetchLoop(ctx, scw.wr, scw.healthCheck, keyspace, shard, scw.destinationDbNames[keyspaceAndShard], insertChannel); err != nil {
-						processError("executeFetchLoop failed: %v", err)
+					executor := newExecutor(scw.wr, scw.healthCheck, keyspace, shard)
+					if err := executor.fetchLoop(ctx, scw.destinationDbNames[keyspaceAndShard], insertChannel); err != nil {
+						processError("executer.FetchLoop failed: %v", err)
 					}
 				}()
 			}
