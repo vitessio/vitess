@@ -21,11 +21,6 @@ import (
 const (
 	// ConnClosed is returned when the underlying connection was closed.
 	ConnClosed = OperationalError("vttablet: Connection Closed")
-
-	// Cancelled can be returned if the user canceled the request.
-	// FIXME(alainjobart): this seems wrong, if anything, we should rely
-	// on context being canceled, or just use context.Canceled.
-	Cancelled = OperationalError("vttablet: Context Cancelled")
 )
 
 var (
@@ -75,7 +70,11 @@ type StreamHealthReader interface {
 type TabletDialer func(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (TabletConn, error)
 
 // TabletConn defines the interface for a vttablet client. It should
-// not be concurrently used across goroutines.
+// be thread-safe, so it can be used concurrently used across goroutines.
+//
+// Most RPC functions can return:
+// - tabletconn.ConnClosed if the underlying connection was closed.
+// - context.Canceled if the query was canceled by the user.
 type TabletConn interface {
 	// Execute executes a non-streaming query on vttablet.
 	Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error)
