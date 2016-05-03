@@ -220,7 +220,7 @@ func TestThrottle_RateRemainderIsDistributedAcrossThreads(t *testing.T) {
 	for threadID := 0; threadID < 2; threadID++ {
 		wantBackoff := 500 * time.Millisecond
 		if gotBackoff := throttler.Throttle(threadID); gotBackoff != wantBackoff {
-			t.Fatalf("throttler should have throttled us. got = %v, want = %v", gotBackoff, wantBackoff)
+			t.Fatalf("throttler should have throttled thread %d. got = %v, want = %v", threadID, gotBackoff, wantBackoff)
 		}
 	}
 }
@@ -242,7 +242,7 @@ func TestThreadFinished(t *testing.T) {
 	wantBackoff := 1000 * time.Millisecond
 	for threadID := 0; threadID < 2; threadID++ {
 		if gotBackoff := throttler.Throttle(threadID); gotBackoff != wantBackoff {
-			t.Fatalf("throttler should have throttled us. got = %v, want = %v", gotBackoff, wantBackoff)
+			t.Fatalf("throttler should have throttled thread %d. got = %v, want = %v", threadID, gotBackoff, wantBackoff)
 		}
 	}
 
@@ -331,6 +331,31 @@ func TestThrottle_MaxRateDisabled(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		if gotBackoff := throttler.Throttle(0); gotBackoff != NotThrottled {
 			t.Fatalf("throttler should not have throttled us: request = %v, backoff = %v", i, gotBackoff)
+		}
+	}
+}
+
+// TestThrottle_MaxRateLowerThanThreadCount tests the behavior that maxRate
+// must not be lower than threadCount. If this is the case, maxRate will be
+// set to threadCount.
+func TestThrottle_MaxRateLowerThanThreadCount(t *testing.T) {
+	fc := &fakeClock{}
+	// 2 Thread, 1 QPS.
+	throttler := newThrottlerWithClock("test", "queries", 2, 1, ReplicationLagModuleDisabled, fc.now)
+	defer throttler.Close()
+
+	// 2 QPS instead of configured 1 QPS allowed since there are 2 threads which
+	// must not starve.
+	fc.setNow(0 * time.Millisecond)
+	for threadID := 0; threadID < 1; threadID++ {
+		if gotBackoff := throttler.Throttle(threadID); gotBackoff != NotThrottled {
+			t.Fatalf("throttler should not have throttled thread %d: backoff = %v", threadID, gotBackoff)
+		}
+	}
+	wantBackoff := 1000 * time.Millisecond
+	for threadID := 0; threadID < 1; threadID++ {
+		if gotBackoff := throttler.Throttle(threadID); gotBackoff != wantBackoff {
+			t.Fatalf("throttler should have throttled thread %d: got = %v, want = %v", threadID, gotBackoff, wantBackoff)
 		}
 	}
 }
