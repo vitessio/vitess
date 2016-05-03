@@ -921,7 +921,7 @@ func TestIsErrorCausedByVTGate(t *testing.T) {
 	}
 	shardConnUnknownErr := &ShardConnError{Err: unknownError}
 	shardConnServerErr := &ShardConnError{Err: serverError}
-	shardConnCancelledErr := &ShardConnError{Err: tabletconn.Cancelled}
+	shardConnCancelledErr := &ShardConnError{Err: context.Canceled}
 
 	scatterConnErrAllUnknownErrs := &ScatterConnError{
 		Errs: []error{unknownError, unknownError, unknownError},
@@ -934,9 +934,9 @@ func TestIsErrorCausedByVTGate(t *testing.T) {
 	}
 
 	inputToWant := map[error]bool{
-		unknownError:         true,
-		serverError:          false,
-		tabletconn.Cancelled: false,
+		unknownError:     true,
+		serverError:      false,
+		context.Canceled: false,
 		// OperationalErrors that are not tabletconn.Cancelled might be from VTGate
 		tabletconn.ConnClosed: true,
 		// Errors wrapped in ShardConnError should get unwrapped

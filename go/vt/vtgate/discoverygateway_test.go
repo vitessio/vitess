@@ -67,6 +67,21 @@ func TestDiscoveryGatewayRollback(t *testing.T) {
 	})
 }
 
+func TestDiscoveryGatewayBeginExecute(t *testing.T) {
+	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
+		_, _, err := dg.BeginExecute(context.Background(), keyspace, shard, tabletType, "query", nil)
+		return err
+	})
+}
+
+func TestDiscoveryGatewayBeginExecuteBatch(t *testing.T) {
+	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
+		queries := []querytypes.BoundQuery{{"query", nil}}
+		_, _, err := dg.BeginExecuteBatch(context.Background(), keyspace, shard, tabletType, queries, false)
+		return err
+	})
+}
+
 func TestDiscoveryGatewayGetEndPoints(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
