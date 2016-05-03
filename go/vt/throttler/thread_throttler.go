@@ -36,6 +36,9 @@ type threadThrottler struct {
 	maxRateSecond int64
 	// currentRate is the number of allowed requests since currentSecond started.
 	currentRate int64
+	// nextRequestInterval is the time when the next request will be allowed.
+	// Tracking this ensures there won't be more than one request per interval.
+	nextRequestInterval time.Time
 }
 
 func newThreadThrottler(threadID int) *threadThrottler {
@@ -64,6 +67,12 @@ func (t *threadThrottler) throttle(now time.Time) time.Duration {
 		return t.currentSecond.Add(1 * time.Second).Sub(now)
 	}
 
+	// Next request isn't expected earlier than nextRequestInterval.
+	// With this check we ensure there's one request per request interval at most.
+	if now.Before(t.nextRequestInterval) {
+		return t.nextRequestInterval.Sub(now)
+	}
+
 	// Check if we have to pace the user.
 	// NOTE: Pacing won't work if maxRate > 1e9 (since 1e9ns = 1s) and therefore
 	//       the returned backoff will always be zero.
@@ -80,6 +89,16 @@ func (t *threadThrottler) throttle(now time.Time) time.Duration {
 		return backoff
 	}
 
+	// Calculate the earlist time the next request can pass.
+	requestInterval := time.Duration(requestIntervalNs) * time.Nanosecond
+	currentRequestInterval := now.Truncate(requestInterval)
+	t.nextRequestInterval = currentRequestInterval.Add(requestInterval)
+	// QPS rates >= 10k are prone to skipping their next request interval.
+	// We have to be more relaxed in this case.
+	if requestInterval <= 100*time.Microsecond {
+		t.nextRequestInterval = t.nextRequestInterval.Add(-requestInterval)
+	}
+
 	t.currentRate++
 	return NotThrottled
 }
@@ -91,6 +110,7 @@ func (t *threadThrottler) resetSecond(nowSecond time.Time) {
 	t.currentSecond = nowSecond
 	t.maxRateSecond = t.maxRate.Get()
 	t.currentRate = 0
+	t.nextRequestInterval = nowSecond
 }
 
 func (t *threadThrottler) setMaxRate(rate int64) {
