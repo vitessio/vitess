@@ -7,22 +7,42 @@ import (
 	"time"
 )
 
-// Example for benchmark results on Lenovo Thinkpad X250, i7-5600U, Quadcore:
+// The main purpose of the benchmarks below is to demonstrate the functionality
+// of the throttler in the real-world (using a non-faked time.Now).
+// The benchmark values should be as close as possible to the request interval
+// (which is the inverse of the QPS).
+// For example, 1k QPS should result into 1,000,000 ns/op.
 //
-// $ go test -run=XXX -bench=. -cpu=4
+// Example for benchmark results on Lenovo Thinkpad X250, i7-5600U, Quadcore.
+//
+// $ go test -run=XXX -bench=. -cpu=4 --benchtime=30s
 // PASS
-// BenchmarkThrottler-4        	 1000000	      9255 ns/op
-// BenchmarkThrottlerParallel-4	  200000	      9498 ns/op
-// BenchmarkThrottlerDisabled-4	20000000	        84.2 ns/op
-// ok  	github.com/youtube/vitess/go/vt/throttler	13.067s
+// BenchmarkThrottler_1kQPS-4          	   50000	   1000040 ns/op
+// BenchmarkThrottler_10kQPS-4         	 1000000	     99999 ns/op
+// BenchmarkThrottler_100kQPS-4        	 5000000	      9999 ns/op
+// BenchmarkThrottlerParallel_1kQPS-4  	   50000	    999903 ns/op
+// BenchmarkThrottlerParallel_10kQPS-4 	  500000	    100060 ns/op
+// BenchmarkThrottlerParallel_100kQPS-4	 5000000	      9999 ns/op
+// BenchmarkThrottlerDisabled-4	500000000	        94.9 ns/op
+// ok  	github.com/youtube/vitess/go/vt/throttler	448.282
 
-// BenchmarkThrottler is not a benchmark, but a real-world demonstration of the
-// Throttler and verifies that it actually throttles requests.
-// This benchmark should show ~10000 ns (10 us) per op.
-func BenchmarkThrottler(b *testing.B) {
-	// 1 Thread, 100,000 QPS (10 us request interval).
-	throttler := NewThrottler("test", "queries", 1, 100*1000, ReplicationLagModuleDisabled)
+func BenchmarkThrottler_1kQPS(b *testing.B) {
+	benchmarkThrottler(b, 1*1000)
+}
+
+func BenchmarkThrottler_10kQPS(b *testing.B) {
+	benchmarkThrottler(b, 10*1000)
+}
+
+func BenchmarkThrottler_100kQPS(b *testing.B) {
+	benchmarkThrottler(b, 100*1000)
+}
+
+// benchmarkThrottler shows that Throttler actually throttles requests.
+func benchmarkThrottler(b *testing.B, qps int64) {
+	throttler := NewThrottler("test", "queries", 1, qps, ReplicationLagModuleDisabled)
 	defer throttler.Close()
+	backoffs := 0
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -33,22 +53,34 @@ func BenchmarkThrottler(b *testing.B) {
 				break
 			}
 			backedOff++
+			backoffs++
 			if backedOff > 1 {
-				b.Logf("did not wait long have after backoff. n = %v, last backoff = %v", i, backoff)
+				b.Logf("did not wait long enough after backoff. n = %v, last backoff = %v", i, backoff)
 			}
 			time.Sleep(backoff)
 		}
 	}
 }
 
-// BenchmarkThrottlerParallel is the parallel version of BenchmarkThrottler.
+func BenchmarkThrottlerParallel_1kQPS(b *testing.B) {
+	benchmarkThrottlerParallel(b, 1*1000)
+}
+
+func BenchmarkThrottlerParallel_10kQPS(b *testing.B) {
+	benchmarkThrottlerParallel(b, 10*1000)
+}
+
+func BenchmarkThrottlerParallel_100kQPS(b *testing.B) {
+	benchmarkThrottlerParallel(b, 100*1000)
+}
+
+// benchmarkThrottlerParallel is the parallel version of benchmarkThrottler.
 // Set -cpu to change the number of threads. The QPS should be distributed
 // across all threads and the reported benchmark value should be similar
-// to the value of BenchmarkThrottler.
-func BenchmarkThrottlerParallel(b *testing.B) {
-	// 1 Thread, 100,000 QPS (10 us request interval).
+// to the value of benchmarkThrottler.
+func benchmarkThrottlerParallel(b *testing.B, qps int64) {
 	threadCount := runtime.GOMAXPROCS(0)
-	throttler := NewThrottler("test", "queries", threadCount, 100*1000, ReplicationLagModuleDisabled)
+	throttler := NewThrottler("test", "queries", threadCount, qps, ReplicationLagModuleDisabled)
 	defer throttler.Close()
 	threadIDs := make(chan int, threadCount)
 	for id := 0; id < threadCount; id++ {
@@ -69,7 +101,7 @@ func BenchmarkThrottlerParallel(b *testing.B) {
 				}
 				backedOff++
 				if backedOff > 1 {
-					b.Logf("did not wait long have after backoff. threadID = %v, last backoff = %v", threadID, backoff)
+					b.Logf("did not wait long enough after backoff. threadID = %v, last backoff = %v", threadID, backoff)
 				}
 				time.Sleep(backoff)
 			}
