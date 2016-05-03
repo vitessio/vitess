@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/discovery"
+	"github.com/youtube/vitess/go/vt/throttler"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
@@ -13,23 +14,31 @@ import (
 )
 
 // executor takes care of the write-side of the copy.
-// There is one executor for each destination shard. To be written data will be
-// passed in through a channel.
+// There is one executor for each destination shard and writer thread.
+// To-be-written data will be passed in through a channel.
 // The main purpose of this struct is to aggregate the objects which won't
 // change during the execution and remove them from method signatures.
 type executor struct {
 	wr          *wrangler.Wrangler
 	healthCheck discovery.HealthCheck
+	throttler   *throttler.Throttler
 	keyspace    string
 	shard       string
+	threadID    int
+	// statsKey is the cached metric key which we need when we increment the stats
+	// variable when we get throttled.
+	statsKey []string
 }
 
-func newExecutor(wr *wrangler.Wrangler, healthCheck discovery.HealthCheck, keyspace, shard string) *executor {
+func newExecutor(wr *wrangler.Wrangler, healthCheck discovery.HealthCheck, throttler *throttler.Throttler, keyspace, shard string, threadID int) *executor {
 	return &executor{
 		wr:          wr,
 		healthCheck: healthCheck,
+		throttler:   throttler,
 		keyspace:    keyspace,
 		shard:       shard,
+		threadID:    threadID,
+		statsKey:    []string{keyspace, shard, fmt.Sprint(threadID)},
 	}
 }
 
@@ -84,6 +93,18 @@ func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
 			goto retry
 		}
 		master = masters[0]
+
+		// Block if we are throttled.
+		if e.throttler != nil {
+			for {
+				backoff := e.throttler.Throttle(e.threadID)
+				if backoff == throttler.NotThrottled {
+					break
+				}
+				statsThrottledCounters.Add(e.statsKey, 1)
+				time.Sleep(backoff)
+			}
+		}
 
 		// Run the command (in a block since goto above does not allow to introduce
 		// new variables until the label is reached.)
