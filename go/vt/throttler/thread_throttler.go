@@ -57,7 +57,7 @@ func (t *threadThrottler) throttle(now time.Time) time.Duration {
 	}
 
 	maxRate := t.maxRateSecond
-	if maxRate == 0 {
+	if maxRate == ZeroRateNoProgess {
 		// Throughput is effectively paused. Do not let anything through until
 		// the max rate changes.
 		return t.currentSecond.Add(1 * time.Second).Sub(now)

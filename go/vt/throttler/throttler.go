@@ -17,19 +17,27 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	log "github.com/golang/glog"
 )
 
-// NotThrottled will be returned by Throttle() if the application is currently
-// not throttled.
-const NotThrottled time.Duration = 0
+const (
+	// NotThrottled will be returned by Throttle() if the application is currently
+	// not throttled.
+	NotThrottled time.Duration = 0
 
-// MaxRateModuleDisabled can be set in NewThrottler() to disable throttling
-// by a fixed rate.
-const MaxRateModuleDisabled = -1
+	// ZeroRateNoProgess can be used to set maxRate to 0. In this case, the
+	// throttler won't let any requests through until the rate is increased again.
+	ZeroRateNoProgess = 0
 
-// ReplicationLagModuleDisabled can be set in NewThrottler() to disable
-// throttling based on the MySQL replication lag.
-const ReplicationLagModuleDisabled = -1
+	// MaxRateModuleDisabled can be set in NewThrottler() to disable throttling
+	// by a fixed rate.
+	MaxRateModuleDisabled = -1
+
+	// ReplicationLagModuleDisabled can be set in NewThrottler() to disable
+	// throttling based on the MySQL replication lag.
+	ReplicationLagModuleDisabled = -1
+)
 
 // Throttler provides a client-side, thread-aware throttler.
 // See the package doc for more information.
@@ -76,7 +84,10 @@ type Throttler struct {
 // NewThrottler creates a new Throttler instance.
 // Use the constants MaxRateModuleDisabled or ReplicationLagModuleDisabled
 // if you want to disable parts of its functionality.
-// maxRate will be distributed across all threadCount threads.
+// maxRate will be distributed across all threadCount threads and must be >=
+// threadCount. If it's lower, it will be automatically set to threadCount.
+// maxRate can also be set to 0 which will effectively pause the user and
+// constantly block until the rate has been increased again.
 // unit refers to the type of entity you want to throttle e.g. "queries" or
 // "transactions".
 // name describes the Throttler instance and will be used by the webinterface.
@@ -204,6 +215,10 @@ func (t *Throttler) updateMaxRate() {
 		return
 	}
 
+	if maxRate != ZeroRateNoProgess && maxRate < int64(threadsRunning) {
+		log.Warningf("Set maxRate is less than the number of threads (%v). To prevent threads from starving, maxRate was increased from: %v to: %v.", threadsRunning, maxRate, threadsRunning)
+		maxRate = int64(threadsRunning)
+	}
 	maxRatePerThread := maxRate / int64(threadsRunning)
 	// Distribute the remainder of the division across all threads.
 	remainder := maxRate % int64(threadsRunning)
