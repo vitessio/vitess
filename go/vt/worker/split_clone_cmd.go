@@ -64,6 +64,8 @@ const splitCloneHTML2 = `
         <INPUT type="text" id="destinationWriterCount" name="destinationWriterCount" value="{{.DefaultDestinationWriterCount}}"></BR>
       <LABEL for="minHealthyRdonlyEndPoints">Minimum Number of required healthy RDONLY tablets: </LABEL>
         <INPUT type="text" id="minHealthyRdonlyEndPoints" name="minHealthyRdonlyEndPoints" value="{{.DefaultMinHealthyRdonlyEndPoints}}"></BR>
+      <LABEL for="maxTPS">Maximum Write Transactions/second (If non-zero, writes on the destination will be throttled. Unlimited by default.): </LABEL>
+        <INPUT type="text" id="maxTPS" name="maxTPS" value="{{.DefaultMaxTPS}}"></BR>
       <INPUT type="hidden" name="keyspace" value="{{.Keyspace}}"/>
       <INPUT type="hidden" name="shard" value="{{.Shard}}"/>
       <INPUT type="submit" value="Clone"/>
@@ -90,6 +92,7 @@ func commandSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagS
 	minTableSizeForSplit := subFlags.Int("min_table_size_for_split", defaultMinTableSizeForSplit, "tables bigger than this size on disk in bytes will be split into source_reader_count chunks if possible")
 	destinationWriterCount := subFlags.Int("destination_writer_count", defaultDestinationWriterCount, "number of concurrent RPCs to execute on the destination")
 	minHealthyRdonlyEndPoints := subFlags.Int("min_healthy_rdonly_endpoints", defaultMinHealthyRdonlyEndPoints, "minimum number of healthy rdonly endpoints before taking out one")
+	maxTPS := subFlags.Int64("max_tps", defaultMaxTPS, "if non-zero, limit copy to maximum number of (write) transactions/second on the destination (unlimited by default)")
 	if err := subFlags.Parse(args); err != nil {
 		return nil, err
 	}
@@ -106,7 +109,7 @@ func commandSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagS
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	worker, err := NewSplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, *strategy, *sourceReaderCount, *destinationPackCount, uint64(*minTableSizeForSplit), *destinationWriterCount, *minHealthyRdonlyEndPoints)
+	worker, err := NewSplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, *strategy, *sourceReaderCount, *destinationPackCount, uint64(*minTableSizeForSplit), *destinationWriterCount, *minHealthyRdonlyEndPoints, *maxTPS)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create split clone worker: %v", err)
 	}
@@ -188,6 +191,7 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 		result["DefaultMinTableSizeForSplit"] = fmt.Sprintf("%v", defaultMinTableSizeForSplit)
 		result["DefaultDestinationWriterCount"] = fmt.Sprintf("%v", defaultDestinationWriterCount)
 		result["DefaultMinHealthyRdonlyEndPoints"] = fmt.Sprintf("%v", defaultMinHealthyRdonlyEndPoints)
+		result["DefaultMaxTPS"] = fmt.Sprintf("%v", defaultMaxTPS)
 		return nil, splitCloneTemplate2, result, nil
 	}
 
@@ -222,9 +226,14 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot parse minHealthyRdonlyEndPoints: %s", err)
 	}
+	maxTPSStr := r.FormValue("maxTPS")
+	maxTPS, err := strconv.ParseInt(maxTPSStr, 0, 64)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("cannot parse maxTPS: %s", err)
+	}
 
 	// start the clone job
-	wrk, err := NewSplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, strategy, int(sourceReaderCount), int(destinationPackCount), uint64(minTableSizeForSplit), int(destinationWriterCount), int(minHealthyRdonlyEndPoints))
+	wrk, err := NewSplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, strategy, int(sourceReaderCount), int(destinationPackCount), uint64(minTableSizeForSplit), int(destinationWriterCount), int(minHealthyRdonlyEndPoints), maxTPS)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot create worker: %v", err)
 	}
