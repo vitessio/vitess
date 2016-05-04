@@ -15,6 +15,9 @@ namespace Vitess\Proto\Vtgate {
     /**  @var int - \Vitess\Proto\Topodata\TabletType */
     public $tablet_type = null;
     
+    /**  @var string */
+    public $keyspace = null;
+    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -48,6 +51,14 @@ namespace Vitess\Proto\Vtgate {
       $f->type      = \DrSlump\Protobuf::TYPE_ENUM;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $f->reference = '\Vitess\Proto\Topodata\TabletType';
+      $descriptor->addField($f);
+
+      // OPTIONAL STRING keyspace = 4
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 4;
+      $f->name      = "keyspace";
+      $f->type      = \DrSlump\Protobuf::TYPE_STRING;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
       foreach (self::$__extensions as $cb) {
@@ -166,6 +177,43 @@ namespace Vitess\Proto\Vtgate {
      */
     public function setTabletType( $value){
       return $this->_set(3, $value);
+    }
+    
+    /**
+     * Check if <keyspace> has a value
+     *
+     * @return boolean
+     */
+    public function hasKeyspace(){
+      return $this->_has(4);
+    }
+    
+    /**
+     * Clear <keyspace> value
+     *
+     * @return \Vitess\Proto\Vtgate\StreamExecuteRequest
+     */
+    public function clearKeyspace(){
+      return $this->_clear(4);
+    }
+    
+    /**
+     * Get <keyspace> value
+     *
+     * @return string
+     */
+    public function getKeyspace(){
+      return $this->_get(4);
+    }
+    
+    /**
+     * Set <keyspace> value
+     *
+     * @param string $value
+     * @return \Vitess\Proto\Vtgate\StreamExecuteRequest
+     */
+    public function setKeyspace( $value){
+      return $this->_set(4, $value);
     }
   }
 }

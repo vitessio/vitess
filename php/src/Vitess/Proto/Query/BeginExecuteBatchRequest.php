@@ -4,7 +4,7 @@
 
 namespace Vitess\Proto\Query {
 
-  class StreamExecuteRequest extends \DrSlump\Protobuf\Message {
+  class BeginExecuteBatchRequest extends \DrSlump\Protobuf\Message {
 
     /**  @var \Vitess\Proto\Vtrpc\CallerID */
     public $effective_caller_id = null;
@@ -15,8 +15,11 @@ namespace Vitess\Proto\Query {
     /**  @var \Vitess\Proto\Query\Target */
     public $target = null;
     
-    /**  @var \Vitess\Proto\Query\BoundQuery */
-    public $query = null;
+    /**  @var \Vitess\Proto\Query\BoundQuery[]  */
+    public $queries = array();
+    
+    /**  @var boolean */
+    public $as_transaction = null;
     
 
     /** @var \Closure[] */
@@ -24,7 +27,7 @@ namespace Vitess\Proto\Query {
 
     public static function descriptor()
     {
-      $descriptor = new \DrSlump\Protobuf\Descriptor(__CLASS__, 'query.StreamExecuteRequest');
+      $descriptor = new \DrSlump\Protobuf\Descriptor(__CLASS__, 'query.BeginExecuteBatchRequest');
 
       // OPTIONAL MESSAGE effective_caller_id = 1
       $f = new \DrSlump\Protobuf\Field();
@@ -53,13 +56,21 @@ namespace Vitess\Proto\Query {
       $f->reference = '\Vitess\Proto\Query\Target';
       $descriptor->addField($f);
 
-      // OPTIONAL MESSAGE query = 4
+      // REPEATED MESSAGE queries = 4
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 4;
-      $f->name      = "query";
+      $f->name      = "queries";
       $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
-      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $f->rule      = \DrSlump\Protobuf::RULE_REPEATED;
       $f->reference = '\Vitess\Proto\Query\BoundQuery';
+      $descriptor->addField($f);
+
+      // OPTIONAL BOOL as_transaction = 5
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 5;
+      $f->name      = "as_transaction";
+      $f->type      = \DrSlump\Protobuf::TYPE_BOOL;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
       foreach (self::$__extensions as $cb) {
@@ -81,7 +92,7 @@ namespace Vitess\Proto\Query {
     /**
      * Clear <effective_caller_id> value
      *
-     * @return \Vitess\Proto\Query\StreamExecuteRequest
+     * @return \Vitess\Proto\Query\BeginExecuteBatchRequest
      */
     public function clearEffectiveCallerId(){
       return $this->_clear(1);
@@ -100,7 +111,7 @@ namespace Vitess\Proto\Query {
      * Set <effective_caller_id> value
      *
      * @param \Vitess\Proto\Vtrpc\CallerID $value
-     * @return \Vitess\Proto\Query\StreamExecuteRequest
+     * @return \Vitess\Proto\Query\BeginExecuteBatchRequest
      */
     public function setEffectiveCallerId(\Vitess\Proto\Vtrpc\CallerID $value){
       return $this->_set(1, $value);
@@ -118,7 +129,7 @@ namespace Vitess\Proto\Query {
     /**
      * Clear <immediate_caller_id> value
      *
-     * @return \Vitess\Proto\Query\StreamExecuteRequest
+     * @return \Vitess\Proto\Query\BeginExecuteBatchRequest
      */
     public function clearImmediateCallerId(){
       return $this->_clear(2);
@@ -137,7 +148,7 @@ namespace Vitess\Proto\Query {
      * Set <immediate_caller_id> value
      *
      * @param \Vitess\Proto\Query\VTGateCallerID $value
-     * @return \Vitess\Proto\Query\StreamExecuteRequest
+     * @return \Vitess\Proto\Query\BeginExecuteBatchRequest
      */
     public function setImmediateCallerId(\Vitess\Proto\Query\VTGateCallerID $value){
       return $this->_set(2, $value);
@@ -155,7 +166,7 @@ namespace Vitess\Proto\Query {
     /**
      * Clear <target> value
      *
-     * @return \Vitess\Proto\Query\StreamExecuteRequest
+     * @return \Vitess\Proto\Query\BeginExecuteBatchRequest
      */
     public function clearTarget(){
       return $this->_clear(3);
@@ -174,47 +185,104 @@ namespace Vitess\Proto\Query {
      * Set <target> value
      *
      * @param \Vitess\Proto\Query\Target $value
-     * @return \Vitess\Proto\Query\StreamExecuteRequest
+     * @return \Vitess\Proto\Query\BeginExecuteBatchRequest
      */
     public function setTarget(\Vitess\Proto\Query\Target $value){
       return $this->_set(3, $value);
     }
     
     /**
-     * Check if <query> has a value
+     * Check if <queries> has a value
      *
      * @return boolean
      */
-    public function hasQuery(){
+    public function hasQueries(){
       return $this->_has(4);
     }
     
     /**
-     * Clear <query> value
+     * Clear <queries> value
      *
-     * @return \Vitess\Proto\Query\StreamExecuteRequest
+     * @return \Vitess\Proto\Query\BeginExecuteBatchRequest
      */
-    public function clearQuery(){
+    public function clearQueries(){
       return $this->_clear(4);
     }
     
     /**
-     * Get <query> value
+     * Get <queries> value
      *
+     * @param int $idx
      * @return \Vitess\Proto\Query\BoundQuery
      */
-    public function getQuery(){
-      return $this->_get(4);
+    public function getQueries($idx = NULL){
+      return $this->_get(4, $idx);
     }
     
     /**
-     * Set <query> value
+     * Set <queries> value
      *
      * @param \Vitess\Proto\Query\BoundQuery $value
-     * @return \Vitess\Proto\Query\StreamExecuteRequest
+     * @return \Vitess\Proto\Query\BeginExecuteBatchRequest
      */
-    public function setQuery(\Vitess\Proto\Query\BoundQuery $value){
-      return $this->_set(4, $value);
+    public function setQueries(\Vitess\Proto\Query\BoundQuery $value, $idx = NULL){
+      return $this->_set(4, $value, $idx);
+    }
+    
+    /**
+     * Get all elements of <queries>
+     *
+     * @return \Vitess\Proto\Query\BoundQuery[]
+     */
+    public function getQueriesList(){
+     return $this->_get(4);
+    }
+    
+    /**
+     * Add a new element to <queries>
+     *
+     * @param \Vitess\Proto\Query\BoundQuery $value
+     * @return \Vitess\Proto\Query\BeginExecuteBatchRequest
+     */
+    public function addQueries(\Vitess\Proto\Query\BoundQuery $value){
+     return $this->_add(4, $value);
+    }
+    
+    /**
+     * Check if <as_transaction> has a value
+     *
+     * @return boolean
+     */
+    public function hasAsTransaction(){
+      return $this->_has(5);
+    }
+    
+    /**
+     * Clear <as_transaction> value
+     *
+     * @return \Vitess\Proto\Query\BeginExecuteBatchRequest
+     */
+    public function clearAsTransaction(){
+      return $this->_clear(5);
+    }
+    
+    /**
+     * Get <as_transaction> value
+     *
+     * @return boolean
+     */
+    public function getAsTransaction(){
+      return $this->_get(5);
+    }
+    
+    /**
+     * Set <as_transaction> value
+     *
+     * @param boolean $value
+     * @return \Vitess\Proto\Query\BeginExecuteBatchRequest
+     */
+    public function setAsTransaction( $value){
+      return $this->_set(5, $value);
     }
   }
 }

@@ -24,9 +24,6 @@ namespace Vitess\Proto\Query {
     /**  @var int */
     public $transaction_id = null;
     
-    /**  @var int */
-    public $session_id = null;
-    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -83,14 +80,6 @@ namespace Vitess\Proto\Query {
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 6;
       $f->name      = "transaction_id";
-      $f->type      = \DrSlump\Protobuf::TYPE_INT64;
-      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
-      $descriptor->addField($f);
-
-      // OPTIONAL INT64 session_id = 7
-      $f = new \DrSlump\Protobuf\Field();
-      $f->number    = 7;
-      $f->name      = "session_id";
       $f->type      = \DrSlump\Protobuf::TYPE_INT64;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
@@ -342,43 +331,6 @@ namespace Vitess\Proto\Query {
      */
     public function setTransactionId( $value){
       return $this->_set(6, $value);
-    }
-    
-    /**
-     * Check if <session_id> has a value
-     *
-     * @return boolean
-     */
-    public function hasSessionId(){
-      return $this->_has(7);
-    }
-    
-    /**
-     * Clear <session_id> value
-     *
-     * @return \Vitess\Proto\Query\ExecuteBatchRequest
-     */
-    public function clearSessionId(){
-      return $this->_clear(7);
-    }
-    
-    /**
-     * Get <session_id> value
-     *
-     * @return int
-     */
-    public function getSessionId(){
-      return $this->_get(7);
-    }
-    
-    /**
-     * Set <session_id> value
-     *
-     * @param int $value
-     * @return \Vitess\Proto\Query\ExecuteBatchRequest
-     */
-    public function setSessionId( $value){
-      return $this->_set(7, $value);
     }
   }
 }
