@@ -107,8 +107,10 @@ proto: install_protoc-gen-go
 # build a new image, create the PHP proto files, and copy them back.
 php_proto: docker_php_proto
 	docker run -ti --name=vitess_php-proto vitess/php-proto bash -c 'tools/proto-gen-php.sh'
+	docker cp vitess_php-proto:/vt/src/github.com/youtube/vitess/php/src/descriptor.php php/src/
+	docker cp vitess_php-proto:/vt/src/github.com/youtube/vitess/php/src/php.php php/src/
 	docker cp vitess_php-proto:/vt/src/github.com/youtube/vitess/php/src/Vitess/Proto/. php/src/Vitess/Proto/
-	docker rm vitess_php-proto	
+	docker rm vitess_php-proto
 
 # This rule builds the bootstrap images for all flavors.
 docker_bootstrap:
