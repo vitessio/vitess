@@ -16,32 +16,27 @@ import (
 
 // QueryService is the interface implemented by the tablet's query service.
 type QueryService interface {
-	// GetSessionId establishes a session to guarantee the current
-	// query service state doesn't change.
-	// This is begin deprecated, replaced by the Target structure.
-	GetSessionId(keyspace, shard string) (int64, error)
-
 	// Transaction management
 
 	// Begin returns the transaction id to use for further operations
-	Begin(ctx context.Context, target *querypb.Target, sessionID int64) (int64, error)
+	Begin(ctx context.Context, target *querypb.Target) (int64, error)
 
 	// Commit commits the current transaction
-	Commit(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) error
+	Commit(ctx context.Context, target *querypb.Target, transactionID int64) error
 
 	// Rollback aborts the current transaction
-	Rollback(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) error
+	Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error
 
 	// Query execution
 
-	Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID, transactionID int64) (*sqltypes.Result, error)
-	StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(*sqltypes.Result) error) error
-	ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, sessionID int64, asTransaction bool, transactionID int64) ([]sqltypes.Result, error)
+	Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, transactionID int64) (*sqltypes.Result, error)
+	StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sendReply func(*sqltypes.Result) error) error
+	ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error)
 
 	// SplitQuery is a map reduce helper function
 	// TODO(erez): Remove this and rename the following func to SplitQuery
 	// once we migrate to SplitQuery V2.
-	SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, sessionID int64) ([]querytypes.QuerySplit, error)
+	SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error)
 
 	// SplitQueryV2 is a MapReduce helper function.
 	// This is version of SplitQuery supports multiple algorithms and multiple split columns.
@@ -55,7 +50,7 @@ type QueryService interface {
 		splitCount int64,
 		numRowsPerQueryPart int64,
 		algorithm querypb.SplitQueryRequest_Algorithm,
-		sessionID int64) ([]querytypes.QuerySplit, error)
+	) ([]querytypes.QuerySplit, error)
 
 	// StreamHealthRegister registers a listener for StreamHealth
 	StreamHealthRegister(chan<- *querypb.StreamHealthResponse) (int, error)
@@ -82,7 +77,7 @@ func CallCorrectSplitQuery(
 	splitCount int64,
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm,
-	sessionID int64) ([]querytypes.QuerySplit, error) {
+) ([]querytypes.QuerySplit, error) {
 
 	if useSplitQueryV2 {
 		return queryService.SplitQueryV2(
@@ -93,8 +88,7 @@ func CallCorrectSplitQuery(
 			splitColumns,
 			splitCount,
 			numRowsPerQueryPart,
-			algorithm,
-			sessionID)
+			algorithm)
 	}
 	return queryService.SplitQuery(
 		ctx,
@@ -102,8 +96,7 @@ func CallCorrectSplitQuery(
 		sql,
 		bindVariables,
 		splitColumnsToSplitColumn(splitColumns),
-		splitCount,
-		sessionID)
+		splitCount)
 }
 
 // SplitColumnsToSplitColumn returns the first SplitColumn in the given slice or an empty

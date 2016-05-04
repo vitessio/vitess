@@ -158,14 +158,8 @@ func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string,
 	}
 }
 
-// GetSessionId is part of the queryservice.QueryService interface
-func (f *FakeQueryService) GetSessionId(keyspace, shard string) (int64, error) {
-	f.t.Fatal("GetSessionId should not be called any more")
-	return 0, nil
-}
-
 // Begin is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, sessionID int64) (int64, error) {
+func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target) (int64, error) {
 	if f.hasBeginError {
 		return 0, f.tabletError
 	}
@@ -207,7 +201,7 @@ func testBeginPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryServi
 }
 
 // Commit is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) error {
+func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	if f.hasError {
 		return f.tabletError
 	}
@@ -247,7 +241,7 @@ func testCommitPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryServ
 }
 
 // Rollback is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) error {
+func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	if f.hasError {
 		return f.tabletError
 	}
@@ -286,7 +280,7 @@ func testRollbackPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQuerySe
 }
 
 // Execute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID, transactionID int64) (*sqltypes.Result, error) {
+func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	if f.hasError {
 		return nil, f.tabletError
 	}
@@ -417,7 +411,7 @@ func testBeginExecutePanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQue
 }
 
 // StreamExecute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(*sqltypes.Result) error) error {
+func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sendReply func(*sqltypes.Result) error) error {
 	if f.panics && f.streamExecutePanicsEarly {
 		panic(fmt.Errorf("test-triggered panic early"))
 	}
@@ -586,7 +580,7 @@ func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQu
 }
 
 // ExecuteBatch is part of the queryservice.QueryService interface
-func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, sessionID int64, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	if f.hasError {
 		return nil, f.tabletError
 	}
@@ -740,7 +734,7 @@ func testBeginExecuteBatchPanics(t *testing.T, conn tabletconn.TabletConn, f *Fa
 }
 
 // SplitQuery is part of the queryservice.QueryService interface
-func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, sessionID int64) ([]querytypes.QuerySplit, error) {
+func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
 	if f.hasError {
 		return nil, f.tabletError
 	}
@@ -774,7 +768,7 @@ func (f *FakeQueryService) SplitQueryV2(
 	splitCount int64,
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm,
-	sessionID int64) ([]querytypes.QuerySplit, error) {
+) ([]querytypes.QuerySplit, error) {
 
 	if f.hasError {
 		return nil, f.tabletError

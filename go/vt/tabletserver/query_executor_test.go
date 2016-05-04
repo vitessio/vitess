@@ -1049,7 +1049,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 }
 
 func newTransaction(tsv *TabletServer) int64 {
-	transactionID, err := tsv.Begin(context.Background(), &tsv.target, tsv.sessionID)
+	transactionID, err := tsv.Begin(context.Background(), &tsv.target)
 	if err != nil {
 		panic(fmt.Errorf("failed to start a transaction: %v", err))
 	}
@@ -1070,7 +1070,7 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 }
 
 func testCommitHelper(t *testing.T, tsv *TabletServer, queryExecutor *QueryExecutor) {
-	if err := tsv.Commit(queryExecutor.ctx, &tsv.target, tsv.sessionID, queryExecutor.transactionID); err != nil {
+	if err := tsv.Commit(queryExecutor.ctx, &tsv.target, queryExecutor.transactionID); err != nil {
 		t.Fatalf("failed to commit transaction: %d, err: %v", queryExecutor.transactionID, err)
 	}
 }

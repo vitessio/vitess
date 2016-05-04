@@ -16,7 +16,6 @@ var (
 	bindVariables             = map[string]interface{}{}
 	splitCount          int64 = 123
 	numRowsPerQueryPart int64 = 456
-	sessionID           int64 = 789
 	algorithm                 = querypb.SplitQueryRequest_EQUAL_SPLITS
 )
 
@@ -31,8 +30,7 @@ func TestCallCorrectSplitQueryCallV1NoSplitColumn(t *testing.T) {
 		sql,
 		bindVariables,
 		"",
-		splitCount,
-		sessionID)
+		splitCount)
 	CallCorrectSplitQuery(
 		mockQueryService,
 		false, /* useSplitQueryV2 */
@@ -43,8 +41,7 @@ func TestCallCorrectSplitQueryCallV1NoSplitColumn(t *testing.T) {
 		[]string{}, /* SplitColumns */
 		splitCount,
 		numRowsPerQueryPart,
-		algorithm,
-		sessionID)
+		algorithm)
 }
 
 func TestCallCorrectSplitQueryCallV1WithSplitColumn(t *testing.T) {
@@ -58,8 +55,7 @@ func TestCallCorrectSplitQueryCallV1WithSplitColumn(t *testing.T) {
 		sql,
 		bindVariables,
 		"First Split Column",
-		splitCount,
-		sessionID)
+		splitCount)
 	CallCorrectSplitQuery(
 		mockQueryService,
 		false, /* useSplitQueryV2 */
@@ -70,8 +66,7 @@ func TestCallCorrectSplitQueryCallV1WithSplitColumn(t *testing.T) {
 		[]string{"First Split Column"}, /* SplitColumns */
 		splitCount,
 		numRowsPerQueryPart,
-		algorithm,
-		sessionID)
+		algorithm)
 }
 
 func TestCallCorrectSplitQueryCallV2(t *testing.T) {
@@ -87,8 +82,7 @@ func TestCallCorrectSplitQueryCallV2(t *testing.T) {
 		splitColumns,
 		splitCount,
 		numRowsPerQueryPart,
-		algorithm,
-		sessionID)
+		algorithm)
 	CallCorrectSplitQuery(
 		mockQueryService,
 		true, /* useSplitQueryV2 */
@@ -99,6 +93,5 @@ func TestCallCorrectSplitQueryCallV2(t *testing.T) {
 		splitColumns,
 		splitCount,
 		numRowsPerQueryPart,
-		algorithm,
-		sessionID)
+		algorithm)
 }
