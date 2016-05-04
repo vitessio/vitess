@@ -104,6 +104,12 @@ proto: install_protoc-gen-go
 	find go/vt/proto -name "*.pb.go" | xargs sed --in-place -r -e 's,import ([a-z0-9_]+) ".",import \1 "github.com/youtube/vitess/go/vt/proto/\1",g'
 	find proto -maxdepth 1 -name '*.proto' -print | sed 's/^proto\///' | sed 's/\.proto//' | xargs -I{} $$VTROOT/dist/grpc/usr/local/bin/protoc -Iproto proto/{}.proto --python_out=py/vtproto --grpc_out=py/vtproto --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/usr/local/bin/grpc_python_plugin
 
+# build a new image, create the PHP proto files, and copy them back.
+php_proto: docker_php_proto
+	docker run -ti --name=vitess_php-proto vitess/php-proto bash -c 'tools/proto-gen-php.sh'
+	docker cp vitess_php-proto:/vt/src/github.com/youtube/vitess/php/src/Vitess/Proto/. php/src/Vitess/Proto/
+	docker rm vitess_php-proto	
+
 # This rule builds the bootstrap images for all flavors.
 docker_bootstrap:
 	docker/bootstrap/build.sh common
@@ -141,6 +147,9 @@ docker_etcd:
 
 docker_publish_site:
 	docker build -f docker/publish-site/Dockerfile -t vitess/publish-site .
+
+docker_php_proto:
+	docker build -f docker/php-proto/Dockerfile -t vitess/php-proto .
 
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.
