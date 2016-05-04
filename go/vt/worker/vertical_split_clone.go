@@ -21,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
+	"github.com/youtube/vitess/go/vt/throttler"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/worker/events"
@@ -46,6 +47,7 @@ type VerticalSplitCloneWorker struct {
 	minTableSizeForSplit      uint64
 	destinationWriterCount    int
 	minHealthyRdonlyEndPoints int
+	maxTPS                    int64
 	cleaner                   *wrangler.Cleaner
 
 	// populated during WorkerStateInit, read-only after that
@@ -66,6 +68,9 @@ type VerticalSplitCloneWorker struct {
 	// database name.
 	// Example Map Entry: test_keyspace/-80 => vt_test_keyspace
 	destinationDbNames map[string]string
+	// destionThrottlers stores for each destination keyspace/shard the
+	// Throttler instance which will limit the write throughput.
+	destinationThrottlers map[string]*throttler.Throttler
 
 	// populated during WorkerStateCopy
 	// tableStatusList holds the status for each table.
@@ -79,13 +84,21 @@ type VerticalSplitCloneWorker struct {
 }
 
 // NewVerticalSplitCloneWorker returns a new VerticalSplitCloneWorker object.
-func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspace, destinationShard string, tables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyEndPoints int) (Worker, error) {
+func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspace, destinationShard string, tables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyEndPoints int, maxTPS int64) (Worker, error) {
 	if len(tables) == 0 {
 		return nil, errors.New("list of tablets to be split out must not be empty")
 	}
 	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
+	}
+	if maxTPS == 0 {
+		maxTPS = throttler.MaxRateModuleDisabled
+	} else {
+		wr.Logger().Infof("throttling enabled and set to a max of %v transactions/second", maxTPS)
+	}
+	if maxTPS != throttler.MaxRateModuleDisabled && maxTPS < int64(destinationWriterCount) {
+		return nil, fmt.Errorf("-max_tps must be >= -destination_writer_count: %v >= %v", maxTPS, destinationWriterCount)
 	}
 	return &VerticalSplitCloneWorker{
 		StatusWorker:              NewStatusWorker(),
@@ -100,9 +113,11 @@ func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspac
 		minTableSizeForSplit:      minTableSizeForSplit,
 		destinationWriterCount:    destinationWriterCount,
 		minHealthyRdonlyEndPoints: minHealthyRdonlyEndPoints,
-		cleaner:                   &wrangler.Cleaner{},
+		maxTPS:  maxTPS,
+		cleaner: &wrangler.Cleaner{},
 
-		destinationDbNames: make(map[string]string),
+		destinationDbNames:    make(map[string]string),
+		destinationThrottlers: make(map[string]*throttler.Throttler),
 
 		ev: &events.VerticalSplitClone{
 			Cell:     cell,
@@ -186,6 +201,10 @@ func (vscw *VerticalSplitCloneWorker) Run(ctx context.Context) error {
 		}
 	}
 
+	// Stop Throttlers.
+	for _, throttler := range vscw.destinationThrottlers {
+		throttler.Close()
+	}
 	// Stop healthcheck.
 	for _, watcher := range vscw.destinationShardWatchers {
 		watcher.Stop()
@@ -349,6 +368,10 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 
 	vscw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Alias()), vscw.destinationKeyspace, vscw.destinationShard)
 	vscw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The HealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
+
+	// Set up the throttler for the destination shard.
+	vscw.destinationThrottlers[keyspaceAndShard] = throttler.NewThrottler(
+		keyspaceAndShard, "transactions", vscw.destinationWriterCount, vscw.maxTPS, throttler.ReplicationLagModuleDisabled)
 	return nil
 }
 
@@ -370,6 +393,10 @@ func (vscw *VerticalSplitCloneWorker) findReloadTargets(ctx context.Context) err
 // (probably from vtctl's CopySchemaShard)
 func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	vscw.setState(WorkerStateCopy)
+	start := time.Now()
+	defer func() {
+		statsStateDurationsNs.Set(string(WorkerStateCopy), time.Now().Sub(start).Nanoseconds())
+	}()
 
 	// get source schema
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
@@ -413,14 +440,18 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 
 	for j := 0; j < vscw.destinationWriterCount; j++ {
 		destinationWaitGroup.Add(1)
-		go func() {
+		go func(threadID int) {
 			defer destinationWaitGroup.Done()
 
 			keyspaceAndShard := topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)
-			if err := executeFetchLoop(ctx, vscw.wr, vscw.healthCheck, vscw.destinationKeyspace, vscw.destinationShard, vscw.destinationDbNames[keyspaceAndShard], insertChannel); err != nil {
-				processError("executeFetchLoop failed: %v", err)
+			throttler := vscw.destinationThrottlers[keyspaceAndShard]
+			defer throttler.ThreadFinished(threadID)
+
+			executor := newExecutor(vscw.wr, vscw.healthCheck, throttler, vscw.destinationKeyspace, vscw.destinationShard, threadID)
+			if err := executor.fetchLoop(ctx, vscw.destinationDbNames[keyspaceAndShard], insertChannel); err != nil {
+				processError("executer.FetchLoop failed: %v", err)
 			}
-		}()
+		}(j)
 	}
 
 	// Now for each table, read data chunks and send them to insertChannel

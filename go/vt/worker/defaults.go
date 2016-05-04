@@ -13,4 +13,5 @@ const (
 	defaultMinTableSizeForSplit      = 1024 * 1024
 	defaultDestinationWriterCount    = 20
 	defaultMinHealthyRdonlyEndPoints = 2
+	defaultMaxTPS                    = 0
 )

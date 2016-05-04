@@ -305,6 +305,42 @@ func TestSplitCloneV2(t *testing.T) {
 	}
 }
 
+func TestSplitCloneV2_Throttled(t *testing.T) {
+	tc := &splitCloneTestCase{t: t}
+	tc.setUp(false /* v3 */)
+	defer tc.tearDown()
+
+	// Run SplitClone throttled and verify that it took longer than usual (~25ms).
+
+	// Modify args to set -max_tps to 300.
+	args := []string{"SplitClone", "-max_tps", "300"}
+	args = append(args, tc.defaultWorkerArgs[1:]...)
+
+	// Run the vtworker command.
+	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
+		t.Fatal(err)
+	}
+
+	// 30 transactions (tx) at a rate of 300 TPS should take at least 33 ms since:
+	// 300 TPS across 10 writer threads: 30 tx/second/thread
+	// => minimum request interval between two tx: 1 s / 30 tx/s = 33 ms
+	// 3 transactions are throttled for 33 ms at least because:
+	// - 1st tx: goes through immediately
+	// - 2nd tx: may not be throttled when 1st tx happened at the end of its
+	//           throttle request interval (negligible backoff)
+	// - 3rd tx: throttled for 33 ms at least since 2nd tx happened
+	want := 33 * time.Millisecond
+	copyDuration := time.Duration(statsStateDurationsNs.Counts()[string(WorkerStateCopy)]) * time.Nanosecond
+	if copyDuration < want {
+		t.Errorf("throttled copy was too fast: %v < %v", copyDuration, want)
+	}
+	t.Logf("throttled copy took: %v", copyDuration)
+	// At least one thread should have been throttled.
+	if counts := statsThrottledCounters.Counts(); len(counts) == 0 {
+		t.Error("worker should have had one throttled thread at least")
+	}
+}
+
 // TestSplitCloneV2_RetryDueToReadonly is identical to the regular test
 // TestSplitCloneV2 with the additional twist that the destination masters
 // fail the first write because they are read-only and succeed after that.
