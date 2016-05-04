@@ -10,12 +10,6 @@ namespace Vitess\Proto\Queryservice {
       parent::__construct($hostname, $opts);
     }
     /**
-     * @param Vitess\Proto\Query\GetSessionIdRequest $input
-     */
-    public function GetSessionId(\Vitess\Proto\Query\GetSessionIdRequest $argument, $metadata = array(), $options = array()) {
-      return $this->_simpleRequest('/queryservice.Query/GetSessionId', $argument, '\Vitess\Proto\Query\GetSessionIdResponse::deserialize', $metadata, $options);
-    }
-    /**
      * @param Vitess\Proto\Query\ExecuteRequest $input
      */
     public function Execute(\Vitess\Proto\Query\ExecuteRequest $argument, $metadata = array(), $options = array()) {
@@ -50,6 +44,18 @@ namespace Vitess\Proto\Queryservice {
      */
     public function Rollback(\Vitess\Proto\Query\RollbackRequest $argument, $metadata = array(), $options = array()) {
       return $this->_simpleRequest('/queryservice.Query/Rollback', $argument, '\Vitess\Proto\Query\RollbackResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Query\BeginExecuteRequest $input
+     */
+    public function BeginExecute(\Vitess\Proto\Query\BeginExecuteRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/queryservice.Query/BeginExecute', $argument, '\Vitess\Proto\Query\BeginExecuteResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Query\BeginExecuteBatchRequest $input
+     */
+    public function BeginExecuteBatch(\Vitess\Proto\Query\BeginExecuteBatchRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/queryservice.Query/BeginExecuteBatch', $argument, '\Vitess\Proto\Query\BeginExecuteBatchResponse::deserialize', $metadata, $options);
     }
     /**
      * @param Vitess\Proto\Query\SplitQueryRequest $input
