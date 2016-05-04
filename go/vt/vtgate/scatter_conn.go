@@ -19,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
@@ -57,42 +56,18 @@ type shardActionTransactionFunc func(shard string, shouldBegin bool, transaction
 
 // NewScatterConn creates a new ScatterConn. All input parameters are passed through
 // for creating the appropriate connections.
-func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletTypesToWait []topodatapb.TabletType, testGateway string) *ScatterConn {
+func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, statsName, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *ScatterConn {
 	tabletCallErrorCountStatsName := ""
-	tabletConnectStatsName := ""
 	if statsName != "" {
 		tabletCallErrorCountStatsName = statsName + "ErrorCount"
-		tabletConnectStatsName = statsName + "TabletConnect"
 	}
-	connTimings := stats.NewMultiTimings(tabletConnectStatsName, []string{"Keyspace", "ShardName", "DbType"})
-	gateway := GetGatewayCreator()(hc, topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings, tabletTypesToWait)
+	gateway := GetGatewayCreator()(hc, topoServer, serv, cell, retryCount, tabletTypesToWait)
 
-	sc := &ScatterConn{
+	return &ScatterConn{
 		timings:              stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		tabletCallErrorCount: stats.NewMultiCounters(tabletCallErrorCountStatsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		gateway:              gateway,
 	}
-
-	// this is to test health checking module when using existing gateway
-	if testGateway != "" {
-		if gc := GetGatewayCreatorByName(testGateway); gc != nil {
-			sc.testGateway = gc(hc, topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings, nil)
-		}
-	}
-
-	return sc
-}
-
-// InitializeConnections pre-initializes connections for all shards.
-// It also populates topology cache by accessing it.
-// It is not necessary to call this function before serving queries,
-// but it would reduce connection overhead when serving.
-func (stc *ScatterConn) InitializeConnections(ctx context.Context) error {
-	// temporarily start healthchecking regardless of gateway used
-	if stc.testGateway != nil {
-		stc.testGateway.InitializeConnections(ctx)
-	}
-	return stc.gateway.InitializeConnections(ctx)
 }
 
 func (stc *ScatterConn) startAction(name, keyspace, shard string, tabletType topodatapb.TabletType) (time.Time, []string) {
@@ -762,7 +737,7 @@ func (stc *ScatterConn) GetGatewayCacheStatus() GatewayEndPointCacheStatusList {
 
 // ScatterConnError is the ScatterConn specific error.
 type ScatterConnError struct {
-	Code int
+	Retryable bool
 	// Preserve the original errors, so that we don't need to parse the error string.
 	Errs []error
 	// serverCode is the error code to use for all the server errors in aggregate
@@ -782,21 +757,14 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	}
 	allRetryableError := true
 	for _, e := range errors {
-		connError, ok := e.(*ShardConnError)
-		if !ok || (connError.Code != tabletconn.ERR_RETRY && connError.Code != tabletconn.ERR_FATAL) || connError.InTransaction {
+		connError, ok := e.(*ShardError)
+		if !ok || (connError.EndPointCode != vtrpcpb.ErrorCode_QUERY_NOT_SERVED && connError.EndPointCode != vtrpcpb.ErrorCode_INTERNAL_ERROR) || connError.InTransaction {
 			allRetryableError = false
 			break
 		}
 	}
-	var code int
-	if allRetryableError {
-		code = tabletconn.ERR_RETRY
-	} else {
-		code = tabletconn.ERR_NORMAL
-	}
-
 	return &ScatterConnError{
-		Code:       code,
+		Retryable:  allRetryableError,
 		Errs:       errors,
 		serverCode: aggregateVtGateErrorCodes(errors),
 	}

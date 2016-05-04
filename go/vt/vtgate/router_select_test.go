@@ -9,15 +9,16 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/topo"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestUnsharded(t *testing.T) {
@@ -497,6 +498,8 @@ func TestSelectINFail(t *testing.T) {
 
 func TestSelectScatter(t *testing.T) {
 	// Special setup: Don't use createRouterEnv.
+	cell := "aa"
+	hc := newFakeHealthCheck()
 	s := createSandbox("TestRouter")
 	s.VSchema = routerVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
@@ -505,11 +508,11 @@ func TestSelectScatter(t *testing.T) {
 	for _, shard := range shards {
 		sbc := &sandboxConn{}
 		conns = append(conns, sbc)
-		s.MapTestConn(shard, sbc)
+		hc.addTestEndPoint(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 	}
 	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
-	router := NewRouter(context.Background(), serv, "aa", "", scatterConn)
+	scatterConn := NewScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
+	router := NewRouter(context.Background(), serv, cell, "", scatterConn)
 
 	_, err := routerExec(router, "select id from user", nil)
 	if err != nil {
@@ -528,6 +531,8 @@ func TestSelectScatter(t *testing.T) {
 
 func TestStreamSelectScatter(t *testing.T) {
 	// Special setup: Don't use createRouterEnv.
+	cell := "aa"
+	hc := newFakeHealthCheck()
 	s := createSandbox("TestRouter")
 	s.VSchema = routerVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
@@ -536,11 +541,11 @@ func TestStreamSelectScatter(t *testing.T) {
 	for _, shard := range shards {
 		sbc := &sandboxConn{}
 		conns = append(conns, sbc)
-		s.MapTestConn(shard, sbc)
+		hc.addTestEndPoint(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 	}
 	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
-	router := NewRouter(context.Background(), serv, "aa", "", scatterConn)
+	scatterConn := NewScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
+	router := NewRouter(context.Background(), serv, cell, "", scatterConn)
 
 	sql := "select id from user"
 	result, err := routerStream(router, sql)
@@ -568,6 +573,8 @@ func TestStreamSelectScatter(t *testing.T) {
 
 func TestSelectScatterFail(t *testing.T) {
 	// Special setup: Don't use createRouterEnv.
+	cell := "aa"
+	hc := newFakeHealthCheck()
 	s := createSandbox("TestRouter")
 	s.VSchema = routerVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
@@ -577,11 +584,11 @@ func TestSelectScatterFail(t *testing.T) {
 	for _, shard := range shards {
 		sbc := &sandboxConn{}
 		conns = append(conns, sbc)
-		s.MapTestConn(shard, sbc)
+		hc.addTestEndPoint(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 	}
 	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
-	router := NewRouter(context.Background(), serv, "aa", "", scatterConn)
+	scatterConn := NewScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
+	router := NewRouter(context.Background(), serv, cell, "", scatterConn)
 
 	_, err := routerExec(router, "select id from user", nil)
 	want := "paramsSelectScatter: keyspace TestRouter fetch error: topo error GetSrvKeyspace"

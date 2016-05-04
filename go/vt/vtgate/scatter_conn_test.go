@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -24,16 +24,20 @@ import (
 
 // This file uses the sandbox_test framework.
 
+var (
+	retryCount = 3
+)
+
 func TestScatterConnExecute(t *testing.T) {
-	testScatterConnGeneric(t, "TestScatterConnExecute", func(shards []string) (*sqltypes.Result, error) {
-		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	testScatterConnGeneric(t, "TestScatterConnExecute", func(hc discovery.HealthCheck, shards []string) (*sqltypes.Result, error) {
+		stc := NewScatterConn(hc, topo.Server{}, new(sandboxTopo), "", "aa", retryCount, nil)
 		return stc.Execute(context.Background(), "query", nil, "TestScatterConnExecute", shards, topodatapb.TabletType_REPLICA, nil, false)
 	})
 }
 
 func TestScatterConnExecuteMulti(t *testing.T) {
-	testScatterConnGeneric(t, "TestScatterConnExecuteMulti", func(shards []string) (*sqltypes.Result, error) {
-		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	testScatterConnGeneric(t, "TestScatterConnExecuteMulti", func(hc discovery.HealthCheck, shards []string) (*sqltypes.Result, error) {
+		stc := NewScatterConn(hc, topo.Server{}, new(sandboxTopo), "", "aa", retryCount, nil)
 		shardVars := make(map[string]map[string]interface{})
 		for _, shard := range shards {
 			shardVars[shard] = nil
@@ -43,8 +47,8 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 }
 
 func TestScatterConnExecuteBatch(t *testing.T) {
-	testScatterConnGeneric(t, "TestScatterConnExecuteBatch", func(shards []string) (*sqltypes.Result, error) {
-		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	testScatterConnGeneric(t, "TestScatterConnExecuteBatch", func(hc discovery.HealthCheck, shards []string) (*sqltypes.Result, error) {
+		stc := NewScatterConn(hc, topo.Server{}, new(sandboxTopo), "", "aa", retryCount, nil)
 		queries := []*vtgatepb.BoundShardQuery{{
 			Query: &querypb.BoundQuery{
 				Sql:           "query",
@@ -66,8 +70,8 @@ func TestScatterConnExecuteBatch(t *testing.T) {
 }
 
 func TestScatterConnStreamExecute(t *testing.T) {
-	testScatterConnGeneric(t, "TestScatterConnStreamExecute", func(shards []string) (*sqltypes.Result, error) {
-		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	testScatterConnGeneric(t, "TestScatterConnStreamExecute", func(hc discovery.HealthCheck, shards []string) (*sqltypes.Result, error) {
+		stc := NewScatterConn(hc, topo.Server{}, new(sandboxTopo), "", "aa", retryCount, nil)
 		qr := new(sqltypes.Result)
 		err := stc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecute", shards, topodatapb.TabletType_REPLICA, func(r *sqltypes.Result) error {
 			appendResult(qr, r)
@@ -78,8 +82,8 @@ func TestScatterConnStreamExecute(t *testing.T) {
 }
 
 func TestScatterConnStreamExecuteMulti(t *testing.T) {
-	testScatterConnGeneric(t, "TestScatterConnStreamExecuteMulti", func(shards []string) (*sqltypes.Result, error) {
-		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	testScatterConnGeneric(t, "TestScatterConnStreamExecuteMulti", func(hc discovery.HealthCheck, shards []string) (*sqltypes.Result, error) {
+		stc := NewScatterConn(hc, topo.Server{}, new(sandboxTopo), "", "aa", retryCount, nil)
 		qr := new(sqltypes.Result)
 		shardVars := make(map[string]map[string]interface{})
 		for _, shard := range shards {
@@ -116,10 +120,11 @@ func verifyErrorCode(t *testing.T, err error, wantCode vtrpcpb.ErrorCode) {
 	}
 }
 
-func testScatterConnGeneric(t *testing.T, name string, f func(shards []string) (*sqltypes.Result, error)) {
+func testScatterConnGeneric(t *testing.T, name string, f func(hc discovery.HealthCheck, shards []string) (*sqltypes.Result, error)) {
+	hc := newFakeHealthCheck()
 	// no shard
 	s := createSandbox(name)
-	qr, err := f(nil)
+	qr, err := f(hc, nil)
 	if qr.RowsAffected != 0 {
 		t.Errorf("want 0, got %v", qr.RowsAffected)
 	}
@@ -130,8 +135,8 @@ func testScatterConnGeneric(t *testing.T, name string, f func(shards []string) (
 	// single shard
 	s.Reset()
 	sbc := &sandboxConn{mustFailServer: 1}
-	s.MapTestConn("0", sbc)
-	qr, err = f([]string{"0"})
+	hc.addTestEndPoint("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil, sbc)
+	qr, err = f(hc, []string{"0"})
 	want := fmt.Sprintf("shard, host: %v.0.replica, host:\"0\" port_map:<key:\"vt\" value:1 > , error: err", name)
 	// Verify server error string.
 	if err == nil || err.Error() != want {
@@ -145,10 +150,11 @@ func testScatterConnGeneric(t *testing.T, name string, f func(shards []string) (
 	// two shards
 	s.Reset()
 	sbc0 := &sandboxConn{mustFailServer: 1}
-	s.MapTestConn("0", sbc0)
 	sbc1 := &sandboxConn{mustFailServer: 1}
-	s.MapTestConn("1", sbc1)
-	_, err = f([]string{"0", "1"})
+	hc.Reset()
+	hc.addTestEndPoint("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil, sbc0)
+	hc.addTestEndPoint("aa", "1", 1, name, "1", topodatapb.TabletType_REPLICA, true, 1, nil, sbc1)
+	_, err = f(hc, []string{"0", "1"})
 	// Verify server errors are consolidated.
 	want = fmt.Sprintf("shard, host: %v.0.replica, host:\"0\" port_map:<key:\"vt\" value:1 > , error: err\nshard, host: %v.1.replica, host:\"1\" port_map:<key:\"vt\" value:1 > , error: err", name, name)
 	verifyScatterConnError(t, err, want, vtrpcpb.ErrorCode_BAD_INPUT)
@@ -163,10 +169,11 @@ func testScatterConnGeneric(t *testing.T, name string, f func(shards []string) (
 	// two shards with different errors
 	s.Reset()
 	sbc0 = &sandboxConn{mustFailServer: 1}
-	s.MapTestConn("0", sbc0)
 	sbc1 = &sandboxConn{mustFailTxPool: 1}
-	s.MapTestConn("1", sbc1)
-	_, err = f([]string{"0", "1"})
+	hc.Reset()
+	hc.addTestEndPoint("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil, sbc0)
+	hc.addTestEndPoint("aa", "1", 1, name, "1", topodatapb.TabletType_REPLICA, true, 1, nil, sbc1)
+	_, err = f(hc, []string{"0", "1"})
 	// Verify server errors are consolidated.
 	want = fmt.Sprintf("shard, host: %v.0.replica, host:\"0\" port_map:<key:\"vt\" value:1 > , error: err\nshard, host: %v.1.replica, host:\"1\" port_map:<key:\"vt\" value:1 > , tx_pool_full: err", name, name)
 	// We should only surface the higher priority error code
@@ -182,8 +189,9 @@ func testScatterConnGeneric(t *testing.T, name string, f func(shards []string) (
 	// duplicate shards
 	s.Reset()
 	sbc = &sandboxConn{}
-	s.MapTestConn("0", sbc)
-	qr, err = f([]string{"0", "0"})
+	hc.Reset()
+	hc.addTestEndPoint("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil, sbc)
+	qr, err = f(hc, []string{"0", "0"})
 	// Ensure that we executed only once.
 	if execCount := sbc.ExecCount.Get(); execCount != 1 {
 		t.Errorf("want 1, got %v", execCount)
@@ -192,10 +200,11 @@ func testScatterConnGeneric(t *testing.T, name string, f func(shards []string) (
 	// no errors
 	s.Reset()
 	sbc0 = &sandboxConn{}
-	s.MapTestConn("0", sbc0)
 	sbc1 = &sandboxConn{}
-	s.MapTestConn("1", sbc1)
-	qr, err = f([]string{"0", "1"})
+	hc.Reset()
+	hc.addTestEndPoint("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil, sbc0)
+	hc.addTestEndPoint("aa", "1", 1, name, "1", topodatapb.TabletType_REPLICA, true, 1, nil, sbc1)
+	qr, err = f(hc, []string{"0", "1"})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -214,12 +223,13 @@ func testScatterConnGeneric(t *testing.T, name string, f func(shards []string) (
 }
 
 func TestMultiExecs(t *testing.T) {
-	s := createSandbox("TestMultiExecs")
+	createSandbox("TestMultiExecs")
 	sbc0 := &sandboxConn{}
-	s.MapTestConn("0", sbc0)
 	sbc1 := &sandboxConn{}
-	s.MapTestConn("1", sbc1)
-	stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	hc := newFakeHealthCheck()
+	hc.addTestEndPoint("aa", "0", 1, "TestMultiExecs", "0", topodatapb.TabletType_REPLICA, true, 1, nil, sbc0)
+	hc.addTestEndPoint("aa", "1", 1, "TestMultiExecs", "1", topodatapb.TabletType_REPLICA, true, 1, nil, sbc1)
+	stc := NewScatterConn(hc, topo.Server{}, new(sandboxTopo), "", "aa", retryCount, nil)
 	shardVars := map[string]map[string]interface{}{
 		"0": {
 			"bv0": 0,
@@ -249,10 +259,11 @@ func TestMultiExecs(t *testing.T) {
 }
 
 func TestScatterConnStreamExecuteSendError(t *testing.T) {
-	s := createSandbox("TestScatterConnStreamExecuteSendError")
+	createSandbox("TestScatterConnStreamExecuteSendError")
 	sbc := &sandboxConn{}
-	s.MapTestConn("0", sbc)
-	stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	hc := newFakeHealthCheck()
+	hc.addTestEndPoint("aa", "0", 1, "TestScatterConnStreamExecuteSendError", "0", topodatapb.TabletType_REPLICA, true, 1, nil, sbc)
+	stc := NewScatterConn(hc, topo.Server{}, new(sandboxTopo), "", "aa", retryCount, nil)
 	err := stc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecuteSendError", []string{"0"}, topodatapb.TabletType_REPLICA, func(*sqltypes.Result) error {
 		return fmt.Errorf("send error")
 	})
@@ -264,10 +275,11 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 }
 
 func TestScatterCommitRollbackIncorrectSession(t *testing.T) {
-	s := createSandbox("TestScatterCommitRollbackIncorrectSession")
+	createSandbox("TestScatterCommitRollbackIncorrectSession")
 	sbc0 := &sandboxConn{}
-	s.MapTestConn("0", sbc0)
-	stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	hc := newFakeHealthCheck()
+	hc.addTestEndPoint("aa", "0", 1, "TestScatterCommitRollbackIncorrectSession", "0", topodatapb.TabletType_REPLICA, true, 1, nil, sbc0)
+	stc := NewScatterConn(hc, topo.Server{}, new(sandboxTopo), "", "aa", retryCount, nil)
 
 	// nil session
 	err := stc.Commit(context.Background(), nil)
@@ -285,12 +297,13 @@ func TestScatterCommitRollbackIncorrectSession(t *testing.T) {
 }
 
 func TestScatterConnCommitSuccess(t *testing.T) {
-	s := createSandbox("TestScatterConnCommitSuccess")
+	createSandbox("TestScatterConnCommitSuccess")
 	sbc0 := &sandboxConn{}
-	s.MapTestConn("0", sbc0)
 	sbc1 := &sandboxConn{}
-	s.MapTestConn("1", sbc1)
-	stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	hc := newFakeHealthCheck()
+	hc.addTestEndPoint("aa", "0", 1, "TestScatterConnCommitSuccess", "0", topodatapb.TabletType_REPLICA, true, 1, nil, sbc0)
+	hc.addTestEndPoint("aa", "1", 1, "TestScatterConnCommitSuccess", "1", topodatapb.TabletType_REPLICA, true, 1, nil, sbc1)
+	stc := NewScatterConn(hc, topo.Server{}, new(sandboxTopo), "", "aa", retryCount, nil)
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
@@ -349,12 +362,13 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 }
 
 func TestScatterConnRollback(t *testing.T) {
-	s := createSandbox("TestScatterConnRollback")
+	createSandbox("TestScatterConnRollback")
 	sbc0 := &sandboxConn{}
-	s.MapTestConn("0", sbc0)
 	sbc1 := &sandboxConn{}
-	s.MapTestConn("1", sbc1)
-	stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	hc := newFakeHealthCheck()
+	hc.addTestEndPoint("aa", "0", 1, "TestScatterConnRollback", "0", topodatapb.TabletType_REPLICA, true, 1, nil, sbc0)
+	hc.addTestEndPoint("aa", "1", 1, "TestScatterConnRollback", "1", topodatapb.TabletType_REPLICA, true, 1, nil, sbc1)
+	stc := NewScatterConn(hc, topo.Server{}, new(sandboxTopo), "", "aa", retryCount, nil)
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
@@ -376,30 +390,11 @@ func TestScatterConnRollback(t *testing.T) {
 	}
 }
 
-func TestScatterConnClose(t *testing.T) {
-	s := createSandbox("TestScatterConnClose")
-	sbc := &sandboxConn{}
-	s.MapTestConn("0", sbc)
-	stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
-	stc.Execute(context.Background(), "query1", nil, "TestScatterConnClose", []string{"0"}, topodatapb.TabletType_REPLICA, nil, false)
-	stc.Close()
-	// retry for 10s as Close() is async.
-	for i := 0; i < 10; i++ {
-		if closeCount := sbc.CloseCount.Get(); closeCount == 1 {
-			return
-		}
-		time.Sleep(1 * time.Second)
-	}
-	if closeCount := sbc.CloseCount.Get(); closeCount != 1 {
-		t.Errorf("want 1, got %d", closeCount)
-	}
-}
-
 func TestScatterConnError(t *testing.T) {
 	err := &ScatterConnError{
-		Code: 12,
+		Retryable: false,
 		Errs: []error{
-			&ShardConnError{Code: 10, Err: &tabletconn.ServerError{Err: "tabletconn error"}},
+			&ShardError{EndPointCode: vtrpcpb.ErrorCode_PERMISSION_DENIED, Err: &tabletconn.ServerError{Err: "tabletconn error"}},
 			fmt.Errorf("generic error"),
 			tabletconn.ConnClosed,
 		},
@@ -415,13 +410,15 @@ func TestScatterConnError(t *testing.T) {
 
 func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	s := createSandbox("TestScatterConnQueryNotInTransaction")
+	hc := newFakeHealthCheck()
 
 	// case 1: read query (not in transaction) followed by write query, not in the same shard.
 	sbc0 := &sandboxConn{}
-	s.MapTestConn("0", sbc0)
 	sbc1 := &sandboxConn{}
-	s.MapTestConn("1", sbc1)
-	stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	hc.Reset()
+	hc.addTestEndPoint("aa", "0", 1, "TestScatterConnQueryNotInTransaction", "0", topodatapb.TabletType_REPLICA, true, 1, nil, sbc0)
+	hc.addTestEndPoint("aa", "1", 1, "TestScatterConnQueryNotInTransaction", "1", topodatapb.TabletType_REPLICA, true, 1, nil, sbc1)
+	stc := NewScatterConn(hc, topo.Server{}, new(sandboxTopo), "", "aa", retryCount, nil)
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, topodatapb.TabletType_REPLICA, session, true)
 	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"1"}, topodatapb.TabletType_REPLICA, session, false)
@@ -458,10 +455,11 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	// case 2: write query followed by read query (not in transaction), not in the same shard.
 	s.Reset()
 	sbc0 = &sandboxConn{}
-	s.MapTestConn("0", sbc0)
 	sbc1 = &sandboxConn{}
-	s.MapTestConn("1", sbc1)
-	stc = NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	hc.Reset()
+	hc.addTestEndPoint("aa", "0", 1, "TestScatterConnQueryNotInTransaction", "0", topodatapb.TabletType_REPLICA, true, 1, nil, sbc0)
+	hc.addTestEndPoint("aa", "1", 1, "TestScatterConnQueryNotInTransaction", "1", topodatapb.TabletType_REPLICA, true, 1, nil, sbc1)
+	stc = NewScatterConn(hc, topo.Server{}, new(sandboxTopo), "", "aa", retryCount, nil)
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, topodatapb.TabletType_REPLICA, session, false)
 	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"1"}, topodatapb.TabletType_REPLICA, session, true)
@@ -498,10 +496,11 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	// case 3: write query followed by read query, in the same shard.
 	s.Reset()
 	sbc0 = &sandboxConn{}
-	s.MapTestConn("0", sbc0)
 	sbc1 = &sandboxConn{}
-	s.MapTestConn("1", sbc1)
-	stc = NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	hc.Reset()
+	hc.addTestEndPoint("aa", "0", 1, "TestScatterConnQueryNotInTransaction", "0", topodatapb.TabletType_REPLICA, true, 1, nil, sbc0)
+	hc.addTestEndPoint("aa", "1", 1, "TestScatterConnQueryNotInTransaction", "1", topodatapb.TabletType_REPLICA, true, 1, nil, sbc1)
+	stc = NewScatterConn(hc, topo.Server{}, new(sandboxTopo), "", "aa", retryCount, nil)
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, topodatapb.TabletType_REPLICA, session, false)
 	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0", "1"}, topodatapb.TabletType_REPLICA, session, true)

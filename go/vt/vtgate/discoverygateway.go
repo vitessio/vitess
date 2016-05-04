@@ -15,7 +15,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
@@ -42,7 +41,7 @@ func init() {
 	RegisterGatewayCreator(gatewayImplementationDiscovery, createDiscoveryGateway)
 }
 
-func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, _ time.Duration, retryCount int, _, _, _ time.Duration, _ *stats.MultiTimings, tabletTypesToWait []topodatapb.TabletType) Gateway {
+func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) Gateway {
 	dg := &discoveryGateway{
 		hc:                hc,
 		topoServer:        topoServer,
@@ -93,11 +92,6 @@ func (dg *discoveryGateway) waitForEndPoints() error {
 		err = nil
 	}
 	return err
-}
-
-// InitializeConnections creates connections to VTTablets.
-func (dg *discoveryGateway) InitializeConnections(ctx context.Context) error {
-	return nil
 }
 
 // Execute executes the non-streaming query for the specified keyspace, shard, and tablet type.
@@ -389,7 +383,7 @@ func (dg *discoveryGateway) getEndPoints(keyspace, shard string, tabletType topo
 	return epList
 }
 
-// WrapError returns ShardConnError which preserves the original error code if possible,
+// WrapError returns ShardError which preserves the original error code if possible,
 // adds the connection context
 // and adds a bit to determine whether the keyspace/shard needs to be
 // re-resolved for a potential sharding event.
@@ -398,18 +392,11 @@ func WrapError(in error, keyspace, shard string, tabletType topodatapb.TabletTyp
 		return nil
 	}
 	shardIdentifier := fmt.Sprintf("%s.%s.%s, %+v", keyspace, shard, strings.ToLower(tabletType.String()), endPoint)
-	code := tabletconn.ERR_NORMAL
-	serverError, ok := in.(*tabletconn.ServerError)
-	if ok {
-		code = serverError.Code
-	}
 
-	shardConnErr := &ShardConnError{
-		Code:            code,
+	return &ShardError{
 		ShardIdentifier: shardIdentifier,
 		InTransaction:   inTransaction,
 		Err:             in,
 		EndPointCode:    vterrors.RecoverVtErrorCode(in),
 	}
-	return shardConnErr
 }

@@ -2,17 +2,15 @@ package vtgate
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
-	"time"
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -71,7 +69,7 @@ func TestDiscoveryGatewayGetEndPoints(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
 	hc := newFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "local", time.Millisecond, 2, time.Second, time.Second, time.Second, nil, nil).(*discoveryGateway)
+	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "local", 2, nil).(*discoveryGateway)
 
 	// replica should only use local ones
 	hc.Reset()
@@ -97,13 +95,13 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	shard := "0"
 	tabletType := topodatapb.TabletType_REPLICA
 	hc := newFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", time.Millisecond, 2, time.Second, time.Second, time.Second, nil, nil)
+	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", 2, nil)
 
 	// no endpoint
 	hc.Reset()
 	want := "shard, host: ks.0.replica, <nil>, no valid endpoint"
 	err := f(dg, keyspace, shard, tabletType)
-	verifyShardConnError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
+	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 	if hc.GetStatsFromTargetCounter != 1 {
 		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
 	}
@@ -113,7 +111,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, fmt.Errorf("no connection"), nil)
 	want = "shard, host: ks.0.replica, <nil>, no valid endpoint"
 	err = f(dg, keyspace, shard, tabletType)
-	verifyShardConnError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
+	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 	if hc.GetStatsFromTargetCounter != 1 {
 		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
 	}
@@ -123,7 +121,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	ep1 := hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, nil, nil)
 	want = fmt.Sprintf(`shard, host: ks.0.replica, <nil>, no valid endpoint`)
 	err = f(dg, keyspace, shard, tabletType)
-	verifyShardConnError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
+	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 	if hc.GetStatsFromTargetCounter != 1 {
 		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
 	}
@@ -170,7 +168,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	ep1 = hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailServer: 1})
 	want = fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: err`, ep1)
 	err = f(dg, keyspace, shard, tabletType)
-	verifyShardConnError(t, err, want, vtrpcpb.ErrorCode_BAD_INPUT)
+	verifyShardError(t, err, want, vtrpcpb.ErrorCode_BAD_INPUT)
 	if hc.GetStatsFromTargetCounter != 1 {
 		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
 	}
@@ -180,7 +178,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	ep1 = hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailConn: 1})
 	want = fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: conn`, ep1)
 	err = f(dg, keyspace, shard, tabletType)
-	verifyShardConnError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
+	verifyShardError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
 	if hc.GetStatsFromTargetCounter != 1 {
 		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
 	}
@@ -202,7 +200,7 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	shard := "0"
 	tabletType := topodatapb.TabletType_REPLICA
 	hc := newFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", time.Millisecond, 2, time.Second, time.Second, time.Second, nil, nil)
+	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", 2, nil)
 
 	// retry error - no retry
 	hc.Reset()
@@ -225,121 +223,21 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	ep1 = hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailConn: 1})
 	want := fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: conn`, ep1)
 	err = f(dg, keyspace, shard, tabletType)
-	verifyShardConnError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
+	verifyShardError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
 	if hc.GetStatsFromTargetCounter != 1 {
 		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
 	}
 }
 
-func newFakeHealthCheck() *fakeHealthCheck {
-	return &fakeHealthCheck{items: make(map[string]*fhcItem)}
-}
-
-type fhcItem struct {
-	eps  *discovery.EndPointStats
-	conn tabletconn.TabletConn
-}
-
-type fakeHealthCheck struct {
-	items map[string]*fhcItem
-
-	// stats
-	GetStatsFromTargetCounter        int
-	GetStatsFromKeyspaceShardCounter int
-}
-
-func (fhc *fakeHealthCheck) Reset() {
-	fhc.GetStatsFromTargetCounter = 0
-	fhc.GetStatsFromKeyspaceShardCounter = 0
-	fhc.items = make(map[string]*fhcItem)
-}
-
-// SetListener sets the listener for healthcheck updates.
-func (fhc *fakeHealthCheck) SetListener(listener discovery.HealthCheckStatsListener) {
-}
-
-// AddEndPoint adds the endpoint, and starts health check.
-func (fhc *fakeHealthCheck) AddEndPoint(cell, name string, endPoint *topodatapb.EndPoint) {
-	key := discovery.EndPointToMapKey(endPoint)
-	item := &fhcItem{
-		eps: &discovery.EndPointStats{
-			EndPoint: endPoint,
-			Cell:     cell,
-			Name:     name,
-		},
+func verifyShardError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.ErrorCode) {
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("wanted error: %s, got error: %v", wantErr, err)
 	}
-	fhc.items[key] = item
-}
-
-// RemoveEndPoint removes the endpoint, and stops the health check.
-func (fhc *fakeHealthCheck) RemoveEndPoint(endPoint *topodatapb.EndPoint) {
-	key := discovery.EndPointToMapKey(endPoint)
-	delete(fhc.items, key)
-}
-
-// GetEndPointStatsFromKeyspaceShard returns all EndPointStats for the given keyspace/shard.
-func (fhc *fakeHealthCheck) GetEndPointStatsFromKeyspaceShard(keyspace, shard string) []*discovery.EndPointStats {
-	fhc.GetStatsFromKeyspaceShardCounter++
-	var res []*discovery.EndPointStats
-	for _, item := range fhc.items {
-		if item.eps.Target == nil {
-			continue
-		}
-		if item.eps.Target.Keyspace == keyspace && item.eps.Target.Shard == shard {
-			res = append(res, item.eps)
-		}
+	if _, ok := err.(*ShardError); !ok {
+		t.Errorf("wanted error type *ShardConnError, got error type: %v", reflect.TypeOf(err))
 	}
-	return res
-}
-
-// GetEndPointStatsFromTarget returns all EndPointStats for the given target.
-func (fhc *fakeHealthCheck) GetEndPointStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*discovery.EndPointStats {
-	fhc.GetStatsFromTargetCounter++
-	var res []*discovery.EndPointStats
-	for _, item := range fhc.items {
-		if item.eps.Target == nil {
-			continue
-		}
-		if item.eps.Target.Keyspace == keyspace && item.eps.Target.Shard == shard && item.eps.Target.TabletType == tabletType {
-			res = append(res, item.eps)
-		}
+	code := vterrors.RecoverVtErrorCode(err)
+	if code != wantCode {
+		t.Errorf("wanted error code: %s, got: %v", wantCode, code)
 	}
-	return res
-}
-
-// GetConnection returns the TabletConn of the given endpoint.
-func (fhc *fakeHealthCheck) GetConnection(endPoint *topodatapb.EndPoint) tabletconn.TabletConn {
-	key := discovery.EndPointToMapKey(endPoint)
-	if item := fhc.items[key]; item != nil {
-		return item.conn
-	}
-	return nil
-}
-
-// CacheStatus returns a displayable version of the cache.
-func (fhc *fakeHealthCheck) CacheStatus() discovery.EndPointsCacheStatusList {
-	return nil
-}
-
-// Close stops the healthcheck.
-func (fhc *fakeHealthCheck) Close() error {
-	return nil
-}
-
-func (fhc *fakeHealthCheck) addTestEndPoint(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error, conn tabletconn.TabletConn) *topodatapb.EndPoint {
-	ep := topo.NewEndPoint(0, host)
-	ep.PortMap["vt"] = port
-	key := discovery.EndPointToMapKey(ep)
-	item := fhc.items[key]
-	if item == nil {
-		fhc.AddEndPoint(cell, "", ep)
-		item = fhc.items[key]
-	}
-	item.eps.Target = &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: tabletType}
-	item.eps.Serving = serving
-	item.eps.TabletExternallyReparentedTimestamp = reparentTS
-	item.eps.Stats = &querypb.RealtimeStats{}
-	item.eps.LastError = err
-	item.conn = conn
-	return ep
 }
