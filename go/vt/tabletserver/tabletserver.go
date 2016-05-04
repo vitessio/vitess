@@ -104,7 +104,6 @@ type TabletServer struct {
 	// the context of a startRequest-endRequest.
 	qe          *QueryEngine
 	invalidator *RowcacheInvalidator
-	sessionID   int64
 
 	// checkMySQLThrottler is used to throttle the number of
 	// requests sent to CheckMySQL.
@@ -145,7 +144,6 @@ func NewTabletServer(config Config) *TabletServer {
 		BeginTimeout:        sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
 		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
 		streamHealthMap:     make(map[int]chan<- *querypb.StreamHealthResponse),
-		sessionID:           Rand(),
 		history:             history.New(10),
 	}
 	tsv.qe = NewQueryEngine(tsv, config)
@@ -383,8 +381,6 @@ func (tsv *TabletServer) serveNewType() (err error) {
 	} else {
 		tsv.invalidator.Close()
 	}
-	tsv.sessionID = Rand()
-	log.Infof("Session id: %d", tsv.sessionID)
 	tsv.transition(StateServing)
 	return nil
 }
@@ -429,7 +425,6 @@ func (tsv *TabletServer) StopService() {
 
 	tsv.invalidator.Close()
 	tsv.qe.Close()
-	tsv.sessionID = Rand()
 }
 
 func (tsv *TabletServer) waitForShutdown() {
