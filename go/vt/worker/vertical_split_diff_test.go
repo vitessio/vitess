@@ -5,7 +5,6 @@
 package worker
 
 import (
-	"flag"
 	"fmt"
 	"strings"
 	"testing"
@@ -16,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
@@ -31,10 +30,9 @@ import (
 // verticalDiffTabletServer is a local QueryService implementation to
 // support the tests
 type verticalDiffTabletServer struct {
-	queryservice.ErrorQueryService
-	t        *testing.T
-	keyspace string
-	shard    string
+	t *testing.T
+
+	*fakes.StreamHealthQueryService
 }
 
 func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
@@ -78,21 +76,6 @@ func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *q
 		}
 	}
 	return nil
-}
-
-func (sq *verticalDiffTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
-	c <- &querypb.StreamHealthResponse{
-		Target: &querypb.Target{
-			Keyspace:   sq.keyspace,
-			Shard:      sq.shard,
-			TabletType: topodatapb.TabletType_RDONLY,
-		},
-		Serving: true,
-		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMaster: 1,
-		},
-	}
-	return 0, nil
 }
 
 // TODO(aaijazi): Create a test in which source and destination data does not match
@@ -151,17 +134,6 @@ func TestVerticalSplitDiff(t *testing.T) {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
-	// We need to use FakeTabletManagerClient because we don't
-	// have a good way to fake the binlog player yet, which is
-	// necessary for synchronizing replication.
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient())
-	subFlags := flag.NewFlagSet("VerticalSplitDiff", flag.ContinueOnError)
-	gwrk, err := commandVerticalSplitDiff(wi, wr, subFlags, []string{"destination_ks/0"})
-	if err != nil {
-		t.Fatalf("commandVerticalSplitDiff failed: %v", err)
-	}
-	wrk := gwrk.(*VerticalSplitDiffWorker)
-
 	for _, rdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2, destRdonly1, destRdonly2} {
 		// both source and destination have the table definition for 'moving1'.
 		// source also has "staying1" while destination has "extra1".
@@ -191,17 +163,21 @@ func TestVerticalSplitDiff(t *testing.T) {
 				},
 			},
 		}
+		qs := fakes.NewStreamHealthQueryService(rdonly.Target())
+		qs.AddDefaultHealthResponse()
 		grpcqueryservice.RegisterForTest(rdonly.RPCServer, &verticalDiffTabletServer{
-			t:        t,
-			keyspace: rdonly.Tablet.Keyspace,
-			shard:    rdonly.Tablet.Shard,
+			t: t,
+			StreamHealthQueryService: qs,
 		})
 	}
 
-	err = wrk.Run(ctx)
-	status := wrk.StatusAsText()
-	t.Logf("Got status: %v", status)
-	if err != nil || wrk.State != WorkerStateDone {
-		t.Errorf("Worker run failed")
+	// Run the vtworker command.
+	args := []string{"VerticalSplitDiff", "destination_ks/0"}
+	// We need to use FakeTabletManagerClient because we don't
+	// have a good way to fake the binlog player yet, which is
+	// necessary for synchronizing replication.
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient())
+	if err := runCommand(t, wi, wr, args); err != nil {
+		t.Fatal(err)
 	}
 }

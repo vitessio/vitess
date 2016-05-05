@@ -1,3 +1,30 @@
+// Package discovery provides a way to discover all tablets e.g. within a
+// specific shard and monitor their current health.
+//
+// Use the HealthCheck object to query for tablets (in this package also
+// referred to as endpoints) and their health.
+//
+// For an example how to use the HealthCheck object, see worker/topo_utils.go.
+//
+// Tablets have to be manually added to the HealthCheck using AddEndPoint().
+// Alternatively, use a Watcher implementation which will constantly watch
+// a source (e.g. the topology) and add and remove tablets as they are
+// added or removed from the source.
+// For a Watcher example have a look at NewShardReplicationWatcher().
+//
+// Note that the getter functions GetEndPointStatsFrom* will always return
+// an unfiltered list of all known tablets.
+// Use the helper functions in utils.go to filter them e.g.
+// RemoveUnhealthyEndpoints() or GetCurrentMaster().
+// replicationlag.go contains a more advanced health filter which is used by
+// vtgate.
+//
+// Internally, the HealthCheck module is connected to each tablet and has a
+// streaming RPC (StreamHealth) open to receive periodic health infos.
+//
+// NOTE: This requires that the health check is enabled on the tablet.
+// As of 04/2016 you enable the health check by setting the vttablet flag
+// --target_tablet_type to the tablet's type i.e. REPLICA or RDONLY.
 package discovery
 
 import (
@@ -23,6 +50,11 @@ var (
 	hcErrorCounters *stats.MultiCounters
 )
 
+const (
+	// DefaultTopoReadConcurrency can be used as default value for the topoReadConcurrency parameter of a TopologyWatcher.
+	DefaultTopoReadConcurrency int = 5
+)
+
 func init() {
 	hcErrorCounters = stats.NewMultiCounters("HealthcheckErrors", []string{"keyspace", "shardname", "tablettype"})
 }
@@ -45,6 +77,20 @@ type EndPointStats struct {
 	LastError                           error
 }
 
+// Alias returns the alias of the tablet.
+// The return value can be used e.g. to generate the input for the topo API.
+func (e *EndPointStats) Alias() *topodatapb.TabletAlias {
+	return &topodatapb.TabletAlias{
+		Cell: e.Cell,
+		Uid:  e.EndPoint.Uid,
+	}
+}
+
+// String is defined because we want to print a []*EndPointStats array nicely.
+func (e *EndPointStats) String() string {
+	return fmt.Sprint(*e)
+}
+
 // HealthCheck defines the interface of health checking module.
 type HealthCheck interface {
 	// SetListener sets the listener for healthcheck updates. It should not block.
@@ -56,6 +102,7 @@ type HealthCheck interface {
 	// GetEndPointStatsFromKeyspaceShard returns all EndPointStats for the given keyspace/shard.
 	GetEndPointStatsFromKeyspaceShard(keyspace, shard string) []*EndPointStats
 	// GetEndPointStatsFromTarget returns all EndPointStats for the given target.
+	// You can exclude unhealthy entries using the helper in utils.go.
 	GetEndPointStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*EndPointStats
 	// GetConnection returns the TabletConn of the given endpoint.
 	GetConnection(endPoint *topodatapb.EndPoint) tabletconn.TabletConn

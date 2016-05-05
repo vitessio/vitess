@@ -485,7 +485,7 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout time.Duration) error {
 	hc := discovery.NewHealthCheck(healthCheckTimeout /* connectTimeout */, healthcheckRetryDelay, healthCheckTimeout, cell)
 	defer hc.Close()
-	watcher := discovery.NewShardReplicationWatcher(wr.TopoServer(), hc, cell, keyspace, shard, healthCheckTopologyRefresh, 5 /* topoReadConcurrency */)
+	watcher := discovery.NewShardReplicationWatcher(wr.TopoServer(), hc, cell, keyspace, shard, healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 	defer watcher.Stop()
 
 	if err := discovery.WaitForEndPoints(ctx, hc, cell, keyspace, shard, []topodatapb.TabletType{servedType}); err != nil {
@@ -503,32 +503,23 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	// Now check the QPS rate of all tablets until the timeout expires.
 	startTime := time.Now()
 	for {
-		healthyTabletsCount := 0
 		// map key: tablet uid
 		drainedHealthyTablets := make(map[uint32]*discovery.EndPointStats)
 		notDrainedHealtyTablets := make(map[uint32]*discovery.EndPointStats)
 
-		addrs := hc.GetEndPointStatsFromTarget(keyspace, shard, servedType)
-		healthyTabletsCount = 0
-		for _, addr := range addrs {
-			// TODO(mberlin): Move this health check logic into a common function
-			// because other code uses it as well e.g. go/vt/worker/topo_utils.go.
-			if addr.Stats == nil || addr.Stats.HealthError != "" || addr.Stats.SecondsBehindMaster > 30 {
-				// not healthy
-				continue
-			}
-
-			healthyTabletsCount++
-			if addr.Stats.Qps == 0.0 {
-				drainedHealthyTablets[addr.EndPoint.Uid] = addr
+		healthyTablets := discovery.RemoveUnhealthyEndpoints(
+			hc.GetEndPointStatsFromTarget(keyspace, shard, servedType))
+		for _, eps := range healthyTablets {
+			if eps.Stats.Qps == 0.0 {
+				drainedHealthyTablets[eps.EndPoint.Uid] = eps
 			} else {
-				notDrainedHealtyTablets[addr.EndPoint.Uid] = addr
+				notDrainedHealtyTablets[eps.EndPoint.Uid] = eps
 			}
 		}
 
-		if len(drainedHealthyTablets) == healthyTabletsCount {
+		if len(drainedHealthyTablets) == len(healthyTablets) {
 			wr.Logger().Infof("%v: All %d healthy tablets were drained after %.1f seconds (not counting %.1f seconds for the initial wait).",
-				cell, healthyTabletsCount, time.Now().Sub(startTime).Seconds(), healthCheckTimeout.Seconds())
+				cell, len(healthyTablets), time.Now().Sub(startTime).Seconds(), healthCheckTimeout.Seconds())
 			break
 		}
 
@@ -538,7 +529,7 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 			deadlineString = fmt.Sprintf(" up to %.1f more seconds", d.Sub(time.Now()).Seconds())
 		}
 		wr.Logger().Infof("%v: Waiting%v for all healthy tablets to be drained (%d/%d done).",
-			cell, deadlineString, len(drainedHealthyTablets), healthyTabletsCount)
+			cell, deadlineString, len(drainedHealthyTablets), len(healthyTablets))
 
 		timer := time.NewTimer(retryDelay)
 		select {
@@ -550,7 +541,7 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 				l = append(l, formatEndpointStats(eps))
 			}
 			return fmt.Errorf("%v: WaitForDrain failed for %v tablets in %v/%v. Only %d/%d tablets were drained. err: %v List of tablets which were not drained: %v",
-				cell, servedType, keyspace, shard, len(drainedHealthyTablets), healthyTabletsCount, ctx.Err(), strings.Join(l, ";"))
+				cell, servedType, keyspace, shard, len(drainedHealthyTablets), len(healthyTablets), ctx.Err(), strings.Join(l, ";"))
 		case <-timer.C:
 		}
 	}
@@ -563,11 +554,7 @@ func formatEndpointStats(eps *discovery.EndPointStats) string {
 	if webPort, ok := eps.EndPoint.PortMap["vt"]; ok {
 		webURL = fmt.Sprintf("http://%v:%d/", eps.EndPoint.Host, webPort)
 	}
-	alias := &topodatapb.TabletAlias{
-		Cell: eps.Cell,
-		Uid:  eps.EndPoint.Uid,
-	}
-	return fmt.Sprintf("%v: %v stats: %v", topoproto.TabletAliasString(alias), webURL, eps.Stats)
+	return fmt.Sprintf("%v: %v stats: %v", topoproto.TabletAliasString(eps.Alias()), webURL, eps.Stats)
 }
 
 // MigrateServedFrom is used during vertical splits to migrate a

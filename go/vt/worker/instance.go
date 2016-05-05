@@ -14,6 +14,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/logutil"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
@@ -119,7 +120,8 @@ func (wi *Instance) setAndStartWorker(wrk Worker, wr *wrangler.Wrangler) (chan s
 		defer func() {
 			// The recovery code is a copy of servenv.HandlePanic().
 			if x := recover(); x != nil {
-				err = fmt.Errorf("uncaught %v panic: %v", "vtworker", x)
+				log.Errorf("uncaught vtworker panic: %v\n%s", x, tb.Stack(4))
+				err = fmt.Errorf("uncaught vtworker panic: %v", x)
 			}
 
 			wi.currentWorkerMutex.Lock()

@@ -181,7 +181,7 @@ func TestSelectBindvars(t *testing.T) {
 		BindVariables: map[string]interface{}{
 			"name1":  []byte("foo1"),
 			"name2":  []byte("foo2"),
-			"__vals": []interface{}{"foo1", "foo2"},
+			"__vals": []interface{}{[]byte("foo1"), []byte("foo2")},
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -260,7 +260,7 @@ func TestSelectEqual(t *testing.T) {
 	wantQueries = []querytypes.BoundQuery{{
 		Sql: "select user_id from name_user_map where name = :name",
 		BindVariables: map[string]interface{}{
-			"name": "foo",
+			"name": []byte("foo"),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -420,7 +420,7 @@ func TestSelectIN(t *testing.T) {
 	wantQueries = []querytypes.BoundQuery{{
 		Sql: "select user_id from name_user_map where name = :name",
 		BindVariables: map[string]interface{}{
-			"name": "foo",
+			"name": []byte("foo"),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -471,7 +471,7 @@ func TestStreamSelectIN(t *testing.T) {
 	wantQueries := []querytypes.BoundQuery{{
 		Sql: "select user_id from name_user_map where name = :name",
 		BindVariables: map[string]interface{}{
-			"name": "foo",
+			"name": []byte("foo"),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {

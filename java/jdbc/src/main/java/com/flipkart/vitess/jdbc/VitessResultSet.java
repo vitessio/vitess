@@ -74,17 +74,19 @@ public class VitessResultSet implements ResultSet {
                     .setType(columnTypes[columnCounter]);
             queryResultBuilder.addFields(queryField.build());
         }
-        for (String[] rowData : data) {
+        if (null != data) {
+            for (String[] rowData : data) {
 
-            Query.Row.Builder queryRow = Query.Row.newBuilder();
-            StringBuilder sb = new StringBuilder();
-            for (String aRowData : rowData) {
-                sb.append(aRowData);
-                queryRow.addLengths(aRowData.length());
+                Query.Row.Builder queryRow = Query.Row.newBuilder();
+                StringBuilder sb = new StringBuilder();
+                for (String aRowData : rowData) {
+                    sb.append(aRowData);
+                    queryRow.addLengths(aRowData.length());
+                }
+                queryRow.setValues(ByteString.copyFromUtf8(sb.toString()));
+                queryResultBuilder.addRows(queryRow);
+                sb.delete(0, sb.length());
             }
-            queryRow.setValues(ByteString.copyFromUtf8(sb.toString()));
-            queryResultBuilder.addRows(queryRow);
-            sb.delete(0, sb.length());
         }
         this.cursor = new SimpleCursor(queryResultBuilder.build());
         this.vitessStatement = null;
@@ -97,7 +99,7 @@ public class VitessResultSet implements ResultSet {
     }
 
     public VitessResultSet(String[] columnNames, Query.Type[] columnTypes,
-                           ArrayList<ArrayList<String>> data) throws SQLException {
+        ArrayList<ArrayList<String>> data) throws SQLException {
 
         if (columnNames.length != columnTypes.length) {
             throw new SQLException(Constants.SQLExceptionMessages.INVALID_RESULT_SET);
@@ -218,13 +220,18 @@ public class VitessResultSet implements ResultSet {
         byte value;
 
         preAccessor(columnIndex);
-
         if (isNull(columnIndex)) {
             return 0;
         }
 
-        byteString = this.getString(columnIndex);
+        //If the return column type is of byte,
+        // return byte otherwise typecast
+        Object object = this.row.getObject(columnIndex);
+        if(object instanceof Byte) {
+            return (byte) object;
+        }
 
+        byteString = this.getString(columnIndex);
         try {
             value = Byte.parseByte(byteString);
         } catch (NumberFormatException nfe) {
@@ -366,13 +373,17 @@ public class VitessResultSet implements ResultSet {
         byte[] value;
 
         preAccessor(columnIndex);
-
         if (isNull(columnIndex)) {
             return null;
         }
+        //If the return column type is of byte[],
+        // return byte[] otherwise typecast
+        Object object = this.row.getObject(columnIndex);
+        if(object instanceof byte[]) {
+            return (byte[]) object;
+        }
 
         bytesString = this.getString(columnIndex);
-
         try {
             value = bytesString.getBytes();
         } catch (Exception ex) {

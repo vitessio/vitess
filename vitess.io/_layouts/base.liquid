@@ -13,8 +13,9 @@
     <meta name="og:image" content="{{ site.baseurl }}/images/{{ site.logo }}"/>
     <meta name="og:description" content="{{ site.description }}"/>
 
-    <!-- GA -->
+    {% if site.analytics.id %}
     {% include analytics.liquid %}
+    {% endif %}
   </head>
   <body class="{{ page.bodyclass }}" id="top_of_page">
 {% if page.tocDepth %}
@@ -23,7 +24,10 @@
     <span id="toc-depth" data-toc-depth="h2,h3"></span>
 {% endif %}
 
-  	{{ content }}
+    {% include nav.html %}
+    {{ content }}
+    <div class="page-spacer"></div>
+    {% include footer.html %}
 
     {% include end-of-page-styles.liquid %}
   </body>

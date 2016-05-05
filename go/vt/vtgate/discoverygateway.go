@@ -306,23 +306,25 @@ func (dg *discoveryGateway) canRetry(ctx context.Context, err error, transaction
 	default:
 	}
 	if serverError, ok := err.(*tabletconn.ServerError); ok {
-		switch serverError.Code {
-		case tabletconn.ERR_FATAL:
+		switch serverError.ServerCode {
+		case vtrpcpb.ErrorCode_INTERNAL_ERROR:
 			// Do not retry on fatal error for streaming query.
 			// For streaming query, vttablet sends:
-			// - RETRY, if streaming is not started yet;
-			// - FATAL, if streaming is broken halfway.
-			// For non-streaming query, handle as ERR_RETRY.
+			// - QUERY_NOT_SERVED, if streaming is not started yet;
+			// - INTERNAL_ERROR, if streaming is broken halfway.
+			// For non-streaming query, handle as QUERY_NOT_SERVED.
 			if isStreaming {
 				return false
 			}
 			fallthrough
-		case tabletconn.ERR_RETRY:
-			// Retry on RETRY and FATAL if not in a transaction.
+		case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
+			// Retry on QUERY_NOT_SERVED and
+			// INTERNAL_ERROR if not in a transaction.
 			inTransaction := (transactionID != 0)
 			return !inTransaction
 		default:
-			// Not retry for TX_POOL_FULL and normal server errors.
+			// Not retry for RESOURCE_EXHAUSTED and normal
+			// server errors.
 			return false
 		}
 	}

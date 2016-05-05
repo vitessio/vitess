@@ -86,7 +86,10 @@ def setUpModule():
     # Create destination shard.
     dst_master.init_tablet('master', 'test_keyspace', '-')
     dst_replica.init_tablet('replica', 'test_keyspace', '-')
-    dst_master.start_vttablet(wait_for_state='NOT_SERVING')
+    # Start masters with enabled healthcheck (necessary for resolving the
+    # destination master).
+    dst_master.start_vttablet(wait_for_state='NOT_SERVING',
+                              target_tablet_type='replica')
     dst_replica.start_vttablet(wait_for_state='NOT_SERVING')
 
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/-',

@@ -1982,8 +1982,9 @@ if (typeof jQuery === 'undefined') {
       '[data-target="' + target + '"],' +
       this.selector + '[href="' + target + '"]'
 
+    // This is the line I changed.
     var active = $(selector)
-      .parents('li')
+      .parent('li')
       .addClass('active')
 
     if (active.parent('.dropdown-menu').length) {

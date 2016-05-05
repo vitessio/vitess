@@ -17,7 +17,9 @@ import (
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
+	"github.com/youtube/vitess/go/vt/throttler"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -45,9 +47,8 @@ type SplitCloneWorker struct {
 	minTableSizeForSplit      uint64
 	destinationWriterCount    int
 	minHealthyRdonlyEndPoints int
+	maxTPS                    int64
 	cleaner                   *wrangler.Cleaner
-
-	// all subsequent fields are protected by the mutex
 
 	// populated during WorkerStateInit, read-only after that
 	keyspaceInfo      *topo.KeyspaceInfo
@@ -57,30 +58,46 @@ type SplitCloneWorker struct {
 	// populated during WorkerStateFindTargets, read-only after that
 	sourceAliases []*topodatapb.TabletAlias
 	sourceTablets []*topo.TabletInfo
+	// healthCheck tracks the health of all MASTER and REPLICA tablets.
+	// It must be closed at the end of the command.
+	healthCheck discovery.HealthCheck
+	// destinationShardWatchers contains a TopologyWatcher for each destination
+	// shard. It updates the list of endpoints in the healthcheck if replicas are
+	// added/removed.
+	// Each watcher must be stopped at the end of the command.
+	destinationShardWatchers []*discovery.TopologyWatcher
+	// destinationDbNames stores for each destination keyspace/shard the MySQL
+	// database name.
+	// Example Map Entry: test_keyspace/-80 => vt_test_keyspace
+	destinationDbNames map[string]string
+	// destionThrottlers stores for each destination keyspace/shard the
+	// Throttler instance which will limit the write throughput.
+	destinationThrottlers map[string]*throttler.Throttler
 
 	// populated during WorkerStateCopy
-	tableStatus []*tableStatus
-	startTime   time.Time
+	// tableStatusList holds the status for each table.
+	tableStatusList tableStatusList
 	// aliases of tablets that need to have their schema reloaded.
 	// Only populated once, read-only after that.
 	reloadAliases [][]*topodatapb.TabletAlias
 	reloadTablets []map[topodatapb.TabletAlias]*topo.TabletInfo
 
 	ev *events.SplitClone
-
-	// Mutex to protect fields that might change when (re)resolving topology.
-	// TODO(aaijazi): we might want to have a Mutex per shard. Having a single mutex
-	// could become a bottleneck, as it needs to be locked for every ExecuteFetch.
-	resolveMu                  sync.Mutex
-	destinationShardsToTablets map[string]*topo.TabletInfo
-	resolveTime                time.Time
 }
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
-func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyEndPoints int) (Worker, error) {
+func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyEndPoints int, maxTPS int64) (Worker, error) {
 	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
+	}
+	if maxTPS == 0 {
+		maxTPS = throttler.MaxRateModuleDisabled
+	} else {
+		wr.Logger().Infof("throttling enabled and set to a max of %v transactions/second", maxTPS)
+	}
+	if maxTPS != throttler.MaxRateModuleDisabled && maxTPS < int64(destinationWriterCount) {
+		return nil, fmt.Errorf("-max_tps must be >= -destination_writer_count: %v >= %v", maxTPS, destinationWriterCount)
 	}
 	return &SplitCloneWorker{
 		StatusWorker:              NewStatusWorker(),
@@ -95,7 +112,11 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 		minTableSizeForSplit:      minTableSizeForSplit,
 		destinationWriterCount:    destinationWriterCount,
 		minHealthyRdonlyEndPoints: minHealthyRdonlyEndPoints,
-		cleaner:                   &wrangler.Cleaner{},
+		maxTPS:  maxTPS,
+		cleaner: &wrangler.Cleaner{},
+
+		destinationDbNames:    make(map[string]string),
+		destinationThrottlers: make(map[string]*throttler.Throttler),
 
 		ev: &events.SplitClone{
 			Cell:          cell,
@@ -127,20 +148,20 @@ func (scw *SplitCloneWorker) formatSources() string {
 
 // StatusAsHTML implements the Worker interface
 func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
-	scw.Mu.Lock()
-	defer scw.Mu.Unlock()
+	state := scw.State()
+
 	result := "<b>Working on:</b> " + scw.keyspace + "/" + scw.shard + "</br>\n"
-	result += "<b>State:</b> " + scw.State.String() + "</br>\n"
-	switch scw.State {
+	result += "<b>State:</b> " + state.String() + "</br>\n"
+	switch state {
 	case WorkerStateCopy:
 		result += "<b>Running</b>:</br>\n"
 		result += "<b>Copying from</b>: " + scw.formatSources() + "</br>\n"
-		statuses, eta := formatTableStatuses(scw.tableStatus, scw.startTime)
+		statuses, eta := scw.tableStatusList.format()
 		result += "<b>ETA</b>: " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
 	case WorkerStateDone:
 		result += "<b>Success</b>:</br>\n"
-		statuses, _ := formatTableStatuses(scw.tableStatus, scw.startTime)
+		statuses, _ := scw.tableStatusList.format()
 		result += strings.Join(statuses, "</br>\n")
 	}
 
@@ -149,20 +170,20 @@ func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
 
 // StatusAsText implements the Worker interface
 func (scw *SplitCloneWorker) StatusAsText() string {
-	scw.Mu.Lock()
-	defer scw.Mu.Unlock()
+	state := scw.State()
+
 	result := "Working on: " + scw.keyspace + "/" + scw.shard + "\n"
-	result += "State: " + scw.State.String() + "\n"
-	switch scw.State {
+	result += "State: " + state.String() + "\n"
+	switch state {
 	case WorkerStateCopy:
 		result += "Running:\n"
 		result += "Copying from: " + scw.formatSources() + "\n"
-		statuses, eta := formatTableStatuses(scw.tableStatus, scw.startTime)
+		statuses, eta := scw.tableStatusList.format()
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
 	case WorkerStateDone:
 		result += "Success:\n"
-		statuses, _ := formatTableStatuses(scw.tableStatus, scw.startTime)
+		statuses, _ := scw.tableStatusList.format()
 		result += strings.Join(statuses, "\n")
 	}
 	return result
@@ -171,9 +192,13 @@ func (scw *SplitCloneWorker) StatusAsText() string {
 // Run implements the Worker interface
 func (scw *SplitCloneWorker) Run(ctx context.Context) error {
 	resetVars()
+
+	// Run the command.
 	err := scw.run(ctx)
 
+	// Cleanup.
 	scw.setState(WorkerStateCleanUp)
+	// Reverse any changes e.g. setting the tablet type of a source RDONLY tablet.
 	cerr := scw.cleaner.CleanUp(scw.wr)
 	if cerr != nil {
 		if err != nil {
@@ -182,6 +207,21 @@ func (scw *SplitCloneWorker) Run(ctx context.Context) error {
 			err = cerr
 		}
 	}
+
+	// Stop Throttlers.
+	for _, throttler := range scw.destinationThrottlers {
+		throttler.Close()
+	}
+	// Stop healthcheck.
+	for _, watcher := range scw.destinationShardWatchers {
+		watcher.Stop()
+	}
+	if scw.healthCheck != nil {
+		if err := scw.healthCheck.Close(); err != nil {
+			scw.wr.Logger().Errorf("HealthCheck.Close() failed: %v", err)
+		}
+	}
+
 	if err != nil {
 		scw.setErrorState(err)
 		return err
@@ -254,6 +294,15 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 		scw.destinationShards = os.Left
 	}
 
+	// Verify that filtered replication is not already enabled.
+	for _, si := range scw.destinationShards {
+		if len(si.SourceShards) > 0 {
+			return fmt.Errorf("destination shard %v/%v has filtered replication already enabled from a previous resharding (ShardInfo is set)."+
+				" This requires manual intervention e.g. use vtctl SourceShardDelete to remove it",
+				si.Keyspace(), si.ShardName())
+		}
+	}
+
 	// validate all serving types
 	servingTypes := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 	for _, st := range servingTypes {
@@ -315,49 +364,53 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 		action.TabletType = topodatapb.TabletType_SPARE
 	}
 
-	return scw.ResolveDestinationMasters(ctx)
-}
-
-// ResolveDestinationMasters implements the Resolver interface.
-// It will attempt to resolve all shards and update scw.destinationShardsToTablets;
-// if it is unable to do so, it will not modify scw.destinationShardsToTablets at all.
-func (scw *SplitCloneWorker) ResolveDestinationMasters(ctx context.Context) error {
-	statsDestinationAttemptedResolves.Add(1)
-	destinationShardsToTablets := make(map[string]*topo.TabletInfo)
-
-	// Allow at most one resolution request at a time; if there are concurrent requests, only
-	// one of them will actually hit the topo server.
-	scw.resolveMu.Lock()
-	defer scw.resolveMu.Unlock()
-
-	// If the last resolution was fresh enough, return it.
-	if time.Now().Sub(scw.resolveTime) < *resolveTTL {
-		return nil
-	}
-
+	// Initialize healthcheck and add destination shards to it.
+	scw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout, "" /* statsSuffix */)
 	for _, si := range scw.destinationShards {
-		ti, err := resolveDestinationShardMaster(ctx, si.Keyspace(), si.ShardName(), scw.wr)
-		if err != nil {
-			return err
-		}
-		destinationShardsToTablets[si.ShardName()] = ti
+		watcher := discovery.NewShardReplicationWatcher(scw.wr.TopoServer(), scw.healthCheck,
+			scw.cell, si.Keyspace(), si.ShardName(),
+			*healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
+		scw.destinationShardWatchers = append(scw.destinationShardWatchers, watcher)
 	}
-	scw.destinationShardsToTablets = destinationShardsToTablets
-	// save the time of the last successful resolution
-	scw.resolveTime = time.Now()
-	statsDestinationActualResolves.Add(1)
-	return nil
-}
 
-// GetDestinationMaster implements the Resolver interface
-func (scw *SplitCloneWorker) GetDestinationMaster(shardName string) (*topo.TabletInfo, error) {
-	scw.resolveMu.Lock()
-	ti, ok := scw.destinationShardsToTablets[shardName]
-	scw.resolveMu.Unlock()
-	if !ok {
-		return nil, fmt.Errorf("no tablet found for destination shard %v", shardName)
+	// Make sure we find a master for each destination shard and log it.
+	scw.wr.Logger().Infof("Finding a MASTER tablet for each destination shard...")
+	for _, si := range scw.destinationShards {
+		waitCtx, waitCancel := context.WithTimeout(ctx, 10*time.Second)
+		defer waitCancel()
+		if err := discovery.WaitForEndPoints(waitCtx, scw.healthCheck,
+			scw.cell, si.Keyspace(), si.ShardName(), []topodatapb.TabletType{topodatapb.TabletType_MASTER}); err != nil {
+			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v: %v", si.Keyspace(), si.ShardName(), err)
+		}
+		masters := discovery.GetCurrentMaster(
+			scw.healthCheck.GetEndPointStatsFromTarget(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER))
+		if len(masters) == 0 {
+			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v in HealthCheck: empty EndPointStats list", si.Keyspace(), si.ShardName())
+		}
+		master := masters[0]
+
+		// Get the MySQL database name of the tablet.
+		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		ti, err := scw.wr.TopoServer().GetTablet(shortCtx, master.Alias())
+		cancel()
+		if err != nil {
+			return fmt.Errorf("cannot get the TabletInfo for destination master (%v) to find out its db name: %v", topoproto.TabletAliasString(master.Alias()), err)
+		}
+		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
+		scw.destinationDbNames[keyspaceAndShard] = ti.DbName()
+
+		scw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Alias()), si.Keyspace(), si.ShardName())
 	}
-	return ti, nil
+	scw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The HealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
+
+	// Set up the throttler for each destination shard.
+	for _, si := range scw.destinationShards {
+		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
+		scw.destinationThrottlers[keyspaceAndShard] = throttler.NewThrottler(
+			keyspaceAndShard, "transactions", scw.destinationWriterCount, scw.maxTPS, throttler.ReplicationLagModuleDisabled)
+	}
+
+	return nil
 }
 
 // Find all tablets on all destination shards. This should be done immediately before reloading
@@ -383,6 +436,10 @@ func (scw *SplitCloneWorker) findReloadTargets(ctx context.Context) error {
 // (probably from vtctl's CopySchemaShard)
 func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	scw.setState(WorkerStateCopy)
+	start := time.Now()
+	defer func() {
+		statsStateDurationsNs.Set(string(WorkerStateCopy), time.Now().Sub(start).Nanoseconds())
+	}()
 
 	// get source schema from the first shard
 	// TODO(alainjobart): for now, we assume the schema is compatible
@@ -399,30 +456,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 		return fmt.Errorf("no tables matching the table filter in tablet %v", topoproto.TabletAliasString(scw.sourceAliases[0]))
 	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
-
-	scw.Mu.Lock()
-	scw.tableStatus = make([]*tableStatus, len(sourceSchemaDefinition.TableDefinitions))
-	for i, td := range sourceSchemaDefinition.TableDefinitions {
-		scw.tableStatus[i] = &tableStatus{
-			name:     td.Name,
-			rowCount: td.RowCount * uint64(len(scw.sourceAliases)),
-		}
-	}
-	scw.startTime = time.Now()
-	scw.Mu.Unlock()
-
-	// Count rows for source tables
-	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
-		if td.Type == tmutils.TableBaseTable {
-			scw.tableStatus[tableIndex].mu.Lock()
-			scw.tableStatus[tableIndex].rowCount = td.RowCount
-			scw.tableStatus[tableIndex].mu.Unlock()
-		} else {
-			scw.tableStatus[tableIndex].mu.Lock()
-			scw.tableStatus[tableIndex].isView = true
-			scw.tableStatus[tableIndex].mu.Unlock()
-		}
-	}
+	scw.tableStatusList.initialize(sourceSchemaDefinition)
 
 	// In parallel, setup the channels to send SQL data chunks to for each destination tablet:
 	//
@@ -451,17 +485,23 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 		// destinationWriterCount go routines reading from it.
 		insertChannels[shardIndex] = make(chan string, scw.destinationWriterCount*2)
 
-		go func(shardName string, insertChannel chan string) {
+		go func(keyspace, shard string, insertChannel chan string) {
 			for j := 0; j < scw.destinationWriterCount; j++ {
 				destinationWaitGroup.Add(1)
-				go func() {
+				go func(threadID int) {
 					defer destinationWaitGroup.Done()
-					if err := executeFetchLoop(ctx, scw.wr, scw, shardName, insertChannel); err != nil {
-						processError("executeFetchLoop failed: %v", err)
+
+					keyspaceAndShard := topoproto.KeyspaceShardString(keyspace, shard)
+					throttler := scw.destinationThrottlers[keyspaceAndShard]
+					defer throttler.ThreadFinished(threadID)
+
+					executor := newExecutor(scw.wr, scw.healthCheck, throttler, keyspace, shard, threadID)
+					if err := executor.fetchLoop(ctx, scw.destinationDbNames[keyspaceAndShard], insertChannel); err != nil {
+						processError("executer.FetchLoop failed: %v", err)
 					}
-				}()
+				}(j)
 			}
-		}(si.ShardName(), insertChannels[shardIndex])
+		}(si.Keyspace(), si.ShardName(), insertChannels[shardIndex])
 	}
 
 	// read the vschema if needed
@@ -515,7 +555,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			scw.tableStatus[tableIndex].setThreadCount(len(chunks) - 1)
+			scw.tableStatusList.setThreadCount(tableIndex, len(chunks)-1)
 
 			for chunkIndex := 0; chunkIndex < len(chunks)-1; chunkIndex++ {
 				sourceWaitGroup.Add(1)
@@ -525,7 +565,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 					sema.Acquire()
 					defer sema.Release()
 
-					scw.tableStatus[tableIndex].threadStarted()
+					scw.tableStatusList.threadStarted(tableIndex)
 
 					// build the query, and start the streaming
 					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, scw.sourceAliases[shardIndex].String())
@@ -540,7 +580,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 					if err := scw.processData(ctx, td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount); err != nil {
 						processError("processData failed: %v", err)
 					}
-					scw.tableStatus[tableIndex].threadDone()
+					scw.tableStatusList.threadDone(tableIndex)
 				}(td, tableIndex, chunkIndex)
 			}
 		}
@@ -580,13 +620,14 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 
 		for _, si := range scw.destinationShards {
 			destinationWaitGroup.Add(1)
-			go func(shardName string) {
+			go func(keyspace, shard string) {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Making and populating blp_checkpoint table")
-				if err := runSQLCommands(ctx, scw.wr, scw, shardName, queries); err != nil {
+				keyspaceAndShard := topoproto.KeyspaceShardString(keyspace, shard)
+				if err := runSQLCommands(ctx, scw.wr, scw.healthCheck, keyspace, shard, scw.destinationDbNames[keyspaceAndShard], queries); err != nil {
 					processError("blp_checkpoint queries failed: %v", err)
 				}
-			}(si.ShardName())
+			}(si.Keyspace(), si.ShardName())
 		}
 		destinationWaitGroup.Wait()
 		if firstError != nil {
@@ -666,7 +707,7 @@ func (scw *SplitCloneWorker) processData(ctx context.Context, td *tabletmanagerd
 		if err := rowSplitter.Split(sr, r.Rows); err != nil {
 			return fmt.Errorf("RowSplitter failed for table %v: %v", td.Name, err)
 		}
-		scw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
+		scw.tableStatusList.addCopiedRows(tableIndex, len(r.Rows))
 
 		// see if we reach the destination pack count
 		packCount++

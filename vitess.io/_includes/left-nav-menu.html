@@ -2,6 +2,7 @@
           <h4 class="arrow-r no-top-margin">Overview</h4>
           <ul style="display: none">
             <li><a href="/overview/">What is Vitess</a></li>
+            <li><a href="/overview/scaling-mysql.html">Scaling MySQL with Vitess</a></li>
             <li><a href="/overview/concepts.html">Key Concepts</a></li>
           </ul>
         </li>
@@ -21,7 +22,7 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li><a href="/user-guide/schema-management.html">Schema Management</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
-              <ul style="list-style-type: none">
+              <ul style="display: block">
                 <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
               </ul>
@@ -46,6 +47,6 @@
 
         <div>
           <form method="get" action="/search/">
-            <input name="q" type="text" placeholder="Search">
+            <input id="search-form" name="q" type="text" placeholder="Search">
           </form>
         </div>

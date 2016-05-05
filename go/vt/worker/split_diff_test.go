@@ -5,7 +5,6 @@
 package worker
 
 import (
-	"flag"
 	"fmt"
 	"strings"
 	"testing"
@@ -16,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
@@ -31,11 +30,10 @@ import (
 // destinationTabletServer is a local QueryService implementation to
 // support the tests
 type destinationTabletServer struct {
-	queryservice.ErrorQueryService
-	t             *testing.T
+	t *testing.T
+
+	*fakes.StreamHealthQueryService
 	excludedTable string
-	keyspace      string
-	shard         string
 }
 
 func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
@@ -91,28 +89,12 @@ func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *qu
 	return nil
 }
 
-func (sq *destinationTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
-	c <- &querypb.StreamHealthResponse{
-		Target: &querypb.Target{
-			Keyspace:   sq.keyspace,
-			Shard:      sq.shard,
-			TabletType: topodatapb.TabletType_RDONLY,
-		},
-		Serving: true,
-		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMaster: 1,
-		},
-	}
-	return 0, nil
-}
-
 // sourceTabletServer is a local QueryService implementation to support the tests
 type sourceTabletServer struct {
-	queryservice.ErrorQueryService
-	t             *testing.T
+	t *testing.T
+
+	*fakes.StreamHealthQueryService
 	excludedTable string
-	keyspace      string
-	shard         string
 	v3            bool
 }
 
@@ -170,21 +152,6 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 		}
 	}
 	return nil
-}
-
-func (sq *sourceTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
-	c <- &querypb.StreamHealthResponse{
-		Target: &querypb.Target{
-			Keyspace:   sq.keyspace,
-			Shard:      sq.shard,
-			TabletType: topodatapb.TabletType_RDONLY,
-		},
-		Serving: true,
-		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMaster: 1,
-		},
-	}
-	return 0, nil
 }
 
 // TODO(aaijazi): Create a test in which source and destination data does not match
@@ -268,23 +235,10 @@ func testSplitDiff(t *testing.T, v3 bool) {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
-	subFlags := flag.NewFlagSet("SplitDiff", flag.ContinueOnError)
-	// We need to use FakeTabletManagerClient because we don't
-	// have a good way to fake the binlog player yet, which is
-	// necessary for synchronizing replication.
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient())
 	excludedTable := "excludedTable1"
-	gwrk, err := commandSplitDiff(wi, wr, subFlags, []string{
-		"-exclude_tables", excludedTable,
-		"ks/-40",
-	})
-	if err != nil {
-		t.Fatalf("commandSplitDiff failed: %v", err)
-	}
-	wrk := gwrk.(*SplitDiffWorker)
 
 	for _, rdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2, leftRdonly1, leftRdonly2} {
-		// The destination only has hald the data.
+		// The destination only has half the data.
 		// For v2, we do filtering at the SQl level.
 		// For v3, we do it in the client.
 		// So in any case, we need real data.
@@ -307,38 +261,39 @@ func testSplitDiff(t *testing.T, v3 bool) {
 		}
 	}
 
-	grpcqueryservice.RegisterForTest(leftRdonly1.RPCServer, &destinationTabletServer{
-		t:             t,
-		excludedTable: excludedTable,
-		keyspace:      leftRdonly1.Tablet.Keyspace,
-		shard:         leftRdonly1.Tablet.Shard,
-	})
-	grpcqueryservice.RegisterForTest(leftRdonly2.RPCServer, &destinationTabletServer{
-		t:             t,
-		excludedTable: excludedTable,
-		keyspace:      leftRdonly2.Tablet.Keyspace,
-		shard:         leftRdonly2.Tablet.Shard,
-	})
-	grpcqueryservice.RegisterForTest(sourceRdonly1.RPCServer, &sourceTabletServer{
-		t:             t,
-		excludedTable: excludedTable,
-		keyspace:      sourceRdonly1.Tablet.Keyspace,
-		shard:         sourceRdonly1.Tablet.Shard,
-		v3:            v3,
-	})
-	grpcqueryservice.RegisterForTest(sourceRdonly2.RPCServer, &sourceTabletServer{
-		t:             t,
-		excludedTable: excludedTable,
-		keyspace:      sourceRdonly2.Tablet.Keyspace,
-		shard:         sourceRdonly2.Tablet.Shard,
-		v3:            v3,
-	})
+	for _, sourceRdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2} {
+		qs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
+		qs.AddDefaultHealthResponse()
+		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &sourceTabletServer{
+			t: t,
+			StreamHealthQueryService: qs,
+			excludedTable:            excludedTable,
+			v3:                       v3,
+		})
+	}
 
-	err = wrk.Run(ctx)
-	status := wrk.StatusAsText()
-	t.Logf("Got status: %v", status)
-	if err != nil || wrk.State != WorkerStateDone {
-		t.Errorf("Worker run failed: %v", err)
+	for _, destRdonly := range []*testlib.FakeTablet{leftRdonly1, leftRdonly2} {
+		qs := fakes.NewStreamHealthQueryService(destRdonly.Target())
+		qs.AddDefaultHealthResponse()
+		grpcqueryservice.RegisterForTest(destRdonly.RPCServer, &destinationTabletServer{
+			t: t,
+			StreamHealthQueryService: qs,
+			excludedTable:            excludedTable,
+		})
+	}
+
+	// Run the vtworker command.
+	args := []string{
+		"SplitDiff",
+		"-exclude_tables", excludedTable,
+		"ks/-40",
+	}
+	// We need to use FakeTabletManagerClient because we don't
+	// have a good way to fake the binlog player yet, which is
+	// necessary for synchronizing replication.
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient())
+	if err := runCommand(t, wi, wr, args); err != nil {
+		t.Fatal(err)
 	}
 }
 

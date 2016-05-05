@@ -114,14 +114,6 @@ def main():
         conn, "music1",
         "select * from music", response, keyspace="user", kr="80-")
 
-    # music_user_idx table
-    exec_query(
-        conn, "music_user_idx0",
-        "select * from music_user_idx", response, keyspace="user", kr="-80")
-    exec_query(
-        conn, "music_user_idx1",
-        "select * from music_user_idx", response, keyspace="user", kr="80-")
-
     # music_extra table
     exec_query(
         conn, "music_extra0",
@@ -129,6 +121,22 @@ def main():
     exec_query(
         conn, "music_extra1",
         "select * from music_extra", response, keyspace="user", kr="80-")
+
+    # name_info table
+    exec_query(
+        conn, "name_info0",
+        "select * from name_info", response, keyspace="user", kr="-80")
+    exec_query(
+        conn, "name_info1",
+        "select * from name_info", response, keyspace="user", kr="80-")
+
+    # music_user_idx table
+    exec_query(
+        conn, "music_user_idx0",
+        "select * from music_user_idx", response, keyspace="user", kr="-80")
+    exec_query(
+        conn, "music_user_idx1",
+        "select * from music_user_idx", response, keyspace="user", kr="80-")
 
     # lookup tables
     exec_query(

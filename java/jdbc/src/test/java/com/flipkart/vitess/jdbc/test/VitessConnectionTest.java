@@ -1,9 +1,8 @@
 package com.flipkart.vitess.jdbc.test;
 
-import com.google.common.util.concurrent.Futures;
-
 import com.flipkart.vitess.jdbc.VitessConnection;
 import com.flipkart.vitess.util.Constants;
+import com.google.common.util.concurrent.Futures;
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.SQLFuture;
 import com.youtube.vitess.client.VTGateTx;
@@ -24,8 +23,7 @@ public class VitessConnectionTest {
 
     String dbURL = "jdbc:vitess://locahost:9000/vt_shipment/shipment";
 
-    @BeforeClass
-    public static void setUp() {
+    @BeforeClass public static void setUp() {
         // load Vitess driver
         try {
             Class.forName("com.flipkart.vitess.jdbc.VitessDriver");
@@ -39,23 +37,21 @@ public class VitessConnectionTest {
         return vitessConnection;
     }
 
-    @Test
-    public void testVitessConnection() throws SQLException {
+    @Test public void testVitessConnection() throws SQLException {
         VitessConnection vitessConnection = new VitessConnection(dbURL, null);
         Assert.assertEquals(false, vitessConnection.isClosed());
         Assert.assertNull(vitessConnection.getDbProperties());
     }
 
-    @Test
-    public void testCreateStatement() throws SQLException {
+    @Test public void testCreateStatement() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         Statement statement = vitessConnection.createStatement();
         Assert.assertEquals(vitessConnection, statement.getConnection());
     }
 
 
-    @Test(expected = SQLException.class)
-    public void testCreateStatementForClose() throws SQLException {
+    @Test(expected = SQLException.class) public void testCreateStatementForClose()
+        throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         vitessConnection.close();
         try {
@@ -65,39 +61,37 @@ public class VitessConnectionTest {
         }
     }
 
-    @Test
-    public void testnativeSQL() throws SQLException {
+    @Test public void testnativeSQL() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         Assert.assertEquals("query", vitessConnection.nativeSQL("query"));
     }
 
-    @Test
-    public void testCreatePreperedStatement() throws SQLException {
+    @Test public void testCreatePreperedStatement() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         PreparedStatement preparedStatementstatement = vitessConnection.prepareStatement("query");
         Assert.assertEquals(vitessConnection, preparedStatementstatement.getConnection());
     }
 
 
-    @Test(expected = SQLException.class)
-    public void testCreatePreperedStatementForClose() throws SQLException {
+    @Test(expected = SQLException.class) public void testCreatePreperedStatementForClose()
+        throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         vitessConnection.close();
         try {
-            PreparedStatement preparedStatementstatement = vitessConnection.prepareStatement("query");
+            PreparedStatement preparedStatementstatement =
+                vitessConnection.prepareStatement("query");
         } catch (SQLException e) {
             throw new SQLException(Constants.SQLExceptionMessages.CONN_CLOSED);
         }
     }
 
-    @Test
-    public void testDefaultGetAutoCommit() throws SQLException {
+    @Test public void testDefaultGetAutoCommit() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         Assert.assertEquals(true, vitessConnection.getAutoCommit());
     }
 
-    @Test(expected = SQLException.class)
-    public void testDefaultGetAutoCommitForClose() throws SQLException {
+    @Test(expected = SQLException.class) public void testDefaultGetAutoCommitForClose()
+        throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         vitessConnection.close();
         try {
@@ -107,15 +101,14 @@ public class VitessConnectionTest {
         }
     }
 
-    @Test
-    public void testDefaultSetAutoCommit() throws SQLException {
+    @Test public void testDefaultSetAutoCommit() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         vitessConnection.setAutoCommit(false);
         Assert.assertEquals(false, vitessConnection.getAutoCommit());
     }
 
-    @Test(expected = SQLException.class)
-    public void testDefaultSetAutoCommitForClose() throws SQLException {
+    @Test(expected = SQLException.class) public void testDefaultSetAutoCommitForClose()
+        throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         vitessConnection.close();
         try {
@@ -125,8 +118,7 @@ public class VitessConnectionTest {
         }
     }
 
-    @Test
-    public void testCommit() throws SQLException {
+    @Test public void testCommit() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         vitessConnection.setAutoCommit(false);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
@@ -137,13 +129,13 @@ public class VitessConnectionTest {
         Assert.assertEquals(null, vitessConnection.getVtGateTx());
     }
 
-    @Test(expected = SQLException.class)
-    public void testCommitForException() throws SQLException {
+    @Test(expected = SQLException.class) public void testCommitForException() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         vitessConnection.setAutoCommit(false);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
         vitessConnection.setVtGateTx(mockVtGateTx);
-        PowerMockito.when(mockVtGateTx.commit(Matchers.any(Context.class))).thenThrow(new SQLException());
+        PowerMockito.when(mockVtGateTx.commit(Matchers.any(Context.class)))
+            .thenThrow(new SQLException());
         try {
             vitessConnection.commit();
         } catch (SQLException e) {
@@ -151,8 +143,7 @@ public class VitessConnectionTest {
         }
     }
 
-    @Test
-    public void testRollback() throws SQLException {
+    @Test public void testRollback() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         vitessConnection.setAutoCommit(false);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
@@ -163,13 +154,14 @@ public class VitessConnectionTest {
         Assert.assertEquals(null, vitessConnection.getVtGateTx());
     }
 
-    @Test(expected = SQLException.class)
-    public void testRollbackForException() throws SQLException {
+    @Test(expected = SQLException.class) public void testRollbackForException()
+        throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         vitessConnection.setAutoCommit(false);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
         vitessConnection.setVtGateTx(mockVtGateTx);
-        PowerMockito.when(mockVtGateTx.rollback(Matchers.any(Context.class))).thenThrow(new SQLException());
+        PowerMockito.when(mockVtGateTx.rollback(Matchers.any(Context.class)))
+            .thenThrow(new SQLException());
         try {
             vitessConnection.rollback();
         } catch (SQLException e) {
@@ -177,8 +169,7 @@ public class VitessConnectionTest {
         }
     }
 
-    @Test
-    public void testClosed() throws SQLException {
+    @Test public void testClosed() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         vitessConnection.setAutoCommit(false);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
@@ -189,13 +180,13 @@ public class VitessConnectionTest {
         Assert.assertEquals(true, vitessConnection.isClosed());
     }
 
-    @Test(expected = SQLException.class)
-    public void testClosedForException() throws SQLException {
+    @Test(expected = SQLException.class) public void testClosedForException() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         vitessConnection.setAutoCommit(false);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
         vitessConnection.setVtGateTx(mockVtGateTx);
-        PowerMockito.when(mockVtGateTx.rollback(Matchers.any(Context.class))).thenThrow(new SQLException());
+        PowerMockito.when(mockVtGateTx.rollback(Matchers.any(Context.class)))
+            .thenThrow(new SQLException());
         try {
             vitessConnection.rollback();
         } catch (SQLException e) {
@@ -203,14 +194,12 @@ public class VitessConnectionTest {
         }
     }
 
-    @Test
-    public void testGetCatalog() throws SQLException {
+    @Test public void testGetCatalog() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         Assert.assertEquals("shipment", vitessConnection.getCatalog());
     }
 
-    @Test
-    public void testSetCatalog() throws SQLException {
+    @Test public void testSetCatalog() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
         vitessConnection.setCatalog("order");
         Assert.assertEquals("order", vitessConnection.getCatalog());

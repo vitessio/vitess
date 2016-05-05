@@ -39,14 +39,13 @@ func NewEqualSplitsAlgorithm(splitParams *SplitParams, sqlExecuter SQLExecuter) 
 	*EqualSplitsAlgorithm, error) {
 
 	if len(splitParams.splitColumns) != len(splitParams.splitColumnTypes) {
-		panic(fmt.Sprintf("len(splitparams.splitColumns) != len(splitparams.splitColumnTypes): %v!=%v",
+		panic(fmt.Sprintf("len(splitParams.splitColumns) != len(splitParams.splitColumnTypes): %v!=%v",
 			len(splitParams.splitColumns), len(splitParams.splitColumnTypes)))
 	}
-	if len(splitParams.splitColumns) != 1 {
-		return nil, fmt.Errorf("using the EQUAL_SPLITS algorithm in SplitQuery requires having"+
-			" exactly one split-column. Got split-columns: %v",
-			splitParams.splitColumns)
+	if len(splitParams.splitColumns) == 0 {
+		panic(fmt.Sprintf("len(splitParams.splitColumns) == 0"))
 	}
+	// This algorithm only uses the first splitColumn.
 	if !sqltypes.IsFloat(splitParams.splitColumnTypes[0]) &&
 		!sqltypes.IsIntegral(splitParams.splitColumnTypes[0]) {
 		return nil, fmt.Errorf("using the EQUAL_SPLITS algorithm in SplitQuery requires having"+
@@ -95,11 +94,11 @@ func (a *EqualSplitsAlgorithm) generateBoundaries() ([]tuple, error) {
 			a.splitParams.sql)
 		return []tuple{}, nil
 	}
-	min, err := valueToBigRat(minValue)
+	min, err := valueToBigRat(minValue, a.splitParams.splitColumnTypes[0])
 	if err != nil {
 		panic(fmt.Sprintf("Failed to convert min to a big.Rat: %v, min: %+v", err, min))
 	}
-	max, err := valueToBigRat(maxValue)
+	max, err := valueToBigRat(maxValue, a.splitParams.splitColumnTypes[0])
 	if err != nil {
 		panic(fmt.Sprintf("Failed to convert max to a big.Rat: %v, max: %+v", err, max))
 	}
@@ -202,22 +201,28 @@ func bigIntToSliceOfBytes(bigInt *big.Int) []byte {
 	return result[1 : len(result)-1]
 }
 
-// valueToBigRat converts a numeric 'value' into a big.Rat object.
-func valueToBigRat(value sqltypes.Value) (*big.Rat, error) {
+// valueToBigRat converts a numeric 'value' regarded as having type 'valueType' into a
+// big.Rat object.
+// Note:
+// We use an explicit valueType rather than depend on the type stored in 'value' to force
+// the type of MAX(column) or MIN(column) to correspond to the type of 'column'.
+// (We've had issues where the type of MAX(column) returned by Vitess was signed even if the
+// type of column was unsigned).
+func valueToBigRat(value sqltypes.Value, valueType querypb.Type) (*big.Rat, error) {
 	switch {
-	case value.IsUnsigned():
+	case sqltypes.IsUnsigned(valueType):
 		nativeValue, err := value.ParseUint64()
 		if err != nil {
 			return nil, err
 		}
 		return uint64ToBigRat(nativeValue), nil
-	case value.IsSigned():
+	case sqltypes.IsSigned(valueType):
 		nativeValue, err := value.ParseInt64()
 		if err != nil {
 			return nil, err
 		}
 		return int64ToBigRat(nativeValue), nil
-	case value.IsFloat():
+	case sqltypes.IsFloat(valueType):
 		nativeValue, err := value.ParseFloat64()
 		if err != nil {
 			return nil, err

@@ -66,7 +66,6 @@ func (vind *Hash) ReverseMap(_ VCursor, ksid []byte) (interface{}, error) {
 }
 
 func getNumber(v interface{}) (int64, error) {
-	// Failsafe check: v will never be a []byte.
 	if val, ok := v.([]byte); ok {
 		v = string(val)
 	}
