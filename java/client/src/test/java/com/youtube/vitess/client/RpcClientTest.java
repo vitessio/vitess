@@ -22,6 +22,7 @@ import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLDataException;
+import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.SQLInvalidAuthorizationSpecException;
 import java.sql.SQLNonTransientException;
@@ -34,8 +35,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * RpcClientTest tests a given implementation of RpcClient
- * against a mock vtgate server (go/cmd/vtgateclienttest).
+ * RpcClientTest tests a given implementation of RpcClient against a mock vtgate server
+ * (go/cmd/vtgateclienttest).
  *
  * Each implementation should extend this class and add a @BeforeClass method that starts the
  * vtgateclienttest server with the necessary parameters, and then sets 'client'.
@@ -499,6 +500,14 @@ public abstract class RpcClientTest {
         Assert.fail("no exception thrown for " + query);
       } catch (Exception e) {
         Assert.assertEquals(cls, e.getClass());
+
+        if (error == "integrity error") {
+          // The mock test server sends back errno:1062 sqlstate:23000 for this case.
+          // Make sure these values get properly extracted by the client.
+          SQLException sqlException = (SQLException) e;
+          Assert.assertEquals(1062, sqlException.getErrorCode());
+          Assert.assertEquals("23000", sqlException.getSQLState());
+        }
       }
 
       // Don't close the transaction on partial error.
@@ -509,6 +518,14 @@ public abstract class RpcClientTest {
         Assert.fail("no exception thrown for " + query);
       } catch (Exception e) {
         Assert.assertEquals(cls, e.getClass());
+
+        if (error == "integrity error") {
+          // The mock test server sends back errno:1062 sqlstate:23000 for this case.
+          // Make sure these values get properly extracted by the client.
+          SQLException sqlException = (SQLException) e;
+          Assert.assertEquals(1062, sqlException.getErrorCode());
+          Assert.assertEquals("23000", sqlException.getSQLState());
+        }
       }
       // The transaction should still be usable now.
       tx.rollback(ctx);
