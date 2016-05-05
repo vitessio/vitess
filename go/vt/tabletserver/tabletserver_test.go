@@ -1267,7 +1267,7 @@ func TestHandleExecTabletError(t *testing.T) {
 	panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "tablet error"))
 }
 
-func TestTerseErrors1(t *testing.T) {
+func TestTerseErrorsNonSQLError(t *testing.T) {
 	ctx := context.Background()
 	logStats := newLogStats("TestHandleExecError", ctx)
 	var err error
@@ -1285,12 +1285,12 @@ func TestTerseErrors1(t *testing.T) {
 	panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "tablet error"))
 }
 
-func TestTerseErrors2(t *testing.T) {
+func TestTerseErrorsBindVars(t *testing.T) {
 	ctx := context.Background()
 	logStats := newLogStats("TestHandleExecError", ctx)
 	var err error
 	defer func() {
-		want := "error: (errno 10) during query: select * from test_table"
+		want := "error: (errno 10) (sqlstate HY000) during query: select * from test_table"
 		if err == nil || err.Error() != want {
 			t.Errorf("Error: %v, want '%s'", err, want)
 		}
@@ -1304,10 +1304,11 @@ func TestTerseErrors2(t *testing.T) {
 		ErrorCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
 		Message:   "msg",
 		SQLError:  10,
+		SQLState:  "HY000",
 	})
 }
 
-func TestTerseErrors3(t *testing.T) {
+func TestTerseErrorsNoBindVars(t *testing.T) {
 	ctx := context.Background()
 	logStats := newLogStats("TestHandleExecError", ctx)
 	var err error

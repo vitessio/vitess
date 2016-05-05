@@ -92,7 +92,7 @@ func trimmedRequestToError(received string) error {
 	case "integrity error":
 		return vterrors.FromError(
 			vtrpcpb.ErrorCode_INTEGRITY_ERROR,
-			errors.New("vtgate test client forced error: integrity error (errno 1062)"),
+			errors.New("vtgate test client forced error: integrity error (errno 1062) (sqlstate 23000)"),
 		)
 	// request backlog and general throttling type errors
 	case "transient error":
