@@ -52,6 +52,7 @@ func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, se
 		tabletsWatchers:   make([]*discovery.TopologyWatcher, 0, 1),
 	}
 	dg.hc.SetListener(dg)
+	log.Infof("loading tablets for cells: %v", *cellsToWatch)
 	for _, c := range strings.Split(*cellsToWatch, ",") {
 		if c == "" {
 			continue
@@ -83,15 +84,22 @@ func (dg *discoveryGateway) waitForEndPoints() error {
 		return nil
 	}
 
+	log.Infof("Waiting for endpoints")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	err := discovery.WaitForAllEndPoints(ctx, dg.hc, dg.srvTopoServer, dg.localCell, dg.tabletTypesToWait)
 	if err == discovery.ErrWaitForEndPointsTimeout {
 		// ignore this error, we will still start up, and may not serve
 		// all endpoints.
+		log.Warningf("Timeout when waiting for endpoints")
 		err = nil
 	}
-	return err
+	if err != nil {
+		log.Errorf("Error when waiting for endpoints: %v", err)
+		return err
+	}
+	log.Infof("Waiting for endpoints completed")
+	return nil
 }
 
 // Execute executes the non-streaming query for the specified keyspace, shard, and tablet type.

@@ -179,7 +179,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 
 	// figure out if we should be running the query service
 	shouldBeServing := false
-	if topo.IsRunningQueryService(targetTabletType) && !agent.BinlogPlayerMap.isRunningFilteredReplication() {
+	if topo.IsRunningQueryService(targetTabletType) && (agent.BinlogPlayerMap == nil || !agent.BinlogPlayerMap.isRunningFilteredReplication()) {
 		shouldBeServing = true
 		if tabletControl != nil {
 			if tabletControl.DisableQueryService {
