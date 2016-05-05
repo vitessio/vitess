@@ -50,6 +50,7 @@ extern void vt_close_result(VT_CONN *conn);
 extern unsigned long vt_thread_id(VT_CONN *conn);
 extern unsigned int vt_errno(VT_CONN *conn);
 extern const char *vt_error(VT_CONN *conn);
+extern const char *vt_sqlstate(VT_CONN *conn);
 
 // vt_simple_command: Calls MySQL simple_command macro to send raw commands.
 my_bool vt_simple_command(

@@ -216,7 +216,7 @@ func (conn *Connection) IsClosed() bool {
 // ExecuteFetch executes the query on the connection
 func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *sqltypes.Result, err error) {
 	if conn.IsClosed() {
-		return nil, sqldb.NewSQLError(2006, "Connection is closed")
+		return nil, sqldb.NewSQLError(2006, "", "Connection is closed")
 	}
 
 	if C.vt_execute(&conn.c, (*C.char)(hack.StringPointer(query)), C.ulong(len(query)), 0) != 0 {
@@ -273,7 +273,7 @@ func (conn *Connection) ExecuteFetchMap(query string) (map[string]string, error)
 // on the Connection until it returns nil or error
 func (conn *Connection) ExecuteStreamFetch(query string) (err error) {
 	if conn.IsClosed() {
-		return sqldb.NewSQLError(2006, "Connection is closed")
+		return sqldb.NewSQLError(2006, "", "Connection is closed")
 	}
 	if C.vt_execute(&conn.c, (*C.char)(hack.StringPointer(query)), C.ulong(len(query)), 1) != 0 {
 		return conn.lastError(query)
@@ -379,12 +379,14 @@ func (conn *Connection) lastError(query string) error {
 	if err := C.vt_error(&conn.c); *err != 0 {
 		return &sqldb.SQLError{
 			Num:     int(C.vt_errno(&conn.c)),
+			State:   C.GoString(C.vt_sqlstate(&conn.c)),
 			Message: C.GoString(err),
 			Query:   query,
 		}
 	}
 	return &sqldb.SQLError{
 		Num:     0,
+		State:   sqldb.SQLStateGeneral,
 		Message: "Dummy",
 		Query:   string(query),
 	}

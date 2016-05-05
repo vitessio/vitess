@@ -29,6 +29,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import javax.annotation.Nullable;
+
 /**
  * Proto contains methods for working with Vitess protobuf messages.
  */
@@ -45,23 +47,81 @@ public class Proto {
    */
   public static void checkError(RPCError error) throws SQLException {
     if (error != null) {
+      int errno = getErrno(error.getMessage());
+      String sqlState = getSQLState(error.getMessage());
+
       switch (error.getCode()) {
         case SUCCESS:
           break;
         case BAD_INPUT:
-          throw new SQLSyntaxErrorException(error.toString());
+          throw new SQLSyntaxErrorException(error.toString(), sqlState, errno);
         case DEADLINE_EXCEEDED:
-          throw new SQLTimeoutException(error.toString());
+          throw new SQLTimeoutException(error.toString(), sqlState, errno);
         case INTEGRITY_ERROR:
-          throw new SQLIntegrityConstraintViolationException(error.toString());
+          throw new SQLIntegrityConstraintViolationException(error.toString(), sqlState, errno);
         case TRANSIENT_ERROR:
-          throw new SQLTransientException(error.toString());
+          throw new SQLTransientException(error.toString(), sqlState, errno);
         case UNAUTHENTICATED:
-          throw new SQLInvalidAuthorizationSpecException(error.toString());
+          throw new SQLInvalidAuthorizationSpecException(error.toString(), sqlState, errno);
         default:
-          throw new SQLNonTransientException("Vitess RPC error: " + error.toString());
+          throw new SQLNonTransientException(
+              "Vitess RPC error: " + error.toString(), sqlState, errno);
       }
     }
+  }
+
+  /**
+   * Extracts the MySQL errno from a Vitess error message, if any.
+   *
+   * <p>
+   * If no errno information is found, it returns {@code 0}.
+   */
+  public static int getErrno(@Nullable String errorMessage) {
+    if (errorMessage == null) {
+      return 0;
+    }
+    int tagPos = errorMessage.indexOf("(errno ");
+    if (tagPos == -1) {
+      return 0;
+    }
+    int start = tagPos + "(errno ".length();
+    if (start >= errorMessage.length()) {
+      return 0;
+    }
+    int end = errorMessage.indexOf(')', start);
+    if (end == -1) {
+      return 0;
+    }
+    try {
+      return Integer.parseInt(errorMessage.substring(start, end));
+    } catch (NumberFormatException e) {
+      return 0;
+    }
+  }
+
+  /**
+   * Extracts the SQLSTATE from a Vitess error message, if any.
+   *
+   * <p>
+   * If no SQLSTATE information is found, it returns {@code ""}.
+   */
+  public static String getSQLState(@Nullable String errorMessage) {
+    if (errorMessage == null) {
+      return "";
+    }
+    int tagPos = errorMessage.indexOf("(sqlstate ");
+    if (tagPos == -1) {
+      return "";
+    }
+    int start = tagPos + "(sqlstate ".length();
+    if (start >= errorMessage.length()) {
+      return "";
+    }
+    int end = errorMessage.indexOf(')', start);
+    if (end == -1) {
+      return "";
+    }
+    return errorMessage.substring(start, end);
   }
 
   public static BindVariable buildBindVariable(Object value) {

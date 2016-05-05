@@ -45,7 +45,7 @@ func (client *QueryClient) Begin() error {
 	if client.transactionID != 0 {
 		return errors.New("already in transaction")
 	}
-	transactionID, err := client.server.Begin(client.ctx, &client.target, 0)
+	transactionID, err := client.server.Begin(client.ctx, &client.target)
 	if err != nil {
 		return err
 	}
@@ -56,13 +56,13 @@ func (client *QueryClient) Begin() error {
 // Commit commits the current transaction.
 func (client *QueryClient) Commit() error {
 	defer func() { client.transactionID = 0 }()
-	return client.server.Commit(client.ctx, &client.target, 0, client.transactionID)
+	return client.server.Commit(client.ctx, &client.target, client.transactionID)
 }
 
 // Rollback rolls back the current transaction.
 func (client *QueryClient) Rollback() error {
 	defer func() { client.transactionID = 0 }()
-	return client.server.Rollback(client.ctx, &client.target, 0, client.transactionID)
+	return client.server.Rollback(client.ctx, &client.target, client.transactionID)
 }
 
 // Execute executes a query.
@@ -72,7 +72,6 @@ func (client *QueryClient) Execute(query string, bindvars map[string]interface{}
 		&client.target,
 		query,
 		bindvars,
-		0,
 		client.transactionID,
 	)
 }
@@ -85,7 +84,6 @@ func (client *QueryClient) StreamExecute(query string, bindvars map[string]inter
 		&client.target,
 		query,
 		bindvars,
-		0,
 		func(res *sqltypes.Result) error {
 			if result.Fields == nil {
 				result.Fields = res.Fields
@@ -108,7 +106,6 @@ func (client *QueryClient) Stream(query string, bindvars map[string]interface{},
 		&client.target,
 		query,
 		bindvars,
-		0,
 		sendFunc,
 	)
 }
@@ -119,7 +116,6 @@ func (client *QueryClient) ExecuteBatch(queries []querytypes.BoundQuery, asTrans
 		client.ctx,
 		&client.target,
 		queries,
-		0,
 		asTransaction,
 		client.transactionID,
 	)

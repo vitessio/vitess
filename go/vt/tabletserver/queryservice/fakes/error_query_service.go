@@ -17,47 +17,41 @@ import (
 // It is used as base for other, more specialised QueryService fakes e.g.
 // StreamHealthQueryService.
 type ErrorQueryService struct {
-	GetSessionIdError error
-}
-
-// GetSessionId is part of QueryService interface
-func (e *ErrorQueryService) GetSessionId(keyspace, shard string) (int64, error) {
-	return 0, e.GetSessionIdError
 }
 
 // Begin is part of QueryService interface
-func (e *ErrorQueryService) Begin(ctx context.Context, target *querypb.Target, sessionID int64) (int64, error) {
+func (e *ErrorQueryService) Begin(ctx context.Context, target *querypb.Target) (int64, error) {
 	return 0, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // Commit is part of QueryService interface
-func (e *ErrorQueryService) Commit(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) error {
+func (e *ErrorQueryService) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // Rollback is part of QueryService interface
-func (e *ErrorQueryService) Rollback(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) error {
+func (e *ErrorQueryService) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // Execute is part of QueryService interface
-func (e *ErrorQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID, transactionID int64) (*sqltypes.Result, error) {
+func (e *ErrorQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // StreamExecute is part of QueryService interface
-func (e *ErrorQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(*sqltypes.Result) error) error {
+func (e *ErrorQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sendReply func(*sqltypes.Result) error) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // ExecuteBatch is part of QueryService interface
-func (e *ErrorQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, sessionID int64, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+func (e *ErrorQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return nil, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // SplitQuery is part of QueryService interface
 // TODO(erez): Remove once the migration to SplitQuery V2 is done.
-func (e *ErrorQueryService) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, sessionID int64) ([]querytypes.QuerySplit, error) {
+func (e *ErrorQueryService) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
 	return nil, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
@@ -71,7 +65,7 @@ func (e *ErrorQueryService) SplitQueryV2(
 	splitCount int64,
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm,
-	sessionID int64) ([]querytypes.QuerySplit, error) {
+) ([]querytypes.QuerySplit, error) {
 	return nil, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 

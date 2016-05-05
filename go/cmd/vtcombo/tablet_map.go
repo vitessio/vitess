@@ -238,7 +238,7 @@ func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVa
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, query, bindVars, 0, transactionID)
+	}, query, bindVars, transactionID)
 	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
@@ -265,7 +265,7 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []query
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, q, 0, asTransaction, transactionID)
+	}, q, asTransaction, transactionID)
 	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
@@ -307,7 +307,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 			Keyspace:   itc.tablet.keyspace,
 			Shard:      itc.tablet.shard,
 			TabletType: itc.tablet.tabletType,
-		}, query, bindVars, 0, func(reply *sqltypes.Result) error {
+		}, query, bindVars, func(reply *sqltypes.Result) error {
 			// We need to deep-copy the reply before returning,
 			// because the underlying buffers are reused.
 			result <- reply.Copy()
@@ -328,7 +328,7 @@ func (itc *internalTabletConn) Begin(ctx context.Context) (int64, error) {
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, 0)
+	})
 	if err != nil {
 		return 0, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
@@ -341,7 +341,7 @@ func (itc *internalTabletConn) Commit(ctx context.Context, transactionID int64) 
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, 0, transactionID)
+	}, transactionID)
 	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 }
 
@@ -351,7 +351,7 @@ func (itc *internalTabletConn) Rollback(ctx context.Context, transactionID int64
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, 0, transactionID)
+	}, transactionID)
 	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 }
 
@@ -395,7 +395,7 @@ func (itc *internalTabletConn) SplitQuery(ctx context.Context, query querytypes.
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, query.Sql, query.BindVariables, splitColumn, splitCount, 0)
+	}, query.Sql, query.BindVariables, splitColumn, splitCount)
 	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
@@ -424,8 +424,7 @@ func (itc *internalTabletConn) SplitQueryV2(
 		splitColumns,
 		splitCount,
 		numRowsPerQueryPart,
-		algorithm,
-		0 /* SessionID */)
+		algorithm)
 	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}

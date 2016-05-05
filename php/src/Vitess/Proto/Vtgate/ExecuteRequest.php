@@ -21,6 +21,9 @@ namespace Vitess\Proto\Vtgate {
     /**  @var boolean */
     public $not_in_transaction = null;
     
+    /**  @var string */
+    public $keyspace = null;
+    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -70,6 +73,14 @@ namespace Vitess\Proto\Vtgate {
       $f->number    = 5;
       $f->name      = "not_in_transaction";
       $f->type      = \DrSlump\Protobuf::TYPE_BOOL;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $descriptor->addField($f);
+
+      // OPTIONAL STRING keyspace = 6
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 6;
+      $f->name      = "keyspace";
+      $f->type      = \DrSlump\Protobuf::TYPE_STRING;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
@@ -263,6 +274,43 @@ namespace Vitess\Proto\Vtgate {
      */
     public function setNotInTransaction( $value){
       return $this->_set(5, $value);
+    }
+    
+    /**
+     * Check if <keyspace> has a value
+     *
+     * @return boolean
+     */
+    public function hasKeyspace(){
+      return $this->_has(6);
+    }
+    
+    /**
+     * Clear <keyspace> value
+     *
+     * @return \Vitess\Proto\Vtgate\ExecuteRequest
+     */
+    public function clearKeyspace(){
+      return $this->_clear(6);
+    }
+    
+    /**
+     * Get <keyspace> value
+     *
+     * @return string
+     */
+    public function getKeyspace(){
+      return $this->_get(6);
+    }
+    
+    /**
+     * Set <keyspace> value
+     *
+     * @param string $value
+     * @return \Vitess\Proto\Vtgate\ExecuteRequest
+     */
+    public function setKeyspace( $value){
+      return $this->_set(6, $value);
     }
   }
 }

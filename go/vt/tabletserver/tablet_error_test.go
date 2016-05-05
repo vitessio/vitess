@@ -24,7 +24,7 @@ func TestTabletErrorCode(t *testing.T) {
 }
 
 func TestTabletErrorRetriableErrorTypeOverwrite(t *testing.T) {
-	sqlErr := sqldb.NewSQLError(mysql.ErrOptionPreventsStatement, "read-only")
+	sqlErr := sqldb.NewSQLError(mysql.ErrOptionPreventsStatement, "HY000", "read-only")
 	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqlErr)
 	if tabletErr.ErrorCode != vtrpcpb.ErrorCode_QUERY_NOT_SERVED {
 		t.Fatalf("got: %v wanted: QUERY_NOT_SERVED", tabletErr.ErrorCode)
@@ -37,7 +37,7 @@ func TestTabletErrorMsgTooLong(t *testing.T) {
 		buf[i] = 'a'
 	}
 	msg := string(buf)
-	sqlErr := sqldb.NewSQLError(mysql.ErrDupEntry, msg)
+	sqlErr := sqldb.NewSQLError(mysql.ErrDupEntry, "23000", msg)
 	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqlErr)
 	if tabletErr.ErrorCode != vtrpcpb.ErrorCode_INTEGRITY_ERROR {
 		t.Fatalf("got %v wanted INTEGRITY_ERROR", tabletErr.ErrorCode)
@@ -48,27 +48,27 @@ func TestTabletErrorMsgTooLong(t *testing.T) {
 }
 
 func TestTabletErrorConnError(t *testing.T) {
-	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqldb.NewSQLError(1999, "test"))
+	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqldb.NewSQLError(1999, "HY000", "test"))
 	if IsConnErr(tabletErr) {
 		t.Fatalf("table error: %v is not a connection error", tabletErr)
 	}
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqldb.NewSQLError(2000, "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqldb.NewSQLError(2000, "HY000", "test"))
 	if !IsConnErr(tabletErr) {
 		t.Fatalf("table error: %v is a connection error", tabletErr)
 	}
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqldb.NewSQLError(mysql.ErrServerLost, "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqldb.NewSQLError(mysql.ErrServerLost, "HY000", "test"))
 	if IsConnErr(tabletErr) {
 		t.Fatalf("table error: %v is not a connection error", tabletErr)
 	}
-	want := "fatal: the query was killed either because it timed out or was canceled: test (errno 2013)"
+	want := "fatal: the query was killed either because it timed out or was canceled: test (errno 2013) (sqlstate HY000)"
 	if tabletErr.Error() != want {
 		t.Fatalf("tablet error: %v, want %s", tabletErr, want)
 	}
-	sqlErr := sqldb.NewSQLError(1998, "test")
+	sqlErr := sqldb.NewSQLError(1998, "HY000", "test")
 	if IsConnErr(sqlErr) {
 		t.Fatalf("sql error: %v is not a connection error", sqlErr)
 	}
-	sqlErr = sqldb.NewSQLError(2001, "test")
+	sqlErr = sqldb.NewSQLError(2001, "HY000", "test")
 	if !IsConnErr(sqlErr) {
 		t.Fatalf("sql error: %v is a connection error", sqlErr)
 	}
@@ -85,26 +85,26 @@ func TestTabletErrorConnError(t *testing.T) {
 }
 
 func TestTabletErrorPrefix(t *testing.T) {
-	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, sqldb.NewSQLError(2000, "test"))
+	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, sqldb.NewSQLError(2000, "HY000", "test"))
 	if tabletErr.Prefix() != "retry: " {
 		t.Fatalf("tablet error with error code: QUERY_NOT_SERVED should has prefix: 'retry: '")
 	}
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqldb.NewSQLError(2000, "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqldb.NewSQLError(2000, "HY000", "test"))
 	if tabletErr.Prefix() != "fatal: " {
 		t.Fatalf("tablet error with error code: INTERNAL_ERROR should has prefix: 'fatal: '")
 	}
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, sqldb.NewSQLError(2000, "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, sqldb.NewSQLError(2000, "HY000", "test"))
 	if tabletErr.Prefix() != "tx_pool_full: " {
 		t.Fatalf("tablet error with error code: RESOURCE_EXHAUSTED should has prefix: 'tx_pool_full: '")
 	}
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_NOT_IN_TX, sqldb.NewSQLError(2000, "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_NOT_IN_TX, sqldb.NewSQLError(2000, "HY000", "test"))
 	if tabletErr.Prefix() != "not_in_tx: " {
 		t.Fatalf("tablet error with error code: NOT_IN_TX should has prefix: 'not_in_tx: '")
 	}
 }
 
 func TestTabletErrorRecordStats(t *testing.T) {
-	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, sqldb.NewSQLError(2000, "test"))
+	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, sqldb.NewSQLError(2000, "HY000", "test"))
 	queryServiceStats := NewQueryServiceStats("", false)
 	retryCounterBefore := queryServiceStats.InfoErrors.Counts()["Retry"]
 	tabletErr.RecordStats(queryServiceStats)
@@ -113,7 +113,7 @@ func TestTabletErrorRecordStats(t *testing.T) {
 		t.Fatalf("tablet error with error code QUERY_NOT_SERVED should increase Retry error count by 1")
 	}
 
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqldb.NewSQLError(2000, "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqldb.NewSQLError(2000, "HY000", "test"))
 	fatalCounterBefore := queryServiceStats.InfoErrors.Counts()["Fatal"]
 	tabletErr.RecordStats(queryServiceStats)
 	fatalCounterAfter := queryServiceStats.InfoErrors.Counts()["Fatal"]
@@ -121,7 +121,7 @@ func TestTabletErrorRecordStats(t *testing.T) {
 		t.Fatalf("tablet error with error code INTERNAL_ERROR should increase Fatal error count by 1")
 	}
 
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, sqldb.NewSQLError(2000, "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, sqldb.NewSQLError(2000, "HY000", "test"))
 	txPoolFullCounterBefore := queryServiceStats.ErrorStats.Counts()["TxPoolFull"]
 	tabletErr.RecordStats(queryServiceStats)
 	txPoolFullCounterAfter := queryServiceStats.ErrorStats.Counts()["TxPoolFull"]
@@ -129,7 +129,7 @@ func TestTabletErrorRecordStats(t *testing.T) {
 		t.Fatalf("tablet error with error code RESOURCE_EXHAUSTED should increase TxPoolFull error count by 1")
 	}
 
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_NOT_IN_TX, sqldb.NewSQLError(2000, "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_NOT_IN_TX, sqldb.NewSQLError(2000, "HY000", "test"))
 	notInTxCounterBefore := queryServiceStats.ErrorStats.Counts()["NotInTx"]
 	tabletErr.RecordStats(queryServiceStats)
 	notInTxCounterAfter := queryServiceStats.ErrorStats.Counts()["NotInTx"]
@@ -137,7 +137,7 @@ func TestTabletErrorRecordStats(t *testing.T) {
 		t.Fatalf("tablet error with error code NOT_IN_TX should increase NotInTx error count by 1")
 	}
 
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, sqldb.NewSQLError(mysql.ErrDupEntry, "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, sqldb.NewSQLError(mysql.ErrDupEntry, "23000", "test"))
 	dupKeyCounterBefore := queryServiceStats.InfoErrors.Counts()["DupKey"]
 	tabletErr.RecordStats(queryServiceStats)
 	dupKeyCounterAfter := queryServiceStats.InfoErrors.Counts()["DupKey"]
@@ -145,7 +145,7 @@ func TestTabletErrorRecordStats(t *testing.T) {
 		t.Fatalf("sql error with SQL error mysql.ErrDupEntry should increase DupKey error count by 1")
 	}
 
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, sqldb.NewSQLError(mysql.ErrLockWaitTimeout, "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, sqldb.NewSQLError(mysql.ErrLockWaitTimeout, "HY000", "test"))
 	lockWaitTimeoutCounterBefore := queryServiceStats.ErrorStats.Counts()["Deadlock"]
 	tabletErr.RecordStats(queryServiceStats)
 	lockWaitTimeoutCounterAfter := queryServiceStats.ErrorStats.Counts()["Deadlock"]
@@ -153,7 +153,7 @@ func TestTabletErrorRecordStats(t *testing.T) {
 		t.Fatalf("sql error with SQL error mysql.ErrLockWaitTimeout should increase Deadlock error count by 1")
 	}
 
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, sqldb.NewSQLError(mysql.ErrLockDeadlock, "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, sqldb.NewSQLError(mysql.ErrLockDeadlock, "40001", "test"))
 	deadlockCounterBefore := queryServiceStats.ErrorStats.Counts()["Deadlock"]
 	tabletErr.RecordStats(queryServiceStats)
 	deadlockCounterAfter := queryServiceStats.ErrorStats.Counts()["Deadlock"]
@@ -161,7 +161,7 @@ func TestTabletErrorRecordStats(t *testing.T) {
 		t.Fatalf("sql error with SQL error mysql.ErrLockDeadlock should increase Deadlock error count by 1")
 	}
 
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, sqldb.NewSQLError(mysql.ErrOptionPreventsStatement, "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, sqldb.NewSQLError(mysql.ErrOptionPreventsStatement, "HY000", "test"))
 	failCounterBefore := queryServiceStats.ErrorStats.Counts()["Fail"]
 	tabletErr.RecordStats(queryServiceStats)
 	failCounterAfter := queryServiceStats.ErrorStats.Counts()["Fail"]
@@ -186,7 +186,7 @@ func TestTabletErrorHandleUncaughtError(t *testing.T) {
 
 func TestTabletErrorHandleRetryError(t *testing.T) {
 	var err error
-	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, sqldb.NewSQLError(1000, "test"))
+	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, sqldb.NewSQLError(1000, "HY000", "test"))
 	logStats := newLogStats("TestTabletErrorHandleError", context.Background())
 	queryServiceStats := NewQueryServiceStats("", false)
 	defer func() {
@@ -201,7 +201,7 @@ func TestTabletErrorHandleRetryError(t *testing.T) {
 
 func TestTabletErrorHandleTxPoolFullError(t *testing.T) {
 	var err error
-	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, sqldb.NewSQLError(1000, "test"))
+	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, sqldb.NewSQLError(1000, "HY000", "test"))
 	logStats := newLogStats("TestTabletErrorHandleError", context.Background())
 	queryServiceStats := NewQueryServiceStats("", false)
 	defer func() {
@@ -228,7 +228,7 @@ func TestTabletErrorLogUncaughtErr(t *testing.T) {
 }
 
 func TestTabletErrorTxPoolFull(t *testing.T) {
-	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, sqldb.NewSQLError(1000, "test"))
+	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, sqldb.NewSQLError(1000, "HY000", "test"))
 	queryServiceStats := NewQueryServiceStats("", false)
 	defer func() {
 		err := recover()
@@ -241,7 +241,7 @@ func TestTabletErrorTxPoolFull(t *testing.T) {
 }
 
 func TestTabletErrorFatal(t *testing.T) {
-	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqldb.NewSQLError(1000, "test"))
+	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqldb.NewSQLError(1000, "HY000", "test"))
 	queryServiceStats := NewQueryServiceStats("", false)
 	defer func() {
 		err := recover()

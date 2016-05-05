@@ -32,100 +32,89 @@ func (_m *MockQueryService) EXPECT() *_MockQueryServiceRecorder {
 	return _m.recorder
 }
 
-func (_m *MockQueryService) GetSessionId(keyspace string, shard string) (int64, error) {
-	ret := _m.ctrl.Call(_m, "GetSessionId", keyspace, shard)
+func (_m *MockQueryService) Begin(ctx context.Context, target *query.Target) (int64, error) {
+	ret := _m.ctrl.Call(_m, "Begin", ctx, target)
 	ret0, _ := ret[0].(int64)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-func (_mr *_MockQueryServiceRecorder) GetSessionId(arg0, arg1 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "GetSessionId", arg0, arg1)
+func (_mr *_MockQueryServiceRecorder) Begin(arg0, arg1 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Begin", arg0, arg1)
 }
 
-func (_m *MockQueryService) Begin(ctx context.Context, target *query.Target, sessionID int64) (int64, error) {
-	ret := _m.ctrl.Call(_m, "Begin", ctx, target, sessionID)
-	ret0, _ := ret[0].(int64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-func (_mr *_MockQueryServiceRecorder) Begin(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "Begin", arg0, arg1, arg2)
-}
-
-func (_m *MockQueryService) Commit(ctx context.Context, target *query.Target, sessionID int64, transactionID int64) error {
-	ret := _m.ctrl.Call(_m, "Commit", ctx, target, sessionID, transactionID)
+func (_m *MockQueryService) Commit(ctx context.Context, target *query.Target, transactionID int64) error {
+	ret := _m.ctrl.Call(_m, "Commit", ctx, target, transactionID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-func (_mr *_MockQueryServiceRecorder) Commit(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "Commit", arg0, arg1, arg2, arg3)
+func (_mr *_MockQueryServiceRecorder) Commit(arg0, arg1, arg2 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Commit", arg0, arg1, arg2)
 }
 
-func (_m *MockQueryService) Rollback(ctx context.Context, target *query.Target, sessionID int64, transactionID int64) error {
-	ret := _m.ctrl.Call(_m, "Rollback", ctx, target, sessionID, transactionID)
+func (_m *MockQueryService) Rollback(ctx context.Context, target *query.Target, transactionID int64) error {
+	ret := _m.ctrl.Call(_m, "Rollback", ctx, target, transactionID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-func (_mr *_MockQueryServiceRecorder) Rollback(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "Rollback", arg0, arg1, arg2, arg3)
+func (_mr *_MockQueryServiceRecorder) Rollback(arg0, arg1, arg2 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Rollback", arg0, arg1, arg2)
 }
 
-func (_m *MockQueryService) Execute(ctx context.Context, target *query.Target, sql string, bindVariables map[string]interface{}, sessionID int64, transactionID int64) (*sqltypes.Result, error) {
-	ret := _m.ctrl.Call(_m, "Execute", ctx, target, sql, bindVariables, sessionID, transactionID)
+func (_m *MockQueryService) Execute(ctx context.Context, target *query.Target, sql string, bindVariables map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
+	ret := _m.ctrl.Call(_m, "Execute", ctx, target, sql, bindVariables, transactionID)
 	ret0, _ := ret[0].(*sqltypes.Result)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-func (_mr *_MockQueryServiceRecorder) Execute(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "Execute", arg0, arg1, arg2, arg3, arg4, arg5)
+func (_mr *_MockQueryServiceRecorder) Execute(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Execute", arg0, arg1, arg2, arg3, arg4)
 }
 
-func (_m *MockQueryService) StreamExecute(ctx context.Context, target *query.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(*sqltypes.Result) error) error {
-	ret := _m.ctrl.Call(_m, "StreamExecute", ctx, target, sql, bindVariables, sessionID, sendReply)
+func (_m *MockQueryService) StreamExecute(ctx context.Context, target *query.Target, sql string, bindVariables map[string]interface{}, sendReply func(*sqltypes.Result) error) error {
+	ret := _m.ctrl.Call(_m, "StreamExecute", ctx, target, sql, bindVariables, sendReply)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-func (_mr *_MockQueryServiceRecorder) StreamExecute(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "StreamExecute", arg0, arg1, arg2, arg3, arg4, arg5)
+func (_mr *_MockQueryServiceRecorder) StreamExecute(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "StreamExecute", arg0, arg1, arg2, arg3, arg4)
 }
 
-func (_m *MockQueryService) ExecuteBatch(ctx context.Context, target *query.Target, queries []querytypes.BoundQuery, sessionID int64, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
-	ret := _m.ctrl.Call(_m, "ExecuteBatch", ctx, target, queries, sessionID, asTransaction, transactionID)
+func (_m *MockQueryService) ExecuteBatch(ctx context.Context, target *query.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+	ret := _m.ctrl.Call(_m, "ExecuteBatch", ctx, target, queries, asTransaction, transactionID)
 	ret0, _ := ret[0].([]sqltypes.Result)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-func (_mr *_MockQueryServiceRecorder) ExecuteBatch(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "ExecuteBatch", arg0, arg1, arg2, arg3, arg4, arg5)
+func (_mr *_MockQueryServiceRecorder) ExecuteBatch(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "ExecuteBatch", arg0, arg1, arg2, arg3, arg4)
 }
 
-func (_m *MockQueryService) SplitQuery(ctx context.Context, target *query.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, sessionID int64) ([]querytypes.QuerySplit, error) {
-	ret := _m.ctrl.Call(_m, "SplitQuery", ctx, target, sql, bindVariables, splitColumn, splitCount, sessionID)
+func (_m *MockQueryService) SplitQuery(ctx context.Context, target *query.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
+	ret := _m.ctrl.Call(_m, "SplitQuery", ctx, target, sql, bindVariables, splitColumn, splitCount)
 	ret0, _ := ret[0].([]querytypes.QuerySplit)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-func (_mr *_MockQueryServiceRecorder) SplitQuery(arg0, arg1, arg2, arg3, arg4, arg5, arg6 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "SplitQuery", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+func (_mr *_MockQueryServiceRecorder) SplitQuery(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "SplitQuery", arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
-func (_m *MockQueryService) SplitQueryV2(ctx context.Context, target *query.Target, sql string, bindVariables map[string]interface{}, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm query.SplitQueryRequest_Algorithm, sessionID int64) ([]querytypes.QuerySplit, error) {
-	ret := _m.ctrl.Call(_m, "SplitQueryV2", ctx, target, sql, bindVariables, splitColumns, splitCount, numRowsPerQueryPart, algorithm, sessionID)
+func (_m *MockQueryService) SplitQueryV2(ctx context.Context, target *query.Target, sql string, bindVariables map[string]interface{}, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm query.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error) {
+	ret := _m.ctrl.Call(_m, "SplitQueryV2", ctx, target, sql, bindVariables, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 	ret0, _ := ret[0].([]querytypes.QuerySplit)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-func (_mr *_MockQueryServiceRecorder) SplitQueryV2(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "SplitQueryV2", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+func (_mr *_MockQueryServiceRecorder) SplitQueryV2(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "SplitQueryV2", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
 }
 
 func (_m *MockQueryService) StreamHealthRegister(_param0 chan<- *query.StreamHealthResponse) (int, error) {

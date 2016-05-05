@@ -26,20 +26,6 @@ type query struct {
 	server queryservice.QueryService
 }
 
-// GetSessionId is part of the queryservice.QueryServer interface
-func (q *query) GetSessionId(ctx context.Context, request *querypb.GetSessionIdRequest) (response *querypb.GetSessionIdResponse, err error) {
-	defer q.server.HandlePanic(&err)
-
-	sessionID, err := q.server.GetSessionId(request.Keyspace, request.Shard)
-	if err != nil {
-		return nil, tabletserver.ToGRPCError(err)
-	}
-
-	return &querypb.GetSessionIdResponse{
-		SessionId: sessionID,
-	}, nil
-}
-
 // Execute is part of the queryservice.QueryServer interface
 func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (response *querypb.ExecuteResponse, err error) {
 	defer q.server.HandlePanic(&err)
@@ -51,7 +37,7 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
-	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, bv, request.SessionId, request.TransactionId)
+	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, bv, request.TransactionId)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
@@ -71,7 +57,7 @@ func (q *query) ExecuteBatch(ctx context.Context, request *querypb.ExecuteBatchR
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
-	results, err := q.server.ExecuteBatch(ctx, request.Target, bql, request.SessionId, request.AsTransaction, request.TransactionId)
+	results, err := q.server.ExecuteBatch(ctx, request.Target, bql, request.AsTransaction, request.TransactionId)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
@@ -91,7 +77,7 @@ func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream quer
 	if err != nil {
 		return tabletserver.ToGRPCError(err)
 	}
-	if err := q.server.StreamExecute(ctx, request.Target, request.Query.Sql, bv, request.SessionId, func(reply *sqltypes.Result) error {
+	if err := q.server.StreamExecute(ctx, request.Target, request.Query.Sql, bv, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.StreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
@@ -108,7 +94,7 @@ func (q *query) Begin(ctx context.Context, request *querypb.BeginRequest) (respo
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	transactionID, err := q.server.Begin(ctx, request.Target, request.SessionId)
+	transactionID, err := q.server.Begin(ctx, request.Target)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
@@ -125,7 +111,7 @@ func (q *query) Commit(ctx context.Context, request *querypb.CommitRequest) (res
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.Commit(ctx, request.Target, request.SessionId, request.TransactionId); err != nil {
+	if err := q.server.Commit(ctx, request.Target, request.TransactionId); err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
 	return &querypb.CommitResponse{}, nil
@@ -138,7 +124,7 @@ func (q *query) Rollback(ctx context.Context, request *querypb.RollbackRequest) 
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.Rollback(ctx, request.Target, request.SessionId, request.TransactionId); err != nil {
+	if err := q.server.Rollback(ctx, request.Target, request.TransactionId); err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
 
@@ -158,13 +144,13 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 	}
 
 	// Begin part
-	transactionID, err := q.server.Begin(ctx, request.Target, 0)
+	transactionID, err := q.server.Begin(ctx, request.Target)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
 
 	// Execute part
-	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, bv, 0, transactionID)
+	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, bv, transactionID)
 	if err != nil {
 		return &querypb.BeginExecuteResponse{
 			Error:         tabletserver.ToRPCError(err),
@@ -190,13 +176,13 @@ func (q *query) BeginExecuteBatch(ctx context.Context, request *querypb.BeginExe
 	}
 
 	// Begin part
-	transactionID, err := q.server.Begin(ctx, request.Target, 0)
+	transactionID, err := q.server.Begin(ctx, request.Target)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
 
 	// ExecuteBatch part
-	results, err := q.server.ExecuteBatch(ctx, request.Target, bql, 0, request.AsTransaction, transactionID)
+	results, err := q.server.ExecuteBatch(ctx, request.Target, bql, request.AsTransaction, transactionID)
 	if err != nil {
 		return &querypb.BeginExecuteBatchResponse{
 			Error:         tabletserver.ToRPCError(err),
@@ -232,8 +218,7 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 		request.SplitColumn,
 		request.SplitCount,
 		request.NumRowsPerQueryPart,
-		request.Algorithm,
-		request.SessionId)
+		request.Algorithm)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}

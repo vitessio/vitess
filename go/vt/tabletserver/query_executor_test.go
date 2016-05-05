@@ -248,18 +248,18 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 
 	db.AddRejectedQuery(
 		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
-		sqldb.NewSQLError(mysql.ErrDupEntry, "err"),
+		sqldb.NewSQLError(mysql.ErrDupEntry, "23000", "err"),
 	)
 	db.AddQuery("update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
 	_, err = qre.Execute()
-	wantErr = "error: err (errno 1062)"
+	wantErr = "error: err (errno 1062) (sqlstate 23000)"
 	if err == nil || err.Error() != wantErr {
 		t.Fatalf("qre.Execute() = %v, want %v", err, wantErr)
 	}
 
 	db.AddRejectedQuery(
 		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
-		sqldb.NewSQLError(mysql.ErrDupEntry, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
+		sqldb.NewSQLError(mysql.ErrDupEntry, "23000", "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
 	)
 	db.AddQuery(
 		"update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */",
@@ -1049,7 +1049,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 }
 
 func newTransaction(tsv *TabletServer) int64 {
-	transactionID, err := tsv.Begin(context.Background(), &tsv.target, tsv.sessionID)
+	transactionID, err := tsv.Begin(context.Background(), &tsv.target)
 	if err != nil {
 		panic(fmt.Errorf("failed to start a transaction: %v", err))
 	}
@@ -1070,7 +1070,7 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 }
 
 func testCommitHelper(t *testing.T, tsv *TabletServer, queryExecutor *QueryExecutor) {
-	if err := tsv.Commit(queryExecutor.ctx, &tsv.target, tsv.sessionID, queryExecutor.transactionID); err != nil {
+	if err := tsv.Commit(queryExecutor.ctx, &tsv.target, queryExecutor.transactionID); err != nil {
 		t.Fatalf("failed to commit transaction: %d, err: %v", queryExecutor.transactionID, err)
 	}
 }
