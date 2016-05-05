@@ -8,11 +8,6 @@ import "query.proto";
 
 // Query defines the tablet query service, implemented by vttablet.
 service Query {
-  // GetSessionId gets a session id from the server. This call is being
-  // deprecated in favor of using the Target field of the subsequent
-  // queries, but is still here for backward compatibility.
-  rpc GetSessionId(query.GetSessionIdRequest) returns (query.GetSessionIdResponse) {};
-
   // Execute executes the specified SQL query (might be in a
   // transaction context, if Query.transaction_id is set).
   rpc Execute(query.ExecuteRequest) returns (query.ExecuteResponse) {};

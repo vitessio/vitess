@@ -4,7 +4,7 @@
 
 namespace Vitess\Proto\Query {
 
-  class StreamExecuteRequest extends \DrSlump\Protobuf\Message {
+  class BeginExecuteRequest extends \DrSlump\Protobuf\Message {
 
     /**  @var \Vitess\Proto\Vtrpc\CallerID */
     public $effective_caller_id = null;
@@ -24,7 +24,7 @@ namespace Vitess\Proto\Query {
 
     public static function descriptor()
     {
-      $descriptor = new \DrSlump\Protobuf\Descriptor(__CLASS__, 'query.StreamExecuteRequest');
+      $descriptor = new \DrSlump\Protobuf\Descriptor(__CLASS__, 'query.BeginExecuteRequest');
 
       // OPTIONAL MESSAGE effective_caller_id = 1
       $f = new \DrSlump\Protobuf\Field();
@@ -81,7 +81,7 @@ namespace Vitess\Proto\Query {
     /**
      * Clear <effective_caller_id> value
      *
-     * @return \Vitess\Proto\Query\StreamExecuteRequest
+     * @return \Vitess\Proto\Query\BeginExecuteRequest
      */
     public function clearEffectiveCallerId(){
       return $this->_clear(1);
@@ -100,7 +100,7 @@ namespace Vitess\Proto\Query {
      * Set <effective_caller_id> value
      *
      * @param \Vitess\Proto\Vtrpc\CallerID $value
-     * @return \Vitess\Proto\Query\StreamExecuteRequest
+     * @return \Vitess\Proto\Query\BeginExecuteRequest
      */
     public function setEffectiveCallerId(\Vitess\Proto\Vtrpc\CallerID $value){
       return $this->_set(1, $value);
@@ -118,7 +118,7 @@ namespace Vitess\Proto\Query {
     /**
      * Clear <immediate_caller_id> value
      *
-     * @return \Vitess\Proto\Query\StreamExecuteRequest
+     * @return \Vitess\Proto\Query\BeginExecuteRequest
      */
     public function clearImmediateCallerId(){
       return $this->_clear(2);
@@ -137,7 +137,7 @@ namespace Vitess\Proto\Query {
      * Set <immediate_caller_id> value
      *
      * @param \Vitess\Proto\Query\VTGateCallerID $value
-     * @return \Vitess\Proto\Query\StreamExecuteRequest
+     * @return \Vitess\Proto\Query\BeginExecuteRequest
      */
     public function setImmediateCallerId(\Vitess\Proto\Query\VTGateCallerID $value){
       return $this->_set(2, $value);
@@ -155,7 +155,7 @@ namespace Vitess\Proto\Query {
     /**
      * Clear <target> value
      *
-     * @return \Vitess\Proto\Query\StreamExecuteRequest
+     * @return \Vitess\Proto\Query\BeginExecuteRequest
      */
     public function clearTarget(){
       return $this->_clear(3);
@@ -174,7 +174,7 @@ namespace Vitess\Proto\Query {
      * Set <target> value
      *
      * @param \Vitess\Proto\Query\Target $value
-     * @return \Vitess\Proto\Query\StreamExecuteRequest
+     * @return \Vitess\Proto\Query\BeginExecuteRequest
      */
     public function setTarget(\Vitess\Proto\Query\Target $value){
       return $this->_set(3, $value);
@@ -192,7 +192,7 @@ namespace Vitess\Proto\Query {
     /**
      * Clear <query> value
      *
-     * @return \Vitess\Proto\Query\StreamExecuteRequest
+     * @return \Vitess\Proto\Query\BeginExecuteRequest
      */
     public function clearQuery(){
       return $this->_clear(4);
@@ -211,7 +211,7 @@ namespace Vitess\Proto\Query {
      * Set <query> value
      *
      * @param \Vitess\Proto\Query\BoundQuery $value
-     * @return \Vitess\Proto\Query\StreamExecuteRequest
+     * @return \Vitess\Proto\Query\BeginExecuteRequest
      */
     public function setQuery(\Vitess\Proto\Query\BoundQuery $value){
       return $this->_set(4, $value);
