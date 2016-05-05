@@ -628,8 +628,9 @@ func (tsv *TabletServer) handleExecErrorNoPanic(sql string, bindVariables map[st
 	if tsv.config.TerseErrors && terr.SQLError != 0 && len(bindVariables) != 0 {
 		myError = &TabletError{
 			SQLError:  terr.SQLError,
+			SQLState:  terr.SQLState,
 			ErrorCode: terr.ErrorCode,
-			Message:   fmt.Sprintf("(errno %d) during query: %s", terr.SQLError, sql),
+			Message:   fmt.Sprintf("(errno %d) (sqlstate %s) during query: %s", terr.SQLError, terr.SQLState, sql),
 		}
 	} else {
 		myError = terr

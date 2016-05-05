@@ -10,6 +10,7 @@ import com.youtube.vitess.client.VTGateTx;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Topodata;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -21,8 +22,17 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.sql.Date;
-import java.sql.*;
-import java.util.*;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.List;
+import java.util.Map;
+import java.util.TimeZone;
 
 /**
  * Created by harshit.gangal on 09/02/16.
@@ -440,7 +450,9 @@ import java.util.*;
         String stringValue = "vitess";
         byte[] bytesValue = stringValue.getBytes();
         Date dateValue = new Date(0);
-        Time timeValue = new Time(0);
+        // Use a time value that won't go negative after adjusting for time zone.
+        // The java.sql.Time class does not properly format negative times.
+        Time timeValue = new Time(12*60*60*1000);
         Timestamp timestampValue = new Timestamp(0);
 
         preparedStatement.setNull(1, Types.INTEGER);

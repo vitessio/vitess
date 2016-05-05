@@ -15,6 +15,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/logutil"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -38,13 +39,9 @@ var logTxPoolFull = logutil.NewThrottledLogger("TxPoolFull", 1*time.Minute)
 type TabletError struct {
 	Message  string
 	SQLError int
+	SQLState string
 	// ErrorCode will be used to transmit the error across RPC boundaries
 	ErrorCode vtrpcpb.ErrorCode
-}
-
-// This is how go-mysql exports its error number
-type hasNumber interface {
-	Number() int
 }
 
 // NewTabletError returns a TabletError of the given type
@@ -59,8 +56,10 @@ func NewTabletError(errCode vtrpcpb.ErrorCode, format string, args ...interface{
 func NewTabletErrorSQL(errCode vtrpcpb.ErrorCode, err error) *TabletError {
 	var errnum int
 	errstr := err.Error()
-	if sqlErr, ok := err.(hasNumber); ok {
+	sqlState := sqldb.SQLStateGeneral
+	if sqlErr, ok := err.(*sqldb.SQLError); ok {
 		errnum = sqlErr.Number()
+		sqlState = sqlErr.SQLState()
 		switch errnum {
 		case mysql.ErrOptionPreventsStatement:
 			// Override error type if MySQL is in read-only mode. It's probably because
@@ -76,6 +75,7 @@ func NewTabletErrorSQL(errCode vtrpcpb.ErrorCode, err error) *TabletError {
 	return &TabletError{
 		Message:   printable(errstr),
 		SQLError:  errnum,
+		SQLState:  sqlState,
 		ErrorCode: errCode,
 	}
 }
@@ -146,7 +146,7 @@ func IsConnErr(err error) bool {
 	switch err := err.(type) {
 	case *TabletError:
 		sqlError = err.SQLError
-	case hasNumber:
+	case *sqldb.SQLError:
 		sqlError = err.Number()
 	default:
 		match := errExtract.FindStringSubmatch(err.Error())
