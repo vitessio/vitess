@@ -352,19 +352,6 @@
 		"vtgatev2": {
 			"File": "vtgatev2_test.py",
 			"Args": [
-				"--vtgate-gateway-flavor=shardgateway"
-			],
-			"Command": [],
-			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0,
-			"Tags": [
-				"site_test"
-			]
-		},
-		"vtgatev2_discovery": {
-			"File": "vtgatev2_test.py",
-			"Args": [
 				"--vtgate-gateway-flavor=discoverygateway"
 			],
 			"Command": [],

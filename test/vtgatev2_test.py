@@ -19,7 +19,6 @@ from vtdb import keyrange_constants
 from vtdb import vtdb_logger
 from vtdb import vtgate_client
 from vtdb import vtgate_cursor
-from vtgate_gateway_flavor.gateway import vtgate_gateway_flavor
 
 
 shard_0_master = tablet.Tablet()
@@ -1220,8 +1219,6 @@ class TestFailures(BaseTestCase):
       t.wait_for_vttablet_state('SERVING')
     self.replica_tablet2.kill_vttablet()
     replica_tablet_proc = self.replica_tablet.kill_vttablet(wait=False)
-    if vtgate_gateway_flavor().flavor() == 'shardgateway':
-      time.sleep(1)  # skip the vttablet waiting period
     # send query while vttablet is in lameduck, should fail as no vttablet
     time.sleep(0.1)  # wait a short while so vtgate gets the health check
     try:
@@ -1287,23 +1284,9 @@ class TestFailures(BaseTestCase):
         keyranges=[self.keyrange])
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
-    # With shardgateway and the new grace period, vttablet doesn't immediately
-    # start rejecting queries, so we don't know which tablet they'll use.
-    # In that case, we only test that the query doesn't raise an exception.
-    if vtgate_gateway_flavor().flavor() != 'shardgateway':
-      self.assertEquals(t1_query_count_after-t1_query_count_before, 1)
+    self.assertEquals(t1_query_count_after-t1_query_count_before, 1)
     # Wait for tablet2 to go down.
     replica_tablet2_proc.wait()
-    if vtgate_gateway_flavor().flavor() == 'shardgateway':
-      # The first query actually may have gone to tablet2.
-      # Now that tablet2 is gone, we need to make sure vtgate drops it.
-      try:
-        vtgate_conn._execute(
-            'select 1 from vt_insert_test', {},
-            tablet_type='replica', keyspace_name=KEYSPACE_NAME,
-            keyranges=[self.keyrange])
-      except Exception, e:  # pylint: disable=broad-except
-        self.assertIsInstance(e, dbexceptions.DatabaseError)
     # send another query, should also succeed on tablet1
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_before = int(tablet1_vars['Queries']['TotalCount'])
@@ -1371,20 +1354,6 @@ class TestFailures(BaseTestCase):
     utils.vtgate.wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         1)
-    if vtgate_gateway_flavor().flavor() == 'shardgateway':
-      # "shardgateway" implementation fails the first query
-      # send query after tablet2 is killed, should not retry on the cached conn
-      try:
-        vtgate_conn._execute(
-            'select 1 from vt_insert_test', {},
-            tablet_type='replica', keyspace_name=KEYSPACE_NAME,
-            keyranges=[self.keyrange])
-        self.fail('DatabaseError should have been raised')
-      except Exception, e:  # pylint: disable=broad-except
-        self.assertIsInstance(e, dbexceptions.DatabaseError)
-        self.assertNotIsInstance(e, dbexceptions.IntegrityError)
-        self.assertNotIsInstance(e, dbexceptions.OperationalError)
-        self.assertNotIsInstance(e, dbexceptions.TimeoutError)
     # send another query, should succeed on tablet1
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_before = int(tablet1_vars['Queries']['TotalCount'])
@@ -1561,17 +1530,6 @@ class TestFailures(BaseTestCase):
     replica_tablet_proc = self.replica_tablet.kill_vttablet(wait=False)
     # Send query while vttablet is in lameduck.
     time.sleep(0.1)
-    if vtgate_gateway_flavor().flavor() == 'shardgateway' and grace_period > 0:
-      # With shardgateway, it should succeed iff we're using the new grace
-      # period. That's because vttablet will continue accepting queries while
-      # advertising unhealthy. Since shardgateway doesn't re-resolve in the
-      # absence of errors, vtgate will still send queries through.
-      vtgate_conn._execute(
-          'select 1 from vt_insert_test', {},
-          tablet_type='replica', keyspace_name=KEYSPACE_NAME,
-          keyranges=[self.keyrange])
-      # Wait until after grace_period, then it should fail like before.
-      time.sleep(grace_period)
     # With discoverygateway, it should fail regardless of grace period,
     # because vttablet broadcasts that it's unhealthy, and vtgate should
     # remove it immediately.

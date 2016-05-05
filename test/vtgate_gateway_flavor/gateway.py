@@ -38,7 +38,7 @@ def set_vtgate_gateway_flavor(flavor):
   global _gateway
 
   if not flavor:
-    flavor = "shardgateway"
+    flavor = "discoverygateway"
 
   cls = flavor_map.get(flavor, None)
   if not cls:
