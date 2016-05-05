@@ -21,6 +21,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     python-crypto \
     python-dev \
     python-mysqldb \
+    ruby \
+    ruby-dev \
     software-properties-common \
     virtualenv \
     unzip \
@@ -98,6 +100,12 @@ RUN cd /vt/src/github.com/youtube/vitess && \
     composer install && \
     find php/vendor/grpc/grpc -mindepth 1 -maxdepth 1 ! -name src | xargs rm -rf && \
     find php/vendor/grpc/grpc/src -mindepth 1 -maxdepth 1 ! -name php | xargs rm -rf
+
+# Install PHP protobuf compiler plugin
+RUN cd /vt/src/github.com/youtube/vitess/php/vendor/datto/protobuf-php && \
+    gem install rake ronn && \
+    rake pear:package version=1.0 && \
+    pear install Protobuf-1.0.tgz
 
 # Create vitess user
 RUN groupadd -r vitess && useradd -r -g vitess vitess && \
