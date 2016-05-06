@@ -1,381 +1,263 @@
-This step-by-step guide explains how to split an unsharded keyspace into two shards.
-(An unsharded keyspace has exactly one shard.)
-The examples assume that the keyspace is named `user_keyspace` and the shard is `0`.
-The sharded keyspace will use the `user_keyspace_id` column as the keyspace ID.
-
-You can use the same general instructions to reshard a sharded keyspace.
+This guide walks you through the process of sharding an existing unsharded
+Vitess [keyspace](http://vitess.io/overview/concepts.html#keyspace).
 
 ## Prerequisites
 
-To complete these steps, you must have:
+We begin by assuming you've completed the
+[Getting Started](http://vitess.io/getting-started/local-instance.html) guide,
+and have left the cluster running.
 
-1. A running [keyspace](http://vitess.io/overview/concepts.html#keyspace).
-   A keyspace is a logical database that maps to one or more MySQL databases.
+## Overview
 
-1.  Two or more [rdonly tablets](http://vitess.io/overview/concepts.html#tablet)
-    running on the source shard. You set the desired tablet type when starting
-    `vttablet` with the `-target_tablet_type` flag. See the
-    [vttablet-up.sh](https://github.com/youtube/vitess/blob/master/examples/local/vttablet-up.sh)
-    script for example.
+The sample clients in the `examples/local` folder use the following schema:
 
-    During resharding, one of these tablets will pause its replication to ensure
-    a consistent snapshot of the data. For this reason, you can't do resharding
-    if there are only `master` and `replica` tablets, because those are reserved
-    for live traffic and Vitess will never take them out of service for batch
-    processes like resharding.
+``` sql
+CREATE TABLE messages (
+  page BIGINT(20) UNSIGNED,
+  time_created_ns BIGINT(20) UNSIGNED,
+  message VARCHAR(10000),
+  PRIMARY KEY (page, time_created_ns)
+) ENGINE=InnoDB
+```
 
-    Having at least two `rdonly` tablets ensures that data updates that occur on
-    the source shard during the resharding process propagate to the destination
-    shard. Steps 3 and 4 of the resharding process discuss this in more detail.
+The idea is that each page number represents a separate guestbook in a
+multi-tenant app. Each guestbook page consists of a list of messages.
 
-We recommend that you also review the
-[Range-Based Sharding](http://vitess.io/user-guide/sharding.html#range-based-sharding)
-section of the *Sharding* guide.
+In this guide, we'll introduce sharding by page number.
+That means pages will be randomly distributed across shards,
+but all records for a given page are always guaranteed to be on the same shard.
+In this way, we can transparently scale the database to support arbitrary growth
+in the number of pages.
 
-## Step 1: Define your Keyspace ID on the Source Shard
+## Configure sharding information
 
-**Note:** Skip this step if your keyspace already has multiple shards.
+The first step is to tell Vitess how we want to partition the data.
+We do this by providing a VSchema definition as follows:
 
-In this step, you add a column, which will serve as the
-[keyspace ID](http://vitess.io/overview/concepts.html#keyspace-id), to each
-table in the soon-to-be-sharded keyspace.
-After the keyspace has been sharded, Vitess will use the column's value to route
-each query to the proper shard.
+``` json
+{
+  "Sharded": true,
+  "Vindexes": {
+    "hash": {
+      "Type": "hash"
+    }
+  },
+  "Tables": {
+    "messages": {
+      "ColVindexes": [
+        {
+          "Col": "page",
+          "Name": "hash"
+        }
+      ]
+    }
+  }
+}
+```
 
-### Step 1.1: Add keyspace ID to each database table
+This says that we want to shard the data by a hash of the `page` column.
+In other words, keep each page's messages together, but spread pages around
+the shards randomly.
 
-For each table in the unsharded keyspace, run the following `alter` statement:
+We can load this VSchema into Vitess like this:
 
 ``` sh
-vtctlclient -server <vtctld host:port> ApplySchema \
-    -sql "alter table <table name> add <keyspace ID column>" \
-    <keyspace name>
+vitess/examples/local$ ./lvtctl.sh SetKeyspaceShardingInfo test_keyspace keyspace_id uint64
+vitess/examples/local$ ./lvtctl.sh ApplyVSchema -vschema "$(cat vschema.json)" test_keyspace
 ```
 
-In this example, the command looks like this:
+## Bring up tablets for new shards
+
+In the unsharded example, you started tablets for a shard
+named *0* in *test_keyspace*, written as *test_keyspace/0*.
+Now you'll start tablets for two additional shards,
+named *test_keyspace/-80* and *test_keyspace/80-*:
 
 ``` sh
-vtctlclient -server <vtctld host:port> ApplySchema \
-    -sql "alter table <table name> add user_keyspace_id" \
-    user_keyspace
+vitess/examples/local$ ./sharded-vttablet-up.sh
 ```
 
-In the above statement, replace `user_keyspace_id` with the column name that you
-want to use to store the keyspace ID value.
-Also replace `user_keyspace` with the name of your keyspace.
+Since the sharding key is the page number,
+this will result in half the pages going to each shard,
+since *0x80* is the midpoint of the
+[sharding key range](http://vitess.io/user-guide/sharding.html#key-ranges-and-partitions).
 
-### Step 1.2: Update tables to contain keyspace ID values
+These new shards will run in parallel with the original shard during the
+transition, but actual traffic will be served only by the original shard
+until we tell it to switch over.
 
-Backfill each row in each table with the appropriate keyspace ID value.
-In this example, each `user_keyspace_id` column contains a 64-bit hash of the
-user ID in that column's row. Using a hash ensures that user IDs are randomly
-and evenly distributed across shards.
+Check the *vtctld* web UI, or the output of `lvtctl.sh ListAllTablets test`,
+to see when the tablets are ready. There should be 5 tablets in each shard.
 
-### Step 1.3: Set keyspace ID in topology server
-
-Tell Vitess which column value identifies the keyspace ID by running the
-following command:
+Once the tablets are ready, initialize replication by electing the first master
+for each of the new shards:
 
 ``` sh
-vtctlclient -server <vtctld host:port> \
-    SetKeyspaceShardingInfo <keyspace name> <keyspace ID column> <keyspace type>
+vitess/examples/local$ ./lvtctl.sh InitShardMaster -force test_keyspace/-80 test-0000000200
+vitess/examples/local$ ./lvtctl.sh InitShardMaster -force test_keyspace/80- test-0000000300
 ```
 
-In this example, the command looks like this:
+Now there should be a total of 15 tablets, with one master for each shard:
 
 ``` sh
-vtctlclient -server <vtctld host:port> \
-    SetKeyspaceShardingInfo user_keyspace user_keyspace_id uint64
+vitess/examples/local$ ./lvtctl.sh ListAllTablets test
+### example output:
+# test-0000000100 test_keyspace 0 master 10.64.3.4:15002 10.64.3.4:3306 []
+# ...
+# test-0000000200 test_keyspace -80 master 10.64.0.7:15002 10.64.0.7:3306 []
+# ...
+# test-0000000300 test_keyspace 80- master 10.64.0.9:15002 10.64.0.9:3306 []
+# ...
 ```
 
-Note that each table in the keyspace must have a column to identify the keyspace ID.
-In addition, all of those columns must have the same name.
+## Copy data from original shard
 
-## Step 2: Prepare the destination shards
-
-In this step, you create the destination shards and tablets.
-At the end of this step, the destination shards will have been created,
-but they will not contain any data and will not serve any traffic.
-
-This example shows how to split an unsharded database into two destination shards.
-As noted in the
-[Key Ranges and Partitions](http://vitess.io/user-guide/sharding.html#key-ranges-and-partitions)
-section, the value [ 0x80 ] is the middle value for sharding keys.
-So, when you split this database into two shards, the
-[range-based shard names](http://vitess.io/user-guide/sharding.html#shard-names-in-range-based-keyspaces)
-for those shards will be:
-
-* -80
-* 80-
-
-### Step 2.1: Create destination shards
-
-To create the destination shards, call the `CreateShard` command.
-You would have used the same command to create the source shard. Repeat the
-following command for each shard you need to create:
+The new tablets start out empty, so we need to copy everything from the
+original shard to the two new ones, starting with the schema:
 
 ``` sh
-vtctlclient -server <vtctld host:port> CreateShard <keyspace name>/<shard name>
+vitess/examples/local$ ./lvtctl.sh CopySchemaShard test_keyspace/0 test_keyspace/-80
+vitess/examples/local$ ./lvtctl.sh CopySchemaShard test_keyspace/0 test_keyspace/80-
 ```
 
-In this example, you would run the command twice:
+Next we copy the data. Since the amount of data to copy can be very large,
+we use a special batch process called *vtworker* to stream the data from a
+single source to multiple destinations, routing each row based on its
+*keyspace_id*:
 
 ``` sh
-vtctlclient -server <vtctld host:port> CreateShard user_keyspace/80-
-vtctlclient -server <vtctld host:port> CreateShard user_keyspace/-80
+vitess/examples/local$ ./sharded-vtworker.sh SplitClone test_keyspace/0
+### example output:
+# I0416 02:08:59.952805       9 instance.go:115] Starting worker...
+# ...
+# State: done
+# Success:
+# messages: copy done, copied 11 rows
 ```
 
-### Step 2.2: Create destination tablets
+Notice that we've only specified the source shard, *test_keyspace/0*.
+The *SplitClone* process will automatically figure out which shards to use
+as the destinations based on the key range that needs to be covered.
+In this case, shard *0* covers the entire range, so it identifies
+*-80* and *80-* as the destination shards, since they combine to cover the
+same range.
 
-Start up `mysqld` and `vttablet` for the destination shards just like you did
-for the source shards, but with a different `-init_shard` argument and a
-different unique tablet ID (specified via `-tablet-path`).
+Next, it will pause replication on one *rdonly* (offline processing) tablet
+to serve as a consistent snapshot of the data. The app can continue without
+downtime, since live traffic is served by *replica* and *master* tablets,
+which are unaffected. Other batch jobs will also be unaffected, since they
+will be served only by the remaining, un-paused *rdonly* tablets.
 
-The example [vttablet-up.sh](https://github.com/youtube/vitess/blob/master/examples/local/vttablet-up.sh)
-script has parameters at the top named `shard` and `uid_base` that can be used
-to make these modifications.
+## Check filtered replication
 
-As with the source shard, you should have two [rdonly tablets](http://vitess.io/overview/concepts.html#tablet)
-on each of the destination shards. The `tablet_type` parameter at the top of
-`vttablet-up.sh` can be used to set this.
+Once the copy from the paused snapshot finishes, *vtworker* turns on
+[filtered replication](http://vitess.io/user-guide/sharding.html#filtered-replication)
+from the source shard to each destination shard. This allows the destination
+shards to catch up on updates that have continued to flow in from the app since
+the time of the snapshot.
 
-### Step 2.3: Initialize replication on destination shards
-
-Next call the `InitShardMaster` command to initialize MySQL replication in each destination shard.
-You would have used the same commands to elect the master tablet on the source shard.
+When the destination shards are caught up, they will continue to replicate
+new updates. You can see this by looking at the contents of each shard as
+you add new messages to various pages in the Guestbook app. Shard *0* will
+see all the messages, while the new shards will only see messages for pages
+that live on that shard.
 
 ``` sh
-vtctlclient -server <vtctld host:port> \
-    InitShardMaster -force <keyspace name>/<shard name> <tablet alias>
+# See what's on shard test_keyspace/0:
+vitess/examples/local$ ./lvtctl.sh ExecuteFetchAsDba test-0000000100 "SELECT * FROM messages"
+# See what's on shard test_keyspace/-80:
+vitess/examples/local$ ./lvtctl.sh ExecuteFetchAsDba test-0000000200 "SELECT * FROM messages"
+# See what's on shard test_keyspace/80-:
+vitess/examples/local$ ./lvtctl.sh ExecuteFetchAsDba test-0000000300 "SELECT * FROM messages"
 ```
 
-In this example, you would run these commands:
+You can run the client script again to add some messages on various pages
+and see how they get routed.
+
+## Check copied data integrity
+
+The *vtworker* batch process has another mode that will compare the source
+and destination to ensure all the data is present and correct.
+The following commands will run a diff for each destination shard:
 
 ``` sh
-vtctlclient -server <vtctld host:port> \
-    InitShardMaster -force user_keyspace/-80 <tablet alias>
-vtctlclient -server <vtctld host:port> \
-    InitShardMaster -force user_keyspace/80- <tablet alias>
+vitess/examples/local$ ./sharded-vtworker.sh SplitDiff test_keyspace/-80
+vitess/examples/local$ ./sharded-vtworker.sh SplitDiff test_keyspace/80-
 ```
 
-## Step 3: Clone data to the destination shards
+If any discrepancies are found, they will be printed.
+If everything is good, you should see something like this:
 
-In this step, you copy the database schema to each destination shard.
-Then you copy the data to the destination shards. At the end of this
-step, the destination tablets will be populated with data but will not
-yet be serving traffic.
+```
+I0416 02:10:56.927313      10 split_diff.go:496] Table messages checks out (4 rows processed, 1072961 qps)
+```
 
-### Step 3.1: Copy schema to destination shards
+## Switch over to new shards
 
-Call the `CopySchemaShard` command to copy the database schema
-from a rdonly tablet on the source shard to the destination shards:
+Now we're ready to switch over to serving from the new shards.
+The [MigrateServedTypes](http://vitess.io/reference/vtctl.html#migrateservedtypes)
+command lets you do this one
+[tablet type](http://vitess.io/overview/concepts.html#tablet) at a time,
+and even one [cell](http://vitess.io/overview/concepts.html#cell-data-center)
+at a time. The process can be rolled back at any point *until* the master is
+switched over.
 
 ``` sh
-vtctlclient -server <vtctld host:port> CopySchemaShard \
-    <keyspace>/<source shard> \
-    <keyspace>/<destination shard>
+vitess/examples/local$ ./lvtctl.sh MigrateServedTypes test_keyspace/0 rdonly
+vitess/examples/local$ ./lvtctl.sh MigrateServedTypes test_keyspace/0 replica
+vitess/examples/local$ ./lvtctl.sh MigrateServedTypes test_keyspace/0 master
 ```
 
-In this example, you would run these two commands:
+During the *master* migration, the original shard master will first stop
+accepting updates. Then the process will wait for the new shard masters to
+fully catch up on filtered replication before allowing them to begin serving.
+Since filtered replication has been following along with live updates, there
+should only be a few seconds of master unavailability.
+
+When the master traffic is migrated, the filtered replication will be stopped.
+Data updates will be visible on the new shards, but not on the original shard.
+See it for yourself: Add a message to the guestbook page and then inspect
+the database content:
 
 ``` sh
-vtctlclient -server <vtctld host:port> \
-    CopySchemaShard user_keyspace/0 user_keyspace/-80
-vtctlclient -server <vtctld host:port> \
-    CopySchemaShard user_keyspace/0 user_keyspace/80-
+# See what's on shard test_keyspace/0
+# (no updates visible since we migrated away from it):
+vitess/examples/local$ ./lvtctl.sh ExecuteFetchAsDba test-0000000100 "SELECT * FROM messages"
+# See what's on shard test_keyspace/-80:
+vitess/examples/local$ ./lvtctl.sh ExecuteFetchAsDba test-0000000200 "SELECT * FROM messages"
+# See what's on shard test_keyspace/80-:
+vitess/examples/local$ ./lvtctl.sh ExecuteFetchAsDba test-0000000300 "SELECT * FROM messages"
 ```
 
-### Step 3.2: Copy data from source shard to destination shards
+## Remove original shard
 
-This step uses a `vtworker` process to copy data from the source shard
-to the destination shards. The `vtworker` performs the following tasks:
-
-1. It finds a `rdonly` tablet on the source shard and stops data
-   replication on the tablet. This prevents the data from changing
-   while it is being copied. During this time, the `rdonly` tablet's
-   status is changed to `worker`, and Vitess will stop routing app
-   traffic to it since it might not have up-to-date data.
-
-1. It does a (concurrent) full scan of each table on the source shard.
-
-1. It identifies the appropriate destination shard for each source row
-   based on the row's sharding key.
-
-1. It streams the data to the master tablet on the correct destination shard.
-
-The following command starts the `vtworker`:
-
-```
-vtworker -cell=<cell name> \
-    SplitClone -min_healthy_rdonly_endpoints=1 <keyspace name>/<source shard name>
-```
-
-For this example, run this command:
-
-```
-vtworker -cell=<cell name> \
-    SplitClone -min_healthy_rdonly_endpoints=1 user_keyspace/0
-```
-
-The amount of time that the worker takes to complete will depend
-on the size of your dataset. When the process completes, the destination
-shards contain the correct data but do not yet serve traffic.
-The destination shards are also now running
-[filtered replication](http://vitess.io/user-guide/sharding.html#filtered-replication).
-
-## Step 4: Run a data diff to verify integrity
-
-Before the destination shard starts serving data, you want to ensure that
-its data is up-to-date. Remember that the source tablet would not have
-received updates to any of its records while the vtworker process was
-copying data to the destination shards.
-
-### Step 4.1: Use filtered replication to catch up to source data changes
-
-Vitess uses [filtered replication](http://vitess.io/user-guide/sharding.html#filtered-replication) to ensure that
-data changes on the source shard during step 3 propagate successfully
-to the destination shards. While this process happens automatically, the
-time it takes to complete depends on how long step 3 took to complete and
-the scope of the data changes on the source shard during that time.
-
-You can see the filtered replication state for a destination shard by
-viewing the status page of the shard's master tablet in your browser
-(the vtctld web UI will link there from the tablet's **STATUS** button).
-The Binlog Player table shows a **SecondsBehindMaster** column that
-indicates how far the destination master is still behind the source shard.
-
-### Step 4.2: Compare data on source and destination shards
-
-In this step, you use another `vtworker` process to ensure that the data
-on the source and destination shards is identical. The vtworker can also
-catch potential problems that might have occurred during the copying
-process. For example, if the sharding key changed for a particular row
-during step 3 or step 4.1, the data on the source and destination shards
-might not be equal.
-
-To start the `vtworker`, run the following `SplitDiff` command:
+Now that all traffic is being served from the new shards, we can remove the
+original one. To do that, we use the `vttablet-down.sh` script from the
+unsharded example:
 
 ``` sh
-vtworker -cell=<cell name> \
-    SplitDiff -min_healthy_rdonly_endpoints=1 <keyspace name>/<shard name>
+vitess/examples/local$ ./vttablet-down.sh
 ```
 
-The commands for the two new destination shards in this example are shown
-below. You need to complete this process for each destination shard.
-However, you must remove one rdonly tablet from the source shard for each
-diff process that is running. As such, it is recommended to run diffs
-sequentially rather than in parallel.
-
+Then we can delete the now-empty shard:
 
 ``` sh
-vtworker -cell=<cell name> \
-    SplitDiff -min_healthy_rdonly_endpoints=1 user_keyspace/-80
-vtworker -cell=<cell name> \
-    SplitDiff -min_healthy_rdonly_endpoints=1 user_keyspace/80-
+vitess/examples/local$ ./lvtctl.sh DeleteShard -recursive test_keyspace/0
 ```
 
-The vtworker performs the following tasks:
+You should then see in the vtctld **Topology** page, or in the output of
+`lvtctl.sh ListAllTablets test` that the tablets for shard *0* are gone.
 
-1. It finds a health `rdonly` tablet in the source shard and a healthy
-   `rdonly` tablet in the destination shard.
+## Tear down and clean up
 
-1. It sets both tablets to stop serving app traffic, so data can be compared
-   reliably.
-
-1. It pauses filtered replication on the destination master tablet.
-
-1. It pauses replication on the source `rdonly` tablet at a position higher
-   than the destination master's filtered replication position.
-
-1. It resumes the destination master's filtered replication.
-
-1. It allows the destination `rdonly` tablet to catch up to the same position
-   as the source `rdonly` tablet and then stops replication on the
-   destination `rdonly` tablet.
-
-1. It compares the schema on the source and destination `rdonly` tablets.
-
-1. It streams data from the source and destination tablets, using the
-   same sharding key constraints, and verifies that the data is equal.
-
-If the diff is successful on the first destination shard, repeat it
-on the next destination shard.
-
-## Step 5: Direct traffic to destination shards
-
-After verifying that your destination shards contain the correct data,
-you can start serving traffic from those shards.
-
-### Step 5.1 Migrate read-only traffic
-
-The safest process is to migrate read-only traffic first. You will migrate
-write operations in the following step, after the read-only traffic is
-stable. The reason for splitting the migration into two steps is that
-you can reverse the migration of read-only traffic without creating data
-inconsistencies. However, you cannot reverse the migration of master
-traffic without creating data inconsistencies.
-
-Use the `MigrateServedTypes` command to migrate `rdonly` and `replica` traffic.
-
-```
-vtctlclient -server <vtctld host:port> \
-    MigrateServedTypes <keyspace name>/<source shard name> rdonly
-vtctlclient -server <vtctld host:port> \
-    MigrateServedTypes <keyspace name>/<source shard name> replica
-```
-
-If something goes wrong during the migration of read-only traffic,
-run the same commands with the `-reverse` flag to return
-read-only traffic to the source shard:
-
-```
-vtctlclient -server <vtctld host:port> \
-    MigrateServedTypes -reverse <keyspace name>/<source shard name> rdonly
-vtctlclient -server <vtctld host:port> \
-    MigrateServedTypes -reverse <keyspace name>/<source shard name> replica
-```
-
-### Step 5.2 Migrate master traffic
-
-Use the `MigrateServedTypes` command again to migrate `master`
-traffic to the destination shard:
-
-```
-vtctlclient -server <vtctld host:port> \
-    MigrateServedTypes <keyspace name>/<source shard name> master
-```
-
-For this example, the command is:
-
-```
-vtctlclient -server <vtctld host:port> MigrateServedTypes user_keyspace/0 master
-```
-
-## Step 6: Scrap source shard
-
-If all of the other steps were successful, you can remove the source
-shard, which should no longer be in use.
-
-### Step 6.1: Remove source shard tablets
-
-Run the following command for each tablet in the source shard:
+Since you already cleaned up the tablets from the original unsharded example by
+running `./vttablet-down.sh`, that step has been replaced with
+`./sharded-vttablet-down.sh` to clean up the new sharded tablets.
 
 ``` sh
-vtctlclient -server <vtctld host:port> DeleteTablet -allow_master <source tablet alias>
-```
-
-### Step 6.2: Delete source shard
-
-Run the following command:
-
-``` sh
-vtctlclient -server <vtctld host:port> \
-    DeleteShard <keyspace name>/<source shard name>
-```
-
-For this example, the command is:
-
-``` sh
-vtctlclient -server <vtctld host:port> DeleteShard user_keyspace/0
+vitess/examples/local$ ./vtgate-down.sh
+vitess/examples/local$ ./sharded-vttablet-down.sh
+vitess/examples/local$ ./vtctld-down.sh
+vitess/examples/local$ ./zk-down.sh
 ```
 
