@@ -6,12 +6,12 @@ set -e
 
 cell='test'
 keyspace='test_keyspace'
-shard=0
-uid_base=100
+shard=${SHARD:-'0'}
+uid_base=${UID_BASE:-'100'}
 tablet_type='replica'
-port_base=15100
-grpc_port_base=16100
-mysql_port_base=33100
+port_base=$[15000 + $uid_base]
+grpc_port_base=$[16000 + $uid_base]
+mysql_port_base=$[33000 + $uid_base]
 tablet_hostname=''
 
 # Travis hostnames are too long for MySQL, so we use IP.

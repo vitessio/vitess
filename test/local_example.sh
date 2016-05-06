@@ -82,11 +82,10 @@ echo "Run Go client script..."
 go run client.go -server=localhost:15991 || teardown
 
 echo "Run Java client script..."
-# We have to install the "example" module first because Maven cannot resolve
-# them when we run "exec:java". See also: http://stackoverflow.com/questions/11091311/maven-execjava-goal-on-a-multi-module-project
-# Install only "example". See also: http://stackoverflow.com/questions/1114026/maven-modules-building-a-single-specific-module
-mvn -f ../../java/pom.xml -pl example -am install -DskipTests
-mvn -f ../../java/example/pom.xml exec:java -Dexec.cleanupDaemonThreads=false -Dexec.mainClass="com.youtube.vitess.example.VitessClientExample" -Dexec.args="localhost:15991" || teardown
+./client_java.sh || teardown
+
+echo "Run JDBC client script..."
+./client_jdbc.sh || teardown
 
 exitcode=0
 teardown

@@ -455,20 +455,6 @@ lock service. ZooKeeper is included in the Vitess distribution.
     status page, showing more details on its operation. Every Vitess server has
     a status page served at `/debug/status` on its web port.
 
-1.  **Initialize the new keyspace**
-
-    By launching tablets assigned to a nonexistent keyspace, we've essentially
-    created a new keyspace. To complete the initialization of the
-    [local topology data](http://vitess.io/doc/TopologyService/#local-data),
-    perform a keyspace rebuild:
-
-    ``` sh
-    $ $VTROOT/bin/vtctlclient -server localhost:15999 RebuildKeyspaceGraph test_keyspace
-    ```
-
-    **Note:** Many `vtctlclient` commands yield no output if
-    they run successfully.
-
 1.  **Initialize MySQL databases**
 
     Next, designate one of the tablets to be the initial master.
@@ -519,11 +505,12 @@ lock service. ZooKeeper is included in the Vitess distribution.
     The SQL to create the table is shown below:
 
     ``` sql
-    CREATE TABLE test_table (
-      id BIGINT AUTO_INCREMENT,
-      msg VARCHAR(250),
-      PRIMARY KEY(id)
-    ) Engine=InnoDB
+    CREATE TABLE messages (
+      page BIGINT(20) UNSIGNED,
+      time_created_ns BIGINT(20) UNSIGNED,
+      message VARCHAR(10000),
+      PRIMARY KEY (page, time_created_ns)
+    ) ENGINE=InnoDB
     ```
 
 1.  **Take a backup**
@@ -587,6 +574,9 @@ To run it, you need to either:
     # Reading from replica...
     # (1L, 'V is for speed')
     ```
+
+There are also sample clients in the same directory for Java, PHP, and Go.
+See the comments at the top of each sample file for usage instructions.
 
 ### Tear down the cluster
 

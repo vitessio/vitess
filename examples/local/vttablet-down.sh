@@ -3,10 +3,8 @@
 # This is an example script that stops the mysqld and vttablet instances
 # created by vttablet-up.sh
 
-set -e
-
 cell='test'
-uid_base=100
+uid_base=${UID_BASE:-'100'}
 
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
