@@ -170,6 +170,10 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 	agent.actionMutex.Lock()
 	defer agent.actionMutex.Unlock()
 
+	agent.runHealthCheckProtected(targetTabletType)
+}
+
+func (agent *ActionAgent) runHealthCheckProtected(targetTabletType topodatapb.TabletType) {
 	// read the current tablet record and tablet control
 	agent.mutex.Lock()
 	tablet := proto.Clone(agent._tablet).(*topodatapb.Tablet)
@@ -180,7 +184,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 	// figure out if we should be running the query service and update stream
 	shouldBeServing := false
 	runUpdateStream := true
-	if topo.IsRunningQueryService(targetTabletType) && !agent.BinlogPlayerMap.isRunningFilteredReplication() {
+	if topo.IsRunningQueryService(targetTabletType) && agent.BinlogPlayerMap != nil && !agent.BinlogPlayerMap.isRunningFilteredReplication() {
 		shouldBeServing = true
 		if tabletControl != nil {
 			if tabletControl.DisableQueryService {

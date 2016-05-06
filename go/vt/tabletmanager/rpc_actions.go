@@ -50,7 +50,11 @@ func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error {
 	_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType)
-	return err
+	if err != nil {
+		return err
+	}
+	agent.runHealthCheckProtected(tabletType)
+	return nil
 }
 
 // Sleep sleeps for the duration
