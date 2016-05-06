@@ -190,6 +190,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 
 	allowQuery := topo.IsRunningQueryService(newTablet.Type)
 	broadcastHealth := false
+	runUpdateStream := allowQuery
 
 	// Read the shard to get SourceShards / TabletControlMap if
 	// we're going to use it.
@@ -257,6 +258,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 				broadcastHealth = true
 			}
 		} else {
+			runUpdateStream = false
 			log.Errorf("Cannot start query service: %v", err)
 		}
 	} else {
@@ -274,8 +276,8 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		if stateChanged, err := agent.disallowQueries(newTablet.Type, disallowQueryReason); err == nil {
 			// If the state changed, broadcast to vtgate.
 			// (e.g. this happens when the tablet was already master, but it just
-			// changed from NOT_SERVING to SERVING because filtered replication was
-			// enabled.
+			// changed from SERVING to NOT_SERVING because filtered replication was
+			// enabled.)
 			if stateChanged {
 				broadcastHealth = true
 			}
@@ -289,7 +291,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	agent.setTabletControl(tabletControl)
 
 	// update stream needs to be started or stopped too
-	if topo.IsRunningUpdateStream(newTablet.Type) {
+	if topo.IsRunningUpdateStream(newTablet.Type) && runUpdateStream {
 		agent.UpdateStream.Enable()
 	} else {
 		agent.UpdateStream.Disable()

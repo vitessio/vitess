@@ -29,7 +29,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		return fmt.Errorf("type MASTER cannot take backup, if you really need to do this, restart vttablet in replica mode")
 	}
 	originalType := tablet.Type
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP, make(map[string]string)); err != nil {
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP); err != nil {
 		return err
 	}
 
@@ -52,7 +52,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	if agent.IsRunningHealthCheck() {
 		originalType = topodatapb.TabletType_SPARE
 	}
-	_, err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, originalType, nil)
+	_, err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, originalType)
 	if err != nil {
 		// failure in changing the topology type is probably worse,
 		// so returning that (we logged the snapshot error anyway)

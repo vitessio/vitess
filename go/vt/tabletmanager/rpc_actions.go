@@ -49,7 +49,7 @@ func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
 // ChangeType changes the tablet type
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error {
-	_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType, nil)
+	_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType)
 	return err
 }
 

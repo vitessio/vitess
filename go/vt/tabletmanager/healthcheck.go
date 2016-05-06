@@ -177,8 +177,9 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 	ignoreErrorExpr := agent._ignoreHealthErrorExpr
 	agent.mutex.Unlock()
 
-	// figure out if we should be running the query service
+	// figure out if we should be running the query service and update stream
 	shouldBeServing := false
+	runUpdateStream := true
 	if topo.IsRunningQueryService(targetTabletType) && !agent.BinlogPlayerMap.isRunningFilteredReplication() {
 		shouldBeServing = true
 		if tabletControl != nil {
@@ -194,24 +195,22 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 	if tablet.Type == topodatapb.TabletType_MASTER {
 		isSlaveType = false
 	}
-	// Remember the health error as healthErr to be sure we don't accidentally
-	// overwrite it with some other err.
+
+	// Remember the health error as healthErr to be sure we don't
+	// accidentally overwrite it with some other err.
 	replicationDelay, healthErr := agent.HealthReporter.Report(isSlaveType, shouldBeServing)
 	if healthErr != nil && ignoreErrorExpr != nil &&
 		ignoreErrorExpr.MatchString(healthErr.Error()) {
+		// we need to ignore this health error
 		record.IgnoredError = healthErr
 		record.IgnoreErrorExpr = ignoreErrorExpr.String()
 		healthErr = nil
 	}
-	health := make(map[string]string)
 	if healthErr == nil {
 		if replicationDelay > *unhealthyThreshold {
 			healthErr = fmt.Errorf("reported replication lag: %v higher than unhealthy threshold: %v", replicationDelay.Seconds(), unhealthyThreshold.Seconds())
-		} else if replicationDelay > *degradedThreshold {
-			health[topo.ReplicationLag] = topo.ReplicationLagHigh
 		}
 	}
-	agent.lastHealthMapCount.Set(int64(len(health)))
 
 	// Figure out if we should be running QueryService, see if we are,
 	// and reconcile.
@@ -226,18 +225,13 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 	isServing := agent.QueryServiceControl.IsServing()
 	if shouldBeServing {
 		if !isServing {
-			// It might be that we're ready to serve, but we just need to start
-			// queryservice. Send the type we want to be, not the type we are.
-			desiredType := tablet.Type
-			if desiredType == topodatapb.TabletType_SPARE {
-				desiredType = targetTabletType
-			}
-
-			// If starting queryservice fails, that's our new reason for being unhealthy.
+			// If starting queryservice fails, that's our
+			// new reason for being unhealthy.
 			//
-			// We don't care if the QueryService state actually changed because we'll
-			// broadcast the latest health status after this immediately anway.
-			_ /* state changed */, healthErr = agent.allowQueries(desiredType)
+			// We don't care if the QueryService state actually
+			// changed because we'll broadcast the latest health
+			// status after this immediately anway.
+			_ /* state changed */, healthErr = agent.allowQueries(tablet.Type)
 		}
 	} else {
 		if isServing {
@@ -252,6 +246,16 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 				log.Errorf("disallowQueries failed: %v", err)
 			}
 		}
+	}
+
+	// change UpdateStream state if necessary
+	if healthErr != nil {
+		runUpdateStream = false
+	}
+	if topo.IsRunningUpdateStream(tablet.Type) && runUpdateStream {
+		agent.UpdateStream.Enable()
+	} else {
+		agent.UpdateStream.Disable()
 	}
 
 	// save the health record
@@ -304,64 +308,6 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 
 	// send it to our observers
 	agent.broadcastHealth()
-
-	// Update our topo.Server state, start with no change
-	newTabletType := tablet.Type
-	if healthErr != nil {
-		// The tablet is not healthy, let's see what we need to do
-		if tablet.Type != targetTabletType {
-			if tablet.Type != topodatapb.TabletType_SPARE {
-				// we only log if we're not in spare,
-				// as the spare state is normal for a
-				// failed health check.
-				log.Infof("Tablet not healthy and in state %v, not changing it: %v", tablet.Type, healthErr)
-			}
-			return
-		}
-
-		// Note that if the query service is running, we may
-		// need to stop it. The post-action callback will do
-		// it, and it will be done after we change our state,
-		// so it's the right order, let it do it.
-		log.Infof("Tablet not healthy, converting it from %v to spare: %v", targetTabletType, healthErr)
-		newTabletType = topodatapb.TabletType_SPARE
-	} else {
-		// We are healthy, maybe with health, see if we need
-		// to update the record. We only change from spare to
-		// our target type.
-		if tablet.Type == topodatapb.TabletType_SPARE {
-			newTabletType = targetTabletType
-		}
-		if tablet.Type == newTabletType && topo.IsHealthEqual(health, tablet.HealthMap) {
-			// no change in health, not logging anything,
-			// and we're done
-			return
-		}
-
-		// we need to update our state
-		log.Infof("Updating tablet record as healthy type %v -> %v with health details %v -> %v", tablet.Type, newTabletType, tablet.HealthMap, health)
-	}
-
-	// Change the Type, update the health. Note we pass in a map
-	// that's not nil, meaning if it's empty, we will clear it.
-	tablet, err := topotools.ChangeOwnType(agent.batchCtx, agent.TopoServer, agent.initialTablet, newTabletType, health)
-	if err != nil {
-		log.Infof("Error updating tablet record: %v", err)
-		return
-	}
-
-	// Rebuild the serving graph in our cell, only if we're dealing with
-	// a serving type
-	if err := agent.updateServingGraph(tablet, targetTabletType); err != nil {
-		log.Warningf("updateServingGraph failed (will still run post action callbacks, serving graph might be out of date): %v", err)
-	}
-
-	// Run the post action callbacks.
-	// Note that this is where we might block for *gracePeriod, depending on the
-	// type of state change. See changeCallback() for details.
-	if err := agent.refreshTablet(agent.batchCtx, "healthcheck"); err != nil {
-		log.Warningf("refreshTablet failed: %v", err)
-	}
 }
 
 // terminateHealthChecks is called when we enter lame duck mode.
@@ -410,7 +356,7 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topodatapb.Tabl
 
 		// We don't wait until after the lameduck period, because we want to make
 		// sure this gets done before servenv onTermTimeout.
-		tablet, err := topotools.ChangeOwnType(agent.batchCtx, agent.TopoServer, agent.initialTablet, topodatapb.TabletType_SPARE, topotools.ClearHealthMap)
+		tablet, err := topotools.ChangeOwnType(agent.batchCtx, agent.TopoServer, agent.initialTablet, topodatapb.TabletType_SPARE)
 		if err != nil {
 			log.Infof("Error updating tablet record: %v", err)
 			return

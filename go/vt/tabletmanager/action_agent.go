@@ -94,8 +94,7 @@ type ActionAgent struct {
 
 	// History of the health checks, public so status
 	// pages can display it
-	History            *history.History
-	lastHealthMapCount *stats.Int
+	History *history.History
 
 	// actionMutex is there to run only one action at a time. If
 	// both agent.actionMutex and agent.mutex needs to be taken,
@@ -184,7 +183,6 @@ func NewActionAgent(
 		DBConfigs:           dbcfgs,
 		SchemaOverrides:     schemaOverrides,
 		History:             history.New(historyLength),
-		lastHealthMapCount:  stats.NewInt("LastHealthMapCount"),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
 	agent.registerQueryRuleSources()
@@ -258,7 +256,7 @@ func NewActionAgent(
 
 // NewTestActionAgent creates an agent for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
-func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon) *ActionAgent {
+func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon, preStart func(*ActionAgent)) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: tabletservermock.NewController(),
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -271,8 +269,10 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *t
 		SchemaOverrides:     nil,
 		BinlogPlayerMap:     nil,
 		History:             history.New(historyLength),
-		lastHealthMapCount:  new(stats.Int),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
+	}
+	if preStart != nil {
+		preStart(agent)
 	}
 	if err := agent.Start(batchCtx, 0, vtPort, grpcPort, false); err != nil {
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
@@ -296,7 +296,6 @@ func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *
 		SchemaOverrides:     nil,
 		BinlogPlayerMap:     nil,
 		History:             history.New(historyLength),
-		lastHealthMapCount:  new(stats.Int),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
 	agent.registerQueryRuleSources()

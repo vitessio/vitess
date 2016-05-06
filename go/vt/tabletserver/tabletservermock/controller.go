@@ -41,9 +41,6 @@ type Controller struct {
 	// QueryServiceEnabled is a state variable
 	QueryServiceEnabled bool
 
-	// InitDBConfigError is the return value for InitDBConfig
-	InitDBConfigError error
-
 	// SetServingTypeError is the return value for SetServingType
 	SetServingTypeError error
 
@@ -64,7 +61,6 @@ type Controller struct {
 func NewController() *Controller {
 	return &Controller{
 		QueryServiceEnabled: false,
-		InitDBConfigError:   nil,
 		IsHealthyError:      nil,
 		ReloadSchemaCount:   0,
 		BroadcastData:       make(chan *BroadcastData, 10),
@@ -82,13 +78,8 @@ func (tqsc *Controller) AddStatusPart() {
 
 // InitDBConfig is part of the tabletserver.Controller interface
 func (tqsc *Controller) InitDBConfig(target querypb.Target, dbConfigs dbconfigs.DBConfigs, schemaOverrides []tabletserver.SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
-	if tqsc.InitDBConfigError == nil {
-		tqsc.CurrentTarget = target
-		tqsc.QueryServiceEnabled = true
-	} else {
-		tqsc.QueryServiceEnabled = false
-	}
-	return tqsc.InitDBConfigError
+	tqsc.CurrentTarget = target
+	return nil
 }
 
 // SetServingType is part of the tabletserver.Controller interface
