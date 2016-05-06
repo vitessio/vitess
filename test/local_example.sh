@@ -9,9 +9,14 @@ cd $VTTOP/examples/local
 
 exitcode=1
 
+# Use a minimal number of tablets for the test.
+# This helps with staying under CI resource limits.
+num_tablets=2
+tablet_tasks=`seq 0 $[$num_tablets - 1]`
+
 teardown() {
   ./vtgate-down.sh &
-  ./vttablet-down.sh &
+  ./vttablet-down.sh $tablet_tasks &
   ./vtctld-down.sh &
   ./zk-down.sh &
   wait
@@ -22,7 +27,7 @@ trap teardown SIGTERM SIGINT
 # Set up servers.
 timeout $timeout ./zk-up.sh || teardown
 timeout $timeout ./vtctld-up.sh || teardown
-timeout $timeout ./vttablet-up.sh || teardown
+timeout $timeout ./vttablet-up.sh $tablet_tasks || teardown
 
 # Retry loop function
 retry_with_timeout() {
@@ -39,29 +44,23 @@ retry_with_timeout() {
 # If we don't do this, then vtgate might take up to a minute
 # to notice the new tablets, which is normally fine, but not
 # when we're trying to get through the test ASAP.
-echo "Waiting for tablets to appear in topology..."
+echo "Waiting for $num_tablets tablets to appear in topology..."
 start=`date +%s`
-until [[ $(vtctlclient -server localhost:15999 ListAllTablets test | wc -l) -eq 3 ]]; do
+until [[ $(./lvtctl.sh ListAllTablets test | wc -l) -eq $num_tablets ]]; do
   retry_with_timeout
 done
 
 timeout $timeout ./vtgate-up.sh || teardown
 
-echo "Rebuild keyspace..."
-start=`date +%s`
-until vtctlclient -server localhost:15999 RebuildKeyspaceGraph test_keyspace; do
-  retry_with_timeout
-done
-
 echo "Initialize shard..."
 start=`date +%s`
-until vtctlclient -server localhost:15999 InitShardMaster -force test_keyspace/0 test-0000000100; do
+until ./lvtctl.sh InitShardMaster -force test_keyspace/0 test-100; do
   retry_with_timeout
 done
 
 echo "Create table..."
 start=`date +%s`
-until vtctlclient -server localhost:15999 ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace; do
+until ./lvtctl.sh ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace; do
   retry_with_timeout
 done
 
