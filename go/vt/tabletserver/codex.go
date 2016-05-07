@@ -228,7 +228,7 @@ func buildStreamComment(tableInfo *TableInfo, pkValueList [][]sqltypes.Value, se
 	fmt.Fprintf(buf, " /* _stream %s (", tableInfo.Name)
 	// We assume the first index exists, and is the pk
 	for _, pkName := range tableInfo.Indexes[0].Columns {
-		buf.WriteString(pkName)
+		buf.WriteString(pkName.Lowered())
 		buf.WriteString(" ")
 	}
 	buf.WriteString(")")

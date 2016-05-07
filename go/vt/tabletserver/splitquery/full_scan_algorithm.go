@@ -155,13 +155,13 @@ func buildNoninitialQuery(
 	}
 }
 
-func convertColumnNamesToSelectExprs(columnNames []string) sqlparser.SelectExprs {
+func convertColumnNamesToSelectExprs(columnNames []sqlparser.ColIdent) sqlparser.SelectExprs {
 	result := make([]sqlparser.SelectExpr, 0, len(columnNames))
 	for _, columnName := range columnNames {
 		result = append(result,
 			&sqlparser.NonStarExpr{
 				Expr: &sqlparser.ColName{
-					Name: sqlparser.SQLName(columnName),
+					Name: columnName,
 				},
 			})
 	}
@@ -175,12 +175,12 @@ func buildLimitClause(offset, rowcount int64) *sqlparser.Limit {
 	}
 }
 
-func buildOrderByClause(splitColumns []string) sqlparser.OrderBy {
+func buildOrderByClause(splitColumns []sqlparser.ColIdent) sqlparser.OrderBy {
 	result := make(sqlparser.OrderBy, 0, len(splitColumns))
 	for _, splitColumn := range splitColumns {
 		result = append(result,
 			&sqlparser.Order{
-				Expr:      &sqlparser.ColName{Name: sqlparser.SQLName(splitColumn)},
+				Expr:      &sqlparser.ColName{Name: splitColumn},
 				Direction: sqlparser.AscScr,
 			},
 		)
@@ -192,10 +192,10 @@ const (
 	prevBindVariablePrefix string = "_splitquery_prev_"
 )
 
-func buildPrevBindVariableNames(splitColumns []string) []string {
+func buildPrevBindVariableNames(splitColumns []sqlparser.ColIdent) []string {
 	result := make([]string, 0, len(splitColumns))
 	for _, splitColumn := range splitColumns {
-		result = append(result, prevBindVariablePrefix+splitColumn)
+		result = append(result, prevBindVariablePrefix+splitColumn.Val())
 	}
 	return result
 }

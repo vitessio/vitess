@@ -5,8 +5,6 @@
 %{
 package sqlparser
 
-import "strings"
-
 func setParseTree(yylex interface{}, stmt Statement) {
   yylex.(*Tokenizer).ParseTree = stmt
 }
@@ -66,8 +64,9 @@ func forceEOF(yylex interface{}) {
   insRows     InsertRows
   updateExprs UpdateExprs
   updateExpr  *UpdateExpr
-  sqlID       SQLName
-  sqlIDs      []SQLName
+  colIdent    ColIdent
+  colIdents   []ColIdent
+  tableIdent  TableIdent
 }
 
 %token LEX_ERROR
@@ -126,7 +125,7 @@ func forceEOF(yylex interface{}) {
 %type <str> inner_join outer_join natural_join
 %type <tableName> table_name
 %type <indexHints> index_hint_list
-%type <sqlIDs> index_list
+%type <colIdents> index_list
 %type <boolExpr> where_expression_opt
 %type <boolExpr> boolean_expression condition
 %type <str> compare
@@ -157,8 +156,8 @@ func forceEOF(yylex interface{}) {
 %type <empty> for_from
 %type <str> ignore_opt
 %type <empty> exists_opt not_exists_opt non_rename_operation to_opt constraint_opt using_opt
-%type <sqlID> sql_id as_lower_opt
-%type <sqlID> table_id as_opt_id
+%type <colIdent> sql_id as_ci_opt
+%type <tableIdent> table_id as_opt_id
 %type <empty> as_opt
 %type <empty> force_eof
 
@@ -195,7 +194,7 @@ select_statement:
   }
 | SELECT comment_opt NEXT sql_id for_from table_name
   {
-    if $4 != "value" {
+    if $4.Lowered() != "value" {
       yylex.Error("expecting value after next")
       return 1
     }
@@ -252,7 +251,7 @@ create_statement:
   }
 | CREATE VIEW sql_id force_eof
   {
-    $$ = &DDL{Action: CreateStr, NewName: SQLName($3)}
+    $$ = &DDL{Action: CreateStr, NewName: TableIdent($3.Lowered())}
   }
 
 alter_statement:
@@ -267,7 +266,7 @@ alter_statement:
   }
 | ALTER VIEW sql_id force_eof
   {
-    $$ = &DDL{Action: AlterStr, Table: SQLName($3), NewName: SQLName($3)}
+    $$ = &DDL{Action: AlterStr, Table: TableIdent($3.Lowered()), NewName: TableIdent($3.Lowered())}
   }
 
 rename_statement:
@@ -288,7 +287,7 @@ drop_statement:
   }
 | DROP VIEW exists_opt sql_id force_eof
   {
-    $$ = &DDL{Action: DropStr, Table: SQLName($4)}
+    $$ = &DDL{Action: DropStr, Table: TableIdent($4.Lowered())}
   }
 
 analyze_statement:
@@ -377,7 +376,7 @@ select_expression:
   {
     $$ = &StarExpr{}
   }
-| expression as_lower_opt
+| expression as_ci_opt
   {
     $$ = &NonStarExpr{Expr: $1, As: $2}
   }
@@ -396,9 +395,9 @@ expression:
     $$ = $1
   }
 
-as_lower_opt:
+as_ci_opt:
   {
-    $$ = ""
+    $$ = ColIdent{}
   }
 | sql_id
   {
@@ -560,7 +559,7 @@ index_hint_list:
 index_list:
   sql_id
   {
-    $$ = []SQLName{$1}
+    $$ = []ColIdent{$1}
   }
 | index_list ',' sql_id
   {
@@ -827,19 +826,19 @@ value_expression:
   }
 | sql_id openb closeb
   {
-    $$ = &FuncExpr{Name: string($1)}
+    $$ = &FuncExpr{Name: $1}
   }
 | sql_id openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: string($1), Exprs: $3}
+    $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
 | sql_id openb DISTINCT select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: string($1), Distinct: true, Exprs: $4}
+    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
   }
 | IF openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: "if", Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent("if"), Exprs: $3}
   }
 | case_expression
   {
@@ -997,11 +996,11 @@ lock_opt:
   }
 | LOCK IN sql_id sql_id
   {
-    if $3 != "share" {
+    if $3.Lowered() != "share" {
       yylex.Error("expecting share")
       return 1
     }
-    if $4 != "mode" {
+    if $4.Lowered() != "mode" {
       yylex.Error("expecting mode")
       return 1
     }
@@ -1133,13 +1132,13 @@ using_opt:
 sql_id:
   ID
   {
-    $$ = SQLName(strings.ToLower(string($1)))
+    $$ = NewColIdent(string($1))
   }
 
 table_id:
   ID
   {
-    $$ = SQLName($1)
+    $$ = TableIdent($1)
   }
 
 openb:

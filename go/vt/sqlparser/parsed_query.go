@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
@@ -106,7 +107,7 @@ func EncodeValue(buf *bytes.Buffer, value interface{}) error {
 // TupleEqualityList is for generating equality constraints
 // for tables that have composite primary keys.
 type TupleEqualityList struct {
-	Columns []string
+	Columns []cistring.CIString
 	Rows    [][]sqltypes.Value
 }
 
@@ -123,7 +124,7 @@ func (tpl *TupleEqualityList) Encode(buf *bytes.Buffer) error {
 }
 
 func (tpl *TupleEqualityList) encodeAsIN(buf *bytes.Buffer) error {
-	buf.WriteString(tpl.Columns[0])
+	buf.WriteString(tpl.Columns[0].Val())
 	buf.WriteString(" in (")
 	for i, r := range tpl.Rows {
 		if len(r) != 1 {
@@ -150,7 +151,7 @@ func (tpl *TupleEqualityList) encodeAsEquality(buf *bytes.Buffer) error {
 			if j != 0 {
 				buf.WriteString(" and ")
 			}
-			buf.WriteString(c)
+			buf.WriteString(c.Val())
 			buf.WriteString(" = ")
 			if err := EncodeValue(buf, r[j]); err != nil {
 				return err

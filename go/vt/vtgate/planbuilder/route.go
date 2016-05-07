@@ -36,7 +36,7 @@ type route struct {
 	ERoute *engine.Route
 }
 
-func newRoute(from sqlparser.TableExprs, eroute *engine.Route, table *vindexes.Table, vschema VSchema, alias, astName sqlparser.SQLName) *route {
+func newRoute(from sqlparser.TableExprs, eroute *engine.Route, table *vindexes.Table, vschema VSchema, alias, astName sqlparser.TableIdent) *route {
 	// We have some circular pointer references here:
 	// The route points to the symtab idicating
 	// the symtab that should be used to resolve symbols
@@ -313,12 +313,12 @@ func (rb *route) computeINPlan(comparison *sqlparser.ComparisonExpr) (opcode eng
 // PushSelect pushes the select expression into the route.
 func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (colsym *colsym, colnum int, err error) {
 	colsym = newColsym(rb, rb.Symtab())
-	if expr.As != "" {
+	if expr.As.Val() != "" {
 		colsym.Alias = expr.As
 	}
 	if col, ok := expr.Expr.(*sqlparser.ColName); ok {
-		if colsym.Alias == "" {
-			colsym.Alias = sqlparser.SQLName(sqlparser.String(col))
+		if colsym.Alias.Val() == "" {
+			colsym.Alias = sqlparser.NewColIdent(sqlparser.String(col))
 		}
 		colsym.Vindex = rb.Symtab().Vindex(col, rb, true)
 		colsym.Underlying = newColref(col)
@@ -335,7 +335,7 @@ func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (colsym *cols
 // PushStar pushes the '*' expression into the route.
 func (rb *route) PushStar(expr *sqlparser.StarExpr) *colsym {
 	colsym := newColsym(rb, rb.Symtab())
-	colsym.Alias = sqlparser.SQLName(sqlparser.String(expr))
+	colsym.Alias = sqlparser.NewColIdent(sqlparser.String(expr))
 	rb.Select.SelectExprs = append(rb.Select.SelectExprs, expr)
 	rb.Colsyms = append(rb.Colsyms, colsym)
 	return colsym
@@ -517,7 +517,7 @@ func (rb *route) SupplyCol(ref colref) int {
 	}
 	ts := ref.Meta.(*tabsym)
 	rb.Colsyms = append(rb.Colsyms, &colsym{
-		Alias:      ts.Alias + "." + ref.Name,
+		Alias:      sqlparser.NewColIdent(string(ts.Alias) + "." + ref.Name),
 		Underlying: ref,
 	})
 	rb.Select.SelectExprs = append(
@@ -526,7 +526,7 @@ func (rb *route) SupplyCol(ref colref) int {
 			Expr: &sqlparser.ColName{
 				Metadata:  ref.Meta,
 				Qualifier: &sqlparser.TableName{Name: ts.ASTName},
-				Name:      ref.Name,
+				Name:      sqlparser.NewColIdent(ref.Name),
 			},
 		},
 	)

@@ -7,6 +7,7 @@ package worker
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
 
@@ -107,7 +108,7 @@ func newV3ResolverFromTableDefinition(keyspaceSchema *vindexes.KeyspaceSchema, t
 	}
 
 	// Find the sharding key column index.
-	columnIndex, ok := tmutils.TableDefinitionGetColumn(td, colVindex.Col)
+	columnIndex, ok := tmutils.TableDefinitionGetColumn(td, colVindex.Col.Val())
 	if !ok {
 		return nil, fmt.Errorf("table %v has a Vindex on unknown column %v", td.Name, colVindex.Col)
 	}
@@ -141,7 +142,7 @@ func newV3ResolverFromColumnList(keyspaceSchema *vindexes.KeyspaceSchema, name s
 	// Find the sharding key column index.
 	columnIndex := -1
 	for i, n := range columns {
-		if n == colVindex.Col {
+		if strings.ToLower(n) == colVindex.Col.Lowered() {
 			columnIndex = i
 			break
 		}

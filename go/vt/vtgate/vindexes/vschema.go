@@ -9,7 +9,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"sort"
-	"strings"
+
+	"github.com/youtube/vitess/go/cistring"
 )
 
 // VSchema represents the denormalized version of VSchemaFormal,
@@ -38,7 +39,7 @@ type Keyspace struct {
 
 // ColVindex contains the index info for each index of a table.
 type ColVindex struct {
-	Col    string
+	Col    cistring.CIString
 	Type   string
 	Name   string
 	Owned  bool
@@ -53,7 +54,7 @@ type KeyspaceSchema struct {
 
 // Autoinc contains the auto-inc information for a table.
 type Autoinc struct {
-	Col      string
+	Col      cistring.CIString
 	Sequence *Table
 	// ColVindexNum is the index of the ColVindex
 	// if the column is also a ColVindex. Otherwise, it's -1.
@@ -165,7 +166,7 @@ func buildTables(source *VSchemaFormal, vschema *VSchema) error {
 					owned = true
 				}
 				columnVindex := &ColVindex{
-					Col:    strings.ToLower(ind.Col),
+					Col:    cistring.NewCIString(ind.Col),
 					Type:   vindexInfo.Type,
 					Name:   ind.Name,
 					Owned:  owned,
@@ -199,7 +200,7 @@ func resolveAutoinc(source *VSchemaFormal, vschema *VSchema) error {
 			if table.Autoinc == nil {
 				continue
 			}
-			t.Autoinc = &Autoinc{Col: table.Autoinc.Col, ColVindexNum: -1}
+			t.Autoinc = &Autoinc{Col: cistring.NewCIString(table.Autoinc.Col), ColVindexNum: -1}
 			seq := vschema.tables[table.Autoinc.Sequence]
 			// TODO(sougou): improve this search.
 			if seq == nil {
@@ -207,7 +208,7 @@ func resolveAutoinc(source *VSchemaFormal, vschema *VSchema) error {
 			}
 			t.Autoinc.Sequence = seq
 			for i, cv := range t.ColVindexes {
-				if t.Autoinc.Col == cv.Col {
+				if t.Autoinc.Col.Lowered() == cv.Col.Lowered() {
 					t.Autoinc.ColVindexNum = i
 					break
 				}

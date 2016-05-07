@@ -14,6 +14,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
+	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -884,6 +885,11 @@ func (tsv *TabletServer) SplitQueryV2(
 	// we don't expect too many of these queries to run concurrently.
 	defer tsv.endRequest(false)
 
+	ciSplitColumns := make([]sqlparser.ColIdent, 0, len(splitColumns))
+	for _, s := range splitColumns {
+		ciSplitColumns = append(ciSplitColumns, sqlparser.NewColIdent(s))
+	}
+
 	if err := validateSplitQueryParameters(
 		target,
 		sql,
@@ -897,7 +903,7 @@ func (tsv *TabletServer) SplitQueryV2(
 	}
 	schema := getSchemaForSplitQuery(tsv.qe.schemaInfo)
 	splitParams, err := createSplitParams(
-		sql, bindVariables, splitColumns, splitCount, numRowsPerQueryPart, schema)
+		sql, bindVariables, ciSplitColumns, splitCount, numRowsPerQueryPart, schema)
 	if err != nil {
 		return nil, err
 	}
@@ -976,7 +982,7 @@ func validateSplitQueryParameters(
 func createSplitParams(
 	sql string,
 	bindVariables map[string]interface{},
-	splitColumns []string,
+	splitColumns []sqlparser.ColIdent,
 	splitCount int64,
 	numRowsPerQueryPart int64,
 	schema map[string]*schema.Table,
@@ -1354,7 +1360,7 @@ func withTimeout(ctx context.Context, timeout time.Duration) (context.Context, c
 	return context.WithTimeout(ctx, timeout)
 }
 
-func getColumnType(qre *QueryExecutor, columnName, tableName string) (querypb.Type, error) {
+func getColumnType(qre *QueryExecutor, columnName cistring.CIString, tableName string) (querypb.Type, error) {
 	conn, err := qre.getConn(qre.qe.connPool)
 	if err != nil {
 		return sqltypes.Null, err
@@ -1374,7 +1380,7 @@ func getColumnType(qre *QueryExecutor, columnName, tableName string) (querypb.Ty
 	return result.Fields[0].Type, nil
 }
 
-func getColumnMinMax(qre *QueryExecutor, columnName, tableName string) (*sqltypes.Result, error) {
+func getColumnMinMax(qre *QueryExecutor, columnName cistring.CIString, tableName string) (*sqltypes.Result, error) {
 	conn, err := qre.getConn(qre.qe.connPool)
 	if err != nil {
 		return nil, err

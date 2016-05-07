@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -24,7 +25,7 @@ type QuerySplitter struct {
 	schemaInfo    *SchemaInfo
 	sel           *sqlparser.Select
 	tableName     string
-	splitColumn   string
+	splitColumn   cistring.CIString
 	rowCount      int64
 }
 
@@ -50,7 +51,7 @@ func NewQuerySplitter(
 		bindVariables: bindVariables,
 		splitCount:    splitCount,
 		schemaInfo:    schemaInfo,
-		splitColumn:   splitColumn,
+		splitColumn:   cistring.NewCIString(splitColumn),
 	}
 }
 
@@ -88,15 +89,15 @@ func (qs *QuerySplitter) validateQuery() error {
 	if len(tableInfo.PKColumns) == 0 {
 		return fmt.Errorf("no primary keys")
 	}
-	if qs.splitColumn != "" {
+	if qs.splitColumn.Val() != "" {
 		for _, index := range tableInfo.Indexes {
 			for _, column := range index.Columns {
-				if qs.splitColumn == column {
+				if qs.splitColumn.Lowered() == column.Lowered() {
 					return nil
 				}
 			}
 		}
-		return fmt.Errorf("split column is not indexed or does not exist in table schema, SplitColumn: %s, TableInfo.Table: %v", qs.splitColumn, tableInfo.Table)
+		return fmt.Errorf("split column is not indexed or does not exist in table schema, SplitColumn: %v, TableInfo.Table: %v", qs.splitColumn, tableInfo.Table)
 	}
 	qs.splitColumn = tableInfo.GetPKColumn(0).Name
 	return nil
@@ -151,7 +152,7 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 		return whereClause
 	}
 	pk := &sqlparser.ColName{
-		Name: sqlparser.SQLName(qs.splitColumn),
+		Name: sqlparser.ColIdent(qs.splitColumn),
 	}
 	if !start.IsNull() {
 		startClause = &sqlparser.ComparisonExpr{

@@ -30,7 +30,7 @@ func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan,
 		return nil, err
 	}
 
-	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
+	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name.Lowered() != "primary" {
 		log.Warningf("no primary key for table %s", tableName)
 		plan.Reason = ReasonTableNoIndex
 		return plan, nil
@@ -80,7 +80,7 @@ func analyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan,
 		return nil, err
 	}
 
-	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
+	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name.Lowered() != "primary" {
 		log.Warningf("no primary key for table %s", tableName)
 		plan.Reason = ReasonTableNoIndex
 		return plan, nil
@@ -114,7 +114,7 @@ func analyzeSet(set *sqlparser.Set) (plan *ExecPlan) {
 		return plan
 	}
 	updateExpr := set.Exprs[0]
-	plan.SetKey = string(updateExpr.Name.Name)
+	plan.SetKey = updateExpr.Name.Name.Val()
 	numExpr, ok := updateExpr.Expr.(sqlparser.NumVal)
 	if !ok {
 		return plan
@@ -130,7 +130,7 @@ func analyzeSet(set *sqlparser.Set) (plan *ExecPlan) {
 
 func analyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.Index) (pkValues []interface{}, err error) {
 	for _, expr := range exprs {
-		index := pkIndex.FindColumn(sqlparser.GetColName(expr.Name))
+		index := pkIndex.FindColumn(sqlparser.GetColName(expr.Name).Val())
 		if index == -1 {
 			continue
 		}
@@ -228,7 +228,7 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 	}
 
 	// This check should never fail because we only cache tables with primary keys.
-	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
+	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name.Lowered() != "primary" {
 		panic("unexpected")
 	}
 
@@ -264,14 +264,14 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 		plan.Reason = ReasonNoIndexMatch
 		return plan, nil
 	}
-	plan.IndexUsed = indexUsed.Name
+	plan.IndexUsed = indexUsed.Name.Val()
 	if plan.IndexUsed == "PRIMARY" {
 		plan.Reason = ReasonPKIndex
 		return plan, nil
 	}
 	var missing bool
 	for _, cnum := range selects {
-		if indexUsed.FindDataColumn(tableInfo.Columns[cnum].Name) != -1 {
+		if indexUsed.FindDataColumn(tableInfo.Columns[cnum].Name.Val()) != -1 {
 			continue
 		}
 		missing = true
@@ -298,11 +298,11 @@ func analyzeSelectExprs(exprs sqlparser.SelectExprs, table *schema.Table) (selec
 			}
 		case *sqlparser.NonStarExpr:
 			name := sqlparser.GetColName(expr.Expr)
-			if name == "" {
+			if name.Val() == "" {
 				// Not a simple column name.
 				return nil, nil
 			}
-			colIndex := table.FindColumn(name)
+			colIndex := table.FindColumn(name.Val())
 			if colIndex == -1 {
 				return nil, fmt.Errorf("column %s not found in table %s", name, table.Name)
 			}
@@ -391,7 +391,7 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 		return nil, err
 	}
 
-	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
+	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name.Lowered() != "primary" {
 		log.Warningf("no primary key for table %s", tableName)
 		plan.Reason = ReasonTableNoIndex
 		return plan, nil
@@ -479,7 +479,7 @@ func getInsertPKColumns(columns sqlparser.Columns, tableInfo *schema.Table) (pkC
 		pkColumnNumbers[i] = -1
 	}
 	for i, column := range columns {
-		index := pkIndex.FindColumn(sqlparser.GetColName(column.(*sqlparser.NonStarExpr).Expr))
+		index := pkIndex.FindColumn(sqlparser.GetColName(column.(*sqlparser.NonStarExpr).Expr).Val())
 		if index == -1 {
 			continue
 		}

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
@@ -376,8 +377,8 @@ func (node *Set) WalkSubtree(visit Visit) error {
 // NewName is set for AlterStr, CreateStr, RenameStr.
 type DDL struct {
 	Action  string
-	Table   SQLName
-	NewName SQLName
+	Table   TableIdent
+	NewName TableIdent
 }
 
 // DDL strings.
@@ -476,7 +477,7 @@ func (Nextval) iSelectExpr()      {}
 
 // StarExpr defines a '*' or 'table.*' expression.
 type StarExpr struct {
-	TableName SQLName
+	TableName TableIdent
 }
 
 // Format formats the node.
@@ -501,13 +502,13 @@ func (node *StarExpr) WalkSubtree(visit Visit) error {
 // NonStarExpr defines a non-'*' select expr.
 type NonStarExpr struct {
 	Expr Expr
-	As   SQLName
+	As   ColIdent
 }
 
 // Format formats the node.
 func (node *NonStarExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v", node.Expr)
-	if node.As != "" {
+	if node.As.Val() != "" {
 		buf.Myprintf(" as %v", node.As)
 	}
 }
@@ -598,7 +599,7 @@ func (*JoinTableExpr) iTableExpr()    {}
 // If As is empty, no alias was used.
 type AliasedTableExpr struct {
 	Expr  SimpleTableExpr
-	As    SQLName
+	As    TableIdent
 	Hints *IndexHints
 }
 
@@ -641,7 +642,7 @@ func (*Subquery) iSimpleTableExpr()  {}
 // It's generally not supported because vitess has its own
 // rules about which database to send a query to.
 type TableName struct {
-	Name, Qualifier SQLName
+	Name, Qualifier TableIdent
 }
 
 // Format formats the node.
@@ -737,7 +738,7 @@ func (node *JoinTableExpr) WalkSubtree(visit Visit) error {
 // IndexHints represents a list of index hints.
 type IndexHints struct {
 	Type    string
-	Indexes []SQLName
+	Indexes []ColIdent
 }
 
 // Index hints.
@@ -1187,7 +1188,7 @@ type ColName struct {
 	// additional data, typically info about which
 	// table or column this node references.
 	Metadata  interface{}
-	Name      SQLName
+	Name      ColIdent
 	Qualifier *TableName
 }
 
@@ -1365,7 +1366,7 @@ func (node *UnaryExpr) WalkSubtree(visit Visit) error {
 // IntervalExpr represents a date-time INTERVAL expression.
 type IntervalExpr struct {
 	Expr Expr
-	Unit SQLName
+	Unit ColIdent
 }
 
 // Format formats the node.
@@ -1387,7 +1388,7 @@ func (node *IntervalExpr) WalkSubtree(visit Visit) error {
 
 // FuncExpr represents a function call.
 type FuncExpr struct {
-	Name     string
+	Name     ColIdent
 	Distinct bool
 	Exprs    SelectExprs
 }
@@ -1398,7 +1399,7 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	if node.Distinct {
 		distinct = "distinct "
 	}
-	buf.Myprintf("%s(%s%v)", node.Name, distinct, node.Exprs)
+	buf.Myprintf("%v(%s%v)", node.Name, distinct, node.Exprs)
 }
 
 // WalkSubtree walks the nodes of the subtree
@@ -1408,6 +1409,7 @@ func (node *FuncExpr) WalkSubtree(visit Visit) error {
 	}
 	return Walk(
 		visit,
+		node.Name,
 		node.Exprs,
 	)
 }
@@ -1434,7 +1436,7 @@ var Aggregates = map[string]bool{
 
 // IsAggregate returns true if the function is an aggregate.
 func (node *FuncExpr) IsAggregate() bool {
-	return Aggregates[string(node.Name)]
+	return Aggregates[node.Name.Lowered()]
 }
 
 // CaseExpr represents a CASE expression.
@@ -1737,12 +1739,50 @@ func (node OnDup) WalkSubtree(visit Visit) error {
 	return Walk(visit, UpdateExprs(node))
 }
 
-// SQLName is an SQL identifier. It will be escaped with
+// ColIdent is a case insensitive SQL identifier. It will be escaped with
 // backquotes if it matches a keyword.
-type SQLName string
+type ColIdent cistring.CIString
+
+// NewColIdent makes a new ColIdent.
+func NewColIdent(str string) ColIdent {
+	return ColIdent(cistring.NewCIString(str))
+}
 
 // Format formats the node.
-func (node SQLName) Format(buf *TrackedBuffer) {
+func (node ColIdent) Format(buf *TrackedBuffer) {
+	if _, ok := keywords[node.Lowered()]; ok {
+		buf.Myprintf("`%s`", node.Val())
+		return
+	}
+	buf.Myprintf("%s", node.Val())
+}
+
+// WalkSubtree walks the nodes of the subtree
+func (node ColIdent) WalkSubtree(visit Visit) error {
+	return nil
+}
+
+// Val returns the case-preserved column name.
+func (node ColIdent) Val() string {
+	return cistring.CIString(node).Val()
+}
+
+// Lowered returns a lower-cased column name.
+func (node ColIdent) Lowered() string {
+	return cistring.CIString(node).Lowered()
+}
+
+// Equal performs a case-insensitive compare.
+func (node ColIdent) Equal(str string) bool {
+	return cistring.CIString(node).Equal(str)
+}
+
+// TableIdent is a case sensitive SQL identifier. It will be escaped with
+// backquotes if it matches a keyword.
+type TableIdent string
+
+// Format formats the node.
+func (node TableIdent) Format(buf *TrackedBuffer) {
 	name := string(node)
 	if _, ok := keywords[strings.ToLower(name)]; ok {
 		buf.Myprintf("`%s`", name)
@@ -1752,6 +1792,6 @@ func (node SQLName) Format(buf *TrackedBuffer) {
 }
 
 // WalkSubtree walks the nodes of the subtree
-func (node SQLName) WalkSubtree(visit Visit) error {
+func (node TableIdent) WalkSubtree(visit Visit) error {
 	return nil
 }

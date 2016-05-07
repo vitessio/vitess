@@ -520,7 +520,7 @@ func (rtr *Router) handleGenerate(vcursor *requestContext, gen *engine.Generate)
 
 func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{}, colVindex *vindexes.ColVindex, bv map[string]interface{}) (ksid []byte, err error) {
 	if vindexKey == nil {
-		return nil, fmt.Errorf("value must be supplied for column %s", colVindex.Col)
+		return nil, fmt.Errorf("value must be supplied for column %v", colVindex.Col)
 	}
 	mapper := colVindex.Vindex.(vindexes.Unique)
 	ksids, err := mapper.Map(vcursor, []interface{}{vindexKey})
@@ -531,14 +531,14 @@ func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{},
 	if len(ksid) == 0 {
 		return nil, fmt.Errorf("could not map %v to a keyspace id", vindexKey)
 	}
-	bv["_"+colVindex.Col] = vindexKey
+	bv["_"+colVindex.Col.Val()] = vindexKey
 	return ksid, nil
 }
 
 func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface{}, colVindex *vindexes.ColVindex, bv map[string]interface{}, ksid []byte) error {
 	if colVindex.Owned {
 		if vindexKey == nil {
-			return fmt.Errorf("value must be supplied for column %s", colVindex.Col)
+			return fmt.Errorf("value must be supplied for column %v", colVindex.Col)
 		}
 		err := colVindex.Vindex.(vindexes.Lookup).Create(vcursor, vindexKey, ksid)
 		if err != nil {
@@ -548,7 +548,7 @@ func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface
 		if vindexKey == nil {
 			reversible, ok := colVindex.Vindex.(vindexes.Reversible)
 			if !ok {
-				return fmt.Errorf("value must be supplied for column %s", colVindex.Col)
+				return fmt.Errorf("value must be supplied for column %v", colVindex.Col)
 			}
 			var err error
 			vindexKey, err = reversible.ReverseMap(vcursor, ksid)
@@ -564,11 +564,11 @@ func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface
 				return err
 			}
 			if !ok {
-				return fmt.Errorf("value %v for column %s does not map to keyspace id %v", vindexKey, colVindex.Col, hex.EncodeToString(ksid))
+				return fmt.Errorf("value %v for column %v does not map to keyspace id %v", vindexKey, colVindex.Col, hex.EncodeToString(ksid))
 			}
 		}
 	}
-	bv["_"+colVindex.Col] = vindexKey
+	bv["_"+colVindex.Col.Val()] = vindexKey
 	return nil
 }
 

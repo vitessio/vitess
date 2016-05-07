@@ -7,6 +7,7 @@ package planbuilder
 import (
 	"fmt"
 
+	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -104,7 +105,7 @@ func GenerateDeleteOuterQuery(del *sqlparser.Delete) *sqlparser.ParsedQuery {
 
 // GenerateSelectSubquery generates the subquery for selects.
 func GenerateSelectSubquery(sel *sqlparser.Select, tableInfo *schema.Table, index string) *sqlparser.ParsedQuery {
-	hint := &sqlparser.IndexHints{Type: sqlparser.UseStr, Indexes: []sqlparser.SQLName{sqlparser.SQLName(index)}}
+	hint := &sqlparser.IndexHints{Type: sqlparser.UseStr, Indexes: []sqlparser.ColIdent{sqlparser.NewColIdent(index)}}
 	tableExpr := sel.From[0].(*sqlparser.AliasedTableExpr)
 	savedHint := tableExpr.Hints
 	tableExpr.Hints = hint
@@ -146,7 +147,7 @@ func GenerateDeleteSubquery(del *sqlparser.Delete, tableInfo *schema.Table) *sql
 }
 
 // GenerateSubquery generates a subquery based on the input parameters.
-func GenerateSubquery(columns []string, table *sqlparser.AliasedTableExpr, where *sqlparser.Where, order sqlparser.OrderBy, limit *sqlparser.Limit, forUpdate bool) *sqlparser.ParsedQuery {
+func GenerateSubquery(columns []cistring.CIString, table *sqlparser.AliasedTableExpr, where *sqlparser.Where, order sqlparser.OrderBy, limit *sqlparser.Limit, forUpdate bool) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	if limit == nil {
 		limit = execLimit
@@ -154,9 +155,9 @@ func GenerateSubquery(columns []string, table *sqlparser.AliasedTableExpr, where
 	fmt.Fprintf(buf, "select ")
 	i := 0
 	for i = 0; i < len(columns)-1; i++ {
-		fmt.Fprintf(buf, "%s, ", columns[i])
+		fmt.Fprintf(buf, "%s, ", columns[i].Val())
 	}
-	fmt.Fprintf(buf, "%s", columns[i])
+	fmt.Fprintf(buf, "%s", columns[i].Val())
 	buf.Myprintf(" from %v%v%v%v", table, where, order, limit)
 	if forUpdate {
 		buf.Myprintf(sqlparser.ForUpdateStr)
@@ -167,7 +168,7 @@ func GenerateSubquery(columns []string, table *sqlparser.AliasedTableExpr, where
 func writeColumnList(buf *sqlparser.TrackedBuffer, columns []schema.TableColumn) {
 	i := 0
 	for i = 0; i < len(columns)-1; i++ {
-		fmt.Fprintf(buf, "%s, ", columns[i].Name)
+		fmt.Fprintf(buf, "%v, ", columns[i].Name)
 	}
-	fmt.Fprintf(buf, "%s", columns[i].Name)
+	fmt.Fprintf(buf, "%v", columns[i].Name)
 }

@@ -101,7 +101,7 @@ func (ti *TableInfo) SetPK(colnames []string) error {
 	}
 	if len(ti.Indexes) == 0 {
 		ti.Indexes = make([]*schema.Index, 1)
-	} else if ti.Indexes[0].Name != "PRIMARY" {
+	} else if ti.Indexes[0].Name.Lowered() != "primary" {
 		ti.Indexes = append(ti.Indexes, nil)
 		copy(ti.Indexes[1:], ti.Indexes[:len(ti.Indexes)-1])
 	} // else we replace the currunt primary key
@@ -136,12 +136,12 @@ func (ti *TableInfo) fetchIndexes(conn *DBConn) error {
 		return nil
 	}
 	pkIndex := ti.Indexes[0]
-	if pkIndex.Name != "PRIMARY" {
+	if pkIndex.Name.Lowered() != "primary" {
 		return nil
 	}
 	ti.PKColumns = make([]int, len(pkIndex.Columns))
 	for i, pkCol := range pkIndex.Columns {
-		ti.PKColumns[i] = ti.FindColumn(pkCol)
+		ti.PKColumns[i] = ti.FindColumn(pkCol.Val())
 	}
 	// Primary key contains all table columns
 	for _, col := range ti.Columns {
@@ -155,7 +155,7 @@ func (ti *TableInfo) fetchIndexes(conn *DBConn) error {
 		for _, c := range pkIndex.Columns {
 			// pk columns may already be part of the index. So,
 			// check before adding.
-			if ti.Indexes[i].FindDataColumn(c) != -1 {
+			if ti.Indexes[i].FindDataColumn(c.Val()) != -1 {
 				continue
 			}
 			ti.Indexes[i].DataColumns = append(ti.Indexes[i].DataColumns, c)
