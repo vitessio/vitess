@@ -1,7 +1,6 @@
 package mysqlctl
 
 import (
-	"fmt"
 	"html/template"
 	"time"
 
@@ -23,9 +22,9 @@ func (mrl *mysqlReplicationLag) Report(isSlaveType, shouldQueryServiceBeRunning 
 	if err != nil {
 		return 0, err
 	}
-	if !slaveStatus.SlaveRunning() {
-		return 0, fmt.Errorf("Replication is not running")
-	}
+	// If the slave is not running, mysqld.SlaveStatus() will set
+	// SecondsBehindMaster to 0. We allow this because we don't want
+	// a stopped slave to be forced unhealthy.
 	return time.Duration(slaveStatus.SecondsBehindMaster) * time.Second, nil
 }
 
