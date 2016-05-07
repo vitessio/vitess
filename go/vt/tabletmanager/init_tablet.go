@@ -16,7 +16,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -123,34 +122,18 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		}
 	}
 
-	// See if we need to add the tablet's cell to the shard's cell
-	// list.  If we do, it has to be under the shard lock.
+	// See if we need to add the tablet's cell to the shard's cell list.
 	if !si.HasCell(agent.TabletAlias.Cell) {
-		actionNode := actionnode.UpdateShard()
-		lockPath, err := actionNode.LockShard(ctx, agent.TopoServer, *initKeyspace, shard)
-		if err != nil {
-			return fmt.Errorf("LockShard(%v/%v) failed: %v", *initKeyspace, shard, err)
-		}
-
-		// re-read the shard with the lock
-		si, err = agent.TopoServer.GetShard(ctx, *initKeyspace, shard)
-		if err != nil {
-			return actionNode.UnlockShard(ctx, agent.TopoServer, *initKeyspace, shard, lockPath, err)
-		}
-
-		// see if we really need to update it now
-		if !si.HasCell(agent.TabletAlias.Cell) {
-			si.Cells = append(si.Cells, agent.TabletAlias.Cell)
-
-			// write it back
-			if err := agent.TopoServer.UpdateShard(ctx, si); err != nil {
-				return actionNode.UnlockShard(ctx, agent.TopoServer, *initKeyspace, shard, lockPath, err)
+		si, err = agent.TopoServer.UpdateShardFields(ctx, *initKeyspace, shard, func(shard *topodatapb.Shard) error {
+			if topoproto.ShardHasCell(shard, agent.TabletAlias.Cell) {
+				// Someone else already did it.
+				return topo.ErrNoUpdateNeeded
 			}
-		}
-
-		// and unlock
-		if err := actionNode.UnlockShard(ctx, agent.TopoServer, *initKeyspace, shard, lockPath, nil); err != nil {
-			return err
+			shard.Cells = append(shard.Cells, agent.TabletAlias.Cell)
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("couldn't add tablet's cell to shard record: %v", err)
 		}
 	}
 	log.Infof("Initializing the tablet for type %v", tabletType)
