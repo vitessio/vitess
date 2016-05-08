@@ -36,8 +36,7 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* simplest */ 1 from t",
 	}, {
-		input:  "select /* keyword col */ `By` from t",
-		output: "select /* keyword col */ `by` from t",
+		input: "select /* keyword col */ `By` from t",
 	}, {
 		input: "select /* double star **/ 1 from t",
 	}, {
@@ -81,8 +80,7 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* column alias with as */ a as b from t",
 	}, {
-		input:  "select /* keyword column alias */ a as `By` from t",
-		output: "select /* keyword column alias */ a as `by` from t",
+		input: "select /* keyword column alias */ a as `By` from t",
 	}, {
 		input: "select /* a.* */ a.* from t",
 	}, {
@@ -115,8 +113,7 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* use */ 1 from t1 use index (a) where b = 1",
 	}, {
-		input:  "select /* keyword index */ 1 from t1 use index (`By`) where b = 1",
-		output: "select /* keyword index */ 1 from t1 use index (`by`) where b = 1",
+		input: "select /* keyword index */ 1 from t1 use index (`By`) where b = 1",
 	}, {
 		input: "select /* ignore */ 1 from t1 as t2 ignore index (a), t3 use index (b) where b = 1",
 	}, {
@@ -308,8 +305,7 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* a.b.c */ a.b.c from t",
 	}, {
-		input:  "select /* keyword a.b */ `By`.`bY` from t",
-		output: "select /* keyword a.b */ `By`.`by` from t",
+		input: "select /* keyword a.b */ `By`.`bY` from t",
 	}, {
 		input: "select /* string */ 'a' from t",
 	}, {
@@ -588,13 +584,11 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input: "select a from B",
 	}, {
-		input:  "select A as B from C",
-		output: "select a as b from C",
+		input: "select A as B from C",
 	}, {
 		input: "select B.* from c",
 	}, {
-		input:  "select B.A from c",
-		output: "select B.a from c",
+		input: "select B.A from c",
 	}, {
 		input: "select * from B as C",
 	}, {
@@ -604,23 +598,19 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input: "update A.B set b = 1",
 	}, {
-		input:  "select A() from b",
-		output: "select a() from b",
+		input: "select A() from b",
 	}, {
-		input:  "select A(B, C) from b",
-		output: "select a(b, c) from b",
+		input: "select A(B, C) from b",
 	}, {
-		input:  "select A(distinct B, C) from b",
-		output: "select a(distinct b, c) from b",
+		input: "select A(distinct B, C) from b",
 	}, {
+		// IF is an exception. It's always lower-cased.
 		input:  "select IF(B, C) from b",
-		output: "select if(b, c) from b",
+		output: "select if(B, C) from b",
 	}, {
-		input:  "select * from b use index (A)",
-		output: "select * from b use index (a)",
+		input: "select * from b use index (A)",
 	}, {
-		input:  "insert into A(A, B) values (1, 2)",
-		output: "insert into A(a, b) values (1, 2)",
+		input: "insert into A(A, B) values (1, 2)",
 	}, {
 		input:  "CREATE TABLE A",
 		output: "create table A",

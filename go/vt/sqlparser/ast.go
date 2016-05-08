@@ -1388,7 +1388,7 @@ func (node *IntervalExpr) WalkSubtree(visit Visit) error {
 
 // FuncExpr represents a function call.
 type FuncExpr struct {
-	Name     ColIdent
+	Name     string
 	Distinct bool
 	Exprs    SelectExprs
 }
@@ -1399,7 +1399,10 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	if node.Distinct {
 		distinct = "distinct "
 	}
-	buf.Myprintf("%v(%s%v)", node.Name, distinct, node.Exprs)
+	// Function names should not be back-quoted even
+	// if they match a reserved word. So, print the
+	// name as is.
+	buf.Myprintf("%s(%s%v)", node.Name, distinct, node.Exprs)
 }
 
 // WalkSubtree walks the nodes of the subtree
@@ -1409,7 +1412,6 @@ func (node *FuncExpr) WalkSubtree(visit Visit) error {
 	}
 	return Walk(
 		visit,
-		node.Name,
 		node.Exprs,
 	)
 }
@@ -1436,7 +1438,7 @@ var Aggregates = map[string]bool{
 
 // IsAggregate returns true if the function is an aggregate.
 func (node *FuncExpr) IsAggregate() bool {
-	return Aggregates[node.Name.Lowered()]
+	return Aggregates[strings.ToLower(node.Name)]
 }
 
 // CaseExpr represents a CASE expression.
@@ -1767,7 +1769,13 @@ func (node ColIdent) Val() string {
 	return cistring.CIString(node).Val()
 }
 
+func (node ColIdent) String() string {
+	return cistring.CIString(node).String()
+}
+
 // Lowered returns a lower-cased column name.
+// This function should generally be used only for optimizing
+// comparisons.
 func (node ColIdent) Lowered() string {
 	return cistring.CIString(node).Lowered()
 }

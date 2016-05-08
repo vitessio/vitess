@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 func Example() {
@@ -19,7 +20,10 @@ func Example() {
 	splitParams, err := NewSplitParamsGivenSplitCount(
 		"SELECT * FROM table WHERE id > :id",   // SQL query
 		map[string]interface{}{"id": int64(5)}, // Bind Variables
-		[]string{"id", "user_id"},              // SplitColumns
+		[]sqlparser.ColIdent{
+			sqlparser.NewColIdent("id"),
+			sqlparser.NewColIdent("user_id"),
+		}, // SplitColumns
 		1000, // SplitCount
 		schema)
 	if err != nil {

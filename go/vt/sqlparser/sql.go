@@ -1776,25 +1776,25 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		//line sql.y:828
 		{
-			yyVAL.valExpr = &FuncExpr{Name: yyDollar[1].colIdent}
+			yyVAL.valExpr = &FuncExpr{Name: yyDollar[1].colIdent.Val()}
 		}
 	case 148:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		//line sql.y:832
 		{
-			yyVAL.valExpr = &FuncExpr{Name: yyDollar[1].colIdent, Exprs: yyDollar[3].selectExprs}
+			yyVAL.valExpr = &FuncExpr{Name: yyDollar[1].colIdent.Val(), Exprs: yyDollar[3].selectExprs}
 		}
 	case 149:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		//line sql.y:836
 		{
-			yyVAL.valExpr = &FuncExpr{Name: yyDollar[1].colIdent, Distinct: true, Exprs: yyDollar[4].selectExprs}
+			yyVAL.valExpr = &FuncExpr{Name: yyDollar[1].colIdent.Val(), Distinct: true, Exprs: yyDollar[4].selectExprs}
 		}
 	case 150:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		//line sql.y:840
 		{
-			yyVAL.valExpr = &FuncExpr{Name: NewColIdent("if"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.valExpr = &FuncExpr{Name: "if", Exprs: yyDollar[3].selectExprs}
 		}
 	case 151:
 		yyDollar = yyS[yypt-1 : yypt+1]

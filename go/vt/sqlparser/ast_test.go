@@ -158,18 +158,34 @@ func TestLimits(t *testing.T) {
 }
 
 func TestIsAggregate(t *testing.T) {
-	f := FuncExpr{Name: NewColIdent("avg")}
+	f := FuncExpr{Name: "avg"}
 	if !f.IsAggregate() {
 		t.Error("IsAggregate: false, want true")
 	}
 
-	f = FuncExpr{Name: NewColIdent("Avg")}
+	f = FuncExpr{Name: "Avg"}
 	if !f.IsAggregate() {
 		t.Error("IsAggregate: false, want true")
 	}
 
-	f = FuncExpr{Name: NewColIdent("foo")}
+	f = FuncExpr{Name: "foo"}
 	if f.IsAggregate() {
 		t.Error("IsAggregate: true, want false")
+	}
+}
+
+func TestColIdent(t *testing.T) {
+	str := NewColIdent("Ab")
+	if str.String() != "Ab" {
+		t.Errorf("String=%s, want Ab", str.Val())
+	}
+	if str.Val() != "Ab" {
+		t.Errorf("Val=%s, want Ab", str.Val())
+	}
+	if str.Lowered() != "ab" {
+		t.Errorf("Val=%s, want ab", str.Lowered())
+	}
+	if !str.Equal("ab") {
+		t.Error("str.Equal(ab)=false, want true")
 	}
 }

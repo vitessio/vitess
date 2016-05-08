@@ -826,19 +826,19 @@ value_expression:
   }
 | sql_id openb closeb
   {
-    $$ = &FuncExpr{Name: $1}
+    $$ = &FuncExpr{Name: $1.Val()}
   }
 | sql_id openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: $1, Exprs: $3}
+    $$ = &FuncExpr{Name: $1.Val(), Exprs: $3}
   }
 | sql_id openb DISTINCT select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
+    $$ = &FuncExpr{Name: $1.Val(), Distinct: true, Exprs: $4}
   }
 | IF openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("if"), Exprs: $3}
+    $$ = &FuncExpr{Name: "if", Exprs: $3}
   }
 | case_expression
   {

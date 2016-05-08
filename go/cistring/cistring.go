@@ -36,6 +36,8 @@ func (s CIString) Val() string {
 }
 
 // Lowered returns the lower-case value of the string.
+// This function should generally be used only for optimizing
+// comparisons.
 func (s CIString) Lowered() string {
 	return s.lowered
 }
@@ -50,4 +52,26 @@ func (s CIString) Equal(in string) bool {
 // MarshalJSON marshals into JSON.
 func (s CIString) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.val)
+}
+
+// UnmarshalJSON unmarshals from JSON.
+func (s *CIString) UnmarshalJSON(b []byte) error {
+	var result string
+	err := json.Unmarshal(b, &result)
+	if err != nil {
+		return err
+	}
+	s.val = result
+	s.lowered = strings.ToLower(result)
+	return nil
+}
+
+// ToStrings converts a []CIString to a case-preserved
+// []string.
+func ToStrings(in []CIString) []string {
+	s := make([]string, len(in))
+	for i := 0; i < len(in); i++ {
+		s[i] = in[i].Val()
+	}
+	return s
 }

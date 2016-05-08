@@ -7,7 +7,6 @@ package worker
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
 
@@ -142,7 +141,7 @@ func newV3ResolverFromColumnList(keyspaceSchema *vindexes.KeyspaceSchema, name s
 	// Find the sharding key column index.
 	columnIndex := -1
 	for i, n := range columns {
-		if strings.ToLower(n) == colVindex.Col.Lowered() {
+		if colVindex.Col.Equal(n) {
 			columnIndex = i
 			break
 		}

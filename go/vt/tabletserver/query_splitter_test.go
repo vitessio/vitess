@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
@@ -143,7 +144,7 @@ func TestGetWhereClause(t *testing.T) {
 	sql := "select * from test_table where count > :count"
 	statement, _ := sqlparser.Parse(sql)
 	splitter.sel, _ = statement.(*sqlparser.Select)
-	splitter.splitColumn = "id"
+	splitter.splitColumn = cistring.NewCIString("id")
 	bindVars := make(map[string]interface{})
 	// no boundary case, start = end = nil, should not change the where clause
 	nilValue := sqltypes.Value{}
