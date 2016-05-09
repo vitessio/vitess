@@ -328,9 +328,11 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 	}
 
 	// change our type to spare if we used to be the master
+	runHealthCheck := false
 	_, err = agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
 		if tablet.Type == topodatapb.TabletType_MASTER {
-			tablet.Type = topodatapb.TabletType_SPARE
+			tablet.Type = topodatapb.TabletType_REPLICA
+			runHealthCheck = true
 			return nil
 		}
 		return topo.ErrNoUpdateNeeded
@@ -344,21 +346,36 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 	if !shouldbeReplicating || timeCreatedNS == 0 {
 		return nil
 	}
-	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
+	if err := agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS); err != nil {
+		return err
+	}
+	if runHealthCheck {
+		agent.runHealthCheckProtected()
+	}
+	return nil
 }
 
 // SlaveWasRestarted updates the parent record for a tablet.
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error {
+	runHealthCheck := false
+
 	// Once this action completes, update authoritative tablet node first.
-	_, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
+	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
 		if tablet.Type == topodatapb.TabletType_MASTER {
-			tablet.Type = topodatapb.TabletType_SPARE
+			tablet.Type = topodatapb.TabletType_REPLICA
+			runHealthCheck = true
 			return nil
 		}
 		return topo.ErrNoUpdateNeeded
-	})
-	return err
+	}); err != nil {
+		return err
+	}
+
+	if runHealthCheck {
+		agent.runHealthCheckProtected()
+	}
+	return nil
 }
 
 // StopReplicationAndGetStatus stops MySQL replication, and returns the
