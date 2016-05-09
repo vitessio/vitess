@@ -824,17 +824,17 @@ value_expression:
     // will be non-trivial because of grammar conflicts.
     $$ = &IntervalExpr{Expr: $2, Unit: $3}
   }
-| sql_id openb closeb
+| table_id openb closeb
   {
-    $$ = &FuncExpr{Name: $1.Val()}
+    $$ = &FuncExpr{Name: string($1)}
   }
-| sql_id openb select_expression_list closeb
+| table_id openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: $1.Val(), Exprs: $3}
+    $$ = &FuncExpr{Name: string($1), Exprs: $3}
   }
-| sql_id openb DISTINCT select_expression_list closeb
+| table_id openb DISTINCT select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: $1.Val(), Distinct: true, Exprs: $4}
+    $$ = &FuncExpr{Name: string($1), Distinct: true, Exprs: $4}
   }
 | IF openb select_expression_list closeb
   {

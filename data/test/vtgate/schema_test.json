@@ -24,15 +24,15 @@
         "user": {
           "ColVindexes": [
             {
-              "Col": "id",
+              "Col": "Id",
               "Name": "user_index"
             },
             {
-              "Col": "name",
+              "Col": "Name",
               "Name": "name_user_map"
             },
             {
-              "Col": "costly",
+              "Col": "Costly",
               "Name": "costly_map"
             }
           ],

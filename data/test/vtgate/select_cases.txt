@@ -326,6 +326,37 @@
   }
 }
 
+# Case preservation
+"select user.Col, user_extra.Id from user join user_extra"
+{
+  "Original": "select user.Col, user_extra.Id from user join user_extra",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.Col from user",
+      "FieldQuery": "select user.Col from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user_extra.Id from user_extra",
+      "FieldQuery": "select user_extra.Id from user_extra where 1 != 1"
+    },
+    "Cols": [
+      -1,
+      1
+    ]
+  }
+}
+
 # syntax error
 "the quick brown fox"
 "syntax error at position 4 near 'the'"

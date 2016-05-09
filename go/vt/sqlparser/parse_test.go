@@ -571,6 +571,10 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "alter table A foo",
 		output: "alter table A",
 	}, {
+		// View names get lower-cased.
+		input:  "alter view A foo",
+		output: "alter table a",
+	}, {
 		input:  "alter table A rename to B",
 		output: "rename table A B",
 	}, {
@@ -623,6 +627,14 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input:  "drop view A",
 		output: "drop table a",
+	}, {
+		input:  "select /* lock in SHARE MODE */ 1 from t lock in SHARE MODE",
+		output: "select /* lock in SHARE MODE */ 1 from t lock in share mode",
+	}, {
+		input:  "select next VALUE from t",
+		output: "select next value from t",
+	}, {
+		input: "select /* use */ 1 from t1 use index (A) where b = 1",
 	}}
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
