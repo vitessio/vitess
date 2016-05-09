@@ -857,16 +857,19 @@ class TestFailures(BaseTestCase):
 
   def tablet_start(self, tablet_obj, tablet_type, lameduck_period='0.5s',
                    grace_period=None):
-    _ = tablet_type
     if grace_period is None:
       # If grace_period is not specified, use whatever default is defined in
       # start_vttablet() itself.
-      return tablet_obj.start_vttablet(target_tablet_type=tablet_type,
-                                       lameduck_period=lameduck_period)
+      tablet_obj.start_vttablet(target_tablet_type=tablet_type,
+                                lameduck_period=lameduck_period,
+                                init_keyspace=KEYSPACE_NAME,
+                                init_shard=SHARD_NAMES[self.shard_index])
     else:
-      return tablet_obj.start_vttablet(target_tablet_type=tablet_type,
-                                       lameduck_period=lameduck_period,
-                                       grace_period=grace_period)
+      tablet_obj.start_vttablet(target_tablet_type=tablet_type,
+                                lameduck_period=lameduck_period,
+                                grace_period=grace_period,
+                                init_keyspace=KEYSPACE_NAME,
+                                init_shard=SHARD_NAMES[self.shard_index])
 
   def test_status_with_error(self):
     """Tests that the status page loads correctly after a VTGate error."""
