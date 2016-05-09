@@ -155,9 +155,9 @@ func GenerateSubquery(columns []cistring.CIString, table *sqlparser.AliasedTable
 	fmt.Fprintf(buf, "select ")
 	i := 0
 	for i = 0; i < len(columns)-1; i++ {
-		fmt.Fprintf(buf, "%s, ", columns[i].Val())
+		fmt.Fprintf(buf, "%s, ", columns[i].Original())
 	}
-	fmt.Fprintf(buf, "%s", columns[i].Val())
+	fmt.Fprintf(buf, "%s", columns[i].Original())
 	buf.Myprintf(" from %v%v%v%v", table, where, order, limit)
 	if forUpdate {
 		buf.Myprintf(sqlparser.ForUpdateStr)

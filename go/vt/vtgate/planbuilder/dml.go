@@ -66,7 +66,7 @@ func generateQuery(statement sqlparser.Statement) string {
 func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.ColVindex) bool {
 	for _, assignment := range setClauses {
 		for _, vcol := range colVindexes {
-			if vcol.Col.Lowered() == assignment.Name.Name.Lowered() {
+			if vcol.Col.Equal(cistring.CIString(assignment.Name.Name)) {
 				return true
 			}
 		}
@@ -114,7 +114,7 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *vindexes.Table) string
 	prefix := ""
 	for _, cv := range table.Owned {
 		buf.WriteString(prefix)
-		buf.WriteString(cv.Col.Val())
+		buf.WriteString(cv.Col.Original())
 		prefix = ", "
 	}
 	fmt.Fprintf(buf, " from %s", table.Name)
@@ -172,5 +172,5 @@ func getMatch(node sqlparser.BoolExpr, col cistring.CIString) interface{} {
 
 func nameMatch(node sqlparser.ValExpr, col cistring.CIString) bool {
 	colname, ok := node.(*sqlparser.ColName)
-	return ok && colname.Name.Lowered() == col.Lowered()
+	return ok && colname.Name.Equal(sqlparser.ColIdent(col))
 }

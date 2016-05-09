@@ -141,7 +141,7 @@ func (ti *TableInfo) fetchIndexes(conn *DBConn) error {
 	}
 	ti.PKColumns = make([]int, len(pkIndex.Columns))
 	for i, pkCol := range pkIndex.Columns {
-		ti.PKColumns[i] = ti.FindColumn(pkCol.Val())
+		ti.PKColumns[i] = ti.FindColumn(pkCol.Original())
 	}
 	// Primary key contains all table columns
 	for _, col := range ti.Columns {
@@ -155,7 +155,7 @@ func (ti *TableInfo) fetchIndexes(conn *DBConn) error {
 		for _, c := range pkIndex.Columns {
 			// pk columns may already be part of the index. So,
 			// check before adding.
-			if ti.Indexes[i].FindDataColumn(c.Val()) != -1 {
+			if ti.Indexes[i].FindDataColumn(c.Original()) != -1 {
 				continue
 			}
 			ti.Indexes[i].DataColumns = append(ti.Indexes[i].DataColumns, c)

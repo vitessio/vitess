@@ -144,7 +144,7 @@ func TestGetWhereClause(t *testing.T) {
 	sql := "select * from test_table where count > :count"
 	statement, _ := sqlparser.Parse(sql)
 	splitter.sel, _ = statement.(*sqlparser.Select)
-	splitter.splitColumn = cistring.NewCIString("id")
+	splitter.splitColumn = cistring.New("id")
 	bindVars := make(map[string]interface{})
 	// no boundary case, start = end = nil, should not change the where clause
 	nilValue := sqltypes.Value{}

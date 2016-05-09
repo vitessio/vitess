@@ -166,7 +166,7 @@ func buildTables(source *VSchemaFormal, vschema *VSchema) error {
 					owned = true
 				}
 				columnVindex := &ColVindex{
-					Col:    cistring.NewCIString(ind.Col),
+					Col:    cistring.New(ind.Col),
 					Type:   vindexInfo.Type,
 					Name:   ind.Name,
 					Owned:  owned,
@@ -200,7 +200,7 @@ func resolveAutoinc(source *VSchemaFormal, vschema *VSchema) error {
 			if table.Autoinc == nil {
 				continue
 			}
-			t.Autoinc = &Autoinc{Col: cistring.NewCIString(table.Autoinc.Col), ColVindexNum: -1}
+			t.Autoinc = &Autoinc{Col: cistring.New(table.Autoinc.Col), ColVindexNum: -1}
 			seq := vschema.tables[table.Autoinc.Sequence]
 			// TODO(sougou): improve this search.
 			if seq == nil {
@@ -208,7 +208,7 @@ func resolveAutoinc(source *VSchemaFormal, vschema *VSchema) error {
 			}
 			t.Autoinc.Sequence = seq
 			for i, cv := range t.ColVindexes {
-				if t.Autoinc.Col.Lowered() == cv.Col.Lowered() {
+				if t.Autoinc.Col.Equal(cv.Col) {
 					t.Autoinc.ColVindexNum = i
 					break
 				}

@@ -177,15 +177,18 @@ func TestIsAggregate(t *testing.T) {
 func TestColIdent(t *testing.T) {
 	str := NewColIdent("Ab")
 	if str.String() != "Ab" {
-		t.Errorf("String=%s, want Ab", str.Val())
+		t.Errorf("String=%s, want Ab", str.Original())
 	}
-	if str.Val() != "Ab" {
-		t.Errorf("Val=%s, want Ab", str.Val())
+	if str.Original() != "Ab" {
+		t.Errorf("Val=%s, want Ab", str.Original())
 	}
 	if str.Lowered() != "ab" {
 		t.Errorf("Val=%s, want ab", str.Lowered())
 	}
-	if !str.Equal("ab") {
-		t.Error("str.Equal(ab)=false, want true")
+	if !str.Equal(NewColIdent("aB")) {
+		t.Error("str.Equal(NewColIdent(aB))=false, want true")
+	}
+	if !str.EqualString("ab") {
+		t.Error("str.EqualString(ab)=false, want true")
 	}
 }

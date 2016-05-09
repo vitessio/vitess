@@ -114,7 +114,7 @@ func analyzeSet(set *sqlparser.Set) (plan *ExecPlan) {
 		return plan
 	}
 	updateExpr := set.Exprs[0]
-	plan.SetKey = updateExpr.Name.Name.Val()
+	plan.SetKey = updateExpr.Name.Name.Original()
 	numExpr, ok := updateExpr.Expr.(sqlparser.NumVal)
 	if !ok {
 		return plan
@@ -130,7 +130,7 @@ func analyzeSet(set *sqlparser.Set) (plan *ExecPlan) {
 
 func analyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.Index) (pkValues []interface{}, err error) {
 	for _, expr := range exprs {
-		index := pkIndex.FindColumn(sqlparser.GetColName(expr.Name).Val())
+		index := pkIndex.FindColumn(sqlparser.GetColName(expr.Name).Original())
 		if index == -1 {
 			continue
 		}
@@ -264,14 +264,14 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 		plan.Reason = ReasonNoIndexMatch
 		return plan, nil
 	}
-	plan.IndexUsed = indexUsed.Name.Val()
+	plan.IndexUsed = indexUsed.Name.Original()
 	if plan.IndexUsed == "PRIMARY" {
 		plan.Reason = ReasonPKIndex
 		return plan, nil
 	}
 	var missing bool
 	for _, cnum := range selects {
-		if indexUsed.FindDataColumn(tableInfo.Columns[cnum].Name.Val()) != -1 {
+		if indexUsed.FindDataColumn(tableInfo.Columns[cnum].Name.Original()) != -1 {
 			continue
 		}
 		missing = true
@@ -298,11 +298,11 @@ func analyzeSelectExprs(exprs sqlparser.SelectExprs, table *schema.Table) (selec
 			}
 		case *sqlparser.NonStarExpr:
 			name := sqlparser.GetColName(expr.Expr)
-			if name.Val() == "" {
+			if name.Original() == "" {
 				// Not a simple column name.
 				return nil, nil
 			}
-			colIndex := table.FindColumn(name.Val())
+			colIndex := table.FindColumn(name.Original())
 			if colIndex == -1 {
 				return nil, fmt.Errorf("column %s not found in table %s", name, table.Name)
 			}
@@ -479,7 +479,7 @@ func getInsertPKColumns(columns sqlparser.Columns, tableInfo *schema.Table) (pkC
 		pkColumnNumbers[i] = -1
 	}
 	for i, column := range columns {
-		index := pkIndex.FindColumn(sqlparser.GetColName(column.(*sqlparser.NonStarExpr).Expr).Val())
+		index := pkIndex.FindColumn(sqlparser.GetColName(column.(*sqlparser.NonStarExpr).Expr).Original())
 		if index == -1 {
 			continue
 		}

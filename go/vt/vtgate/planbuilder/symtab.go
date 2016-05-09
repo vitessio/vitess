@@ -7,6 +7,7 @@ package planbuilder
 import (
 	"fmt"
 
+	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
@@ -143,7 +144,7 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (rb *route, isL
 			Qualifier: col.Qualifier,
 		})
 		for _, colsym := range st.Colsyms {
-			if colsym.Alias.Equal(name) || colsym.Alias.Equal(starname) || colsym.Alias.Equal("*") {
+			if colsym.Alias.EqualString(name) || colsym.Alias.EqualString(starname) || colsym.Alias.EqualString("*") {
 				col.Metadata = colsym
 				return colsym.Route(), true, nil
 			}
@@ -257,7 +258,7 @@ func (t *tabsym) Symtab() *symtab {
 // FindVindex returns the vindex if one was found for the column.
 func (t *tabsym) FindVindex(name sqlparser.ColIdent) vindexes.Vindex {
 	for _, colVindex := range t.ColVindexes {
-		if colVindex.Col.Lowered() == name.Lowered() {
+		if colVindex.Col.Equal(cistring.CIString(name)) {
 			return colVindex.Vindex
 		}
 	}

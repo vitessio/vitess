@@ -76,7 +76,7 @@ func getPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (pkValu
 		if !sqlparser.StringIn(condition.Operator, sqlparser.EqualStr, sqlparser.InStr) {
 			return nil, nil
 		}
-		index := pkindexScore.FindMatch(condition.Left.(*sqlparser.ColName).Name.Val())
+		index := pkindexScore.FindMatch(condition.Left.(*sqlparser.ColName).Name.Original())
 		if index == -1 {
 			return nil, nil
 		}
@@ -103,9 +103,9 @@ func getIndexMatch(conditions []sqlparser.BoolExpr, indexes []*schema.Index) *sc
 		var col string
 		switch condition := condition.(type) {
 		case *sqlparser.ComparisonExpr:
-			col = condition.Left.(*sqlparser.ColName).Name.Val()
+			col = condition.Left.(*sqlparser.ColName).Name.Original()
 		case *sqlparser.RangeCond:
-			col = condition.Left.(*sqlparser.ColName).Name.Val()
+			col = condition.Left.(*sqlparser.ColName).Name.Original()
 		default:
 			panic("unreachaable")
 		}

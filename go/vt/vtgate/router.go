@@ -531,7 +531,7 @@ func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{},
 	if len(ksid) == 0 {
 		return nil, fmt.Errorf("could not map %v to a keyspace id", vindexKey)
 	}
-	bv["_"+colVindex.Col.Val()] = vindexKey
+	bv["_"+colVindex.Col.Original()] = vindexKey
 	return ksid, nil
 }
 
@@ -568,7 +568,7 @@ func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface
 			}
 		}
 	}
-	bv["_"+colVindex.Col.Val()] = vindexKey
+	bv["_"+colVindex.Col.Original()] = vindexKey
 	return nil
 }
 

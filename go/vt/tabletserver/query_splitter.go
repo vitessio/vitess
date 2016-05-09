@@ -51,7 +51,7 @@ func NewQuerySplitter(
 		bindVariables: bindVariables,
 		splitCount:    splitCount,
 		schemaInfo:    schemaInfo,
-		splitColumn:   cistring.NewCIString(splitColumn),
+		splitColumn:   cistring.New(splitColumn),
 	}
 }
 
@@ -89,10 +89,10 @@ func (qs *QuerySplitter) validateQuery() error {
 	if len(tableInfo.PKColumns) == 0 {
 		return fmt.Errorf("no primary keys")
 	}
-	if qs.splitColumn.Val() != "" {
+	if qs.splitColumn.Original() != "" {
 		for _, index := range tableInfo.Indexes {
 			for _, column := range index.Columns {
-				if qs.splitColumn.Lowered() == column.Lowered() {
+				if qs.splitColumn.Equal(column) {
 					return nil
 				}
 			}

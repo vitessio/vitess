@@ -79,7 +79,7 @@ func buildIndexPlan(ins *sqlparser.Insert, colVindex *vindexes.ColVindex, route 
 		return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
 	route.Values = append(route.Values.([]interface{}), val)
-	row[pos] = sqlparser.ValArg([]byte(":_" + colVindex.Col.Val()))
+	row[pos] = sqlparser.ValArg([]byte(":_" + colVindex.Col.Original()))
 	return nil
 }
 
@@ -109,7 +109,7 @@ func buildAutoincPlan(ins *sqlparser.Insert, autoinc *vindexes.Autoinc, route *e
 func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString) (row sqlparser.ValTuple, pos int) {
 	pos = -1
 	for i, column := range ins.Columns {
-		if col.Lowered() == sqlparser.GetColName(column.(*sqlparser.NonStarExpr).Expr).Lowered() {
+		if col.Equal(cistring.CIString(sqlparser.GetColName(column.(*sqlparser.NonStarExpr).Expr))) {
 			pos = i
 			break
 		}

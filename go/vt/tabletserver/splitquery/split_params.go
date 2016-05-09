@@ -167,7 +167,7 @@ func newSplitParams(sql string, bindVariables map[string]interface{}, splitColum
 	// Get the split-columns types.
 	splitColumnTypes := make([]querypb.Type, 0, len(splitColumns))
 	for _, splitColumn := range splitColumns {
-		i := tableSchema.FindColumn(splitColumn.Val())
+		i := tableSchema.FindColumn(splitColumn.Original())
 		if i == -1 {
 			return nil, fmt.Errorf("can't find split-column: %v", splitColumn)
 		}
@@ -212,7 +212,7 @@ func isColIdentSlicePrefix(potentialPrefix []sqlparser.ColIdent, slice []cistrin
 		return false
 	}
 	for i := range potentialPrefix {
-		if potentialPrefix[i].Lowered() != slice[i].Lowered() {
+		if !potentialPrefix[i].Equal(sqlparser.ColIdent(slice[i])) {
 			return false
 		}
 	}
@@ -227,7 +227,7 @@ func (sp *SplitParams) areSplitColumnsPrimaryKey() bool {
 		return false
 	}
 	for i := 0; i < len(sp.splitColumns); i++ {
-		if sp.splitColumns[i].Lowered() != pkCols[i].Lowered() {
+		if !sp.splitColumns[i].Equal(pkCols[i]) {
 			return false
 		}
 	}

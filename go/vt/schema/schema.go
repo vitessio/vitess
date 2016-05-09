@@ -8,8 +8,6 @@ package schema
 // It contains a data structure that's shared between sqlparser & tabletserver
 
 import (
-	"strings"
-
 	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
@@ -68,7 +66,7 @@ func (ta *Table) IsReadCached() bool {
 // AddColumn adds a column to the Table.
 func (ta *Table) AddColumn(name string, columnType querypb.Type, defval sqltypes.Value, extra string) {
 	index := len(ta.Columns)
-	ta.Columns = append(ta.Columns, TableColumn{Name: cistring.NewCIString(name)})
+	ta.Columns = append(ta.Columns, TableColumn{Name: cistring.New(name)})
 	ta.Columns[index].Type = columnType
 	if extra == "auto_increment" {
 		ta.Columns[index].IsAuto = true
@@ -85,9 +83,9 @@ func (ta *Table) AddColumn(name string, columnType querypb.Type, defval sqltypes
 // FindColumn finds a column in the table. It returns the index if found.
 // Otherwise, it returns -1.
 func (ta *Table) FindColumn(name string) int {
-	lowered := strings.ToLower(name)
+	ciName := cistring.New(name)
 	for i, col := range ta.Columns {
-		if col.Name.Lowered() == lowered {
+		if col.Name.Equal(ciName) {
 			return i
 		}
 	}
@@ -133,12 +131,12 @@ type Index struct {
 
 // NewIndex creates a new Index.
 func NewIndex(name string) *Index {
-	return &Index{Name: cistring.NewCIString(name)}
+	return &Index{Name: cistring.New(name)}
 }
 
 // AddColumn adds a column to the index.
 func (idx *Index) AddColumn(name string, cardinality uint64) {
-	idx.Columns = append(idx.Columns, cistring.NewCIString(name))
+	idx.Columns = append(idx.Columns, cistring.New(name))
 	if cardinality == 0 {
 		cardinality = uint64(len(idx.Cardinality) + 1)
 	}
@@ -148,9 +146,9 @@ func (idx *Index) AddColumn(name string, cardinality uint64) {
 // FindColumn finds a column in the index. It returns the index if found.
 // Otherwise, it returns -1.
 func (idx *Index) FindColumn(name string) int {
-	lowered := strings.ToLower(name)
+	ciName := cistring.New(name)
 	for i, colName := range idx.Columns {
-		if colName.Lowered() == lowered {
+		if colName.Equal(ciName) {
 			return i
 		}
 	}
@@ -160,9 +158,9 @@ func (idx *Index) FindColumn(name string) int {
 // FindDataColumn finds a data column in the index. It returns the index if found.
 // Otherwise, it returns -1.
 func (idx *Index) FindDataColumn(name string) int {
-	lowered := strings.ToLower(name)
+	ciName := cistring.New(name)
 	for i, colName := range idx.DataColumns {
-		if colName.Lowered() == lowered {
+		if colName.Equal(ciName) {
 			return i
 		}
 	}

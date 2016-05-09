@@ -11,23 +11,27 @@ import (
 )
 
 func TestCIString(t *testing.T) {
-	str := NewCIString("Ab")
+	str := New("Ab")
 	if str.String() != "Ab" {
-		t.Errorf("String=%s, want Ab", str.Val())
+		t.Errorf("String=%s, want Ab", str.Original())
 	}
-	if str.Val() != "Ab" {
-		t.Errorf("Val=%s, want Ab", str.Val())
+	if str.Original() != "Ab" {
+		t.Errorf("Val=%s, want Ab", str.Original())
 	}
 	if str.Lowered() != "ab" {
 		t.Errorf("Val=%s, want ab", str.Lowered())
 	}
-	if !str.Equal("ab") {
+	str2 := New("aB")
+	if !str.Equal(str2) {
+		t.Error("str.Equal(New(aB))=false, want true")
+	}
+	if !str.EqualString("ab") {
 		t.Error("str.Equal(ab)=false, want true")
 	}
 }
 
 func TestCIStringMarshal(t *testing.T) {
-	str := NewCIString("Ab")
+	str := New("Ab")
 	b, err := json.Marshal(str)
 	if err != nil {
 		t.Fatal(err)
@@ -46,8 +50,8 @@ func TestCIStringMarshal(t *testing.T) {
 
 func TestToStrings(t *testing.T) {
 	in := []CIString{
-		NewCIString("Ab"),
-		NewCIString("aB"),
+		New("Ab"),
+		New("aB"),
 	}
 	want := []string{"Ab", "aB"}
 	got := ToStrings(in)

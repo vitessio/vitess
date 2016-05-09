@@ -508,7 +508,7 @@ type NonStarExpr struct {
 // Format formats the node.
 func (node *NonStarExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v", node.Expr)
-	if node.As.Val() != "" {
+	if node.As.Original() != "" {
 		buf.Myprintf(" as %v", node.As)
 	}
 }
@@ -1747,16 +1747,16 @@ type ColIdent cistring.CIString
 
 // NewColIdent makes a new ColIdent.
 func NewColIdent(str string) ColIdent {
-	return ColIdent(cistring.NewCIString(str))
+	return ColIdent(cistring.New(str))
 }
 
 // Format formats the node.
 func (node ColIdent) Format(buf *TrackedBuffer) {
 	if _, ok := keywords[node.Lowered()]; ok {
-		buf.Myprintf("`%s`", node.Val())
+		buf.Myprintf("`%s`", node.Original())
 		return
 	}
-	buf.Myprintf("%s", node.Val())
+	buf.Myprintf("%s", node.Original())
 }
 
 // WalkSubtree walks the nodes of the subtree
@@ -1764,9 +1764,9 @@ func (node ColIdent) WalkSubtree(visit Visit) error {
 	return nil
 }
 
-// Val returns the case-preserved column name.
-func (node ColIdent) Val() string {
-	return cistring.CIString(node).Val()
+// Original returns the case-preserved column name.
+func (node ColIdent) Original() string {
+	return cistring.CIString(node).Original()
 }
 
 func (node ColIdent) String() string {
@@ -1781,8 +1781,13 @@ func (node ColIdent) Lowered() string {
 }
 
 // Equal performs a case-insensitive compare.
-func (node ColIdent) Equal(str string) bool {
-	return cistring.CIString(node).Equal(str)
+func (node ColIdent) Equal(in ColIdent) bool {
+	return cistring.CIString(node).Equal(cistring.CIString(in))
+}
+
+// EqualString performs a case-insensitive compare with str.
+func (node ColIdent) EqualString(str string) bool {
+	return cistring.CIString(node).EqualString(str)
 }
 
 // TableIdent is a case sensitive SQL identifier. It will be escaped with

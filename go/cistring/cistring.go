@@ -11,6 +11,12 @@ import (
 )
 
 // CIString is an immutable case-insensitive string.
+// It precomputes and stores the lower case version of the string
+// internally. This increases the initial memory cost of the object
+// but saves the CPU (and memory) cost of lowercasing as needed.
+// This should generally trade off favorably because there are many
+// situations where comparisons are performed in a loop against
+// the same object.
 type CIString struct {
 	val, lowered string
 	// nocompare prevents this struct from being compared
@@ -18,8 +24,8 @@ type CIString struct {
 	nocompare func()
 }
 
-// NewCIString creates a new CIString.
-func NewCIString(str string) CIString {
+// New creates a new CIString.
+func New(str string) CIString {
 	return CIString{
 		val:     str,
 		lowered: strings.ToLower(str),
@@ -30,8 +36,8 @@ func (s CIString) String() string {
 	return s.val
 }
 
-// Val returns the case-preserved value of the string.
-func (s CIString) Val() string {
+// Original returns the case-preserved value of the string.
+func (s CIString) Original() string {
 	return s.val
 }
 
@@ -42,10 +48,18 @@ func (s CIString) Lowered() string {
 	return s.lowered
 }
 
-// Equal returns true if the input is case-insensitive
-// equal to the string. If the input is already lower-cased,
-// it's more efficient to check if s.Lowered()==in.
-func (s CIString) Equal(in string) bool {
+// Equal performs a case-insensitive compare. For comparing
+// in a loop, it's beneficial to build a CIString outside
+// the loop and using it to compare with other CIString
+// variables inside the loop.
+func (s CIString) Equal(in CIString) bool {
+	return s.lowered == in.lowered
+}
+
+// EqualString performs a case-insensitive compare with str.
+// If the input is already lower-cased, it's more efficient
+// to check if s.Lowered()==in.
+func (s CIString) EqualString(in string) bool {
 	return s.lowered == strings.ToLower(in)
 }
 
@@ -71,7 +85,7 @@ func (s *CIString) UnmarshalJSON(b []byte) error {
 func ToStrings(in []CIString) []string {
 	s := make([]string, len(in))
 	for i := 0; i < len(in); i++ {
-		s[i] = in[i].Val()
+		s[i] = in[i].Original()
 	}
 	return s
 }
