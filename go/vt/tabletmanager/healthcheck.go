@@ -4,9 +4,16 @@
 
 package tabletmanager
 
-// This file handles the health check. It is enabled by passing a
-// target_tablet_type command line parameter. The tablet will then go
-// to the target tablet type if healthy, and to 'spare' if not.
+// This file handles the health check. It is always enabled in production
+// vttablets (but not in vtcombo, and not in unit tests by default).
+// If we are unhealthy, we'll stop the query service. In any case,
+// we report our replication delay so vtgate's discovery can use this tablet
+// or not.
+//
+// Note: we used to go to SPARE when unhealthy, and back to the target
+// tablet type when healhty. Now that we use the discovery module,
+// health is handled by clients subscribing to the health stream, so
+// we don't need to do that any more.
 
 import (
 	"flag"
@@ -139,13 +146,9 @@ func (agent *ActionAgent) initHealthCheck() {
 }
 
 // runHealthCheck takes the action mutex, runs the health check,
-// and if we need to change our state, do it.
-// If we are the master, we don't change our type, healthy or not.
-// If we are not the master, we change to spare if not healthy,
-// or to the passed in targetTabletType if healthy.
-//
-// Note we only update the topo record if we need to, that is if our type or
-// health details changed.
+// and if we need to change our state, do it. We never change our type,
+// just the health we report (so we do not change the topo server at all).
+// We do not interact with topo server, we use cached values for everything.
 //
 // This will not change the BinlogPlayerMap, but if it is not empty,
 // we will think we should not be running the query service.
@@ -302,8 +305,7 @@ func (agent *ActionAgent) runHealthCheckProtected() {
 
 // terminateHealthChecks is called when we enter lame duck mode.
 // We will clean up our state, and set query service to lame duck mode.
-// We only do something if we are in targetTabletType state, and then
-// we just go to spare.
+// We only do something if we are in a serving state, and not a master.
 func (agent *ActionAgent) terminateHealthChecks() {
 	agent.actionMutex.Lock()
 	defer agent.actionMutex.Unlock()
@@ -322,24 +324,16 @@ func (agent *ActionAgent) terminateHealthChecks() {
 	// Go lameduck for gracePeriod.
 	// We've already checked above that we're not MASTER.
 
-	// Enter new lameduck mode for gracePeriod, then shut down queryservice.
-	// New lameduck mode means keep accepting queries, but advertise unhealthy.
-	// After we return from this synchronous OnTermSync hook, servenv may decide
-	// to wait even longer, for the rest of the time specified by its own
-	// "-lameduck-period" flag. During that extra period, queryservice will be
-	// in old lameduck mode, meaning stay alive but reject new queries.
+	// Enter new lameduck mode for gracePeriod, then shut down
+	// queryservice.  New lameduck mode means keep accepting
+	// queries, but advertise unhealthy.  After we return from
+	// this synchronous OnTermSync hook, servenv may decide to
+	// wait even longer, for the rest of the time specified by its
+	// own "-lameduck-period" flag. During that extra period,
+	// queryservice will be in old lameduck mode, meaning stay
+	// alive but reject new queries.
 	agent.enterLameduck("terminating healthchecks")
 	agent.broadcastHealth()
 	time.Sleep(*gracePeriod)
 	agent.disallowQueries(tablet.Type, "terminating healthchecks")
-}
-
-// updateServingGraph will update the serving graph if we need to.
-func (agent *ActionAgent) updateServingGraph(tablet *topodatapb.Tablet, targetTabletType topodatapb.TabletType) error {
-	if topo.IsInServingGraph(targetTabletType) {
-		if err := topotools.UpdateTabletEndpoints(agent.batchCtx, agent.TopoServer, tablet); err != nil {
-			return fmt.Errorf("UpdateTabletEndpoints failed: %v", err)
-		}
-	}
-	return nil
 }

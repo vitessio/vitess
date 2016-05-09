@@ -163,7 +163,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	/// Consume the first health broadcast triggered by ActionAgent.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
-	if _, err := expectBroadcastData(agent.QueryServiceControl, 0); err != nil {
+	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
 		t.Fatal(err)
 	}
 	if err := expectStateChange(agent.QueryServiceControl, true, topodatapb.TabletType_REPLICA); err != nil {
@@ -203,7 +203,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	if agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType != topodatapb.TabletType_REPLICA {
 		t.Errorf("invalid tabletserver target: %v", agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType)
 	}
-	if _, err := expectBroadcastData(agent.QueryServiceControl, 12); err != nil {
+	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "", 12); err != nil {
 		t.Fatal(err)
 	}
 
@@ -231,7 +231,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	if got := agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType; got != targetTabletType {
 		t.Errorf("invalid tabletserver target: got = %v, want = %v", got, targetTabletType)
 	}
-	if _, err := expectBroadcastData(agent.QueryServiceControl, 13); err != nil {
+	if _, err := expectBroadcastData(agent.QueryServiceControl, false, "tablet is unhealthy", 13); err != nil {
 		t.Fatal(err)
 	}
 
@@ -315,7 +315,7 @@ func TestQueryServiceStopped(t *testing.T) {
 	/// Consume the first health broadcast triggered by ActionAgent.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
-	if _, err := expectBroadcastData(agent.QueryServiceControl, 0); err != nil {
+	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
 		t.Fatal(err)
 	}
 	if err := expectStateChange(agent.QueryServiceControl, true, topodatapb.TabletType_REPLICA); err != nil {
@@ -353,7 +353,7 @@ func TestQueryServiceStopped(t *testing.T) {
 		t.Errorf("invalid tabletserver target: got = %v, want = %v", got, want)
 	}
 
-	if _, err := expectBroadcastData(agent.QueryServiceControl, 14); err != nil {
+	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "", 14); err != nil {
 		t.Fatal(err)
 	}
 
@@ -390,11 +390,7 @@ func TestQueryServiceStopped(t *testing.T) {
 	if got := agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType; got != want {
 		t.Errorf("invalid tabletserver target: got = %v, want = %v", got, want)
 	}
-	if bd, err := expectBroadcastData(agent.QueryServiceControl, 15); err == nil {
-		if bd.RealtimeStats.HealthError != "test cannot start query service" {
-			t.Errorf("unexpected HealthError: %v", *bd)
-		}
-	} else {
+	if _, err := expectBroadcastData(agent.QueryServiceControl, false, "test cannot start query service", 15); err != nil {
 		t.Fatal(err)
 	}
 	// NOTE: No more broadcasts or state changes since SetServingTypeError is set
@@ -418,7 +414,7 @@ func TestTabletControl(t *testing.T) {
 	/// Consume the first health broadcast triggered by ActionAgent.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
-	if _, err := expectBroadcastData(agent.QueryServiceControl, 0); err != nil {
+	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
 		t.Fatal(err)
 	}
 	if err := expectStateChange(agent.QueryServiceControl, true, topodatapb.TabletType_REPLICA); err != nil {
@@ -448,7 +444,7 @@ func TestTabletControl(t *testing.T) {
 	if got := agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType; got != targetTabletType {
 		t.Errorf("invalid tabletserver target: got = %v, want = %v", got, targetTabletType)
 	}
-	if _, err := expectBroadcastData(agent.QueryServiceControl, 16); err != nil {
+	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "", 16); err != nil {
 		t.Fatal(err)
 	}
 
@@ -485,7 +481,7 @@ func TestTabletControl(t *testing.T) {
 
 	// Consume the health broadcast which was triggered due to the QueryService
 	// state change from SERVING to NOT_SERVING.
-	if _, err := expectBroadcastData(agent.QueryServiceControl, 16); err != nil {
+	if _, err := expectBroadcastData(agent.QueryServiceControl, false, "", 16); err != nil {
 		t.Fatal(err)
 	}
 	if err := expectStateChange(agent.QueryServiceControl, false, targetTabletType); err != nil {
@@ -515,12 +511,12 @@ func TestTabletControl(t *testing.T) {
 	if got := agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType; got != targetTabletType {
 		t.Errorf("invalid tabletserver target: got = %v, want = %v", got, targetTabletType)
 	}
-	if _, err := expectBroadcastData(agent.QueryServiceControl, 17); err != nil {
+	if _, err := expectBroadcastData(agent.QueryServiceControl, false, "", 17); err != nil {
 		t.Fatal(err)
 	}
 	// NOTE: No state change here since nothing has changed.
 
-	// go unhealthy, check we go to spare and QS is not running
+	// go unhealthy, check we go to error state and QS is not running
 	agent.HealthReporter.(*fakeHealthCheck).reportError = fmt.Errorf("tablet is unhealthy")
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 18 * time.Second
 	before = time.Now()
@@ -541,7 +537,7 @@ func TestTabletControl(t *testing.T) {
 	if agent._healthyTime.Sub(before) < 0 {
 		t.Errorf("runHealthCheck did not update agent._healthyTime")
 	}
-	if _, err := expectBroadcastData(agent.QueryServiceControl, 18); err != nil {
+	if _, err := expectBroadcastData(agent.QueryServiceControl, false, "tablet is unhealthy", 18); err != nil {
 		t.Fatal(err)
 	}
 	// NOTE: No state change here since QueryService is already NOT_SERVING.
@@ -571,7 +567,7 @@ func TestTabletControl(t *testing.T) {
 	if agent._healthyTime.Sub(before) < 0 {
 		t.Errorf("runHealthCheck did not update agent._healthyTime")
 	}
-	if _, err := expectBroadcastData(agent.QueryServiceControl, 19); err != nil {
+	if _, err := expectBroadcastData(agent.QueryServiceControl, false, "", 19); err != nil {
 		t.Fatal(err)
 	}
 	if got := agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType; got != targetTabletType {
@@ -597,7 +593,7 @@ func TestTabletControl(t *testing.T) {
 
 	// QueryService changed back from SERVING to NOT_SERVING since refreshTablet()
 	// re-read the topology and saw that REPLICA is still not allowed to serve.
-	if _, err := expectBroadcastData(agent.QueryServiceControl, 19); err != nil {
+	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "", 19); err != nil {
 		t.Fatal(err)
 	}
 	if err := expectStateChange(agent.QueryServiceControl, true, targetTabletType); err != nil {
@@ -627,10 +623,23 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	/// Consume the first health broadcast triggered by ActionAgent.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
-	if _, err := expectBroadcastData(agent.QueryServiceControl, 0); err != nil {
+	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
 		t.Fatal(err)
 	}
 	if err := expectStateChange(agent.QueryServiceControl, true, topodatapb.TabletType_REPLICA); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run health check to turn into a healthy replica
+	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 12 * time.Second
+	agent.runHealthCheck()
+	if !agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should be running")
+	}
+	if got := agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType; got != topodatapb.TabletType_REPLICA {
+		t.Errorf("invalid tabletserver target: got = %v, want = %v", got, topodatapb.TabletType_REPLICA)
+	}
+	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "", 12); err != nil {
 		t.Fatal(err)
 	}
 
@@ -659,7 +668,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	}
 
 	// Consume the health broadcast (no replication delay as we are master)
-	if _, err := expectBroadcastData(agent.QueryServiceControl, 0); err != nil {
+	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "", 0); err != nil {
 		t.Fatal(err)
 	}
 	if err := expectStateChange(agent.QueryServiceControl, true, targetTabletType); err != nil {
@@ -682,7 +691,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	if got := agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType; got != targetTabletType {
 		t.Errorf("invalid tabletserver target: got = %v, want = %v", got, targetTabletType)
 	}
-	if _, err := expectBroadcastData(agent.QueryServiceControl, 20); err != nil {
+	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "", 20); err != nil {
 		t.Fatal(err)
 	}
 
@@ -735,7 +744,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	// (MASTER, SERVING) to (MASTER, NOT_SERVING).
 	// Since we didn't run healthcheck again yet, the broadcast data contains the
 	// cached replication lag of 20 instead of 21.
-	if bd, err := expectBroadcastData(agent.QueryServiceControl, 20); err == nil {
+	if bd, err := expectBroadcastData(agent.QueryServiceControl, false, "", 20); err == nil {
 		if bd.RealtimeStats.BinlogPlayersCount != 1 {
 			t.Fatalf("filtered replication must be enabled: %v", bd)
 		}
@@ -762,7 +771,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	if got := agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType; got != targetTabletType {
 		t.Errorf("invalid tabletserver target: got = %v, want = %v", got, targetTabletType)
 	}
-	if bd, err := expectBroadcastData(agent.QueryServiceControl, 22); err == nil {
+	if bd, err := expectBroadcastData(agent.QueryServiceControl, false, "", 22); err == nil {
 		if bd.RealtimeStats.BinlogPlayersCount != 1 {
 			t.Fatalf("filtered replication must be still running: %v", bd)
 		}
@@ -794,7 +803,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	}
 	// Since we didn't run healthcheck again yet, the broadcast data contains the
 	// cached replication lag of 22 instead of 23.
-	if bd, err := expectBroadcastData(agent.QueryServiceControl, 22); err == nil {
+	if bd, err := expectBroadcastData(agent.QueryServiceControl, true, "", 22); err == nil {
 		if bd.RealtimeStats.BinlogPlayersCount != 0 {
 			t.Fatalf("filtered replication must be disabled now: %v", bd)
 		}
@@ -842,13 +851,16 @@ func TestOldHealthCheck(t *testing.T) {
 
 // expectBroadcastData checks that runHealthCheck() broadcasted the expected
 // stats (going the value for secondsBehindMaster).
-// Note that it may be necessary to call this function twice when
-// runHealthCheck() also calls freshTablet() which might trigger another
-// broadcast e.g. because we went from REPLICA to SPARE and into lameduck.
-func expectBroadcastData(qsc tabletserver.Controller, secondsBehindMaster uint32) (*tabletservermock.BroadcastData, error) {
+func expectBroadcastData(qsc tabletserver.Controller, serving bool, healthError string, secondsBehindMaster uint32) (*tabletservermock.BroadcastData, error) {
 	bd := <-qsc.(*tabletservermock.Controller).BroadcastData
+	if got := bd.Serving; got != serving {
+		return nil, fmt.Errorf("unexpected BroadcastData.Serving, got: %v want: %v with bd: %+v", got, serving, bd)
+	}
+	if got := bd.RealtimeStats.HealthError; got != healthError {
+		return nil, fmt.Errorf("unexpected BroadcastData.HealthError, got: %v want: %v with bd: %+v", got, healthError, bd)
+	}
 	if got := bd.RealtimeStats.SecondsBehindMaster; got != secondsBehindMaster {
-		return nil, fmt.Errorf("unexpected BroadcastData. got: %v want: %v got bd: %+v", got, secondsBehindMaster, bd)
+		return nil, fmt.Errorf("unexpected BroadcastData.SecondsBehindMaster, got: %v want: %v with bd: %+v", got, secondsBehindMaster, bd)
 	}
 	return bd, nil
 }

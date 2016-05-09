@@ -22,6 +22,9 @@ type BroadcastData struct {
 
 	// RealtimeStats stores the last broadcast stats.
 	RealtimeStats querypb.RealtimeStats
+
+	// Serving contains the QueryServiceEnabled flag
+	Serving bool
 }
 
 // StateChange stores the state the controller changed to.
@@ -146,6 +149,7 @@ func (tqsc *Controller) BroadcastHealth(terTimestamp int64, stats *querypb.Realt
 	tqsc.BroadcastData <- &BroadcastData{
 		TERTimestamp:  terTimestamp,
 		RealtimeStats: *stats,
+		Serving:       tqsc.QueryServiceEnabled,
 	}
 }
 

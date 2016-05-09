@@ -71,16 +71,36 @@ func (KeyspaceIdType) EnumDescriptor() ([]byte, []int) { return fileDescriptor0,
 type TabletType int32
 
 const (
-	TabletType_UNKNOWN      TabletType = 0
-	TabletType_MASTER       TabletType = 1
-	TabletType_REPLICA      TabletType = 2
-	TabletType_RDONLY       TabletType = 3
-	TabletType_BATCH        TabletType = 3
-	TabletType_SPARE        TabletType = 4
+	// UNKNOWN is not a valid value.
+	TabletType_UNKNOWN TabletType = 0
+	// MASTER is the master server for the shard. Only MASTER allows DMLs.
+	TabletType_MASTER TabletType = 1
+	// REPLICA is a slave type. It is used to serve live traffic.
+	// A REPLICA can be promoted to MASTER. A demoted MASTER will go to REPLICA.
+	TabletType_REPLICA TabletType = 2
+	// RDONLY (old name) / BATCH (new name) is used to serve traffic for
+	// long-running jobs. It is a separate type from REPLICA so
+	// long-running queries don't affect web-like traffic.
+	TabletType_RDONLY TabletType = 3
+	TabletType_BATCH  TabletType = 3
+	// SPARE is a type of servers that cannot serve queries, but is available
+	// in case an extra server is needed.
+	TabletType_SPARE TabletType = 4
+	// EXPERIMENTAL is like SPARE, except it can serve queries. This
+	// type can be used for usages not planned by Vitess, like online
+	// export to another storage engine.
 	TabletType_EXPERIMENTAL TabletType = 5
-	TabletType_BACKUP       TabletType = 6
-	TabletType_RESTORE      TabletType = 7
-	TabletType_WORKER       TabletType = 8
+	// BACKUP is the type a server goes to when taking a backup. No queries
+	// can be served in BACKUP mode.
+	TabletType_BACKUP TabletType = 6
+	// RESTORE is the type a server uses when restoring a backup, at
+	// startup time.  No queries can be served in RESTORE mode.
+	TabletType_RESTORE TabletType = 7
+	// WORKER is the type a server goes into when used by a vtworker
+	// process to perform an offline action. It is a serving type (as
+	// the vtworker processes may need queries to run). In this state,
+	// this tablet is dedicated to the vtworker process that uses it.
+	TabletType_WORKER TabletType = 8
 )
 
 var TabletType_name = map[int32]string{
