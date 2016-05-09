@@ -152,13 +152,13 @@ func TestTabletExternallyReparented(t *testing.T) {
 	waitForExternalReparent(t, waitID)
 
 	// Now double-check the serving graph is good.
-	// Should only have one good replica left.
+	// Should have all replicas left.
 	addrs, _, err := ts.GetEndPoints(ctx, "cell1", "test_keyspace", "0", topodatapb.TabletType_REPLICA)
 	if err != nil {
 		t.Fatalf("GetEndPoints failed at the end: %v", err)
 	}
-	if len(addrs.Entries) != 1 {
-		t.Fatalf("GetEndPoints has too many entries: %v", addrs)
+	if len(addrs.Entries) != 3 {
+		t.Fatalf("GetEndPoints has too many entries %v: %v", len(addrs.Entries), addrs)
 	}
 }
 
@@ -300,21 +300,21 @@ func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {
 	waitForExternalReparent(t, waitID)
 
 	// Now double-check the serving graph is good.
-	// Should only have one good replica left.
+	// Should only both replicas left.
 	addrs, _, err := ts.GetEndPoints(ctx, "cell1", "test_keyspace", "0", topodatapb.TabletType_REPLICA)
 	if err != nil {
 		t.Fatalf("GetEndPoints failed at the end: %v", err)
 	}
-	if len(addrs.Entries) != 1 {
+	if len(addrs.Entries) != 2 {
 		t.Fatalf("GetEndPoints has too many entries: %v", addrs)
 	}
 
-	// check the old master was converted to spare
+	// check the old master was converted to replica
 	tablet, err := ts.GetTablet(ctx, oldMaster.Tablet.Alias)
 	if err != nil {
 		t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
 	}
-	if tablet.Type != topodatapb.TabletType_SPARE {
+	if tablet.Type != topodatapb.TabletType_REPLICA {
 		t.Fatalf("old master should be spare but is: %v", tablet.Type)
 	}
 }

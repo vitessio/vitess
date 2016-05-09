@@ -203,7 +203,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 			// old master to be up to change its own record.
 			oldMasterTablet, err := agent.TopoServer.UpdateTabletFields(ctx, oldMasterAlias,
 				func(tablet *topodatapb.Tablet) error {
-					tablet.Type = topodatapb.TabletType_SPARE
+					tablet.Type = topodatapb.TabletType_REPLICA
 					return nil
 				})
 			if err != nil {
