@@ -384,29 +384,26 @@ class TestTabletManager(unittest.TestCase):
     self.assertEqual(ti['type'], topodata_pb2.MASTER,
                      'unexpected master type: %s' % ti['type'])
 
-    # stop replication, make sure we go unhealthy.
+    # stop replication, make sure we don't go unhealthy.
+    # (we have a baseline as well, so the time should be good).
     utils.run_vtctl(['StopSlave', tablet_62044.tablet_alias])
-    tablet_62044.wait_for_vttablet_state('NOT_SERVING')
     utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
-    self.check_healthz(tablet_62044, False)
+    self.check_healthz(tablet_62044, True)
 
-    # make sure status web page is unhappy
-    self.assertIn(
-        '>unhealthy: replication_reporter: '
-        'Replication is not running</span></div>', tablet_62044.get_status())
+    # make sure status web page is healthy
+    self.assertIn('>healthy</span></div>', tablet_62044.get_status())
 
     # make sure the health stream is updated
     health = utils.run_vtctl_json(['VtTabletStreamHealth',
                                    '-count', '1',
                                    tablet_62044.tablet_alias])
-    self.assertIn(
-        'replication_reporter: Replication is not running',
-        health['realtime_stats']['health_error'])
-    self.assertNotIn('serving', health)
+    self.assertTrue(('seconds_behind_master' not in health['realtime_stats']) or
+                    (health['realtime_stats']['seconds_behind_master'] < 30),
+                    'got unexpected health: %s' % str(health))
+    self.assertIn('serving', health)
 
-    # then restart replication, make sure we go back to healthy
+    # then restart replication, make sure we stay healthy
     utils.run_vtctl(['StartSlave', tablet_62044.tablet_alias])
-    tablet_62044.wait_for_vttablet_state('SERVING')
     utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
 
     # make sure status web page is healthy
@@ -488,18 +485,14 @@ class TestTabletManager(unittest.TestCase):
 
     # Change from rdonly to worker and stop replication. (These
     # actions are similar to the SplitClone vtworker command
-    # implementation.)  The tablet will become unhealthy, but the
+    # implementation.)  The tablet will stay healthy, and the
     # query service is still running.
     utils.run_vtctl(['ChangeSlaveType', tablet_62044.tablet_alias, 'worker'])
     utils.run_vtctl(['StopSlave', tablet_62044.tablet_alias])
     # Trigger healthcheck explicitly to avoid waiting for the next interval.
     utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
     utils.wait_for_tablet_type(tablet_62044.tablet_alias, 'worker')
-    self.check_healthz(tablet_62044, False)
-    # Make sure that replication got disabled.
-    self.assertIn(
-        '>unhealthy: replication_reporter: '
-        'Replication is not running</span></div>', tablet_62044.get_status())
+    self.check_healthz(tablet_62044, True)
     # Query service is still running.
     tablet_62044.wait_for_vttablet_state('SERVING')
 
@@ -562,7 +555,9 @@ class TestTabletManager(unittest.TestCase):
                     auto_log=True)
     self.check_healthz(tablet_62344, True)
 
-    # the slave won't be healthy at first, as replication is not running
+    # the slave won't be healthy at first, as replication has not been
+    # running ever while vttablet was running, so we don't have a
+    # backup baseline.
     utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias],
                     auto_log=True)
     self.check_healthz(tablet_62044, False)

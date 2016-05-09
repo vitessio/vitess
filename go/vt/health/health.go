@@ -1,6 +1,7 @@
 package health
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"sort"
@@ -15,6 +16,12 @@ var (
 	// DefaultAggregator is the global aggregator to use for real
 	// programs. Use a custom one for tests.
 	DefaultAggregator *Aggregator
+
+	// ErrSlaveNotRunning is returned by health plugins when replication
+	// is not running and we can't figure out the replication delay.
+	// Note everything else should be operational, and the underlying
+	// MySQL instance should be capable of answering queries.
+	ErrSlaveNotRunning = errors.New("slave is not running")
 )
 
 func init() {

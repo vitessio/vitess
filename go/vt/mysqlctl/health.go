@@ -1,7 +1,6 @@
 package mysqlctl
 
 import (
-	"fmt"
 	"html/template"
 	"time"
 
@@ -10,7 +9,14 @@ import (
 
 // mysqlReplicationLag implements health.Reporter
 type mysqlReplicationLag struct {
-	mysqld *Mysqld
+	// set at construction time
+	mysqld MysqlDaemon
+	now    func() time.Time
+
+	// store the last time we successfully got the lag, so if we
+	// can't get the lag any more, we can extrapolate.
+	lastKnownValue uint
+	lastKnownTime  time.Time
 }
 
 // Report is part of the health.Reporter interface
@@ -20,12 +26,19 @@ func (mrl *mysqlReplicationLag) Report(isSlaveType, shouldQueryServiceBeRunning 
 	}
 
 	slaveStatus, err := mrl.mysqld.SlaveStatus()
+	if err == nil && !slaveStatus.SlaveRunning() {
+		err = health.ErrSlaveNotRunning
+	}
 	if err != nil {
+		if !mrl.lastKnownTime.IsZero() {
+			// we can extrapolate
+			elapsed := mrl.now().Sub(mrl.lastKnownTime)
+			return elapsed + time.Duration(mrl.lastKnownValue)*time.Second, nil
+		}
 		return 0, err
 	}
-	if !slaveStatus.SlaveRunning() {
-		return 0, fmt.Errorf("Replication is not running")
-	}
+	mrl.lastKnownValue = slaveStatus.SecondsBehindMaster
+	mrl.lastKnownTime = mrl.now()
 	return time.Duration(slaveStatus.SecondsBehindMaster) * time.Second, nil
 }
 
@@ -36,6 +49,9 @@ func (mrl *mysqlReplicationLag) HTMLName() template.HTML {
 
 // MySQLReplicationLag lag returns a reporter that reports the MySQL
 // replication lag.
-func MySQLReplicationLag(mysqld *Mysqld) health.Reporter {
-	return &mysqlReplicationLag{mysqld}
+func MySQLReplicationLag(mysqld MysqlDaemon) health.Reporter {
+	return &mysqlReplicationLag{
+		mysqld: mysqld,
+		now:    time.Now,
+	}
 }

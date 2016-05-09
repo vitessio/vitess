@@ -24,6 +24,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/timer"
+	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -197,6 +198,14 @@ func (agent *ActionAgent) runHealthCheckProtected() {
 		// we need to ignore this health error
 		record.IgnoredError = healthErr
 		record.IgnoreErrorExpr = ignoreErrorExpr.String()
+		healthErr = nil
+	}
+	if healthErr == health.ErrSlaveNotRunning {
+		// The slave is not running, so we just don't know the
+		// delay.  Use a maximum delay, so we can let vtgate
+		// find the right replica, instead of erroring out.
+		// (this works as the check below is a strict > operator).
+		replicationDelay = *unhealthyThreshold
 		healthErr = nil
 	}
 	if healthErr == nil {

@@ -127,6 +127,9 @@ type FakeMysqlDaemon struct {
 	// CurrentMasterport is returned by SlaveStatus
 	CurrentMasterPort int
 
+	// SecondsBehindMaster is returned by SlaveStatus
+	SecondsBehindMaster uint
+
 	// ReadOnly is the current value of the flag
 	ReadOnly bool
 
@@ -254,11 +257,12 @@ func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
 // SlaveStatus is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) SlaveStatus() (replication.Status, error) {
 	return replication.Status{
-		Position:        fmd.CurrentMasterPosition,
-		SlaveIORunning:  fmd.Replicating,
-		SlaveSQLRunning: fmd.Replicating,
-		MasterHost:      fmd.CurrentMasterHost,
-		MasterPort:      fmd.CurrentMasterPort,
+		Position:            fmd.CurrentMasterPosition,
+		SecondsBehindMaster: fmd.SecondsBehindMaster,
+		SlaveIORunning:      fmd.Replicating,
+		SlaveSQLRunning:     fmd.Replicating,
+		MasterHost:          fmd.CurrentMasterHost,
+		MasterPort:          fmd.CurrentMasterPort,
 	}, nil
 }
 
