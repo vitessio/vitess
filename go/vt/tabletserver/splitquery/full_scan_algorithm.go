@@ -3,6 +3,7 @@ package splitquery
 import (
 	"fmt"
 
+	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
@@ -60,26 +61,29 @@ func NewFullScanAlgorithm(
 	return result, nil
 }
 
-const (
-	maxIterations int64 = 100000
-)
+// getSplitColumns is part of the SplitAlgorithmInterface interface
+func (a *FullScanAlgorithm) getSplitColumns() []*schema.TableColumn {
+	return a.splitParams.splitColumns
+}
 
-func (algorithm *FullScanAlgorithm) generateBoundaries() ([]tuple, error) {
-	prevTuple, err := algorithm.executeQuery(algorithm.initialQuery)
+func (a *FullScanAlgorithm) generateBoundaries() ([]tuple, error) {
+	prevTuple, err := a.executeQuery(a.initialQuery)
 	if err != nil {
 		return nil, err
 	}
-	result := make([]tuple, 0, algorithm.splitParams.splitCount)
+	result := make([]tuple, 0, a.splitParams.splitCount)
 	var iteration int64
+	// We have to allow for more than splitCount query-parts since we use an estimated
+	// tableSize in the equation 'numRowsPerQueryPart * splitCount = tableSize'.
+	maxIterations := 10 * a.splitParams.splitCount
 	for iteration = 0; prevTuple != nil; iteration++ {
-		// TODO(erez): Change maxIterations to use some function of splitParams.splitCount
 		if iteration > maxIterations {
 			panic(fmt.Sprintf("splitquery.FullScanAlgorithm.generateBoundaries(): didn't terminate"+
-				" after %v iterations. FullScanAlgorithm: %v", maxIterations, algorithm))
+				" after %v iterations (=10*splitCount). FullScanAlgorithm: %v", maxIterations, a))
 		}
 		result = append(result, prevTuple)
-		algorithm.populatePrevTupleInBindVariables(prevTuple, algorithm.noninitialQuery.BindVariables)
-		prevTuple, err = algorithm.executeQuery(algorithm.noninitialQuery)
+		a.populatePrevTupleInBindVariables(prevTuple, a.noninitialQuery.BindVariables)
+		prevTuple, err = a.executeQuery(a.noninitialQuery)
 		if err != nil {
 			return nil, err
 		}
@@ -87,14 +91,14 @@ func (algorithm *FullScanAlgorithm) generateBoundaries() ([]tuple, error) {
 	return result, nil
 }
 
-func (algorithm *FullScanAlgorithm) populatePrevTupleInBindVariables(
+func (a *FullScanAlgorithm) populatePrevTupleInBindVariables(
 	prevTuple tuple, bindVariables map[string]interface{}) {
-	if len(prevTuple) != len(algorithm.prevBindVariableNames) {
-		panic(fmt.Sprintf("len(prevTuple) != len(algorithm.prevBindVariableNames): %v != %v",
-			len(prevTuple), len(algorithm.prevBindVariableNames)))
+	if len(prevTuple) != len(a.prevBindVariableNames) {
+		panic(fmt.Sprintf("len(prevTuple) != len(a.prevBindVariableNames): %v != %v",
+			len(prevTuple), len(a.prevBindVariableNames)))
 	}
 	for i, tupleElement := range prevTuple {
-		bindVariables[algorithm.prevBindVariableNames[i]] = tupleElement.ToNative()
+		bindVariables[a.prevBindVariableNames[i]] = tupleElement.ToNative()
 	}
 }
 
@@ -122,7 +126,7 @@ func buildInitialQueryAST(splitParams *SplitParams) *sqlparser.Select {
 			*splitParams))
 	}
 	resultSelectAST := *splitParams.selectAST
-	resultSelectAST.SelectExprs = convertColumnNamesToSelectExprs(splitParams.splitColumns)
+	resultSelectAST.SelectExprs = convertColumnsToSelectExprs(splitParams.splitColumns)
 	resultSelectAST.Limit = buildLimitClause(splitParams.numRowsPerQueryPart, 1)
 	resultSelectAST.OrderBy = buildOrderByClause(splitParams.splitColumns)
 	return &resultSelectAST
@@ -147,7 +151,7 @@ func buildNoninitialQuery(
 		resultSelectAST,
 		constructTupleInequality(
 			convertBindVariableNamesToValExpr(prevBindVariableNames),
-			convertColumnNamesToValExpr(splitParams.splitColumns),
+			convertColumnsToValExpr(splitParams.splitColumns),
 			false /* strict */))
 	return &querytypes.BoundQuery{
 		Sql:           sqlparser.String(resultSelectAST),
@@ -155,13 +159,13 @@ func buildNoninitialQuery(
 	}
 }
 
-func convertColumnNamesToSelectExprs(columnNames []sqlparser.ColIdent) sqlparser.SelectExprs {
-	result := make([]sqlparser.SelectExpr, 0, len(columnNames))
-	for _, columnName := range columnNames {
+func convertColumnsToSelectExprs(columns []*schema.TableColumn) sqlparser.SelectExprs {
+	result := make([]sqlparser.SelectExpr, 0, len(columns))
+	for _, column := range columns {
 		result = append(result,
 			&sqlparser.NonStarExpr{
 				Expr: &sqlparser.ColName{
-					Name: columnName,
+					Name: sqlparser.ColIdent(column.Name),
 				},
 			})
 	}
@@ -175,12 +179,12 @@ func buildLimitClause(offset, rowcount int64) *sqlparser.Limit {
 	}
 }
 
-func buildOrderByClause(splitColumns []sqlparser.ColIdent) sqlparser.OrderBy {
+func buildOrderByClause(splitColumns []*schema.TableColumn) sqlparser.OrderBy {
 	result := make(sqlparser.OrderBy, 0, len(splitColumns))
 	for _, splitColumn := range splitColumns {
 		result = append(result,
 			&sqlparser.Order{
-				Expr:      &sqlparser.ColName{Name: splitColumn},
+				Expr:      &sqlparser.ColName{Name: sqlparser.ColIdent(splitColumn.Name)},
 				Direction: sqlparser.AscScr,
 			},
 		)
@@ -192,16 +196,16 @@ const (
 	prevBindVariablePrefix string = "_splitquery_prev_"
 )
 
-func buildPrevBindVariableNames(splitColumns []sqlparser.ColIdent) []string {
+func buildPrevBindVariableNames(splitColumns []*schema.TableColumn) []string {
 	result := make([]string, 0, len(splitColumns))
 	for _, splitColumn := range splitColumns {
-		result = append(result, prevBindVariablePrefix+splitColumn.Lowered())
+		result = append(result, prevBindVariablePrefix+splitColumn.Name.Lowered())
 	}
 	return result
 }
 
-func (algorithm *FullScanAlgorithm) executeQuery(boundQuery *querytypes.BoundQuery) (tuple, error) {
-	sqlResult, err := algorithm.sqlExecuter.SQLExecute(
+func (a *FullScanAlgorithm) executeQuery(boundQuery *querytypes.BoundQuery) (tuple, error) {
+	sqlResult, err := a.sqlExecuter.SQLExecute(
 		boundQuery.Sql,
 		boundQuery.BindVariables)
 	if err != nil {
@@ -211,9 +215,9 @@ func (algorithm *FullScanAlgorithm) executeQuery(boundQuery *querytypes.BoundQue
 		return nil, nil
 	}
 	if len(sqlResult.Rows) == 1 {
-		if len(sqlResult.Rows[0]) != len(algorithm.splitParams.splitColumns) {
+		if len(sqlResult.Rows[0]) != len(a.splitParams.splitColumns) {
 			panic(fmt.Sprintf("splitquery.executeQuery: expected a tuple of length %v. Got tuple: %v",
-				len(algorithm.splitParams.splitColumns), sqlResult.Rows[0]))
+				len(a.splitParams.splitColumns), sqlResult.Rows[0]))
 		}
 		return sqlResult.Rows[0], nil
 	}
