@@ -195,7 +195,7 @@ const (
 func buildPrevBindVariableNames(splitColumns []sqlparser.ColIdent) []string {
 	result := make([]string, 0, len(splitColumns))
 	for _, splitColumn := range splitColumns {
-		result = append(result, prevBindVariablePrefix+splitColumn.Val())
+		result = append(result, prevBindVariablePrefix+splitColumn.Lowered())
 	}
 	return result
 }

@@ -29,9 +29,9 @@ func NewSplitter(splitParams *SplitParams, algorithm SplitAlgorithmInterface) *S
 	splitter.endBindVariableNames = make([]string, 0, len(splitter.splitParams.splitColumns))
 	for _, splitColumn := range splitter.splitParams.splitColumns {
 		splitter.startBindVariableNames = append(
-			splitter.startBindVariableNames, startBindVariablePrefix+splitColumn.Val())
+			splitter.startBindVariableNames, startBindVariablePrefix+splitColumn.Lowered())
 		splitter.endBindVariableNames = append(
-			splitter.endBindVariableNames, endBindVariablePrefix+splitColumn.Val())
+			splitter.endBindVariableNames, endBindVariablePrefix+splitColumn.Lowered())
 	}
 	splitter.initQueryPartSQLs()
 	return &splitter

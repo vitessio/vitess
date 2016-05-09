@@ -198,16 +198,16 @@ func getPrimaryKeyColumns(table *schema.Table) []sqlparser.ColIdent {
 // make up some index in 'table'.
 func areColumnsAPrefixOfAnIndex(columns []sqlparser.ColIdent, table *schema.Table) bool {
 	for _, index := range table.Indexes {
-		if isStringSlicePrefix(columns, index.Columns) {
+		if isColIdentSlicePrefix(columns, index.Columns) {
 			return true
 		}
 	}
 	return false
 }
 
-// isStringSlicePrefix returns true if 'potentialPrefix' is a prefix of the slice
+// isColIdentSlicePrefix returns true if 'potentialPrefix' is a prefix of the slice
 // 'slice'.
-func isStringSlicePrefix(potentialPrefix []sqlparser.ColIdent, slice []cistring.CIString) bool {
+func isColIdentSlicePrefix(potentialPrefix []sqlparser.ColIdent, slice []cistring.CIString) bool {
 	if len(potentialPrefix) > len(slice) {
 		return false
 	}
