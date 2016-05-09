@@ -135,9 +135,11 @@ class TestBackup(unittest.TestCase):
     # insert more data on the master
     self._insert_master(2)
 
-    # now bring up the other slave, health check on, init_tablet on, restore on
+    # now bring up the other slave, replication lag check on,
+    # init_tablet on, restore on.
     tablet_replica2.start_vttablet(wait_for_state='SERVING',
-                                   target_tablet_type='replica',
+                                   enable_replication_lag_check=True,
+                                   init_tablet_type='replica',
                                    init_keyspace='test_keyspace',
                                    init_shard='0',
                                    supports_backups=True)

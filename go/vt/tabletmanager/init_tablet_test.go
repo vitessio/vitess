@@ -84,7 +84,7 @@ func TestInitTablet(t *testing.T) {
 		t.Errorf("wrong gRPC port for tablet: %v", ti.PortMap["grpc"])
 	}
 
-	// try to init again, this time with health check on
+	// try to init again, this time with old deprecated target_tablet_type
 	*initTabletType = ""
 	*targetTabletType = "replica"
 	if err := agent.InitTablet(port, gRPCPort); err != nil {
@@ -135,7 +135,7 @@ func TestInitTablet(t *testing.T) {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
 
-	// init again with the tablet_type set, no healthcheck
+	// init again with the tablet_type set, using init_tablet_type
 	// (also check db name override and tags here)
 	*initTabletType = "replica"
 	*targetTabletType = ""

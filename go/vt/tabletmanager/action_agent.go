@@ -192,11 +192,6 @@ func NewActionAgent(
 		return nil, fmt.Errorf("agent.InitTablet failed: %v", err)
 	}
 
-	// Publish and set the TargetTabletType. Not a global var
-	// since it should never be changed.
-	statsTabletType := stats.NewString("TargetTabletType")
-	statsTabletType.Set(*targetTabletType)
-
 	// Create the TabletType stats
 	agent.exportStats = true
 	agent.statsTabletType = stats.NewString("TabletType")

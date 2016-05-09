@@ -6,7 +6,6 @@ package topo
 
 import (
 	"fmt"
-	"reflect"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -178,16 +177,6 @@ func (ti *TabletInfo) IsInServingGraph() bool {
 // IsSlaveType returns if this tablet's type is a slave
 func (ti *TabletInfo) IsSlaveType() bool {
 	return IsSlaveType(ti.Type)
-}
-
-// IsHealthEqual compares the two health maps, and
-// returns true if they're equivalent.
-func IsHealthEqual(left, right map[string]string) bool {
-	if len(left) == 0 && len(right) == 0 {
-		return true
-	}
-
-	return reflect.DeepEqual(left, right)
 }
 
 // NewTabletInfo returns a TabletInfo basing on tablet with the

@@ -12,7 +12,6 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
-	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -20,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -33,7 +31,7 @@ const (
 
 var (
 	healthCheckInterval = flag.Duration("health_check_interval", 20*time.Second, "Interval between health checks")
-	targetTabletType    = flag.String("target_tablet_type", "", "The tablet type we are thriving to be when healthy.")
+	targetTabletType    = flag.String("target_tablet_type", "", "DEPRECATED, use init_tablet_type now.")
 	degradedThreshold   = flag.Duration("degraded_threshold", defaultDegradedThreshold, "replication lag after which a replica is considered degraded (only used in status UI)")
 	unhealthyThreshold  = flag.Duration("unhealthy_threshold", defaultUnhealthyThreshold, "replication lag  after which a replica is considered unhealthy")
 )
@@ -118,23 +116,11 @@ func ConfigHTML() template.HTML {
 		healthCheckInterval, degradedThreshold, unhealthyThreshold))
 }
 
-// IsRunningHealthCheck indicates if the agent is configured to run healthchecks.
-func (agent *ActionAgent) IsRunningHealthCheck() bool {
-	return *targetTabletType != ""
-}
-
+// initHealthCheck will start the health check background go routine,
+// and configure the healthcheck shutdown. It is only run by NewActionAgent
+// for real vttablet agents (not by tests, nor vtcombo).
 func (agent *ActionAgent) initHealthCheck() {
-	if !agent.IsRunningHealthCheck() {
-		log.Infof("No target_tablet_type specified, disabling any health check")
-		return
-	}
-
-	tt, err := topoproto.ParseTabletType(*targetTabletType)
-	if err != nil {
-		log.Fatalf("Invalid target tablet type %v: %v", *targetTabletType, err)
-	}
-
-	log.Infof("Starting periodic health check every %v with target_tablet_type=%v", *healthCheckInterval, *targetTabletType)
+	log.Infof("Starting periodic health check every %v", *healthCheckInterval)
 	t := timer.NewTimer(*healthCheckInterval)
 	servenv.OnTermSync(func() {
 		// When we enter lameduck mode, we want to not call
@@ -144,7 +130,7 @@ func (agent *ActionAgent) initHealthCheck() {
 		t.Stop()
 
 		// Now we can finish up and force ourselves to not healthy.
-		agent.terminateHealthChecks(tt)
+		agent.terminateHealthChecks()
 	})
 	t.Start(func() {
 		agent.runHealthCheck()
@@ -318,62 +304,34 @@ func (agent *ActionAgent) runHealthCheckProtected() {
 // We will clean up our state, and set query service to lame duck mode.
 // We only do something if we are in targetTabletType state, and then
 // we just go to spare.
-func (agent *ActionAgent) terminateHealthChecks(targetTabletType topodatapb.TabletType) {
+func (agent *ActionAgent) terminateHealthChecks() {
 	agent.actionMutex.Lock()
 	defer agent.actionMutex.Unlock()
 	log.Info("agent.terminateHealthChecks is starting")
 
 	// read the current tablet record
 	tablet := agent.Tablet()
-
-	if tablet.Type != targetTabletType {
-		// If we're MASTER, SPARE, WORKER, etc. then the healthcheck shouldn't
-		// touch it. We also skip gracePeriod in that case.
-		log.Infof("Tablet in state %v, not changing it", tablet.Type)
+	if tablet.Type == topodatapb.TabletType_MASTER || !topo.IsInServingGraph(tablet.Type) {
+		// If we're MASTER, SPARE, WORKER, etc. then we
+		// shouldn't enter lameduck. We do lameduck to not
+		// trigger errors on clients.
+		log.Infof("Tablet in state %v, not entering lameduck", tablet.Type)
 		return
 	}
 
-	var wg sync.WaitGroup
-
 	// Go lameduck for gracePeriod.
 	// We've already checked above that we're not MASTER.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
 
-		// Enter new lameduck mode for gracePeriod, then shut down queryservice.
-		// New lameduck mode means keep accepting queries, but advertise unhealthy.
-		// After we return from this synchronous OnTermSync hook, servenv may decide
-		// to wait even longer, for the rest of the time specified by its own
-		// "-lameduck-period" flag. During that extra period, queryservice will be
-		// in old lameduck mode, meaning stay alive but reject new queries.
-		agent.enterLameduck("terminating healthchecks")
-		agent.broadcastHealth()
-		time.Sleep(*gracePeriod)
-		agent.disallowQueries(tablet.Type, "terminating healthchecks")
-	}()
-
-	// Change Type to spare and clear HealthMap.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		// We don't wait until after the lameduck period, because we want to make
-		// sure this gets done before servenv onTermTimeout.
-		tablet, err := topotools.ChangeOwnType(agent.batchCtx, agent.TopoServer, agent.initialTablet, topodatapb.TabletType_SPARE)
-		if err != nil {
-			log.Infof("Error updating tablet record: %v", err)
-			return
-		}
-
-		// Update the serving graph in our cell, only if we're dealing with
-		// a serving type
-		if err := agent.updateServingGraph(tablet, targetTabletType); err != nil {
-			log.Warningf("updateServingGraph failed (will still run post action callbacks, serving graph might be out of date): %v", err)
-		}
-	}()
-
-	wg.Wait()
+	// Enter new lameduck mode for gracePeriod, then shut down queryservice.
+	// New lameduck mode means keep accepting queries, but advertise unhealthy.
+	// After we return from this synchronous OnTermSync hook, servenv may decide
+	// to wait even longer, for the rest of the time specified by its own
+	// "-lameduck-period" flag. During that extra period, queryservice will be
+	// in old lameduck mode, meaning stay alive but reject new queries.
+	agent.enterLameduck("terminating healthchecks")
+	agent.broadcastHealth()
+	time.Sleep(*gracePeriod)
+	agent.disallowQueries(tablet.Type, "terminating healthchecks")
 }
 
 // updateServingGraph will update the serving graph if we need to.

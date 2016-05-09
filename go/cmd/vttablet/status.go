@@ -178,17 +178,15 @@ func addStatusParts(qsc tabletserver.Controller) {
 			"DisableQueryService": agent.DisableQueryService(),
 		}
 	})
-	if agent.IsRunningHealthCheck() {
-		servenv.AddStatusFuncs(template.FuncMap{
-			"github_com_youtube_vitess_health_html_name": healthHTMLName,
-		})
-		servenv.AddStatusPart("Health", healthTemplate, func() interface{} {
-			return &healthStatus{
-				Records: agent.History.Records(),
-				Config:  tabletmanager.ConfigHTML(),
-			}
-		})
-	}
+	servenv.AddStatusFuncs(template.FuncMap{
+		"github_com_youtube_vitess_health_html_name": healthHTMLName,
+	})
+	servenv.AddStatusPart("Health", healthTemplate, func() interface{} {
+		return &healthStatus{
+			Records: agent.History.Records(),
+			Config:  tabletmanager.ConfigHTML(),
+		}
+	})
 	qsc.AddStatusPart()
 	servenv.AddStatusPart("Binlog Player", binlogTemplate, func() interface{} {
 		return agent.BinlogPlayerMap.Status()

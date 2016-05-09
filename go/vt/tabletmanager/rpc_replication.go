@@ -416,15 +416,6 @@ func (agent *ActionAgent) isMasterEligible() (bool, error) {
 	switch agent.Tablet().Type {
 	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:
 		return true, nil
-	case topodatapb.TabletType_SPARE:
-		// If we're SPARE, it could be because healthcheck is enabled.
-		tt, err := topoproto.ParseTabletType(*targetTabletType)
-		if err != nil {
-			return false, fmt.Errorf("can't determine if tablet is master-eligible: currently SPARE and no -target_tablet_type flag specified")
-		}
-		if tt == topodatapb.TabletType_REPLICA {
-			return true, nil
-		}
 	}
 
 	return false, nil

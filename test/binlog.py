@@ -83,13 +83,10 @@ def setUpModule():
     utils.run_vtctl(['RunHealthCheck', src_replica.tablet_alias])
     utils.run_vtctl(['RunHealthCheck', src_rdonly.tablet_alias])
 
-    # Create destination shard.
+    # Create destination shard (won't be serving as there is no DB)
     dst_master.init_tablet('master', 'test_keyspace', '-')
     dst_replica.init_tablet('replica', 'test_keyspace', '-')
-    # Start masters with enabled healthcheck (necessary for resolving the
-    # destination master).
-    dst_master.start_vttablet(wait_for_state='NOT_SERVING',
-                              target_tablet_type='replica')
+    dst_master.start_vttablet(wait_for_state='NOT_SERVING')
     dst_replica.start_vttablet(wait_for_state='NOT_SERVING')
 
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/-',
@@ -99,7 +96,7 @@ def setUpModule():
     utils.run_vtctl(['CopySchemaShard', src_replica.tablet_alias,
                      'test_keyspace/-'], auto_log=True)
 
-    # run the clone worked (this is a degenerate case, source and destination
+    # run the clone worker (this is a degenerate case, source and destination
     # both have the full keyrange. Happens to work correctly).
     logging.debug('Running the clone worker to start binlog stream...')
     utils.run_vtworker(['--cell', 'test_nj',

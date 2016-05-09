@@ -407,7 +407,8 @@ class Tablet(object):
       extra_args=None, extra_env=None, include_mysql_port=True,
       init_tablet_type=None, init_keyspace=None,
       init_shard=None, init_db_name_override=None,
-      supports_backups=False, grace_period='1s', enable_semi_sync=True):
+      supports_backups=False, grace_period='1s', enable_semi_sync=True,
+      enable_replication_lag_check=False):
     """Starts a vttablet process, and returns it.
 
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -471,6 +472,12 @@ class Tablet(object):
       self.tablet_type = target_tablet_type
       args.extend(['-target_tablet_type', target_tablet_type,
                    '-health_check_interval', '2s',
+                   '-enable_replication_lag_check',
+                   '-degraded_threshold', '5s'])
+    elif enable_replication_lag_check:
+      # FIXME(alainjobart) eventually target_tablet_type will be gone.
+      # then we will just use enable_replication_lag_check when needed.
+      args.extend(['-health_check_interval', '2s',
                    '-enable_replication_lag_check',
                    '-degraded_threshold', '5s'])
 
