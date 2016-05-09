@@ -53,7 +53,7 @@ func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.
 	if err != nil {
 		return err
 	}
-	agent.runHealthCheckProtected(tabletType)
+	agent.runHealthCheckProtected()
 	return nil
 }
 
@@ -77,8 +77,8 @@ func (agent *ActionAgent) RefreshState(ctx context.Context) {
 
 // RunHealthCheck will manually run the health check on the tablet.
 // Should be called under RPCWrap.
-func (agent *ActionAgent) RunHealthCheck(ctx context.Context, targetTabletType topodatapb.TabletType) {
-	agent.runHealthCheck(targetTabletType)
+func (agent *ActionAgent) RunHealthCheck(ctx context.Context) {
+	agent.runHealthCheck()
 }
 
 // IgnoreHealthError sets the regexp for health check errors to ignore.

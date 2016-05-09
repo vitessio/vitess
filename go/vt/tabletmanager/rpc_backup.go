@@ -46,12 +46,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	name := fmt.Sprintf("%v.%v", time.Now().UTC().Format("2006-01-02.150405"), topoproto.TabletAliasString(tablet.Alias))
 	returnErr := mysqlctl.Backup(ctx, agent.MysqlDaemon, l, dir, name, concurrency, agent.hookExtraEnv())
 
-	// and change our type back to the appropriate value:
-	// - if healthcheck is enabled, go to spare
-	// - if not, go back to original type
-	if agent.IsRunningHealthCheck() {
-		originalType = topodatapb.TabletType_SPARE
-	}
+	// change our type back to the original value
 	_, err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, originalType)
 	if err != nil {
 		// failure in changing the topology type is probably worse,
@@ -61,6 +56,14 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		}
 		returnErr = err
 	}
+
+	// let's update our internal state (start query service and other things)
+	if err := agent.refreshTablet(ctx, "after backup"); err != nil {
+		return fmt.Errorf("failed to update state after backup: %v", err)
+	}
+
+	// and re-run health check to be sure to capture any replication delay
+	agent.runHealthCheckProtected()
 
 	return returnErr
 }

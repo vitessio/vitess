@@ -169,8 +169,8 @@ var commands = []commandGroup{
 				"<tablet alias>",
 				"Reloads the tablet record on the specified tablet."},
 			{"RunHealthCheck", commandRunHealthCheck,
-				"<tablet alias> <target tablet type>",
-				"Runs a health check on a remote tablet with the specified target type."},
+				"<tablet alias>",
+				"Runs a health check on a remote tablet."},
 			{"IgnoreHealthError", commandIgnoreHealthError,
 				"<tablet alias> <ignore regexp>",
 				"Sets the regexp for health check errors to ignore on the specified tablet. The pattern has implicit ^$ anchors. Set to empty string or restart vttablet to stop ignoring anything."},
@@ -881,14 +881,10 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <tablet alias> and <target tablet type> arguments are required for the RunHealthCheck command.")
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("The <tablet alias> argument is required for the RunHealthCheck command.")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	servedType, err := parseTabletType(subFlags.Arg(1), []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
 	if err != nil {
 		return err
 	}
@@ -896,7 +892,7 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo, servedType)
+	return wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo)
 }
 
 func commandIgnoreHealthError(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1412,7 +1408,7 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 	// Always run an explicit healthcheck first to make sure we don't see any outdated values.
 	// This is especially true for tests and automation where there is no pause of multiple seconds
 	// between commands and the periodic healthcheck did not run again yet.
-	if err := wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo, topodatapb.TabletType_REPLICA); err != nil {
+	if err := wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo); err != nil {
 		return fmt.Errorf("failed to run explicit healthcheck on tablet: %v err: %v", tabletInfo, err)
 	}
 

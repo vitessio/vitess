@@ -130,7 +130,7 @@ func (s *server) RunHealthCheck(ctx context.Context, request *tabletmanagerdatap
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &tabletmanagerdatapb.RunHealthCheckResponse{}
 	return response, s.agent.RPCWrap(ctx, actionnode.TabletActionRunHealthCheck, request, response, func() error {
-		s.agent.RunHealthCheck(ctx, request.TabletType)
+		s.agent.RunHealthCheck(ctx)
 		return nil
 	})
 }

@@ -33,8 +33,8 @@ const (
 
 var (
 	healthCheckInterval = flag.Duration("health_check_interval", 20*time.Second, "Interval between health checks")
-	targetTabletType    = flag.String("target_tablet_type", "", "The tablet type we are thriving to be when healthy. When not healthy, we'll go to spare.")
-	degradedThreshold   = flag.Duration("degraded_threshold", defaultDegradedThreshold, "replication lag after which a replica is considered degraded")
+	targetTabletType    = flag.String("target_tablet_type", "", "The tablet type we are thriving to be when healthy.")
+	degradedThreshold   = flag.Duration("degraded_threshold", defaultDegradedThreshold, "replication lag after which a replica is considered degraded (only used in status UI)")
 	unhealthyThreshold  = flag.Duration("unhealthy_threshold", defaultUnhealthyThreshold, "replication lag  after which a replica is considered unhealthy")
 )
 
@@ -147,7 +147,7 @@ func (agent *ActionAgent) initHealthCheck() {
 		agent.terminateHealthChecks(tt)
 	})
 	t.Start(func() {
-		agent.runHealthCheck(tt)
+		agent.runHealthCheck()
 	})
 	t.Trigger()
 }
@@ -166,14 +166,14 @@ func (agent *ActionAgent) initHealthCheck() {
 //
 // This will not change the TabletControl record, but will use it
 // to see if we should be running the query service.
-func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType) {
+func (agent *ActionAgent) runHealthCheck() {
 	agent.actionMutex.Lock()
 	defer agent.actionMutex.Unlock()
 
-	agent.runHealthCheckProtected(targetTabletType)
+	agent.runHealthCheckProtected()
 }
 
-func (agent *ActionAgent) runHealthCheckProtected(targetTabletType topodatapb.TabletType) {
+func (agent *ActionAgent) runHealthCheckProtected() {
 	// read the current tablet record and tablet control
 	agent.mutex.Lock()
 	tablet := proto.Clone(agent._tablet).(*topodatapb.Tablet)
@@ -184,7 +184,7 @@ func (agent *ActionAgent) runHealthCheckProtected(targetTabletType topodatapb.Ta
 	// figure out if we should be running the query service and update stream
 	shouldBeServing := false
 	runUpdateStream := true
-	if topo.IsRunningQueryService(targetTabletType) && agent.BinlogPlayerMap != nil && !agent.BinlogPlayerMap.isRunningFilteredReplication() {
+	if topo.IsRunningQueryService(tablet.Type) && agent.BinlogPlayerMap != nil && !agent.BinlogPlayerMap.isRunningFilteredReplication() {
 		shouldBeServing = true
 		if tabletControl != nil {
 			if tabletControl.DisableQueryService {

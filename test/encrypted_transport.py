@@ -303,7 +303,7 @@ class TestSecure(unittest.TestCase):
         'test_keyspace'])
     for t in [shard_0_master, shard_0_slave]:
       utils.run_vtctl(tmclient_extra_args('vttablet-client-1') + [
-          'RunHealthCheck', t.tablet_alias, 'replica'])
+          'RunHealthCheck', t.tablet_alias])
 
     # start vtgate
     utils.VtGate().start(extra_args=tabletconn_extra_args('vttablet-client-1')+

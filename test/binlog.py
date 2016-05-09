@@ -80,8 +80,8 @@ def setUpModule():
 
     # run a health check on source replica so it responds to discovery
     # (for binlog players) and on the source rdonlys (for workers)
-    utils.run_vtctl(['RunHealthCheck', src_replica.tablet_alias, 'replica'])
-    utils.run_vtctl(['RunHealthCheck', src_rdonly.tablet_alias, 'rdonly'])
+    utils.run_vtctl(['RunHealthCheck', src_replica.tablet_alias])
+    utils.run_vtctl(['RunHealthCheck', src_rdonly.tablet_alias])
 
     # Create destination shard.
     dst_master.init_tablet('master', 'test_keyspace', '-')

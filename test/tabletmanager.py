@@ -375,7 +375,7 @@ class TestTabletManager(unittest.TestCase):
 
     # make sure the unhealthy slave goes to healthy
     tablet_62044.wait_for_vttablet_state('SERVING')
-    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias, 'replica'])
+    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
     self.check_healthz(tablet_62044, True)
 
     # make sure the master is still master
@@ -386,7 +386,7 @@ class TestTabletManager(unittest.TestCase):
     # stop replication, make sure we go unhealthy.
     utils.run_vtctl(['StopSlave', tablet_62044.tablet_alias])
     tablet_62044.wait_for_vttablet_state('NOT_SERVING')
-    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias, 'replica'])
+    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
     self.check_healthz(tablet_62044, False)
 
     # make sure status web page is unhappy
@@ -406,7 +406,7 @@ class TestTabletManager(unittest.TestCase):
     # then restart replication, make sure we go back to healthy
     utils.run_vtctl(['StartSlave', tablet_62044.tablet_alias])
     tablet_62044.wait_for_vttablet_state('SERVING')
-    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias, 'replica'])
+    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
 
     # make sure status web page is healthy
     self.assertIn('>healthy</span></div>', tablet_62044.get_status())
@@ -480,7 +480,7 @@ class TestTabletManager(unittest.TestCase):
                      tablet_62344.tablet_alias])
 
     # Trigger healthcheck to save time waiting for the next interval.
-    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias, 'rdonly'])
+    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
     tablet_62044.wait_for_vttablet_state('SERVING')
     self.check_healthz(tablet_62044, True)
 
@@ -491,7 +491,7 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl(['ChangeSlaveType', tablet_62044.tablet_alias, 'worker'])
     utils.run_vtctl(['StopSlave', tablet_62044.tablet_alias])
     # Trigger healthcheck explicitly to avoid waiting for the next interval.
-    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias, 'rdonly'])
+    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
     utils.wait_for_tablet_type(tablet_62044.tablet_alias, 'worker')
     self.check_healthz(tablet_62044, False)
     # Make sure that replication got disabled.
@@ -504,7 +504,7 @@ class TestTabletManager(unittest.TestCase):
     # Restart replication. Tablet will become healthy again.
     utils.run_vtctl(['ChangeSlaveType', tablet_62044.tablet_alias, 'rdonly'])
     utils.run_vtctl(['StartSlave', tablet_62044.tablet_alias])
-    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias, 'rdonly'])
+    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
     self.check_healthz(tablet_62044, True)
 
     # kill the tablets
@@ -556,12 +556,12 @@ class TestTabletManager(unittest.TestCase):
     utils.wait_procs(start_procs)
 
     # the master should still be healthy
-    utils.run_vtctl(['RunHealthCheck', tablet_62344.tablet_alias, 'replica'],
+    utils.run_vtctl(['RunHealthCheck', tablet_62344.tablet_alias],
                     auto_log=True)
     self.check_healthz(tablet_62344, True)
 
     # the slave won't be healthy at first, as replication is not running
-    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias, 'replica'],
+    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias],
                     auto_log=True)
     self.check_healthz(tablet_62044, False)
     tablet_62044.wait_for_vttablet_state('NOT_SERVING')
@@ -570,7 +570,7 @@ class TestTabletManager(unittest.TestCase):
     tablet_62044.mquery('', ['START SLAVE'])
 
     # wait for the tablet to become healthy and fix its mysql port
-    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias, 'replica'],
+    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias],
                     auto_log=True)
     tablet_62044.wait_for_vttablet_state('SERVING')
     self.check_healthz(tablet_62044, True)
@@ -608,7 +608,7 @@ class TestTabletManager(unittest.TestCase):
 
     # run health check on both, make sure they are both healthy
     for t in tablet_62344, tablet_62044:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       self.check_healthz(t, True)
 
@@ -618,7 +618,7 @@ class TestTabletManager(unittest.TestCase):
 
     # run health check on both, make sure they are both healthy
     for t in tablet_62344, tablet_62044:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       self.check_healthz(t, True)
 
@@ -628,7 +628,7 @@ class TestTabletManager(unittest.TestCase):
 
     # run health check on both, make sure they are both healthy
     for t in tablet_62344, tablet_62044:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       self.check_healthz(t, True)
 

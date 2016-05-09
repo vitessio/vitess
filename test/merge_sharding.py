@@ -290,9 +290,9 @@ index by_msg (msg)
     # run a health check on source replicas so they respond to discovery
     # (for binlog players) and on the source rdonlys (for workers)
     for t in [shard_0_replica, shard_1_replica]:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'])
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
     for t in [shard_0_rdonly, shard_1_rdonly]:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
 
     # create the merge shards
     shard_dest_master.init_tablet('master', 'test_keyspace', '-80')
@@ -377,8 +377,7 @@ index by_msg (msg)
 
     # use vtworker to compare the data (after health-checking the destination
     # rdonly tablets so discovery works)
-    utils.run_vtctl(['RunHealthCheck', shard_dest_rdonly.tablet_alias,
-                     'rdonly'])
+    utils.run_vtctl(['RunHealthCheck', shard_dest_rdonly.tablet_alias])
     logging.debug('Running vtworker SplitDiff on first half')
     utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
                         '--exclude_tables', 'unrelated',

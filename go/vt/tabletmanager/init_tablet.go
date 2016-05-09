@@ -68,9 +68,8 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 
 	} else if *targetTabletType != "" {
 		// use the targetTabletType, check it's not master.
-		// FIXME(alainjobart): refactor the flags: we should add a
-		// boolean to enable healthcheck, and just use
-		// init_tablet_type.
+		// FIXME(alainjobart): refactor the flags: we should switch
+		// to init_tablet_type, and always enable healthcheck.
 		var err error
 		tabletType, err = topoproto.ParseTabletType(*targetTabletType)
 		if err != nil {

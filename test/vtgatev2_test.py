@@ -1180,7 +1180,7 @@ class TestFailures(BaseTestCase):
     # then restart replication, and write data, make sure we go back to healthy
     for t in [self.replica_tablet]:
       utils.run_vtctl(['StartSlave', t.tablet_alias])
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       t.wait_for_vttablet_state('SERVING')
     utils.vtgate.wait_for_endpoints(
@@ -1218,7 +1218,7 @@ class TestFailures(BaseTestCase):
     # then restart replication, and write data, make sure we go back to healthy
     for t in [self.replica_tablet, self.replica_tablet2]:
       utils.run_vtctl(['StartSlave', t.tablet_alias])
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       t.wait_for_vttablet_state('SERVING')
     self.replica_tablet2.kill_vttablet()
@@ -1268,7 +1268,7 @@ class TestFailures(BaseTestCase):
     # then restart replication, and write data, make sure we go back to healthy
     for t in [self.replica_tablet]:
       utils.run_vtctl(['StartSlave', t.tablet_alias])
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       t.wait_for_vttablet_state('SERVING')
     utils.vtgate.wait_for_endpoints(
@@ -1358,7 +1358,7 @@ class TestFailures(BaseTestCase):
     # then restart replication, and write data, make sure we go back to healthy
     for t in [self.replica_tablet]:
       utils.run_vtctl(['StartSlave', t.tablet_alias])
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       t.wait_for_vttablet_state('SERVING')
     utils.vtgate.wait_for_endpoints(
@@ -1515,7 +1515,7 @@ class TestFailures(BaseTestCase):
     # then restart replication, and write data, make sure we go back to healthy
     for t in [self.replica_tablet, self.replica_tablet2]:
       utils.run_vtctl(['StartSlave', t.tablet_alias])
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       t.wait_for_vttablet_state('SERVING')
     utils.vtgate.wait_for_endpoints(
@@ -1612,7 +1612,7 @@ class TestFailures(BaseTestCase):
     utils.wait_procs([self.replica_tablet2.start_mysql(),])
     for t in [self.replica_tablet2]:
       utils.run_vtctl(['StartSlave', t.tablet_alias])
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       t.wait_for_vttablet_state('SERVING')
     utils.vtgate.wait_for_endpoints(

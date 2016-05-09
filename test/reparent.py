@@ -536,7 +536,7 @@ class TestReparent(unittest.TestCase):
 
     # make sure the master health stream says it's the master too
     # (health check is disabled on these servers, force it first)
-    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias, 'replica'])
+    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
     health = utils.run_vtctl_json(['VtTabletStreamHealth',
                                    '-count', '1',
                                    tablet_62044.tablet_alias])

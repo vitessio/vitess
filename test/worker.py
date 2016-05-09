@@ -212,9 +212,9 @@ class TestBaseSplitClone(unittest.TestCase):
     # Enforce a health check instead of waiting for the next periodic one.
     # (saves up to 1 second execution time on average)
     for t in shard_tablets.replicas:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'])
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
     for t in shard_tablets.rdonlys:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
 
     # Wait for tablet state to change after starting all tablets. This allows
     # us to start all tablets at once, instead of sequentially waiting.

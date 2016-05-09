@@ -1013,7 +1013,7 @@ def check_tablet_query_service(
 
   if tablet.tablet_type == 'rdonly':
     # Run RunHealthCheck to be sure the tablet doesn't change its serving state.
-    run_vtctl(['RunHealthCheck', tablet.tablet_alias, 'rdonly'],
+    run_vtctl(['RunHealthCheck', tablet.tablet_alias],
               auto_log=True)
 
     tablet_vars = get_vars(tablet.port)

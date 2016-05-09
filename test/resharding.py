@@ -445,9 +445,9 @@ primary key (name)
     # run a health check on source replicas so they respond to discovery
     # (for binlog players) and on the source rdonlys (for workers)
     for t in [shard_0_replica, shard_1_slave1]:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'])
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
     for t in [shard_0_ny_rdonly, shard_1_ny_rdonly, shard_1_rdonly1]:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
 
     # create the split shards
     shard_2_master.init_tablet('master', 'test_keyspace', '80-c0')
@@ -558,7 +558,7 @@ primary key (name)
 
     # use vtworker to compare the data (after health-checking the destination
     # rdonly tablets so discovery works)
-    utils.run_vtctl(['RunHealthCheck', shard_3_rdonly1.tablet_alias, 'rdonly'])
+    utils.run_vtctl(['RunHealthCheck', shard_3_rdonly1.tablet_alias])
     logging.debug('Running vtworker SplitDiff')
     utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
                         '--exclude_tables', 'unrelated',
@@ -590,7 +590,7 @@ primary key (name)
     utils.run_vtctl(['ChangeSlaveType', shard_1_slave1.tablet_alias, 'spare'])
     shard_1_slave2.wait_for_vttablet_state('SERVING')
     shard_1_slave1.wait_for_vttablet_state('NOT_SERVING')
-    utils.run_vtctl(['RunHealthCheck', shard_1_slave2.tablet_alias, 'replica'])
+    utils.run_vtctl(['RunHealthCheck', shard_1_slave2.tablet_alias])
 
     # test data goes through again
     logging.debug('Inserting lots of data on source shard')
@@ -607,7 +607,7 @@ primary key (name)
     # check query service is off on master 2 and master 3, as filtered
     # replication is enabled. Even health check that is enabled on
     # master 3 should not interfere (we run it to be sure).
-    utils.run_vtctl(['RunHealthCheck', shard_3_master.tablet_alias, 'replica'],
+    utils.run_vtctl(['RunHealthCheck', shard_3_master.tablet_alias],
                     auto_log=True)
     for master in [shard_2_master, shard_3_master]:
       utils.check_tablet_query_service(self, master, False, False)

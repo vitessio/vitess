@@ -180,7 +180,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	// and update the mysql port to 3306
 	before := time.Now()
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 12 * time.Second
-	agent.runHealthCheck(targetTabletType)
+	agent.runHealthCheck()
 	ti, err := agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
@@ -211,7 +211,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 13 * time.Second
 	agent.HealthReporter.(*fakeHealthCheck).reportError = fmt.Errorf("tablet is unhealthy")
 	before = time.Now()
-	agent.runHealthCheck(targetTabletType)
+	agent.runHealthCheck()
 	ti, err = agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
@@ -258,7 +258,6 @@ func TestQueryServiceNotStarting(t *testing.T) {
 		// so we have to do this here.
 		a.QueryServiceControl.(*tabletservermock.Controller).SetServingTypeError = fmt.Errorf("test cannot start query service")
 	})
-	targetTabletType := topodatapb.TabletType_REPLICA
 
 	// we should not be serving.
 	if agent.QueryServiceControl.IsServing() {
@@ -273,7 +272,7 @@ func TestQueryServiceNotStarting(t *testing.T) {
 
 	// Now we can run another health check, it will stay unhealthy forever.
 	before := time.Now()
-	agent.runHealthCheck(targetTabletType)
+	agent.runHealthCheck()
 	ti, err := agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
@@ -332,7 +331,7 @@ func TestQueryServiceStopped(t *testing.T) {
 	// first health check, should keep us in replica / healthy
 	before := time.Now()
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 14 * time.Second
-	agent.runHealthCheck(targetTabletType)
+	agent.runHealthCheck()
 	ti, err := agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
@@ -370,7 +369,7 @@ func TestQueryServiceStopped(t *testing.T) {
 	// health check should now fail
 	before = time.Now()
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 15 * time.Second
-	agent.runHealthCheck(targetTabletType)
+	agent.runHealthCheck()
 	ti, err = agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
@@ -429,7 +428,7 @@ func TestTabletControl(t *testing.T) {
 	// first health check, should keep us in replica, just broadcast
 	before := time.Now()
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 16 * time.Second
-	agent.runHealthCheck(targetTabletType)
+	agent.runHealthCheck()
 	ti, err := agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
@@ -496,7 +495,7 @@ func TestTabletControl(t *testing.T) {
 	// check running a health check will not start it again
 	before = time.Now()
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 17 * time.Second
-	agent.runHealthCheck(targetTabletType)
+	agent.runHealthCheck()
 	ti, err = agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
@@ -525,7 +524,7 @@ func TestTabletControl(t *testing.T) {
 	agent.HealthReporter.(*fakeHealthCheck).reportError = fmt.Errorf("tablet is unhealthy")
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 18 * time.Second
 	before = time.Now()
-	agent.runHealthCheck(targetTabletType)
+	agent.runHealthCheck()
 	ti, err = agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
@@ -555,7 +554,7 @@ func TestTabletControl(t *testing.T) {
 	agent.HealthReporter.(*fakeHealthCheck).reportError = nil
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 19 * time.Second
 	before = time.Now()
-	agent.runHealthCheck(targetTabletType)
+	agent.runHealthCheck()
 	ti, err = agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
@@ -669,7 +668,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 
 	// Run health check to make sure we stay good
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 20 * time.Second
-	agent.runHealthCheck(topodatapb.TabletType_REPLICA)
+	agent.runHealthCheck()
 	ti, err = agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
@@ -749,7 +748,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 
 	// Running a healthcheck won't put the QueryService back to SERVING.
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 22 * time.Second
-	agent.runHealthCheck(topodatapb.TabletType_REPLICA)
+	agent.runHealthCheck()
 	ti, err = agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
