@@ -89,9 +89,6 @@ message Tablet {
 
   // tablet tags
   map<string, string> tags = 10;
-
-  // tablet health information
-  map<string, string> health_map = 11;
 }
 
 // A Shard contains data about a subset of the data whithin a keyspace.
@@ -218,9 +215,6 @@ message EndPoint {
 
   // The ports opened for service.
   map<string, int32> port_map = 3;
-
-  // The health entries.
-  map<string, string> health_map = 4;
 }
 
 // EndPoints corresponds to a list of tablets.

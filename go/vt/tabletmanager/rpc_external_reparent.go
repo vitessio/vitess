@@ -102,7 +102,6 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 	log.Infof("fastTabletExternallyReparented: executing change callback for state change to MASTER")
 	oldTablet := proto.Clone(tablet).(*topodatapb.Tablet)
 	tablet.Type = topodatapb.TabletType_MASTER
-	tablet.HealthMap = nil
 	agent.setTablet(tablet)
 
 	wg.Add(1)
@@ -183,7 +182,6 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		updatedTablet, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias,
 			func(tablet *topodatapb.Tablet) error {
 				tablet.Type = topodatapb.TabletType_MASTER
-				tablet.HealthMap = nil
 				return nil
 			})
 		if err != nil {

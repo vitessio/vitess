@@ -20,16 +20,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
 
-const (
-	// ReplicationLag is the key in the health map to indicate high
-	// replication lag
-	ReplicationLag = "replication_lag"
-
-	// ReplicationLagHigh is the value in the health map to indicate high
-	// replication lag
-	ReplicationLagHigh = "high"
-)
-
 // IsTrivialTypeChange returns if this db type be trivially reassigned
 // without changes to the replication graph
 func IsTrivialTypeChange(oldTabletType, newTabletType topodatapb.TabletType) bool {
@@ -110,12 +100,6 @@ func TabletEndPoint(tablet *topodatapb.Tablet) (*topodatapb.EndPoint, error) {
 		entry.PortMap[name] = int32(port)
 	}
 
-	if len(tablet.HealthMap) > 0 {
-		entry.HealthMap = make(map[string]string, len(tablet.HealthMap))
-		for k, v := range tablet.HealthMap {
-			entry.HealthMap[k] = v
-		}
-	}
 	return entry, nil
 }
 

@@ -134,7 +134,6 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 	// Change our type to master if not already
 	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
 		tablet.Type = topodatapb.TabletType_MASTER
-		tablet.HealthMap = nil
 		return nil
 	}); err != nil {
 		return "", err
@@ -332,7 +331,6 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 	_, err = agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
 		if tablet.Type == topodatapb.TabletType_MASTER {
 			tablet.Type = topodatapb.TabletType_SPARE
-			tablet.HealthMap = nil
 			return nil
 		}
 		return topo.ErrNoUpdateNeeded
