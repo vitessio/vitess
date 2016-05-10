@@ -15,7 +15,7 @@ type mysqlReplicationLag struct {
 
 	// store the last time we successfully got the lag, so if we
 	// can't get the lag any more, we can extrapolate.
-	lastKnownValue uint
+	lastKnownValue time.Duration
 	lastKnownTime  time.Time
 }
 
@@ -31,15 +31,17 @@ func (mrl *mysqlReplicationLag) Report(isSlaveType, shouldQueryServiceBeRunning 
 	}
 	if err != nil {
 		if !mrl.lastKnownTime.IsZero() {
-			// we can extrapolate
+			// we can extrapolate with the worst possible
+			// value (that is we made no replication
+			// progress since last time, and just fell more behind)
 			elapsed := mrl.now().Sub(mrl.lastKnownTime)
-			return elapsed + time.Duration(mrl.lastKnownValue)*time.Second, nil
+			return elapsed + mrl.lastKnownValue, nil
 		}
 		return 0, err
 	}
-	mrl.lastKnownValue = slaveStatus.SecondsBehindMaster
+	mrl.lastKnownValue = time.Duration(slaveStatus.SecondsBehindMaster) * time.Second
 	mrl.lastKnownTime = mrl.now()
-	return time.Duration(slaveStatus.SecondsBehindMaster) * time.Second, nil
+	return mrl.lastKnownValue, nil
 }
 
 // HTMLName is part of the health.Reporter interface

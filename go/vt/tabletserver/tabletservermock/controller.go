@@ -44,6 +44,9 @@ type Controller struct {
 	// QueryServiceEnabled is a state variable
 	QueryServiceEnabled bool
 
+	// IsInLameduck is a state variable
+	IsInLameduck bool
+
 	// SetServingTypeError is the return value for SetServingType
 	SetServingTypeError error
 
@@ -99,6 +102,7 @@ func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, serving
 			TabletType: tabletType,
 		}
 	}
+	tqsc.IsInLameduck = false
 	return stateChanged, tqsc.SetServingTypeError
 }
 
@@ -149,10 +153,11 @@ func (tqsc *Controller) BroadcastHealth(terTimestamp int64, stats *querypb.Realt
 	tqsc.BroadcastData <- &BroadcastData{
 		TERTimestamp:  terTimestamp,
 		RealtimeStats: *stats,
-		Serving:       tqsc.QueryServiceEnabled,
+		Serving:       tqsc.QueryServiceEnabled && (!tqsc.IsInLameduck),
 	}
 }
 
 // EnterLameduck implements tabletserver.Controller.
 func (tqsc *Controller) EnterLameduck() {
+	tqsc.IsInLameduck = true
 }

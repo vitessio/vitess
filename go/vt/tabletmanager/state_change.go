@@ -263,9 +263,9 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		}
 	} else {
 		// Query service should be stopped.
-		if (oldTablet.Type == topodatapb.TabletType_REPLICA ||
-			oldTablet.Type == topodatapb.TabletType_RDONLY) &&
-			newTablet.Type == topodatapb.TabletType_SPARE {
+		if topo.IsSubjectToLameduck(oldTablet.Type) &&
+			newTablet.Type == topodatapb.TabletType_SPARE &&
+			*gracePeriod > 0 {
 			// When a non-MASTER serving type is going SPARE,
 			// put query service in lameduck during gracePeriod.
 			agent.enterLameduck(disallowQueryReason)

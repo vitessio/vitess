@@ -157,6 +157,12 @@ func createTestAgent(ctx context.Context, t *testing.T, preStart func(*ActionAge
 // TestHealthCheckControlsQueryService verifies that a tablet going healthy
 // starts the query service, and going unhealthy stops it.
 func TestHealthCheckControlsQueryService(t *testing.T) {
+	// we need an actual grace period set, so lameduck is enabled
+	*gracePeriod = 10 * time.Millisecond
+	defer func() {
+		*gracePeriod = 0
+	}()
+
 	ctx := context.Background()
 	agent, _ := createTestAgent(ctx, t, nil)
 
@@ -231,12 +237,20 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	if got := agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType; got != topodatapb.TabletType_REPLICA {
 		t.Errorf("invalid tabletserver target: got = %v, want = %v", got, topodatapb.TabletType_REPLICA)
 	}
-	if _, err := expectBroadcastData(agent.QueryServiceControl, false, "tablet is unhealthy", 13); err != nil {
+
+	// first we get the lameduck broadcast, with no error and old
+	// replication delay
+	if _, err := expectBroadcastData(agent.QueryServiceControl, false, "", 12); err != nil {
 		t.Fatal(err)
 	}
 
-	// QueryService disabled since we are unhealthy now.
+	// then query service is disabled since we are unhealthy now.
 	if err := expectStateChange(agent.QueryServiceControl, false, topodatapb.TabletType_REPLICA); err != nil {
+		t.Fatal(err)
+	}
+
+	// and the associated broadcast
+	if _, err := expectBroadcastData(agent.QueryServiceControl, false, "tablet is unhealthy", 13); err != nil {
 		t.Fatal(err)
 	}
 
@@ -249,7 +263,9 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	}
 }
 
-// TestErrSlaveNotRunningIsHealthy verifies that a tablet whose healthcheck reports health.ErrSlaveNotRunning is still considered healthy with high replication lag.
+// TestErrSlaveNotRunningIsHealthy verifies that a tablet whose
+// healthcheck reports health.ErrSlaveNotRunning is still considered
+// healthy with high replication lag.
 func TestErrSlaveNotRunningIsHealthy(t *testing.T) {
 	*unhealthyThreshold = 10 * time.Minute
 	ctx := context.Background()

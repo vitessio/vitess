@@ -285,6 +285,7 @@ func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
 
 // SetMaster sets replication master, and waits for the
 // reparent_journal table entry up to context timeout
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	parent, err := agent.TopoServer.GetTablet(ctx, parentAlias)
 	if err != nil {
@@ -327,7 +328,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 		return err
 	}
 
-	// change our type to spare if we used to be the master
+	// change our type to REPLICA if we used to be the master
 	runHealthCheck := false
 	_, err = agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
 		if tablet.Type == topodatapb.TabletType_MASTER {

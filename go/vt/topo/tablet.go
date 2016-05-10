@@ -56,6 +56,29 @@ func IsRunningQueryService(tt topodatapb.TabletType) bool {
 	return false
 }
 
+// IsSubjectToLameduck returns if a tablet is subject to being
+// lameduck.  Lameduck is a transition period where we are still
+// allowed to serve, but we tell the clients we are going away
+// soon. Typically, a vttablet will still serve, but broadcast a
+// non-serving state through its health check. then vtgate will ctahc
+// that non-serving state, and stop sending queries.
+//
+// Masters are not subject to lameduck, as we usually want to transition
+// them as fast as possible.
+//
+// Replica and rdonly will use lameduck when going from healthy to
+// unhealhty (either because health check fails, or they're shutting down).
+//
+// Other types are probably not serving user visible traffic, so they
+// need to transition as fast as possible too.
+func IsSubjectToLameduck(tt topodatapb.TabletType) bool {
+	switch tt {
+	case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+		return true
+	}
+	return false
+}
+
 // IsRunningUpdateStream returns if a tablet is running the update stream
 // RPC service.
 func IsRunningUpdateStream(tt topodatapb.TabletType) bool {

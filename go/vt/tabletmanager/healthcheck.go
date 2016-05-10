@@ -174,7 +174,7 @@ func (agent *ActionAgent) runHealthCheckProtected() {
 	// figure out if we should be running the query service and update stream
 	shouldBeServing := false
 	runUpdateStream := true
-	if topo.IsRunningQueryService(tablet.Type) && agent.BinlogPlayerMap != nil && !agent.BinlogPlayerMap.isRunningFilteredReplication() {
+	if topo.IsRunningQueryService(tablet.Type) && (agent.BinlogPlayerMap == nil || !agent.BinlogPlayerMap.isRunningFilteredReplication()) {
 		shouldBeServing = true
 		if tabletControl != nil {
 			if tabletControl.DisableQueryService {
@@ -234,13 +234,34 @@ func (agent *ActionAgent) runHealthCheckProtected() {
 			// changed because we'll broadcast the latest health
 			// status after this immediately anway.
 			_ /* state changed */, healthErr = agent.allowQueries(tablet.Type)
+
+			if healthErr == nil {
+				// we were unhealthy, are now healthy,
+				// make sure we have the right mysql port.
+				if updatedTablet := agent.checkTabletMysqlPort(agent.batchCtx, tablet); updatedTablet != nil {
+					agent.setTablet(updatedTablet)
+					tablet = updatedTablet
+				}
+			}
 		}
 	} else {
 		if isServing {
-			// We are not healthy or should not be running the query service.
+			// We are not healthy or should not be running
+			// the query service.
+
+			// First enter lameduck during gracePeriod to
+			// limit client errors.
+			if topo.IsSubjectToLameduck(tablet.Type) && *gracePeriod > 0 {
+				// put query service in lameduck during gracePeriod.
+				agent.enterLameduck("health check failed")
+				agent.broadcastHealth()
+				time.Sleep(*gracePeriod)
+			}
+
 			//
-			// We don't care if the QueryService state actually changed because we'll
-			// broadcast the latest health status after this immediately anway.
+			// We don't care if the QueryService state actually
+			// changed because we'll broadcast the latest health
+			// status after this immediately anway.
 			_ /* state changed */, err := agent.disallowQueries(tablet.Type,
 				fmt.Sprintf("health-check failure(%v)", healthErr),
 			)
@@ -322,27 +343,31 @@ func (agent *ActionAgent) terminateHealthChecks() {
 
 	// read the current tablet record
 	tablet := agent.Tablet()
-	if tablet.Type == topodatapb.TabletType_MASTER || !topo.IsInServingGraph(tablet.Type) {
+	if !topo.IsSubjectToLameduck(tablet.Type) {
 		// If we're MASTER, SPARE, WORKER, etc. then we
 		// shouldn't enter lameduck. We do lameduck to not
 		// trigger errors on clients.
 		log.Infof("Tablet in state %v, not entering lameduck", tablet.Type)
-		return
+	} else if *gracePeriod == 0 {
+		log.Infof("No serving_state_grace_period set, not entering lameduck")
+
+	} else {
+		// Go lameduck for gracePeriod.
+		// We've already checked above that we're not MASTER.
+
+		// Enter new lameduck mode for gracePeriod, then shut down
+		// queryservice.  New lameduck mode means keep accepting
+		// queries, but advertise unhealthy.  After we return from
+		// this synchronous OnTermSync hook, servenv may decide to
+		// wait even longer, for the rest of the time specified by its
+		// own "-lameduck-period" flag. During that extra period,
+		// queryservice will be in old lameduck mode, meaning stay
+		// alive but reject new queries.
+		agent.enterLameduck("terminating healthchecks")
+		agent.broadcastHealth()
+		time.Sleep(*gracePeriod)
 	}
 
-	// Go lameduck for gracePeriod.
-	// We've already checked above that we're not MASTER.
-
-	// Enter new lameduck mode for gracePeriod, then shut down
-	// queryservice.  New lameduck mode means keep accepting
-	// queries, but advertise unhealthy.  After we return from
-	// this synchronous OnTermSync hook, servenv may decide to
-	// wait even longer, for the rest of the time specified by its
-	// own "-lameduck-period" flag. During that extra period,
-	// queryservice will be in old lameduck mode, meaning stay
-	// alive but reject new queries.
-	agent.enterLameduck("terminating healthchecks")
-	agent.broadcastHealth()
-	time.Sleep(*gracePeriod)
+	// in any case, we're done now
 	agent.disallowQueries(tablet.Type, "terminating healthchecks")
 }
