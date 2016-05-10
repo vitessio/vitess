@@ -555,23 +555,37 @@ class TestTabletManager(unittest.TestCase):
                     auto_log=True)
     self.check_healthz(tablet_62344, True)
 
-    # the slave won't be healthy at first, as replication has not been
-    # running ever while vttablet was running, so we don't have a
-    # backup baseline.
-    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias],
-                    auto_log=True)
-    self.check_healthz(tablet_62044, False)
-    tablet_62044.wait_for_vttablet_state('NOT_SERVING')
-
-    # restart replication
-    tablet_62044.mquery('', ['START SLAVE'])
-
-    # wait for the tablet to become healthy and fix its mysql port
+    # the slave will now be healthy, but report a very high replication
+    # lag, because it can't figure out what it exactly is.
     utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias],
                     auto_log=True)
     tablet_62044.wait_for_vttablet_state('SERVING')
     self.check_healthz(tablet_62044, True)
 
+    health = utils.run_vtctl_json(['VtTabletStreamHealth',
+                                   '-count', '1',
+                                   tablet_62044.tablet_alias])
+    self.assertTrue('seconds_behind_master' in health['realtime_stats'])
+    self.assertEqual(health['realtime_stats']['seconds_behind_master'], 7200)
+    self.assertIn('serving', health)
+
+    # restart replication, wait until health check goes small
+    # (a value of zero is default and won't be in structure)
+    tablet_62044.mquery('', ['START SLAVE'])
+    timeout = 10
+    while True:
+      utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias],
+                      auto_log=True)
+      health = utils.run_vtctl_json(['VtTabletStreamHealth',
+                                     '-count', '1',
+                                     tablet_62044.tablet_alias])
+      if 'serving' in health and (
+          ('seconds_behind_master' not in health['realtime_stats']) or
+          (health['realtime_stats']['seconds_behind_master'] < 30)):
+        break
+      timeout = utils.wait_step('health delay goes back down', timeout)
+
+    # wait for the tablet to fix its mysql port
     for t in tablet_62344, tablet_62044:
       # wait for mysql port to show up
       timeout = 10

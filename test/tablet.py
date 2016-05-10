@@ -596,8 +596,8 @@ class Tablet(object):
                 '  vttablet %s in state %s != %s', self.tablet_alias, s,
                 expected)
       timeout = utils.wait_step(
-          'waiting for state %s (last seen state: %s)' %
-          (expected, last_seen_state),
+          'waiting for %s state %s (last seen state: %s)' %
+          (self.tablet_alias, expected, last_seen_state),
           timeout, sleep_time=0.1)
 
   def wait_for_mysqlctl_socket(self, timeout=30.0):
