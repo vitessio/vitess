@@ -18,10 +18,11 @@ import (
 // situations where comparisons are performed in a loop against
 // the same object.
 type CIString struct {
+	// This artifact prevents this struct from being compared
+	// with itself. It consumes no space as long as it's not the
+	// last field in the struct.
+	_            [0]struct{ notComparable []byte }
 	val, lowered string
-	// nocompare prevents this struct from being compared
-	// with itself.
-	nocompare func()
 }
 
 // New creates a new CIString.

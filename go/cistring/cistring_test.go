@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
+	"unsafe"
 )
 
 func TestCIString(t *testing.T) {
@@ -57,5 +58,13 @@ func TestToStrings(t *testing.T) {
 	got := ToStrings(in)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ToStrings(in)=%+v, want %+v", got, want)
+	}
+}
+
+func TestSize(t *testing.T) {
+	size := unsafe.Sizeof(New(""))
+	want := 2 * unsafe.Sizeof("")
+	if size != want {
+		t.Errorf("Size of CIString: %d, want 32", want)
 	}
 }
