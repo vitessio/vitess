@@ -414,22 +414,23 @@ primary key (name)
     # we set full_mycnf_args to True as a test in the KIT_BYTES case
     full_mycnf_args = keyspace_id_type == keyrange_constants.KIT_BYTES
 
-    # create databases so vttablet can start behaving normally
+    # create databases so vttablet can start behaving somewhat normally
     for t in [shard_0_master, shard_0_replica, shard_0_ny_rdonly,
               shard_1_master, shard_1_slave1, shard_1_slave2, shard_1_ny_rdonly,
               shard_1_rdonly1]:
       t.create_db('vt_test_keyspace')
       t.start_vttablet(wait_for_state=None, full_mycnf_args=full_mycnf_args)
 
-    # wait for the tablets
+    # wait for the tablets (replication is not setup, the slaves won't be
+    # healthy)
     shard_0_master.wait_for_vttablet_state('SERVING')
-    shard_0_replica.wait_for_vttablet_state('SERVING')
-    shard_0_ny_rdonly.wait_for_vttablet_state('SERVING')
+    shard_0_replica.wait_for_vttablet_state('NOT_SERVING')
+    shard_0_ny_rdonly.wait_for_vttablet_state('NOT_SERVING')
     shard_1_master.wait_for_vttablet_state('SERVING')
-    shard_1_slave1.wait_for_vttablet_state('SERVING')
-    shard_1_slave2.wait_for_vttablet_state('SERVING')
-    shard_1_ny_rdonly.wait_for_vttablet_state('SERVING')
-    shard_1_rdonly1.wait_for_vttablet_state('SERVING')
+    shard_1_slave1.wait_for_vttablet_state('NOT_SERVING')
+    shard_1_slave2.wait_for_vttablet_state('NOT_SERVING')
+    shard_1_ny_rdonly.wait_for_vttablet_state('NOT_SERVING')
+    shard_1_rdonly1.wait_for_vttablet_state('NOT_SERVING')
 
     # reparent to make the tablets work
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/-80',
@@ -459,12 +460,8 @@ primary key (name)
 
     # start vttablet on the split shards (no db created,
     # so they're all not serving)
-    # Start masters with enabled healthcheck (necessary for resolving the
-    # destination master).
-    shard_2_master.start_vttablet(wait_for_state=None,
-                                  target_tablet_type='replica')
-    shard_3_master.start_vttablet(wait_for_state=None,
-                                  target_tablet_type='replica')
+    shard_2_master.start_vttablet(wait_for_state=None)
+    shard_3_master.start_vttablet(wait_for_state=None)
     for t in [shard_2_replica1, shard_2_replica2,
               shard_3_replica, shard_3_rdonly1]:
       t.start_vttablet(wait_for_state=None)
@@ -487,11 +484,6 @@ primary key (name)
         keyspace_id_type=keyspace_id_type,
         sharding_column_name='custom_sharding_key')
 
-    # TODO(mberlin): Use a different approach for the same effect because this
-    #                one doesn't work when the healthcheck is enabled on the
-    #                tablet. In that case the healthcheck will race with the
-    #                test and convert the SPARE tablet back to REPLICA the next
-    #                time it runs.
     # disable shard_1_slave2, so we're sure filtered replication will go
     # from shard_1_slave1
     utils.run_vtctl(['ChangeSlaveType', shard_1_slave2.tablet_alias, 'spare'])

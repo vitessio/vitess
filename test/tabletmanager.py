@@ -358,10 +358,8 @@ class TestTabletManager(unittest.TestCase):
     for t in tablet_62344, tablet_62044:
       t.create_db('vt_test_keyspace')
 
-    tablet_62344.start_vttablet(wait_for_state=None,
-                                enable_replication_lag_check=True)
+    tablet_62344.start_vttablet(wait_for_state=None)
     tablet_62044.start_vttablet(wait_for_state=None,
-                                enable_replication_lag_check=True,
                                 lameduck_period='5s',
                                 init_tablet_type='replica',
                                 init_keyspace='test_keyspace',
@@ -462,10 +460,8 @@ class TestTabletManager(unittest.TestCase):
     for t in tablet_62344, tablet_62044:
       t.create_db('vt_test_keyspace')
 
-    tablet_62344.start_vttablet(wait_for_state=None,
-                                enable_replication_lag_check=True)
+    tablet_62344.start_vttablet(wait_for_state=None)
     tablet_62044.start_vttablet(wait_for_state=None,
-                                enable_replication_lag_check=True,
                                 init_tablet_type='rdonly',
                                 init_keyspace='test_keyspace',
                                 init_shard='0')
@@ -537,7 +533,6 @@ class TestTabletManager(unittest.TestCase):
                              include_mysql_port=False)
     for t in tablet_62344, tablet_62044:
       t.start_vttablet(wait_for_state=None,
-                       enable_replication_lag_check=True,
                        full_mycnf_args=True, include_mysql_port=False)
     for t in tablet_62344, tablet_62044:
       t.wait_for_vttablet_state('NOT_SERVING')
@@ -603,7 +598,6 @@ class TestTabletManager(unittest.TestCase):
     for t in tablet_62344, tablet_62044:
       t.create_db('vt_test_keyspace')
       t.start_vttablet(wait_for_state=None,
-                       enable_replication_lag_check=True,
                        lameduck_period='5s',
                        init_tablet_type='replica',
                        init_keyspace='test_keyspace',
@@ -659,7 +653,6 @@ class TestTabletManager(unittest.TestCase):
 
     # Starts unhealthy because of "no slave status" (not replicating).
     tablet_62344.start_vttablet(wait_for_state='NOT_SERVING',
-                                enable_replication_lag_check=True,
                                 init_tablet_type='replica',
                                 init_keyspace='test_keyspace',
                                 init_shard='0')

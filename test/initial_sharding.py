@@ -259,13 +259,13 @@ index by_msg (msg)
   def test_resharding(self):
     # create the keyspace with just one shard
     shard_master.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard='0')
     shard_replica.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard='0')
     shard_rdonly1.start_vttablet(
-        wait_for_state=None, target_tablet_type='rdonly',
+        wait_for_state=None, init_tablet_type='rdonly',
         init_keyspace='test_keyspace', init_shard='0')
 
     for t in [shard_master, shard_replica, shard_rdonly1]:
@@ -315,22 +315,22 @@ index by_msg (msg)
 
         # create the split shards
     shard_0_master.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard='-80')
     shard_0_replica.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard='-80')
     shard_0_rdonly1.start_vttablet(
-        wait_for_state=None, target_tablet_type='rdonly',
+        wait_for_state=None, init_tablet_type='rdonly',
         init_keyspace='test_keyspace', init_shard='-80')
     shard_1_master.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard='80-')
     shard_1_replica.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard='80-')
     shard_1_rdonly1.start_vttablet(
-        wait_for_state=None, target_tablet_type='rdonly',
+        wait_for_state=None, init_tablet_type='rdonly',
         init_keyspace='test_keyspace', init_shard='80-')
 
     # start vttablet on the split shards (no db created,

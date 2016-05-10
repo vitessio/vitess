@@ -112,7 +112,7 @@ def setup_tablets():
     t.create_db('vt_test_keyspace')
     for create_table in create_tables:
       t.mquery(shard_0_master.dbname, create_table)
-    t.start_vttablet(wait_for_state=None, target_tablet_type='replica')
+    t.start_vttablet(wait_for_state=None)
 
   for t in [shard_0_master]:
     t.wait_for_vttablet_state('SERVING')

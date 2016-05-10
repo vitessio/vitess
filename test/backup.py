@@ -138,7 +138,6 @@ class TestBackup(unittest.TestCase):
     # now bring up the other slave, replication lag check on,
     # init_tablet on, restore on.
     tablet_replica2.start_vttablet(wait_for_state='SERVING',
-                                   enable_replication_lag_check=True,
                                    init_tablet_type='replica',
                                    init_keyspace='test_keyspace',
                                    init_shard='0',
