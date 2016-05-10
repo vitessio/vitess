@@ -110,11 +110,32 @@ type ActionAgent struct {
 	// the record.
 	initialTablet *topodatapb.Tablet
 
-	// mutex protects the following fields, only hold the mutex
-	// to update the fields, nothing else.
-	mutex            sync.Mutex
-	_tablet          *topodatapb.Tablet
-	_tabletControl   *topodatapb.Shard_TabletControl
+	// mutex protects all the following fields (that start with '_'),
+	// only hold the mutex to update the fields, nothing else.
+	mutex sync.Mutex
+
+	// _tablet has the Tablet record we last read from the topology server.
+	_tablet *topodatapb.Tablet
+
+	// _disallowQueryService is set to the reason we should be
+	// disallowing queries from being served. It is set from changeCallback,
+	// and used by healthcheck. If empty, we should allow queries.
+	// It is set if the current type is not serving, if a TabletControl
+	// tells us not to serve, or if filtered replication is running.
+	_disallowQueryService string
+
+	// _enableUpdateStream is true if we should be running the
+	// UpdateStream service. Note if we can't start the query
+	// service, or if the server health check fails, we will
+	// disable UpdateStream.
+	_enableUpdateStream bool
+
+	// _blacklistedTables has the list of tables we are currently
+	// blacklisting.
+	_blacklistedTables []string
+
+	// set to true if mysql is not up when we start. That way, we
+	// only log once that we'r waiting for mysql.
 	_waitingForMysql bool
 
 	// if the agent is healthy, this is nil. Otherwise it contains
@@ -359,33 +380,38 @@ func (agent *ActionAgent) Healthy() (time.Duration, error) {
 	return agent._replicationDelay, healthy
 }
 
-// BlacklistedTables reads the list of blacklisted tables from the TabletControl
-// record (if any) stored in the agent, protected by mutex.
+// BlacklistedTables returns the list of currently blacklisted tables.
 func (agent *ActionAgent) BlacklistedTables() []string {
-	var blacklistedTables []string
 	agent.mutex.Lock()
-	if agent._tabletControl != nil {
-		blacklistedTables = agent._tabletControl.BlacklistedTables
-	}
-	agent.mutex.Unlock()
-	return blacklistedTables
+	defer agent.mutex.Unlock()
+	return agent._blacklistedTables
 }
 
-// DisableQueryService reads the DisableQueryService field from the TabletControl
-// record (if any) stored in the agent, protected by mutex.
-func (agent *ActionAgent) DisableQueryService() bool {
-	disable := false
+// DisallowQueryService returns the reason the query service should be
+// disabled, if any.
+func (agent *ActionAgent) DisallowQueryService() string {
 	agent.mutex.Lock()
-	if agent._tabletControl != nil {
-		disable = agent._tabletControl.DisableQueryService
-	}
-	agent.mutex.Unlock()
-	return disable
+	defer agent.mutex.Unlock()
+	return agent._disallowQueryService
 }
 
-func (agent *ActionAgent) setTabletControl(tc *topodatapb.Shard_TabletControl) {
+// EnableUpdateStream returns if we should enable update stream or not
+func (agent *ActionAgent) EnableUpdateStream() bool {
 	agent.mutex.Lock()
-	agent._tabletControl = proto.Clone(tc).(*topodatapb.Shard_TabletControl)
+	defer agent.mutex.Unlock()
+	return agent._enableUpdateStream
+}
+
+func (agent *ActionAgent) setServicesDesiredState(disallowQueryService string, enableUpdateStream bool) {
+	agent.mutex.Lock()
+	agent._disallowQueryService = disallowQueryService
+	agent._enableUpdateStream = enableUpdateStream
+	agent.mutex.Unlock()
+}
+
+func (agent *ActionAgent) setBlacklistedTables(value []string) {
+	agent.mutex.Lock()
+	agent._blacklistedTables = value
 	agent.mutex.Unlock()
 }
 

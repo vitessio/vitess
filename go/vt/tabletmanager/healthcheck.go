@@ -167,21 +167,10 @@ func (agent *ActionAgent) runHealthCheckProtected() {
 	// read the current tablet record and tablet control
 	agent.mutex.Lock()
 	tablet := proto.Clone(agent._tablet).(*topodatapb.Tablet)
-	tabletControl := proto.Clone(agent._tabletControl).(*topodatapb.Shard_TabletControl)
+	shouldBeServing := agent._disallowQueryService == ""
+	runUpdateStream := agent._enableUpdateStream
 	ignoreErrorExpr := agent._ignoreHealthErrorExpr
 	agent.mutex.Unlock()
-
-	// figure out if we should be running the query service and update stream
-	shouldBeServing := false
-	runUpdateStream := true
-	if topo.IsRunningQueryService(tablet.Type) && (agent.BinlogPlayerMap == nil || !agent.BinlogPlayerMap.isRunningFilteredReplication()) {
-		shouldBeServing = true
-		if tabletControl != nil {
-			if tabletControl.DisableQueryService {
-				shouldBeServing = false
-			}
-		}
-	}
 
 	// run the health check
 	record := &HealthRecord{}
@@ -233,7 +222,7 @@ func (agent *ActionAgent) runHealthCheckProtected() {
 			// We don't care if the QueryService state actually
 			// changed because we'll broadcast the latest health
 			// status after this immediately anway.
-			_ /* state changed */, healthErr = agent.allowQueries(tablet.Type)
+			_ /* state changed */, healthErr = agent.QueryServiceControl.SetServingType(tablet.Type, true, nil)
 
 			if healthErr == nil {
 				// we were unhealthy, are now healthy,
@@ -252,21 +241,15 @@ func (agent *ActionAgent) runHealthCheckProtected() {
 			// First enter lameduck during gracePeriod to
 			// limit client errors.
 			if topo.IsSubjectToLameduck(tablet.Type) && *gracePeriod > 0 {
-				// put query service in lameduck during gracePeriod.
-				agent.enterLameduck("health check failed")
-				agent.broadcastHealth()
-				time.Sleep(*gracePeriod)
+				agent.lameduck("health check failed")
 			}
 
-			//
 			// We don't care if the QueryService state actually
 			// changed because we'll broadcast the latest health
 			// status after this immediately anway.
-			_ /* state changed */, err := agent.disallowQueries(tablet.Type,
-				fmt.Sprintf("health-check failure(%v)", healthErr),
-			)
-			if err != nil {
-				log.Errorf("disallowQueries failed: %v", err)
+			log.Infof("Disabling query service because of health-check failure: %v", healthErr)
+			if _ /* state changed */, err := agent.QueryServiceControl.SetServingType(tablet.Type, false, nil); err != nil {
+				log.Errorf("SetServingType(serving=false) failed: %v", err)
 			}
 		}
 	}
@@ -367,14 +350,13 @@ func (agent *ActionAgent) terminateHealthChecks() {
 	// own "-lameduck-period" flag. During that extra period,
 	// queryservice will be in old lameduck mode, meaning stay
 	// alive but reject new queries.
-	agent.enterLameduck("terminating healthchecks")
-	agent.broadcastHealth()
-	time.Sleep(*gracePeriod)
+	agent.lameduck("terminating healthchecks")
 
 	// Note we only do this now if we entered lameduck. In the
 	// master case for instance, we want to keep serving until
 	// vttablet dies entirely (where else is the client going to
 	// go?).  After servenv lameduck, the queryservice is stopped
 	// from a servenv.OnClose() hook anyway.
-	agent.disallowQueries(tablet.Type, "terminating healthchecks")
+	log.Infof("Disabling query service after lameduck in terminating healthchecks")
+	agent.QueryServiceControl.SetServingType(tablet.Type, false, nil)
 }

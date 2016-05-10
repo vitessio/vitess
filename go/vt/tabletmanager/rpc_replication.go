@@ -9,13 +9,15 @@ import (
 	"fmt"
 	"time"
 
+	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
-	"golang.org/x/net/context"
 
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -209,8 +211,9 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	tablet := agent.Tablet()
 	// We don't care if the QueryService state actually changed because we'll
 	// let vtgate keep serving read traffic from this master (see comment below).
-	if _ /* state changed */, err := agent.disallowQueries(tablet.Type, "DemoteMaster marks server rdonly"); err != nil {
-		return "", fmt.Errorf("disallowQueries failed: %v", err)
+	log.Infof("DemoteMaster disabling query service")
+	if _ /* state changed */, err := agent.QueryServiceControl.SetServingType(tablet.Type, false, nil); err != nil {
+		return "", fmt.Errorf("SetServingType(serving=false) failed: %v", err)
 	}
 
 	// If using semi-sync, we need to disable master-side.
