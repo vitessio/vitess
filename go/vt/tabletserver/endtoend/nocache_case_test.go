@@ -577,7 +577,7 @@ func TestNocacheCases(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_mixed_case(col1, col2) values(1, 2)",
 					Rewritten: []string{
-						"insert into vitess_mixed_case(col1, col2) values (1, 2) /* _stream vitess_mixed_case (col1 ) (1 )",
+						"insert into vitess_mixed_case(col1, col2) values (1, 2) /* _stream vitess_mixed_case (Col1 ) (1 )",
 					},
 					RowsAffected: 1,
 				},

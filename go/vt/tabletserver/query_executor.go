@@ -11,6 +11,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -443,7 +444,7 @@ func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value, limit int64) (*s
 	if len(missingRows) != 0 {
 		bv := map[string]interface{}{
 			"#pk": sqlparser.TupleEqualityList{
-				Columns: qre.plan.TableInfo.Indexes[0].Columns,
+				Columns: cistring.ToStrings(qre.plan.TableInfo.Indexes[0].Columns),
 				Rows:    missingRows,
 			},
 		}
@@ -487,7 +488,7 @@ func (qre *QueryExecutor) spotCheck(rcresult RCResult, pk []sqltypes.Value) erro
 	qre.qe.queryServiceStats.SpotCheckCount.Add(1)
 	bv := map[string]interface{}{
 		"#pk": sqlparser.TupleEqualityList{
-			Columns: qre.plan.TableInfo.Indexes[0].Columns,
+			Columns: cistring.ToStrings(qre.plan.TableInfo.Indexes[0].Columns),
 			Rows:    [][]sqltypes.Value{pk},
 		},
 	}
@@ -664,7 +665,7 @@ func (qre *QueryExecutor) execDMLPKRows(conn poolConn, query *sqlparser.ParsedQu
 		}
 		bsc := buildStreamComment(qre.plan.TableInfo, pkRows, secondaryList)
 		qre.bindVars["#pk"] = sqlparser.TupleEqualityList{
-			Columns: qre.plan.TableInfo.Indexes[0].Columns,
+			Columns: cistring.ToStrings(qre.plan.TableInfo.Indexes[0].Columns),
 			Rows:    pkRows,
 		}
 		r, err := qre.directFetch(conn, query, qre.bindVars, bsc)

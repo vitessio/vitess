@@ -25,6 +25,12 @@
         "Category": 0,
         "IsAuto": false,
         "Default": "MA=="
+      },
+      {
+        "Name": "CamelCase",
+        "Category": 0,
+        "IsAuto": false,
+        "Default": "MA=="
       }
     ],
     "Indexes": [
