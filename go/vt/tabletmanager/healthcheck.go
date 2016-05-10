@@ -348,26 +348,33 @@ func (agent *ActionAgent) terminateHealthChecks() {
 		// shouldn't enter lameduck. We do lameduck to not
 		// trigger errors on clients.
 		log.Infof("Tablet in state %v, not entering lameduck", tablet.Type)
-	} else if *gracePeriod == 0 {
-		log.Infof("No serving_state_grace_period set, not entering lameduck")
-
-	} else {
-		// Go lameduck for gracePeriod.
-		// We've already checked above that we're not MASTER.
-
-		// Enter new lameduck mode for gracePeriod, then shut down
-		// queryservice.  New lameduck mode means keep accepting
-		// queries, but advertise unhealthy.  After we return from
-		// this synchronous OnTermSync hook, servenv may decide to
-		// wait even longer, for the rest of the time specified by its
-		// own "-lameduck-period" flag. During that extra period,
-		// queryservice will be in old lameduck mode, meaning stay
-		// alive but reject new queries.
-		agent.enterLameduck("terminating healthchecks")
-		agent.broadcastHealth()
-		time.Sleep(*gracePeriod)
+		return
 	}
 
-	// in any case, we're done now
+	if *gracePeriod == 0 {
+		log.Infof("No serving_state_grace_period set, not entering lameduck")
+		return
+	}
+
+	// Go lameduck for gracePeriod.
+	// We've already checked above that we're not MASTER.
+
+	// Enter new lameduck mode for gracePeriod, then shut down
+	// queryservice.  New lameduck mode means keep accepting
+	// queries, but advertise unhealthy.  After we return from
+	// this synchronous OnTermSync hook, servenv may decide to
+	// wait even longer, for the rest of the time specified by its
+	// own "-lameduck-period" flag. During that extra period,
+	// queryservice will be in old lameduck mode, meaning stay
+	// alive but reject new queries.
+	agent.enterLameduck("terminating healthchecks")
+	agent.broadcastHealth()
+	time.Sleep(*gracePeriod)
+
+	// Note we only do this now if we entered lameduck. In the
+	// master case for instance, we want to keep serving until
+	// vttablet dies entirely (where else is the client going to
+	// go?).  After servenv lameduck, the queryservice is stopped
+	// from a servenv.OnClose() hook anyway.
 	agent.disallowQueries(tablet.Type, "terminating healthchecks")
 }

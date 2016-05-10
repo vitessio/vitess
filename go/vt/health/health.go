@@ -104,6 +104,8 @@ func (ag *Aggregator) Report(isSlaveType, shouldQueryServiceBeRunning bool) (tim
 	for _, s := range results {
 		switch s.err {
 		case ErrSlaveNotRunning:
+			// Return the ErrSlaveNotRunning sentinel
+			// value, only if there are no other errors.
 			err = ErrSlaveNotRunning
 		case nil:
 			if s.delay > result {
