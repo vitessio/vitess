@@ -49,7 +49,7 @@ var (
       {{if .DisallowQueryService}}
         Query Service disabled: {{.DisallowQueryService}}<br>
       {{end}}
-      {{if !.EnableUpdateStream}}
+      {{if .DisableUpdateStream}}
         Update Stream disabled<br>
       {{end}}
     </td>
@@ -179,7 +179,7 @@ func addStatusParts(qsc tabletserver.Controller) {
 			"Tablet":               topo.NewTabletInfo(agent.Tablet(), -1),
 			"BlacklistedTables":    agent.BlacklistedTables(),
 			"DisallowQueryService": agent.DisallowQueryService(),
-			"EnableUpdateStream":   agent.EnableUpdateStream(),
+			"DisableUpdateStream":  !agent.EnableUpdateStream(),
 		}
 	})
 	servenv.AddStatusFuncs(template.FuncMap{

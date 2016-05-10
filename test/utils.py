@@ -1016,10 +1016,11 @@ def check_tablet_query_service(
                         tablet_vars['TabletStateName'], expected_state))
 
   status = tablet.get_status()
+  tc_dqs = 'Query Service disabled: TabletControl.DisableQueryService set'
   if tablet_control_disabled:
-    testcase.assertIn('Query Service disabled by TabletControl', status)
+    testcase.assertIn(tc_dqs, status)
   else:
-    testcase.assertNotIn('Query Service disabled by TabletControl', status)
+    testcase.assertNotIn(tc_dqs, status)
 
   if tablet.tablet_type == 'rdonly':
     # Run RunHealthCheck to be sure the tablet doesn't change its serving state.

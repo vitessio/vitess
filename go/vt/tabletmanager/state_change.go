@@ -206,7 +206,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 				if topo.InCellList(newTablet.Alias.Cell, tc.Cells) {
 					if tc.DisableQueryService {
 						allowQuery = false
-						disallowQueryReason = "query service disabled by tablet control"
+						disallowQueryReason = "TabletControl.DisableQueryService set"
 					}
 					blacklistedTables = tc.BlacklistedTables
 				}
