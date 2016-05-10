@@ -91,29 +91,29 @@ class TestVerticalSplit(unittest.TestCase, base_sharding.BaseShardingTest):
          'source_keyspace',
          'destination_keyspace'])
     source_master.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='source_keyspace', init_shard='0')
     source_replica.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='source_keyspace', init_shard='0')
     source_rdonly1.start_vttablet(
-        wait_for_state=None, target_tablet_type='rdonly',
+        wait_for_state=None, init_tablet_type='rdonly',
         init_keyspace='source_keyspace', init_shard='0')
     source_rdonly2.start_vttablet(
-        wait_for_state=None, target_tablet_type='rdonly',
+        wait_for_state=None, init_tablet_type='rdonly',
         init_keyspace='source_keyspace', init_shard='0')
 
     destination_master.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='destination_keyspace', init_shard='0')
     destination_replica.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='destination_keyspace', init_shard='0')
     destination_rdonly1.start_vttablet(
-        wait_for_state=None, target_tablet_type='rdonly',
+        wait_for_state=None, init_tablet_type='rdonly',
         init_keyspace='destination_keyspace', init_shard='0')
     destination_rdonly2.start_vttablet(
-        wait_for_state=None, target_tablet_type='rdonly',
+        wait_for_state=None, init_tablet_type='rdonly',
         init_keyspace='destination_keyspace', init_shard='0')
 
     # wait for the tablets

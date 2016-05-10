@@ -197,7 +197,7 @@ def setup_tablets():
     t.create_db('vt_test_keyspace')
     for create_table in create_tables:
       t.mquery(shard_0_master.dbname, create_table)
-    t.start_vttablet(wait_for_state=None, target_tablet_type='replica')
+    t.start_vttablet(wait_for_state=None)
 
   for t in [shard_0_master, shard_1_master]:
     t.wait_for_vttablet_state('SERVING')
@@ -860,14 +860,14 @@ class TestFailures(BaseTestCase):
     if grace_period is None:
       # If grace_period is not specified, use whatever default is defined in
       # start_vttablet() itself.
-      tablet_obj.start_vttablet(target_tablet_type=tablet_type,
-                                lameduck_period=lameduck_period,
+      tablet_obj.start_vttablet(lameduck_period=lameduck_period,
+                                init_tablet_type=tablet_type,
                                 init_keyspace=KEYSPACE_NAME,
                                 init_shard=SHARD_NAMES[self.shard_index])
     else:
-      tablet_obj.start_vttablet(target_tablet_type=tablet_type,
-                                lameduck_period=lameduck_period,
+      tablet_obj.start_vttablet(lameduck_period=lameduck_period,
                                 grace_period=grace_period,
+                                init_tablet_type=tablet_type,
                                 init_keyspace=KEYSPACE_NAME,
                                 init_shard=SHARD_NAMES[self.shard_index])
 
@@ -1529,17 +1529,26 @@ class TestFailures(BaseTestCase):
     self._test_lameduck_ongoing_query_single(2)
 
   def _test_lameduck_ongoing_query_single(self, grace_period):
-    vtgate_conn = get_connection()
+    # disable the second replica, we'll only use the first one
     utils.wait_procs([self.replica_tablet2.shutdown_mysql(),])
+    utils.run_vtctl(['RunHealthCheck', self.replica_tablet2.tablet_alias],
+                    auto_log=True)
+    utils.vtgate.wait_for_endpoints(
+        '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
+        1)
+
+    # re-configure the first tablet with a grace period
     self.replica_tablet.kill_vttablet()
     self.tablet_start(self.replica_tablet, 'replica', '5s',
                       grace_period='%ds'%grace_period)
     utils.vtgate.wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         1)
+
     # make sure query can go through tablet1
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_before = int(tablet1_vars['Queries']['TotalCount'])
+    vtgate_conn = get_connection()
     try:
       vtgate_conn._execute(
           'select 1 from vt_insert_test', {},
@@ -1608,7 +1617,8 @@ class TestFailures(BaseTestCase):
         'select 1 from vt_insert_test', {},
         tablet_type='replica', keyspace_name=KEYSPACE_NAME,
         keyranges=[self.keyrange])
-    # start tablet2
+
+    # restart tablet2
     utils.wait_procs([self.replica_tablet2.start_mysql(),])
     for t in [self.replica_tablet2]:
       utils.run_vtctl(['StartSlave', t.tablet_alias])

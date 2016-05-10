@@ -181,21 +181,17 @@ class TestBaseSplitClone(unittest.TestCase):
     """
     # Start tablets.
     #
-    # Specifying 'target_tablet_type' enables the health check
-    # i.e. tablets will be automatically returned to the serving graph
-    # after a SplitClone or SplitDiff.
-    #
     # NOTE: The future master has to be started with type 'replica'.
     shard_tablets.master.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard=shard_name)
     for t in shard_tablets.replicas:
       t.start_vttablet(
-          wait_for_state=None, target_tablet_type='replica',
+          wait_for_state=None, init_tablet_type='replica',
           init_keyspace='test_keyspace', init_shard=shard_name)
     for t in shard_tablets.rdonlys:
       t.start_vttablet(
-          wait_for_state=None, target_tablet_type='rdonly',
+          wait_for_state=None, init_tablet_type='rdonly',
           init_keyspace='test_keyspace', init_shard=shard_name)
 
     # Block until tablets are up and we can enable replication.

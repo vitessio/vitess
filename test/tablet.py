@@ -408,7 +408,7 @@ class Tablet(object):
       init_tablet_type=None, init_keyspace=None,
       init_shard=None, init_db_name_override=None,
       supports_backups=False, grace_period='1s', enable_semi_sync=True,
-      enable_replication_lag_check=False):
+      enable_replication_lag_check=True):
     """Starts a vttablet process, and returns it.
 
     The process is also saved in self.proc, so it's easy to kill as well.

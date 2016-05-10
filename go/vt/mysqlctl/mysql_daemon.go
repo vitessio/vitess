@@ -121,6 +121,9 @@ type FakeMysqlDaemon struct {
 	// and SlaveStatus
 	CurrentMasterPosition replication.Position
 
+	// SlaveStatusError is used by SlaveStatus
+	SlaveStatusError error
+
 	// CurrentMasterHost is returned by SlaveStatus
 	CurrentMasterHost string
 
@@ -256,6 +259,9 @@ func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
 
 // SlaveStatus is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) SlaveStatus() (replication.Status, error) {
+	if fmd.SlaveStatusError != nil {
+		return replication.Status{}, fmd.SlaveStatusError
+	}
 	return replication.Status{
 		Position:            fmd.CurrentMasterPosition,
 		SecondsBehindMaster: fmd.SecondsBehindMaster,

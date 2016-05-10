@@ -80,7 +80,6 @@ class TestVtctld(unittest.TestCase):
                        extra_args=utils.vtctld.process_args())
     shard_0_replica.create_db('vt_test_keyspace')
     shard_0_replica.start_vttablet(extra_args=utils.vtctld.process_args(),
-                                   target_tablet_type='replica',
                                    wait_for_state=None)
 
     # wait for the right states

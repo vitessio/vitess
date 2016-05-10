@@ -389,6 +389,7 @@ def wait_for_vars(name, port, var=None, key=None, value=None, timeout=10.0):
     if key:
       text += ' key %s:%s' % (key, value)
   while True:
+    display_text = text
     v = get_vars(port)
     if v:
       if var is None:
@@ -396,9 +397,18 @@ def wait_for_vars(name, port, var=None, key=None, value=None, timeout=10.0):
       if var in v:
         if key is None:
           break
-        if key in v[var] and v[var][key] == value:
-          break
-    timeout = wait_step(text, timeout)
+        if key in v[var]:
+          if v[var][key] == value:
+            break
+          else:
+            display_text += ' (current value:%s)' % v[var][key]
+        else:
+          display_text += ' (no current value)'
+      else:
+        display_text += ' (%s not in vars)' % var
+    else:
+      display_text += ' (no vars yet)'
+    timeout = wait_step(display_text, timeout)
 
 
 def poll_for_vars(

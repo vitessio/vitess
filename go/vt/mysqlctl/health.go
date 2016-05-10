@@ -26,19 +26,26 @@ func (mrl *mysqlReplicationLag) Report(isSlaveType, shouldQueryServiceBeRunning 
 	}
 
 	slaveStatus, err := mrl.mysqld.SlaveStatus()
-	if err == nil && !slaveStatus.SlaveRunning() {
-		err = health.ErrSlaveNotRunning
-	}
 	if err != nil {
-		if !mrl.lastKnownTime.IsZero() {
-			// we can extrapolate with the worst possible
-			// value (that is we made no replication
-			// progress since last time, and just fell more behind)
-			elapsed := mrl.now().Sub(mrl.lastKnownTime)
-			return elapsed + mrl.lastKnownValue, nil
-		}
+		// mysqld is not running. We can't report healthy.
 		return 0, err
 	}
+	if !slaveStatus.SlaveRunning() {
+		// mysqld is running, but slave is not replicating (most likely,
+		// replication has been stopped). See if we can extrapolate.
+		if mrl.lastKnownTime.IsZero() {
+			// we can't.
+			return 0, health.ErrSlaveNotRunning
+		}
+
+		// we can extrapolate with the worst possible
+		// value (that is we made no replication
+		// progress since last time, and just fell more behind).
+		elapsed := mrl.now().Sub(mrl.lastKnownTime)
+		return elapsed + mrl.lastKnownValue, nil
+	}
+
+	// we got a real value, save it.
 	mrl.lastKnownValue = time.Duration(slaveStatus.SecondsBehindMaster) * time.Second
 	mrl.lastKnownTime = mrl.now()
 	return mrl.lastKnownValue, nil
