@@ -375,8 +375,7 @@ class Tablet(object):
     if start:
       if not wait_for_start:
         expected_state = None
-      elif (tablet_type == 'master' or tablet_type == 'replica' or
-            tablet_type == 'rdonly' or tablet_type == 'batch'):
+      elif tablet_type == 'master':
         expected_state = 'SERVING'
       else:
         expected_state = 'NOT_SERVING'
