@@ -76,7 +76,7 @@ def setUpModule():
     utils.VtGate().start()
 
     master_tablet.start_vttablet()
-    replica_tablet.start_vttablet()
+    replica_tablet.start_vttablet(wait_for_state='NOT_SERVING')
     utils.run_vtctl(['SetReadWrite', master_tablet.tablet_alias])
     utils.check_db_read_write(master_tablet.tablet_uid)
 
