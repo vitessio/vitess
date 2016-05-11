@@ -13,6 +13,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/history"
@@ -458,9 +459,12 @@ func (tsv *TabletServer) setTimeBomb() chan struct{} {
 // connect to the database and serving traffic) or an error explaining
 // the unhealthiness otherwise.
 func (tsv *TabletServer) IsHealthy() error {
+	tsv.mu.Lock()
+	target := proto.Clone(&tsv.target).(*querypb.Target)
+	tsv.mu.Unlock()
 	_, err := tsv.Execute(
 		context.Background(),
-		nil,
+		target,
 		"select 1 from dual",
 		nil,
 		0,
@@ -689,11 +693,12 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 		bindVariables = make(map[string]interface{})
 	}
 	sql = stripTrailing(sql, bindVariables)
+	plan := tsv.qe.schemaInfo.GetPlan(ctx, logStats, sql)
 	qre := &QueryExecutor{
 		query:         sql,
 		bindVars:      bindVariables,
 		transactionID: transactionID,
-		plan:          tsv.qe.schemaInfo.GetPlan(ctx, logStats, sql),
+		plan:          plan,
 		ctx:           ctx,
 		logStats:      logStats,
 		qe:            tsv.qe,
@@ -1138,16 +1143,16 @@ func (tsv *TabletServer) startRequest(target *querypb.Target, isBegin, allowShut
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state == StateServing {
-		goto verifySession
+		goto verifyTarget
 	}
 	if (isBegin || allowShutdown) && tsv.state == StateShuttingDown {
-		goto verifySession
+		goto verifyTarget
 	}
 	return NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
 
-verifySession:
+verifyTarget:
 	if target != nil {
-		// a valid target can be used instead of a valid session
+		// a valid target needs to be used
 		if target.Keyspace != tsv.target.Keyspace {
 			return NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid keyspace %v", target.Keyspace)
 		}
@@ -1164,6 +1169,8 @@ verifySession:
 		}
 		goto ok
 	}
+
+	return NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "No target")
 
 ok:
 	tsv.requests.Add(1)

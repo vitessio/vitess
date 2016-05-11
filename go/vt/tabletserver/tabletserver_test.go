@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -488,14 +489,14 @@ func TestTabletServerReconnect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TabletServer.StartService should success but get error: %v", err)
 	}
-	_, err = tsv.Execute(context.Background(), nil, query, nil, 0)
+	_, err = tsv.Execute(context.Background(), &target, query, nil, 0)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// make mysql conn fail
 	db.EnableConnFail()
-	_, err = tsv.Execute(context.Background(), nil, query, nil, 0)
+	_, err = tsv.Execute(context.Background(), &target, query, nil, 0)
 	if err == nil {
 		t.Error("Execute: want error, got nil")
 	}
@@ -510,7 +511,7 @@ func TestTabletServerReconnect(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tsv.Execute(context.Background(), nil, query, nil, 0)
+	_, err = tsv.Execute(context.Background(), &target, query, nil, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -522,8 +523,11 @@ func TestTabletServerTarget(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	target1 := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	target2 := querypb.Target{TabletType: topodatapb.TabletType_REPLICA}
+	target1 := querypb.Target{
+		Keyspace:   "test_keyspace",
+		Shard:      "test_shard",
+		TabletType: topodatapb.TabletType_MASTER,
+	}
 	err := tsv.StartService(target1, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -531,24 +535,56 @@ func TestTabletServerTarget(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 
+	// query that works
 	db.AddQuery("select * from test_table limit 1000", &sqltypes.Result{})
 	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = tsv.Execute(ctx, &target2, "select * from test_table limit 1000", nil, 0)
+
+	// wrong tablet type
+	target2 := proto.Clone(&target1).(*querypb.Target)
+	target2.TabletType = topodatapb.TabletType_REPLICA
+	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0)
 	want := "Invalid tablet type"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
 	}
+
+	// set expected target type to MASTER, but also accept REPLICA
 	tsv.SetServingType(topodatapb.TabletType_MASTER, true, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = tsv.Execute(ctx, &target2, "select * from test_table limit 1000", nil, 0)
+	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	// wrong keyspace
+	target2 = proto.Clone(&target1).(*querypb.Target)
+	target2.Keyspace = "bad"
+	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0)
+	want = "Invalid keyspace bad"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must contain %s", err, want)
+	}
+
+	// wrong shard
+	target2 = proto.Clone(&target1).(*querypb.Target)
+	target2.Shard = "bad"
+	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0)
+	want = "Invalid shard bad"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must contain %s", err, want)
+	}
+
+	// no target
+	_, err = tsv.Execute(ctx, nil, "select * from test_table limit 1000", nil, 0)
+	want = "No target"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must contain %s", err, want)
 	}
 }
 
@@ -574,15 +610,15 @@ func TestTabletServerCommitTransaciton(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	transactionID, err := tsv.Begin(ctx, nil)
+	transactionID, err := tsv.Begin(ctx, &target)
 	if err != nil {
-		t.Fatalf("call TabletServer.Begin failed")
+		t.Fatalf("call TabletServer.Begin failed: %v", err)
 	}
-	if _, err := tsv.Execute(ctx, nil, executeSQL, nil, transactionID); err != nil {
-		t.Fatalf("failed to execute query: %s", executeSQL)
+	if _, err := tsv.Execute(ctx, &target, executeSQL, nil, transactionID); err != nil {
+		t.Fatalf("failed to execute query: %s: %s", executeSQL, err)
 	}
-	if err := tsv.Commit(ctx, nil, transactionID); err != nil {
-		t.Fatalf("call TabletServer.Commit failed")
+	if err := tsv.Commit(ctx, &target, transactionID); err != nil {
+		t.Fatalf("call TabletServer.Commit failed: %v", err)
 	}
 }
 
@@ -608,15 +644,15 @@ func TestTabletServerRollback(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	transactionID, err := tsv.Begin(ctx, nil)
+	transactionID, err := tsv.Begin(ctx, &target)
 	if err != nil {
-		t.Fatalf("call TabletServer.Begin failed")
+		t.Fatalf("call TabletServer.Begin failed: %v", err)
 	}
-	if _, err := tsv.Execute(ctx, nil, executeSQL, nil, transactionID); err != nil {
-		t.Fatalf("failed to execute query: %s", executeSQL)
+	if _, err := tsv.Execute(ctx, &target, executeSQL, nil, transactionID); err != nil {
+		t.Fatalf("failed to execute query: %s: %v", executeSQL, err)
 	}
-	if err := tsv.Rollback(ctx, nil, transactionID); err != nil {
-		t.Fatalf("call TabletServer.Rollback failed")
+	if err := tsv.Rollback(ctx, &target, transactionID); err != nil {
+		t.Fatalf("call TabletServer.Rollback failed: %v", err)
 	}
 }
 
@@ -644,7 +680,7 @@ func TestTabletServerStreamExecute(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	sendReply := func(*sqltypes.Result) error { return nil }
-	if err := tsv.StreamExecute(ctx, nil, executeSQL, nil, sendReply); err != nil {
+	if err := tsv.StreamExecute(ctx, &target, executeSQL, nil, sendReply); err != nil {
 		t.Fatalf("TabletServer.StreamExecute should success: %s, but get error: %v",
 			executeSQL, err)
 	}
@@ -669,7 +705,7 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, &target, []querytypes.BoundQuery{
 		{
 			Sql:           sql,
 			BindVariables: nil,
@@ -801,7 +837,7 @@ func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 		t.Fatalf("rollback should not be executed.")
 	}
 
-	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, &target, []querytypes.BoundQuery{
 		{
 			Sql:           sql,
 			BindVariables: nil,
@@ -839,7 +875,7 @@ func TestTabletServerExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, &target, []querytypes.BoundQuery{
 		{
 			Sql:           sql,
 			BindVariables: nil,
@@ -955,7 +991,7 @@ func TestTabletServerSplitQuery(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	sql := "select * from test_table where count > :count"
-	if _, err := tsv.SplitQuery(ctx, nil, sql, nil, "", 10); err != nil {
+	if _, err := tsv.SplitQuery(ctx, &target, sql, nil, "", 10); err != nil {
 		t.Fatalf("TabletServer.SplitQuery should success: %v, but get error: %v", sql, err)
 	}
 }
