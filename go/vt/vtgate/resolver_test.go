@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
@@ -27,8 +28,8 @@ import (
 // This file uses the sandbox_test framework.
 
 func TestResolverExecuteKeyspaceIds(t *testing.T) {
-	testResolverGeneric(t, "TestResolverExecuteKeyspaceIds", func() (*sqltypes.Result, error) {
-		res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	testResolverGeneric(t, "TestResolverExecuteKeyspaceIds", func(hc discovery.HealthCheck) (*sqltypes.Result, error) {
+		res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 		return res.ExecuteKeyspaceIds(context.Background(),
 			"query",
 			nil,
@@ -41,8 +42,8 @@ func TestResolverExecuteKeyspaceIds(t *testing.T) {
 }
 
 func TestResolverExecuteKeyRanges(t *testing.T) {
-	testResolverGeneric(t, "TestResolverExecuteKeyRanges", func() (*sqltypes.Result, error) {
-		res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	testResolverGeneric(t, "TestResolverExecuteKeyRanges", func(hc discovery.HealthCheck) (*sqltypes.Result, error) {
+		res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 		return res.ExecuteKeyRanges(context.Background(),
 			"query",
 			nil,
@@ -55,8 +56,8 @@ func TestResolverExecuteKeyRanges(t *testing.T) {
 }
 
 func TestResolverExecuteEntityIds(t *testing.T) {
-	testResolverGeneric(t, "TestResolverExecuteEntityIds", func() (*sqltypes.Result, error) {
-		res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	testResolverGeneric(t, "TestResolverExecuteEntityIds", func(hc discovery.HealthCheck) (*sqltypes.Result, error) {
+		res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 		return res.ExecuteEntityIds(context.Background(),
 			"query",
 			nil,
@@ -81,8 +82,8 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 }
 
 func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
-	testResolverGeneric(t, "TestResolverExecuteBatchKeyspaceIds", func() (*sqltypes.Result, error) {
-		res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	testResolverGeneric(t, "TestResolverExecuteBatchKeyspaceIds", func(hc discovery.HealthCheck) (*sqltypes.Result, error) {
+		res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 		qrs, err := res.ExecuteBatchKeyspaceIds(context.Background(),
 			[]*vtgatepb.BoundKeyspaceIdQuery{{
 				Query: &querypb.BoundQuery{
@@ -106,14 +107,14 @@ func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 }
 
 func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
-	createSandbox("TestResolverStreamExecuteKeyspaceIds")
-	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*sqltypes.Result, error) {
-		res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	keyspace := "TestResolverStreamExecuteKeyspaceIds"
+	testResolverStreamGeneric(t, keyspace, func(hc discovery.HealthCheck) (*sqltypes.Result, error) {
+		res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 		qr := new(sqltypes.Result)
 		err := res.StreamExecuteKeyspaceIds(context.Background(),
 			"query",
 			nil,
-			"TestResolverStreamExecuteKeyspaceIds",
+			keyspace,
 			[][]byte{{0x10}, {0x15}},
 			topodatapb.TabletType_MASTER,
 			func(r *sqltypes.Result) error {
@@ -122,13 +123,13 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 			})
 		return qr, err
 	})
-	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*sqltypes.Result, error) {
-		res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	testResolverStreamGeneric(t, keyspace, func(hc discovery.HealthCheck) (*sqltypes.Result, error) {
+		res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 		qr := new(sqltypes.Result)
 		err := res.StreamExecuteKeyspaceIds(context.Background(),
 			"query",
 			nil,
-			"TestResolverStreamExecuteKeyspaceIds",
+			keyspace,
 			[][]byte{{0x10}, {0x15}, {0x25}},
 			topodatapb.TabletType_MASTER,
 			func(r *sqltypes.Result) error {
@@ -140,15 +141,15 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 }
 
 func TestResolverStreamExecuteKeyRanges(t *testing.T) {
-	createSandbox("TestResolverStreamExecuteKeyRanges")
+	keyspace := "TestResolverStreamExecuteKeyRanges"
 	// streaming a single shard
-	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*sqltypes.Result, error) {
-		res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	testResolverStreamGeneric(t, keyspace, func(hc discovery.HealthCheck) (*sqltypes.Result, error) {
+		res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 		qr := new(sqltypes.Result)
 		err := res.StreamExecuteKeyRanges(context.Background(),
 			"query",
 			nil,
-			"TestResolverStreamExecuteKeyRanges",
+			keyspace,
 			[]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x15}}},
 			topodatapb.TabletType_MASTER,
 			func(r *sqltypes.Result) error {
@@ -158,13 +159,13 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 		return qr, err
 	})
 	// streaming multiple shards
-	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*sqltypes.Result, error) {
-		res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	testResolverStreamGeneric(t, keyspace, func(hc discovery.HealthCheck) (*sqltypes.Result, error) {
+		res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 		qr := new(sqltypes.Result)
 		err := res.StreamExecuteKeyRanges(context.Background(),
 			"query",
 			nil,
-			"TestResolverStreamExecuteKeyRanges",
+			keyspace,
 			[]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x25}}},
 			topodatapb.TabletType_MASTER,
 			func(r *sqltypes.Result) error {
@@ -175,14 +176,16 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 	})
 }
 
-func testResolverGeneric(t *testing.T, name string, action func() (*sqltypes.Result, error)) {
+func testResolverGeneric(t *testing.T, name string, action func(hc discovery.HealthCheck) (*sqltypes.Result, error)) {
 	// successful execute
 	s := createSandbox(name)
 	sbc0 := &sandboxConn{}
-	s.MapTestConn("-20", sbc0)
 	sbc1 := &sandboxConn{}
-	s.MapTestConn("20-40", sbc1)
-	_, err := action()
+	hc := newFakeHealthCheck()
+	hc.addTestEndPoint("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+	hc.addTestEndPoint("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+
+	_, err := action(hc)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -196,10 +199,11 @@ func testResolverGeneric(t *testing.T, name string, action func() (*sqltypes.Res
 	// non-retryable failure
 	s.Reset()
 	sbc0 = &sandboxConn{mustFailServer: 1}
-	s.MapTestConn("-20", sbc0)
 	sbc1 = &sandboxConn{mustFailRetry: 1}
-	s.MapTestConn("20-40", sbc1)
-	_, err = action()
+	hc.Reset()
+	hc.addTestEndPoint("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+	hc.addTestEndPoint("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	_, err = action(hc)
 	want1 := fmt.Sprintf("shard, host: %s.-20.master, host:\"-20\" port_map:<key:\"vt\" value:1 > , error: err", name)
 	want2 := fmt.Sprintf("shard, host: %s.20-40.master, host:\"20-40\" port_map:<key:\"vt\" value:1 > , retry: err", name)
 	want := []string{want1, want2}
@@ -228,10 +232,11 @@ func testResolverGeneric(t *testing.T, name string, action func() (*sqltypes.Res
 	// retryable failure, no sharding event
 	s.Reset()
 	sbc0 = &sandboxConn{mustFailRetry: 1}
-	s.MapTestConn("-20", sbc0)
 	sbc1 = &sandboxConn{mustFailFatal: 1}
-	s.MapTestConn("20-40", sbc1)
-	_, err = action()
+	hc.Reset()
+	hc.addTestEndPoint("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+	hc.addTestEndPoint("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	_, err = action(hc)
 	want1 = fmt.Sprintf("shard, host: %s.-20.master, host:\"-20\" port_map:<key:\"vt\" value:1 > , retry: err", name)
 	want2 = fmt.Sprintf("shard, host: %s.20-40.master, host:\"20-40\" port_map:<key:\"vt\" value:1 > , fatal: err", name)
 	want = []string{want1, want2}
@@ -261,14 +266,15 @@ func testResolverGeneric(t *testing.T, name string, action func() (*sqltypes.Res
 	s.Reset()
 	addSandboxServedFrom(name, name+"ServedFrom0")
 	sbc0 = &sandboxConn{}
-	s.MapTestConn("-20", sbc0)
 	sbc1 = &sandboxConn{}
-	s.MapTestConn("20-40", sbc1)
+	hc.Reset()
+	hc.addTestEndPoint("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+	hc.addTestEndPoint("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 	s0 := createSandbox(name + "ServedFrom0") // make sure we have a fresh copy
 	s0.ShardSpec = "-80-"
 	sbc2 := &sandboxConn{}
-	s0.MapTestConn("-80", sbc2)
-	_, err = action()
+	hc.addTestEndPoint("aa", "1.1.1.1", 1003, name+"ServedFrom0", "-80", topodatapb.TabletType_MASTER, true, 1, nil, sbc2)
+	_, err = action(hc)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -295,17 +301,21 @@ func testResolverGeneric(t *testing.T, name string, action func() (*sqltypes.Res
 	// retryable failure, vertical resharding
 	s.Reset()
 	sbc0 = &sandboxConn{}
-	s.MapTestConn("-20", sbc0)
 	sbc1 = &sandboxConn{mustFailFatal: 1}
-	s.MapTestConn("20-40", sbc1)
+	hc.Reset()
+	hc.addTestEndPoint("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+	hc.addTestEndPoint("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 	i := 0
 	s.SrvKeyspaceCallback = func() {
 		if i == 1 {
 			addSandboxServedFrom(name, name+"ServedFrom")
+			hc.Reset()
+			hc.addTestEndPoint("aa", "1.1.1.1", 1001, name+"ServedFrom", "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+			hc.addTestEndPoint("aa", "1.1.1.1", 1002, name+"ServedFrom", "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 		}
 		i++
 	}
-	_, err = action()
+	_, err = action(hc)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -324,19 +334,21 @@ func testResolverGeneric(t *testing.T, name string, action func() (*sqltypes.Res
 	// retryable failure, horizontal resharding
 	s.Reset()
 	sbc0 = &sandboxConn{}
-	s.MapTestConn("-20", sbc0)
 	sbc1 = &sandboxConn{mustFailRetry: 1}
-	s.MapTestConn("20-40", sbc1)
+	hc.Reset()
+	hc.addTestEndPoint("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+	hc.addTestEndPoint("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 	i = 0
 	s.SrvKeyspaceCallback = func() {
 		if i == 1 {
 			s.ShardSpec = "-20-30-40-60-80-a0-c0-e0-"
-			s.MapTestConn("-20", sbc0)
-			s.MapTestConn("20-30", sbc1)
+			hc.Reset()
+			hc.addTestEndPoint("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+			hc.addTestEndPoint("aa", "1.1.1.1", 1002, name, "20-30", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 		}
 		i++
 	}
-	_, err = action()
+	_, err = action(hc)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -353,14 +365,15 @@ func testResolverGeneric(t *testing.T, name string, action func() (*sqltypes.Res
 	}
 }
 
-func testResolverStreamGeneric(t *testing.T, name string, action func() (*sqltypes.Result, error)) {
+func testResolverStreamGeneric(t *testing.T, name string, action func(hc discovery.HealthCheck) (*sqltypes.Result, error)) {
 	// successful execute
 	s := createSandbox(name)
 	sbc0 := &sandboxConn{}
-	s.MapTestConn("-20", sbc0)
 	sbc1 := &sandboxConn{}
-	s.MapTestConn("20-40", sbc1)
-	_, err := action()
+	hc := newFakeHealthCheck()
+	hc.addTestEndPoint("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+	hc.addTestEndPoint("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	_, err := action(hc)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -371,10 +384,11 @@ func testResolverStreamGeneric(t *testing.T, name string, action func() (*sqltyp
 	// failure
 	s.Reset()
 	sbc0 = &sandboxConn{mustFailRetry: 1}
-	s.MapTestConn("-20", sbc0)
 	sbc1 = &sandboxConn{}
-	s.MapTestConn("20-40", sbc1)
-	_, err = action()
+	hc.Reset()
+	hc.addTestEndPoint("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+	hc.addTestEndPoint("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	_, err = action(hc)
 	want := fmt.Sprintf("shard, host: %s.-20.master, host:\"-20\" port_map:<key:\"vt\" value:1 > , retry: err", name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want\n%s\ngot\n%v", want, err)
@@ -448,19 +462,20 @@ func TestResolverBuildEntityIds(t *testing.T) {
 }
 
 func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
-	res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
-
-	s := createSandbox("TestResolverDmlOnMultipleKeyspaceIds")
+	keyspace := "TestResolverDmlOnMultipleKeyspaceIds"
+	createSandbox(keyspace)
 	sbc0 := &sandboxConn{}
-	s.MapTestConn("-20", sbc0)
 	sbc1 := &sandboxConn{}
-	s.MapTestConn("20-40", sbc1)
+	hc := newFakeHealthCheck()
+	hc.addTestEndPoint("aa", "1.1.1.1", 1001, keyspace, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+	hc.addTestEndPoint("aa", "1.1.1.1", 1002, keyspace, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 
+	res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 	errStr := "DML should not span multiple keyspace_ids"
 	_, err := res.ExecuteKeyspaceIds(context.Background(),
 		"update table set a = b",
 		nil,
-		"TestResolverExecuteKeyspaceIds",
+		keyspace,
 		[][]byte{{0x10}, {0x25}},
 		topodatapb.TabletType_MASTER,
 		nil,
@@ -471,11 +486,13 @@ func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
 }
 
 func TestResolverExecBatchReresolve(t *testing.T) {
-	s := createSandbox("TestResolverExecBatchReresolve")
+	keyspace := "TestResolverExecBatchReresolve"
+	createSandbox(keyspace)
 	sbc := &sandboxConn{mustFailRetry: 20}
-	s.MapTestConn("0", sbc)
+	hc := newFakeHealthCheck()
+	hc.addTestEndPoint("aa", "0", 1, keyspace, "0", topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 
-	res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 
 	callcount := 0
 	buildBatchRequest := func() (*scatterBatchRequest, error) {
@@ -485,7 +502,7 @@ func TestResolverExecBatchReresolve(t *testing.T) {
 				Sql:           "query",
 				BindVariables: nil,
 			},
-			Keyspace: "TestResolverExecBatchReresolve",
+			Keyspace: keyspace,
 			Shards:   []string{"0"},
 		}}
 		return boundShardQueriesToScatterBatchRequest(queries)
@@ -506,11 +523,13 @@ func TestResolverExecBatchReresolve(t *testing.T) {
 }
 
 func TestResolverExecBatchAsTransaction(t *testing.T) {
-	s := createSandbox("TestResolverExecBatchAsTransaction")
+	keyspace := "TestResolverExecBatchAsTransaction"
+	createSandbox(keyspace)
 	sbc := &sandboxConn{mustFailRetry: 20}
-	s.MapTestConn("0", sbc)
+	hc := newFakeHealthCheck()
+	hc.addTestEndPoint("aa", "0", 1, keyspace, "0", topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 
-	res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
+	res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 
 	callcount := 0
 	buildBatchRequest := func() (*scatterBatchRequest, error) {
@@ -520,7 +539,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 				Sql:           "query",
 				BindVariables: nil,
 			},
-			Keyspace: "TestResolverExecBatchAsTransaction",
+			Keyspace: keyspace,
 			Shards:   []string{"0"},
 		}}
 		return boundShardQueriesToScatterBatchRequest(queries)
@@ -529,7 +548,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, true, nil, buildBatchRequest)
 	want := "shard, host: TestResolverExecBatchAsTransaction.0.master, host:\"0\" port_map:<key:\"vt\" value:1 > , retry: err"
 	if err == nil || err.Error() != want {
-		t.Errorf("want got, got none")
+		t.Errorf("want %v, got %v", want, err)
 	}
 	// Ensure scatter did not re-resolve
 	if callcount != 1 {
@@ -549,8 +568,8 @@ func TestIsRetryableError(t *testing.T) {
 		{fmt.Errorf("generic error"), false},
 		{&ScatterConnError{Retryable: true}, true},
 		{&ScatterConnError{Retryable: false}, false},
-		{&ShardConnError{EndPointCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED}, true},
-		{&ShardConnError{EndPointCode: vtrpcpb.ErrorCode_INTERNAL_ERROR}, false},
+		{&ShardError{EndPointCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED}, true},
+		{&ShardError{EndPointCode: vtrpcpb.ErrorCode_INTERNAL_ERROR}, false},
 		// tabletconn.ServerError will not come directly here,
 		// they'll be wrapped in ScatterConnError or ShardConnError.
 		// So they can't be retried as is.

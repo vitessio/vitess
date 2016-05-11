@@ -531,7 +531,7 @@ class VtGate(object):
 
   def start(self, cell='test_nj', retry_count=2,
             topo_impl=None, cache_ttl='1s',
-            timeout_total='2s',
+            healthcheck_conn_timeout='2s',
             extra_args=None, tablets=None,
             tablet_types_to_wait='MASTER,REPLICA'):
     """Start vtgate. Saves it into the global vtgate variable if not set yet."""
@@ -542,7 +542,7 @@ class VtGate(object):
         '-retry-count', str(retry_count),
         '-log_dir', environment.vtlogroot,
         '-srv_topo_cache_ttl', cache_ttl,
-        '-conn-timeout-total', timeout_total,
+        '-healthcheck_conn_timeout', healthcheck_conn_timeout,
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-gateway_implementation', vtgate_gateway_flavor().flavor(),
         '-tablet_grpc_combine_begin_execute',

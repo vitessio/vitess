@@ -74,12 +74,6 @@ type sandbox struct {
 	// SrvKeyspaceMustFail specifies how often GetSrvKeyspace must fail before succeeding
 	SrvKeyspaceMustFail int
 
-	// EndPointCounter tracks how often GetEndPoints was called
-	EndPointCounter sync2.AtomicInt64
-
-	// EndPointMustFail specifies how often GetEndPoints must fail before succeeding
-	EndPointMustFail int
-
 	// DialCounter tracks how often sandboxDialer was called
 	DialCounter int
 
@@ -98,18 +92,16 @@ type sandbox struct {
 	// SrvKeyspaceCallback specifies the callback function in GetSrvKeyspace
 	SrvKeyspaceCallback func()
 
-	TestConns map[string]map[uint32]tabletconn.TabletConn
-	VSchema   string
+	// VSchema specifies the vschema in JSON format.
+	VSchema string
 }
 
+// Reset cleans up sandbox internal state.
 func (s *sandbox) Reset() {
 	s.sandmu.Lock()
 	defer s.sandmu.Unlock()
-	s.TestConns = make(map[string]map[uint32]tabletconn.TabletConn)
 	s.SrvKeyspaceCounter = 0
 	s.SrvKeyspaceMustFail = 0
-	s.EndPointCounter.Set(0)
-	s.EndPointMustFail = 0
 	s.DialCounter = 0
 	s.DialMustFail = 0
 	s.DialMustTimeout = 0
@@ -118,43 +110,7 @@ func (s *sandbox) Reset() {
 	s.SrvKeyspaceCallback = nil
 }
 
-// a sandboxableConn is a tablet.TabletConn that allows you
-// to set the endPoint. MapTestConn uses it to set some good
-// defaults. This way, you have the option of calling MapTestConn
-// with variables other than sandboxConn.
-type sandboxableConn interface {
-	tabletconn.TabletConn
-	setEndPoint(*topodatapb.EndPoint)
-}
-
-func (s *sandbox) MapTestConn(shard string, conn sandboxableConn) {
-	s.sandmu.Lock()
-	defer s.sandmu.Unlock()
-	conns, ok := s.TestConns[shard]
-	if !ok {
-		conns = make(map[uint32]tabletconn.TabletConn)
-	}
-	uid := uint32(len(conns))
-	conn.setEndPoint(&topodatapb.EndPoint{
-		Uid:     uid,
-		Host:    shard,
-		PortMap: map[string]int32{"vt": 1},
-	})
-	conns[uid] = conn
-	s.TestConns[shard] = conns
-}
-
-func (s *sandbox) DeleteTestConn(shard string, conn tabletconn.TabletConn) {
-	s.sandmu.Lock()
-	defer s.sandmu.Unlock()
-	conns, ok := s.TestConns[shard]
-	if !ok {
-		panic(fmt.Sprintf("unknown shard: %v", shard))
-	}
-	delete(conns, conn.EndPoint().Uid)
-	s.TestConns[shard] = conns
-}
-
+// DefaultShardSpec is the default sharding scheme for testing.
 var DefaultShardSpec = "-20-40-60-80-a0-c0-e0-"
 
 func getAllShards(shardSpec string) ([]*topodatapb.KeyRange, error) {
@@ -237,9 +193,9 @@ func createUnshardedKeyspace() (*topodatapb.SrvKeyspace, error) {
 
 // sandboxTopo satisfies the SrvTopoServer interface
 type sandboxTopo struct {
-	callbackGetEndPoints func(st *sandboxTopo)
 }
 
+// GetSrvKeyspaceNames is part of SrvTopoServer.
 func (sct *sandboxTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
@@ -250,6 +206,7 @@ func (sct *sandboxTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([
 	return keyspaces, nil
 }
 
+// GetSrvKeyspace is part of SrvTopoServer.
 func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	sand := getSandbox(keyspace)
 	if sand.SrvKeyspaceCallback != nil {
@@ -284,6 +241,7 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 	return createShardedSrvKeyspace(sand.ShardSpec, sand.KeyspaceServedFrom)
 }
 
+// WatchVSchema is part of SrvTopoServer.
 func (sct *sandboxTopo) WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan string, err error) {
 	result := make(chan string, 1)
 	value := getSandbox(keyspace).VSchema
@@ -291,27 +249,14 @@ func (sct *sandboxTopo) WatchVSchema(ctx context.Context, keyspace string) (noti
 	return result, nil
 }
 
+// GetSrvShard is part of SrvTopoServer.
 func (sct *sandboxTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error) {
 	return nil, fmt.Errorf("Unsupported")
 }
 
+// GetEndPoints is part of SrvTopoServer.
 func (sct *sandboxTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType) (*topodatapb.EndPoints, int64, error) {
-	sand := getSandbox(keyspace)
-	sand.EndPointCounter.Add(1)
-	if sct.callbackGetEndPoints != nil {
-		sct.callbackGetEndPoints(sct)
-	}
-	if sand.EndPointMustFail > 0 {
-		sand.EndPointMustFail--
-		return nil, -1, fmt.Errorf("topo error")
-	}
-
-	conns := sand.TestConns[shard]
-	ep := &topodatapb.EndPoints{}
-	for _, conn := range conns {
-		ep.Entries = append(ep.Entries, conn.EndPoint())
-	}
-	return ep, -1, nil
+	return nil, -1, fmt.Errorf("Unsupported")
 }
 
 func sandboxDialer(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
@@ -328,17 +273,19 @@ func sandboxDialer(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace,
 		sand.DialMustTimeout--
 		return nil, tabletconn.OperationalError(fmt.Sprintf("conn unreachable"))
 	}
-	conns := sand.TestConns[shard]
-	if conns == nil {
-		panic(fmt.Sprintf("can't find shard %v", shard))
-	}
-	tconn := conns[endPoint.Uid]
-	return tconn, nil
+	sbc := &sandboxConn{}
+	sbc.endPoint = endPoint
+	sbc.SetTarget(keyspace, shard, tabletType)
+	return sbc, nil
 }
 
 // sandboxConn satisfies the TabletConn interface
 type sandboxConn struct {
-	endPoint       *topodatapb.EndPoint
+	keyspace   string
+	shard      string
+	tabletType topodatapb.TabletType
+	endPoint   *topodatapb.EndPoint
+
 	mustFailRetry  int
 	mustFailFatal  int
 	mustFailServer int
@@ -346,16 +293,12 @@ type sandboxConn struct {
 	mustFailTxPool int
 	mustFailNotTx  int
 
-	// A callback to tweak the behavior on each conn call
-	onConnUse func(*sandboxConn)
-
 	// These Count vars report how often the corresponding
 	// functions were called.
 	ExecCount          sync2.AtomicInt64
 	BeginCount         sync2.AtomicInt64
 	CommitCount        sync2.AtomicInt64
 	RollbackCount      sync2.AtomicInt64
-	CloseCount         sync2.AtomicInt64
 	AsTransactionCount sync2.AtomicInt64
 
 	// Queries stores the non-batch requests received.
@@ -375,9 +318,6 @@ type sandboxConn struct {
 }
 
 func (sbc *sandboxConn) getError() error {
-	if sbc.onConnUse != nil {
-		sbc.onConnUse(sbc)
-	}
 	if sbc.mustFailRetry > 0 {
 		sbc.mustFailRetry--
 		return &tabletconn.ServerError{
@@ -550,14 +490,12 @@ func (sbc *sandboxConn) SplitQueryV2(
 	splitCount int64,
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error) {
-	// The sandbox stores the shard name in the endPoint Host field.
-	shard := sbc.endPoint.Host
 	splits := []querytypes.QuerySplit{
 		{
 			Sql: fmt.Sprintf(
 				"query:%v, splitColumns:%v, splitCount:%v,"+
 					" numRowsPerQueryPart:%v, algorithm:%v, shard:%v",
-				query, splitColumns, splitCount, numRowsPerQueryPart, algorithm, shard),
+				query, splitColumns, splitCount, numRowsPerQueryPart, algorithm, sbc.shard),
 		},
 	}
 	return splits, nil
@@ -570,19 +508,17 @@ func (sbc *sandboxConn) StreamHealth(ctx context.Context) (tabletconn.StreamHeal
 
 // Close does not change ExecCount
 func (sbc *sandboxConn) Close() {
-	sbc.CloseCount.Add(1)
 }
 
 func (sbc *sandboxConn) SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error {
-	return fmt.Errorf("not implemented, vtgate doesn't use target yet")
+	sbc.keyspace = keyspace
+	sbc.shard = shard
+	sbc.tabletType = tabletType
+	return nil
 }
 
 func (sbc *sandboxConn) EndPoint() *topodatapb.EndPoint {
 	return sbc.endPoint
-}
-
-func (sbc *sandboxConn) setEndPoint(ep *topodatapb.EndPoint) {
-	sbc.endPoint = ep
 }
 
 func (sbc *sandboxConn) getNextResult() *sqltypes.Result {

@@ -95,12 +95,12 @@ type RegisterVTGate func(vtgateservice.VTGateService)
 var RegisterVTGates []RegisterVTGate
 
 // Init initializes VTGate server.
-func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletTypesToWait []topodatapb.TabletType, maxInFlight int, testGateway string) *VTGate {
+func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType, maxInFlight int) *VTGate {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
 	rpcVTGate = &VTGate{
-		resolver:     NewResolver(hc, topoServer, serv, "VttabletCall", cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, tabletTypesToWait, testGateway),
+		resolver:     NewResolver(hc, topoServer, serv, "VttabletCall", cell, retryCount, tabletTypesToWait),
 		timings:      stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
 		rowsReturned: stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
 
@@ -139,22 +139,6 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 		}
 	})
 	return rpcVTGate
-}
-
-// InitializeConnections pre-initializes VTGate by connecting to vttablets of all keyspace/shard/type.
-// It is not necessary to call this function before serving queries,
-// but it would reduce connection overhead when serving.
-func (vtg *VTGate) InitializeConnections(ctx context.Context) (err error) {
-	defer vtg.HandlePanic(&err)
-
-	log.Infof("Initialize VTTablet connections")
-	err = vtg.resolver.InitializeConnections(ctx)
-	if err != nil {
-		log.Errorf("failed to initialize connections: %v", err)
-		return err
-	}
-	log.Infof("Initialize VTTablet connections completed")
-	return nil
 }
 
 // Execute executes a non-streaming query by routing based on the values in the query.
@@ -800,7 +784,7 @@ func isErrorCausedByVTGate(err error) bool {
 		switch e := e.(type) {
 		case *ScatterConnError:
 			errQueue = append(errQueue, e.Errs...)
-		case *ShardConnError:
+		case *ShardError:
 			errQueue = append(errQueue, e.Err)
 		case tabletconn.OperationalError:
 			// this is a failure to communicate with vttablet

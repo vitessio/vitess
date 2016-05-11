@@ -12,7 +12,6 @@ import (
 	"reflect"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
@@ -49,19 +48,12 @@ type Resolver struct {
 
 // NewResolver creates a new Resolver. All input parameters are passed through
 // for creating ScatterConn.
-func NewResolver(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletTypesToWait []topodatapb.TabletType, testGateway string) *Resolver {
+func NewResolver(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, statsName, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *Resolver {
 	return &Resolver{
-		scatterConn: NewScatterConn(hc, topoServer, serv, statsName, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, tabletTypesToWait, testGateway),
+		scatterConn: NewScatterConn(hc, topoServer, serv, statsName, cell, retryCount, tabletTypesToWait),
 		toposerv:    serv,
 		cell:        cell,
 	}
-}
-
-// InitializeConnections pre-initializes VTGate by connecting to vttablets of all keyspace/shard/type.
-// It is not necessary to call this function before serving queries,
-// but it would reduce connection overhead when serving.
-func (res *Resolver) InitializeConnections(ctx context.Context) error {
-	return res.scatterConn.InitializeConnections(ctx)
 }
 
 // isRetryableError will be true if the error should be retried.
@@ -69,7 +61,7 @@ func isRetryableError(err error) bool {
 	switch e := err.(type) {
 	case *ScatterConnError:
 		return e.Retryable
-	case *ShardConnError:
+	case *ShardError:
 		return e.EndPointCode == vtrpcpb.ErrorCode_QUERY_NOT_SERVED
 	default:
 		return false

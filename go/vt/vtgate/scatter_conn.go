@@ -56,42 +56,18 @@ type shardActionTransactionFunc func(shard string, shouldBegin bool, transaction
 
 // NewScatterConn creates a new ScatterConn. All input parameters are passed through
 // for creating the appropriate connections.
-func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletTypesToWait []topodatapb.TabletType, testGateway string) *ScatterConn {
+func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, statsName, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *ScatterConn {
 	tabletCallErrorCountStatsName := ""
-	tabletConnectStatsName := ""
 	if statsName != "" {
 		tabletCallErrorCountStatsName = statsName + "ErrorCount"
-		tabletConnectStatsName = statsName + "TabletConnect"
 	}
-	connTimings := stats.NewMultiTimings(tabletConnectStatsName, []string{"Keyspace", "ShardName", "DbType"})
-	gateway := GetGatewayCreator()(hc, topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings, tabletTypesToWait)
+	gateway := GetGatewayCreator()(hc, topoServer, serv, cell, retryCount, tabletTypesToWait)
 
-	sc := &ScatterConn{
+	return &ScatterConn{
 		timings:              stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		tabletCallErrorCount: stats.NewMultiCounters(tabletCallErrorCountStatsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		gateway:              gateway,
 	}
-
-	// this is to test health checking module when using existing gateway
-	if testGateway != "" {
-		if gc := GetGatewayCreatorByName(testGateway); gc != nil {
-			sc.testGateway = gc(hc, topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings, nil)
-		}
-	}
-
-	return sc
-}
-
-// InitializeConnections pre-initializes connections for all shards.
-// It also populates topology cache by accessing it.
-// It is not necessary to call this function before serving queries,
-// but it would reduce connection overhead when serving.
-func (stc *ScatterConn) InitializeConnections(ctx context.Context) error {
-	// temporarily start healthchecking regardless of gateway used
-	if stc.testGateway != nil {
-		stc.testGateway.InitializeConnections(ctx)
-	}
-	return stc.gateway.InitializeConnections(ctx)
 }
 
 func (stc *ScatterConn) startAction(name, keyspace, shard string, tabletType topodatapb.TabletType) (time.Time, []string) {
@@ -785,7 +761,7 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	}
 	allRetryableError := true
 	for _, e := range errors {
-		connError, ok := e.(*ShardConnError)
+		connError, ok := e.(*ShardError)
 		if !ok || (connError.EndPointCode != vtrpcpb.ErrorCode_QUERY_NOT_SERVED && connError.EndPointCode != vtrpcpb.ErrorCode_INTERNAL_ERROR) || connError.InTransaction {
 			allRetryableError = false
 			break

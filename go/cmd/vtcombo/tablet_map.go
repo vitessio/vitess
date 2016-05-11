@@ -187,6 +187,16 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		return &internalTabletManagerClient{}
 	})
 	*tmclient.TabletManagerProtocol = "internal"
+
+	// run healthcheck on all vttablets
+	tmc := tmclient.NewTabletManagerClient()
+	for _, tablet := range tabletMap {
+		tabletInfo, err := ts.GetTablet(ctx, tablet.agent.TabletAlias)
+		if err != nil {
+			log.Fatalf("cannot find tablet: %+v", tablet.agent.TabletAlias)
+		}
+		tmc.RunHealthCheck(ctx, tabletInfo)
+	}
 }
 
 //
