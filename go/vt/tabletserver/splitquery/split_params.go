@@ -3,8 +3,6 @@ package splitquery
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/cistring"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -17,7 +15,7 @@ type SplitParams struct {
 	// parameter in each constructor.
 	sql           string
 	bindVariables map[string]interface{}
-	splitColumns  []sqlparser.ColIdent
+
 	// Exactly one of splitCount, numRowsPerQueryPart will be given by the caller.
 	// See the two NewSplitParams... constructors below. The other field member
 	// will be computed using the equation: max(1, floor(numTableRows / x)),
@@ -28,9 +26,9 @@ type SplitParams struct {
 
 	// The fields below will be computed by the appropriate constructor.
 
+	splitColumns []*schema.TableColumn
 	// The schema of the table referenced in the SELECT query given in 'sql'.
 	splitTableSchema *schema.Table
-	splitColumnTypes []querypb.Type
 	// The AST for the SELECT query given in 'sql'.
 	selectAST *sqlparser.Select
 }
@@ -47,9 +45,10 @@ type SplitParams struct {
 //
 // 'bindVariables' are the bind-variables for the sql query.
 //
-// 'splitColumns' is the list of splitColumns to use. These must adhere to the restrictions found in
-// the documentation of the vtgate.SplitQueryRequest.split_column protocol buffer field.
-// If splitColumns is empty, the split columns used are the primary key columns (in order).
+// 'splitColumnNames' should contain the names of split columns to use. These must adhere to the
+// restrictions found in the documentation of the vtgate.SplitQueryRequest.split_column protocol
+// buffer field. If splitColumnNames is empty, the split columns used are the primary key columns
+// (in order).
 //
 // 'numRowsPerQueryPart' is the desired number of rows per query part returned. The actual number
 // may be different depending on the split-algorithm used.
@@ -59,14 +58,15 @@ type SplitParams struct {
 func NewSplitParamsGivenNumRowsPerQueryPart(
 	sql string,
 	bindVariables map[string]interface{},
-	splitColumns []sqlparser.ColIdent,
+	splitColumnNames []sqlparser.ColIdent,
 	numRowsPerQueryPart int64,
-	schema map[string]*schema.Table) (*SplitParams, error) {
+	schema map[string]*schema.Table,
+) (*SplitParams, error) {
 	if numRowsPerQueryPart <= 0 {
 		return nil, fmt.Errorf("numRowsPerQueryPart must be positive. Got: %v",
 			numRowsPerQueryPart)
 	}
-	result, err := newSplitParams(sql, bindVariables, splitColumns, schema)
+	result, err := newSplitParams(sql, bindVariables, splitColumnNames, schema)
 	if err != nil {
 		return nil, err
 	}
@@ -87,9 +87,10 @@ func NewSplitParamsGivenNumRowsPerQueryPart(
 //
 // 'bindVariables' are the bind-variables for the sql query.
 //
-// 'splitColumns' is the list of splitColumns to use. These must adhere to the restrictions found in
-// the documentation of the vtgate.SplitQueryRequest.split_column protocol buffer field.
-// If splitColumns is empty, the split columns used are the primary key columns (in order).
+// 'splitColumnNames' should contain the names of split columns to use. These must adhere to the
+// restrictions found in the documentation of the vtgate.SplitQueryRequest.split_column protocol
+// buffer field. If splitColumnNames is empty, the split columns used are the primary key columns
+// (in order).
 //
 // 'splitCount' is the desired splitCount to use. The actual number may be different depending on
 // the split-algorithm used.
@@ -99,15 +100,15 @@ func NewSplitParamsGivenNumRowsPerQueryPart(
 func NewSplitParamsGivenSplitCount(
 	sql string,
 	bindVariables map[string]interface{},
-	splitColumns []sqlparser.ColIdent,
+	splitColumnNames []sqlparser.ColIdent,
 	splitCount int64,
-	schema map[string]*schema.Table) (*SplitParams, error) {
-
+	schema map[string]*schema.Table,
+) (*SplitParams, error) {
 	if splitCount <= 0 {
 		return nil, fmt.Errorf("splitCount must be positive. Got: %v",
 			splitCount)
 	}
-	result, err := newSplitParams(sql, bindVariables, splitColumns, schema)
+	result, err := newSplitParams(sql, bindVariables, splitColumnNames, schema)
 	if err != nil {
 		return nil, err
 	}
@@ -123,9 +124,12 @@ func (sp *SplitParams) GetSplitTableName() string {
 
 // newSplitParams validates and initializes all the fields except splitCount and
 // numRowsPerQueryPart. It contains the common code for the constructors above.
-func newSplitParams(sql string, bindVariables map[string]interface{}, splitColumns []sqlparser.ColIdent,
-	schema map[string]*schema.Table) (*SplitParams, error) {
-
+func newSplitParams(
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumnNames []sqlparser.ColIdent,
+	schemaMap map[string]*schema.Table,
+) (*SplitParams, error) {
 	statement, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, fmt.Errorf("failed parsing query: '%v', err: '%v'", sql, err)
@@ -150,69 +154,84 @@ func newSplitParams(sql string, bindVariables map[string]interface{}, splitColum
 		return nil, fmt.Errorf("unsupported FROM clause in query"+
 			" (must be a simple table expression): %v", sql)
 	}
-	tableSchema, ok := schema[tableName]
+	tableSchema, ok := schemaMap[tableName]
 	if tableSchema == nil {
 		return nil, fmt.Errorf("can't find table in schema")
 	}
-	if len(splitColumns) == 0 {
+
+	// Get the schema.TableColumn representation of each splitColumnName.
+	var splitColumns []*schema.TableColumn
+	if len(splitColumnNames) == 0 {
 		splitColumns = getPrimaryKeyColumns(tableSchema)
-		if len(splitColumns) == 0 {
-			panic(fmt.Sprintf("getPrimaryKeyColumns() returned an empty slice. %+v", tableSchema))
+	} else {
+		splitColumns, err = findSplitColumnsInSchema(splitColumnNames, tableSchema)
+		if err != nil {
+			return nil, err
+		}
+		if !areColumnsAPrefixOfAnIndex(splitColumns, tableSchema) {
+			return nil, fmt.Errorf("split-columns must be a prefix of the columns composing"+
+				" an index. Sql: %v, split-columns: %v", sql, splitColumns)
 		}
 	}
-	if !areColumnsAPrefixOfAnIndex(splitColumns, tableSchema) {
-		return nil, fmt.Errorf("split-columns must be a prefix of the columns composing"+
-			" an index. Sql: %v, split-columns: %v", sql, splitColumns)
-	}
-	// Get the split-columns types.
-	splitColumnTypes := make([]querypb.Type, 0, len(splitColumns))
-	for _, splitColumn := range splitColumns {
-		i := tableSchema.FindColumn(splitColumn.Original())
-		if i == -1 {
-			return nil, fmt.Errorf("can't find split-column: %v", splitColumn)
-		}
-		splitColumnTypes = append(splitColumnTypes, tableSchema.Columns[i].Type)
+
+	if len(splitColumns) == 0 {
+		panic(fmt.Sprintf(
+			"Empty set of split columns. splitColumns: %+v, tableSchema: %+v",
+			splitColumns, tableSchema))
 	}
 
 	return &SplitParams{
 		sql:              sql,
 		bindVariables:    bindVariables,
 		splitColumns:     splitColumns,
-		splitColumnTypes: splitColumnTypes,
 		selectAST:        selectAST,
 		splitTableSchema: tableSchema,
 	}, nil
 }
 
+func findSplitColumnsInSchema(
+	splitColumnNames []sqlparser.ColIdent, tableSchema *schema.Table,
+) ([]*schema.TableColumn, error) {
+	result := make([]*schema.TableColumn, 0, len(splitColumnNames))
+	for _, splitColumnName := range splitColumnNames {
+		i := tableSchema.FindColumn(splitColumnName.Original())
+		if i == -1 {
+			return nil, fmt.Errorf("can't find split column: %v", splitColumnName)
+		}
+		result = append(result, &tableSchema.Columns[i])
+	}
+	return result, nil
+}
+
 // getPrimaryKeyColumns returns the list of primary-key column names, in order, for the
 // given table.
-func getPrimaryKeyColumns(table *schema.Table) []sqlparser.ColIdent {
-	result := make([]sqlparser.ColIdent, 0, len(table.PKColumns))
+func getPrimaryKeyColumns(table *schema.Table) []*schema.TableColumn {
+	result := make([]*schema.TableColumn, 0, len(table.PKColumns))
 	for _, pkColIndex := range table.PKColumns {
-		result = append(result, sqlparser.ColIdent(table.Columns[pkColIndex].Name))
+		result = append(result, &table.Columns[pkColIndex])
 	}
 	return result
 }
 
 // areColumnsAPrefixOfAnIndex returns true if 'columns' form a prefix of the columns that
 // make up some index in 'table'.
-func areColumnsAPrefixOfAnIndex(columns []sqlparser.ColIdent, table *schema.Table) bool {
+func areColumnsAPrefixOfAnIndex(columns []*schema.TableColumn, table *schema.Table) bool {
 	for _, index := range table.Indexes {
-		if isColIdentSlicePrefix(columns, index.Columns) {
+		if areColumnsAPrefixOfIndex(columns, index) {
 			return true
 		}
 	}
 	return false
 }
 
-// isColIdentSlicePrefix returns true if 'potentialPrefix' is a prefix of the slice
-// 'slice'.
-func isColIdentSlicePrefix(potentialPrefix []sqlparser.ColIdent, slice []cistring.CIString) bool {
-	if len(potentialPrefix) > len(slice) {
+// areColumnsAPrefixOfIndex returns true if 'potentialPrefix' forms a prefix of the columns
+// composing 'index'.
+func areColumnsAPrefixOfIndex(potentialPrefix []*schema.TableColumn, index *schema.Index) bool {
+	if len(potentialPrefix) > len(index.Columns) {
 		return false
 	}
 	for i := range potentialPrefix {
-		if !potentialPrefix[i].Equal(sqlparser.ColIdent(slice[i])) {
+		if !potentialPrefix[i].Name.Equal(index.Columns[i]) {
 			return false
 		}
 	}
@@ -226,8 +245,9 @@ func (sp *SplitParams) areSplitColumnsPrimaryKey() bool {
 	if len(sp.splitColumns) != len(pkCols) {
 		return false
 	}
+	// Compare the names of sp.splitColumns to the names of pkCols.
 	for i := 0; i < len(sp.splitColumns); i++ {
-		if !sp.splitColumns[i].Equal(pkCols[i]) {
+		if !sp.splitColumns[i].Name.Equal(pkCols[i].Name) {
 			return false
 		}
 	}

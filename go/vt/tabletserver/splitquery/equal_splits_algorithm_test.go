@@ -14,7 +14,7 @@ import (
 
 // Table-driven test for equal-splits algorithm.
 // Fields are exported so that "%v" would print them using their String() method.
-type testCaseType struct {
+type equalSplitsAlgorithmTestCaseType struct {
 	SplitColumn        string
 	SplitCount         int64
 	MinValue           sqltypes.Value
@@ -22,99 +22,99 @@ type testCaseType struct {
 	ExpectedBoundaries []tuple
 }
 
-var testCases = []testCaseType{
+var equalSplitsAlgorithmTestCases = []equalSplitsAlgorithmTestCaseType{
 	{ // Split the interval [10, 60] into 5 parts.
 		SplitColumn: "int64_col",
 		SplitCount:  5,
-		MinValue:    Int64Value(10),
-		MaxValue:    Int64Value(60),
+		MinValue:    int64Value(10),
+		MaxValue:    int64Value(60),
 		ExpectedBoundaries: []tuple{
-			{Int64Value(20)},
-			{Int64Value(30)},
-			{Int64Value(40)},
-			{Int64Value(50)},
+			{int64Value(20)},
+			{int64Value(30)},
+			{int64Value(40)},
+			{int64Value(50)},
 		},
 	},
 	{ // Split the interval [10, 60] into 4 parts.
 		SplitColumn: "int64_col",
 		SplitCount:  4,
-		MinValue:    Int64Value(10),
-		MaxValue:    Int64Value(60),
+		MinValue:    int64Value(10),
+		MaxValue:    int64Value(60),
 		ExpectedBoundaries: []tuple{
-			{Int64Value(22)},
-			{Int64Value(35)},
-			{Int64Value(47)},
+			{int64Value(22)},
+			{int64Value(35)},
+			{int64Value(47)},
 		},
 	},
 	{ // Split the interval [-30, 60] into 4 parts.
 		SplitColumn: "int64_col",
 		SplitCount:  4,
-		MinValue:    Int64Value(-30),
-		MaxValue:    Int64Value(60),
+		MinValue:    int64Value(-30),
+		MaxValue:    int64Value(60),
 		ExpectedBoundaries: []tuple{
-			{Int64Value(-7)},
-			{Int64Value(15)},
-			{Int64Value(37)},
+			{int64Value(-7)},
+			{int64Value(15)},
+			{int64Value(37)},
 		},
 	},
 	{ // Split the interval [18446744073709551610,18446744073709551615] into 4 parts.
 		SplitColumn: "uint64_col",
 		SplitCount:  4,
-		MinValue:    Uint64Value(18446744073709551610),
-		MaxValue:    Uint64Value(18446744073709551615),
+		MinValue:    uint64Value(18446744073709551610),
+		MaxValue:    uint64Value(18446744073709551615),
 		ExpectedBoundaries: []tuple{
-			{Uint64Value(18446744073709551611)},
-			{Uint64Value(18446744073709551612)},
-			{Uint64Value(18446744073709551613)},
+			{uint64Value(18446744073709551611)},
+			{uint64Value(18446744073709551612)},
+			{uint64Value(18446744073709551613)},
 		},
 	},
 	{ // Split the interval [0,95] into 10 parts.
 		SplitColumn: "uint64_col",
 		SplitCount:  10,
-		MinValue:    Uint64Value(0),
-		MaxValue:    Uint64Value(95),
+		MinValue:    uint64Value(0),
+		MaxValue:    uint64Value(95),
 		ExpectedBoundaries: []tuple{
-			{Uint64Value(9)},
-			{Uint64Value(19)},
-			{Uint64Value(28)},
-			{Uint64Value(38)},
-			{Uint64Value(47)},
-			{Uint64Value(57)},
-			{Uint64Value(66)},
-			{Uint64Value(76)},
-			{Uint64Value(85)},
+			{uint64Value(9)},
+			{uint64Value(19)},
+			{uint64Value(28)},
+			{uint64Value(38)},
+			{uint64Value(47)},
+			{uint64Value(57)},
+			{uint64Value(66)},
+			{uint64Value(76)},
+			{uint64Value(85)},
 		},
 	},
 	{ // Split the interval [-30.25, 60.25] into 4 parts.
 		SplitColumn: "float64_col",
 		SplitCount:  4,
-		MinValue:    Float64Value(-30.25),
-		MaxValue:    Float64Value(60.25),
+		MinValue:    float64Value(-30.25),
+		MaxValue:    float64Value(60.25),
 		ExpectedBoundaries: []tuple{
-			{Float64Value(-7.625)},
-			{Float64Value(15)},
-			{Float64Value(37.625)},
+			{float64Value(-7.625)},
+			{float64Value(15)},
+			{float64Value(37.625)},
 		},
 	},
 	{ // Split the interval [-30, -30] into 4 parts.
 		// (should return an empty boundary list).
 		SplitColumn:        "int64_col",
 		SplitCount:         4,
-		MinValue:           Int64Value(-30),
-		MaxValue:           Int64Value(-30),
+		MinValue:           int64Value(-30),
+		MaxValue:           int64Value(-30),
 		ExpectedBoundaries: []tuple{},
 	},
 }
 
 func TestEqualSplitsAlgorithm(t *testing.T) {
 	// singleTest is a function that executes a single-test.
-	singleTest := func(testCase *testCaseType) {
+	singleTest := func(testCase *equalSplitsAlgorithmTestCaseType) {
 		splitParams, err := NewSplitParamsGivenSplitCount(
 			"select * from test_table where int_col > 5",
 			/* bindVariables */ nil,
 			[]sqlparser.ColIdent{sqlparser.NewColIdent(testCase.SplitColumn)},
 			testCase.SplitCount,
-			GetSchema(),
+			getTestSchema(),
 		)
 		if err != nil {
 			t.Errorf("NewSplitParamsWithNumRowsPerQueryPart failed with: %v", err)
@@ -150,7 +150,7 @@ func TestEqualSplitsAlgorithm(t *testing.T) {
 				boundaries, testCase.ExpectedBoundaries, testCase)
 		}
 	} // singleTest()
-	for _, testCase := range testCases {
+	for _, testCase := range equalSplitsAlgorithmTestCases {
 		singleTest(&testCase)
 	}
 }

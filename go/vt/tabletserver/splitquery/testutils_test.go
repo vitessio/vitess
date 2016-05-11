@@ -3,14 +3,15 @@ package splitquery
 // This file contains utility routines for used in splitquery tests.
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/schema"
 )
 
-// GetSchema returns a fake schema object that can be given to SplitParams
-func GetSchema() map[string]*schema.Table {
+// getSchema returns a fake schema object that can be given to SplitParams
+func getTestSchema() map[string]*schema.Table {
 	table := schema.Table{
 		Name: "test_table",
 	}
@@ -35,6 +36,13 @@ func GetSchema() map[string]*schema.Table {
 	addIndexToTable(&table, "idx_id_user_id", "id", "user_id")
 	addIndexToTable(&table, "idx_id_user_id_user_id_2", "id", "user_id", "user_id2")
 
+	table.SetMysqlStats(
+		int64Value(1000), /* TableRows */
+		int64Value(100),  /* DataLength */
+		int64Value(123),  /* IndexLength */
+		int64Value(456),  /* DataFree */
+	)
+
 	result := make(map[string]*schema.Table)
 	result["test_table"] = &table
 
@@ -48,18 +56,30 @@ func GetSchema() map[string]*schema.Table {
 	return result
 }
 
-// Int64Value builds a sqltypes.Value of type sqltypes.Int64 containing the given int64 value.
-func Int64Value(value int64) sqltypes.Value {
+var testSchema = getTestSchema()
+
+func getTestSchemaColumn(tableName, columnName string) *schema.TableColumn {
+	tableSchema := testSchema[tableName]
+	columnIndex := tableSchema.FindColumn(columnName)
+	if columnIndex < 0 {
+		panic(fmt.Sprintf(
+			"Can't find columnName: %v (tableName: %v) in test schema.", columnName, tableName))
+	}
+	return &tableSchema.Columns[columnIndex]
+}
+
+// int64Value builds a sqltypes.Value of type sqltypes.Int64 containing the given int64 value.
+func int64Value(value int64) sqltypes.Value {
 	return sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt([]byte{}, value, 10))
 }
 
-// Uint64Value builds a sqltypes.Value of type sqltypes.Uint64 containing the given uint64 value.
-func Uint64Value(value uint64) sqltypes.Value {
+// uint64Value builds a sqltypes.Value of type sqltypes.Uint64 containing the given uint64 value.
+func uint64Value(value uint64) sqltypes.Value {
 	return sqltypes.MakeTrusted(sqltypes.Uint64, strconv.AppendUint([]byte{}, value, 10))
 }
 
-// Float64Value builds a sqltypes.Value of type sqltypes.Float64 containing the given float64 value.
-func Float64Value(value float64) sqltypes.Value {
+// float64Value builds a sqltypes.Value of type sqltypes.Float64 containing the given float64 value.
+func float64Value(value float64) sqltypes.Value {
 	return sqltypes.MakeTrusted(sqltypes.Float64, strconv.AppendFloat([]byte{}, value, 'f', -1, 64))
 }
 

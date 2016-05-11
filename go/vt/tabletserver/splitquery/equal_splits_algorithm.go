@@ -8,6 +8,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
@@ -38,18 +39,18 @@ type EqualSplitsAlgorithm struct {
 func NewEqualSplitsAlgorithm(splitParams *SplitParams, sqlExecuter SQLExecuter) (
 	*EqualSplitsAlgorithm, error) {
 
-	if len(splitParams.splitColumns) != len(splitParams.splitColumnTypes) {
-		panic(fmt.Sprintf("len(splitParams.splitColumns) != len(splitParams.splitColumnTypes): %v!=%v",
-			len(splitParams.splitColumns), len(splitParams.splitColumnTypes)))
-	}
 	if len(splitParams.splitColumns) == 0 {
-		panic(fmt.Sprintf("len(splitParams.splitColumns) == 0"))
+		panic(fmt.Sprintf("len(splitParams.splitColumns) == 0." +
+			" SplitParams should have defaulted the split columns to the primary key columns."))
 	}
 	// This algorithm only uses the first splitColumn.
-	if !sqltypes.IsFloat(splitParams.splitColumnTypes[0]) &&
-		!sqltypes.IsIntegral(splitParams.splitColumnTypes[0]) {
+	// Note that we do not force the user to specify only one split column, since a common
+	// use-case is not to specify split columns at all, which will make them default to the table
+	// primary key columns, and there can be more than one primary key column for a table.
+	if !sqltypes.IsFloat(splitParams.splitColumns[0].Type) &&
+		!sqltypes.IsIntegral(splitParams.splitColumns[0].Type) {
 		return nil, fmt.Errorf("using the EQUAL_SPLITS algorithm in SplitQuery requires having"+
-			" a numeric (integral or float) split-column. Got type: %v", splitParams.splitColumnTypes[0])
+			" a numeric (integral or float) split-column. Got type: %v", splitParams.splitColumns[0])
 	}
 	if splitParams.splitCount <= 0 {
 		return nil, fmt.Errorf("using the EQUAL_SPLITS algorithm in SplitQuery requires a positive"+
@@ -62,6 +63,11 @@ func NewEqualSplitsAlgorithm(splitParams *SplitParams, sqlExecuter SQLExecuter) 
 		minMaxQuery: buildMinMaxQuery(splitParams),
 	}
 	return result, nil
+}
+
+// getSplitColumns is part of the SplitAlgorithmInterface interface
+func (a *EqualSplitsAlgorithm) getSplitColumns() []*schema.TableColumn {
+	return a.splitParams.splitColumns[0:1]
 }
 
 func (a *EqualSplitsAlgorithm) generateBoundaries() ([]tuple, error) {
@@ -94,11 +100,11 @@ func (a *EqualSplitsAlgorithm) generateBoundaries() ([]tuple, error) {
 			a.splitParams.sql)
 		return []tuple{}, nil
 	}
-	min, err := valueToBigRat(minValue, a.splitParams.splitColumnTypes[0])
+	min, err := valueToBigRat(minValue, a.splitParams.splitColumns[0].Type)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to convert min to a big.Rat: %v, min: %+v", err, min))
 	}
-	max, err := valueToBigRat(maxValue, a.splitParams.splitColumnTypes[0])
+	max, err := valueToBigRat(maxValue, a.splitParams.splitColumns[0].Type)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to convert max to a big.Rat: %v, max: %+v", err, max))
 	}
@@ -108,8 +114,8 @@ func (a *EqualSplitsAlgorithm) generateBoundaries() ([]tuple, error) {
 	}
 	if minCmpMax == 0 {
 		log.Infof("max(%v)=min(%v)=%v. splitParams.sql: %v. Query will not be split.",
-			a.splitParams.splitColumns[0],
-			a.splitParams.splitColumns[0],
+			a.splitParams.splitColumns[0].Name,
+			a.splitParams.splitColumns[0].Name,
 			min,
 			a.splitParams.sql)
 		return []tuple{}, nil
@@ -124,7 +130,7 @@ func (a *EqualSplitsAlgorithm) generateBoundaries() ([]tuple, error) {
 	for i := int64(1); i < a.splitParams.splitCount; i++ {
 		boundary.Add(boundary, subIntervalSize)
 		// Here boundary=min+i*subIntervalSize
-		boundaryValue := bigRatToValue(boundary, a.splitParams.splitColumnTypes[0])
+		boundaryValue := bigRatToValue(boundary, a.splitParams.splitColumns[0].Type)
 		result = append(result, tuple{boundaryValue})
 	}
 	return result, nil
@@ -159,8 +165,8 @@ func buildMinMaxQuery(splitParams *SplitParams) string {
 		panic(fmt.Sprintf("Can't get tableName from query %v", splitParams.sql))
 	}
 	return fmt.Sprintf("select min(%v), max(%v) from %v",
-		splitParams.splitColumns[0],
-		splitParams.splitColumns[0],
+		splitParams.splitColumns[0].Name,
+		splitParams.splitColumns[0].Name,
 		tableName)
 }
 
