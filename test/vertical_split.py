@@ -69,10 +69,32 @@ class TestVerticalSplit(unittest.TestCase, base_sharding.BaseShardingTest):
     self.insert_index = 0
 
     self._init_keyspaces_and_tablets()
-    utils.VtGate().start(cache_ttl='0s')
+    utils.VtGate().start(cache_ttl='0s', tablets=[
+        source_master, source_replica, source_rdonly1,
+        source_rdonly2, destination_master,
+        destination_replica, destination_rdonly1,
+        destination_rdonly2])
+
+    utils.vtgate.wait_for_endpoints(
+        '%s.%s.master' % ('source_keyspace', '0'),
+        1)
+    utils.vtgate.wait_for_endpoints(
+        '%s.%s.replica' % ('source_keyspace', '0'),
+        1)
+    utils.vtgate.wait_for_endpoints(
+        '%s.%s.rdonly' % ('source_keyspace', '0'),
+        2)
+    utils.vtgate.wait_for_endpoints(
+        '%s.%s.master' % ('destination_keyspace', '0'),
+        1)
+    utils.vtgate.wait_for_endpoints(
+        '%s.%s.replica' % ('destination_keyspace', '0'),
+        1)
+    utils.vtgate.wait_for_endpoints(
+        '%s.%s.rdonly' % ('destination_keyspace', '0'),
+        2)
 
     # create the schema on the source keyspace, add some values
-    self._create_source_schema()
     self._insert_initial_values()
 
   def tearDown(self):
@@ -90,38 +112,71 @@ class TestVerticalSplit(unittest.TestCase, base_sharding.BaseShardingTest):
          'master:source_keyspace,replica:source_keyspace,rdonly:'
          'source_keyspace',
          'destination_keyspace'])
-    source_master.start_vttablet(
-        wait_for_state=None, init_tablet_type='replica',
-        init_keyspace='source_keyspace', init_shard='0')
-    source_replica.start_vttablet(
-        wait_for_state=None, init_tablet_type='replica',
-        init_keyspace='source_keyspace', init_shard='0')
-    source_rdonly1.start_vttablet(
-        wait_for_state=None, init_tablet_type='rdonly',
-        init_keyspace='source_keyspace', init_shard='0')
-    source_rdonly2.start_vttablet(
-        wait_for_state=None, init_tablet_type='rdonly',
-        init_keyspace='source_keyspace', init_shard='0')
 
-    destination_master.start_vttablet(
-        wait_for_state=None, init_tablet_type='replica',
-        init_keyspace='destination_keyspace', init_shard='0')
-    destination_replica.start_vttablet(
-        wait_for_state=None, init_tablet_type='replica',
-        init_keyspace='destination_keyspace', init_shard='0')
-    destination_rdonly1.start_vttablet(
-        wait_for_state=None, init_tablet_type='rdonly',
-        init_keyspace='destination_keyspace', init_shard='0')
-    destination_rdonly2.start_vttablet(
-        wait_for_state=None, init_tablet_type='rdonly',
-        init_keyspace='destination_keyspace', init_shard='0')
+    source_master.init_tablet(
+        'master',
+        keyspace='source_keyspace',
+        shard='0',
+        tablet_index=0)
+    source_replica.init_tablet(
+        'replica',
+        keyspace='source_keyspace',
+        shard='0',
+        tablet_index=1)
+    source_rdonly1.init_tablet(
+        'rdonly',
+        keyspace='source_keyspace',
+        shard='0',
+        tablet_index=2)
+    source_rdonly2.init_tablet(
+        'rdonly',
+        keyspace='source_keyspace',
+        shard='0',
+        tablet_index=3)
+    destination_master.init_tablet(
+        'master',
+        keyspace='destination_keyspace',
+        shard='0',
+        tablet_index=0)
+    destination_replica.init_tablet(
+        'replica',
+        keyspace='destination_keyspace',
+        shard='0',
+        tablet_index=1)
+    destination_rdonly1.init_tablet(
+        'rdonly',
+        keyspace='destination_keyspace',
+        shard='0',
+        tablet_index=2)
+    destination_rdonly2.init_tablet(
+        'rdonly',
+        keyspace='destination_keyspace',
+        shard='0',
+        tablet_index=3)
+
+    utils.run_vtctl(
+        ['RebuildKeyspaceGraph', 'source_keyspace'], auto_log=True)
+    utils.run_vtctl(
+        ['RebuildKeyspaceGraph', 'destination_keyspace'], auto_log=True)
+
+    self._create_source_schema()
+
+    for t in [source_master, source_replica,
+              destination_master, destination_replica]:
+      t.start_vttablet(wait_for_state=None)
+    for t in [source_rdonly1, source_rdonly2,
+              destination_rdonly1, destination_rdonly2]:
+      t.start_vttablet(wait_for_state=None)
 
     # wait for the tablets
-    all_setup_tablets = [
-        source_master, source_replica, source_rdonly1, source_rdonly2,
-        destination_master, destination_replica, destination_rdonly1,
+    master_tablets = [source_master, destination_master]
+    for t in master_tablets:
+      t.wait_for_vttablet_state('SERVING')
+    replica_tablets = [
+        source_replica, source_rdonly1, source_rdonly2,
+        destination_replica, destination_rdonly1,
         destination_rdonly2]
-    for t in all_setup_tablets:
+    for t in replica_tablets:
       t.wait_for_vttablet_state('NOT_SERVING')
 
     # check SrvKeyspace
@@ -137,8 +192,21 @@ class TestVerticalSplit(unittest.TestCase, base_sharding.BaseShardingTest):
                      destination_master.tablet_alias], auto_log=True)
     destination_master.tablet_type = 'master'
 
-    for t in all_setup_tablets:
+    for t in [source_replica, destination_replica]:
+      utils.wait_for_tablet_type(t.tablet_alias, 'replica')
+    for t in [source_rdonly1, source_rdonly2,
+              destination_rdonly1, destination_rdonly2]:
+      utils.wait_for_tablet_type(t.tablet_alias, 'rdonly')
+
+    for t in master_tablets:
       t.wait_for_vttablet_state('SERVING')
+    for t in replica_tablets:
+      t.wait_for_vttablet_state('SERVING')
+
+    utils.run_vtctl(
+        ['RebuildKeyspaceGraph', 'source_keyspace'], auto_log=True)
+    utils.run_vtctl(
+        ['RebuildKeyspaceGraph', 'destination_keyspace'], auto_log=True)
 
   def _create_source_schema(self):
     create_table_template = '''create table %s(
@@ -149,26 +217,17 @@ index by_msg (msg)
 ) Engine=InnoDB'''
     create_view_template = 'create view %s(id, msg) as select id, msg from %s'
 
-    for t in ['moving1', 'moving2', 'staying1', 'staying2']:
-      utils.run_vtctl(['ApplySchema',
-                       '-sql=' + create_table_template % (t),
-                       'source_keyspace'],
-                      auto_log=True)
-    utils.run_vtctl(['ApplySchema',
-                     '-sql=' + create_view_template % ('view1', 'moving1'),
-                     'source_keyspace'],
-                    auto_log=True)
     for t in [source_master, source_replica, source_rdonly1, source_rdonly2]:
-      utils.run_vtctl(['ReloadSchema', t.tablet_alias])
+      t.create_db('vt_source_keyspace')
+      for n in ['moving1', 'moving2', 'staying1', 'staying2']:
+        t.mquery(source_master.dbname, create_table_template % (n))
+      t.mquery(source_master.dbname,
+               create_view_template % ('view1', 'moving1'))
 
-    # Add a table to the destination keyspace which should be ignored.
-    utils.run_vtctl(['ApplySchema',
-                     '-sql=' + create_table_template % 'extra1',
-                     'destination_keyspace'],
-                    auto_log=True)
-    for t in [destination_master, destination_replica,
-              destination_rdonly1, destination_rdonly2]:
-      utils.run_vtctl(['ReloadSchema', t.tablet_alias])
+    for t in [destination_master, destination_replica, destination_rdonly1,
+              destination_rdonly2]:
+      t.create_db('vt_destination_keyspace')
+      t.mquery(destination_master.dbname, create_table_template % 'extra1')
 
   def _insert_initial_values(self):
     self.moving1_first = self._insert_values('moving1', 100)

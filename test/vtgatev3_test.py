@@ -7,7 +7,6 @@ import unittest
 
 import environment
 import keyspace_util
-import tablet
 import utils
 from protocols_flavor import protocols_flavor
 
@@ -16,9 +15,9 @@ from vtdb import dbexceptions
 from vtdb import vtgate_cursor
 from vtdb import vtgate_client
 
-shard_0_master = tablet.Tablet()
-shard_1_master = tablet.Tablet()
-lookup_master = tablet.Tablet()
+shard_0_master = None
+shard_1_master = None
+lookup_master = None
 
 keyspace_env = None
 
@@ -275,7 +274,11 @@ def setUpModule():
     lookup_master = keyspace_env.tablet_map['lookup.0.master']
 
     utils.apply_vschema(vschema)
-    utils.VtGate().start()
+    utils.VtGate().start(
+        tablets=[shard_0_master, shard_1_master, lookup_master])
+    utils.vtgate.wait_for_endpoints('user.-80.master', 1)
+    utils.vtgate.wait_for_endpoints('user.80-.master', 1)
+    utils.vtgate.wait_for_endpoints('lookup.0.master', 1)
   except:
     tearDownModule()
     raise

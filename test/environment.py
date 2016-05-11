@@ -22,7 +22,6 @@ from topo_flavor.server import topo_server
 # Import the VTGate gateway flavors that you want registered as options for the
 # --gateway_implementation flag.
 # pylint: disable=unused-import
-import vtgate_gateway_flavor.shardgateway
 import vtgate_gateway_flavor.discoverygateway
 
 
