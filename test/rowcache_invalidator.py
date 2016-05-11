@@ -55,8 +55,9 @@ def setUpModule():
 
     for t in all_tablets:
       t.start_vttablet(memcache=True, wait_for_state=None)
-    for t in all_tablets:
-      t.wait_for_vttablet_state('SERVING')
+    master_tablet.wait_for_vttablet_state('SERVING')
+    for t in [replica_tablet, replica2_tablet]:
+      t.wait_for_vttablet_state('NOT_SERVING')
 
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
                      master_tablet.tablet_alias], auto_log=True)

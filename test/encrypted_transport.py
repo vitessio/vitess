@@ -288,6 +288,7 @@ class TestSecure(unittest.TestCase):
         extra_args=server_extra_args('vttablet-server-instance',
                                      'vttablet-client'))
     shard_0_slave.start_vttablet(
+        wait_for_state='NOT_SERVING',
         table_acl_config=table_acl_config,
         extra_args=server_extra_args('vttablet-server-instance',
                                      'vttablet-client'))
