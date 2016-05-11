@@ -58,8 +58,9 @@ def setUpModule():
       t.create_db('vt_test_keyspace')
       t.start_vttablet(wait_for_state=None)
 
-    for t in [src_master, src_replica, src_rdonly]:
-      t.wait_for_vttablet_state('SERVING')
+    src_master.wait_for_vttablet_state('SERVING')
+    for t in [src_replica, src_rdonly]:
+      t.wait_for_vttablet_state('NOT_SERVING')
 
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
                      src_master.tablet_alias], auto_log=True)
