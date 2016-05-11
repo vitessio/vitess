@@ -47,6 +47,20 @@ class TestEnv(object):
         procs.append(self._new_tablet(keyspace, shard, 'rdonly', i))
     utils.wait_procs(procs)
 
+    # init tablets.
+    for shard in shards:
+      tablet_index = 0
+      self._init_tablet(keyspace, shard, 'master', None, tablet_index)
+      tablet_index += 1
+      for i in xrange(replica_count):
+        self._init_tablet(keyspace, shard, 'replica', i, tablet_index)
+        tablet_index += 1
+      for i in xrange(rdonly_count):
+        self._init_tablet(keyspace, shard, 'rdonly', i, tablet_index)
+        tablet_index += 1
+
+    utils.run_vtctl(['RebuildKeyspaceGraph', keyspace], auto_log=True)
+
     # Start tablets.
     for shard in shards:
       self._start_tablet(keyspace, shard, 'master', None)
@@ -55,14 +69,26 @@ class TestEnv(object):
       for i in xrange(rdonly_count):
         self._start_tablet(keyspace, shard, 'rdonly', i)
 
-    # Start replication.
+    for t in self.master_tablets:
+      t.wait_for_vttablet_state('SERVING')
     for t in self.tablets:
-      t.wait_for_vttablet_state('NOT_SERVING')
+      if t not in self.master_tablets:
+        t.wait_for_vttablet_state('NOT_SERVING')
+
     for t in self.master_tablets:
       utils.run_vtctl(['InitShardMaster', '-force', keyspace+'/'+t.shard,
                        t.tablet_alias], auto_log=True)
+      t.tablet_type = 'master'
+
+    for t in self.tablets:
+      if t.tablet_type == 'replica':
+        utils.wait_for_tablet_type(t.tablet_alias, 'replica')
+      elif t.tablet_type == 'rdonly':
+        utils.wait_for_tablet_type(t.tablet_alias, 'rdonly')
     for t in self.tablets:
       t.wait_for_vttablet_state('SERVING')
+
+    utils.run_vtctl(['RebuildKeyspaceGraph', keyspace], auto_log=True)
 
     for ddl in ddls:
       fname = os.path.join(environment.tmproot, 'ddl.sql')
@@ -84,22 +110,31 @@ class TestEnv(object):
     self.tablets.append(t)
     if tablet_type == 'master':
       self.master_tablets.append(t)
-      key = '%s.%s.%s' %(keyspace, shard, tablet_type)
+      key = '%s.%s.%s' % (keyspace, shard, tablet_type)
     else:
       key = '%s.%s.%s.%s' % (keyspace, shard, tablet_type, index)
     self.tablet_map[key] = t
     return t.init_mysql()
 
-  def _start_tablet(self, keyspace, shard, tablet_type, index):
-    """Start a tablet."""
-    target_tablet_type = tablet_type
+  def _init_tablet(self, keyspace, shard, tablet_type, index, tablet_index):
     if tablet_type == 'master':
-      target_tablet_type = 'replica'
-      key = '%s.%s.%s' %(keyspace, shard, tablet_type)
+      key = '%s.%s.%s' % (keyspace, shard, tablet_type)
     else:
       key = '%s.%s.%s.%s' % (keyspace, shard, tablet_type, index)
     t = self.tablet_map[key]
+    t.init_tablet(tablet_type, keyspace, shard, tablet_index=tablet_index)
+
+  def _start_tablet(self, keyspace, shard, tablet_type, index):
+    """Start a tablet."""
+    init_tablet_type = tablet_type
+    if tablet_type == 'master':
+      init_tablet_type = 'replica'
+      key = '%s.%s.%s' % (keyspace, shard, tablet_type)
+    else:
+      key = '%s.%s.%s.%s' % (keyspace, shard, tablet_type, index)
+    t = self.tablet_map[key]
+    t.create_db('vt_' + keyspace)
     return t.start_vttablet(
-        wait_for_state=None, target_tablet_type=target_tablet_type,
+        wait_for_state=None, init_tablet_type=init_tablet_type,
         init_keyspace=keyspace, init_shard=shard,
         extra_args=['-queryserver-config-schema-reload-time', '1'])

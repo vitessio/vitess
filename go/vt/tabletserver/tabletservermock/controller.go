@@ -22,6 +22,9 @@ type BroadcastData struct {
 
 	// RealtimeStats stores the last broadcast stats.
 	RealtimeStats querypb.RealtimeStats
+
+	// Serving contains the QueryServiceEnabled flag
+	Serving bool
 }
 
 // StateChange stores the state the controller changed to.
@@ -41,8 +44,8 @@ type Controller struct {
 	// QueryServiceEnabled is a state variable
 	QueryServiceEnabled bool
 
-	// InitDBConfigError is the return value for InitDBConfig
-	InitDBConfigError error
+	// IsInLameduck is a state variable
+	IsInLameduck bool
 
 	// SetServingTypeError is the return value for SetServingType
 	SetServingTypeError error
@@ -64,7 +67,6 @@ type Controller struct {
 func NewController() *Controller {
 	return &Controller{
 		QueryServiceEnabled: false,
-		InitDBConfigError:   nil,
 		IsHealthyError:      nil,
 		ReloadSchemaCount:   0,
 		BroadcastData:       make(chan *BroadcastData, 10),
@@ -82,13 +84,8 @@ func (tqsc *Controller) AddStatusPart() {
 
 // InitDBConfig is part of the tabletserver.Controller interface
 func (tqsc *Controller) InitDBConfig(target querypb.Target, dbConfigs dbconfigs.DBConfigs, schemaOverrides []tabletserver.SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
-	if tqsc.InitDBConfigError == nil {
-		tqsc.CurrentTarget = target
-		tqsc.QueryServiceEnabled = true
-	} else {
-		tqsc.QueryServiceEnabled = false
-	}
-	return tqsc.InitDBConfigError
+	tqsc.CurrentTarget = target
+	return nil
 }
 
 // SetServingType is part of the tabletserver.Controller interface
@@ -105,6 +102,7 @@ func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, serving
 			TabletType: tabletType,
 		}
 	}
+	tqsc.IsInLameduck = false
 	return stateChanged, tqsc.SetServingTypeError
 }
 
@@ -155,9 +153,11 @@ func (tqsc *Controller) BroadcastHealth(terTimestamp int64, stats *querypb.Realt
 	tqsc.BroadcastData <- &BroadcastData{
 		TERTimestamp:  terTimestamp,
 		RealtimeStats: *stats,
+		Serving:       tqsc.QueryServiceEnabled && (!tqsc.IsInLameduck),
 	}
 }
 
 // EnterLameduck implements tabletserver.Controller.
 func (tqsc *Controller) EnterLameduck() {
+	tqsc.IsInLameduck = true
 }

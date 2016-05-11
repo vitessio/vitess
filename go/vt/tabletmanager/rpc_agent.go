@@ -44,7 +44,7 @@ type RPCAgent interface {
 
 	RefreshState(ctx context.Context)
 
-	RunHealthCheck(ctx context.Context, targetTabletType topodatapb.TabletType)
+	RunHealthCheck(ctx context.Context)
 
 	IgnoreHealthError(ctx context.Context, pattern string) error
 

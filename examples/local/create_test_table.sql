@@ -1,6 +1,7 @@
-CREATE TABLE test_table (
-  id BIGINT AUTO_INCREMENT,
-  msg VARCHAR(250),
-  PRIMARY KEY (id)
+CREATE TABLE messages (
+  page BIGINT(20) UNSIGNED,
+  time_created_ns BIGINT(20) UNSIGNED,
+  message VARCHAR(10000),
+  PRIMARY KEY (page, time_created_ns)
 ) ENGINE=InnoDB
 

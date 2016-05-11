@@ -91,8 +91,10 @@ class TestSharded(unittest.TestCase):
     for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
       t.create_db('vt_test_keyspace')
       t.start_vttablet(wait_for_state=None)
-    for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
+    for t in [shard_0_master, shard_1_master]:
       t.wait_for_vttablet_state('SERVING')
+    for t in [shard_0_replica, shard_1_replica]:
+      t.wait_for_vttablet_state('NOT_SERVING')
 
     # apply the schema on the first shard through vtctl, so all tablets
     # are the same.

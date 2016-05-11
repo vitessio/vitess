@@ -15,9 +15,6 @@ namespace Vitess\Proto\Topodata {
     /**  @var \Vitess\Proto\Topodata\EndPoint\PortMapEntry[]  */
     public $port_map = array();
     
-    /**  @var \Vitess\Proto\Topodata\EndPoint\HealthMapEntry[]  */
-    public $health_map = array();
-    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -49,15 +46,6 @@ namespace Vitess\Proto\Topodata {
       $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
       $f->rule      = \DrSlump\Protobuf::RULE_REPEATED;
       $f->reference = '\Vitess\Proto\Topodata\EndPoint\PortMapEntry';
-      $descriptor->addField($f);
-
-      // REPEATED MESSAGE health_map = 4
-      $f = new \DrSlump\Protobuf\Field();
-      $f->number    = 4;
-      $f->name      = "health_map";
-      $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
-      $f->rule      = \DrSlump\Protobuf::RULE_REPEATED;
-      $f->reference = '\Vitess\Proto\Topodata\EndPoint\HealthMapEntry';
       $descriptor->addField($f);
 
       foreach (self::$__extensions as $cb) {
@@ -196,63 +184,6 @@ namespace Vitess\Proto\Topodata {
      */
     public function addPortMap(\Vitess\Proto\Topodata\EndPoint\PortMapEntry $value){
      return $this->_add(3, $value);
-    }
-    
-    /**
-     * Check if <health_map> has a value
-     *
-     * @return boolean
-     */
-    public function hasHealthMap(){
-      return $this->_has(4);
-    }
-    
-    /**
-     * Clear <health_map> value
-     *
-     * @return \Vitess\Proto\Topodata\EndPoint
-     */
-    public function clearHealthMap(){
-      return $this->_clear(4);
-    }
-    
-    /**
-     * Get <health_map> value
-     *
-     * @param int $idx
-     * @return \Vitess\Proto\Topodata\EndPoint\HealthMapEntry
-     */
-    public function getHealthMap($idx = NULL){
-      return $this->_get(4, $idx);
-    }
-    
-    /**
-     * Set <health_map> value
-     *
-     * @param \Vitess\Proto\Topodata\EndPoint\HealthMapEntry $value
-     * @return \Vitess\Proto\Topodata\EndPoint
-     */
-    public function setHealthMap(\Vitess\Proto\Topodata\EndPoint\HealthMapEntry $value, $idx = NULL){
-      return $this->_set(4, $value, $idx);
-    }
-    
-    /**
-     * Get all elements of <health_map>
-     *
-     * @return \Vitess\Proto\Topodata\EndPoint\HealthMapEntry[]
-     */
-    public function getHealthMapList(){
-     return $this->_get(4);
-    }
-    
-    /**
-     * Add a new element to <health_map>
-     *
-     * @param \Vitess\Proto\Topodata\EndPoint\HealthMapEntry $value
-     * @return \Vitess\Proto\Topodata\EndPoint
-     */
-    public function addHealthMap(\Vitess\Proto\Topodata\EndPoint\HealthMapEntry $value){
-     return $this->_add(4, $value);
     }
   }
 }

@@ -150,7 +150,6 @@ message RefreshStateResponse {
 }
 
 message RunHealthCheckRequest {
-  topodata.TabletType tablet_type = 1;
 }
 
 message RunHealthCheckResponse {

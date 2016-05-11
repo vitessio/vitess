@@ -273,11 +273,6 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	// change the cleaner actions from ChangeSlaveType(rdonly)
 	// to StartSlave() + ChangeSlaveType(spare)
 	wrangler.RecordStartSlaveAction(vsdw.cleaner, sourceTablet)
-	action, err := wrangler.FindChangeSlaveTypeActionByTarget(vsdw.cleaner, vsdw.sourceAlias)
-	if err != nil {
-		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topoproto.TabletAliasString(vsdw.sourceAlias), err)
-	}
-	action.TabletType = topodatapb.TabletType_SPARE
 
 	// 3 - ask the master of the destination shard to resume filtered
 	//     replication up to the new list of positions
@@ -305,11 +300,6 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 		return fmt.Errorf("StopSlaveMinimum on %v at %v failed: %v", topoproto.TabletAliasString(vsdw.destinationAlias), masterPos, err)
 	}
 	wrangler.RecordStartSlaveAction(vsdw.cleaner, destinationTablet)
-	action, err = wrangler.FindChangeSlaveTypeActionByTarget(vsdw.cleaner, vsdw.destinationAlias)
-	if err != nil {
-		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topoproto.TabletAliasString(vsdw.destinationAlias), err)
-	}
-	action.TabletType = topodatapb.TabletType_SPARE
 
 	// 5 - restart filtered replication on destination master
 	vsdw.wr.Logger().Infof("Restarting filtered replication on master %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias))

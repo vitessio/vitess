@@ -7,6 +7,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/splitquery/splitquery_testing"
 )
 
@@ -16,7 +17,10 @@ func TestMultipleBoundaries(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		"select * from test_table where int_col > 5",
 		nil, /* bindVariables */
-		[]string{"id", "user_id"}, /* splitColumns */
+		[]sqlparser.ColIdent{
+			sqlparser.NewColIdent("id"),
+			sqlparser.NewColIdent("user_id"),
+		}, /* splitColumns */
 		1000,
 		GetSchema(),
 	)
@@ -92,7 +96,10 @@ func TestSmallNumberOfRows(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		"select * from test_table where int_col > 5",
 		nil, /* bindVariables */
-		[]string{"id", "user_id"}, /* splitColumns */
+		[]sqlparser.ColIdent{
+			sqlparser.NewColIdent("id"),
+			sqlparser.NewColIdent("user_id"),
+		}, /* splitColumns */
 		1000,
 		GetSchema(),
 	)
@@ -129,7 +136,10 @@ func TestSQLExecuterReturnsError(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		"select * from test_table where int_col > 5",
 		nil, /* bindVariables */
-		[]string{"id", "user_id"}, /* splitColumns */
+		[]sqlparser.ColIdent{
+			sqlparser.NewColIdent("id"),
+			sqlparser.NewColIdent("user_id"),
+		}, /* splitColumns */
 		1000,
 		GetSchema(),
 	)

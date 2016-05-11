@@ -49,8 +49,12 @@ func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
 // ChangeType changes the tablet type
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error {
-	_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType, nil)
-	return err
+	_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType)
+	if err != nil {
+		return err
+	}
+	agent.runHealthCheckProtected()
+	return nil
 }
 
 // Sleep sleeps for the duration
@@ -73,8 +77,8 @@ func (agent *ActionAgent) RefreshState(ctx context.Context) {
 
 // RunHealthCheck will manually run the health check on the tablet.
 // Should be called under RPCWrap.
-func (agent *ActionAgent) RunHealthCheck(ctx context.Context, targetTabletType topodatapb.TabletType) {
-	agent.runHealthCheck(targetTabletType)
+func (agent *ActionAgent) RunHealthCheck(ctx context.Context) {
+	agent.runHealthCheck()
 }
 
 // IgnoreHealthError sets the regexp for health check errors to ignore.

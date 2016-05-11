@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -63,13 +64,11 @@ func generateQuery(statement sqlparser.Statement) string {
 // isIndexChanging returns true if any of the update
 // expressions modify a vindex column.
 func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.ColVindex) bool {
-	vindexCols := make([]string, len(colVindexes))
-	for i, index := range colVindexes {
-		vindexCols[i] = index.Col
-	}
 	for _, assignment := range setClauses {
-		if sqlparser.StringIn(string(assignment.Name.Name), vindexCols...) {
-			return true
+		for _, vcol := range colVindexes {
+			if vcol.Col.Equal(cistring.CIString(assignment.Name.Name)) {
+				return true
+			}
 		}
 	}
 	return false
@@ -115,7 +114,7 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *vindexes.Table) string
 	prefix := ""
 	for _, cv := range table.Owned {
 		buf.WriteString(prefix)
-		buf.WriteString(cv.Col)
+		buf.WriteString(cv.Col.Original())
 		prefix = ", "
 	}
 	fmt.Fprintf(buf, " from %s", table.Name)
@@ -146,7 +145,7 @@ func getDMLRouting(where *sqlparser.Where, route *engine.Route) error {
 // getMatch returns the matched value if there is an equality
 // constraint on the specified column that can be used to
 // decide on a route.
-func getMatch(node sqlparser.BoolExpr, col string) interface{} {
+func getMatch(node sqlparser.BoolExpr, col cistring.CIString) interface{} {
 	filters := splitAndExpression(nil, node)
 	for _, filter := range filters {
 		comparison, ok := filter.(*sqlparser.ComparisonExpr)
@@ -171,7 +170,7 @@ func getMatch(node sqlparser.BoolExpr, col string) interface{} {
 	return nil
 }
 
-func nameMatch(node sqlparser.ValExpr, col string) bool {
+func nameMatch(node sqlparser.ValExpr, col cistring.CIString) bool {
 	colname, ok := node.(*sqlparser.ColName)
-	return ok && string(colname.Name) == col
+	return ok && colname.Name.Equal(sqlparser.ColIdent(col))
 }

@@ -375,8 +375,7 @@ class Tablet(object):
     if start:
       if not wait_for_start:
         expected_state = None
-      elif (tablet_type == 'master' or tablet_type == 'replica' or
-            tablet_type == 'rdonly' or tablet_type == 'batch'):
+      elif tablet_type == 'master':
         expected_state = 'SERVING'
       else:
         expected_state = 'NOT_SERVING'
@@ -403,7 +402,7 @@ class Tablet(object):
       schema_override=None,
       repl_extra_flags=None, table_acl_config=None,
       lameduck_period=None, security_policy=None,
-      target_tablet_type=None, full_mycnf_args=False,
+      full_mycnf_args=False,
       extra_args=None, extra_env=None, include_mysql_port=True,
       init_tablet_type=None, init_keyspace=None,
       init_shard=None, init_db_name_override=None,
@@ -430,6 +429,10 @@ class Tablet(object):
     args.extend(['-binlog_player_healthcheck_retry_delay', '1s'])
     args.extend(['-binlog_player_retry_delay', '1s'])
     args.extend(['-pid_file', os.path.join(self.tablet_dir, 'vttablet.pid')])
+    # always enable_replication_lag_check with somewhat short values for tests
+    args.extend(['-health_check_interval', '2s'])
+    args.extend(['-enable_replication_lag_check'])
+    args.extend(['-degraded_threshold', '5s'])
     if enable_semi_sync:
       args.append('-enable_semi_sync')
     if self.use_mysqlctld:
@@ -467,12 +470,6 @@ class Tablet(object):
       ])
       if include_mysql_port:
         args.extend(['-mycnf_mysql_port', str(self.mysql_port)])
-    if target_tablet_type:
-      self.tablet_type = target_tablet_type
-      args.extend(['-target_tablet_type', target_tablet_type,
-                   '-health_check_interval', '2s',
-                   '-enable_replication_lag_check',
-                   '-degraded_threshold', '5s'])
 
     # this is used to run InitTablet as part of the vttablet startup
     if init_tablet_type:
@@ -589,8 +586,8 @@ class Tablet(object):
                 '  vttablet %s in state %s != %s', self.tablet_alias, s,
                 expected)
       timeout = utils.wait_step(
-          'waiting for state %s (last seen state: %s)' %
-          (expected, last_seen_state),
+          'waiting for %s state %s (last seen state: %s)' %
+          (self.tablet_alias, expected, last_seen_state),
           timeout, sleep_time=0.1)
 
   def wait_for_mysqlctl_socket(self, timeout=30.0):

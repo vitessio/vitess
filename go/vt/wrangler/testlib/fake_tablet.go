@@ -174,7 +174,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 
 	// create a test agent on that port, and re-read the record
 	// (it has new ports and IP)
-	ft.Agent = tabletmanager.NewTestActionAgent(context.Background(), wr.TopoServer(), ft.Tablet.Alias, vtPort, gRPCPort, ft.FakeMysqlDaemon)
+	ft.Agent = tabletmanager.NewTestActionAgent(context.Background(), wr.TopoServer(), ft.Tablet.Alias, vtPort, gRPCPort, ft.FakeMysqlDaemon, nil)
 	ft.Tablet = ft.Agent.Tablet()
 
 	// create the gRPC server

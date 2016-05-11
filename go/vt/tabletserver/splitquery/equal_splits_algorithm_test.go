@@ -8,6 +8,7 @@ import (
 	"github.com/golang/mock/gomock"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/splitquery/splitquery_testing"
 )
 
@@ -111,7 +112,7 @@ func TestEqualSplitsAlgorithm(t *testing.T) {
 		splitParams, err := NewSplitParamsGivenSplitCount(
 			"select * from test_table where int_col > 5",
 			/* bindVariables */ nil,
-			[]string{testCase.SplitColumn},
+			[]sqlparser.ColIdent{sqlparser.NewColIdent(testCase.SplitColumn)},
 			testCase.SplitCount,
 			GetSchema(),
 		)

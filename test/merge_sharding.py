@@ -270,10 +270,15 @@ index by_msg (msg)
       t.create_db('vt_test_keyspace')
       t.start_vttablet(wait_for_state=None)
 
-    for t in [shard_0_master, shard_0_replica, shard_0_rdonly,
-              shard_1_master, shard_1_replica, shard_1_rdonly,
-              shard_2_master, shard_2_replica, shard_2_rdonly]:
+    # masters will be serving
+    for t in [shard_0_master, shard_1_master, shard_2_master]:
       t.wait_for_vttablet_state('SERVING')
+
+    # slaves won't be, no replication state
+    for t in [shard_0_replica, shard_0_rdonly,
+              shard_1_replica, shard_1_rdonly,
+              shard_2_replica, shard_2_rdonly]:
+      t.wait_for_vttablet_state('NOT_SERVING')
 
     # reparent to make the tablets work
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/-40',
@@ -290,23 +295,19 @@ index by_msg (msg)
     # run a health check on source replicas so they respond to discovery
     # (for binlog players) and on the source rdonlys (for workers)
     for t in [shard_0_replica, shard_1_replica]:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'])
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
     for t in [shard_0_rdonly, shard_1_rdonly]:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
 
     # create the merge shards
     shard_dest_master.init_tablet('master', 'test_keyspace', '-80')
     shard_dest_replica.init_tablet('replica', 'test_keyspace', '-80')
     shard_dest_rdonly.init_tablet('rdonly', 'test_keyspace', '-80')
 
-    # start vttablet on the split shards (no db created,
+    # start vttablet on the destination shard (no db created,
     # so they're all not serving)
-    for t in [shard_dest_replica, shard_dest_rdonly]:
+    for t in [shard_dest_master, shard_dest_replica, shard_dest_rdonly]:
       t.start_vttablet(wait_for_state=None)
-    # Start masters with enabled healthcheck (necessary for resolving the
-    # destination master).
-    shard_dest_master.start_vttablet(wait_for_state=None,
-                                     target_tablet_type='replica')
     for t in [shard_dest_master, shard_dest_replica, shard_dest_rdonly]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
@@ -377,8 +378,7 @@ index by_msg (msg)
 
     # use vtworker to compare the data (after health-checking the destination
     # rdonly tablets so discovery works)
-    utils.run_vtctl(['RunHealthCheck', shard_dest_rdonly.tablet_alias,
-                     'rdonly'])
+    utils.run_vtctl(['RunHealthCheck', shard_dest_rdonly.tablet_alias])
     logging.debug('Running vtworker SplitDiff on first half')
     utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
                         '--exclude_tables', 'unrelated',

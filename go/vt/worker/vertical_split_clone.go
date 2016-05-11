@@ -328,11 +328,6 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	}
 
 	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet)
-	action, err := wrangler.FindChangeSlaveTypeActionByTarget(vscw.cleaner, vscw.sourceAlias)
-	if err != nil {
-		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topoproto.TabletAliasString(vscw.sourceAlias), err)
-	}
-	action.TabletType = topodatapb.TabletType_SPARE
 
 	// Initialize healthcheck and add destination shards to it.
 	vscw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout, "" /* statsSuffix */)

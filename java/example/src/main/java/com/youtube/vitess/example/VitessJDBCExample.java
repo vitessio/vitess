@@ -1,56 +1,60 @@
 package com.youtube.vitess.example;
 
-import java.sql.*;
+import org.joda.time.Instant;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.Random;
 
 /**
  * Created by harshit.gangal on 10/03/16.
  */
 public class VitessJDBCExample {
-    private static final String dbURL = "jdbc:vitess://<vtGateHostname>:<vtGatePort>/<keyspace>/<dbName>";
-    private static Connection conn;
-
-    static {
-        try {
-            //With JDBC 4.1 Specs class.forname is not required.
-            conn = DriverManager.getConnection(dbURL, null);
-        } catch (SQLException e) {
-            System.out.println("failed to initialize class");
-        }
+  public static void main(String[] args) throws Exception {
+    if (args.length != 1) {
+      System.out.println("usage: VitessJDBCExample <vtgate-host:port>");
+      System.exit(1);
     }
 
-    public static void main(String[] args) throws Exception {
-        Statement stmt;
-        stmt = conn.createStatement();
-        ResultSet rs = stmt.executeQuery("show databases");
-        ResultSetMetaData resultSetMetaData = rs.getMetaData();
-        int colCount = resultSetMetaData.getColumnCount();
+    // Connect to vtgate.
+    String dbURL = "jdbc:vitess://" + args[0] + "/test_keyspace/unused";
+    try (Connection conn = DriverManager.getConnection(dbURL, null)) {
+      // Insert some messages on random pages.
+      System.out.println("Inserting into master...");
+      Random rand = new Random();
+      for (int i = 0; i < 3; i++) {
+        Instant timeCreated = Instant.now();
+        int page = rand.nextInt(100) + 1;
+
+        PreparedStatement stmt =
+            conn.prepareStatement(
+                "INSERT INTO messages (page,time_created_ns,message) VALUES (?,?,?)");
+        stmt.setInt(1, page);
+        stmt.setLong(2, timeCreated.getMillis() * 1000000);
+        stmt.setString(3, "V is for speed");
+        stmt.execute();
+      }
+
+      // Read it back from a replica.
+      System.out.println("Reading from replica...");
+      String sql = "SELECT page, time_created_ns, message FROM messages";
+      try (Statement stmt = conn.createStatement();
+          ResultSet rs = stmt.executeQuery(sql)) {
         while (rs.next()) {
-            for (int i = 1; i <= colCount; ++i) {
-                System.out.println(resultSetMetaData.getColumnName(i) + " : " + rs.getString(i));
-            }
+          long page = rs.getLong("page");
+          long timeCreated = rs.getLong("time_created_ns");
+          String message = rs.getString("message");
+          System.out.format("(%s, %s, %s)\n", page, timeCreated, message);
         }
-        rs.close();
-        stmt.close();
-
-
-        String sql = "select * from test_table where id BETWEEN ? AND ?";
-        PreparedStatement preparedStatement = conn.prepareStatement(sql);
-        preparedStatement.setInt(1, 1);
-        preparedStatement.setInt(2, 10);
-
-        rs = preparedStatement.executeQuery();
-        resultSetMetaData = rs.getMetaData();
-        colCount = resultSetMetaData.getColumnCount();
-        int rowCount = 1;
-        while (rs.next()) {
-            System.out.println("Row ----> " + rowCount);
-            for (int i = 1; i <= colCount; ++i) {
-                System.out.println(resultSetMetaData.getColumnName(i) + " : " + rs.getString(i));
-            }
-            ++rowCount;
-        }
-        rs.close();
-        preparedStatement.close();
-        conn.close();
+      }
+    } catch (Exception e) {
+      System.out.println("Vitess JDBC example failed.");
+      System.out.println("Error Details:");
+      e.printStackTrace();
+      System.exit(2);
     }
+  }
 }

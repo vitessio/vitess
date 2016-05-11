@@ -288,6 +288,7 @@ class TestSecure(unittest.TestCase):
         extra_args=server_extra_args('vttablet-server-instance',
                                      'vttablet-client'))
     shard_0_slave.start_vttablet(
+        wait_for_state='NOT_SERVING',
         table_acl_config=table_acl_config,
         extra_args=server_extra_args('vttablet-server-instance',
                                      'vttablet-client'))
@@ -303,7 +304,7 @@ class TestSecure(unittest.TestCase):
         'test_keyspace'])
     for t in [shard_0_master, shard_0_slave]:
       utils.run_vtctl(tmclient_extra_args('vttablet-client-1') + [
-          'RunHealthCheck', t.tablet_alias, 'replica'])
+          'RunHealthCheck', t.tablet_alias])
 
     # start vtgate
     utils.VtGate().start(extra_args=tabletconn_extra_args('vttablet-client-1')+

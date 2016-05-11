@@ -52,7 +52,7 @@ var routerVSchema = `
 		"user": {
 			"ColVindexes": [
 				{
-					"Col": "id",
+					"Col": "Id",
 					"Name": "user_index"
 				},
 				{

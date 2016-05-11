@@ -64,7 +64,7 @@ type TabletManagerClient interface {
 	RefreshState(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// RunHealthCheck asks the remote tablet to run a health check cycle
-	RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topodatapb.TabletType) error
+	RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// IgnoreHealthError sets the regexp for health errors to ignore.
 	IgnoreHealthError(ctx context.Context, tablet *topo.TabletInfo, pattern string) error

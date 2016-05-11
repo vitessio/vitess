@@ -443,13 +443,10 @@ func agentRPCTestRefreshStatePanic(ctx context.Context, t *testing.T, client tmc
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-var testRunHealthCheckValue = topodatapb.TabletType_RDONLY
-
-func (fra *fakeRPCAgent) RunHealthCheck(ctx context.Context, targetTabletType topodatapb.TabletType) {
+func (fra *fakeRPCAgent) RunHealthCheck(ctx context.Context) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "RunHealthCheck tabletType", targetTabletType, testRunHealthCheckValue)
 }
 
 var testIgnoreHealthErrorValue = ".*"
@@ -463,14 +460,14 @@ func (fra *fakeRPCAgent) IgnoreHealthError(ctx context.Context, pattern string) 
 }
 
 func agentRPCTestRunHealthCheck(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.RunHealthCheck(ctx, ti, testRunHealthCheckValue)
+	err := client.RunHealthCheck(ctx, ti)
 	if err != nil {
 		t.Errorf("RunHealthCheck failed: %v", err)
 	}
 }
 
 func agentRPCTestRunHealthCheckPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.RunHealthCheck(ctx, ti, testRunHealthCheckValue)
+	err := client.RunHealthCheck(ctx, ti)
 	expectRPCWrapPanic(t, err)
 }
 

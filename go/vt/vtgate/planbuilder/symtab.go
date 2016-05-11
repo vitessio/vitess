@@ -7,6 +7,7 @@ package planbuilder
 import (
 	"fmt"
 
+	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
@@ -62,7 +63,7 @@ func newSymtab(vschema VSchema) *symtab {
 }
 
 // AddAlias adds a table alias to symtab.
-func (st *symtab) AddAlias(alias, astName sqlparser.SQLName, table *vindexes.Table, rb *route) error {
+func (st *symtab) AddAlias(alias, astName sqlparser.TableIdent, table *vindexes.Table, rb *route) error {
 	if found := st.findTable(alias); found != nil {
 		return fmt.Errorf("duplicate symbol: %s", alias)
 	}
@@ -99,7 +100,7 @@ func (st *symtab) Merge(newsyms *symtab) error {
 	return nil
 }
 
-func (st *symtab) findTable(alias sqlparser.SQLName) *tabsym {
+func (st *symtab) findTable(alias sqlparser.TableIdent) *tabsym {
 	for i, t := range st.tables {
 		if t.Alias == alias {
 			return st.tables[i]
@@ -137,13 +138,13 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (rb *route, isL
 		return m.Route(), m.Symtab() == st, nil
 	}
 	if len(st.Colsyms) != 0 {
-		name := sqlparser.SQLName(sqlparser.String(col))
-		starname := sqlparser.SQLName(sqlparser.String(&sqlparser.ColName{
-			Name:      "*",
+		name := sqlparser.String(col)
+		starname := sqlparser.String(&sqlparser.ColName{
+			Name:      sqlparser.NewColIdent("*"),
 			Qualifier: col.Qualifier,
-		}))
+		})
 		for _, colsym := range st.Colsyms {
-			if name == colsym.Alias || starname == colsym.Alias || colsym.Alias == "*" {
+			if colsym.Alias.EqualString(name) || colsym.Alias.EqualString(starname) || colsym.Alias.EqualString("*") {
 				col.Metadata = colsym
 				return colsym.Route(), true, nil
 			}
@@ -158,7 +159,7 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (rb *route, isL
 		}
 		return nil, false, fmt.Errorf("symbol %s not found", sqlparser.String(col))
 	}
-	qualifier := sqlparser.SQLName(sqlparser.String(col.Qualifier))
+	qualifier := sqlparser.TableIdent(sqlparser.String(col.Qualifier))
 	if qualifier == "" && autoResolve && len(st.tables) == 1 {
 		for _, t := range st.tables {
 			qualifier = t.Alias
@@ -231,8 +232,8 @@ type sym interface {
 // from the table name, which is something that VTTablet and MySQL
 // can't recognize.
 type tabsym struct {
-	Alias       sqlparser.SQLName
-	ASTName     sqlparser.SQLName
+	Alias       sqlparser.TableIdent
+	ASTName     sqlparser.TableIdent
 	route       *route
 	symtab      *symtab
 	Keyspace    *vindexes.Keyspace
@@ -242,7 +243,7 @@ type tabsym struct {
 func (t *tabsym) newColRef(col *sqlparser.ColName) colref {
 	return colref{
 		Meta: t,
-		Name: col.Name,
+		Name: col.Name.Lowered(),
 	}
 }
 
@@ -255,9 +256,9 @@ func (t *tabsym) Symtab() *symtab {
 }
 
 // FindVindex returns the vindex if one was found for the column.
-func (t *tabsym) FindVindex(name sqlparser.SQLName) vindexes.Vindex {
+func (t *tabsym) FindVindex(name sqlparser.ColIdent) vindexes.Vindex {
 	for _, colVindex := range t.ColVindexes {
-		if string(name) == colVindex.Col {
+		if colVindex.Col.Equal(cistring.CIString(name)) {
 			return colVindex.Vindex
 		}
 	}
@@ -274,7 +275,7 @@ func (t *tabsym) FindVindex(name sqlparser.SQLName) vindexes.Vindex {
 // is set to the column it refers. If the referenced column has a Vindex,
 // the Vindex field is also accordingly set.
 type colsym struct {
-	Alias      sqlparser.SQLName
+	Alias      sqlparser.ColIdent
 	route      *route
 	symtab     *symtab
 	Underlying colref
@@ -312,7 +313,7 @@ func (cs *colsym) Symtab() *symtab {
 // or colsym. This representation makes a colref unambiguous.
 type colref struct {
 	Meta sym
-	Name sqlparser.SQLName
+	Name string
 }
 
 // newColref builds a colref from a sqlparser.ColName that was

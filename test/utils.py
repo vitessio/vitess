@@ -389,6 +389,7 @@ def wait_for_vars(name, port, var=None, key=None, value=None, timeout=10.0):
     if key:
       text += ' key %s:%s' % (key, value)
   while True:
+    display_text = text
     v = get_vars(port)
     if v:
       if var is None:
@@ -396,9 +397,18 @@ def wait_for_vars(name, port, var=None, key=None, value=None, timeout=10.0):
       if var in v:
         if key is None:
           break
-        if key in v[var] and v[var][key] == value:
-          break
-    timeout = wait_step(text, timeout)
+        if key in v[var]:
+          if v[var][key] == value:
+            break
+          else:
+            display_text += ' (current value:%s)' % v[var][key]
+        else:
+          display_text += ' (no current value)'
+      else:
+        display_text += ' (%s not in vars)' % var
+    else:
+      display_text += ' (no vars yet)'
+    timeout = wait_step(display_text, timeout)
 
 
 def poll_for_vars(
@@ -519,9 +529,9 @@ class VtGate(object):
       self.grpc_port = environment.reserve_ports(1)
     self.proc = None
 
-  def start(self, cell='test_nj', retry_delay=1, retry_count=2,
+  def start(self, cell='test_nj', retry_count=2,
             topo_impl=None, cache_ttl='1s',
-            timeout_total='2s', timeout_per_conn='1s',
+            timeout_total='2s',
             extra_args=None, tablets=None,
             tablet_types_to_wait='MASTER,REPLICA'):
     """Start vtgate. Saves it into the global vtgate variable if not set yet."""
@@ -529,12 +539,10 @@ class VtGate(object):
     args = environment.binary_args('vtgate') + [
         '-port', str(self.port),
         '-cell', cell,
-        '-retry-delay', '%ss' % (str(retry_delay)),
         '-retry-count', str(retry_count),
         '-log_dir', environment.vtlogroot,
         '-srv_topo_cache_ttl', cache_ttl,
         '-conn-timeout-total', timeout_total,
-        '-conn-timeout-per-conn', timeout_per_conn,
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-gateway_implementation', vtgate_gateway_flavor().flavor(),
         '-tablet_grpc_combine_begin_execute',
@@ -677,8 +685,6 @@ class VtGate(object):
       count: how many endpoints to wait for.
       timeout: how long to wait.
     """
-    if vtgate_gateway_flavor().flavor() == 'shardgateway':
-      return
     wait_for_vars('vtgate', self.port,
                   var=vtgate_gateway_flavor().connection_count_vars(),
                   key=name, value=count, timeout=timeout)
@@ -1006,14 +1012,15 @@ def check_tablet_query_service(
                         tablet_vars['TabletStateName'], expected_state))
 
   status = tablet.get_status()
+  tc_dqs = 'Query Service disabled: TabletControl.DisableQueryService set'
   if tablet_control_disabled:
-    testcase.assertIn('Query Service disabled by TabletControl', status)
+    testcase.assertIn(tc_dqs, status)
   else:
-    testcase.assertNotIn('Query Service disabled by TabletControl', status)
+    testcase.assertNotIn(tc_dqs, status)
 
   if tablet.tablet_type == 'rdonly':
     # Run RunHealthCheck to be sure the tablet doesn't change its serving state.
-    run_vtctl(['RunHealthCheck', tablet.tablet_alias, 'rdonly'],
+    run_vtctl(['RunHealthCheck', tablet.tablet_alias],
               auto_log=True)
 
     tablet_vars = get_vars(tablet.port)

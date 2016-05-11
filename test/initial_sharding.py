@@ -258,25 +258,44 @@ index by_msg (msg)
 
   def test_resharding(self):
     # create the keyspace with just one shard
-    shard_master.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
-        init_keyspace='test_keyspace', init_shard='0')
-    shard_replica.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
-        init_keyspace='test_keyspace', init_shard='0')
-    shard_rdonly1.start_vttablet(
-        wait_for_state=None, target_tablet_type='rdonly',
-        init_keyspace='test_keyspace', init_shard='0')
+    shard_master.init_tablet(
+        'master',
+        keyspace='test_keyspace',
+        shard='0',
+        tablet_index=0)
+    shard_replica.init_tablet(
+        'replica',
+        keyspace='test_keyspace',
+        shard='0',
+        tablet_index=1)
+    shard_rdonly1.init_tablet(
+        'rdonly',
+        keyspace='test_keyspace',
+        shard='0',
+        tablet_index=2)
+
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     for t in [shard_master, shard_replica, shard_rdonly1]:
+      t.create_db('vt_test_keyspace')
+
+    shard_master.start_vttablet(wait_for_state=None)
+    shard_replica.start_vttablet(wait_for_state=None)
+    shard_rdonly1.start_vttablet(wait_for_state=None)
+
+    shard_master.wait_for_vttablet_state('SERVING')
+    for t in [shard_replica, shard_rdonly1]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
     # reparent to make the tablets work
     utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
                      shard_master.tablet_alias], auto_log=True)
 
+    utils.wait_for_tablet_type(shard_replica.tablet_alias, 'replica')
+    utils.wait_for_tablet_type(shard_rdonly1.tablet_alias, 'rdonly')
     for t in [shard_master, shard_replica, shard_rdonly1]:
       t.wait_for_vttablet_state('SERVING')
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # create the tables and add startup values
     self._create_schema()
@@ -288,7 +307,11 @@ index by_msg (msg)
 
     # must start vtgate after tablets are up, or else wait until 1min refresh
     # we want cache_ttl at zero so we re-read the topology for every test query.
-    utils.VtGate().start(cache_ttl='0')
+    utils.VtGate().start(cache_ttl='0', tablets=[
+        shard_master, shard_replica, shard_rdonly1])
+    utils.vtgate.wait_for_endpoints('test_keyspace.0.master', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.0.replica', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.0.rdonly', 1)
 
     # check the Map Reduce API works correctly, should use ExecuteShards,
     # as we're not sharded yet.
@@ -311,33 +334,54 @@ index by_msg (msg)
                     auto_log=True)
 
     # run a health check on source replica so it responds to discovery
-    utils.run_vtctl(['RunHealthCheck', shard_replica.tablet_alias, 'replica'])
+    utils.run_vtctl(['RunHealthCheck', shard_replica.tablet_alias])
 
-        # create the split shards
-    shard_0_master.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
-        init_keyspace='test_keyspace', init_shard='-80')
-    shard_0_replica.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
-        init_keyspace='test_keyspace', init_shard='-80')
-    shard_0_rdonly1.start_vttablet(
-        wait_for_state=None, target_tablet_type='rdonly',
-        init_keyspace='test_keyspace', init_shard='-80')
-    shard_1_master.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
-        init_keyspace='test_keyspace', init_shard='80-')
-    shard_1_replica.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
-        init_keyspace='test_keyspace', init_shard='80-')
-    shard_1_rdonly1.start_vttablet(
-        wait_for_state=None, target_tablet_type='rdonly',
-        init_keyspace='test_keyspace', init_shard='80-')
+    # create the split shards
+    shard_0_master.init_tablet(
+        'master',
+        keyspace='test_keyspace',
+        shard='-80',
+        tablet_index=0)
+    shard_0_replica.init_tablet(
+        'replica',
+        keyspace='test_keyspace',
+        shard='-80',
+        tablet_index=1)
+    shard_0_rdonly1.init_tablet(
+        'rdonly',
+        keyspace='test_keyspace',
+        shard='-80',
+        tablet_index=2)
+    shard_1_master.init_tablet(
+        'master',
+        keyspace='test_keyspace',
+        shard='80-',
+        tablet_index=0)
+    shard_1_replica.init_tablet(
+        'replica',
+        keyspace='test_keyspace',
+        shard='80-',
+        tablet_index=1)
+    shard_1_rdonly1.init_tablet(
+        'rdonly',
+        keyspace='test_keyspace',
+        shard='80-',
+        tablet_index=2)
 
-    # start vttablet on the split shards (no db created,
-    # so they're all not serving)
-    sharded_tablets = [shard_0_master, shard_0_replica, shard_0_rdonly1,
-                       shard_1_master, shard_1_replica, shard_1_rdonly1]
-    for t in sharded_tablets:
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+
+    for t in [shard_0_master, shard_0_replica,
+              shard_1_master, shard_1_replica]:
+      t.create_db('vt_test_keyspace')
+      t.start_vttablet(wait_for_state=None)
+    for t in [shard_0_rdonly1, shard_1_rdonly1]:
+      t.create_db('vt_test_keyspace')
+      t.start_vttablet(wait_for_state=None)
+
+    for t in [shard_0_master, shard_1_master]:
+      t.wait_for_vttablet_state('SERVING')
+    for t in [shard_0_replica, shard_0_rdonly1,
+              shard_1_replica, shard_1_rdonly1]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
     utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/-80',
@@ -345,13 +389,34 @@ index by_msg (msg)
     utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/80-',
                      shard_1_master.tablet_alias], auto_log=True)
 
+    for t in [shard_0_replica, shard_1_replica]:
+      utils.wait_for_tablet_type(t.tablet_alias, 'replica')
+    for t in [shard_0_rdonly1, shard_1_rdonly1]:
+      utils.wait_for_tablet_type(t.tablet_alias, 'rdonly')
+
+    sharded_tablets = [shard_0_master, shard_0_replica, shard_0_rdonly1,
+                       shard_1_master, shard_1_replica, shard_1_rdonly1]
     for t in sharded_tablets:
       t.wait_for_vttablet_state('SERVING')
+
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # must restart vtgate after tablets are up, or else wait until 1min refresh
     # we want cache_ttl at zero so we re-read the topology for every test query.
     utils.vtgate.kill()
-    utils.VtGate().start(cache_ttl='0')
+    utils.VtGate().start(cache_ttl='0', tablets=[
+        shard_master, shard_replica, shard_rdonly1,
+        shard_0_master, shard_0_replica, shard_0_rdonly1,
+        shard_1_master, shard_1_replica, shard_1_rdonly1])
+    utils.vtgate.wait_for_endpoints('test_keyspace.0.master', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.0.replica', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.0.rdonly', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.-80.master', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.-80.replica', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.-80.rdonly', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.80-.master', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.80-.replica', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.80-.rdonly', 1)
 
     # check the Map Reduce API works correctly, should use ExecuteKeyRanges now,
     # as we are sharded (with just one shard).
@@ -378,7 +443,7 @@ index by_msg (msg)
                        shard_rdonly1.tablet_alias,
                        keyspace_shard],
                       auto_log=True)
-    utils.run_vtctl(['RunHealthCheck', shard_rdonly1.tablet_alias, 'rdonly'])
+    utils.run_vtctl(['RunHealthCheck', shard_rdonly1.tablet_alias])
 
     utils.run_vtworker(['--cell', 'test_nj',
                         '--command_display_interval', '10ms',
@@ -426,7 +491,7 @@ index by_msg (msg)
     # use vtworker to compare the data
     logging.debug('Running vtworker SplitDiff for -80')
     for t in [shard_0_rdonly1, shard_1_rdonly1]:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
     utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
                         '--min_healthy_rdonly_endpoints', '1',
                         'test_keyspace/-80'],

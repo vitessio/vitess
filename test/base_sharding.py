@@ -96,7 +96,7 @@ class BaseShardingTest(object):
 
     # Enforce health check because it's not running by default as
     # tablets may not be started with it, or may not run it in time.
-    utils.run_vtctl(['RunHealthCheck', tablet_obj.tablet_alias, 'replica'])
+    utils.run_vtctl(['RunHealthCheck', tablet_obj.tablet_alias])
     stream_health = utils.run_vtctl_json(['VtTabletStreamHealth',
                                           '-count', '1',
                                           tablet_obj.tablet_alias])

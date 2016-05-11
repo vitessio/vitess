@@ -268,6 +268,26 @@ func TestSelectEqual(t *testing.T) {
 	}
 }
 
+func TestSelectCaseSensitivity(t *testing.T) {
+	router, sbc1, sbc2, _ := createRouterEnv()
+
+	_, err := routerExec(router, "select Id from user where iD = 1", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select Id from user where iD = 1",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
+	sbc1.Queries = nil
+}
+
 func TestSelectEqualNotFound(t *testing.T) {
 	router, _, _, sbclookup := createRouterEnv()
 
