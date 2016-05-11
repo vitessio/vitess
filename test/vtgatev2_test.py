@@ -1541,6 +1541,7 @@ class TestFailures(BaseTestCase):
     self.replica_tablet.kill_vttablet()
     self.tablet_start(self.replica_tablet, 'replica', '5s',
                       grace_period='%ds'%grace_period)
+    self.replica_tablet.wait_for_vttablet_state('SERVING')
     utils.vtgate.wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         1)

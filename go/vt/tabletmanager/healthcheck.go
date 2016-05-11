@@ -334,11 +334,6 @@ func (agent *ActionAgent) terminateHealthChecks() {
 		return
 	}
 
-	if *gracePeriod == 0 {
-		log.Infof("No serving_state_grace_period set, not entering lameduck")
-		return
-	}
-
 	// Go lameduck for gracePeriod.
 	// We've already checked above that we're not MASTER.
 
