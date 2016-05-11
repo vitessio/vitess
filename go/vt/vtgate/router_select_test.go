@@ -77,6 +77,63 @@ func TestUnsharded(t *testing.T) {
 	}
 }
 
+func TestUnshardedComments(t *testing.T) {
+	router, _, _, sbclookup := createRouterEnv()
+
+	_, err := routerExec(router, "select id from music_user_map where id = 1 /* trailing */", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select id from music_user_map where id = 1 /* trailing */",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+	}
+
+	_, err = routerExec(router, "update music_user_map set id = 1 /* trailing */", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql:           "select id from music_user_map where id = 1 /* trailing */",
+		BindVariables: map[string]interface{}{},
+	}, {
+		Sql:           "update music_user_map set id = 1 /* trailing */",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+	}
+
+	sbclookup.Queries = nil
+	_, err = routerExec(router, "delete from music_user_map /* trailing */", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql:           "delete from music_user_map /* trailing */",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+	}
+
+	sbclookup.Queries = nil
+	_, err = routerExec(router, "insert into music_user_map values (1) /* trailing */", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql:           "insert into music_user_map values (1) /* trailing */",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+	}
+}
+
 func TestStreamUnsharded(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
 
@@ -265,6 +322,26 @@ func TestSelectEqual(t *testing.T) {
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
 	}
+}
+
+func TestSelectComments(t *testing.T) {
+	router, sbc1, sbc2, _ := createRouterEnv()
+
+	_, err := routerExec(router, "select id from user where id = 1 /* trailing */", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select id from user where id = 1 /* trailing */",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
+	sbc1.Queries = nil
 }
 
 func TestSelectCaseSensitivity(t *testing.T) {
@@ -647,6 +724,27 @@ func TestSimpleJoin(t *testing.T) {
 	}
 	if !reflect.DeepEqual(result, wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+func TestJoinComments(t *testing.T) {
+	router, sbc1, sbc2, _ := createRouterEnv()
+	_, err := routerExec(router, "select u1.id, u2.id from user u1 join user u2 where u1.id = 1 and u2.id = 3 /* trailing */", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select u1.id from user as u1 where u1.id = 1 /* trailing */",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql:           "select u2.id from user as u2 where u2.id = 3 /* trailing */",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
 	}
 }
 

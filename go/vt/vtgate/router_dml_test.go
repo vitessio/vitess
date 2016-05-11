@@ -78,6 +78,27 @@ func TestUpdateEqual(t *testing.T) {
 	}
 }
 
+func TestUpdateComments(t *testing.T) {
+	router, sbc1, sbc2, _ := createRouterEnv()
+
+	_, err := routerExec(router, "update user set a=2 where id = 1 /* trailing */", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql: "update user set a = 2 where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
+		BindVariables: map[string]interface{}{
+			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
+}
+
 func TestUpdateEqualFail(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
 	s := getSandbox("TestRouter")
@@ -201,6 +222,48 @@ func TestDeleteEqual(t *testing.T) {
 	}
 }
 
+func TestDeleteComments(t *testing.T) {
+	router, sbc, _, sbclookup := createRouterEnv()
+
+	sbc.setResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{"name", sqltypes.VarChar},
+		},
+		RowsAffected: 1,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("myname")),
+		}},
+	}})
+	_, err := routerExec(router, "delete from user where id = 1 /* trailing */", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select name from user where id = 1 for update",
+		BindVariables: map[string]interface{}{},
+	}, {
+		Sql: "delete from user where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
+		BindVariables: map[string]interface{}{
+			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
+		},
+	}}
+	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
+		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
+	}
+
+	wantQueries = []querytypes.BoundQuery{{
+		Sql: "delete from name_user_map where name = :name and user_id = :user_id",
+		BindVariables: map[string]interface{}{
+			"user_id": int64(1),
+			"name":    "myname",
+		},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries:\n%+v, want\n%+v\n", sbclookup.Queries, wantQueries)
+	}
+}
+
 func TestDeleteEqualFail(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
 	s := getSandbox("TestRouter")
@@ -302,6 +365,40 @@ func TestInsertSharded(t *testing.T) {
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: \n%+v, want \n%+v\n", sbclookup.Queries, wantQueries)
+	}
+}
+
+func TestInsertComments(t *testing.T) {
+	router, sbc1, sbc2, sbclookup := createRouterEnv()
+
+	_, err := routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname') /* trailing */", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql: "insert into user(id, v, name) values (:_Id, 2, :_name) /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
+		BindVariables: map[string]interface{}{
+			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
+			"_Id":         int64(1),
+			"_name":       []byte("myname"),
+			"__seq":       int64(1),
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
+		BindVariables: map[string]interface{}{
+			"name":    []byte("myname"),
+			"user_id": int64(1),
+		},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: \n%+v, want \n%+v", sbclookup.Queries, wantQueries)
 	}
 }
 

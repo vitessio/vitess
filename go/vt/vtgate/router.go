@@ -122,7 +122,7 @@ func (rtr *Router) ExecuteRoute(vcursor *requestContext, route *engine.Route, jo
 	}
 	return rtr.scatterConn.ExecuteMulti(
 		vcursor.ctx,
-		route.Query,
+		route.Query+vcursor.comments,
 		params.ks,
 		params.shardVars,
 		vcursor.tabletType,
@@ -190,7 +190,7 @@ func (rtr *Router) StreamExecuteRoute(vcursor *requestContext, route *engine.Rou
 	}
 	return rtr.scatterConn.StreamExecuteMulti(
 		vcursor.ctx,
-		route.Query,
+		route.Query+vcursor.comments,
 		params.ks,
 		params.shardVars,
 		vcursor.tabletType,
@@ -261,7 +261,7 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, route *engine.Route)
 		return &sqltypes.Result{}, nil
 	}
 	vcursor.bindVars[ksidName] = string(ksid)
-	rewritten := sqlannotation.AddKeyspaceID(route.Query, ksid)
+	rewritten := sqlannotation.AddKeyspaceID(route.Query, ksid, vcursor.comments)
 	return rtr.scatterConn.Execute(
 		vcursor.ctx,
 		rewritten,
@@ -292,7 +292,7 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, route *engine.Route)
 		}
 	}
 	vcursor.bindVars[ksidName] = string(ksid)
-	rewritten := sqlannotation.AddKeyspaceID(route.Query, ksid)
+	rewritten := sqlannotation.AddKeyspaceID(route.Query, ksid, vcursor.comments)
 	return rtr.scatterConn.Execute(
 		vcursor.ctx,
 		rewritten,
@@ -329,7 +329,7 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 		}
 	}
 	vcursor.bindVars[ksidName] = string(ksid)
-	rewritten := sqlannotation.AddKeyspaceID(route.Query, ksid)
+	rewritten := sqlannotation.AddKeyspaceID(route.Query, ksid, vcursor.comments)
 	result, err := rtr.scatterConn.Execute(
 		vcursor.ctx,
 		rewritten,

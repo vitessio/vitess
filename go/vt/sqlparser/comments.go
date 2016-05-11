@@ -2,9 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
-
-const trailingComment = "_trailingComment"
+package sqlparser
 
 type matchtracker struct {
 	query string
@@ -12,27 +10,17 @@ type matchtracker struct {
 	eof   bool
 }
 
-// stripTrailing strips out trailing comments if any and puts them in a bind variable.
-// This code is a hack. Will need cleaning if it evolves beyond this.
-func stripTrailing(sql string, bindVariables map[string]interface{}) string {
+// SplitTrailingComments splits the query trailing comments from the query.
+func SplitTrailingComments(sql string) (query, comments string) {
 	tracker := matchtracker{
 		query: sql,
 		index: len(sql),
 	}
 	pos := tracker.matchComments()
 	if pos >= 0 {
-		bindVariables[trailingComment] = tracker.query[pos:]
-		return tracker.query[:pos]
+		return tracker.query[:pos], tracker.query[pos:]
 	}
-	return sql
-}
-
-// restoreTrailing undoes work done by stripTrailing
-func restoreTrailing(sql []byte, bindVars map[string]interface{}) []byte {
-	if ytcomment, ok := bindVars[trailingComment]; ok {
-		sql = append(sql, ytcomment.(string)...)
-	}
-	return sql
+	return sql, ""
 }
 
 // matchComments matches trailing comments. If no comment was found,
