@@ -119,9 +119,11 @@ func GetGatewayCreatorByName(name string) GatewayCreator {
 // ShardError is the error about a specific shard.
 // It implements vterrors.VtError.
 type ShardError struct {
+	// ShardIdentifier is the keyspace+shard.
 	ShardIdentifier string
-	InTransaction   bool
-	// Preserve the original error, so that we don't need to parse the error string.
+	// InTransaction indicates if it is inside a transaction.
+	InTransaction bool
+	// Err preserves the original error, so that we don't need to parse the error string.
 	Err error
 	// EndPointCode is the error code to use for all the endpoint errors in aggregate
 	EndPointCode vtrpcpb.ErrorCode

@@ -92,9 +92,11 @@ type sandbox struct {
 	// SrvKeyspaceCallback specifies the callback function in GetSrvKeyspace
 	SrvKeyspaceCallback func()
 
+	// VSchema specifies the vschema in JSON format.
 	VSchema string
 }
 
+// Reset cleans up sandbox internal state.
 func (s *sandbox) Reset() {
 	s.sandmu.Lock()
 	defer s.sandmu.Unlock()
@@ -108,6 +110,7 @@ func (s *sandbox) Reset() {
 	s.SrvKeyspaceCallback = nil
 }
 
+// DefaultShardSpec is the default sharding scheme for testing.
 var DefaultShardSpec = "-20-40-60-80-a0-c0-e0-"
 
 func getAllShards(shardSpec string) ([]*topodatapb.KeyRange, error) {
@@ -192,6 +195,7 @@ func createUnshardedKeyspace() (*topodatapb.SrvKeyspace, error) {
 type sandboxTopo struct {
 }
 
+// GetSrvKeyspaceNames is part of SrvTopoServer.
 func (sct *sandboxTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
@@ -202,6 +206,7 @@ func (sct *sandboxTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([
 	return keyspaces, nil
 }
 
+// GetSrvKeyspace is part of SrvTopoServer.
 func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	sand := getSandbox(keyspace)
 	if sand.SrvKeyspaceCallback != nil {
@@ -236,6 +241,7 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 	return createShardedSrvKeyspace(sand.ShardSpec, sand.KeyspaceServedFrom)
 }
 
+// WatchVSchema is part of SrvTopoServer.
 func (sct *sandboxTopo) WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan string, err error) {
 	result := make(chan string, 1)
 	value := getSandbox(keyspace).VSchema
@@ -243,10 +249,12 @@ func (sct *sandboxTopo) WatchVSchema(ctx context.Context, keyspace string) (noti
 	return result, nil
 }
 
+// GetSrvShard is part of SrvTopoServer.
 func (sct *sandboxTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error) {
 	return nil, fmt.Errorf("Unsupported")
 }
 
+// GetEndPoints is part of SrvTopoServer.
 func (sct *sandboxTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType) (*topodatapb.EndPoints, int64, error) {
 	return nil, -1, fmt.Errorf("Unsupported")
 }

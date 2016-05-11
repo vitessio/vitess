@@ -18,14 +18,17 @@ type fhcItem struct {
 	conn tabletconn.TabletConn
 }
 
+// fakeHealthCheck implements discovery.HealthCheck.
 type fakeHealthCheck struct {
 	items map[string]*fhcItem
 
-	// stats
-	GetStatsFromTargetCounter        int
+	// GetStatsFromTargetCounter counts GetEndpointStatsFromTarget() being called.
+	GetStatsFromTargetCounter int
+	// GetStatsFromKeyspaceShardCounter counts GetEndPointStatsFromKeyspaceShard() being called.
 	GetStatsFromKeyspaceShardCounter int
 }
 
+// Reset cleans up the internal state.
 func (fhc *fakeHealthCheck) Reset() {
 	fhc.GetStatsFromTargetCounter = 0
 	fhc.GetStatsFromKeyspaceShardCounter = 0
@@ -36,7 +39,7 @@ func (fhc *fakeHealthCheck) Reset() {
 func (fhc *fakeHealthCheck) SetListener(listener discovery.HealthCheckStatsListener) {
 }
 
-// AddEndPoint adds the endpoint, and starts health check.
+// AddEndPoint adds the endpoint.
 func (fhc *fakeHealthCheck) AddEndPoint(cell, name string, endPoint *topodatapb.EndPoint) {
 	key := discovery.EndPointToMapKey(endPoint)
 	item := &fhcItem{
@@ -49,7 +52,7 @@ func (fhc *fakeHealthCheck) AddEndPoint(cell, name string, endPoint *topodatapb.
 	fhc.items[key] = item
 }
 
-// RemoveEndPoint removes the endpoint, and stops the health check.
+// RemoveEndPoint removes the endpoint.
 func (fhc *fakeHealthCheck) RemoveEndPoint(endPoint *topodatapb.EndPoint) {
 	key := discovery.EndPointToMapKey(endPoint)
 	delete(fhc.items, key)
@@ -104,6 +107,7 @@ func (fhc *fakeHealthCheck) Close() error {
 	return nil
 }
 
+// addTestEndPoint inserts a fake entry into fakeHealthCheck.
 func (fhc *fakeHealthCheck) addTestEndPoint(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error, conn tabletconn.TabletConn) *topodatapb.EndPoint {
 	if conn != nil {
 		conn.SetTarget(keyspace, shard, tabletType)
