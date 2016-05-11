@@ -414,22 +414,23 @@ primary key (name)
     # we set full_mycnf_args to True as a test in the KIT_BYTES case
     full_mycnf_args = keyspace_id_type == keyrange_constants.KIT_BYTES
 
-    # create databases so vttablet can start behaving normally
+    # create databases so vttablet can start behaving somewhat normally
     for t in [shard_0_master, shard_0_replica, shard_0_ny_rdonly,
               shard_1_master, shard_1_slave1, shard_1_slave2, shard_1_ny_rdonly,
               shard_1_rdonly1]:
       t.create_db('vt_test_keyspace')
       t.start_vttablet(wait_for_state=None, full_mycnf_args=full_mycnf_args)
 
-    # wait for the tablets
+    # wait for the tablets (replication is not setup, the slaves won't be
+    # healthy)
     shard_0_master.wait_for_vttablet_state('SERVING')
-    shard_0_replica.wait_for_vttablet_state('SERVING')
-    shard_0_ny_rdonly.wait_for_vttablet_state('SERVING')
+    shard_0_replica.wait_for_vttablet_state('NOT_SERVING')
+    shard_0_ny_rdonly.wait_for_vttablet_state('NOT_SERVING')
     shard_1_master.wait_for_vttablet_state('SERVING')
-    shard_1_slave1.wait_for_vttablet_state('SERVING')
-    shard_1_slave2.wait_for_vttablet_state('SERVING')
-    shard_1_ny_rdonly.wait_for_vttablet_state('SERVING')
-    shard_1_rdonly1.wait_for_vttablet_state('SERVING')
+    shard_1_slave1.wait_for_vttablet_state('NOT_SERVING')
+    shard_1_slave2.wait_for_vttablet_state('NOT_SERVING')
+    shard_1_ny_rdonly.wait_for_vttablet_state('NOT_SERVING')
+    shard_1_rdonly1.wait_for_vttablet_state('NOT_SERVING')
 
     # reparent to make the tablets work
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/-80',
@@ -445,9 +446,9 @@ primary key (name)
     # run a health check on source replicas so they respond to discovery
     # (for binlog players) and on the source rdonlys (for workers)
     for t in [shard_0_replica, shard_1_slave1]:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'])
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
     for t in [shard_0_ny_rdonly, shard_1_ny_rdonly, shard_1_rdonly1]:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
 
     # create the split shards
     shard_2_master.init_tablet('master', 'test_keyspace', '80-c0')
@@ -459,12 +460,8 @@ primary key (name)
 
     # start vttablet on the split shards (no db created,
     # so they're all not serving)
-    # Start masters with enabled healthcheck (necessary for resolving the
-    # destination master).
-    shard_2_master.start_vttablet(wait_for_state=None,
-                                  target_tablet_type='replica')
-    shard_3_master.start_vttablet(wait_for_state=None,
-                                  target_tablet_type='replica')
+    shard_2_master.start_vttablet(wait_for_state=None)
+    shard_3_master.start_vttablet(wait_for_state=None)
     for t in [shard_2_replica1, shard_2_replica2,
               shard_3_replica, shard_3_rdonly1]:
       t.start_vttablet(wait_for_state=None)
@@ -487,11 +484,6 @@ primary key (name)
         keyspace_id_type=keyspace_id_type,
         sharding_column_name='custom_sharding_key')
 
-    # TODO(mberlin): Use a different approach for the same effect because this
-    #                one doesn't work when the healthcheck is enabled on the
-    #                tablet. In that case the healthcheck will race with the
-    #                test and convert the SPARE tablet back to REPLICA the next
-    #                time it runs.
     # disable shard_1_slave2, so we're sure filtered replication will go
     # from shard_1_slave1
     utils.run_vtctl(['ChangeSlaveType', shard_1_slave2.tablet_alias, 'spare'])
@@ -558,7 +550,7 @@ primary key (name)
 
     # use vtworker to compare the data (after health-checking the destination
     # rdonly tablets so discovery works)
-    utils.run_vtctl(['RunHealthCheck', shard_3_rdonly1.tablet_alias, 'rdonly'])
+    utils.run_vtctl(['RunHealthCheck', shard_3_rdonly1.tablet_alias])
     logging.debug('Running vtworker SplitDiff')
     utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
                         '--exclude_tables', 'unrelated',
@@ -590,7 +582,7 @@ primary key (name)
     utils.run_vtctl(['ChangeSlaveType', shard_1_slave1.tablet_alias, 'spare'])
     shard_1_slave2.wait_for_vttablet_state('SERVING')
     shard_1_slave1.wait_for_vttablet_state('NOT_SERVING')
-    utils.run_vtctl(['RunHealthCheck', shard_1_slave2.tablet_alias, 'replica'])
+    utils.run_vtctl(['RunHealthCheck', shard_1_slave2.tablet_alias])
 
     # test data goes through again
     logging.debug('Inserting lots of data on source shard')
@@ -607,7 +599,7 @@ primary key (name)
     # check query service is off on master 2 and master 3, as filtered
     # replication is enabled. Even health check that is enabled on
     # master 3 should not interfere (we run it to be sure).
-    utils.run_vtctl(['RunHealthCheck', shard_3_master.tablet_alias, 'replica'],
+    utils.run_vtctl(['RunHealthCheck', shard_3_master.tablet_alias],
                     auto_log=True)
     for master in [shard_2_master, shard_3_master]:
       utils.check_tablet_query_service(self, master, False, False)

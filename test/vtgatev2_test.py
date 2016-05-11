@@ -196,7 +196,7 @@ def setup_tablets():
     t.create_db('vt_test_keyspace')
     for create_table in create_tables:
       t.mquery(shard_0_master.dbname, create_table)
-    t.start_vttablet(wait_for_state=None, target_tablet_type='replica')
+    t.start_vttablet(wait_for_state=None)
 
   for t in [shard_0_master, shard_1_master]:
     t.wait_for_vttablet_state('SERVING')
@@ -856,16 +856,19 @@ class TestFailures(BaseTestCase):
 
   def tablet_start(self, tablet_obj, tablet_type, lameduck_period='0.5s',
                    grace_period=None):
-    _ = tablet_type
     if grace_period is None:
       # If grace_period is not specified, use whatever default is defined in
       # start_vttablet() itself.
-      return tablet_obj.start_vttablet(target_tablet_type=tablet_type,
-                                       lameduck_period=lameduck_period)
+      tablet_obj.start_vttablet(lameduck_period=lameduck_period,
+                                init_tablet_type=tablet_type,
+                                init_keyspace=KEYSPACE_NAME,
+                                init_shard=SHARD_NAMES[self.shard_index])
     else:
-      return tablet_obj.start_vttablet(target_tablet_type=tablet_type,
-                                       lameduck_period=lameduck_period,
-                                       grace_period=grace_period)
+      tablet_obj.start_vttablet(lameduck_period=lameduck_period,
+                                grace_period=grace_period,
+                                init_tablet_type=tablet_type,
+                                init_keyspace=KEYSPACE_NAME,
+                                init_shard=SHARD_NAMES[self.shard_index])
 
   def test_status_with_error(self):
     """Tests that the status page loads correctly after a VTGate error."""
@@ -1176,7 +1179,7 @@ class TestFailures(BaseTestCase):
     # then restart replication, and write data, make sure we go back to healthy
     for t in [self.replica_tablet]:
       utils.run_vtctl(['StartSlave', t.tablet_alias])
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       t.wait_for_vttablet_state('SERVING')
     utils.vtgate.wait_for_endpoints(
@@ -1214,7 +1217,7 @@ class TestFailures(BaseTestCase):
     # then restart replication, and write data, make sure we go back to healthy
     for t in [self.replica_tablet, self.replica_tablet2]:
       utils.run_vtctl(['StartSlave', t.tablet_alias])
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       t.wait_for_vttablet_state('SERVING')
     self.replica_tablet2.kill_vttablet()
@@ -1262,7 +1265,7 @@ class TestFailures(BaseTestCase):
     # then restart replication, and write data, make sure we go back to healthy
     for t in [self.replica_tablet]:
       utils.run_vtctl(['StartSlave', t.tablet_alias])
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       t.wait_for_vttablet_state('SERVING')
     utils.vtgate.wait_for_endpoints(
@@ -1338,7 +1341,7 @@ class TestFailures(BaseTestCase):
     # then restart replication, and write data, make sure we go back to healthy
     for t in [self.replica_tablet]:
       utils.run_vtctl(['StartSlave', t.tablet_alias])
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       t.wait_for_vttablet_state('SERVING')
     utils.vtgate.wait_for_endpoints(
@@ -1481,7 +1484,7 @@ class TestFailures(BaseTestCase):
     # then restart replication, and write data, make sure we go back to healthy
     for t in [self.replica_tablet, self.replica_tablet2]:
       utils.run_vtctl(['StartSlave', t.tablet_alias])
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       t.wait_for_vttablet_state('SERVING')
     utils.vtgate.wait_for_endpoints(
@@ -1495,17 +1498,27 @@ class TestFailures(BaseTestCase):
     self._test_lameduck_ongoing_query_single(2)
 
   def _test_lameduck_ongoing_query_single(self, grace_period):
-    vtgate_conn = get_connection()
+    # disable the second replica, we'll only use the first one
     utils.wait_procs([self.replica_tablet2.shutdown_mysql(),])
-    self.replica_tablet.kill_vttablet()
-    self.tablet_start(self.replica_tablet, 'replica', '5s',
-                      grace_period='%ds'%grace_period)
+    utils.run_vtctl(['RunHealthCheck', self.replica_tablet2.tablet_alias],
+                    auto_log=True)
     utils.vtgate.wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         1)
+
+    # re-configure the first tablet with a grace period
+    self.replica_tablet.kill_vttablet()
+    self.tablet_start(self.replica_tablet, 'replica', '5s',
+                      grace_period='%ds'%grace_period)
+    self.replica_tablet.wait_for_vttablet_state('SERVING')
+    utils.vtgate.wait_for_endpoints(
+        '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
+        1)
+
     # make sure query can go through tablet1
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_before = int(tablet1_vars['Queries']['TotalCount'])
+    vtgate_conn = get_connection()
     try:
       vtgate_conn._execute(
           'select 1 from vt_insert_test', {},
@@ -1563,11 +1576,12 @@ class TestFailures(BaseTestCase):
         'select 1 from vt_insert_test', {},
         tablet_type='replica', keyspace_name=KEYSPACE_NAME,
         keyranges=[self.keyrange])
-    # start tablet2
+
+    # restart tablet2
     utils.wait_procs([self.replica_tablet2.start_mysql(),])
     for t in [self.replica_tablet2]:
       utils.run_vtctl(['StartSlave', t.tablet_alias])
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       t.wait_for_vttablet_state('SERVING')
     utils.vtgate.wait_for_endpoints(

@@ -116,7 +116,7 @@
     "Vindex": "user_index",
     "Values": 1,
     "Table": "user",
-    "Subquery": "select name, costly from user where id = 1 for update"
+    "Subquery": "select Name, Costly from user where id = 1 for update"
   }
 }
 
@@ -205,7 +205,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "insert into user(id, name, costly) values (:_id, :_name, :_costly)",
+    "Query": "insert into user(id, Name, Costly) values (:_Id, :_Name, :_Costly)",
     "Values": [
       ":__seq",
       null,
@@ -234,7 +234,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "insert into user(nonid, id, name, costly) values (2, :_id, :_name, :_costly)",
+    "Query": "insert into user(nonid, Id, Name, Costly) values (2, :_Id, :_Name, :_Costly)",
     "Values": [
       ":__seq",
       null,
@@ -262,7 +262,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "insert into user(nonid, name, id, costly) values (2, :_name, :_id, :_costly)",
+    "Query": "insert into user(nonid, name, id, Costly) values (2, :_Name, :_Id, :_Costly)",
     "Values": [
       ":__seq",
       "foo",

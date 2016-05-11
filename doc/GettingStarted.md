@@ -395,7 +395,7 @@ lock service. ZooKeeper is included in the Vitess distribution.
 
 1.  **Start vtctld**
 
-    The `vtctld` server provides a web interface that
+    The *vtctld* server provides a web interface that
     displays all of the coordination information stored in ZooKeeper.
 
     ``` sh
@@ -406,19 +406,22 @@ lock service. ZooKeeper is included in the Vitess distribution.
     ```
 
     Open `http://localhost:15000` to verify that
-    `vtctld` is running. There won't be any information
+    *vtctld* is running. There won't be any information
     there yet, but the menu should come up, which indicates that
-    `vtctld` is running.
+    *vtctld* is running.
 
-    The `vtctld` server also accepts commands from the `vtctlclient` tool,
+    The *vtctld* server also accepts commands from the `vtctlclient` tool,
     which is used to administer the cluster. Note that the port for RPCs
     (in this case `15999`) is different from the web UI port (`15000`).
     These ports can be configured with command-line flags, as demonstrated
     in `vtctld-up.sh`.
 
+    For convenience, we'll use the `lvtctl.sh` script in example commands,
+    to avoid having to type the *vtctld* address every time.
+
     ``` sh
     # List available commands
-    $ $VTROOT/bin/vtctlclient -server localhost:15999 Help
+    vitess/examples/local$ ./lvtctl.sh help
     ```
 
 1.  **Start vttablets**
@@ -442,7 +445,7 @@ lock service. ZooKeeper is included in the Vitess distribution.
     # Access tablet test-0000000102 at http://localhost:15102/debug/status
     ```
 
-    After this command completes, refresh the `vtctld` web UI, and you should
+    After this command completes, refresh the *vtctld* web UI, and you should
     see a keyspace named `test_keyspace` with a single shard named `0`.
     This is what an unsharded keyspace looks like.
 
@@ -455,20 +458,6 @@ lock service. ZooKeeper is included in the Vitess distribution.
     status page, showing more details on its operation. Every Vitess server has
     a status page served at `/debug/status` on its web port.
 
-1.  **Initialize the new keyspace**
-
-    By launching tablets assigned to a nonexistent keyspace, we've essentially
-    created a new keyspace. To complete the initialization of the
-    [local topology data](http://vitess.io/doc/TopologyService/#local-data),
-    perform a keyspace rebuild:
-
-    ``` sh
-    $ $VTROOT/bin/vtctlclient -server localhost:15999 RebuildKeyspaceGraph test_keyspace
-    ```
-
-    **Note:** Many `vtctlclient` commands yield no output if
-    they run successfully.
-
 1.  **Initialize MySQL databases**
 
     Next, designate one of the tablets to be the initial master.
@@ -478,7 +467,7 @@ lock service. ZooKeeper is included in the Vitess distribution.
     named `test_keyspace`, the MySQL database will be named `vt_test_keyspace`.
 
     ``` sh
-    $ $VTROOT/bin/vtctlclient -server localhost:15999 InitShardMaster -force test_keyspace/0 test-0000000100
+    vitess/examples/local$ ./lvtctl.sh InitShardMaster -force test_keyspace/0 test-100
     ### example output:
     # master-elect tablet test-0000000100 is not the shard master, proceeding anyway as -force was used
     # master-elect tablet test-0000000100 is not a master in the shard, proceeding anyway as -force was used
@@ -491,14 +480,14 @@ lock service. ZooKeeper is included in the Vitess distribution.
     brand new shard.
 
     After running this command, go back to the **Shard Status** page
-    in the `vtctld` web interface. When you refresh the
-    page, you should see that one `vttablet` is the master
+    in the *vtctld* web interface. When you refresh the
+    page, you should see that one *vttablet* is the master
     and the other two are replicas.
 
     You can also see this on the command line:
 
     ``` sh
-    $ $VTROOT/bin/vtctlclient -server localhost:15999 ListAllTablets test
+    vitess/examples/local$ ./lvtctl.sh ListAllTablets test
     ### example output:
     # test-0000000100 test_keyspace 0 master localhost:15100 localhost:33100 []
     # test-0000000101 test_keyspace 0 replica localhost:15101 localhost:33101 []
@@ -513,17 +502,18 @@ lock service. ZooKeeper is included in the Vitess distribution.
 
     ``` sh
     # Make sure to run this from the examples/local dir, so it finds the file.
-    vitess/examples/local$ $VTROOT/bin/vtctlclient -server localhost:15999 ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
+    vitess/examples/local$ ./lvtctl.sh ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
     ```
 
     The SQL to create the table is shown below:
 
     ``` sql
-    CREATE TABLE test_table (
-      id BIGINT AUTO_INCREMENT,
-      msg VARCHAR(250),
-      PRIMARY KEY(id)
-    ) Engine=InnoDB
+    CREATE TABLE messages (
+      page BIGINT(20) UNSIGNED,
+      time_created_ns BIGINT(20) UNSIGNED,
+      message VARCHAR(10000),
+      PRIMARY KEY (page, time_created_ns)
+    ) ENGINE=InnoDB
     ```
 
 1.  **Take a backup**
@@ -536,29 +526,29 @@ lock service. ZooKeeper is included in the Vitess distribution.
     also automatically restore from the latest backup and then resume replication.
 
     ``` sh
-    $ $VTROOT/bin/vtctlclient -server localhost:15999 Backup test-0000000101
+    vitess/examples/local$ ./lvtctl.sh Backup test-0000000102
     ```
 
     After the backup completes, you can list available backups for the shard:
 
     ``` sh
-    $ $VTROOT/bin/vtctlclient -server localhost:15999 ListBackups test_keyspace/0
+    vitess/examples/local$ ./lvtctl.sh ListBackups test_keyspace/0
     ### example output:
-    # 2015-10-21.042940.test-0000000104
+    # 2016-05-06.072724.test-0000000102
     ```
 
     **Note:** In this single-server example setup, backups are stored at
     `$VTDATAROOT/backups`. In a multi-server deployment, you would usually mount
     an NFS directory there. You can also change the location by setting the
-    `-file_backup_storage_root` flag on `vtctld` and `vttablet`, as demonstrated
+    `-file_backup_storage_root` flag on *vtctld* and *vttablet*, as demonstrated
     in `vtctld-up.sh` and `vttablet-up.sh`.
 
 1.  **Start vtgate**
 
-    Vitess uses `vtgate` to route each client query to
-    the correct `vttablet`. This local example runs a
-    single `vtgate` instance, though a real deployment
-    would likely run multiple `vtgate` instances to share
+    Vitess uses *vtgate* to route each client query to
+    the correct *vttablet*. This local example runs a
+    single *vtgate* instance, though a real deployment
+    would likely run multiple *vtgate* instances to share
     the load.
 
     ``` sh
@@ -568,7 +558,7 @@ lock service. ZooKeeper is included in the Vitess distribution.
 ### Run a Client Application
 
 The `client.py` file is a simple sample application
-that connects to `vtgate` and executes some queries.
+that connects to *vtgate* and executes some queries.
 To run it, you need to either:
 
 *   Add the Vitess Python packages to your `PYTHONPATH`.
@@ -583,10 +573,24 @@ To run it, you need to either:
     ### example output:
     # Inserting into master...
     # Reading from master...
-    # (1L, 'V is for speed')
-    # Reading from replica...
-    # (1L, 'V is for speed')
+    # (5L, 1462510331910124032L, 'V is for speed')
+    # (15L, 1462519383758071808L, 'V is for speed')
+    # (42L, 1462510369213753088L, 'V is for speed')
+    # ...
     ```
+
+There are also sample clients in the same directory for Java, PHP, and Go.
+See the comments at the top of each sample file for usage instructions.
+
+### Try Vitess resharding
+
+Now that you have a full Vitess stack running, you may want to go on to the
+[Horizontal Sharding](http://vitess.io/user-guide/horizontal-sharding.html)
+guide to try out
+[dynamic resharding](http://vitess.io/user-guide/sharding.html#resharding).
+
+If so, you can skip the tear-down since the sharding guide picks up right here.
+If not, continue to the clean-up steps below.
 
 ### Tear down the cluster
 

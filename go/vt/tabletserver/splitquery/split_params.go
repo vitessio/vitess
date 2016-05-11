@@ -2,8 +2,8 @@ package splitquery
 
 import (
 	"fmt"
-	"reflect"
 
+	"github.com/youtube/vitess/go/cistring"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -17,7 +17,7 @@ type SplitParams struct {
 	// parameter in each constructor.
 	sql           string
 	bindVariables map[string]interface{}
-	splitColumns  []string
+	splitColumns  []sqlparser.ColIdent
 	// Exactly one of splitCount, numRowsPerQueryPart will be given by the caller.
 	// See the two NewSplitParams... constructors below. The other field member
 	// will be computed using the equation: max(1, floor(numTableRows / x)),
@@ -59,7 +59,7 @@ type SplitParams struct {
 func NewSplitParamsGivenNumRowsPerQueryPart(
 	sql string,
 	bindVariables map[string]interface{},
-	splitColumns []string,
+	splitColumns []sqlparser.ColIdent,
 	numRowsPerQueryPart int64,
 	schema map[string]*schema.Table) (*SplitParams, error) {
 	if numRowsPerQueryPart <= 0 {
@@ -99,7 +99,7 @@ func NewSplitParamsGivenNumRowsPerQueryPart(
 func NewSplitParamsGivenSplitCount(
 	sql string,
 	bindVariables map[string]interface{},
-	splitColumns []string,
+	splitColumns []sqlparser.ColIdent,
 	splitCount int64,
 	schema map[string]*schema.Table) (*SplitParams, error) {
 
@@ -116,13 +116,14 @@ func NewSplitParamsGivenSplitCount(
 	return result, nil
 }
 
+// GetSplitTableName returns the name of the table to split.
 func (sp *SplitParams) GetSplitTableName() string {
 	return sp.splitTableSchema.Name
 }
 
 // newSplitParams validates and initializes all the fields except splitCount and
 // numRowsPerQueryPart. It contains the common code for the constructors above.
-func newSplitParams(sql string, bindVariables map[string]interface{}, splitColumns []string,
+func newSplitParams(sql string, bindVariables map[string]interface{}, splitColumns []sqlparser.ColIdent,
 	schema map[string]*schema.Table) (*SplitParams, error) {
 
 	statement, err := sqlparser.Parse(sql)
@@ -166,7 +167,7 @@ func newSplitParams(sql string, bindVariables map[string]interface{}, splitColum
 	// Get the split-columns types.
 	splitColumnTypes := make([]querypb.Type, 0, len(splitColumns))
 	for _, splitColumn := range splitColumns {
-		i := tableSchema.FindColumn(splitColumn)
+		i := tableSchema.FindColumn(splitColumn.Original())
 		if i == -1 {
 			return nil, fmt.Errorf("can't find split-column: %v", splitColumn)
 		}
@@ -185,33 +186,33 @@ func newSplitParams(sql string, bindVariables map[string]interface{}, splitColum
 
 // getPrimaryKeyColumns returns the list of primary-key column names, in order, for the
 // given table.
-func getPrimaryKeyColumns(table *schema.Table) []string {
-	result := make([]string, 0, len(table.PKColumns))
+func getPrimaryKeyColumns(table *schema.Table) []sqlparser.ColIdent {
+	result := make([]sqlparser.ColIdent, 0, len(table.PKColumns))
 	for _, pkColIndex := range table.PKColumns {
-		result = append(result, table.Columns[pkColIndex].Name)
+		result = append(result, sqlparser.ColIdent(table.Columns[pkColIndex].Name))
 	}
 	return result
 }
 
 // areColumnsAPrefixOfAnIndex returns true if 'columns' form a prefix of the columns that
 // make up some index in 'table'.
-func areColumnsAPrefixOfAnIndex(columns []string, table *schema.Table) bool {
+func areColumnsAPrefixOfAnIndex(columns []sqlparser.ColIdent, table *schema.Table) bool {
 	for _, index := range table.Indexes {
-		if isStringSlicePrefix(columns, index.Columns) {
+		if isColIdentSlicePrefix(columns, index.Columns) {
 			return true
 		}
 	}
 	return false
 }
 
-// isStringSlicePrefix returns true if 'potentialPrefix' is a prefix of the slice
+// isColIdentSlicePrefix returns true if 'potentialPrefix' is a prefix of the slice
 // 'slice'.
-func isStringSlicePrefix(potentialPrefix []string, slice []string) bool {
+func isColIdentSlicePrefix(potentialPrefix []sqlparser.ColIdent, slice []cistring.CIString) bool {
 	if len(potentialPrefix) > len(slice) {
 		return false
 	}
 	for i := range potentialPrefix {
-		if potentialPrefix[i] != slice[i] {
+		if !potentialPrefix[i].Equal(sqlparser.ColIdent(slice[i])) {
 			return false
 		}
 	}
@@ -221,5 +222,14 @@ func isStringSlicePrefix(potentialPrefix []string, slice []string) bool {
 // areSplitColumnsPrimaryKey returns true if the splitColumns in 'splitParams'
 // are the primary key columns in order.
 func (sp *SplitParams) areSplitColumnsPrimaryKey() bool {
-	return reflect.DeepEqual(sp.splitColumns, getPrimaryKeyColumns(sp.splitTableSchema))
+	pkCols := getPrimaryKeyColumns(sp.splitTableSchema)
+	if len(sp.splitColumns) != len(pkCols) {
+		return false
+	}
+	for i := 0; i < len(sp.splitColumns); i++ {
+		if !sp.splitColumns[i].Equal(pkCols[i]) {
+			return false
+		}
+	}
+	return true
 }

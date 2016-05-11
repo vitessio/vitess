@@ -23,12 +23,16 @@ import (
 // underlying GTIDSet might use slices, which are not comparable. Using == in
 // those cases will result in a run-time panic.
 type Position struct {
-	GTIDSet GTIDSet
-
 	// This is a zero byte compile-time check that no one is trying to
 	// use == or != with Position. Without this, we won't know there's
-	// a problem until the runtime panic.
+	// a problem until the runtime panic. Note that this must not be
+	// the last field of the struct, or else the Go compiler will add
+	// padding to prevent pointers to this field from becoming invalid.
 	_ [0]struct{ notComparable []byte }
+
+	// GTIDSet is the underlying GTID set. It must not be anonymous,
+	// or else Position would itself also implement the GTIDSet interface.
+	GTIDSet GTIDSet
 }
 
 // Equal returns true if this position is equal to another.

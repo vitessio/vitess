@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -78,7 +79,7 @@ func buildIndexPlan(ins *sqlparser.Insert, colVindex *vindexes.ColVindex, route 
 		return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
 	route.Values = append(route.Values.([]interface{}), val)
-	row[pos] = sqlparser.ValArg([]byte(":_" + colVindex.Col))
+	row[pos] = sqlparser.ValArg([]byte(":_" + colVindex.Col.Original()))
 	return nil
 }
 
@@ -105,17 +106,17 @@ func buildAutoincPlan(ins *sqlparser.Insert, autoinc *vindexes.Autoinc, route *e
 	return nil
 }
 
-func findOrInsertPos(ins *sqlparser.Insert, col string) (row sqlparser.ValTuple, pos int) {
+func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString) (row sqlparser.ValTuple, pos int) {
 	pos = -1
 	for i, column := range ins.Columns {
-		if col == sqlparser.GetColName(column.(*sqlparser.NonStarExpr).Expr) {
+		if col.Equal(cistring.CIString(sqlparser.GetColName(column.(*sqlparser.NonStarExpr).Expr))) {
 			pos = i
 			break
 		}
 	}
 	if pos == -1 {
 		pos = len(ins.Columns)
-		ins.Columns = append(ins.Columns, &sqlparser.NonStarExpr{Expr: &sqlparser.ColName{Name: sqlparser.SQLName(col)}})
+		ins.Columns = append(ins.Columns, &sqlparser.NonStarExpr{Expr: &sqlparser.ColName{Name: sqlparser.ColIdent(col)}})
 		ins.Rows.(sqlparser.Values)[0] = append(ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple), &sqlparser.NullVal{})
 	}
 	return ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple), pos

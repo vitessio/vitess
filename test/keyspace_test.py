@@ -156,7 +156,7 @@ def setup_sharded_keyspace():
   for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
     t.create_db('vt_test_keyspace_sharded')
     t.mquery(shard_0_master.dbname, create_vt_insert_test)
-    t.start_vttablet(wait_for_state=None, target_tablet_type='replica')
+    t.start_vttablet(wait_for_state=None)
 
   for t in [shard_0_master, shard_1_master]:
     t.wait_for_vttablet_state('SERVING')
@@ -203,8 +203,7 @@ def setup_unsharded_keyspace():
   for t in [unsharded_master, unsharded_replica]:
     t.create_db('vt_test_keyspace_unsharded')
     t.mquery(unsharded_master.dbname, create_vt_insert_test)
-    t.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica')
+    t.start_vttablet(wait_for_state=None)
 
   for t in [unsharded_master]:
     t.wait_for_vttablet_state('SERVING')

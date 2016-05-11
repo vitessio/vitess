@@ -259,12 +259,11 @@ func makeValueString(fields []*querypb.Field, rows [][]sqltypes.Value) string {
 // Note: We assume that "eps" is immutable and we can reference its data.
 func endPointToTabletInfo(eps *discovery.EndPointStats) *topo.TabletInfo {
 	return topo.NewTabletInfo(&topodatapb.Tablet{
-		Alias:     eps.Alias(),
-		Hostname:  eps.EndPoint.Host,
-		PortMap:   eps.EndPoint.PortMap,
-		HealthMap: eps.EndPoint.HealthMap,
-		Keyspace:  eps.Target.Keyspace,
-		Shard:     eps.Target.Shard,
-		Type:      eps.Target.TabletType,
+		Alias:    eps.Alias(),
+		Hostname: eps.EndPoint.Host,
+		PortMap:  eps.EndPoint.PortMap,
+		Keyspace: eps.Target.Keyspace,
+		Shard:    eps.Target.Shard,
+		Type:     eps.Target.TabletType,
 	}, -1 /* version */)
 }

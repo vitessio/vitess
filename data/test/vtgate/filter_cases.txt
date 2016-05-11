@@ -700,6 +700,23 @@
   }
 }
 
+# Case preservation test
+"select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5"
+{
+  "Original": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5",
+    "FieldQuery": "select user_extra.Id from user join user_extra where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 5
+  }
+}
+
 # outer and inner subquery route reference the same "uu.id" name
 # but they refer to different things. The first reference is to the outermost query,
 # and the second reference is to the the innermost 'from' subquery.

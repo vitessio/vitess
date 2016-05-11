@@ -9,13 +9,15 @@ import (
 	"fmt"
 	"time"
 
+	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
-	"golang.org/x/net/context"
 
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -134,7 +136,6 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 	// Change our type to master if not already
 	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
 		tablet.Type = topodatapb.TabletType_MASTER
-		tablet.HealthMap = nil
 		return nil
 	}); err != nil {
 		return "", err
@@ -210,8 +211,9 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	tablet := agent.Tablet()
 	// We don't care if the QueryService state actually changed because we'll
 	// let vtgate keep serving read traffic from this master (see comment below).
-	if _ /* state changed */, err := agent.disallowQueries(tablet.Type, "DemoteMaster marks server rdonly"); err != nil {
-		return "", fmt.Errorf("disallowQueries failed: %v", err)
+	log.Infof("DemoteMaster disabling query service")
+	if _ /* state changed */, err := agent.QueryServiceControl.SetServingType(tablet.Type, false, nil); err != nil {
+		return "", fmt.Errorf("SetServingType(serving=false) failed: %v", err)
 	}
 
 	// If using semi-sync, we need to disable master-side.
@@ -270,7 +272,7 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 		return "", err
 	}
 
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, topotools.ClearHealthMap); err != nil {
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER); err != nil {
 		return "", err
 	}
 
@@ -280,12 +282,13 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 // SlaveWasPromoted promotes a slave to master, no questions asked.
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
-	_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, topotools.ClearHealthMap)
+	_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER)
 	return err
 }
 
 // SetMaster sets replication master, and waits for the
 // reparent_journal table entry up to context timeout
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	parent, err := agent.TopoServer.GetTablet(ctx, parentAlias)
 	if err != nil {
@@ -328,11 +331,12 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 		return err
 	}
 
-	// change our type to spare if we used to be the master
+	// change our type to REPLICA if we used to be the master
+	runHealthCheck := false
 	_, err = agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
 		if tablet.Type == topodatapb.TabletType_MASTER {
-			tablet.Type = topodatapb.TabletType_SPARE
-			tablet.HealthMap = nil
+			tablet.Type = topodatapb.TabletType_REPLICA
+			runHealthCheck = true
 			return nil
 		}
 		return topo.ErrNoUpdateNeeded
@@ -346,21 +350,36 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 	if !shouldbeReplicating || timeCreatedNS == 0 {
 		return nil
 	}
-	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
+	if err := agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS); err != nil {
+		return err
+	}
+	if runHealthCheck {
+		agent.runHealthCheckProtected()
+	}
+	return nil
 }
 
 // SlaveWasRestarted updates the parent record for a tablet.
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error {
+	runHealthCheck := false
+
 	// Once this action completes, update authoritative tablet node first.
-	_, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
+	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
 		if tablet.Type == topodatapb.TabletType_MASTER {
-			tablet.Type = topodatapb.TabletType_SPARE
+			tablet.Type = topodatapb.TabletType_REPLICA
+			runHealthCheck = true
 			return nil
 		}
 		return topo.ErrNoUpdateNeeded
-	})
-	return err
+	}); err != nil {
+		return err
+	}
+
+	if runHealthCheck {
+		agent.runHealthCheckProtected()
+	}
+	return nil
 }
 
 // StopReplicationAndGetStatus stops MySQL replication, and returns the
@@ -405,7 +424,7 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, topotools.ClearHealthMap); err != nil {
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER); err != nil {
 		return "", err
 	}
 
@@ -416,15 +435,6 @@ func (agent *ActionAgent) isMasterEligible() (bool, error) {
 	switch agent.Tablet().Type {
 	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:
 		return true, nil
-	case topodatapb.TabletType_SPARE:
-		// If we're SPARE, it could be because healthcheck is enabled.
-		tt, err := topoproto.ParseTabletType(*targetTabletType)
-		if err != nil {
-			return false, fmt.Errorf("can't determine if tablet is master-eligible: currently SPARE and no -target_tablet_type flag specified")
-		}
-		if tt == topodatapb.TabletType_REPLICA {
-			return true, nil
-		}
 	}
 
 	return false, nil

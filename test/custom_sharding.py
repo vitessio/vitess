@@ -127,12 +127,9 @@ class TestCustomSharding(unittest.TestCase):
 
     for t in [shard_0_master, shard_0_replica, shard_0_rdonly]:
       t.create_db('vt_test_keyspace')
-    shard_0_master.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica')
-    shard_0_replica.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica')
-    shard_0_rdonly.start_vttablet(
-        wait_for_state=None, target_tablet_type='rdonly')
+    shard_0_master.start_vttablet(wait_for_state=None)
+    shard_0_replica.start_vttablet(wait_for_state=None)
+    shard_0_rdonly.start_vttablet(wait_for_state=None)
 
     for t in [shard_0_master]:
       t.wait_for_vttablet_state('SERVING')
@@ -185,12 +182,9 @@ primary key (id)
 
     for t in [shard_1_master, shard_1_replica, shard_1_rdonly]:
       t.create_db('vt_test_keyspace')
-    shard_1_master.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica')
-    shard_1_replica.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica')
-    shard_1_rdonly.start_vttablet(
-        wait_for_state=None, target_tablet_type='rdonly')
+    shard_1_master.start_vttablet(wait_for_state=None)
+    shard_1_replica.start_vttablet(wait_for_state=None)
+    shard_1_rdonly.start_vttablet(wait_for_state=None)
 
     for t in [shard_1_master]:
       t.wait_for_vttablet_state('SERVING')

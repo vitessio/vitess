@@ -1,20 +1,25 @@
 package health
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"sort"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/youtube/vitess/go/vt/concurrency"
 )
 
 var (
 	// DefaultAggregator is the global aggregator to use for real
 	// programs. Use a custom one for tests.
 	DefaultAggregator *Aggregator
+
+	// ErrSlaveNotRunning is returned by health plugins when replication
+	// is not running and we can't figure out the replication delay.
+	// Note everything else should be operational, and the underlying
+	// MySQL instance should be capable of answering queries.
+	ErrSlaveNotRunning = errors.New("slave is not running")
 )
 
 func init() {
@@ -64,6 +69,12 @@ func NewAggregator() *Aggregator {
 	}
 }
 
+type singleResult struct {
+	name  string
+	delay time.Duration
+	err   error
+}
+
 // Report aggregates health statuses from all the reporters. If any
 // errors occur during the reporting, they will be logged, but only
 // the first error will be returned.
@@ -71,40 +82,40 @@ func NewAggregator() *Aggregator {
 // delays returned by the Reporter implementations (although typically
 // only one implementation will actually return a meaningful one).
 func (ag *Aggregator) Report(isSlaveType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
-	var (
-		wg  sync.WaitGroup
-		rec concurrency.AllErrorRecorder
-	)
-
-	results := make(chan time.Duration, len(ag.reporters))
+	wg := sync.WaitGroup{}
+	results := make([]singleResult, len(ag.reporters))
+	index := 0
 	ag.mu.Lock()
 	for name, rep := range ag.reporters {
 		wg.Add(1)
-		go func(name string, rep Reporter) {
+		go func(index int, name string, rep Reporter) {
 			defer wg.Done()
-			replicationDelay, err := rep.Report(isSlaveType, shouldQueryServiceBeRunning)
-			if err != nil {
-				rec.RecordError(fmt.Errorf("%v: %v", name, err))
-				return
-			}
-			results <- replicationDelay
-		}(name, rep)
+			results[index].name = name
+			results[index].delay, results[index].err = rep.Report(isSlaveType, shouldQueryServiceBeRunning)
+		}(index, name, rep)
+		index++
 	}
 	ag.mu.Unlock()
 	wg.Wait()
-	close(results)
-	if err := rec.Error(); err != nil {
-		return 0, err
-	}
 
 	// merge and return the results
 	var result time.Duration
-	for replicationDelay := range results {
-		if replicationDelay > result {
-			result = replicationDelay
+	var err error
+	for _, s := range results {
+		switch s.err {
+		case ErrSlaveNotRunning:
+			// Return the ErrSlaveNotRunning sentinel
+			// value, only if there are no other errors.
+			err = ErrSlaveNotRunning
+		case nil:
+			if s.delay > result {
+				result = s.delay
+			}
+		default:
+			return 0, fmt.Errorf("%v: %v", s.name, s.err)
 		}
 	}
-	return result, nil
+	return result, err
 }
 
 // Register registers rep with ag. Only keys specified in keys will be

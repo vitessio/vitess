@@ -6,7 +6,6 @@ package vtgate
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -18,179 +17,6 @@ import (
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
-
-func TestFilterUnhealthy(t *testing.T) {
-	cases := []struct {
-		source *topodatapb.EndPoints
-		want   *topodatapb.EndPoints
-	}{
-		{
-			source: nil,
-			want:   nil,
-		},
-		{
-			source: &topodatapb.EndPoints{},
-			want:   &topodatapb.EndPoints{Entries: nil},
-		},
-		{
-			source: &topodatapb.EndPoints{Entries: []*topodatapb.EndPoint{}},
-			want:   &topodatapb.EndPoints{Entries: []*topodatapb.EndPoint{}},
-		},
-		{
-			// All are healthy and all should be returned.
-			source: &topodatapb.EndPoints{
-				Entries: []*topodatapb.EndPoint{
-					{
-						Uid:       1,
-						HealthMap: nil,
-					},
-					{
-						Uid:       2,
-						HealthMap: map[string]string{},
-					},
-					{
-						Uid: 3,
-						HealthMap: map[string]string{
-							"Random": "Value1",
-						},
-					},
-					{
-						Uid:       4,
-						HealthMap: nil,
-					},
-				},
-			},
-			want: &topodatapb.EndPoints{
-				Entries: []*topodatapb.EndPoint{
-					{
-						Uid:       1,
-						HealthMap: nil,
-					},
-					{
-						Uid:       2,
-						HealthMap: map[string]string{},
-					},
-					{
-						Uid: 3,
-						HealthMap: map[string]string{
-							"Random": "Value1",
-						},
-					},
-					{
-						Uid:       4,
-						HealthMap: nil,
-					},
-				},
-			},
-		},
-		{
-			// 4 is unhealthy, it should be filtered out.
-			source: &topodatapb.EndPoints{
-				Entries: []*topodatapb.EndPoint{
-					{
-						Uid:       1,
-						HealthMap: nil,
-					},
-					{
-						Uid:       2,
-						HealthMap: map[string]string{},
-					},
-					{
-						Uid: 3,
-						HealthMap: map[string]string{
-							"Random": "Value2",
-						},
-					},
-					{
-						Uid: 4,
-						HealthMap: map[string]string{
-							topo.ReplicationLag: topo.ReplicationLagHigh,
-						},
-					},
-					{
-						Uid:       5,
-						HealthMap: nil,
-					},
-				},
-			},
-			want: &topodatapb.EndPoints{
-				Entries: []*topodatapb.EndPoint{
-					{
-						Uid:       1,
-						HealthMap: nil,
-					},
-					{
-						Uid:       2,
-						HealthMap: map[string]string{},
-					},
-					{
-						Uid: 3,
-						HealthMap: map[string]string{
-							"Random": "Value2",
-						},
-					},
-					{
-						Uid:       5,
-						HealthMap: nil,
-					},
-				},
-			},
-		},
-		{
-			// Only unhealthy servers, return all of them.
-			source: &topodatapb.EndPoints{
-				Entries: []*topodatapb.EndPoint{
-					{
-						Uid: 1,
-						HealthMap: map[string]string{
-							topo.ReplicationLag: topo.ReplicationLagHigh,
-						},
-					},
-					{
-						Uid: 2,
-						HealthMap: map[string]string{
-							topo.ReplicationLag: topo.ReplicationLagHigh,
-						},
-					},
-					{
-						Uid: 3,
-						HealthMap: map[string]string{
-							topo.ReplicationLag: topo.ReplicationLagHigh,
-						},
-					},
-				},
-			},
-			want: &topodatapb.EndPoints{
-				Entries: []*topodatapb.EndPoint{
-					{
-						Uid: 1,
-						HealthMap: map[string]string{
-							topo.ReplicationLag: topo.ReplicationLagHigh,
-						},
-					},
-					{
-						Uid: 2,
-						HealthMap: map[string]string{
-							topo.ReplicationLag: topo.ReplicationLagHigh,
-						},
-					},
-					{
-						Uid: 3,
-						HealthMap: map[string]string{
-							topo.ReplicationLag: topo.ReplicationLagHigh,
-						},
-					},
-				},
-			},
-		},
-	}
-
-	for _, c := range cases {
-		if got := filterUnhealthyServers(c.source); !reflect.DeepEqual(got, c.want) {
-			t.Errorf("filterUnhealthy(%+v)=%+v, want %+v", c.source, got, c.want)
-		}
-	}
-}
 
 // fakeTopo is used in testing ResilientSrvTopoServer logic.
 // returns errors for everything, except the one keyspace.
@@ -258,8 +84,7 @@ func (ft *fakeTopoRemoteMaster) GetEndPoints(ctx context.Context, cell, keyspace
 		return &topodatapb.EndPoints{
 			Entries: []*topodatapb.EndPoint{
 				{
-					Uid:       0,
-					HealthMap: nil,
+					Uid: 0,
 				},
 			},
 		}, -1, nil
@@ -267,8 +92,7 @@ func (ft *fakeTopoRemoteMaster) GetEndPoints(ctx context.Context, cell, keyspace
 	return &topodatapb.EndPoints{
 		Entries: []*topodatapb.EndPoint{
 			{
-				Uid:       1,
-				HealthMap: nil,
+				Uid: 1,
 			},
 		},
 	}, -1, nil

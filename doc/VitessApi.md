@@ -89,7 +89,7 @@ ExecuteBatchKeyspaceIds executes the list of queries based on the specified keys
 
 #### Request
 
- ExecuteBatchKeyspaceIdsRequest is the payload to ExecuteBatchKeyspaceId
+ ExecuteBatchKeyspaceIdsRequest is the payload to ExecuteBatchKeyspaceId.
 
 ##### Parameters
 
@@ -99,11 +99,11 @@ ExecuteBatchKeyspaceIds executes the list of queries based on the specified keys
 | <code>session</code> <br>[Session](#session)| Session objects are session cookies and are invalidated on use. Query results will contain updated session values. Their content should be opaque to the user. |
 | <code>queries</code> <br>list &lt;[BoundKeyspaceIdQuery](#boundkeyspaceidquery)&gt;| BoundKeyspaceIdQuery represents a single query request for the specified list of keyspace ids. This is used in a list for ExecuteBatchKeyspaceIdsRequest. |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
-| <code>as_transaction</code> <br>bool| |
+| <code>as_transaction</code> <br>bool| as_transaction will execute the queries in this batch in a single transaction per shard, created for this purpose. (this can be seen as adding a 'begin' before and 'commit' after the queries). Only makes sense if tablet_type is master. If set, the Session is ignored. |
 
 #### Response
 
- ExecuteBatchKeyspaceIdsResponse is the returned value from ExecuteBatchKeyspaceId
+ ExecuteBatchKeyspaceIdsResponse is the returned value from ExecuteBatchKeyspaceId.
 
 ##### Properties
 
@@ -119,7 +119,7 @@ ExecuteEntityIds executes the query based on the specified external id to keyspa
 
 #### Request
 
- ExecuteEntityIdsRequest is the payload to ExecuteEntityIds
+ ExecuteEntityIdsRequest is the payload to ExecuteEntityIds.
 
 ##### Parameters
 
@@ -128,11 +128,11 @@ ExecuteEntityIds executes the query based on the specified external id to keyspa
 | <code>caller_id</code> <br>[vtrpc.CallerID](#vtrpc.callerid)| CallerID is passed along RPCs to identify the originating client for a request. It is not meant to be secure, but only informational.  The client can put whatever info they want in these fields, and they will be trusted by the servers. The fields will just be used for logging purposes, and to easily find a client. VtGate propagates it to VtTablet, and VtTablet may use this information for monitoring purposes, to display on dashboards, or for blacklisting purposes. |
 | <code>session</code> <br>[Session](#session)| Session objects are session cookies and are invalidated on use. Query results will contain updated session values. Their content should be opaque to the user. |
 | <code>query</code> <br>[query.BoundQuery](#query.boundquery)| BoundQuery is a query with its bind variables |
-| <code>keyspace</code> <br>string| |
-| <code>entity_column_name</code> <br>string| |
-| <code>entity_keyspace_ids</code> <br>list &lt;[EntityId](#executeentityidsrequest.entityid)&gt;| |
+| <code>keyspace</code> <br>string| keyspace to target the query to. |
+| <code>entity_column_name</code> <br>string| entity_column_name is the column name to use. |
+| <code>entity_keyspace_ids</code> <br>list &lt;[EntityId](#executeentityidsrequest.entityid)&gt;| entity_keyspace_ids are pairs of entity_column_name values associated with its corresponding keyspace_id. |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
-| <code>not_in_transaction</code> <br>bool| |
+| <code>not_in_transaction</code> <br>bool| not_in_transaction is deprecated and should not be used. |
 
 #### Messages
 
@@ -142,28 +142,13 @@ ExecuteEntityIds executes the query based on the specified external id to keyspa
 
 | Name |Description |
 | :-------- | :-------- 
-| <code>xid_type</code> <br>[Type](#executeentityidsrequest.entityid.type)| |
-| <code>xid_bytes</code> <br>bytes| |
-| <code>xid_int</code> <br>int64| |
-| <code>xid_uint</code> <br>uint64| |
-| <code>xid_float</code> <br>double| |
-| <code>keyspace_id</code> <br>bytes| |
-
-#### Enums
-
-##### ExecuteEntityIdsRequest.EntityId.Type
-
-| Name |Value |Description |
-| :-------- | :-------- | :-------- 
-| <code>TYPE_NULL</code> | <code>0</code> |  |
-| <code>TYPE_BYTES</code> | <code>1</code> |  |
-| <code>TYPE_INT</code> | <code>2</code> |  |
-| <code>TYPE_UINT</code> | <code>3</code> |  |
-| <code>TYPE_FLOAT</code> | <code>4</code> |  |
+| <code>type</code> <br>[query.Type](#query.type)| Type defines the various supported data types in bind vars and query results. |
+| <code>value</code> <br>bytes| value is the value for the entity. Not set if type is NULL_TYPE. |
+| <code>keyspace_id</code> <br>bytes| keyspace_id is the associated keyspace_id for the entity. |
 
 #### Response
 
- ExecuteEntityIdsResponse is the returned value from ExecuteEntityIds
+ ExecuteEntityIdsResponse is the returned value from ExecuteEntityIds.
 
 ##### Properties
 
@@ -179,7 +164,7 @@ ExecuteKeyRanges executes the query based on the specified key ranges.
 
 #### Request
 
- ExecuteKeyRangesRequest is the payload to ExecuteKeyRanges
+ ExecuteKeyRangesRequest is the payload to ExecuteKeyRanges.
 
 ##### Parameters
 
@@ -188,14 +173,14 @@ ExecuteKeyRanges executes the query based on the specified key ranges.
 | <code>caller_id</code> <br>[vtrpc.CallerID](#vtrpc.callerid)| CallerID is passed along RPCs to identify the originating client for a request. It is not meant to be secure, but only informational.  The client can put whatever info they want in these fields, and they will be trusted by the servers. The fields will just be used for logging purposes, and to easily find a client. VtGate propagates it to VtTablet, and VtTablet may use this information for monitoring purposes, to display on dashboards, or for blacklisting purposes. |
 | <code>session</code> <br>[Session](#session)| Session objects are session cookies and are invalidated on use. Query results will contain updated session values. Their content should be opaque to the user. |
 | <code>query</code> <br>[query.BoundQuery](#query.boundquery)| BoundQuery is a query with its bind variables |
-| <code>keyspace</code> <br>string| |
+| <code>keyspace</code> <br>string| keyspace to target the query to |
 | <code>key_ranges</code> <br>list &lt;[topodata.KeyRange](#topodata.keyrange)&gt;| KeyRange describes a range of sharding keys, when range-based sharding is used. |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
-| <code>not_in_transaction</code> <br>bool| |
+| <code>not_in_transaction</code> <br>bool| not_in_transaction is deprecated and should not be used. |
 
 #### Response
 
- ExecuteKeyRangesResponse is the returned value from ExecuteKeyRanges
+ ExecuteKeyRangesResponse is the returned value from ExecuteKeyRanges.
 
 ##### Properties
 
@@ -211,7 +196,7 @@ ExecuteKeyspaceIds executes the query based on the specified keyspace ids.
 
 #### Request
 
- ExecuteKeyspaceIdsRequest is the payload to ExecuteKeyspaceIds
+ ExecuteKeyspaceIdsRequest is the payload to ExecuteKeyspaceIds.
 
 ##### Parameters
 
@@ -220,14 +205,14 @@ ExecuteKeyspaceIds executes the query based on the specified keyspace ids.
 | <code>caller_id</code> <br>[vtrpc.CallerID](#vtrpc.callerid)| CallerID is passed along RPCs to identify the originating client for a request. It is not meant to be secure, but only informational.  The client can put whatever info they want in these fields, and they will be trusted by the servers. The fields will just be used for logging purposes, and to easily find a client. VtGate propagates it to VtTablet, and VtTablet may use this information for monitoring purposes, to display on dashboards, or for blacklisting purposes. |
 | <code>session</code> <br>[Session](#session)| Session objects are session cookies and are invalidated on use. Query results will contain updated session values. Their content should be opaque to the user. |
 | <code>query</code> <br>[query.BoundQuery](#query.boundquery)| BoundQuery is a query with its bind variables |
-| <code>keyspace</code> <br>string| |
-| <code>keyspace_ids</code> <br>list &lt;bytes&gt;| |
+| <code>keyspace</code> <br>string| keyspace to target the query to. |
+| <code>keyspace_ids</code> <br>list &lt;bytes&gt;| keyspace_ids contains the list of keyspace_ids affected by this query. Will be used to find the shards to send the query to. |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
-| <code>not_in_transaction</code> <br>bool| |
+| <code>not_in_transaction</code> <br>bool| not_in_transaction is deprecated and should not be used. |
 
 #### Response
 
- ExecuteKeyspaceIdsResponse is the returned value from ExecuteKeyspaceIds
+ ExecuteKeyspaceIdsResponse is the returned value from ExecuteKeyspaceIds.
 
 ##### Properties
 
@@ -243,7 +228,7 @@ StreamExecuteKeyRanges executes a streaming query based on key ranges. Use this 
 
 #### Request
 
- StreamExecuteKeyRangesRequest is the payload to StreamExecuteKeyRanges
+ StreamExecuteKeyRangesRequest is the payload to StreamExecuteKeyRanges.
 
 ##### Parameters
 
@@ -251,19 +236,18 @@ StreamExecuteKeyRanges executes a streaming query based on key ranges. Use this 
 | :-------- | :-------- 
 | <code>caller_id</code> <br>[vtrpc.CallerID](#vtrpc.callerid)| CallerID is passed along RPCs to identify the originating client for a request. It is not meant to be secure, but only informational.  The client can put whatever info they want in these fields, and they will be trusted by the servers. The fields will just be used for logging purposes, and to easily find a client. VtGate propagates it to VtTablet, and VtTablet may use this information for monitoring purposes, to display on dashboards, or for blacklisting purposes. |
 | <code>query</code> <br>[query.BoundQuery](#query.boundquery)| BoundQuery is a query with its bind variables |
-| <code>keyspace</code> <br>string| |
+| <code>keyspace</code> <br>string| keyspace to target the query to. |
 | <code>key_ranges</code> <br>list &lt;[topodata.KeyRange](#topodata.keyrange)&gt;| KeyRange describes a range of sharding keys, when range-based sharding is used. |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
 
 #### Response
 
- StreamExecuteKeyRangesResponse is the returned value from StreamExecuteKeyRanges
+ StreamExecuteKeyRangesResponse is the returned value from StreamExecuteKeyRanges.
 
 ##### Properties
 
 | Name |Description |
 | :-------- | :-------- 
-| <code>error</code> <br>[vtrpc.RPCError](#vtrpc.rpcerror)| RPCError is an application-level error structure returned by VtTablet (and passed along by VtGate if appropriate). We use this so the clients don't have to parse the error messages, but instead can depend on the value of the code. |
 | <code>result</code> <br>[query.QueryResult](#query.queryresult)| QueryResult is returned by Execute and ExecuteStream.  As returned by Execute, len(fields) is always equal to len(row) (for each row in rows).  As returned by StreamExecute, the first QueryResult has the fields set, and subsequent QueryResult have rows set. And as Execute, len(QueryResult[0].fields) is always equal to len(row) (for each row in rows for each QueryResult in QueryResult[1:]). |
 
 ### StreamExecuteKeyspaceIds
@@ -272,7 +256,7 @@ StreamExecuteKeyspaceIds executes a streaming query based on keyspace ids. Use t
 
 #### Request
 
- StreamExecuteKeyspaceIdsRequest is the payload to StreamExecuteKeyspaceIds
+ StreamExecuteKeyspaceIdsRequest is the payload to StreamExecuteKeyspaceIds.
 
 ##### Parameters
 
@@ -280,19 +264,18 @@ StreamExecuteKeyspaceIds executes a streaming query based on keyspace ids. Use t
 | :-------- | :-------- 
 | <code>caller_id</code> <br>[vtrpc.CallerID](#vtrpc.callerid)| CallerID is passed along RPCs to identify the originating client for a request. It is not meant to be secure, but only informational.  The client can put whatever info they want in these fields, and they will be trusted by the servers. The fields will just be used for logging purposes, and to easily find a client. VtGate propagates it to VtTablet, and VtTablet may use this information for monitoring purposes, to display on dashboards, or for blacklisting purposes. |
 | <code>query</code> <br>[query.BoundQuery](#query.boundquery)| BoundQuery is a query with its bind variables |
-| <code>keyspace</code> <br>string| |
-| <code>keyspace_ids</code> <br>list &lt;bytes&gt;| |
+| <code>keyspace</code> <br>string| keyspace to target the query to. |
+| <code>keyspace_ids</code> <br>list &lt;bytes&gt;| keyspace_ids contains the list of keyspace_ids affected by this query. Will be used to find the shards to send the query to. |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
 
 #### Response
 
- StreamExecuteKeyspaceIdsResponse is the returned value from StreamExecuteKeyspaceIds
+ StreamExecuteKeyspaceIdsResponse is the returned value from StreamExecuteKeyspaceIds.
 
 ##### Properties
 
 | Name |Description |
 | :-------- | :-------- 
-| <code>error</code> <br>[vtrpc.RPCError](#vtrpc.rpcerror)| RPCError is an application-level error structure returned by VtTablet (and passed along by VtGate if appropriate). We use this so the clients don't have to parse the error messages, but instead can depend on the value of the code. |
 | <code>result</code> <br>[query.QueryResult](#query.queryresult)| QueryResult is returned by Execute and ExecuteStream.  As returned by Execute, len(fields) is always equal to len(row) (for each row in rows).  As returned by StreamExecute, the first QueryResult has the fields set, and subsequent QueryResult have rows set. And as Execute, len(QueryResult[0].fields) is always equal to len(row) (for each row in rows for each QueryResult in QueryResult[1:]). |
 
 ##Transactions
@@ -302,7 +285,7 @@ Begin a transaction.
 
 #### Request
 
- BeginRequest is the payload to Begin
+ BeginRequest is the payload to Begin.
 
 ##### Parameters
 
@@ -312,13 +295,12 @@ Begin a transaction.
 
 #### Response
 
- BeginResponse is the returned value from Begin
+ BeginResponse is the returned value from Begin.
 
 ##### Properties
 
 | Name |Description |
 | :-------- | :-------- 
-| <code>error</code> <br>[vtrpc.RPCError](#vtrpc.rpcerror)| RPCError is an application-level error structure returned by VtTablet (and passed along by VtGate if appropriate). We use this so the clients don't have to parse the error messages, but instead can depend on the value of the code. |
 | <code>session</code> <br>[Session](#session)| Session objects are session cookies and are invalidated on use. Query results will contain updated session values. Their content should be opaque to the user. |
 
 ### Commit
@@ -327,7 +309,7 @@ Commit a transaction.
 
 #### Request
 
- CommitRequest is the payload to Commit
+ CommitRequest is the payload to Commit.
 
 ##### Parameters
 
@@ -338,13 +320,12 @@ Commit a transaction.
 
 #### Response
 
- CommitResponse is the returned value from Commit
+ CommitResponse is the returned value from Commit.
 
 ##### Properties
 
 | Name |Description |
 | :-------- | :-------- 
-| <code>error</code> <br>[vtrpc.RPCError](#vtrpc.rpcerror)| RPCError is an application-level error structure returned by VtTablet (and passed along by VtGate if appropriate). We use this so the clients don't have to parse the error messages, but instead can depend on the value of the code. |
 
 ### Rollback
 
@@ -352,7 +333,7 @@ Rollback a transaction.
 
 #### Request
 
- RollbackRequest is the payload to Rollback
+ RollbackRequest is the payload to Rollback.
 
 ##### Parameters
 
@@ -363,13 +344,12 @@ Rollback a transaction.
 
 #### Response
 
- RollbackResponse is the returned value from Rollback
+ RollbackResponse is the returned value from Rollback.
 
 ##### Properties
 
 | Name |Description |
 | :-------- | :-------- 
-| <code>error</code> <br>[vtrpc.RPCError](#vtrpc.rpcerror)| RPCError is an application-level error structure returned by VtTablet (and passed along by VtGate if appropriate). We use this so the clients don't have to parse the error messages, but instead can depend on the value of the code. |
 
 ##Custom Sharding
 ### ExecuteBatchShards
@@ -388,11 +368,11 @@ ExecuteBatchShards executes the list of queries on the specified shards.
 | <code>session</code> <br>[Session](#session)| Session objects are session cookies and are invalidated on use. Query results will contain updated session values. Their content should be opaque to the user. |
 | <code>queries</code> <br>list &lt;[BoundShardQuery](#boundshardquery)&gt;| BoundShardQuery represents a single query request for the specified list of shards. This is used in a list for ExecuteBatchShardsRequest. |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
-| <code>as_transaction</code> <br>bool| |
+| <code>as_transaction</code> <br>bool| as_transaction will execute the queries in this batch in a single transaction per shard, created for this purpose. (this can be seen as adding a 'begin' before and 'commit' after the queries). Only makes sense if tablet_type is master. If set, the Session is ignored. |
 
 #### Response
 
- ExecuteBatchShardsResponse is the returned value from ExecuteBatchShards
+ ExecuteBatchShardsResponse is the returned value from ExecuteBatchShards.
 
 ##### Properties
 
@@ -408,7 +388,7 @@ ExecuteShards executes the query on the specified shards.
 
 #### Request
 
- ExecuteShardsRequest is the payload to ExecuteShards
+ ExecuteShardsRequest is the payload to ExecuteShards.
 
 ##### Parameters
 
@@ -417,14 +397,14 @@ ExecuteShards executes the query on the specified shards.
 | <code>caller_id</code> <br>[vtrpc.CallerID](#vtrpc.callerid)| CallerID is passed along RPCs to identify the originating client for a request. It is not meant to be secure, but only informational.  The client can put whatever info they want in these fields, and they will be trusted by the servers. The fields will just be used for logging purposes, and to easily find a client. VtGate propagates it to VtTablet, and VtTablet may use this information for monitoring purposes, to display on dashboards, or for blacklisting purposes. |
 | <code>session</code> <br>[Session](#session)| Session objects are session cookies and are invalidated on use. Query results will contain updated session values. Their content should be opaque to the user. |
 | <code>query</code> <br>[query.BoundQuery](#query.boundquery)| BoundQuery is a query with its bind variables |
-| <code>keyspace</code> <br>string| |
-| <code>shards</code> <br>list &lt;string&gt;| |
+| <code>keyspace</code> <br>string| keyspace to target the query to. |
+| <code>shards</code> <br>list &lt;string&gt;| shards to target the query to. A DML can only target one shard. |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
-| <code>not_in_transaction</code> <br>bool| |
+| <code>not_in_transaction</code> <br>bool| not_in_transaction is deprecated and should not be used. |
 
 #### Response
 
- ExecuteShardsResponse is the returned value from ExecuteShards
+ ExecuteShardsResponse is the returned value from ExecuteShards.
 
 ##### Properties
 
@@ -440,7 +420,7 @@ StreamExecuteShards executes a streaming query based on shards. Use this method 
 
 #### Request
 
- StreamExecuteShardsRequest is the payload to StreamExecuteShards
+ StreamExecuteShardsRequest is the payload to StreamExecuteShards.
 
 ##### Parameters
 
@@ -448,19 +428,18 @@ StreamExecuteShards executes a streaming query based on shards. Use this method 
 | :-------- | :-------- 
 | <code>caller_id</code> <br>[vtrpc.CallerID](#vtrpc.callerid)| CallerID is passed along RPCs to identify the originating client for a request. It is not meant to be secure, but only informational.  The client can put whatever info they want in these fields, and they will be trusted by the servers. The fields will just be used for logging purposes, and to easily find a client. VtGate propagates it to VtTablet, and VtTablet may use this information for monitoring purposes, to display on dashboards, or for blacklisting purposes. |
 | <code>query</code> <br>[query.BoundQuery](#query.boundquery)| BoundQuery is a query with its bind variables |
-| <code>keyspace</code> <br>string| |
-| <code>shards</code> <br>list &lt;string&gt;| |
+| <code>keyspace</code> <br>string| keyspace to target the query to. |
+| <code>shards</code> <br>list &lt;string&gt;| shards to target the query to. |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
 
 #### Response
 
- StreamExecuteShardsResponse is the returned value from StreamExecuteShards
+ StreamExecuteShardsResponse is the returned value from StreamExecuteShards.
 
 ##### Properties
 
 | Name |Description |
 | :-------- | :-------- 
-| <code>error</code> <br>[vtrpc.RPCError](#vtrpc.rpcerror)| RPCError is an application-level error structure returned by VtTablet (and passed along by VtGate if appropriate). We use this so the clients don't have to parse the error messages, but instead can depend on the value of the code. |
 | <code>result</code> <br>[query.QueryResult](#query.queryresult)| QueryResult is returned by Execute and ExecuteStream.  As returned by Execute, len(fields) is always equal to len(row) (for each row in rows).  As returned by StreamExecute, the first QueryResult has the fields set, and subsequent QueryResult have rows set. And as Execute, len(QueryResult[0].fields) is always equal to len(row) (for each row in rows for each QueryResult in QueryResult[1:]). |
 
 ##Map Reduce
@@ -470,27 +449,30 @@ Split a query into non-overlapping sub queries
 
 #### Request
 
- SplitQueryRequest is the payload to SplitQuery
+ SplitQueryRequest is the payload to SplitQuery.  SplitQuery takes a "SELECT" query and generates a list of queries called "query-parts". Each query-part consists of the original query with an added WHERE clause that restricts the query-part to operate only on rows whose values in the the columns listed in the "split_column" field of the request (see below) are in a particular range.  It is guaranteed that the set of rows obtained from executing each query-part on a database snapshot and merging (without deduping) the results is equal to the set of rows obtained from executing the original query on the same snapshot with the rows containing NULL values in any of the split_column's excluded.  This is typically called by the MapReduce master when reading from Vitess. There it's desirable that the sets of rows returned by the query-parts have roughly the same size.
 
 ##### Parameters
 
 | Name |Description |
 | :-------- | :-------- 
 | <code>caller_id</code> <br>[vtrpc.CallerID](#vtrpc.callerid)| CallerID is passed along RPCs to identify the originating client for a request. It is not meant to be secure, but only informational.  The client can put whatever info they want in these fields, and they will be trusted by the servers. The fields will just be used for logging purposes, and to easily find a client. VtGate propagates it to VtTablet, and VtTablet may use this information for monitoring purposes, to display on dashboards, or for blacklisting purposes. |
-| <code>keyspace</code> <br>string| |
+| <code>keyspace</code> <br>string| keyspace to target the query to. |
 | <code>query</code> <br>[query.BoundQuery](#query.boundquery)| BoundQuery is a query with its bind variables |
-| <code>split_column</code> <br>string| |
-| <code>split_count</code> <br>int64| |
+| <code>split_column</code> <br>list &lt;string&gt;| Each generated query-part will be restricted to rows whose values in the columns listed in this field are in a particular range. The list of columns named here must be a prefix of the list of columns defining some index or primary key of the table referenced in 'query'. For many tables using the primary key columns (in order) is sufficient and this is the default if this field is omitted. See the comment on the 'algorithm' field for more restrictions and information. |
+| <code>split_count</code> <br>int64| You can specify either an estimate of the number of query-parts to generate or an estimate of the number of rows each query-part should return. Thus, exactly one of split_count or num_rows_per_query_part should be nonzero. The non-given parameter is calculated from the given parameter using the formula: split_count * num_rows_per_query_pary = table_size, where table_size is an approximation of the number of rows in the table. Note that if "split_count" is given it is regarded as an estimate. The number of query-parts returned may differ slightly (in particular, if it's not a whole multiple of the number of vitess shards). |
+| <code>num_rows_per_query_part</code> <br>int64| |
+| <code>algorithm</code> <br>query.SplitQueryRequest.Algorithm| The algorithm to use to split the query. The split algorithm is performed on each database shard in parallel. The lists of query-parts generated by the shards are merged and returned to the caller. Two algorithms are supported: EQUAL_SPLITS If this algorithm is selected then only the first 'split_column' given is used (or the first primary key column if the 'split_column' field is empty). In the rest of this algorithm's description, we refer to this column as "the split column". The split column must have numeric type (integral or floating point). The algorithm works by taking the interval [min, max], where min and max are the minimum and maximum values of the split column in the table-shard, respectively, and partitioning it into 'split_count' sub-intervals of equal size. The added WHERE clause of each query-part restricts that part to rows whose value in the split column belongs to a particular sub-interval. This is fast, but requires that the distribution of values of the split column be uniform in [min, max] for the number of rows returned by each query part to be roughly the same. FULL_SCAN If this algorithm is used then the split_column must be the primary key columns (in order). This algorithm performs a full-scan of the table-shard referenced in 'query' to get "boundary" rows that are num_rows_per_query_part apart when the table is ordered by the columns listed in 'split_column'. It then restricts each query-part to the rows located between two successive boundary rows. This algorithm supports multiple split_column's of any type, but is slower than EQUAL_SPLITS. |
+| <code>use_split_query_v2</code> <br>bool| Whether to use the new split-query code that supports multiple split-columns and the FULL_SCAN algorithm. This is a temporary field which aids in the migration of SplitQuery to the new code. to the SplitQuery version 2. |
 
 #### Response
 
- SplitQueryResponse is the returned value from SplitQuery
+ SplitQueryResponse is the returned value from SplitQuery.
 
 ##### Properties
 
 | Name |Description |
 | :-------- | :-------- 
-| <code>splits</code> <br>list &lt;[Part](#splitqueryresponse.part)&gt;| |
+| <code>splits</code> <br>list &lt;[Part](#splitqueryresponse.part)&gt;| splits contains the queries to run to fetch the entire data set. |
 
 #### Messages
 
@@ -500,7 +482,7 @@ Split a query into non-overlapping sub queries
 
 | Name |Description |
 | :-------- | :-------- 
-| <code>keyspace</code> <br>string| |
+| <code>keyspace</code> <br>string| keyspace to target the query to. |
 | <code>key_ranges</code> <br>list &lt;[topodata.KeyRange](#topodata.keyrange)&gt;| KeyRange describes a range of sharding keys, when range-based sharding is used. |
 
 ##### SplitQueryResponse.Part
@@ -510,9 +492,9 @@ Split a query into non-overlapping sub queries
 | Name |Description |
 | :-------- | :-------- 
 | <code>query</code> <br>[query.BoundQuery](#query.boundquery)| BoundQuery is a query with its bind variables |
-| <code>key_range_part</code> <br>[KeyRangePart](#splitqueryresponse.keyrangepart)| |
-| <code>shard_part</code> <br>[ShardPart](#splitqueryresponse.shardpart)| |
-| <code>size</code> <br>int64| |
+| <code>key_range_part</code> <br>[KeyRangePart](#splitqueryresponse.keyrangepart)| key_range_part is set if the query should be executed by ExecuteKeyRanges. |
+| <code>shard_part</code> <br>[ShardPart](#splitqueryresponse.shardpart)| shard_part is set if the query should be executed by ExecuteShards. |
+| <code>size</code> <br>int64| size is the approximate number of rows this query will return. |
 
 ##### SplitQueryResponse.ShardPart
 
@@ -520,8 +502,8 @@ Split a query into non-overlapping sub queries
 
 | Name |Description |
 | :-------- | :-------- 
-| <code>keyspace</code> <br>string| |
-| <code>shards</code> <br>list &lt;string&gt;| |
+| <code>keyspace</code> <br>string| keyspace to target the query to. |
+| <code>shards</code> <br>list &lt;string&gt;| shards to target the query to. |
 
 ##Topology
 ### GetSrvKeyspace
@@ -530,17 +512,17 @@ GetSrvKeyspace returns a SrvKeyspace object (as seen by this vtgate). This metho
 
 #### Request
 
- GetSrvKeyspaceRequest is the payload to GetSrvKeyspace
+ GetSrvKeyspaceRequest is the payload to GetSrvKeyspace.
 
 ##### Parameters
 
 | Name |Description |
 | :-------- | :-------- 
-| <code>keyspace</code> <br>string| |
+| <code>keyspace</code> <br>string| keyspace name to fetch. |
 
 #### Response
 
- GetSrvKeyspaceResponse is the returned value from GetSrvKeyspace
+ GetSrvKeyspaceResponse is the returned value from GetSrvKeyspace.
 
 ##### Properties
 
@@ -555,7 +537,7 @@ Execute tries to route the query to the right shard. It depends on the query and
 
 #### Request
 
- ExecuteRequest is the payload to Execute
+ ExecuteRequest is the payload to Execute.
 
 ##### Parameters
 
@@ -565,11 +547,12 @@ Execute tries to route the query to the right shard. It depends on the query and
 | <code>session</code> <br>[Session](#session)| Session objects are session cookies and are invalidated on use. Query results will contain updated session values. Their content should be opaque to the user. |
 | <code>query</code> <br>[query.BoundQuery](#query.boundquery)| BoundQuery is a query with its bind variables |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
-| <code>not_in_transaction</code> <br>bool| |
+| <code>not_in_transaction</code> <br>bool| not_in_transaction is deprecated and should not be used. |
+| <code>keyspace</code> <br>string| keyspace to target the query to. |
 
 #### Response
 
- ExecuteResponse is the returned value from Execute
+ ExecuteResponse is the returned value from Execute.
 
 ##### Properties
 
@@ -585,7 +568,7 @@ StreamExecute executes a streaming query based on shards. It depends on the quer
 
 #### Request
 
- StreamExecuteRequest is the payload to StreamExecute
+ StreamExecuteRequest is the payload to StreamExecute.
 
 ##### Parameters
 
@@ -594,19 +577,55 @@ StreamExecute executes a streaming query based on shards. It depends on the quer
 | <code>caller_id</code> <br>[vtrpc.CallerID](#vtrpc.callerid)| CallerID is passed along RPCs to identify the originating client for a request. It is not meant to be secure, but only informational.  The client can put whatever info they want in these fields, and they will be trusted by the servers. The fields will just be used for logging purposes, and to easily find a client. VtGate propagates it to VtTablet, and VtTablet may use this information for monitoring purposes, to display on dashboards, or for blacklisting purposes. |
 | <code>query</code> <br>[query.BoundQuery](#query.boundquery)| BoundQuery is a query with its bind variables |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
+| <code>keyspace</code> <br>string| keyspace to target the query to. |
 
 #### Response
 
- StreamExecuteResponse is the returned value from StreamExecute
+ StreamExecuteResponse is the returned value from StreamExecute.
 
 ##### Properties
 
 | Name |Description |
 | :-------- | :-------- 
-| <code>error</code> <br>[vtrpc.RPCError](#vtrpc.rpcerror)| RPCError is an application-level error structure returned by VtTablet (and passed along by VtGate if appropriate). We use this so the clients don't have to parse the error messages, but instead can depend on the value of the code. |
 | <code>result</code> <br>[query.QueryResult](#query.queryresult)| QueryResult is returned by Execute and ExecuteStream.  As returned by Execute, len(fields) is always equal to len(row) (for each row in rows).  As returned by StreamExecute, the first QueryResult has the fields set, and subsequent QueryResult have rows set. And as Execute, len(QueryResult[0].fields) is always equal to len(row) (for each row in rows for each QueryResult in QueryResult[1:]). |
 
 ## Enums
+
+### query.Type
+
+ Type defines the various supported data types in bind vars and query results.
+
+| Name |Value |Description |
+| :-------- | :-------- | :-------- 
+| <code>NULL_TYPE</code> | <code>0</code> | NULL_TYPE specifies a NULL type.  |
+| <code>INT8</code> | <code>257</code> | INT8 specifies a TINYINT type. Properties: 1, IsNumber.  |
+| <code>UINT8</code> | <code>770</code> | UINT8 specifies a TINYINT UNSIGNED type. Properties: 2, IsNumber, IsUnsigned.  |
+| <code>INT16</code> | <code>259</code> | INT16 specifies a SMALLINT type. Properties: 3, IsNumber.  |
+| <code>UINT16</code> | <code>772</code> | UINT16 specifies a SMALLINT UNSIGNED type. Properties: 4, IsNumber, IsUnsigned.  |
+| <code>INT24</code> | <code>261</code> | INT24 specifies a MEDIUMINT type. Properties: 5, IsNumber.  |
+| <code>UINT24</code> | <code>774</code> | UINT24 specifies a MEDIUMINT UNSIGNED type. Properties: 6, IsNumber, IsUnsigned.  |
+| <code>INT32</code> | <code>263</code> | INT32 specifies a INTEGER type. Properties: 7, IsNumber.  |
+| <code>UINT32</code> | <code>776</code> | UINT32 specifies a INTEGER UNSIGNED type. Properties: 8, IsNumber, IsUnsigned.  |
+| <code>INT64</code> | <code>265</code> | INT64 specifies a BIGINT type. Properties: 9, IsNumber.  |
+| <code>UINT64</code> | <code>778</code> | UINT64 specifies a BIGINT UNSIGNED type. Properties: 10, IsNumber, IsUnsigned.  |
+| <code>FLOAT32</code> | <code>1035</code> | FLOAT32 specifies a FLOAT type. Properties: 11, IsFloat.  |
+| <code>FLOAT64</code> | <code>1036</code> | FLOAT64 specifies a DOUBLE or REAL type. Properties: 12, IsFloat.  |
+| <code>TIMESTAMP</code> | <code>2061</code> | TIMESTAMP specifies a TIMESTAMP type. Properties: 13, IsQuoted.  |
+| <code>DATE</code> | <code>2062</code> | DATE specifies a DATE type. Properties: 14, IsQuoted.  |
+| <code>TIME</code> | <code>2063</code> | TIME specifies a TIME type. Properties: 15, IsQuoted.  |
+| <code>DATETIME</code> | <code>2064</code> | DATETIME specifies a DATETIME type. Properties: 16, IsQuoted.  |
+| <code>YEAR</code> | <code>785</code> | YEAR specifies a YEAR type. Properties: 17, IsNumber, IsUnsigned.  |
+| <code>DECIMAL</code> | <code>18</code> | DECIMAL specifies a DECIMAL or NUMERIC type. Properties: 18, None.  |
+| <code>TEXT</code> | <code>6163</code> | TEXT specifies a TEXT type. Properties: 19, IsQuoted, IsText.  |
+| <code>BLOB</code> | <code>10260</code> | BLOB specifies a BLOB type. Properties: 20, IsQuoted, IsBinary.  |
+| <code>VARCHAR</code> | <code>6165</code> | VARCHAR specifies a VARCHAR type. Properties: 21, IsQuoted, IsText.  |
+| <code>VARBINARY</code> | <code>10262</code> | VARBINARY specifies a VARBINARY type. Properties: 22, IsQuoted, IsBinary.  |
+| <code>CHAR</code> | <code>6167</code> | CHAR specifies a CHAR type. Properties: 23, IsQuoted, IsText.  |
+| <code>BINARY</code> | <code>10264</code> | BINARY specifies a BINARY type. Properties: 24, IsQuoted, IsBinary.  |
+| <code>BIT</code> | <code>2073</code> | BIT specifies a BIT type. Properties: 25, IsQuoted.  |
+| <code>ENUM</code> | <code>2074</code> | ENUM specifies an ENUM type. Properties: 26, IsQuoted.  |
+| <code>SET</code> | <code>2075</code> | SET specifies a SET type. Properties: 27, IsQuoted.  |
+| <code>TUPLE</code> | <code>28</code> | TUPLE specifies a a tuple. This cannot be returned in a QueryResult, but it can be sent as a bind var. Properties: 28, None.  |
 
 ### topodata.KeyspaceIdType
 
@@ -624,19 +643,16 @@ StreamExecute executes a streaming query based on shards. It depends on the quer
 
 | Name |Value |Description |
 | :-------- | :-------- | :-------- 
-| <code>UNKNOWN</code> | <code>0</code> |  |
-| <code>IDLE</code> | <code>1</code> |  |
-| <code>MASTER</code> | <code>2</code> |  |
-| <code>REPLICA</code> | <code>3</code> |  |
-| <code>RDONLY</code> | <code>4</code> |  |
-| <code>BATCH</code> | <code>4</code> |  |
-| <code>SPARE</code> | <code>5</code> |  |
-| <code>EXPERIMENTAL</code> | <code>6</code> |  |
-| <code>SCHEMA_UPGRADE</code> | <code>7</code> |  |
-| <code>BACKUP</code> | <code>8</code> |  |
-| <code>RESTORE</code> | <code>9</code> |  |
-| <code>WORKER</code> | <code>10</code> |  |
-| <code>SCRAP</code> | <code>11</code> |  |
+| <code>UNKNOWN</code> | <code>0</code> | UNKNOWN is not a valid value.  |
+| <code>MASTER</code> | <code>1</code> | MASTER is the master server for the shard. Only MASTER allows DMLs.  |
+| <code>REPLICA</code> | <code>2</code> | REPLICA is a slave type. It is used to serve live traffic. A REPLICA can be promoted to MASTER. A demoted MASTER will go to REPLICA.  |
+| <code>RDONLY</code> | <code>3</code> | RDONLY (old name) / BATCH (new name) is used to serve traffic for long-running jobs. It is a separate type from REPLICA so long-running queries don't affect web-like traffic.  |
+| <code>BATCH</code> | <code>3</code> |  |
+| <code>SPARE</code> | <code>4</code> | SPARE is a type of servers that cannot serve queries, but is available in case an extra server is needed.  |
+| <code>EXPERIMENTAL</code> | <code>5</code> | EXPERIMENTAL is like SPARE, except it can serve queries. This type can be used for usages not planned by Vitess, like online export to another storage engine.  |
+| <code>BACKUP</code> | <code>6</code> | BACKUP is the type a server goes to when taking a backup. No queries can be served in BACKUP mode.  |
+| <code>RESTORE</code> | <code>7</code> | RESTORE is the type a server uses when restoring a backup, at startup time.  No queries can be served in RESTORE mode.  |
+| <code>WORKER</code> | <code>8</code> | WORKER is the type a server goes into when used by a vtworker process to perform an offline action. It is a serving type (as the vtworker processes may need queries to run). In this state, this tablet is dedicated to the vtworker process that uses it.  |
 
 ### vtrpc.ErrorCode
 
@@ -644,17 +660,17 @@ StreamExecute executes a streaming query based on shards. It depends on the quer
 
 | Name |Value |Description |
 | :-------- | :-------- | :-------- 
-| <code>SUCCESS</code> | <code>0</code> | SUCCESS is returned from a successful call  |
-| <code>CANCELLED</code> | <code>1</code> | CANCELLED means that the context was cancelled (and noticed in the app layer, as opposed to the RPC layer)  |
+| <code>SUCCESS</code> | <code>0</code> | SUCCESS is returned from a successful call.  |
+| <code>CANCELLED</code> | <code>1</code> | CANCELLED means that the context was cancelled (and noticed in the app layer, as opposed to the RPC layer).  |
 | <code>UNKNOWN_ERROR</code> | <code>2</code> | UNKNOWN_ERROR includes: 1. MySQL error codes that we don't explicitly handle. 2. MySQL response that wasn't as expected. For example, we might expect a MySQL timestamp to be returned in a particular way, but it wasn't. 3. Anything else that doesn't fall into a different bucket.  |
 | <code>BAD_INPUT</code> | <code>3</code> | BAD_INPUT is returned when an end-user either sends SQL that couldn't be parsed correctly, or tries a query that isn't supported by Vitess.  |
 | <code>DEADLINE_EXCEEDED</code> | <code>4</code> | DEADLINE_EXCEEDED is returned when an action is taking longer than a given timeout.  |
-| <code>INTEGRITY_ERROR</code> | <code>5</code> | INTEGRITY_ERROR is returned on integrity error from MySQL, usually due to duplicate primary keys  |
+| <code>INTEGRITY_ERROR</code> | <code>5</code> | INTEGRITY_ERROR is returned on integrity error from MySQL, usually due to duplicate primary keys.  |
 | <code>PERMISSION_DENIED</code> | <code>6</code> | PERMISSION_DENIED errors are returned when a user requests access to something that they don't have permissions for.  |
 | <code>RESOURCE_EXHAUSTED</code> | <code>7</code> | RESOURCE_EXHAUSTED is returned when a query exceeds its quota in some dimension and can't be completed due to that. Queries that return RESOURCE_EXHAUSTED should not be retried, as it could be detrimental to the server's health. Examples of errors that will cause the RESOURCE_EXHAUSTED code: 1. TxPoolFull: this is retried server-side, and is only returned as an error if the server-side retries failed. 2. Query is killed due to it taking too long.  |
 | <code>QUERY_NOT_SERVED</code> | <code>8</code> | QUERY_NOT_SERVED means that a query could not be served right now. Client can interpret it as: "the tablet that you sent this query to cannot serve the query right now, try a different tablet or try again later." This could be due to various reasons: QueryService is not serving, should not be serving, wrong shard, wrong tablet type, blacklisted table, etc. Clients that receive this error should usually retry the query, but after taking the appropriate steps to make sure that the query will get sent to the correct tablet.  |
 | <code>NOT_IN_TX</code> | <code>9</code> | NOT_IN_TX means that we're not currently in a transaction, but we should be.  |
-| <code>INTERNAL_ERROR</code> | <code>10</code> | INTERNAL_ERRORs are problems that only the server can fix, not the client. These errors are not due to a query itself, but rather due to the state of the system. Generally, we don't expect the errors to go away by themselves, but they may go away after human intervention. Examples of scenarios where INTERNAL_ERROR is returned: 1. Something is not configured correctly internally. 2. A necessary resource is not available, and we don't expect it to become available by itself. 3. A sanity check fails 4. Some other internal error occurs Clients should not retry immediately, as there is little chance of success. However, it's acceptable for retries to happen internally, for example to multiple backends, in case only a subset of backend are not functional.  |
+| <code>INTERNAL_ERROR</code> | <code>10</code> | INTERNAL_ERRORs are problems that only the server can fix, not the client. These errors are not due to a query itself, but rather due to the state of the system. Generally, we don't expect the errors to go away by themselves, but they may go away after human intervention. Examples of scenarios where INTERNAL_ERROR is returned: 1. Something is not configured correctly internally. 2. A necessary resource is not available, and we don't expect it to become available by itself. 3. A sanity check fails. 4. Some other internal error occurs. Clients should not retry immediately, as there is little chance of success. However, it's acceptable for retries to happen internally, for example to multiple backends, in case only a subset of backend are not functional.  |
 | <code>TRANSIENT_ERROR</code> | <code>11</code> | TRANSIENT_ERROR is used for when there is some error that we expect we can recover from automatically - often due to a resource limit temporarily being reached. Retrying this error, with an exponential backoff, should succeed. Clients should be able to successfully retry the query on the same backends. Examples of things that can trigger this error: 1. Query has been throttled 2. VtGate could have request backlog  |
 | <code>UNAUTHENTICATED</code> | <code>12</code> | UNAUTHENTICATED errors are returned when a user requests access to something, and we're unable to verify the user's authentication.  |
 
@@ -669,8 +685,8 @@ BoundKeyspaceIdQuery represents a single query request for the specified list of
 | Name |Description |
 | :-------- | :-------- 
 | <code>query</code> <br>[query.BoundQuery](#query.boundquery)| BoundQuery is a query with its bind variables |
-| <code>keyspace</code> <br>string| |
-| <code>keyspace_ids</code> <br>list &lt;bytes&gt;| |
+| <code>keyspace</code> <br>string| keyspace to target the query to. |
+| <code>keyspace_ids</code> <br>list &lt;bytes&gt;| keyspace_ids contains the list of keyspace_ids affected by this query. Will be used to find the shards to send the query to. |
 
 ### BoundShardQuery
 
@@ -681,8 +697,8 @@ BoundShardQuery represents a single query request for the specified list of shar
 | Name |Description |
 | :-------- | :-------- 
 | <code>query</code> <br>[query.BoundQuery](#query.boundquery)| BoundQuery is a query with its bind variables |
-| <code>keyspace</code> <br>string| |
-| <code>shards</code> <br>list &lt;string&gt;| |
+| <code>keyspace</code> <br>string| keyspace to target the query to. |
+| <code>shards</code> <br>list &lt;string&gt;| shards to target the query to. A DML can only target one shard. |
 
 ### Session
 
@@ -708,37 +724,15 @@ Session objects are session cookies and are invalidated on use. Query results wi
 
 ### query.BindVariable
 
-BindVariable represents a single bind variable in a Query
+BindVariable represents a single bind variable in a Query.
 
 #### Properties
 
 | Name |Description |
 | :-------- | :-------- 
-| <code>type</code> <br>[Type](#bindvariable.type)| |
-| <code>value_bytes</code> <br>bytes| Depending on type, only one value below is set. |
-| <code>value_int</code> <br>int64| |
-| <code>value_uint</code> <br>uint64| |
-| <code>value_float</code> <br>double| |
-| <code>value_bytes_list</code> <br>list &lt;bytes&gt;| |
-| <code>value_int_list</code> <br>list &lt;int64&gt;| |
-| <code>value_uint_list</code> <br>list &lt;uint64&gt;| |
-| <code>value_float_list</code> <br>list &lt;double&gt;| |
-
-#### Enums
-
-##### BindVariable.Type
-
-| Name |Value |Description |
-| :-------- | :-------- | :-------- 
-| <code>TYPE_NULL</code> | <code>0</code> |  |
-| <code>TYPE_BYTES</code> | <code>1</code> |  |
-| <code>TYPE_INT</code> | <code>2</code> |  |
-| <code>TYPE_UINT</code> | <code>3</code> |  |
-| <code>TYPE_FLOAT</code> | <code>4</code> |  |
-| <code>TYPE_BYTES_LIST</code> | <code>5</code> |  |
-| <code>TYPE_INT_LIST</code> | <code>6</code> |  |
-| <code>TYPE_UINT_LIST</code> | <code>7</code> |  |
-| <code>TYPE_FLOAT_LIST</code> | <code>8</code> |  |
+| <code>type</code> <br>[Type](#query.type)| |
+| <code>value</code> <br>bytes| |
+| <code>values</code> <br>list &lt;[Value](#query.value)&gt;| Value represents a typed value. |
 
 ### query.BoundQuery
 
@@ -748,8 +742,8 @@ BoundQuery is a query with its bind variables
 
 | Name |Description |
 | :-------- | :-------- 
-| <code>sql</code> <br>bytes| |
-| <code>bind_variables</code> <br>map &lt;string, [BindVariable](#query.bindvariable)&gt;| |
+| <code>sql</code> <br>string| sql is the SQL query to execute |
+| <code>bind_variables</code> <br>map &lt;string, [BindVariable](#query.bindvariable)&gt;| bind_variables is a map of all bind variables to expand in the query |
 
 ### query.Field
 
@@ -760,67 +754,7 @@ Field describes a single column returned by a query
 | Name |Description |
 | :-------- | :-------- 
 | <code>name</code> <br>string| name of the field as returned by mysql C API |
-| <code>type</code> <br>[Type](#field.type)| |
-| <code>flags</code> <br>int64| flags is essentially a bitset<Flag>. |
-
-#### Enums
-
-##### Field.Flag
-
- Flag contains the MySQL field flags bitset values e.g. to distinguish between signed and unsigned integer.  These numbers should exactly match values defined in dist/mysql-5.1.52/include/mysql_com.h
-
-| Name |Value |Description |
-| :-------- | :-------- | :-------- 
-| <code>VT_ZEROVALUE_FLAG</code> | <code>0</code> | ZEROVALUE_FLAG is not part of the MySQL specification and only used in unit tests.  |
-| <code>VT_NOT_NULL_FLAG</code> | <code>1</code> |  |
-| <code>VT_PRI_KEY_FLAG</code> | <code>2</code> |  |
-| <code>VT_UNIQUE_KEY_FLAG</code> | <code>4</code> |  |
-| <code>VT_MULTIPLE_KEY_FLAG</code> | <code>8</code> |  |
-| <code>VT_BLOB_FLAG</code> | <code>16</code> |  |
-| <code>VT_UNSIGNED_FLAG</code> | <code>32</code> |  |
-| <code>VT_ZEROFILL_FLAG</code> | <code>64</code> |  |
-| <code>VT_BINARY_FLAG</code> | <code>128</code> |  |
-| <code>VT_ENUM_FLAG</code> | <code>256</code> |  |
-| <code>VT_AUTO_INCREMENT_FLAG</code> | <code>512</code> |  |
-| <code>VT_TIMESTAMP_FLAG</code> | <code>1024</code> |  |
-| <code>VT_SET_FLAG</code> | <code>2048</code> |  |
-| <code>VT_NO_DEFAULT_VALUE_FLAG</code> | <code>4096</code> |  |
-| <code>VT_ON_UPDATE_NOW_FLAG</code> | <code>8192</code> |  |
-| <code>VT_NUM_FLAG</code> | <code>32768</code> |  |
-
-##### Field.Type
-
- Type follows enum_field_types from mysql.h.
-
-| Name |Value |Description |
-| :-------- | :-------- | :-------- 
-| <code>TYPE_DECIMAL</code> | <code>0</code> |  |
-| <code>TYPE_TINY</code> | <code>1</code> |  |
-| <code>TYPE_SHORT</code> | <code>2</code> |  |
-| <code>TYPE_LONG</code> | <code>3</code> |  |
-| <code>TYPE_FLOAT</code> | <code>4</code> |  |
-| <code>TYPE_DOUBLE</code> | <code>5</code> |  |
-| <code>TYPE_NULL</code> | <code>6</code> |  |
-| <code>TYPE_TIMESTAMP</code> | <code>7</code> |  |
-| <code>TYPE_LONGLONG</code> | <code>8</code> |  |
-| <code>TYPE_INT24</code> | <code>9</code> |  |
-| <code>TYPE_DATE</code> | <code>10</code> |  |
-| <code>TYPE_TIME</code> | <code>11</code> |  |
-| <code>TYPE_DATETIME</code> | <code>12</code> |  |
-| <code>TYPE_YEAR</code> | <code>13</code> |  |
-| <code>TYPE_NEWDATE</code> | <code>14</code> |  |
-| <code>TYPE_VARCHAR</code> | <code>15</code> |  |
-| <code>TYPE_BIT</code> | <code>16</code> |  |
-| <code>TYPE_NEWDECIMAL</code> | <code>246</code> |  |
-| <code>TYPE_ENUM</code> | <code>247</code> |  |
-| <code>TYPE_SET</code> | <code>248</code> |  |
-| <code>TYPE_TINY_BLOB</code> | <code>249</code> |  |
-| <code>TYPE_MEDIUM_BLOB</code> | <code>250</code> |  |
-| <code>TYPE_LONG_BLOB</code> | <code>251</code> |  |
-| <code>TYPE_BLOB</code> | <code>252</code> |  |
-| <code>TYPE_VAR_STRING</code> | <code>253</code> |  |
-| <code>TYPE_STRING</code> | <code>254</code> |  |
-| <code>TYPE_GEOMETRY</code> | <code>255</code> |  |
+| <code>type</code> <br>[Type](#query.type)| vitess-defined type. Conversion function is in sqltypes package. |
 
 ### query.QueryResult
 
@@ -843,7 +777,8 @@ Row is a database row.
 
 | Name |Description |
 | :-------- | :-------- 
-| <code>values</code> <br>list &lt;bytes&gt;| |
+| <code>lengths</code> <br>list &lt;sint64&gt;| lengths contains the length of each value in values. A length of -1 means that the field is NULL. While reading values, you have to accummulate the length to know the offset where the next value begins in values. |
+| <code>values</code> <br>bytes| values contains a concatenation of all values in the row. |
 
 ### query.Target
 
@@ -856,6 +791,17 @@ Target describes what the client expects the tablet is. If the tablet does not m
 | <code>keyspace</code> <br>string| |
 | <code>shard</code> <br>string| |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
+
+### query.Value
+
+Value represents a typed value.
+
+#### Properties
+
+| Name |Description |
+| :-------- | :-------- 
+| <code>type</code> <br>[Type](#query.type)| |
+| <code>value</code> <br>bytes| |
 
 ### topodata.KeyRange
 

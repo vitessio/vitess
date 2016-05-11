@@ -74,10 +74,8 @@ def setUpModule():
     replica_tablet.create_db('vt_test_keyspace')
     replica_tablet.create_db('other_database')
 
-    master_tablet.start_vttablet(wait_for_state=None,
-                                 target_tablet_type='replica')
-    replica_tablet.start_vttablet(wait_for_state=None,
-                                  target_tablet_type='replica')
+    master_tablet.start_vttablet(wait_for_state=None)
+    replica_tablet.start_vttablet(wait_for_state=None)
     master_tablet.wait_for_vttablet_state('SERVING')
     replica_tablet.wait_for_vttablet_state('NOT_SERVING')
 

@@ -358,6 +358,14 @@ class TestVTGateFunctions(unittest.TestCase):
           ([(i, 'test %s' % i)], 1L, 0,
            [('id', self.int_type), ('name', self.string_type)]))
 
+    # Test case sensitivity
+    cursor.execute('select Id, Name from vt_user where iD = :id', {'id': 1})
+    self.assertEqual(
+        (cursor.fetchall(), cursor.rowcount, cursor.lastrowid,
+         cursor.description),
+        ([(1, 'test 1')], 1L, 0,
+         [('Id', self.int_type), ('Name', self.string_type)]))
+
     # Test insert with no auto-inc
     vtgate_conn.begin()
     result = self.execute_on_master(

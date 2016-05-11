@@ -28,8 +28,9 @@ const (
 // TableDefinitionGetColumn returns the index of a column inside a
 // TableDefinition.
 func TableDefinitionGetColumn(td *tabletmanagerdatapb.TableDefinition, name string) (index int, ok bool) {
+	lowered := strings.ToLower(name)
 	for i, n := range td.Columns {
-		if name == n {
+		if lowered == strings.ToLower(n) {
 			return i, true
 		}
 	}

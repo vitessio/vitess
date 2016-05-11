@@ -55,18 +55,6 @@ func EndPointEquality(left, right *topodatapb.EndPoint) bool {
 			return false
 		}
 	}
-	if len(left.HealthMap) != len(right.HealthMap) {
-		return false
-	}
-	for key, lvalue := range left.HealthMap {
-		rvalue, ok := right.HealthMap[key]
-		if !ok {
-			return false
-		}
-		if lvalue != rvalue {
-			return false
-		}
-	}
 	return true
 }
 

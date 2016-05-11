@@ -219,15 +219,13 @@ func (client *Client) RefreshState(ctx context.Context, tablet *topo.TabletInfo)
 }
 
 // RunHealthCheck is part of the tmclient.TabletManagerClient interface.
-func (client *Client) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topodatapb.TabletType) error {
+func (client *Client) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
 	}
 	defer cc.Close()
-	_, err = c.RunHealthCheck(ctx, &tabletmanagerdatapb.RunHealthCheckRequest{
-		TabletType: targetTabletType,
-	})
+	_, err = c.RunHealthCheck(ctx, &tabletmanagerdatapb.RunHealthCheckRequest{})
 	return err
 }
 

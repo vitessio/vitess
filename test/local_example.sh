@@ -9,9 +9,14 @@ cd $VTTOP/examples/local
 
 exitcode=1
 
+# Use a minimal number of tablets for the test.
+# This helps with staying under CI resource limits.
+num_tablets=2
+tablet_tasks=`seq 0 $[$num_tablets - 1]`
+
 teardown() {
   ./vtgate-down.sh &
-  ./vttablet-down.sh &
+  ./vttablet-down.sh $tablet_tasks &
   ./vtctld-down.sh &
   ./zk-down.sh &
   wait
@@ -22,7 +27,7 @@ trap teardown SIGTERM SIGINT
 # Set up servers.
 timeout $timeout ./zk-up.sh || teardown
 timeout $timeout ./vtctld-up.sh || teardown
-timeout $timeout ./vttablet-up.sh || teardown
+timeout $timeout ./vttablet-up.sh $tablet_tasks || teardown
 
 # Retry loop function
 retry_with_timeout() {
@@ -39,29 +44,23 @@ retry_with_timeout() {
 # If we don't do this, then vtgate might take up to a minute
 # to notice the new tablets, which is normally fine, but not
 # when we're trying to get through the test ASAP.
-echo "Waiting for tablets to appear in topology..."
+echo "Waiting for $num_tablets tablets to appear in topology..."
 start=`date +%s`
-until [[ $(vtctlclient -server localhost:15999 ListAllTablets test | wc -l) -eq 3 ]]; do
+until [[ $(./lvtctl.sh ListAllTablets test | wc -l) -eq $num_tablets ]]; do
   retry_with_timeout
 done
 
 timeout $timeout ./vtgate-up.sh || teardown
 
-echo "Rebuild keyspace..."
-start=`date +%s`
-until vtctlclient -server localhost:15999 RebuildKeyspaceGraph test_keyspace; do
-  retry_with_timeout
-done
-
 echo "Initialize shard..."
 start=`date +%s`
-until vtctlclient -server localhost:15999 InitShardMaster -force test_keyspace/0 test-0000000100; do
+until ./lvtctl.sh InitShardMaster -force test_keyspace/0 test-100; do
   retry_with_timeout
 done
 
 echo "Create table..."
 start=`date +%s`
-until vtctlclient -server localhost:15999 ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace; do
+until ./lvtctl.sh ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace; do
   retry_with_timeout
 done
 
@@ -82,11 +81,10 @@ echo "Run Go client script..."
 go run client.go -server=localhost:15991 || teardown
 
 echo "Run Java client script..."
-# We have to install the "example" module first because Maven cannot resolve
-# them when we run "exec:java". See also: http://stackoverflow.com/questions/11091311/maven-execjava-goal-on-a-multi-module-project
-# Install only "example". See also: http://stackoverflow.com/questions/1114026/maven-modules-building-a-single-specific-module
-mvn -f ../../java/pom.xml -pl example -am install -DskipTests
-mvn -f ../../java/example/pom.xml exec:java -Dexec.cleanupDaemonThreads=false -Dexec.mainClass="com.youtube.vitess.example.VitessClientExample" -Dexec.args="localhost:15991" || teardown
+./client_java.sh || teardown
+
+echo "Run JDBC client script..."
+./client_jdbc.sh || teardown
 
 exitcode=0
 teardown

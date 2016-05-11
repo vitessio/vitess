@@ -57,7 +57,7 @@ class TestAutomationVerticalSplit(vertical_split.TestVerticalSplit):
     # One of the two source rdonly tablets went spare after the diff.
     # Force a healthcheck on both to get them back to "rdonly".
     for t in [vertical_split.source_rdonly1, vertical_split.source_rdonly2]:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
 
     self._check_srv_keyspace('')
     self._check_blacklisted_tables(vertical_split.source_master,

@@ -163,12 +163,10 @@ class TestVerticalSplit(unittest.TestCase, base_sharding.BaseShardingTest):
 
     for t in [source_master, source_replica,
               destination_master, destination_replica]:
-      t.start_vttablet(
-          wait_for_state=None, target_tablet_type='replica')
+      t.start_vttablet(wait_for_state=None)
     for t in [source_rdonly1, source_rdonly2,
               destination_rdonly1, destination_rdonly2]:
-      t.start_vttablet(
-          wait_for_state=None, target_tablet_type='rdonly')
+      t.start_vttablet(wait_for_state=None)
 
     # wait for the tablets
     master_tablets = [source_master, destination_master]
@@ -417,10 +415,6 @@ index by_msg (msg)
                         '--min_healthy_rdonly_endpoints', '1',
                         'destination_keyspace/0'],
                        auto_log=True)
-    # One of the two source rdonly tablets went spare after the clone.
-    # Force a healthcheck on both to get them back to "rdonly".
-    for t in [source_rdonly1, source_rdonly2]:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
 
     # check values are present
     self._check_values(destination_master, 'vt_destination_keyspace', 'moving1',
@@ -450,17 +444,10 @@ index by_msg (msg)
                                   min_statements=100, min_transactions=100)
 
     # use vtworker to compare the data
-    for t in [destination_rdonly1, destination_rdonly2]:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
     logging.debug('Running vtworker VerticalSplitDiff')
     utils.run_vtworker(['-cell', 'test_nj', 'VerticalSplitDiff',
                         '--min_healthy_rdonly_endpoints', '1',
                         'destination_keyspace/0'], auto_log=True)
-    # One of each source and dest rdonly tablet went spare after the diff.
-    # Force a healthcheck on all four to get them back to "rdonly".
-    for t in [source_rdonly1, source_rdonly2,
-              destination_rdonly1, destination_rdonly2]:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
 
     utils.pause('Good time to test vtworker for diffs')
 

@@ -126,13 +126,15 @@ class TestEnv(object):
 
   def _start_tablet(self, keyspace, shard, tablet_type, index):
     """Start a tablet."""
-    target_tablet_type = tablet_type
+    init_tablet_type = tablet_type
     if tablet_type == 'master':
-      target_tablet_type = 'replica'
+      init_tablet_type = 'replica'
       key = '%s.%s.%s' % (keyspace, shard, tablet_type)
     else:
       key = '%s.%s.%s.%s' % (keyspace, shard, tablet_type, index)
     t = self.tablet_map[key]
     t.create_db('vt_' + keyspace)
     return t.start_vttablet(
-        wait_for_state=None, target_tablet_type=target_tablet_type)
+        wait_for_state=None, init_tablet_type=init_tablet_type,
+        init_keyspace=keyspace, init_shard=shard,
+        extra_args=['-queryserver-config-schema-reload-time', '1'])

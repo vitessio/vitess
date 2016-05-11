@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
@@ -46,7 +47,7 @@ func TestSplit1SplitColumn(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		"select * from test_table",
 		map[string]interface{}{},
-		[]string{"id"},
+		[]sqlparser.ColIdent{sqlparser.NewColIdent("id")},
 		1000, // numRowsPerQueryPart
 		GetSchema())
 	if err != nil {
@@ -107,7 +108,10 @@ func TestSplit2SplitColumns(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		"select * from test_table",
 		map[string]interface{}{},
-		[]string{"id", "user_id"},
+		[]sqlparser.ColIdent{
+			sqlparser.NewColIdent("id"),
+			sqlparser.NewColIdent("user_id"),
+		}, /* splitColumns */
 		1000, // numRowsPerQueryPart
 		GetSchema())
 	if err != nil {
@@ -181,7 +185,11 @@ func TestSplit3SplitColumns(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		"select * from test_table",
 		map[string]interface{}{},
-		[]string{"id", "user_id", "user_id2"},
+		[]sqlparser.ColIdent{
+			sqlparser.NewColIdent("id"),
+			sqlparser.NewColIdent("user_id"),
+			sqlparser.NewColIdent("user_id2"),
+		}, /* splitColumns */
 		1000, // numRowsPerQueryPart
 		GetSchema())
 	if err != nil {
@@ -260,7 +268,10 @@ func TestSplitWithWhereClause(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		"select * from test_table where name!='foo'",
 		map[string]interface{}{},
-		[]string{"id", "user_id"},
+		[]sqlparser.ColIdent{
+			sqlparser.NewColIdent("id"),
+			sqlparser.NewColIdent("user_id"),
+		}, /* splitColumns */
 		1000, // numRowsPerQueryPart
 		GetSchema())
 	if err != nil {
@@ -334,7 +345,10 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		"select * from test_table",
 		map[string]interface{}{"foo": int64(100)},
-		[]string{"id", "user_id"},
+		[]sqlparser.ColIdent{
+			sqlparser.NewColIdent("id"),
+			sqlparser.NewColIdent("user_id"),
+		}, /* splitColumns */
 		1000, // numRowsPerQueryPart
 		GetSchema())
 	if err != nil {
@@ -412,7 +426,10 @@ func TestSplitWithEmptyBoundaryList(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
 		"select * from test_table",
 		map[string]interface{}{"foo": int64(100)},
-		[]string{"id", "user_id"},
+		[]sqlparser.ColIdent{
+			sqlparser.NewColIdent("id"),
+			sqlparser.NewColIdent("user_id"),
+		}, /* splitColumns */
 		1000,
 		GetSchema())
 	if err != nil {
