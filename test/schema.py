@@ -59,12 +59,12 @@ def setUpModule():
 
     # wait for the tablets to start
     shard_0_master.wait_for_vttablet_state('SERVING')
-    shard_0_replica1.wait_for_vttablet_state('SERVING')
-    shard_0_replica2.wait_for_vttablet_state('SERVING')
-    shard_0_rdonly.wait_for_vttablet_state('SERVING')
+    shard_0_replica1.wait_for_vttablet_state('NOT_SERVING')
+    shard_0_replica2.wait_for_vttablet_state('NOT_SERVING')
+    shard_0_rdonly.wait_for_vttablet_state('NOT_SERVING')
     shard_0_backup.wait_for_vttablet_state('NOT_SERVING')
     shard_1_master.wait_for_vttablet_state('SERVING')
-    shard_1_replica1.wait_for_vttablet_state('SERVING')
+    shard_1_replica1.wait_for_vttablet_state('NOT_SERVING')
 
     # make sure all replication is good
     for t in initial_tablets:
@@ -103,8 +103,8 @@ def _setup_shard_2():
     t.start_vttablet(wait_for_state=None)
 
   # wait for the tablets to start
-  for t in shard_2_tablets:
-    t.wait_for_vttablet_state('SERVING')
+  shard_2_master.wait_for_vttablet_state('SERVING')
+  shard_2_replica1.wait_for_vttablet_state('NOT_SERVING')
 
   utils.run_vtctl(['InitShardMaster', test_keyspace + '/2',
                    shard_2_master.tablet_alias], auto_log=True)
