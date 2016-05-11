@@ -2,6 +2,7 @@ package com.youtube.vitess.example;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.net.HostAndPort;
+import com.google.common.primitives.UnsignedLong;
 
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.RpcClient;
@@ -13,23 +14,17 @@ import com.youtube.vitess.client.grpc.GrpcClientFactory;
 import com.youtube.vitess.proto.Topodata.TabletType;
 
 import org.joda.time.Duration;
+import org.joda.time.Instant;
 
 import java.net.InetSocketAddress;
-import java.util.Arrays;
 import java.util.Map;
+import java.util.Random;
 
 /**
- * VitessClientExample.java is a sample for using the Vitess Java Client with an unsharded keyspace.
+ * VitessClientExample.java is a sample for using the Vitess low-level Java Client.
  *
  * Before running this, start up a local example cluster as described in the
  * examples/local/README.md file.
- *
- * Alternatively, load the schema examples/local/create_test_table.sql into your instance:
- *
- * <pre>
- *   $VTROOT/bin/vtctlclient -server <vtctld-host:port> ApplySchema -sql \
- *   "$(cat create_test_table.sql)" test_keyspace
- * </pre>
  */
 public class VitessClientExample {
   public static void main(String[] args) {
@@ -45,38 +40,41 @@ public class VitessClientExample {
     Context ctx = Context.getDefault().withDeadlineAfter(Duration.millis(5 * 1000));
     try (RpcClient client = new GrpcClientFactory().create(ctx, addr);
         VTGateBlockingConn conn = new VTGateBlockingConn(client)) {
-      String keyspace = "test_keyspace";
-      Iterable<String> shards = Arrays.asList("0");
-      Map<String, Object> bindVars =
-          new ImmutableMap.Builder<String, Object>().put("msg", "V is for speed").build();
-
-      // Insert something.
+      // Insert some messages on random pages.
       System.out.println("Inserting into master...");
-      VTGateBlockingTx tx = conn.begin(ctx);
-      tx.executeShards(
-          ctx,
-          "INSERT INTO test_table (msg) VALUES (:msg)",
-          keyspace,
-          shards,
-          bindVars,
-          TabletType.MASTER);
-      tx.commit(ctx);
+      Random rand = new Random();
+      for (int i = 0; i < 3; i++) {
+        Instant timeCreated = Instant.now();
+        Map<String, Object> bindVars =
+            new ImmutableMap.Builder<String, Object>()
+                .put("page", rand.nextInt(100) + 1)
+                .put("time_created_ns", timeCreated.getMillis() * 1000000)
+                .put("message", "V is for speed")
+                .build();
+
+        VTGateBlockingTx tx = conn.begin(ctx);
+        tx.execute(
+            ctx,
+            "INSERT INTO messages (page,time_created_ns,message) VALUES (:page,:time_created_ns,:message)",
+            bindVars,
+            TabletType.MASTER);
+        tx.commit(ctx);
+      }
 
       // Read it back from the master.
       System.out.println("Reading from master...");
       try (Cursor cursor =
-              conn.executeShards(
-                  ctx,
-                  "SELECT id, msg FROM test_table",
-                  keyspace,
-                  shards,
-                  null /* bindVars */,
-                  TabletType.MASTER)) {
+          conn.execute(
+              ctx,
+              "SELECT page, time_created_ns, message FROM messages",
+              null /* bindVars */,
+              TabletType.MASTER)) {
         Row row;
         while ((row = cursor.next()) != null) {
-          long id = row.getLong("id");
-          byte[] msg = row.getBytes("msg");
-          System.out.format("(%d, %s)\n", id, new String(msg));
+          UnsignedLong page = row.getULong("page");
+          UnsignedLong timeCreated = row.getULong("time_created_ns");
+          byte[] message = row.getBytes("message");
+          System.out.format("(%s, %s, %s)\n", page, timeCreated, new String(message));
         }
       }
     } catch (Exception e) {

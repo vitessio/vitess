@@ -80,32 +80,6 @@
                     <target>7</target>
                 </configuration>
             </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>2.4.3</version>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>shade</goal>
-                        </goals>
-                        <configuration>
-                            <artifactSet>
-                                <excludes>
-                                    <exclude>log4j:log4j:jar:</exclude>
-                                    <exclude>org.slf4j:slf4j-log4j12:jar:</exclude>
-                                    <exclude>org.slf4j:slf4j-api:jar:</exclude>
-                                    <exclude>com.fasterxml.jackson.core:jackson-core:jar:</exclude>
-                                    <exclude>com.sun.jersey:jersey-client:jar:</exclude>
-                                    <exclude>com.sun.jersey:jersey-core:jar:</exclude>
-                                    <exclude>javax.servlet:servlet-api:jar:</exclude>
-                                </excludes>
-                            </artifactSet>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
         </plugins>
     </build>
 </project>

@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/youtube/vitess/go/cistring"
 )
 
 // stFU satisfies Functional, Unique.
@@ -167,7 +169,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 		Keyspace: ks,
 		ColVindexes: []*ColVindex{
 			{
-				Col:  "c1",
+				Col:  cistring.New("c1"),
 				Type: "stfu",
 				Name: "stfu1",
 				Vindex: &stFU{
@@ -178,7 +180,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 				},
 			},
 			{
-				Col:    "c2",
+				Col:    cistring.New("c2"),
 				Type:   "stln",
 				Name:   "stln1",
 				Owned:  true,
@@ -255,14 +257,14 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		Keyspace: ks,
 		ColVindexes: []*ColVindex{
 			{
-				Col:    "c1",
+				Col:    cistring.New("c1"),
 				Type:   "stlu",
 				Name:   "stlu1",
 				Owned:  false,
 				Vindex: &stLU{name: "stlu1"},
 			},
 			{
-				Col:    "c2",
+				Col:    cistring.New("c2"),
 				Type:   "stfu",
 				Name:   "stfu1",
 				Owned:  false,
@@ -619,7 +621,7 @@ func TestSequence(t *testing.T) {
 		Keyspace: kss,
 		ColVindexes: []*ColVindex{
 			{
-				Col:  "c1",
+				Col:  cistring.New("c1"),
 				Type: "stfu",
 				Name: "stfu1",
 				Vindex: &stFU{
@@ -631,7 +633,7 @@ func TestSequence(t *testing.T) {
 			},
 		},
 		Autoinc: &Autoinc{
-			Col:      "c1",
+			Col:      cistring.New("c1"),
 			Sequence: seq,
 		},
 	}

@@ -5,6 +5,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import com.youtube.vitess.client.Context;
+import com.youtube.vitess.client.Proto;
 import com.youtube.vitess.client.RpcClient;
 import com.youtube.vitess.client.StreamIterator;
 import com.youtube.vitess.proto.Query.QueryResult;
@@ -248,17 +249,21 @@ public class GrpcClient implements RpcClient {
   static SQLException convertGrpcError(Throwable e) {
     if (e instanceof StatusRuntimeException) {
       StatusRuntimeException sre = (StatusRuntimeException) e;
+
+      int errno = Proto.getErrno(sre.getMessage());
+      String sqlState = Proto.getSQLState(sre.getMessage());
+
       switch (sre.getStatus().getCode()) {
         case INVALID_ARGUMENT:
-          return new SQLSyntaxErrorException(sre.toString(), sre);
+          return new SQLSyntaxErrorException(sre.toString(), sqlState, errno, sre);
         case DEADLINE_EXCEEDED:
-          return new SQLTimeoutException(sre.toString(), sre);
+          return new SQLTimeoutException(sre.toString(), sqlState, errno, sre);
         case ALREADY_EXISTS:
-          return new SQLIntegrityConstraintViolationException(sre.toString(), sre);
+          return new SQLIntegrityConstraintViolationException(sre.toString(), sqlState, errno, sre);
         case UNAUTHENTICATED:
-          return new SQLInvalidAuthorizationSpecException(sre.toString(), sre);
+          return new SQLInvalidAuthorizationSpecException(sre.toString(), sqlState, errno, sre);
         case UNAVAILABLE:
-          return new SQLTransientException(sre.toString(), sre);
+          return new SQLTransientException(sre.toString(), sqlState, errno, sre);
         default: // Covers e.g. UNKNOWN.
           String advice = "";
           if (e.getCause() instanceof java.nio.channels.ClosedChannelException) {
@@ -266,7 +271,7 @@ public class GrpcClient implements RpcClient {
                 "Failed to connect to vtgate. Make sure that vtgate is running and you are using the correct address. Details: ";
           }
           return new SQLNonTransientException(
-              "gRPC StatusRuntimeException: " + advice + e.toString(), e);
+              "gRPC StatusRuntimeException: " + advice + e.toString(), sqlState, errno, e);
       }
     }
     return new SQLNonTransientException("gRPC error: " + e.toString(), e);

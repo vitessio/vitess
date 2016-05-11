@@ -6,12 +6,11 @@ set -e
 
 cell='test'
 keyspace='test_keyspace'
-shard=0
-uid_base=100
-tablet_type='replica'
-port_base=15100
-grpc_port_base=16100
-mysql_port_base=33100
+shard=${SHARD:-'0'}
+uid_base=${UID_BASE:-'100'}
+port_base=$[15000 + $uid_base]
+grpc_port_base=$[16000 + $uid_base]
+mysql_port_base=$[17000 + $uid_base]
 tablet_hostname=''
 
 # Travis hostnames are too long for MySQL, so we use IP.
@@ -59,9 +58,9 @@ if [ -z "$memcached_path" ]; then
   exit 1
 fi
 
-# Start 3 vttablets by default.
+# Start 5 vttablets by default.
 # Pass a list of UID indices on the command line to override.
-uids=${@:-'0 1 2'}
+uids=${@:-'0 1 2 3 4'}
 
 # Start all mysqlds in background.
 for uid_index in $uids; do
@@ -94,6 +93,10 @@ for uid_index in $uids; do
   grpc_port=$[$grpc_port_base + $uid_index]
   printf -v alias '%s-%010d' $cell $uid
   printf -v tablet_dir 'vt_%010d' $uid
+  tablet_type=replica
+  if [[ $uid_index -gt 2 ]]; then
+    tablet_type=rdonly
+  fi
 
   echo "Starting vttablet for $alias..."
   $VTROOT/bin/vttablet \

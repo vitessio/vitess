@@ -12,7 +12,7 @@ have left the cluster running.
 
 We will follow a process similar to the one in the general
 [Horizontal Sharding](http://vitess.io/user-guide/horizontal-sharding.html)
-guide, except that here we'll give the exact commands you'll need to do it for
+guide, except that here we'll give the commands you'll need to do it for
 the example Vitess cluster in Kubernetes.
 
 Since Vitess makes [sharding](http://vitess.io/user-guide/sharding.html)
@@ -119,12 +119,12 @@ vitess/examples/kubernetes$ ./kvtctl.sh CopySchemaShard test_keyspace/0 test_key
 ```
 
 Next we copy the data. Since the amount of data to copy can be very large,
-we use a special batch process called `vtworker` to stream the data from a
+we use a special batch process called *vtworker* to stream the data from a
 single source to multiple destinations, routing each row based on its
 *keyspace_id*:
 
 ``` sh
-vitess/examples/kubernetes$ ./sharded-vtworker.sh -use_v3_resharding_mode SplitClone test_keyspace/0
+vitess/examples/kubernetes$ ./sharded-vtworker.sh SplitClone test_keyspace/0
 ### example output:
 # Creating vtworker pod in cell test...
 # pods/vtworker
@@ -153,7 +153,7 @@ will be served only by the remaining, un-paused *rdonly* tablets.
 
 ## Check filtered replication
 
-Once the copy from the paused snapshot finishes, `vtworker` turns on
+Once the copy from the paused snapshot finishes, *vtworker* turns on
 [filtered replication](http://vitess.io/user-guide/sharding.html#filtered-replication)
 from the source shard to each destination shard. This allows the destination
 shards to catch up on updates that have continued to flow in from the app since
@@ -178,13 +178,13 @@ Add some messages on various pages of the Guestbook to see how they get routed.
 
 ## Check copied data integrity
 
-The `vtworker` batch process has another mode that will compare the source
+The *vtworker* batch process has another mode that will compare the source
 and destination to ensure all the data is present and correct.
 The following commands will run a diff for each destination shard:
 
 ``` sh
-vitess/examples/kubernetes$ ./sharded-vtworker.sh -use_v3_resharding_mode SplitDiff test_keyspace/-80
-vitess/examples/kubernetes$ ./sharded-vtworker.sh -use_v3_resharding_mode SplitDiff test_keyspace/80-
+vitess/examples/kubernetes$ ./sharded-vtworker.sh SplitDiff test_keyspace/-80
+vitess/examples/kubernetes$ ./sharded-vtworker.sh SplitDiff test_keyspace/80-
 ```
 
 If any discrepancies are found, they will be printed.

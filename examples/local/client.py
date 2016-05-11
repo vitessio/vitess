@@ -2,7 +2,9 @@
 
 """Sample Vitess client in Python.
 
-This is a sample for using the Python Vitess client with an unsharded keyspace.
+This is a sample for using the Python Vitess client.
+It's a script that inserts some random messages on random pages of the
+guestbook sample app.
 
 Before running this, start up a local example cluster as described in the
 README.md file.
@@ -12,16 +14,13 @@ vitess/examples/local$ ./client.sh
 """
 
 import argparse
+import random
+import time
 
-from vtdb import keyrange
-from vtdb import keyrange_constants
 from vtdb import vtgate_client
 
 # register the python gRPC client upon import
 from vtdb import grpc_vtgate_client  # pylint: disable=unused-import
-
-# Constants and params
-UNSHARDED = [keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)]
 
 # Parse args
 parser = argparse.ArgumentParser()
@@ -33,20 +32,26 @@ args = parser.parse_args()
 conn = vtgate_client.connect('grpc', args.server, args.timeout)
 
 try:
-  # Insert something.
+  # Insert some messages on random pages.
   print 'Inserting into master...'
-  cursor = conn.cursor(
-      tablet_type='master', keyspace='test_keyspace',
-      keyranges=UNSHARDED, writable=True)
-  cursor.begin()
-  cursor.execute(
-      'INSERT INTO test_table (msg) VALUES (:msg)',
-      {'msg': 'V is for speed'})
-  cursor.commit()
+  cursor = conn.cursor(tablet_type='master', writable=True)
+  for i in range(3):
+    page = random.randint(1, 100)
+
+    cursor.begin()
+    cursor.execute(
+        'INSERT INTO messages (page, time_created_ns, message)'
+        ' VALUES (:page, :time_created_ns, :message)',
+        {
+            'page': page,
+            'time_created_ns': int(time.time() * 1e9),
+            'message': 'V is for speed',
+        })
+    cursor.commit()
 
   # Read it back from the master.
   print 'Reading from master...'
-  cursor.execute('SELECT * FROM test_table', {})
+  cursor.execute('SELECT page, time_created_ns, message FROM messages', {})
   for row in cursor.fetchall():
     print row
 
@@ -55,9 +60,8 @@ try:
   # Read from a replica.
   # Note that this may be behind master due to replication lag.
   print 'Reading from replica...'
-  cursor = conn.cursor(
-      tablet_type='replica', keyspace='test_keyspace', keyranges=UNSHARDED)
-  cursor.execute('SELECT * FROM test_table', {})
+  cursor = conn.cursor(tablet_type='replica')
+  cursor.execute('SELECT page, time_created_ns, message FROM messages', {})
   for row in cursor.fetchall():
     print row
   cursor.close()

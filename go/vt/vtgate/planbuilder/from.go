@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -61,7 +62,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 		if err != nil {
 			return nil, err
 		}
-		alias := sqlparser.SQLName(sqlparser.String(expr))
+		alias := sqlparser.TableIdent(sqlparser.String(expr))
 		astName := expr.Name
 		if tableExpr.As != "" {
 			alias = tableExpr.As
@@ -96,7 +97,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 				continue
 			}
 			table.ColVindexes = append(table.ColVindexes, &vindexes.ColVindex{
-				Col:    string(colsyms.Alias),
+				Col:    cistring.CIString(colsyms.Alias),
 				Vindex: colsyms.Vindex,
 			})
 		}

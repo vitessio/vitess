@@ -45,7 +45,7 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a limit 5",
-  "ColumnNumbers": [0, 1, 2, 3]
+  "ColumnNumbers": [0, 1, 2, 3, 4]
 }
 
 # cross-db
@@ -162,7 +162,7 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a limit :#maxLimit",
-  "ColumnNumbers": [0, 1, 2, 3]
+  "ColumnNumbers": [0, 1, 2, 3, 4]
 }
 
 # c.eid
@@ -213,9 +213,9 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid = 1 and id in (1, 2) limit :#maxLimit",
-  "OuterQuery": "select eid, id, name, foo from a where :#pk",
+  "OuterQuery": "select eid, id, name, foo, CamelCase from a where :#pk",
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [0, 1, 2, 3],
+  "ColumnNumbers": [0, 1, 2, 3, 4],
   "PKValues": [1,[1,2]]
 }
 
@@ -226,9 +226,9 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid = :v1 and id in (:v2, :v3) limit :#maxLimit",
-  "OuterQuery": "select eid, id, name, foo from a where :#pk",
+  "OuterQuery": "select eid, id, name, foo, CamelCase from a where :#pk",
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [0, 1, 2, 3],
+  "ColumnNumbers": [0, 1, 2, 3, 4],
   "PKValues": [":v1",[":v2",":v3"]]
 }
 
@@ -239,10 +239,10 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where name = 'foo' limit :#maxLimit",
-  "OuterQuery": "select eid, id, name, foo from a where :#pk",
+  "OuterQuery": "select eid, id, name, foo, CamelCase from a where :#pk",
   "Subquery": "select eid, id from a use index (b_name) where name = 'foo' limit :#maxLimit",
   "IndexUsed": "b_name",
-  "ColumnNumbers": [0, 1, 2, 3]
+  "ColumnNumbers": [0, 1, 2, 3, 4]
 }
 
 # covering index
@@ -291,7 +291,7 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid + 1 = 1 limit :#maxLimit",
-  "ColumnNumbers": [0, 1, 2, 3]
+  "ColumnNumbers": [0, 1, 2, 3, 4]
 }
 
 # complex where (non-value operand)
@@ -302,7 +302,7 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid = id limit :#maxLimit",
-  "ColumnNumbers": [0, 1, 2, 3]
+  "ColumnNumbers": [0, 1, 2, 3, 4]
 }
 
 # inequality on pk columns
@@ -324,9 +324,9 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where (eid = 1) and (id = 2) limit :#maxLimit",
-  "OuterQuery": "select eid, id, name, foo from a where :#pk",
+  "OuterQuery": "select eid, id, name, foo, CamelCase from a where :#pk",
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [0, 1, 2, 3],
+  "ColumnNumbers": [0, 1, 2, 3, 4],
   "PKValues": [1, 2]
 }
 
@@ -337,9 +337,9 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid = 1 and id = 1 limit :#maxLimit",
-  "OuterQuery": "select eid, id, name, foo from a where :#pk",
+  "OuterQuery": "select eid, id, name, foo, CamelCase from a where :#pk",
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [0, 1, 2, 3],
+  "ColumnNumbers": [0, 1, 2, 3, 4],
   "PKValues": [1, 1]
 }
 
@@ -518,7 +518,7 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid in (1) and id in (1, 2) limit :#maxLimit",
-  "ColumnNumbers": [0, 1, 2, 3]
+  "ColumnNumbers": [0, 1, 2, 3, 4]
 }
 
 # double pk IN 2
@@ -529,7 +529,7 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid in (1, 2) and id in (1, 2) limit :#maxLimit",
-  "ColumnNumbers": [0, 1, 2, 3]
+  "ColumnNumbers": [0, 1, 2, 3, 4]
 }
 
 # pk as tuple
@@ -540,7 +540,7 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where (eid, id) in ((1, 1), (2, 2)) limit :#maxLimit",
-  "ColumnNumbers": [0, 1, 2, 3]
+  "ColumnNumbers": [0, 1, 2, 3, 4]
 }
 
 # no index match
@@ -645,7 +645,7 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid = 1 and id = 1 order by name asc limit :#maxLimit",
-  "ColumnNumbers": [0, 1, 2, 3]
+  "ColumnNumbers": [0, 1, 2, 3, 4]
 }
 
 # cardinality override
@@ -680,6 +680,17 @@
   "TableName": "d",
   "FieldQuery": "select * from d force index (d_bar_never) where 1 != 1",
   "FullQuery": "select * from d force index (d_bar_never) where bar = 'foo' limit :#maxLimit",
+  "ColumnNumbers": [0, 1, 2, 3]
+}
+
+# camel case preserved
+"select Name, id, FOO, bar from d"
+{
+  "PlanID": "PASS_SELECT",
+  "Reason": "WHERE",
+  "TableName": "d",
+  "FieldQuery": "select Name, id, FOO, bar from d where 1 != 1",
+  "FullQuery": "select Name, id, FOO, bar from d limit :#maxLimit",
   "ColumnNumbers": [0, 1, 2, 3]
 }
 

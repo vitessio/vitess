@@ -142,6 +142,11 @@ const char *vt_error(VT_CONN *conn) {
   return mysql_error(conn->mysql);
 }
 
+const char *vt_sqlstate(VT_CONN *conn) {
+  mysql_thread_init();
+  return mysql_sqlstate(conn->mysql);
+}
+
 my_bool vt_simple_command(
     VT_CONN *conn,
     enum enum_server_command command,

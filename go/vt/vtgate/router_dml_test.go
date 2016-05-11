@@ -247,10 +247,10 @@ func TestInsertSharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into user(id, v, name) values (:_id, 2, :_name) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert into user(id, v, name) values (:_Id, 2, :_name) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
-			"_id":         int64(1),
+			"_Id":         int64(1),
 			"_name":       []byte("myname"),
 			"__seq":       int64(1),
 		},
@@ -279,10 +279,10 @@ func TestInsertSharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "insert into user(id, v, name) values (:_id, 2, :_name) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
+		Sql: "insert into user(id, v, name) values (:_Id, 2, :_name) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "N\xb1\x90ɢ\xfa\x16\x9c",
-			"_id":         int64(3),
+			"_Id":         int64(3),
 			"__seq":       int64(3),
 			"_name":       []byte("myname2"),
 		},
@@ -320,10 +320,10 @@ func TestInsertGenerator(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into user(v, name, id) values (2, :_name, :_id) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert into user(v, name, Id) values (2, :_name, :_Id) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
-			"_id":         int64(1),
+			"_Id":         int64(1),
 			"__seq":       int64(1),
 			"_name":       []byte("myname"),
 		},
