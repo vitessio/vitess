@@ -64,7 +64,6 @@ type endPointCounters struct {
 	emptyResults        *stats.MultiCounters
 	remoteQueries       *stats.MultiCounters
 	numberReturned      *stats.MultiCounters
-	degradedResults     *stats.MultiCounters
 	cacheHits           *stats.MultiCounters
 	remoteLookups       *stats.MultiCounters
 	remoteLookupErrors  *stats.MultiCounters
@@ -79,7 +78,6 @@ func newEndPointCounters(counterPrefix string) *endPointCounters {
 		errors:              stats.NewMultiCounters(counterPrefix+"EndPointErrorCount", labels),
 		emptyResults:        stats.NewMultiCounters(counterPrefix+"EndPointEmptyResultCount", labels),
 		numberReturned:      stats.NewMultiCounters(counterPrefix+"EndPointsReturnedCount", labels),
-		degradedResults:     stats.NewMultiCounters(counterPrefix+"EndPointDegradedResultCount", labels),
 		cacheHits:           stats.NewMultiCounters(counterPrefix+"EndPointCacheHitCount", labels),
 		remoteQueries:       stats.NewMultiCounters(counterPrefix+"EndPointRemoteQueryCount", labels),
 		remoteLookups:       stats.NewMultiCounters(counterPrefix+"EndPointRemoteLookupCount", labels),
@@ -176,45 +174,8 @@ type endPointsEntry struct {
 	// value is the end points that were returned to the client.
 	value *topodatapb.EndPoints
 
-	// originalValue is the end points that were returned from
-	// the topology server.
-	originalValue *topodatapb.EndPoints
-
 	lastError    error
 	lastErrorCtx context.Context
-}
-
-func endPointIsHealthy(ep *topodatapb.EndPoint) bool {
-	// if we are behind on replication, we're not 100% healthy
-	return ep.HealthMap == nil || ep.HealthMap[topo.ReplicationLag] != topo.ReplicationLagHigh
-}
-
-// filterUnhealthyServers removes the unhealthy servers from the list,
-// unless all servers are unhealthy, then it keeps them all.
-func filterUnhealthyServers(endPoints *topodatapb.EndPoints) *topodatapb.EndPoints {
-
-	// no endpoints, return right away
-	if endPoints == nil || len(endPoints.Entries) == 0 {
-		return endPoints
-	}
-
-	healthyEndPoints := make([]*topodatapb.EndPoint, 0, len(endPoints.Entries))
-	for _, ep := range endPoints.Entries {
-		// if we are behind on replication, we're not 100% healthy
-		if !endPointIsHealthy(ep) {
-			continue
-		}
-
-		healthyEndPoints = append(healthyEndPoints, ep)
-	}
-
-	// we have healthy guys, we return them
-	if len(healthyEndPoints) > 0 {
-		return &topodatapb.EndPoints{Entries: healthyEndPoints}
-	}
-
-	// we only have unhealthy guys, return them
-	return endPoints
 }
 
 // NewResilientSrvTopoServer creates a new ResilientSrvTopoServer
@@ -486,11 +447,6 @@ func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, ke
 			return
 		}
 		server.endPointCounters.numberReturned.Add(key, int64(len(result.Entries)))
-		// We either serve all healthy endpoints or all degraded endpoints, so the first entry is representative.
-		if !endPointIsHealthy(result.Entries[0]) {
-			server.endPointCounters.degradedResults.Add(key, 1)
-			return
-		}
 	}()
 
 	// If the entry is fresh enough, return it
@@ -538,8 +494,7 @@ func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, ke
 
 	// save the value we got and the current time in the cache
 	entry.insertionTime = time.Now()
-	entry.originalValue = result
-	entry.value = filterUnhealthyServers(result)
+	entry.value = result
 	entry.lastError = err
 	entry.lastErrorCtx = newCtx
 	entry.remote = remote
@@ -679,64 +634,38 @@ func (sscsl SrvShardCacheStatusList) Swap(i, j int) {
 
 // EndPointsCacheStatus is the current value for an EndPoints object
 type EndPointsCacheStatus struct {
-	Cell          string
-	Keyspace      string
-	Shard         string
-	TabletType    topodatapb.TabletType
-	Value         *topodatapb.EndPoints
-	OriginalValue *topodatapb.EndPoints
-	LastError     error
-	LastErrorCtx  context.Context
+	Cell         string
+	Keyspace     string
+	Shard        string
+	TabletType   topodatapb.TabletType
+	Value        *topodatapb.EndPoints
+	LastError    error
+	LastErrorCtx context.Context
 }
 
 // StatusAsHTML returns an HTML version of our status.
 // It works best if there is data in the cache.
 func (st *EndPointsCacheStatus) StatusAsHTML() template.HTML {
-	ovl := 0
-	if st.OriginalValue != nil {
-		ovl = len(st.OriginalValue.Entries)
+	if st.Value == nil || len(st.Value.Entries) == 0 {
+		return template.HTML("<b>No endpoints</b>")
 	}
-	vl := 0
-	if st.Value != nil {
-		vl = len(st.Value.Entries)
-	}
+
 	// Assemble links to individual endpoints
 	epLinks := "{ "
-	if ovl > 0 {
-		for _, ove := range st.OriginalValue.Entries {
-			healthColor := "red"
-			var vtPort int32
-			if vl > 0 {
-				for _, ve := range st.Value.Entries {
-					if ove.Uid == ve.Uid {
-						ok := false
-						if vtPort, ok = ve.PortMap["vt"]; ok {
-							// EndPoint is healthy
-							healthColor = "green"
-							if len(ve.HealthMap) > 0 {
-								// EndPoint is half healthy
-								healthColor = "orange"
-							}
-						}
-					}
-				}
-			}
-			epLinks += fmt.Sprintf(
-				"<a href=\"http://%v:%d\" style=\"color:%v\">%v:%d</a> ",
-				ove.Host, vtPort, healthColor, ove.Host, vtPort)
+	for _, ve := range st.Value.Entries {
+		healthColor := "red"
+		var vtPort int32
+		var ok bool
+		if vtPort, ok = ve.PortMap["vt"]; ok {
+			// EndPoint is healthy
+			healthColor = "green"
 		}
+		epLinks += fmt.Sprintf(
+			"<a href=\"http://%v:%d\" style=\"color:%v\">%v:%d</a> ",
+			ve.Host, vtPort, healthColor, ve.Host, vtPort)
 	}
 	epLinks += "}"
-	if ovl == vl {
-		if vl == 0 {
-			return template.HTML(fmt.Sprintf("<b>No healthy endpoints</b>, %v", epLinks))
-		}
-		if len(st.OriginalValue.Entries[0].HealthMap) > 0 {
-			return template.HTML(fmt.Sprintf("<b>Serving from %v degraded endpoints</b>, %v", vl, epLinks))
-		}
-		return template.HTML(fmt.Sprintf("All %v endpoints are healthy, %v", vl, epLinks))
-	}
-	return template.HTML(fmt.Sprintf("Serving from %v healthy endpoints out of %v, %v", vl, ovl, epLinks))
+	return template.HTML(fmt.Sprintf("Serving from %v healthy endpoints: %v", len(st.Value.Entries), epLinks))
 }
 
 // EndPointsCacheStatusList is used for sorting
@@ -810,14 +739,13 @@ func (server *ResilientSrvTopoServer) CacheStatus() *ResilientSrvTopoServerCache
 	for _, entry := range server.endPointsCache {
 		entry.mutex.Lock()
 		result.EndPoints = append(result.EndPoints, &EndPointsCacheStatus{
-			Cell:          entry.cell,
-			Keyspace:      entry.keyspace,
-			Shard:         entry.shard,
-			TabletType:    entry.tabletType,
-			Value:         entry.value,
-			OriginalValue: entry.originalValue,
-			LastError:     entry.lastError,
-			LastErrorCtx:  entry.lastErrorCtx,
+			Cell:         entry.cell,
+			Keyspace:     entry.keyspace,
+			Shard:        entry.shard,
+			TabletType:   entry.tabletType,
+			Value:        entry.value,
+			LastError:    entry.lastError,
+			LastErrorCtx: entry.lastErrorCtx,
 		})
 		entry.mutex.Unlock()
 	}

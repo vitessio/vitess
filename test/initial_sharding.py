@@ -259,13 +259,13 @@ index by_msg (msg)
   def test_resharding(self):
     # create the keyspace with just one shard
     shard_master.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard='0')
     shard_replica.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard='0')
     shard_rdonly1.start_vttablet(
-        wait_for_state=None, target_tablet_type='rdonly',
+        wait_for_state=None, init_tablet_type='rdonly',
         init_keyspace='test_keyspace', init_shard='0')
 
     for t in [shard_master, shard_replica, shard_rdonly1]:
@@ -311,26 +311,26 @@ index by_msg (msg)
                     auto_log=True)
 
     # run a health check on source replica so it responds to discovery
-    utils.run_vtctl(['RunHealthCheck', shard_replica.tablet_alias, 'replica'])
+    utils.run_vtctl(['RunHealthCheck', shard_replica.tablet_alias])
 
         # create the split shards
     shard_0_master.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard='-80')
     shard_0_replica.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard='-80')
     shard_0_rdonly1.start_vttablet(
-        wait_for_state=None, target_tablet_type='rdonly',
+        wait_for_state=None, init_tablet_type='rdonly',
         init_keyspace='test_keyspace', init_shard='-80')
     shard_1_master.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard='80-')
     shard_1_replica.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard='80-')
     shard_1_rdonly1.start_vttablet(
-        wait_for_state=None, target_tablet_type='rdonly',
+        wait_for_state=None, init_tablet_type='rdonly',
         init_keyspace='test_keyspace', init_shard='80-')
 
     # start vttablet on the split shards (no db created,
@@ -378,7 +378,7 @@ index by_msg (msg)
                        shard_rdonly1.tablet_alias,
                        keyspace_shard],
                       auto_log=True)
-    utils.run_vtctl(['RunHealthCheck', shard_rdonly1.tablet_alias, 'rdonly'])
+    utils.run_vtctl(['RunHealthCheck', shard_rdonly1.tablet_alias])
 
     utils.run_vtworker(['--cell', 'test_nj',
                         '--command_display_interval', '10ms',
@@ -426,7 +426,7 @@ index by_msg (msg)
     # use vtworker to compare the data
     logging.debug('Running vtworker SplitDiff for -80')
     for t in [shard_0_rdonly1, shard_1_rdonly1]:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
     utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
                         '--min_healthy_rdonly_endpoints', '1',
                         'test_keyspace/-80'],

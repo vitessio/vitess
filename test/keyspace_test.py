@@ -108,16 +108,16 @@ def setup_sharded_keyspace():
   utils.run_vtctl(['SetKeyspaceShardingInfo', '-force', SHARDED_KEYSPACE,
                    'keyspace_id', 'uint64'])
   shard_0_master.start_vttablet(
-      wait_for_state=None, target_tablet_type='replica',
+      wait_for_state=None, init_tablet_type='replica',
       init_keyspace=SHARDED_KEYSPACE, init_shard='-80')
   shard_0_replica.start_vttablet(
-      wait_for_state=None, target_tablet_type='replica',
+      wait_for_state=None, init_tablet_type='replica',
       init_keyspace=SHARDED_KEYSPACE, init_shard='-80')
   shard_1_master.start_vttablet(
-      wait_for_state=None, target_tablet_type='replica',
+      wait_for_state=None, init_tablet_type='replica',
       init_keyspace=SHARDED_KEYSPACE, init_shard='80-')
   shard_1_replica.start_vttablet(
-      wait_for_state=None, target_tablet_type='replica',
+      wait_for_state=None, init_tablet_type='replica',
       init_keyspace=SHARDED_KEYSPACE, init_shard='80-')
 
   for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
@@ -141,10 +141,10 @@ def setup_unsharded_keyspace():
   utils.run_vtctl(['SetKeyspaceShardingInfo', '-force', UNSHARDED_KEYSPACE,
                    'keyspace_id', 'uint64'])
   unsharded_master.start_vttablet(
-      wait_for_state=None, target_tablet_type='replica',
+      wait_for_state=None, init_tablet_type='replica',
       init_keyspace=UNSHARDED_KEYSPACE, init_shard='0')
   unsharded_replica.start_vttablet(
-      wait_for_state=None, target_tablet_type='replica',
+      wait_for_state=None, init_tablet_type='replica',
       init_keyspace=UNSHARDED_KEYSPACE, init_shard='0')
 
   for t in [unsharded_master, unsharded_replica]:

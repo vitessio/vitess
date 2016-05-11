@@ -80,13 +80,13 @@ class TestVtctld(unittest.TestCase):
                        extra_args=utils.vtctld.process_args())
     shard_0_replica.create_db('vt_test_keyspace')
     shard_0_replica.start_vttablet(extra_args=utils.vtctld.process_args(),
-                                   target_tablet_type='replica',
                                    wait_for_state=None)
 
     # wait for the right states
-    for t in [shard_0_master, shard_1_master, shard_1_replica]:
+    for t in [shard_0_master, shard_1_master]:
       t.wait_for_vttablet_state('SERVING')
-    shard_0_replica.wait_for_vttablet_state('NOT_SERVING')
+    for t in [shard_0_replica, shard_1_replica]:
+      t.wait_for_vttablet_state('NOT_SERVING')
 
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/-80',
                      shard_0_master.tablet_alias], auto_log=True)

@@ -79,7 +79,7 @@ class TestMysqlctl(unittest.TestCase):
     replica_tablet.start_vttablet(wait_for_state=None,
                                   extra_env={'MYSQL_FLAVOR': ''})
     master_tablet.wait_for_vttablet_state('SERVING')
-    replica_tablet.wait_for_vttablet_state('SERVING')
+    replica_tablet.wait_for_vttablet_state('NOT_SERVING')
 
     # reparent tablets, which requires flavor detection
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',

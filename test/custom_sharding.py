@@ -108,13 +108,13 @@ class TestCustomSharding(unittest.TestCase):
 
     # start the first shard only for now
     shard_0_master.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard='0')
     shard_0_replica.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard='0')
     shard_0_rdonly.start_vttablet(
-        wait_for_state=None, target_tablet_type='rdonly',
+        wait_for_state=None, init_tablet_type='rdonly',
         init_keyspace='test_keyspace', init_shard='0')
     for t in [shard_0_master, shard_0_replica, shard_0_rdonly]:
       t.wait_for_vttablet_state('NOT_SERVING')
@@ -143,13 +143,13 @@ primary key (id)
 
     # create shard 1
     shard_1_master.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard='1')
     shard_1_replica.start_vttablet(
-        wait_for_state=None, target_tablet_type='replica',
+        wait_for_state=None, init_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard='1')
     shard_1_rdonly.start_vttablet(
-        wait_for_state=None, target_tablet_type='rdonly',
+        wait_for_state=None, init_tablet_type='rdonly',
         init_keyspace='test_keyspace', init_shard='1')
     for t in [shard_1_master, shard_1_replica, shard_1_rdonly]:
       t.wait_for_vttablet_state('NOT_SERVING')

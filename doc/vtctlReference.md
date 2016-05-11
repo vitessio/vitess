@@ -636,7 +636,7 @@ Starts a transaction on the provided server.
 | connect_timeout | Duration | Connection timeout for vttablet client |
 | keyspace | string | keyspace the tablet belongs to |
 | shard | string | shard the tablet belongs to |
-| tablet_type | string | tablet type we expect from the tablet (use unknown to use sessionId) |
+| tablet_type | string | tablet type we expect from the tablet |
 
 
 #### Arguments
@@ -669,7 +669,7 @@ Commits a transaction on the provided server.
 | connect_timeout | Duration | Connection timeout for vttablet client |
 | keyspace | string | keyspace the tablet belongs to |
 | shard | string | shard the tablet belongs to |
-| tablet_type | string | tablet type we expect from the tablet (use unknown to use sessionId) |
+| tablet_type | string | tablet type we expect from the tablet |
 
 
 #### Arguments
@@ -703,7 +703,7 @@ Executes the given query on the given tablet.
 | json | Boolean | Output JSON instead of human-readable table |
 | keyspace | string | keyspace the tablet belongs to |
 | shard | string | shard the tablet belongs to |
-| tablet_type | string | tablet type we expect from the tablet (use unknown to use sessionId) |
+| tablet_type | string | tablet type we expect from the tablet |
 | transaction_id | Int | transaction id to use, if inside a transaction. |
 
 
@@ -738,7 +738,7 @@ Rollbacks a transaction on the provided server.
 | connect_timeout | Duration | Connection timeout for vttablet client |
 | keyspace | string | keyspace the tablet belongs to |
 | shard | string | shard the tablet belongs to |
-| tablet_type | string | tablet type we expect from the tablet (use unknown to use sessionId) |
+| tablet_type | string | tablet type we expect from the tablet |
 
 
 #### Arguments
@@ -2000,35 +2000,19 @@ Reparent a tablet to the current master in the shard. This only works if the cur
 
 ### RunHealthCheck
 
-Runs a health check on a remote tablet with the specified target type.
+Runs a health check on a remote tablet.
 
 #### Example
 
-<pre class="command-example">RunHealthCheck &lt;tablet alias&gt; &lt;target tablet type&gt;</pre>
+<pre class="command-example">RunHealthCheck &lt;tablet alias&gt;</pre>
 
 #### Arguments
 
 * <code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>.
-* <code>&lt;target tablet type&gt;</code> &ndash; Required. The vttablet's role. Valid values are:
-
-    * <code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes
-    * <code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)
-    * <code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.
-    * <code>master</code> &ndash; A primary copy of data
-    * <code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns
-    * <code>replica</code> &ndash; A slaved copy of data ready to be promoted to master
-    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state.
-    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.
-    * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
-    * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
-    * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
-
-
-
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> and <code>&lt;target tablet type&gt;</code> arguments are required for the <code>&lt;RunHealthCheck&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
+* The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;RunHealthCheck&gt;</code> command. This error occurs if the command is not called with exactly one argument.
 
 
 ### SetReadOnly

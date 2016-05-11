@@ -357,11 +357,6 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 		}
 
 		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i])
-		action, err := wrangler.FindChangeSlaveTypeActionByTarget(scw.cleaner, alias)
-		if err != nil {
-			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topoproto.TabletAliasString(alias), err)
-		}
-		action.TabletType = topodatapb.TabletType_SPARE
 	}
 
 	// Initialize healthcheck and add destination shards to it.

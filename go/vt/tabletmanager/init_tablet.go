@@ -10,7 +10,6 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
-	"strings"
 	"time"
 
 	log "github.com/golang/glog"
@@ -57,26 +56,32 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		var err error
 		tabletType, err = topoproto.ParseTabletType(*initTabletType)
 		if err != nil {
-			log.Fatalf("Invalid init tablet type %v: %v", *initTabletType, err)
+			log.Fatalf("Invalid init_tablet_type %v: %v", *initTabletType, err)
 		}
 
 		if tabletType == topodatapb.TabletType_MASTER {
 			// We disallow MASTER, so we don't have to change
 			// shard.MasterAlias, and deal with the corner cases.
-			log.Fatalf("init_tablet_type cannot be %v", tabletType)
+			log.Fatalf("init_tablet_type cannot be master, use replica instead")
 		}
 
 	} else if *targetTabletType != "" {
-		if strings.ToUpper(*targetTabletType) == topodatapb.TabletType_name[int32(topodatapb.TabletType_MASTER)] {
-			log.Fatalf("target_tablet_type cannot be '%v'. Use '%v' instead.", tabletType, topodatapb.TabletType_REPLICA)
+		// use the targetTabletType, check it's not master.
+		// FIXME(alainjobart): refactor the flags: we should switch
+		// to init_tablet_type, and always enable healthcheck.
+		var err error
+		tabletType, err = topoproto.ParseTabletType(*targetTabletType)
+		if err != nil {
+			log.Fatalf("Invalid target_tablet_type %v: %v", *targetTabletType, err)
 		}
 
-		// use spare, the healthcheck will turn us into what
-		// we need to be eventually
-		tabletType = topodatapb.TabletType_SPARE
-
+		if tabletType == topodatapb.TabletType_MASTER {
+			// We disallow MASTER, so we don't have to change
+			// shard.MasterAlias, and deal with the corner cases.
+			log.Fatalf("target_tablet_type cannot be master. Use replica instead.")
+		}
 	} else {
-		log.Fatalf("if init tablet is enabled, one of init_tablet_type or target_tablet_type needs to be specified")
+		log.Fatalf("if init tablet is enabled (by specifying init_keyspace), one of init_tablet_type or target_tablet_type needs to be specified")
 	}
 
 	// create a context for this whole operation

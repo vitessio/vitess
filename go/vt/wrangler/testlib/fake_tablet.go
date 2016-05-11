@@ -61,7 +61,7 @@ type FakeTablet struct {
 	// listen on the 'vt' port.
 	StartHTTPServer bool
 	HTTPListener    net.Listener
-	HTTPServer      http.Server
+	HTTPServer      *http.Server
 }
 
 // TabletOption is an interface for changing tablet parameters.
@@ -165,7 +165,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 			t.Fatalf("Cannot listen on http port: %v", err)
 		}
 		handler := http.NewServeMux()
-		ft.HTTPServer = http.Server{
+		ft.HTTPServer = &http.Server{
 			Handler: handler,
 		}
 		go ft.HTTPServer.Serve(ft.HTTPListener)
@@ -174,7 +174,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 
 	// create a test agent on that port, and re-read the record
 	// (it has new ports and IP)
-	ft.Agent = tabletmanager.NewTestActionAgent(context.Background(), wr.TopoServer(), ft.Tablet.Alias, vtPort, gRPCPort, ft.FakeMysqlDaemon)
+	ft.Agent = tabletmanager.NewTestActionAgent(context.Background(), wr.TopoServer(), ft.Tablet.Alias, vtPort, gRPCPort, ft.FakeMysqlDaemon, nil)
 	ft.Tablet = ft.Agent.Tablet()
 
 	// create the gRPC server

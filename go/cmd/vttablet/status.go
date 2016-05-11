@@ -46,8 +46,11 @@ var (
       {{if .BlacklistedTables}}
         BlacklistedTables: {{range .BlacklistedTables}}{{.}} {{end}}<br>
       {{end}}
-      {{if .DisableQueryService}}
-        Query Service disabled by TabletControl<br>
+      {{if .DisallowQueryService}}
+        Query Service disabled: {{.DisallowQueryService}}<br>
+      {{end}}
+      {{if .DisableUpdateStream}}
+        Update Stream disabled<br>
       {{end}}
     </td>
     <td width="25%" border="">
@@ -173,22 +176,21 @@ var onStatusRegistered func()
 func addStatusParts(qsc tabletserver.Controller) {
 	servenv.AddStatusPart("Tablet", tabletTemplate, func() interface{} {
 		return map[string]interface{}{
-			"Tablet":              topo.NewTabletInfo(agent.Tablet(), -1),
-			"BlacklistedTables":   agent.BlacklistedTables(),
-			"DisableQueryService": agent.DisableQueryService(),
+			"Tablet":               topo.NewTabletInfo(agent.Tablet(), -1),
+			"BlacklistedTables":    agent.BlacklistedTables(),
+			"DisallowQueryService": agent.DisallowQueryService(),
+			"DisableUpdateStream":  !agent.EnableUpdateStream(),
 		}
 	})
-	if agent.IsRunningHealthCheck() {
-		servenv.AddStatusFuncs(template.FuncMap{
-			"github_com_youtube_vitess_health_html_name": healthHTMLName,
-		})
-		servenv.AddStatusPart("Health", healthTemplate, func() interface{} {
-			return &healthStatus{
-				Records: agent.History.Records(),
-				Config:  tabletmanager.ConfigHTML(),
-			}
-		})
-	}
+	servenv.AddStatusFuncs(template.FuncMap{
+		"github_com_youtube_vitess_health_html_name": healthHTMLName,
+	})
+	servenv.AddStatusPart("Health", healthTemplate, func() interface{} {
+		return &healthStatus{
+			Records: agent.History.Records(),
+			Config:  tabletmanager.ConfigHTML(),
+		}
+	})
 	qsc.AddStatusPart()
 	servenv.AddStatusPart("Binlog Player", binlogTemplate, func() interface{} {
 		return agent.BinlogPlayerMap.Status()

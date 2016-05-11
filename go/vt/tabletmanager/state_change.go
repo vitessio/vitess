@@ -71,24 +71,15 @@ func (agent *ActionAgent) loadBlacklistRules(tablet *topodatapb.Tablet, blacklis
 	return nil
 }
 
-// allowQueries tells QueryService to go in the serving state.
-// Returns true if the state of QueryService or the tablet type changed.
-func (agent *ActionAgent) allowQueries(tabletType topodatapb.TabletType) (bool, error) {
-	return agent.QueryServiceControl.SetServingType(tabletType, true, nil)
-}
-
-// disallowQueries tells QueryService to go in the *not* serving state.
-// Returns true if the state of QueryService or the tablet type changed.
-func (agent *ActionAgent) disallowQueries(tabletType topodatapb.TabletType, reason string) (bool, error) {
-	log.Infof("Agent is going to disallow queries, reason: %v", reason)
-
-	return agent.QueryServiceControl.SetServingType(tabletType, false, nil)
-}
-
-func (agent *ActionAgent) enterLameduck(reason string) {
+// lameduck changes the QueryServiceControl state to lameduck,
+// brodcasts the new health, then sleep for grace period, to give time
+// to clients to get the new status.
+func (agent *ActionAgent) lameduck(reason string) {
 	log.Infof("Agent is entering lameduck, reason: %v", reason)
-
 	agent.QueryServiceControl.EnterLameduck()
+	agent.broadcastHealth()
+	time.Sleep(*gracePeriod)
+	log.Infof("Agent is leaving lameduck")
 }
 
 func (agent *ActionAgent) broadcastHealth() {
@@ -190,11 +181,11 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 
 	allowQuery := topo.IsRunningQueryService(newTablet.Type)
 	broadcastHealth := false
+	runUpdateStream := allowQuery
 
 	// Read the shard to get SourceShards / TabletControlMap if
 	// we're going to use it.
 	var shardInfo *topo.ShardInfo
-	var tabletControl *topodatapb.Shard_TabletControl
 	var err error
 	var disallowQueryReason string
 	var blacklistedTables []string
@@ -215,20 +206,22 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 				if topo.InCellList(newTablet.Alias.Cell, tc.Cells) {
 					if tc.DisableQueryService {
 						allowQuery = false
-						disallowQueryReason = "query service disabled by tablet control"
+						disallowQueryReason = "TabletControl.DisableQueryService set"
 					}
 					blacklistedTables = tc.BlacklistedTables
-					tabletControl = tc
 				}
 			}
 		}
 	} else {
 		disallowQueryReason = fmt.Sprintf("not a serving tablet type(%v)", newTablet.Type)
 	}
+	agent.setServicesDesiredState(disallowQueryReason, runUpdateStream)
 	if updateBlacklistedTables {
 		if err := agent.loadBlacklistRules(newTablet, blacklistedTables); err != nil {
 			// FIXME(alainjobart) how to handle this error?
 			log.Errorf("Cannot update blacklisted tables rule: %v", err)
+		} else {
+			agent.setBlacklistedTables(blacklistedTables)
 		}
 	}
 
@@ -248,7 +241,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 			}
 		}
 
-		if stateChanged, err := agent.allowQueries(newTablet.Type); err == nil {
+		if stateChanged, err := agent.QueryServiceControl.SetServingType(newTablet.Type, true, nil); err == nil {
 			// If the state changed, broadcast to vtgate.
 			// (e.g. this happens when the tablet was already master, but it just
 			// changed from NOT_SERVING to SERVING due to
@@ -257,39 +250,35 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 				broadcastHealth = true
 			}
 		} else {
+			runUpdateStream = false
 			log.Errorf("Cannot start query service: %v", err)
 		}
 	} else {
 		// Query service should be stopped.
-		if (oldTablet.Type == topodatapb.TabletType_REPLICA ||
-			oldTablet.Type == topodatapb.TabletType_RDONLY) &&
-			newTablet.Type == topodatapb.TabletType_SPARE {
+		if topo.IsSubjectToLameduck(oldTablet.Type) &&
+			newTablet.Type == topodatapb.TabletType_SPARE &&
+			*gracePeriod > 0 {
 			// When a non-MASTER serving type is going SPARE,
 			// put query service in lameduck during gracePeriod.
-			agent.enterLameduck(disallowQueryReason)
-			agent.broadcastHealth()
-			time.Sleep(*gracePeriod)
+			agent.lameduck(disallowQueryReason)
 		}
 
-		if stateChanged, err := agent.disallowQueries(newTablet.Type, disallowQueryReason); err == nil {
+		log.Infof("Disabling query service on type change, reason: %v", disallowQueryReason)
+		if stateChanged, err := agent.QueryServiceControl.SetServingType(newTablet.Type, false, nil); err == nil {
 			// If the state changed, broadcast to vtgate.
 			// (e.g. this happens when the tablet was already master, but it just
-			// changed from NOT_SERVING to SERVING because filtered replication was
-			// enabled.
+			// changed from SERVING to NOT_SERVING because filtered replication was
+			// enabled.)
 			if stateChanged {
 				broadcastHealth = true
 			}
 		} else {
-			log.Errorf("disallowQueries failed: %v", err)
+			log.Errorf("SetServingType(serving=false) failed: %v", err)
 		}
 	}
 
-	// save the tabletControl we've been using, so the background
-	// healthcheck makes the same decisions as we've been making.
-	agent.setTabletControl(tabletControl)
-
 	// update stream needs to be started or stopped too
-	if topo.IsRunningUpdateStream(newTablet.Type) {
+	if topo.IsRunningUpdateStream(newTablet.Type) && runUpdateStream {
 		agent.UpdateStream.Enable()
 	} else {
 		agent.UpdateStream.Disable()

@@ -150,8 +150,9 @@ class TestReparent(unittest.TestCase):
                              wait_for_start=False)
 
     # wait for all tablets to start
-    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
-      t.wait_for_vttablet_state('SERVING')
+    tablet_62344.wait_for_vttablet_state('SERVING')
+    for t in [tablet_62044, tablet_41983, tablet_31981]:
+      t.wait_for_vttablet_state('NOT_SERVING')
 
     # Recompute the shard layout node - until you do that, it might not be
     # valid.
@@ -214,15 +215,17 @@ class TestReparent(unittest.TestCase):
     self.assertEqual(shard['cells'], ['test_nj'],
                      'wrong list of cell in Shard: %s' % str(shard['cells']))
 
-    # Create a few slaves for testing reparenting.
+    # Create a few slaves for testing reparenting. Won't be healthy
+    # as replication is not running.
     tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
     tablet_41983.init_tablet('replica', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
     tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
-    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
-      t.wait_for_vttablet_state('SERVING')
+    tablet_62344.wait_for_vttablet_state('SERVING')
+    for t in [tablet_62044, tablet_41983, tablet_31981]:
+      t.wait_for_vttablet_state('NOT_SERVING')
     shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
     self.assertEqual(
         shard['cells'], ['test_nj', 'test_ny'],
@@ -295,7 +298,7 @@ class TestReparent(unittest.TestCase):
     tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
     for t in [tablet_62044, tablet_41983, tablet_31981]:
-      t.wait_for_vttablet_state('SERVING')
+      t.wait_for_vttablet_state('NOT_SERVING')
     if environment.topo_server().flavor() == 'zookeeper':
       shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
       self.assertEqual(shard['cells'], ['test_nj', 'test_ny'],
@@ -386,8 +389,9 @@ class TestReparent(unittest.TestCase):
                              wait_for_start=False)
 
     # wait for all tablets to start
-    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
-      t.wait_for_vttablet_state('SERVING')
+    tablet_62344.wait_for_vttablet_state('SERVING')
+    for t in [tablet_62044, tablet_41983, tablet_31981]:
+      t.wait_for_vttablet_state('NOT_SERVING')
 
     # Recompute the shard layout node - until you do that, it might not be
     # valid.
@@ -452,8 +456,9 @@ class TestReparent(unittest.TestCase):
                              wait_for_start=False)
 
     # wait for all tablets to start
-    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
-      t.wait_for_vttablet_state('SERVING')
+    tablet_62344.wait_for_vttablet_state('SERVING')
+    for t in [tablet_62044, tablet_41983, tablet_31981]:
+      t.wait_for_vttablet_state('NOT_SERVING')
 
     # Reparent as a starting point
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
@@ -536,7 +541,7 @@ class TestReparent(unittest.TestCase):
 
     # make sure the master health stream says it's the master too
     # (health check is disabled on these servers, force it first)
-    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias, 'replica'])
+    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
     health = utils.run_vtctl_json(['VtTabletStreamHealth',
                                    '-count', '1',
                                    tablet_62044.tablet_alias])
@@ -568,8 +573,9 @@ class TestReparent(unittest.TestCase):
                              wait_for_start=False)
 
     # wait for all tablets to start
-    for t in [tablet_62344, tablet_62044, tablet_31981, tablet_41983]:
-      t.wait_for_vttablet_state('SERVING')
+    tablet_62344.wait_for_vttablet_state('SERVING')
+    for t in [tablet_62044, tablet_31981, tablet_41983]:
+      t.wait_for_vttablet_state('NOT_SERVING')
 
     # Recompute the shard layout node - until you do that, it might not be
     # valid.

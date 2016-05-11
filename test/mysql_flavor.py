@@ -14,7 +14,7 @@ class MysqlFlavor(object):
     """Returns commands to convert a slave to a master."""
     return [
         "STOP SLAVE",
-        "RESET SLAVE",
+        "RESET SLAVE ALL",
         "RESET MASTER",
     ]
 
@@ -22,7 +22,7 @@ class MysqlFlavor(object):
     """Returns commands to reset replication settings."""
     return [
         "STOP SLAVE",
-        "RESET SLAVE",
+        "RESET SLAVE ALL",
         "RESET MASTER",
     ]
 
@@ -85,7 +85,7 @@ class MariaDB(MysqlFlavor):
   def reset_replication_commands(self):
     return [
         "STOP SLAVE",
-        "RESET SLAVE",
+        "RESET SLAVE ALL",
         "RESET MASTER",
         "SET GLOBAL gtid_slave_pos = ''",
     ]

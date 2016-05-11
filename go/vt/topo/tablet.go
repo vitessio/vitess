@@ -6,7 +6,6 @@ package topo
 
 import (
 	"fmt"
-	"reflect"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -19,16 +18,6 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-)
-
-const (
-	// ReplicationLag is the key in the health map to indicate high
-	// replication lag
-	ReplicationLag = "replication_lag"
-
-	// ReplicationLagHigh is the value in the health map to indicate high
-	// replication lag
-	ReplicationLagHigh = "high"
 )
 
 // IsTrivialTypeChange returns if this db type be trivially reassigned
@@ -61,7 +50,30 @@ func IsInServingGraph(tt topodatapb.TabletType) bool {
 // IsRunningQueryService returns if a tablet is running the query service
 func IsRunningQueryService(tt topodatapb.TabletType) bool {
 	switch tt {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_WORKER:
+	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_EXPERIMENTAL, topodatapb.TabletType_WORKER:
+		return true
+	}
+	return false
+}
+
+// IsSubjectToLameduck returns if a tablet is subject to being
+// lameduck.  Lameduck is a transition period where we are still
+// allowed to serve, but we tell the clients we are going away
+// soon. Typically, a vttablet will still serve, but broadcast a
+// non-serving state through its health check. then vtgate will ctahc
+// that non-serving state, and stop sending queries.
+//
+// Masters are not subject to lameduck, as we usually want to transition
+// them as fast as possible.
+//
+// Replica and rdonly will use lameduck when going from healthy to
+// unhealhty (either because health check fails, or they're shutting down).
+//
+// Other types are probably not serving user visible traffic, so they
+// need to transition as fast as possible too.
+func IsSubjectToLameduck(tt topodatapb.TabletType) bool {
+	switch tt {
+	case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
 		return true
 	}
 	return false
@@ -111,12 +123,6 @@ func TabletEndPoint(tablet *topodatapb.Tablet) (*topodatapb.EndPoint, error) {
 		entry.PortMap[name] = int32(port)
 	}
 
-	if len(tablet.HealthMap) > 0 {
-		entry.HealthMap = make(map[string]string, len(tablet.HealthMap))
-		for k, v := range tablet.HealthMap {
-			entry.HealthMap[k] = v
-		}
-	}
 	return entry, nil
 }
 
@@ -178,16 +184,6 @@ func (ti *TabletInfo) IsInServingGraph() bool {
 // IsSlaveType returns if this tablet's type is a slave
 func (ti *TabletInfo) IsSlaveType() bool {
 	return IsSlaveType(ti.Type)
-}
-
-// IsHealthEqual compares the two health maps, and
-// returns true if they're equivalent.
-func IsHealthEqual(left, right map[string]string) bool {
-	if len(left) == 0 && len(right) == 0 {
-		return true
-	}
-
-	return reflect.DeepEqual(left, right)
 }
 
 // NewTabletInfo returns a TabletInfo basing on tablet with the

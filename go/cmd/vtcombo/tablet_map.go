@@ -557,13 +557,13 @@ func (itmc *internalTabletManagerClient) RefreshState(ctx context.Context, table
 	})
 }
 
-func (itmc *internalTabletManagerClient) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topodatapb.TabletType) error {
+func (itmc *internalTabletManagerClient) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo) error {
 	t, ok := tabletMap[tablet.Tablet.Alias.Uid]
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Tablet.Alias.Uid)
 	}
 	return t.agent.RPCWrap(ctx, actionnode.TabletActionRunHealthCheck, nil, nil, func() error {
-		t.agent.RunHealthCheck(ctx, targetTabletType)
+		t.agent.RunHealthCheck(ctx)
 		return nil
 	})
 }

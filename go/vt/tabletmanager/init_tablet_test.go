@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/history"
-	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
@@ -36,16 +35,15 @@ func TestInitTablet(t *testing.T) {
 	gRPCPort := int32(3456)
 	mysqlDaemon := mysqlctl.NewFakeMysqlDaemon(db)
 	agent := &ActionAgent{
-		TopoServer:         ts,
-		TabletAlias:        tabletAlias,
-		MysqlDaemon:        mysqlDaemon,
-		DBConfigs:          dbconfigs.DBConfigs{},
-		SchemaOverrides:    nil,
-		BinlogPlayerMap:    nil,
-		batchCtx:           ctx,
-		History:            history.New(historyLength),
-		lastHealthMapCount: new(stats.Int),
-		_healthy:           fmt.Errorf("healthcheck not run yet"),
+		TopoServer:      ts,
+		TabletAlias:     tabletAlias,
+		MysqlDaemon:     mysqlDaemon,
+		DBConfigs:       dbconfigs.DBConfigs{},
+		SchemaOverrides: nil,
+		BinlogPlayerMap: nil,
+		batchCtx:        ctx,
+		History:         history.New(historyLength),
+		_healthy:        fmt.Errorf("healthcheck not run yet"),
 	}
 
 	// let's use a real tablet in a shard, that will create
@@ -86,7 +84,7 @@ func TestInitTablet(t *testing.T) {
 		t.Errorf("wrong gRPC port for tablet: %v", ti.PortMap["grpc"])
 	}
 
-	// try to init again, this time with health check on
+	// try to init again, this time with old deprecated target_tablet_type
 	*initTabletType = ""
 	*targetTabletType = "replica"
 	if err := agent.InitTablet(port, gRPCPort); err != nil {
@@ -96,7 +94,7 @@ func TestInitTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if ti.Type != topodatapb.TabletType_SPARE {
+	if ti.Type != topodatapb.TabletType_REPLICA {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
 
@@ -116,8 +114,8 @@ func TestInitTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	// It should still be spare, because the tablet record doesn't agree.
-	if ti.Type != topodatapb.TabletType_SPARE {
+	// It should still be replica, because the tablet record doesn't agree.
+	if ti.Type != topodatapb.TabletType_REPLICA {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
 
@@ -137,7 +135,7 @@ func TestInitTablet(t *testing.T) {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
 
-	// init again with the tablet_type set, no healthcheck
+	// init again with the tablet_type set, using init_tablet_type
 	// (also check db name override and tags here)
 	*initTabletType = "replica"
 	*targetTabletType = ""
