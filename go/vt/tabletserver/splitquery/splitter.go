@@ -3,6 +3,7 @@ package splitquery
 import (
 	"fmt"
 
+	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
@@ -25,13 +26,15 @@ func NewSplitter(splitParams *SplitParams, algorithm SplitAlgorithmInterface) *S
 	splitter.splitParams = splitParams
 	splitter.algorithm = algorithm
 	splitter.splitParams = splitParams
-	splitter.startBindVariableNames = make([]string, 0, len(splitter.splitParams.splitColumns))
-	splitter.endBindVariableNames = make([]string, 0, len(splitter.splitParams.splitColumns))
-	for _, splitColumn := range splitter.splitParams.splitColumns {
+
+	splitColumns := algorithm.getSplitColumns()
+	splitter.startBindVariableNames = make([]string, 0, len(splitColumns))
+	splitter.endBindVariableNames = make([]string, 0, len(splitColumns))
+	for _, splitColumn := range splitColumns {
 		splitter.startBindVariableNames = append(
-			splitter.startBindVariableNames, startBindVariablePrefix+splitColumn.Lowered())
+			splitter.startBindVariableNames, startBindVariablePrefix+splitColumn.Name.Lowered())
 		splitter.endBindVariableNames = append(
-			splitter.endBindVariableNames, endBindVariablePrefix+splitColumn.Lowered())
+			splitter.endBindVariableNames, endBindVariablePrefix+splitColumn.Name.Lowered())
 	}
 	splitter.initQueryPartSQLs()
 	return &splitter
@@ -60,7 +63,7 @@ func (splitter *Splitter) Split() ([]querytypes.QuerySplit, error) {
 // initQueryPartSQLs initializes the firstQueryPartSQL, middleQueryPartSQL and lastQueryPartSQL
 // fields.
 func (splitter *Splitter) initQueryPartSQLs() {
-	splitColumns := convertColumnNamesToValExpr(splitter.splitParams.splitColumns)
+	splitColumns := convertColumnsToValExpr(splitter.algorithm.getSplitColumns())
 	startBindVariables := convertBindVariableNamesToValExpr(splitter.startBindVariableNames)
 	endBindVariables := convertBindVariableNamesToValExpr(splitter.endBindVariableNames)
 	splitColsLessThanEnd := constructTupleInequality(
@@ -129,10 +132,10 @@ func populateBoundaryBindVariables(
 	}
 }
 
-func convertColumnNamesToValExpr(colNames []sqlparser.ColIdent) []sqlparser.ValExpr {
-	valExprs := make([]sqlparser.ValExpr, 0, len(colNames))
-	for _, colName := range colNames {
-		valExprs = append(valExprs, &sqlparser.ColName{Name: colName})
+func convertColumnsToValExpr(columns []*schema.TableColumn) []sqlparser.ValExpr {
+	valExprs := make([]sqlparser.ValExpr, 0, len(columns))
+	for _, column := range columns {
+		valExprs = append(valExprs, &sqlparser.ColName{Name: sqlparser.ColIdent(column.Name)})
 	}
 	return valExprs
 }
