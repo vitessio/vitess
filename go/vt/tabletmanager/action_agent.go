@@ -84,6 +84,12 @@ type ActionAgent struct {
 	// only used if exportStats is true.
 	statsTabletType *stats.String
 
+	// skipMysqlPortCheck is set when we don't want healthcheck to
+	// alter the mysql port of the Tablet record. This is used by
+	// vtcombo, because we dont configure the 'dba' pool, used to
+	// get the mysql port.
+	skipMysqlPortCheck bool
+
 	// batchCtx is given to the agent by its creator, and should be used for
 	// any background tasks spawned by the agent.
 	batchCtx context.Context
@@ -106,8 +112,8 @@ type ActionAgent struct {
 	initReplication bool
 
 	// initialTablet remembers the state of the tablet record at startup.
-	// It can be used to notice, for example, if another tablet has taken over
-	// the record.
+	// It can be used to notice, for example, if another tablet has taken
+	// over the record.
 	initialTablet *topodatapb.Tablet
 
 	// mutex protects all the following fields (that start with '_'),
@@ -311,6 +317,7 @@ func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *
 		DBConfigs:           dbcfgs,
 		SchemaOverrides:     nil,
 		BinlogPlayerMap:     nil,
+		skipMysqlPortCheck:  true,
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
