@@ -50,16 +50,17 @@ func AddIfDML(sql string, keyspaceIDs [][]byte) string {
 // otherwise, it returns a copy of 'sql'.
 func AddKeyspaceIDIfDML(sql string, keyspaceID []byte) string {
 	if isDml(sql) {
-		return AddKeyspaceID(sql, keyspaceID)
+		return AddKeyspaceID(sql, keyspaceID, "")
 	}
 	return sql
 }
 
 // AddKeyspaceID returns a copy of 'sql' annotated
-// with the given keyspace id.
-func AddKeyspaceID(sql string, keyspaceID []byte) string {
-	return fmt.Sprintf("%s /* vtgate:: keyspace_id:%s */",
-		sql, hex.EncodeToString(keyspaceID))
+// with the given keyspace id. It also appends the
+// additional trailingComments, if any.
+func AddKeyspaceID(sql string, keyspaceID []byte, trailingComments string) string {
+	return fmt.Sprintf("%s /* vtgate:: keyspace_id:%s */%s",
+		sql, hex.EncodeToString(keyspaceID), trailingComments)
 }
 
 // AddFilteredReplicationUnfriendlyIfDML annotates the given 'sql'

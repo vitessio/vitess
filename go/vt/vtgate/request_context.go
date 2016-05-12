@@ -10,12 +10,13 @@ import (
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 )
 
 type requestContext struct {
 	ctx              context.Context
-	sql              string
+	sql, comments    string
 	bindVars         map[string]interface{}
 	keyspace         string
 	tabletType       topodatapb.TabletType
@@ -25,9 +26,11 @@ type requestContext struct {
 }
 
 func newRequestContext(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, router *Router) *requestContext {
+	query, comments := sqlparser.SplitTrailingComments(sql)
 	return &requestContext{
 		ctx:              ctx,
-		sql:              sql,
+		sql:              query,
+		comments:         comments,
 		bindVars:         bindVars,
 		keyspace:         keyspace,
 		tabletType:       tabletType,

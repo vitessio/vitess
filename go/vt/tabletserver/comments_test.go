@@ -1,7 +1,3 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package tabletserver
 
 import (
@@ -9,60 +5,19 @@ import (
 	"testing"
 )
 
-var testCases = []struct {
-	input          string
-	outSQL, outVar string
-}{{
-	"/",
-	"/", "",
-}, {
-	"*/",
-	"*/", "",
-}, {
-	"/*/",
-	"/*/", "",
-}, {
-	"a*/",
-	"a*/", "",
-}, {
-	"*a*/",
-	"*a*/", "",
-}, {
-	"**a*/",
-	"**a*/", "",
-}, {
-	"/*b**a*/",
-	"", "/*b**a*/",
-}, {
-	"/*a*/",
-	"", "/*a*/",
-}, {
-	"/**/",
-	"", "/**/",
-}, {
-	"/*b*/ /*a*/",
-	"", "/*b*/ /*a*/",
-}, {
-	"foo /* bar */",
-	"foo", " /* bar */",
-}, {
-	"foo /** bar */",
-	"foo", " /** bar */",
-}, {
-	"foo /*** bar */",
-	"foo", " /*** bar */",
-}, {
-	"foo /** bar **/",
-	"foo", " /** bar **/",
-}, {
-	"foo /*** bar ***/",
-	"foo", " /*** bar ***/",
-}, {
-	"*** bar ***/",
-	"*** bar ***/", "",
-}}
-
 func TestComments(t *testing.T) {
+	testCases := []struct {
+		input          string
+		outSQL, outVar string
+	}{{
+		input:  "/",
+		outSQL: "/",
+		outVar: "",
+	}, {
+		input:  "foo /* bar */",
+		outSQL: "foo",
+		outVar: " /* bar */",
+	}}
 	for _, testCase := range testCases {
 		bindVariables := make(map[string]interface{})
 		gotSQL := stripTrailing(testCase.input, bindVariables)

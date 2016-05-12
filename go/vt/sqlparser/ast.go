@@ -826,7 +826,6 @@ func (*ComparisonExpr) iExpr() {}
 func (*RangeCond) iExpr()      {}
 func (*IsExpr) iExpr()         {}
 func (*ExistsExpr) iExpr()     {}
-func (*KeyrangeExpr) iExpr()   {}
 func (StrVal) iExpr()          {}
 func (NumVal) iExpr()          {}
 func (ValArg) iExpr()          {}
@@ -857,7 +856,6 @@ func (*ComparisonExpr) iBoolExpr() {}
 func (*RangeCond) iBoolExpr()      {}
 func (*IsExpr) iBoolExpr()         {}
 func (*ExistsExpr) iBoolExpr()     {}
-func (*KeyrangeExpr) iBoolExpr()   {}
 
 // AndExpr represents an AND expression.
 type AndExpr struct {
@@ -1066,28 +1064,6 @@ func (node *ExistsExpr) WalkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		node.Subquery,
-	)
-}
-
-// KeyrangeExpr represents a KEYRANGE expression.
-type KeyrangeExpr struct {
-	Start, End ValExpr
-}
-
-// Format formats the node.
-func (node *KeyrangeExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("keyrange(%v, %v)", node.Start, node.End)
-}
-
-// WalkSubtree walks the nodes of the subtree
-func (node *KeyrangeExpr) WalkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Start,
-		node.End,
 	)
 }
 
