@@ -271,7 +271,7 @@ func (agent *ActionAgent) runHealthCheckProtected() {
 	agent.History.Add(record)
 
 	// try to figure out the mysql port if we don't have it yet
-	if _, ok := tablet.PortMap["mysql"]; !ok {
+	if _, ok := tablet.PortMap["mysql"]; !ok && !agent.skipMysqlPortCheck {
 		// we don't know the port, try to get it from mysqld
 		mysqlPort, err := agent.MysqlDaemon.GetMysqlPort()
 		if err != nil {
