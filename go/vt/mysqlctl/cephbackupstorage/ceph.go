@@ -1,4 +1,4 @@
-// Package Cephbackupstorage implements the BackupStorage interface
+// Package cephbackupstorage implements the BackupStorage interface
 // for Ceph Cloud Storage.
 package cephbackupstorage
 
@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/minio/minio-go"
+	minio "github.com/minio/minio-go"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
 )
@@ -25,7 +25,7 @@ var (
 		"Path to JSON config file for ceph backup storage")
 )
 
-var StorageConfig struct {
+var storageConfig struct {
 	AccessKey string `json:"accessKey"`
 	SecretKey string `json:"secretKey"`
 	EndPoint  string `json:"endPoint"`
@@ -220,20 +220,20 @@ func (bs *CephBackupStorage) client() (*minio.Client, error) {
 		}
 		defer configFile.Close()
 		jsonParser := json.NewDecoder(configFile)
-		if err = jsonParser.Decode(&StorageConfig); err != nil {
+		if err = jsonParser.Decode(&storageConfig); err != nil {
 			return nil, fmt.Errorf("Error parsing the json file : %v", err)
 		}
 
-		bucket = StorageConfig.Bucket
-		accessKey := StorageConfig.AccessKey
-		secretKey := StorageConfig.SecretKey
-		url := StorageConfig.EndPoint
+		bucket = storageConfig.Bucket
+		accessKey := storageConfig.AccessKey
+		secretKey := storageConfig.SecretKey
+		url := storageConfig.EndPoint
 
-		ceph_client, err := minio.NewV2(url, accessKey, secretKey, true)
+		client, err := minio.NewV2(url, accessKey, secretKey, true)
 		if err != nil {
 			return nil, err
 		}
-		bs._client = ceph_client
+		bs._client = client
 	}
 	return bs._client, nil
 }
