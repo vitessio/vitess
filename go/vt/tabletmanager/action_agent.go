@@ -653,7 +653,8 @@ func (agent *ActionAgent) initializeKeyRangeRule(ctx context.Context, keyspace s
 		return fmt.Errorf("cannot read keyspace %v to get sharding key: %v", keyspace, err)
 	}
 	if keyspaceInfo.ShardingColumnName == "" {
-		return fmt.Errorf("keyspace %v has an empty ShardingColumnName, cannot setup KeyRange rule", keyspace)
+		log.Infof("Keyspace %v has an empty ShardingColumnName, not adding KeyRange query rule", keyspace)
+		return nil
 	}
 
 	// create the rules

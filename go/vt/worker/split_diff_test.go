@@ -164,14 +164,7 @@ func testSplitDiff(t *testing.T, v3 bool) {
 	wi := NewInstance(ctx, ts, "cell1", time.Second)
 
 	if v3 {
-		// FIXME(alainjobart): ShardingColumnName and ShardingColumnType
-		// are not used by v3 split_clone, but they are required
-		// by tabletmanager to setup the rules. We have b/27901260
-		// open internally to fix this.
-		if err := ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{
-			ShardingColumnName: "keyspace_id",
-			ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
-		}); err != nil {
+		if err := ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}); err != nil {
 			t.Fatalf("CreateKeyspace v3 failed: %v", err)
 		}
 

@@ -19,10 +19,6 @@ import (
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
-const (
-	ksidName = "keyspace_id"
-)
-
 // Router is the layer to route queries to the correct shards
 // based on the values in the query.
 type Router struct {
@@ -260,7 +256,6 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, route *engine.Route)
 	if len(ksid) == 0 {
 		return &sqltypes.Result{}, nil
 	}
-	vcursor.bindVars[ksidName] = string(ksid)
 	rewritten := sqlannotation.AddKeyspaceID(route.Query, ksid, vcursor.comments)
 	return rtr.scatterConn.Execute(
 		vcursor.ctx,
@@ -291,7 +286,6 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, route *engine.Route)
 			return nil, fmt.Errorf("execDeleteEqual: %v", err)
 		}
 	}
-	vcursor.bindVars[ksidName] = string(ksid)
 	rewritten := sqlannotation.AddKeyspaceID(route.Query, ksid, vcursor.comments)
 	return rtr.scatterConn.Execute(
 		vcursor.ctx,
@@ -328,7 +322,6 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 			return nil, err
 		}
 	}
-	vcursor.bindVars[ksidName] = string(ksid)
 	rewritten := sqlannotation.AddKeyspaceID(route.Query, ksid, vcursor.comments)
 	result, err := rtr.scatterConn.Execute(
 		vcursor.ctx,

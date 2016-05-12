@@ -32,10 +32,6 @@ class TestEnv(object):
     utils.run_vtctl(['CreateKeyspace', keyspace])
     if not shards or shards[0] == '0':
       shards = ['0']
-    else:
-      utils.run_vtctl(
-          ['SetKeyspaceShardingInfo', '-force', keyspace, 'keyspace_id',
-           'uint64'])
 
     # Create tablets and start mysqld.
     procs = []
