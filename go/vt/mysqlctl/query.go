@@ -72,13 +72,18 @@ func (mysqld *Mysqld) FetchSuperQuery(query string) (*sqltypes.Result, error) {
 }
 
 // fetchSuperQueryMap returns a map from column names to cell data for a query
-// that should return exactly 1 row.
+// that should return either 0 or 1 row. If the query returns zero rows, this
+// will return a nil map and nil error.
 func (mysqld *Mysqld) fetchSuperQueryMap(query string) (map[string]string, error) {
 	qr, err := mysqld.FetchSuperQuery(query)
 	if err != nil {
 		return nil, err
 	}
-	if len(qr.Rows) != 1 {
+	if len(qr.Rows) == 0 {
+		// The query succeeded, but there is no data.
+		return nil, nil
+	}
+	if len(qr.Rows) > 1 {
 		return nil, fmt.Errorf("query %#v returned %d rows, expected 1", query, len(qr.Rows))
 	}
 	if len(qr.Fields) != len(qr.Rows[0]) {

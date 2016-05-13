@@ -43,6 +43,11 @@ func (flavor *mysql56) MasterPosition(mysqld *Mysqld) (rp replication.Position, 
 func (flavor *mysql56) SlaveStatus(mysqld *Mysqld) (replication.Status, error) {
 	fields, err := mysqld.fetchSuperQueryMap("SHOW SLAVE STATUS")
 	if err != nil {
+		return replication.Status{}, err
+	}
+	if len(fields) == 0 {
+		// The query returned no data, meaning the server
+		// is not configured as a slave.
 		return replication.Status{}, ErrNotSlave
 	}
 	status := parseSlaveStatus(fields)
