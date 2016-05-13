@@ -64,20 +64,6 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
     if self.env.get_tablet_task_number(new_master_name) != desired_master_task:
       return False
 
-    for cell in self.env.cells:
-      try:
-        # This GetEndPoints call should succeed when called on the cell with the
-        # master, otherwise it'll raise an exception.
-        self.env.vtctl_helper.execute_vtctl_command(
-            ['GetEndPoints', cell, '{0}/{1}'.format(keyspace, shard_name),
-             'master'], expect_fail=(cell != desired_master_cell))
-        if cell != desired_master_cell:
-          return False
-      except vtctl_helper.VtctlClientError:
-        # This should only happen when calling GetEndPoints on a cell other than
-        # the master cell.
-        if cell == desired_master_cell:
-          return False
     return True
 
   def explicit_reparent(self, keyspace, num_shards, external=False,
