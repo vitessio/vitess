@@ -51,6 +51,10 @@ func (agent *ActionAgent) MasterPosition(ctx context.Context) (string, error) {
 // replication or not (using hook if not).
 // Should be called under RPCWrapLock.
 func (agent *ActionAgent) StopSlave(ctx context.Context) error {
+	// Remember that we were told to stop, so we don't try to
+	// restart ourselves (in replication_reporter).
+	agent.setSlaveStopped(true)
+
 	return mysqlctl.StopSlave(agent.MysqlDaemon, agent.hookExtraEnv())
 }
 
@@ -65,7 +69,7 @@ func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position string,
 	if err := agent.MysqlDaemon.WaitMasterPos(pos, waitTime); err != nil {
 		return "", err
 	}
-	if err := mysqlctl.StopSlave(agent.MysqlDaemon, agent.hookExtraEnv()); err != nil {
+	if err := agent.StopSlave(ctx); err != nil {
 		return "", err
 	}
 	pos, err = agent.MysqlDaemon.MasterPosition()
@@ -79,6 +83,8 @@ func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position string,
 // replication or not (using hook if not).
 // Should be called under RPCWrapLock.
 func (agent *ActionAgent) StartSlave(ctx context.Context) error {
+	agent.setSlaveStopped(false)
+
 	if *enableSemiSync {
 		if err := agent.enableSemiSync(false); err != nil {
 			return err
@@ -100,7 +106,7 @@ func (agent *ActionAgent) ResetReplication(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
+	agent.setSlaveStopped(true)
 	return agent.MysqlDaemon.ExecuteSuperQueryList(cmds)
 }
 
@@ -168,6 +174,8 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 	if err != nil {
 		return err
 	}
+
+	agent.setSlaveStopped(false)
 
 	// If using semi-sync, we need to enable it before connecting to master.
 	if *enableSemiSync {
@@ -394,7 +402,7 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*rep
 		// no replication is running, just return what we got
 		return replication.StatusToProto(rs), nil
 	}
-	if err := mysqlctl.StopSlave(agent.MysqlDaemon, agent.hookExtraEnv()); err != nil {
+	if err := agent.StopSlave(ctx); err != nil {
 		return nil, fmt.Errorf("stop slave failed: %v", err)
 	}
 	// now patch in the current position
