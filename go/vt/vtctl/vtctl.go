@@ -363,12 +363,6 @@ var commands = []commandGroup{
 			{"GetSrvKeyspaceNames", commandGetSrvKeyspaceNames,
 				"<cell>",
 				"Outputs a list of keyspace names."},
-			{"GetSrvShard", commandGetSrvShard,
-				"<cell> <keyspace/shard>",
-				"Outputs a JSON structure that contains information about the SrvShard."},
-			{"GetEndPoints", commandGetEndPoints,
-				"<cell> <keyspace/shard> <tablet type>",
-				"Outputs a JSON structure that contains information about the EndPoints."},
 		},
 	},
 	{
@@ -2122,48 +2116,6 @@ func commandGetSrvKeyspaceNames(ctx context.Context, wr *wrangler.Wrangler, subF
 		wr.Logger().Printf("%v\n", ks)
 	}
 	return nil
-}
-
-func commandGetSrvShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <cell> and <keyspace/shard> arguments are required for the GetSrvShard command.")
-	}
-
-	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(1))
-	if err != nil {
-		return err
-	}
-	srvShard, err := wr.TopoServer().GetSrvShard(ctx, subFlags.Arg(0), keyspace, shard)
-	if err != nil {
-		return err
-	}
-	return printJSON(wr.Logger(), srvShard)
-}
-
-func commandGetEndPoints(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 3 {
-		return fmt.Errorf("The <cell>, <keyspace/shard>, and <tablet type> arguments are required for the GetEndPoints command.")
-	}
-
-	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(1))
-	if err != nil {
-		return err
-	}
-	tabletType, err := parseTabletType(subFlags.Arg(2), []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
-	if err != nil {
-		return err
-	}
-	endPoints, _, err := wr.TopoServer().GetEndPoints(ctx, subFlags.Arg(0), keyspace, shard, tabletType)
-	if err != nil {
-		return err
-	}
-	return printJSON(wr.Logger(), endPoints)
 }
 
 func commandGetShardReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

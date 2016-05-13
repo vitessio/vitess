@@ -1101,44 +1101,8 @@ Validates that the master version matches all of the slaves.
 
 ## Serving Graph
 
-* [GetEndPoints](#getendpoints)
 * [GetSrvKeyspace](#getsrvkeyspace)
 * [GetSrvKeyspaceNames](#getsrvkeyspacenames)
-* [GetSrvShard](#getsrvshard)
-
-### GetEndPoints
-
-Outputs a JSON structure that contains information about the EndPoints.
-
-#### Example
-
-<pre class="command-example">GetEndPoints &lt;cell&gt; &lt;keyspace/shard&gt; &lt;tablet type&gt;</pre>
-
-#### Arguments
-
-* <code>&lt;cell&gt;</code> &ndash; Required. A cell is a location for a service. Generally, a cell resides in only one cluster. In Vitess, the terms "cell" and "data center" are interchangeable. The argument value is a string that does not contain whitespace.
-* <code>&lt;keyspace/shard&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables as well as the shard associated with the command. The keyspace must be identified by a string that does not contain whitepace, while the shard is typically identified by a string in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.
-* <code>&lt;tablet type&gt;</code> &ndash; Required. The vttablet's role. Valid values are:
-
-    * <code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes
-    * <code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)
-    * <code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.
-    * <code>master</code> &ndash; A primary copy of data
-    * <code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns
-    * <code>replica</code> &ndash; A slaved copy of data ready to be promoted to master
-    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state.
-    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.
-    * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
-    * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
-    * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
-
-
-
-
-#### Errors
-
-* The <code>&lt;cell&gt;</code>, <code>&lt;keyspace/shard&gt;</code>, and <code>&lt;tablet type&gt;</code> arguments are required for the <code>&lt;GetEndPoints&gt;</code> command. This error occurs if the command is not called with exactly 3 arguments.
-
 
 ### GetSrvKeyspace
 
@@ -1173,24 +1137,6 @@ Outputs a list of keyspace names.
 #### Errors
 
 * The <code>&lt;cell&gt;</code> argument is required for the <code>&lt;GetSrvKeyspaceNames&gt;</code> command. This error occurs if the command is not called with exactly one argument.
-
-
-### GetSrvShard
-
-Outputs a JSON structure that contains information about the SrvShard.
-
-#### Example
-
-<pre class="command-example">GetSrvShard &lt;cell&gt; &lt;keyspace/shard&gt;</pre>
-
-#### Arguments
-
-* <code>&lt;cell&gt;</code> &ndash; Required. A cell is a location for a service. Generally, a cell resides in only one cluster. In Vitess, the terms "cell" and "data center" are interchangeable. The argument value is a string that does not contain whitespace.
-* <code>&lt;keyspace/shard&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables as well as the shard associated with the command. The keyspace must be identified by a string that does not contain whitepace, while the shard is typically identified by a string in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.
-
-#### Errors
-
-* The <code>&lt;cell&gt;</code> and <code>&lt;keyspace/shard&gt;</code> arguments are required for the <code>&lt;GetSrvShard&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
 
 
 ## Shards
