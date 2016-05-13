@@ -39,18 +39,18 @@ func WaitForEndPoints(ctx context.Context, hc HealthCheck, cell, keyspace, shard
 			shard:    shard,
 		}: true,
 	}
-	return waitForEndPoints(ctx, hc, keyspaceShards, types)
+	return waitForEndPoints(ctx, hc, keyspaceShards, types, false)
 }
 
-// WaitForAllEndPoints waits for at least one endpoint in the given cell
+// WaitForAllServingEndPoints waits for at least one serving endpoint in the given cell
 // for all keyspaces / shards before returning.
-func WaitForAllEndPoints(ctx context.Context, hc HealthCheck, ts topo.SrvTopoServer, cell string, types []topodatapb.TabletType) error {
+func WaitForAllServingEndPoints(ctx context.Context, hc HealthCheck, ts topo.SrvTopoServer, cell string, types []topodatapb.TabletType) error {
 	keyspaceShards, err := findAllKeyspaceShards(ctx, ts, cell)
 	if err != nil {
 		return err
 	}
 
-	return waitForEndPoints(ctx, hc, keyspaceShards, types)
+	return waitForEndPoints(ctx, hc, keyspaceShards, types, true)
 }
 
 // findAllKeyspaceShards goes through all serving shards in the topology
@@ -98,7 +98,7 @@ func findAllKeyspaceShards(ctx context.Context, ts topo.SrvTopoServer, cell stri
 }
 
 // waitForEndPoints is the internal method that polls for endpoints
-func waitForEndPoints(ctx context.Context, hc HealthCheck, keyspaceShards map[keyspaceShard]bool, types []topodatapb.TabletType) error {
+func waitForEndPoints(ctx context.Context, hc HealthCheck, keyspaceShards map[keyspaceShard]bool, types []topodatapb.TabletType, requireServing bool) error {
 RetryLoop:
 	for {
 		select {
@@ -112,9 +112,23 @@ RetryLoop:
 			allPresent := true
 			for _, tt := range types {
 				epl := hc.GetEndPointStatsFromTarget(ks.keyspace, ks.shard, tt)
-				if len(epl) == 0 {
-					allPresent = false
-					break
+				if requireServing {
+					hasServingEP := false
+					for _, eps := range epl {
+						if eps.LastError == nil && eps.Serving {
+							hasServingEP = true
+							break
+						}
+					}
+					if !hasServingEP {
+						allPresent = false
+						break
+					}
+				} else {
+					if len(epl) == 0 {
+						allPresent = false
+						break
+					}
 				}
 			}
 
