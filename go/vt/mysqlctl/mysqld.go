@@ -59,7 +59,7 @@ type Mysqld struct {
 	appPool       *dbconnpool.ConnectionPool
 	replParams    *sqldb.ConnParams
 	dbaMysqlStats *stats.Timings
-	TabletDir     string
+	tabletDir     string
 	SnapshotDir   string
 
 	// mutex protects the fields below.
@@ -107,7 +107,7 @@ func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *sqldb.Con
 		appPool:       appPool,
 		replParams:    repl,
 		dbaMysqlStats: dbaMysqlStats,
-		TabletDir:     TabletDir(config.ServerID),
+		tabletDir:     TabletDir(config.ServerID),
 		SnapshotDir:   SnapshotDir(config.ServerID),
 	}
 }
@@ -115,6 +115,12 @@ func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *sqldb.Con
 // Cnf returns the mysql config for the daemon
 func (mysqld *Mysqld) Cnf() *Mycnf {
 	return mysqld.config
+}
+
+// TabletDir returns the main tablet directory.
+// It's a method so it can be accessed through the MysqlDaemon interface.
+func (mysqld *Mysqld) TabletDir() string {
+	return mysqld.tabletDir
 }
 
 // RunMysqlUpgrade will run the mysql_upgrade program on the current install.
@@ -482,8 +488,8 @@ func (mysqld *Mysqld) initConfig(root string) error {
 }
 
 func (mysqld *Mysqld) createDirs() error {
-	log.Infof("creating directory %s", mysqld.TabletDir)
-	if err := os.MkdirAll(mysqld.TabletDir, os.ModePerm); err != nil {
+	log.Infof("creating directory %s", mysqld.tabletDir)
+	if err := os.MkdirAll(mysqld.tabletDir, os.ModePerm); err != nil {
 		return err
 	}
 	for _, dir := range TopLevelDirs() {
@@ -509,19 +515,19 @@ func (mysqld *Mysqld) createDirs() error {
 // /vt/data is present, it will create the following structure:
 // /vt/data/vt_xxxx /vt/vt_xxxx/data -> /vt/data/vt_xxxx
 func (mysqld *Mysqld) createTopDir(dir string) error {
-	vtname := path.Base(mysqld.TabletDir)
+	vtname := path.Base(mysqld.tabletDir)
 	target := path.Join(vtenv.VtDataRoot(), dir)
 	_, err := os.Lstat(target)
 	if err != nil {
 		if os.IsNotExist(err) {
-			topdir := path.Join(mysqld.TabletDir, dir)
+			topdir := path.Join(mysqld.tabletDir, dir)
 			log.Infof("creating directory %s", topdir)
 			return os.MkdirAll(topdir, os.ModePerm)
 		}
 		return err
 	}
 	linkto := path.Join(target, vtname)
-	source := path.Join(mysqld.TabletDir, dir)
+	source := path.Join(mysqld.tabletDir, dir)
 	log.Infof("creating directory %s", linkto)
 	err = os.MkdirAll(linkto, os.ModePerm)
 	if err != nil {
@@ -542,7 +548,7 @@ func (mysqld *Mysqld) Teardown(ctx context.Context, force bool) error {
 	}
 	var removalErr error
 	for _, dir := range TopLevelDirs() {
-		qdir := path.Join(mysqld.TabletDir, dir)
+		qdir := path.Join(mysqld.tabletDir, dir)
 		if err := deleteTopDir(qdir); err != nil {
 			removalErr = err
 		}
