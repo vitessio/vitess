@@ -254,11 +254,6 @@ func (sct *sandboxTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard s
 	return nil, fmt.Errorf("Unsupported")
 }
 
-// GetEndPoints is part of SrvTopoServer.
-func (sct *sandboxTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType) (*topodatapb.EndPoints, int64, error) {
-	return nil, -1, fmt.Errorf("Unsupported")
-}
-
 func sandboxDialer(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 	sand := getSandbox(keyspace)
 	sand.sandmu.Lock()

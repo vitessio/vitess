@@ -50,29 +50,6 @@ var (
   </tr>
   {{end}}
 </table>
-<br>
-<table>
-  <tr>
-    <th colspan="5">EndPoints Cache (NOT USED for new endpoint implementation)</th>
-  </tr>
-  <tr>
-    <th>Cell</th>
-    <th>Keyspace</th>
-    <th>Shard</th>
-    <th>TabletType</th>
-    <th>EndPoints</th>
-  </tr>
-  {{range $i, $ep := .EndPoints}}
-  <tr>
-    <td>{{github_com_youtube_vitess_vtctld_srv_cell $ep.Cell}}</td>
-    <td>{{github_com_youtube_vitess_vtctld_srv_keyspace $ep.Cell $ep.Keyspace}}</td>
-    <td>{{github_com_youtube_vitess_vtctld_srv_shard $ep.Cell $ep.Keyspace $ep.Shard}}</td>
-    <td>{{github_com_youtube_vitess_vtctld_srv_type $ep.Cell $ep.Keyspace $ep.Shard $ep.TabletType}}</td>
-    <td>{{if $ep.LastError}}<b>{{$ep.LastError}}</b>{{else}}{{$ep.StatusAsHTML}}{{end}}</td>
-  </tr>
-  {{end}}
-</table>
-<small>This is just a cache, so some data may not be visible here yet. It is empty if using new endpoint implementation.</small>
 `
 
 	statsTemplate = `
