@@ -42,11 +42,9 @@ read_buffer_size = 1M
 read_rnd_buffer_size = 1M
 server-id = {{.ServerID}}
 skip-name-resolve
-# we now need networking for replication. this is a tombstone to simpler times.
-#skip_networking
 # all db instances should skip the slave startup - that way we can do any
-# out-of-bounds checking before we restart everything - in case we need to do
-# some extra work to skip mangled transactions or fudge the slave start
+# additional configuration (like enabling semi-sync) before we connect to
+# the master.
 skip_slave_start
 slave_net_timeout = 60
 slave_load_tmpdir = {{.SlaveLoadTmpDir}}
