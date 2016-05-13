@@ -87,7 +87,7 @@ func (dg *discoveryGateway) waitForEndPoints() error {
 	log.Infof("Waiting for endpoints")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	err := discovery.WaitForAllEndPoints(ctx, dg.hc, dg.srvTopoServer, dg.localCell, dg.tabletTypesToWait)
+	err := discovery.WaitForAllServingEndPoints(ctx, dg.hc, dg.srvTopoServer, dg.localCell, dg.tabletTypesToWait)
 	if err == discovery.ErrWaitForEndPointsTimeout {
 		// ignore this error, we will still start up, and may not serve
 		// all endpoints.

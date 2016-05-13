@@ -60,7 +60,6 @@ def extra_vtcombo_parameters():
           'grpc-vtgateservice',
           'grpc-vtctl',
           ]),
-      '-cells_to_watch', 'test',
       ]
 
 
