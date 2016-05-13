@@ -128,6 +128,8 @@ func ConfigHTML() template.HTML {
 // and configure the healthcheck shutdown. It is only run by NewActionAgent
 // for real vttablet agents (not by tests, nor vtcombo).
 func (agent *ActionAgent) initHealthCheck() {
+	registerReplicationReporter(agent)
+
 	log.Infof("Starting periodic health check every %v", *healthCheckInterval)
 	t := timer.NewTimer(*healthCheckInterval)
 	servenv.OnTermSync(func() {

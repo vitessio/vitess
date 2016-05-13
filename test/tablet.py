@@ -429,9 +429,9 @@ class Tablet(object):
     args.extend(['-binlog_player_healthcheck_retry_delay', '1s'])
     args.extend(['-binlog_player_retry_delay', '1s'])
     args.extend(['-pid_file', os.path.join(self.tablet_dir, 'vttablet.pid')])
-    # always enable_replication_lag_check with somewhat short values for tests
+    # always enable_replication_reporter with somewhat short values for tests
     args.extend(['-health_check_interval', '2s'])
-    args.extend(['-enable_replication_lag_check'])
+    args.extend(['-enable_replication_reporter'])
     args.extend(['-degraded_threshold', '5s'])
     if enable_semi_sync:
       args.append('-enable_semi_sync')

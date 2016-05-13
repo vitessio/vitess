@@ -382,6 +382,23 @@ class TestTabletManager(unittest.TestCase):
     self.assertEqual(ti['type'], topodata_pb2.MASTER,
                      'unexpected master type: %s' % ti['type'])
 
+    # stop replication at the mysql level.
+    # vttablet replication_reporter should restart it.
+    tablet_62044.mquery('', 'stop slave')
+    # insert something on the master and wait for it on the slave.
+    tablet_62344.mquery('vt_test_keyspace', [
+        'create table repl_test_table (id int)',
+        'insert into repl_test_table values (123)'], write=True)
+    timeout = 10.0
+    while True:
+      result = tablet_62044.mquery('vt_test_keyspace',
+                                   'select * from repl_test_table')
+      if result:
+        self.assertEqual(result[0][0], 123L)
+        break
+      timeout = utils.wait_step(
+          'slave replication repaired by replication_reporter', timeout)
+
     # stop replication, make sure we don't go unhealthy.
     # (we have a baseline as well, so the time should be good).
     utils.run_vtctl(['StopSlave', tablet_62044.tablet_alias])
@@ -538,6 +555,16 @@ class TestTabletManager(unittest.TestCase):
       t.wait_for_vttablet_state('NOT_SERVING')
       self.check_healthz(t, False)
 
+    # Tell slave to not try to repair replication in healthcheck.
+    # The StopSlave will ultimately fail because mysqld is not running,
+    # But vttablet should remember that it's not supposed to fix replication.
+    utils.run_vtctl(['StopSlave', tablet_62044.tablet_alias], expect_fail=True)
+
+    # The above notice to not fix replication should survive tablet restart.
+    tablet_62044.kill_vttablet()
+    tablet_62044.start_vttablet(wait_for_state='NOT_SERVING',
+                                full_mycnf_args=True, include_mysql_port=False)
+
     # restart mysqld
     start_procs = [
         tablet_62344.start_mysql(),
@@ -566,7 +593,7 @@ class TestTabletManager(unittest.TestCase):
 
     # restart replication, wait until health check goes small
     # (a value of zero is default and won't be in structure)
-    tablet_62044.mquery('', ['START SLAVE'])
+    utils.run_vtctl(['StartSlave', tablet_62044.tablet_alias])
     timeout = 10
     while True:
       utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias],
