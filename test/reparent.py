@@ -95,26 +95,18 @@ class TestReparent(unittest.TestCase):
                                 tablet_obj.tablet_alias,
                                 timeout, sleep_time=0.1)
 
-  def _check_db_addr(self, shard, db_type, expected_port, cell='test_nj'):
-    ep = utils.run_vtctl_json(['GetEndPoints', cell, 'test_keyspace/' + shard,
-                               db_type])
-    self.assertEqual(
-        len(ep['entries']), 1, 'Wrong number of entries: %s' % str(ep))
-    port = ep['entries'][0]['port_map']['vt']
-    self.assertEqual(
-        port, expected_port,
-        'Unexpected port: %d != %d from %s' % (port, expected_port, str(ep)))
-    host = ep['entries'][0]['host']
-    # Hostname was set explicitly to 'localhost' with -tablet_hostname flag.
-    if not host.startswith('localhost'):
-      self.fail(
-          'Invalid hostname %s was expecting something starting with %s' %
-          (host, 'localhost'))
+  def _check_master_tablet(self, t, port=None):
+    """Makes sure the tablet type is master, and its health check agrees."""
+    ti = utils.run_vtctl_json(['GetTablet', t.tablet_alias])
+    self.assertEqual(ti['type'], topodata_pb2.MASTER)
+    if port:
+      self.assertEqual(ti['port_map']['vt'], port)
 
-  def _check_master_cell(self, cell, shard_id, master_cell):
-    srv_shard = utils.run_vtctl_json(['GetSrvShard', cell,
-                                      'test_keyspace/%s' % (shard_id)])
-    self.assertEqual(srv_shard['master_cell'], master_cell)
+    # make sure the health stream is updated
+    health = utils.run_vtctl_json(['VtTabletStreamHealth', '-count', '1',
+                                   t.tablet_alias])
+    self.assertIn('serving', health)
+    self.assertEqual(health['target']['tablet_type'], topodata_pb2.MASTER)
 
   def test_master_to_spare_state_change_impossible(self):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -172,8 +164,6 @@ class TestReparent(unittest.TestCase):
     tablet_62344.kill_vttablet()
     tablet_62344.shutdown_mysql().wait()
 
-    self._check_db_addr('0', 'master', tablet_62344.port)
-
     # Perform a planned reparent operation, will try to contact
     # the current master and fail somewhat quickly
     _, stderr = utils.run_vtctl(['-wait-time', '5s',
@@ -187,7 +177,7 @@ class TestReparent(unittest.TestCase):
                      tablet_62044.tablet_alias], auto_log=True)
 
     utils.validate_topology()
-    self._check_db_addr('0', 'master', tablet_62044.port)
+    self._check_master_tablet(tablet_62044)
 
     # insert data into the new master, check the connected slaves work
     self._populate_vt_insert_test(tablet_62044, 2)
@@ -244,11 +234,7 @@ class TestReparent(unittest.TestCase):
                      tablet_62344.tablet_alias], auto_log=True)
     utils.validate_topology(ping_tablets=True)
 
-    self._check_db_addr(shard_id, 'master', tablet_62344.port)
-
-    # Verify MasterCell is properly set
-    self._check_master_cell('test_nj', shard_id, 'test_nj')
-    self._check_master_cell('test_ny', shard_id, 'test_nj')
+    self._check_master_tablet(tablet_62344)
 
     # Perform a graceful reparent operation to another cell.
     utils.pause('test_reparent_cross_cell PlannedReparentShard')
@@ -256,11 +242,7 @@ class TestReparent(unittest.TestCase):
                      tablet_31981.tablet_alias], auto_log=True)
     utils.validate_topology()
 
-    self._check_db_addr(shard_id, 'master', tablet_31981.port, cell='test_ny')
-
-    # Verify MasterCell is set to new cell.
-    self._check_master_cell('test_nj', shard_id, 'test_ny')
-    self._check_master_cell('test_ny', shard_id, 'test_ny')
+    self._check_master_tablet(tablet_31981)
 
     tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983,
                          tablet_31981])
@@ -318,11 +300,7 @@ class TestReparent(unittest.TestCase):
     utils.validate_topology(ping_tablets=True)
     tablet_62344.mquery('vt_test_keyspace', self._create_vt_insert_test)
 
-    self._check_db_addr(shard_id, 'master', tablet_62344.port)
-
-    # Verify MasterCell is set to new cell.
-    self._check_master_cell('test_nj', shard_id, 'test_nj')
-    self._check_master_cell('test_ny', shard_id, 'test_nj')
+    self._check_master_tablet(tablet_62344)
 
     utils.validate_topology()
 
@@ -336,16 +314,12 @@ class TestReparent(unittest.TestCase):
                      tablet_62044.tablet_alias], auto_log=True)
     utils.validate_topology()
 
-    self._check_db_addr(shard_id, 'master', tablet_62044.port)
+    self._check_master_tablet(tablet_62044)
 
     # insert data into the new master, check the connected slaves work
     self._populate_vt_insert_test(tablet_62044, 1)
     self._check_vt_insert_test(tablet_41983, 1)
     self._check_vt_insert_test(tablet_62344, 1)
-
-    # Verify MasterCell is set to new cell.
-    self._check_master_cell('test_nj', shard_id, 'test_nj')
-    self._check_master_cell('test_ny', shard_id, 'test_nj')
 
     tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983,
                          tablet_31981])
@@ -358,7 +332,7 @@ class TestReparent(unittest.TestCase):
     timeout = 30.0
     while True:
       try:
-        self._check_db_addr(shard_id, 'master', new_port)
+        self._check_master_tablet(tablet_62044, port=new_port)
         break
       except protocols_flavor().client_error_exception_type():
         timeout = utils.wait_step('waiting for new port to register',
@@ -406,7 +380,7 @@ class TestReparent(unittest.TestCase):
                      tablet_62344.tablet_alias])
     utils.validate_topology(ping_tablets=True)
 
-    self._check_db_addr(shard_id, 'master', tablet_62344.port)
+    self._check_master_tablet(tablet_62344)
 
     # Kill one tablet so we seem offline
     tablet_31981.kill_vttablet()
@@ -414,7 +388,7 @@ class TestReparent(unittest.TestCase):
     # Perform a graceful reparent operation.
     utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/' + shard_id,
                      tablet_62044.tablet_alias])
-    self._check_db_addr(shard_id, 'master', tablet_62044.port)
+    self._check_master_tablet(tablet_62044)
 
     tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983])
 
