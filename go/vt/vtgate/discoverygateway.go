@@ -262,9 +262,9 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 		shuffleTablets(tablets)
 
 		// skip tablets we tried before
-		for _, ep := range tablets {
-			if _, ok := invalidTablets[discovery.TabletToMapKey(ep)]; !ok {
-				tablet = ep
+		for _, t := range tablets {
+			if _, ok := invalidTablets[discovery.TabletToMapKey(t)]; !ok {
+				tablet = t
 				break
 			}
 		}

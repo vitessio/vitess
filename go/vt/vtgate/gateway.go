@@ -147,20 +147,20 @@ func (e *ShardError) VtErrorCode() vtrpcpb.ErrorCode {
 type GatewayTabletCacheStatusList []*GatewayTabletCacheStatus
 
 // Len is part of sort.Interface.
-func (gepcsl GatewayTabletCacheStatusList) Len() int {
-	return len(gepcsl)
+func (gtcsl GatewayTabletCacheStatusList) Len() int {
+	return len(gtcsl)
 }
 
 // Less is part of sort.Interface.
-func (gepcsl GatewayTabletCacheStatusList) Less(i, j int) bool {
-	iKey := strings.Join([]string{gepcsl[i].Keyspace, gepcsl[i].Shard, string(gepcsl[i].TabletType), gepcsl[i].Name}, ".")
-	jKey := strings.Join([]string{gepcsl[j].Keyspace, gepcsl[j].Shard, string(gepcsl[j].TabletType), gepcsl[j].Name}, ".")
+func (gtcsl GatewayTabletCacheStatusList) Less(i, j int) bool {
+	iKey := strings.Join([]string{gtcsl[i].Keyspace, gtcsl[i].Shard, string(gtcsl[i].TabletType), gtcsl[i].Name}, ".")
+	jKey := strings.Join([]string{gtcsl[j].Keyspace, gtcsl[j].Shard, string(gtcsl[j].TabletType), gtcsl[j].Name}, ".")
 	return iKey < jKey
 }
 
 // Swap is part of sort.Interface.
-func (gepcsl GatewayTabletCacheStatusList) Swap(i, j int) {
-	gepcsl[i], gepcsl[j] = gepcsl[j], gepcsl[i]
+func (gtcsl GatewayTabletCacheStatusList) Swap(i, j int) {
+	gtcsl[i], gtcsl[j] = gtcsl[j], gtcsl[i]
 }
 
 // GatewayTabletCacheStatus contains the status per tablet for a gateway.

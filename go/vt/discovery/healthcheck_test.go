@@ -26,15 +26,15 @@ func init() {
 }
 
 func TestHealthCheck(t *testing.T) {
-	ep := topo.NewTablet(0, "cell", "a")
-	ep.PortMap["vt"] = 1
+	tablet := topo.NewTablet(0, "cell", "a")
+	tablet.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse)
-	fakeConn := createFakeConn(ep, input)
+	fakeConn := createFakeConn(tablet, input)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	l := newListener()
 	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, time.Hour, "" /* statsSuffix */).(*HealthCheckImpl)
 	hc.SetListener(l)
-	hc.AddTablet("cell", "", ep)
+	hc.AddTablet("cell", "", tablet)
 	t.Logf(`hc = HealthCheck(); hc.AddTablet("cell", "", {Host: "a", PortMap: {"vt": 1}})`)
 
 	// no tablet before getting first StreamHealthResponse
@@ -51,7 +51,7 @@ func TestHealthCheck(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 	want := &TabletStats{
-		Tablet:  ep,
+		Tablet:  tablet,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Up:      true,
 		Serving: true,
@@ -68,12 +68,12 @@ func TestHealthCheck(t *testing.T) {
 	if len(tsList) != 1 || !reflect.DeepEqual(tsList[0], want) {
 		t.Errorf(`hc.GetTabletStatsFromKeyspaceShard("k", "s") = %+v; want %+v`, tsList, want)
 	}
-	epcsl := hc.CacheStatus()
-	epcslWant := TabletsCacheStatusList{{
+	tcsl := hc.CacheStatus()
+	tcslWant := TabletsCacheStatusList{{
 		Cell:   "cell",
 		Target: &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		TabletsStats: TabletStatsList{{
-			Tablet:  ep,
+			Tablet:  tablet,
 			Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 			Up:      true,
 			Serving: true,
@@ -81,8 +81,8 @@ func TestHealthCheck(t *testing.T) {
 			TabletExternallyReparentedTimestamp: 10,
 		}},
 	}}
-	if !reflect.DeepEqual(epcsl, epcslWant) {
-		t.Errorf(`hc.CacheStatus() = %+v; want %+v`, epcsl, epcslWant)
+	if !reflect.DeepEqual(tcsl, tcslWant) {
+		t.Errorf(`hc.CacheStatus() = %+v; want %+v`, tcsl, tcslWant)
 	}
 
 	// TabletType changed
@@ -93,7 +93,7 @@ func TestHealthCheck(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
 	}
 	want = &TabletStats{
-		Tablet:  ep,
+		Tablet:  tablet,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
 		Serving: true,
@@ -119,7 +119,7 @@ func TestHealthCheck(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
 	}
 	want = &TabletStats{
-		Tablet:  ep,
+		Tablet:  tablet,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
 		Serving: false,
@@ -141,7 +141,7 @@ func TestHealthCheck(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
 	}
 	want = &TabletStats{
-		Tablet:  ep,
+		Tablet:  tablet,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
 		Serving: false,
@@ -157,11 +157,11 @@ func TestHealthCheck(t *testing.T) {
 	}
 
 	// remove tablet
-	hc.deleteConn(ep)
+	hc.deleteConn(tablet)
 	close(fakeConn.hcChan)
 	t.Logf(`hc.RemoveTablet({Host: "a", PortMap: {"vt": 1}})`)
 	want = &TabletStats{
-		Tablet:  ep,
+		Tablet:  tablet,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      false,
 		Serving: false,
@@ -183,15 +183,15 @@ func TestHealthCheck(t *testing.T) {
 
 func TestHealthCheckTimeout(t *testing.T) {
 	timeout := 500 * time.Millisecond
-	ep := topo.NewTablet(0, "cell", "a")
-	ep.PortMap["vt"] = 1
+	tablet := topo.NewTablet(0, "cell", "a")
+	tablet.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse)
-	createFakeConn(ep, input)
+	createFakeConn(tablet, input)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	l := newListener()
 	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, timeout, "" /* statsSuffix */).(*HealthCheckImpl)
 	hc.SetListener(l)
-	hc.AddTablet("cell", "", ep)
+	hc.AddTablet("cell", "", tablet)
 	t.Logf(`hc = HealthCheck(); hc.AddTablet("cell", "", {Host: "a", PortMap: {"vt": 1}})`)
 
 	// one tablet after receiving a StreamHealthResponse
@@ -202,7 +202,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 	want := &TabletStats{
-		Tablet:  ep,
+		Tablet:  tablet,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Up:      true,
 		Serving: true,

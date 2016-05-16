@@ -109,13 +109,13 @@ func TestWaitForTablets(t *testing.T) {
 	defer shortCancel()
 	waitAvailableTabletInterval = 20 * time.Millisecond
 
-	ep := topo.NewTablet(0, "cell", "a")
-	ep.PortMap["vt"] = 1
+	tablet := topo.NewTablet(0, "cell", "a")
+	tablet.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse)
-	createFakeConn(ep, input)
+	createFakeConn(tablet, input)
 
 	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, 1*time.Hour, "" /* statsSuffix */)
-	hc.AddTablet("cell", "", ep)
+	hc.AddTablet("cell", "", tablet)
 
 	// this should time out
 	if err := WaitForTablets(shortCtx, hc, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != ErrWaitForTabletsTimeout {

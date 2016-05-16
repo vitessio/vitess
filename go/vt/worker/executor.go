@@ -132,7 +132,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
 	retry:
 		masterAlias := "no-master-was-available"
 		if master != nil {
-			masterAlias = topoproto.TabletAliasString(master.Alias())
+			masterAlias = topoproto.TabletAliasString(master.Tablet.Alias)
 		}
 		tabletString := fmt.Sprintf("%v (%v/%v)", masterAlias, e.keyspace, e.shard)
 
@@ -153,7 +153,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
 // succeeded, false if the error is retryable and a non-nil error if the
 // command must not be retried.
 func (e *executor) checkError(err error, isRetry bool, master *discovery.TabletStats) (bool, error) {
-	tabletString := fmt.Sprintf("%v (%v/%v)", topoproto.TabletAliasString(master.Alias()), e.keyspace, e.shard)
+	tabletString := fmt.Sprintf("%v (%v/%v)", topoproto.TabletAliasString(master.Tablet.Alias), e.keyspace, e.shard)
 	// If the ExecuteFetch call failed because of an application error, we will try to figure out why.
 	// We need to extract the MySQL error number, and will attempt to retry if we think the error is recoverable.
 	match := errExtract.FindStringSubmatch(err.Error())

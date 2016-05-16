@@ -509,11 +509,11 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 
 		healthyTablets := discovery.RemoveUnhealthyTablets(
 			hc.GetTabletStatsFromTarget(keyspace, shard, servedType))
-		for _, eps := range healthyTablets {
-			if eps.Stats.Qps == 0.0 {
-				drainedHealthyTablets[eps.Tablet.Alias.Uid] = eps
+		for _, ts := range healthyTablets {
+			if ts.Stats.Qps == 0.0 {
+				drainedHealthyTablets[ts.Tablet.Alias.Uid] = ts
 			} else {
-				notDrainedHealtyTablets[eps.Tablet.Alias.Uid] = eps
+				notDrainedHealtyTablets[ts.Tablet.Alias.Uid] = ts
 			}
 		}
 
@@ -537,8 +537,8 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 			timer.Stop()
 
 			var l []string
-			for _, eps := range notDrainedHealtyTablets {
-				l = append(l, formatEndpointStats(eps))
+			for _, ts := range notDrainedHealtyTablets {
+				l = append(l, formatEndpointStats(ts))
 			}
 			return fmt.Errorf("%v: WaitForDrain failed for %v tablets in %v/%v. Only %d/%d tablets were drained. err: %v List of tablets which were not drained: %v",
 				cell, servedType, keyspace, shard, len(drainedHealthyTablets), len(healthyTablets), ctx.Err(), strings.Join(l, ";"))
@@ -549,12 +549,12 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	return nil
 }
 
-func formatEndpointStats(eps *discovery.TabletStats) string {
+func formatEndpointStats(ts *discovery.TabletStats) string {
 	webURL := "unknown http port"
-	if webPort, ok := eps.Tablet.PortMap["vt"]; ok {
-		webURL = fmt.Sprintf("http://%v:%d/", eps.Tablet.Hostname, webPort)
+	if webPort, ok := ts.Tablet.PortMap["vt"]; ok {
+		webURL = fmt.Sprintf("http://%v:%d/", ts.Tablet.Hostname, webPort)
 	}
-	return fmt.Sprintf("%v: %v stats: %v", topoproto.TabletAliasString(eps.Alias()), webURL, eps.Stats)
+	return fmt.Sprintf("%v: %v stats: %v", topoproto.TabletAliasString(ts.Tablet.Alias), webURL, ts.Stats)
 }
 
 // MigrateServedFrom is used during vertical splits to migrate a

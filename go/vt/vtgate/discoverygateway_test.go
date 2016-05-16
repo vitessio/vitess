@@ -90,18 +90,18 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 	hc.Reset()
 	hc.addTestTablet("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil, nil)
 	ep1 := hc.addTestTablet("local", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil, nil)
-	eps := dg.getTablets(keyspace, shard, topodatapb.TabletType_REPLICA)
-	if len(eps) != 1 || !topo.TabletEquality(eps[0], ep1) {
-		t.Errorf("want %+v, got %+v", ep1, eps)
+	tsl := dg.getTablets(keyspace, shard, topodatapb.TabletType_REPLICA)
+	if len(tsl) != 1 || !topo.TabletEquality(tsl[0], ep1) {
+		t.Errorf("want %+v, got %+v", ep1, tsl)
 	}
 
 	// master should use the one with newer timestamp regardless of cell
 	hc.Reset()
 	hc.addTestTablet("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 5, nil, nil)
 	ep1 = hc.addTestTablet("remote", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 10, nil, nil)
-	eps = dg.getTablets(keyspace, shard, topodatapb.TabletType_MASTER)
-	if len(eps) != 1 || !topo.TabletEquality(eps[0], ep1) {
-		t.Errorf("want %+v, got %+v", ep1, eps)
+	tsl = dg.getTablets(keyspace, shard, topodatapb.TabletType_MASTER)
+	if len(tsl) != 1 || !topo.TabletEquality(tsl[0], ep1) {
+		t.Errorf("want %+v, got %+v", ep1, tsl)
 	}
 }
 

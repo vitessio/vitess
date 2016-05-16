@@ -111,12 +111,12 @@ func (fhc *fakeHealthCheck) addTestTablet(cell, host string, port int32, keyspac
 	if conn != nil {
 		conn.SetTarget(keyspace, shard, tabletType)
 	}
-	ep := topo.NewTablet(0, cell, host)
-	ep.PortMap["vt"] = port
-	key := discovery.TabletToMapKey(ep)
+	t := topo.NewTablet(0, cell, host)
+	t.PortMap["vt"] = port
+	key := discovery.TabletToMapKey(t)
 	item := fhc.items[key]
 	if item == nil {
-		fhc.AddTablet(cell, "", ep)
+		fhc.AddTablet(cell, "", t)
 		item = fhc.items[key]
 	}
 	item.ts.Target = &querypb.Target{
@@ -129,5 +129,5 @@ func (fhc *fakeHealthCheck) addTestTablet(cell, host string, port int32, keyspac
 	item.ts.Stats = &querypb.RealtimeStats{}
 	item.ts.LastError = err
 	item.conn = conn
-	return ep
+	return t
 }

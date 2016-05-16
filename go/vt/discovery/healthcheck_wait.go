@@ -111,11 +111,11 @@ RetryLoop:
 		for ks := range keyspaceShards {
 			allPresent := true
 			for _, tt := range types {
-				epl := hc.GetTabletStatsFromTarget(ks.keyspace, ks.shard, tt)
+				tl := hc.GetTabletStatsFromTarget(ks.keyspace, ks.shard, tt)
 				if requireServing {
 					hasServingEP := false
-					for _, eps := range epl {
-						if eps.LastError == nil && eps.Serving {
+					for _, t := range tl {
+						if t.LastError == nil && t.Serving {
 							hasServingEP = true
 							break
 						}
@@ -125,7 +125,7 @@ RetryLoop:
 						break
 					}
 				} else {
-					if len(epl) == 0 {
+					if len(tl) == 0 {
 						allPresent = false
 						break
 					}

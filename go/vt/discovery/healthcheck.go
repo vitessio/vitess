@@ -75,12 +75,6 @@ type TabletStats struct {
 	LastError                           error
 }
 
-// Alias returns the alias of the tablet.
-// The return value can be used e.g. to generate the input for the topo API.
-func (e *TabletStats) Alias() *topodatapb.TabletAlias {
-	return e.Tablet.Alias
-}
-
 // String is defined because we want to print a []*TabletStats array nicely.
 func (e *TabletStats) String() string {
 	return fmt.Sprint(*e)
@@ -325,7 +319,7 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, tablet *topodat
 		hc.mu.Unlock()
 	} else if hcc.target.TabletType != shr.Target.TabletType {
 		// tablet type changed for the tablet
-		log.Infof("HealthCheckUpdate(Type Change): %v, EP: %v/%+v, target %+v => %+v, reparent time: %v", hcc.name, hcc.cell, tablet, hcc.target, shr.Target, shr.TabletExternallyReparentedTimestamp)
+		log.Infof("HealthCheckUpdate(Type Change): %v, tablet: %v/%+v, target %+v => %+v, reparent time: %v", hcc.name, hcc.cell, tablet, hcc.target, shr.Target, shr.TabletExternallyReparentedTimestamp)
 		hc.mu.Lock()
 		hc.deleteTabletFromTargetProtected(hcc.target, tablet)
 		hcc.update(shr, serving, healthErr, true)
@@ -492,16 +486,16 @@ func (hc *HealthCheckImpl) GetTabletStatsFromKeyspaceShard(keyspace, shard strin
 		return nil
 	}
 	res := make([]*TabletStats, 0, 1)
-	for _, epList := range ttMap {
-		for _, ep := range epList {
-			key := TabletToMapKey(ep)
+	for _, tList := range ttMap {
+		for _, t := range tList {
+			key := TabletToMapKey(t)
 			hcc, ok := hc.addrToConns[key]
 			if !ok {
 				continue
 			}
 			hcc.mu.RLock()
 			ts := &TabletStats{
-				Tablet:  ep,
+				Tablet:  t,
 				Name:    hcc.name,
 				Target:  hcc.target,
 				Up:      hcc.up,
@@ -530,20 +524,20 @@ func (hc *HealthCheckImpl) GetTabletStatsFromTarget(keyspace, shard string, tabl
 	if !ok {
 		return nil
 	}
-	epList, ok := ttMap[tabletType]
+	tList, ok := ttMap[tabletType]
 	if !ok {
 		return nil
 	}
 	res := make([]*TabletStats, 0, 1)
-	for _, ep := range epList {
-		key := TabletToMapKey(ep)
+	for _, t := range tList {
+		key := TabletToMapKey(t)
 		hcc, ok := hc.addrToConns[key]
 		if !ok {
 			continue
 		}
 		hcc.mu.RLock()
 		ts := &TabletStats{
-			Tablet:  ep,
+			Tablet:  t,
 			Name:    hcc.name,
 			Target:  hcc.target,
 			Up:      hcc.up,
@@ -584,17 +578,17 @@ func (hc *HealthCheckImpl) addTabletToTargetProtected(target *querypb.Target, ta
 		ttMap = make(map[topodatapb.TabletType][]*topodatapb.Tablet)
 		shardMap[target.Shard] = ttMap
 	}
-	epList, ok := ttMap[target.TabletType]
+	tList, ok := ttMap[target.TabletType]
 	if !ok {
-		epList = make([]*topodatapb.Tablet, 0, 1)
+		tList = make([]*topodatapb.Tablet, 0, 1)
 	}
-	for _, ep := range epList {
-		if topo.TabletEquality(ep, tablet) {
+	for _, t := range tList {
+		if topo.TabletEquality(t, tablet) {
 			log.Warningf("tablet is already added: %+v", tablet)
 			return
 		}
 	}
-	ttMap[target.TabletType] = append(epList, tablet)
+	ttMap[target.TabletType] = append(tList, tablet)
 }
 
 // deleteTabletFromTargetProtected deletes the tablet for the given target.
@@ -608,14 +602,14 @@ func (hc *HealthCheckImpl) deleteTabletFromTargetProtected(target *querypb.Targe
 	if !ok {
 		return
 	}
-	epList, ok := ttMap[target.TabletType]
+	tList, ok := ttMap[target.TabletType]
 	if !ok {
 		return
 	}
-	for i, ep := range epList {
-		if topo.TabletEquality(ep, tablet) {
-			epList = append(epList[:i], epList[i+1:]...)
-			ttMap[target.TabletType] = epList
+	for i, t := range tList {
+		if topo.TabletEquality(t, tablet) {
+			tList = append(tList[:i], tList[i+1:]...)
+			ttMap[target.TabletType] = tList
 			return
 		}
 	}
@@ -656,12 +650,12 @@ func (tsl TabletStatsList) Swap(i, j int) {
 }
 
 // StatusAsHTML returns an HTML version of the status.
-func (epcs *TabletsCacheStatus) StatusAsHTML() template.HTML {
-	epLinks := make([]string, 0, 1)
-	if epcs.TabletsStats != nil {
-		sort.Sort(epcs.TabletsStats)
+func (tcs *TabletsCacheStatus) StatusAsHTML() template.HTML {
+	tLinks := make([]string, 0, 1)
+	if tcs.TabletsStats != nil {
+		sort.Sort(tcs.TabletsStats)
 	}
-	for _, ts := range epcs.TabletsStats {
+	for _, ts := range tcs.TabletsStats {
 		vtPort := ts.Tablet.PortMap["vt"]
 		color := "green"
 		extra := ""
@@ -684,45 +678,45 @@ func (epcs *TabletsCacheStatus) StatusAsHTML() template.HTML {
 		if name == "" {
 			name = addr
 		}
-		epLinks = append(epLinks, fmt.Sprintf(`<a href="http://%s" style="color:%v">%v</a>%v`, addr, color, name, extra))
+		tLinks = append(tLinks, fmt.Sprintf(`<a href="http://%s" style="color:%v">%v</a>%v`, addr, color, name, extra))
 	}
-	return template.HTML(strings.Join(epLinks, "<br>"))
+	return template.HTML(strings.Join(tLinks, "<br>"))
 }
 
 // TabletsCacheStatusList is used for sorting.
 type TabletsCacheStatusList []*TabletsCacheStatus
 
 // Len is part of sort.Interface.
-func (epcsl TabletsCacheStatusList) Len() int {
-	return len(epcsl)
+func (tcsl TabletsCacheStatusList) Len() int {
+	return len(tcsl)
 }
 
 // Less is part of sort.Interface
-func (epcsl TabletsCacheStatusList) Less(i, j int) bool {
-	return epcsl[i].Cell+"."+epcsl[i].Target.Keyspace+"."+epcsl[i].Target.Shard+"."+string(epcsl[i].Target.TabletType) <
-		epcsl[j].Cell+"."+epcsl[j].Target.Keyspace+"."+epcsl[j].Target.Shard+"."+string(epcsl[j].Target.TabletType)
+func (tcsl TabletsCacheStatusList) Less(i, j int) bool {
+	return tcsl[i].Cell+"."+tcsl[i].Target.Keyspace+"."+tcsl[i].Target.Shard+"."+string(tcsl[i].Target.TabletType) <
+		tcsl[j].Cell+"."+tcsl[j].Target.Keyspace+"."+tcsl[j].Target.Shard+"."+string(tcsl[j].Target.TabletType)
 }
 
 // Swap is part of sort.Interface
-func (epcsl TabletsCacheStatusList) Swap(i, j int) {
-	epcsl[i], epcsl[j] = epcsl[j], epcsl[i]
+func (tcsl TabletsCacheStatusList) Swap(i, j int) {
+	tcsl[i], tcsl[j] = tcsl[j], tcsl[i]
 }
 
 // CacheStatus returns a displayable version of the cache.
 func (hc *HealthCheckImpl) CacheStatus() TabletsCacheStatusList {
-	epcsMap := make(map[string]*TabletsCacheStatus)
+	tcsMap := make(map[string]*TabletsCacheStatus)
 	hc.mu.RLock()
 	for _, hcc := range hc.addrToConns {
 		hcc.mu.RLock()
 		key := fmt.Sprintf("%v.%v.%v.%v", hcc.cell, hcc.target.Keyspace, hcc.target.Shard, string(hcc.target.TabletType))
-		var epcs *TabletsCacheStatus
+		var tcs *TabletsCacheStatus
 		var ok bool
-		if epcs, ok = epcsMap[key]; !ok {
-			epcs = &TabletsCacheStatus{
+		if tcs, ok = tcsMap[key]; !ok {
+			tcs = &TabletsCacheStatus{
 				Cell:   hcc.cell,
 				Target: hcc.target,
 			}
-			epcsMap[key] = epcs
+			tcsMap[key] = tcs
 		}
 		stats := &TabletStats{
 			Tablet:  hcc.tablet,
@@ -735,15 +729,15 @@ func (hc *HealthCheckImpl) CacheStatus() TabletsCacheStatusList {
 			LastError:                           hcc.lastError,
 		}
 		hcc.mu.RUnlock()
-		epcs.TabletsStats = append(epcs.TabletsStats, stats)
+		tcs.TabletsStats = append(tcs.TabletsStats, stats)
 	}
 	hc.mu.RUnlock()
-	epcsl := make(TabletsCacheStatusList, 0, len(epcsMap))
-	for _, epcs := range epcsMap {
-		epcsl = append(epcsl, epcs)
+	tcsl := make(TabletsCacheStatusList, 0, len(tcsMap))
+	for _, tcs := range tcsMap {
+		tcsl = append(tcsl, tcs)
 	}
-	sort.Sort(epcsl)
-	return epcsl
+	sort.Sort(tcsl)
+	return tcsl
 }
 
 // Close stops the healthcheck.

@@ -386,15 +386,15 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 
 		// Get the MySQL database name of the tablet.
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		ti, err := scw.wr.TopoServer().GetTablet(shortCtx, master.Alias())
+		ti, err := scw.wr.TopoServer().GetTablet(shortCtx, master.Tablet.Alias)
 		cancel()
 		if err != nil {
-			return fmt.Errorf("cannot get the TabletInfo for destination master (%v) to find out its db name: %v", topoproto.TabletAliasString(master.Alias()), err)
+			return fmt.Errorf("cannot get the TabletInfo for destination master (%v) to find out its db name: %v", topoproto.TabletAliasString(master.Tablet.Alias), err)
 		}
 		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
 		scw.destinationDbNames[keyspaceAndShard] = ti.DbName()
 
-		scw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Alias()), si.Keyspace(), si.ShardName())
+		scw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Tablet.Alias), si.Keyspace(), si.ShardName())
 	}
 	scw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The HealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
 
