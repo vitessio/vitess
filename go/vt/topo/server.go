@@ -206,37 +206,6 @@ type Impl interface {
 	// UnlockSrvShardForAction unlocks a serving shard.
 	UnlockSrvShardForAction(ctx context.Context, cell, keyspace, shard, lockPath, results string) error
 
-	// GetSrvTabletTypesPerShard returns the existing serving types
-	// for a shard.
-	// Can return ErrNoNode.
-	GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspace, shard string) ([]topodatapb.TabletType, error)
-
-	// CreateEndPoints creates and sets the serving records for a cell,
-	// keyspace, shard, tabletType.
-	// It returns ErrNodeExists if the record already exists.
-	CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType, addrs *topodatapb.EndPoints) error
-
-	// UpdateEndPoints updates the serving records for a cell,
-	// keyspace, shard, tabletType.
-	// If existingVersion is -1, it will set the value unconditionally,
-	// creating it if necessary.
-	// Otherwise, it will Compare-And-Set only if the version matches.
-	// Can return ErrBadVersion.
-	// Can return ErrNoNode only if existingVersion is not -1.
-	UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType, addrs *topodatapb.EndPoints, existingVersion int64) error
-
-	// GetEndPoints returns the EndPoints list of serving addresses
-	// for a TabletType inside a shard, as well as the node version.
-	// Can return ErrNoNode.
-	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType) (ep *topodatapb.EndPoints, version int64, err error)
-
-	// DeleteEndPoints deletes the serving records for a cell,
-	// keyspace, shard, tabletType.
-	// If existingVersion is -1, it will delete the records unconditionally.
-	// Otherwise, it will Compare-And-Delete only if the version matches.
-	// Can return ErrNoNode or ErrBadVersion.
-	DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType, existingVersion int64) error
-
 	// WatchSrvKeyspace returns a channel that receives notifications
 	// every time the SrvKeyspace for the given keyspace / cell changes.
 	// It should receive a notification with the initial value fairly

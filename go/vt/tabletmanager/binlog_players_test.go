@@ -23,7 +23,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
@@ -266,9 +265,6 @@ func createSourceTablet(t *testing.T, name string, ts topo.Server, keyspace, sha
 	}
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Fatalf("CreateTablet failed: %v", err)
-	}
-	if err := topotools.UpdateTabletEndpoints(ctx, ts, tablet); err != nil {
-		t.Fatalf("topotools.UpdateTabletEndpoints failed: %v", err)
 	}
 
 	// register a tablet conn dialer that will return the instance
