@@ -488,7 +488,7 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	watcher := discovery.NewShardReplicationWatcher(wr.TopoServer(), hc, cell, keyspace, shard, healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 	defer watcher.Stop()
 
-	if err := discovery.WaitForEndPoints(ctx, hc, cell, keyspace, shard, []topodatapb.TabletType{servedType}); err != nil {
+	if err := discovery.WaitForTablets(ctx, hc, cell, keyspace, shard, []topodatapb.TabletType{servedType}); err != nil {
 		return fmt.Errorf("%v: error waiting for initial %v endpoints for %v/%v: %v", cell, servedType, keyspace, shard, err)
 	}
 
@@ -504,16 +504,16 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	startTime := time.Now()
 	for {
 		// map key: tablet uid
-		drainedHealthyTablets := make(map[uint32]*discovery.EndPointStats)
-		notDrainedHealtyTablets := make(map[uint32]*discovery.EndPointStats)
+		drainedHealthyTablets := make(map[uint32]*discovery.TabletStats)
+		notDrainedHealtyTablets := make(map[uint32]*discovery.TabletStats)
 
-		healthyTablets := discovery.RemoveUnhealthyEndpoints(
-			hc.GetEndPointStatsFromTarget(keyspace, shard, servedType))
+		healthyTablets := discovery.RemoveUnhealthyTablets(
+			hc.GetTabletStatsFromTarget(keyspace, shard, servedType))
 		for _, eps := range healthyTablets {
 			if eps.Stats.Qps == 0.0 {
-				drainedHealthyTablets[eps.EndPoint.Uid] = eps
+				drainedHealthyTablets[eps.Tablet.Alias.Uid] = eps
 			} else {
-				notDrainedHealtyTablets[eps.EndPoint.Uid] = eps
+				notDrainedHealtyTablets[eps.Tablet.Alias.Uid] = eps
 			}
 		}
 
@@ -549,10 +549,10 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	return nil
 }
 
-func formatEndpointStats(eps *discovery.EndPointStats) string {
+func formatEndpointStats(eps *discovery.TabletStats) string {
 	webURL := "unknown http port"
-	if webPort, ok := eps.EndPoint.PortMap["vt"]; ok {
-		webURL = fmt.Sprintf("http://%v:%d/", eps.EndPoint.Host, webPort)
+	if webPort, ok := eps.Tablet.PortMap["vt"]; ok {
+		webURL = fmt.Sprintf("http://%v:%d/", eps.Tablet.Hostname, webPort)
 	}
 	return fmt.Sprintf("%v: %v stats: %v", topoproto.TabletAliasString(eps.Alias()), webURL, eps.Stats)
 }

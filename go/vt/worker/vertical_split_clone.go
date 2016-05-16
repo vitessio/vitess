@@ -340,14 +340,14 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	vscw.wr.Logger().Infof("Finding a MASTER tablet for each destination shard...")
 	waitCtx, waitCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer waitCancel()
-	if err := discovery.WaitForEndPoints(waitCtx, vscw.healthCheck,
+	if err := discovery.WaitForTablets(waitCtx, vscw.healthCheck,
 		vscw.cell, vscw.destinationKeyspace, vscw.destinationShard, []topodatapb.TabletType{topodatapb.TabletType_MASTER}); err != nil {
 		return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v: %v", vscw.destinationKeyspace, vscw.destinationShard, err)
 	}
 	masters := discovery.GetCurrentMaster(
-		vscw.healthCheck.GetEndPointStatsFromTarget(vscw.destinationKeyspace, vscw.destinationShard, topodatapb.TabletType_MASTER))
+		vscw.healthCheck.GetTabletStatsFromTarget(vscw.destinationKeyspace, vscw.destinationShard, topodatapb.TabletType_MASTER))
 	if len(masters) == 0 {
-		return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v in HealthCheck: empty EndPointStats list", vscw.destinationKeyspace, vscw.destinationShard)
+		return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v in HealthCheck: empty TabletStats list", vscw.destinationKeyspace, vscw.destinationShard)
 	}
 	master := masters[0]
 

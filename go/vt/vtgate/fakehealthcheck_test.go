@@ -14,7 +14,7 @@ func newFakeHealthCheck() *fakeHealthCheck {
 }
 
 type fhcItem struct {
-	eps  *discovery.EndPointStats
+	ts   *discovery.TabletStats
 	conn tabletconn.TabletConn
 }
 
@@ -22,9 +22,9 @@ type fhcItem struct {
 type fakeHealthCheck struct {
 	items map[string]*fhcItem
 
-	// GetStatsFromTargetCounter counts GetEndpointStatsFromTarget() being called.
+	// GetStatsFromTargetCounter counts GetTabletStatsFromTarget() being called.
 	GetStatsFromTargetCounter int
-	// GetStatsFromKeyspaceShardCounter counts GetEndPointStatsFromKeyspaceShard() being called.
+	// GetStatsFromKeyspaceShardCounter counts GetTabletStatsFromKeyspaceShard() being called.
 	GetStatsFromKeyspaceShardCounter int
 }
 
@@ -39,58 +39,58 @@ func (fhc *fakeHealthCheck) Reset() {
 func (fhc *fakeHealthCheck) SetListener(listener discovery.HealthCheckStatsListener) {
 }
 
-// AddEndPoint adds the endpoint.
-func (fhc *fakeHealthCheck) AddEndPoint(cell, name string, endPoint *topodatapb.EndPoint) {
-	key := discovery.EndPointToMapKey(endPoint)
+// AddTablet adds the tablet.
+func (fhc *fakeHealthCheck) AddTablet(cell, name string, tablet *topodatapb.Tablet) {
+	key := discovery.TabletToMapKey(tablet)
 	item := &fhcItem{
-		eps: &discovery.EndPointStats{
-			EndPoint: endPoint,
-			Cell:     cell,
-			Name:     name,
+		ts: &discovery.TabletStats{
+			Tablet: tablet,
+			Cell:   cell,
+			Name:   name,
 		},
 	}
 	fhc.items[key] = item
 }
 
-// RemoveEndPoint removes the endpoint.
-func (fhc *fakeHealthCheck) RemoveEndPoint(endPoint *topodatapb.EndPoint) {
-	key := discovery.EndPointToMapKey(endPoint)
+// RemoveTablet removes the tablet.
+func (fhc *fakeHealthCheck) RemoveTablet(tablet *topodatapb.Tablet) {
+	key := discovery.TabletToMapKey(tablet)
 	delete(fhc.items, key)
 }
 
-// GetEndPointStatsFromKeyspaceShard returns all EndPointStats for the given keyspace/shard.
-func (fhc *fakeHealthCheck) GetEndPointStatsFromKeyspaceShard(keyspace, shard string) []*discovery.EndPointStats {
+// GetTabletStatsFromKeyspaceShard returns all TabletStats for the given keyspace/shard.
+func (fhc *fakeHealthCheck) GetTabletStatsFromKeyspaceShard(keyspace, shard string) []*discovery.TabletStats {
 	fhc.GetStatsFromKeyspaceShardCounter++
-	var res []*discovery.EndPointStats
+	var res []*discovery.TabletStats
 	for _, item := range fhc.items {
-		if item.eps.Target == nil {
+		if item.ts.Target == nil {
 			continue
 		}
-		if item.eps.Target.Keyspace == keyspace && item.eps.Target.Shard == shard {
-			res = append(res, item.eps)
+		if item.ts.Target.Keyspace == keyspace && item.ts.Target.Shard == shard {
+			res = append(res, item.ts)
 		}
 	}
 	return res
 }
 
-// GetEndPointStatsFromTarget returns all EndPointStats for the given target.
-func (fhc *fakeHealthCheck) GetEndPointStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*discovery.EndPointStats {
+// GetTabletStatsFromTarget returns all TabletStats for the given target.
+func (fhc *fakeHealthCheck) GetTabletStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*discovery.TabletStats {
 	fhc.GetStatsFromTargetCounter++
-	var res []*discovery.EndPointStats
+	var res []*discovery.TabletStats
 	for _, item := range fhc.items {
-		if item.eps.Target == nil {
+		if item.ts.Target == nil {
 			continue
 		}
-		if item.eps.Target.Keyspace == keyspace && item.eps.Target.Shard == shard && item.eps.Target.TabletType == tabletType {
-			res = append(res, item.eps)
+		if item.ts.Target.Keyspace == keyspace && item.ts.Target.Shard == shard && item.ts.Target.TabletType == tabletType {
+			res = append(res, item.ts)
 		}
 	}
 	return res
 }
 
-// GetConnection returns the TabletConn of the given endpoint.
-func (fhc *fakeHealthCheck) GetConnection(endPoint *topodatapb.EndPoint) tabletconn.TabletConn {
-	key := discovery.EndPointToMapKey(endPoint)
+// GetConnection returns the TabletConn of the given tablet.
+func (fhc *fakeHealthCheck) GetConnection(tablet *topodatapb.Tablet) tabletconn.TabletConn {
+	key := discovery.TabletToMapKey(tablet)
 	if item := fhc.items[key]; item != nil {
 		return item.conn
 	}
@@ -98,7 +98,7 @@ func (fhc *fakeHealthCheck) GetConnection(endPoint *topodatapb.EndPoint) tabletc
 }
 
 // CacheStatus returns a displayable version of the cache.
-func (fhc *fakeHealthCheck) CacheStatus() discovery.EndPointsCacheStatusList {
+func (fhc *fakeHealthCheck) CacheStatus() discovery.TabletsCacheStatusList {
 	return nil
 }
 
@@ -107,24 +107,24 @@ func (fhc *fakeHealthCheck) Close() error {
 	return nil
 }
 
-// addTestEndPoint inserts a fake entry into fakeHealthCheck.
-func (fhc *fakeHealthCheck) addTestEndPoint(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error, conn tabletconn.TabletConn) *topodatapb.EndPoint {
+// addTestTablet inserts a fake entry into fakeHealthCheck.
+func (fhc *fakeHealthCheck) addTestTablet(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error, conn tabletconn.TabletConn) *topodatapb.Tablet {
 	if conn != nil {
 		conn.SetTarget(keyspace, shard, tabletType)
 	}
-	ep := topo.NewEndPoint(0, host)
+	ep := topo.NewTablet(0, host)
 	ep.PortMap["vt"] = port
-	key := discovery.EndPointToMapKey(ep)
+	key := discovery.TabletToMapKey(ep)
 	item := fhc.items[key]
 	if item == nil {
-		fhc.AddEndPoint(cell, "", ep)
+		fhc.AddTablet(cell, "", ep)
 		item = fhc.items[key]
 	}
-	item.eps.Target = &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: tabletType}
-	item.eps.Serving = serving
-	item.eps.TabletExternallyReparentedTimestamp = reparentTS
-	item.eps.Stats = &querypb.RealtimeStats{}
-	item.eps.LastError = err
+	item.ts.Target = &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: tabletType}
+	item.ts.Serving = serving
+	item.ts.TabletExternallyReparentedTimestamp = reparentTS
+	item.ts.Stats = &querypb.RealtimeStats{}
+	item.ts.LastError = err
 	item.conn = conn
 	return ep
 }

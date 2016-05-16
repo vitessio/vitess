@@ -38,7 +38,7 @@ import (
 //
 // BinlogPlayerMap will create BinlogPlayerController objects
 // to talk to the source remote tablets. They will use the topology to
-// find valid endpoints, so we have to update the EndPoints.
+// find valid tablets, so we have to update the Tablets.
 //
 // We fake the communication between the BinlogPlayerController objects and
 // the remote tablets by registering our own binlogplayer.Client.
@@ -70,9 +70,9 @@ func newFakeBinlogClient(t *testing.T, expectedDialUID uint32) *fakeBinlogClient
 }
 
 // Dial is part of the binlogplayer.Client interface
-func (fbc *fakeBinlogClient) Dial(endPoint *topodatapb.EndPoint, connTimeout time.Duration) error {
-	if fbc.expectedDialUID != endPoint.Uid {
-		fbc.t.Errorf("fakeBinlogClient.Dial expected uid %v got %v", fbc.expectedDialUID, endPoint.Uid)
+func (fbc *fakeBinlogClient) Dial(tablet *topodatapb.Tablet, connTimeout time.Duration) error {
+	if fbc.expectedDialUID != tablet.Alias.Uid {
+		fbc.t.Errorf("fakeBinlogClient.Dial expected uid %v got %v", fbc.expectedDialUID, tablet.Alias.Uid)
 	}
 	return nil
 }
@@ -121,7 +121,7 @@ func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string
 // fakeTabletConn implement TabletConn interface. We only care about the
 // health check part.
 type fakeTabletConn struct {
-	endPoint   *topodatapb.EndPoint
+	tablet     *topodatapb.Tablet
 	keyspace   string
 	shard      string
 	tabletType topodatapb.TabletType
@@ -176,9 +176,9 @@ func (ftc *fakeTabletConn) SetTarget(keyspace, shard string, tabletType topodata
 	return fmt.Errorf("not implemented in this test")
 }
 
-// EndPoint is part of the TabletConn interface
-func (ftc *fakeTabletConn) EndPoint() *topodatapb.EndPoint {
-	return ftc.endPoint
+// Tablet is part of the TabletConn interface
+func (ftc *fakeTabletConn) Tablet() *topodatapb.Tablet {
+	return ftc.tablet
 }
 
 // SplitQuery is part of the TabletConn interface
@@ -269,9 +269,9 @@ func createSourceTablet(t *testing.T, name string, ts topo.Server, keyspace, sha
 
 	// register a tablet conn dialer that will return the instance
 	// we want
-	tabletconn.RegisterDialer(name, func(ctx context.Context, endPoint *topodatapb.EndPoint, k, s string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
+	tabletconn.RegisterDialer(name, func(ctx context.Context, tablet *topodatapb.Tablet, k, s string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 		return &fakeTabletConn{
-			endPoint:   endPoint,
+			tablet:     tablet,
 			keyspace:   keyspace,
 			shard:      vshard,
 			tabletType: topodatapb.TabletType_REPLICA,

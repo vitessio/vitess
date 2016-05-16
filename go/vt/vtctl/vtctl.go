@@ -1394,10 +1394,6 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 	if err != nil {
 		return err
 	}
-	ep, err := topo.TabletEndPoint(tabletInfo.Tablet)
-	if err != nil {
-		return fmt.Errorf("cannot get EndPoint for master tablet record: %v record: %v", err, tabletInfo)
-	}
 
 	// Always run an explicit healthcheck first to make sure we don't see any outdated values.
 	// This is especially true for tests and automation where there is no pause of multiple seconds
@@ -1407,7 +1403,7 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 	}
 
 	// TabletType is unused for StreamHealth, use UNKNOWN
-	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", topodatapb.TabletType_UNKNOWN, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, "", "", topodatapb.TabletType_UNKNOWN, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", alias, err)
 	}

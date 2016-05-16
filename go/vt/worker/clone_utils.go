@@ -251,19 +251,12 @@ func makeValueString(fields []*querypb.Field, rows [][]sqltypes.Value) string {
 	return buf.String()
 }
 
-// endPointToTabletInfo converts an EndPointStats object from the discovery
+// tabletStatsToTabletInfo converts a TabletStats object from the discovery
 // package into a TabletInfo object. The latter one is required by several
 // TabletManagerClient API calls.
 // Note that this is a best-effort conversion and won't result into the same
 // result as a call to topo.GetTablet().
 // Note: We assume that "eps" is immutable and we can reference its data.
-func endPointToTabletInfo(eps *discovery.EndPointStats) *topo.TabletInfo {
-	return topo.NewTabletInfo(&topodatapb.Tablet{
-		Alias:    eps.Alias(),
-		Hostname: eps.EndPoint.Host,
-		PortMap:  eps.EndPoint.PortMap,
-		Keyspace: eps.Target.Keyspace,
-		Shard:    eps.Target.Shard,
-		Type:     eps.Target.TabletType,
-	}, -1 /* version */)
+func tabletStatsToTabletInfo(eps *discovery.TabletStats) *topo.TabletInfo {
+	return topo.NewTabletInfo(eps.Tablet, -1 /* version */)
 }

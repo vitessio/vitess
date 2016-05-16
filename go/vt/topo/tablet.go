@@ -138,6 +138,41 @@ func TabletComplete(tablet *topodatapb.Tablet) error {
 	return nil
 }
 
+// NewTablet create a new Tablet record with the given Hostname and id.
+func NewTablet(uid uint32, host string) *topodatapb.Tablet {
+	return &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Uid: uid,
+		},
+		Hostname: host,
+		PortMap:  make(map[string]int32),
+	}
+}
+
+// TabletEquality returns true iff two Tablet are representing the same tablet
+// process: same uid/cell, running on the same host / ports.
+func TabletEquality(left, right *topodatapb.Tablet) bool {
+	if !topoproto.TabletAliasEqual(left.Alias, right.Alias) {
+		return false
+	}
+	if left.Hostname != right.Hostname {
+		return false
+	}
+	if len(left.PortMap) != len(right.PortMap) {
+		return false
+	}
+	for key, lvalue := range left.PortMap {
+		rvalue, ok := right.PortMap[key]
+		if !ok {
+			return false
+		}
+		if lvalue != rvalue {
+			return false
+		}
+	}
+	return true
+}
+
 // TabletInfo is the container for a Tablet, read from the topology server.
 type TabletInfo struct {
 	version int64 // node version - used to prevent stomping concurrent writes

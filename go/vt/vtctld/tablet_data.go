@@ -82,13 +82,9 @@ func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias 
 	if err != nil {
 		return err
 	}
-	ep, err := topo.TabletEndPoint(ti.Tablet)
-	if err != nil {
-		return err
-	}
 
 	// TabletType is unused for StreamHealth, use UNKNOWN
-	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", topodatapb.TabletType_UNKNOWN, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ctx, ti.Tablet, "", "", topodatapb.TabletType_UNKNOWN, 30*time.Second)
 	if err != nil {
 		return err
 	}

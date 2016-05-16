@@ -18,7 +18,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -298,12 +297,8 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if err != nil {
 		return err
 	}
-	ep, err := topo.TabletEndPoint(tabletInfo.Tablet)
-	if err != nil {
-		return fmt.Errorf("cannot get EndPoint from tablet record: %v", err)
-	}
 
-	conn, err := tabletconn.GetDialer()(ctx, ep, *keyspace, *shard, tt, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *keyspace, *shard, tt, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
@@ -343,12 +338,8 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	if err != nil {
 		return err
 	}
-	ep, err := topo.TabletEndPoint(tabletInfo.Tablet)
-	if err != nil {
-		return fmt.Errorf("cannot get EndPoint from tablet record: %v", err)
-	}
 
-	conn, err := tabletconn.GetDialer()(ctx, ep, *keyspace, *shard, tt, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *keyspace, *shard, tt, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
@@ -391,12 +382,8 @@ func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	ep, err := topo.TabletEndPoint(tabletInfo.Tablet)
-	if err != nil {
-		return fmt.Errorf("cannot get EndPoint from tablet record: %v", err)
-	}
 
-	conn, err := tabletconn.GetDialer()(ctx, ep, *keyspace, *shard, tt, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *keyspace, *shard, tt, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
@@ -432,12 +419,8 @@ func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	if err != nil {
 		return err
 	}
-	ep, err := topo.TabletEndPoint(tabletInfo.Tablet)
-	if err != nil {
-		return fmt.Errorf("cannot get EndPoint from tablet record: %v", err)
-	}
 
-	conn, err := tabletconn.GetDialer()(ctx, ep, *keyspace, *shard, tt, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *keyspace, *shard, tt, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
@@ -464,13 +447,8 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 		return err
 	}
 
-	ep, err := topo.TabletEndPoint(tabletInfo.Tablet)
-	if err != nil {
-		return fmt.Errorf("cannot get EndPoint from tablet record: %v", err)
-	}
-
 	// tablet type is unused for StreamHealth, use UNKNOWN
-	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", topodatapb.TabletType_UNKNOWN, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, "", "", topodatapb.TabletType_UNKNOWN, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}

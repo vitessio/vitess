@@ -1,21 +1,20 @@
 // Package discovery provides a way to discover all tablets e.g. within a
 // specific shard and monitor their current health.
 //
-// Use the HealthCheck object to query for tablets (in this package also
-// referred to as endpoints) and their health.
+// Use the HealthCheck object to query for tablets and their health.
 //
 // For an example how to use the HealthCheck object, see worker/topo_utils.go.
 //
-// Tablets have to be manually added to the HealthCheck using AddEndPoint().
+// Tablets have to be manually added to the HealthCheck using AddTablet().
 // Alternatively, use a Watcher implementation which will constantly watch
 // a source (e.g. the topology) and add and remove tablets as they are
 // added or removed from the source.
 // For a Watcher example have a look at NewShardReplicationWatcher().
 //
-// Note that the getter functions GetEndPointStatsFrom* will always return
+// Note that the getter functions GetTabletStatsFrom* will always return
 // an unfiltered list of all known tablets.
 // Use the helper functions in utils.go to filter them e.g.
-// RemoveUnhealthyEndpoints() or GetCurrentMaster().
+// RemoveUnhealthyTablets() or GetCurrentMaster().
 // replicationlag.go contains a more advanced health filter which is used by
 // vtgate.
 //
@@ -61,16 +60,16 @@ func init() {
 
 // HealthCheckStatsListener is the listener to receive health check stats update.
 type HealthCheckStatsListener interface {
-	StatsUpdate(*EndPointStats)
+	StatsUpdate(*TabletStats)
 }
 
-// EndPointStats is returned when getting the set of endpoints.
-type EndPointStats struct {
-	EndPoint                            *topodatapb.EndPoint
+// TabletStats is returned when getting the set of tablets.
+type TabletStats struct {
+	Tablet                              *topodatapb.Tablet
 	Name                                string // name is an optional tag (e.g. alternative address)
 	Cell                                string
 	Target                              *querypb.Target
-	Up                                  bool // whether the endpoint is added
+	Up                                  bool // whether the tablet is added
 	Serving                             bool // whether the server is serving
 	TabletExternallyReparentedTimestamp int64
 	Stats                               *querypb.RealtimeStats
@@ -79,15 +78,12 @@ type EndPointStats struct {
 
 // Alias returns the alias of the tablet.
 // The return value can be used e.g. to generate the input for the topo API.
-func (e *EndPointStats) Alias() *topodatapb.TabletAlias {
-	return &topodatapb.TabletAlias{
-		Cell: e.Cell,
-		Uid:  e.EndPoint.Uid,
-	}
+func (e *TabletStats) Alias() *topodatapb.TabletAlias {
+	return e.Tablet.Alias
 }
 
-// String is defined because we want to print a []*EndPointStats array nicely.
-func (e *EndPointStats) String() string {
+// String is defined because we want to print a []*TabletStats array nicely.
+func (e *TabletStats) String() string {
 	return fmt.Sprint(*e)
 }
 
@@ -95,19 +91,19 @@ func (e *EndPointStats) String() string {
 type HealthCheck interface {
 	// SetListener sets the listener for healthcheck updates. It should not block.
 	SetListener(listener HealthCheckStatsListener)
-	// AddEndPoint adds the endpoint, and starts health check.
-	AddEndPoint(cell, name string, endPoint *topodatapb.EndPoint)
-	// RemoveEndPoint removes the endpoint, and stops the health check.
-	RemoveEndPoint(endPoint *topodatapb.EndPoint)
-	// GetEndPointStatsFromKeyspaceShard returns all EndPointStats for the given keyspace/shard.
-	GetEndPointStatsFromKeyspaceShard(keyspace, shard string) []*EndPointStats
-	// GetEndPointStatsFromTarget returns all EndPointStats for the given target.
+	// AddTablet adds the tablet, and starts health check.
+	AddTablet(cell, name string, tablet *topodatapb.Tablet)
+	// RemoveTablet removes the tablet, and stops the health check.
+	RemoveTablet(tablet *topodatapb.Tablet)
+	// GetTabletStatsFromKeyspaceShard returns all TabletStats for the given keyspace/shard.
+	GetTabletStatsFromKeyspaceShard(keyspace, shard string) []*TabletStats
+	// GetTabletStatsFromTarget returns all TabletStats for the given target.
 	// You can exclude unhealthy entries using the helper in utils.go.
-	GetEndPointStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*EndPointStats
-	// GetConnection returns the TabletConn of the given endpoint.
-	GetConnection(endPoint *topodatapb.EndPoint) tabletconn.TabletConn
+	GetTabletStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*TabletStats
+	// GetConnection returns the TabletConn of the given tablet.
+	GetConnection(tablet *topodatapb.Tablet) tabletconn.TabletConn
 	// CacheStatus returns a displayable version of the cache.
-	CacheStatus() EndPointsCacheStatusList
+	CacheStatus() TabletsCacheStatusList
 	// Close stops the healthcheck.
 	Close() error
 }
@@ -116,7 +112,7 @@ type HealthCheck interface {
 func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration, healthCheckTimeout time.Duration, statsSuffix string) HealthCheck {
 	hc := &HealthCheckImpl{
 		addrToConns:        make(map[string]*healthCheckConn),
-		targetToEPs:        make(map[string]map[string]map[topodatapb.TabletType][]*topodatapb.EndPoint),
+		targetToTablets:    make(map[string]map[string]map[topodatapb.TabletType][]*topodatapb.Tablet),
 		connTimeout:        connTimeout,
 		retryDelay:         retryDelay,
 		healthCheckTimeout: healthCheckTimeout,
@@ -161,19 +157,19 @@ type HealthCheckImpl struct {
 
 	// mu protects all the following fields
 	// when locking both mutex from HealthCheck and healthCheckConn, HealthCheck.mu goes first.
-	mu          sync.RWMutex
-	addrToConns map[string]*healthCheckConn                                            // addrToConns maps from address to the healthCheckConn object.
-	targetToEPs map[string]map[string]map[topodatapb.TabletType][]*topodatapb.EndPoint // targetToEPs maps from keyspace/shard/tablettype to a list of endpoints.
+	mu              sync.RWMutex
+	addrToConns     map[string]*healthCheckConn                                          // addrToConns maps from address to the healthCheckConn object.
+	targetToTablets map[string]map[string]map[topodatapb.TabletType][]*topodatapb.Tablet // targetToTablets maps from keyspace/shard/tablettype to a list of tablets.
 }
 
-// healthCheckConn contains details about an endpoint.
+// healthCheckConn contains details about a tablet.
 type healthCheckConn struct {
 	// set at construction time
 	cell       string
 	name       string
 	ctx        context.Context
 	cancelFunc context.CancelFunc
-	endPoint   *topodatapb.EndPoint
+	tablet     *topodatapb.Tablet
 
 	// mu protects all the following fields
 	// when locking both mutex from HealthCheck and healthCheckConn, HealthCheck.mu goes first.
@@ -188,7 +184,7 @@ type healthCheckConn struct {
 	lastResponseTimestamp               time.Time // timestamp of the last healthcheck response
 }
 
-// servingConnStats returns the number of serving endpoints per keyspace/shard/tablet type.
+// servingConnStats returns the number of serving tablets per keyspace/shard/tablet type.
 func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 	res := make(map[string]int64)
 	hc.mu.RLock()
@@ -206,8 +202,8 @@ func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 	return res
 }
 
-// checkConn performs health checking on the given endpoint.
-func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, endPoint *topodatapb.EndPoint) {
+// checkConn performs health checking on the given tablet.
+func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, tablet *topodatapb.Tablet) {
 	defer func() {
 		hcc.mu.Lock()
 		if hcc.conn != nil {
@@ -218,7 +214,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, en
 	}()
 	// retry health check if it fails
 	for {
-		stream, err := hcc.connect(hc, endPoint)
+		stream, err := hcc.connect(hc, tablet)
 		if err != nil {
 			select {
 			case <-hcc.ctx.Done():
@@ -235,19 +231,19 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, en
 			continue
 		}
 		for {
-			reconnect, err := hcc.processResponse(hc, endPoint, stream)
+			reconnect, err := hcc.processResponse(hc, tablet, stream)
 			if err != nil {
 				hcc.mu.Lock()
 				hcc.serving = false
 				hcc.lastError = err
-				eps := &EndPointStats{
-					EndPoint: endPoint,
-					Cell:     hcc.cell,
-					Name:     hcc.name,
-					Target:   hcc.target,
-					Up:       hcc.up,
-					Serving:  hcc.serving,
-					Stats:    hcc.stats,
+				ts := &TabletStats{
+					Tablet:  tablet,
+					Cell:    hcc.cell,
+					Name:    hcc.name,
+					Target:  hcc.target,
+					Up:      hcc.up,
+					Serving: hcc.serving,
+					Stats:   hcc.stats,
 					TabletExternallyReparentedTimestamp: hcc.tabletExternallyReparentedTimestamp,
 					LastError:                           hcc.lastError,
 				}
@@ -255,7 +251,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, en
 				hcc.mu.Unlock()
 				// notify downstream for serving status change
 				if hc.listener != nil {
-					hc.listener.StatsUpdate(eps)
+					hc.listener.StatsUpdate(ts)
 				}
 				select {
 				case <-hcc.ctx.Done():
@@ -277,11 +273,11 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, en
 	}
 }
 
-// connect creates connection to the endpoint and starts streaming.
-func (hcc *healthCheckConn) connect(hc *HealthCheckImpl, endPoint *topodatapb.EndPoint) (tabletconn.StreamHealthReader, error) {
+// connect creates connection to the tablet and starts streaming.
+func (hcc *healthCheckConn) connect(hc *HealthCheckImpl, tablet *topodatapb.Tablet) (tabletconn.StreamHealthReader, error) {
 	// Keyspace, shard and tabletType are not known yet, but they're unused
 	// by StreamHealth. We'll use SetTarget later to set them.
-	conn, err := tabletconn.GetDialer()(hcc.ctx, endPoint, "" /*keyspace*/, "" /*shard*/, topodatapb.TabletType_UNKNOWN, hc.connTimeout)
+	conn, err := tabletconn.GetDialer()(hcc.ctx, tablet, "" /*keyspace*/, "" /*shard*/, topodatapb.TabletType_UNKNOWN, hc.connTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +295,7 @@ func (hcc *healthCheckConn) connect(hc *HealthCheckImpl, endPoint *topodatapb.En
 
 // processResponse reads one health check response, and notifies HealthCheckStatsListener.
 // It returns bool to indicate if the caller should reconnect. We do not need to reconnect when the streaming is working.
-func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, endPoint *topodatapb.EndPoint, stream tabletconn.StreamHealthReader) (bool, error) {
+func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, tablet *topodatapb.Tablet, stream tabletconn.StreamHealthReader) (bool, error) {
 	select {
 	case <-hcc.ctx.Done():
 		return false, hcc.ctx.Err()
@@ -324,18 +320,18 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, endPoint *topod
 	}
 
 	if hcc.target.TabletType == topodatapb.TabletType_UNKNOWN {
-		// The first time we see response for the endpoint.
+		// The first time we see response for the tablet.
 		hcc.update(shr, serving, healthErr, true)
 		hc.mu.Lock()
-		hc.addEndPointToTargetProtected(hcc.target, endPoint)
+		hc.addTabletToTargetProtected(hcc.target, tablet)
 		hc.mu.Unlock()
 	} else if hcc.target.TabletType != shr.Target.TabletType {
 		// tablet type changed for the tablet
-		log.Infof("HealthCheckUpdate(Type Change): %v, EP: %v/%+v, target %+v => %+v, reparent time: %v", hcc.name, hcc.cell, endPoint, hcc.target, shr.Target, shr.TabletExternallyReparentedTimestamp)
+		log.Infof("HealthCheckUpdate(Type Change): %v, EP: %v/%+v, target %+v => %+v, reparent time: %v", hcc.name, hcc.cell, tablet, hcc.target, shr.Target, shr.TabletExternallyReparentedTimestamp)
 		hc.mu.Lock()
-		hc.deleteEndPointFromTargetProtected(hcc.target, endPoint)
+		hc.deleteTabletFromTargetProtected(hcc.target, tablet)
 		hcc.update(shr, serving, healthErr, true)
-		hc.addEndPointToTargetProtected(shr.Target, endPoint)
+		hc.addTabletToTargetProtected(shr.Target, tablet)
 		hc.mu.Unlock()
 	} else {
 		hcc.update(shr, serving, healthErr, false)
@@ -343,19 +339,19 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, endPoint *topod
 	// notify downstream for tablettype and realtimestats change
 	if hc.listener != nil {
 		hcc.mu.RLock()
-		eps := &EndPointStats{
-			EndPoint: endPoint,
-			Cell:     hcc.cell,
-			Name:     hcc.name,
-			Target:   hcc.target,
-			Up:       hcc.up,
-			Serving:  hcc.serving,
-			Stats:    hcc.stats,
+		ts := &TabletStats{
+			Tablet:  tablet,
+			Cell:    hcc.cell,
+			Name:    hcc.name,
+			Target:  hcc.target,
+			Up:      hcc.up,
+			Serving: hcc.serving,
+			Stats:   hcc.stats,
 			TabletExternallyReparentedTimestamp: hcc.tabletExternallyReparentedTimestamp,
 			LastError:                           hcc.lastError,
 		}
 		hcc.mu.RUnlock()
-		hc.listener.StatsUpdate(eps)
+		hc.listener.StatsUpdate(ts)
 	}
 	return false, nil
 }
@@ -384,7 +380,7 @@ func (hc *HealthCheckImpl) checkHealthCheckTimeout() {
 	for _, hcc := range list {
 		hcc.mu.RLock()
 		if !hcc.serving {
-			// ignore non-serving endpoint
+			// ignore non-serving tablet
 			hcc.mu.RUnlock()
 			continue
 		}
@@ -394,11 +390,11 @@ func (hc *HealthCheckImpl) checkHealthCheckTimeout() {
 			continue
 		}
 		hcc.mu.RUnlock()
-		// mark the endpoint non-serving as we have not seen a health check response for a long time
+		// mark the tablet non-serving as we have not seen a health check response for a long time
 		hcc.mu.Lock()
 		// check again to avoid race condition
 		if !hcc.serving {
-			// ignore non-serving endpoint
+			// ignore non-serving tablet
 			hcc.mu.Unlock()
 			continue
 		}
@@ -409,14 +405,14 @@ func (hc *HealthCheckImpl) checkHealthCheckTimeout() {
 		}
 		hcc.serving = false
 		hcc.lastError = fmt.Errorf("healthcheck timed out (latest %v)", hcc.lastResponseTimestamp)
-		eps := &EndPointStats{
-			EndPoint: hcc.endPoint,
-			Cell:     hcc.cell,
-			Name:     hcc.name,
-			Target:   hcc.target,
-			Up:       hcc.up,
-			Serving:  hcc.serving,
-			Stats:    hcc.stats,
+		ts := &TabletStats{
+			Tablet:  hcc.tablet,
+			Cell:    hcc.cell,
+			Name:    hcc.name,
+			Target:  hcc.target,
+			Up:      hcc.up,
+			Serving: hcc.serving,
+			Stats:   hcc.stats,
 			TabletExternallyReparentedTimestamp: hcc.tabletExternallyReparentedTimestamp,
 			LastError:                           hcc.lastError,
 		}
@@ -424,20 +420,20 @@ func (hc *HealthCheckImpl) checkHealthCheckTimeout() {
 		hcc.mu.Unlock()
 		// notify downstream for serving status change
 		if hc.listener != nil {
-			hc.listener.StatsUpdate(eps)
+			hc.listener.StatsUpdate(ts)
 		}
 		hcErrorCounters.Add([]string{target.Keyspace, target.Shard, strings.ToLower(target.TabletType.String())}, 1)
 	}
 }
 
-func (hc *HealthCheckImpl) deleteConn(endPoint *topodatapb.EndPoint) {
+func (hc *HealthCheckImpl) deleteConn(tablet *topodatapb.Tablet) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
-	key := EndPointToMapKey(endPoint)
+	key := TabletToMapKey(tablet)
 	hcc, ok := hc.addrToConns[key]
 	if !ok {
-		log.Warningf("deleting unknown endpoint: %+v", endPoint)
+		log.Warningf("deleting unknown tablet: %+v", tablet)
 		return
 	}
 	hcc.mu.Lock()
@@ -445,7 +441,7 @@ func (hc *HealthCheckImpl) deleteConn(endPoint *topodatapb.EndPoint) {
 	hcc.mu.Unlock()
 	hcc.cancelFunc()
 	delete(hc.addrToConns, key)
-	hc.deleteEndPointFromTargetProtected(hcc.target, endPoint)
+	hc.deleteTabletFromTargetProtected(hcc.target, tablet)
 }
 
 // SetListener sets the listener for healthcheck updates. It should not block.
@@ -453,45 +449,45 @@ func (hc *HealthCheckImpl) SetListener(listener HealthCheckStatsListener) {
 	hc.listener = listener
 }
 
-// AddEndPoint adds the endpoint, and starts health check.
+// AddTablet adds the tablet, and starts health check.
 // It does not block on making connection.
-// name is an optional tag for the endpoint, e.g. an alternative address.
-func (hc *HealthCheckImpl) AddEndPoint(cell, name string, endPoint *topodatapb.EndPoint) {
+// name is an optional tag for the tablet, e.g. an alternative address.
+func (hc *HealthCheckImpl) AddTablet(cell, name string, tablet *topodatapb.Tablet) {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	hcc := &healthCheckConn{
 		cell:       cell,
 		name:       name,
 		ctx:        ctx,
 		cancelFunc: cancelFunc,
-		endPoint:   endPoint,
+		tablet:     tablet,
 		target:     &querypb.Target{},
 		up:         true,
 	}
-	key := EndPointToMapKey(endPoint)
+	key := TabletToMapKey(tablet)
 	hc.mu.Lock()
 	if _, ok := hc.addrToConns[key]; ok {
 		hc.mu.Unlock()
-		log.Warningf("adding duplicate endpoint %v for %v: %+v", name, cell, endPoint)
+		log.Warningf("adding duplicate tablet %v for %v: %+v", name, cell, tablet)
 		return
 	}
 	hc.addrToConns[key] = hcc
 	hc.mu.Unlock()
 
-	go hc.checkConn(hcc, cell, name, endPoint)
+	go hc.checkConn(hcc, cell, name, tablet)
 }
 
-// RemoveEndPoint removes the endpoint, and stops the health check.
+// RemoveTablet removes the tablet, and stops the health check.
 // It does not block.
-func (hc *HealthCheckImpl) RemoveEndPoint(endPoint *topodatapb.EndPoint) {
-	go hc.deleteConn(endPoint)
+func (hc *HealthCheckImpl) RemoveTablet(tablet *topodatapb.Tablet) {
+	go hc.deleteConn(tablet)
 }
 
-// GetEndPointStatsFromKeyspaceShard returns all EndPointStats for the given keyspace/shard.
-func (hc *HealthCheckImpl) GetEndPointStatsFromKeyspaceShard(keyspace, shard string) []*EndPointStats {
+// GetTabletStatsFromKeyspaceShard returns all TabletStats for the given keyspace/shard.
+func (hc *HealthCheckImpl) GetTabletStatsFromKeyspaceShard(keyspace, shard string) []*TabletStats {
 	hc.mu.RLock()
 	defer hc.mu.RUnlock()
 
-	shardMap, ok := hc.targetToEPs[keyspace]
+	shardMap, ok := hc.targetToTablets[keyspace]
 	if !ok {
 		return nil
 	}
@@ -499,39 +495,39 @@ func (hc *HealthCheckImpl) GetEndPointStatsFromKeyspaceShard(keyspace, shard str
 	if !ok {
 		return nil
 	}
-	res := make([]*EndPointStats, 0, 1)
+	res := make([]*TabletStats, 0, 1)
 	for _, epList := range ttMap {
 		for _, ep := range epList {
-			key := EndPointToMapKey(ep)
+			key := TabletToMapKey(ep)
 			hcc, ok := hc.addrToConns[key]
 			if !ok {
 				continue
 			}
 			hcc.mu.RLock()
-			eps := &EndPointStats{
-				EndPoint: ep,
-				Cell:     hcc.cell,
-				Name:     hcc.name,
-				Target:   hcc.target,
-				Up:       hcc.up,
-				Serving:  hcc.serving,
-				Stats:    hcc.stats,
+			ts := &TabletStats{
+				Tablet:  ep,
+				Cell:    hcc.cell,
+				Name:    hcc.name,
+				Target:  hcc.target,
+				Up:      hcc.up,
+				Serving: hcc.serving,
+				Stats:   hcc.stats,
 				TabletExternallyReparentedTimestamp: hcc.tabletExternallyReparentedTimestamp,
 				LastError:                           hcc.lastError,
 			}
 			hcc.mu.RUnlock()
-			res = append(res, eps)
+			res = append(res, ts)
 		}
 	}
 	return res
 }
 
-// GetEndPointStatsFromTarget returns all EndPointStats for the given target.
-func (hc *HealthCheckImpl) GetEndPointStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*EndPointStats {
+// GetTabletStatsFromTarget returns all TabletStats for the given target.
+func (hc *HealthCheckImpl) GetTabletStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*TabletStats {
 	hc.mu.RLock()
 	defer hc.mu.RUnlock()
 
-	shardMap, ok := hc.targetToEPs[keyspace]
+	shardMap, ok := hc.targetToTablets[keyspace]
 	if !ok {
 		return nil
 	}
@@ -543,36 +539,36 @@ func (hc *HealthCheckImpl) GetEndPointStatsFromTarget(keyspace, shard string, ta
 	if !ok {
 		return nil
 	}
-	res := make([]*EndPointStats, 0, 1)
+	res := make([]*TabletStats, 0, 1)
 	for _, ep := range epList {
-		key := EndPointToMapKey(ep)
+		key := TabletToMapKey(ep)
 		hcc, ok := hc.addrToConns[key]
 		if !ok {
 			continue
 		}
 		hcc.mu.RLock()
-		eps := &EndPointStats{
-			EndPoint: ep,
-			Cell:     hcc.cell,
-			Name:     hcc.name,
-			Target:   hcc.target,
-			Up:       hcc.up,
-			Serving:  hcc.serving,
-			Stats:    hcc.stats,
+		ts := &TabletStats{
+			Tablet:  ep,
+			Cell:    hcc.cell,
+			Name:    hcc.name,
+			Target:  hcc.target,
+			Up:      hcc.up,
+			Serving: hcc.serving,
+			Stats:   hcc.stats,
 			TabletExternallyReparentedTimestamp: hcc.tabletExternallyReparentedTimestamp,
 			LastError:                           hcc.lastError,
 		}
 		hcc.mu.RUnlock()
-		res = append(res, eps)
+		res = append(res, ts)
 	}
 	return res
 }
 
-// GetConnection returns the TabletConn of the given endpoint.
-func (hc *HealthCheckImpl) GetConnection(endPoint *topodatapb.EndPoint) tabletconn.TabletConn {
+// GetConnection returns the TabletConn of the given tablet.
+func (hc *HealthCheckImpl) GetConnection(tablet *topodatapb.Tablet) tabletconn.TabletConn {
 	hc.mu.RLock()
 	defer hc.mu.RUnlock()
-	hcc := hc.addrToConns[EndPointToMapKey(endPoint)]
+	hcc := hc.addrToConns[TabletToMapKey(tablet)]
 	if hcc == nil {
 		return nil
 	}
@@ -581,36 +577,36 @@ func (hc *HealthCheckImpl) GetConnection(endPoint *topodatapb.EndPoint) tabletco
 	return hcc.conn
 }
 
-// addEndPointToTargetProtected adds the endpoint to the given target.
+// addTabletToTargetProtected adds the tablet to the given target.
 // LOCK_REQUIRED hc.mu
-func (hc *HealthCheckImpl) addEndPointToTargetProtected(target *querypb.Target, endPoint *topodatapb.EndPoint) {
-	shardMap, ok := hc.targetToEPs[target.Keyspace]
+func (hc *HealthCheckImpl) addTabletToTargetProtected(target *querypb.Target, tablet *topodatapb.Tablet) {
+	shardMap, ok := hc.targetToTablets[target.Keyspace]
 	if !ok {
-		shardMap = make(map[string]map[topodatapb.TabletType][]*topodatapb.EndPoint)
-		hc.targetToEPs[target.Keyspace] = shardMap
+		shardMap = make(map[string]map[topodatapb.TabletType][]*topodatapb.Tablet)
+		hc.targetToTablets[target.Keyspace] = shardMap
 	}
 	ttMap, ok := shardMap[target.Shard]
 	if !ok {
-		ttMap = make(map[topodatapb.TabletType][]*topodatapb.EndPoint)
+		ttMap = make(map[topodatapb.TabletType][]*topodatapb.Tablet)
 		shardMap[target.Shard] = ttMap
 	}
 	epList, ok := ttMap[target.TabletType]
 	if !ok {
-		epList = make([]*topodatapb.EndPoint, 0, 1)
+		epList = make([]*topodatapb.Tablet, 0, 1)
 	}
 	for _, ep := range epList {
-		if topo.EndPointEquality(ep, endPoint) {
-			log.Warningf("endpoint is already added: %+v", endPoint)
+		if topo.TabletEquality(ep, tablet) {
+			log.Warningf("tablet is already added: %+v", tablet)
 			return
 		}
 	}
-	ttMap[target.TabletType] = append(epList, endPoint)
+	ttMap[target.TabletType] = append(epList, tablet)
 }
 
-// deleteEndPointFromTargetProtected deletes the endpoint for the given target.
+// deleteTabletFromTargetProtected deletes the tablet for the given target.
 // LOCK_REQUIRED hc.mu
-func (hc *HealthCheckImpl) deleteEndPointFromTargetProtected(target *querypb.Target, endPoint *topodatapb.EndPoint) {
-	shardMap, ok := hc.targetToEPs[target.Keyspace]
+func (hc *HealthCheckImpl) deleteTabletFromTargetProtected(target *querypb.Target, tablet *topodatapb.Tablet) {
+	shardMap, ok := hc.targetToTablets[target.Keyspace]
 	if !ok {
 		return
 	}
@@ -623,7 +619,7 @@ func (hc *HealthCheckImpl) deleteEndPointFromTargetProtected(target *querypb.Tar
 		return
 	}
 	for i, ep := range epList {
-		if topo.EndPointEquality(ep, endPoint) {
+		if topo.TabletEquality(ep, tablet) {
 			epList = append(epList[:i], epList[i+1:]...)
 			ttMap[target.TabletType] = epList
 			return
@@ -631,66 +627,66 @@ func (hc *HealthCheckImpl) deleteEndPointFromTargetProtected(target *querypb.Tar
 	}
 }
 
-// EndPointsCacheStatus is the current endpoints for a cell/target.
-// TODO: change this to reflect the e2e information about the endpoints.
-type EndPointsCacheStatus struct {
-	Cell           string
-	Target         *querypb.Target
-	EndPointsStats EndPointStatsList
+// TabletsCacheStatus is the current tablets for a cell/target.
+// TODO: change this to reflect the e2e information about the tablets.
+type TabletsCacheStatus struct {
+	Cell         string
+	Target       *querypb.Target
+	TabletsStats TabletStatsList
 }
 
-// EndPointStatsList is used for sorting.
-type EndPointStatsList []*EndPointStats
+// TabletStatsList is used for sorting.
+type TabletStatsList []*TabletStats
 
 // Len is part of sort.Interface.
-func (epsl EndPointStatsList) Len() int {
-	return len(epsl)
+func (tsl TabletStatsList) Len() int {
+	return len(tsl)
 }
 
 // Less is part of sort.Interface
-func (epsl EndPointStatsList) Less(i, j int) bool {
-	name1 := epsl[i].Name
+func (tsl TabletStatsList) Less(i, j int) bool {
+	name1 := tsl[i].Name
 	if name1 == "" {
-		name1 = EndPointToMapKey(epsl[i].EndPoint)
+		name1 = TabletToMapKey(tsl[i].Tablet)
 	}
-	name2 := epsl[j].Name
+	name2 := tsl[j].Name
 	if name2 == "" {
-		name2 = EndPointToMapKey(epsl[j].EndPoint)
+		name2 = TabletToMapKey(tsl[j].Tablet)
 	}
 	return name1 < name2
 }
 
 // Swap is part of sort.Interface
-func (epsl EndPointStatsList) Swap(i, j int) {
-	epsl[i], epsl[j] = epsl[j], epsl[i]
+func (tsl TabletStatsList) Swap(i, j int) {
+	tsl[i], tsl[j] = tsl[j], tsl[i]
 }
 
 // StatusAsHTML returns an HTML version of the status.
-func (epcs *EndPointsCacheStatus) StatusAsHTML() template.HTML {
+func (epcs *TabletsCacheStatus) StatusAsHTML() template.HTML {
 	epLinks := make([]string, 0, 1)
-	if epcs.EndPointsStats != nil {
-		sort.Sort(epcs.EndPointsStats)
+	if epcs.TabletsStats != nil {
+		sort.Sort(epcs.TabletsStats)
 	}
-	for _, eps := range epcs.EndPointsStats {
-		vtPort := eps.EndPoint.PortMap["vt"]
+	for _, ts := range epcs.TabletsStats {
+		vtPort := ts.Tablet.PortMap["vt"]
 		color := "green"
 		extra := ""
-		if eps.LastError != nil {
+		if ts.LastError != nil {
 			color = "red"
-			extra = fmt.Sprintf(" (%v)", eps.LastError)
-		} else if !eps.Serving {
+			extra = fmt.Sprintf(" (%v)", ts.LastError)
+		} else if !ts.Serving {
 			color = "red"
 			extra = " (Not Serving)"
-		} else if !eps.Up {
+		} else if !ts.Up {
 			color = "red"
 			extra = " (Down)"
-		} else if eps.Target.TabletType == topodatapb.TabletType_MASTER {
-			extra = fmt.Sprintf(" (MasterTS: %v)", eps.TabletExternallyReparentedTimestamp)
+		} else if ts.Target.TabletType == topodatapb.TabletType_MASTER {
+			extra = fmt.Sprintf(" (MasterTS: %v)", ts.TabletExternallyReparentedTimestamp)
 		} else {
-			extra = fmt.Sprintf(" (RepLag: %v)", eps.Stats.SecondsBehindMaster)
+			extra = fmt.Sprintf(" (RepLag: %v)", ts.Stats.SecondsBehindMaster)
 		}
-		name := eps.Name
-		addr := netutil.JoinHostPort(eps.EndPoint.Host, vtPort)
+		name := ts.Name
+		addr := netutil.JoinHostPort(ts.Tablet.Hostname, vtPort)
 		if name == "" {
 			name = addr
 		}
@@ -699,57 +695,57 @@ func (epcs *EndPointsCacheStatus) StatusAsHTML() template.HTML {
 	return template.HTML(strings.Join(epLinks, "<br>"))
 }
 
-// EndPointsCacheStatusList is used for sorting.
-type EndPointsCacheStatusList []*EndPointsCacheStatus
+// TabletsCacheStatusList is used for sorting.
+type TabletsCacheStatusList []*TabletsCacheStatus
 
 // Len is part of sort.Interface.
-func (epcsl EndPointsCacheStatusList) Len() int {
+func (epcsl TabletsCacheStatusList) Len() int {
 	return len(epcsl)
 }
 
 // Less is part of sort.Interface
-func (epcsl EndPointsCacheStatusList) Less(i, j int) bool {
+func (epcsl TabletsCacheStatusList) Less(i, j int) bool {
 	return epcsl[i].Cell+"."+epcsl[i].Target.Keyspace+"."+epcsl[i].Target.Shard+"."+string(epcsl[i].Target.TabletType) <
 		epcsl[j].Cell+"."+epcsl[j].Target.Keyspace+"."+epcsl[j].Target.Shard+"."+string(epcsl[j].Target.TabletType)
 }
 
 // Swap is part of sort.Interface
-func (epcsl EndPointsCacheStatusList) Swap(i, j int) {
+func (epcsl TabletsCacheStatusList) Swap(i, j int) {
 	epcsl[i], epcsl[j] = epcsl[j], epcsl[i]
 }
 
 // CacheStatus returns a displayable version of the cache.
-func (hc *HealthCheckImpl) CacheStatus() EndPointsCacheStatusList {
-	epcsMap := make(map[string]*EndPointsCacheStatus)
+func (hc *HealthCheckImpl) CacheStatus() TabletsCacheStatusList {
+	epcsMap := make(map[string]*TabletsCacheStatus)
 	hc.mu.RLock()
 	for _, hcc := range hc.addrToConns {
 		hcc.mu.RLock()
 		key := fmt.Sprintf("%v.%v.%v.%v", hcc.cell, hcc.target.Keyspace, hcc.target.Shard, string(hcc.target.TabletType))
-		var epcs *EndPointsCacheStatus
+		var epcs *TabletsCacheStatus
 		var ok bool
 		if epcs, ok = epcsMap[key]; !ok {
-			epcs = &EndPointsCacheStatus{
+			epcs = &TabletsCacheStatus{
 				Cell:   hcc.cell,
 				Target: hcc.target,
 			}
 			epcsMap[key] = epcs
 		}
-		stats := &EndPointStats{
-			Cell:     hcc.cell,
-			Name:     hcc.name,
-			Target:   hcc.target,
-			Up:       hcc.up,
-			Serving:  hcc.serving,
-			EndPoint: hcc.endPoint,
-			Stats:    hcc.stats,
+		stats := &TabletStats{
+			Cell:    hcc.cell,
+			Name:    hcc.name,
+			Target:  hcc.target,
+			Up:      hcc.up,
+			Serving: hcc.serving,
+			Tablet:  hcc.tablet,
+			Stats:   hcc.stats,
 			TabletExternallyReparentedTimestamp: hcc.tabletExternallyReparentedTimestamp,
 			LastError:                           hcc.lastError,
 		}
 		hcc.mu.RUnlock()
-		epcs.EndPointsStats = append(epcs.EndPointsStats, stats)
+		epcs.TabletsStats = append(epcs.TabletsStats, stats)
 	}
 	hc.mu.RUnlock()
-	epcsl := make(EndPointsCacheStatusList, 0, len(epcsMap))
+	epcsl := make(TabletsCacheStatusList, 0, len(epcsMap))
 	for _, epcs := range epcsMap {
 		epcsl = append(epcsl, epcs)
 	}
@@ -767,18 +763,18 @@ func (hc *HealthCheckImpl) Close() error {
 		hcc.cancelFunc()
 	}
 	hc.addrToConns = make(map[string]*healthCheckConn)
-	hc.targetToEPs = make(map[string]map[string]map[topodatapb.TabletType][]*topodatapb.EndPoint)
+	hc.targetToTablets = make(map[string]map[string]map[topodatapb.TabletType][]*topodatapb.Tablet)
 	return nil
 }
 
-// EndPointToMapKey creates a key to the map from endpoint's host and ports.
+// TabletToMapKey creates a key to the map from tablet's host and ports.
 // It should only be used in discovery and related module.
-func EndPointToMapKey(endPoint *topodatapb.EndPoint) string {
+func TabletToMapKey(tablet *topodatapb.Tablet) string {
 	parts := make([]string, 0, 1)
-	for name, port := range endPoint.PortMap {
+	for name, port := range tablet.PortMap {
 		parts = append(parts, netutil.JoinHostPort(name, port))
 	}
 	sort.Strings(parts)
-	parts = append([]string{endPoint.Host}, parts...)
+	parts = append([]string{tablet.Hostname}, parts...)
 	return strings.Join(parts, ",")
 }

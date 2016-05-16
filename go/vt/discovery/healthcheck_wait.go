@@ -17,11 +17,11 @@ import (
 )
 
 var (
-	// ErrWaitForEndPointsTimeout is returned if we cannot get the endpoints in time
-	ErrWaitForEndPointsTimeout = errors.New("timeout waiting for endpoints")
+	// ErrWaitForTabletsTimeout is returned if we cannot get the tablets in time
+	ErrWaitForTabletsTimeout = errors.New("timeout waiting for tablets")
 
 	// how much to sleep between each check
-	waitAvailableEndPointInterval = 100 * time.Millisecond
+	waitAvailableTabletInterval = 100 * time.Millisecond
 )
 
 // keyspaceShard is a helper structure used internally
@@ -30,27 +30,27 @@ type keyspaceShard struct {
 	shard    string
 }
 
-// WaitForEndPoints waits for at least one endpoint in the given cell /
+// WaitForTablets waits for at least one tablet in the given cell /
 // keyspace / shard before returning.
-func WaitForEndPoints(ctx context.Context, hc HealthCheck, cell, keyspace, shard string, types []topodatapb.TabletType) error {
+func WaitForTablets(ctx context.Context, hc HealthCheck, cell, keyspace, shard string, types []topodatapb.TabletType) error {
 	keyspaceShards := map[keyspaceShard]bool{
 		keyspaceShard{
 			keyspace: keyspace,
 			shard:    shard,
 		}: true,
 	}
-	return waitForEndPoints(ctx, hc, keyspaceShards, types, false)
+	return waitForTablets(ctx, hc, keyspaceShards, types, false)
 }
 
-// WaitForAllServingEndPoints waits for at least one serving endpoint in the given cell
+// WaitForAllServingTablets waits for at least one serving tablet in the given cell
 // for all keyspaces / shards before returning.
-func WaitForAllServingEndPoints(ctx context.Context, hc HealthCheck, ts topo.SrvTopoServer, cell string, types []topodatapb.TabletType) error {
+func WaitForAllServingTablets(ctx context.Context, hc HealthCheck, ts topo.SrvTopoServer, cell string, types []topodatapb.TabletType) error {
 	keyspaceShards, err := findAllKeyspaceShards(ctx, ts, cell)
 	if err != nil {
 		return err
 	}
 
-	return waitForEndPoints(ctx, hc, keyspaceShards, types, true)
+	return waitForTablets(ctx, hc, keyspaceShards, types, true)
 }
 
 // findAllKeyspaceShards goes through all serving shards in the topology
@@ -97,8 +97,8 @@ func findAllKeyspaceShards(ctx context.Context, ts topo.SrvTopoServer, cell stri
 	return keyspaceShards, nil
 }
 
-// waitForEndPoints is the internal method that polls for endpoints
-func waitForEndPoints(ctx context.Context, hc HealthCheck, keyspaceShards map[keyspaceShard]bool, types []topodatapb.TabletType, requireServing bool) error {
+// waitForTablets is the internal method that polls for tablets
+func waitForTablets(ctx context.Context, hc HealthCheck, keyspaceShards map[keyspaceShard]bool, types []topodatapb.TabletType, requireServing bool) error {
 RetryLoop:
 	for {
 		select {
@@ -111,7 +111,7 @@ RetryLoop:
 		for ks := range keyspaceShards {
 			allPresent := true
 			for _, tt := range types {
-				epl := hc.GetEndPointStatsFromTarget(ks.keyspace, ks.shard, tt)
+				epl := hc.GetTabletStatsFromTarget(ks.keyspace, ks.shard, tt)
 				if requireServing {
 					hasServingEP := false
 					for _, eps := range epl {
@@ -143,7 +143,7 @@ RetryLoop:
 		}
 
 		// Unblock after the sleep or when the context has expired.
-		timer := time.NewTimer(waitAvailableEndPointInterval)
+		timer := time.NewTimer(waitAvailableTabletInterval)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -152,10 +152,10 @@ RetryLoop:
 	}
 
 	if ctx.Err() == context.DeadlineExceeded {
-		log.Warningf("waitForEndPoints timeout for %v (context error: %v)", keyspaceShards, ctx.Err())
-		return ErrWaitForEndPointsTimeout
+		log.Warningf("waitForTablets timeout for %v (context error: %v)", keyspaceShards, ctx.Err())
+		return ErrWaitForTabletsTimeout
 	}
-	err := fmt.Errorf("waitForEndPoints failed for %v (context error: %v)", keyspaceShards, ctx.Err())
+	err := fmt.Errorf("waitForTablets failed for %v (context error: %v)", keyspaceShards, ctx.Err())
 	log.Error(err)
 	return err
 }

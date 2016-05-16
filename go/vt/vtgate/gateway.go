@@ -80,8 +80,8 @@ type Gateway interface {
 	// Close shuts down underlying connections.
 	Close(ctx context.Context) error
 
-	// CacheStatus returns a list of GatewayEndPointCacheStatus per endpoint.
-	CacheStatus() GatewayEndPointCacheStatusList
+	// CacheStatus returns a list of GatewayTabletCacheStatus per tablet.
+	CacheStatus() GatewayTabletCacheStatusList
 }
 
 // GatewayCreator is the func which can create the actual gateway object.
@@ -125,8 +125,8 @@ type ShardError struct {
 	InTransaction bool
 	// Err preserves the original error, so that we don't need to parse the error string.
 	Err error
-	// EndPointCode is the error code to use for all the endpoint errors in aggregate
-	EndPointCode vtrpcpb.ErrorCode
+	// ErrorCode is the error code to use for all the tablet errors in aggregate
+	ErrorCode vtrpcpb.ErrorCode
 }
 
 // Error returns the error string.
@@ -140,31 +140,31 @@ func (e *ShardError) Error() string {
 // VtErrorCode returns the underlying Vitess error code.
 // This is part of vterrors.VtError interface.
 func (e *ShardError) VtErrorCode() vtrpcpb.ErrorCode {
-	return e.EndPointCode
+	return e.ErrorCode
 }
 
-// GatewayEndPointCacheStatusList is a slice of GatewayEndPointCacheStatus.
-type GatewayEndPointCacheStatusList []*GatewayEndPointCacheStatus
+// GatewayTabletCacheStatusList is a slice of GatewayTabletCacheStatus.
+type GatewayTabletCacheStatusList []*GatewayTabletCacheStatus
 
 // Len is part of sort.Interface.
-func (gepcsl GatewayEndPointCacheStatusList) Len() int {
+func (gepcsl GatewayTabletCacheStatusList) Len() int {
 	return len(gepcsl)
 }
 
 // Less is part of sort.Interface.
-func (gepcsl GatewayEndPointCacheStatusList) Less(i, j int) bool {
+func (gepcsl GatewayTabletCacheStatusList) Less(i, j int) bool {
 	iKey := strings.Join([]string{gepcsl[i].Keyspace, gepcsl[i].Shard, string(gepcsl[i].TabletType), gepcsl[i].Name}, ".")
 	jKey := strings.Join([]string{gepcsl[j].Keyspace, gepcsl[j].Shard, string(gepcsl[j].TabletType), gepcsl[j].Name}, ".")
 	return iKey < jKey
 }
 
 // Swap is part of sort.Interface.
-func (gepcsl GatewayEndPointCacheStatusList) Swap(i, j int) {
+func (gepcsl GatewayTabletCacheStatusList) Swap(i, j int) {
 	gepcsl[i], gepcsl[j] = gepcsl[j], gepcsl[i]
 }
 
-// GatewayEndPointCacheStatus contains the status per endpoint for a gateway.
-type GatewayEndPointCacheStatus struct {
+// GatewayTabletCacheStatus contains the status per tablet for a gateway.
+type GatewayTabletCacheStatus struct {
 	Keyspace   string
 	Shard      string
 	TabletType topodatapb.TabletType
@@ -187,7 +187,7 @@ var (
 	// muAggr protects below vars.
 	muAggr sync.Mutex
 	// aggregators holds all Aggregators created.
-	aggregators []*GatewayEndPointStatusAggregator
+	aggregators []*GatewayTabletStatusAggregator
 	// gatewayStatsChanFull tracks the number of times
 	// aggrChan becomes full.
 	gatewayStatsChanFull *stats.Int
@@ -202,7 +202,7 @@ func init() {
 }
 
 // registerAggregator registers an aggregator to the global list.
-func registerAggregator(a *GatewayEndPointStatusAggregator) {
+func registerAggregator(a *GatewayTabletStatusAggregator) {
 	muAggr.Lock()
 	defer muAggr.Unlock()
 	aggregators = append(aggregators, a)
@@ -227,20 +227,20 @@ func processQueryInfo() {
 	}
 }
 
-// NewGatewayEndPointStatusAggregator creates a GatewayEndPointStatusAggregator.
-func NewGatewayEndPointStatusAggregator() *GatewayEndPointStatusAggregator {
-	gepsa := &GatewayEndPointStatusAggregator{}
+// NewGatewayTabletStatusAggregator creates a GatewayTabletStatusAggregator.
+func NewGatewayTabletStatusAggregator() *GatewayTabletStatusAggregator {
+	gepsa := &GatewayTabletStatusAggregator{}
 	registerAggregator(gepsa)
 	return gepsa
 }
 
-// GatewayEndPointStatusAggregator tracks endpoint status for a gateway.
-type GatewayEndPointStatusAggregator struct {
+// GatewayTabletStatusAggregator tracks tablet status for a gateway.
+type GatewayTabletStatusAggregator struct {
 	Keyspace   string
 	Shard      string
 	TabletType topodatapb.TabletType
-	Name       string // the alternative name of an endpoint
-	Addr       string // the host:port of an endpoint
+	Name       string // the alternative name of a tablet
+	Addr       string // the host:port of a tablet
 
 	// mu protects below fields.
 	mu         sync.RWMutex
@@ -253,7 +253,7 @@ type GatewayEndPointStatusAggregator struct {
 }
 
 type queryInfo struct {
-	aggr       *GatewayEndPointStatusAggregator
+	aggr       *GatewayTabletStatusAggregator
 	addr       string
 	tabletType topodatapb.TabletType
 	elapsed    time.Duration
@@ -261,7 +261,7 @@ type queryInfo struct {
 }
 
 // UpdateQueryInfo updates the aggregator with the given information about a query.
-func (gepsa *GatewayEndPointStatusAggregator) UpdateQueryInfo(addr string, tabletType topodatapb.TabletType, elapsed time.Duration, hasError bool) {
+func (gepsa *GatewayTabletStatusAggregator) UpdateQueryInfo(addr string, tabletType topodatapb.TabletType, elapsed time.Duration, hasError bool) {
 	qi := &queryInfo{
 		aggr:       gepsa,
 		addr:       addr,
@@ -276,7 +276,7 @@ func (gepsa *GatewayEndPointStatusAggregator) UpdateQueryInfo(addr string, table
 	}
 }
 
-func (gepsa *GatewayEndPointStatusAggregator) processQueryInfo(qi *queryInfo) {
+func (gepsa *GatewayTabletStatusAggregator) processQueryInfo(qi *queryInfo) {
 	gepsa.mu.Lock()
 	defer gepsa.mu.Unlock()
 	if gepsa.TabletType != qi.tabletType {
@@ -302,9 +302,9 @@ func (gepsa *GatewayEndPointStatusAggregator) processQueryInfo(qi *queryInfo) {
 	}
 }
 
-// GetCacheStatus returns a GatewayEndPointCacheStatus representing the current gateway status.
-func (gepsa *GatewayEndPointStatusAggregator) GetCacheStatus() *GatewayEndPointCacheStatus {
-	status := &GatewayEndPointCacheStatus{
+// GetCacheStatus returns a GatewayTabletCacheStatus representing the current gateway status.
+func (gepsa *GatewayTabletStatusAggregator) GetCacheStatus() *GatewayTabletCacheStatus {
+	status := &GatewayTabletCacheStatus{
 		Keyspace: gepsa.Keyspace,
 		Shard:    gepsa.Shard,
 		Name:     gepsa.Name,
@@ -331,7 +331,7 @@ func (gepsa *GatewayEndPointStatusAggregator) GetCacheStatus() *GatewayEndPointC
 }
 
 // resetNextSlot resets the next tracking slot.
-func (gepsa *GatewayEndPointStatusAggregator) resetNextSlot() {
+func (gepsa *GatewayTabletStatusAggregator) resetNextSlot() {
 	gepsa.mu.Lock()
 	defer gepsa.mu.Unlock()
 	gepsa.tick = (gepsa.tick + 1) % 60

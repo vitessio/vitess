@@ -988,7 +988,7 @@ func CreateFakeServer(t *testing.T) *FakeQueryService {
 }
 
 // TestSuite runs all the tests
-func TestSuite(t *testing.T, protocol string, endPoint *topodatapb.EndPoint, fake *FakeQueryService) {
+func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *FakeQueryService) {
 	tests := []func(*testing.T, tabletconn.TabletConn, *FakeQueryService){
 		// positive test cases
 		testBegin,
@@ -1034,7 +1034,7 @@ func TestSuite(t *testing.T, protocol string, endPoint *topodatapb.EndPoint, fak
 
 	// create a connection
 	ctx := context.Background()
-	conn, err := tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, topodatapb.TabletType_REPLICA, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ctx, tablet, testTarget.Keyspace, testTarget.Shard, topodatapb.TabletType_REPLICA, 30*time.Second)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}

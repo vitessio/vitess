@@ -5,136 +5,136 @@ import (
 	"testing"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 func TestFilterByReplicationLag(t *testing.T) {
-	// 0 endpoint
-	got := FilterByReplicationLag([]*EndPointStats{})
+	// 0 tablet
+	got := FilterByReplicationLag([]*TabletStats{})
 	if len(got) != 0 {
 		t.Errorf("FilterByReplicationLag([]) = %+v, want []", got)
 	}
-	// 1 serving endpoint
-	eps1 := &EndPointStats{
-		EndPoint: &topodatapb.EndPoint{Uid: 1},
-		Serving:  true,
-		Stats:    &querypb.RealtimeStats{},
+	// 1 serving tablet
+	ts1 := &TabletStats{
+		Tablet:  topo.NewTablet(1, "host1"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{},
 	}
-	eps2 := &EndPointStats{
-		EndPoint: &topodatapb.EndPoint{Uid: 2},
-		Serving:  false,
-		Stats:    &querypb.RealtimeStats{},
+	ts2 := &TabletStats{
+		Tablet:  topo.NewTablet(2, "host2"),
+		Serving: false,
+		Stats:   &querypb.RealtimeStats{},
 	}
-	got = FilterByReplicationLag([]*EndPointStats{eps1, eps2})
+	got = FilterByReplicationLag([]*TabletStats{ts1, ts2})
 	if len(got) != 1 {
-		t.Errorf("len(FilterByReplicationLag([{EndPoint: {Uid: 1}, Serving: true}, {EndPoint: {Uid: 2}, Serving: false}])) = %v, want 1", len(got))
+		t.Errorf("len(FilterByReplicationLag([{Tablet: {Uid: 1}, Serving: true}, {Tablet: {Uid: 2}, Serving: false}])) = %v, want 1", len(got))
 	}
-	if len(got) > 0 && !reflect.DeepEqual(got[0], eps1) {
-		t.Errorf("FilterByReplicationLag([{EndPoint: {Uid: 1}, Serving: true}, {EndPoint: {Uid: 2}, Serving: false}]) = %+v, want %+v", got[0], eps1)
+	if len(got) > 0 && !reflect.DeepEqual(got[0], ts1) {
+		t.Errorf("FilterByReplicationLag([{Tablet: {Uid: 1}, Serving: true}, {Tablet: {Uid: 2}, Serving: false}]) = %+v, want %+v", got[0], ts1)
 	}
 	// lags of (1s, 1s, 1s, 30s)
-	eps1 = &EndPointStats{
-		EndPoint: &topodatapb.EndPoint{Uid: 1},
-		Serving:  true,
-		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 1},
+	ts1 = &TabletStats{
+		Tablet:  topo.NewTablet(1, "host1"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
 	}
-	eps2 = &EndPointStats{
-		EndPoint: &topodatapb.EndPoint{Uid: 2},
-		Serving:  true,
-		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 1},
+	ts2 = &TabletStats{
+		Tablet:  topo.NewTablet(2, "host2"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
 	}
-	eps3 := &EndPointStats{
-		EndPoint: &topodatapb.EndPoint{Uid: 3},
-		Serving:  true,
-		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 1},
+	ts3 := &TabletStats{
+		Tablet:  topo.NewTablet(3, "host3"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
 	}
-	eps4 := &EndPointStats{
-		EndPoint: &topodatapb.EndPoint{Uid: 4},
-		Serving:  true,
-		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 30},
+	ts4 := &TabletStats{
+		Tablet:  topo.NewTablet(4, "host4"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 30},
 	}
-	got = FilterByReplicationLag([]*EndPointStats{eps1, eps2, eps3, eps4})
-	if len(got) != 4 || !reflect.DeepEqual(got[0], eps1) || !reflect.DeepEqual(got[1], eps2) || !reflect.DeepEqual(got[2], eps3) || !reflect.DeepEqual(got[3], eps4) {
+	got = FilterByReplicationLag([]*TabletStats{ts1, ts2, ts3, ts4})
+	if len(got) != 4 || !reflect.DeepEqual(got[0], ts1) || !reflect.DeepEqual(got[1], ts2) || !reflect.DeepEqual(got[2], ts3) || !reflect.DeepEqual(got[3], ts4) {
 		t.Errorf("FilterByReplicationLag([1s, 1s, 1s, 30s]) = %+v, want all", got)
 	}
 	// lags of (5s, 10s, 15s, 120s)
-	eps1 = &EndPointStats{
-		EndPoint: &topodatapb.EndPoint{Uid: 1},
-		Serving:  true,
-		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 5},
+	ts1 = &TabletStats{
+		Tablet:  topo.NewTablet(1, "host1"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 5},
 	}
-	eps2 = &EndPointStats{
-		EndPoint: &topodatapb.EndPoint{Uid: 2},
-		Serving:  true,
-		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 10},
+	ts2 = &TabletStats{
+		Tablet:  topo.NewTablet(2, "host2"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 10},
 	}
-	eps3 = &EndPointStats{
-		EndPoint: &topodatapb.EndPoint{Uid: 3},
-		Serving:  true,
-		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 15},
+	ts3 = &TabletStats{
+		Tablet:  topo.NewTablet(3, "host3"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 15},
 	}
-	eps4 = &EndPointStats{
-		EndPoint: &topodatapb.EndPoint{Uid: 4},
-		Serving:  true,
-		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 120},
+	ts4 = &TabletStats{
+		Tablet:  topo.NewTablet(4, "host4"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 120},
 	}
-	got = FilterByReplicationLag([]*EndPointStats{eps1, eps2, eps3, eps4})
-	if len(got) != 3 || !reflect.DeepEqual(got[0], eps1) || !reflect.DeepEqual(got[1], eps2) || !reflect.DeepEqual(got[2], eps3) {
+	got = FilterByReplicationLag([]*TabletStats{ts1, ts2, ts3, ts4})
+	if len(got) != 3 || !reflect.DeepEqual(got[0], ts1) || !reflect.DeepEqual(got[1], ts2) || !reflect.DeepEqual(got[2], ts3) {
 		t.Errorf("FilterByReplicationLag([5s, 10s, 15s, 120s]) = %+v, want [5s, 10s, 15s]", got)
 	}
 	// lags of (30m, 35m, 40m, 45m)
-	eps1 = &EndPointStats{
-		EndPoint: &topodatapb.EndPoint{Uid: 1},
-		Serving:  true,
-		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 30 * 60},
+	ts1 = &TabletStats{
+		Tablet:  topo.NewTablet(1, "host1"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 30 * 60},
 	}
-	eps2 = &EndPointStats{
-		EndPoint: &topodatapb.EndPoint{Uid: 2},
-		Serving:  true,
-		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 35 * 60},
+	ts2 = &TabletStats{
+		Tablet:  topo.NewTablet(2, "host2"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 35 * 60},
 	}
-	eps3 = &EndPointStats{
-		EndPoint: &topodatapb.EndPoint{Uid: 3},
-		Serving:  true,
-		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 40 * 60},
+	ts3 = &TabletStats{
+		Tablet:  topo.NewTablet(3, "host3"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 40 * 60},
 	}
-	eps4 = &EndPointStats{
-		EndPoint: &topodatapb.EndPoint{Uid: 4},
-		Serving:  true,
-		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 45 * 60},
+	ts4 = &TabletStats{
+		Tablet:  topo.NewTablet(4, "host4"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 45 * 60},
 	}
-	got = FilterByReplicationLag([]*EndPointStats{eps1, eps2, eps3, eps4})
-	if len(got) != 4 || !reflect.DeepEqual(got[0], eps1) || !reflect.DeepEqual(got[1], eps2) || !reflect.DeepEqual(got[2], eps3) || !reflect.DeepEqual(got[3], eps4) {
+	got = FilterByReplicationLag([]*TabletStats{ts1, ts2, ts3, ts4})
+	if len(got) != 4 || !reflect.DeepEqual(got[0], ts1) || !reflect.DeepEqual(got[1], ts2) || !reflect.DeepEqual(got[2], ts3) || !reflect.DeepEqual(got[3], ts4) {
 		t.Errorf("FilterByReplicationLag([30m, 35m, 40m, 45m]) = %+v, want all", got)
 	}
 	// lags of (1m, 100m) - return at least 2 items to avoid overloading if the 2nd one is not delayed too much
-	eps1 = &EndPointStats{
-		EndPoint: &topodatapb.EndPoint{Uid: 1},
-		Serving:  true,
-		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 1 * 60},
+	ts1 = &TabletStats{
+		Tablet:  topo.NewTablet(1, "host1"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1 * 60},
 	}
-	eps2 = &EndPointStats{
-		EndPoint: &topodatapb.EndPoint{Uid: 2},
-		Serving:  true,
-		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 100 * 60},
+	ts2 = &TabletStats{
+		Tablet:  topo.NewTablet(2, "host2"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 100 * 60},
 	}
-	got = FilterByReplicationLag([]*EndPointStats{eps1, eps2})
-	if len(got) != 2 || !reflect.DeepEqual(got[0], eps1) || !reflect.DeepEqual(got[1], eps2) {
+	got = FilterByReplicationLag([]*TabletStats{ts1, ts2})
+	if len(got) != 2 || !reflect.DeepEqual(got[0], ts1) || !reflect.DeepEqual(got[1], ts2) {
 		t.Errorf("FilterByReplicationLag([1m, 100m]) = %+v, want all", got)
 	}
 	// lags of (1m, 3h) - return 1 if the 2nd one is delayed too much
-	eps1 = &EndPointStats{
-		EndPoint: &topodatapb.EndPoint{Uid: 1},
-		Serving:  true,
-		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 1 * 60},
+	ts1 = &TabletStats{
+		Tablet:  topo.NewTablet(1, "host1"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1 * 60},
 	}
-	eps2 = &EndPointStats{
-		EndPoint: &topodatapb.EndPoint{Uid: 2},
-		Serving:  true,
-		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 3 * 60 * 60},
+	ts2 = &TabletStats{
+		Tablet:  topo.NewTablet(2, "host2"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 3 * 60 * 60},
 	}
-	got = FilterByReplicationLag([]*EndPointStats{eps1, eps2})
-	if len(got) != 1 || !reflect.DeepEqual(got[0], eps1) {
+	got = FilterByReplicationLag([]*TabletStats{ts1, ts2})
+	if len(got) != 1 || !reflect.DeepEqual(got[0], ts1) {
 		t.Errorf("FilterByReplicationLag([1m, 3h]) = %+v, want [1m]", got)
 	}
 }

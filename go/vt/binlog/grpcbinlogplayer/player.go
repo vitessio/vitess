@@ -25,8 +25,8 @@ type client struct {
 	c  binlogservicepb.UpdateStreamClient
 }
 
-func (client *client) Dial(endPoint *topodatapb.EndPoint, connTimeout time.Duration) error {
-	addr := netutil.JoinHostPort(endPoint.Host, endPoint.PortMap["grpc"])
+func (client *client) Dial(tablet *topodatapb.Tablet, connTimeout time.Duration) error {
+	addr := netutil.JoinHostPort(tablet.Hostname, tablet.PortMap["grpc"])
 	var err error
 	client.cc, err = grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(connTimeout))
 	if err != nil {

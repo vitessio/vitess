@@ -87,7 +87,7 @@ func NewStats() *Stats {
 
 // BinlogPlayer is handling reading a stream of updates from BinlogServer
 type BinlogPlayer struct {
-	endPoint *topodatapb.EndPoint
+	tablet   *topodatapb.Tablet
 	dbClient VtClient
 
 	// for key range base requests
@@ -109,9 +109,9 @@ type BinlogPlayer struct {
 // replicating the provided keyrange, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *topodatapb.EndPoint, keyRange *topodatapb.KeyRange, uid uint32, startPosition string, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
+func NewBinlogPlayerKeyRange(dbClient VtClient, tablet *topodatapb.Tablet, keyRange *topodatapb.KeyRange, uid uint32, startPosition string, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
 	result := &BinlogPlayer{
-		endPoint:  endPoint,
+		tablet:    tablet,
 		dbClient:  dbClient,
 		keyRange:  keyRange,
 		uid:       uid,
@@ -135,9 +135,9 @@ func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *topodatapb.EndPoint, k
 // replicating the provided tables, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerTables(dbClient VtClient, endPoint *topodatapb.EndPoint, tables []string, uid uint32, startPosition string, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
+func NewBinlogPlayerTables(dbClient VtClient, tablet *topodatapb.Tablet, tables []string, uid uint32, startPosition string, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
 	result := &BinlogPlayer{
-		endPoint:  endPoint,
+		tablet:    tablet,
 		dbClient:  dbClient,
 		tables:    tables,
 		uid:       uid,
@@ -279,7 +279,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 			blp.uid,
 			blp.tables,
 			blp.position,
-			blp.endPoint,
+			blp.tablet,
 		)
 	} else {
 		log.Infof("BinlogPlayer client %v for keyrange '%v-%v' starting @ '%v', server: %v",
@@ -287,7 +287,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 			hex.EncodeToString(blp.keyRange.Start),
 			hex.EncodeToString(blp.keyRange.End),
 			blp.position,
-			blp.endPoint,
+			blp.tablet,
 		)
 	}
 	if !blp.stopPosition.IsZero() {
@@ -308,7 +308,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 		return fmt.Errorf("no binlog player client factory named %v", *binlogPlayerProtocol)
 	}
 	blplClient := clientFactory()
-	err := blplClient.Dial(blp.endPoint, *BinlogPlayerConnTimeout)
+	err := blplClient.Dial(blp.tablet, *BinlogPlayerConnTimeout)
 	if err != nil {
 		log.Errorf("Error dialing binlog server: %v", err)
 		return fmt.Errorf("error dialing binlog server: %v", err)

@@ -373,14 +373,14 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	for _, si := range scw.destinationShards {
 		waitCtx, waitCancel := context.WithTimeout(ctx, 10*time.Second)
 		defer waitCancel()
-		if err := discovery.WaitForEndPoints(waitCtx, scw.healthCheck,
+		if err := discovery.WaitForTablets(waitCtx, scw.healthCheck,
 			scw.cell, si.Keyspace(), si.ShardName(), []topodatapb.TabletType{topodatapb.TabletType_MASTER}); err != nil {
 			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v: %v", si.Keyspace(), si.ShardName(), err)
 		}
 		masters := discovery.GetCurrentMaster(
-			scw.healthCheck.GetEndPointStatsFromTarget(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER))
+			scw.healthCheck.GetTabletStatsFromTarget(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER))
 		if len(masters) == 0 {
-			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v in HealthCheck: empty EndPointStats list", si.Keyspace(), si.ShardName())
+			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v in HealthCheck: empty TabletStats list", si.Keyspace(), si.ShardName())
 		}
 		master := masters[0]
 

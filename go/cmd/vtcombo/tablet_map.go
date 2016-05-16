@@ -204,23 +204,23 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 //
 
 // dialer is our tabletconn.Dialer
-func dialer(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
-	tablet, ok := tabletMap[endPoint.Uid]
+func dialer(ctx context.Context, tablet *topodatapb.Tablet, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
+	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return nil, tabletconn.OperationalError("connection refused")
 	}
 
 	return &internalTabletConn{
-		tablet:   tablet,
-		endPoint: endPoint,
+		tablet:     t,
+		topoTablet: tablet,
 	}, nil
 }
 
 // internalTabletConn implements tabletconn.TabletConn by forwarding everything
 // to the tablet
 type internalTabletConn struct {
-	tablet   *tablet
-	endPoint *topodatapb.EndPoint
+	tablet     *tablet
+	topoTablet *topodatapb.Tablet
 }
 
 // Execute is part of tabletconn.TabletConn
@@ -384,9 +384,9 @@ func (itc *internalTabletConn) SetTarget(keyspace, shard string, tabletType topo
 	return nil
 }
 
-// EndPoint is part of tabletconn.TabletConn
-func (itc *internalTabletConn) EndPoint() *topodatapb.EndPoint {
-	return itc.endPoint
+// Tablet is part of tabletconn.TabletConn
+func (itc *internalTabletConn) Tablet() *topodatapb.Tablet {
+	return itc.topoTablet
 }
 
 // SplitQuery is part of tabletconn.TabletConn
