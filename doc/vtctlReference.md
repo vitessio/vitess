@@ -649,7 +649,6 @@ Starts a transaction on the provided server.
 #### Errors
 
 * the <code>&lt;tablet_alias&gt;</code> argument is required for the <code>&lt;VtTabletBegin&gt;</code> command This error occurs if the command is not called with exactly one argument.
-* cannot get EndPoint from tablet record: %v
 * cannot connect to tablet %v: %v
 * Begin failed: %v
 
@@ -683,7 +682,6 @@ Commits a transaction on the provided server.
 #### Errors
 
 * the <code>&lt;tablet_alias&gt;</code> and <code>&lt;transaction_id&gt;</code> arguments are required for the <code>&lt;VtTabletCommit&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
-* cannot get EndPoint from tablet record: %v
 * cannot connect to tablet %v: %v
 
 
@@ -718,7 +716,6 @@ Executes the given query on the given tablet.
 #### Errors
 
 * the <code>&lt;tablet_alias&gt;</code> and <code>&lt;sql&gt;</code> arguments are required for the <code>&lt;VtTabletExecute&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
-* cannot get EndPoint from tablet record: %v
 * cannot connect to tablet %v: %v
 * Execute failed: %v
 
@@ -752,7 +749,6 @@ Rollbacks a transaction on the provided server.
 #### Errors
 
 * the <code>&lt;tablet_alias&gt;</code> and <code>&lt;transaction_id&gt;</code> arguments are required for the <code>&lt;VtTabletRollback&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
-* cannot get EndPoint from tablet record: %v
 * cannot connect to tablet %v: %v
 
 
@@ -780,7 +776,6 @@ Executes the StreamHealth streaming query to a vttablet process. Will stop after
 #### Errors
 
 * The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;VtTabletStreamHealth&gt;</code> command. This error occurs if the command is not called with exactly one argument.
-* cannot get EndPoint from tablet record: %v
 * cannot connect to tablet %v: %v
 * stream ended early: %v
 
@@ -1624,7 +1619,6 @@ Blocks until the specified shard has caught up with the filtered replication of 
 * The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;WaitForFilteredReplication&gt;</code> command. This error occurs if the command is not called with exactly one argument.
 * shard %v/%v has no source shard
 * shard %v/%v has no master
-* cannot get EndPoint for master tablet record: %v record: %v
 * failed to run explicit healthcheck on tablet: %v err: %v
 * cannot connect to tablet %v: %v
 * could not stream health records from tablet: %v err: %v
