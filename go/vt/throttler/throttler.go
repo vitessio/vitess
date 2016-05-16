@@ -32,7 +32,7 @@ const (
 
 	// MaxRateModuleDisabled can be set in NewThrottler() to disable throttling
 	// by a fixed rate.
-	MaxRateModuleDisabled = -1
+	MaxRateModuleDisabled = int64(math.MaxInt64)
 
 	// ReplicationLagModuleDisabled can be set in NewThrottler() to disable
 	// throttling based on the MySQL replication lag.
@@ -103,10 +103,6 @@ func newThrottlerWithClock(name, unit string, threadCount int, maxRate int64, ma
 func newThrottler(name, unit string, threadCount int, maxRate int64, maxReplicationLag int, nowFunc func() time.Time) *Throttler {
 	// Enable the configured modules.
 	var modules []Module
-	if maxRate == MaxRateModuleDisabled {
-		// We never disable this module. Assume an infinite rate.
-		maxRate = int64(math.MaxInt64)
-	}
 	modules = append(modules, NewMaxRateModule(maxRate))
 	// TODO(mberlin): Append ReplicationLagModule once it's implemented.
 

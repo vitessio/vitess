@@ -4,6 +4,8 @@
 
 package worker
 
+import "github.com/youtube/vitess/go/vt/throttler"
+
 const (
 	defaultSourceReaderCount = 10
 	// defaultDestinationPackCount is the number of rows which will be aggreated
@@ -13,5 +15,5 @@ const (
 	defaultMinTableSizeForSplit      = 1024 * 1024
 	defaultDestinationWriterCount    = 20
 	defaultMinHealthyRdonlyEndPoints = 2
-	defaultMaxTPS                    = 0
+	defaultMaxTPS                    = throttler.MaxRateModuleDisabled
 )

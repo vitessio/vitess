@@ -91,9 +91,7 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 	if err != nil {
 		return nil, err
 	}
-	if maxTPS == 0 {
-		maxTPS = throttler.MaxRateModuleDisabled
-	} else {
+	if maxTPS != throttler.MaxRateModuleDisabled {
 		wr.Logger().Infof("throttling enabled and set to a max of %v transactions/second", maxTPS)
 	}
 	if maxTPS != throttler.MaxRateModuleDisabled && maxTPS < int64(destinationWriterCount) {
