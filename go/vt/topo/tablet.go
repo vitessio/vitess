@@ -113,11 +113,12 @@ func TabletComplete(tablet *topodatapb.Tablet) error {
 	return nil
 }
 
-// NewTablet create a new Tablet record with the given Hostname and id.
-func NewTablet(uid uint32, host string) *topodatapb.Tablet {
+// NewTablet create a new Tablet record with the given id, cell, and hostname.
+func NewTablet(uid uint32, cell, host string) *topodatapb.Tablet {
 	return &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
-			Uid: uid,
+			Cell: cell,
+			Uid:  uid,
 		},
 		Hostname: host,
 		PortMap:  make(map[string]int32),

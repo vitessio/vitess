@@ -109,7 +109,7 @@ func TestWaitForTablets(t *testing.T) {
 	defer shortCancel()
 	waitAvailableTabletInterval = 20 * time.Millisecond
 
-	ep := topo.NewTablet(0, "a")
+	ep := topo.NewTablet(0, "cell", "a")
 	ep.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse)
 	createFakeConn(ep, input)

@@ -137,7 +137,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(hc discovery.Healt
 	sbc := &sandboxConn{mustFailServer: 1}
 	hc.addTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil, sbc)
 	qr, err = f(hc, []string{"0"})
-	want := fmt.Sprintf("shard, host: %v.0.replica, alias:<> hostname:\"0\" port_map:<key:\"vt\" value:1 > , error: err", name)
+	want := fmt.Sprintf("shard, host: %v.0.replica, alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > , error: err", name)
 	// Verify server error string.
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
@@ -156,7 +156,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(hc discovery.Healt
 	hc.addTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_REPLICA, true, 1, nil, sbc1)
 	_, err = f(hc, []string{"0", "1"})
 	// Verify server errors are consolidated.
-	want = fmt.Sprintf("shard, host: %v.0.replica, alias:<> hostname:\"0\" port_map:<key:\"vt\" value:1 > , error: err\nshard, host: %v.1.replica, alias:<> hostname:\"1\" port_map:<key:\"vt\" value:1 > , error: err", name, name)
+	want = fmt.Sprintf("shard, host: %v.0.replica, alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > , error: err\nshard, host: %v.1.replica, alias:<cell:\"aa\" > hostname:\"1\" port_map:<key:\"vt\" value:1 > , error: err", name, name)
 	verifyScatterConnError(t, err, want, vtrpcpb.ErrorCode_BAD_INPUT)
 	// Ensure that we tried only once.
 	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
@@ -175,7 +175,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(hc discovery.Healt
 	hc.addTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_REPLICA, true, 1, nil, sbc1)
 	_, err = f(hc, []string{"0", "1"})
 	// Verify server errors are consolidated.
-	want = fmt.Sprintf("shard, host: %v.0.replica, alias:<> hostname:\"0\" port_map:<key:\"vt\" value:1 > , error: err\nshard, host: %v.1.replica, alias:<> hostname:\"1\" port_map:<key:\"vt\" value:1 > , tx_pool_full: err", name, name)
+	want = fmt.Sprintf("shard, host: %v.0.replica, alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > , error: err\nshard, host: %v.1.replica, alias:<cell:\"aa\" > hostname:\"1\" port_map:<key:\"vt\" value:1 > , tx_pool_full: err", name, name)
 	// We should only surface the higher priority error code
 	verifyScatterConnError(t, err, want, vtrpcpb.ErrorCode_BAD_INPUT)
 	// Ensure that we tried only once.

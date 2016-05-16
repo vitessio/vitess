@@ -355,42 +355,42 @@ func shuffleTablets(tablets []*topodatapb.Tablet) {
 // replica - return all from local cell.
 // TODO(liang): select replica by replication lag.
 func (dg *discoveryGateway) getTablets(keyspace, shard string, tabletType topodatapb.TabletType) []*topodatapb.Tablet {
-	epsList := dg.hc.GetTabletStatsFromTarget(keyspace, shard, tabletType)
+	tsList := dg.hc.GetTabletStatsFromTarget(keyspace, shard, tabletType)
 	// for master, use any cells and return the one with max reparent timestamp.
 	if tabletType == topodatapb.TabletType_MASTER {
 		var maxTimestamp int64
-		var ep *topodatapb.Tablet
-		for _, eps := range epsList {
-			if eps.LastError != nil || !eps.Serving {
+		var t *topodatapb.Tablet
+		for _, ts := range tsList {
+			if ts.LastError != nil || !ts.Serving {
 				continue
 			}
-			if eps.TabletExternallyReparentedTimestamp >= maxTimestamp {
-				maxTimestamp = eps.TabletExternallyReparentedTimestamp
-				ep = eps.Tablet
+			if ts.TabletExternallyReparentedTimestamp >= maxTimestamp {
+				maxTimestamp = ts.TabletExternallyReparentedTimestamp
+				t = ts.Tablet
 			}
 		}
-		if ep == nil {
+		if t == nil {
 			return nil
 		}
-		return []*topodatapb.Tablet{ep}
+		return []*topodatapb.Tablet{t}
 	}
 	// for non-master, use only tablets from local cell and filter by replication lag.
-	list := make([]*discovery.TabletStats, 0, len(epsList))
-	for _, eps := range epsList {
-		if eps.LastError != nil || !eps.Serving {
+	list := make([]*discovery.TabletStats, 0, len(tsList))
+	for _, ts := range tsList {
+		if ts.LastError != nil || !ts.Serving {
 			continue
 		}
-		if dg.localCell != eps.Cell {
+		if dg.localCell != ts.Tablet.Alias.Cell {
 			continue
 		}
-		list = append(list, eps)
+		list = append(list, ts)
 	}
 	list = discovery.FilterByReplicationLag(list)
-	epList := make([]*topodatapb.Tablet, 0, len(list))
-	for _, eps := range list {
-		epList = append(epList, eps.Tablet)
+	tList := make([]*topodatapb.Tablet, 0, len(list))
+	for _, ts := range list {
+		tList = append(tList, ts.Tablet)
 	}
-	return epList
+	return tList
 }
 
 // WrapError returns ShardError which preserves the original error code if possible,

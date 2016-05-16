@@ -67,7 +67,6 @@ type HealthCheckStatsListener interface {
 type TabletStats struct {
 	Tablet                              *topodatapb.Tablet
 	Name                                string // name is an optional tag (e.g. alternative address)
-	Cell                                string
 	Target                              *querypb.Target
 	Up                                  bool // whether the tablet is added
 	Serving                             bool // whether the server is serving
@@ -238,7 +237,6 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, ta
 				hcc.lastError = err
 				ts := &TabletStats{
 					Tablet:  tablet,
-					Cell:    hcc.cell,
 					Name:    hcc.name,
 					Target:  hcc.target,
 					Up:      hcc.up,
@@ -341,7 +339,6 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, tablet *topodat
 		hcc.mu.RLock()
 		ts := &TabletStats{
 			Tablet:  tablet,
-			Cell:    hcc.cell,
 			Name:    hcc.name,
 			Target:  hcc.target,
 			Up:      hcc.up,
@@ -407,7 +404,6 @@ func (hc *HealthCheckImpl) checkHealthCheckTimeout() {
 		hcc.lastError = fmt.Errorf("healthcheck timed out (latest %v)", hcc.lastResponseTimestamp)
 		ts := &TabletStats{
 			Tablet:  hcc.tablet,
-			Cell:    hcc.cell,
 			Name:    hcc.name,
 			Target:  hcc.target,
 			Up:      hcc.up,
@@ -506,7 +502,6 @@ func (hc *HealthCheckImpl) GetTabletStatsFromKeyspaceShard(keyspace, shard strin
 			hcc.mu.RLock()
 			ts := &TabletStats{
 				Tablet:  ep,
-				Cell:    hcc.cell,
 				Name:    hcc.name,
 				Target:  hcc.target,
 				Up:      hcc.up,
@@ -549,7 +544,6 @@ func (hc *HealthCheckImpl) GetTabletStatsFromTarget(keyspace, shard string, tabl
 		hcc.mu.RLock()
 		ts := &TabletStats{
 			Tablet:  ep,
-			Cell:    hcc.cell,
 			Name:    hcc.name,
 			Target:  hcc.target,
 			Up:      hcc.up,
@@ -731,12 +725,11 @@ func (hc *HealthCheckImpl) CacheStatus() TabletsCacheStatusList {
 			epcsMap[key] = epcs
 		}
 		stats := &TabletStats{
-			Cell:    hcc.cell,
+			Tablet:  hcc.tablet,
 			Name:    hcc.name,
 			Target:  hcc.target,
 			Up:      hcc.up,
 			Serving: hcc.serving,
-			Tablet:  hcc.tablet,
 			Stats:   hcc.stats,
 			TabletExternallyReparentedTimestamp: hcc.tabletExternallyReparentedTimestamp,
 			LastError:                           hcc.lastError,

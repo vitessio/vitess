@@ -26,7 +26,7 @@ func init() {
 }
 
 func TestHealthCheck(t *testing.T) {
-	ep := topo.NewTablet(0, "a")
+	ep := topo.NewTablet(0, "cell", "a")
 	ep.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse)
 	fakeConn := createFakeConn(ep, input)
@@ -52,7 +52,6 @@ func TestHealthCheck(t *testing.T) {
 	}
 	want := &TabletStats{
 		Tablet:  ep,
-		Cell:    "cell",
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Up:      true,
 		Serving: true,
@@ -75,7 +74,6 @@ func TestHealthCheck(t *testing.T) {
 		Target: &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		TabletsStats: TabletStatsList{{
 			Tablet:  ep,
-			Cell:    "cell",
 			Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 			Up:      true,
 			Serving: true,
@@ -96,7 +94,6 @@ func TestHealthCheck(t *testing.T) {
 	}
 	want = &TabletStats{
 		Tablet:  ep,
-		Cell:    "cell",
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
 		Serving: true,
@@ -123,7 +120,6 @@ func TestHealthCheck(t *testing.T) {
 	}
 	want = &TabletStats{
 		Tablet:  ep,
-		Cell:    "cell",
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
 		Serving: false,
@@ -146,7 +142,6 @@ func TestHealthCheck(t *testing.T) {
 	}
 	want = &TabletStats{
 		Tablet:  ep,
-		Cell:    "cell",
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
 		Serving: false,
@@ -167,7 +162,6 @@ func TestHealthCheck(t *testing.T) {
 	t.Logf(`hc.RemoveTablet({Host: "a", PortMap: {"vt": 1}})`)
 	want = &TabletStats{
 		Tablet:  ep,
-		Cell:    "cell",
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      false,
 		Serving: false,
@@ -189,7 +183,7 @@ func TestHealthCheck(t *testing.T) {
 
 func TestHealthCheckTimeout(t *testing.T) {
 	timeout := 500 * time.Millisecond
-	ep := topo.NewTablet(0, "a")
+	ep := topo.NewTablet(0, "cell", "a")
 	ep.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse)
 	createFakeConn(ep, input)
@@ -209,7 +203,6 @@ func TestHealthCheckTimeout(t *testing.T) {
 	}
 	want := &TabletStats{
 		Tablet:  ep,
-		Cell:    "cell",
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Up:      true,
 		Serving: true,

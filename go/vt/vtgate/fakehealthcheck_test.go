@@ -45,7 +45,6 @@ func (fhc *fakeHealthCheck) AddTablet(cell, name string, tablet *topodatapb.Tabl
 	item := &fhcItem{
 		ts: &discovery.TabletStats{
 			Tablet: tablet,
-			Cell:   cell,
 			Name:   name,
 		},
 	}
@@ -112,7 +111,7 @@ func (fhc *fakeHealthCheck) addTestTablet(cell, host string, port int32, keyspac
 	if conn != nil {
 		conn.SetTarget(keyspace, shard, tabletType)
 	}
-	ep := topo.NewTablet(0, host)
+	ep := topo.NewTablet(0, cell, host)
 	ep.PortMap["vt"] = port
 	key := discovery.TabletToMapKey(ep)
 	item := fhc.items[key]
@@ -120,7 +119,11 @@ func (fhc *fakeHealthCheck) addTestTablet(cell, host string, port int32, keyspac
 		fhc.AddTablet(cell, "", ep)
 		item = fhc.items[key]
 	}
-	item.ts.Target = &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: tabletType}
+	item.ts.Target = &querypb.Target{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: tabletType,
+	}
 	item.ts.Serving = serving
 	item.ts.TabletExternallyReparentedTimestamp = reparentTS
 	item.ts.Stats = &querypb.RealtimeStats{}

@@ -204,8 +204,8 @@ func testResolverGeneric(t *testing.T, name string, action func(hc discovery.Hea
 	hc.addTestTablet("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
 	hc.addTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 	_, err = action(hc)
-	want1 := fmt.Sprintf("shard, host: %s.-20.master, alias:<> hostname:\"-20\" port_map:<key:\"vt\" value:1 > , error: err", name)
-	want2 := fmt.Sprintf("shard, host: %s.20-40.master, alias:<> hostname:\"20-40\" port_map:<key:\"vt\" value:1 > , retry: err", name)
+	want1 := fmt.Sprintf("shard, host: %s.-20.master, alias:<cell:\"aa\" > hostname:\"-20\" port_map:<key:\"vt\" value:1 > , error: err", name)
+	want2 := fmt.Sprintf("shard, host: %s.20-40.master, alias:<cell:\"aa\" > hostname:\"20-40\" port_map:<key:\"vt\" value:1 > , retry: err", name)
 	want := []string{want1, want2}
 	sort.Strings(want)
 	if err == nil {
@@ -237,8 +237,8 @@ func testResolverGeneric(t *testing.T, name string, action func(hc discovery.Hea
 	hc.addTestTablet("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
 	hc.addTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 	_, err = action(hc)
-	want1 = fmt.Sprintf("shard, host: %s.-20.master, alias:<> hostname:\"-20\" port_map:<key:\"vt\" value:1 > , retry: err", name)
-	want2 = fmt.Sprintf("shard, host: %s.20-40.master, alias:<> hostname:\"20-40\" port_map:<key:\"vt\" value:1 > , fatal: err", name)
+	want1 = fmt.Sprintf("shard, host: %s.-20.master, alias:<cell:\"aa\" > hostname:\"-20\" port_map:<key:\"vt\" value:1 > , retry: err", name)
+	want2 = fmt.Sprintf("shard, host: %s.20-40.master, alias:<cell:\"aa\" > hostname:\"20-40\" port_map:<key:\"vt\" value:1 > , fatal: err", name)
 	want = []string{want1, want2}
 	sort.Strings(want)
 	if err == nil {
@@ -389,7 +389,7 @@ func testResolverStreamGeneric(t *testing.T, name string, action func(hc discove
 	hc.addTestTablet("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
 	hc.addTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 	_, err = action(hc)
-	want := fmt.Sprintf("shard, host: %s.-20.master, alias:<> hostname:\"-20\" port_map:<key:\"vt\" value:1 > , retry: err", name)
+	want := fmt.Sprintf("shard, host: %s.-20.master, alias:<cell:\"aa\" > hostname:\"-20\" port_map:<key:\"vt\" value:1 > , retry: err", name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want\n%s\ngot\n%v", want, err)
 	}
@@ -509,7 +509,7 @@ func TestResolverExecBatchReresolve(t *testing.T) {
 	}
 
 	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, false, nil, buildBatchRequest)
-	want := "shard, host: TestResolverExecBatchReresolve.0.master, alias:<> hostname:\"0\" port_map:<key:\"vt\" value:1 > , retry: err"
+	want := "shard, host: TestResolverExecBatchReresolve.0.master, alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > , retry: err"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -546,7 +546,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	}
 
 	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, true, nil, buildBatchRequest)
-	want := "shard, host: TestResolverExecBatchAsTransaction.0.master, alias:<> hostname:\"0\" port_map:<key:\"vt\" value:1 > , retry: err"
+	want := "shard, host: TestResolverExecBatchAsTransaction.0.master, alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > , retry: err"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %v, got %v", want, err)
 	}

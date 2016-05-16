@@ -16,12 +16,12 @@ func TestFilterByReplicationLag(t *testing.T) {
 	}
 	// 1 serving tablet
 	ts1 := &TabletStats{
-		Tablet:  topo.NewTablet(1, "host1"),
+		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{},
 	}
 	ts2 := &TabletStats{
-		Tablet:  topo.NewTablet(2, "host2"),
+		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: false,
 		Stats:   &querypb.RealtimeStats{},
 	}
@@ -34,22 +34,22 @@ func TestFilterByReplicationLag(t *testing.T) {
 	}
 	// lags of (1s, 1s, 1s, 30s)
 	ts1 = &TabletStats{
-		Tablet:  topo.NewTablet(1, "host1"),
+		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
 	}
 	ts2 = &TabletStats{
-		Tablet:  topo.NewTablet(2, "host2"),
+		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
 	}
 	ts3 := &TabletStats{
-		Tablet:  topo.NewTablet(3, "host3"),
+		Tablet:  topo.NewTablet(3, "cell", "host3"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
 	}
 	ts4 := &TabletStats{
-		Tablet:  topo.NewTablet(4, "host4"),
+		Tablet:  topo.NewTablet(4, "cell", "host4"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 30},
 	}
@@ -59,22 +59,22 @@ func TestFilterByReplicationLag(t *testing.T) {
 	}
 	// lags of (5s, 10s, 15s, 120s)
 	ts1 = &TabletStats{
-		Tablet:  topo.NewTablet(1, "host1"),
+		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 5},
 	}
 	ts2 = &TabletStats{
-		Tablet:  topo.NewTablet(2, "host2"),
+		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 10},
 	}
 	ts3 = &TabletStats{
-		Tablet:  topo.NewTablet(3, "host3"),
+		Tablet:  topo.NewTablet(3, "cell", "host3"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 15},
 	}
 	ts4 = &TabletStats{
-		Tablet:  topo.NewTablet(4, "host4"),
+		Tablet:  topo.NewTablet(4, "cell", "host4"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 120},
 	}
@@ -84,22 +84,22 @@ func TestFilterByReplicationLag(t *testing.T) {
 	}
 	// lags of (30m, 35m, 40m, 45m)
 	ts1 = &TabletStats{
-		Tablet:  topo.NewTablet(1, "host1"),
+		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 30 * 60},
 	}
 	ts2 = &TabletStats{
-		Tablet:  topo.NewTablet(2, "host2"),
+		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 35 * 60},
 	}
 	ts3 = &TabletStats{
-		Tablet:  topo.NewTablet(3, "host3"),
+		Tablet:  topo.NewTablet(3, "cell", "host3"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 40 * 60},
 	}
 	ts4 = &TabletStats{
-		Tablet:  topo.NewTablet(4, "host4"),
+		Tablet:  topo.NewTablet(4, "cell", "host4"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 45 * 60},
 	}
@@ -109,12 +109,12 @@ func TestFilterByReplicationLag(t *testing.T) {
 	}
 	// lags of (1m, 100m) - return at least 2 items to avoid overloading if the 2nd one is not delayed too much
 	ts1 = &TabletStats{
-		Tablet:  topo.NewTablet(1, "host1"),
+		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1 * 60},
 	}
 	ts2 = &TabletStats{
-		Tablet:  topo.NewTablet(2, "host2"),
+		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 100 * 60},
 	}
@@ -124,12 +124,12 @@ func TestFilterByReplicationLag(t *testing.T) {
 	}
 	// lags of (1m, 3h) - return 1 if the 2nd one is delayed too much
 	ts1 = &TabletStats{
-		Tablet:  topo.NewTablet(1, "host1"),
+		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1 * 60},
 	}
 	ts2 = &TabletStats{
-		Tablet:  topo.NewTablet(2, "host2"),
+		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 3 * 60 * 60},
 	}
