@@ -106,7 +106,7 @@ func newBinlogPlayerController(ts topo.Server, vtClientFactory func() binlogplay
 		binlogPlayerStats: binlogplayer.NewStats(),
 		healthCheck:       discovery.NewHealthCheck(*binlogplayer.BinlogPlayerConnTimeout, *healthcheckRetryDelay, *healthCheckTimeout, "" /* statsSuffix */),
 	}
-	blc.shardReplicationWatcher = discovery.NewShardReplicationWatcher(ts, blc.healthCheck, cell, sourceShard.Keyspace, sourceShard.Shard, *healthCheckTopologyRefresh, 5)
+	blc.shardReplicationWatcher = discovery.NewShardReplicationWatcher(ts, blc.healthCheck, cell, sourceShard.Keyspace, sourceShard.Shard, *healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 	return blc
 }
 
