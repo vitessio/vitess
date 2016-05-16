@@ -254,11 +254,6 @@ message EndPoint {
   reserved 4;
 }
 
-// EndPoints corresponds to a list of tablets.
-message EndPoints {
-  repeated EndPoint entries = 1;
-}
-
 // SrvShard is a rollup node for the shard itself.
 message SrvShard {
   // Copied from Shard.

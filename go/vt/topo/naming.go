@@ -57,8 +57,3 @@ func EndPointEquality(left, right *topodatapb.EndPoint) bool {
 	}
 	return true
 }
-
-// NewEndPoints creates a EndPoints with a pre-allocated slice for Entries.
-func NewEndPoints() *topodatapb.EndPoints {
-	return &topodatapb.EndPoints{Entries: make([]*topodatapb.EndPoint, 0, 8)}
-}
