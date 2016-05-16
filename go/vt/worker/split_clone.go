@@ -350,13 +350,13 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 		}
 
 		shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-		err := scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i])
+		err := scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i].Tablet)
 		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot stop replication on tablet %v", topoproto.TabletAliasString(alias))
 		}
 
-		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i])
+		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i].Tablet)
 	}
 
 	// Initialize healthcheck and add destination shards to it.
@@ -604,7 +604,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 		// get the current position from the sources
 		for shardIndex := range scw.sourceShards {
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-			status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex])
+			status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex].Tablet)
 			cancel()
 			if err != nil {
 				return err
@@ -662,7 +662,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Reloading schema on tablet %v", ti.AliasString())
 				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-				err := scw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti)
+				err := scw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti.Tablet)
 				cancel()
 				if err != nil {
 					processError("ReloadSchema failed on tablet %v: %v", ti.AliasString(), err)

@@ -134,7 +134,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
 	waitID := makeWaitID()
-	if err := tmc.TabletExternallyReparented(context.Background(), ti, waitID); err != nil {
+	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(slave) error: %v", err)
 	}
 	waitForExternalReparent(t, waitID)
@@ -146,7 +146,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
 	waitID = makeWaitID()
-	if err := tmc.TabletExternallyReparented(context.Background(), ti, waitID); err != nil {
+	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 	}
 	waitForExternalReparent(t, waitID)
@@ -196,7 +196,7 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
 	waitID := makeWaitID()
-	if err := tmc.TabletExternallyReparented(context.Background(), ti, waitID); err != nil {
+	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 	}
 	waitForExternalReparent(t, waitID)
@@ -241,7 +241,7 @@ func TestTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
 	waitID := makeWaitID()
-	if err := tmc.TabletExternallyReparented(context.Background(), ti, waitID); err != nil {
+	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 	}
 	waitForExternalReparent(t, waitID)
@@ -284,7 +284,7 @@ func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
 	waitID := makeWaitID()
-	if err := tmc.TabletExternallyReparented(context.Background(), ti, waitID); err != nil {
+	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 	}
 	waitForExternalReparent(t, waitID)

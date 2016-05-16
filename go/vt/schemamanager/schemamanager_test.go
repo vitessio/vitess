@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -243,7 +244,7 @@ func (client *fakeTabletManagerClient) AddSchemaDefinition(
 	client.schemaDefinitions[dbName] = schemaDefinition
 }
 
-func (client *fakeTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*tmutils.SchemaChangeResult, error) {
+func (client *fakeTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, change string) (*tmutils.SchemaChangeResult, error) {
 	result, ok := client.preflightSchemas[change]
 	if !ok {
 		var scr tmutils.SchemaChangeResult
@@ -252,15 +253,15 @@ func (client *fakeTabletManagerClient) PreflightSchema(ctx context.Context, tabl
 	return result, nil
 }
 
-func (client *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	result, ok := client.schemaDefinitions[tablet.DbName()]
+func (client *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	result, ok := client.schemaDefinitions[topoproto.TabletDbName(tablet)]
 	if !ok {
-		return nil, fmt.Errorf("unknown database: %s", tablet.DbName())
+		return nil, fmt.Errorf("unknown database: %s", topoproto.TabletDbName(tablet))
 	}
 	return result, nil
 }
 
-func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
+func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, query string, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
 	if client.EnableExecuteFetchAsDbaError {
 		return nil, fmt.Errorf("ExecuteFetchAsDba occur an unknown error")
 	}

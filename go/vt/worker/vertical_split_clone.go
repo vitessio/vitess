@@ -321,13 +321,13 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 
 	// stop replication on it
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	err = vscw.wr.TabletManagerClient().StopSlave(shortCtx, vscw.sourceTablet)
+	err = vscw.wr.TabletManagerClient().StopSlave(shortCtx, vscw.sourceTablet.Tablet)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot stop replication on tablet %v", topoproto.TabletAliasString(vscw.sourceAlias))
 	}
 
-	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet)
+	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet.Tablet)
 
 	// Initialize healthcheck and add destination shards to it.
 	vscw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout, "" /* statsSuffix */)
@@ -504,7 +504,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	} else {
 		// get the current position from the source
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		status, err := vscw.wr.TabletManagerClient().SlaveStatus(shortCtx, vscw.sourceTablet)
+		status, err := vscw.wr.TabletManagerClient().SlaveStatus(shortCtx, vscw.sourceTablet.Tablet)
 		cancel()
 		if err != nil {
 			return err
@@ -553,7 +553,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 			defer destinationWaitGroup.Done()
 			vscw.wr.Logger().Infof("Reloading schema on tablet %v", ti.AliasString())
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-			err := vscw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti)
+			err := vscw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti.Tablet)
 			cancel()
 			if err != nil {
 				processError("ReloadSchema failed on tablet %v: %v", ti.AliasString(), err)

@@ -10,18 +10,21 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
-	"golang.org/x/net/context"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // TabletExecutor applies schema changes to all tablets.
 type TabletExecutor struct {
 	tmClient             tmclient.TabletManagerClient
 	topoServer           topo.Server
-	tabletInfos          []*topo.TabletInfo
+	tablets              []*topodatapb.Tablet
 	schemaDiffs          []*tmutils.SchemaChangeResult
 	isClosed             bool
 	allowBigSchemaChange bool
@@ -61,7 +64,7 @@ func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 		return fmt.Errorf("unable to get shard names for keyspace: %s, error: %v", keyspace, err)
 	}
 	log.Infof("Keyspace: %v, Shards: %v\n", keyspace, shardNames)
-	exec.tabletInfos = make([]*topo.TabletInfo, len(shardNames))
+	exec.tablets = make([]*topodatapb.Tablet, len(shardNames))
 	for i, shardName := range shardNames {
 		shardInfo, err := exec.topoServer.GetShard(ctx, keyspace, shardName)
 		log.Infof("\tShard: %s, ShardInfo: %v\n", shardName, shardInfo)
@@ -76,11 +79,11 @@ func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 		if err != nil {
 			return fmt.Errorf("unable to get master tablet info, keyspace: %s, shard: %s, error: %v", keyspace, shardName, err)
 		}
-		exec.tabletInfos[i] = tabletInfo
+		exec.tablets[i] = tabletInfo.Tablet
 		log.Infof("\t\tTabletInfo: %+v\n", tabletInfo)
 	}
 
-	if len(exec.tabletInfos) == 0 {
+	if len(exec.tablets) == 0 {
 		return fmt.Errorf("keyspace: %s does not contain any master tablets", keyspace)
 	}
 	exec.isClosed = false
@@ -117,9 +120,9 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 //   1. Alter more than 100,000 rows.
 //   2. Change a table with more than 2,000,000 rows (Drops are fine).
 func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDDLs []*sqlparser.DDL) (bool, error) {
-	// exec.tabletInfos is guaranteed to have at least one element;
+	// exec.tablets is guaranteed to have at least one element;
 	// Otherwise, Open should fail and executor should fail.
-	masterTabletInfo := exec.tabletInfos[0]
+	masterTabletInfo := exec.tablets[0]
 	// get database schema, excluding views.
 	dbSchema, err := exec.tmClient.GetSchema(
 		ctx, masterTabletInfo, []string{}, []string{}, false)
@@ -153,7 +156,7 @@ func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []s
 	exec.schemaDiffs = make([]*tmutils.SchemaChangeResult, len(sqls))
 	for i := range sqls {
 		schemaDiff, err := exec.tmClient.PreflightSchema(
-			ctx, exec.tabletInfos[0], sqls[i])
+			ctx, exec.tablets[0], sqls[i])
 		if err != nil {
 			return err
 		}
@@ -199,12 +202,12 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 
 func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult *ExecuteResult, sql string) {
 	var wg sync.WaitGroup
-	numOfMasterTablets := len(exec.tabletInfos)
+	numOfMasterTablets := len(exec.tablets)
 	wg.Add(numOfMasterTablets)
 	errChan := make(chan ShardWithError, numOfMasterTablets)
 	successChan := make(chan ShardResult, numOfMasterTablets)
-	for i := range exec.tabletInfos {
-		go exec.executeOneTablet(ctx, &wg, exec.tabletInfos[i], sql, errChan, successChan)
+	for i := range exec.tablets {
+		go exec.executeOneTablet(ctx, &wg, exec.tablets[i], sql, errChan, successChan)
 	}
 	wg.Wait()
 	close(errChan)
@@ -222,7 +225,7 @@ func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult 
 func (exec *TabletExecutor) executeOneTablet(
 	ctx context.Context,
 	wg *sync.WaitGroup,
-	tabletInfo *topo.TabletInfo,
+	tabletInfo *topodatapb.Tablet,
 	sql string,
 	errChan chan ShardWithError,
 	successChan chan ShardResult) {
@@ -238,7 +241,7 @@ func (exec *TabletExecutor) executeOneTablet(
 // Close clears tablet executor states
 func (exec *TabletExecutor) Close() {
 	if !exec.isClosed {
-		exec.tabletInfos = nil
+		exec.tablets = nil
 		exec.isClosed = true
 	}
 }

@@ -210,7 +210,7 @@ func (wr *Wrangler) getMastersPosition(ctx context.Context, shards []*topo.Shard
 				return
 			}
 
-			pos, err := wr.tmc.MasterPosition(ctx, ti)
+			pos, err := wr.tmc.MasterPosition(ctx, ti.Tablet)
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -248,13 +248,13 @@ func (wr *Wrangler) waitForFilteredReplication(ctx context.Context, sourcePositi
 
 				// and wait for it
 				wr.Logger().Infof("Waiting for %v to catch up", topoproto.TabletAliasString(si.MasterAlias))
-				tablet, err := wr.ts.GetTablet(ctx, si.MasterAlias)
+				ti, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 				if err != nil {
 					rec.RecordError(err)
 					return
 				}
 
-				if err := wr.tmc.WaitBlpPosition(ctx, tablet, blpPosition, waitTime); err != nil {
+				if err := wr.tmc.WaitBlpPosition(ctx, ti.Tablet, blpPosition, waitTime); err != nil {
 					rec.RecordError(err)
 				} else {
 					wr.Logger().Infof("%v caught up", topoproto.TabletAliasString(si.MasterAlias))
@@ -281,7 +281,7 @@ func (wr *Wrangler) refreshMasters(ctx context.Context, shards []*topo.ShardInfo
 				return
 			}
 
-			if err := wr.tmc.RefreshState(ctx, ti); err != nil {
+			if err := wr.tmc.RefreshState(ctx, ti.Tablet); err != nil {
 				rec.RecordError(err)
 			} else {
 				wr.Logger().Infof("%v responded", topoproto.TabletAliasString(si.MasterAlias))
@@ -738,20 +738,20 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 
 	// Now refresh the blacklisted table list on the source master
 	event.DispatchUpdate(ev, "refreshing source master so it updates its blacklisted tables")
-	if err := wr.tmc.RefreshState(ctx, sourceMasterTabletInfo); err != nil {
+	if err := wr.tmc.RefreshState(ctx, sourceMasterTabletInfo.Tablet); err != nil {
 		return err
 	}
 
 	// get the position
 	event.DispatchUpdate(ev, "getting master position")
-	masterPosition, err := wr.tmc.MasterPosition(ctx, sourceMasterTabletInfo)
+	masterPosition, err := wr.tmc.MasterPosition(ctx, sourceMasterTabletInfo.Tablet)
 	if err != nil {
 		return err
 	}
 
 	// wait for it
 	event.DispatchUpdate(ev, "waiting for destination master to catch up to source master")
-	if err := wr.tmc.WaitBlpPosition(ctx, destinationMasterTabletInfo, &tabletmanagerdatapb.BlpPosition{
+	if err := wr.tmc.WaitBlpPosition(ctx, destinationMasterTabletInfo.Tablet, &tabletmanagerdatapb.BlpPosition{
 		Uid:      0,
 		Position: masterPosition,
 	}, filteredReplicationWaitTime); err != nil {
@@ -834,7 +834,7 @@ func (wr *Wrangler) RefreshTablesByShard(ctx context.Context, si *topo.ShardInfo
 			// Using 60 seconds because RefreshState should not take more than 30 seconds.
 			// (RefreshState will restart the tablet's QueryService and most time will be spent on the shutdown, i.e. waiting up to 30 seconds on transactions (see Config.TransactionTimeout)).
 			ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-			if err := wr.tmc.RefreshState(ctx, ti); err != nil {
+			if err := wr.tmc.RefreshState(ctx, ti.Tablet); err != nil {
 				wr.Logger().Warningf("RefreshTablesByShard: failed to refresh %v: %v", ti.AliasString(), err)
 			}
 			cancel()

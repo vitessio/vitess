@@ -101,31 +101,6 @@ func IsSlaveType(tt topodatapb.TabletType) bool {
 	return true
 }
 
-// TabletValidatePortMap returns an error if the tablet's portmap doesn't
-// contain all the necessary ports for the tablet to be fully
-// operational. We only care about vt port now, as mysql may not even
-// be running.
-func TabletValidatePortMap(tablet *topodatapb.Tablet) error {
-	if _, ok := tablet.PortMap["vt"]; !ok {
-		return fmt.Errorf("no vt port available")
-	}
-	return nil
-}
-
-// TabletEndPoint returns an EndPoint associated with the tablet record
-func TabletEndPoint(tablet *topodatapb.Tablet) (*topodatapb.EndPoint, error) {
-	if err := TabletValidatePortMap(tablet); err != nil {
-		return nil, err
-	}
-
-	entry := NewEndPoint(tablet.Alias.Uid, tablet.Hostname)
-	for name, port := range tablet.PortMap {
-		entry.PortMap[name] = int32(port)
-	}
-
-	return entry, nil
-}
-
 // TabletComplete validates and normalizes the tablet. If the shard name
 // contains a '-' it is going to try to infer the keyrange from it.
 func TabletComplete(tablet *topodatapb.Tablet) error {

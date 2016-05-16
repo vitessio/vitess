@@ -10,7 +10,6 @@ import (
 
 	"github.com/youtube/vitess/go/vt/tabletmanager/agentrpctest"
 	"github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
-	"github.com/youtube/vitess/go/vt/topo"
 	"google.golang.org/grpc"
 
 	tabletmanagerservicepb "github.com/youtube/vitess/go/vt/proto/tabletmanagerservice"
@@ -36,7 +35,7 @@ func TestGRPCTMServer(t *testing.T) {
 
 	// Create a gRPC client to talk to the fake tablet.
 	client := &grpctmclient.Client{}
-	ti := topo.NewTabletInfo(&topodatapb.Tablet{
+	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "test",
 			Uid:  123,
@@ -45,8 +44,8 @@ func TestGRPCTMServer(t *testing.T) {
 		PortMap: map[string]int32{
 			"grpc": port,
 		},
-	}, 0)
+	}
 
 	// and run the test suite
-	agentrpctest.Run(t, client, ti, fakeAgent)
+	agentrpctest.Run(t, client, tablet, fakeAgent)
 }

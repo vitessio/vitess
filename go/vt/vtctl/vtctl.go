@@ -741,7 +741,7 @@ func commandSetReadOnly(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.TabletManagerClient().SetReadOnly(ctx, ti)
+	return wr.TabletManagerClient().SetReadOnly(ctx, ti.Tablet)
 }
 
 func commandSetReadWrite(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -760,7 +760,7 @@ func commandSetReadWrite(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.TabletManagerClient().SetReadWrite(ctx, ti)
+	return wr.TabletManagerClient().SetReadWrite(ctx, ti.Tablet)
 }
 
 func commandStartSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -779,7 +779,7 @@ func commandStartSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.TabletManagerClient().StartSlave(ctx, ti)
+	return wr.TabletManagerClient().StartSlave(ctx, ti.Tablet)
 }
 
 func commandStopSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -798,7 +798,7 @@ func commandStopSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.TabletManagerClient().StopSlave(ctx, ti)
+	return wr.TabletManagerClient().StopSlave(ctx, ti.Tablet)
 }
 
 func commandChangeSlaveType(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -850,7 +850,7 @@ func commandPing(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Flag
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().Ping(ctx, tabletInfo)
+	return wr.TabletManagerClient().Ping(ctx, tabletInfo.Tablet)
 }
 
 func commandRefreshState(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -868,7 +868,7 @@ func commandRefreshState(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().RefreshState(ctx, tabletInfo)
+	return wr.TabletManagerClient().RefreshState(ctx, tabletInfo.Tablet)
 }
 
 func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -886,7 +886,7 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo)
+	return wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo.Tablet)
 }
 
 func commandIgnoreHealthError(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -905,7 +905,7 @@ func commandIgnoreHealthError(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().IgnoreHealthError(ctx, tabletInfo, pattern)
+	return wr.TabletManagerClient().IgnoreHealthError(ctx, tabletInfo.Tablet, pattern)
 }
 
 func commandWaitForDrain(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -958,7 +958,7 @@ func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().Sleep(ctx, ti, duration)
+	return wr.TabletManagerClient().Sleep(ctx, ti.Tablet, duration)
 }
 
 func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -978,7 +978,7 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	if err != nil {
 		return err
 	}
-	stream, err := wr.TabletManagerClient().Backup(ctx, tabletInfo, *concurrency)
+	stream, err := wr.TabletManagerClient().Backup(ctx, tabletInfo.Tablet, *concurrency)
 	if err != nil {
 		return err
 	}
@@ -1134,7 +1134,7 @@ func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangle
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().TabletExternallyReparented(ctx, ti, "")
+	return wr.TabletManagerClient().TabletExternallyReparented(ctx, ti.Tablet, "")
 }
 
 func commandValidateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1398,7 +1398,7 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 	// Always run an explicit healthcheck first to make sure we don't see any outdated values.
 	// This is especially true for tests and automation where there is no pause of multiple seconds
 	// between commands and the periodic healthcheck did not run again yet.
-	if err := wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo); err != nil {
+	if err := wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo.Tablet); err != nil {
 		return fmt.Errorf("failed to run explicit healthcheck on tablet: %v err: %v", tabletInfo, err)
 	}
 

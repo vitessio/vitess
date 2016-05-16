@@ -174,7 +174,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 			// Tell the old master to re-read its tablet record and change its state.
 			// We don't need to wait for it.
 			tmc := tmclient.NewTabletManagerClient()
-			tmc.RefreshState(ctx, topo.NewTabletInfo(oldMasterTablet, -1))
+			tmc.RefreshState(ctx, oldMasterTablet)
 		}()
 	}
 

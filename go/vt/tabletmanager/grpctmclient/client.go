@@ -19,7 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
@@ -51,7 +51,7 @@ func init() {
 type Client struct{}
 
 // dial returns a client to use
-func (client *Client) dial(ctx context.Context, tablet *topo.TabletInfo) (*grpc.ClientConn, tabletmanagerservicepb.TabletManagerClient, error) {
+func (client *Client) dial(ctx context.Context, tablet *topodatapb.Tablet) (*grpc.ClientConn, tabletmanagerservicepb.TabletManagerClient, error) {
 	// create the RPC client, using ctx.Deadline if set, or no timeout.
 	var connectTimeout time.Duration
 	deadline, ok := ctx.Deadline()
@@ -83,7 +83,7 @@ func (client *Client) dial(ctx context.Context, tablet *topo.TabletInfo) (*grpc.
 //
 
 // Ping is part of the tmclient.TabletManagerClient interface.
-func (client *Client) Ping(ctx context.Context, tablet *topo.TabletInfo) error {
+func (client *Client) Ping(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -102,7 +102,7 @@ func (client *Client) Ping(ctx context.Context, tablet *topo.TabletInfo) error {
 }
 
 // Sleep is part of the tmclient.TabletManagerClient interface.
-func (client *Client) Sleep(ctx context.Context, tablet *topo.TabletInfo, duration time.Duration) error {
+func (client *Client) Sleep(ctx context.Context, tablet *topodatapb.Tablet, duration time.Duration) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -115,7 +115,7 @@ func (client *Client) Sleep(ctx context.Context, tablet *topo.TabletInfo, durati
 }
 
 // ExecuteHook is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ExecuteHook(ctx context.Context, tablet *topo.TabletInfo, hk *hook.Hook) (*hook.HookResult, error) {
+func (client *Client) ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet, hk *hook.Hook) (*hook.HookResult, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -137,7 +137,7 @@ func (client *Client) ExecuteHook(ctx context.Context, tablet *topo.TabletInfo, 
 }
 
 // GetSchema is part of the tmclient.TabletManagerClient interface.
-func (client *Client) GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (client *Client) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -155,7 +155,7 @@ func (client *Client) GetSchema(ctx context.Context, tablet *topo.TabletInfo, ta
 }
 
 // GetPermissions is part of the tmclient.TabletManagerClient interface.
-func (client *Client) GetPermissions(ctx context.Context, tablet *topo.TabletInfo) (*tabletmanagerdatapb.Permissions, error) {
+func (client *Client) GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -173,7 +173,7 @@ func (client *Client) GetPermissions(ctx context.Context, tablet *topo.TabletInf
 //
 
 // SetReadOnly is part of the tmclient.TabletManagerClient interface.
-func (client *Client) SetReadOnly(ctx context.Context, tablet *topo.TabletInfo) error {
+func (client *Client) SetReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -184,7 +184,7 @@ func (client *Client) SetReadOnly(ctx context.Context, tablet *topo.TabletInfo) 
 }
 
 // SetReadWrite is part of the tmclient.TabletManagerClient interface.
-func (client *Client) SetReadWrite(ctx context.Context, tablet *topo.TabletInfo) error {
+func (client *Client) SetReadWrite(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -195,7 +195,7 @@ func (client *Client) SetReadWrite(ctx context.Context, tablet *topo.TabletInfo)
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType topodatapb.TabletType) error {
+func (client *Client) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -208,7 +208,7 @@ func (client *Client) ChangeType(ctx context.Context, tablet *topo.TabletInfo, d
 }
 
 // RefreshState is part of the tmclient.TabletManagerClient interface.
-func (client *Client) RefreshState(ctx context.Context, tablet *topo.TabletInfo) error {
+func (client *Client) RefreshState(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -219,7 +219,7 @@ func (client *Client) RefreshState(ctx context.Context, tablet *topo.TabletInfo)
 }
 
 // RunHealthCheck is part of the tmclient.TabletManagerClient interface.
-func (client *Client) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo) error {
+func (client *Client) RunHealthCheck(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -230,7 +230,7 @@ func (client *Client) RunHealthCheck(ctx context.Context, tablet *topo.TabletInf
 }
 
 // IgnoreHealthError is part of the tmclient.TabletManagerClient interface.
-func (client *Client) IgnoreHealthError(ctx context.Context, tablet *topo.TabletInfo, pattern string) error {
+func (client *Client) IgnoreHealthError(ctx context.Context, tablet *topodatapb.Tablet, pattern string) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -243,7 +243,7 @@ func (client *Client) IgnoreHealthError(ctx context.Context, tablet *topo.Tablet
 }
 
 // ReloadSchema is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ReloadSchema(ctx context.Context, tablet *topo.TabletInfo) error {
+func (client *Client) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -254,7 +254,7 @@ func (client *Client) ReloadSchema(ctx context.Context, tablet *topo.TabletInfo)
 }
 
 // PreflightSchema is part of the tmclient.TabletManagerClient interface.
-func (client *Client) PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*tmutils.SchemaChangeResult, error) {
+func (client *Client) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, change string) (*tmutils.SchemaChangeResult, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -273,7 +273,7 @@ func (client *Client) PreflightSchema(ctx context.Context, tablet *topo.TabletIn
 }
 
 // ApplySchema is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ApplySchema(ctx context.Context, tablet *topo.TabletInfo, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
+func (client *Client) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -296,7 +296,7 @@ func (client *Client) ApplySchema(ctx context.Context, tablet *topo.TabletInfo, 
 }
 
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
+func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, query string, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -304,7 +304,7 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topo.Tablet
 	defer cc.Close()
 	response, err := c.ExecuteFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 		Query:          query,
-		DbName:         tablet.DbName(),
+		DbName:         topoproto.TabletDbName(tablet),
 		MaxRows:        uint64(maxRows),
 		DisableBinlogs: disableBinlogs,
 		ReloadSchema:   reloadSchema,
@@ -316,7 +316,7 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topo.Tablet
 }
 
 // ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int) (*querypb.QueryResult, error) {
+func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, query string, maxRows int) (*querypb.QueryResult, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -337,7 +337,7 @@ func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topo.Tablet
 //
 
 // SlaveStatus is part of the tmclient.TabletManagerClient interface.
-func (client *Client) SlaveStatus(ctx context.Context, tablet *topo.TabletInfo) (*replicationdatapb.Status, error) {
+func (client *Client) SlaveStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -351,7 +351,7 @@ func (client *Client) SlaveStatus(ctx context.Context, tablet *topo.TabletInfo) 
 }
 
 // MasterPosition is part of the tmclient.TabletManagerClient interface.
-func (client *Client) MasterPosition(ctx context.Context, tablet *topo.TabletInfo) (string, error) {
+func (client *Client) MasterPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return "", err
@@ -365,7 +365,7 @@ func (client *Client) MasterPosition(ctx context.Context, tablet *topo.TabletInf
 }
 
 // StopSlave is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StopSlave(ctx context.Context, tablet *topo.TabletInfo) error {
+func (client *Client) StopSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -376,7 +376,7 @@ func (client *Client) StopSlave(ctx context.Context, tablet *topo.TabletInfo) er
 }
 
 // StopSlaveMinimum is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StopSlaveMinimum(ctx context.Context, tablet *topo.TabletInfo, minPos string, waitTime time.Duration) (string, error) {
+func (client *Client) StopSlaveMinimum(ctx context.Context, tablet *topodatapb.Tablet, minPos string, waitTime time.Duration) (string, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return "", err
@@ -393,7 +393,7 @@ func (client *Client) StopSlaveMinimum(ctx context.Context, tablet *topo.TabletI
 }
 
 // StartSlave is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StartSlave(ctx context.Context, tablet *topo.TabletInfo) error {
+func (client *Client) StartSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -404,7 +404,7 @@ func (client *Client) StartSlave(ctx context.Context, tablet *topo.TabletInfo) e
 }
 
 // TabletExternallyReparented is part of the tmclient.TabletManagerClient interface.
-func (client *Client) TabletExternallyReparented(ctx context.Context, tablet *topo.TabletInfo, externalID string) error {
+func (client *Client) TabletExternallyReparented(ctx context.Context, tablet *topodatapb.Tablet, externalID string) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -417,7 +417,7 @@ func (client *Client) TabletExternallyReparented(ctx context.Context, tablet *to
 }
 
 // GetSlaves is part of the tmclient.TabletManagerClient interface.
-func (client *Client) GetSlaves(ctx context.Context, tablet *topo.TabletInfo) ([]string, error) {
+func (client *Client) GetSlaves(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -431,7 +431,7 @@ func (client *Client) GetSlaves(ctx context.Context, tablet *topo.TabletInfo) ([
 }
 
 // WaitBlpPosition is part of the tmclient.TabletManagerClient interface.
-func (client *Client) WaitBlpPosition(ctx context.Context, tablet *topo.TabletInfo, blpPosition *tabletmanagerdatapb.BlpPosition, waitTime time.Duration) error {
+func (client *Client) WaitBlpPosition(ctx context.Context, tablet *topodatapb.Tablet, blpPosition *tabletmanagerdatapb.BlpPosition, waitTime time.Duration) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -445,7 +445,7 @@ func (client *Client) WaitBlpPosition(ctx context.Context, tablet *topo.TabletIn
 }
 
 // StopBlp is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StopBlp(ctx context.Context, tablet *topo.TabletInfo) ([]*tabletmanagerdatapb.BlpPosition, error) {
+func (client *Client) StopBlp(ctx context.Context, tablet *topodatapb.Tablet) ([]*tabletmanagerdatapb.BlpPosition, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -459,7 +459,7 @@ func (client *Client) StopBlp(ctx context.Context, tablet *topo.TabletInfo) ([]*
 }
 
 // StartBlp is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StartBlp(ctx context.Context, tablet *topo.TabletInfo) error {
+func (client *Client) StartBlp(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -470,7 +470,7 @@ func (client *Client) StartBlp(ctx context.Context, tablet *topo.TabletInfo) err
 }
 
 // RunBlpUntil is part of the tmclient.TabletManagerClient interface.
-func (client *Client) RunBlpUntil(ctx context.Context, tablet *topo.TabletInfo, positions []*tabletmanagerdatapb.BlpPosition, waitTime time.Duration) (string, error) {
+func (client *Client) RunBlpUntil(ctx context.Context, tablet *topodatapb.Tablet, positions []*tabletmanagerdatapb.BlpPosition, waitTime time.Duration) (string, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return "", err
@@ -491,7 +491,7 @@ func (client *Client) RunBlpUntil(ctx context.Context, tablet *topo.TabletInfo, 
 //
 
 // ResetReplication is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ResetReplication(ctx context.Context, tablet *topo.TabletInfo) error {
+func (client *Client) ResetReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -502,7 +502,7 @@ func (client *Client) ResetReplication(ctx context.Context, tablet *topo.TabletI
 }
 
 // InitMaster is part of the tmclient.TabletManagerClient interface.
-func (client *Client) InitMaster(ctx context.Context, tablet *topo.TabletInfo) (string, error) {
+func (client *Client) InitMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return "", err
@@ -516,7 +516,7 @@ func (client *Client) InitMaster(ctx context.Context, tablet *topo.TabletInfo) (
 }
 
 // PopulateReparentJournal is part of the tmclient.TabletManagerClient interface.
-func (client *Client) PopulateReparentJournal(ctx context.Context, tablet *topo.TabletInfo, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, pos string) error {
+func (client *Client) PopulateReparentJournal(ctx context.Context, tablet *topodatapb.Tablet, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, pos string) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -532,7 +532,7 @@ func (client *Client) PopulateReparentJournal(ctx context.Context, tablet *topo.
 }
 
 // InitSlave is part of the tmclient.TabletManagerClient interface.
-func (client *Client) InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error {
+func (client *Client) InitSlave(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -547,7 +547,7 @@ func (client *Client) InitSlave(ctx context.Context, tablet *topo.TabletInfo, pa
 }
 
 // DemoteMaster is part of the tmclient.TabletManagerClient interface.
-func (client *Client) DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) (string, error) {
+func (client *Client) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return "", err
@@ -561,7 +561,7 @@ func (client *Client) DemoteMaster(ctx context.Context, tablet *topo.TabletInfo)
 }
 
 // PromoteSlaveWhenCaughtUp is part of the tmclient.TabletManagerClient interface.
-func (client *Client) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topo.TabletInfo, pos string) (string, error) {
+func (client *Client) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topodatapb.Tablet, pos string) (string, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return "", err
@@ -577,7 +577,7 @@ func (client *Client) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topo
 }
 
 // SlaveWasPromoted is part of the tmclient.TabletManagerClient interface.
-func (client *Client) SlaveWasPromoted(ctx context.Context, tablet *topo.TabletInfo) error {
+func (client *Client) SlaveWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -588,7 +588,7 @@ func (client *Client) SlaveWasPromoted(ctx context.Context, tablet *topo.TabletI
 }
 
 // SetMaster is part of the tmclient.TabletManagerClient interface.
-func (client *Client) SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
+func (client *Client) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -603,7 +603,7 @@ func (client *Client) SetMaster(ctx context.Context, tablet *topo.TabletInfo, pa
 }
 
 // SlaveWasRestarted is part of the tmclient.TabletManagerClient interface.
-func (client *Client) SlaveWasRestarted(ctx context.Context, tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs) error {
+func (client *Client) SlaveWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, args *actionnode.SlaveWasRestartedArgs) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -616,7 +616,7 @@ func (client *Client) SlaveWasRestarted(ctx context.Context, tablet *topo.Tablet
 }
 
 // StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *topo.TabletInfo) (*replicationdatapb.Status, error) {
+func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -630,7 +630,7 @@ func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *t
 }
 
 // PromoteSlave is part of the tmclient.TabletManagerClient interface.
-func (client *Client) PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (string, error) {
+func (client *Client) PromoteSlave(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return "", err
@@ -661,7 +661,7 @@ func (e *eventStreamAdapter) Recv() (*logutilpb.Event, error) {
 }
 
 // Backup is part of the tmclient.TabletManagerClient interface.
-func (client *Client) Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (logutil.EventStream, error) {
+func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int) (logutil.EventStream, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err

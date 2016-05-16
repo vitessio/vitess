@@ -214,7 +214,7 @@ func (tta TabletTagAction) CleanUp(ctx context.Context, wr *Wrangler) error {
 
 // StartSlaveAction will restart binlog replication on a server
 type StartSlaveAction struct {
-	TabletInfo *topo.TabletInfo
+	Tablet *topodatapb.Tablet
 }
 
 // StartSlaveActionName is the name of the slave start action
@@ -222,15 +222,15 @@ const StartSlaveActionName = "StartSlaveAction"
 
 // RecordStartSlaveAction records a new StartSlaveAction
 // into the specified Cleaner
-func RecordStartSlaveAction(cleaner *Cleaner, tabletInfo *topo.TabletInfo) {
-	cleaner.Record(StartSlaveActionName, topoproto.TabletAliasString(tabletInfo.Alias), &StartSlaveAction{
-		TabletInfo: tabletInfo,
+func RecordStartSlaveAction(cleaner *Cleaner, tablet *topodatapb.Tablet) {
+	cleaner.Record(StartSlaveActionName, topoproto.TabletAliasString(tablet.Alias), &StartSlaveAction{
+		Tablet: tablet,
 	})
 }
 
 // CleanUp is part of CleanerAction interface.
 func (sba StartSlaveAction) CleanUp(ctx context.Context, wr *Wrangler) error {
-	return wr.TabletManagerClient().StartSlave(ctx, sba.TabletInfo)
+	return wr.TabletManagerClient().StartSlave(ctx, sba.Tablet)
 }
 
 //
@@ -239,7 +239,7 @@ func (sba StartSlaveAction) CleanUp(ctx context.Context, wr *Wrangler) error {
 
 // StartBlpAction will restart binlog replication on a server
 type StartBlpAction struct {
-	TabletInfo *topo.TabletInfo
+	Tablet *topodatapb.Tablet
 }
 
 // StartBlpActionName is the name of the action to start binlog player
@@ -247,13 +247,13 @@ const StartBlpActionName = "StartBlpAction"
 
 // RecordStartBlpAction records a new StartBlpAction
 // into the specified Cleaner
-func RecordStartBlpAction(cleaner *Cleaner, tabletInfo *topo.TabletInfo) {
-	cleaner.Record(StartBlpActionName, topoproto.TabletAliasString(tabletInfo.Alias), &StartBlpAction{
-		TabletInfo: tabletInfo,
+func RecordStartBlpAction(cleaner *Cleaner, tablet *topodatapb.Tablet) {
+	cleaner.Record(StartBlpActionName, topoproto.TabletAliasString(tablet.Alias), &StartBlpAction{
+		Tablet: tablet,
 	})
 }
 
 // CleanUp is part of CleanerAction interface.
 func (sba StartBlpAction) CleanUp(ctx context.Context, wr *Wrangler) error {
-	return wr.TabletManagerClient().StartBlp(ctx, sba.TabletInfo)
+	return wr.TabletManagerClient().StartBlp(ctx, sba.Tablet)
 }
