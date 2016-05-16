@@ -301,7 +301,7 @@ func TestThreadFinished(t *testing.T) {
 func TestThrottle_MaxRateIsZero(t *testing.T) {
 	fc := &fakeClock{}
 	// 1 Thread, 0 QPS.
-	throttler := newThrottlerWithClock("test", "queries", 1, 0, ReplicationLagModuleDisabled, fc.now)
+	throttler := newThrottlerWithClock("test", "queries", 1, ZeroRateNoProgess, ReplicationLagModuleDisabled, fc.now)
 	defer throttler.Close()
 
 	fc.setNow(0 * time.Millisecond)
