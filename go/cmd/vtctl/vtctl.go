@@ -17,6 +17,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
@@ -51,12 +52,6 @@ func installSignalHandlers(cancel func()) {
 	}()
 }
 
-// hooks to register plug-ins after flag init
-
-type initFunc func()
-
-var initFuncs []initFunc
-
 func main() {
 	defer exit.RecoverAll()
 	defer logutil.Flush()
@@ -77,16 +72,14 @@ func main() {
 		log.Warningf("cannot connect to syslog: %v", err)
 	}
 
+	servenv.FireRunHooks()
+
 	topoServer := topo.GetServer()
 	defer topo.CloseServers()
 
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
 	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, tmclient.NewTabletManagerClient())
 	installSignalHandlers(cancel)
-
-	for _, f := range initFuncs {
-		f()
-	}
 
 	err := vtctl.RunCommand(ctx, wr, args)
 	cancel()
