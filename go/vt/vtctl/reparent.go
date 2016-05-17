@@ -55,10 +55,6 @@ func init() {
 }
 
 func commandDemoteMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if *disableActiveReparents {
-		return fmt.Errorf("active reparent actions disable in this cluster")
-	}
-
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -78,10 +74,6 @@ func commandDemoteMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 }
 
 func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if *disableActiveReparents {
-		return fmt.Errorf("active reparent actions disable in this cluster")
-	}
-
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -96,10 +88,6 @@ func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 }
 
 func commandInitShardMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if *disableActiveReparents {
-		return fmt.Errorf("active reparent actions disable in this cluster")
-	}
-
 	force := subFlags.Bool("force", false, "will force the reparent even if the provided tablet is not a master or the shard master")
 	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for slaves to catch up in reparenting")
 	if err := subFlags.Parse(args); err != nil {
@@ -120,10 +108,6 @@ func commandInitShardMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags
 }
 
 func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if *disableActiveReparents {
-		return fmt.Errorf("active reparent actions disable in this cluster")
-	}
-
 	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for slaves to catch up in reparenting")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -144,10 +128,6 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 }
 
 func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if *disableActiveReparents {
-		return fmt.Errorf("active reparent actions disable in this cluster")
-	}
-
 	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for slaves to catch up in reparenting")
 	if err := subFlags.Parse(args); err != nil {
 		return err
