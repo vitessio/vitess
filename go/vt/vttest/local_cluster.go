@@ -37,8 +37,13 @@ type Handle struct {
 
 // VitessOption is the type for generic options to be passed in to LaunchVitess.
 type VitessOption struct {
+	// beforeRun is executed before we start run_local_database.py.
 	beforeRun func(*Handle) error
-	afterRun  func()
+
+	// afterRun is executed after run_local_database.py has been
+	// started and is running (and is done reading and applying
+	// the schema).
+	afterRun func()
 }
 
 // Verbose makes the underlying local_cluster verbose.
@@ -54,7 +59,7 @@ func Verbose(verbose bool) VitessOption {
 }
 
 // SchemaDirectory is used to specify a directory to read schema from.
-// It conflicts with Schema / MySQLOnly.
+// It cannot be used at the same time as Schema.
 func SchemaDirectory(dir string) VitessOption {
 	return VitessOption{
 		beforeRun: func(hdl *Handle) error {
@@ -67,7 +72,7 @@ func SchemaDirectory(dir string) VitessOption {
 }
 
 // Topology is used to pass in the topology string.
-// It conflicts with MySQLOnly.
+// It cannot be used at the same time as MySQLOnly.
 func Topology(topo string) VitessOption {
 	return VitessOption{
 		beforeRun: func(hdl *Handle) error {
@@ -79,7 +84,7 @@ func Topology(topo string) VitessOption {
 
 // MySQLOnly is used to launch only a mysqld instance, with the specified db name.
 // Use it before Schema option.
-// It is incompativle with the Topology option.
+// It cannot be used at the same as Topology.
 func MySQLOnly(dbName string) VitessOption {
 	return VitessOption{
 		beforeRun: func(hdl *Handle) error {
@@ -198,7 +203,7 @@ func (hdl *Handle) TearDown() error {
 }
 
 // MySQLConnParams builds the MySQL connection params.
-// It's valid only if you used LaunchMySQL.
+// It's valid only if you used MySQLOnly option.
 func (hdl *Handle) MySQLConnParams() (sqldb.ConnParams, error) {
 	params := sqldb.ConnParams{
 		Charset: "utf8",
