@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	log "github.com/golang/glog"
@@ -34,6 +35,112 @@ type Handle struct {
 	dbname string
 }
 
+// VitessOption is the type for generic options to be passed in to LaunchVitess.
+type VitessOption struct {
+	beforeRun func(*Handle) error
+	afterRun  func()
+}
+
+// Verbose makes the underlying local_cluster verbose.
+func Verbose(verbose bool) VitessOption {
+	return VitessOption{
+		beforeRun: func(hdl *Handle) error {
+			if verbose {
+				hdl.cmd.Args = append(hdl.cmd.Args, "--verbose")
+			}
+			return nil
+		},
+	}
+}
+
+// SchemaDirectory is used to specify a directory to read schema from.
+// It conflicts with Schema / MySQLOnly.
+func SchemaDirectory(dir string) VitessOption {
+	return VitessOption{
+		beforeRun: func(hdl *Handle) error {
+			if dir != "" {
+				hdl.cmd.Args = append(hdl.cmd.Args, "--schema_dir", dir)
+			}
+			return nil
+		},
+	}
+}
+
+// Topology is used to pass in the topology string.
+// It conflicts with MySQLOnly.
+func Topology(topo string) VitessOption {
+	return VitessOption{
+		beforeRun: func(hdl *Handle) error {
+			hdl.cmd.Args = append(hdl.cmd.Args, "--topology", topo)
+			return nil
+		},
+	}
+}
+
+// MySQLOnly is used to launch only a mysqld instance, with the specified db name.
+// Use it before Schema option.
+// It is incompativle with the Topology option.
+func MySQLOnly(dbName string) VitessOption {
+	return VitessOption{
+		beforeRun: func(hdl *Handle) error {
+			hdl.dbname = dbName
+			hdl.cmd.Args = append(hdl.cmd.Args,
+				"--topology", fmt.Sprintf("%s/0:%s", dbName, dbName),
+				"--mysql_only")
+			return nil
+		},
+	}
+}
+
+// Schema is used to specify SQL commands to run at startup.
+// It conflicts with SchemaDirectory
+func Schema(schema string) VitessOption {
+	schemaDir := ""
+	return VitessOption{
+		beforeRun: func(hdl *Handle) error {
+			if schema == "" {
+				return nil
+			}
+			if hdl.dbname == "" {
+				return fmt.Errorf("Schema option requires a previously passed MySQLOnly option")
+			}
+			var err error
+			schemaDir, err = ioutil.TempDir("", "vt")
+			if err != nil {
+				return err
+			}
+			ksDir := path.Join(schemaDir, hdl.dbname)
+			err = os.Mkdir(ksDir, os.ModeDir|0775)
+			if err != nil {
+				return err
+			}
+			fileName := path.Join(ksDir, "schema.sql")
+			f, err := os.Create(fileName)
+			if err != nil {
+				return err
+			}
+			n, err := f.WriteString(schema)
+			if n != len(schema) {
+				return errors.New("short write")
+			}
+			if err != nil {
+				return err
+			}
+			err = f.Close()
+			if err != nil {
+				return err
+			}
+			hdl.cmd.Args = append(hdl.cmd.Args, "--schema_dir", schemaDir)
+			return nil
+		},
+		afterRun: func() {
+			if schemaDir != "" {
+				os.RemoveAll(schemaDir)
+			}
+		},
+	}
+}
+
 // InitDataOptions contain the command line arguments that configure
 // initialization of vttest with random data. See the documentation of
 // the corresponding command line flags in py/vttest/run_local_database.py
@@ -47,60 +154,34 @@ type InitDataOptions struct {
 	nullProbability   *float64
 }
 
-// LaunchVitess launches a vitess test cluster.
-func LaunchVitess(
-	topo, schemaDir string, verbose bool, initDataOptions *InitDataOptions,
-) (hdl *Handle, err error) {
-	hdl = &Handle{}
-	err = hdl.run(randomPort(), topo, schemaDir, false, verbose, initDataOptions)
-	if err != nil {
-		return nil, err
+// InitData returns a VitessOption that sets the InitDataOptions parameters.
+func InitData(i *InitDataOptions) VitessOption {
+	return VitessOption{
+		beforeRun: func(hdl *Handle) error {
+			hdl.cmd.Args = append(hdl.cmd.Args, "--initialize_with_random_data")
+			if i.rngSeed != nil {
+				hdl.cmd.Args = append(hdl.cmd.Args, "--rng_seed", fmt.Sprintf("%v", *i.rngSeed))
+			}
+			if i.minTableShardSize != nil {
+				hdl.cmd.Args = append(hdl.cmd.Args, "--min_table_shard_size", fmt.Sprintf("%v", *i.minTableShardSize))
+			}
+			if i.maxTableShardSize != nil {
+				hdl.cmd.Args = append(hdl.cmd.Args, "--max_table_shard_size", fmt.Sprintf("%v", *i.maxTableShardSize))
+			}
+			if i.nullProbability != nil {
+				hdl.cmd.Args = append(hdl.cmd.Args, "--null_probability", fmt.Sprintf("%v", *i.nullProbability))
+			}
+			return nil
+		},
 	}
-	return hdl, nil
 }
 
-// LaunchMySQL launches just a MySQL instance with the specified db name. The schema
-// is specified as a string instead of a file.
-func LaunchMySQL(dbName, schema string, verbose bool) (hdl *Handle, err error) {
-	hdl = &Handle{
-		dbname: dbName,
-	}
-	var schemaDir string
-	if schema != "" {
-		schemaDir, err = ioutil.TempDir("", "vt")
-		if err != nil {
-			return nil, err
-		}
-		defer os.RemoveAll(schemaDir)
-		ksDir := path.Join(schemaDir, dbName)
-		err = os.Mkdir(ksDir, os.ModeDir|0775)
-		if err != nil {
-			return nil, err
-		}
-		fileName := path.Join(ksDir, "schema.sql")
-		f, err := os.Create(fileName)
-		if err != nil {
-			return nil, err
-		}
-		n, err := f.WriteString(schema)
-		if n != len(schema) {
-			return nil, errors.New("short write")
-		}
-		if err != nil {
-			return nil, err
-		}
-		err = f.Close()
-		if err != nil {
-			return nil, err
-		}
-	}
-	err = hdl.run(
-		randomPort(),
-		fmt.Sprintf("%s/0:%s", dbName, dbName),
-		schemaDir,
-		true,
-		verbose,
-		nil /* initDataOptions */)
+// LaunchVitess launches a vitess test cluster.
+func LaunchVitess(
+	options ...VitessOption,
+) (hdl *Handle, err error) {
+	hdl = &Handle{}
+	err = hdl.run(options...)
 	if err != nil {
 		return nil, err
 	}
@@ -167,36 +248,28 @@ func (hdl *Handle) MySQLConnParams() (sqldb.ConnParams, error) {
 }
 
 func (hdl *Handle) run(
-	port int,
-	topo string,
-	schemaDir string,
-	mysqlOnly bool,
-	verbose bool,
-	initDataOptions *InitDataOptions,
+	options ...VitessOption,
 ) error {
 	launcher, err := launcherPath()
 	if err != nil {
 		return err
 	}
-	log.Infof("executing: %v --port %v --topology %v",
-		launcher, strconv.Itoa(port), topo)
+	port := randomPort()
 	hdl.cmd = exec.Command(
 		launcher,
 		"--port", strconv.Itoa(port),
-		"--topology", topo,
 	)
-	if schemaDir != "" {
-		hdl.cmd.Args = append(hdl.cmd.Args, "--schema_dir", schemaDir)
+	for _, option := range options {
+		if err := option.beforeRun(hdl); err != nil {
+			return err
+		}
+		if option.afterRun != nil {
+			defer option.afterRun()
+		}
 	}
-	if mysqlOnly {
-		hdl.cmd.Args = append(hdl.cmd.Args, "--mysql_only")
-	}
-	if verbose {
-		hdl.cmd.Args = append(hdl.cmd.Args, "--verbose")
-	}
-	if initDataOptions != nil {
-		hdl.cmd.Args = initDataOptions.appendArgs(hdl.cmd.Args)
-	}
+
+	log.Infof("executing: %v", strings.Join(hdl.cmd.Args, " "))
+
 	hdl.cmd.Stderr = os.Stderr
 	stdout, err := hdl.cmd.StdoutPipe()
 	if err != nil {
@@ -217,23 +290,6 @@ func (hdl *Handle) run(
 			"Error (%v) parsing JSON output from command: %v.", err, launcher)
 	}
 	return err
-}
-
-func (i *InitDataOptions) appendArgs(args []string) []string {
-	args = append(args, "--initialize_with_random_data")
-	if i.rngSeed != nil {
-		args = append(args, "--rng_seed", fmt.Sprintf("%v", *i.rngSeed))
-	}
-	if i.minTableShardSize != nil {
-		args = append(args, "--min_table_shard_size", fmt.Sprintf("%v", *i.minTableShardSize))
-	}
-	if i.maxTableShardSize != nil {
-		args = append(args, "--max_table_shard_size", fmt.Sprintf("%v", *i.maxTableShardSize))
-	}
-	if i.nullProbability != nil {
-		args = append(args, "--null_probability", fmt.Sprintf("%v", *i.nullProbability))
-	}
-	return args
 }
 
 // randomPort returns a random number between 10k & 30k.

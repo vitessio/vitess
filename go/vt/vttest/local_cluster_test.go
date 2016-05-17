@@ -17,7 +17,7 @@ import (
 )
 
 func TestVitess(t *testing.T) {
-	hdl, err := LaunchVitess("test_keyspace/0:test_keyspace", "", false, nil /* initDataOptions */)
+	hdl, err := LaunchVitess(Topology("test_keyspace/0:test_keyspace"))
 	if err != nil {
 		t.Error(err)
 		return
@@ -57,7 +57,7 @@ func TestVitess(t *testing.T) {
 }
 
 func TestMySQL(t *testing.T) {
-	hdl, err := LaunchMySQL("vttest", "create table a(id int, name varchar(128), primary key(id))", false)
+	hdl, err := LaunchVitess(MySQLOnly("vttest"), Schema("create table a(id int, name varchar(128), primary key(id))"))
 	if err != nil {
 		t.Error(err)
 		return

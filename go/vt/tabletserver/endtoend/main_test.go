@@ -35,7 +35,7 @@ func TestMain(m *testing.M) {
 	tabletserver.Init()
 
 	exitCode := func() int {
-		hdl, err := vttest.LaunchMySQL("vttest", testSchema, testing.Verbose())
+		hdl, err := vttest.LaunchVitess(vttest.MySQLOnly("vttest"), vttest.Schema(testSchema), vttest.Verbose(testing.Verbose()))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "could not launch mysql: %v\n", err)
 			return 1
