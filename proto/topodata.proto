@@ -238,27 +238,6 @@ message ShardReplication {
 
 // Serving graph information
 
-// EndPoint corresponds to a single tablet.
-message EndPoint {
-  // The uid of the tablet.
-  uint32 uid = 1;
-
-  // The host the tablet is running on (FQDN).
-  string host = 2;
-
-  // The ports opened for service.
-  map<string, int32> port_map = 3;
-
-  // OBSOLETE: The health entries.
-  // map<string, string> health_map = 4;
-  reserved 4;
-}
-
-// EndPoints corresponds to a list of tablets.
-message EndPoints {
-  repeated EndPoint entries = 1;
-}
-
 // SrvShard is a rollup node for the shard itself.
 message SrvShard {
   // Copied from Shard.

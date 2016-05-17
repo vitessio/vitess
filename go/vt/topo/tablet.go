@@ -101,31 +101,6 @@ func IsSlaveType(tt topodatapb.TabletType) bool {
 	return true
 }
 
-// TabletValidatePortMap returns an error if the tablet's portmap doesn't
-// contain all the necessary ports for the tablet to be fully
-// operational. We only care about vt port now, as mysql may not even
-// be running.
-func TabletValidatePortMap(tablet *topodatapb.Tablet) error {
-	if _, ok := tablet.PortMap["vt"]; !ok {
-		return fmt.Errorf("no vt port available")
-	}
-	return nil
-}
-
-// TabletEndPoint returns an EndPoint associated with the tablet record
-func TabletEndPoint(tablet *topodatapb.Tablet) (*topodatapb.EndPoint, error) {
-	if err := TabletValidatePortMap(tablet); err != nil {
-		return nil, err
-	}
-
-	entry := NewEndPoint(tablet.Alias.Uid, tablet.Hostname)
-	for name, port := range tablet.PortMap {
-		entry.PortMap[name] = int32(port)
-	}
-
-	return entry, nil
-}
-
 // TabletComplete validates and normalizes the tablet. If the shard name
 // contains a '-' it is going to try to infer the keyrange from it.
 func TabletComplete(tablet *topodatapb.Tablet) error {
@@ -136,6 +111,42 @@ func TabletComplete(tablet *topodatapb.Tablet) error {
 	tablet.Shard = shard
 	tablet.KeyRange = kr
 	return nil
+}
+
+// NewTablet create a new Tablet record with the given id, cell, and hostname.
+func NewTablet(uid uint32, cell, host string) *topodatapb.Tablet {
+	return &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: cell,
+			Uid:  uid,
+		},
+		Hostname: host,
+		PortMap:  make(map[string]int32),
+	}
+}
+
+// TabletEquality returns true iff two Tablet are representing the same tablet
+// process: same uid/cell, running on the same host / ports.
+func TabletEquality(left, right *topodatapb.Tablet) bool {
+	if !topoproto.TabletAliasEqual(left.Alias, right.Alias) {
+		return false
+	}
+	if left.Hostname != right.Hostname {
+		return false
+	}
+	if len(left.PortMap) != len(right.PortMap) {
+		return false
+	}
+	for key, lvalue := range left.PortMap {
+		rvalue, ok := right.PortMap[key]
+		if !ok {
+			return false
+		}
+		if lvalue != rvalue {
+			return false
+		}
+	}
+	return true
 }
 
 // TabletInfo is the container for a Tablet, read from the topology server.

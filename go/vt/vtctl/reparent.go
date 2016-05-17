@@ -65,7 +65,7 @@ func commandDemoteMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
-	_, err = wr.TabletManagerClient().DemoteMaster(ctx, tabletInfo)
+	_, err = wr.TabletManagerClient().DemoteMaster(ctx, tabletInfo.Tablet)
 	return err
 }
 

@@ -62,7 +62,7 @@ func isRetryableError(err error) bool {
 	case *ScatterConnError:
 		return e.Retryable
 	case *ShardError:
-		return e.EndPointCode == vtrpcpb.ErrorCode_QUERY_NOT_SERVED
+		return e.ErrorCode == vtrpcpb.ErrorCode_QUERY_NOT_SERVED
 	default:
 		return false
 	}
@@ -364,7 +364,7 @@ func (res *Resolver) Rollback(ctx context.Context, inSession *vtgatepb.Session) 
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
-func (res *Resolver) GetGatewayCacheStatus() GatewayEndPointCacheStatusList {
+func (res *Resolver) GetGatewayCacheStatus() GatewayTabletCacheStatusList {
 	return res.scatterConn.GetGatewayCacheStatus()
 }
 

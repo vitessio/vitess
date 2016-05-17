@@ -182,8 +182,8 @@ func testResolverGeneric(t *testing.T, name string, action func(hc discovery.Hea
 	sbc0 := &sandboxConn{}
 	sbc1 := &sandboxConn{}
 	hc := newFakeHealthCheck()
-	hc.addTestEndPoint("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
-	hc.addTestEndPoint("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	hc.addTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+	hc.addTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 
 	_, err := action(hc)
 	if err != nil {
@@ -201,11 +201,11 @@ func testResolverGeneric(t *testing.T, name string, action func(hc discovery.Hea
 	sbc0 = &sandboxConn{mustFailServer: 1}
 	sbc1 = &sandboxConn{mustFailRetry: 1}
 	hc.Reset()
-	hc.addTestEndPoint("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
-	hc.addTestEndPoint("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	hc.addTestTablet("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+	hc.addTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 	_, err = action(hc)
-	want1 := fmt.Sprintf("shard, host: %s.-20.master, host:\"-20\" port_map:<key:\"vt\" value:1 > , error: err", name)
-	want2 := fmt.Sprintf("shard, host: %s.20-40.master, host:\"20-40\" port_map:<key:\"vt\" value:1 > , retry: err", name)
+	want1 := fmt.Sprintf("shard, host: %s.-20.master, alias:<cell:\"aa\" > hostname:\"-20\" port_map:<key:\"vt\" value:1 > , error: err", name)
+	want2 := fmt.Sprintf("shard, host: %s.20-40.master, alias:<cell:\"aa\" > hostname:\"20-40\" port_map:<key:\"vt\" value:1 > , retry: err", name)
 	want := []string{want1, want2}
 	sort.Strings(want)
 	if err == nil {
@@ -234,11 +234,11 @@ func testResolverGeneric(t *testing.T, name string, action func(hc discovery.Hea
 	sbc0 = &sandboxConn{mustFailRetry: 1}
 	sbc1 = &sandboxConn{mustFailFatal: 1}
 	hc.Reset()
-	hc.addTestEndPoint("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
-	hc.addTestEndPoint("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	hc.addTestTablet("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+	hc.addTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 	_, err = action(hc)
-	want1 = fmt.Sprintf("shard, host: %s.-20.master, host:\"-20\" port_map:<key:\"vt\" value:1 > , retry: err", name)
-	want2 = fmt.Sprintf("shard, host: %s.20-40.master, host:\"20-40\" port_map:<key:\"vt\" value:1 > , fatal: err", name)
+	want1 = fmt.Sprintf("shard, host: %s.-20.master, alias:<cell:\"aa\" > hostname:\"-20\" port_map:<key:\"vt\" value:1 > , retry: err", name)
+	want2 = fmt.Sprintf("shard, host: %s.20-40.master, alias:<cell:\"aa\" > hostname:\"20-40\" port_map:<key:\"vt\" value:1 > , fatal: err", name)
 	want = []string{want1, want2}
 	sort.Strings(want)
 	if err == nil {
@@ -268,12 +268,12 @@ func testResolverGeneric(t *testing.T, name string, action func(hc discovery.Hea
 	sbc0 = &sandboxConn{}
 	sbc1 = &sandboxConn{}
 	hc.Reset()
-	hc.addTestEndPoint("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
-	hc.addTestEndPoint("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	hc.addTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+	hc.addTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 	s0 := createSandbox(name + "ServedFrom0") // make sure we have a fresh copy
 	s0.ShardSpec = "-80-"
 	sbc2 := &sandboxConn{}
-	hc.addTestEndPoint("aa", "1.1.1.1", 1003, name+"ServedFrom0", "-80", topodatapb.TabletType_MASTER, true, 1, nil, sbc2)
+	hc.addTestTablet("aa", "1.1.1.1", 1003, name+"ServedFrom0", "-80", topodatapb.TabletType_MASTER, true, 1, nil, sbc2)
 	_, err = action(hc)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -303,15 +303,15 @@ func testResolverGeneric(t *testing.T, name string, action func(hc discovery.Hea
 	sbc0 = &sandboxConn{}
 	sbc1 = &sandboxConn{mustFailFatal: 1}
 	hc.Reset()
-	hc.addTestEndPoint("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
-	hc.addTestEndPoint("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	hc.addTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+	hc.addTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 	i := 0
 	s.SrvKeyspaceCallback = func() {
 		if i == 1 {
 			addSandboxServedFrom(name, name+"ServedFrom")
 			hc.Reset()
-			hc.addTestEndPoint("aa", "1.1.1.1", 1001, name+"ServedFrom", "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
-			hc.addTestEndPoint("aa", "1.1.1.1", 1002, name+"ServedFrom", "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+			hc.addTestTablet("aa", "1.1.1.1", 1001, name+"ServedFrom", "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+			hc.addTestTablet("aa", "1.1.1.1", 1002, name+"ServedFrom", "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 		}
 		i++
 	}
@@ -336,15 +336,15 @@ func testResolverGeneric(t *testing.T, name string, action func(hc discovery.Hea
 	sbc0 = &sandboxConn{}
 	sbc1 = &sandboxConn{mustFailRetry: 1}
 	hc.Reset()
-	hc.addTestEndPoint("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
-	hc.addTestEndPoint("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	hc.addTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+	hc.addTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 	i = 0
 	s.SrvKeyspaceCallback = func() {
 		if i == 1 {
 			s.ShardSpec = "-20-30-40-60-80-a0-c0-e0-"
 			hc.Reset()
-			hc.addTestEndPoint("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
-			hc.addTestEndPoint("aa", "1.1.1.1", 1002, name, "20-30", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+			hc.addTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+			hc.addTestTablet("aa", "1.1.1.1", 1002, name, "20-30", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 		}
 		i++
 	}
@@ -371,8 +371,8 @@ func testResolverStreamGeneric(t *testing.T, name string, action func(hc discove
 	sbc0 := &sandboxConn{}
 	sbc1 := &sandboxConn{}
 	hc := newFakeHealthCheck()
-	hc.addTestEndPoint("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
-	hc.addTestEndPoint("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	hc.addTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+	hc.addTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 	_, err := action(hc)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -386,10 +386,10 @@ func testResolverStreamGeneric(t *testing.T, name string, action func(hc discove
 	sbc0 = &sandboxConn{mustFailRetry: 1}
 	sbc1 = &sandboxConn{}
 	hc.Reset()
-	hc.addTestEndPoint("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
-	hc.addTestEndPoint("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	hc.addTestTablet("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+	hc.addTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 	_, err = action(hc)
-	want := fmt.Sprintf("shard, host: %s.-20.master, host:\"-20\" port_map:<key:\"vt\" value:1 > , retry: err", name)
+	want := fmt.Sprintf("shard, host: %s.-20.master, alias:<cell:\"aa\" > hostname:\"-20\" port_map:<key:\"vt\" value:1 > , retry: err", name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want\n%s\ngot\n%v", want, err)
 	}
@@ -467,8 +467,8 @@ func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
 	sbc0 := &sandboxConn{}
 	sbc1 := &sandboxConn{}
 	hc := newFakeHealthCheck()
-	hc.addTestEndPoint("aa", "1.1.1.1", 1001, keyspace, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
-	hc.addTestEndPoint("aa", "1.1.1.1", 1002, keyspace, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	hc.addTestTablet("aa", "1.1.1.1", 1001, keyspace, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
+	hc.addTestTablet("aa", "1.1.1.1", 1002, keyspace, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 
 	res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 	errStr := "DML should not span multiple keyspace_ids"
@@ -490,7 +490,7 @@ func TestResolverExecBatchReresolve(t *testing.T) {
 	createSandbox(keyspace)
 	sbc := &sandboxConn{mustFailRetry: 20}
 	hc := newFakeHealthCheck()
-	hc.addTestEndPoint("aa", "0", 1, keyspace, "0", topodatapb.TabletType_MASTER, true, 1, nil, sbc)
+	hc.addTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 
 	res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 
@@ -509,7 +509,7 @@ func TestResolverExecBatchReresolve(t *testing.T) {
 	}
 
 	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, false, nil, buildBatchRequest)
-	want := "shard, host: TestResolverExecBatchReresolve.0.master, host:\"0\" port_map:<key:\"vt\" value:1 > , retry: err"
+	want := "shard, host: TestResolverExecBatchReresolve.0.master, alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > , retry: err"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -527,7 +527,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	createSandbox(keyspace)
 	sbc := &sandboxConn{mustFailRetry: 20}
 	hc := newFakeHealthCheck()
-	hc.addTestEndPoint("aa", "0", 1, keyspace, "0", topodatapb.TabletType_MASTER, true, 1, nil, sbc)
+	hc.addTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 
 	res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 
@@ -546,7 +546,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	}
 
 	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, true, nil, buildBatchRequest)
-	want := "shard, host: TestResolverExecBatchAsTransaction.0.master, host:\"0\" port_map:<key:\"vt\" value:1 > , retry: err"
+	want := "shard, host: TestResolverExecBatchAsTransaction.0.master, alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > , retry: err"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %v, got %v", want, err)
 	}
@@ -568,8 +568,8 @@ func TestIsRetryableError(t *testing.T) {
 		{fmt.Errorf("generic error"), false},
 		{&ScatterConnError{Retryable: true}, true},
 		{&ScatterConnError{Retryable: false}, false},
-		{&ShardError{EndPointCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED}, true},
-		{&ShardError{EndPointCode: vtrpcpb.ErrorCode_INTERNAL_ERROR}, false},
+		{&ShardError{ErrorCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED}, true},
+		{&ShardError{ErrorCode: vtrpcpb.ErrorCode_INTERNAL_ERROR}, false},
 		// tabletconn.ServerError will not come directly here,
 		// they'll be wrapped in ScatterConnError or ShardConnError.
 		// So they can't be retried as is.

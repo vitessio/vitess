@@ -226,22 +226,22 @@ google.setOnLoadCallback(function() {
 </style>
 <table>
   <tr>
-    <th colspan="5">HealthCheck EndPoints Cache</th>
+    <th colspan="5">HealthCheck Tablet Cache</th>
   </tr>
   <tr>
     <th>Cell</th>
     <th>Keyspace</th>
     <th>Shard</th>
     <th>TabletType</th>
-    <th>EndPointsStats</th>
+    <th>TabletStats</th>
   </tr>
-  {{range $i, $eps := .}}
+  {{range $i, $ts := .}}
   <tr>
-    <td>{{github_com_youtube_vitess_vtctld_srv_cell $eps.Cell}}</td>
-    <td>{{github_com_youtube_vitess_vtctld_srv_keyspace $eps.Cell $eps.Target.Keyspace}}</td>
-    <td>{{github_com_youtube_vitess_vtctld_srv_shard $eps.Cell $eps.Target.Keyspace $eps.Target.Shard}}</td>
-    <td>{{github_com_youtube_vitess_vtctld_srv_type $eps.Cell $eps.Target.Keyspace $eps.Target.Shard $eps.Target.TabletType}}</td>
-    <td>{{$eps.StatusAsHTML}}</td>
+    <td>{{github_com_youtube_vitess_vtctld_srv_cell $ts.Cell}}</td>
+    <td>{{github_com_youtube_vitess_vtctld_srv_keyspace $ts.Cell $ts.Target.Keyspace}}</td>
+    <td>{{github_com_youtube_vitess_vtctld_srv_shard $ts.Cell $ts.Target.Keyspace $ts.Target.Shard}}</td>
+    <td>{{github_com_youtube_vitess_vtctld_srv_type $ts.Cell $ts.Target.Keyspace $ts.Target.Shard $ts.Target.TabletType}}</td>
+    <td>{{$ts.StatusAsHTML}}</td>
   </tr>
   {{end}}
 </table>

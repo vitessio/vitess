@@ -104,7 +104,7 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 	// get the min and max of the leading column of the primary key
 	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", td.PrimaryKeyColumns[0], td.PrimaryKeyColumns[0], ti.DbName(), td.Name)
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(shortCtx, ti, query, 1)
+	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(shortCtx, ti.Tablet, query, 1)
 	cancel()
 	if err != nil {
 		return nil, fmt.Errorf("ExecuteFetchAsApp: %v", err)
@@ -249,21 +249,4 @@ func makeValueString(fields []*querypb.Field, rows [][]sqltypes.Value) string {
 		buf.WriteByte(')')
 	}
 	return buf.String()
-}
-
-// endPointToTabletInfo converts an EndPointStats object from the discovery
-// package into a TabletInfo object. The latter one is required by several
-// TabletManagerClient API calls.
-// Note that this is a best-effort conversion and won't result into the same
-// result as a call to topo.GetTablet().
-// Note: We assume that "eps" is immutable and we can reference its data.
-func endPointToTabletInfo(eps *discovery.EndPointStats) *topo.TabletInfo {
-	return topo.NewTabletInfo(&topodatapb.Tablet{
-		Alias:    eps.Alias(),
-		Hostname: eps.EndPoint.Host,
-		PortMap:  eps.EndPoint.PortMap,
-		Keyspace: eps.Target.Keyspace,
-		Shard:    eps.Target.Shard,
-		Type:     eps.Target.TabletType,
-	}, -1 /* version */)
 }

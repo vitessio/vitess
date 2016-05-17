@@ -17,7 +17,6 @@ import (
 	"launchpad.net/gozk/zookeeper"
 
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/zk"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -46,114 +45,6 @@ func zkPathForVtShard(cell, keyspace, shard string) string {
 
 func zkPathForVtName(cell, keyspace, shard string, tabletType topodatapb.TabletType) string {
 	return path.Join(zkPathForVtShard(cell, keyspace, shard), strings.ToLower(tabletType.String()))
-}
-
-// GetSrvTabletTypesPerShard is part of the topo.Server interface
-func (zkts *Server) GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspace, shard string) ([]topodatapb.TabletType, error) {
-	zkSgShardPath := zkPathForVtShard(cell, keyspace, shard)
-	children, _, err := zkts.zconn.Children(zkSgShardPath)
-	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return nil, err
-	}
-	result := make([]topodatapb.TabletType, 0, len(children))
-	for _, tt := range children {
-		// these two are used for locking
-		if tt == "action" || tt == "actionlog" {
-			continue
-		}
-		if ptt, err := topoproto.ParseTabletType(tt); err == nil {
-			result = append(result, ptt)
-		}
-	}
-	return result, nil
-}
-
-// CreateEndPoints is part of the topo.Server interface
-func (zkts *Server) CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType, addrs *topodatapb.EndPoints) error {
-	path := zkPathForVtName(cell, keyspace, shard, tabletType)
-	data, err := json.MarshalIndent(addrs, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	// Create only if it doesn't exist.
-	_, err = zk.CreateRecursive(zkts.zconn, path, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-		err = topo.ErrNodeExists
-	}
-	return err
-}
-
-// UpdateEndPoints is part of the topo.Server interface
-func (zkts *Server) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType, addrs *topodatapb.EndPoints, existingVersion int64) error {
-	path := zkPathForVtName(cell, keyspace, shard, tabletType)
-	data, err := json.MarshalIndent(addrs, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	if existingVersion == -1 {
-		// Update or create unconditionally.
-		_, err := zk.CreateRecursive(zkts.zconn, path, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-		if err != nil {
-			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-				// Node already exists - just stomp away. Multiple writers shouldn't be here.
-				// We use RetryChange here because it won't update the node unnecessarily.
-				f := func(oldValue string, oldStat zk.Stat) (string, error) {
-					return string(data), nil
-				}
-				err = zkts.zconn.RetryChange(path, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
-			}
-		}
-		return err
-	}
-
-	// Compare And Set
-	if _, err = zkts.zconn.Set(path, string(data), int(existingVersion)); err != nil {
-		if zookeeper.IsError(err, zookeeper.ZBADVERSION) {
-			err = topo.ErrBadVersion
-		} else if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-	}
-	return err
-}
-
-// GetEndPoints is part of the topo.Server interface
-func (zkts *Server) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType) (*topodatapb.EndPoints, int64, error) {
-	path := zkPathForVtName(cell, keyspace, shard, tabletType)
-	data, stat, err := zkts.zconn.Get(path)
-	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return nil, 0, err
-	}
-	result := &topodatapb.EndPoints{}
-	if len(data) > 0 {
-		if err := json.Unmarshal([]byte(data), result); err != nil {
-			return nil, 0, fmt.Errorf("EndPoints unmarshal failed: %v %v", data, err)
-		}
-	}
-	return result, int64(stat.Version()), nil
-}
-
-// DeleteEndPoints is part of the topo.Server interface
-func (zkts *Server) DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType, existingVersion int64) error {
-	path := zkPathForVtName(cell, keyspace, shard, tabletType)
-	if err := zkts.zconn.Delete(path, int(existingVersion)); err != nil {
-		switch {
-		case zookeeper.IsError(err, zookeeper.ZNONODE):
-			err = topo.ErrNoNode
-		case zookeeper.IsError(err, zookeeper.ZBADVERSION):
-			err = topo.ErrBadVersion
-		}
-		return err
-	}
-	return nil
 }
 
 // UpdateSrvShard is part of the topo.Server interface
@@ -269,50 +160,6 @@ func (zkts *Server) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]str
 
 	sort.Strings(children)
 	return children, nil
-}
-
-var errSkipUpdate = fmt.Errorf("skip update")
-
-func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr *topodatapb.EndPoint) (newValue string, err error) {
-	if oldStat == nil {
-		// The incoming object doesn't exist - we haven't been placed in the serving
-		// graph yet, so don't update. Assume the next process that rebuilds the graph
-		// will get the updated tablet location.
-		return "", errSkipUpdate
-	}
-
-	var addrs *topodatapb.EndPoints
-	if oldValue != "" {
-		addrs = &topodatapb.EndPoints{}
-		if len(oldValue) > 0 {
-			if err := json.Unmarshal([]byte(oldValue), addrs); err != nil {
-				return "", fmt.Errorf("EndPoints unmarshal failed: %v %v", oldValue, err)
-			}
-		}
-
-		foundTablet := false
-		for i, entry := range addrs.Entries {
-			if entry.Uid == addr.Uid {
-				foundTablet = true
-				if !topo.EndPointEquality(entry, addr) {
-					addrs.Entries[i] = addr
-				}
-				break
-			}
-		}
-
-		if !foundTablet {
-			addrs.Entries = append(addrs.Entries, addr)
-		}
-	} else {
-		addrs = topo.NewEndPoints()
-		addrs.Entries = append(addrs.Entries, addr)
-	}
-	data, err := json.MarshalIndent(addrs, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
 }
 
 // WatchSrvKeyspace is part of the topo.Server interface

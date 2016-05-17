@@ -134,7 +134,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
 	waitID := makeWaitID()
-	if err := tmc.TabletExternallyReparented(context.Background(), ti, waitID); err != nil {
+	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(slave) error: %v", err)
 	}
 	waitForExternalReparent(t, waitID)
@@ -146,20 +146,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
 	waitID = makeWaitID()
-	if err := tmc.TabletExternallyReparented(context.Background(), ti, waitID); err != nil {
+	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 	}
 	waitForExternalReparent(t, waitID)
-
-	// Now double-check the serving graph is good.
-	// Should have all replicas left.
-	addrs, _, err := ts.GetEndPoints(ctx, "cell1", "test_keyspace", "0", topodatapb.TabletType_REPLICA)
-	if err != nil {
-		t.Fatalf("GetEndPoints failed at the end: %v", err)
-	}
-	if len(addrs.Entries) != 3 {
-		t.Fatalf("GetEndPoints has too many entries %v: %v", len(addrs.Entries), addrs)
-	}
 }
 
 // TestTabletExternallyReparentedWithDifferentMysqlPort makes sure
@@ -206,7 +196,7 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
 	waitID := makeWaitID()
-	if err := tmc.TabletExternallyReparented(context.Background(), ti, waitID); err != nil {
+	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 	}
 	waitForExternalReparent(t, waitID)
@@ -251,7 +241,7 @@ func TestTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
 	waitID := makeWaitID()
-	if err := tmc.TabletExternallyReparented(context.Background(), ti, waitID); err != nil {
+	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 	}
 	waitForExternalReparent(t, waitID)
@@ -294,20 +284,10 @@ func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
 	waitID := makeWaitID()
-	if err := tmc.TabletExternallyReparented(context.Background(), ti, waitID); err != nil {
+	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 	}
 	waitForExternalReparent(t, waitID)
-
-	// Now double-check the serving graph is good.
-	// Should only both replicas left.
-	addrs, _, err := ts.GetEndPoints(ctx, "cell1", "test_keyspace", "0", topodatapb.TabletType_REPLICA)
-	if err != nil {
-		t.Fatalf("GetEndPoints failed at the end: %v", err)
-	}
-	if len(addrs.Entries) != 2 {
-		t.Fatalf("GetEndPoints has too many entries: %v", addrs)
-	}
 
 	// check the old master was converted to replica
 	tablet, err := ts.GetTablet(ctx, oldMaster.Tablet.Alias)

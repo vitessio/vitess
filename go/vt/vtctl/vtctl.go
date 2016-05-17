@@ -363,12 +363,6 @@ var commands = []commandGroup{
 			{"GetSrvKeyspaceNames", commandGetSrvKeyspaceNames,
 				"<cell>",
 				"Outputs a list of keyspace names."},
-			{"GetSrvShard", commandGetSrvShard,
-				"<cell> <keyspace/shard>",
-				"Outputs a JSON structure that contains information about the SrvShard."},
-			{"GetEndPoints", commandGetEndPoints,
-				"<cell> <keyspace/shard> <tablet type>",
-				"Outputs a JSON structure that contains information about the EndPoints."},
 		},
 	},
 	{
@@ -747,7 +741,7 @@ func commandSetReadOnly(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.TabletManagerClient().SetReadOnly(ctx, ti)
+	return wr.TabletManagerClient().SetReadOnly(ctx, ti.Tablet)
 }
 
 func commandSetReadWrite(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -766,7 +760,7 @@ func commandSetReadWrite(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.TabletManagerClient().SetReadWrite(ctx, ti)
+	return wr.TabletManagerClient().SetReadWrite(ctx, ti.Tablet)
 }
 
 func commandStartSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -785,7 +779,7 @@ func commandStartSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.TabletManagerClient().StartSlave(ctx, ti)
+	return wr.TabletManagerClient().StartSlave(ctx, ti.Tablet)
 }
 
 func commandStopSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -804,7 +798,7 @@ func commandStopSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.TabletManagerClient().StopSlave(ctx, ti)
+	return wr.TabletManagerClient().StopSlave(ctx, ti.Tablet)
 }
 
 func commandChangeSlaveType(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -856,7 +850,7 @@ func commandPing(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Flag
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().Ping(ctx, tabletInfo)
+	return wr.TabletManagerClient().Ping(ctx, tabletInfo.Tablet)
 }
 
 func commandRefreshState(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -874,7 +868,7 @@ func commandRefreshState(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().RefreshState(ctx, tabletInfo)
+	return wr.TabletManagerClient().RefreshState(ctx, tabletInfo.Tablet)
 }
 
 func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -892,7 +886,7 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo)
+	return wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo.Tablet)
 }
 
 func commandIgnoreHealthError(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -911,7 +905,7 @@ func commandIgnoreHealthError(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().IgnoreHealthError(ctx, tabletInfo, pattern)
+	return wr.TabletManagerClient().IgnoreHealthError(ctx, tabletInfo.Tablet, pattern)
 }
 
 func commandWaitForDrain(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -964,7 +958,7 @@ func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().Sleep(ctx, ti, duration)
+	return wr.TabletManagerClient().Sleep(ctx, ti.Tablet, duration)
 }
 
 func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -984,7 +978,7 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	if err != nil {
 		return err
 	}
-	stream, err := wr.TabletManagerClient().Backup(ctx, tabletInfo, *concurrency)
+	stream, err := wr.TabletManagerClient().Backup(ctx, tabletInfo.Tablet, *concurrency)
 	if err != nil {
 		return err
 	}
@@ -1140,7 +1134,7 @@ func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangle
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().TabletExternallyReparented(ctx, ti, "")
+	return wr.TabletManagerClient().TabletExternallyReparented(ctx, ti.Tablet, "")
 }
 
 func commandValidateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1400,20 +1394,16 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 	if err != nil {
 		return err
 	}
-	ep, err := topo.TabletEndPoint(tabletInfo.Tablet)
-	if err != nil {
-		return fmt.Errorf("cannot get EndPoint for master tablet record: %v record: %v", err, tabletInfo)
-	}
 
 	// Always run an explicit healthcheck first to make sure we don't see any outdated values.
 	// This is especially true for tests and automation where there is no pause of multiple seconds
 	// between commands and the periodic healthcheck did not run again yet.
-	if err := wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo); err != nil {
+	if err := wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo.Tablet); err != nil {
 		return fmt.Errorf("failed to run explicit healthcheck on tablet: %v err: %v", tabletInfo, err)
 	}
 
 	// TabletType is unused for StreamHealth, use UNKNOWN
-	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", topodatapb.TabletType_UNKNOWN, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, "", "", topodatapb.TabletType_UNKNOWN, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", alias, err)
 	}
@@ -2122,48 +2112,6 @@ func commandGetSrvKeyspaceNames(ctx context.Context, wr *wrangler.Wrangler, subF
 		wr.Logger().Printf("%v\n", ks)
 	}
 	return nil
-}
-
-func commandGetSrvShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <cell> and <keyspace/shard> arguments are required for the GetSrvShard command.")
-	}
-
-	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(1))
-	if err != nil {
-		return err
-	}
-	srvShard, err := wr.TopoServer().GetSrvShard(ctx, subFlags.Arg(0), keyspace, shard)
-	if err != nil {
-		return err
-	}
-	return printJSON(wr.Logger(), srvShard)
-}
-
-func commandGetEndPoints(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 3 {
-		return fmt.Errorf("The <cell>, <keyspace/shard>, and <tablet type> arguments are required for the GetEndPoints command.")
-	}
-
-	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(1))
-	if err != nil {
-		return err
-	}
-	tabletType, err := parseTabletType(subFlags.Arg(2), []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
-	if err != nil {
-		return err
-	}
-	endPoints, _, err := wr.TopoServer().GetEndPoints(ctx, subFlags.Arg(0), keyspace, shard, tabletType)
-	if err != nil {
-		return err
-	}
-	return printJSON(wr.Logger(), endPoints)
 }
 
 func commandGetShardReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

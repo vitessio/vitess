@@ -51,7 +51,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/topotools"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -436,16 +435,6 @@ func (agent *ActionAgent) verifyTopology(ctx context.Context) error {
 	return nil
 }
 
-func (agent *ActionAgent) verifyServingAddrs(ctx context.Context) error {
-	tablet := agent.Tablet()
-	if !topo.IsRunningQueryService(tablet.Type) {
-		return nil
-	}
-
-	// Check to see our address is registered in the right place.
-	return topotools.UpdateTabletEndpoints(ctx, agent.TopoServer, tablet)
-}
-
 // Start validates and updates the topology records for the tablet, and performs
 // the initial state change callback to start tablet services.
 // If initUpdateStream is set, update stream service will also be registered.
@@ -508,10 +497,6 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 	agent.initialTablet = proto.Clone(tablet).(*topodatapb.Tablet)
 
 	if err = agent.verifyTopology(ctx); err != nil {
-		return err
-	}
-
-	if err = agent.verifyServingAddrs(ctx); err != nil {
 		return err
 	}
 

@@ -80,7 +80,7 @@ func TestDiscoveryGatewayBeginExecuteBatch(t *testing.T) {
 	})
 }
 
-func TestDiscoveryGatewayGetEndPoints(t *testing.T) {
+func TestDiscoveryGatewayGetTablets(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
 	hc := newFakeHealthCheck()
@@ -88,20 +88,20 @@ func TestDiscoveryGatewayGetEndPoints(t *testing.T) {
 
 	// replica should only use local ones
 	hc.Reset()
-	hc.addTestEndPoint("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil, nil)
-	ep1 := hc.addTestEndPoint("local", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil, nil)
-	eps := dg.getEndPoints(keyspace, shard, topodatapb.TabletType_REPLICA)
-	if len(eps) != 1 || !topo.EndPointEquality(eps[0], ep1) {
-		t.Errorf("want %+v, got %+v", ep1, eps)
+	hc.addTestTablet("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil, nil)
+	ep1 := hc.addTestTablet("local", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil, nil)
+	tsl := dg.getTablets(keyspace, shard, topodatapb.TabletType_REPLICA)
+	if len(tsl) != 1 || !topo.TabletEquality(tsl[0], ep1) {
+		t.Errorf("want %+v, got %+v", ep1, tsl)
 	}
 
 	// master should use the one with newer timestamp regardless of cell
 	hc.Reset()
-	hc.addTestEndPoint("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 5, nil, nil)
-	ep1 = hc.addTestEndPoint("remote", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 10, nil, nil)
-	eps = dg.getEndPoints(keyspace, shard, topodatapb.TabletType_MASTER)
-	if len(eps) != 1 || !topo.EndPointEquality(eps[0], ep1) {
-		t.Errorf("want %+v, got %+v", ep1, eps)
+	hc.addTestTablet("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 5, nil, nil)
+	ep1 = hc.addTestTablet("remote", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 10, nil, nil)
+	tsl = dg.getTablets(keyspace, shard, topodatapb.TabletType_MASTER)
+	if len(tsl) != 1 || !topo.TabletEquality(tsl[0], ep1) {
+		t.Errorf("want %+v, got %+v", ep1, tsl)
 	}
 }
 
@@ -112,29 +112,29 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	hc := newFakeHealthCheck()
 	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", 2, nil)
 
-	// no endpoint
+	// no tablet
 	hc.Reset()
-	want := "shard, host: ks.0.replica, <nil>, no valid endpoint"
+	want := "shard, host: ks.0.replica, <nil>, no valid tablet"
 	err := f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 	if hc.GetStatsFromTargetCounter != 1 {
 		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
 	}
 
-	// endpoint with error
+	// tablet with error
 	hc.Reset()
-	hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, fmt.Errorf("no connection"), nil)
-	want = "shard, host: ks.0.replica, <nil>, no valid endpoint"
+	hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, fmt.Errorf("no connection"), nil)
+	want = "shard, host: ks.0.replica, <nil>, no valid tablet"
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 	if hc.GetStatsFromTargetCounter != 1 {
 		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
 	}
 
-	// endpoint without connection
+	// tablet without connection
 	hc.Reset()
-	ep1 := hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, nil, nil)
-	want = fmt.Sprintf(`shard, host: ks.0.replica, <nil>, no valid endpoint`)
+	ep1 := hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, nil, nil)
+	want = fmt.Sprintf(`shard, host: ks.0.replica, <nil>, no valid tablet`)
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 	if hc.GetStatsFromTargetCounter != 1 {
@@ -143,8 +143,8 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 
 	// retry error
 	hc.Reset()
-	ep1 = hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailRetry: 1})
-	ep2 := hc.addTestEndPoint("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailRetry: 1})
+	ep1 = hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailRetry: 1})
+	ep2 := hc.addTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailRetry: 1})
 	wants := map[string]int{
 		fmt.Sprintf(`shard, host: ks.0.replica, %+v, retry: err`, ep1): 0,
 		fmt.Sprintf(`shard, host: ks.0.replica, %+v, retry: err`, ep2): 0,
@@ -159,8 +159,8 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 
 	// fatal error
 	hc.Reset()
-	ep1 = hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailFatal: 1})
-	ep2 = hc.addTestEndPoint("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailFatal: 1})
+	ep1 = hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailFatal: 1})
+	ep2 = hc.addTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailFatal: 1})
 	wants = map[string]int{
 		fmt.Sprintf(`shard, host: ks.0.replica, %+v, fatal: err`, ep1): 0,
 		fmt.Sprintf(`shard, host: ks.0.replica, %+v, fatal: err`, ep2): 0,
@@ -180,7 +180,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 
 	// server error - no retry
 	hc.Reset()
-	ep1 = hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailServer: 1})
+	ep1 = hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailServer: 1})
 	want = fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: err`, ep1)
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_BAD_INPUT)
@@ -190,7 +190,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 
 	// conn error - no retry
 	hc.Reset()
-	ep1 = hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailConn: 1})
+	ep1 = hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailConn: 1})
 	want = fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: conn`, ep1)
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
@@ -200,7 +200,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 
 	// no failure
 	hc.Reset()
-	hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{})
+	hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{})
 	err = f(dg, keyspace, shard, tabletType)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -219,8 +219,8 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 
 	// retry error - no retry
 	hc.Reset()
-	ep1 := hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailRetry: 1})
-	ep2 := hc.addTestEndPoint("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailRetry: 1})
+	ep1 := hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailRetry: 1})
+	ep2 := hc.addTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailRetry: 1})
 	wants := map[string]int{
 		fmt.Sprintf(`shard, host: ks.0.replica, %+v, retry: err`, ep1): 0,
 		fmt.Sprintf(`shard, host: ks.0.replica, %+v, retry: err`, ep2): 0,
@@ -235,7 +235,7 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 
 	// conn error - no retry
 	hc.Reset()
-	ep1 = hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailConn: 1})
+	ep1 = hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailConn: 1})
 	want := fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: conn`, ep1)
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)

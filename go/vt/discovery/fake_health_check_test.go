@@ -8,51 +8,51 @@ import (
 )
 
 func newFakeHealthCheck() *fakeHealthCheck {
-	return &fakeHealthCheck{endPoints: make(map[string]*topodatapb.EndPoint)}
+	return &fakeHealthCheck{tablets: make(map[string]*topodatapb.Tablet)}
 }
 
 type fakeHealthCheck struct {
-	mu        sync.RWMutex
-	endPoints map[string]*topodatapb.EndPoint
+	mu      sync.RWMutex
+	tablets map[string]*topodatapb.Tablet
 }
 
 // SetListener sets the listener for healthcheck updates.
 func (*fakeHealthCheck) SetListener(listener HealthCheckStatsListener) {
 }
 
-// AddEndPoint adds the endpoint, and starts health check.
-func (fhc *fakeHealthCheck) AddEndPoint(cell, name string, endPoint *topodatapb.EndPoint) {
+// AddTablet adds the tablet, and starts health check.
+func (fhc *fakeHealthCheck) AddTablet(cell, name string, tablet *topodatapb.Tablet) {
 	fhc.mu.Lock()
 	defer fhc.mu.Unlock()
-	key := EndPointToMapKey(endPoint)
-	fhc.endPoints[key] = endPoint
+	key := TabletToMapKey(tablet)
+	fhc.tablets[key] = tablet
 }
 
-// RemoveEndPoint removes the endpoint, and stops the health check.
-func (fhc *fakeHealthCheck) RemoveEndPoint(endPoint *topodatapb.EndPoint) {
+// RemoveTablet removes the tablet, and stops the health check.
+func (fhc *fakeHealthCheck) RemoveTablet(tablet *topodatapb.Tablet) {
 	fhc.mu.Lock()
 	defer fhc.mu.Unlock()
-	key := EndPointToMapKey(endPoint)
-	delete(fhc.endPoints, key)
+	key := TabletToMapKey(tablet)
+	delete(fhc.tablets, key)
 }
 
-// GetEndPointStatsFromKeyspaceShard returns all EndPointStats for the given keyspace/shard.
-func (*fakeHealthCheck) GetEndPointStatsFromKeyspaceShard(keyspace, shard string) []*EndPointStats {
+// GetTabletStatsFromKeyspaceShard returns all TabletStats for the given keyspace/shard.
+func (*fakeHealthCheck) GetTabletStatsFromKeyspaceShard(keyspace, shard string) []*TabletStats {
 	return nil
 }
 
-// GetEndPointStatsFromTarget returns all EndPointStats for the given target.
-func (*fakeHealthCheck) GetEndPointStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*EndPointStats {
+// GetTabletStatsFromTarget returns all TabletStats for the given target.
+func (*fakeHealthCheck) GetTabletStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*TabletStats {
 	return nil
 }
 
-// GetConnection returns the TabletConn of the given endpoint.
-func (*fakeHealthCheck) GetConnection(endPoint *topodatapb.EndPoint) tabletconn.TabletConn {
+// GetConnection returns the TabletConn of the given tablet.
+func (*fakeHealthCheck) GetConnection(tablet *topodatapb.Tablet) tabletconn.TabletConn {
 	return nil
 }
 
 // CacheStatus returns a displayable version of the cache.
-func (*fakeHealthCheck) CacheStatus() EndPointsCacheStatusList {
+func (*fakeHealthCheck) CacheStatus() TabletsCacheStatusList {
 	return nil
 }
 
@@ -61,12 +61,12 @@ func (*fakeHealthCheck) Close() error {
 	return nil
 }
 
-func (fhc *fakeHealthCheck) GetAllEndPoints() map[string]*topodatapb.EndPoint {
-	res := make(map[string]*topodatapb.EndPoint)
+func (fhc *fakeHealthCheck) GetAllTablets() map[string]*topodatapb.Tablet {
+	res := make(map[string]*topodatapb.Tablet)
 	fhc.mu.RLock()
 	defer fhc.mu.RUnlock()
-	for key, ep := range fhc.endPoints {
-		res[key] = ep
+	for key, t := range fhc.tablets {
+		res[key] = t
 	}
 	return res
 }

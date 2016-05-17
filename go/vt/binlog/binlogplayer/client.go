@@ -41,7 +41,7 @@ type BinlogTransactionStream interface {
 // Client is the interface all clients must satisfy
 type Client interface {
 	// Dial a server
-	Dial(endPoint *topodatapb.EndPoint, connTimeout time.Duration) error
+	Dial(tablet *topodatapb.Tablet, connTimeout time.Duration) error
 
 	// Close the connection
 	Close()

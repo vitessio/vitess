@@ -37,15 +37,17 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 	ft.AddTablet("aa", 0, "host1", map[string]int32{"vt": 123})
 	tw.loadTablets()
 	t.Logf(`ft.AddTablet("aa", 0, "host1", {"vt": 123}); tw.loadTablets()`)
-	want := &topodatapb.EndPoint{
-		Uid:     0,
-		Host:    "host1",
-		PortMap: map[string]int32{"vt": 123},
+	want := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Uid: 0,
+		},
+		Hostname: "host1",
+		PortMap:  map[string]int32{"vt": 123},
 	}
-	allEPs := fhc.GetAllEndPoints()
-	key := EndPointToMapKey(want)
-	if _, ok := allEPs[key]; !ok || len(allEPs) != 1 {
-		t.Errorf("fhc.GetAllEndPoints() = %+v; want %+v", allEPs, want)
+	allTablets := fhc.GetAllTablets()
+	key := TabletToMapKey(want)
+	if _, ok := allTablets[key]; !ok || len(allTablets) != 1 {
+		t.Errorf("fhc.GetAllTablets() = %+v; want %+v", allTablets, want)
 	}
 
 	// same tablet, different port, should update (previous
@@ -53,15 +55,17 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 	ft.AddTablet("aa", 0, "host1", map[string]int32{"vt": 456})
 	tw.loadTablets()
 	t.Logf(`ft.AddTablet("aa", 0, "host1", {"vt": 456}); tw.loadTablets()`)
-	want = &topodatapb.EndPoint{
-		Uid:     0,
-		Host:    "host1",
-		PortMap: map[string]int32{"vt": 456},
+	want = &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Uid: 0,
+		},
+		Hostname: "host1",
+		PortMap:  map[string]int32{"vt": 456},
 	}
-	allEPs = fhc.GetAllEndPoints()
-	key = EndPointToMapKey(want)
-	if _, ok := allEPs[key]; !ok || len(allEPs) != 1 {
-		t.Errorf("fhc.GetAllEndPoints() = %+v; want %+v", allEPs, want)
+	allTablets = fhc.GetAllTablets()
+	key = TabletToMapKey(want)
+	if _, ok := allTablets[key]; !ok || len(allTablets) != 1 {
+		t.Errorf("fhc.GetAllTablets() = %+v; want %+v", allTablets, want)
 	}
 
 	tw.Stop()

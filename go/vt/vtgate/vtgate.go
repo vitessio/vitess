@@ -754,7 +754,7 @@ func (vtg *VTGate) GetSrvShard(ctx context.Context, keyspace, shard string) (*to
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
-func (vtg *VTGate) GetGatewayCacheStatus() GatewayEndPointCacheStatusList {
+func (vtg *VTGate) GetGatewayCacheStatus() GatewayTabletCacheStatusList {
 	return vtg.resolver.GetGatewayCacheStatus()
 }
 

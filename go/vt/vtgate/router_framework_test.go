@@ -161,12 +161,12 @@ func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxConn) {
 	s.VSchema = routerVSchema
 	sbc1 = &sandboxConn{}
 	sbc2 = &sandboxConn{}
-	hc.addTestEndPoint(cell, "-20", 1, "TestRouter", "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
-	hc.addTestEndPoint(cell, "40-60", 1, "TestRouter", "40-60", topodatapb.TabletType_MASTER, true, 1, nil, sbc2)
+	hc.addTestTablet(cell, "-20", 1, "TestRouter", "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	hc.addTestTablet(cell, "40-60", 1, "TestRouter", "40-60", topodatapb.TabletType_MASTER, true, 1, nil, sbc2)
 
 	createSandbox(KsTestUnsharded)
 	sbclookup = &sandboxConn{}
-	hc.addTestEndPoint(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil, sbclookup)
+	hc.addTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil, sbclookup)
 
 	bad := createSandbox("TestBadSharding")
 	bad.VSchema = badVSchema

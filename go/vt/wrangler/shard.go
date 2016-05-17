@@ -183,16 +183,6 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 			wr.Logger().Warningf("Cannot delete ShardReplication in cell %v for %v/%v: %v", cell, keyspace, shard, err)
 		}
 
-		for _, t := range topoproto.AllTabletTypes {
-			if !topo.IsInServingGraph(t) {
-				continue
-			}
-
-			if err := wr.ts.DeleteEndPoints(ctx, cell, keyspace, shard, t, -1); err != nil && err != topo.ErrNoNode {
-				wr.Logger().Warningf("Cannot delete EndPoints in cell %v for %v/%v/%v: %v", cell, keyspace, shard, t, err)
-			}
-		}
-
 		if err := wr.ts.DeleteSrvShard(ctx, cell, keyspace, shard); err != nil && err != topo.ErrNoNode {
 			wr.Logger().Warningf("Cannot delete SrvShard in cell %v for %v/%v: %v", cell, keyspace, shard, err)
 		}

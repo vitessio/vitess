@@ -21,12 +21,12 @@ import (
 
 // GetPermissions returns the permissions set on a remote tablet
 func (wr *Wrangler) GetPermissions(ctx context.Context, tabletAlias *topodatapb.TabletAlias) (*tabletmanagerdatapb.Permissions, error) {
-	tablet, err := wr.ts.GetTablet(ctx, tabletAlias)
+	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
 	}
 
-	return wr.tmc.GetPermissions(ctx, tablet)
+	return wr.tmc.GetPermissions(ctx, ti.Tablet)
 }
 
 // diffPermissions is a helper method to asynchronously diff a permissions

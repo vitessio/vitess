@@ -76,7 +76,7 @@ func InitVtctld(ts topo.Server) {
 			if err != nil {
 				return "", err
 			}
-			return "", wr.TabletManagerClient().Ping(ctx, ti)
+			return "", wr.TabletManagerClient().Ping(ctx, ti.Tablet)
 		})
 
 	actionRepo.RegisterTabletAction("RefreshState", acl.ADMIN,
@@ -85,7 +85,7 @@ func InitVtctld(ts topo.Server) {
 			if err != nil {
 				return "", err
 			}
-			return "", wr.TabletManagerClient().RefreshState(ctx, ti)
+			return "", wr.TabletManagerClient().RefreshState(ctx, ti.Tablet)
 		})
 
 	actionRepo.RegisterTabletAction("DeleteTablet", acl.ADMIN,

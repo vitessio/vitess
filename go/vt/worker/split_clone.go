@@ -350,13 +350,13 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 		}
 
 		shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-		err := scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i])
+		err := scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i].Tablet)
 		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot stop replication on tablet %v", topoproto.TabletAliasString(alias))
 		}
 
-		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i])
+		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i].Tablet)
 	}
 
 	// Initialize healthcheck and add destination shards to it.
@@ -373,28 +373,28 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	for _, si := range scw.destinationShards {
 		waitCtx, waitCancel := context.WithTimeout(ctx, 10*time.Second)
 		defer waitCancel()
-		if err := discovery.WaitForEndPoints(waitCtx, scw.healthCheck,
+		if err := discovery.WaitForTablets(waitCtx, scw.healthCheck,
 			scw.cell, si.Keyspace(), si.ShardName(), []topodatapb.TabletType{topodatapb.TabletType_MASTER}); err != nil {
 			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v: %v", si.Keyspace(), si.ShardName(), err)
 		}
 		masters := discovery.GetCurrentMaster(
-			scw.healthCheck.GetEndPointStatsFromTarget(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER))
+			scw.healthCheck.GetTabletStatsFromTarget(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER))
 		if len(masters) == 0 {
-			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v in HealthCheck: empty EndPointStats list", si.Keyspace(), si.ShardName())
+			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v in HealthCheck: empty TabletStats list", si.Keyspace(), si.ShardName())
 		}
 		master := masters[0]
 
 		// Get the MySQL database name of the tablet.
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		ti, err := scw.wr.TopoServer().GetTablet(shortCtx, master.Alias())
+		ti, err := scw.wr.TopoServer().GetTablet(shortCtx, master.Tablet.Alias)
 		cancel()
 		if err != nil {
-			return fmt.Errorf("cannot get the TabletInfo for destination master (%v) to find out its db name: %v", topoproto.TabletAliasString(master.Alias()), err)
+			return fmt.Errorf("cannot get the TabletInfo for destination master (%v) to find out its db name: %v", topoproto.TabletAliasString(master.Tablet.Alias), err)
 		}
 		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
 		scw.destinationDbNames[keyspaceAndShard] = ti.DbName()
 
-		scw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Alias()), si.Keyspace(), si.ShardName())
+		scw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Tablet.Alias), si.Keyspace(), si.ShardName())
 	}
 	scw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The HealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
 
@@ -604,7 +604,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 		// get the current position from the sources
 		for shardIndex := range scw.sourceShards {
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-			status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex])
+			status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex].Tablet)
 			cancel()
 			if err != nil {
 				return err
@@ -662,7 +662,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Reloading schema on tablet %v", ti.AliasString())
 				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-				err := scw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti)
+				err := scw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti.Tablet)
 				cancel()
 				if err != nil {
 					processError("ReloadSchema failed on tablet %v: %v", ti.AliasString(), err)
