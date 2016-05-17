@@ -79,21 +79,22 @@ func sourceRdonlyFactory(t *testing.T, dbAndTableName string, min, max int) func
 	return f.getFactory()
 }
 
-// This FakeTabletManagerClient extension will implement ChangeType using the topo server
-type FakeTMCTopo struct {
+// fakeTMCTopo is a FakeTabletManagerClient extension that implements ChangeType
+// using the provided topo server.
+type fakeTMCTopo struct {
 	tmclient.TabletManagerClient
 	server topo.Server
 }
 
 func newFakeTMCTopo(ts topo.Server) tmclient.TabletManagerClient {
-	return &FakeTMCTopo{
+	return &fakeTMCTopo{
 		TabletManagerClient: faketmclient.NewFakeTabletManagerClient(),
 		server:              ts,
 	}
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTMCTopo) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType) error {
+func (client *fakeTMCTopo) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType) error {
 	_, err := client.server.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
 		t.Type = dbType
 		return nil
