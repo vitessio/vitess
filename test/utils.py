@@ -727,7 +727,10 @@ def run_vtctl(clargs, auto_log=False, expect_fail=False,
 
 def run_vtctl_vtctl(clargs, auto_log=False, expect_fail=False,
                     **kwargs):
-  args = environment.binary_args('vtctl') + ['-log_dir', environment.vtlogroot]
+  args = environment.binary_args('vtctl') + [
+      '-log_dir', environment.vtlogroot,
+      '-enable_queries',
+  ]
   args.extend(environment.topo_server().flags())
   args.extend(['-tablet_manager_protocol',
                protocols_flavor().tablet_manager_protocol()])
@@ -1088,6 +1091,7 @@ class Vtctld(object):
 
   def start(self):
     args = environment.binary_args('vtctld') + [
+        '-enable_queries',
         '-web_dir', environment.vttop + '/web/vtctld',
         '--log_dir', environment.vtlogroot,
         '--port', str(self.port),

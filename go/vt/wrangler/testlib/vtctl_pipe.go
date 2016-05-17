@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl/grpcvtctlserver"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
@@ -24,6 +25,8 @@ import (
 	// vtctl client is registered and can be used.
 	_ "github.com/youtube/vitess/go/vt/vtctl/grpcvtctlclient"
 )
+
+var servenvInitialized = false
 
 func init() {
 	// make sure we use the right protocol
@@ -40,6 +43,13 @@ type VtctlPipe struct {
 
 // NewVtctlPipe creates a new VtctlPipe based on the given topo server.
 func NewVtctlPipe(t *testing.T, ts topo.Server) *VtctlPipe {
+	// Register all vtctl commands
+	if !servenvInitialized {
+		flag.Set("enable_queries", "true")
+		servenv.FireRunHooks()
+		servenvInitialized = true
+	}
+
 	// Listen on a random port
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {

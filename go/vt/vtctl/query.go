@@ -17,6 +17,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -30,57 +31,67 @@ import (
 
 const queriesGroupName = "Queries"
 
+var (
+	enableQueries = flag.Bool("enable_queries", false, "if set, allows vtgate and vttablet queries. May have security implications, as the queries will be run from this process.")
+)
+
 func init() {
-	addCommandGroup(queriesGroupName)
+	servenv.OnRun(func() {
+		if !*enableQueries {
+			return
+		}
 
-	// VtGate commands
-	addCommand(queriesGroupName, command{
-		"VtGateExecute",
-		commandVtGateExecute,
-		"-server <vtgate> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] [-json] <sql>",
-		"Executes the given SQL query with the provided bound variables against the vtgate server."})
-	addCommand(queriesGroupName, command{
-		"VtGateExecuteShards",
-		commandVtGateExecuteShards,
-		"-server <vtgate> -keyspace <keyspace> -shards <shard0>,<shard1>,... [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] [-json] <sql>",
-		"Executes the given SQL query with the provided bound variables against the vtgate server. It is routed to the provided shards."})
-	addCommand(queriesGroupName, command{
-		"VtGateExecuteKeyspaceIds",
-		commandVtGateExecuteKeyspaceIds,
-		"-server <vtgate> -keyspace <keyspace> -keyspace_ids <ks1 in hex>,<k2 in hex>,... [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] [-json] <sql>",
-		"Executes the given SQL query with the provided bound variables against the vtgate server. It is routed to the shards that contain the provided keyspace ids."})
-	addCommand(queriesGroupName, command{
-		"VtGateSplitQuery",
-		commandVtGateSplitQuery,
-		"-server <vtgate> -keyspace <keyspace> [-split_column <split_column>] -split_count <split_count> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] <sql>",
-		"Executes the SplitQuery computation for the given SQL query with the provided bound variables against the vtgate server (this is the base query for Map-Reduce workloads, and is provided here for debug / test purposes)."})
+		addCommandGroup(queriesGroupName)
 
-	// VtTablet commands
-	addCommand(queriesGroupName, command{
-		"VtTabletExecute",
-		commandVtTabletExecute,
-		"[-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-transaction_id <transaction_id>] [-tablet_type <tablet_type>] [-json] -keyspace <keyspace> -shard <shard> <tablet alias> <sql>",
-		"Executes the given query on the given tablet."})
-	addCommand(queriesGroupName, command{
-		"VtTabletBegin",
-		commandVtTabletBegin,
-		"[-connect_timeout <connect timeout>] [-tablet_type <tablet_type>] -keyspace <keyspace> -shard <shard> <tablet alias>",
-		"Starts a transaction on the provided server."})
-	addCommand(queriesGroupName, command{
-		"VtTabletCommit",
-		commandVtTabletCommit,
-		"[-connect_timeout <connect timeout>] [-tablet_type <tablet_type>] -keyspace <keyspace> -shard <shard> <tablet alias> <transaction_id>",
-		"Commits a transaction on the provided server."})
-	addCommand(queriesGroupName, command{
-		"VtTabletRollback",
-		commandVtTabletRollback,
-		"[-connect_timeout <connect timeout>] [-tablet_type <tablet_type>] -keyspace <keyspace> -shard <shard> <tablet alias> <transaction_id>",
-		"Rollbacks a transaction on the provided server."})
-	addCommand(queriesGroupName, command{
-		"VtTabletStreamHealth",
-		commandVtTabletStreamHealth,
-		"[-count <count, default 1>] [-connect_timeout <connect timeout>] <tablet alias>",
-		"Executes the StreamHealth streaming query to a vttablet process. Will stop after getting <count> answers."})
+		// VtGate commands
+		addCommand(queriesGroupName, command{
+			"VtGateExecute",
+			commandVtGateExecute,
+			"-server <vtgate> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] [-json] <sql>",
+			"Executes the given SQL query with the provided bound variables against the vtgate server."})
+		addCommand(queriesGroupName, command{
+			"VtGateExecuteShards",
+			commandVtGateExecuteShards,
+			"-server <vtgate> -keyspace <keyspace> -shards <shard0>,<shard1>,... [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] [-json] <sql>",
+			"Executes the given SQL query with the provided bound variables against the vtgate server. It is routed to the provided shards."})
+		addCommand(queriesGroupName, command{
+			"VtGateExecuteKeyspaceIds",
+			commandVtGateExecuteKeyspaceIds,
+			"-server <vtgate> -keyspace <keyspace> -keyspace_ids <ks1 in hex>,<k2 in hex>,... [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] [-json] <sql>",
+			"Executes the given SQL query with the provided bound variables against the vtgate server. It is routed to the shards that contain the provided keyspace ids."})
+		addCommand(queriesGroupName, command{
+			"VtGateSplitQuery",
+			commandVtGateSplitQuery,
+			"-server <vtgate> -keyspace <keyspace> [-split_column <split_column>] -split_count <split_count> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] <sql>",
+			"Executes the SplitQuery computation for the given SQL query with the provided bound variables against the vtgate server (this is the base query for Map-Reduce workloads, and is provided here for debug / test purposes)."})
+
+		// VtTablet commands
+		addCommand(queriesGroupName, command{
+			"VtTabletExecute",
+			commandVtTabletExecute,
+			"[-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-transaction_id <transaction_id>] [-tablet_type <tablet_type>] [-json] -keyspace <keyspace> -shard <shard> <tablet alias> <sql>",
+			"Executes the given query on the given tablet."})
+		addCommand(queriesGroupName, command{
+			"VtTabletBegin",
+			commandVtTabletBegin,
+			"[-connect_timeout <connect timeout>] [-tablet_type <tablet_type>] -keyspace <keyspace> -shard <shard> <tablet alias>",
+			"Starts a transaction on the provided server."})
+		addCommand(queriesGroupName, command{
+			"VtTabletCommit",
+			commandVtTabletCommit,
+			"[-connect_timeout <connect timeout>] [-tablet_type <tablet_type>] -keyspace <keyspace> -shard <shard> <tablet alias> <transaction_id>",
+			"Commits a transaction on the provided server."})
+		addCommand(queriesGroupName, command{
+			"VtTabletRollback",
+			commandVtTabletRollback,
+			"[-connect_timeout <connect timeout>] [-tablet_type <tablet_type>] -keyspace <keyspace> -shard <shard> <tablet alias> <transaction_id>",
+			"Rollbacks a transaction on the provided server."})
+		addCommand(queriesGroupName, command{
+			"VtTabletStreamHealth",
+			commandVtTabletStreamHealth,
+			"[-count <count, default 1>] [-connect_timeout <connect timeout>] <tablet alias>",
+			"Executes the StreamHealth streaming query to a vttablet process. Will stop after getting <count> answers."})
+	})
 }
 
 type bindvars map[string]interface{}
