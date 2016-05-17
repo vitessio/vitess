@@ -226,14 +226,14 @@ google.setOnLoadCallback(function() {
 </style>
 <table>
   <tr>
-    <th colspan="5">HealthCheck EndPoints Cache</th>
+    <th colspan="5">HealthCheck Tablet Cache</th>
   </tr>
   <tr>
     <th>Cell</th>
     <th>Keyspace</th>
     <th>Shard</th>
     <th>TabletType</th>
-    <th>EndPointsStats</th>
+    <th>TabletStats</th>
   </tr>
   {{range $i, $ts := .}}
   <tr>
