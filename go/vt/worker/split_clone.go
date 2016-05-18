@@ -391,6 +391,9 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 		}
 		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
 		scw.destinationDbNames[keyspaceAndShard] = ti.DbName()
+		
+		// TODO(mberlin): Verify on the destination master that the
+		// _vt.blp_checkpoint table has the latest schema.
 
 		scw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Tablet.Alias), si.Keyspace(), si.ShardName())
 	}
@@ -612,7 +615,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 				return err
 			}
 
-			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(uint32(shardIndex), status.Position, time.Now().Unix(), flags))
+			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(uint32(shardIndex), status.Position, scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), flags))
 		}
 
 		for _, si := range scw.destinationShards {
