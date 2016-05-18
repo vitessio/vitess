@@ -38,8 +38,8 @@ func TestGRPCBinlogStreamer(t *testing.T) {
 	c := &client{}
 
 	// and send it to the test suite
-	binlogplayertest.Run(t, c, &topodatapb.EndPoint{
-		Host: host,
+	binlogplayertest.Run(t, c, &topodatapb.Tablet{
+		Hostname: host,
 		PortMap: map[string]int32{
 			"grpc": int32(port),
 		},

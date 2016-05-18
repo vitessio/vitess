@@ -41,8 +41,8 @@ func init() {
 
 // gRPCQueryClient implements a gRPC implementation for TabletConn
 type gRPCQueryClient struct {
-	// endPoint is set at construction time, and never changed
-	endPoint *topodatapb.EndPoint
+	// tablet is set at construction time, and never changed
+	tablet *topodatapb.Tablet
 
 	// mu protects the next fields
 	mu     sync.RWMutex
@@ -52,9 +52,9 @@ type gRPCQueryClient struct {
 }
 
 // DialTablet creates and initializes gRPCQueryClient.
-func DialTablet(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
+func DialTablet(ctx context.Context, tablet *topodatapb.Tablet, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 	// create the RPC client
-	addr := netutil.JoinHostPort(endPoint.Host, endPoint.PortMap["grpc"])
+	addr := netutil.JoinHostPort(tablet.Hostname, tablet.PortMap["grpc"])
 	opt, err := grpcutils.ClientSecureDialOption(*cert, *key, *ca, *name)
 	if err != nil {
 		return nil, err
@@ -66,9 +66,9 @@ func DialTablet(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, sh
 	c := queryservicepb.NewQueryClient(cc)
 
 	result := &gRPCQueryClient{
-		endPoint: endPoint,
-		cc:       cc,
-		c:        c,
+		tablet: tablet,
+		cc:     cc,
+		c:      c,
 		target: &querypb.Target{
 			Keyspace:   keyspace,
 			Shard:      shard,
@@ -482,7 +482,7 @@ func (conn *gRPCQueryClient) SetTarget(keyspace, shard string, tabletType topoda
 	return nil
 }
 
-// EndPoint returns the rpc end point.
-func (conn *gRPCQueryClient) EndPoint() *topodatapb.EndPoint {
-	return conn.endPoint
+// Tablet returns the rpc end point.
+func (conn *gRPCQueryClient) Tablet() *topodatapb.Tablet {
+	return conn.tablet
 }

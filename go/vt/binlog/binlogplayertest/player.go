@@ -276,8 +276,8 @@ func (fake *FakeBinlogStreamer) HandlePanic(err *error) {
 }
 
 // Run runs the test suite
-func Run(t *testing.T, bpc binlogplayer.Client, endPoint *topodatapb.EndPoint, fake *FakeBinlogStreamer) {
-	if err := bpc.Dial(endPoint, 30*time.Second); err != nil {
+func Run(t *testing.T, bpc binlogplayer.Client, tablet *topodatapb.Tablet, fake *FakeBinlogStreamer) {
+	if err := bpc.Dial(tablet, 30*time.Second); err != nil {
 		t.Fatalf("Dial failed: %v", err)
 	}
 

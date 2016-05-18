@@ -560,56 +560,6 @@ func (tee *Tee) UnlockSrvShardForAction(ctx context.Context, cell, keyspace, sha
 	return perr
 }
 
-// GetSrvTabletTypesPerShard is part of the topo.Server interface
-func (tee *Tee) GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspace, shard string) ([]topodatapb.TabletType, error) {
-	return tee.readFrom.GetSrvTabletTypesPerShard(ctx, cell, keyspace, shard)
-}
-
-// CreateEndPoints is part of the topo.Server interface
-func (tee *Tee) CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType, addrs *topodatapb.EndPoints) error {
-	if err := tee.primary.CreateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.CreateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.CreateEndPoints(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
-	}
-	return nil
-}
-
-// UpdateEndPoints is part of the topo.Server interface
-func (tee *Tee) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType, addrs *topodatapb.EndPoints, existingVersion int64) error {
-	if err := tee.primary.UpdateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs, existingVersion); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.UpdateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs, -1); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.UpdateEndPoints(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
-	}
-	return nil
-}
-
-// GetEndPoints is part of the topo.Server interface
-func (tee *Tee) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType) (*topodatapb.EndPoints, int64, error) {
-	return tee.readFrom.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
-}
-
-// DeleteEndPoints is part of the topo.Server interface
-func (tee *Tee) DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType, existingVersion int64) error {
-	err := tee.primary.DeleteEndPoints(ctx, cell, keyspace, shard, tabletType, existingVersion)
-	if err != nil && err != topo.ErrNoNode {
-		return err
-	}
-
-	if err := tee.secondary.DeleteEndPoints(ctx, cell, keyspace, shard, tabletType, -1); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.DeleteEndPoints(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
-	}
-	return err
-}
-
 // UpdateSrvShard is part of the topo.Server interface
 func (tee *Tee) UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *topodatapb.SrvShard) error {
 	if err := tee.primary.UpdateSrvShard(ctx, cell, keyspace, shard, srvShard); err != nil {

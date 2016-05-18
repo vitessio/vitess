@@ -258,7 +258,7 @@ func (sct *sandboxTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard s
 	return nil, fmt.Errorf("Unsupported")
 }
 
-func sandboxDialer(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
+func sandboxDialer(ctx context.Context, tablet *topodatapb.Tablet, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 	sand := getSandbox(keyspace)
 	sand.sandmu.Lock()
 	defer sand.sandmu.Unlock()
@@ -273,7 +273,7 @@ func sandboxDialer(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace,
 		return nil, tabletconn.OperationalError(fmt.Sprintf("conn unreachable"))
 	}
 	sbc := &sandboxConn{}
-	sbc.endPoint = endPoint
+	sbc.tablet = tablet
 	sbc.SetTarget(keyspace, shard, tabletType)
 	return sbc, nil
 }
@@ -283,7 +283,7 @@ type sandboxConn struct {
 	keyspace   string
 	shard      string
 	tabletType topodatapb.TabletType
-	endPoint   *topodatapb.EndPoint
+	tablet     *topodatapb.Tablet
 
 	mustFailRetry  int
 	mustFailFatal  int
@@ -516,8 +516,8 @@ func (sbc *sandboxConn) SetTarget(keyspace, shard string, tabletType topodatapb.
 	return nil
 }
 
-func (sbc *sandboxConn) EndPoint() *topodatapb.EndPoint {
-	return sbc.endPoint
+func (sbc *sandboxConn) Tablet() *topodatapb.Tablet {
+	return sbc.tablet
 }
 
 func (sbc *sandboxConn) getNextResult() *sqltypes.Result {

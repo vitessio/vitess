@@ -20,20 +20,20 @@ import (
 )
 
 var (
-	// waitForHealthyEndPointsTimeout intends to wait for the
+	// waitForHealthyTabletsTimeout intends to wait for the
 	// healthcheck to automatically return rdonly instances which
 	// have been taken out by previous *Clone or *Diff runs.
 	// Therefore, the default for this variable must be higher
 	// than vttablet's -health_check_interval.
-	waitForHealthyEndPointsTimeout = flag.Duration("wait_for_healthy_rdonly_endpoints_timeout", 60*time.Second, "maximum time to wait if less than --min_healthy_rdonly_endpoints are available")
+	waitForHealthyTabletsTimeout = flag.Duration("wait_for_healthy_rdonly_endpoints_timeout", 60*time.Second, "maximum time to wait if less than --min_healthy_rdonly_endpoints are available")
 )
 
-// FindHealthyRdonlyEndPoint returns a random healthy endpoint.
+// FindHealthyRdonlyTablet returns a random healthy endpoint.
 // Since we don't want to use them all, we require at least
-// minHealthyEndPoints servers to be healthy.
+// minHealthyTablets servers to be healthy.
 // May block up to -wait_for_healthy_rdonly_endpoints_timeout.
-func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell, keyspace, shard string, minHealthyRdonlyEndPoints int) (*topodatapb.TabletAlias, error) {
-	busywaitCtx, busywaitCancel := context.WithTimeout(ctx, *waitForHealthyEndPointsTimeout)
+func FindHealthyRdonlyTablet(ctx context.Context, wr *wrangler.Wrangler, cell, keyspace, shard string, minHealthyRdonlyTablets int) (*topodatapb.TabletAlias, error) {
+	busywaitCtx, busywaitCancel := context.WithTimeout(ctx, *waitForHealthyTabletsTimeout)
 	defer busywaitCancel()
 
 	// create a discovery healthcheck, wait for it to have one rdonly
@@ -45,29 +45,29 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 
 	deadlineForLog, _ := busywaitCtx.Deadline()
 	wr.Logger().Infof("Waiting for enough healthy rdonly endpoints to become available. required: %v Waiting up to %.1f seconds.",
-		minHealthyRdonlyEndPoints, deadlineForLog.Sub(time.Now()).Seconds())
-	if err := discovery.WaitForEndPoints(busywaitCtx, healthCheck, cell, keyspace, shard, []topodatapb.TabletType{topodatapb.TabletType_RDONLY}); err != nil {
+		minHealthyRdonlyTablets, deadlineForLog.Sub(time.Now()).Seconds())
+	if err := discovery.WaitForTablets(busywaitCtx, healthCheck, cell, keyspace, shard, []topodatapb.TabletType{topodatapb.TabletType_RDONLY}); err != nil {
 		return nil, fmt.Errorf("error waiting for rdonly endpoints for (%v,%v/%v): %v", cell, keyspace, shard, err)
 	}
 
-	var healthyEndpoints []*discovery.EndPointStats
+	var healthyEndpoints []*discovery.TabletStats
 	for {
 		select {
 		case <-busywaitCtx.Done():
 			return nil, fmt.Errorf("not enough healthy rdonly endpoints to choose from in (%v,%v/%v), have %v healthy ones, need at least %v Context error: %v",
-				cell, keyspace, shard, len(healthyEndpoints), minHealthyRdonlyEndPoints, busywaitCtx.Err())
+				cell, keyspace, shard, len(healthyEndpoints), minHealthyRdonlyTablets, busywaitCtx.Err())
 		default:
 		}
 
-		healthyEndpoints = discovery.RemoveUnhealthyEndpoints(
-			healthCheck.GetEndPointStatsFromTarget(keyspace, shard, topodatapb.TabletType_RDONLY))
-		if len(healthyEndpoints) >= minHealthyRdonlyEndPoints {
+		healthyEndpoints = discovery.RemoveUnhealthyTablets(
+			healthCheck.GetTabletStatsFromTarget(keyspace, shard, topodatapb.TabletType_RDONLY))
+		if len(healthyEndpoints) >= minHealthyRdonlyTablets {
 			break
 		}
 
 		deadlineForLog, _ := busywaitCtx.Deadline()
 		wr.Logger().Infof("Waiting for enough healthy rdonly endpoints to become available. available: %v required: %v Waiting up to %.1f more seconds.",
-			len(healthyEndpoints), minHealthyRdonlyEndPoints, deadlineForLog.Sub(time.Now()).Seconds())
+			len(healthyEndpoints), minHealthyRdonlyTablets, deadlineForLog.Sub(time.Now()).Seconds())
 		// Block for 1 second because 2 seconds is the -health_check_interval flag value in integration tests.
 		timer := time.NewTimer(1 * time.Second)
 		select {
@@ -79,18 +79,15 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 
 	// random server in the list is what we want
 	index := rand.Intn(len(healthyEndpoints))
-	return &topodatapb.TabletAlias{
-		Cell: cell,
-		Uid:  healthyEndpoints[index].EndPoint.Uid,
-	}, nil
+	return healthyEndpoints[index].Tablet.Alias, nil
 }
 
 // FindWorkerTablet will:
 // - find a rdonly instance in the keyspace / shard
 // - mark it as worker
 // - tag it with our worker process
-func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspace, shard string, minHealthyRdonlyEndPoints int) (*topodatapb.TabletAlias, error) {
-	tabletAlias, err := FindHealthyRdonlyEndPoint(ctx, wr, cell, keyspace, shard, minHealthyRdonlyEndPoints)
+func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspace, shard string, minHealthyRdonlyTablets int) (*topodatapb.TabletAlias, error) {
+	tabletAlias, err := FindHealthyRdonlyTablet(ctx, wr, cell, keyspace, shard, minHealthyRdonlyTablets)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +124,7 @@ func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrang
 	// Record a clean-up action to take the tablet back to rdonly.
 	// We will alter this one later on and let the tablet go back to
 	// 'spare' if we have stopped replication for too long on it.
-	wrangler.RecordChangeSlaveTypeAction(cleaner, tabletAlias, topodatapb.TabletType_RDONLY)
+	wrangler.RecordChangeSlaveTypeAction(cleaner, tabletAlias, topodatapb.TabletType_WORKER, topodatapb.TabletType_RDONLY)
 	return tabletAlias, nil
 }
 

@@ -28,6 +28,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
+	"path"
 	"regexp"
 	"sync"
 	"time"
@@ -51,14 +53,20 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/topotools"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// Query rules from keyrange
-const keyrangeQueryRules string = "KeyrangeQueryRules"
+const (
+	// keyrangeQueryRules is the QueryRuleSource name for rules that are based
+	// on the key range.
+	keyrangeQueryRules = "KeyrangeQueryRules"
+
+	// slaveStoppedFile is the file name for the file whose existence informs
+	// vttablet to NOT try to repair replication.
+	slaveStoppedFile = "do_not_replicate"
+)
 
 var (
 	tabletHostname = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
@@ -160,6 +168,10 @@ type ActionAgent struct {
 	// _ignoreHealthErrorExpr can be set by RPC to selectively disable certain
 	// healthcheck errors. It should only be accessed while holding actionMutex.
 	_ignoreHealthErrorExpr *regexp.Regexp
+
+	// _slaveStopped remembers if we've been told to stop replicating.
+	// If it's nil, we'll try to check for the slaveStoppedFile.
+	_slaveStopped *bool
 }
 
 func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
@@ -409,6 +421,48 @@ func (agent *ActionAgent) EnableUpdateStream() bool {
 	return agent._enableUpdateStream
 }
 
+func (agent *ActionAgent) slaveStopped() bool {
+	agent.mutex.Lock()
+	defer agent.mutex.Unlock()
+
+	// If we already know the value, don't bother checking the file.
+	if agent._slaveStopped != nil {
+		return *agent._slaveStopped
+	}
+
+	// If the marker file exists, we're stopped.
+	// Treat any read error as if the file doesn't exist.
+	_, err := os.Stat(path.Join(agent.MysqlDaemon.TabletDir(), slaveStoppedFile))
+	slaveStopped := err == nil
+	agent._slaveStopped = &slaveStopped
+	return slaveStopped
+}
+
+func (agent *ActionAgent) setSlaveStopped(slaveStopped bool) {
+	agent.mutex.Lock()
+	defer agent.mutex.Unlock()
+
+	agent._slaveStopped = &slaveStopped
+
+	// Make a best-effort attempt to persist the value across tablet restarts.
+	// We store a marker in the filesystem so it works regardless of whether
+	// mysqld is running, and so it's tied to this particular instance of the
+	// tablet data dir (the one that's paused at a known replication position).
+	tabletDir := agent.MysqlDaemon.TabletDir()
+	if tabletDir == "" {
+		return
+	}
+	markerFile := path.Join(tabletDir, slaveStoppedFile)
+	if slaveStopped {
+		file, err := os.Create(markerFile)
+		if err == nil {
+			file.Close()
+		}
+	} else {
+		os.Remove(markerFile)
+	}
+}
+
 func (agent *ActionAgent) setServicesDesiredState(disallowQueryService string, enableUpdateStream bool) {
 	agent.mutex.Lock()
 	agent._disallowQueryService = disallowQueryService
@@ -434,16 +488,6 @@ func (agent *ActionAgent) verifyTopology(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func (agent *ActionAgent) verifyServingAddrs(ctx context.Context) error {
-	tablet := agent.Tablet()
-	if !topo.IsRunningQueryService(tablet.Type) {
-		return nil
-	}
-
-	// Check to see our address is registered in the right place.
-	return topotools.UpdateTabletEndpoints(ctx, agent.TopoServer, tablet)
 }
 
 // Start validates and updates the topology records for the tablet, and performs
@@ -508,10 +552,6 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 	agent.initialTablet = proto.Clone(tablet).(*topodatapb.Tablet)
 
 	if err = agent.verifyTopology(ctx); err != nil {
-		return err
-	}
-
-	if err = agent.verifyServingAddrs(ctx); err != nil {
 		return err
 	}
 

@@ -392,7 +392,7 @@ func TestSplitCloneV2_RetryDueToReparent(t *testing.T) {
 			t.Fatalf("GetTablet failed: %v", err)
 		}
 		tmc := tmclient.NewTabletManagerClient()
-		if err := tmc.TabletExternallyReparented(context.Background(), ti, "wait id 1"); err != nil {
+		if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, "wait id 1"); err != nil {
 			t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 		}
 

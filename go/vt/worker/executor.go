@@ -80,12 +80,12 @@ func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
 	// Is this current attempt a retry of a previous attempt?
 	isRetry := false
 	for {
-		var master *discovery.EndPointStats
+		var master *discovery.TabletStats
 		var err error
 
 		// Get the current master from the HealthCheck.
 		masters := discovery.GetCurrentMaster(
-			e.healthCheck.GetEndPointStatsFromTarget(e.keyspace, e.shard, topodatapb.TabletType_MASTER))
+			e.healthCheck.GetTabletStatsFromTarget(e.keyspace, e.shard, topodatapb.TabletType_MASTER))
 		if len(masters) == 0 {
 			e.wr.Logger().Warningf("ExecuteFetch failed for keyspace/shard %v/%v because no MASTER is available; will retry until there is MASTER again", e.keyspace, e.shard)
 			statsRetryCount.Add(1)
@@ -110,7 +110,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
 		// new variables until the label is reached.)
 		{
 			tryCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
-			_, err = e.wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, endPointToTabletInfo(master), command, 0)
+			_, err = e.wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, master.Tablet, command, 0)
 			cancel()
 
 			if err == nil {
@@ -132,7 +132,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
 	retry:
 		masterAlias := "no-master-was-available"
 		if master != nil {
-			masterAlias = topoproto.TabletAliasString(master.Alias())
+			masterAlias = topoproto.TabletAliasString(master.Tablet.Alias)
 		}
 		tabletString := fmt.Sprintf("%v (%v/%v)", masterAlias, e.keyspace, e.shard)
 
@@ -152,8 +152,8 @@ func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
 // checkError returns true if the error can be ignored and the command
 // succeeded, false if the error is retryable and a non-nil error if the
 // command must not be retried.
-func (e *executor) checkError(err error, isRetry bool, master *discovery.EndPointStats) (bool, error) {
-	tabletString := fmt.Sprintf("%v (%v/%v)", topoproto.TabletAliasString(master.Alias()), e.keyspace, e.shard)
+func (e *executor) checkError(err error, isRetry bool, master *discovery.TabletStats) (bool, error) {
+	tabletString := fmt.Sprintf("%v (%v/%v)", topoproto.TabletAliasString(master.Tablet.Alias), e.keyspace, e.shard)
 	// If the ExecuteFetch call failed because of an application error, we will try to figure out why.
 	// We need to extract the MySQL error number, and will attempt to retry if we think the error is recoverable.
 	match := errExtract.FindStringSubmatch(err.Error())

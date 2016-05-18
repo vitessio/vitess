@@ -69,11 +69,6 @@ class TestTabletManager(unittest.TestCase):
       t.set_semi_sync_enabled(master=False)
       t.clean_dbs()
 
-  def _check_srv_shard(self):
-    srv_shard = utils.run_vtctl_json(['GetSrvShard', 'test_nj',
-                                      'test_keyspace/0'])
-    self.assertEqual(srv_shard['master_cell'], 'test_nj')
-
   # run twice to check behavior with existing znode data
   def test_sanity(self):
     self._test_sanity()
@@ -87,7 +82,6 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl(
         ['RebuildKeyspaceGraph', '-rebuild_srv_shards', 'test_keyspace'])
     utils.validate_topology()
-    self._check_srv_shard()
 
     # if these statements don't run before the tablet it will wedge
     # waiting for the db to become accessible. this is more a bug than
@@ -133,7 +127,6 @@ class TestTabletManager(unittest.TestCase):
     # break because we only have a single master, no slaves
     utils.run_vtctl(['ValidateShard', '-ping-tablets=false',
                      'test_keyspace/0'])
-    self._check_srv_shard()
 
     tablet_62344.kill_vttablet()
 
@@ -154,7 +147,6 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
     utils.validate_topology()
-    self._check_srv_shard()
     tablet_62344.create_db('vt_test_keyspace')
     tablet_62344.start_vttablet()
 
@@ -382,6 +374,24 @@ class TestTabletManager(unittest.TestCase):
     self.assertEqual(ti['type'], topodata_pb2.MASTER,
                      'unexpected master type: %s' % ti['type'])
 
+    # stop replication at the mysql level.
+    tablet_62044.mquery('', 'stop slave')
+    # vttablet replication_reporter should restart it.
+    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
+    # insert something on the master and wait for it on the slave.
+    tablet_62344.mquery('vt_test_keyspace', [
+        'create table repl_test_table (id int)',
+        'insert into repl_test_table values (123)'], write=True)
+    timeout = 10.0
+    while True:
+      result = tablet_62044.mquery('vt_test_keyspace',
+                                   'select * from repl_test_table')
+      if result:
+        self.assertEqual(result[0][0], 123L)
+        break
+      timeout = utils.wait_step(
+          'slave replication repaired by replication_reporter', timeout)
+
     # stop replication, make sure we don't go unhealthy.
     # (we have a baseline as well, so the time should be good).
     utils.run_vtctl(['StopSlave', tablet_62044.tablet_alias])
@@ -538,6 +548,16 @@ class TestTabletManager(unittest.TestCase):
       t.wait_for_vttablet_state('NOT_SERVING')
       self.check_healthz(t, False)
 
+    # Tell slave to not try to repair replication in healthcheck.
+    # The StopSlave will ultimately fail because mysqld is not running,
+    # But vttablet should remember that it's not supposed to fix replication.
+    utils.run_vtctl(['StopSlave', tablet_62044.tablet_alias], expect_fail=True)
+
+    # The above notice to not fix replication should survive tablet restart.
+    tablet_62044.kill_vttablet()
+    tablet_62044.start_vttablet(wait_for_state='NOT_SERVING',
+                                full_mycnf_args=True, include_mysql_port=False)
+
     # restart mysqld
     start_procs = [
         tablet_62344.start_mysql(),
@@ -566,7 +586,7 @@ class TestTabletManager(unittest.TestCase):
 
     # restart replication, wait until health check goes small
     # (a value of zero is default and won't be in structure)
-    tablet_62044.mquery('', ['START SLAVE'])
+    utils.run_vtctl(['StartSlave', tablet_62044.tablet_alias])
     timeout = 10
     while True:
       utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias],

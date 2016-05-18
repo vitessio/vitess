@@ -7,15 +7,11 @@ package etcdtopo
 import (
 	"encoding/json"
 	"fmt"
-	"path"
 	"time"
 
 	"github.com/coreos/go-etcd/etcd"
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
-
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -24,142 +20,6 @@ import (
 // we get an error from the Watch method. It is exported so individual
 // test and main programs can change it.
 var WatchSleepDuration = 30 * time.Second
-
-// GetSrvTabletTypesPerShard implements topo.Server.
-func (s *Server) GetSrvTabletTypesPerShard(ctx context.Context, cellName, keyspace, shard string) ([]topodatapb.TabletType, error) {
-	cell, err := s.getCell(cellName)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := cell.Get(srvShardDirPath(keyspace, shard), false /* sort */, false /* recursive */)
-	if err != nil {
-		return nil, convertError(err)
-	}
-	if resp.Node == nil {
-		return nil, ErrBadResponse
-	}
-
-	tabletTypes := make([]topodatapb.TabletType, 0, len(resp.Node.Nodes))
-	for _, n := range resp.Node.Nodes {
-		strType := path.Base(n.Key)
-		if tt, err := topoproto.ParseTabletType(strType); err == nil {
-			tabletTypes = append(tabletTypes, tt)
-		}
-	}
-	return tabletTypes, nil
-}
-
-// CreateEndPoints implements topo.Server.
-func (s *Server) CreateEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topodatapb.TabletType, addrs *topodatapb.EndPoints) error {
-	cell, err := s.getCell(cellName)
-	if err != nil {
-		return err
-	}
-
-	data, err := json.MarshalIndent(addrs, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	// Set only if it doesn't exist.
-	_, err = cell.Create(endPointsFilePath(keyspace, shard, tabletType), string(data), 0 /* ttl */)
-	return convertError(err)
-}
-
-// UpdateEndPoints implements topo.Server.
-func (s *Server) UpdateEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topodatapb.TabletType, addrs *topodatapb.EndPoints, existingVersion int64) error {
-	cell, err := s.getCell(cellName)
-	if err != nil {
-		return err
-	}
-
-	data, err := json.MarshalIndent(addrs, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	if existingVersion == -1 {
-		// Set unconditionally.
-		_, err := cell.Set(endPointsFilePath(keyspace, shard, tabletType), string(data), 0 /* ttl */)
-		return convertError(err)
-	}
-
-	// Update only if version matches.
-	return s.updateEndPoints(cellName, keyspace, shard, tabletType, addrs, existingVersion)
-}
-
-// updateEndPoints updates the EndPoints file only if the version matches.
-func (s *Server) updateEndPoints(cellName, keyspace, shard string, tabletType topodatapb.TabletType, addrs *topodatapb.EndPoints, version int64) error {
-	cell, err := s.getCell(cellName)
-	if err != nil {
-		return err
-	}
-
-	data, err := json.MarshalIndent(addrs, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	_, err = cell.CompareAndSwap(endPointsFilePath(keyspace, shard, tabletType), string(data), 0, /* ttl */
-		"" /* prevValue */, uint64(version))
-	return convertError(err)
-}
-
-// GetEndPoints implements topo.Server.
-func (s *Server) GetEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topodatapb.TabletType) (*topodatapb.EndPoints, int64, error) {
-	cell, err := s.getCell(cellName)
-	if err != nil {
-		return nil, -1, err
-	}
-
-	resp, err := cell.Get(endPointsFilePath(keyspace, shard, tabletType), false /* sort */, false /* recursive */)
-	if err != nil {
-		return nil, -1, convertError(err)
-	}
-	if resp.Node == nil {
-		return nil, -1, ErrBadResponse
-	}
-
-	value := &topodatapb.EndPoints{}
-	if resp.Node.Value != "" {
-		if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
-			return nil, -1, fmt.Errorf("bad end points data (%v): %q", err, resp.Node.Value)
-		}
-	}
-	return value, int64(resp.Node.ModifiedIndex), nil
-}
-
-// DeleteEndPoints implements topo.Server.
-func (s *Server) DeleteEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topodatapb.TabletType, existingVersion int64) error {
-	cell, err := s.getCell(cellName)
-	if err != nil {
-		return err
-	}
-	dirPath := endPointsDirPath(keyspace, shard, tabletType)
-
-	if existingVersion == -1 {
-		// Delete unconditionally.
-		_, err := cell.Delete(dirPath, true /* recursive */)
-		return convertError(err)
-	}
-
-	// Delete EndPoints file only if version matches.
-	if _, err := cell.CompareAndDelete(endPointsFilePath(keyspace, shard, tabletType), "" /* prevValue */, uint64(existingVersion)); err != nil {
-		return convertError(err)
-	}
-	// Delete the parent dir only if it's empty.
-	_, err = cell.DeleteDir(dirPath)
-	err = convertError(err)
-	if err == topo.ErrNotEmpty {
-		// Someone else recreated the EndPoints file after we deleted it,
-		// but before we got around to removing the parent dir.
-		// This is fine, because whoever recreated it has already seen our delete,
-		// and we're not at risk of overwriting their change.
-		err = nil
-	}
-	return err
-}
 
 // UpdateSrvShard implements topo.Server.
 func (s *Server) UpdateSrvShard(ctx context.Context, cellName, keyspace, shard string, srvShard *topodatapb.SrvShard) error {
@@ -339,7 +199,7 @@ func (s *Server) WatchSrvKeyspace(ctx context.Context, cellName, keyspace string
 				if resp.Node != nil && resp.Node.Value != "" {
 					srvKeyspace = &topodatapb.SrvKeyspace{}
 					if err := json.Unmarshal([]byte(resp.Node.Value), srvKeyspace); err != nil {
-						log.Errorf("failed to Unmarshal EndPoints for %v: %v", filePath, err)
+						log.Errorf("failed to Unmarshal SrvKeyspace for %v: %v", filePath, err)
 						continue
 					}
 				}

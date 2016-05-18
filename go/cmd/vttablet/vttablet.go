@@ -117,7 +117,6 @@ func main() {
 	// done by the agent has the right reporter)
 	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnParams, &dbcfgs.Repl)
 	servenv.OnClose(mysqld.Close)
-	registerHealthReporter(mysqld)
 
 	// Depends on both query and updateStream.
 	gRPCPort := int32(0)

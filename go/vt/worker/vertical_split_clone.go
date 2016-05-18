@@ -321,13 +321,13 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 
 	// stop replication on it
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	err = vscw.wr.TabletManagerClient().StopSlave(shortCtx, vscw.sourceTablet)
+	err = vscw.wr.TabletManagerClient().StopSlave(shortCtx, vscw.sourceTablet.Tablet)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot stop replication on tablet %v", topoproto.TabletAliasString(vscw.sourceAlias))
 	}
 
-	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet)
+	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet.Tablet)
 
 	// Initialize healthcheck and add destination shards to it.
 	vscw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout, "" /* statsSuffix */)
@@ -340,28 +340,28 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	vscw.wr.Logger().Infof("Finding a MASTER tablet for each destination shard...")
 	waitCtx, waitCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer waitCancel()
-	if err := discovery.WaitForEndPoints(waitCtx, vscw.healthCheck,
+	if err := discovery.WaitForTablets(waitCtx, vscw.healthCheck,
 		vscw.cell, vscw.destinationKeyspace, vscw.destinationShard, []topodatapb.TabletType{topodatapb.TabletType_MASTER}); err != nil {
 		return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v: %v", vscw.destinationKeyspace, vscw.destinationShard, err)
 	}
 	masters := discovery.GetCurrentMaster(
-		vscw.healthCheck.GetEndPointStatsFromTarget(vscw.destinationKeyspace, vscw.destinationShard, topodatapb.TabletType_MASTER))
+		vscw.healthCheck.GetTabletStatsFromTarget(vscw.destinationKeyspace, vscw.destinationShard, topodatapb.TabletType_MASTER))
 	if len(masters) == 0 {
-		return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v in HealthCheck: empty EndPointStats list", vscw.destinationKeyspace, vscw.destinationShard)
+		return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v in HealthCheck: empty TabletStats list", vscw.destinationKeyspace, vscw.destinationShard)
 	}
 	master := masters[0]
 
 	// Get the MySQL database name of the tablet.
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	ti, err := vscw.wr.TopoServer().GetTablet(shortCtx, master.Alias())
+	ti, err := vscw.wr.TopoServer().GetTablet(shortCtx, master.Tablet.Alias)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot get the TabletInfo for destination master (%v) to find out its db name: %v", topoproto.TabletAliasString(master.Alias()), err)
+		return fmt.Errorf("cannot get the TabletInfo for destination master (%v) to find out its db name: %v", topoproto.TabletAliasString(master.Tablet.Alias), err)
 	}
 	keyspaceAndShard := topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)
 	vscw.destinationDbNames[keyspaceAndShard] = ti.DbName()
 
-	vscw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Alias()), vscw.destinationKeyspace, vscw.destinationShard)
+	vscw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Tablet.Alias), vscw.destinationKeyspace, vscw.destinationShard)
 	vscw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The HealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
 
 	// Set up the throttler for the destination shard.
@@ -504,7 +504,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	} else {
 		// get the current position from the source
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		status, err := vscw.wr.TabletManagerClient().SlaveStatus(shortCtx, vscw.sourceTablet)
+		status, err := vscw.wr.TabletManagerClient().SlaveStatus(shortCtx, vscw.sourceTablet.Tablet)
 		cancel()
 		if err != nil {
 			return err
@@ -553,7 +553,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 			defer destinationWaitGroup.Done()
 			vscw.wr.Logger().Infof("Reloading schema on tablet %v", ti.AliasString())
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-			err := vscw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti)
+			err := vscw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti.Tablet)
 			cancel()
 			if err != nil {
 				processError("ReloadSchema failed on tablet %v: %v", ti.AliasString(), err)

@@ -731,7 +731,7 @@ func (stc *ScatterConn) Close() error {
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
-func (stc *ScatterConn) GetGatewayCacheStatus() GatewayEndPointCacheStatusList {
+func (stc *ScatterConn) GetGatewayCacheStatus() GatewayTabletCacheStatusList {
 	return stc.gateway.CacheStatus()
 }
 
@@ -762,7 +762,7 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	allRetryableError := true
 	for _, e := range errors {
 		connError, ok := e.(*ShardError)
-		if !ok || (connError.EndPointCode != vtrpcpb.ErrorCode_QUERY_NOT_SERVED && connError.EndPointCode != vtrpcpb.ErrorCode_INTERNAL_ERROR) || connError.InTransaction {
+		if !ok || (connError.ErrorCode != vtrpcpb.ErrorCode_QUERY_NOT_SERVED && connError.ErrorCode != vtrpcpb.ErrorCode_INTERNAL_ERROR) || connError.InTransaction {
 			allRetryableError = false
 			break
 		}

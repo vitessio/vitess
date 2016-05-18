@@ -169,7 +169,7 @@ func (wr *Wrangler) ChangeSlaveType(ctx context.Context, tabletAlias *topodatapb
 	}
 
 	// ask the tablet to make the change
-	if err := wr.tmc.ChangeType(ctx, ti, tabletType); err != nil {
+	if err := wr.tmc.ChangeType(ctx, ti.Tablet, tabletType); err != nil {
 		return err
 	}
 
@@ -193,7 +193,7 @@ func (wr *Wrangler) changeTypeInternal(ctx context.Context, tabletAlias *topodat
 	rebuildRequired := ti.IsInServingGraph()
 
 	// change the type
-	if err := wr.tmc.ChangeType(ctx, ti, dbType); err != nil {
+	if err := wr.tmc.ChangeType(ctx, ti.Tablet, dbType); err != nil {
 		return err
 	}
 
@@ -213,5 +213,5 @@ func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias *topodata
 	if err != nil {
 		return nil, err
 	}
-	return wr.tmc.ExecuteFetchAsDba(ctx, ti, query, maxRows, disableBinlogs, reloadSchema)
+	return wr.tmc.ExecuteFetchAsDba(ctx, ti.Tablet, query, maxRows, disableBinlogs, reloadSchema)
 }

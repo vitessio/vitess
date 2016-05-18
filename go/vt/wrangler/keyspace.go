@@ -210,7 +210,7 @@ func (wr *Wrangler) getMastersPosition(ctx context.Context, shards []*topo.Shard
 				return
 			}
 
-			pos, err := wr.tmc.MasterPosition(ctx, ti)
+			pos, err := wr.tmc.MasterPosition(ctx, ti.Tablet)
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -248,13 +248,13 @@ func (wr *Wrangler) waitForFilteredReplication(ctx context.Context, sourcePositi
 
 				// and wait for it
 				wr.Logger().Infof("Waiting for %v to catch up", topoproto.TabletAliasString(si.MasterAlias))
-				tablet, err := wr.ts.GetTablet(ctx, si.MasterAlias)
+				ti, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 				if err != nil {
 					rec.RecordError(err)
 					return
 				}
 
-				if err := wr.tmc.WaitBlpPosition(ctx, tablet, blpPosition, waitTime); err != nil {
+				if err := wr.tmc.WaitBlpPosition(ctx, ti.Tablet, blpPosition, waitTime); err != nil {
 					rec.RecordError(err)
 				} else {
 					wr.Logger().Infof("%v caught up", topoproto.TabletAliasString(si.MasterAlias))
@@ -281,7 +281,7 @@ func (wr *Wrangler) refreshMasters(ctx context.Context, shards []*topo.ShardInfo
 				return
 			}
 
-			if err := wr.tmc.RefreshState(ctx, ti); err != nil {
+			if err := wr.tmc.RefreshState(ctx, ti.Tablet); err != nil {
 				rec.RecordError(err)
 			} else {
 				wr.Logger().Infof("%v responded", topoproto.TabletAliasString(si.MasterAlias))
@@ -488,7 +488,7 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	watcher := discovery.NewShardReplicationWatcher(wr.TopoServer(), hc, cell, keyspace, shard, healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 	defer watcher.Stop()
 
-	if err := discovery.WaitForEndPoints(ctx, hc, cell, keyspace, shard, []topodatapb.TabletType{servedType}); err != nil {
+	if err := discovery.WaitForTablets(ctx, hc, cell, keyspace, shard, []topodatapb.TabletType{servedType}); err != nil {
 		return fmt.Errorf("%v: error waiting for initial %v endpoints for %v/%v: %v", cell, servedType, keyspace, shard, err)
 	}
 
@@ -504,16 +504,16 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	startTime := time.Now()
 	for {
 		// map key: tablet uid
-		drainedHealthyTablets := make(map[uint32]*discovery.EndPointStats)
-		notDrainedHealtyTablets := make(map[uint32]*discovery.EndPointStats)
+		drainedHealthyTablets := make(map[uint32]*discovery.TabletStats)
+		notDrainedHealtyTablets := make(map[uint32]*discovery.TabletStats)
 
-		healthyTablets := discovery.RemoveUnhealthyEndpoints(
-			hc.GetEndPointStatsFromTarget(keyspace, shard, servedType))
-		for _, eps := range healthyTablets {
-			if eps.Stats.Qps == 0.0 {
-				drainedHealthyTablets[eps.EndPoint.Uid] = eps
+		healthyTablets := discovery.RemoveUnhealthyTablets(
+			hc.GetTabletStatsFromTarget(keyspace, shard, servedType))
+		for _, ts := range healthyTablets {
+			if ts.Stats.Qps == 0.0 {
+				drainedHealthyTablets[ts.Tablet.Alias.Uid] = ts
 			} else {
-				notDrainedHealtyTablets[eps.EndPoint.Uid] = eps
+				notDrainedHealtyTablets[ts.Tablet.Alias.Uid] = ts
 			}
 		}
 
@@ -537,8 +537,8 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 			timer.Stop()
 
 			var l []string
-			for _, eps := range notDrainedHealtyTablets {
-				l = append(l, formatEndpointStats(eps))
+			for _, ts := range notDrainedHealtyTablets {
+				l = append(l, formatEndpointStats(ts))
 			}
 			return fmt.Errorf("%v: WaitForDrain failed for %v tablets in %v/%v. Only %d/%d tablets were drained. err: %v List of tablets which were not drained: %v",
 				cell, servedType, keyspace, shard, len(drainedHealthyTablets), len(healthyTablets), ctx.Err(), strings.Join(l, ";"))
@@ -549,12 +549,12 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	return nil
 }
 
-func formatEndpointStats(eps *discovery.EndPointStats) string {
+func formatEndpointStats(ts *discovery.TabletStats) string {
 	webURL := "unknown http port"
-	if webPort, ok := eps.EndPoint.PortMap["vt"]; ok {
-		webURL = fmt.Sprintf("http://%v:%d/", eps.EndPoint.Host, webPort)
+	if webPort, ok := ts.Tablet.PortMap["vt"]; ok {
+		webURL = fmt.Sprintf("http://%v:%d/", ts.Tablet.Hostname, webPort)
 	}
-	return fmt.Sprintf("%v: %v stats: %v", topoproto.TabletAliasString(eps.Alias()), webURL, eps.Stats)
+	return fmt.Sprintf("%v: %v stats: %v", topoproto.TabletAliasString(ts.Tablet.Alias), webURL, ts.Stats)
 }
 
 // MigrateServedFrom is used during vertical splits to migrate a
@@ -738,20 +738,20 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 
 	// Now refresh the blacklisted table list on the source master
 	event.DispatchUpdate(ev, "refreshing source master so it updates its blacklisted tables")
-	if err := wr.tmc.RefreshState(ctx, sourceMasterTabletInfo); err != nil {
+	if err := wr.tmc.RefreshState(ctx, sourceMasterTabletInfo.Tablet); err != nil {
 		return err
 	}
 
 	// get the position
 	event.DispatchUpdate(ev, "getting master position")
-	masterPosition, err := wr.tmc.MasterPosition(ctx, sourceMasterTabletInfo)
+	masterPosition, err := wr.tmc.MasterPosition(ctx, sourceMasterTabletInfo.Tablet)
 	if err != nil {
 		return err
 	}
 
 	// wait for it
 	event.DispatchUpdate(ev, "waiting for destination master to catch up to source master")
-	if err := wr.tmc.WaitBlpPosition(ctx, destinationMasterTabletInfo, &tabletmanagerdatapb.BlpPosition{
+	if err := wr.tmc.WaitBlpPosition(ctx, destinationMasterTabletInfo.Tablet, &tabletmanagerdatapb.BlpPosition{
 		Uid:      0,
 		Position: masterPosition,
 	}, filteredReplicationWaitTime); err != nil {
@@ -834,7 +834,7 @@ func (wr *Wrangler) RefreshTablesByShard(ctx context.Context, si *topo.ShardInfo
 			// Using 60 seconds because RefreshState should not take more than 30 seconds.
 			// (RefreshState will restart the tablet's QueryService and most time will be spent on the shutdown, i.e. waiting up to 30 seconds on transactions (see Config.TransactionTimeout)).
 			ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-			if err := wr.tmc.RefreshState(ctx, ti); err != nil {
+			if err := wr.tmc.RefreshState(ctx, ti.Tablet); err != nil {
 				wr.Logger().Warningf("RefreshTablesByShard: failed to refresh %v: %v", ti.AliasString(), err)
 			}
 			cancel()

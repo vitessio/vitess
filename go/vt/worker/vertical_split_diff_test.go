@@ -13,7 +13,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
@@ -176,7 +175,7 @@ func TestVerticalSplitDiff(t *testing.T) {
 	// We need to use FakeTabletManagerClient because we don't
 	// have a good way to fake the binlog player yet, which is
 	// necessary for synchronizing replication.
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient())
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, newFakeTMCTopo(ts))
 	if err := runCommand(t, wi, wr, args); err != nil {
 		t.Fatal(err)
 	}

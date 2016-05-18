@@ -209,11 +209,5 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		return fmt.Errorf("CreateTablet failed: %v", err)
 	}
 
-	// and now update the serving graph. Note we do that in any case,
-	// to clean any inaccurate record from any part of the serving graph.
-	if err := topotools.UpdateTabletEndpoints(ctx, agent.TopoServer, tablet); err != nil {
-		return fmt.Errorf("UpdateTabletEndpoints failed: %v", err)
-	}
-
 	return nil
 }

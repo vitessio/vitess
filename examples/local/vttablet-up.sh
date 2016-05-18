@@ -109,6 +109,7 @@ for uid_index in $uids; do
     -health_check_interval 5s \
     -enable-rowcache \
     -enable_semi_sync \
+    -enable_replication_reporter \
     -rowcache-bin $memcached_path \
     -rowcache-socket $VTDATAROOT/$tablet_dir/memcache.sock \
     -backup_storage_implementation file \

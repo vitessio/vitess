@@ -13,29 +13,29 @@ var (
 	highReplicationLagMinServing = flag.Duration("discovery_high_replication_lag_minimum_serving", 2*time.Hour, "the replication lag that is considered too high when selecting miminum 2 vttablets for serving")
 )
 
-// FilterByReplicationLag filters the list of EndPointStats by EndPointStats.Stats.SecondsBehindMaster.
-// The algorithm (EndPointStats that is non-serving or has error is ignored):
-// - Return the list if there is 0 or 1 endpoint.
-// - Return the list if all endpoints have <=30s lag.
-// - Filter by replication lag: for each endpoint, if the mean value without it is more than 0.7 of the mean value across all endpoints, it is valid.
+// FilterByReplicationLag filters the list of TabletStats by TabletStats.Stats.SecondsBehindMaster.
+// The algorithm (TabletStats that is non-serving or has error is ignored):
+// - Return the list if there is 0 or 1 tablet.
+// - Return the list if all tablets have <=30s lag.
+// - Filter by replication lag: for each tablet, if the mean value without it is more than 0.7 of the mean value across all tablets, it is valid.
 // For example, lags of (5s, 10s, 15s, 120s) return the first three;
 // lags of (30m, 35m, 40m, 45m) return all.
-func FilterByReplicationLag(epsList []*EndPointStats) []*EndPointStats {
-	list := make([]*EndPointStats, 0, len(epsList))
-	// filter non-serving endpoints
-	for _, eps := range epsList {
-		if !eps.Serving || eps.LastError != nil || eps.Stats == nil {
+func FilterByReplicationLag(tabletStatsList []*TabletStats) []*TabletStats {
+	list := make([]*TabletStats, 0, len(tabletStatsList))
+	// filter non-serving tablets
+	for _, ts := range tabletStatsList {
+		if !ts.Serving || ts.LastError != nil || ts.Stats == nil {
 			continue
 		}
-		list = append(list, eps)
+		list = append(list, ts)
 	}
 	if len(list) <= 1 {
 		return list
 	}
-	// if all have low replication lag (<=30s), return all endpoints.
+	// if all have low replication lag (<=30s), return all tablets.
 	allLowLag := true
-	for _, eps := range list {
-		if float64(eps.Stats.SecondsBehindMaster) > LowReplicationLag.Seconds() {
+	for _, ts := range list {
+		if float64(ts.Stats.SecondsBehindMaster) > LowReplicationLag.Seconds() {
 			allLowLag = false
 			break
 		}
@@ -44,31 +44,31 @@ func FilterByReplicationLag(epsList []*EndPointStats) []*EndPointStats {
 		return list
 	}
 	// filter those affecting "mean" lag significantly
-	// calculate mean for all endpoints
-	res := make([]*EndPointStats, 0, len(list))
+	// calculate mean for all tablets
+	res := make([]*TabletStats, 0, len(list))
 	m, _ := mean(list, -1)
-	for i, eps := range list {
-		// calculate mean by excluding ith endpoint
+	for i, ts := range list {
+		// calculate mean by excluding ith tablet
 		mi, _ := mean(list, i)
 		if float64(mi) > float64(m)*0.7 {
-			res = append(res, eps)
+			res = append(res, ts)
 		}
 	}
-	// return at least 2 endpoints to avoid over loading,
-	// if there is another endpoint with replication lag < highReplicationLagMinServing.
+	// return at least 2 tablets to avoid over loading,
+	// if there is another tablet with replication lag < highReplicationLagMinServing.
 	if len(res) == 0 {
 		return list
 	}
 	if len(res) == 1 && len(list) > 1 {
 		minLag := uint32(math.MaxUint32)
 		idx := -1
-		for i, eps := range list {
-			if eps == res[0] {
+		for i, ts := range list {
+			if ts == res[0] {
 				continue
 			}
-			if eps.Stats.SecondsBehindMaster < minLag {
+			if ts.Stats.SecondsBehindMaster < minLag {
 				idx = i
-				minLag = eps.Stats.SecondsBehindMaster
+				minLag = ts.Stats.SecondsBehindMaster
 			}
 		}
 		if idx >= 0 && minLag <= uint32(highReplicationLagMinServing.Seconds()) {
@@ -80,14 +80,14 @@ func FilterByReplicationLag(epsList []*EndPointStats) []*EndPointStats {
 
 // mean calculates the mean value over the given list,
 // while excluding the item with the specified index.
-func mean(epsList []*EndPointStats, idxExclude int) (uint64, error) {
+func mean(tabletStatsList []*TabletStats, idxExclude int) (uint64, error) {
 	var sum uint64
 	var count uint64
-	for i, eps := range epsList {
+	for i, ts := range tabletStatsList {
 		if i == idxExclude {
 			continue
 		}
-		sum = sum + uint64(eps.Stats.SecondsBehindMaster)
+		sum = sum + uint64(ts.Stats.SecondsBehindMaster)
 		count++
 	}
 	if count == 0 {

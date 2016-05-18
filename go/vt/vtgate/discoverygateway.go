@@ -28,8 +28,8 @@ import (
 )
 
 var (
-	cellsToWatch        = flag.String("cells_to_watch", "", "comma-separated list of cells for watching endpoints")
-	refreshInterval     = flag.Duration("endpoint_refresh_interval", 1*time.Minute, "endpoint refresh interval")
+	cellsToWatch        = flag.String("cells_to_watch", "", "comma-separated list of cells for watching tablets")
+	refreshInterval     = flag.Duration("tablet_refresh_interval", 1*time.Minute, "tablet refresh interval")
 	topoReadConcurrency = flag.Int("topo_read_concurrency", 32, "concurrent topo reads")
 )
 
@@ -60,7 +60,7 @@ func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, se
 		ctw := discovery.NewCellTabletsWatcher(dg.topoServer, dg.hc, c, *refreshInterval, *topoReadConcurrency)
 		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
 	}
-	err := dg.waitForEndPoints()
+	err := dg.waitForTablets()
 	if err != nil {
 		log.Errorf("createDiscoveryGateway: %v", err)
 	}
@@ -78,27 +78,27 @@ type discoveryGateway struct {
 	tabletsWatchers []*discovery.TopologyWatcher
 }
 
-func (dg *discoveryGateway) waitForEndPoints() error {
-	// Skip waiting for endpoints if we are not told to do so.
+func (dg *discoveryGateway) waitForTablets() error {
+	// Skip waiting for tablets if we are not told to do so.
 	if len(dg.tabletTypesToWait) == 0 {
 		return nil
 	}
 
-	log.Infof("Waiting for endpoints")
+	log.Infof("Waiting for tablets")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	err := discovery.WaitForAllServingEndPoints(ctx, dg.hc, dg.srvTopoServer, dg.localCell, dg.tabletTypesToWait)
-	if err == discovery.ErrWaitForEndPointsTimeout {
+	err := discovery.WaitForAllServingTablets(ctx, dg.hc, dg.srvTopoServer, dg.localCell, dg.tabletTypesToWait)
+	if err == discovery.ErrWaitForTabletsTimeout {
 		// ignore this error, we will still start up, and may not serve
-		// all endpoints.
-		log.Warningf("Timeout when waiting for endpoints")
+		// all tablets.
+		log.Warningf("Timeout when waiting for tablets")
 		err = nil
 	}
 	if err != nil {
-		log.Errorf("Error when waiting for endpoints: %v", err)
+		log.Errorf("Error when waiting for tablets: %v", err)
 		return err
 	}
-	log.Infof("Waiting for endpoints completed")
+	log.Infof("Waiting for tablets completed")
 	return nil
 }
 
@@ -231,13 +231,13 @@ func (dg *discoveryGateway) Close(ctx context.Context) error {
 	return nil
 }
 
-// CacheStatus returns a list of GatewayEndPointCacheStatus per endpoint.
-func (dg *discoveryGateway) CacheStatus() GatewayEndPointCacheStatusList {
+// CacheStatus returns a list of GatewayTabletCacheStatus per tablet.
+func (dg *discoveryGateway) CacheStatus() GatewayTabletCacheStatusList {
 	return nil
 }
 
 // StatsUpdate receives updates about target and realtime stats changes.
-func (dg *discoveryGateway) StatsUpdate(*discovery.EndPointStats) {
+func (dg *discoveryGateway) StatsUpdate(*discovery.TabletStats) {
 }
 
 // withRetry gets available connections and executes the action. If there are retryable errors,
@@ -246,29 +246,29 @@ func (dg *discoveryGateway) StatsUpdate(*discovery.EndPointStats) {
 // a resharding event, and set the re-resolve bit and let the upper layers
 // re-resolve and retry.
 func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, action func(conn tabletconn.TabletConn) error, transactionID int64, isStreaming bool) error {
-	var endPointLastUsed *topodatapb.EndPoint
+	var tabletLastUsed *topodatapb.Tablet
 	var err error
 	inTransaction := (transactionID != 0)
-	invalidEndPoints := make(map[string]bool)
+	invalidTablets := make(map[string]bool)
 
 	for i := 0; i < dg.retryCount+1; i++ {
-		var endPoint *topodatapb.EndPoint
-		endPoints := dg.getEndPoints(keyspace, shard, tabletType)
-		if len(endPoints) == 0 {
-			// fail fast if there is no endpoint
-			err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no valid endpoint"))
+		var tablet *topodatapb.Tablet
+		tablets := dg.getTablets(keyspace, shard, tabletType)
+		if len(tablets) == 0 {
+			// fail fast if there is no tablet
+			err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no valid tablet"))
 			break
 		}
-		shuffleEndPoints(endPoints)
+		shuffleTablets(tablets)
 
-		// skip endpoints we tried before
-		for _, ep := range endPoints {
-			if _, ok := invalidEndPoints[discovery.EndPointToMapKey(ep)]; !ok {
-				endPoint = ep
+		// skip tablets we tried before
+		for _, t := range tablets {
+			if _, ok := invalidTablets[discovery.TabletToMapKey(t)]; !ok {
+				tablet = t
 				break
 			}
 		}
-		if endPoint == nil {
+		if tablet == nil {
 			if err == nil {
 				// do not override error from last attempt.
 				err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no available connection"))
@@ -277,11 +277,11 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 		}
 
 		// execute
-		endPointLastUsed = endPoint
-		conn := dg.hc.GetConnection(endPoint)
+		tabletLastUsed = tablet
+		conn := dg.hc.GetConnection(tablet)
 		if conn == nil {
-			err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no connection for %+v", endPoint))
-			invalidEndPoints[discovery.EndPointToMapKey(endPoint)] = true
+			err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no connection for %+v", tablet))
+			invalidTablets[discovery.TabletToMapKey(tablet)] = true
 			continue
 		}
 
@@ -292,12 +292,12 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 
 		err = action(conn)
 		if dg.canRetry(ctx, err, transactionID, isStreaming) {
-			invalidEndPoints[discovery.EndPointToMapKey(endPoint)] = true
+			invalidTablets[discovery.TabletToMapKey(tablet)] = true
 			continue
 		}
 		break
 	}
-	return WrapError(err, keyspace, shard, tabletType, endPointLastUsed, inTransaction)
+	return WrapError(err, keyspace, shard, tabletType, tabletLastUsed, inTransaction)
 }
 
 // canRetry determines whether a query can be retried or not.
@@ -340,73 +340,73 @@ func (dg *discoveryGateway) canRetry(ctx context.Context, err error, transaction
 	return false
 }
 
-func shuffleEndPoints(endPoints []*topodatapb.EndPoint) {
+func shuffleTablets(tablets []*topodatapb.Tablet) {
 	index := 0
-	length := len(endPoints)
+	length := len(tablets)
 	for i := length - 1; i > 0; i-- {
 		index = rand.Intn(i + 1)
-		endPoints[i], endPoints[index] = endPoints[index], endPoints[i]
+		tablets[i], tablets[index] = tablets[index], tablets[i]
 	}
 }
 
-// getEndPoints gets all available endpoints from HealthCheck,
+// getTablets gets all available tablets from HealthCheck,
 // and selects the usable ones based several rules:
 // master - return one from any cells with latest reparent timestamp;
 // replica - return all from local cell.
 // TODO(liang): select replica by replication lag.
-func (dg *discoveryGateway) getEndPoints(keyspace, shard string, tabletType topodatapb.TabletType) []*topodatapb.EndPoint {
-	epsList := dg.hc.GetEndPointStatsFromTarget(keyspace, shard, tabletType)
+func (dg *discoveryGateway) getTablets(keyspace, shard string, tabletType topodatapb.TabletType) []*topodatapb.Tablet {
+	tsList := dg.hc.GetTabletStatsFromTarget(keyspace, shard, tabletType)
 	// for master, use any cells and return the one with max reparent timestamp.
 	if tabletType == topodatapb.TabletType_MASTER {
 		var maxTimestamp int64
-		var ep *topodatapb.EndPoint
-		for _, eps := range epsList {
-			if eps.LastError != nil || !eps.Serving {
+		var t *topodatapb.Tablet
+		for _, ts := range tsList {
+			if ts.LastError != nil || !ts.Serving {
 				continue
 			}
-			if eps.TabletExternallyReparentedTimestamp >= maxTimestamp {
-				maxTimestamp = eps.TabletExternallyReparentedTimestamp
-				ep = eps.EndPoint
+			if ts.TabletExternallyReparentedTimestamp >= maxTimestamp {
+				maxTimestamp = ts.TabletExternallyReparentedTimestamp
+				t = ts.Tablet
 			}
 		}
-		if ep == nil {
+		if t == nil {
 			return nil
 		}
-		return []*topodatapb.EndPoint{ep}
+		return []*topodatapb.Tablet{t}
 	}
-	// for non-master, use only endpoints from local cell and filter by replication lag.
-	list := make([]*discovery.EndPointStats, 0, len(epsList))
-	for _, eps := range epsList {
-		if eps.LastError != nil || !eps.Serving {
+	// for non-master, use only tablets from local cell and filter by replication lag.
+	list := make([]*discovery.TabletStats, 0, len(tsList))
+	for _, ts := range tsList {
+		if ts.LastError != nil || !ts.Serving {
 			continue
 		}
-		if dg.localCell != eps.Cell {
+		if dg.localCell != ts.Tablet.Alias.Cell {
 			continue
 		}
-		list = append(list, eps)
+		list = append(list, ts)
 	}
 	list = discovery.FilterByReplicationLag(list)
-	epList := make([]*topodatapb.EndPoint, 0, len(list))
-	for _, eps := range list {
-		epList = append(epList, eps.EndPoint)
+	tList := make([]*topodatapb.Tablet, 0, len(list))
+	for _, ts := range list {
+		tList = append(tList, ts.Tablet)
 	}
-	return epList
+	return tList
 }
 
 // WrapError returns ShardError which preserves the original error code if possible,
 // adds the connection context
 // and adds a bit to determine whether the keyspace/shard needs to be
 // re-resolved for a potential sharding event.
-func WrapError(in error, keyspace, shard string, tabletType topodatapb.TabletType, endPoint *topodatapb.EndPoint, inTransaction bool) (wrapped error) {
+func WrapError(in error, keyspace, shard string, tabletType topodatapb.TabletType, tablet *topodatapb.Tablet, inTransaction bool) (wrapped error) {
 	if in == nil {
 		return nil
 	}
-	shardIdentifier := fmt.Sprintf("%s.%s.%s, %+v", keyspace, shard, strings.ToLower(tabletType.String()), endPoint)
+	shardIdentifier := fmt.Sprintf("%s.%s.%s, %+v", keyspace, shard, strings.ToLower(tabletType.String()), tablet)
 
 	return &ShardError{
 		ShardIdentifier: shardIdentifier,
 		InTransaction:   inTransaction,
 		Err:             in,
-		EndPointCode:    vterrors.RecoverVtErrorCode(in),
+		ErrorCode:       vterrors.RecoverVtErrorCode(in),
 	}
 }

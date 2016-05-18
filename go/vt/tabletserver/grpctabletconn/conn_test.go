@@ -35,8 +35,8 @@ func TestGRPCTabletConn(t *testing.T) {
 	go server.Serve(listener)
 
 	// run the test suite
-	tabletconntest.TestSuite(t, protocolName, &topodatapb.EndPoint{
-		Host: host,
+	tabletconntest.TestSuite(t, protocolName, &topodatapb.Tablet{
+		Hostname: host,
 		PortMap: map[string]int32{
 			"grpc": int32(port),
 		},
@@ -45,8 +45,8 @@ func TestGRPCTabletConn(t *testing.T) {
 	// run it again with combo enabled
 	t.Log("Enabling combo Begin / Execute{,Batch}")
 	*combo = true
-	tabletconntest.TestSuite(t, protocolName, &topodatapb.EndPoint{
-		Host: host,
+	tabletconntest.TestSuite(t, protocolName, &topodatapb.Tablet{
+		Hostname: host,
 		PortMap: map[string]int32{
 			"grpc": int32(port),
 		},

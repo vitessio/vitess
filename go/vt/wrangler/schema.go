@@ -33,7 +33,7 @@ func (wr *Wrangler) GetSchema(ctx context.Context, tabletAlias *topodatapb.Table
 		return nil, err
 	}
 
-	return wr.tmc.GetSchema(ctx, ti, tables, excludeTables, includeViews)
+	return wr.tmc.GetSchema(ctx, ti.Tablet, tables, excludeTables, includeViews)
 }
 
 // ReloadSchema forces the remote tablet to reload its schema.
@@ -43,7 +43,7 @@ func (wr *Wrangler) ReloadSchema(ctx context.Context, tabletAlias *topodatapb.Ta
 		return err
 	}
 
-	return wr.tmc.ReloadSchema(ctx, ti)
+	return wr.tmc.ReloadSchema(ctx, ti.Tablet)
 }
 
 // helper method to asynchronously diff a schema
@@ -191,7 +191,7 @@ func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *topodatapb
 	if err != nil {
 		return nil, err
 	}
-	return wr.tmc.PreflightSchema(ctx, ti, change)
+	return wr.tmc.PreflightSchema(ctx, ti.Tablet, change)
 }
 
 // ApplySchemaKeyspace applies a schema change to an entire keyspace.
@@ -309,7 +309,7 @@ func (wr *Wrangler) applySQLShard(ctx context.Context, tabletInfo *topo.TabletIn
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	// Need to make sure that we enable binlog, since we're only applying the statement on masters.
-	_, err = wr.tmc.ExecuteFetchAsDba(ctx, tabletInfo, filledChange, 0, false, reloadSchema)
+	_, err = wr.tmc.ExecuteFetchAsDba(ctx, tabletInfo.Tablet, filledChange, 0, false, reloadSchema)
 	return err
 }
 

@@ -26,6 +26,8 @@ import (
 type MysqlDaemon interface {
 	// Cnf returns the underlying mycnf
 	Cnf() *Mycnf
+	// TabletDir returns the tablet directory.
+	TabletDir() string
 
 	// methods related to mysql running or not
 	Start(ctx context.Context) error
@@ -219,6 +221,11 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 // Cnf is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) Cnf() *Mycnf {
 	return fmd.Mycnf
+}
+
+// TabletDir is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) TabletDir() string {
+	return ""
 }
 
 // Start is part of the MysqlDaemon interface

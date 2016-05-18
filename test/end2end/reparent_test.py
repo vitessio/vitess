@@ -45,8 +45,8 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
                         desired_master_task):
     """Verify that the new master is the correct task in the correct cell.
 
-    This function uses vtctl to call GetShards and GetEndPoints on all cells
-    in order to determine that everyone agrees where the master is.
+    This function uses vtctl to call GetShard in order to determine
+    that everyone agrees where the master is.
 
     Args:
       keyspace: Name of the keyspace to reparent (string)
@@ -56,6 +56,7 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
 
     Returns:
       True if desired_master is the consensus new master
+
     """
     # First verify that GetShard shows the correct master
     new_master_name = self.env.get_current_master_name(keyspace, shard_name)
@@ -64,20 +65,6 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
     if self.env.get_tablet_task_number(new_master_name) != desired_master_task:
       return False
 
-    for cell in self.env.cells:
-      try:
-        # This GetEndPoints call should succeed when called on the cell with the
-        # master, otherwise it'll raise an exception.
-        self.env.vtctl_helper.execute_vtctl_command(
-            ['GetEndPoints', cell, '{0}/{1}'.format(keyspace, shard_name),
-             'master'], expect_fail=(cell != desired_master_cell))
-        if cell != desired_master_cell:
-          return False
-      except vtctl_helper.VtctlClientError:
-        # This should only happen when calling GetEndPoints on a cell other than
-        # the master cell.
-        if cell == desired_master_cell:
-          return False
     return True
 
   def explicit_reparent(self, keyspace, num_shards, external=False,
@@ -147,7 +134,7 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
       thread.start()
 
       if not cross_cell:
-        # Wait for the serving graph to be updated.
+        # Wait for the shard to be updated.
         # This doesn't work for cross-cell, because mapping a task
         # number to a tablet UID is more trouble than it's worth.
         uid = (self.env.get_tablet_uid(original_master_name)
@@ -157,13 +144,12 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
             self.fail('Timed out waiting for serving graph update on %s/%s' % (
                 keyspace, shard_name))
           try:
-            endpoints = json.loads(self.env.vtctl_helper.execute_vtctl_command(
-                ['GetEndPoints', next_master['cell'],
-                 '%s/%s' % (keyspace, shard_name), 'master']))
-            if int(endpoints['entries'][0]['uid']) == uid:
+            shard_info = json.loads(self.env.vtctl_helper.execute_vtctl_command(
+                ['GetShard', '%s/%s' % (keyspace, shard_name)]))
+            if int(shard_info['master_alias']['uid']) == uid:
               duration = time.time() - start_time
               durations.append(duration)
-              logging.info('Serving graph updated for %s/%s after %f seconds',
+              logging.info('Shard record updated for %s/%s after %f seconds',
                            keyspace, shard_name, duration)
               break
           except (IndexError, KeyError, vtctl_helper.VtctlClientError):

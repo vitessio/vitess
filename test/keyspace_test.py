@@ -275,9 +275,6 @@ class TestKeyspace(unittest.TestCase):
     utils.run_vtctl(
         ['GetShardReplication', 'test_nj', 'test_delete_keyspace/0'])
     utils.run_vtctl(['GetSrvKeyspace', 'test_nj', 'test_delete_keyspace'])
-    utils.run_vtctl(['GetSrvShard', 'test_nj', 'test_delete_keyspace/0'])
-    utils.run_vtctl(
-        ['GetEndPoints', 'test_nj', 'test_delete_keyspace/0', 'master'])
 
     # Recursive DeleteKeyspace
     utils.run_vtctl(['DeleteKeyspace', '-recursive', 'test_delete_keyspace'])
@@ -291,11 +288,6 @@ class TestKeyspace(unittest.TestCase):
         expect_fail=True)
     utils.run_vtctl(
         ['GetSrvKeyspace', 'test_nj', 'test_delete_keyspace'],
-        expect_fail=True)
-    utils.run_vtctl(
-        ['GetSrvShard', 'test_nj', 'test_delete_keyspace/0'], expect_fail=True)
-    utils.run_vtctl(
-        ['GetEndPoints', 'test_nj', 'test_delete_keyspace/0', 'master'],
         expect_fail=True)
 
   def test_remove_keyspace_cell(self):
@@ -322,12 +314,6 @@ class TestKeyspace(unittest.TestCase):
     utils.run_vtctl(
         ['GetShardReplication', 'test_nj', 'test_delete_keyspace/1'])
     utils.run_vtctl(['GetSrvKeyspace', 'test_nj', 'test_delete_keyspace'])
-    utils.run_vtctl(['GetSrvShard', 'test_nj', 'test_delete_keyspace/0'])
-    utils.run_vtctl(['GetSrvShard', 'test_nj', 'test_delete_keyspace/1'])
-    utils.run_vtctl(
-        ['GetEndPoints', 'test_nj', 'test_delete_keyspace/0', 'replica'])
-    utils.run_vtctl(
-        ['GetEndPoints', 'test_nj', 'test_delete_keyspace/1', 'replica'])
 
     # Just remove the shard from one cell (including tablets),
     # but leaving the global records and other cells/shards alone.
@@ -349,12 +335,6 @@ class TestKeyspace(unittest.TestCase):
     utils.run_vtctl(
         ['GetShardReplication', 'test_nj', 'test_delete_keyspace/1'])
     utils.run_vtctl(['GetSrvKeyspace', 'test_nj', 'test_delete_keyspace'])
-    utils.run_vtctl(['GetSrvShard', 'test_nj', 'test_delete_keyspace/0'])
-    utils.run_vtctl(
-        ['GetEndPoints', 'test_nj', 'test_delete_keyspace/1', 'replica'])
-    utils.run_vtctl(
-        ['GetEndPoints', 'test_nj', 'test_delete_keyspace/0', 'replica'],
-        expect_fail=True)
 
     # Add it back to do another test.
     utils.run_vtctl(

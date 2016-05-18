@@ -104,32 +104,32 @@ func TestFindAllKeyspaceShards(t *testing.T) {
 	}
 }
 
-func TestWaitForEndPoints(t *testing.T) {
+func TestWaitForTablets(t *testing.T) {
 	shortCtx, shortCancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer shortCancel()
-	waitAvailableEndPointInterval = 20 * time.Millisecond
+	waitAvailableTabletInterval = 20 * time.Millisecond
 
-	ep := topo.NewEndPoint(0, "a")
-	ep.PortMap["vt"] = 1
+	tablet := topo.NewTablet(0, "cell", "a")
+	tablet.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse)
-	createFakeConn(ep, input)
+	createFakeConn(tablet, input)
 
 	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, 1*time.Hour, "" /* statsSuffix */)
-	hc.AddEndPoint("cell", "", ep)
+	hc.AddTablet("cell", "", tablet)
 
 	// this should time out
-	if err := WaitForEndPoints(shortCtx, hc, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != ErrWaitForEndPointsTimeout {
+	if err := WaitForTablets(shortCtx, hc, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != ErrWaitForTabletsTimeout {
 		t.Errorf("got wrong error: %v", err)
 	}
 
 	// this should fail, but return a non-timeout error
 	cancelledCtx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := WaitForEndPoints(cancelledCtx, hc, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err == nil || err == ErrWaitForEndPointsTimeout {
+	if err := WaitForTablets(cancelledCtx, hc, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err == nil || err == ErrWaitForTabletsTimeout {
 		t.Errorf("want: non-timeout error, got: %v", err)
 	}
 
-	// send the endpoint in
+	// send the tablet in
 	shr := &querypb.StreamHealthResponse{
 		Target: &querypb.Target{
 			Keyspace:   "keyspace",
@@ -144,8 +144,8 @@ func TestWaitForEndPoints(t *testing.T) {
 	// and ask again, with longer time outs so it's not flaky
 	longCtx, longCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer longCancel()
-	waitAvailableEndPointInterval = 10 * time.Millisecond
-	if err := WaitForEndPoints(longCtx, hc, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != nil {
+	waitAvailableTabletInterval = 10 * time.Millisecond
+	if err := WaitForTablets(longCtx, hc, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != nil {
 		t.Errorf("got error: %v", err)
 	}
 }

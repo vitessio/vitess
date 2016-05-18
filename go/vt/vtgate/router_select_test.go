@@ -605,7 +605,7 @@ func TestSelectScatter(t *testing.T) {
 	for _, shard := range shards {
 		sbc := &sandboxConn{}
 		conns = append(conns, sbc)
-		hc.addTestEndPoint(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
+		hc.addTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
@@ -638,7 +638,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	for _, shard := range shards {
 		sbc := &sandboxConn{}
 		conns = append(conns, sbc)
-		hc.addTestEndPoint(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
+		hc.addTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
@@ -681,7 +681,7 @@ func TestSelectScatterFail(t *testing.T) {
 	for _, shard := range shards {
 		sbc := &sandboxConn{}
 		conns = append(conns, sbc)
-		hc.addTestEndPoint(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
+		hc.addTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)

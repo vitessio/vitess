@@ -234,12 +234,12 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	// 1 - stop the master binlog replication, get its current position
 	vsdw.wr.Logger().Infof("Stopping master binlog replication on %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias))
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	blpPositionList, err := vsdw.wr.TabletManagerClient().StopBlp(shortCtx, masterInfo)
+	blpPositionList, err := vsdw.wr.TabletManagerClient().StopBlp(shortCtx, masterInfo.Tablet)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("StopBlp on master %v failed: %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), err)
 	}
-	wrangler.RecordStartBlpAction(vsdw.cleaner, masterInfo)
+	wrangler.RecordStartBlpAction(vsdw.cleaner, masterInfo.Tablet)
 
 	// 2 - stop the source tablet at a binlog position
 	//     higher than the destination master
@@ -260,7 +260,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 		return err
 	}
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	stoppedAt, err := vsdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet, blpPos.Position, *remoteActionsTimeout)
+	stoppedAt, err := vsdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet.Tablet, blpPos.Position, *remoteActionsTimeout)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", topoproto.TabletAliasString(vsdw.sourceAlias), blpPos.Position, err)
@@ -272,13 +272,13 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 
 	// change the cleaner actions from ChangeSlaveType(rdonly)
 	// to StartSlave() + ChangeSlaveType(spare)
-	wrangler.RecordStartSlaveAction(vsdw.cleaner, sourceTablet)
+	wrangler.RecordStartSlaveAction(vsdw.cleaner, sourceTablet.Tablet)
 
 	// 3 - ask the master of the destination shard to resume filtered
 	//     replication up to the new list of positions
 	vsdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), stopPositionList)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	masterPos, err := vsdw.wr.TabletManagerClient().RunBlpUntil(shortCtx, masterInfo, stopPositionList, *remoteActionsTimeout)
+	masterPos, err := vsdw.wr.TabletManagerClient().RunBlpUntil(shortCtx, masterInfo.Tablet, stopPositionList, *remoteActionsTimeout)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("RunBlpUntil on %v until %v failed: %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), stopPositionList, err)
@@ -294,17 +294,17 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 		return err
 	}
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	_, err = vsdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, destinationTablet, masterPos, *remoteActionsTimeout)
+	_, err = vsdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, destinationTablet.Tablet, masterPos, *remoteActionsTimeout)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("StopSlaveMinimum on %v at %v failed: %v", topoproto.TabletAliasString(vsdw.destinationAlias), masterPos, err)
 	}
-	wrangler.RecordStartSlaveAction(vsdw.cleaner, destinationTablet)
+	wrangler.RecordStartSlaveAction(vsdw.cleaner, destinationTablet.Tablet)
 
 	// 5 - restart filtered replication on destination master
 	vsdw.wr.Logger().Infof("Restarting filtered replication on master %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias))
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	err = vsdw.wr.TabletManagerClient().StartBlp(shortCtx, masterInfo)
+	err = vsdw.wr.TabletManagerClient().StartBlp(shortCtx, masterInfo.Tablet)
 	if err := vsdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias)); err != nil {
 		vsdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), err)
 	}

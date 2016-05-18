@@ -12,15 +12,15 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-func TestGatwayEndPointStatusAggregator(t *testing.T) {
-	aggr := &GatewayEndPointStatusAggregator{
+func TestGatwayTabletStatusAggregator(t *testing.T) {
+	aggr := &GatewayTabletStatusAggregator{
 		Keyspace:   "k",
 		Shard:      "s",
 		TabletType: topodatapb.TabletType_REPLICA,
 		Name:       "n",
 		Addr:       "a",
 	}
-	t.Logf("aggr = GatwayEndPointStatusAggregator{k, s, replica, n, a}")
+	t.Logf("aggr = GatwayTabletStatusAggregator{k, s, replica, n, a}")
 	qi := &queryInfo{
 		aggr:       aggr,
 		addr:       "",
@@ -50,7 +50,7 @@ func TestGatwayEndPointStatusAggregator(t *testing.T) {
 	}
 	aggr.processQueryInfo(qi)
 	t.Logf("aggr.processQueryInfo(, replica, 3ms, true)")
-	want := &GatewayEndPointCacheStatus{
+	want := &GatewayTabletCacheStatus{
 		Keyspace:   "k",
 		Shard:      "s",
 		Name:       "n",
@@ -88,7 +88,7 @@ func TestGatwayEndPointStatusAggregator(t *testing.T) {
 	}
 	aggr.processQueryInfo(qi)
 	t.Logf("aggr.processQueryInfo(, master, 6ms, true)")
-	want = &GatewayEndPointCacheStatus{
+	want = &GatewayTabletCacheStatus{
 		Keyspace:   "k",
 		Shard:      "s",
 		Name:       "n",

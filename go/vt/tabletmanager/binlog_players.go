@@ -270,26 +270,23 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		return fmt.Errorf("not starting because flag '%v' is set", binlogplayer.BlpFlagDontStart)
 	}
 
-	// wait for the endpoint set (usefull for the first run at least, fast for next runs)
-	if err := discovery.WaitForEndPoints(bpc.ctx, bpc.healthCheck, bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != nil {
-		return fmt.Errorf("error waiting for endpoints for %v %v %v: %v", bpc.cell, bpc.sourceShard.String(), topodatapb.TabletType_REPLICA, err)
+	// wait for the tablet set (usefull for the first run at least, fast for next runs)
+	if err := discovery.WaitForTablets(bpc.ctx, bpc.healthCheck, bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != nil {
+		return fmt.Errorf("error waiting for tablets for %v %v %v: %v", bpc.cell, bpc.sourceShard.String(), topodatapb.TabletType_REPLICA, err)
 	}
 
 	// Find the server list from the health check
-	addrs := discovery.RemoveUnhealthyEndpoints(
-		bpc.healthCheck.GetEndPointStatsFromTarget(bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topodatapb.TabletType_REPLICA))
+	addrs := discovery.RemoveUnhealthyTablets(
+		bpc.healthCheck.GetTabletStatsFromTarget(bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topodatapb.TabletType_REPLICA))
 	if len(addrs) == 0 {
 		return fmt.Errorf("can't find any healthy source tablet for %v %v %v", bpc.cell, bpc.sourceShard.String(), topodatapb.TabletType_REPLICA)
 	}
 	newServerIndex := rand.Intn(len(addrs))
-	endPoint := addrs[newServerIndex].EndPoint
+	tablet := addrs[newServerIndex].Tablet
 
 	// save our current server
 	bpc.playerMutex.Lock()
-	bpc.sourceTablet = &topodatapb.TabletAlias{
-		Cell: bpc.cell,
-		Uid:  endPoint.Uid,
-	}
+	bpc.sourceTablet = tablet.Alias
 	bpc.lastError = nil
 	bpc.playerMutex.Unlock()
 
@@ -302,7 +299,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		}
 
 		// tables, just get them
-		player, err := binlogplayer.NewBinlogPlayerTables(vtClient, endPoint, tables, bpc.sourceShard.Uid, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
+		player, err := binlogplayer.NewBinlogPlayerTables(vtClient, tablet, tables, bpc.sourceShard.Uid, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
 		if err != nil {
 			return fmt.Errorf("NewBinlogPlayerTables failed: %v", err)
 		}
@@ -315,7 +312,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
 	}
 
-	player, err := binlogplayer.NewBinlogPlayerKeyRange(vtClient, endPoint, overlap, bpc.sourceShard.Uid, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
+	player, err := binlogplayer.NewBinlogPlayerKeyRange(vtClient, tablet, overlap, bpc.sourceShard.Uid, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
 	if err != nil {
 		return fmt.Errorf("NewBinlogPlayerKeyRange failed: %v", err)
 	}
