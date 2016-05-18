@@ -498,7 +498,7 @@ class TestReparent(unittest.TestCase):
 
     # make sure the master status page says it's the master
     tablet_62044_master_status = tablet_62044.get_status()
-    self.assertIn('Serving graph: test_keyspace 0 master',
+    self.assertIn('Keyspace: test_keyspace Shard: 0 Tablet Type: MASTER',
                   tablet_62044_master_status)
 
     # make sure the master health stream says it's the master too

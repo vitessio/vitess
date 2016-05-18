@@ -40,7 +40,7 @@ var (
   <tr border="">
     <td width="25%" border="">
       Alias: {{github_com_youtube_vitess_vtctld_tablet .Tablet.AliasString}}<br>
-      Keyspace: {{github_com_youtube_vitess_vtctld_keyspace .Tablet.Keyspace}} Shard: {{github_com_youtube_vitess_vtctld_shard .Tablet.Keyspace .Tablet.Shard}}<br>
+      Keyspace: {{github_com_youtube_vitess_vtctld_keyspace .Tablet.Keyspace}} Shard: {{github_com_youtube_vitess_vtctld_shard .Tablet.Keyspace .Tablet.Shard}} Tablet Type: {{.Tablet.Type}}<br>
       SrvKeyspace: {{github_com_youtube_vitess_vtctld_srv_keyspace .Tablet.Alias.Cell .Tablet.Keyspace}}<br>
       Replication graph: {{github_com_youtube_vitess_vtctld_replication .Tablet.Alias.Cell .Tablet.Keyspace .Tablet.Shard}}<br>
       {{if .BlacklistedTables}}
