@@ -5,11 +5,17 @@ import (
 	"strconv"
 	"testing"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
+	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file contains common test helper.
@@ -71,4 +77,27 @@ func sourceRdonlyFactory(t *testing.T, dbAndTableName string, min, max int) func
 		},
 	})
 	return f.getFactory()
+}
+
+// fakeTMCTopo is a FakeTabletManagerClient extension that implements ChangeType
+// using the provided topo server.
+type fakeTMCTopo struct {
+	tmclient.TabletManagerClient
+	server topo.Server
+}
+
+func newFakeTMCTopo(ts topo.Server) tmclient.TabletManagerClient {
+	return &fakeTMCTopo{
+		TabletManagerClient: faketmclient.NewFakeTabletManagerClient(),
+		server:              ts,
+	}
+}
+
+// ChangeType is part of the tmclient.TabletManagerClient interface.
+func (client *fakeTMCTopo) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType) error {
+	_, err := client.server.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
+		t.Type = dbType
+		return nil
+	})
+	return err
 }

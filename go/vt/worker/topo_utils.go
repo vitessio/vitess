@@ -124,7 +124,7 @@ func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrang
 	// Record a clean-up action to take the tablet back to rdonly.
 	// We will alter this one later on and let the tablet go back to
 	// 'spare' if we have stopped replication for too long on it.
-	wrangler.RecordChangeSlaveTypeAction(cleaner, tabletAlias, topodatapb.TabletType_RDONLY)
+	wrangler.RecordChangeSlaveTypeAction(cleaner, tabletAlias, topodatapb.TabletType_WORKER, topodatapb.TabletType_RDONLY)
 	return tabletAlias, nil
 }
 
