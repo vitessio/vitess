@@ -163,6 +163,8 @@ func newThrottler(name, unit string, threadCount int, maxRate int64, maxReplicat
 // If the duration is zero, the thread is not throttled.
 // If the duration is not zero, the thread must call Throttle() again after
 // the backoff duration elapsed.
+// The maximum value for the returned backoff is 1 second since the throttler
+// internally operates on a per-second basis.
 func (t *Throttler) Throttle(threadID int) time.Duration {
 	if t.closed {
 		panic(fmt.Sprintf("BUG: thread with ID: %v must not access closed Throttler", threadID))
