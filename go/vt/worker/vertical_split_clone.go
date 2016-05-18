@@ -363,8 +363,12 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	vscw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The HealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
 
 	// Set up the throttler for the destination shard.
-	vscw.destinationThrottlers[keyspaceAndShard] = throttler.NewThrottler(
+	t, err := throttler.NewThrottler(
 		keyspaceAndShard, "transactions", vscw.destinationWriterCount, vscw.maxTPS, throttler.ReplicationLagModuleDisabled)
+	if err != nil {
+		return fmt.Errorf("cannot instantiate throttler: %v", err)
+	}
+	vscw.destinationThrottlers[keyspaceAndShard] = t
 	return nil
 }
 

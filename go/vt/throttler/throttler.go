@@ -36,7 +36,7 @@ const (
 
 	// ReplicationLagModuleDisabled can be set in NewThrottler() to disable
 	// throttling based on the MySQL replication lag.
-	ReplicationLagModuleDisabled = -1
+	ReplicationLagModuleDisabled = int64(math.MaxInt64)
 )
 
 // Throttler provides a client-side, thread-aware throttler.
@@ -91,16 +91,24 @@ type Throttler struct {
 // unit refers to the type of entity you want to throttle e.g. "queries" or
 // "transactions".
 // name describes the Throttler instance and will be used by the webinterface.
-func NewThrottler(name, unit string, threadCount int, maxRate int64, maxReplicationLag int) *Throttler {
+func NewThrottler(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64) (*Throttler, error) {
 	return newThrottler(name, unit, threadCount, maxRate, maxReplicationLag, time.Now)
 }
 
 // newThrottlerWithClock should only be used for testing.
-func newThrottlerWithClock(name, unit string, threadCount int, maxRate int64, maxReplicationLag int, nowFunc func() time.Time) *Throttler {
+func newThrottlerWithClock(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
 	return newThrottler(name, unit, threadCount, maxRate, maxReplicationLag, nowFunc)
 }
 
-func newThrottler(name, unit string, threadCount int, maxRate int64, maxReplicationLag int, nowFunc func() time.Time) *Throttler {
+func newThrottler(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
+	// Verify input parameters.
+	if maxRate < 0 {
+		return nil, fmt.Errorf("maxRate must be >= 0: %v", maxRate)
+	}
+	if maxReplicationLag < 0 {
+		return nil, fmt.Errorf("maxReplicationLag must be >= 0: %v", maxReplicationLag)
+	}
+
 	// Enable the configured modules.
 	var modules []Module
 	modules = append(modules, NewMaxRateModule(maxRate))
@@ -139,7 +147,7 @@ func newThrottler(name, unit string, threadCount int, maxRate int64, maxReplicat
 		}
 	}()
 
-	return t
+	return t, nil
 }
 
 // Throttle returns a backoff duration which specifies for how long "threadId"

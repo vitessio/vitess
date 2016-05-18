@@ -399,8 +399,12 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	// Set up the throttler for each destination shard.
 	for _, si := range scw.destinationShards {
 		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
-		scw.destinationThrottlers[keyspaceAndShard] = throttler.NewThrottler(
+		t, err := throttler.NewThrottler(
 			keyspaceAndShard, "transactions", scw.destinationWriterCount, scw.maxTPS, throttler.ReplicationLagModuleDisabled)
+		if err != nil {
+			return fmt.Errorf("cannot instantiate throttler: %v", err)
+		}
+		scw.destinationThrottlers[keyspaceAndShard] = t
 	}
 
 	return nil
