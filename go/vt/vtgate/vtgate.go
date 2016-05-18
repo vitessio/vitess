@@ -748,11 +748,6 @@ func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, keyspace string) (*topoda
 	return vtg.resolver.toposerv.GetSrvKeyspace(ctx, vtg.resolver.cell, keyspace)
 }
 
-// GetSrvShard is part of the vtgate service API.
-func (vtg *VTGate) GetSrvShard(ctx context.Context, keyspace, shard string) (*topodatapb.SrvShard, error) {
-	return vtg.resolver.toposerv.GetSrvShard(ctx, vtg.resolver.cell, keyspace, shard)
-}
-
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
 func (vtg *VTGate) GetGatewayCacheStatus() GatewayTabletCacheStatusList {
 	return vtg.resolver.GetGatewayCacheStatus()

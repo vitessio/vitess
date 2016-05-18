@@ -216,14 +216,6 @@ const (
 	// KeyspaceActionCreateShard protects shard creation within the keyspace
 	KeyspaceActionCreateShard = "KeyspaceCreateShard"
 
-	//
-	// SrvShard actions - very local locking, for consistency.
-	// These are just descriptive and used for locking / logging.
-	//
-
-	// SrvShardActionRebuild locks the SvrShard for rebuild
-	SrvShardActionRebuild = "RebuildSrvShard"
-
 	// all the valid states for an action
 
 	// ActionStateQueued is for an action that is going to be executed

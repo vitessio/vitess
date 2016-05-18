@@ -51,7 +51,6 @@ def setUpModule():
     src_replica.init_tablet('replica', 'test_keyspace', '0')
     src_rdonly.init_tablet('rdonly', 'test_keyspace', '0')
 
-    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
     utils.validate_topology()
 
     for t in [src_master, src_replica, src_rdonly]:

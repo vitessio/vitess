@@ -131,27 +131,3 @@ func (zkts *Server) LockShardForAction(ctx context.Context, keyspace, shard, con
 func (zkts *Server) UnlockShardForAction(ctx context.Context, keyspace, shard, lockPath, results string) error {
 	return zkts.unlockForAction(lockPath, results)
 }
-
-// LockSrvShardForAction is part of topo.Server interface
-func (zkts *Server) LockSrvShardForAction(ctx context.Context, cell, keyspace, shard, contents string) (string, error) {
-	// Action paths end in a trailing slash to that when we create
-	// sequential nodes, they are created as children, not siblings.
-	actionDir := path.Join(zkPathForVtShard(cell, keyspace, shard), "action")
-
-	// if we can't create the lock file because the directory doesn't exist,
-	// create it
-	p, err := zkts.lockForAction(ctx, actionDir+"/", contents)
-	if err != nil && zookeeper.IsError(err, zookeeper.ZNONODE) {
-		_, err = zk.CreateRecursive(zkts.zconn, actionDir, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-		if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-			return "", err
-		}
-		p, err = zkts.lockForAction(ctx, actionDir+"/", contents)
-	}
-	return p, err
-}
-
-// UnlockSrvShardForAction is part of topo.Server interface
-func (zkts *Server) UnlockSrvShardForAction(ctx context.Context, cell, keyspace, shard, lockPath, results string) error {
-	return zkts.unlockForAction(lockPath, results)
-}

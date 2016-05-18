@@ -31,7 +31,7 @@ func (agent *ActionAgent) maybeRebuildKeyspace(cell, keyspace string) {
 		return
 	}
 
-	if err := topotools.RebuildKeyspace(agent.batchCtx, logutil.NewConsoleLogger(), agent.TopoServer, keyspace, []string{cell}, false); err != nil {
+	if err := topotools.RebuildKeyspace(agent.batchCtx, logutil.NewConsoleLogger(), agent.TopoServer, keyspace, []string{cell}); err != nil {
 		log.Warningf("RebuildKeyspace(%v,%v) failed: %v, may need to run 'vtctl RebuildKeyspaceGraph %v')", cell, keyspace, err, keyspace)
 	}
 }

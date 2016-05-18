@@ -271,7 +271,6 @@ class TestKeyspace(unittest.TestCase):
     # Create the serving/replication entries and check that they exist,
     # so we can later check they're deleted.
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_delete_keyspace'])
-    utils.run_vtctl(['RebuildShardGraph', 'test_delete_keyspace/0'])
     utils.run_vtctl(
         ['GetShardReplication', 'test_nj', 'test_delete_keyspace/0'])
     utils.run_vtctl(['GetSrvKeyspace', 'test_nj', 'test_delete_keyspace'])
@@ -307,8 +306,6 @@ class TestKeyspace(unittest.TestCase):
     # Create the serving/replication entries and check that they exist,
     # so we can later check they're deleted.
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_delete_keyspace'])
-    utils.run_vtctl(['RebuildShardGraph', 'test_delete_keyspace/0'])
-    utils.run_vtctl(['RebuildShardGraph', 'test_delete_keyspace/1'])
     utils.run_vtctl(
         ['GetShardReplication', 'test_nj', 'test_delete_keyspace/0'])
     utils.run_vtctl(
@@ -320,7 +317,6 @@ class TestKeyspace(unittest.TestCase):
     utils.run_vtctl(
         ['RemoveShardCell', '-recursive', 'test_delete_keyspace/0', 'test_nj'])
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_delete_keyspace'])
-    utils.run_vtctl(['RebuildShardGraph', 'test_delete_keyspace/0'])
 
     utils.run_vtctl(['GetKeyspace', 'test_delete_keyspace'])
     utils.run_vtctl(['GetShard', 'test_delete_keyspace/0'])
@@ -341,7 +337,6 @@ class TestKeyspace(unittest.TestCase):
         ['InitTablet', '-port=1234', '-keyspace=test_delete_keyspace',
          '-shard=0', 'test_nj-0000000100', 'replica'])
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_delete_keyspace'])
-    utils.run_vtctl(['RebuildShardGraph', 'test_delete_keyspace/0'])
     utils.run_vtctl(
         ['GetShardReplication', 'test_nj', 'test_delete_keyspace/0'])
 
@@ -350,8 +345,6 @@ class TestKeyspace(unittest.TestCase):
         ['RemoveKeyspaceCell', '-recursive', 'test_delete_keyspace',
          'test_nj'])
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_delete_keyspace'])
-    utils.run_vtctl(['RebuildShardGraph', 'test_delete_keyspace/0'])
-    utils.run_vtctl(['RebuildShardGraph', 'test_delete_keyspace/1'])
 
     utils.run_vtctl(
         ['GetShardReplication', 'test_ca', 'test_delete_keyspace/0'])

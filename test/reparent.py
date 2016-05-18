@@ -146,9 +146,6 @@ class TestReparent(unittest.TestCase):
     for t in [tablet_62044, tablet_41983, tablet_31981]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
-    # Recompute the shard layout node - until you do that, it might not be
-    # valid.
-    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
     utils.validate_topology()
 
     # Force the slaves to reparent assuming that all the datasets are
@@ -221,9 +218,6 @@ class TestReparent(unittest.TestCase):
         shard['cells'], ['test_nj', 'test_ny'],
         'wrong list of cell in Shard: %s' % str(shard['cells']))
 
-    # Recompute the shard layout node - until you do that, it might not be
-    # valid.
-    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/' + shard_id])
     utils.validate_topology()
 
     # Force the slaves to reparent assuming that all the datasets are
@@ -286,9 +280,6 @@ class TestReparent(unittest.TestCase):
       self.assertEqual(shard['cells'], ['test_nj', 'test_ny'],
                        'wrong list of cell in Shard: %s' % str(shard['cells']))
 
-    # Recompute the shard layout node - until you do that, it might not be
-    # valid.
-    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/' + shard_id])
     utils.validate_topology()
 
     # Force the slaves to reparent assuming that all the datasets are
@@ -367,9 +358,6 @@ class TestReparent(unittest.TestCase):
     for t in [tablet_62044, tablet_41983, tablet_31981]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
-    # Recompute the shard layout node - until you do that, it might not be
-    # valid.
-    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/' + shard_id])
     utils.validate_topology()
 
     # Force the slaves to reparent assuming that all the datasets are
@@ -551,9 +539,6 @@ class TestReparent(unittest.TestCase):
     for t in [tablet_62044, tablet_31981, tablet_41983]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
-    # Recompute the shard layout node - until you do that, it might not be
-    # valid.
-    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/' + shard_id])
     utils.validate_topology()
 
     # Force the slaves to reparent assuming that all the datasets are identical.

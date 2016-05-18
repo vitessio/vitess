@@ -142,17 +142,6 @@ func TestShardLock(t *testing.T) {
 	test.CheckShardLock(ctx, t, ts)
 }
 
-func TestSrvShardLock(t *testing.T) {
-	ctx := context.Background()
-	if testing.Short() {
-		t.Skip("skipping wait-based test in short mode.")
-	}
-
-	ts := newTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckSrvShardLock(ctx, t, ts)
-}
-
 func TestVSchema(t *testing.T) {
 	ctx := context.Background()
 	if testing.Short() {

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"path"
 	"sort"
-	"strings"
 	"time"
 
 	log "github.com/golang/glog"
@@ -37,68 +36,6 @@ func zkPathForCell(cell string) string {
 
 func zkPathForVtKeyspace(cell, keyspace string) string {
 	return path.Join(zkPathForCell(cell), keyspace)
-}
-
-func zkPathForVtShard(cell, keyspace, shard string) string {
-	return path.Join(zkPathForVtKeyspace(cell, keyspace), shard)
-}
-
-func zkPathForVtName(cell, keyspace, shard string, tabletType topodatapb.TabletType) string {
-	return path.Join(zkPathForVtShard(cell, keyspace, shard), strings.ToLower(tabletType.String()))
-}
-
-// UpdateSrvShard is part of the topo.Server interface
-func (zkts *Server) UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *topodatapb.SrvShard) error {
-	path := zkPathForVtShard(cell, keyspace, shard)
-	data, err := json.MarshalIndent(srvShard, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	// Update or create unconditionally.
-	if _, err = zk.CreateRecursive(zkts.zconn, path, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-			// Node already exists - just stomp away. Multiple writers shouldn't be here.
-			// We use RetryChange here because it won't update the node unnecessarily.
-			f := func(oldValue string, oldStat zk.Stat) (string, error) {
-				return string(data), nil
-			}
-			err = zkts.zconn.RetryChange(path, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
-		}
-	}
-	return err
-}
-
-// GetSrvShard is part of the topo.Server interface
-func (zkts *Server) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error) {
-	path := zkPathForVtShard(cell, keyspace, shard)
-	data, _, err := zkts.zconn.Get(path)
-	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return nil, err
-	}
-	srvShard := &topodatapb.SrvShard{}
-	if len(data) > 0 {
-		if err := json.Unmarshal([]byte(data), srvShard); err != nil {
-			return nil, fmt.Errorf("SrvShard unmarshal failed: %v %v", data, err)
-		}
-	}
-	return srvShard, nil
-}
-
-// DeleteSrvShard is part of the topo.Server interface
-func (zkts *Server) DeleteSrvShard(ctx context.Context, cell, keyspace, shard string) error {
-	path := zkPathForVtShard(cell, keyspace, shard)
-	err := zkts.zconn.Delete(path, -1)
-	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return err
-	}
-	return nil
 }
 
 // UpdateSrvKeyspace is part of the topo.Server interface

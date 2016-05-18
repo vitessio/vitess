@@ -249,11 +249,6 @@ func (sct *sandboxTopo) WatchVSchema(ctx context.Context, keyspace string) (noti
 	return result, nil
 }
 
-// GetSrvShard is part of SrvTopoServer.
-func (sct *sandboxTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error) {
-	return nil, fmt.Errorf("Unsupported")
-}
-
 func sandboxDialer(ctx context.Context, tablet *topodatapb.Tablet, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 	sand := getSandbox(keyspace)
 	sand.sandmu.Lock()

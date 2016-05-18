@@ -168,12 +168,3 @@ func KeyspaceCreateShard() *ActionNode {
 		Action: KeyspaceActionCreateShard,
 	}).SetGuid()
 }
-
-//methods to build the serving shard action nodes
-
-// RebuildSrvShard returns an ActionNode
-func RebuildSrvShard() *ActionNode {
-	return (&ActionNode{
-		Action: SrvShardActionRebuild,
-	}).SetGuid()
-}

@@ -197,9 +197,6 @@ var commands = []commandGroup{
 			{"GetShard", commandGetShard,
 				"<keyspace/shard>",
 				"Outputs a JSON structure that contains information about the Shard."},
-			{"RebuildShardGraph", commandRebuildShardGraph,
-				"[-cells=a,b] <keyspace/shard> ... ",
-				"Rebuilds the replication graph and shard serving data in ZooKeeper or etcd. This may trigger an update to all connected clients."},
 			{"TabletExternallyReparented", commandTabletExternallyReparented,
 				"<tablet alias>",
 				"Changes metadata in the topology server to acknowledge a shard master change performed by an external tool. See the Reparenting guide for more information:" +
@@ -705,7 +702,6 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 
 func commandDeleteTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	allowMaster := subFlags.Bool("allow_master", false, "Allows for the master tablet of a shard to be deleted. Use with caution.")
-	skipRebuild := subFlags.Bool("skip_rebuild", false, "Skips rebuilding the shard serving graph after deleting the tablet")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -718,7 +714,7 @@ func commandDeleteTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	for _, tabletAlias := range tabletAliases {
-		if err := wr.DeleteTablet(ctx, tabletAlias, *allowMaster, *skipRebuild); err != nil {
+		if err := wr.DeleteTablet(ctx, tabletAlias, *allowMaster); err != nil {
 			return err
 		}
 	}
@@ -1090,32 +1086,6 @@ func commandGetShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 		return err
 	}
 	return printJSON(wr.Logger(), shardInfo)
-}
-
-func commandRebuildShardGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	cells := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() == 0 {
-		return fmt.Errorf("The <keyspace/shard> argument must be used to identify at least one keyspace and shard when calling the RebuildShardGraph command.")
-	}
-
-	var cellArray []string
-	if *cells != "" {
-		cellArray = strings.Split(*cells, ",")
-	}
-
-	keyspaceShards, err := shardParamsToKeyspaceShards(ctx, wr, subFlags.Args())
-	if err != nil {
-		return err
-	}
-	for _, ks := range keyspaceShards {
-		if _, err := wr.RebuildShardGraph(ctx, ks.Keyspace, ks.Shard, cellArray); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1644,7 +1614,6 @@ func commandSetKeyspaceServedFrom(ctx context.Context, wr *wrangler.Wrangler, su
 
 func commandRebuildKeyspaceGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	cells := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
-	rebuildSrvShards := subFlags.Bool("rebuild_srv_shards", false, "Indicates whether all SrvShard objects should also be rebuilt. The default value is <code>false</code>.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1662,7 +1631,7 @@ func commandRebuildKeyspaceGraph(ctx context.Context, wr *wrangler.Wrangler, sub
 		return err
 	}
 	for _, keyspace := range keyspaces {
-		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, cellArray, *rebuildSrvShards); err != nil {
+		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, cellArray); err != nil {
 			return err
 		}
 	}
