@@ -52,7 +52,6 @@ func RestartSlavesExternal(ts topo.Server, log logutil.Logger, slaveTabletMap, m
 				// the old master can be annoying if left
 				// around in the replication graph, so if we
 				// can't restart it, we just make it spare.
-				// We don't rebuild the Shard just yet though.
 				log.Warningf("Old master %v is not restarting in time, forcing it to spare: %v", ti.Alias, err)
 
 				ti.Type = topodatapb.TabletType_SPARE

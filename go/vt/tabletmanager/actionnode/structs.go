@@ -76,13 +76,6 @@ func ShardExternallyReparented(tabletAlias *topodatapb.TabletAlias) *ActionNode 
 	}).SetGuid()
 }
 
-// RebuildShard returns an ActionNode
-func RebuildShard() *ActionNode {
-	return (&ActionNode{
-		Action: ShardActionRebuild,
-	}).SetGuid()
-}
-
 // CheckShard returns an ActionNode
 func CheckShard() *ActionNode {
 	return (&ActionNode{

@@ -79,8 +79,7 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl(['CreateKeyspace', '-force', 'test_keyspace'])
     utils.run_vtctl(['createshard', '-force', 'test_keyspace/0'])
     tablet_62344.init_tablet('master', 'test_keyspace', '0', parent=False)
-    utils.run_vtctl(
-        ['RebuildKeyspaceGraph', '-rebuild_srv_shards', 'test_keyspace'])
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'])
     utils.validate_topology()
 
     # if these statements don't run before the tablet it will wedge

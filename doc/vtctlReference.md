@@ -292,11 +292,11 @@ Migrates a serving type from the source shard to the shards that it replicates t
 
 ### RebuildKeyspaceGraph
 
-Rebuilds the serving data for the keyspace and, optionally, all shards in the specified keyspace. This command may trigger an update to all connected clients.
+Rebuilds the serving data for the keyspace. This command may trigger an update to all connected clients.
 
 #### Example
 
-<pre class="command-example">RebuildKeyspaceGraph [-cells=a,b] [-rebuild_srv_shards] &lt;keyspace&gt; ...</pre>
+<pre class="command-example">RebuildKeyspaceGraph [-cells=a,b] &lt;keyspace&gt; ...</pre>
 
 #### Flags
 
@@ -1695,7 +1695,7 @@ Deletes tablet(s) from the topology.
 
 #### Example
 
-<pre class="command-example">DeleteTablet [-allow_master] [-skip_rebuild] &lt;tablet alias&gt; ...</pre>
+<pre class="command-example">DeleteTablet [-allow_master] &lt;tablet alias&gt; ...</pre>
 
 #### Flags
 

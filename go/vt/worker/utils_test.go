@@ -94,8 +94,8 @@ func newFakeTMCTopo(ts topo.Server) tmclient.TabletManagerClient {
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface.
-func (client *fakeTMCTopo) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType) error {
-	_, err := client.server.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
+func (f *fakeTMCTopo) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType) error {
+	_, err := f.server.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
 		t.Type = dbType
 		return nil
 	})

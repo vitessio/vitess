@@ -164,7 +164,6 @@ That command performs the following operations:
    <code>spare</code> to ensure that it does not interfere with ongoing
    operations.
 1. Updates the <code>Shard</code> object to specify the new master.
-1. Rebuilds the shard's serving graph.
 
 The <code>TabletExternallyReparented</code> command fails in the following
 cases:

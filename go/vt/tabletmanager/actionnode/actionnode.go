@@ -175,9 +175,6 @@ const (
 	// been reparented
 	ShardActionExternallyReparented = "ShardExternallyReparented"
 
-	// ShardActionRebuild recomputes derived shard-wise data
-	ShardActionRebuild = "RebuildShard"
-
 	// ShardActionCheck takes a generic read lock for inexpensive
 	// shard-wide actions.
 	ShardActionCheck = "CheckShard"

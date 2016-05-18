@@ -160,18 +160,6 @@ func (wr *Wrangler) ChangeSlaveType(ctx context.Context, tabletAlias *topodatapb
 	return wr.tmc.ChangeType(ctx, ti.Tablet, tabletType)
 }
 
-// same as ChangeType, but assume we already have the shard lock,
-// and do not have the option to force anything.
-func (wr *Wrangler) changeTypeInternal(ctx context.Context, tabletAlias *topodatapb.TabletAlias, dbType topodatapb.TabletType) error {
-	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
-
-	// change the type
-	return wr.tmc.ChangeType(ctx, ti.Tablet, dbType)
-}
-
 // ExecuteFetchAsDba executes a query remotely using the DBA pool
 func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias *topodatapb.TabletAlias, query string, maxRows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)

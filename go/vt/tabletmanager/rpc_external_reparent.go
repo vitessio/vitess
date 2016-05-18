@@ -133,7 +133,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	var errs concurrency.AllErrorRecorder
 	oldMasterAlias := si.MasterAlias
 
-	// Update the tablet records and serving graph for the old and new master concurrently.
+	// Update the tablet records concurrently.
 	event.DispatchUpdate(ev, "updating old and new master tablet records")
 	log.Infof("finalizeTabletExternallyReparented: updating tablet records")
 	wg.Add(1)
