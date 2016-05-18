@@ -25,6 +25,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/throttler"
 )
 
 var (
@@ -206,6 +207,31 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (string, string, error) {
 	return qr.Rows[0][0].String(), qr.Rows[0][1].String(), nil
 }
 
+// readThrottlerSettings will retrieve the throttler settings for filtered
+// replication from the checkpoint table.
+func (blp *BinlogPlayer) readThrottlerSettings() (int64, int64, error) {
+	selectThrottlerSettings := QueryBlpThrottlerSettings(blp.uid)
+	qr, err := blp.dbClient.ExecuteFetch(selectThrottlerSettings, 1, true)
+	if err != nil {
+		return throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("error %v in selecting the throttler settings %v", err, selectThrottlerSettings)
+	}
+
+	if qr.RowsAffected != 1 {
+		return throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("checkpoint information not available in db for %v", blp.uid)
+	}
+
+	maxTPS, err := qr.Rows[0][0].ParseInt64()
+	if err != nil {
+		return throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("failed to parse max_tps column: %v", err)
+	}
+	maxReplicationLag, err := qr.Rows[0][1].ParseInt64()
+	if err != nil {
+		return throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("failed to parse max_replication_lag column: %v", err)
+	}
+
+	return maxTPS, maxReplicationLag, nil
+}
+
 func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) (ok bool, err error) {
 	txnStartTime := time.Now()
 	if err = blp.dbClient.Begin(); err != nil {
@@ -274,6 +300,21 @@ func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 // It will return io.EOF if the server stops sending us updates.
 // It may return any other error it encounters.
 func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
+	// Instantiate the throttler based on the configuration stored in the db.
+	maxTPS, maxReplicationLag, err := blp.readThrottlerSettings()
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	t, err := throttler.NewThrottler(
+		fmt.Sprintf("BinlogPlayer/%d", blp.uid), "transactions", 1 /* threadCount */, maxTPS, maxReplicationLag)
+	if err != nil {
+		log.Errorf("failed to instantiate throttler: %v", err)
+		return fmt.Errorf("failed to instantiate throttler: %v", err)
+	}
+	defer t.Close()
+
+	// Log the mode of operation and when the player stops.
 	if len(blp.tables) > 0 {
 		log.Infof("BinlogPlayer client %v for tables %v starting @ '%v', server: %v",
 			blp.uid,
@@ -308,7 +349,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 		return fmt.Errorf("no binlog player client factory named %v", *binlogPlayerProtocol)
 	}
 	blplClient := clientFactory()
-	err := blplClient.Dial(blp.tablet, *BinlogPlayerConnTimeout)
+	err = blplClient.Dial(blp.tablet, *BinlogPlayerConnTimeout)
 	if err != nil {
 		log.Errorf("Error dialing binlog server: %v", err)
 		return fmt.Errorf("error dialing binlog server: %v", err)
@@ -346,6 +387,15 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	}
 
 	for {
+		// Block if we are throttled.
+		for {
+			backoff := t.Throttle(0 /* threadID */)
+			if backoff == throttler.NotThrottled {
+				break
+			}
+			time.Sleep(backoff)
+		}
+
 		// get the response
 		response, err := stream.Recv()
 		if err != nil {
@@ -397,19 +447,22 @@ func CreateBlpCheckpoint() []string {
 		`CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (
   source_shard_uid INT(10) UNSIGNED NOT NULL,
   pos VARCHAR(250) DEFAULT NULL,
-  time_updated BIGINT UNSIGNED NOT NULL,
-  transaction_timestamp BIGINT UNSIGNED NOT NULL,
+  max_tps BIGINT(20) NOT NULL,
+  max_replication_lag BIGINT(20) NOT NULL,
+  time_updated BIGINT(20) UNSIGNED NOT NULL,
+  transaction_timestamp BIGINT(20) UNSIGNED NOT NULL,
   flags VARCHAR(250) DEFAULT NULL,
-  PRIMARY KEY (source_shard_uid)) ENGINE=InnoDB`}
+  PRIMARY KEY (source_shard_uid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8`}
 }
 
 // PopulateBlpCheckpoint returns a statement to populate the first value into
 // the _vt.blp_checkpoint table.
-func PopulateBlpCheckpoint(index uint32, position string, timeUpdated int64, flags string) string {
+func PopulateBlpCheckpoint(index uint32, position string, maxTPS int64, maxReplicationLag int64, timeUpdated int64, flags string) string {
 	return fmt.Sprintf("INSERT INTO _vt.blp_checkpoint "+
-		"(source_shard_uid, pos, time_updated, transaction_timestamp, flags) "+
-		"VALUES (%v, '%v', %v, 0, '%v')",
-		index, position, timeUpdated, flags)
+		"(source_shard_uid, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, flags) "+
+		"VALUES (%v, '%v', %v, %v, %v, 0, '%v')",
+		index, position, maxTPS, maxReplicationLag, timeUpdated, flags)
 }
 
 // updateBlpCheckpoint returns a statement to update a value in the
@@ -434,4 +487,11 @@ func updateBlpCheckpoint(uid uint32, pos replication.Position, timeUpdated int64
 // given shard from the _vt.blp_checkpoint table.
 func QueryBlpCheckpoint(index uint32) string {
 	return fmt.Sprintf("SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=%v", index)
+}
+
+// QueryBlpThrottlerSettings returns a statement to query the throttler settings
+// (used by filtered replication) for a given shard from the_vt.blp_checkpoint
+// table.
+func QueryBlpThrottlerSettings(index uint32) string {
+	return fmt.Sprintf("SELECT max_tps, max_replication_lag FROM _vt.blp_checkpoint WHERE source_shard_uid=%v", index)
 }
