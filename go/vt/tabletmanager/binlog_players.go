@@ -94,7 +94,12 @@ type BinlogPlayerController struct {
 	lastError error
 }
 
+// newBinlogPlayerController instantiates a new BinlogPlayerController.
+// Use Start() and Stop() to start and stop it.
+// Once stopped, you should call Close() to stop and free resources e.g. the
+// healthcheck instance.
 func newBinlogPlayerController(ts topo.Server, vtClientFactory func() binlogplayer.VtClient, mysqld mysqlctl.MysqlDaemon, cell string, keyRange *topodatapb.KeyRange, sourceShard *topodatapb.Shard_SourceShard, dbName string) *BinlogPlayerController {
+	healthCheck := discovery.NewHealthCheck(*binlogplayer.BinlogPlayerConnTimeout, *healthcheckRetryDelay, *healthCheckTimeout, "" /* statsSuffix */)
 	blc := &BinlogPlayerController{
 		ts:                ts,
 		vtClientFactory:   vtClientFactory,
@@ -104,9 +109,12 @@ func newBinlogPlayerController(ts topo.Server, vtClientFactory func() binlogplay
 		dbName:            dbName,
 		sourceShard:       sourceShard,
 		binlogPlayerStats: binlogplayer.NewStats(),
-		healthCheck:       discovery.NewHealthCheck(*binlogplayer.BinlogPlayerConnTimeout, *healthcheckRetryDelay, *healthCheckTimeout, "" /* statsSuffix */),
+		// Note: healthCheck and shardReplicationWatcher remain active independent
+		// of whether the BinlogPlayerController is Start()'d or Stop()'d.
+		// Use Close() after Stop() to finally close them and free their resources.
+		healthCheck:             healthCheck,
+		shardReplicationWatcher: discovery.NewShardReplicationWatcher(ts, healthCheck, cell, sourceShard.Keyspace, sourceShard.Shard, *healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency),
 	}
-	blc.shardReplicationWatcher = discovery.NewShardReplicationWatcher(ts, blc.healthCheck, cell, sourceShard.Keyspace, sourceShard.Shard, *healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 	return blc
 }
 
@@ -197,6 +205,21 @@ func (bpc *BinlogPlayerController) Stop() {
 	case <-done:
 		bpc.reset()
 	}
+}
+
+// Close will stop and free any long running resources e.g. the healthcheck.
+// It can only be called on a stopped instance (i.e. Start() was never called
+// or after Stop() was called.)
+func (bpc *BinlogPlayerController) Close() {
+	bpc.playerMutex.Lock()
+	if bpc.ctx != nil {
+		bpc.playerMutex.Unlock()
+		log.Fatalf("%v: cannot Close() a BinlogPlayerController which was not Stop()'d before", bpc)
+		return
+	}
+
+	bpc.shardReplicationWatcher.Stop()
+	bpc.healthCheck.Close()
 }
 
 // Loop runs the main player loop: try to play, and in case of error,
@@ -451,8 +474,7 @@ func (blm *BinlogPlayerMap) StopAllPlayersAndReset() {
 		if blm.state == BpmStateRunning {
 			bpc.Stop()
 		}
-		bpc.shardReplicationWatcher.Stop()
-		bpc.healthCheck.Close()
+		bpc.Close()
 		hadPlayers = true
 	}
 	blm.players = make(map[uint32]*BinlogPlayerController)
@@ -493,7 +515,7 @@ func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *topodatapb.T
 	// remove all entries from toRemove
 	for source := range toRemove {
 		blm.players[source].Stop()
-		blm.players[source].healthCheck.Close()
+		blm.players[source].Close()
 		delete(blm.players, source)
 	}
 
