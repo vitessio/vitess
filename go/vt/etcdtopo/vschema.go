@@ -1,12 +1,15 @@
 package etcdtopo
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/coreos/go-etcd/etcd"
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -15,35 +18,43 @@ This file contains the vschema management code for etcdtopo.Server
 */
 
 // SaveVSchema saves the JSON vschema into the topo.
-func (s *Server) SaveVSchema(ctx context.Context, keyspace, vschema string) error {
-	_, err := s.getGlobal().Set(vschemaFilePath(keyspace), vschema, 0 /* ttl */)
+func (s *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vschemapb.Keyspace) error {
+	data, err := json.MarshalIndent(vschema, "", "  ")
+	if err != nil {
+		return err
+	}
+	_, err = s.getGlobal().Set(vschemaFilePath(keyspace), string(data), 0 /* ttl */)
 	if err != nil {
 		return convertError(err)
 	}
 	return nil
 }
 
-// GetVSchema fetches the JSON vschema from the topo.
-func (s *Server) GetVSchema(ctx context.Context, keyspace string) (string, error) {
+// GetVSchema fetches the vschema from the topo.
+func (s *Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error) {
 	resp, err := s.getGlobal().Get(vschemaFilePath(keyspace), false /* sort */, false /* recursive */)
 	if err != nil {
 		err = convertError(err)
 		if err == topo.ErrNoNode {
-			return "{}", nil
+			return &vschemapb.Keyspace{}, nil
 		}
-		return "", err
+		return nil, err
 	}
 	if resp.Node == nil {
-		return "", ErrBadResponse
+		return nil, ErrBadResponse
 	}
-	return resp.Node.Value, nil
+	var vs vschemapb.Keyspace
+	if err := json.Unmarshal([]byte(resp.Node.Value), &vs); err != nil {
+		return nil, fmt.Errorf("bad vschema data (%v): %q", err, resp.Node.Value)
+	}
+	return &vs, nil
 }
 
 // WatchVSchema is part of the topo.Server interface
-func (s *Server) WatchVSchema(ctx context.Context, keyspace string) (<-chan string, error) {
+func (s *Server) WatchVSchema(ctx context.Context, keyspace string) (<-chan *vschemapb.Keyspace, error) {
 	filePath := vschemaFilePath(keyspace)
 
-	notifications := make(chan string, 10)
+	notifications := make(chan *vschemapb.Keyspace, 10)
 
 	// The watch go routine will stop if the 'stop' channel is closed.
 	// Otherwise it will try to watch everything in a loop, and send events
@@ -51,7 +62,7 @@ func (s *Server) WatchVSchema(ctx context.Context, keyspace string) (<-chan stri
 	watch := make(chan *etcd.Response)
 	stop := make(chan bool)
 	go func() {
-		vschema := "{}"
+		var vschema *vschemapb.Keyspace
 		var modifiedVersion int64
 
 		resp, err := s.getGlobal().Get(filePath, false /* sort */, false /* recursive */)
@@ -59,7 +70,10 @@ func (s *Server) WatchVSchema(ctx context.Context, keyspace string) (<-chan stri
 			// node doesn't exist
 		} else {
 			if resp.Node.Value != "" {
-				vschema = resp.Node.Value
+				var vs vschemapb.Keyspace
+				if err := json.Unmarshal([]byte(resp.Node.Value), &vs); err == nil {
+					vschema = &vs
+				}
 				modifiedVersion = int64(resp.Node.ModifiedIndex)
 			}
 		}
@@ -93,9 +107,12 @@ func (s *Server) WatchVSchema(ctx context.Context, keyspace string) (<-chan stri
 		for {
 			select {
 			case resp := <-watch:
-				vschema := "{}"
+				var vschema *vschemapb.Keyspace
 				if resp.Node != nil && resp.Node.Value != "" {
-					vschema = resp.Node.Value
+					var vs vschemapb.Keyspace
+					if err := json.Unmarshal([]byte(resp.Node.Value), &vs); err == nil {
+						vschema = &vs
+					}
 				}
 				notifications <- vschema
 			case <-ctx.Done():

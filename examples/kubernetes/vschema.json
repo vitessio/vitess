@@ -1,16 +1,16 @@
 {
-  "Sharded": true,
-  "Vindexes": {
+  "sharded": true,
+  "vindexes": {
     "hash": {
-      "Type": "hash"
+      "type": "hash"
     }
   },
-  "Tables": {
+  "tables": {
     "messages": {
-      "ColVindexes": [
+      "col_vindexes": [
         {
-          "Col": "page",
-          "Name": "hash"
+          "col": "page",
+          "name": "hash"
         }
       ]
     }

@@ -24,7 +24,7 @@ type Hash struct {
 }
 
 // NewHash creates a new Hash.
-func NewHash(name string, m map[string]interface{}) (Vindex, error) {
+func NewHash(name string, m map[string]string) (Vindex, error) {
 	return &Hash{name: name}, nil
 }
 

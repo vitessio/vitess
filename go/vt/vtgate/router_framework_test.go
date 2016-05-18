@@ -14,118 +14,118 @@ import (
 
 var routerVSchema = `
 {
-	"Sharded": true,
-	"Vindexes": {
+	"sharded": true,
+	"vindexes": {
 		"user_index": {
-			"Type": "hash"
+			"type": "hash"
 		},
 		"music_user_map": {
-			"Type": "lookup_hash_unique",
-			"Owner": "music",
-			"Params": {
+			"type": "lookup_hash_unique",
+			"owner": "music",
+			"params": {
 				"Table": "music_user_map",
 				"From": "music_id",
 				"To": "user_id"
 			}
 		},
 		"name_user_map": {
-			"Type": "lookup_hash",
-			"Owner": "user",
-			"Params": {
+			"type": "lookup_hash",
+			"owner": "user",
+			"params": {
 				"Table": "name_user_map",
 				"From": "name",
 				"To": "user_id"
 			}
 		},
 		"idx1": {
-			"Type": "hash"
+			"type": "hash"
 		},
 		"idx_noauto": {
-			"Type": "hash",
-			"Owner": "noauto_table"
+			"type": "hash",
+			"owner": "noauto_table"
 		},
 		"keyspace_id": {
-			"Type": "numeric"
+			"type": "numeric"
 		}
 	},
-	"Tables": {
+	"tables": {
 		"user": {
-			"ColVindexes": [
+			"col_vindexes": [
 				{
-					"Col": "Id",
-					"Name": "user_index"
+					"col": "Id",
+					"name": "user_index"
 				},
 				{
-					"Col": "name",
-					"Name": "name_user_map"
+					"col": "name",
+					"name": "name_user_map"
 				}
 			],
-			"Autoinc" : {
-				"Col": "id",
-				"Sequence": "user_seq"
+			"autoinc": {
+				"col": "id",
+				"sequence": "user_seq"
 			}
 		},
 		"user_extra": {
-			"ColVindexes": [
+			"col_vindexes": [
 				{
-					"Col": "user_id",
-					"Name": "user_index"
+					"col": "user_id",
+					"name": "user_index"
 				}
 			]
 		},
 		"music": {
-			"ColVindexes": [
+			"col_vindexes": [
 				{
-					"Col": "user_id",
-					"Name": "user_index"
+					"col": "user_id",
+					"name": "user_index"
 				},
 				{
-					"Col": "id",
-					"Name": "music_user_map"
+					"col": "id",
+					"name": "music_user_map"
 				}
 			],
 			"Autoinc" : {
-				"Col": "id",
-				"Sequence": "user_seq"
+				"col": "id",
+				"sequence": "user_seq"
 			}
 		},
 		"music_extra": {
-			"ColVindexes": [
+			"col_vindexes": [
 				{
-					"Col": "user_id",
-					"Name": "user_index"
+					"col": "user_id",
+					"name": "user_index"
 				},
 				{
-					"Col": "music_id",
-					"Name": "music_user_map"
+					"col": "music_id",
+					"name": "music_user_map"
 				}
 			]
 		},
 		"music_extra_reversed": {
-			"ColVindexes": [
+			"col_vindexes": [
 				{
-					"Col": "music_id",
-					"Name": "music_user_map"
+					"col": "music_id",
+					"name": "music_user_map"
 				},
 				{
-					"Col": "user_id",
-					"Name": "user_index"
+					"col": "user_id",
+					"name": "user_index"
 				}
 			]
 		},
 		"noauto_table": {
-			"ColVindexes": [
+			"col_vindexes": [
 				{
-					"Col": "id",
-					"Name": "idx_noauto"
+					"col": "id",
+					"name": "idx_noauto"
 				}
 			]
 		},
 		"ksid_table": {
-			"ColVindexes": [
+			"col_vindexes": [
 				{
-					"Col": "keyspace_id",
-					"Name": "keyspace_id"
+					"col": "keyspace_id",
+					"name": "keyspace_id"
 				}
 			]
 		}
@@ -134,8 +134,8 @@ var routerVSchema = `
 `
 var badVSchema = `
 {
-	"Sharded": false,
-	"Tables": {
+	"sharded": false,
+	"tables": {
 		"sharded_table": {}
 	}
 }
@@ -143,10 +143,10 @@ var badVSchema = `
 
 var unshardedVSchema = `
 {
-	"Sharded": false,
-	"Tables": {
+	"sharded": false,
+	"tables": {
 		"user_seq": {
-			"Type": "Sequence"
+			"type": "Sequence"
 		},
 		"music_user_map": {},
 		"name_user_map": {}

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -97,12 +96,8 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 				log.Fatalf("CreateKeyspace(%v) failed: %v", keyspace, err)
 			}
 			keyspaceMap[keyspace] = true
-			kformal := formal.Keyspaces[keyspace]
-			data, err := json.Marshal(kformal)
-			if err != nil {
-				log.Fatalf("Marshal failed: %v", err)
-			}
-			if err := ts.SaveVSchema(ctx, keyspace, string(data)); err != nil {
+			vs := formal.Keyspaces[keyspace]
+			if err := ts.SaveVSchema(ctx, keyspace, &vs); err != nil {
 				log.Fatalf("SaveVSchema failed: %v", err)
 			}
 		}

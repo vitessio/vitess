@@ -11,6 +11,7 @@ import (
 	"sort"
 
 	"github.com/youtube/vitess/go/cistring"
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 // VSchema represents the denormalized version of VSchemaFormal,
@@ -79,37 +80,35 @@ func BuildVSchema(source *VSchemaFormal) (vschema *VSchema, err error) {
 	return vschema, nil
 }
 
-// VSchemaFormalForKeyspace returns a VSchemaFormal for the single keyspace
-// based on the JSON input.
-func VSchemaFormalForKeyspace(input []byte, name string) (*VSchemaFormal, error) {
-	var ks KeyspaceFormal
-	if err := json.Unmarshal(input, &ks); err != nil {
-		return nil, fmt.Errorf("Unmarshal failed: %v %s %v", ks, input, err)
+// BuildKeyspaceSchema builds the vschema portion for one keyspace.
+// The build ignores sequence references because those dependencies can
+// go cross-keyspace.
+func BuildKeyspaceSchema(input *vschemapb.Keyspace, keyspace string) (*KeyspaceSchema, error) {
+	if input == nil {
+		input = &vschemapb.Keyspace{}
 	}
-
-	return &VSchemaFormal{
-		Keyspaces: map[string]KeyspaceFormal{
-			name: ks,
+	formal := &VSchemaFormal{
+		Keyspaces: map[string]vschemapb.Keyspace{
+			keyspace: *input,
 		},
-	}, nil
-}
-
-// ValidateVSchema ensures that the the JSON representation
-// of the keyspace vschema are valid.
-// External references (like sequence) are not validated.
-func ValidateVSchema(input []byte) error {
-	formal, err := VSchemaFormalForKeyspace(input, "ks")
-	if err != nil {
-		return err
 	}
-	// We go through the motion of building the vschema,
-	// but just for this keyspace
 	vschema := &VSchema{
 		tables:    make(map[string]*Table),
 		Keyspaces: make(map[string]*KeyspaceSchema),
 	}
 	buildKeyspaces(formal, vschema)
-	return buildTables(formal, vschema)
+	err := buildTables(formal, vschema)
+	if err != nil {
+		return nil, err
+	}
+	return vschema.Keyspaces[keyspace], nil
+}
+
+// ValidateKeyspace ensures that the keyspace vschema is valid.
+// External references (like sequence) are not validated.
+func ValidateKeyspace(input *vschemapb.Keyspace) error {
+	_, err := BuildKeyspaceSchema(input, "")
+	return err
 }
 
 func buildKeyspaces(source *VSchemaFormal, vschema *VSchema) {
@@ -154,6 +153,9 @@ func buildTables(source *VSchemaFormal, vschema *VSchema) error {
 			vschema.Keyspaces[ksname].Tables[tname] = t
 			if table.Type == "Sequence" {
 				t.IsSequence = true
+			}
+			if keyspace.Sharded && len(table.ColVindexes) == 0 {
+				return fmt.Errorf("missing primary col vindex for table: %s", tname)
 			}
 			for i, ind := range table.ColVindexes {
 				vindexInfo, ok := ks.Vindexes[ind.Name]
@@ -278,44 +280,7 @@ func colVindexSorted(cvs []*ColVindex) (sorted []*ColVindex) {
 // VSchemaFormal is the formal representation of the vschema
 // as loaded from the source.
 type VSchemaFormal struct {
-	Keyspaces map[string]KeyspaceFormal
-}
-
-// KeyspaceFormal is the keyspace info for each keyspace
-// as loaded from the source.
-type KeyspaceFormal struct {
-	Sharded  bool
-	Vindexes map[string]VindexFormal
-	Tables   map[string]TableFormal
-}
-
-// VindexFormal is the info for each index as loaded from
-// the source.
-type VindexFormal struct {
-	Type   string
-	Params map[string]interface{}
-	Owner  string
-}
-
-// TableFormal is the info for each table as loaded from
-// the source.
-type TableFormal struct {
-	Type        string
-	ColVindexes []ColVindexFormal
-	Autoinc     *AutoincFormal
-}
-
-// ColVindexFormal is the info for each indexed column
-// of a table as loaded from the source.
-type ColVindexFormal struct {
-	Col  string
-	Name string
-}
-
-// AutoincFormal represents the JSON format for auto-inc.
-type AutoincFormal struct {
-	Col      string
-	Sequence string
+	Keyspaces map[string]vschemapb.Keyspace
 }
 
 // LoadFormal loads the JSON representation of VSchema from a file.

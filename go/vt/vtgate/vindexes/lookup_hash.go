@@ -22,7 +22,7 @@ type LookupHash struct {
 }
 
 // NewLookupHash creates a LookupHash vindex.
-func NewLookupHash(name string, m map[string]interface{}) (Vindex, error) {
+func NewLookupHash(name string, m map[string]string) (Vindex, error) {
 	lhu := &LookupHash{name: name}
 	lhu.lkp.Init(m)
 	return lhu, nil
@@ -69,7 +69,7 @@ type LookupHashUnique struct {
 }
 
 // NewLookupHashUnique creates a LookupHashUnique vindex.
-func NewLookupHashUnique(name string, m map[string]interface{}) (Vindex, error) {
+func NewLookupHashUnique(name string, m map[string]string) (Vindex, error) {
 	lhu := &LookupHashUnique{name: name}
 	lhu.lkp.Init(m)
 	return lhu, nil
@@ -113,14 +113,10 @@ type lookup struct {
 	sel, ver, ins, del string
 }
 
-func (lkp *lookup) Init(m map[string]interface{}) {
-	get := func(name string) string {
-		v, _ := m[name].(string)
-		return v
-	}
-	t := get("Table")
-	from := get("From")
-	to := get("To")
+func (lkp *lookup) Init(m map[string]string) {
+	t := m["Table"]
+	from := m["From"]
+	to := m["To"]
 
 	lkp.Table = t
 	lkp.From = from

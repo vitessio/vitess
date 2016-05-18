@@ -1,0 +1,39 @@
+// This file contains all the types necessary to make
+// RPC calls to Vttablet.
+
+syntax = "proto3";
+
+package vschema;
+
+// Keyspace is the vschema for a keyspace.
+message Keyspace {
+  bool sharded = 1;
+  map<string, Vindex> vindexes = 2;
+  map<string, Table> tables = 3;
+}
+
+// Vindex is the vindex info for a Keyspace.
+message Vindex {
+  string type = 1;
+  map<string, string> params = 2;
+  string owner = 3;
+}
+
+// Table is the table info for a Keyspace.
+message Table {
+  string type = 1;
+  repeated ColVindex col_vindexes = 2;
+  Autoinc autoinc = 3;
+}
+
+// ColVindex is used to associate a column to a vindex.
+message ColVindex {
+  string col = 1;
+  string name = 2;
+}
+
+// Autoinc is used to designate a column as auto-inc.
+message Autoinc {
+  string col = 1;
+  string sequence = 2;
+}

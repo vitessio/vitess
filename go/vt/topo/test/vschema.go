@@ -5,13 +5,14 @@
 package test
 
 import (
-	"strings"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 // CheckVSchema runs the tests on the VSchema part of the API
@@ -28,29 +29,15 @@ func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
 	}
 
 	got, err := ts.GetVSchema(ctx, "test_keyspace")
+	want := &vschemapb.Keyspace{}
 	if err != nil {
 		t.Error(err)
 	}
-	want := "{}"
-	if got != want {
-		t.Errorf("GetVSchema: %s, want %s", got, want)
+	if !proto.Equal(got, want) {
+		t.Errorf("GetVSchema: %s, want nil", got)
 	}
 
-	err = ts.SaveVSchema(ctx, "test_keyspace", `{ "Sharded": true }`)
-	if err != nil {
-		t.Error(err)
-	}
-
-	got, err = ts.GetVSchema(ctx, "test_keyspace")
-	if err != nil {
-		t.Error(err)
-	}
-	want = `{ "Sharded": true }`
-	if got != want {
-		t.Errorf("GetVSchema: %s, want %s", got, want)
-	}
-
-	err = ts.SaveVSchema(ctx, "test_keyspace", `{ "Sharded": false }`)
+	err = ts.SaveVSchema(ctx, "test_keyspace", &vschemapb.Keyspace{Sharded: true})
 	if err != nil {
 		t.Error(err)
 	}
@@ -59,16 +46,23 @@ func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
 	if err != nil {
 		t.Error(err)
 	}
-	want = `{ "Sharded": false }`
-	if got != want {
+	want = &vschemapb.Keyspace{Sharded: true}
+	if !proto.Equal(got, want) {
 		t.Errorf("GetVSchema: %s, want %s", got, want)
 	}
 
-	tts := topo.Server{Impl: ts}
-	err = tts.SaveVSchema(ctx, "test_keyspace", "invalid")
-	want = "Unmarshal failed:"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("SaveVSchema: %v, must start with %s", err, want)
+	err = ts.SaveVSchema(ctx, "test_keyspace", &vschemapb.Keyspace{})
+	if err != nil {
+		t.Error(err)
+	}
+
+	got, err = ts.GetVSchema(ctx, "test_keyspace")
+	if err != nil {
+		t.Error(err)
+	}
+	want = &vschemapb.Keyspace{}
+	if !proto.Equal(got, want) {
+		t.Errorf("GetVSchema: %s, want %s", got, want)
 	}
 
 	// Make sure the vschema is not returned as a shard name,
@@ -93,12 +87,12 @@ func CheckWatchVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
 		t.Fatalf("WatchVSchema failed: %v", err)
 	}
 	vs, ok := <-notifications
-	if !ok || vs != "{}" {
+	if !ok || vs != nil {
 		t.Fatalf("first value is wrong: %v %v", vs, ok)
 	}
 
 	// update the VSchema, should get a notification
-	newContents := `{ "Sharded": false }`
+	newContents := &vschemapb.Keyspace{}
 	if err := ts.SaveVSchema(ctx, keyspace, newContents); err != nil {
 		t.Fatalf("SaveVSchema failed: %v", err)
 	}
@@ -107,19 +101,19 @@ func CheckWatchVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
 		if !ok {
 			t.Fatalf("watch channel is closed???")
 		}
-		if vs == "{}" {
+		if vs == nil {
 			// duplicate notification of the first value, that's OK
 			continue
 		}
 		// non-empty value, that one should be ours
-		if vs != newContents {
+		if !proto.Equal(vs, newContents) {
 			t.Fatalf("first value is wrong: got %v expected %v", vs, newContents)
 		}
 		break
 	}
 
 	// empty the VSchema, should get a notification
-	if err := ts.SaveVSchema(ctx, keyspace, "{}"); err != nil {
+	if err := ts.SaveVSchema(ctx, keyspace, nil); err != nil {
 		t.Fatalf("SaveVSchema failed: %v", err)
 	}
 	for {
@@ -127,19 +121,19 @@ func CheckWatchVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
 		if !ok {
 			t.Fatalf("watch channel is closed???")
 		}
-		if vs == "{}" {
+		if vs == nil {
 			break
 		}
 
 		// duplicate notification of the first value, that's OK,
 		// but value better be good.
-		if vs != newContents {
+		if !proto.Equal(vs, newContents) {
 			t.Fatalf("duplicate notification value is bad: %v", vs)
 		}
 	}
 
 	// re-create the value, a bit different, should get a notification
-	newContents = `{ "Sharded": true }`
+	newContents = &vschemapb.Keyspace{Sharded: true}
 	if err := ts.SaveVSchema(ctx, keyspace, newContents); err != nil {
 		t.Fatalf("SaveVSchema failed: %v", err)
 	}
@@ -148,12 +142,12 @@ func CheckWatchVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
 		if !ok {
 			t.Fatalf("watch channel is closed???")
 		}
-		if vs == "{}" {
+		if vs == nil {
 			// duplicate notification of the closed value, that's OK
 			continue
 		}
 		// non-empty value, that one should be ours
-		if vs != newContents {
+		if !proto.Equal(vs, newContents) {
 			t.Fatalf("value after delete / re-create is wrong: %v", vs)
 		}
 		break
@@ -167,7 +161,7 @@ func CheckWatchVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
 		if !ok {
 			break
 		}
-		if vs != newContents {
+		if !proto.Equal(vs, newContents) {
 			t.Fatalf("duplicate notification value is bad: %v", vs)
 		}
 	}

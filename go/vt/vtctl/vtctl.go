@@ -75,7 +75,6 @@ COMMAND ARGUMENT DEFINITIONS
 package vtctl
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -106,6 +105,7 @@ import (
 
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 var (
@@ -2058,12 +2058,12 @@ func commandGetVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	if err != nil {
 		return err
 	}
-	buf := &bytes.Buffer{}
-	err = json.Indent(buf, []byte(schema), "", "  ")
+	b, err := json.MarshalIndent(schema, "", "  ")
 	if err != nil {
-		wr.Logger().Printf("%s\n", schema)
+		wr.Logger().Printf("%v\n", err)
+		return err
 	}
-	wr.Logger().Printf("%s\n", buf.String())
+	wr.Logger().Printf("%s\n", b)
 	return nil
 }
 
@@ -2079,16 +2079,23 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if (*vschema == "") == (*vschemaFile == "") {
 		return fmt.Errorf("Either the vschema or vschemaFile flag must be specified when calling the ApplyVSchema command.")
 	}
-	s := *vschema
+	var schema []byte
 	if *vschemaFile != "" {
-		schema, err := ioutil.ReadFile(*vschemaFile)
+		var err error
+		schema, err = ioutil.ReadFile(*vschemaFile)
 		if err != nil {
 			return err
 		}
-		s = string(schema)
+	} else {
+		schema = []byte(*vschema)
+	}
+	var vs vschemapb.Keyspace
+	err := json.Unmarshal(schema, &vs)
+	if err != nil {
+		return err
 	}
 	keyspace := subFlags.Arg(0)
-	return wr.TopoServer().SaveVSchema(ctx, keyspace, s)
+	return wr.TopoServer().SaveVSchema(ctx, keyspace, &vs)
 }
 
 func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

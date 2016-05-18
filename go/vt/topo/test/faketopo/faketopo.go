@@ -9,6 +9,7 @@ import (
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 var errNotImplemented = errors.New("Not implemented")
@@ -225,17 +226,17 @@ func (ft FakeTopo) UnlockShardForAction(ctx context.Context, keyspace, shard, lo
 }
 
 // SaveVSchema implements topo.Server.
-func (ft FakeTopo) SaveVSchema(context.Context, string, string) error {
+func (ft FakeTopo) SaveVSchema(context.Context, string, *vschemapb.Keyspace) error {
 	return errNotImplemented
 }
 
 // GetVSchema implements topo.Server.
-func (ft FakeTopo) GetVSchema(ctx context.Context, keyspace string) (string, error) {
-	return "", errNotImplemented
+func (ft FakeTopo) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error) {
+	return nil, errNotImplemented
 }
 
 // WatchVSchema implements topo.Server.WatchSrvKeyspace
-func (ft FakeTopo) WatchVSchema(ctx context.Context, keyspace string) (<-chan string, error) {
+func (ft FakeTopo) WatchVSchema(ctx context.Context, keyspace string) (<-chan *vschemapb.Keyspace, error) {
 	return nil, errNotImplemented
 }
 

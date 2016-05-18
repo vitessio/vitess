@@ -12,7 +12,7 @@ import (
 var hash Vindex
 
 func init() {
-	hv, err := CreateVindex("hash", "nn", map[string]interface{}{"Table": "t", "Column": "c"})
+	hv, err := CreateVindex("hash", "nn", map[string]string{"Table": "t", "Column": "c"})
 	if err != nil {
 		panic(err)
 	}

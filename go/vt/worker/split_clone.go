@@ -506,19 +506,13 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("cannot load VSchema for keyspace %v: %v", scw.keyspace, err)
 		}
-
-		formal, err := vindexes.VSchemaFormalForKeyspace([]byte(kschema), scw.keyspace)
-		if err != nil {
-			return fmt.Errorf("error building formal vschema for keyspace %s: %v", scw.keyspace, err)
+		if kschema == nil {
+			return fmt.Errorf("no VSchema for keyspace %v", scw.keyspace)
 		}
-		vschema, err := vindexes.BuildVSchema(formal)
+
+		keyspaceSchema, err = vindexes.BuildKeyspaceSchema(kschema, scw.keyspace)
 		if err != nil {
 			return fmt.Errorf("cannot build vschema for keyspace %v: %v", scw.keyspace, err)
-		}
-		var ok bool
-		keyspaceSchema, ok = vschema.Keyspaces[scw.keyspace]
-		if !ok {
-			return fmt.Errorf("no VSchema for keyspace %v", scw.keyspace)
 		}
 	}
 

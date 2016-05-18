@@ -20,6 +20,7 @@ import (
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 var (
@@ -187,7 +188,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, c
 }
 
 // WatchVSchema is part of the SrvTopoServer API
-func (server *ResilientSrvTopoServer) WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan string, err error) {
+func (server *ResilientSrvTopoServer) WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan *vschemapb.Keyspace, err error) {
 	return server.topoServer.WatchVSchema(ctx, keyspace)
 }
 

@@ -31,7 +31,7 @@ func (*hashIndex) Map(vindexes.VCursor, []interface{}) ([][]byte, error) { retur
 func (*hashIndex) Create(vindexes.VCursor, interface{}) error            { return nil }
 func (*hashIndex) Delete(vindexes.VCursor, []interface{}, []byte) error  { return nil }
 
-func newHashIndex(name string, _ map[string]interface{}) (vindexes.Vindex, error) {
+func newHashIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &hashIndex{name: name}, nil
 }
 
@@ -47,7 +47,7 @@ func (*lookupIndex) Map(vindexes.VCursor, []interface{}) ([][]byte, error) { ret
 func (*lookupIndex) Create(vindexes.VCursor, interface{}, []byte) error    { return nil }
 func (*lookupIndex) Delete(vindexes.VCursor, []interface{}, []byte) error  { return nil }
 
-func newLookupIndex(name string, _ map[string]interface{}) (vindexes.Vindex, error) {
+func newLookupIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &lookupIndex{name: name}, nil
 }
 
@@ -63,7 +63,7 @@ func (*multiIndex) Map(vindexes.VCursor, []interface{}) ([][][]byte, error) { re
 func (*multiIndex) Create(vindexes.VCursor, interface{}, []byte) error      { return nil }
 func (*multiIndex) Delete(vindexes.VCursor, []interface{}, []byte) error    { return nil }
 
-func newMultiIndex(name string, _ map[string]interface{}) (vindexes.Vindex, error) {
+func newMultiIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &multiIndex{name: name}, nil
 }
 
@@ -79,7 +79,7 @@ func (*costlyIndex) Map(vindexes.VCursor, []interface{}) ([][][]byte, error) { r
 func (*costlyIndex) Create(vindexes.VCursor, interface{}, []byte) error      { return nil }
 func (*costlyIndex) Delete(vindexes.VCursor, []interface{}, []byte) error    { return nil }
 
-func newCostlyIndex(name string, _ map[string]interface{}) (vindexes.Vindex, error) {
+func newCostlyIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &costlyIndex{name: name}, nil
 }
 
