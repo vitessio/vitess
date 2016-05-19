@@ -220,8 +220,6 @@ message Keyspace {
   repeated ServedFrom served_froms = 4;
 }
 
-// Replication graph information
-
 // ShardReplication describes the MySQL replication relationships
 // whithin a cell.
 message ShardReplication {
@@ -235,8 +233,6 @@ message ShardReplication {
   // for a given tablet.
   repeated Node nodes = 1;
 }
-
-// Serving graph information
 
 // ShardReference is used as a pointer from a SrvKeyspace to a Shard
 message ShardReference {

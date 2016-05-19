@@ -31,23 +31,28 @@ topology changes (for resharding for instance).
 
 ### Global vs Local
 
-We differentiate two instances of the Topology Server: the global instance, and
-the per-cell local instance:
+We differentiate two instances of the Topology Server: the Global instance, and
+the per-cell Local instance:
 
-* The global instance is used to store global data about the topology that
+* The Global instance is used to store global data about the topology that
   doesn’t change very often, for instance information about Keyspaces and
   Shards. The data is independent of individual instances and cells, and needs
   to survive a cell going down entirely.
-* There is one local instance per cell, that contains cell-specific information,
+* There is one Local instance per cell, that contains cell-specific information,
   and also rolled-up data from the global + local cell to make it easier for
-  clients to find the data. The Vitess serving path should not use the global
-  topology instance, but instead the rolled-up data in the local topology
-  server.
+  clients to find the data. The Vitess local processes should not use the Global
+  topology instance, but instead the rolled-up data in the Local topology
+  server as much as possible.
 
-The global instance can go down for a while and not impact the local cells (an
+The Global instance can go down for a while and not impact the local cells (an
 exception to that is if a reparent needs to be processed, it might not work). If
-a local instance goes down, it only affects the local tablets in that instance
+a Local instance goes down, it only affects the local tablets in that instance
 (and then the cell is usually in bad shape, and should not be used).
+
+Furthermore, the Vitess processes will not use the Global nor the Local Topology
+Server to serve individual queries. They only use the Topology Server to get the
+topology information at startup and in the background, but never to directly
+serve queries.
 
 ### Recovery
 
