@@ -595,7 +595,7 @@ class TestMinHealthyRdonlyEndpoints(TestBaseSplitCloneResiliency):
   def split_clone_fails_not_enough_health_rdonly_tablets(self):
     """Verify vtworker errors if there aren't enough healthy RDONLY tablets."""
 
-    stdout, _ = utils.run_vtworker(
+    _, stderr = utils.run_vtworker(
         ['-cell', 'test_nj',
          '--wait_for_healthy_rdonly_endpoints_timeout', '1s',
          'SplitClone',
@@ -603,10 +603,10 @@ class TestMinHealthyRdonlyEndpoints(TestBaseSplitCloneResiliency):
          'test_keyspace/0'],
         auto_log=True,
         expect_fail=True)
-    self.assertIn(stdout, 'findTargets() failed: FindWorkerTablet() failed for'
+    self.assertIn('findTargets() failed: FindWorkerTablet() failed for'
                   ' test_nj/test_keyspace/0: not enough healthy rdonly'
                   ' endpoints to choose from in (test_nj,test_keyspace/0),'
-                  ' have 1 healthy ones, need at least 2')
+                  ' have 1 healthy ones, need at least 2', stderr)
 
 
 def add_test_options(parser):
