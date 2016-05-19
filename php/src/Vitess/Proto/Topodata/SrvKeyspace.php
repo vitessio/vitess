@@ -18,9 +18,6 @@ namespace Vitess\Proto\Topodata {
     /**  @var \Vitess\Proto\Topodata\SrvKeyspace\ServedFrom[]  */
     public $served_from = array();
     
-    /**  @var int */
-    public $split_shard_count = null;
-    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -62,14 +59,6 @@ namespace Vitess\Proto\Topodata {
       $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
       $f->rule      = \DrSlump\Protobuf::RULE_REPEATED;
       $f->reference = '\Vitess\Proto\Topodata\SrvKeyspace\ServedFrom';
-      $descriptor->addField($f);
-
-      // OPTIONAL INT32 split_shard_count = 5
-      $f = new \DrSlump\Protobuf\Field();
-      $f->number    = 5;
-      $f->name      = "split_shard_count";
-      $f->type      = \DrSlump\Protobuf::TYPE_INT32;
-      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
       foreach (self::$__extensions as $cb) {
@@ -265,43 +254,6 @@ namespace Vitess\Proto\Topodata {
      */
     public function addServedFrom(\Vitess\Proto\Topodata\SrvKeyspace\ServedFrom $value){
      return $this->_add(4, $value);
-    }
-    
-    /**
-     * Check if <split_shard_count> has a value
-     *
-     * @return boolean
-     */
-    public function hasSplitShardCount(){
-      return $this->_has(5);
-    }
-    
-    /**
-     * Clear <split_shard_count> value
-     *
-     * @return \Vitess\Proto\Topodata\SrvKeyspace
-     */
-    public function clearSplitShardCount(){
-      return $this->_clear(5);
-    }
-    
-    /**
-     * Get <split_shard_count> value
-     *
-     * @return int
-     */
-    public function getSplitShardCount(){
-      return $this->_get(5);
-    }
-    
-    /**
-     * Set <split_shard_count> value
-     *
-     * @param int $value
-     * @return \Vitess\Proto\Topodata\SrvKeyspace
-     */
-    public function setSplitShardCount( $value){
-      return $this->_set(5, $value);
     }
   }
 }

@@ -554,9 +554,6 @@ class Proto3Connection(object):
         }
       result['Partitions'] = pmap
 
-    if sk.split_shard_count:
-      result['SplitShardCount'] = sk.split_shard_count
-
     return result
 
   def keyspace_from_response(self, name, response):

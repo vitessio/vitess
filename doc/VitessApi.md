@@ -837,7 +837,6 @@ SrvKeyspace is a rollup node for the keyspace itself.
 | <code>sharding_column_name</code> <br>string| copied from Keyspace |
 | <code>sharding_column_type</code> <br>[KeyspaceIdType](#topodata.keyspaceidtype)| |
 | <code>served_from</code> <br>list &lt;[ServedFrom](#srvkeyspace.servedfrom)&gt;| |
-| <code>split_shard_count</code> <br>int32| |
 
 #### Messages
 

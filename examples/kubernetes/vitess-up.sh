@@ -120,7 +120,7 @@ if [ $num_shards -gt 0 ]
 then
   echo Calling CreateKeyspace and SetKeyspaceShardingInfo
   $kvtctl CreateKeyspace -force $KEYSPACE
-  $kvtctl SetKeyspaceShardingInfo -force -split_shard_count $num_shards $KEYSPACE keyspace_id uint64
+  $kvtctl SetKeyspaceShardingInfo -force $KEYSPACE keyspace_id uint64
 fi
 
 echo 'Running vttablet-up.sh' && CELLS=$CELLS ./vttablet-up.sh
@@ -152,14 +152,8 @@ while [ $counter -lt $MAX_VTTABLET_TOPO_WAIT_RETRIES ]; do
   fi
 done
 
-# split_shard_count = num_shards for sharded keyspace, 0 for unsharded
-split_shard_count=$num_shards
-if [ $split_shard_count -eq 1 ]; then
-  split_shard_count=0
-fi
-
 echo -n Setting Keyspace Sharding Info...
-$kvtctl SetKeyspaceShardingInfo -force -split_shard_count $split_shard_count $KEYSPACE keyspace_id uint64
+$kvtctl SetKeyspaceShardingInfo -force $KEYSPACE keyspace_id uint64
 echo Done
 echo -n Rebuilding Keyspace Graph...
 $kvtctl RebuildKeyspaceGraph $KEYSPACE

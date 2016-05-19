@@ -64,6 +64,7 @@ class K8sEnvironment(base_environment.BaseEnvironment):
       if not keyspace_info:
         self.num_shards.append(1)
       else:
+        # FIXME(alainjobart) this is not working any more
         self.num_shards.append(keyspace_info['split_shard_count'])
 
     # This assumes that all keyspaces use the same set of cells

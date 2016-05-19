@@ -12,9 +12,6 @@ namespace Vitess\Proto\Topodata {
     /**  @var int - \Vitess\Proto\Topodata\KeyspaceIdType */
     public $sharding_column_type = null;
     
-    /**  @var int */
-    public $split_shard_count = null;
-    
     /**  @var \Vitess\Proto\Topodata\Keyspace\ServedFrom[]  */
     public $served_froms = array();
     
@@ -41,14 +38,6 @@ namespace Vitess\Proto\Topodata {
       $f->type      = \DrSlump\Protobuf::TYPE_ENUM;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $f->reference = '\Vitess\Proto\Topodata\KeyspaceIdType';
-      $descriptor->addField($f);
-
-      // OPTIONAL INT32 split_shard_count = 3
-      $f = new \DrSlump\Protobuf\Field();
-      $f->number    = 3;
-      $f->name      = "split_shard_count";
-      $f->type      = \DrSlump\Protobuf::TYPE_INT32;
-      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
       // REPEATED MESSAGE served_froms = 4
@@ -139,43 +128,6 @@ namespace Vitess\Proto\Topodata {
      */
     public function setShardingColumnType( $value){
       return $this->_set(2, $value);
-    }
-    
-    /**
-     * Check if <split_shard_count> has a value
-     *
-     * @return boolean
-     */
-    public function hasSplitShardCount(){
-      return $this->_has(3);
-    }
-    
-    /**
-     * Clear <split_shard_count> value
-     *
-     * @return \Vitess\Proto\Topodata\Keyspace
-     */
-    public function clearSplitShardCount(){
-      return $this->_clear(3);
-    }
-    
-    /**
-     * Get <split_shard_count> value
-     *
-     * @return int
-     */
-    public function getSplitShardCount(){
-      return $this->_get(3);
-    }
-    
-    /**
-     * Set <split_shard_count> value
-     *
-     * @param int $value
-     * @return \Vitess\Proto\Topodata\Keyspace
-     */
-    public function setSplitShardCount( $value){
-      return $this->_set(3, $value);
     }
     
     /**

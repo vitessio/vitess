@@ -245,7 +245,7 @@ var commands = []commandGroup{
 	{
 		"Keyspaces", []command{
 			{"CreateKeyspace", commandCreateKeyspace,
-				"[-sharding_column_name=name] [-sharding_column_type=type] [-served_from=tablettype1:ks1,tablettype2,ks2,...] [-split_shard_count=N] [-force] <keyspace name>",
+				"[-sharding_column_name=name] [-sharding_column_type=type] [-served_from=tablettype1:ks1,tablettype2,ks2,...] [-force] <keyspace name>",
 				"Creates the specified keyspace."},
 			{"DeleteKeyspace", commandDeleteKeyspace,
 				"[-recursive] <keyspace>",
@@ -260,7 +260,7 @@ var commands = []commandGroup{
 				"",
 				"Outputs a sorted list of all keyspaces."},
 			{"SetKeyspaceShardingInfo", commandSetKeyspaceShardingInfo,
-				"[-force] [-split_shard_count=N] <keyspace name> [<column name>] [<column type>]",
+				"[-force] <keyspace name> [<column name>] [<column type>]",
 				"Updates the sharding information for a keyspace."},
 			{"SetKeyspaceServedFrom", commandSetKeyspaceServedFrom,
 				"[-source=<source keyspace name>] [-remove] [-cells=c1,c2,...] <keyspace name> <tablet type>",
@@ -1465,7 +1465,6 @@ func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	shardingColumnName := subFlags.String("sharding_column_name", "", "Specifies the column to use for sharding operations")
 	shardingColumnType := subFlags.String("sharding_column_type", "", "Specifies the type of the column to use for sharding operations")
-	splitShardCount := subFlags.Int("split_shard_count", 0, "Specifies the number of shards to use for data splits")
 	force := subFlags.Bool("force", false, "Proceeds even if the keyspace already exists")
 	var servedFrom flagutil.StringMapValue
 	subFlags.Var(&servedFrom, "served_from", "Specifies a comma-separated list of dbtype:keyspace pairs used to serve traffic")
@@ -1484,7 +1483,6 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	ki := &topodatapb.Keyspace{
 		ShardingColumnName: *shardingColumnName,
 		ShardingColumnType: kit,
-		SplitShardCount:    int32(*splitShardCount),
 	}
 	if len(servedFrom) > 0 {
 		for name, value := range servedFrom {
@@ -1558,7 +1556,6 @@ func commandGetKeyspaces(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 
 func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	force := subFlags.Bool("force", false, "Updates fields even if they are already set. Use caution before calling this command.")
-	splitShardCount := subFlags.Int("split_shard_count", 0, "Specifies the number of shards to use for data splits")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1586,7 +1583,7 @@ func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, 
 		return fmt.Errorf("Both <column name> and <column type> must be set, or both must be unset.")
 	}
 
-	return wr.SetKeyspaceShardingInfo(ctx, keyspace, columnName, kit, int32(*splitShardCount), *force)
+	return wr.SetKeyspaceShardingInfo(ctx, keyspace, columnName, kit, *force)
 }
 
 func commandSetKeyspaceServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

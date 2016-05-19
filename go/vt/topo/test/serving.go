@@ -169,7 +169,7 @@ func CheckWatchSrvKeyspace(ctx context.Context, t *testing.T, ts topo.Impl) {
 	}
 
 	// re-create the value, a bit different, should get a notification
-	srvKeyspace.SplitShardCount = 2
+	srvKeyspace.ShardingColumnName = "test_column2"
 	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace); err != nil {
 		t.Fatalf("UpdateSrvKeyspace failed: %v", err)
 	}

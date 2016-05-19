@@ -2205,5 +2205,4 @@ var getSrvKeyspaceResult = &topodatapb.SrvKeyspace{
 			Keyspace:   "other_keyspace",
 		},
 	},
-	SplitShardCount: 128,
 }

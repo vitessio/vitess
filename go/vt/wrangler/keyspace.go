@@ -36,19 +36,19 @@ func (wr *Wrangler) unlockKeyspace(ctx context.Context, keyspace string, actionN
 
 // SetKeyspaceShardingInfo locks a keyspace and sets its ShardingColumnName
 // and ShardingColumnType
-func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType, splitShardCount int32, force bool) error {
+func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType, force bool) error {
 	actionNode := actionnode.SetKeyspaceShardingInfo()
 	lockPath, err := wr.lockKeyspace(ctx, keyspace, actionNode)
 	if err != nil {
 		return err
 	}
 
-	err = wr.setKeyspaceShardingInfo(ctx, keyspace, shardingColumnName, shardingColumnType, splitShardCount, force)
+	err = wr.setKeyspaceShardingInfo(ctx, keyspace, shardingColumnName, shardingColumnType, force)
 	return wr.unlockKeyspace(ctx, keyspace, actionNode, lockPath, err)
 
 }
 
-func (wr *Wrangler) setKeyspaceShardingInfo(ctx context.Context, keyspace, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType, splitShardCount int32, force bool) error {
+func (wr *Wrangler) setKeyspaceShardingInfo(ctx context.Context, keyspace, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType, force bool) error {
 	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
 	if err != nil {
 		return err
@@ -72,7 +72,6 @@ func (wr *Wrangler) setKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 
 	ki.ShardingColumnName = shardingColumnName
 	ki.ShardingColumnType = shardingColumnType
-	ki.SplitShardCount = splitShardCount
 	return wr.ts.UpdateKeyspace(ctx, ki)
 }
 

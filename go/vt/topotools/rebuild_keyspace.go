@@ -43,7 +43,6 @@ func findCellsForRebuild(ki *topo.KeyspaceInfo, shardMap map[string]*topo.ShardI
 					ShardingColumnName: ki.ShardingColumnName,
 					ShardingColumnType: ki.ShardingColumnType,
 					ServedFrom:         ki.ComputeCellServedFrom(cell),
-					SplitShardCount:    ki.SplitShardCount,
 				}
 			}
 		}
