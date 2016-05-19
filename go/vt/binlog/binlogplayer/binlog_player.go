@@ -393,6 +393,9 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 			if backoff == throttler.NotThrottled {
 				break
 			}
+			// We don't bother checking for context cancellation here because the
+			// sleep will block only up to 1 second. (Usually, backoff is 1s / rate
+			// e.g. a rate of 1000 TPS results into a backoff of 1 ms.)
 			time.Sleep(backoff)
 		}
 
