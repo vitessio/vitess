@@ -207,18 +207,18 @@ func (bpc *BinlogPlayerController) Stop() {
 }
 
 // Close will stop and free any long running resources e.g. the healthcheck.
-// It can only be called on a stopped instance (i.e. Start() was never called
-// or after Stop() was called.)
-func (bpc *BinlogPlayerController) Close() {
+// Returns an error if BinlogPlayerController is not stopped (i.e. Start() was
+// called but not Stop().)
+func (bpc *BinlogPlayerController) Close() error {
 	bpc.playerMutex.Lock()
 	if bpc.ctx != nil {
 		bpc.playerMutex.Unlock()
-		log.Fatalf("%v: cannot Close() a BinlogPlayerController which was not Stop()'d before", bpc)
-		return
+		return fmt.Errorf("%v: cannot Close() a BinlogPlayerController which was not Stop()'d before", bpc)
 	}
 
 	bpc.shardReplicationWatcher.Stop()
 	bpc.healthCheck.Close()
+	return nil
 }
 
 // Loop runs the main player loop: try to play, and in case of error,
@@ -473,7 +473,9 @@ func (blm *BinlogPlayerMap) StopAllPlayersAndReset() {
 		if blm.state == BpmStateRunning {
 			bpc.Stop()
 		}
-		bpc.Close()
+		if err := bpc.Close(); err != nil {
+			log.Error(err)
+		}
 		hadPlayers = true
 	}
 	blm.players = make(map[uint32]*BinlogPlayerController)
@@ -514,7 +516,9 @@ func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *topodatapb.T
 	// remove all entries from toRemove
 	for source := range toRemove {
 		blm.players[source].Stop()
-		blm.players[source].Close()
+		if err := blm.players[source].Close(); err != nil {
+			log.Error(err)
+		}
 		delete(blm.players, source)
 	}
 
