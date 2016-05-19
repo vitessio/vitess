@@ -309,8 +309,9 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	t, err := throttler.NewThrottler(
 		fmt.Sprintf("BinlogPlayer/%d", blp.uid), "transactions", 1 /* threadCount */, maxTPS, maxReplicationLag)
 	if err != nil {
-		log.Errorf("failed to instantiate throttler: %v", err)
-		return fmt.Errorf("failed to instantiate throttler: %v", err)
+		err := fmt.Errorf("failed to instantiate throttler: %v", err)
+		log.Error(err)
+		return err
 	}
 	defer t.Close()
 
@@ -351,8 +352,9 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	blplClient := clientFactory()
 	err = blplClient.Dial(blp.tablet, *BinlogPlayerConnTimeout)
 	if err != nil {
-		log.Errorf("Error dialing binlog server: %v", err)
-		return fmt.Errorf("error dialing binlog server: %v", err)
+		err := fmt.Errorf("error dialing binlog server: %v", err)
+		log.Error(err)
+		return err
 	}
 	defer blplClient.Close()
 
@@ -382,8 +384,9 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 		stream, err = blplClient.StreamKeyRange(ctx, replication.EncodePosition(blp.position), blp.keyRange, blp.defaultCharset)
 	}
 	if err != nil {
-		log.Errorf("Error sending streaming query to binlog server: %v", err)
-		return fmt.Errorf("error sending streaming query to binlog server: %v", err)
+		err := fmt.Errorf("error sending streaming query to binlog server: %v", err)
+		log.Error(err)
+		return err
 	}
 
 	for {
