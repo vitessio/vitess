@@ -69,7 +69,7 @@ func (s *server) GetSchema(ctx context.Context, request *tabletmanagerdatapb.Get
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &tabletmanagerdatapb.GetSchemaResponse{}
 	return response, s.agent.RPCWrap(ctx, actionnode.TabletActionGetSchema, request, response, func() error {
-		sd, err := s.agent.GetSchema(ctx, request.Tables, request.ExcludeTables, request.IncludeViews)
+		sd, err := s.agent.GetSchema(ctx, request.DbName, request.Tables, request.ExcludeTables, request.IncludeViews)
 		if err == nil {
 			response.SchemaDefinition = sd
 		}

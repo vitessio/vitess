@@ -14,8 +14,11 @@ import (
 
 // GetSchema returns the schema.
 // Should be called under RPCWrap.
-func (agent *ActionAgent) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	return agent.MysqlDaemon.GetSchema(topoproto.TabletDbName(agent.Tablet()), tables, excludeTables, includeViews)
+func (agent *ActionAgent) GetSchema(ctx context.Context, dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	if dbName == "" {
+		dbName = topoproto.TabletDbName(agent.Tablet())
+	}
+	return agent.MysqlDaemon.GetSchema(dbName, tables, excludeTables, includeViews)
 }
 
 // ReloadSchema will reload the schema

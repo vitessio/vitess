@@ -359,7 +359,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	keyspaceAndShard := topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)
 	vscw.destinationDbNames[keyspaceAndShard] = ti.DbName()
 
-  // TODO(mberlin): Verify on the destination master that the
+	// TODO(mberlin): Verify on the destination master that the
 	// _vt.blp_checkpoint table has the latest schema.
 
 	vscw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Tablet.Alias), vscw.destinationKeyspace, vscw.destinationShard)
@@ -400,7 +400,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 
 	// get source schema
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	sourceSchemaDefinition, err := vscw.wr.GetSchema(shortCtx, vscw.sourceAlias, vscw.tables, nil, true)
+	sourceSchemaDefinition, err := vscw.wr.GetSchema(shortCtx, vscw.sourceAlias, "" /* dbName */, vscw.tables, nil /* excludeTables */, true /* includeViews */)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot get schema from source %v: %v", topoproto.TabletAliasString(vscw.sourceAlias), err)

@@ -27,13 +27,13 @@ import (
 )
 
 // GetSchema uses an RPC to get the schema from a remote tablet
-func (wr *Wrangler) GetSchema(ctx context.Context, tabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (wr *Wrangler) GetSchema(ctx context.Context, tabletAlias *topodatapb.TabletAlias, dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
 	}
 
-	return wr.tmc.GetSchema(ctx, ti.Tablet, tables, excludeTables, includeViews)
+	return wr.tmc.GetSchema(ctx, ti.Tablet, dbName, tables, excludeTables, includeViews)
 }
 
 // ReloadSchema forces the remote tablet to reload its schema.
@@ -50,7 +50,7 @@ func (wr *Wrangler) ReloadSchema(ctx context.Context, tabletAlias *topodatapb.Ta
 func (wr *Wrangler) diffSchema(ctx context.Context, masterSchema *tabletmanagerdatapb.SchemaDefinition, masterTabletAlias, alias *topodatapb.TabletAlias, excludeTables []string, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	log.Infof("Gathering schema for %v", topoproto.TabletAliasString(alias))
-	slaveSchema, err := wr.GetSchema(ctx, alias, nil, excludeTables, includeViews)
+	slaveSchema, err := wr.GetSchema(ctx, alias, "" /* dbName */, nil, excludeTables, includeViews)
 	if err != nil {
 		er.RecordError(err)
 		return
@@ -72,7 +72,7 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
 	log.Infof("Gathering schema for master %v", topoproto.TabletAliasString(si.MasterAlias))
-	masterSchema, err := wr.GetSchema(ctx, si.MasterAlias, nil, excludeTables, includeViews)
+	masterSchema, err := wr.GetSchema(ctx, si.MasterAlias, "" /* dbName */, nil, excludeTables, includeViews)
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 	}
 	referenceAlias := si.MasterAlias
 	log.Infof("Gathering schema for reference master %v", topoproto.TabletAliasString(referenceAlias))
-	referenceSchema, err := wr.GetSchema(ctx, referenceAlias, nil, excludeTables, includeViews)
+	referenceSchema, err := wr.GetSchema(ctx, referenceAlias, "" /* dbName */, nil, excludeTables, includeViews)
 	if err != nil {
 		return err
 	}
@@ -247,7 +247,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 		return nil
 	}
 
-	sourceSd, err := wr.GetSchema(ctx, sourceTabletAlias, tables, excludeTables, includeViews)
+	sourceSd, err := wr.GetSchema(ctx, sourceTabletAlias, "" /* dbName */, tables, excludeTables, includeViews)
 	if err != nil {
 		return err
 	}
@@ -283,11 +283,11 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 // "sourceAlias" and "destAlias" are identical. Otherwise, the difference is
 // returned as []string.
 func (wr *Wrangler) compareSchemas(ctx context.Context, sourceAlias, destAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool) ([]string, error) {
-	sourceSd, err := wr.GetSchema(ctx, sourceAlias, tables, excludeTables, includeViews)
+	sourceSd, err := wr.GetSchema(ctx, sourceAlias, "" /* dbName */, tables, excludeTables, includeViews)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get schema from tablet %v. err: %v", sourceAlias, err)
 	}
-	destSd, err := wr.GetSchema(ctx, destAlias, tables, excludeTables, includeViews)
+	destSd, err := wr.GetSchema(ctx, destAlias, "" /* dbName */, tables, excludeTables, includeViews)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get schema from tablet %v. err: %v", destAlias, err)
 	}

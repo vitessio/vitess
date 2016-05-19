@@ -312,7 +312,7 @@ var commands = []commandGroup{
 	{
 		"Schema, Version, Permissions", []command{
 			{"GetSchema", commandGetSchema,
-				"[-tables=<table1>,<table2>,...] [-exclude_tables=<table1>,<table2>,...] [-include-views] <tablet alias>",
+				"[-db_name=''] [-tables=<table1>,<table2>,...] [-exclude_tables=<table1>,<table2>,...] [-include-views] <tablet alias>",
 				"Displays the full schema for a tablet, or just the schema for the specified tables in that tablet."},
 			{"ReloadSchema", commandReloadSchema,
 				"<tablet alias>",
@@ -1817,6 +1817,7 @@ func commandListTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 }
 
 func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	dbName := subFlags.String("db_name", "", "Specifies the database for which the schema should be fetched. If empty, the schema for the Vitess keyspace database will be retrieved.")
 	tables := subFlags.String("tables", "", "Specifies a comma-separated list of regular expressions for which tables should gather information")
 	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of regular expressions for tables to exclude")
 	includeViews := subFlags.Bool("include-views", false, "Includes views in the output")
@@ -1840,7 +1841,7 @@ func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
 
-	sd, err := wr.GetSchema(ctx, tabletAlias, tableArray, excludeTableArray, *includeViews)
+	sd, err := wr.GetSchema(ctx, tabletAlias, *dbName, tableArray, excludeTableArray, *includeViews)
 	if err != nil {
 		return err
 	}

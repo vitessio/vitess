@@ -493,14 +493,14 @@ func (itmc *internalTabletManagerClient) Ping(ctx context.Context, tablet *topod
 	})
 }
 
-func (itmc *internalTabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (itmc *internalTabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
 	var result *tabletmanagerdatapb.SchemaDefinition
 	if err := t.agent.RPCWrap(ctx, actionnode.TabletActionGetSchema, nil, nil, func() error {
-		sd, err := t.agent.GetSchema(ctx, tables, excludeTables, includeViews)
+		sd, err := t.agent.GetSchema(ctx, dbName, tables, excludeTables, includeViews)
 		if err == nil {
 			result = sd
 		}

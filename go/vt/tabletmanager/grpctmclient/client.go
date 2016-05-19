@@ -137,13 +137,14 @@ func (client *Client) ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet
 }
 
 // GetSchema is part of the tmclient.TabletManagerClient interface.
-func (client *Client) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (client *Client) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer cc.Close()
 	response, err := c.GetSchema(ctx, &tabletmanagerdatapb.GetSchemaRequest{
+		DbName:        dbName,
 		Tables:        tables,
 		ExcludeTables: excludeTables,
 		IncludeViews:  includeViews,

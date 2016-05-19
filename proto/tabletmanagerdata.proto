@@ -108,6 +108,11 @@ message ExecuteHookResponse {
 }
 
 message GetSchemaRequest {
+  // db_name specifies for which database the schema should be fetched.
+  // If empty the schema for the Vitess keyspace database will be returned.
+  // Since this is the most common use case, db_name should be only set when
+  // actually necessary.
+  string db_name = 4;
   repeated string tables = 1;
   bool include_views = 2;
   repeated string exclude_tables = 3;
