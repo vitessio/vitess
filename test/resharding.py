@@ -436,6 +436,12 @@ primary key (name)
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/80-',
                      shard_1_master.tablet_alias], auto_log=True)
 
+    # check the shards
+    shards = utils.run_vtctl_json(['FindAllShardsInKeyspace', 'test_keyspace'])
+    self.assertIn('-80', shards, 'unexpected shards: %s' % str(shards))
+    self.assertIn('80-', shards, 'unexpected shards: %s' % str(shards))
+    self.assertEqual(len(shards), 2, 'unexpected shards: %s' % str(shards))
+
     # create the tables
     self._create_schema()
     self._insert_startup_values()
@@ -471,6 +477,12 @@ primary key (name)
                      shard_2_master.tablet_alias], auto_log=True)
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/c0-',
                      shard_3_master.tablet_alias], auto_log=True)
+
+    # check the shards
+    shards = utils.run_vtctl_json(['FindAllShardsInKeyspace', 'test_keyspace'])
+    for s in ['-80', '80-', '80-c0', 'c0-']:
+      self.assertIn(s, shards, 'unexpected shards: %s' % str(shards))
+    self.assertEqual(len(shards), 4, 'unexpected shards: %s' % str(shards))
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'],
                     auto_log=True)

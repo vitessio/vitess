@@ -57,20 +57,17 @@ class K8sEnvironment(base_environment.BaseEnvironment):
           'Invalid environment, no keyspaces found')
 
     self.num_shards = []
+    self.shards = []
 
     for keyspace in self.keyspaces:
-      keyspace_info = json.loads(self.vtctl_helper.execute_vtctl_command(
-          ['GetKeyspace', keyspace]))
-      if not keyspace_info:
-        self.num_shards.append(1)
-      else:
-        # FIXME(alainjobart) this is not working any more
-        self.num_shards.append(keyspace_info['split_shard_count'])
+      shards = json.loads(self.vtctl_helper.execute_vtctl_command(
+          ['FindAllShardsInKeyspace', keyspace]))
+      self.shards.append(shards)
+      self.num_shards.append(len(shards))
 
-    # This assumes that all keyspaces use the same set of cells
+    # This assumes that all keyspaces/shards use the same set of cells
     self.cells = json.loads(self.vtctl_helper.execute_vtctl_command(
-        ['GetShard', '%s/%s' % (
-            self.keyspaces[0], utils.get_shard_name(0, self.num_shards[0]))]
+        ['GetShard', '%s/%s' % (self.keyspaces[0], self.shards[0][0])]
         ))['cells']
 
     self.primary_cells = self.cells
