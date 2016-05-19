@@ -139,34 +139,9 @@ func (ft FakeTopo) DeleteKeyspaceReplication(ctx context.Context, cell, keyspace
 	return errNotImplemented
 }
 
-// LockSrvShardForAction implements topo.Server.
-func (ft FakeTopo) LockSrvShardForAction(ctx context.Context, cell, keyspace, shard, contents string) (string, error) {
-	return "", errNotImplemented
-}
-
-// UnlockSrvShardForAction implements topo.Server.
-func (ft FakeTopo) UnlockSrvShardForAction(ctx context.Context, cell, keyspace, shard, lockPath, results string) error {
-	return errNotImplemented
-}
-
 // WatchSrvKeyspace implements topo.Server.WatchSrvKeyspace
 func (ft FakeTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, error) {
 	return nil, errNotImplemented
-}
-
-// UpdateSrvShard implements topo.Server.
-func (ft FakeTopo) UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *topodatapb.SrvShard) error {
-	return errNotImplemented
-}
-
-// GetSrvShard implements topo.Server.
-func (ft FakeTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error) {
-	return nil, errNotImplemented
-}
-
-// DeleteSrvShard implements topo.Server.
-func (ft FakeTopo) DeleteSrvShard(ctx context.Context, cell, keyspace, shard string) error {
-	return errNotImplemented
 }
 
 // UpdateSrvKeyspace implements topo.Server.

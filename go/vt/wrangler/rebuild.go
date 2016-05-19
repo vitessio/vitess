@@ -13,15 +13,9 @@ import (
 	"golang.org/x/net/context"
 )
 
-// RebuildShardGraph rebuilds the serving and replication rollup data data while locking
-// out other changes.
-func (wr *Wrangler) RebuildShardGraph(ctx context.Context, keyspace, shard string, cells []string) (*topo.ShardInfo, error) {
-	return topotools.RebuildShard(ctx, wr.logger, wr.ts, keyspace, shard, cells)
-}
-
 // RebuildKeyspaceGraph rebuilds the serving graph data while locking out other changes.
-func (wr *Wrangler) RebuildKeyspaceGraph(ctx context.Context, keyspace string, cells []string, rebuildSrvShards bool) error {
-	return topotools.RebuildKeyspace(ctx, wr.logger, wr.ts, keyspace, cells, rebuildSrvShards)
+func (wr *Wrangler) RebuildKeyspaceGraph(ctx context.Context, keyspace string, cells []string) error {
+	return topotools.RebuildKeyspace(ctx, wr.logger, wr.ts, keyspace, cells)
 }
 
 func strInList(sl []string, s string) bool {
@@ -101,7 +95,7 @@ func (wr *Wrangler) RebuildReplicationGraph(ctx context.Context, cells []string,
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil, true); err != nil {
+			if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil); err != nil {
 				mu.Lock()
 				hasErr = true
 				mu.Unlock()

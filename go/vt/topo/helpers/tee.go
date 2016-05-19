@@ -44,7 +44,6 @@ type Tee struct {
 
 	keyspaceLockPaths map[string]string
 	shardLockPaths    map[string]string
-	srvShardLockPaths map[string]string
 }
 
 // when reading a version from 'readFrom', we also read another version
@@ -75,7 +74,6 @@ func NewTee(primary, secondary topo.Impl, reverseLockOrder bool) *Tee {
 		tabletVersionMapping:   make(map[topodatapb.TabletAlias]versionMapping),
 		keyspaceLockPaths:      make(map[string]string),
 		shardLockPaths:         make(map[string]string),
-		srvShardLockPaths:      make(map[string]string),
 	}
 }
 
@@ -509,87 +507,6 @@ func (tee *Tee) DeleteKeyspaceReplication(ctx context.Context, cell, keyspace st
 //
 // Serving Graph management, per cell.
 //
-
-// LockSrvShardForAction is part of the topo.Server interface
-func (tee *Tee) LockSrvShardForAction(ctx context.Context, cell, keyspace, shard, contents string) (string, error) {
-	// lock lockFirst
-	pLockPath, err := tee.lockFirst.LockSrvShardForAction(ctx, cell, keyspace, shard, contents)
-	if err != nil {
-		return "", err
-	}
-
-	// lock lockSecond
-	sLockPath, err := tee.lockSecond.LockSrvShardForAction(ctx, cell, keyspace, shard, contents)
-	if err != nil {
-		if err := tee.lockFirst.UnlockSrvShardForAction(ctx, cell, keyspace, shard, pLockPath, "{}"); err != nil {
-			log.Warningf("Failed to unlock lockFirst shard after failed lockSecond lock for %v/%v/%v", cell, keyspace, shard)
-		}
-		return "", err
-	}
-
-	// remember both locks, keyed by lockFirst lock path
-	tee.mu.Lock()
-	tee.srvShardLockPaths[pLockPath] = sLockPath
-	tee.mu.Unlock()
-	return pLockPath, nil
-}
-
-// UnlockSrvShardForAction is part of the topo.Server interface
-func (tee *Tee) UnlockSrvShardForAction(ctx context.Context, cell, keyspace, shard, lockPath, results string) error {
-	// get from map
-	tee.mu.Lock() // not using defer for unlock, to minimize lock time
-	sLockPath, ok := tee.srvShardLockPaths[lockPath]
-	if !ok {
-		tee.mu.Unlock()
-		return fmt.Errorf("no lockPath %v in srvShardLockPaths", lockPath)
-	}
-	delete(tee.srvShardLockPaths, lockPath)
-	tee.mu.Unlock()
-
-	// unlock lockSecond, then lockFirst
-	serr := tee.lockSecond.UnlockSrvShardForAction(ctx, cell, keyspace, shard, sLockPath, results)
-	perr := tee.lockFirst.UnlockSrvShardForAction(ctx, cell, keyspace, shard, lockPath, results)
-
-	if serr != nil {
-		if perr != nil {
-			log.Warningf("Secondary UnlockSrvShardForAction(%v/%v/%v, %v) failed: %v", cell, keyspace, shard, sLockPath, serr)
-		}
-		return serr
-	}
-	return perr
-}
-
-// UpdateSrvShard is part of the topo.Server interface
-func (tee *Tee) UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *topodatapb.SrvShard) error {
-	if err := tee.primary.UpdateSrvShard(ctx, cell, keyspace, shard, srvShard); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.UpdateSrvShard(ctx, cell, keyspace, shard, srvShard); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.UpdateSrvShard(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
-	}
-	return nil
-}
-
-// GetSrvShard is part of the topo.Server interface
-func (tee *Tee) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error) {
-	return tee.readFrom.GetSrvShard(ctx, cell, keyspace, shard)
-}
-
-// DeleteSrvShard is part of the topo.Server interface
-func (tee *Tee) DeleteSrvShard(ctx context.Context, cell, keyspace, shard string) error {
-	err := tee.primary.DeleteSrvShard(ctx, cell, keyspace, shard)
-	if err != nil && err != topo.ErrNoNode {
-		return err
-	}
-
-	if err := tee.secondary.DeleteSrvShard(ctx, cell, keyspace, shard); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.DeleteSrvShard(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
-	}
-	return err
-}
 
 // UpdateSrvKeyspace is part of the topo.Server interface
 func (tee *Tee) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error {

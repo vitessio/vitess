@@ -237,11 +237,6 @@ func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string)
 	return &topodatapb.SrvKeyspace{}, nil
 }
 
-// GetSrvShard is part of the VTGateService interface
-func (f *fakeVTGateService) GetSrvShard(ctx context.Context, keyspace, shard string) (*topodatapb.SrvShard, error) {
-	return &topodatapb.SrvShard{}, nil
-}
-
 // HandlePanic is part of the VTGateService interface
 func (f *fakeVTGateService) HandlePanic(err *error) {
 	if x := recover(); x != nil {

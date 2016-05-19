@@ -19,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/topotools/events"
 	"golang.org/x/net/context"
 
@@ -134,7 +133,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	var errs concurrency.AllErrorRecorder
 	oldMasterAlias := si.MasterAlias
 
-	// Update the tablet records and serving graph for the old and new master concurrently.
+	// Update the tablet records concurrently.
 	event.DispatchUpdate(ev, "updating old and new master tablet records")
 	log.Infof("finalizeTabletExternallyReparented: updating tablet records")
 	wg.Add(1)
@@ -193,24 +192,16 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	// didn't get modified between the time when we read it and the time when we
 	// write it back. Now we use an update loop pattern to do that instead.
 	event.DispatchUpdate(ev, "updating global shard record")
-	log.Infof("finalizeTabletExternallyReparented: updating global shard record")
-	si, err = agent.TopoServer.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(shard *topodatapb.Shard) error {
+	log.Infof("finalizeTabletExternallyReparented: updating global shard record if needed")
+	_, err = agent.TopoServer.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(shard *topodatapb.Shard) error {
+		if topoproto.TabletAliasEqual(shard.MasterAlias, tablet.Alias) {
+			return topo.ErrNoUpdateNeeded
+		}
 		shard.MasterAlias = tablet.Alias
 		return nil
 	})
 	if err != nil {
 		return err
-	}
-
-	// We already took care of updating the serving graph for the old and new masters.
-	// All that's left now is in case of a cross-cell reparent, we need to update the
-	// master cell setting in the SrvShard records of all cells.
-	if oldMasterAlias == nil || oldMasterAlias.Cell != tablet.Alias.Cell {
-		event.DispatchUpdate(ev, "rebuilding shard serving graph")
-		log.Infof("finalizeTabletExternallyReparented: updating SrvShard in all cells for cross-cell reparent")
-		if err := topotools.UpdateAllSrvShards(ctx, agent.TopoServer, si); err != nil {
-			return err
-		}
 	}
 
 	event.DispatchUpdate(ev, "finished")

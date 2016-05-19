@@ -25,13 +25,11 @@ func TestHandleExplorerRedirect(t *testing.T) {
 	}
 
 	table := map[string]string{
-		"/explorers/redirect?type=keyspace&keyspace=test_keyspace":                                          "/app/#/keyspaces/",
-		"/explorers/redirect?type=shard&keyspace=test_keyspace&shard=-80":                                   "/app/#/shard/test_keyspace/-80",
-		"/explorers/redirect?type=srv_keyspace&keyspace=test_keyspace&cell=cell1":                           "/app/#/keyspaces/",
-		"/explorers/redirect?type=srv_shard&keyspace=test_keyspace&shard=-80&cell=cell1":                    "/app/#/shard/test_keyspace/-80",
-		"/explorers/redirect?type=srv_type&keyspace=test_keyspace&shard=-80&cell=cell1&tablet_type=replica": "/app/#/shard/test_keyspace/-80",
-		"/explorers/redirect?type=tablet&alias=cell1-123":                                                   "/app/#/shard/test_keyspace/123-456",
-		"/explorers/redirect?type=replication&keyspace=test_keyspace&shard=-80&cell=cell1":                  "/app/#/shard/test_keyspace/-80",
+		"/explorers/redirect?type=keyspace&keyspace=test_keyspace":                         "/app/#/keyspaces/",
+		"/explorers/redirect?type=shard&keyspace=test_keyspace&shard=-80":                  "/app/#/shard/test_keyspace/-80",
+		"/explorers/redirect?type=srv_keyspace&keyspace=test_keyspace&cell=cell1":          "/app/#/keyspaces/",
+		"/explorers/redirect?type=tablet&alias=cell1-123":                                  "/app/#/shard/test_keyspace/123-456",
+		"/explorers/redirect?type=replication&keyspace=test_keyspace&shard=-80&cell=cell1": "/app/#/shard/test_keyspace/-80",
 	}
 
 	for input, want := range table {

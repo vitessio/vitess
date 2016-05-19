@@ -173,7 +173,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 	// sharding queries.
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
 	for keyspace := range keyspaceMap {
-		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil, true); err != nil {
+		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil); err != nil {
 			log.Fatalf("cannot rebuild %v: %v", keyspace, err)
 		}
 	}

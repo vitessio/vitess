@@ -816,7 +816,7 @@ KeyRange describes a range of sharding keys, when range-based sharding is used.
 
 ### topodata.ShardReference
 
-ShardReference is used as a pointer from a SrvKeyspace to a SrvShard
+ShardReference is used as a pointer from a SrvKeyspace to a Shard
 
 #### Properties
 
@@ -848,7 +848,7 @@ SrvKeyspace is a rollup node for the keyspace itself.
 | Name |Description |
 | :-------- | :-------- 
 | <code>served_type</code> <br>[TabletType](#topodata.tablettype)| The type this partition applies to. |
-| <code>shard_references</code> <br>list &lt;[ShardReference](#topodata.shardreference)&gt;| ShardReference is used as a pointer from a SrvKeyspace to a SrvShard |
+| <code>shard_references</code> <br>list &lt;[ShardReference](#topodata.shardreference)&gt;| ShardReference is used as a pointer from a SrvKeyspace to a Shard |
 
 ##### SrvKeyspace.ServedFrom
 

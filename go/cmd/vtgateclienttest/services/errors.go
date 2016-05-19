@@ -288,10 +288,3 @@ func (c *errorClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*top
 	}
 	return c.fallbackClient.GetSrvKeyspace(ctx, keyspace)
 }
-
-func (c *errorClient) GetSrvShard(ctx context.Context, keyspace, shard string) (*topodatapb.SrvShard, error) {
-	if err := requestToError(keyspace); err != nil {
-		return nil, err
-	}
-	return c.fallbackClient.GetSrvShard(ctx, keyspace, shard)
-}

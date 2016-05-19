@@ -14,9 +14,6 @@ import (
 	"strings"
 
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/topo"
-
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -87,33 +84,6 @@ func VtctldSrvKeyspace(cell, keyspace string) template.HTML {
 	})
 }
 
-// VtctldSrvShard returns the shard name, possibly linked to the
-// SrvShard page in vtctld.
-func VtctldSrvShard(cell, keyspace, shard string) template.HTML {
-	return MakeVtctldRedirect(shard, map[string]string{
-		"type":     "srv_shard",
-		"cell":     cell,
-		"keyspace": keyspace,
-		"shard":    shard,
-	})
-}
-
-// VtctldSrvType returns the tablet type, possibly linked to the
-// EndPoints page in vtctld.
-func VtctldSrvType(cell, keyspace, shard string, tabletType topodatapb.TabletType) template.HTML {
-	strTabletType := strings.ToLower(tabletType.String())
-	if !topo.IsInServingGraph(tabletType) {
-		return template.HTML(strTabletType)
-	}
-	return MakeVtctldRedirect(strTabletType, map[string]string{
-		"type":        "srv_type",
-		"cell":        cell,
-		"keyspace":    keyspace,
-		"shard":       shard,
-		"tablet_type": strTabletType,
-	})
-}
-
 // VtctldReplication returns 'cell/keyspace/shard', possibly linked to the
 // ShardReplication page in vtctld.
 func VtctldReplication(cell, keyspace, shard string) template.HTML {
@@ -141,8 +111,6 @@ func init() {
 		"github_com_youtube_vitess_vtctld_shard":        VtctldShard,
 		"github_com_youtube_vitess_vtctld_srv_cell":     VtctldSrvCell,
 		"github_com_youtube_vitess_vtctld_srv_keyspace": VtctldSrvKeyspace,
-		"github_com_youtube_vitess_vtctld_srv_shard":    VtctldSrvShard,
-		"github_com_youtube_vitess_vtctld_srv_type":     VtctldSrvType,
 		"github_com_youtube_vitess_vtctld_replication":  VtctldReplication,
 		"github_com_youtube_vitess_vtctld_tablet":       VtctldTablet,
 	})

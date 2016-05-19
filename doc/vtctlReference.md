@@ -292,18 +292,17 @@ Migrates a serving type from the source shard to the shards that it replicates t
 
 ### RebuildKeyspaceGraph
 
-Rebuilds the serving data for the keyspace and, optionally, all shards in the specified keyspace. This command may trigger an update to all connected clients.
+Rebuilds the serving data for the keyspace. This command may trigger an update to all connected clients.
 
 #### Example
 
-<pre class="command-example">RebuildKeyspaceGraph [-cells=a,b] [-rebuild_srv_shards] &lt;keyspace&gt; ...</pre>
+<pre class="command-example">RebuildKeyspaceGraph [-cells=a,b] &lt;keyspace&gt; ...</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | cells | string | Specifies a comma-separated list of cells to update |
-| rebuild_srv_shards | Boolean | Indicates whether all SrvShard objects should also be rebuilt. The default value is <code>false</code>. |
 
 
 #### Arguments
@@ -1144,7 +1143,6 @@ Outputs a list of keyspace names.
 * [ListBackups](#listbackups)
 * [ListShardTablets](#listshardtablets)
 * [PlannedReparentShard](#plannedreparentshard)
-* [RebuildShardGraph](#rebuildshardgraph)
 * [RemoveBackup](#removebackup)
 * [RemoveShardCell](#removeshardcell)
 * [SetShardServedTypes](#setshardservedtypes)
@@ -1228,7 +1226,6 @@ Reparents the shard to the new master. Assumes the old master is dead and not re
 #### Errors
 
 * action <code>&lt;EmergencyReparentShard&gt;</code> requires <code>&lt;keyspace/shard&gt;</code> <code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly 2 arguments.
-* active reparent actions disable in this cluster
 
 
 ### GetShard
@@ -1272,7 +1269,6 @@ Sets the initial master for a shard. Will make all other tablets in the shard sl
 #### Errors
 
 * action <code>&lt;InitShardMaster&gt;</code> requires <code>&lt;keyspace/shard&gt;</code> <code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly 2 arguments.
-* active reparent actions disable in this cluster
 
 
 ### ListBackups
@@ -1327,31 +1323,6 @@ Reparents the shard to the new master. Both old and new master need to be up and
 #### Errors
 
 * action <code>&lt;PlannedReparentShard&gt;</code> requires <code>&lt;keyspace/shard&gt;</code> <code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly 2 arguments.
-* active reparent actions disable in this cluster
-
-
-### RebuildShardGraph
-
-Rebuilds the replication graph and shard serving data in ZooKeeper or etcd. This may trigger an update to all connected clients.
-
-#### Example
-
-<pre class="command-example">RebuildShardGraph [-cells=a,b] &lt;keyspace/shard&gt; ...</pre>
-
-#### Flags
-
-| Name | Type | Definition |
-| :-------- | :--------- | :--------- |
-| cells | string | Specifies a comma-separated list of cells to update |
-
-
-#### Arguments
-
-* <code>&lt;keyspace/shard&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables as well as the shard associated with the command. The keyspace must be identified by a string that does not contain whitepace, while the shard is typically identified by a string in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>. To specify multiple values for this argument, separate individual values with a space.
-
-#### Errors
-
-* The <code>&lt;keyspace/shard&gt;</code> argument must be used to identify at least one keyspace and shard when calling the <code>&lt;RebuildShardGraph&gt;</code> command. This error occurs if the command is not called with at least one argument.
 
 
 ### RemoveBackup
@@ -1724,14 +1695,13 @@ Deletes tablet(s) from the topology.
 
 #### Example
 
-<pre class="command-example">DeleteTablet [-allow_master] [-skip_rebuild] &lt;tablet alias&gt; ...</pre>
+<pre class="command-example">DeleteTablet [-allow_master] &lt;tablet alias&gt; ...</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | allow_master | Boolean | Allows for the master tablet of a shard to be deleted. Use with caution. |
-| skip_rebuild | Boolean | Skips rebuilding the shard serving graph after deleting the tablet |
 
 
 #### Arguments
@@ -1754,7 +1724,6 @@ Demotes a master tablet.
 #### Errors
 
 * action <code>&lt;DemoteMaster&gt;</code> requires <code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly one argument.
-* active reparent actions disable in this cluster
 
 
 ### ExecuteFetchAsDba
@@ -1935,7 +1904,6 @@ Reparent a tablet to the current master in the shard. This only works if the cur
 #### Errors
 
 * action <code>&lt;ReparentTablet&gt;</code> requires <code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly one argument.
-* active reparent actions disable in this cluster
 
 
 ### RunHealthCheck

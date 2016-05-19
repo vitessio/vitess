@@ -231,23 +231,6 @@ func waitForLock(ctx context.Context, client Client, lockPath string, waitIndex 
 	}
 }
 
-// LockSrvShardForAction implements topo.Server.
-func (s *Server) LockSrvShardForAction(ctx context.Context, cellName, keyspace, shard, contents string) (string, error) {
-	cell, err := s.getCell(cellName)
-	if err != nil {
-		return "", err
-	}
-
-	return lock(ctx, cell.Client, srvShardDirPath(keyspace, shard), contents,
-		false /* mustExist */)
-}
-
-// UnlockSrvShardForAction implements topo.Server.
-func (s *Server) UnlockSrvShardForAction(ctx context.Context, cellName, keyspace, shard, actionPath, results string) error {
-	log.Infof("results of %v: %v", actionPath, results)
-	return unlock(srvShardDirPath(keyspace, shard), actionPath)
-}
-
 // LockKeyspaceForAction implements topo.Server.
 func (s *Server) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
 	return lock(ctx, s.getGlobal(), keyspaceDirPath(keyspace), contents,

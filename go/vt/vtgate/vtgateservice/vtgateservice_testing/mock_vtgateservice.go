@@ -214,17 +214,6 @@ func (_mr *_MockVTGateServiceRecorder) GetSrvKeyspace(arg0, arg1 interface{}) *g
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "GetSrvKeyspace", arg0, arg1)
 }
 
-func (_m *MockVTGateService) GetSrvShard(ctx context.Context, keyspace string, shard string) (*topodata.SrvShard, error) {
-	ret := _m.ctrl.Call(_m, "GetSrvShard", ctx, keyspace, shard)
-	ret0, _ := ret[0].(*topodata.SrvShard)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-func (_mr *_MockVTGateServiceRecorder) GetSrvShard(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "GetSrvShard", arg0, arg1, arg2)
-}
-
 func (_m *MockVTGateService) HandlePanic(err *error) {
 	_m.ctrl.Call(_m, "HandlePanic", err)
 }

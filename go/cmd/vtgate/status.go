@@ -239,8 +239,8 @@ google.setOnLoadCallback(function() {
   <tr>
     <td>{{github_com_youtube_vitess_vtctld_srv_cell $ts.Cell}}</td>
     <td>{{github_com_youtube_vitess_vtctld_srv_keyspace $ts.Cell $ts.Target.Keyspace}}</td>
-    <td>{{github_com_youtube_vitess_vtctld_srv_shard $ts.Cell $ts.Target.Keyspace $ts.Target.Shard}}</td>
-    <td>{{github_com_youtube_vitess_vtctld_srv_type $ts.Cell $ts.Target.Keyspace $ts.Target.Shard $ts.Target.TabletType}}</td>
+    <td>{{$ts.Target.Shard}}</td>
+    <td>{{$ts.Target.TabletType}}</td>
     <td>{{$ts.StatusAsHTML}}</td>
   </tr>
   {{end}}
