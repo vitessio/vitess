@@ -499,15 +499,51 @@ primary key (name)
                        shard_1_rdonly1.tablet_alias, keyspace_shard],
                       auto_log=True)
 
-    utils.run_vtworker(['--cell', 'test_nj',
-                        '--command_display_interval', '10ms',
-                        'SplitClone',
-                        '--exclude_tables', 'unrelated',
-                        '--source_reader_count', '10',
-                        '--min_table_size_for_split', '1',
-                        '--min_healthy_rdonly_endpoints', '1',
-                        'test_keyspace/80-'],
-                       auto_log=True)
+    # Test that SplitClone fails early if the _vt.blp_checkpoint table
+    # exists with a different schema.
+    shard_2_master.mquery('', 'CREATE DATABASE IF NOT EXISTS _vt', write=True)
+    shard_2_master.mquery('_vt',
+                          'CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint ('
+                          'source_shard_uid INT(10) UNSIGNED NOT NULL, '
+                          'pos VARCHAR(250) DEFAULT NULL, '
+                          'time_updated BIGINT UNSIGNED NOT NULL, '
+                          'transaction_timestamp BIGINT UNSIGNED NOT NULL, '
+                          'flags VARCHAR(250) DEFAULT NULL, '
+                          'PRIMARY KEY (source_shard_uid)'
+                          ') ENGINE=InnoDB',
+                          write=True)
+    clone_args = ['--cell', 'test_nj',
+                  '--command_display_interval', '10ms',
+                  'SplitClone',
+                  '--exclude_tables', 'unrelated',
+                  '--source_reader_count', '10',
+                  '--min_table_size_for_split', '1',
+                  '--min_healthy_rdonly_endpoints', '1',
+                  'test_keyspace/80-']
+
+    _, stderr = utils.run_vtworker(clone_args, auto_log=True, expect_fail=True)
+    self.assertIn('existing schema and required schema disagree on schema for'
+                  ' table blp_checkpoint', stderr)
+
+    # Create _vt.blp_checkpoint table with the latest schema. SplitClone should
+    # not fail in that case.
+    shard_2_master.mquery('', 'DROP TABLE _vt.blp_checkpoint', write=True)
+    shard_2_master.mquery(
+        '_vt',
+        'CREATE TABLE IF NOT EXISTS `_vt`.`blp_checkpoint` (\n'
+        '  `source_shard_uid` INT(10) UNSIGNED NOT NULL,\n'
+        '  `pos` VARCHAR(250) DEFAULT NULL,\n'
+        '  `max_tps` BIGINT(20) NOT NULL,\n'
+        '  `max_replication_lag` BIGINT(20) NOT NULL,\n'
+        '  `time_updated` BIGINT(20) UNSIGNED NOT NULL,\n'
+        '  `transaction_timestamp` BIGINT(20) UNSIGNED NOT NULL,\n'
+        '  `flags` VARCHAR(250) DEFAULT NULL,\n'
+        '  PRIMARY KEY (`source_shard_uid`)\n'
+        ') ENGINE=InnoDB DEFAULT CHARSET=utf8',
+        write=True)
+
+    # Run SplitClone..
+    utils.run_vtworker(clone_args, auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly1.tablet_alias,
                      'rdonly'], auto_log=True)
 

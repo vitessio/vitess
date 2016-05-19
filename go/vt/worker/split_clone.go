@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/throttler"
@@ -385,15 +386,37 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 		// Get the MySQL database name of the tablet.
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		ti, err := scw.wr.TopoServer().GetTablet(shortCtx, master.Tablet.Alias)
-		cancel()
+		defer cancel()
 		if err != nil {
 			return fmt.Errorf("cannot get the TabletInfo for destination master (%v) to find out its db name: %v", topoproto.TabletAliasString(master.Tablet.Alias), err)
 		}
 		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
 		scw.destinationDbNames[keyspaceAndShard] = ti.DbName()
-		
-		// TODO(mberlin): Verify on the destination master that the
-		// _vt.blp_checkpoint table has the latest schema.
+
+		// Verify that the binlog player checkpoint table has the latest schema.
+		gotVtSchema, err := scw.wr.GetSchema(shortCtx, master.Tablet.Alias, "_vt", []string{"blp_checkpoint"}, nil /* excludeTables */, false /* includeViews */)
+		if err == nil && len(gotVtSchema.TableDefinitions) > 0 {
+			wantCreateTableSQL := binlogplayer.CreateBlpCheckpoint()[1]
+			wantCreateTableSQL = strings.Replace(wantCreateTableSQL, " IF NOT EXISTS", "", -1)
+			wantCreateTableSQL = strings.Replace(wantCreateTableSQL, "`_vt`.`blp_checkpoint`", "`blp_checkpoint`", -1)
+			wantVtSchema := &tabletmanagerdatapb.SchemaDefinition{
+				DatabaseSchema: "CREATE DATABASE /*!32312 IF NOT EXISTS*/ `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+					{
+						Name:   "blp_checkpoint",
+						Schema: wantCreateTableSQL,
+						Type:   tmutils.TableBaseTable,
+					},
+				},
+			}
+			rec := &concurrency.AllErrorRecorder{}
+			tmutils.DiffSchema("existing schema", gotVtSchema, "required schema", wantVtSchema, rec)
+			if rec.HasErrors() {
+				scw.wr.Logger().Warningf("blp_checkpoint table does not have the latest schema. Please delete the existing table to fix this. Details: %v", rec.Error().Error())
+				return rec.Error()
+			}
+			scw.wr.Logger().Infof("Existing blp_checkpoint table has the latest schema.")
+		}
 
 		scw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Tablet.Alias), si.Keyspace(), si.ShardName())
 	}

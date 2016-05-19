@@ -447,16 +447,16 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 func CreateBlpCheckpoint() []string {
 	return []string{
 		"CREATE DATABASE IF NOT EXISTS _vt",
-		`CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (
-  source_shard_uid INT(10) UNSIGNED NOT NULL,
-  pos VARCHAR(250) DEFAULT NULL,
-  max_tps BIGINT(20) NOT NULL,
-  max_replication_lag BIGINT(20) NOT NULL,
-  time_updated BIGINT(20) UNSIGNED NOT NULL,
-  transaction_timestamp BIGINT(20) UNSIGNED NOT NULL,
-  flags VARCHAR(250) DEFAULT NULL,
-  PRIMARY KEY (source_shard_uid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8`}
+		"CREATE TABLE IF NOT EXISTS `_vt`.`blp_checkpoint` (\n" +
+			"  `source_shard_uid` int(10) unsigned NOT NULL,\n" +
+			"  `pos` varchar(250) DEFAULT NULL,\n" +
+			"  `max_tps` bigint(20) NOT NULL,\n" +
+			"  `max_replication_lag` bigint(20) NOT NULL,\n" +
+			"  `time_updated` bigint(20) unsigned NOT NULL,\n" +
+			"  `transaction_timestamp` bigint(20) unsigned NOT NULL,\n" +
+			"  `flags` varchar(250) DEFAULT NULL,\n" +
+			"  PRIMARY KEY (`source_shard_uid`)\n" +
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8"}
 }
 
 // PopulateBlpCheckpoint returns a statement to populate the first value into
