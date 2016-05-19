@@ -55,7 +55,6 @@ the shards randomly.
 We can load this VSchema into Vitess like this:
 
 ``` sh
-vitess/examples/kubernetes$ ./kvtctl.sh SetKeyspaceShardingInfo test_keyspace keyspace_id uint64
 vitess/examples/kubernetes$ ./kvtctl.sh ApplyVSchema -vschema "$(cat vschema.json)" test_keyspace
 ```
 

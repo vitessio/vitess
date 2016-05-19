@@ -62,7 +62,6 @@ the shards randomly.
 We can load this VSchema into Vitess like this:
 
 ``` sh
-vitess/examples/local$ ./lvtctl.sh SetKeyspaceShardingInfo test_keyspace keyspace_id uint64
 vitess/examples/local$ ./lvtctl.sh ApplyVSchema -vschema "$(cat vschema.json)" test_keyspace
 ```
 
