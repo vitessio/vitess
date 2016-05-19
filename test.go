@@ -63,7 +63,7 @@ For example:
 
 // Flags
 var (
-	flavor   = flag.String("flavor", "mysql56", "bootstrap flavor to run against")
+	flavor   = flag.String("flavor", "mysql57", "bootstrap flavor to run against")
 	runCount = flag.Int("runs", 1, "run each test this many times")
 	retryMax = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
 	logPass  = flag.Bool("log-pass", false, "log test output even if it passes")
