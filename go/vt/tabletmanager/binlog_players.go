@@ -211,8 +211,9 @@ func (bpc *BinlogPlayerController) Stop() {
 // called but not Stop().)
 func (bpc *BinlogPlayerController) Close() error {
 	bpc.playerMutex.Lock()
+	defer bpc.playerMutex.Unlock()
+
 	if bpc.ctx != nil {
-		bpc.playerMutex.Unlock()
 		return fmt.Errorf("%v: cannot Close() a BinlogPlayerController which was not Stop()'d before", bpc)
 	}
 
