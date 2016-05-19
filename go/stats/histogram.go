@@ -27,7 +27,7 @@ type Histogram struct {
 
 // NewHistogram creates a histogram with auto-generated labels
 // based on the cutoffs. The buckets are categorized using the
-// following criterion: cutoff[i-1] <= value < cutoff[i]. Anything
+// following criterion: cutoff[i-1] < value <= cutoff[i]. Anything
 // higher than the highest cutoff is labeled as "inf".
 func NewHistogram(name string, cutoffs []int64) *Histogram {
 	labels := make([]string, len(cutoffs)+1)
@@ -62,7 +62,7 @@ func NewGenericHistogram(name string, cutoffs []int64, labels []string, countLab
 // Add adds a new measurement to the Histogram.
 func (h *Histogram) Add(value int64) {
 	for i := range h.labels {
-		if i == len(h.labels)-1 || value < h.cutoffs[i] {
+		if i == len(h.labels)-1 || value <= h.cutoffs[i] {
 			h.buckets[i].Add(1)
 			h.total.Add(value)
 			break
