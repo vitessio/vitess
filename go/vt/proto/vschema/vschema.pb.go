@@ -63,7 +63,7 @@ type Vindex struct {
 	// (or plugged in) vindex names.
 	Type string `protobuf:"bytes,1,opt,name=type" json:"type,omitempty"`
 	// params is a map of attribute value pairs
-	// that must be dedfined as required by the
+	// that must be defined as required by the
 	// vindex constructors. The values can only
 	// be strings.
 	Params map[string]string `protobuf:"bytes,2,rep,name=params" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
@@ -89,7 +89,7 @@ func (m *Vindex) GetParams() map[string]string {
 // Table is the table info for a Keyspace.
 type Table struct {
 	// If the table is a sequence, type must be
-	// "Sequence". Otherwise, it should be empty.
+	// "sequence". Otherwise, it should be empty.
 	Type string `protobuf:"bytes,1,opt,name=type" json:"type,omitempty"`
 	// column_vindexes associates columns to vindexes.
 	ColumnVindexes []*ColumnVindex `protobuf:"bytes,2,rep,name=column_vindexes,json=columnVindexes" json:"column_vindexes,omitempty"`

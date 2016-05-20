@@ -18,7 +18,7 @@ message Vindex {
   // (or plugged in) vindex names.
   string type = 1;
   // params is a map of attribute value pairs
-  // that must be dedfined as required by the
+  // that must be defined as required by the
   // vindex constructors. The values can only
   // be strings.
   map<string, string> params = 2;
