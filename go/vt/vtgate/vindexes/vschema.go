@@ -151,7 +151,7 @@ func buildTables(source *VSchemaFormal, vschema *VSchema) error {
 				vschema.tables[tname] = t
 			}
 			vschema.Keyspaces[ksname].Tables[tname] = t
-			if table.Type == "Sequence" {
+			if table.Type == "sequence" {
 				t.IsSequence = true
 			}
 			if keyspace.Sharded && len(table.ColumnVindexes) == 0 {

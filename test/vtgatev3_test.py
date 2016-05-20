@@ -223,10 +223,10 @@ vschema = {
       "sharded": false,
       "tables": {
         "vt_user_seq": {
-          "type": "Sequence"
+          "type": "sequence"
         },
         "vt_music_seq": {
-          "type": "Sequence"
+          "type": "sequence"
         },
         "music_user_map": {},
         "name_user2_map": {}

@@ -384,14 +384,14 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 			"ksa": {
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						Type: "Sequence",
+						Type: "sequence",
 					},
 				},
 			},
 			"ksb": {
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						Type: "Sequence",
+						Type: "sequence",
 					},
 				},
 			},
@@ -593,7 +593,7 @@ func TestSequence(t *testing.T) {
 			"unsharded": {
 				Tables: map[string]*vschemapb.Table{
 					"seq": {
-						Type: "Sequence",
+						Type: "sequence",
 					},
 				},
 			},

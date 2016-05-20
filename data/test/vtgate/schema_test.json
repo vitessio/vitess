@@ -83,7 +83,7 @@
       "tables": {
         "main1": {},
         "seq": {
-          "type": "Sequence"
+          "type": "sequence"
         }
       }
     }

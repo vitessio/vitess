@@ -146,7 +146,7 @@ var unshardedVSchema = `
 	"sharded": false,
 	"tables": {
 		"user_seq": {
-			"type": "Sequence"
+			"type": "sequence"
 		},
 		"music_user_map": {},
 		"name_user_map": {}

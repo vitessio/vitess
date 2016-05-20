@@ -106,10 +106,10 @@
       "sharded": false,
       "tables": {
         "user_seq": {
-          "type": "Sequence"
+          "type": "sequence"
         },
         "music_seq": {
-          "type": "Sequence"
+          "type": "sequence"
         },
         "name_user_idx": {}
       }

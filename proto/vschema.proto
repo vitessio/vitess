@@ -32,7 +32,7 @@ message Vindex {
 // Table is the table info for a Keyspace.
 message Table {
   // If the table is a sequence, type must be
-  // "Sequence". Otherwise, it should be empty.
+  // "sequence". Otherwise, it should be empty.
   string type = 1;
   // column_vindexes associates columns to vindexes.
   repeated ColumnVindex column_vindexes = 2;
