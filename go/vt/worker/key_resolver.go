@@ -94,10 +94,10 @@ func newV3ResolverFromTableDefinition(keyspaceSchema *vindexes.KeyspaceSchema, t
 	}
 	// the primary vindex is most likely the sharding key, and has to
 	// be unique.
-	if len(tableSchema.ColVindexes) == 0 {
+	if len(tableSchema.ColumnVindexes) == 0 {
 		return nil, fmt.Errorf("no vindex definition for table %v", td.Name)
 	}
-	colVindex := tableSchema.ColVindexes[0]
+	colVindex := tableSchema.ColumnVindexes[0]
 	if colVindex.Vindex.Cost() > 1 {
 		return nil, fmt.Errorf("primary vindex cost is too high for table %v", td.Name)
 	}
@@ -107,9 +107,9 @@ func newV3ResolverFromTableDefinition(keyspaceSchema *vindexes.KeyspaceSchema, t
 	}
 
 	// Find the sharding key column index.
-	columnIndex, ok := tmutils.TableDefinitionGetColumn(td, colVindex.Col.Original())
+	columnIndex, ok := tmutils.TableDefinitionGetColumn(td, colVindex.Column.Original())
 	if !ok {
-		return nil, fmt.Errorf("table %v has a Vindex on unknown column %v", td.Name, colVindex.Col)
+		return nil, fmt.Errorf("table %v has a Vindex on unknown column %v", td.Name, colVindex.Column)
 	}
 
 	return &v3Resolver{
@@ -126,10 +126,10 @@ func newV3ResolverFromColumnList(keyspaceSchema *vindexes.KeyspaceSchema, name s
 	}
 	// the primary vindex is most likely the sharding key, and has to
 	// be unique.
-	if len(tableSchema.ColVindexes) == 0 {
+	if len(tableSchema.ColumnVindexes) == 0 {
 		return nil, fmt.Errorf("no vindex definition for table %v", name)
 	}
-	colVindex := tableSchema.ColVindexes[0]
+	colVindex := tableSchema.ColumnVindexes[0]
 	if colVindex.Vindex.Cost() > 1 {
 		return nil, fmt.Errorf("primary vindex cost is too high for table %v", name)
 	}
@@ -141,13 +141,13 @@ func newV3ResolverFromColumnList(keyspaceSchema *vindexes.KeyspaceSchema, name s
 	// Find the sharding key column index.
 	columnIndex := -1
 	for i, n := range columns {
-		if colVindex.Col.EqualString(n) {
+		if colVindex.Column.EqualString(n) {
 			columnIndex = i
 			break
 		}
 	}
 	if columnIndex == -1 {
-		return nil, fmt.Errorf("table %v has a Vindex on unknown column %v", name, colVindex.Col)
+		return nil, fmt.Errorf("table %v has a Vindex on unknown column %v", name, colVindex.Column)
 	}
 
 	return &v3Resolver{

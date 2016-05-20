@@ -37,7 +37,35 @@ func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
 		t.Errorf("GetVSchema: %s, want nil", got)
 	}
 
-	err = ts.SaveVSchema(ctx, "test_keyspace", &vschemapb.Keyspace{Sharded: true})
+	err = ts.SaveVSchema(ctx, "test_keyspace", &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"stfu1": {
+				Type: "stfu",
+				Params: map[string]string{
+					"stfu1": "1",
+				},
+				Owner: "t1",
+			},
+			"stln1": {
+				Type:  "stln",
+				Owner: "t1",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{
+					{
+						Column: "c1",
+						Name:   "stfu1",
+					}, {
+						Column: "c2",
+						Name:   "stln1",
+					},
+				},
+			},
+		},
+	})
 	if err != nil {
 		t.Error(err)
 	}
@@ -46,7 +74,35 @@ func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
 	if err != nil {
 		t.Error(err)
 	}
-	want = &vschemapb.Keyspace{Sharded: true}
+	want = &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"stfu1": {
+				Type: "stfu",
+				Params: map[string]string{
+					"stfu1": "1",
+				},
+				Owner: "t1",
+			},
+			"stln1": {
+				Type:  "stln",
+				Owner: "t1",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{
+					{
+						Column: "c1",
+						Name:   "stfu1",
+					}, {
+						Column: "c2",
+						Name:   "stln1",
+					},
+				},
+			},
+		},
+	}
 	if !proto.Equal(got, want) {
 		t.Errorf("GetVSchema: %s, want %s", got, want)
 	}

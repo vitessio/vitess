@@ -83,10 +83,10 @@ func (tc *splitCloneTestCase) setUp(v3 bool) {
 			},
 			Tables: map[string]*vschemapb.Table{
 				"table1": {
-					ColVindexes: []*vschemapb.ColVindex{
+					ColumnVindexes: []*vschemapb.ColumnVindex{
 						{
-							Col:  "keyspace_id",
-							Name: "table1_index",
+							Column: "keyspace_id",
+							Name:   "table1_index",
 						},
 					},
 				},

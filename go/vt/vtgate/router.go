@@ -308,7 +308,7 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
-	ksid, err := rtr.handlePrimary(vcursor, keys[0], route.Table.ColVindexes[0], vcursor.bindVars)
+	ksid, err := rtr.handlePrimary(vcursor, keys[0], route.Table.ColumnVindexes[0], vcursor.bindVars)
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
@@ -317,7 +317,7 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
 	for i := 1; i < len(keys); i++ {
-		err := rtr.handleNonPrimary(vcursor, keys[i], route.Table.ColVindexes[i], vcursor.bindVars, ksid)
+		err := rtr.handleNonPrimary(vcursor, keys[i], route.Table.ColumnVindexes[i], vcursor.bindVars, ksid)
 		if err != nil {
 			return nil, err
 		}
@@ -511,9 +511,9 @@ func (rtr *Router) handleGenerate(vcursor *requestContext, gen *engine.Generate)
 	return num, nil
 }
 
-func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{}, colVindex *vindexes.ColVindex, bv map[string]interface{}) (ksid []byte, err error) {
+func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{}, colVindex *vindexes.ColumnVindex, bv map[string]interface{}) (ksid []byte, err error) {
 	if vindexKey == nil {
-		return nil, fmt.Errorf("value must be supplied for column %v", colVindex.Col)
+		return nil, fmt.Errorf("value must be supplied for column %v", colVindex.Column)
 	}
 	mapper := colVindex.Vindex.(vindexes.Unique)
 	ksids, err := mapper.Map(vcursor, []interface{}{vindexKey})
@@ -524,14 +524,14 @@ func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{},
 	if len(ksid) == 0 {
 		return nil, fmt.Errorf("could not map %v to a keyspace id", vindexKey)
 	}
-	bv["_"+colVindex.Col.Original()] = vindexKey
+	bv["_"+colVindex.Column.Original()] = vindexKey
 	return ksid, nil
 }
 
-func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface{}, colVindex *vindexes.ColVindex, bv map[string]interface{}, ksid []byte) error {
+func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface{}, colVindex *vindexes.ColumnVindex, bv map[string]interface{}, ksid []byte) error {
 	if colVindex.Owned {
 		if vindexKey == nil {
-			return fmt.Errorf("value must be supplied for column %v", colVindex.Col)
+			return fmt.Errorf("value must be supplied for column %v", colVindex.Column)
 		}
 		err := colVindex.Vindex.(vindexes.Lookup).Create(vcursor, vindexKey, ksid)
 		if err != nil {
@@ -541,7 +541,7 @@ func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface
 		if vindexKey == nil {
 			reversible, ok := colVindex.Vindex.(vindexes.Reversible)
 			if !ok {
-				return fmt.Errorf("value must be supplied for column %v", colVindex.Col)
+				return fmt.Errorf("value must be supplied for column %v", colVindex.Column)
 			}
 			var err error
 			vindexKey, err = reversible.ReverseMap(vcursor, ksid)
@@ -549,7 +549,7 @@ func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface
 				return err
 			}
 			if vindexKey == nil {
-				return fmt.Errorf("could not compute value for column %v", colVindex.Col)
+				return fmt.Errorf("could not compute value for column %v", colVindex.Column)
 			}
 		} else {
 			ok, err := colVindex.Vindex.Verify(vcursor, vindexKey, ksid)
@@ -557,11 +557,11 @@ func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface
 				return err
 			}
 			if !ok {
-				return fmt.Errorf("value %v for column %v does not map to keyspace id %v", vindexKey, colVindex.Col, hex.EncodeToString(ksid))
+				return fmt.Errorf("value %v for column %v does not map to keyspace id %v", vindexKey, colVindex.Column, hex.EncodeToString(ksid))
 			}
 		}
 	}
-	bv["_"+colVindex.Col.Original()] = vindexKey
+	bv["_"+colVindex.Column.Original()] = vindexKey
 	return nil
 }
 

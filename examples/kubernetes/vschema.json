@@ -7,9 +7,9 @@
   },
   "tables": {
     "messages": {
-      "col_vindexes": [
+      "column_vindexes": [
         {
-          "col": "page",
+          "column": "page",
           "name": "hash"
         }
       ]

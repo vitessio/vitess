@@ -143,13 +143,13 @@ func TestShardedVSchemaOwned(t *testing.T) {
 				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						ColVindexes: []*vschemapb.ColVindex{
+						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
-								Col:  "c1",
-								Name: "stfu1",
+								Column: "c1",
+								Name:   "stfu1",
 							}, {
-								Col:  "c2",
-								Name: "stln1",
+								Column: "c2",
+								Name:   "stln1",
 							},
 						},
 					},
@@ -168,11 +168,11 @@ func TestShardedVSchemaOwned(t *testing.T) {
 	t1 := &Table{
 		Name:     "t1",
 		Keyspace: ks,
-		ColVindexes: []*ColVindex{
+		ColumnVindexes: []*ColumnVindex{
 			{
-				Col:  cistring.New("c1"),
-				Type: "stfu",
-				Name: "stfu1",
+				Column: cistring.New("c1"),
+				Type:   "stfu",
+				Name:   "stfu1",
 				Vindex: &stFU{
 					name: "stfu1",
 					Params: map[string]string{
@@ -181,7 +181,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 				},
 			},
 			{
-				Col:    cistring.New("c2"),
+				Column: cistring.New("c2"),
 				Type:   "stln",
 				Name:   "stln1",
 				Owned:  true,
@@ -189,11 +189,11 @@ func TestShardedVSchemaOwned(t *testing.T) {
 			},
 		},
 	}
-	t1.Ordered = []*ColVindex{
-		t1.ColVindexes[1],
-		t1.ColVindexes[0],
+	t1.Ordered = []*ColumnVindex{
+		t1.ColumnVindexes[1],
+		t1.ColumnVindexes[0],
 	}
-	t1.Owned = t1.ColVindexes[1:]
+	t1.Owned = t1.ColumnVindexes[1:]
 	want := &VSchema{
 		tables: map[string]*Table{
 			"t1": t1,
@@ -231,13 +231,13 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						ColVindexes: []*vschemapb.ColVindex{
+						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
-								Col:  "c1",
-								Name: "stlu1",
+								Column: "c1",
+								Name:   "stlu1",
 							}, {
-								Col:  "c2",
-								Name: "stfu1",
+								Column: "c2",
+								Name:   "stfu1",
 							},
 						},
 					},
@@ -256,16 +256,16 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 	t1 := &Table{
 		Name:     "t1",
 		Keyspace: ks,
-		ColVindexes: []*ColVindex{
+		ColumnVindexes: []*ColumnVindex{
 			{
-				Col:    cistring.New("c1"),
+				Column: cistring.New("c1"),
 				Type:   "stlu",
 				Name:   "stlu1",
 				Owned:  false,
 				Vindex: &stLU{name: "stlu1"},
 			},
 			{
-				Col:    cistring.New("c2"),
+				Column: cistring.New("c2"),
 				Type:   "stfu",
 				Name:   "stfu1",
 				Owned:  false,
@@ -273,9 +273,9 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 			},
 		},
 	}
-	t1.Ordered = []*ColVindex{
-		t1.ColVindexes[1],
-		t1.ColVindexes[0],
+	t1.Ordered = []*ColumnVindex{
+		t1.ColumnVindexes[1],
+		t1.ColumnVindexes[0],
 	}
 	want := &VSchema{
 		tables: map[string]*Table{
@@ -307,10 +307,10 @@ func TestBuildVSchemaVindexNotFoundFail(t *testing.T) {
 				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						ColVindexes: []*vschemapb.ColVindex{
+						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
-								Col:  "c1",
-								Name: "noexist",
+								Column: "c1",
+								Name:   "noexist",
 							},
 						},
 					},
@@ -325,7 +325,7 @@ func TestBuildVSchemaVindexNotFoundFail(t *testing.T) {
 	}
 }
 
-func TestBuildVSchemaNoColVindexFail(t *testing.T) {
+func TestBuildVSchemaNoColumnVindexFail(t *testing.T) {
 	bad := VSchemaFormal{
 		Keyspaces: map[string]vschemapb.Keyspace{
 			"sharded": {
@@ -360,10 +360,10 @@ func TestBuildVSchemaInvalidVindexFail(t *testing.T) {
 				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						ColVindexes: []*vschemapb.ColVindex{
+						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
-								Col:  "c1",
-								Name: "stf",
+								Column: "c1",
+								Name:   "stf",
 							},
 						},
 					},
@@ -508,10 +508,10 @@ func TestBuildVSchemaNoindexFail(t *testing.T) {
 				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						ColVindexes: []*vschemapb.ColVindex{
+						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
-								Col:  "c1",
-								Name: "notexist",
+								Column: "c1",
+								Name:   "notexist",
 							},
 						},
 					},
@@ -538,10 +538,10 @@ func TestBuildVSchemaNotUniqueFail(t *testing.T) {
 				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						ColVindexes: []*vschemapb.ColVindex{
+						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
-								Col:  "c1",
-								Name: "stln",
+								Column: "c1",
+								Name:   "stln",
 							},
 						},
 					},
@@ -569,10 +569,10 @@ func TestBuildVSchemaPrimaryNonFunctionalFail(t *testing.T) {
 				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						ColVindexes: []*vschemapb.ColVindex{
+						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
-								Col:  "c1",
-								Name: "stlu",
+								Column: "c1",
+								Name:   "stlu",
 							},
 						},
 					},
@@ -609,14 +609,14 @@ func TestSequence(t *testing.T) {
 				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						ColVindexes: []*vschemapb.ColVindex{
+						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
-								Col:  "c1",
-								Name: "stfu1",
+								Column: "c1",
+								Name:   "stfu1",
 							},
 						},
-						Autoinc: &vschemapb.Autoinc{
-							Col:      "c1",
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
 							Sequence: "seq",
 						},
 					},
@@ -643,11 +643,11 @@ func TestSequence(t *testing.T) {
 	t1 := &Table{
 		Name:     "t1",
 		Keyspace: kss,
-		ColVindexes: []*ColVindex{
+		ColumnVindexes: []*ColumnVindex{
 			{
-				Col:  cistring.New("c1"),
-				Type: "stfu",
-				Name: "stfu1",
+				Column: cistring.New("c1"),
+				Type:   "stfu",
+				Name:   "stfu1",
 				Vindex: &stFU{
 					name: "stfu1",
 					Params: map[string]string{
@@ -656,13 +656,13 @@ func TestSequence(t *testing.T) {
 				},
 			},
 		},
-		Autoinc: &Autoinc{
-			Col:      cistring.New("c1"),
+		AutoIncrement: &AutoIncrement{
+			Column:   cistring.New("c1"),
 			Sequence: seq,
 		},
 	}
-	t1.Ordered = []*ColVindex{
-		t1.ColVindexes[0],
+	t1.Ordered = []*ColumnVindex{
+		t1.ColumnVindexes[0],
 	}
 	want := &VSchema{
 		tables: map[string]*Table{
@@ -703,14 +703,14 @@ func TestBadSequence(t *testing.T) {
 				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						ColVindexes: []*vschemapb.ColVindex{
+						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
-								Col:  "c1",
-								Name: "stfu1",
+								Column: "c1",
+								Name:   "stfu1",
 							},
 						},
-						Autoinc: &vschemapb.Autoinc{
-							Col:      "c1",
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
 							Sequence: "seq",
 						},
 					},
@@ -746,18 +746,18 @@ func TestFind(t *testing.T) {
 				},
 				Tables: map[string]*vschemapb.Table{
 					"tb": {
-						ColVindexes: []*vschemapb.ColVindex{
+						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
-								Col:  "c1",
-								Name: "stfu1",
+								Column: "c1",
+								Name:   "stfu1",
 							},
 						},
 					},
 					"t1": {
-						ColVindexes: []*vschemapb.ColVindex{
+						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
-								Col:  "c1",
-								Name: "stfu1",
+								Column: "c1",
+								Name:   "stfu1",
 							},
 						},
 					},
@@ -820,8 +820,8 @@ func TestBuildKeyspaceSchema(t *testing.T) {
 	good := &vschemapb.Keyspace{
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
-				Autoinc: &vschemapb.Autoinc{
-					Col:      "col",
+				AutoIncrement: &vschemapb.AutoIncrement{
+					Column:   "col",
 					Sequence: "outside",
 				},
 			},
@@ -861,8 +861,8 @@ func TestValidate(t *testing.T) {
 	good := &vschemapb.Keyspace{
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
-				Autoinc: &vschemapb.Autoinc{
-					Col:      "col",
+				AutoIncrement: &vschemapb.AutoIncrement{
+					Column:   "col",
 					Sequence: "outside",
 				},
 			},
@@ -897,15 +897,15 @@ func TestVSchemaJSON(t *testing.T) {
 		"sharded": true,
 		"tables": {
 			"t1": {
-				"col_vindexes":[{
-						"col":"c1",
+				"column_vindexes":[{
+						"column":"c1",
 						"name":"stfu1"
 					},{
-						"col":"c2",
+						"column":"c2",
 						"name":"stln1"
 					}],
-				"autoinc": {
-					"col": "col",
+				"auto_increment": {
+					"column": "col",
 					"sequence": "outside"
 				}
 			},
@@ -921,17 +921,17 @@ func TestVSchemaJSON(t *testing.T) {
 		Sharded: true,
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
-				ColVindexes: []*vschemapb.ColVindex{
+				ColumnVindexes: []*vschemapb.ColumnVindex{
 					{
-						Col:  "c1",
-						Name: "stfu1",
+						Column: "c1",
+						Name:   "stfu1",
 					}, {
-						Col:  "c2",
-						Name: "stln1",
+						Column: "c2",
+						Name:   "stln1",
 					},
 				},
-				Autoinc: &vschemapb.Autoinc{
-					Col:      "col",
+				AutoIncrement: &vschemapb.AutoIncrement{
+					Column:   "col",
 					Sequence: "outside",
 				},
 			},
@@ -978,18 +978,18 @@ func TestFindSingleKeyspace(t *testing.T) {
 				},
 				Tables: map[string]*vschemapb.Table{
 					"tb": {
-						ColVindexes: []*vschemapb.ColVindex{
+						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
-								Col:  "c1",
-								Name: "stfu1",
+								Column: "c1",
+								Name:   "stfu1",
 							},
 						},
 					},
 					"t1": {
-						ColVindexes: []*vschemapb.ColVindex{
+						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
-								Col:  "c1",
-								Name: "stfu1",
+								Column: "c1",
+								Name:   "stfu1",
 							},
 						},
 					},

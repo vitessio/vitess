@@ -96,8 +96,8 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 			if colsyms.Vindex == nil {
 				continue
 			}
-			table.ColVindexes = append(table.ColVindexes, &vindexes.ColVindex{
-				Col:    cistring.CIString(colsyms.Alias),
+			table.ColumnVindexes = append(table.ColumnVindexes, &vindexes.ColumnVindex{
+				Column: cistring.CIString(colsyms.Alias),
 				Vindex: colsyms.Vindex,
 			})
 		}

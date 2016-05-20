@@ -23,13 +23,13 @@ type VSchema struct {
 
 // Table represents a table in VSchema.
 type Table struct {
-	IsSequence  bool
-	Name        string
-	Keyspace    *Keyspace
-	ColVindexes []*ColVindex
-	Ordered     []*ColVindex
-	Owned       []*ColVindex
-	Autoinc     *Autoinc
+	IsSequence     bool
+	Name           string
+	Keyspace       *Keyspace
+	ColumnVindexes []*ColumnVindex
+	Ordered        []*ColumnVindex
+	Owned          []*ColumnVindex
+	AutoIncrement  *AutoIncrement
 }
 
 // Keyspace contains the keyspcae info for each Table.
@@ -38,9 +38,9 @@ type Keyspace struct {
 	Sharded bool
 }
 
-// ColVindex contains the index info for each index of a table.
-type ColVindex struct {
-	Col    cistring.CIString
+// ColumnVindex contains the index info for each index of a table.
+type ColumnVindex struct {
+	Column cistring.CIString
 	Type   string
 	Name   string
 	Owned  bool
@@ -53,13 +53,13 @@ type KeyspaceSchema struct {
 	Tables   map[string]*Table
 }
 
-// Autoinc contains the auto-inc information for a table.
-type Autoinc struct {
-	Col      cistring.CIString
+// AutoIncrement contains the auto-inc information for a table.
+type AutoIncrement struct {
+	Column   cistring.CIString
 	Sequence *Table
-	// ColVindexNum is the index of the ColVindex
-	// if the column is also a ColVindex. Otherwise, it's -1.
-	ColVindexNum int
+	// ColumnVindexNum is the index of the ColumnVindex
+	// if the column is also a ColumnVindex. Otherwise, it's -1.
+	ColumnVindexNum int
 }
 
 // BuildVSchema builds a VSchema from a VSchemaFormal.
@@ -73,7 +73,7 @@ func BuildVSchema(source *VSchemaFormal) (vschema *VSchema, err error) {
 	if err != nil {
 		return nil, err
 	}
-	err = resolveAutoinc(source, vschema)
+	err = resolveAutoIncrement(source, vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -154,10 +154,10 @@ func buildTables(source *VSchemaFormal, vschema *VSchema) error {
 			if table.Type == "Sequence" {
 				t.IsSequence = true
 			}
-			if keyspace.Sharded && len(table.ColVindexes) == 0 {
+			if keyspace.Sharded && len(table.ColumnVindexes) == 0 {
 				return fmt.Errorf("missing primary col vindex for table: %s", tname)
 			}
-			for i, ind := range table.ColVindexes {
+			for i, ind := range table.ColumnVindexes {
 				vindexInfo, ok := ks.Vindexes[ind.Name]
 				if !ok {
 					return fmt.Errorf("vindex %s not found for table %s", ind.Name, tname)
@@ -167,8 +167,8 @@ func buildTables(source *VSchemaFormal, vschema *VSchema) error {
 				if _, ok := vindex.(Lookup); ok && vindexInfo.Owner == tname {
 					owned = true
 				}
-				columnVindex := &ColVindex{
-					Col:    cistring.New(ind.Col),
+				columnVindex := &ColumnVindex{
+					Column: cistring.New(ind.Column),
 					Type:   vindexInfo.Type,
 					Name:   ind.Name,
 					Owned:  owned,
@@ -183,35 +183,35 @@ func buildTables(source *VSchemaFormal, vschema *VSchema) error {
 						return fmt.Errorf("primary vindex %s cannot be owned for table %s", ind.Name, tname)
 					}
 				}
-				t.ColVindexes = append(t.ColVindexes, columnVindex)
+				t.ColumnVindexes = append(t.ColumnVindexes, columnVindex)
 				if owned {
 					t.Owned = append(t.Owned, columnVindex)
 				}
 			}
-			t.Ordered = colVindexSorted(t.ColVindexes)
+			t.Ordered = colVindexSorted(t.ColumnVindexes)
 		}
 	}
 	return nil
 }
 
-func resolveAutoinc(source *VSchemaFormal, vschema *VSchema) error {
+func resolveAutoIncrement(source *VSchemaFormal, vschema *VSchema) error {
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
 		for tname, table := range ks.Tables {
 			t := ksvschema.Tables[tname]
-			if table.Autoinc == nil {
+			if table.AutoIncrement == nil {
 				continue
 			}
-			t.Autoinc = &Autoinc{Col: cistring.New(table.Autoinc.Col), ColVindexNum: -1}
-			seq := vschema.tables[table.Autoinc.Sequence]
+			t.AutoIncrement = &AutoIncrement{Column: cistring.New(table.AutoIncrement.Column), ColumnVindexNum: -1}
+			seq := vschema.tables[table.AutoIncrement.Sequence]
 			// TODO(sougou): improve this search.
 			if seq == nil {
-				return fmt.Errorf("sequence %s not found for table %s", table.Autoinc.Sequence, tname)
+				return fmt.Errorf("sequence %s not found for table %s", table.AutoIncrement.Sequence, tname)
 			}
-			t.Autoinc.Sequence = seq
-			for i, cv := range t.ColVindexes {
-				if t.Autoinc.Col.Equal(cv.Col) {
-					t.Autoinc.ColVindexNum = i
+			t.AutoIncrement.Sequence = seq
+			for i, cv := range t.ColumnVindexes {
+				if t.AutoIncrement.Column.Equal(cv.Column) {
+					t.AutoIncrement.ColumnVindexNum = i
 					break
 				}
 			}
@@ -261,15 +261,15 @@ func (vschema *VSchema) Find(keyspace, tablename string) (table *Table, err erro
 	return table, nil
 }
 
-// ByCost provides the interface needed for ColVindexes to
+// ByCost provides the interface needed for ColumnVindexes to
 // be sorted by cost order.
-type ByCost []*ColVindex
+type ByCost []*ColumnVindex
 
 func (bc ByCost) Len() int           { return len(bc) }
 func (bc ByCost) Swap(i, j int)      { bc[i], bc[j] = bc[j], bc[i] }
 func (bc ByCost) Less(i, j int) bool { return bc[i].Vindex.Cost() < bc[j].Vindex.Cost() }
 
-func colVindexSorted(cvs []*ColVindex) (sorted []*ColVindex) {
+func colVindexSorted(cvs []*ColumnVindex) (sorted []*ColumnVindex) {
 	for _, cv := range cvs {
 		sorted = append(sorted, cv)
 	}

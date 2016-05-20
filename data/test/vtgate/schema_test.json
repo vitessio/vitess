@@ -22,57 +22,57 @@
       },
       "tables": {
         "user": {
-          "col_vindexes": [
+          "column_vindexes": [
             {
-              "col": "Id",
+              "column": "Id",
               "name": "user_index"
             },
             {
-              "col": "Name",
+              "column": "Name",
               "name": "name_user_map"
             },
             {
-              "col": "Costly",
+              "column": "Costly",
               "name": "costly_map"
             }
           ],
-          "autoinc": {
-            "col": "id",
+          "auto_increment": {
+            "column": "id",
             "sequence": "seq"
           }
         },
         "user_extra": {
-          "col_vindexes": [
+          "column_vindexes": [
             {
-              "col": "user_id",
+              "column": "user_id",
               "name": "user_index"
             }
           ],
-          "autoinc": {
-            "col": "extra_id",
+          "auto_increment": {
+            "column": "extra_id",
             "sequence": "seq"
           }
         },
         "music": {
-          "col_vindexes": [
+          "column_vindexes": [
             {
-              "col": "user_id",
+              "column": "user_id",
               "name": "user_index"
             },
             {
-              "col": "id",
+              "column": "id",
               "name": "music_user_map"
             }
           ]
         },
         "music_extra": {
-          "col_vindexes": [
+          "column_vindexes": [
             {
-              "col": "user_id",
+              "column": "user_id",
               "name": "user_index"
             },
             {
-              "col": "music_id",
+              "column": "music_id",
               "name": "music_user_map"
             }
           ]
@@ -83,7 +83,7 @@
       "tables": {
         "main1": {},
         "seq": {
-          "type": "sequence"
+          "type": "Sequence"
         }
       }
     }

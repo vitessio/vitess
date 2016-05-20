@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vschema.proto',
   package='vschema',
   syntax='proto3',
-  serialized_pb=_b('\n\rvschema.proto\x12\x07vschema\"\xfe\x01\n\x08Keyspace\x12\x0f\n\x07sharded\x18\x01 \x01(\x08\x12\x31\n\x08vindexes\x18\x02 \x03(\x0b\x32\x1f.vschema.Keyspace.VindexesEntry\x12-\n\x06tables\x18\x03 \x03(\x0b\x32\x1d.vschema.Keyspace.TablesEntry\x1a@\n\rVindexesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1e\n\x05value\x18\x02 \x01(\x0b\x32\x0f.vschema.Vindex:\x02\x38\x01\x1a=\n\x0bTablesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1d\n\x05value\x18\x02 \x01(\x0b\x32\x0e.vschema.Table:\x02\x38\x01\"\x81\x01\n\x06Vindex\x12\x0c\n\x04type\x18\x01 \x01(\t\x12+\n\x06params\x18\x02 \x03(\x0b\x32\x1b.vschema.Vindex.ParamsEntry\x12\r\n\x05owner\x18\x03 \x01(\t\x1a-\n\x0bParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"b\n\x05Table\x12\x0c\n\x04type\x18\x01 \x01(\t\x12(\n\x0c\x63ol_vindexes\x18\x02 \x03(\x0b\x32\x12.vschema.ColVindex\x12!\n\x07\x61utoinc\x18\x03 \x01(\x0b\x32\x10.vschema.Autoinc\"&\n\tColVindex\x12\x0b\n\x03\x63ol\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\"(\n\x07\x41utoinc\x12\x0b\n\x03\x63ol\x18\x01 \x01(\t\x12\x10\n\x08sequence\x18\x02 \x01(\tb\x06proto3')
+  serialized_pb=_b('\n\rvschema.proto\x12\x07vschema\"\xfe\x01\n\x08Keyspace\x12\x0f\n\x07sharded\x18\x01 \x01(\x08\x12\x31\n\x08vindexes\x18\x02 \x03(\x0b\x32\x1f.vschema.Keyspace.VindexesEntry\x12-\n\x06tables\x18\x03 \x03(\x0b\x32\x1d.vschema.Keyspace.TablesEntry\x1a@\n\rVindexesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1e\n\x05value\x18\x02 \x01(\x0b\x32\x0f.vschema.Vindex:\x02\x38\x01\x1a=\n\x0bTablesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1d\n\x05value\x18\x02 \x01(\x0b\x32\x0e.vschema.Table:\x02\x38\x01\"\x81\x01\n\x06Vindex\x12\x0c\n\x04type\x18\x01 \x01(\t\x12+\n\x06params\x18\x02 \x03(\x0b\x32\x1b.vschema.Vindex.ParamsEntry\x12\r\n\x05owner\x18\x03 \x01(\t\x1a-\n\x0bParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"u\n\x05Table\x12\x0c\n\x04type\x18\x01 \x01(\t\x12.\n\x0f\x63olumn_vindexes\x18\x02 \x03(\x0b\x32\x15.vschema.ColumnVindex\x12.\n\x0e\x61uto_increment\x18\x03 \x01(\x0b\x32\x16.vschema.AutoIncrement\",\n\x0c\x43olumnVindex\x12\x0e\n\x06\x63olumn\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\"1\n\rAutoIncrement\x12\x0e\n\x06\x63olumn\x18\x01 \x01(\t\x12\x10\n\x08sequence\x18\x02 \x01(\tb\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -242,14 +242,14 @@ _TABLE = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='col_vindexes', full_name='vschema.Table.col_vindexes', index=1,
+      name='column_vindexes', full_name='vschema.Table.column_vindexes', index=1,
       number=2, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='autoinc', full_name='vschema.Table.autoinc', index=2,
+      name='auto_increment', full_name='vschema.Table.auto_increment', index=2,
       number=3, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
@@ -268,26 +268,26 @@ _TABLE = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=415,
-  serialized_end=513,
+  serialized_end=532,
 )
 
 
-_COLVINDEX = _descriptor.Descriptor(
-  name='ColVindex',
-  full_name='vschema.ColVindex',
+_COLUMNVINDEX = _descriptor.Descriptor(
+  name='ColumnVindex',
+  full_name='vschema.ColumnVindex',
   filename=None,
   file=DESCRIPTOR,
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='col', full_name='vschema.ColVindex.col', index=0,
+      name='column', full_name='vschema.ColumnVindex.column', index=0,
       number=1, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='name', full_name='vschema.ColVindex.name', index=1,
+      name='name', full_name='vschema.ColumnVindex.name', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
@@ -305,27 +305,27 @@ _COLVINDEX = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=515,
-  serialized_end=553,
+  serialized_start=534,
+  serialized_end=578,
 )
 
 
-_AUTOINC = _descriptor.Descriptor(
-  name='Autoinc',
-  full_name='vschema.Autoinc',
+_AUTOINCREMENT = _descriptor.Descriptor(
+  name='AutoIncrement',
+  full_name='vschema.AutoIncrement',
   filename=None,
   file=DESCRIPTOR,
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='col', full_name='vschema.Autoinc.col', index=0,
+      name='column', full_name='vschema.AutoIncrement.column', index=0,
       number=1, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='sequence', full_name='vschema.Autoinc.sequence', index=1,
+      name='sequence', full_name='vschema.AutoIncrement.sequence', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
@@ -343,8 +343,8 @@ _AUTOINC = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=555,
-  serialized_end=595,
+  serialized_start=580,
+  serialized_end=629,
 )
 
 _KEYSPACE_VINDEXESENTRY.fields_by_name['value'].message_type = _VINDEX
@@ -355,13 +355,13 @@ _KEYSPACE.fields_by_name['vindexes'].message_type = _KEYSPACE_VINDEXESENTRY
 _KEYSPACE.fields_by_name['tables'].message_type = _KEYSPACE_TABLESENTRY
 _VINDEX_PARAMSENTRY.containing_type = _VINDEX
 _VINDEX.fields_by_name['params'].message_type = _VINDEX_PARAMSENTRY
-_TABLE.fields_by_name['col_vindexes'].message_type = _COLVINDEX
-_TABLE.fields_by_name['autoinc'].message_type = _AUTOINC
+_TABLE.fields_by_name['column_vindexes'].message_type = _COLUMNVINDEX
+_TABLE.fields_by_name['auto_increment'].message_type = _AUTOINCREMENT
 DESCRIPTOR.message_types_by_name['Keyspace'] = _KEYSPACE
 DESCRIPTOR.message_types_by_name['Vindex'] = _VINDEX
 DESCRIPTOR.message_types_by_name['Table'] = _TABLE
-DESCRIPTOR.message_types_by_name['ColVindex'] = _COLVINDEX
-DESCRIPTOR.message_types_by_name['Autoinc'] = _AUTOINC
+DESCRIPTOR.message_types_by_name['ColumnVindex'] = _COLUMNVINDEX
+DESCRIPTOR.message_types_by_name['AutoIncrement'] = _AUTOINCREMENT
 
 Keyspace = _reflection.GeneratedProtocolMessageType('Keyspace', (_message.Message,), dict(
 
@@ -408,19 +408,19 @@ Table = _reflection.GeneratedProtocolMessageType('Table', (_message.Message,), d
   ))
 _sym_db.RegisterMessage(Table)
 
-ColVindex = _reflection.GeneratedProtocolMessageType('ColVindex', (_message.Message,), dict(
-  DESCRIPTOR = _COLVINDEX,
+ColumnVindex = _reflection.GeneratedProtocolMessageType('ColumnVindex', (_message.Message,), dict(
+  DESCRIPTOR = _COLUMNVINDEX,
   __module__ = 'vschema_pb2'
-  # @@protoc_insertion_point(class_scope:vschema.ColVindex)
+  # @@protoc_insertion_point(class_scope:vschema.ColumnVindex)
   ))
-_sym_db.RegisterMessage(ColVindex)
+_sym_db.RegisterMessage(ColumnVindex)
 
-Autoinc = _reflection.GeneratedProtocolMessageType('Autoinc', (_message.Message,), dict(
-  DESCRIPTOR = _AUTOINC,
+AutoIncrement = _reflection.GeneratedProtocolMessageType('AutoIncrement', (_message.Message,), dict(
+  DESCRIPTOR = _AUTOINCREMENT,
   __module__ = 'vschema_pb2'
-  # @@protoc_insertion_point(class_scope:vschema.Autoinc)
+  # @@protoc_insertion_point(class_scope:vschema.AutoIncrement)
   ))
-_sym_db.RegisterMessage(Autoinc)
+_sym_db.RegisterMessage(AutoIncrement)
 
 
 _KEYSPACE_VINDEXESENTRY.has_options = True

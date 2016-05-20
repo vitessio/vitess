@@ -1,5 +1,4 @@
-// This file contains all the types necessary to make
-// RPC calls to Vttablet.
+// This file contains the types needed to define a vschema.
 
 syntax = "proto3";
 
@@ -7,6 +6,7 @@ package vschema;
 
 // Keyspace is the vschema for a keyspace.
 message Keyspace {
+  // If sharded is false, vindexes and tables are ignored.
   bool sharded = 1;
   map<string, Vindex> vindexes = 2;
   map<string, Table> tables = 3;
@@ -14,26 +14,43 @@ message Keyspace {
 
 // Vindex is the vindex info for a Keyspace.
 message Vindex {
+  // The type must match one of the predefined
+  // (or plugged in) vindex names.
   string type = 1;
+  // params is a map of attribute value pairs
+  // that must be dedfined as required by the
+  // vindex constructors. The values can only
+  // be strings.
   map<string, string> params = 2;
+  // A lookup vindex can have an owner table defined.
+  // If so, rows in the lookup table are created or
+  // deleted in sync with corresponding rows in the
+  // owner table.
   string owner = 3;
 }
 
 // Table is the table info for a Keyspace.
 message Table {
+  // If the table is a sequence, type must be
+  // "Sequence". Otherwise, it should be empty.
   string type = 1;
-  repeated ColVindex col_vindexes = 2;
-  Autoinc autoinc = 3;
+  // column_vindexes associates columns to vindexes.
+  repeated ColumnVindex column_vindexes = 2;
+  // auto_increment is specified if a column needs
+  // to be associated with a sequence.
+  AutoIncrement auto_increment = 3;
 }
 
-// ColVindex is used to associate a column to a vindex.
-message ColVindex {
-  string col = 1;
+// ColumnVindex is used to associate a column to a vindex.
+message ColumnVindex {
+  string column = 1;
+  // The name must match a vindex defined in Keyspace.
   string name = 2;
 }
 
-// Autoinc is used to designate a column as auto-inc.
-message Autoinc {
-  string col = 1;
+// Autoincrement is used to designate a column as auto-inc.
+message AutoIncrement {
+  string column = 1;
+  // The sequence must match a table of type SEQUENCE.
   string sequence = 2;
 }

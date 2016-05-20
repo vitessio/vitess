@@ -50,81 +50,81 @@ var routerVSchema = `
 	},
 	"tables": {
 		"user": {
-			"col_vindexes": [
+			"column_vindexes": [
 				{
-					"col": "Id",
+					"column": "Id",
 					"name": "user_index"
 				},
 				{
-					"col": "name",
+					"column": "name",
 					"name": "name_user_map"
 				}
 			],
-			"autoinc": {
-				"col": "id",
+			"auto_increment": {
+				"column": "id",
 				"sequence": "user_seq"
 			}
 		},
 		"user_extra": {
-			"col_vindexes": [
+			"column_vindexes": [
 				{
-					"col": "user_id",
+					"column": "user_id",
 					"name": "user_index"
 				}
 			]
 		},
 		"music": {
-			"col_vindexes": [
+			"column_vindexes": [
 				{
-					"col": "user_id",
+					"column": "user_id",
 					"name": "user_index"
 				},
 				{
-					"col": "id",
+					"column": "id",
 					"name": "music_user_map"
 				}
 			],
-			"Autoinc" : {
-				"col": "id",
+			"auto_increment": {
+				"column": "id",
 				"sequence": "user_seq"
 			}
 		},
 		"music_extra": {
-			"col_vindexes": [
+			"column_vindexes": [
 				{
-					"col": "user_id",
+					"column": "user_id",
 					"name": "user_index"
 				},
 				{
-					"col": "music_id",
+					"column": "music_id",
 					"name": "music_user_map"
 				}
 			]
 		},
 		"music_extra_reversed": {
-			"col_vindexes": [
+			"column_vindexes": [
 				{
-					"col": "music_id",
+					"column": "music_id",
 					"name": "music_user_map"
 				},
 				{
-					"col": "user_id",
+					"column": "user_id",
 					"name": "user_index"
 				}
 			]
 		},
 		"noauto_table": {
-			"col_vindexes": [
+			"column_vindexes": [
 				{
-					"col": "id",
+					"column": "id",
 					"name": "idx_noauto"
 				}
 			]
 		},
 		"ksid_table": {
-			"col_vindexes": [
+			"column_vindexes": [
 				{
-					"col": "keyspace_id",
+					"column": "keyspace_id",
 					"name": "keyspace_id"
 				}
 			]

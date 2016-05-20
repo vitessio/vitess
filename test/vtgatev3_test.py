@@ -134,85 +134,85 @@ vschema = {
       },
       "tables": {
         "vt_user": {
-          "col_vindexes": [
+          "column_vindexes": [
             {
-              "col": "id",
+              "column": "id",
               "name": "user_index"
             }
           ],
-          "autoinc": {
-            "col": "id",
+          "auto_increment": {
+            "column": "id",
             "sequence": "vt_user_seq"
           }
         },
         "vt_user2": {
-          "col_vindexes": [
+          "column_vindexes": [
             {
-              "col": "id",
+              "column": "id",
               "name": "user_index"
             },
             {
-              "col": "name",
+              "column": "name",
               "name": "name_user2_map"
             }
           ]
         },
         "vt_user_extra": {
-          "col_vindexes": [
+          "column_vindexes": [
             {
-              "col": "user_id",
+              "column": "user_id",
               "name": "user_index"
             }
           ]
         },
         "vt_music": {
-          "col_vindexes": [
+          "column_vindexes": [
             {
-              "col": "user_id",
+              "column": "user_id",
               "name": "user_index"
             },
             {
-              "col": "id",
+              "column": "id",
               "name": "music_user_map"
             }
           ],
-          "autoinc": {
-            "col": "id",
+          "auto_increment": {
+            "column": "id",
             "sequence": "vt_music_seq"
           }
         },
         "vt_music_extra": {
-          "col_vindexes": [
+          "column_vindexes": [
             {
-              "col": "music_id",
+              "column": "music_id",
               "name": "music_user_map"
             },
             {
-              "col": "user_id",
+              "column": "user_id",
               "name": "user_index"
             }
           ]
         },
         "join_user": {
-          "col_vindexes": [
+          "column_vindexes": [
             {
-              "col": "id",
+              "column": "id",
               "name": "user_index"
             }
           ]
         },
         "join_user_extra": {
-          "col_vindexes": [
+          "column_vindexes": [
             {
-              "col": "user_id",
+              "column": "user_id",
               "name": "user_index"
             }
           ]
         },
         "join_name_info": {
-          "col_vindexes": [
+          "column_vindexes": [
             {
-              "col": "name",
+              "column": "name",
               "name": "unicode_hash"
             }
           ]
