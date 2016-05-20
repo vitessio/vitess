@@ -198,9 +198,8 @@ message Keyspace {
   // UNSET if the keyspace is not sharded
   KeyspaceIdType sharding_column_type = 2;
 
-  // SplitShardCount stores the number of jobs to run to be sure to
-  // always have at most one job per shard (used during resharding).
-  int32 split_shard_count = 3;
+  // OBSOLETE int32 split_shard_count = 3;
+  reserved 3;
 
   // ServedFrom indicates a relationship between a TabletType and the
   // keyspace name that's serving it.
@@ -268,5 +267,6 @@ message SrvKeyspace {
   string sharding_column_name = 2;
   KeyspaceIdType sharding_column_type = 3;
   repeated ServedFrom served_from = 4;
-  int32 split_shard_count = 5;
+  // OBSOLETE int32 split_shard_count = 5;
+  reserved 5;
 }

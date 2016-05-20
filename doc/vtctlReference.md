@@ -118,7 +118,7 @@ Creates the specified keyspace.
 
 #### Example
 
-<pre class="command-example">CreateKeyspace [-sharding_column_name=name] [-sharding_column_type=type] [-served_from=tablettype1:ks1,tablettype2,ks2,...] [-split_shard_count=N] [-force] &lt;keyspace name&gt;</pre>
+<pre class="command-example">CreateKeyspace [-sharding_column_name=name] [-sharding_column_type=type] [-served_from=tablettype1:ks1,tablettype2,ks2,...] [-force] &lt;keyspace name&gt;</pre>
 
 #### Flags
 
@@ -128,7 +128,6 @@ Creates the specified keyspace.
 | served_from | string | Specifies a comma-separated list of dbtype:keyspace pairs used to serve traffic |
 | sharding_column_name | string | Specifies the column to use for sharding operations |
 | sharding_column_type | string | Specifies the type of the column to use for sharding operations |
-| split_shard_count | Int | Specifies the number of shards to use for data splits |
 
 
 #### Arguments
@@ -388,14 +387,13 @@ Updates the sharding information for a keyspace.
 
 #### Example
 
-<pre class="command-example">SetKeyspaceShardingInfo [-force] [-split_shard_count=N] &lt;keyspace name&gt; [&lt;column name&gt;] [&lt;column type&gt;]</pre>
+<pre class="command-example">SetKeyspaceShardingInfo [-force] &lt;keyspace name&gt; [&lt;column name&gt;] [&lt;column type&gt;]</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | force | Boolean | Updates fields even if they are already set. Use caution before calling this command. |
-| split_shard_count | Int | Specifies the number of shards to use for data splits |
 
 
 #### Arguments

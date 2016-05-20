@@ -245,7 +245,6 @@ index by_msg (msg)
     utils.run_vtctl(['CreateKeyspace',
                      '--sharding_column_name', 'custom_sharding_key',
                      '--sharding_column_type', keyspace_id_type,
-                     '--split_shard_count', '4',
                      'test_keyspace'])
 
     shard_0_master.init_tablet('master', 'test_keyspace', '-40')
@@ -261,7 +260,7 @@ index by_msg (msg)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     ks = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_keyspace'])
-    self.assertEqual(ks['split_shard_count'], 4)
+    self.assertEqual(ks['sharding_column_name'], 'custom_sharding_key')
 
     # create databases so vttablet can start behaving normally
     for t in [shard_0_master, shard_0_replica, shard_0_rdonly,
