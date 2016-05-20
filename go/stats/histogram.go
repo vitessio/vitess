@@ -54,7 +54,7 @@ func NewGenericHistogram(name string, cutoffs []int64, labels []string, countLab
 		buckets:    make([]sync2.AtomicInt64, len(labels)),
 	}
 	if name != "" {
-		Publish(name, h)
+		publish(name, h)
 	}
 	return h
 }

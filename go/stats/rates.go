@@ -64,7 +64,7 @@ func NewRates(name string, countTracker CountTracker, samples int, interval time
 		timestampLastSampling: timeNow(),
 	}
 	if name != "" {
-		Publish(name, rt)
+		publish(name, rt)
 	}
 	if interval > 0 {
 		go rt.track()

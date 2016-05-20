@@ -31,7 +31,7 @@ func NewCounters(name string, tags ...string) *Counters {
 		c.counts[tag] = new(int64)
 	}
 	if name != "" {
-		Publish(name, c)
+		publish(name, c)
 	}
 	return c
 }
@@ -156,7 +156,7 @@ func NewMultiCounters(name string, labels []string) *MultiCounters {
 		labels:   labels,
 	}
 	if name != "" {
-		Publish(name, t)
+		publish(name, t)
 	}
 	return t
 }
@@ -208,7 +208,7 @@ func NewMultiCountersFunc(name string, labels []string, f CountersFunc) *MultiCo
 		labels:       labels,
 	}
 	if name != "" {
-		Publish(name, t)
+		publish(name, t)
 	}
 	return t
 }

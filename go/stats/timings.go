@@ -37,7 +37,7 @@ func NewTimings(name string, categories ...string) *Timings {
 		t.histograms[cat] = NewGenericHistogram("", bucketCutoffs, bucketLabels, "Count", "Time")
 	}
 	if name != "" {
-		Publish(name, t)
+		publish(name, t)
 	}
 	return t
 }
@@ -165,7 +165,7 @@ func NewMultiTimings(name string, labels []string) *MultiTimings {
 		labels:  labels,
 	}
 	if name != "" {
-		Publish(name, t)
+		publish(name, t)
 	}
 	return t
 }
