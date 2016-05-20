@@ -248,6 +248,17 @@ type Impl interface {
 	// the lock until at most ctx.Done(). The wait can be interrupted
 	// by cancelling the context. It returns the lock path.
 	//
+	// We are currently only using this method to lock actions
+	// that would impact each-other. Most changes of the Shard object
+	// are done by UpdateShardFields, which is not locking the shard
+	// object. The current list of actions that lock a shard are:
+	// 1. all Vitess-controlled re-parenting operations:
+	//   1.1 InitShardMaster
+	//   1.2 PlannedReparentShard
+	//   1.3 EmergencyReparentShard
+	// 2. operations that we don't want to conflict with re-parenting:
+	//   2.1 DeleteTablet when it's the shard's current master
+	//
 	// Can return ErrTimeout or ErrInterrupted
 	LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error)
 

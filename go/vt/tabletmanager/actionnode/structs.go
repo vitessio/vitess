@@ -97,7 +97,7 @@ func SetShardServedTypes(cells []string, servedType topodatapb.TabletType) *Acti
 // MigrateServedTypes returns an ActionNode
 func MigrateServedTypes(servedType topodatapb.TabletType) *ActionNode {
 	return (&ActionNode{
-		Action: ShardActionMigrateServedTypes,
+		Action: KeyspaceActionMigrateServedTypes,
 		Args: &MigrateServedTypesArgs{
 			ServedType: servedType,
 		},

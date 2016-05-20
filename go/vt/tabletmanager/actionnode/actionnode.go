@@ -182,10 +182,6 @@ const (
 	// ShardActionSetServedTypes changes the ServedTypes inside a shard
 	ShardActionSetServedTypes = "SetShardServedTypes"
 
-	// ShardActionMigrateServedTypes migratew served types from
-	// one shard to another
-	ShardActionMigrateServedTypes = "MigrateServedTypes"
-
 	// ShardActionUpdateShard updates the Shard object (Cells, ...)
 	ShardActionUpdateShard = "UpdateShard"
 
@@ -202,6 +198,10 @@ const (
 
 	// KeyspaceActionSetShardingInfo updates the sharding info
 	KeyspaceActionSetShardingInfo = "SetKeyspaceShardingInfo"
+
+	// KeyspaceActionMigrateServedTypes migrates ServedType from
+	// one shard to another in a keyspace
+	KeyspaceActionMigrateServedTypes = "MigrateServedTypes"
 
 	// KeyspaceActionMigrateServedFrom migrates ServedFrom to
 	// another keyspace

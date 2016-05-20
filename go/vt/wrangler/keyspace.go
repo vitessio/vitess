@@ -45,7 +45,6 @@ func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 
 	err = wr.setKeyspaceShardingInfo(ctx, keyspace, shardingColumnName, shardingColumnType, force)
 	return wr.unlockKeyspace(ctx, keyspace, actionNode, lockPath, err)
-
 }
 
 func (wr *Wrangler) setKeyspaceShardingInfo(ctx context.Context, keyspace, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType, force bool) error {
@@ -78,6 +77,17 @@ func (wr *Wrangler) setKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 // MigrateServedTypes is used during horizontal splits to migrate a
 // served type from a list of shards to another.
 func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType topodatapb.TabletType, reverse, skipReFreshState bool, filteredReplicationWaitTime time.Duration) error {
+	actionNode := actionnode.MigrateServedTypes(servedType)
+	lockPath, err := wr.lockKeyspace(ctx, keyspace, actionNode)
+	if err != nil {
+		return err
+	}
+
+	err = wr.migrateServedTypesLocked(ctx, keyspace, shard, cells, servedType, reverse, skipReFreshState, filteredReplicationWaitTime)
+	return wr.unlockKeyspace(ctx, keyspace, actionNode, lockPath, err)
+}
+
+func (wr *Wrangler) migrateServedTypesLocked(ctx context.Context, keyspace, shard string, cells []string, servedType topodatapb.TabletType, reverse, skipReFreshState bool, filteredReplicationWaitTime time.Duration) error {
 	if servedType == topodatapb.TabletType_MASTER {
 		// we cannot migrate a master back, since when master migration
 		// is done, the source shards are dead
@@ -168,7 +178,7 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 
 	// rebuild the keyspace serving graph if there was no error
 	if !rec.HasErrors() {
-		rec.RecordError(wr.RebuildKeyspaceGraph(ctx, keyspace, cells))
+		rec.RecordError(wr.RebuildKeyspaceLocked(ctx, keyspace, cells))
 	}
 
 	// Send a refresh to the tablets we just disabled, iff:

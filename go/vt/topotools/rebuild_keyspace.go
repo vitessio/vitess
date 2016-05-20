@@ -26,7 +26,7 @@ func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts topo.Server, ke
 		return err
 	}
 
-	err = rebuildKeyspace(ctx, log, ts, keyspace, cells)
+	err = RebuildKeyspaceLocked(ctx, log, ts, keyspace, cells)
 	return node.UnlockKeyspace(ctx, ts, keyspace, lockPath, err)
 }
 
@@ -49,13 +49,13 @@ func findCellsForRebuild(ki *topo.KeyspaceInfo, shardMap map[string]*topo.ShardI
 	}
 }
 
-// rebuildKeyspace should only be used with an action lock on the keyspace
+// RebuildKeyspaceLocked should only be used with an action lock on the keyspace
 // - otherwise the consistency of the serving graph data can't be
 // guaranteed.
 //
 // Take data from the global keyspace and rebuild the local serving
 // copies in each cell.
-func rebuildKeyspace(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace string, cells []string) error {
+func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace string, cells []string) error {
 	log.Infof("rebuildKeyspace %v", keyspace)
 
 	ki, err := ts.GetKeyspace(ctx, keyspace)
