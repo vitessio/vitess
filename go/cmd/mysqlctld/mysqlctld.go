@@ -33,7 +33,7 @@ var (
 	mysqlSocket = flag.String("mysql_socket", "", "path to the mysql socket")
 
 	// mysqlctl init flags
-	waitTime      = flag.Duration("wait_time", 2*time.Minute, "how long to wait for mysqld startup or shutdown")
+	waitTime      = flag.Duration("wait_time", 5*time.Minute, "how long to wait for mysqld startup or shutdown")
 	initDBSQLFile = flag.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
 )
 
