@@ -17,8 +17,6 @@ import (
 type TestServer struct {
 	topo.Impl
 	localCells []string
-
-	HookLockSrvShardForAction func()
 }
 
 // newTestServer returns a new TestServer (with the required paths created)
@@ -45,13 +43,4 @@ func New(t *testing.T, cells []string) topo.Server {
 // GetKnownCells is part of topo.Server interface
 func (s *TestServer) GetKnownCells(ctx context.Context) ([]string, error) {
 	return s.localCells, nil
-}
-
-// LockSrvShardForAction should override the function defined by the underlying
-// topo.Server.
-func (s *TestServer) LockSrvShardForAction(ctx context.Context, cell, keyspace, shard, contents string) (string, error) {
-	if s.HookLockSrvShardForAction != nil {
-		s.HookLockSrvShardForAction()
-	}
-	return s.Impl.LockSrvShardForAction(ctx, cell, keyspace, shard, contents)
 }

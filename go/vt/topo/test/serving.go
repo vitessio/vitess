@@ -19,25 +19,6 @@ import (
 func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Impl) {
 	cell := getLocalCell(ctx, t, ts)
 
-	// test cell/keyspace/shard entries (SrvShard)
-	srvShard := &topodatapb.SrvShard{
-		Name:       "-10",
-		KeyRange:   newKeyRange("-10"),
-		MasterCell: "test",
-	}
-	if err := ts.UpdateSrvShard(ctx, cell, "test_keyspace", "-10", srvShard); err != nil {
-		t.Fatalf("UpdateSrvShard(1): %v", err)
-	}
-	if _, err := ts.GetSrvShard(ctx, cell, "test_keyspace", "666"); err != topo.ErrNoNode {
-		t.Errorf("GetSrvShard(invalid): %v", err)
-	}
-	if s, err := ts.GetSrvShard(ctx, cell, "test_keyspace", "-10"); err != nil ||
-		s.Name != "-10" ||
-		!key.KeyRangeEqual(s.KeyRange, newKeyRange("-10")) ||
-		s.MasterCell != "test" {
-		t.Errorf("GetSrvShard(valid): %v", err)
-	}
-
 	// test cell/keyspace entries (SrvKeyspace)
 	srvKeyspace := topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
@@ -105,7 +86,7 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Impl) {
 
 	// Delete the SrvKeyspace.
 	if err := ts.DeleteSrvKeyspace(ctx, cell, "unknown_keyspace_so_far"); err != nil {
-		t.Fatalf("DeleteSrvShard: %v", err)
+		t.Fatalf("DeleteSrvKeyspace: %v", err)
 	}
 	if _, err := ts.GetSrvKeyspace(ctx, cell, "unknown_keyspace_so_far"); err != topo.ErrNoNode {
 		t.Errorf("GetSrvKeyspace(deleted) got %v, want ErrNoNode", err)
@@ -188,7 +169,7 @@ func CheckWatchSrvKeyspace(ctx context.Context, t *testing.T, ts topo.Impl) {
 	}
 
 	// re-create the value, a bit different, should get a notification
-	srvKeyspace.SplitShardCount = 2
+	srvKeyspace.ShardingColumnName = "test_column2"
 	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace); err != nil {
 		t.Fatalf("UpdateSrvKeyspace failed: %v", err)
 	}

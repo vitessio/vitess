@@ -442,7 +442,6 @@ public abstract class RpcClientTest {
                     .setTabletType(TabletType.MASTER)
                     .setKeyspace("other_keyspace")
                     .build())
-            .setSplitShardCount(128)
             .build();
     SrvKeyspace actual = conn.getSrvKeyspace(ctx, "big");
     Assert.assertEquals(expected, actual);

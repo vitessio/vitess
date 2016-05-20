@@ -55,7 +55,6 @@ the shards randomly.
 We can load this VSchema into Vitess like this:
 
 ``` sh
-vitess/examples/kubernetes$ ./kvtctl.sh SetKeyspaceShardingInfo test_keyspace keyspace_id uint64
 vitess/examples/kubernetes$ ./kvtctl.sh ApplyVSchema -vschema "$(cat vschema.json)" test_keyspace
 ```
 
@@ -240,7 +239,6 @@ unsharded example:
 ``` sh
 vitess/examples/kubernetes$ ./vttablet-down.sh
 ### example output:
-# Removing tablet test-0000000100 from Vitess topology...
 # Deleting pod for tablet test-0000000100...
 # pods/vttablet-100
 # ...
@@ -249,7 +247,7 @@ vitess/examples/kubernetes$ ./vttablet-down.sh
 Then we can delete the now-empty shard:
 
 ``` sh
-vitess/examples/kubernetes$ ./kvtctl.sh DeleteShard test_keyspace/0
+vitess/examples/kubernetes$ ./kvtctl.sh DeleteShard -recursive test_keyspace/0
 ```
 
 You should then see in the vtctld **Topology** page, or in the output of

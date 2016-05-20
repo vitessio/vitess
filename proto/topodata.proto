@@ -198,9 +198,8 @@ message Keyspace {
   // UNSET if the keyspace is not sharded
   KeyspaceIdType sharding_column_type = 2;
 
-  // SplitShardCount stores the number of jobs to run to be sure to
-  // always have at most one job per shard (used during resharding).
-  int32 split_shard_count = 3;
+  // OBSOLETE int32 split_shard_count = 3;
+  reserved 3;
 
   // ServedFrom indicates a relationship between a TabletType and the
   // keyspace name that's serving it.
@@ -220,8 +219,6 @@ message Keyspace {
   repeated ServedFrom served_froms = 4;
 }
 
-// Replication graph information
-
 // ShardReplication describes the MySQL replication relationships
 // whithin a cell.
 message ShardReplication {
@@ -236,19 +233,7 @@ message ShardReplication {
   repeated Node nodes = 1;
 }
 
-// Serving graph information
-
-// SrvShard is a rollup node for the shard itself.
-message SrvShard {
-  // Copied from Shard.
-  string name = 1;
-  KeyRange key_range = 2;
-
-  // The cell that master tablet resides in.
-  string master_cell = 3;
-}
-
-// ShardReference is used as a pointer from a SrvKeyspace to a SrvShard
+// ShardReference is used as a pointer from a SrvKeyspace to a Shard
 message ShardReference {
   // Copied from Shard.
   string name = 1;
@@ -282,5 +267,6 @@ message SrvKeyspace {
   string sharding_column_name = 2;
   KeyspaceIdType sharding_column_type = 3;
   repeated ServedFrom served_from = 4;
-  int32 split_shard_count = 5;
+  // OBSOLETE int32 split_shard_count = 5;
+  reserved 5;
 }

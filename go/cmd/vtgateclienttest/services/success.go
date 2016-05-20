@@ -71,7 +71,6 @@ func (c *successClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*t
 					Keyspace:   "other_keyspace",
 				},
 			},
-			SplitShardCount: 128,
 		}, nil
 	}
 	if keyspace == "small" {

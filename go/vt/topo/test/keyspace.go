@@ -63,7 +63,6 @@ func CheckKeyspace(ctx context.Context, t *testing.T, ts topo.Impl) {
 				Keyspace:   "test_keyspace3",
 			},
 		},
-		SplitShardCount: 64,
 	}
 	if err := ts.CreateKeyspace(ctx, "test_keyspace2", k); err != nil {
 		t.Errorf("CreateKeyspace: %v", err)

@@ -65,17 +65,6 @@ func handleExplorerRedirect(ctx context.Context, ts topo.Server, r *http.Request
 			return "", errors.New("keyspace and cell are required for this redirect")
 		}
 		return appPrefix + "#/keyspaces/", nil
-	case "srv_shard":
-		if keyspace == "" || shard == "" || cell == "" {
-			return "", errors.New("keyspace, shard, and cell are required for this redirect")
-		}
-		return appPrefix + fmt.Sprintf("#/shard/%s/%s", keyspace, shard), nil
-	case "srv_type":
-		tabletType := r.FormValue("tablet_type")
-		if keyspace == "" || shard == "" || cell == "" || tabletType == "" {
-			return "", errors.New("keyspace, shard, cell, and tablet_type are required for this redirect")
-		}
-		return appPrefix + fmt.Sprintf("#/shard/%s/%s", keyspace, shard), nil
 	case "tablet":
 		alias := r.FormValue("alias")
 		if alias == "" {

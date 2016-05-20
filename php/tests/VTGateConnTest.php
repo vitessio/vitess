@@ -418,7 +418,6 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
         $served_from->setTabletType(Proto\Topodata\TabletType::MASTER);
         $served_from->setKeyspace('other_keyspace');
         $expected->addServedFrom($served_from);
-        $expected->setSplitShardCount(128);
 
         $actual = $conn->getSrvKeyspace($ctx, "big");
         $this->assertEquals($expected, $actual);

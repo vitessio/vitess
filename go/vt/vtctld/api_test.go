@@ -10,8 +10,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
@@ -61,7 +59,6 @@ func TestAPI(t *testing.T) {
 		KeyRange: &topodatapb.KeyRange{Start: nil, End: []byte{0x80}},
 		PortMap:  map[string]int32{"vt": 200},
 	})
-	topotools.RebuildShard(ctx, logutil.NewConsoleLogger(), ts, "ks1", "-80", cells)
 
 	// Populate fake actions.
 	actionRepo.RegisterKeyspaceAction("TestKeyspaceAction",

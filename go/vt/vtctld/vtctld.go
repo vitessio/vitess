@@ -90,7 +90,7 @@ func InitVtctld(ts topo.Server) {
 
 	actionRepo.RegisterTabletAction("DeleteTablet", acl.ADMIN,
 		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias, r *http.Request) (string, error) {
-			return "", wr.DeleteTablet(ctx, tabletAlias, false, false)
+			return "", wr.DeleteTablet(ctx, tabletAlias, false)
 		})
 
 	actionRepo.RegisterTabletAction("ReloadSchema", acl.ADMIN,

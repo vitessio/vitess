@@ -48,13 +48,6 @@ func Run(port int) {
 	Close()
 }
 
-// FireRunHooks fires the hooks registered by OnHook.
-// Use this in a non-server to run the hooks registered
-// by servenv.OnRun().
-func FireRunHooks() {
-	onRunHooks.Fire()
-}
-
 // Close runs any registered exit hooks in parallel.
 func Close() {
 	onCloseHooks.Fire()

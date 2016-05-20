@@ -94,14 +94,12 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 // DeleteTablet removes a tablet from a shard.
 // - if allowMaster is set, we can Delete a master tablet (and clear
 // its record from the Shard record if it was the master).
-// - if skipRebuild is set, we do not rebuild the serving graph.
-func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias, allowMaster, skipRebuild bool) error {
+func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias, allowMaster bool) error {
 	// load the tablet, see if we'll need to rebuild
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
 	}
-	rebuildRequired := ti.IsInServingGraph()
 	wasMaster := ti.Type == topodatapb.TabletType_MASTER
 	if wasMaster && !allowMaster {
 		return fmt.Errorf("cannot delete tablet %v as it is a master, use allow_master flag", topoproto.TabletAliasString(tabletAlias))
@@ -139,17 +137,7 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 		}
 	}
 
-	// and rebuild the original shard if needed
-	if !rebuildRequired {
-		wr.Logger().Infof("Rebuild not required")
-		return nil
-	}
-	if skipRebuild {
-		wr.Logger().Warningf("Rebuild required, but skipping it")
-		return nil
-	}
-	_, err = wr.RebuildShardGraph(ctx, ti.Keyspace, ti.Shard, []string{ti.Alias.Cell})
-	return err
+	return nil
 }
 
 // ChangeSlaveType changes the type of tablet and recomputes all
@@ -168,43 +156,8 @@ func (wr *Wrangler) ChangeSlaveType(ctx context.Context, tabletAlias *topodatapb
 		return fmt.Errorf("tablet %v type change %v -> %v is not an allowed transition for ChangeSlaveType", tabletAlias, ti.Type, tabletType)
 	}
 
-	// ask the tablet to make the change
-	if err := wr.tmc.ChangeType(ctx, ti.Tablet, tabletType); err != nil {
-		return err
-	}
-
-	// if the tablet was or is serving, rebuild the serving graph
-	if ti.IsInServingGraph() || topo.IsInServingGraph(tabletType) {
-		if _, err := wr.RebuildShardGraph(ctx, ti.Tablet.Keyspace, ti.Tablet.Shard, []string{ti.Tablet.Alias.Cell}); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// same as ChangeType, but assume we already have the shard lock,
-// and do not have the option to force anything.
-func (wr *Wrangler) changeTypeInternal(ctx context.Context, tabletAlias *topodatapb.TabletAlias, dbType topodatapb.TabletType) error {
-	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
-	rebuildRequired := ti.IsInServingGraph()
-
-	// change the type
-	if err := wr.tmc.ChangeType(ctx, ti.Tablet, dbType); err != nil {
-		return err
-	}
-
-	// rebuild if necessary
-	if rebuildRequired {
-		_, err = wr.RebuildShardGraph(ctx, ti.Keyspace, ti.Shard, []string{ti.Alias.Cell})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	// and ask the tablet to make the change
+	return wr.tmc.ChangeType(ctx, ti.Tablet, tabletType)
 }
 
 // ExecuteFetchAsDba executes a query remotely using the DBA pool

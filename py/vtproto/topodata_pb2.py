@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='topodata.proto',
   package='topodata',
   syntax='proto3',
-  serialized_pb=_b('\n\x0etopodata.proto\x12\x08topodata\"&\n\x08KeyRange\x12\r\n\x05start\x18\x01 \x01(\x0c\x12\x0b\n\x03\x65nd\x18\x02 \x01(\x0c\"(\n\x0bTabletAlias\x12\x0c\n\x04\x63\x65ll\x18\x01 \x01(\t\x12\x0b\n\x03uid\x18\x02 \x01(\r\"\x90\x03\n\x06Tablet\x12$\n\x05\x61lias\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\x12\x10\n\x08hostname\x18\x02 \x01(\t\x12\n\n\x02ip\x18\x03 \x01(\t\x12/\n\x08port_map\x18\x04 \x03(\x0b\x32\x1d.topodata.Tablet.PortMapEntry\x12\x10\n\x08keyspace\x18\x05 \x01(\t\x12\r\n\x05shard\x18\x06 \x01(\t\x12%\n\tkey_range\x18\x07 \x01(\x0b\x32\x12.topodata.KeyRange\x12\"\n\x04type\x18\x08 \x01(\x0e\x32\x14.topodata.TabletType\x12\x18\n\x10\x64\x62_name_override\x18\t \x01(\t\x12(\n\x04tags\x18\n \x03(\x0b\x32\x1a.topodata.Tablet.TagsEntry\x1a.\n\x0cPortMapEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x05:\x02\x38\x01\x1a+\n\tTagsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01J\x04\x08\x0b\x10\x0c\"\xcb\x04\n\x05Shard\x12+\n\x0cmaster_alias\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\x12%\n\tkey_range\x18\x02 \x01(\x0b\x32\x12.topodata.KeyRange\x12\x30\n\x0cserved_types\x18\x03 \x03(\x0b\x32\x1a.topodata.Shard.ServedType\x12\x32\n\rsource_shards\x18\x04 \x03(\x0b\x32\x1b.topodata.Shard.SourceShard\x12\r\n\x05\x63\x65lls\x18\x05 \x03(\t\x12\x36\n\x0ftablet_controls\x18\x06 \x03(\x0b\x32\x1d.topodata.Shard.TabletControl\x1a\x46\n\nServedType\x12)\n\x0btablet_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\x12\r\n\x05\x63\x65lls\x18\x02 \x03(\t\x1ar\n\x0bSourceShard\x12\x0b\n\x03uid\x18\x01 \x01(\r\x12\x10\n\x08keyspace\x18\x02 \x01(\t\x12\r\n\x05shard\x18\x03 \x01(\t\x12%\n\tkey_range\x18\x04 \x01(\x0b\x32\x12.topodata.KeyRange\x12\x0e\n\x06tables\x18\x05 \x03(\t\x1a\x84\x01\n\rTabletControl\x12)\n\x0btablet_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\x12\r\n\x05\x63\x65lls\x18\x02 \x03(\t\x12\x1d\n\x15\x64isable_query_service\x18\x03 \x01(\x08\x12\x1a\n\x12\x62lacklisted_tables\x18\x04 \x03(\t\"\x8a\x02\n\x08Keyspace\x12\x1c\n\x14sharding_column_name\x18\x01 \x01(\t\x12\x36\n\x14sharding_column_type\x18\x02 \x01(\x0e\x32\x18.topodata.KeyspaceIdType\x12\x19\n\x11split_shard_count\x18\x03 \x01(\x05\x12\x33\n\x0cserved_froms\x18\x04 \x03(\x0b\x32\x1d.topodata.Keyspace.ServedFrom\x1aX\n\nServedFrom\x12)\n\x0btablet_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\x12\r\n\x05\x63\x65lls\x18\x02 \x03(\t\x12\x10\n\x08keyspace\x18\x03 \x01(\t\"w\n\x10ShardReplication\x12.\n\x05nodes\x18\x01 \x03(\x0b\x32\x1f.topodata.ShardReplication.Node\x1a\x33\n\x04Node\x12+\n\x0ctablet_alias\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\"T\n\x08SrvShard\x12\x0c\n\x04name\x18\x01 \x01(\t\x12%\n\tkey_range\x18\x02 \x01(\x0b\x32\x12.topodata.KeyRange\x12\x13\n\x0bmaster_cell\x18\x03 \x01(\t\"E\n\x0eShardReference\x12\x0c\n\x04name\x18\x01 \x01(\t\x12%\n\tkey_range\x18\x02 \x01(\x0b\x32\x12.topodata.KeyRange\"\xb1\x03\n\x0bSrvKeyspace\x12;\n\npartitions\x18\x01 \x03(\x0b\x32\'.topodata.SrvKeyspace.KeyspacePartition\x12\x1c\n\x14sharding_column_name\x18\x02 \x01(\t\x12\x36\n\x14sharding_column_type\x18\x03 \x01(\x0e\x32\x18.topodata.KeyspaceIdType\x12\x35\n\x0bserved_from\x18\x04 \x03(\x0b\x32 .topodata.SrvKeyspace.ServedFrom\x12\x19\n\x11split_shard_count\x18\x05 \x01(\x05\x1ar\n\x11KeyspacePartition\x12)\n\x0bserved_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\x12\x32\n\x10shard_references\x18\x02 \x03(\x0b\x32\x18.topodata.ShardReference\x1aI\n\nServedFrom\x12)\n\x0btablet_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\x12\x10\n\x08keyspace\x18\x02 \x01(\t*2\n\x0eKeyspaceIdType\x12\t\n\x05UNSET\x10\x00\x12\n\n\x06UINT64\x10\x01\x12\t\n\x05\x42YTES\x10\x02*\x8f\x01\n\nTabletType\x12\x0b\n\x07UNKNOWN\x10\x00\x12\n\n\x06MASTER\x10\x01\x12\x0b\n\x07REPLICA\x10\x02\x12\n\n\x06RDONLY\x10\x03\x12\t\n\x05\x42\x41TCH\x10\x03\x12\t\n\x05SPARE\x10\x04\x12\x10\n\x0c\x45XPERIMENTAL\x10\x05\x12\n\n\x06\x42\x41\x43KUP\x10\x06\x12\x0b\n\x07RESTORE\x10\x07\x12\n\n\x06WORKER\x10\x08\x1a\x02\x10\x01\x42\x1a\n\x18\x63om.youtube.vitess.protob\x06proto3')
+  serialized_pb=_b('\n\x0etopodata.proto\x12\x08topodata\"&\n\x08KeyRange\x12\r\n\x05start\x18\x01 \x01(\x0c\x12\x0b\n\x03\x65nd\x18\x02 \x01(\x0c\"(\n\x0bTabletAlias\x12\x0c\n\x04\x63\x65ll\x18\x01 \x01(\t\x12\x0b\n\x03uid\x18\x02 \x01(\r\"\x90\x03\n\x06Tablet\x12$\n\x05\x61lias\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\x12\x10\n\x08hostname\x18\x02 \x01(\t\x12\n\n\x02ip\x18\x03 \x01(\t\x12/\n\x08port_map\x18\x04 \x03(\x0b\x32\x1d.topodata.Tablet.PortMapEntry\x12\x10\n\x08keyspace\x18\x05 \x01(\t\x12\r\n\x05shard\x18\x06 \x01(\t\x12%\n\tkey_range\x18\x07 \x01(\x0b\x32\x12.topodata.KeyRange\x12\"\n\x04type\x18\x08 \x01(\x0e\x32\x14.topodata.TabletType\x12\x18\n\x10\x64\x62_name_override\x18\t \x01(\t\x12(\n\x04tags\x18\n \x03(\x0b\x32\x1a.topodata.Tablet.TagsEntry\x1a.\n\x0cPortMapEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x05:\x02\x38\x01\x1a+\n\tTagsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01J\x04\x08\x0b\x10\x0c\"\xcb\x04\n\x05Shard\x12+\n\x0cmaster_alias\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\x12%\n\tkey_range\x18\x02 \x01(\x0b\x32\x12.topodata.KeyRange\x12\x30\n\x0cserved_types\x18\x03 \x03(\x0b\x32\x1a.topodata.Shard.ServedType\x12\x32\n\rsource_shards\x18\x04 \x03(\x0b\x32\x1b.topodata.Shard.SourceShard\x12\r\n\x05\x63\x65lls\x18\x05 \x03(\t\x12\x36\n\x0ftablet_controls\x18\x06 \x03(\x0b\x32\x1d.topodata.Shard.TabletControl\x1a\x46\n\nServedType\x12)\n\x0btablet_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\x12\r\n\x05\x63\x65lls\x18\x02 \x03(\t\x1ar\n\x0bSourceShard\x12\x0b\n\x03uid\x18\x01 \x01(\r\x12\x10\n\x08keyspace\x18\x02 \x01(\t\x12\r\n\x05shard\x18\x03 \x01(\t\x12%\n\tkey_range\x18\x04 \x01(\x0b\x32\x12.topodata.KeyRange\x12\x0e\n\x06tables\x18\x05 \x03(\t\x1a\x84\x01\n\rTabletControl\x12)\n\x0btablet_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\x12\r\n\x05\x63\x65lls\x18\x02 \x03(\t\x12\x1d\n\x15\x64isable_query_service\x18\x03 \x01(\x08\x12\x1a\n\x12\x62lacklisted_tables\x18\x04 \x03(\t\"\xf5\x01\n\x08Keyspace\x12\x1c\n\x14sharding_column_name\x18\x01 \x01(\t\x12\x36\n\x14sharding_column_type\x18\x02 \x01(\x0e\x32\x18.topodata.KeyspaceIdType\x12\x33\n\x0cserved_froms\x18\x04 \x03(\x0b\x32\x1d.topodata.Keyspace.ServedFrom\x1aX\n\nServedFrom\x12)\n\x0btablet_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\x12\r\n\x05\x63\x65lls\x18\x02 \x03(\t\x12\x10\n\x08keyspace\x18\x03 \x01(\tJ\x04\x08\x03\x10\x04\"w\n\x10ShardReplication\x12.\n\x05nodes\x18\x01 \x03(\x0b\x32\x1f.topodata.ShardReplication.Node\x1a\x33\n\x04Node\x12+\n\x0ctablet_alias\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\"E\n\x0eShardReference\x12\x0c\n\x04name\x18\x01 \x01(\t\x12%\n\tkey_range\x18\x02 \x01(\x0b\x32\x12.topodata.KeyRange\"\x9c\x03\n\x0bSrvKeyspace\x12;\n\npartitions\x18\x01 \x03(\x0b\x32\'.topodata.SrvKeyspace.KeyspacePartition\x12\x1c\n\x14sharding_column_name\x18\x02 \x01(\t\x12\x36\n\x14sharding_column_type\x18\x03 \x01(\x0e\x32\x18.topodata.KeyspaceIdType\x12\x35\n\x0bserved_from\x18\x04 \x03(\x0b\x32 .topodata.SrvKeyspace.ServedFrom\x1ar\n\x11KeyspacePartition\x12)\n\x0bserved_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\x12\x32\n\x10shard_references\x18\x02 \x03(\x0b\x32\x18.topodata.ShardReference\x1aI\n\nServedFrom\x12)\n\x0btablet_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\x12\x10\n\x08keyspace\x18\x02 \x01(\tJ\x04\x08\x05\x10\x06*2\n\x0eKeyspaceIdType\x12\t\n\x05UNSET\x10\x00\x12\n\n\x06UINT64\x10\x01\x12\t\n\x05\x42YTES\x10\x02*\x8f\x01\n\nTabletType\x12\x0b\n\x07UNKNOWN\x10\x00\x12\n\n\x06MASTER\x10\x01\x12\x0b\n\x07REPLICA\x10\x02\x12\n\n\x06RDONLY\x10\x03\x12\t\n\x05\x42\x41TCH\x10\x03\x12\t\n\x05SPARE\x10\x04\x12\x10\n\x0c\x45XPERIMENTAL\x10\x05\x12\n\n\x06\x42\x41\x43KUP\x10\x06\x12\x0b\n\x07RESTORE\x10\x07\x12\n\n\x06WORKER\x10\x08\x1a\x02\x10\x01\x42\x1a\n\x18\x63om.youtube.vitess.protob\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -45,8 +45,8 @@ _KEYSPACEIDTYPE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   options=None,
-  serialized_start=2086,
-  serialized_end=2136,
+  serialized_start=1958,
+  serialized_end=2008,
 )
 _sym_db.RegisterEnumDescriptor(_KEYSPACEIDTYPE)
 
@@ -100,8 +100,8 @@ _TABLETTYPE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   options=_descriptor._ParseOptions(descriptor_pb2.EnumOptions(), _b('\020\001')),
-  serialized_start=2139,
-  serialized_end=2282,
+  serialized_start=2011,
+  serialized_end=2154,
 )
 _sym_db.RegisterEnumDescriptor(_TABLETTYPE)
 
@@ -618,8 +618,8 @@ _KEYSPACE_SERVEDFROM = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1282,
-  serialized_end=1370,
+  serialized_start=1255,
+  serialized_end=1343,
 )
 
 _KEYSPACE = _descriptor.Descriptor(
@@ -644,14 +644,7 @@ _KEYSPACE = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='split_shard_count', full_name='topodata.Keyspace.split_shard_count', index=2,
-      number=3, type=5, cpp_type=1, label=1,
-      has_default_value=False, default_value=0,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-    _descriptor.FieldDescriptor(
-      name='served_froms', full_name='topodata.Keyspace.served_froms', index=3,
+      name='served_froms', full_name='topodata.Keyspace.served_froms', index=2,
       number=4, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
@@ -670,7 +663,7 @@ _KEYSPACE = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=1104,
-  serialized_end=1370,
+  serialized_end=1349,
 )
 
 
@@ -700,8 +693,8 @@ _SHARDREPLICATION_NODE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1440,
-  serialized_end=1491,
+  serialized_start=1419,
+  serialized_end=1470,
 )
 
 _SHARDREPLICATION = _descriptor.Descriptor(
@@ -730,53 +723,8 @@ _SHARDREPLICATION = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1372,
-  serialized_end=1491,
-)
-
-
-_SRVSHARD = _descriptor.Descriptor(
-  name='SrvShard',
-  full_name='topodata.SrvShard',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='name', full_name='topodata.SrvShard.name', index=0,
-      number=1, type=9, cpp_type=9, label=1,
-      has_default_value=False, default_value=_b("").decode('utf-8'),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-    _descriptor.FieldDescriptor(
-      name='key_range', full_name='topodata.SrvShard.key_range', index=1,
-      number=2, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-    _descriptor.FieldDescriptor(
-      name='master_cell', full_name='topodata.SrvShard.master_cell', index=2,
-      number=3, type=9, cpp_type=9, label=1,
-      has_default_value=False, default_value=_b("").decode('utf-8'),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-  ],
-  extensions=[
-  ],
-  nested_types=[],
-  enum_types=[
-  ],
-  options=None,
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=1493,
-  serialized_end=1577,
+  serialized_start=1351,
+  serialized_end=1470,
 )
 
 
@@ -813,8 +761,8 @@ _SHARDREFERENCE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1579,
-  serialized_end=1648,
+  serialized_start=1472,
+  serialized_end=1541,
 )
 
 
@@ -851,8 +799,8 @@ _SRVKEYSPACE_KEYSPACEPARTITION = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1895,
-  serialized_end=2009,
+  serialized_start=1761,
+  serialized_end=1875,
 )
 
 _SRVKEYSPACE_SERVEDFROM = _descriptor.Descriptor(
@@ -888,8 +836,8 @@ _SRVKEYSPACE_SERVEDFROM = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2011,
-  serialized_end=2084,
+  serialized_start=1877,
+  serialized_end=1950,
 )
 
 _SRVKEYSPACE = _descriptor.Descriptor(
@@ -927,13 +875,6 @@ _SRVKEYSPACE = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
-    _descriptor.FieldDescriptor(
-      name='split_shard_count', full_name='topodata.SrvKeyspace.split_shard_count', index=4,
-      number=5, type=5, cpp_type=1, label=1,
-      has_default_value=False, default_value=0,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
   ],
   extensions=[
   ],
@@ -946,8 +887,8 @@ _SRVKEYSPACE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1651,
-  serialized_end=2084,
+  serialized_start=1544,
+  serialized_end=1956,
 )
 
 _TABLET_PORTMAPENTRY.containing_type = _TABLET
@@ -975,7 +916,6 @@ _KEYSPACE.fields_by_name['served_froms'].message_type = _KEYSPACE_SERVEDFROM
 _SHARDREPLICATION_NODE.fields_by_name['tablet_alias'].message_type = _TABLETALIAS
 _SHARDREPLICATION_NODE.containing_type = _SHARDREPLICATION
 _SHARDREPLICATION.fields_by_name['nodes'].message_type = _SHARDREPLICATION_NODE
-_SRVSHARD.fields_by_name['key_range'].message_type = _KEYRANGE
 _SHARDREFERENCE.fields_by_name['key_range'].message_type = _KEYRANGE
 _SRVKEYSPACE_KEYSPACEPARTITION.fields_by_name['served_type'].enum_type = _TABLETTYPE
 _SRVKEYSPACE_KEYSPACEPARTITION.fields_by_name['shard_references'].message_type = _SHARDREFERENCE
@@ -991,7 +931,6 @@ DESCRIPTOR.message_types_by_name['Tablet'] = _TABLET
 DESCRIPTOR.message_types_by_name['Shard'] = _SHARD
 DESCRIPTOR.message_types_by_name['Keyspace'] = _KEYSPACE
 DESCRIPTOR.message_types_by_name['ShardReplication'] = _SHARDREPLICATION
-DESCRIPTOR.message_types_by_name['SrvShard'] = _SRVSHARD
 DESCRIPTOR.message_types_by_name['ShardReference'] = _SHARDREFERENCE
 DESCRIPTOR.message_types_by_name['SrvKeyspace'] = _SRVKEYSPACE
 DESCRIPTOR.enum_types_by_name['KeyspaceIdType'] = _KEYSPACEIDTYPE
@@ -1094,13 +1033,6 @@ ShardReplication = _reflection.GeneratedProtocolMessageType('ShardReplication', 
   ))
 _sym_db.RegisterMessage(ShardReplication)
 _sym_db.RegisterMessage(ShardReplication.Node)
-
-SrvShard = _reflection.GeneratedProtocolMessageType('SrvShard', (_message.Message,), dict(
-  DESCRIPTOR = _SRVSHARD,
-  __module__ = 'topodata_pb2'
-  # @@protoc_insertion_point(class_scope:topodata.SrvShard)
-  ))
-_sym_db.RegisterMessage(SrvShard)
 
 ShardReference = _reflection.GeneratedProtocolMessageType('ShardReference', (_message.Message,), dict(
   DESCRIPTOR = _SHARDREFERENCE,

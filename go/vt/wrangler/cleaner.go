@@ -127,10 +127,8 @@ func RecordChangeSlaveTypeAction(cleaner *Cleaner, tabletAlias *topodatapb.Table
 		if err != nil {
 			return err
 		}
-		if from != topodatapb.TabletType_UNKNOWN {
-			if ti.Type != from {
-				return fmt.Errorf("tablet %v is not of the right type (got %v expected %v), not changing it to %v", topoproto.TabletAliasString(tabletAlias), ti.Type, from, to)
-			}
+		if ti.Type != from {
+			return fmt.Errorf("tablet %v is not of the right type (got %v expected %v), not changing it to %v", topoproto.TabletAliasString(tabletAlias), ti.Type, from, to)
 		}
 		if !topo.IsTrivialTypeChange(ti.Type, to) {
 			return fmt.Errorf("tablet %v type change %v -> %v is not an allowed transition for ChangeSlaveType", topoproto.TabletAliasString(tabletAlias), ti.Type, to)

@@ -44,7 +44,6 @@ func testGetSrvKeyspace(t *testing.T, conn *vtgateconn.VTGateConn) {
 				Keyspace:   "other_keyspace",
 			},
 		},
-		SplitShardCount: 128,
 	}
 	got, err := conn.GetSrvKeyspace(context.Background(), "big")
 	if err != nil {

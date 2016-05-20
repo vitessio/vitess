@@ -99,13 +99,3 @@ func TestShardLock(t *testing.T) {
 	ts := newFakeTeeServer(t)
 	test.CheckShardLock(ctx, t, ts)
 }
-
-func TestSrvShardLock(t *testing.T) {
-	ctx := context.Background()
-	if testing.Short() {
-		t.Skip("skipping wait-based test in short mode.")
-	}
-
-	ts := newFakeTeeServer(t)
-	test.CheckSrvShardLock(ctx, t, ts)
-}

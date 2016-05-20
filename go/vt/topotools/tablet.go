@@ -12,7 +12,7 @@ level. In particular, it cannot depend on:
 
 topotools is used by wrangler, so it ends up in all tools using
 wrangler (vtctl, vtctld, ...). It is also included by vttablet, so it contains:
-- most of the logic to rebuild a shard serving graph (helthcheck module)
+- most of the logic to create a shard / keyspace (tablet's init code)
 - some of the logic to perform a TabletExternallyReparented (RPC call
   to master vttablet to let it know it's the master).
 

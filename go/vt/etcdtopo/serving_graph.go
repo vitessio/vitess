@@ -21,55 +21,6 @@ import (
 // test and main programs can change it.
 var WatchSleepDuration = 30 * time.Second
 
-// UpdateSrvShard implements topo.Server.
-func (s *Server) UpdateSrvShard(ctx context.Context, cellName, keyspace, shard string, srvShard *topodatapb.SrvShard) error {
-	cell, err := s.getCell(cellName)
-	if err != nil {
-		return err
-	}
-
-	data, err := json.MarshalIndent(srvShard, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	_, err = cell.Set(srvShardFilePath(keyspace, shard), string(data), 0 /* ttl */)
-	return convertError(err)
-}
-
-// GetSrvShard implements topo.Server.
-func (s *Server) GetSrvShard(ctx context.Context, cellName, keyspace, shard string) (*topodatapb.SrvShard, error) {
-	cell, err := s.getCell(cellName)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := cell.Get(srvShardFilePath(keyspace, shard), false /* sort */, false /* recursive */)
-	if err != nil {
-		return nil, convertError(err)
-	}
-	if resp.Node == nil {
-		return nil, ErrBadResponse
-	}
-
-	value := &topodatapb.SrvShard{}
-	if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
-		return nil, fmt.Errorf("bad serving shard data (%v): %q", err, resp.Node.Value)
-	}
-	return value, nil
-}
-
-// DeleteSrvShard implements topo.Server.
-func (s *Server) DeleteSrvShard(ctx context.Context, cellName, keyspace, shard string) error {
-	cell, err := s.getCell(cellName)
-	if err != nil {
-		return err
-	}
-
-	_, err = cell.Delete(srvShardDirPath(keyspace, shard), true /* recursive */)
-	return convertError(err)
-}
-
 // UpdateSrvKeyspace implements topo.Server.
 func (s *Server) UpdateSrvKeyspace(ctx context.Context, cellName, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error {
 	cell, err := s.getCell(cellName)

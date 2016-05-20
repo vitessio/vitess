@@ -196,17 +196,6 @@ type Impl interface {
 	// Serving Graph management, per cell.
 	//
 
-	// LockSrvShardForAction locks the serving shard in order to
-	// perform the action described by contents. It will wait for
-	// the lock until at most ctx.Done(). The wait can be interrupted
-	// by cancelling the context. It returns the lock path.
-	//
-	// Can return ErrTimeout or ErrInterrupted.
-	LockSrvShardForAction(ctx context.Context, cell, keyspace, shard, contents string) (string, error)
-
-	// UnlockSrvShardForAction unlocks a serving shard.
-	UnlockSrvShardForAction(ctx context.Context, cell, keyspace, shard, lockPath, results string) error
-
 	// WatchSrvKeyspace returns a channel that receives notifications
 	// every time the SrvKeyspace for the given keyspace / cell changes.
 	// It should receive a notification with the initial value fairly
@@ -223,18 +212,6 @@ type Impl interface {
 	// the object version will change, most likely triggering the
 	// notification, but the content hasn't changed).
 	WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (notifications <-chan *topodatapb.SrvKeyspace, err error)
-
-	// UpdateSrvShard updates the serving records for a cell,
-	// keyspace, shard.
-	UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *topodatapb.SrvShard) error
-
-	// GetSrvShard reads a SrvShard record.
-	// Can return ErrNoNode.
-	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error)
-
-	// DeleteSrvShard deletes a SrvShard record.
-	// Can return ErrNoNode.
-	DeleteSrvShard(ctx context.Context, cell, keyspace, shard string) error
 
 	// UpdateSrvKeyspace updates the serving records for a cell, keyspace.
 	UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error
@@ -313,7 +290,6 @@ type Server struct {
 type SrvTopoServer interface {
 	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
-	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error)
 	WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan *vschemapb.Keyspace, err error)
 }
 

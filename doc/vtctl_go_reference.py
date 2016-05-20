@@ -361,6 +361,7 @@ def main(root_directory):
     current_command = ''
     current_function = ''
     is_func_init = False
+    is_flag_section = False
 
     # treat func init() same as var commands
     # treat addCommand("Group Name"... same as command {... in vtctl.go group
@@ -373,8 +374,15 @@ def main(root_directory):
       if line.strip() == '' or line.strip().startswith('//'):
         continue
 
-      if is_func_init and line.strip() == '}':
-        #get_commands = False
+      if is_func_init and not is_flag_section and re.search(r'^if .+ {', line.strip()):
+          is_flag_section = True
+      elif is_func_init and not is_flag_section and line.strip() == 'servenv.OnRun(func() {':
+        pass
+      elif is_func_init and is_flag_section and line.strip() == 'return':
+        pass
+      elif is_func_init and is_flag_section and line.strip() == '}':
+        is_flag_section = False
+      elif is_func_init and (line.strip() == '}' or line.strip() == '})'):
         is_func_init = False
       elif get_commands:
         # This line precedes a command group's name, e.g. "Tablets" or "Shards."

@@ -57,10 +57,6 @@ type VTGateService interface {
 	// Topology support
 	GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error)
 
-	// GetSrvShard is not part of the public API, but might be used
-	// by some implementations.
-	GetSrvShard(ctx context.Context, keyspace, shard string) (*topodatapb.SrvShard, error)
-
 	// HandlePanic should be called with defer at the beginning of each
 	// RPC implementation method, before calling any of the previous methods
 	HandlePanic(err *error)

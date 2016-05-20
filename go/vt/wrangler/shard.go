@@ -182,10 +182,6 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 		if err := wr.ts.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil && err != topo.ErrNoNode {
 			wr.Logger().Warningf("Cannot delete ShardReplication in cell %v for %v/%v: %v", cell, keyspace, shard, err)
 		}
-
-		if err := wr.ts.DeleteSrvShard(ctx, cell, keyspace, shard); err != nil && err != topo.ErrNoNode {
-			wr.Logger().Warningf("Cannot delete SrvShard in cell %v for %v/%v: %v", cell, keyspace, shard, err)
-		}
 	}
 
 	return wr.ts.DeleteShard(ctx, keyspace, shard)
@@ -248,13 +244,6 @@ func (wr *Wrangler) removeShardCell(ctx context.Context, keyspace, shard, cell s
 		// ShardReplication object is now useless, remove it
 		if err := wr.ts.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil && err != topo.ErrNoNode {
 			return fmt.Errorf("error deleting ShardReplication object in cell %v: %v", cell, err)
-		}
-
-		// Rebuild the shard serving graph to reflect the tablets we deleted.
-		// This must be done before removing the cell from the global shard record,
-		// since this cell will be skipped by all future rebuilds.
-		if _, err := wr.RebuildShardGraph(ctx, keyspace, shard, []string{cell}); err != nil {
-			return fmt.Errorf("can't rebuild serving graph for shard %v/%v in cell %v: %v", keyspace, shard, cell, err)
 		}
 
 		// we keep going

@@ -389,12 +389,10 @@ primary key (name)
     utils.run_vtctl(['CreateKeyspace',
                      '--sharding_column_name', 'bad_column',
                      '--sharding_column_type', 'bytes',
-                     '--split_shard_count', '2',
                      'test_keyspace'])
     utils.run_vtctl(['SetKeyspaceShardingInfo', 'test_keyspace',
                      'custom_sharding_key', 'uint64'], expect_fail=True)
-    utils.run_vtctl(['SetKeyspaceShardingInfo',
-                     '-force', '-split_shard_count', '4',
+    utils.run_vtctl(['SetKeyspaceShardingInfo', '-force',
                      'test_keyspace', 'custom_sharding_key', keyspace_id_type])
 
     shard_0_master.init_tablet('master', 'test_keyspace', '-80')
@@ -409,7 +407,7 @@ primary key (name)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     ks = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_keyspace'])
-    self.assertEqual(ks['split_shard_count'], 4)
+    self.assertEqual(ks['sharding_column_name'], 'custom_sharding_key')
 
     # we set full_mycnf_args to True as a test in the KIT_BYTES case
     full_mycnf_args = keyspace_id_type == keyrange_constants.KIT_BYTES
@@ -437,6 +435,12 @@ primary key (name)
                      shard_0_master.tablet_alias], auto_log=True)
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/80-',
                      shard_1_master.tablet_alias], auto_log=True)
+
+    # check the shards
+    shards = utils.run_vtctl_json(['FindAllShardsInKeyspace', 'test_keyspace'])
+    self.assertIn('-80', shards, 'unexpected shards: %s' % str(shards))
+    self.assertIn('80-', shards, 'unexpected shards: %s' % str(shards))
+    self.assertEqual(len(shards), 2, 'unexpected shards: %s' % str(shards))
 
     # create the tables
     self._create_schema()
@@ -473,6 +477,12 @@ primary key (name)
                      shard_2_master.tablet_alias], auto_log=True)
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/c0-',
                      shard_3_master.tablet_alias], auto_log=True)
+
+    # check the shards
+    shards = utils.run_vtctl_json(['FindAllShardsInKeyspace', 'test_keyspace'])
+    for s in ['-80', '80-', '80-c0', 'c0-']:
+      self.assertIn(s, shards, 'unexpected shards: %s' % str(shards))
+    self.assertEqual(len(shards), 4, 'unexpected shards: %s' % str(shards))
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'],
                     auto_log=True)

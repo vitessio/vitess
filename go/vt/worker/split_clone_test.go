@@ -135,10 +135,10 @@ func (tc *splitCloneTestCase) setUp(v3 bool) {
 	if err := tc.ts.CreateShard(ctx, "ks", "80-"); err != nil {
 		tc.t.Fatalf("CreateShard(\"-80\") failed: %v", err)
 	}
-	if err := tc.wi.wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", topodatapb.KeyspaceIdType_UINT64, 4, false); err != nil {
+	if err := tc.wi.wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", topodatapb.KeyspaceIdType_UINT64, false); err != nil {
 		tc.t.Fatalf("SetKeyspaceShardingInfo failed: %v", err)
 	}
-	if err := tc.wi.wr.RebuildKeyspaceGraph(ctx, "ks", nil, true); err != nil {
+	if err := tc.wi.wr.RebuildKeyspaceGraph(ctx, "ks", nil); err != nil {
 		tc.t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 

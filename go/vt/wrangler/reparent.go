@@ -320,11 +320,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 		return fmt.Errorf("failed to create database: %v", err)
 	}
 
-	// Then we rebuild the entire serving graph for the shard,
-	// to account for all changes.
-	event.DispatchUpdate(ev, "rebuilding shard graph")
-	_, err = wr.RebuildShardGraph(ctx, keyspace, shard, nil)
-	return err
+	return nil
 }
 
 // PlannedReparentShard will make the provided tablet the master for the shard,
@@ -453,12 +449,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		return err
 	}
 
-	// Then we rebuild the entire serving graph for the shard,
-	// to account for all changes.
-	wr.logger.Infof("rebuilding shard graph")
-	event.DispatchUpdate(ev, "rebuilding shard serving graph")
-	_, err = wr.RebuildShardGraph(ctx, keyspace, shard, nil)
-	return err
+	return nil
 }
 
 // EmergencyReparentShard will make the provided tablet the master for
@@ -651,10 +642,5 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		return err
 	}
 
-	// Then we rebuild the entire serving graph for the shard,
-	// to account for all changes.
-	wr.logger.Infof("rebuilding shard graph")
-	event.DispatchUpdate(ev, "rebuilding shard serving graph")
-	_, err = wr.RebuildShardGraph(ctx, keyspace, shard, nil)
-	return err
+	return nil
 }
