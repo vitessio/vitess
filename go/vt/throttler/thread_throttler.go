@@ -77,7 +77,7 @@ func (t *threadThrottler) throttle(now time.Time) time.Duration {
 	// NOTE: Pacing won't work if maxRate > 1e9 (since 1e9ns = 1s) and therefore
 	//       the returned backoff will always be zero.
 	// Minimum time between two requests.
-	requestIntervalNs := time.Second.Nanoseconds() / maxRate
+	requestIntervalNs := (1 * time.Second).Nanoseconds() / maxRate
 	// End of the previous request is the earliest allowed time of this request.
 	earliestArrivalOffsetNs := t.currentRate * requestIntervalNs
 	earliestArrival := t.currentSecond.Add(time.Duration(earliestArrivalOffsetNs) * time.Nanosecond)

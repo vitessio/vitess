@@ -92,9 +92,7 @@ func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspac
 	if err != nil {
 		return nil, err
 	}
-	if maxTPS == 0 {
-		maxTPS = throttler.MaxRateModuleDisabled
-	} else {
+	if maxTPS != throttler.MaxRateModuleDisabled {
 		wr.Logger().Infof("throttling enabled and set to a max of %v transactions/second", maxTPS)
 	}
 	if maxTPS != throttler.MaxRateModuleDisabled && maxTPS < int64(destinationWriterCount) {
@@ -361,12 +359,19 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	keyspaceAndShard := topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)
 	vscw.destinationDbNames[keyspaceAndShard] = ti.DbName()
 
+  // TODO(mberlin): Verify on the destination master that the
+	// _vt.blp_checkpoint table has the latest schema.
+
 	vscw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Tablet.Alias), vscw.destinationKeyspace, vscw.destinationShard)
 	vscw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The HealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
 
 	// Set up the throttler for the destination shard.
-	vscw.destinationThrottlers[keyspaceAndShard] = throttler.NewThrottler(
+	t, err := throttler.NewThrottler(
 		keyspaceAndShard, "transactions", vscw.destinationWriterCount, vscw.maxTPS, throttler.ReplicationLagModuleDisabled)
+	if err != nil {
+		return fmt.Errorf("cannot instantiate throttler: %v", err)
+	}
+	vscw.destinationThrottlers[keyspaceAndShard] = t
 	return nil
 }
 
@@ -516,7 +521,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 		if vscw.strategy.dontStartBinlogPlayer {
 			flags = binlogplayer.BlpFlagDontStart
 		}
-		queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, time.Now().Unix(), flags))
+		queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, vscw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), flags))
 		vscw.wr.Logger().Infof("Making and populating blp_checkpoint table")
 		keyspaceAndShard := topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)
 		if err := runSQLCommands(ctx, vscw.wr, vscw.healthCheck, vscw.destinationKeyspace, vscw.destinationShard, vscw.destinationDbNames[keyspaceAndShard], queries); err != nil {

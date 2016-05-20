@@ -286,7 +286,7 @@ func checkBlpPositionList(t *testing.T, bpm *BinlogPlayerMap, vtClientSyncChanne
 	// ask for BlpPositionList, make sure we got what we expect
 	go func() {
 		vtcm := binlogplayer.NewVtClientMock()
-		vtcm.Result = &sqltypes.Result{
+		vtcm.AddResult(&sqltypes.Result{
 			Fields:       nil,
 			RowsAffected: 1,
 			InsertID:     0,
@@ -296,7 +296,7 @@ func checkBlpPositionList(t *testing.T, bpm *BinlogPlayerMap, vtClientSyncChanne
 					sqltypes.MakeString([]byte("")),
 				},
 			},
-		}
+		})
 		vtClientSyncChannel <- vtcm
 	}()
 	bpl, err := bpm.BlpPositionList()
@@ -309,6 +309,20 @@ func checkBlpPositionList(t *testing.T, bpm *BinlogPlayerMap, vtClientSyncChanne
 		bpl[0].Position != "MariaDB/0-1-1235" {
 		t.Errorf("unexpected BlpPositionList: %v", bpl)
 	}
+}
+
+// mockedThrottlerSettings is the mocked out query result when filtered
+// replication reads the throttler settings from the DB.
+var mockedThrottlerSettings = &sqltypes.Result{
+	Fields:       nil,
+	RowsAffected: 1,
+	InsertID:     0,
+	Rows: [][]sqltypes.Value{
+		{
+			sqltypes.MakeString([]byte("9223372036854775807")), // max_tps
+			sqltypes.MakeString([]byte("9223372036854775807")), // max_replication_lag
+		},
+	},
 }
 
 func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
@@ -402,7 +416,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 	// start position at first. Note this also synchronizes the player,
 	// so we can then check mysqlDaemon.BinlogPlayerEnabled.
 	vtClientMock := binlogplayer.NewVtClientMock()
-	vtClientMock.Result = &sqltypes.Result{
+	vtClientMock.AddResult(&sqltypes.Result{
 		Fields:       nil,
 		RowsAffected: 1,
 		InsertID:     0,
@@ -412,11 +426,14 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 				sqltypes.MakeString([]byte("")),
 			},
 		},
-	}
+	})
 	vtClientSyncChannel <- vtClientMock
 	if !mysqlDaemon.BinlogPlayerEnabled {
 		t.Errorf("mysqlDaemon.BinlogPlayerEnabled should be true")
 	}
+
+	// Mock out the throttler settings result.
+	vtClientMock.AddResult(mockedThrottlerSettings)
 
 	// the client will then try to connect to the remote tablet.
 	// give it what it needs.
@@ -439,13 +456,14 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 
 	// and make sure it results in a committed statement
 	sql := <-vtClientMock.CommitChannel
-	if len(sql) != 5 ||
+	if len(sql) != 6 ||
 		sql[0] != "SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=1" ||
-		sql[1] != "BEGIN" ||
-		!strings.HasPrefix(sql[2], "UPDATE _vt.blp_checkpoint SET pos='MariaDB/0-1-1235', time_updated=") ||
-		!strings.HasSuffix(sql[2], ", transaction_timestamp=72 WHERE source_shard_uid=1") ||
-		sql[3] != "INSERT INTO tablet VALUES(1)" ||
-		sql[4] != "COMMIT" {
+		sql[1] != "SELECT max_tps, max_replication_lag FROM _vt.blp_checkpoint WHERE source_shard_uid=1" ||
+		sql[2] != "BEGIN" ||
+		!strings.HasPrefix(sql[3], "UPDATE _vt.blp_checkpoint SET pos='MariaDB/0-1-1235', time_updated=") ||
+		!strings.HasSuffix(sql[3], ", transaction_timestamp=72 WHERE source_shard_uid=1") ||
+		sql[4] != "INSERT INTO tablet VALUES(1)" ||
+		sql[5] != "COMMIT" {
 		t.Errorf("Got wrong SQL: %#v", sql)
 	}
 
@@ -566,8 +584,7 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 	// write a mocked vtClientMock that will be used to read the
 	// start position at first. Note this also synchronizes the player,
 	// so we can then check mysqlDaemon.BinlogPlayerEnabled.
-	vtClientMock := binlogplayer.NewVtClientMock()
-	vtClientMock.Result = &sqltypes.Result{
+	startPos := &sqltypes.Result{
 		Fields:       nil,
 		RowsAffected: 1,
 		InsertID:     0,
@@ -578,10 +595,19 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 			},
 		},
 	}
+	vtClientMock := binlogplayer.NewVtClientMock()
+	vtClientMock.AddResult(startPos)
 	vtClientSyncChannel <- vtClientMock
 	if !mysqlDaemon.BinlogPlayerEnabled {
 		t.Errorf("mysqlDaemon.BinlogPlayerEnabled should be true")
 	}
+
+	// Mock out the throttler settings result.
+	vtClientMock.AddResult(mockedThrottlerSettings)
+	// Mock two more results since the BinlogPlayer will be stopped and then
+	// restarted again with the RunUntil() call.
+	vtClientMock.AddResult(startPos)
+	vtClientMock.AddResult(mockedThrottlerSettings)
 
 	// the client will then try to connect to the remote tablet.
 	// give it what it needs.
@@ -626,14 +652,16 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 
 		// and make sure it results in a committed statement
 		sql := <-vtClientMock.CommitChannel
-		if len(sql) != 6 ||
+		if len(sql) != 8 ||
 			sql[0] != "SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=1" ||
-			sql[1] != "SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=1" ||
-			sql[2] != "BEGIN" ||
-			!strings.HasPrefix(sql[3], "UPDATE _vt.blp_checkpoint SET pos='MariaDB/0-1-1235', time_updated=") ||
-			!strings.HasSuffix(sql[3], ", transaction_timestamp=72 WHERE source_shard_uid=1") ||
-			sql[4] != "INSERT INTO tablet VALUES(1)" ||
-			sql[5] != "COMMIT" {
+			sql[1] != "SELECT max_tps, max_replication_lag FROM _vt.blp_checkpoint WHERE source_shard_uid=1" ||
+			sql[2] != "SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=1" ||
+			sql[3] != "SELECT max_tps, max_replication_lag FROM _vt.blp_checkpoint WHERE source_shard_uid=1" ||
+			sql[4] != "BEGIN" ||
+			!strings.HasPrefix(sql[5], "UPDATE _vt.blp_checkpoint SET pos='MariaDB/0-1-1235', time_updated=") ||
+			!strings.HasSuffix(sql[5], ", transaction_timestamp=72 WHERE source_shard_uid=1") ||
+			sql[6] != "INSERT INTO tablet VALUES(1)" ||
+			sql[7] != "COMMIT" {
 			t.Errorf("Got wrong SQL: %#v", sql)
 		}
 		wg.Done()
@@ -695,7 +723,7 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 	binlogplayer.RegisterClientFactory("test_vertical", func() binlogplayer.Client {
 		return <-clientSyncChannel
 	})
-	flag.Lookup("binlog_player_protocol").Value.Set("test_vertical")
+	flag.Set("binlog_player_protocol", "test_vertical")
 
 	// create the BinlogPlayerMap on the local tablet
 	// (note that local tablet is never in the topology, we don't
@@ -770,7 +798,7 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 	// start position at first. Note this also synchronizes the player,
 	// so we can then check mysqlDaemon.BinlogPlayerEnabled.
 	vtClientMock := binlogplayer.NewVtClientMock()
-	vtClientMock.Result = &sqltypes.Result{
+	vtClientMock.AddResult(&sqltypes.Result{
 		Fields:       nil,
 		RowsAffected: 1,
 		InsertID:     0,
@@ -780,11 +808,14 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 				sqltypes.MakeString([]byte("")),
 			},
 		},
-	}
+	})
 	vtClientSyncChannel <- vtClientMock
 	if !mysqlDaemon.BinlogPlayerEnabled {
 		t.Errorf("mysqlDaemon.BinlogPlayerEnabled should be true")
 	}
+
+	// Mock out the throttler settings result.
+	vtClientMock.AddResult(mockedThrottlerSettings)
 
 	// the client will then try to connect to the remote tablet.
 	// give it what it needs.
@@ -807,13 +838,14 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 
 	// and make sure it results in a committed statement
 	sql := <-vtClientMock.CommitChannel
-	if len(sql) != 5 ||
+	if len(sql) != 6 ||
 		sql[0] != "SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=1" ||
-		sql[1] != "BEGIN" ||
-		!strings.HasPrefix(sql[2], "UPDATE _vt.blp_checkpoint SET pos='MariaDB/0-1-1235', time_updated=") ||
-		!strings.HasSuffix(sql[2], ", transaction_timestamp=72 WHERE source_shard_uid=1") ||
-		sql[3] != "INSERT INTO tablet VALUES(1)" ||
-		sql[4] != "COMMIT" {
+		sql[1] != "SELECT max_tps, max_replication_lag FROM _vt.blp_checkpoint WHERE source_shard_uid=1" ||
+		sql[2] != "BEGIN" ||
+		!strings.HasPrefix(sql[3], "UPDATE _vt.blp_checkpoint SET pos='MariaDB/0-1-1235', time_updated=") ||
+		!strings.HasSuffix(sql[3], ", transaction_timestamp=72 WHERE source_shard_uid=1") ||
+		sql[4] != "INSERT INTO tablet VALUES(1)" ||
+		sql[5] != "COMMIT" {
 		t.Errorf("Got wrong SQL: %#v", sql)
 	}
 

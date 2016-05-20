@@ -32,11 +32,19 @@ const (
 
 	// MaxRateModuleDisabled can be set in NewThrottler() to disable throttling
 	// by a fixed rate.
-	MaxRateModuleDisabled = -1
+	MaxRateModuleDisabled = math.MaxInt64
+
+	// InvalidMaxRate is a constant which will fail in a NewThrottler() call.
+	// It should be used when returning maxRate in an error case.
+	InvalidMaxRate = -1
 
 	// ReplicationLagModuleDisabled can be set in NewThrottler() to disable
 	// throttling based on the MySQL replication lag.
-	ReplicationLagModuleDisabled = -1
+	ReplicationLagModuleDisabled = math.MaxInt64
+
+	// InvalidMaxReplicationLag is a constant which will fail in a NewThrottler()
+	// call. It should be used when returning maxReplicationlag in an error case.
+	InvalidMaxReplicationLag = -1
 )
 
 // Throttler provides a client-side, thread-aware throttler.
@@ -91,22 +99,26 @@ type Throttler struct {
 // unit refers to the type of entity you want to throttle e.g. "queries" or
 // "transactions".
 // name describes the Throttler instance and will be used by the webinterface.
-func NewThrottler(name, unit string, threadCount int, maxRate int64, maxReplicationLag int) *Throttler {
+func NewThrottler(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64) (*Throttler, error) {
 	return newThrottler(name, unit, threadCount, maxRate, maxReplicationLag, time.Now)
 }
 
 // newThrottlerWithClock should only be used for testing.
-func newThrottlerWithClock(name, unit string, threadCount int, maxRate int64, maxReplicationLag int, nowFunc func() time.Time) *Throttler {
+func newThrottlerWithClock(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
 	return newThrottler(name, unit, threadCount, maxRate, maxReplicationLag, nowFunc)
 }
 
-func newThrottler(name, unit string, threadCount int, maxRate int64, maxReplicationLag int, nowFunc func() time.Time) *Throttler {
+func newThrottler(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
+	// Verify input parameters.
+	if maxRate < 0 {
+		return nil, fmt.Errorf("maxRate must be >= 0: %v", maxRate)
+	}
+	if maxReplicationLag < 0 {
+		return nil, fmt.Errorf("maxReplicationLag must be >= 0: %v", maxReplicationLag)
+	}
+
 	// Enable the configured modules.
 	var modules []Module
-	if maxRate == MaxRateModuleDisabled {
-		// We never disable this module. Assume an infinite rate.
-		maxRate = int64(math.MaxInt64)
-	}
 	modules = append(modules, NewMaxRateModule(maxRate))
 	// TODO(mberlin): Append ReplicationLagModule once it's implemented.
 
@@ -143,7 +155,7 @@ func newThrottler(name, unit string, threadCount int, maxRate int64, maxReplicat
 		}
 	}()
 
-	return t
+	return t, nil
 }
 
 // Throttle returns a backoff duration which specifies for how long "threadId"
@@ -151,6 +163,8 @@ func newThrottler(name, unit string, threadCount int, maxRate int64, maxReplicat
 // If the duration is zero, the thread is not throttled.
 // If the duration is not zero, the thread must call Throttle() again after
 // the backoff duration elapsed.
+// The maximum value for the returned backoff is 1 second since the throttler
+// internally operates on a per-second basis.
 func (t *Throttler) Throttle(threadID int) time.Duration {
 	if t.closed {
 		panic(fmt.Sprintf("BUG: thread with ID: %v must not access closed Throttler", threadID))

@@ -782,7 +782,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	}
 	// Mock out the BinlogPlayer client. Tell the BinlogPlayer not to start.
 	vtClientMock := binlogplayer.NewVtClientMock()
-	vtClientMock.Result = &sqltypes.Result{
+	vtClientMock.AddResult(&sqltypes.Result{
 		Fields:       nil,
 		RowsAffected: 1,
 		InsertID:     0,
@@ -792,7 +792,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 				sqltypes.MakeString([]byte("DontStart")),
 			},
 		},
-	}
+	})
 	vtClientMocksChannel <- vtClientMock
 
 	// Refresh the tablet state, as vtworker would do.

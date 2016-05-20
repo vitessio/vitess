@@ -91,9 +91,7 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 	if err != nil {
 		return nil, err
 	}
-	if maxTPS == 0 {
-		maxTPS = throttler.MaxRateModuleDisabled
-	} else {
+	if maxTPS != throttler.MaxRateModuleDisabled {
 		wr.Logger().Infof("throttling enabled and set to a max of %v transactions/second", maxTPS)
 	}
 	if maxTPS != throttler.MaxRateModuleDisabled && maxTPS < int64(destinationWriterCount) {
@@ -393,6 +391,9 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 		}
 		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
 		scw.destinationDbNames[keyspaceAndShard] = ti.DbName()
+		
+		// TODO(mberlin): Verify on the destination master that the
+		// _vt.blp_checkpoint table has the latest schema.
 
 		scw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Tablet.Alias), si.Keyspace(), si.ShardName())
 	}
@@ -401,8 +402,12 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	// Set up the throttler for each destination shard.
 	for _, si := range scw.destinationShards {
 		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
-		scw.destinationThrottlers[keyspaceAndShard] = throttler.NewThrottler(
+		t, err := throttler.NewThrottler(
 			keyspaceAndShard, "transactions", scw.destinationWriterCount, scw.maxTPS, throttler.ReplicationLagModuleDisabled)
+		if err != nil {
+			return fmt.Errorf("cannot instantiate throttler: %v", err)
+		}
+		scw.destinationThrottlers[keyspaceAndShard] = t
 	}
 
 	return nil
@@ -604,7 +609,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 				return err
 			}
 
-			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(uint32(shardIndex), status.Position, time.Now().Unix(), flags))
+			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(uint32(shardIndex), status.Position, scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), flags))
 		}
 
 		for _, si := range scw.destinationShards {

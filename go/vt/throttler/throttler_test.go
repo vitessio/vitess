@@ -40,7 +40,7 @@ func BenchmarkThrottler_100kQPS(b *testing.B) {
 
 // benchmarkThrottler shows that Throttler actually throttles requests.
 func benchmarkThrottler(b *testing.B, qps int64) {
-	throttler := NewThrottler("test", "queries", 1, qps, ReplicationLagModuleDisabled)
+	throttler, _ := NewThrottler("test", "queries", 1, qps, ReplicationLagModuleDisabled)
 	defer throttler.Close()
 	backoffs := 0
 	b.ResetTimer()
@@ -80,7 +80,7 @@ func BenchmarkThrottlerParallel_100kQPS(b *testing.B) {
 // to the value of benchmarkThrottler.
 func benchmarkThrottlerParallel(b *testing.B, qps int64) {
 	threadCount := runtime.GOMAXPROCS(0)
-	throttler := NewThrottler("test", "queries", threadCount, qps, ReplicationLagModuleDisabled)
+	throttler, _ := NewThrottler("test", "queries", threadCount, qps, ReplicationLagModuleDisabled)
 	defer throttler.Close()
 	threadIDs := make(chan int, threadCount)
 	for id := 0; id < threadCount; id++ {
@@ -113,7 +113,7 @@ func benchmarkThrottlerParallel(b *testing.B, qps int64) {
 // BenchmarkThrottlerDisabled is the unthrottled version of
 // BenchmarkThrottler. It should report a much lower ns/op value.
 func BenchmarkThrottlerDisabled(b *testing.B) {
-	throttler := NewThrottler("test", "queries", 1, MaxRateModuleDisabled, ReplicationLagModuleDisabled)
+	throttler, _ := NewThrottler("test", "queries", 1, MaxRateModuleDisabled, ReplicationLagModuleDisabled)
 	defer throttler.Close()
 	b.ResetTimer()
 
@@ -147,7 +147,7 @@ func sinceZero(sinceZero time.Duration) time.Time {
 func TestThrottle(t *testing.T) {
 	fc := &fakeClock{}
 	// 1 Thread, 2 QPS.
-	throttler := newThrottlerWithClock("test", "queries", 1, 2, ReplicationLagModuleDisabled, fc.now)
+	throttler, _ := newThrottlerWithClock("test", "queries", 1, 2, ReplicationLagModuleDisabled, fc.now)
 	defer throttler.Close()
 
 	// 2 QPS should divide the current second into two chunks of 500 ms:
@@ -188,7 +188,7 @@ func TestThrottle(t *testing.T) {
 func TestThrottle_RateRemainderIsDistributedAcrossThreads(t *testing.T) {
 	fc := &fakeClock{}
 	// 3 Threads, 5 QPS.
-	throttler := newThrottlerWithClock("test", "queries", 3, 5, ReplicationLagModuleDisabled, fc.now)
+	throttler, _ := newThrottlerWithClock("test", "queries", 3, 5, ReplicationLagModuleDisabled, fc.now)
 	defer throttler.Close()
 
 	// Out of 5 QPS, each thread gets 1 and two threads get 1 query extra.
@@ -228,7 +228,7 @@ func TestThrottle_RateRemainderIsDistributedAcrossThreads(t *testing.T) {
 func TestThreadFinished(t *testing.T) {
 	fc := &fakeClock{}
 	// 2 Threads, 2 QPS.
-	throttler := newThrottlerWithClock("test", "queries", 2, 2, ReplicationLagModuleDisabled, fc.now)
+	throttler, _ := newThrottlerWithClock("test", "queries", 2, 2, ReplicationLagModuleDisabled, fc.now)
 	defer throttler.Close()
 
 	// First second: Each thread consumes their 1 QPS.
@@ -301,7 +301,7 @@ func TestThreadFinished(t *testing.T) {
 func TestThrottle_MaxRateIsZero(t *testing.T) {
 	fc := &fakeClock{}
 	// 1 Thread, 0 QPS.
-	throttler := newThrottlerWithClock("test", "queries", 1, 0, ReplicationLagModuleDisabled, fc.now)
+	throttler, _ := newThrottlerWithClock("test", "queries", 1, ZeroRateNoProgess, ReplicationLagModuleDisabled, fc.now)
 	defer throttler.Close()
 
 	fc.setNow(0 * time.Millisecond)
@@ -323,7 +323,7 @@ func TestThrottle_MaxRateIsZero(t *testing.T) {
 
 func TestThrottle_MaxRateDisabled(t *testing.T) {
 	fc := &fakeClock{}
-	throttler := newThrottlerWithClock("test", "queries", 1, MaxRateModuleDisabled, ReplicationLagModuleDisabled, fc.now)
+	throttler, _ := newThrottlerWithClock("test", "queries", 1, MaxRateModuleDisabled, ReplicationLagModuleDisabled, fc.now)
 	defer throttler.Close()
 
 	fc.setNow(0 * time.Millisecond)
@@ -341,7 +341,7 @@ func TestThrottle_MaxRateDisabled(t *testing.T) {
 func TestThrottle_MaxRateLowerThanThreadCount(t *testing.T) {
 	fc := &fakeClock{}
 	// 2 Thread, 1 QPS.
-	throttler := newThrottlerWithClock("test", "queries", 2, 1, ReplicationLagModuleDisabled, fc.now)
+	throttler, _ := newThrottlerWithClock("test", "queries", 2, 1, ReplicationLagModuleDisabled, fc.now)
 	defer throttler.Close()
 
 	// 2 QPS instead of configured 1 QPS allowed since there are 2 threads which
@@ -362,7 +362,7 @@ func TestThrottle_MaxRateLowerThanThreadCount(t *testing.T) {
 
 func TestUpdateMaxRate_AllThreadsFinished(t *testing.T) {
 	fc := &fakeClock{}
-	throttler := newThrottlerWithClock("test", "queries", 2, 1e9, ReplicationLagModuleDisabled, fc.now)
+	throttler, _ := newThrottlerWithClock("test", "queries", 2, 1e9, ReplicationLagModuleDisabled, fc.now)
 	defer throttler.Close()
 
 	throttler.ThreadFinished(0)
@@ -375,7 +375,7 @@ func TestUpdateMaxRate_AllThreadsFinished(t *testing.T) {
 
 func TestClose(t *testing.T) {
 	fc := &fakeClock{}
-	throttler := newThrottlerWithClock("test", "queries", 1, 1, ReplicationLagModuleDisabled, fc.now)
+	throttler, _ := newThrottlerWithClock("test", "queries", 1, 1, ReplicationLagModuleDisabled, fc.now)
 	throttler.Close()
 
 	defer func() {
