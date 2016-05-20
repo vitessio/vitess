@@ -18,7 +18,7 @@ type UnicodeLooseMD5 struct {
 }
 
 // MewUnicodeLooseMD5 creates a new UnicodeLooseMD5.
-func MewUnicodeLooseMD5(name string, _ map[string]interface{}) (Vindex, error) {
+func MewUnicodeLooseMD5(name string, _ map[string]string) (Vindex, error) {
 	return &UnicodeLooseMD5{name: name}, nil
 }
 

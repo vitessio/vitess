@@ -39,8 +39,8 @@ const (
 
 var (
 	topology           = flag.String("topology", "", "Define which shards exist in the test topology in the form <keyspace>/<shardrange>:<dbname>,... The dbname must be unique among all shards, since they share a MySQL instance in the test environment.")
-	shardingColumnName = flag.String("sharding_column_name", "keyspace_id", "Specifies the column to use for sharding operations")
-	shardingColumnType = flag.String("sharding_column_type", "uint64", "Specifies the type of the column to use for sharding operations")
+	shardingColumnName = flag.String("sharding_column_name", "", "Specifies the column to use for sharding operations")
+	shardingColumnType = flag.String("sharding_column_type", "", "Specifies the type of the column to use for sharding operations")
 	vschemaFile        = flag.String("vschema", "", "vschema file")
 
 	ts topo.Server

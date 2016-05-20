@@ -17,7 +17,7 @@ type Numeric struct {
 }
 
 // NewNumeric creates a Numeric vindex.
-func NewNumeric(name string, _ map[string]interface{}) (Vindex, error) {
+func NewNumeric(name string, _ map[string]string) (Vindex, error) {
 	return &Numeric{name: name}, nil
 }
 

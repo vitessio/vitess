@@ -68,12 +68,12 @@ func (st *symtab) AddAlias(alias, astName sqlparser.TableIdent, table *vindexes.
 		return fmt.Errorf("duplicate symbol: %s", alias)
 	}
 	st.tables = append(st.tables, &tabsym{
-		Alias:       alias,
-		ASTName:     astName,
-		route:       rb,
-		symtab:      st,
-		Keyspace:    table.Keyspace,
-		ColVindexes: table.ColVindexes,
+		Alias:          alias,
+		ASTName:        astName,
+		route:          rb,
+		symtab:         st,
+		Keyspace:       table.Keyspace,
+		ColumnVindexes: table.ColumnVindexes,
 	})
 	return nil
 }
@@ -109,12 +109,12 @@ func (st *symtab) findTable(alias sqlparser.TableIdent) *tabsym {
 	return nil
 }
 
-// SetRHS removes the ColVindexes from the aliases signifying
+// SetRHS removes the ColumnVindexes from the aliases signifying
 // that they cannot be used to make routing decisions. This is
 // called if the table is in the RHS of a LEFT JOIN.
 func (st *symtab) SetRHS() {
 	for _, t := range st.tables {
-		t.ColVindexes = nil
+		t.ColumnVindexes = nil
 	}
 }
 
@@ -232,12 +232,12 @@ type sym interface {
 // from the table name, which is something that VTTablet and MySQL
 // can't recognize.
 type tabsym struct {
-	Alias       sqlparser.TableIdent
-	ASTName     sqlparser.TableIdent
-	route       *route
-	symtab      *symtab
-	Keyspace    *vindexes.Keyspace
-	ColVindexes []*vindexes.ColVindex
+	Alias          sqlparser.TableIdent
+	ASTName        sqlparser.TableIdent
+	route          *route
+	symtab         *symtab
+	Keyspace       *vindexes.Keyspace
+	ColumnVindexes []*vindexes.ColumnVindex
 }
 
 func (t *tabsym) newColRef(col *sqlparser.ColName) colref {
@@ -257,8 +257,8 @@ func (t *tabsym) Symtab() *symtab {
 
 // FindVindex returns the vindex if one was found for the column.
 func (t *tabsym) FindVindex(name sqlparser.ColIdent) vindexes.Vindex {
-	for _, colVindex := range t.ColVindexes {
-		if colVindex.Col.Equal(cistring.CIString(name)) {
+	for _, colVindex := range t.ColumnVindexes {
+		if colVindex.Column.Equal(cistring.CIString(name)) {
 			return colVindex.Vindex
 		}
 	}

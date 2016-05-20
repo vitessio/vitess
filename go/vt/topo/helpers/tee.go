@@ -13,6 +13,7 @@ import (
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 // Tee is an implementation of topo.Server that uses a primary
@@ -654,7 +655,7 @@ func (tee *Tee) UnlockShardForAction(ctx context.Context, keyspace, shard, lockP
 }
 
 // SaveVSchema is part of the topo.Server interface
-func (tee *Tee) SaveVSchema(ctx context.Context, keyspace, contents string) error {
+func (tee *Tee) SaveVSchema(ctx context.Context, keyspace string, contents *vschemapb.Keyspace) error {
 	err := tee.primary.SaveVSchema(ctx, keyspace, contents)
 	if err != nil {
 		return err
@@ -668,13 +669,13 @@ func (tee *Tee) SaveVSchema(ctx context.Context, keyspace, contents string) erro
 }
 
 // GetVSchema is part of the topo.Server interface
-func (tee *Tee) GetVSchema(ctx context.Context, keyspace string) (string, error) {
+func (tee *Tee) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error) {
 	return tee.readFrom.GetVSchema(ctx, keyspace)
 }
 
 // WatchVSchema is part of the topo.Server interface.
 // We only watch for changes on the primary.
-func (tee *Tee) WatchVSchema(ctx context.Context, keyspace string) (<-chan string, error) {
+func (tee *Tee) WatchVSchema(ctx context.Context, keyspace string) (<-chan *vschemapb.Keyspace, error) {
 	return tee.primary.WatchVSchema(ctx, keyspace)
 }
 

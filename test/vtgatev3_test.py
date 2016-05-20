@@ -105,128 +105,128 @@ primary key (music_id)
 
 vschema = {
     'user': '''{
-      "Sharded": true,
-      "Vindexes": {
+      "sharded": true,
+      "vindexes": {
         "user_index": {
-          "Type": "hash"
+          "type": "hash"
         },
         "unicode_hash": {
-          "Type": "unicode_loose_md5"
+          "type": "unicode_loose_md5"
         },
         "name_user2_map": {
-          "Type": "lookup_hash",
-          "Params": {
+          "type": "lookup_hash",
+          "params": {
             "Table": "name_user2_map",
             "From": "name",
             "To": "user2_id"
           },
-          "Owner": "vt_user2"
+          "owner": "vt_user2"
         },
         "music_user_map": {
-          "Type": "lookup_hash_unique",
-          "Params": {
+          "type": "lookup_hash_unique",
+          "params": {
             "Table": "music_user_map",
             "From": "music_id",
             "To": "user_id"
           },
-          "Owner": "vt_music"
+          "owner": "vt_music"
         }
       },
-      "Tables": {
+      "tables": {
         "vt_user": {
-          "ColVindexes": [
+          "column_vindexes": [
             {
-              "Col": "id",
-              "Name": "user_index"
+              "column": "id",
+              "name": "user_index"
             }
           ],
-          "Autoinc": {
-            "Col": "id",
-            "Sequence": "vt_user_seq"
+          "auto_increment": {
+            "column": "id",
+            "sequence": "vt_user_seq"
           }
         },
         "vt_user2": {
-          "ColVindexes": [
+          "column_vindexes": [
             {
-              "Col": "id",
-              "Name": "user_index"
+              "column": "id",
+              "name": "user_index"
             },
             {
-              "Col": "name",
-              "Name": "name_user2_map"
+              "column": "name",
+              "name": "name_user2_map"
             }
           ]
         },
         "vt_user_extra": {
-          "ColVindexes": [
+          "column_vindexes": [
             {
-              "Col": "user_id",
-              "Name": "user_index"
+              "column": "user_id",
+              "name": "user_index"
             }
           ]
         },
         "vt_music": {
-          "ColVindexes": [
+          "column_vindexes": [
             {
-              "Col": "user_id",
-              "Name": "user_index"
+              "column": "user_id",
+              "name": "user_index"
             },
             {
-              "Col": "id",
-              "Name": "music_user_map"
+              "column": "id",
+              "name": "music_user_map"
             }
           ],
-          "Autoinc": {
-            "Col": "id",
-            "Sequence": "vt_music_seq"
+          "auto_increment": {
+            "column": "id",
+            "sequence": "vt_music_seq"
           }
         },
         "vt_music_extra": {
-          "ColVindexes": [
+          "column_vindexes": [
             {
-              "Col": "music_id",
-              "Name": "music_user_map"
+              "column": "music_id",
+              "name": "music_user_map"
             },
             {
-              "Col": "user_id",
-              "Name": "user_index"
+              "column": "user_id",
+              "name": "user_index"
             }
           ]
         },
         "join_user": {
-          "ColVindexes": [
+          "column_vindexes": [
             {
-              "Col": "id",
-              "Name": "user_index"
+              "column": "id",
+              "name": "user_index"
             }
           ]
         },
         "join_user_extra": {
-          "ColVindexes": [
+          "column_vindexes": [
             {
-              "Col": "user_id",
-              "Name": "user_index"
+              "column": "user_id",
+              "name": "user_index"
             }
           ]
         },
         "join_name_info": {
-          "ColVindexes": [
+          "column_vindexes": [
             {
-              "Col": "name",
-              "Name": "unicode_hash"
+              "column": "name",
+              "name": "unicode_hash"
             }
           ]
         }
       }
     }''',
     'lookup': '''{
-      "Sharded": false,
-      "Tables": {
+      "sharded": false,
+      "tables": {
         "vt_user_seq": {
-          "Type": "Sequence"
+          "type": "sequence"
         },
         "vt_music_seq": {
-          "Type": "Sequence"
+          "type": "sequence"
         },
         "music_user_map": {},
         "name_user2_map": {}

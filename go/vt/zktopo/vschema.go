@@ -5,6 +5,8 @@
 package zktopo
 
 import (
+	"encoding/json"
+	"fmt"
 	"path"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 	"github.com/youtube/vitess/go/zk"
 )
 
@@ -23,31 +26,40 @@ const (
 	vschemaPath = "vschema"
 )
 
-// SaveVSchema saves the JSON vschema into the topo.
-func (zkts *Server) SaveVSchema(ctx context.Context, keyspace, vschema string) error {
+// SaveVSchema saves the vschema into the topo.
+func (zkts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vschemapb.Keyspace) error {
+	data, err := json.MarshalIndent(vschema, "", "  ")
+	if err != nil {
+		return err
+	}
 	vschemaPath := path.Join(GlobalKeyspacesPath, keyspace, vschemaPath)
-	_, err := zk.CreateOrUpdate(zkts.zconn, vschemaPath, vschema, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
+	_, err = zk.CreateOrUpdate(zkts.zconn, vschemaPath, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
 	return err
 }
 
 // GetVSchema fetches the JSON vschema from the topo.
-func (zkts *Server) GetVSchema(ctx context.Context, keyspace string) (string, error) {
+func (zkts *Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error) {
 	vschemaPath := path.Join(GlobalKeyspacesPath, keyspace, vschemaPath)
 	data, _, err := zkts.zconn.Get(vschemaPath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			return "{}", nil
+			return &vschemapb.Keyspace{}, nil
 		}
-		return "", err
+		return nil, err
 	}
-	return data, nil
+	var vs vschemapb.Keyspace
+	err = json.Unmarshal([]byte(data), &vs)
+	if err != nil {
+		return nil, fmt.Errorf("bad vschema data (%v): %q", err, data)
+	}
+	return &vs, nil
 }
 
 // WatchVSchema is part of the topo.Server interface
-func (zkts *Server) WatchVSchema(ctx context.Context, keyspace string) (<-chan string, error) {
+func (zkts *Server) WatchVSchema(ctx context.Context, keyspace string) (<-chan *vschemapb.Keyspace, error) {
 	vschemaPath := path.Join(GlobalKeyspacesPath, keyspace, vschemaPath)
 
-	notifications := make(chan string, 10)
+	notifications := make(chan *vschemapb.Keyspace, 10)
 
 	// waitOrInterrupted will return true if context.Done() is triggered
 	waitOrInterrupted := func() bool {
@@ -68,7 +80,7 @@ func (zkts *Server) WatchVSchema(ctx context.Context, keyspace string) (<-chan s
 			if err != nil {
 				if zookeeper.IsError(err, zookeeper.ZNONODE) {
 					// the parent directory doesn't exist
-					notifications <- "{}"
+					notifications <- nil
 				}
 
 				log.Errorf("Cannot set watch on %v, waiting for %v to retry: %v", vschemaPath, WatchSleepDuration, err)
@@ -80,11 +92,17 @@ func (zkts *Server) WatchVSchema(ctx context.Context, keyspace string) (<-chan s
 
 			// get the initial value, send it, or send {} if no
 			// data
-			value := "{}"
+			var vs vschemapb.Keyspace
 			if len(data) > 0 {
-				value = data
+				if err := json.Unmarshal([]byte(data), &vs); err != nil {
+					log.Warningf("error unmarhsalling vschema for %v: %v", vschemaPath, err)
+					notifications <- nil
+				} else {
+					notifications <- &vs
+				}
+			} else {
+				notifications <- nil
 			}
-			notifications <- value
 
 			// now act on the watch
 			select {

@@ -27,6 +27,7 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 const (
@@ -73,24 +74,25 @@ func (tc *splitCloneTestCase) setUp(v3 bool) {
 			tc.t.Fatalf("CreateKeyspace v3 failed: %v", err)
 		}
 
-		if err := tc.ts.SaveVSchema(ctx, "ks", `{
-  "Sharded": true,
-  "Vindexes": {
-    "table1_index": {
-      "Type": "numeric"
-    }
-  },
-  "Tables": {
-    "table1": {
-      "ColVindexes": [
-        {
-          "Col": "keyspace_id",
-          "Name": "table1_index"
-        }
-      ]
-    }
-  }
-}`); err != nil {
+		vs := &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"table1_index": {
+					Type: "numeric",
+				},
+			},
+			Tables: map[string]*vschemapb.Table{
+				"table1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{
+						{
+							Column: "keyspace_id",
+							Name:   "table1_index",
+						},
+					},
+				},
+			},
+		}
+		if err := tc.ts.SaveVSchema(ctx, "ks", vs); err != nil {
 			tc.t.Fatalf("SaveVSchema v3 failed: %v", err)
 		}
 	} else {

@@ -49,7 +49,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 		return nil, err
 	}
 	route.Opcode = engine.UpdateEqual
-	if isIndexChanging(upd.Exprs, route.Table.ColVindexes) {
+	if isIndexChanging(upd.Exprs, route.Table.ColumnVindexes) {
 		return nil, errors.New("unsupported: DML cannot change vindex column")
 	}
 	return route, nil
@@ -63,10 +63,10 @@ func generateQuery(statement sqlparser.Statement) string {
 
 // isIndexChanging returns true if any of the update
 // expressions modify a vindex column.
-func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.ColVindex) bool {
+func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.ColumnVindex) bool {
 	for _, assignment := range setClauses {
 		for _, vcol := range colVindexes {
-			if vcol.Col.Equal(cistring.CIString(assignment.Name.Name)) {
+			if vcol.Column.Equal(cistring.CIString(assignment.Name.Name)) {
 				return true
 			}
 		}
@@ -114,7 +114,7 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *vindexes.Table) string
 	prefix := ""
 	for _, cv := range table.Owned {
 		buf.WriteString(prefix)
-		buf.WriteString(cv.Col.Original())
+		buf.WriteString(cv.Column.Original())
 		prefix = ", "
 	}
 	fmt.Fprintf(buf, " from %s", table.Name)
@@ -133,7 +133,7 @@ func getDMLRouting(where *sqlparser.Where, route *engine.Route) error {
 		if !vindexes.IsUnique(index.Vindex) {
 			continue
 		}
-		if values := getMatch(where.Expr, index.Col); values != nil {
+		if values := getMatch(where.Expr, index.Column); values != nil {
 			route.Vindex = index.Vindex
 			route.Values = values
 			return nil

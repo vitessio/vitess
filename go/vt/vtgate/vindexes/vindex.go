@@ -93,7 +93,7 @@ type Lookup interface {
 // A NewVindexFunc is a function that creates a Vindex based on the
 // properties specified in the input map. Every vindex must
 // register a NewVindexFunc under a unique vindexType.
-type NewVindexFunc func(string, map[string]interface{}) (Vindex, error)
+type NewVindexFunc func(string, map[string]string) (Vindex, error)
 
 var registry = make(map[string]NewVindexFunc)
 
@@ -110,7 +110,7 @@ func Register(vindexType string, newVindexFunc NewVindexFunc) {
 
 // CreateVindex creates a vindex of the specified type using the
 // supplied params. The type must have been previously registered.
-func CreateVindex(vindexType, name string, params map[string]interface{}) (Vindex, error) {
+func CreateVindex(vindexType, name string, params map[string]string) (Vindex, error) {
 	f, ok := registry[vindexType]
 	if !ok {
 		return nil, fmt.Errorf("vindexType %s not found", vindexType)

@@ -53,7 +53,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 	if len(ins.Columns) != len(row) {
 		return nil, errors.New("column list doesn't match values")
 	}
-	colVindexes := route.Table.ColVindexes
+	colVindexes := route.Table.ColumnVindexes
 	route.Opcode = engine.InsertSharded
 	route.Values = make([]interface{}, 0, len(colVindexes))
 	for _, index := range colVindexes {
@@ -61,8 +61,8 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 			return nil, err
 		}
 	}
-	if route.Table.Autoinc != nil {
-		if err := buildAutoincPlan(ins, route.Table.Autoinc, route); err != nil {
+	if route.Table.AutoIncrement != nil {
+		if err := buildAutoIncrementPlan(ins, route.Table.AutoIncrement, route); err != nil {
 			return nil, err
 		}
 	}
@@ -70,20 +70,20 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 	return route, nil
 }
 
-// buildIndexPlan adds the insert value to the Values field for the specified ColVindex.
+// buildIndexPlan adds the insert value to the Values field for the specified ColumnVindex.
 // This value will be used at the time of insert to validate the vindex value.
-func buildIndexPlan(ins *sqlparser.Insert, colVindex *vindexes.ColVindex, route *engine.Route) error {
-	row, pos := findOrInsertPos(ins, colVindex.Col)
+func buildIndexPlan(ins *sqlparser.Insert, colVindex *vindexes.ColumnVindex, route *engine.Route) error {
+	row, pos := findOrInsertPos(ins, colVindex.Column)
 	val, err := valConvert(row[pos])
 	if err != nil {
 		return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
 	route.Values = append(route.Values.([]interface{}), val)
-	row[pos] = sqlparser.ValArg([]byte(":_" + colVindex.Col.Original()))
+	row[pos] = sqlparser.ValArg([]byte(":_" + colVindex.Column.Original()))
 	return nil
 }
 
-func buildAutoincPlan(ins *sqlparser.Insert, autoinc *vindexes.Autoinc, route *engine.Route) error {
+func buildAutoIncrementPlan(ins *sqlparser.Insert, autoinc *vindexes.AutoIncrement, route *engine.Route) error {
 	route.Generate = &engine.Generate{
 		Opcode:   engine.SelectUnsharded,
 		Keyspace: autoinc.Sequence.Keyspace,
@@ -91,12 +91,12 @@ func buildAutoincPlan(ins *sqlparser.Insert, autoinc *vindexes.Autoinc, route *e
 	}
 	// If it's also a colvindex, we have to add a redirect from route.Values.
 	// Otherwise, we have to redirect from row[pos].
-	if autoinc.ColVindexNum >= 0 {
-		route.Generate.Value = route.Values.([]interface{})[autoinc.ColVindexNum]
-		route.Values.([]interface{})[autoinc.ColVindexNum] = ":" + engine.SeqVarName
+	if autoinc.ColumnVindexNum >= 0 {
+		route.Generate.Value = route.Values.([]interface{})[autoinc.ColumnVindexNum]
+		route.Values.([]interface{})[autoinc.ColumnVindexNum] = ":" + engine.SeqVarName
 		return nil
 	}
-	row, pos := findOrInsertPos(ins, autoinc.Col)
+	row, pos := findOrInsertPos(ins, autoinc.Column)
 	val, err := valConvert(row[pos])
 	if err != nil {
 		return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)

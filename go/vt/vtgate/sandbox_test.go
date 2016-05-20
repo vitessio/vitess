@@ -5,6 +5,7 @@
 package vtgate
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -242,10 +244,12 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 }
 
 // WatchVSchema is part of SrvTopoServer.
-func (sct *sandboxTopo) WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan string, err error) {
-	result := make(chan string, 1)
+func (sct *sandboxTopo) WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan *vschemapb.Keyspace, err error) {
+	result := make(chan *vschemapb.Keyspace, 1)
 	value := getSandbox(keyspace).VSchema
-	result <- value
+	var vs vschemapb.Keyspace
+	_ = json.Unmarshal([]byte(value), &vs)
+	result <- &vs
 	return result, nil
 }
 

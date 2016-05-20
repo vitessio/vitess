@@ -1,115 +1,115 @@
 {
   "Keyspaces": {
     "user": {
-      "Sharded": true,
-      "Vindexes": {
+      "sharded": true,
+      "vindexes": {
         "hash": {
-          "Type": "hash"
+          "type": "hash"
         },
         "unicode_loose_md5": {
-          "Type": "unicode_loose_md5"
+          "type": "unicode_loose_md5"
         },
         "name_user_idx": {
-          "Type": "lookup_hash",
-          "Params": {
+          "type": "lookup_hash",
+          "params": {
             "Table": "name_user_idx",
             "From": "name",
             "To": "user_id"
           },
-          "Owner": "user"
+          "owner": "user"
         },
         "music_user_idx": {
-          "Type": "lookup_hash_unique",
-          "Params": {
+          "type": "lookup_hash_unique",
+          "params": {
             "Table": "music_user_idx",
             "From": "music_id",
             "To": "user_id"
           },
-          "Owner": "music"
+          "owner": "music"
         },
         "keyspace_idx": {
-          "Type": "numeric"
+          "type": "numeric"
         }
       },
-      "Tables": {
+      "tables": {
         "user": {
-          "ColVindexes": [
+          "column_vindexes": [
             {
-              "Col": "user_id",
-              "Name": "hash"
+              "column": "user_id",
+              "name": "hash"
             },
             {
-              "Col": "name",
-              "Name": "name_user_idx"
+              "column": "name",
+              "name": "name_user_idx"
             }
           ],
-          "Autoinc": {
-            "Col": "user_id",
-            "Sequence": "user_seq"
+          "auto_increment": {
+            "column": "user_id",
+            "sequence": "user_seq"
           }
         },
         "user_extra": {
-          "ColVindexes": [
+          "column_vindexes": [
             {
-              "Col": "user_id",
-              "Name": "hash"
+              "column": "user_id",
+              "name": "hash"
             }
           ]
         },
         "music": {
-          "ColVindexes": [
+          "column_vindexes": [
             {
-              "Col": "user_id",
-              "Name": "hash"
+              "column": "user_id",
+              "name": "hash"
             },
             {
-              "Col": "music_id",
-              "Name": "music_user_idx"
+              "column": "music_id",
+              "name": "music_user_idx"
             }
           ],
-          "Autoinc": {
-            "Col": "music_id",
-            "Sequence": "music_seq"
+          "auto_increment": {
+            "column": "music_id",
+            "sequence": "music_seq"
           }
         },
         "music_extra": {
-          "ColVindexes": [
+          "column_vindexes": [
             {
-              "Col": "music_id",
-              "Name": "music_user_idx"
+              "column": "music_id",
+              "name": "music_user_idx"
             },
             {
-              "Col": "keyspace_id",
-              "Name": "keyspace_idx"
+              "column": "keyspace_id",
+              "name": "keyspace_idx"
             }
           ]
         },
         "name_info": {
-          "ColVindexes": [
+          "column_vindexes": [
             {
-              "Col": "name",
-              "Name": "unicode_loose_md5"
+              "column": "name",
+              "name": "unicode_loose_md5"
             }
           ]
         },
         "music_user_idx": {
-          "ColVindexes": [
+          "column_vindexes": [
             {
-              "Col": "music_id",
-              "Name": "hash"
+              "column": "music_id",
+              "name": "hash"
             }
           ]
         }
       }
     },
     "lookup": {
-      "Sharded": false,
-      "Tables": {
+      "sharded": false,
+      "tables": {
         "user_seq": {
-          "Type": "Sequence"
+          "type": "sequence"
         },
         "music_seq": {
-          "Type": "Sequence"
+          "type": "sequence"
         },
         "name_user_idx": {}
       }

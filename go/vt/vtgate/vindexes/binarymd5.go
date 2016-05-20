@@ -14,7 +14,7 @@ type BinaryMD5 struct {
 }
 
 // NewBinaryMD5 creates a new BinaryMD5.
-func NewBinaryMD5(name string, _ map[string]interface{}) (Vindex, error) {
+func NewBinaryMD5(name string, _ map[string]string) (Vindex, error) {
 	return &BinaryMD5{name: name}, nil
 }
 
