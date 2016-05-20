@@ -34,7 +34,7 @@ var (
 )
 
 func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
-	waitTime := subFlags.Duration("wait_time", 2*time.Minute, "how long to wait for startup")
+	waitTime := subFlags.Duration("wait_time", 5*time.Minute, "how long to wait for startup")
 	initDBSQLFile := subFlags.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
 	subFlags.Parse(args)
 
@@ -47,7 +47,7 @@ func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) err
 }
 
 func shutdownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
-	waitTime := subFlags.Duration("wait_time", 2*time.Minute, "how long to wait for shutdown")
+	waitTime := subFlags.Duration("wait_time", 5*time.Minute, "how long to wait for shutdown")
 	subFlags.Parse(args)
 
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
@@ -59,7 +59,7 @@ func shutdownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string)
 }
 
 func startCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
-	waitTime := subFlags.Duration("wait_time", 2*time.Minute, "how long to wait for startup")
+	waitTime := subFlags.Duration("wait_time", 5*time.Minute, "how long to wait for startup")
 	subFlags.Parse(args)
 
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
@@ -71,7 +71,7 @@ func startCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) er
 }
 
 func teardownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
-	waitTime := subFlags.Duration("wait_time", 2*time.Minute, "how long to wait for shutdown")
+	waitTime := subFlags.Duration("wait_time", 5*time.Minute, "how long to wait for shutdown")
 	force := subFlags.Bool("force", false, "will remove the root directory even if mysqld shutdown fails")
 	subFlags.Parse(args)
 
@@ -126,13 +126,13 @@ type command struct {
 }
 
 var commands = []command{
-	{"init", initCmd, "[-wait_time=20s] [-init_db_sql_file=]",
+	{"init", initCmd, "[-wait_time=5m] [-init_db_sql_file=]",
 		"Initalizes the directory structure and starts mysqld"},
-	{"teardown", teardownCmd, "[-force]",
+	{"teardown", teardownCmd, "[-wait_time=5m] [-force]",
 		"Shuts mysqld down, and removes the directory"},
-	{"start", startCmd, "[-wait_time=20s]",
+	{"start", startCmd, "[-wait_time=5m]",
 		"Starts mysqld on an already 'init'-ed directory"},
-	{"shutdown", shutdownCmd, "[-wait_time=20s]",
+	{"shutdown", shutdownCmd, "[-wait_time=5m]",
 		"Shuts down mysqld, does not remove any file"},
 
 	{"position", positionCmd,

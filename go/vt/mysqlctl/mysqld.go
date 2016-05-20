@@ -439,7 +439,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 
 	// Start mysqld.
 	if err = mysqld.Start(ctx); err != nil {
-		log.Errorf("failed starting, check %v", mysqld.config.ErrorLogPath)
+		log.Errorf("failed starting mysqld (check %v for more info): %v", mysqld.config.ErrorLogPath, err)
 		return err
 	}
 

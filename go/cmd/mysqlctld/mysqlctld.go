@@ -33,7 +33,7 @@ var (
 	mysqlSocket = flag.String("mysql_socket", "", "path to the mysql socket")
 
 	// mysqlctl init flags
-	waitTime      = flag.Duration("wait_time", 2*time.Minute, "how long to wait for mysqld startup or shutdown")
+	waitTime      = flag.Duration("wait_time", 5*time.Minute, "how long to wait for mysqld startup or shutdown")
 	initDBSQLFile = flag.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
 )
 
@@ -74,10 +74,16 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
 	if _, err = os.Stat(mycnf.DataDir); os.IsNotExist(err) {
 		log.Infof("mysql data dir (%s) doesn't exist, initializing", mycnf.DataDir)
-		mysqld.Init(ctx, *initDBSQLFile)
+		if err := mysqld.Init(ctx, *initDBSQLFile); err != nil {
+			log.Errorf("failed to initialize mysql data dir and start mysqld: %v", err)
+			exit.Return(1)
+		}
 	} else {
 		log.Infof("mysql data dir (%s) already exists, starting without init", mycnf.DataDir)
-		mysqld.Start(ctx)
+		if err := mysqld.Start(ctx); err != nil {
+			log.Errorf("failed to start mysqld: %v", err)
+			exit.Return(1)
+		}
 	}
 	cancel()
 
