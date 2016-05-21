@@ -28,9 +28,7 @@ import (
 )
 
 const (
-	// NOTE(szopa): maxSize used to be 1 << 30, but that causes
-	// compiler errors in some situations.
-	maxSize = 1 << 20
+	maxSize = 1 << 30
 )
 
 func init() {
