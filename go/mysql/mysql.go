@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	maxSize = 1 << 30
+	maxSize = 1 << 32
 )
 
 func init() {
