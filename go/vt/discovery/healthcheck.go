@@ -141,7 +141,7 @@ func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration, healthC
 
 // HealthCheckImpl performs health checking and notifies downstream components about any changes.
 type HealthCheckImpl struct {
-	// set at construction time
+	// Immutable fields set at construction time.
 	listener           HealthCheckStatsListener
 	connTimeout        time.Duration
 	retryDelay         time.Duration
@@ -745,7 +745,6 @@ func (hc *HealthCheckImpl) Close() error {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 	close(hc.closeChan)
-	hc.listener = nil
 	for _, hcc := range hc.addrToConns {
 		hcc.cancelFunc()
 	}
