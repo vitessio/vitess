@@ -154,7 +154,7 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
     public function setUp()
     {
         $this->ctx = Context::getDefault()->withDeadlineAfter(5.0)->withCallerId(self::$CALLER_ID);
-        $this->conn = new VTGateConn(self::$client);
+        $this->conn = new VTGateConn(self::$client, self::$KEYSPACE);
     }
 
     private function getEcho($result)
@@ -176,6 +176,7 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
         $echo = $this->getEcho($conn->execute($ctx, self::$ECHO_QUERY, self::$BIND_VARS, self::$TABLET_TYPE));
         $this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
         $this->assertEquals(self::$ECHO_QUERY, $echo['query']);
+        $this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
         $this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
         $this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
 
@@ -250,6 +251,7 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
         $echo = $this->getEcho($conn->streamExecute($ctx, self::$ECHO_QUERY, self::$BIND_VARS, self::$TABLET_TYPE));
         $this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
         $this->assertEquals(self::$ECHO_QUERY, $echo['query']);
+        $this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
         $this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
         $this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
 
@@ -288,6 +290,7 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
         $echo = $this->getEcho($tx->execute($ctx, self::$ECHO_QUERY, self::$BIND_VARS, self::$TABLET_TYPE));
         $this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
         $this->assertEquals(self::$ECHO_QUERY, $echo['query']);
+        $this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
         $this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
         $this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
         $this->assertEquals(self::$SESSION_ECHO, $echo['session']);
