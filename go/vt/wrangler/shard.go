@@ -64,7 +64,7 @@ func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.Shar
 func (wr *Wrangler) SetShardServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType topodatapb.TabletType, remove bool) (err error) {
 	// lock the keyspace to not conflict with resharding operations
 	actionNode := actionnode.SetShardServedTypes(cells, servedType)
-	ctx, unlock, lockErr := actionNode.LockKeyspaceContext(ctx, wr.ts, keyspace)
+	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, wr.ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -94,7 +94,7 @@ func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard s
 	}
 
 	actionNode := actionnode.UpdateShard()
-	ctx, unlock, lockErr := actionNode.LockKeyspaceContext(ctx, wr.ts, keyspace)
+	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, wr.ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -240,7 +240,7 @@ func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell s
 // SourceShardDelete will delete a SourceShard inside a shard, by index.
 func (wr *Wrangler) SourceShardDelete(ctx context.Context, keyspace, shard string, uid uint32) (err error) {
 	actionNode := actionnode.UpdateShard()
-	ctx, unlock, lockErr := actionNode.LockKeyspaceContext(ctx, wr.ts, keyspace)
+	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, wr.ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -270,7 +270,7 @@ func (wr *Wrangler) SourceShardDelete(ctx context.Context, keyspace, shard strin
 // SourceShardAdd will add a new SourceShard inside a shard
 func (wr *Wrangler) SourceShardAdd(ctx context.Context, keyspace, shard string, uid uint32, skeyspace, sshard string, keyRange *topodatapb.KeyRange, tables []string) (err error) {
 	actionNode := actionnode.UpdateShard()
-	ctx, unlock, lockErr := actionNode.LockKeyspaceContext(ctx, wr.ts, keyspace)
+	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, wr.ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}

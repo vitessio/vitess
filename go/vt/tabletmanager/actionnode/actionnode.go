@@ -17,6 +17,9 @@ import (
 	"time"
 )
 
+// Action is the type for all Lock objects
+type Action string
+
 const (
 	//
 	// Shard actions - involve all tablets in a shard.
@@ -24,21 +27,21 @@ const (
 	//
 
 	// ShardActionReparent handles reparenting of the shard
-	ShardActionReparent = "ReparentShard"
+	ShardActionReparent = Action("ReparentShard")
 
 	// ShardActionExternallyReparented locks the shard when it's
 	// been reparented
-	ShardActionExternallyReparented = "ShardExternallyReparented"
+	ShardActionExternallyReparented = Action("ShardExternallyReparented")
 
 	// ShardActionCheck takes a generic read lock for inexpensive
 	// shard-wide actions.
-	ShardActionCheck = "CheckShard"
+	ShardActionCheck = Action("CheckShard")
 
 	// ShardActionSetServedTypes changes the ServedTypes inside a shard
-	ShardActionSetServedTypes = "SetShardServedTypes"
+	ShardActionSetServedTypes = Action("SetShardServedTypes")
 
 	// ShardActionUpdateShard updates the Shard object (Cells, ...)
-	ShardActionUpdateShard = "UpdateShard"
+	ShardActionUpdateShard = Action("UpdateShard")
 
 	//
 	// Keyspace actions - require very high level locking for consistency.
@@ -46,65 +49,68 @@ const (
 	//
 
 	// KeyspaceActionRebuild rebuilds the keyspace serving graph
-	KeyspaceActionRebuild = "RebuildKeyspace"
+	KeyspaceActionRebuild = Action("RebuildKeyspace")
 
 	// KeyspaceActionApplySchema applies a schema change on the keyspace
-	KeyspaceActionApplySchema = "ApplySchemaKeyspace"
+	KeyspaceActionApplySchema = Action("ApplySchemaKeyspace")
 
 	// KeyspaceActionSetShardingInfo updates the sharding info
-	KeyspaceActionSetShardingInfo = "SetKeyspaceShardingInfo"
+	KeyspaceActionSetShardingInfo = Action("SetKeyspaceShardingInfo")
 
 	// KeyspaceActionMigrateServedTypes migrates ServedType from
 	// one shard to another in a keyspace
-	KeyspaceActionMigrateServedTypes = "MigrateServedTypes"
+	KeyspaceActionMigrateServedTypes = Action("MigrateServedTypes")
 
 	// KeyspaceActionMigrateServedFrom migrates ServedFrom to
 	// another keyspace
-	KeyspaceActionMigrateServedFrom = "MigrateServedFrom"
+	KeyspaceActionMigrateServedFrom = Action("MigrateServedFrom")
 
 	// KeyspaceActionSetServedFrom updates ServedFrom
-	KeyspaceActionSetServedFrom = "SetKeyspaceServedFrom"
+	KeyspaceActionSetServedFrom = Action("SetKeyspaceServedFrom")
 
 	// KeyspaceActionCreateShard protects shard creation within the keyspace
-	KeyspaceActionCreateShard = "KeyspaceCreateShard"
+	KeyspaceActionCreateShard = Action("KeyspaceCreateShard")
 )
 
-// ActionNode describes a long-running action on a tablet, or an action
-// on a shard or keyspace that locks it.
-// Note it cannot be JSON-deserialized, because of the interface{} variable
-type ActionNode struct {
+// Lock describes a long-running lock on a keyspace or a shard.
+// Note it cannot be JSON-deserialized, because of the interface{} variable,
+// but we only serialize it for debugging / logging purposes.
+type Lock struct {
 	// Action and the following fields are set at construction time
-	Action   string
+	Action   Action
 	Args     interface{}
 	HostName string
 	UserName string
 	Time     string
 
-	// Status is the current status of the action.
+	// Status is the current status of the Lock.
 	Status string
 }
 
+// NewLock creates a new Lock.
+func NewLock(action Action, args interface{}) *Lock {
+	l := &Lock{
+		Action:   action,
+		Args:     args,
+		HostName: "unknown",
+		UserName: "unknown",
+		Time:     time.Now().Format(time.RFC3339),
+		Status:   "Running",
+	}
+	if h, err := os.Hostname(); err == nil {
+		l.HostName = h
+	}
+	if u, err := user.Current(); err == nil {
+		l.UserName = u.Username
+	}
+	return l
+}
+
 // ToJSON returns a JSON representation of the object.
-func (n *ActionNode) ToJSON() (string, error) {
-	data, err := json.MarshalIndent(n, "", "  ")
+func (l *Lock) ToJSON() (string, error) {
+	data, err := json.MarshalIndent(l, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("cannot JSON-marshal node: %v", err)
 	}
 	return string(data), nil
-}
-
-// Init will set the action identifier fields for the action node
-// and return the action node.
-func (n *ActionNode) Init() *ActionNode {
-	n.Status = "Running"
-	n.Time = time.Now().Format(time.RFC3339)
-	n.UserName = "unknown"
-	if u, err := user.Current(); err == nil {
-		n.UserName = u.Username
-	}
-	n.HostName = "unknown"
-	if h, err := os.Hostname(); err == nil {
-		n.HostName = h
-	}
-	return n
 }

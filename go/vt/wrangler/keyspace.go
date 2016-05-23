@@ -31,7 +31,7 @@ import (
 func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType, force bool) (err error) {
 	// Lock the keyspace
 	actionNode := actionnode.SetKeyspaceShardingInfo()
-	ctx, unlock, lockErr := actionNode.LockKeyspaceContext(ctx, wr.ts, keyspace)
+	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, wr.ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -83,7 +83,7 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 
 	// lock the keyspace
 	actionNode := actionnode.MigrateServedTypes(servedType)
-	ctx, unlock, lockErr := actionNode.LockKeyspaceContext(ctx, wr.ts, keyspace)
+	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, wr.ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -557,7 +557,7 @@ func (wr *Wrangler) MigrateServedFrom(ctx context.Context, keyspace, shard strin
 
 	// lock the keyspace
 	actionNode := actionnode.MigrateServedFrom(servedType)
-	ctx, unlock, lockErr := actionNode.LockKeyspaceContext(ctx, wr.ts, keyspace)
+	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, wr.ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -735,7 +735,7 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 func (wr *Wrangler) SetKeyspaceServedFrom(ctx context.Context, keyspace string, servedType topodatapb.TabletType, cells []string, sourceKeyspace string, remove bool) (err error) {
 	// Lock the keyspace
 	actionNode := actionnode.SetKeyspaceServedFrom()
-	ctx, unlock, lockErr := actionNode.LockKeyspaceContext(ctx, wr.ts, keyspace)
+	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, wr.ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}

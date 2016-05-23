@@ -131,7 +131,7 @@ func (wr *Wrangler) ReparentTablet(ctx context.Context, tabletAlias *topodatapb.
 func (wr *Wrangler) InitShardMaster(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (err error) {
 	// lock the shard
 	actionNode := actionnode.ReparentShard(initShardMasterOperation, masterElectTabletAlias)
-	ctx, unlock, lockErr := actionNode.LockShardContext(ctx, wr.ts, keyspace, shard)
+	ctx, unlock, lockErr := actionNode.LockShard(ctx, wr.ts, keyspace, shard)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -303,7 +303,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) (err error) {
 	// lock the shard
 	actionNode := actionnode.ReparentShard(plannedReparentShardOperation, masterElectTabletAlias)
-	ctx, unlock, lockErr := actionNode.LockShardContext(ctx, wr.ts, keyspace, shard)
+	ctx, unlock, lockErr := actionNode.LockShard(ctx, wr.ts, keyspace, shard)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -431,7 +431,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) (err error) {
 	// lock the shard
 	actionNode := actionnode.ReparentShard(emergencyReparentShardOperation, masterElectTabletAlias)
-	ctx, unlock, lockErr := actionNode.LockShardContext(ctx, wr.ts, keyspace, shard)
+	ctx, unlock, lockErr := actionNode.LockShard(ctx, wr.ts, keyspace, shard)
 	if lockErr != nil {
 		return lockErr
 	}

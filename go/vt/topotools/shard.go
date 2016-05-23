@@ -18,7 +18,7 @@ import (
 func CreateShard(ctx context.Context, ts topo.Server, keyspace, shard string) (err error) {
 	// Lock the keyspace, because we're looking at ServedTypes.
 	actionNode := actionnode.KeyspaceCreateShard()
-	ctx, unlock, lockErr := actionNode.LockKeyspaceContext(ctx, ts, keyspace)
+	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -43,7 +43,7 @@ func GetOrCreateShard(ctx context.Context, ts topo.Server, keyspace, shard strin
 
 	// now we can lock the keyspace
 	actionNode := actionnode.KeyspaceCreateShard()
-	ctx, unlock, lockErr := actionNode.LockKeyspaceContext(ctx, ts, keyspace)
+	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, ts, keyspace)
 	if lockErr != nil {
 		return nil, fmt.Errorf("LockKeyspace failed: %v", lockErr)
 	}

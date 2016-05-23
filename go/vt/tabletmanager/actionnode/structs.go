@@ -7,37 +7,12 @@ package actionnode
 import topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 /*
-This file defines all the payload structures for the ActionNode objects.
+This file defines all the payload structures for the Lock objects.
 
 Note it's OK to rename the structures as the type name is not saved in json.
 */
 
 // shard action node structures
-
-// SetShardServedTypesArgs is the payload for SetShardServedTypes
-type SetShardServedTypesArgs struct {
-	Cells      []string
-	ServedType topodatapb.TabletType
-}
-
-// MigrateServedTypesArgs is the payload for MigrateServedTypes
-type MigrateServedTypesArgs struct {
-	ServedType topodatapb.TabletType
-}
-
-// keyspace action node structures
-
-// ApplySchemaKeyspaceArgs is the payload for ApplySchemaKeyspace
-type ApplySchemaKeyspaceArgs struct {
-	Change string
-}
-
-// MigrateServedFromArgs is the payload for MigrateServedFrom
-type MigrateServedFromArgs struct {
-	ServedType topodatapb.TabletType
-}
-
-// methods to build the shard action nodes
 
 // ReparentShardArgs is the payload for ReparentShard
 type ReparentShardArgs struct {
@@ -45,107 +20,100 @@ type ReparentShardArgs struct {
 	MasterElectAlias *topodatapb.TabletAlias
 }
 
-// ReparentShard returns an ActionNode
-func ReparentShard(operation string, masterElectAlias *topodatapb.TabletAlias) *ActionNode {
-	return (&ActionNode{
-		Action: ShardActionReparent,
-		Args: &ReparentShardArgs{
-			Operation:        operation,
-			MasterElectAlias: masterElectAlias,
-		},
-	}).Init()
+// ReparentShard returns a Lock
+func ReparentShard(operation string, masterElectAlias *topodatapb.TabletAlias) *Lock {
+	return NewLock(ShardActionReparent, &ReparentShardArgs{
+		Operation:        operation,
+		MasterElectAlias: masterElectAlias,
+	})
 }
 
-// ShardExternallyReparented returns an ActionNode
-func ShardExternallyReparented(tabletAlias *topodatapb.TabletAlias) *ActionNode {
-	return (&ActionNode{
-		Action: ShardActionExternallyReparented,
-		Args:   &tabletAlias,
-	}).Init()
+// ShardExternallyReparented returns a Lock
+func ShardExternallyReparented(tabletAlias *topodatapb.TabletAlias) *Lock {
+	return NewLock(ShardActionExternallyReparented, tabletAlias)
 }
 
-// CheckShard returns an ActionNode
-func CheckShard() *ActionNode {
-	return (&ActionNode{
-		Action: ShardActionCheck,
-	}).Init()
+// CheckShard returns a Lock
+func CheckShard() *Lock {
+	return NewLock(ShardActionCheck, nil)
 }
 
-// SetShardServedTypes returns an ActionNode
-func SetShardServedTypes(cells []string, servedType topodatapb.TabletType) *ActionNode {
-	return (&ActionNode{
-		Action: ShardActionSetServedTypes,
-		Args: &SetShardServedTypesArgs{
-			Cells:      cells,
-			ServedType: servedType,
-		},
-	}).Init()
+// keyspace action node structures
+
+// SetShardServedTypesArgs is the payload for SetShardServedTypes
+type SetShardServedTypesArgs struct {
+	Cells      []string
+	ServedType topodatapb.TabletType
 }
 
-// MigrateServedTypes returns an ActionNode
-func MigrateServedTypes(servedType topodatapb.TabletType) *ActionNode {
-	return (&ActionNode{
-		Action: KeyspaceActionMigrateServedTypes,
-		Args: &MigrateServedTypesArgs{
-			ServedType: servedType,
-		},
-	}).Init()
+// SetShardServedTypes returns a Lock
+func SetShardServedTypes(cells []string, servedType topodatapb.TabletType) *Lock {
+	return NewLock(ShardActionSetServedTypes, &SetShardServedTypesArgs{
+		Cells:      cells,
+		ServedType: servedType,
+	})
 }
 
-// UpdateShard returns an ActionNode
-func UpdateShard() *ActionNode {
-	return (&ActionNode{
-		Action: ShardActionUpdateShard,
-	}).Init()
+// MigrateServedTypesArgs is the payload for MigrateServedTypes
+type MigrateServedTypesArgs struct {
+	ServedType topodatapb.TabletType
+}
+
+// MigrateServedTypes returns a Lock
+func MigrateServedTypes(servedType topodatapb.TabletType) *Lock {
+	return NewLock(KeyspaceActionMigrateServedTypes, &MigrateServedTypesArgs{
+		ServedType: servedType,
+	})
+}
+
+// UpdateShard returns a Lock
+func UpdateShard() *Lock {
+	return NewLock(ShardActionUpdateShard, nil)
 }
 
 // methods to build the keyspace action nodes
 
-// RebuildKeyspace returns an ActionNode
-func RebuildKeyspace() *ActionNode {
-	return (&ActionNode{
-		Action: KeyspaceActionRebuild,
-	}).Init()
+// RebuildKeyspace returns a Lock
+func RebuildKeyspace() *Lock {
+	return NewLock(KeyspaceActionRebuild, nil)
 }
 
-// SetKeyspaceShardingInfo returns an ActionNode
-func SetKeyspaceShardingInfo() *ActionNode {
-	return (&ActionNode{
-		Action: KeyspaceActionSetShardingInfo,
-	}).Init()
+// SetKeyspaceShardingInfo returns a Lock
+func SetKeyspaceShardingInfo() *Lock {
+	return NewLock(KeyspaceActionSetShardingInfo, nil)
 }
 
-// SetKeyspaceServedFrom returns an ActionNode
-func SetKeyspaceServedFrom() *ActionNode {
-	return (&ActionNode{
-		Action: KeyspaceActionSetServedFrom,
-	}).Init()
+// SetKeyspaceServedFrom returns a Lock
+func SetKeyspaceServedFrom() *Lock {
+	return NewLock(KeyspaceActionSetServedFrom, nil)
 }
 
-// ApplySchemaKeyspace returns an ActionNode
-func ApplySchemaKeyspace(change string) *ActionNode {
-	return (&ActionNode{
-		Action: KeyspaceActionApplySchema,
-		Args: &ApplySchemaKeyspaceArgs{
-			Change: change,
-		},
-	}).Init()
+// ApplySchemaKeyspaceArgs is the payload for ApplySchemaKeyspace
+type ApplySchemaKeyspaceArgs struct {
+	Change string
 }
 
-// MigrateServedFrom returns an ActionNode
-func MigrateServedFrom(servedType topodatapb.TabletType) *ActionNode {
-	return (&ActionNode{
-		Action: KeyspaceActionMigrateServedFrom,
-		Args: &MigrateServedFromArgs{
-			ServedType: servedType,
-		},
-	}).Init()
+// ApplySchemaKeyspace returns a Lock
+func ApplySchemaKeyspace(change string) *Lock {
+	return NewLock(KeyspaceActionApplySchema, &ApplySchemaKeyspaceArgs{
+		Change: change,
+	})
 }
 
-// KeyspaceCreateShard returns an ActionNode to use to lock a keyspace
+// MigrateServedFromArgs is the payload for MigrateServedFrom
+type MigrateServedFromArgs struct {
+	ServedType topodatapb.TabletType
+}
+
+// MigrateServedFrom returns a Lock
+func MigrateServedFrom(servedType topodatapb.TabletType) *Lock {
+	return NewLock(KeyspaceActionMigrateServedFrom, &MigrateServedFromArgs{
+		ServedType: servedType,
+	})
+}
+
+// KeyspaceCreateShard returns a Lock to use to lock a keyspace
 // for shard creation
-func KeyspaceCreateShard() *ActionNode {
-	return (&ActionNode{
-		Action: KeyspaceActionCreateShard,
-	}).Init()
+func KeyspaceCreateShard() *Lock {
+	return NewLock(KeyspaceActionCreateShard, nil)
 }

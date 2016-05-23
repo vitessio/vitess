@@ -21,7 +21,7 @@ import (
 // RebuildKeyspace rebuilds the serving graph data while locking out other changes.
 func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace string, cells []string) (err error) {
 	actionNode := actionnode.RebuildKeyspace()
-	ctx, unlock, lockErr := actionNode.LockKeyspaceContext(ctx, ts, keyspace)
+	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}

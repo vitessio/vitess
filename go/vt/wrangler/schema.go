@@ -201,7 +201,7 @@ func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *topodatapb
 func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace, change string, allowLongUnavailability bool, waitSlaveTimeout time.Duration) (err error) {
 	// lock the keyspace
 	actionNode := actionnode.ApplySchemaKeyspace(change)
-	ctx, unlock, lockErr := actionNode.LockKeyspaceContext(ctx, wr.ts, keyspace)
+	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, wr.ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}

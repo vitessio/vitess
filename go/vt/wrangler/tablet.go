@@ -114,7 +114,7 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 	if wasMaster {
 		// We lock the shard to not conflict with reparent operations.
 		actionNode := actionnode.UpdateShard()
-		ctx, unlock, lockErr := actionNode.LockShardContext(ctx, wr.ts, ti.Keyspace, ti.Shard)
+		ctx, unlock, lockErr := actionNode.LockShard(ctx, wr.ts, ti.Keyspace, ti.Shard)
 		if lockErr != nil {
 			return lockErr
 		}
