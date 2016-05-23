@@ -161,3 +161,46 @@ values, it is necessary to re-query the database.
 
 We have plans to make this Update Stream feature more consistent, very
 resilient, fast, and transparent to sharding.
+
+## Semi-Sync
+
+If you tell Vitess to enforce semi-sync
+([semisynchronous replication](https://dev.mysql.com/doc/refman/5.7/en/replication-semisync.html))
+by passing the `-enable_semi_sync` flag to vttablets,
+then the following will happen:
+
+*   The master will only accept writes if it has at least one slave connected
+    and sending semi-sync ACK. It will never fall back to asynchronous
+    (not requiring ACKs) because of timeouts while waiting for ACK, nor because
+    of having zero slaves connected.
+
+    This is important to prevent split brain (or alternate futures) in case of a
+    network partition. If we can verify all slaves have stopped replicating,
+    we know the old master is not accepting writes, even if we are unable to
+    contact the old master itself.
+
+*   Slaves of *replica* type will send semi-sync ACK. Slaves of *rdonly* type will
+    **not** send ACK. This is because rdonly slaves are not eligible to be
+    promoted to master, so we want to avoid the case where a rdonly slave is the
+    single best candidate for election at the time of master failure.
+
+These behaviors combine to give you the property that, in case of master
+failure, there is at least one other *replica* type slave that has every
+transaction that was ever reported to clients as having completed.
+You can then (manually, or with an automated tool like
+[Orchestrator](https://github.com/outbrain/orchestrator))
+pick the replica that is farthest ahead in GTID position and promote that to be
+the new master.
+
+Thus, you can survive sudden master failure without losing any transactions that
+were reported to clients as completed. In MySQL 5.7+, this guarantee is
+strengthened slightly to preventing loss of any transactions that were ever
+**committed** on the original master, eliminating so-called
+[phantom reads](http://bugs.mysql.com/bug.php?id=62174).
+
+With regard to replication lag, note that this does **not** guarantee there is
+always at least one *replica* type slave from which queries will always return
+up-to-date results. Semi-sync guarantees that at least one slave has the
+transaction in its relay log, but it has not necessarily been applied yet.
+The only way to guarantee a fully up-to-date read is to send the request to the
+master.
