@@ -8,7 +8,6 @@ package wrangler
 
 import (
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -18,7 +17,7 @@ var (
 	// remote actions. We usually take a lock then do an action,
 	// so basing this to be greater than DefaultLockTimeout is good.
 	// Use this as the default value for Context that need a deadline.
-	DefaultActionTimeout = actionnode.DefaultLockTimeout * 4
+	DefaultActionTimeout = topo.DefaultLockTimeout * 4
 )
 
 // Wrangler manages complex actions on the topology, like reparents,

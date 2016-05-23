@@ -1,15 +1,15 @@
-// Copyright 2014, Google Inc. All rights reserved.
+// Copyright 2016, Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package actionnode
-
-// This file contains utility functions to be used with actionnode /
-// topology server.
+package topo
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"os"
+	"os/user"
 	"sync"
 	"time"
 
@@ -17,8 +17,12 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/trace"
-	"github.com/youtube/vitess/go/vt/topo"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
+
+// This file contains utility methods and definitions to lock
+// keyspaces and shards.
 
 var (
 	// DefaultLockTimeout is a good value to use as a default for
@@ -29,6 +33,104 @@ var (
 	// timeout for locking topology structures.
 	LockTimeout = flag.Duration("lock_timeout", DefaultLockTimeout, "timeout for acquiring topology locks")
 )
+
+// Action is the type for all Lock objects
+type Action string
+
+const (
+	//
+	// Shard actions - involve all tablets in a shard.
+	// These are just descriptive and used for locking / logging.
+	//
+
+	// ShardActionReparent handles reparenting of the shard
+	ShardActionReparent = Action("ReparentShard")
+
+	// ShardActionExternallyReparented locks the shard when it's
+	// been reparented
+	ShardActionExternallyReparented = Action("ShardExternallyReparented")
+
+	// ShardActionCheck takes a generic read lock for inexpensive
+	// shard-wide actions.
+	ShardActionCheck = Action("CheckShard")
+
+	// ShardActionSetServedTypes changes the ServedTypes inside a shard
+	ShardActionSetServedTypes = Action("SetShardServedTypes")
+
+	// ShardActionUpdateShard updates the Shard object (Cells, ...)
+	ShardActionUpdateShard = Action("UpdateShard")
+
+	//
+	// Keyspace actions - require very high level locking for consistency.
+	// These are just descriptive and used for locking / logging.
+	//
+
+	// KeyspaceActionRebuild rebuilds the keyspace serving graph
+	KeyspaceActionRebuild = Action("RebuildKeyspace")
+
+	// KeyspaceActionApplySchema applies a schema change on the keyspace
+	KeyspaceActionApplySchema = Action("ApplySchemaKeyspace")
+
+	// KeyspaceActionSetShardingInfo updates the sharding info
+	KeyspaceActionSetShardingInfo = Action("SetKeyspaceShardingInfo")
+
+	// KeyspaceActionMigrateServedTypes migrates ServedType from
+	// one shard to another in a keyspace
+	KeyspaceActionMigrateServedTypes = Action("MigrateServedTypes")
+
+	// KeyspaceActionMigrateServedFrom migrates ServedFrom to
+	// another keyspace
+	KeyspaceActionMigrateServedFrom = Action("MigrateServedFrom")
+
+	// KeyspaceActionSetServedFrom updates ServedFrom
+	KeyspaceActionSetServedFrom = Action("SetKeyspaceServedFrom")
+
+	// KeyspaceActionCreateShard protects shard creation within the keyspace
+	KeyspaceActionCreateShard = Action("KeyspaceCreateShard")
+)
+
+// Lock describes a long-running lock on a keyspace or a shard.
+// Note it cannot be JSON-deserialized, because of the interface{} variable,
+// but we only serialize it for debugging / logging purposes.
+type Lock struct {
+	// Action and the following fields are set at construction time
+	Action   Action
+	Args     interface{}
+	HostName string
+	UserName string
+	Time     string
+
+	// Status is the current status of the Lock.
+	Status string
+}
+
+// NewLock creates a new Lock.
+func NewLock(action Action, args interface{}) *Lock {
+	l := &Lock{
+		Action:   action,
+		Args:     args,
+		HostName: "unknown",
+		UserName: "unknown",
+		Time:     time.Now().Format(time.RFC3339),
+		Status:   "Running",
+	}
+	if h, err := os.Hostname(); err == nil {
+		l.HostName = h
+	}
+	if u, err := user.Current(); err == nil {
+		l.UserName = u.Username
+	}
+	return l
+}
+
+// ToJSON returns a JSON representation of the object.
+func (l *Lock) ToJSON() (string, error) {
+	data, err := json.MarshalIndent(l, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("cannot JSON-marshal node: %v", err)
+	}
+	return string(data), nil
+}
 
 // lockInfo is an individual info structure for a lock
 type lockInfo struct {
@@ -49,9 +151,9 @@ type locksInfo struct {
 }
 
 // Context glue
-type key int
+type locksKeyType int
 
-var locksKey key
+var locksKey locksKeyType
 
 // LockKeyspace will lock the keyspace, and return:
 // - a context with a locksInfo structure for future reference.
@@ -71,7 +173,7 @@ var locksKey key
 //   * 'vtctl SetShardTabletControl' emergency operations
 //   * 'vtctl SourceShardAdd' and 'vtctl SourceShardDelete' emergency operations
 // * keyspace-wide schema changes
-func (l *Lock) LockKeyspace(ctx context.Context, ts topo.Server, keyspace string) (context.Context, func(context.Context, *error), error) {
+func (l *Lock) LockKeyspace(ctx context.Context, ts Server, keyspace string) (context.Context, func(context.Context, *error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
 		i = &locksInfo{
@@ -138,7 +240,7 @@ func CheckKeyspaceLocked(ctx context.Context, keyspace string) error {
 
 // lockKeyspace will lock the keyspace in the topology server.
 // unlockKeyspace should be called if this returns no error.
-func (l *Lock) lockKeyspace(ctx context.Context, ts topo.Server, keyspace string) (lockPath string, err error) {
+func (l *Lock) lockKeyspace(ctx context.Context, ts Server, keyspace string) (lockPath string, err error) {
 	log.Infof("Locking keyspace %v for action %v", keyspace, l.Action)
 
 	ctx, cancel := context.WithTimeout(ctx, *LockTimeout)
@@ -158,7 +260,7 @@ func (l *Lock) lockKeyspace(ctx context.Context, ts topo.Server, keyspace string
 }
 
 // unlockKeyspace unlocks a previously locked keyspace.
-func (l *Lock) unlockKeyspace(ctx context.Context, ts topo.Server, keyspace string, lockPath string, actionError error) error {
+func (l *Lock) unlockKeyspace(ctx context.Context, ts Server, keyspace string, lockPath string, actionError error) error {
 	// Detach from the parent timeout, but copy the trace span.
 	// We need to still release the lock even if the parent context timed out.
 	ctx = trace.CopySpan(context.TODO(), ctx)
@@ -215,7 +317,7 @@ func (l *Lock) unlockKeyspace(ctx context.Context, ts topo.Server, keyspace stri
 // * operations that we don't want to conflict with re-parenting:
 //   * DeleteTablet when it's the shard's current master
 //
-func (l *Lock) LockShard(ctx context.Context, ts topo.Server, keyspace, shard string) (context.Context, func(context.Context, *error), error) {
+func (l *Lock) LockShard(ctx context.Context, ts Server, keyspace, shard string) (context.Context, func(context.Context, *error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
 		i = &locksInfo{
@@ -284,7 +386,7 @@ func CheckShardLocked(ctx context.Context, keyspace, shard string) error {
 
 // lockShard will lock the shard in the topology server.
 // UnlockShard should be called if this returns no error.
-func (l *Lock) lockShard(ctx context.Context, ts topo.Server, keyspace, shard string) (lockPath string, err error) {
+func (l *Lock) lockShard(ctx context.Context, ts Server, keyspace, shard string) (lockPath string, err error) {
 	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, l.Action)
 
 	ctx, cancel := context.WithTimeout(ctx, *LockTimeout)
@@ -305,7 +407,7 @@ func (l *Lock) lockShard(ctx context.Context, ts topo.Server, keyspace, shard st
 }
 
 // unlockShard unlocks a previously locked shard.
-func (l *Lock) unlockShard(ctx context.Context, ts topo.Server, keyspace, shard string, lockPath string, actionError error) error {
+func (l *Lock) unlockShard(ctx context.Context, ts Server, keyspace, shard string, lockPath string, actionError error) error {
 	// Detach from the parent timeout, but copy the trace span.
 	// We need to still release the lock even if the parent context timed out.
 	ctx = trace.CopySpan(context.TODO(), ctx)
@@ -345,4 +447,112 @@ func (l *Lock) unlockShard(ctx context.Context, ts topo.Server, keyspace, shard 
 		return actionError
 	}
 	return err
+}
+
+//
+// shard lock related structures and creation methods
+//
+
+// ReparentShardArgs is the payload for ReparentShard
+type ReparentShardArgs struct {
+	Operation        string
+	MasterElectAlias *topodatapb.TabletAlias
+}
+
+// ReparentShardLock returns a Lock
+func ReparentShardLock(operation string, masterElectAlias *topodatapb.TabletAlias) *Lock {
+	return NewLock(ShardActionReparent, &ReparentShardArgs{
+		Operation:        operation,
+		MasterElectAlias: masterElectAlias,
+	})
+}
+
+// ShardExternallyReparentedLock returns a Lock
+func ShardExternallyReparentedLock(tabletAlias *topodatapb.TabletAlias) *Lock {
+	return NewLock(ShardActionExternallyReparented, tabletAlias)
+}
+
+// CheckShardLock returns a Lock
+func CheckShardLock() *Lock {
+	return NewLock(ShardActionCheck, nil)
+}
+
+//
+// keyspace lock related structures and creation methods
+//
+
+// SetShardServedTypesArgs is the payload for SetShardServedTypes
+type SetShardServedTypesArgs struct {
+	Cells      []string
+	ServedType topodatapb.TabletType
+}
+
+// SetShardServedTypesLock returns a Lock
+func SetShardServedTypesLock(cells []string, servedType topodatapb.TabletType) *Lock {
+	return NewLock(ShardActionSetServedTypes, &SetShardServedTypesArgs{
+		Cells:      cells,
+		ServedType: servedType,
+	})
+}
+
+// MigrateServedTypesArgs is the payload for MigrateServedTypes
+type MigrateServedTypesArgs struct {
+	ServedType topodatapb.TabletType
+}
+
+// MigrateServedTypesLock returns a Lock
+func MigrateServedTypesLock(servedType topodatapb.TabletType) *Lock {
+	return NewLock(KeyspaceActionMigrateServedTypes, &MigrateServedTypesArgs{
+		ServedType: servedType,
+	})
+}
+
+// UpdateShardLock returns a Lock
+func UpdateShardLock() *Lock {
+	return NewLock(ShardActionUpdateShard, nil)
+}
+
+// RebuildKeyspaceLock returns a Lock
+func RebuildKeyspaceLock() *Lock {
+	return NewLock(KeyspaceActionRebuild, nil)
+}
+
+// SetKeyspaceShardingInfoLock returns a Lock
+func SetKeyspaceShardingInfoLock() *Lock {
+	return NewLock(KeyspaceActionSetShardingInfo, nil)
+}
+
+// SetKeyspaceServedFromLock returns a Lock
+func SetKeyspaceServedFromLock() *Lock {
+	return NewLock(KeyspaceActionSetServedFrom, nil)
+}
+
+// ApplySchemaKeyspaceArgs is the payload for ApplySchemaKeyspace
+type ApplySchemaKeyspaceArgs struct {
+	Change string
+}
+
+// ApplySchemaKeyspaceLock returns a Lock
+func ApplySchemaKeyspaceLock(change string) *Lock {
+	return NewLock(KeyspaceActionApplySchema, &ApplySchemaKeyspaceArgs{
+		Change: change,
+	})
+}
+
+// MigrateServedFromArgs is the payload for MigrateServedFrom
+type MigrateServedFromArgs struct {
+	ServedType topodatapb.TabletType
+}
+
+// MigrateServedFromLock returns a Lock
+func MigrateServedFromLock(servedType topodatapb.TabletType) *Lock {
+	return NewLock(KeyspaceActionMigrateServedFrom, &MigrateServedFromArgs{
+		ServedType: servedType,
+	})
+}
+
+// KeyspaceCreateShardLock returns a Lock to use to lock a keyspace
+// for shard creation
+func KeyspaceCreateShardLock() *Lock {
+	return NewLock(KeyspaceActionCreateShard, nil)
 }

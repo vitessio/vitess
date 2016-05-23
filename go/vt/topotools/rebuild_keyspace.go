@@ -10,7 +10,6 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
@@ -20,8 +19,8 @@ import (
 
 // RebuildKeyspace rebuilds the serving graph data while locking out other changes.
 func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace string, cells []string) (err error) {
-	actionNode := actionnode.RebuildKeyspace()
-	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, ts, keyspace)
+	lock := topo.RebuildKeyspaceLock()
+	ctx, unlock, lockErr := lock.LockKeyspace(ctx, ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -57,7 +56,7 @@ func findCellsForRebuild(ki *topo.KeyspaceInfo, shardMap map[string]*topo.ShardI
 // copies in each cell.
 func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace string, cells []string) error {
 	log.Infof("rebuildKeyspace %v", keyspace)
-	if err := actionnode.CheckKeyspaceLocked(ctx, keyspace); err != nil {
+	if err := topo.CheckKeyspaceLocked(ctx, keyspace); err != nil {
 		return err
 	}
 

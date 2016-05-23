@@ -7,7 +7,6 @@ package topotools
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
@@ -17,8 +16,8 @@ import (
 // CreateShard will create the shard, while holding the keyspace lock
 func CreateShard(ctx context.Context, ts topo.Server, keyspace, shard string) (err error) {
 	// Lock the keyspace, because we're looking at ServedTypes.
-	actionNode := actionnode.KeyspaceCreateShard()
-	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, ts, keyspace)
+	lock := topo.KeyspaceCreateShardLock()
+	ctx, unlock, lockErr := lock.LockKeyspace(ctx, ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -42,8 +41,8 @@ func GetOrCreateShard(ctx context.Context, ts topo.Server, keyspace, shard strin
 	}
 
 	// now we can lock the keyspace
-	actionNode := actionnode.KeyspaceCreateShard()
-	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, ts, keyspace)
+	lock := topo.KeyspaceCreateShardLock()
+	ctx, unlock, lockErr := lock.LockKeyspace(ctx, ts, keyspace)
 	if lockErr != nil {
 		return nil, fmt.Errorf("LockKeyspace failed: %v", lockErr)
 	}

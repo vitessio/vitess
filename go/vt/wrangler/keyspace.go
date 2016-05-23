@@ -13,7 +13,6 @@ import (
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -30,8 +29,8 @@ import (
 // and ShardingColumnType
 func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType, force bool) (err error) {
 	// Lock the keyspace
-	actionNode := actionnode.SetKeyspaceShardingInfo()
-	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, wr.ts, keyspace)
+	lock := topo.SetKeyspaceShardingInfoLock()
+	ctx, unlock, lockErr := lock.LockKeyspace(ctx, wr.ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -82,8 +81,8 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 	}
 
 	// lock the keyspace
-	actionNode := actionnode.MigrateServedTypes(servedType)
-	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, wr.ts, keyspace)
+	lock := topo.MigrateServedTypesLock(servedType)
+	ctx, unlock, lockErr := lock.LockKeyspace(ctx, wr.ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -556,8 +555,8 @@ func (wr *Wrangler) MigrateServedFrom(ctx context.Context, keyspace, shard strin
 	}
 
 	// lock the keyspace
-	actionNode := actionnode.MigrateServedFrom(servedType)
-	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, wr.ts, keyspace)
+	lock := topo.MigrateServedFromLock(servedType)
+	ctx, unlock, lockErr := lock.LockKeyspace(ctx, wr.ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -734,8 +733,8 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 // SetKeyspaceServedFrom locks a keyspace and changes its ServerFromMap
 func (wr *Wrangler) SetKeyspaceServedFrom(ctx context.Context, keyspace string, servedType topodatapb.TabletType, cells []string, sourceKeyspace string, remove bool) (err error) {
 	// Lock the keyspace
-	actionNode := actionnode.SetKeyspaceServedFrom()
-	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, wr.ts, keyspace)
+	lock := topo.SetKeyspaceServedFromLock()
+	ctx, unlock, lockErr := lock.LockKeyspace(ctx, wr.ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}

@@ -18,7 +18,6 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/schemamanager"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
@@ -200,8 +199,8 @@ func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *topodatapb
 // and fail if not (unless force is specified).
 func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace, change string, allowLongUnavailability bool, waitSlaveTimeout time.Duration) (err error) {
 	// lock the keyspace
-	actionNode := actionnode.ApplySchemaKeyspace(change)
-	ctx, unlock, lockErr := actionNode.LockKeyspace(ctx, wr.ts, keyspace)
+	lock := topo.ApplySchemaKeyspaceLock(change)
+	ctx, unlock, lockErr := lock.LockKeyspace(ctx, wr.ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}

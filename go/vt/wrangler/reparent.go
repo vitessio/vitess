@@ -16,7 +16,6 @@ import (
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -130,8 +129,8 @@ func (wr *Wrangler) ReparentTablet(ctx context.Context, tabletAlias *topodatapb.
 // InitShardMaster will make the provided tablet the master for the shard.
 func (wr *Wrangler) InitShardMaster(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (err error) {
 	// lock the shard
-	actionNode := actionnode.ReparentShard(initShardMasterOperation, masterElectTabletAlias)
-	ctx, unlock, lockErr := actionNode.LockShard(ctx, wr.ts, keyspace, shard)
+	lock := topo.ReparentShardLock(initShardMasterOperation, masterElectTabletAlias)
+	ctx, unlock, lockErr := lock.LockShard(ctx, wr.ts, keyspace, shard)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -302,8 +301,8 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 // when both the current and new master are reachable and in good shape.
 func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) (err error) {
 	// lock the shard
-	actionNode := actionnode.ReparentShard(plannedReparentShardOperation, masterElectTabletAlias)
-	ctx, unlock, lockErr := actionNode.LockShard(ctx, wr.ts, keyspace, shard)
+	lock := topo.ReparentShardLock(plannedReparentShardOperation, masterElectTabletAlias)
+	ctx, unlock, lockErr := lock.LockShard(ctx, wr.ts, keyspace, shard)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -430,8 +429,8 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 // the shard, when the old master is completely unreachable.
 func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) (err error) {
 	// lock the shard
-	actionNode := actionnode.ReparentShard(emergencyReparentShardOperation, masterElectTabletAlias)
-	ctx, unlock, lockErr := actionNode.LockShard(ctx, wr.ts, keyspace, shard)
+	lock := topo.ReparentShardLock(emergencyReparentShardOperation, masterElectTabletAlias)
+	ctx, unlock, lockErr := lock.LockShard(ctx, wr.ts, keyspace, shard)
 	if lockErr != nil {
 		return lockErr
 	}

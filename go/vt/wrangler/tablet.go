@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -113,8 +112,8 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 	// update the Shard object if the master was scrapped.
 	if wasMaster {
 		// We lock the shard to not conflict with reparent operations.
-		actionNode := actionnode.UpdateShard()
-		ctx, unlock, lockErr := actionNode.LockShard(ctx, wr.ts, ti.Keyspace, ti.Shard)
+		lock := topo.UpdateShardLock()
+		ctx, unlock, lockErr := lock.LockShard(ctx, wr.ts, ti.Keyspace, ti.Shard)
 		if lockErr != nil {
 			return lockErr
 		}
