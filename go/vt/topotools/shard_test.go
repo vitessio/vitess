@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package topotools_test
+package topotools
 
 import (
 	"fmt"
@@ -13,13 +13,12 @@ import (
 
 	"golang.org/x/net/context"
 
-	. "github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// TestCreateShard tests a few cases for CreateShard
+// TestCreateShard tests a few cases for topo.CreateShard
 func TestCreateShard(t *testing.T) {
 	ctx := context.Background()
 	cells := []string{"test_cell"}
@@ -31,7 +30,7 @@ func TestCreateShard(t *testing.T) {
 	shard := "0"
 
 	// create shard in a non-existing keyspace
-	if err := CreateShard(ctx, ts, keyspace, shard); err == nil {
+	if err := ts.CreateShard(ctx, keyspace, shard); err == nil {
 		t.Fatalf("CreateShard(invalid keyspace) didn't fail")
 	}
 
@@ -41,7 +40,7 @@ func TestCreateShard(t *testing.T) {
 	}
 
 	// create shard should now work
-	if err := CreateShard(ctx, ts, keyspace, shard); err != nil {
+	if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
 }
@@ -63,7 +62,7 @@ func TestCreateShardCustomSharding(t *testing.T) {
 
 	// create first shard in keyspace
 	shard0 := "0"
-	if err := CreateShard(ctx, ts, keyspace, shard0); err != nil {
+	if err := ts.CreateShard(ctx, keyspace, shard0); err != nil {
 		t.Fatalf("CreateShard(shard0) failed: %v", err)
 	}
 	if si, err := ts.GetShard(ctx, keyspace, shard0); err != nil {
@@ -76,7 +75,7 @@ func TestCreateShardCustomSharding(t *testing.T) {
 
 	// create second shard in keyspace
 	shard1 := "1"
-	if err := CreateShard(ctx, ts, keyspace, shard1); err != nil {
+	if err := ts.CreateShard(ctx, keyspace, shard1); err != nil {
 		t.Fatalf("CreateShard(shard1) failed: %v", err)
 	}
 	if si, err := ts.GetShard(ctx, keyspace, shard1); err != nil {
@@ -110,7 +109,7 @@ func TestGetOrCreateShard(t *testing.T) {
 			for j := 0; j < 100; j++ {
 				index := rand.Intn(10)
 				shard := fmt.Sprintf("%v", index)
-				si, err := GetOrCreateShard(ctx, ts, keyspace, shard)
+				si, err := ts.GetOrCreateShard(ctx, keyspace, shard)
 				if err != nil {
 					t.Errorf("GetOrCreateShard(%v, %v) failed: %v", i, shard, err)
 				}

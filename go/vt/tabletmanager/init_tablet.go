@@ -17,7 +17,6 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/topotools"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -101,7 +100,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	log.Infof("Reading shard record %v/%v", *initKeyspace, shard)
 
 	// read the shard, create it if necessary
-	si, err := topotools.GetOrCreateShard(ctx, agent.TopoServer, *initKeyspace, shard)
+	si, err := agent.TopoServer.GetOrCreateShard(ctx, *initKeyspace, shard)
 	if err != nil {
 		return fmt.Errorf("InitTablet cannot GetOrCreateShard shard: %v", err)
 	}

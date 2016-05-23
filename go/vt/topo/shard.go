@@ -229,7 +229,16 @@ func (ts Server) UpdateShardFields(ctx context.Context, keyspace, shard string, 
 // This should be called while holding the keyspace lock for the shard.
 // (call topotools.CreateShard to do that for you).
 // In unit tests (that are not parallel), this function can be called directly.
-func (ts Server) CreateShard(ctx context.Context, keyspace, shard string) error {
+func (ts Server) CreateShard(ctx context.Context, keyspace, shard string) (err error) {
+	// Lock the keyspace, because we'll be looking at ServedTypes.
+	lock := KeyspaceCreateShardLock()
+	ctx, unlock, lockErr := lock.LockKeyspace(ctx, ts, keyspace)
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(ctx, &err)
+
+	// validate parameters
 	name, keyRange, err := ValidateShardName(shard)
 	if err != nil {
 		return err
@@ -269,6 +278,8 @@ func (ts Server) CreateShard(ctx context.Context, keyspace, shard string) error 
 	}
 
 	if err := ts.Impl.CreateShard(ctx, keyspace, name, value); err != nil {
+		// return error as is, we need to propagate
+		// ErrNodeExists for instance.
 		return err
 	}
 
@@ -279,6 +290,29 @@ func (ts Server) CreateShard(ctx context.Context, keyspace, shard string) error 
 		Status:       "created",
 	})
 	return nil
+}
+
+// GetOrCreateShard will return the shard object, or create one if it doesn't
+// already exist. Note the shard creation is protected by a keyspace Lock.
+func (ts Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) (si *ShardInfo, err error) {
+	si, err = ts.GetShard(ctx, keyspace, shard)
+	if err != ErrNoNode {
+		return
+	}
+
+	// create the keyspace, maybe it already exists
+	if err = ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil && err != ErrNodeExists {
+		return nil, fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
+	}
+
+	// now try to create with the lock, may already exist
+	if err = ts.CreateShard(ctx, keyspace, shard); err != nil && err != ErrNodeExists {
+		return nil, fmt.Errorf("CreateShard(%v/%v) failed: %v", keyspace, shard, err)
+	}
+
+	// try to read the shard again, maybe someone created it
+	// in between the original GetShard and the LockKeyspace
+	return ts.GetShard(ctx, keyspace, shard)
 }
 
 // DeleteShard wraps the underlying Impl.DeleteShard
