@@ -96,7 +96,6 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -417,15 +416,6 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 		shard = "<null>"
 	}
 	return fmt.Sprintf("%v %v %v %v %v %v %v", topoproto.TabletAliasString(ti.Alias), keyspace, shard, strings.ToLower(ti.Type.String()), ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(ti.Tags))
-}
-
-func fmtAction(action *actionnode.ActionNode) string {
-	state := string(action.State)
-	// FIXME(msolomon) The default state should really just have the value "queued".
-	if action.State == actionnode.ActionStateQueued {
-		state = "queued"
-	}
-	return fmt.Sprintf("%v %v %v %v %v", action.Path, action.Action, state, action.ActionGuid, action.Error)
 }
 
 func listTabletsByShard(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) error {

@@ -18,7 +18,6 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
@@ -482,7 +481,7 @@ func (itmc *internalTabletManagerClient) Ping(ctx context.Context, tablet *topod
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.agent.RPCWrap(ctx, actionnode.TabletActionPing, nil, nil, func() error {
+	return t.agent.RPCWrap(ctx, tabletmanager.TabletActionPing, nil, nil, func() error {
 		t.agent.Ping(ctx, "payload")
 		return nil
 	})
@@ -494,7 +493,7 @@ func (itmc *internalTabletManagerClient) GetSchema(ctx context.Context, tablet *
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
 	var result *tabletmanagerdatapb.SchemaDefinition
-	if err := t.agent.RPCWrap(ctx, actionnode.TabletActionGetSchema, nil, nil, func() error {
+	if err := t.agent.RPCWrap(ctx, tabletmanager.TabletActionGetSchema, nil, nil, func() error {
 		sd, err := t.agent.GetSchema(ctx, tables, excludeTables, includeViews)
 		if err == nil {
 			result = sd
@@ -512,7 +511,7 @@ func (itmc *internalTabletManagerClient) GetPermissions(ctx context.Context, tab
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
 	var result *tabletmanagerdatapb.Permissions
-	if err := t.agent.RPCWrap(ctx, actionnode.TabletActionGetPermissions, nil, nil, func() error {
+	if err := t.agent.RPCWrap(ctx, tabletmanager.TabletActionGetPermissions, nil, nil, func() error {
 		p, err := t.agent.GetPermissions(ctx)
 		if err == nil {
 			result = p
@@ -541,7 +540,7 @@ func (itmc *internalTabletManagerClient) Sleep(ctx context.Context, tablet *topo
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.agent.RPCWrapLockAction(ctx, actionnode.TabletActionSleep, nil, nil, true, func() error {
+	return t.agent.RPCWrapLockAction(ctx, tabletmanager.TabletActionSleep, nil, nil, true, func() error {
 		t.agent.Sleep(ctx, duration)
 		return nil
 	})
@@ -556,7 +555,7 @@ func (itmc *internalTabletManagerClient) RefreshState(ctx context.Context, table
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.agent.RPCWrapLockAction(ctx, actionnode.TabletActionRefreshState, nil, nil, true, func() error {
+	return t.agent.RPCWrapLockAction(ctx, tabletmanager.TabletActionRefreshState, nil, nil, true, func() error {
 		t.agent.RefreshState(ctx)
 		return nil
 	})
@@ -567,7 +566,7 @@ func (itmc *internalTabletManagerClient) RunHealthCheck(ctx context.Context, tab
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.agent.RPCWrap(ctx, actionnode.TabletActionRunHealthCheck, nil, nil, func() error {
+	return t.agent.RPCWrap(ctx, tabletmanager.TabletActionRunHealthCheck, nil, nil, func() error {
 		t.agent.RunHealthCheck(ctx)
 		return nil
 	})
@@ -578,7 +577,7 @@ func (itmc *internalTabletManagerClient) IgnoreHealthError(ctx context.Context, 
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.agent.RPCWrap(ctx, actionnode.TabletActionIgnoreHealthError, nil, nil, func() error {
+	return t.agent.RPCWrap(ctx, tabletmanager.TabletActionIgnoreHealthError, nil, nil, func() error {
 		t.agent.IgnoreHealthError(ctx, pattern)
 		return nil
 	})
@@ -589,7 +588,7 @@ func (itmc *internalTabletManagerClient) ReloadSchema(ctx context.Context, table
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.agent.RPCWrapLockAction(ctx, actionnode.TabletActionReloadSchema, nil, nil, true, func() error {
+	return t.agent.RPCWrapLockAction(ctx, tabletmanager.TabletActionReloadSchema, nil, nil, true, func() error {
 		t.agent.ReloadSchema(ctx)
 		return nil
 	})
@@ -601,7 +600,7 @@ func (itmc *internalTabletManagerClient) PreflightSchema(ctx context.Context, ta
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
 	var result *tmutils.SchemaChangeResult
-	if err := t.agent.RPCWrapLockAction(ctx, actionnode.TabletActionPreflightSchema, nil, nil, true, func() error {
+	if err := t.agent.RPCWrapLockAction(ctx, tabletmanager.TabletActionPreflightSchema, nil, nil, true, func() error {
 		scr, err := t.agent.PreflightSchema(ctx, change)
 		if err == nil {
 			result = scr
@@ -619,7 +618,7 @@ func (itmc *internalTabletManagerClient) ApplySchema(ctx context.Context, tablet
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
 	var result *tmutils.SchemaChangeResult
-	if err := t.agent.RPCWrapLockAction(ctx, actionnode.TabletActionApplySchema, nil, nil, true, func() error {
+	if err := t.agent.RPCWrapLockAction(ctx, tabletmanager.TabletActionApplySchema, nil, nil, true, func() error {
 		scr, err := t.agent.ApplySchema(ctx, change)
 		if err == nil {
 			result = scr

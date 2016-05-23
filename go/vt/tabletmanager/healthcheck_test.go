@@ -18,7 +18,6 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
 	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
@@ -531,7 +530,7 @@ func TestTabletControl(t *testing.T) {
 	}
 
 	// now refresh the tablet state, as the resharding process would do
-	agent.RPCWrapLockAction(ctx, actionnode.TabletActionRefreshState, "", "", true, func() error {
+	agent.RPCWrapLockAction(ctx, TabletActionRefreshState, "", "", true, func() error {
 		agent.RefreshState(ctx)
 		return nil
 	})
@@ -653,7 +652,7 @@ func TestTabletControl(t *testing.T) {
 	}
 
 	// now refresh the tablet state, as the resharding process would do
-	agent.RPCWrapLockAction(ctx, actionnode.TabletActionRefreshState, "", "", true, func() error {
+	agent.RPCWrapLockAction(ctx, TabletActionRefreshState, "", "", true, func() error {
 		agent.RefreshState(ctx)
 		return nil
 	})
@@ -711,7 +710,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 
 	// Run TER to turn us into a proper master, wait for it to finish.
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 19 * time.Second
-	if err := agent.RPCWrapLock(ctx, actionnode.TabletActionExternallyReparented, "", "", false, func() error {
+	if err := agent.RPCWrapLock(ctx, TabletActionExternallyReparented, "", "", false, func() error {
 		return agent.TabletExternallyReparented(ctx, "unused_id")
 	}); err != nil {
 		t.Fatal(err)
@@ -798,7 +797,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	// Refresh the tablet state, as vtworker would do.
 	// Since we change the QueryService state, we'll also trigger a health broadcast.
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 21 * time.Second
-	agent.RPCWrapLockAction(ctx, actionnode.TabletActionRefreshState, "", "", true, func() error {
+	agent.RPCWrapLockAction(ctx, TabletActionRefreshState, "", "", true, func() error {
 		agent.RefreshState(ctx)
 		return nil
 	})
@@ -859,7 +858,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	// This should also trigger a health broadcast since the QueryService state
 	// changes from NOT_SERVING to SERVING.
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 23 * time.Second
-	agent.RPCWrapLockAction(ctx, actionnode.TabletActionRefreshState, "", "", true, func() error {
+	agent.RPCWrapLockAction(ctx, TabletActionRefreshState, "", "", true, func() error {
 		agent.RefreshState(ctx)
 		return nil
 	})

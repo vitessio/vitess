@@ -1140,7 +1140,7 @@ func agentRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.
 //
 
 // RPCWrap is part of the RPCAgent interface
-func (fra *fakeRPCAgent) RPCWrap(ctx context.Context, name string, args, reply interface{}, f func() error) (err error) {
+func (fra *fakeRPCAgent) RPCWrap(ctx context.Context, name tabletmanager.TabletAction, args, reply interface{}, f func() error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = fmt.Errorf("RPCWrap caught panic during %v", name)
@@ -1150,7 +1150,7 @@ func (fra *fakeRPCAgent) RPCWrap(ctx context.Context, name string, args, reply i
 }
 
 // RPCWrapLock is part of the RPCAgent interface
-func (fra *fakeRPCAgent) RPCWrapLock(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) (err error) {
+func (fra *fakeRPCAgent) RPCWrapLock(ctx context.Context, name tabletmanager.TabletAction, args, reply interface{}, verbose bool, f func() error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = fmt.Errorf("RPCWrapLock caught panic during %v", name)
@@ -1160,7 +1160,7 @@ func (fra *fakeRPCAgent) RPCWrapLock(ctx context.Context, name string, args, rep
 }
 
 // RPCWrapLockAction is part of the RPCAgent interface
-func (fra *fakeRPCAgent) RPCWrapLockAction(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) (err error) {
+func (fra *fakeRPCAgent) RPCWrapLockAction(ctx context.Context, name tabletmanager.TabletAction, args, reply interface{}, verbose bool, f func() error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = fmt.Errorf("RPCWrapLockAction caught panic during %v", name)

@@ -9,11 +9,6 @@ import topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 /*
 This file defines all the payload structures for the ActionNode objects.
 
-The naming conventions are:
-- a structure used for Args only is suffixed by 'Args'.
-- a structure used for Reply only is suffixed by 'Reply'.
-- a structure used for both Args and Reply is suffixed by 'Data'.
-
 Note it's OK to rename the structures as the type name is not saved in json.
 */
 
@@ -58,7 +53,7 @@ func ReparentShard(operation string, masterElectAlias *topodatapb.TabletAlias) *
 			Operation:        operation,
 			MasterElectAlias: masterElectAlias,
 		},
-	}).SetGuid()
+	}).Init()
 }
 
 // ShardExternallyReparented returns an ActionNode
@@ -66,14 +61,14 @@ func ShardExternallyReparented(tabletAlias *topodatapb.TabletAlias) *ActionNode 
 	return (&ActionNode{
 		Action: ShardActionExternallyReparented,
 		Args:   &tabletAlias,
-	}).SetGuid()
+	}).Init()
 }
 
 // CheckShard returns an ActionNode
 func CheckShard() *ActionNode {
 	return (&ActionNode{
 		Action: ShardActionCheck,
-	}).SetGuid()
+	}).Init()
 }
 
 // SetShardServedTypes returns an ActionNode
@@ -84,7 +79,7 @@ func SetShardServedTypes(cells []string, servedType topodatapb.TabletType) *Acti
 			Cells:      cells,
 			ServedType: servedType,
 		},
-	}).SetGuid()
+	}).Init()
 }
 
 // MigrateServedTypes returns an ActionNode
@@ -94,14 +89,14 @@ func MigrateServedTypes(servedType topodatapb.TabletType) *ActionNode {
 		Args: &MigrateServedTypesArgs{
 			ServedType: servedType,
 		},
-	}).SetGuid()
+	}).Init()
 }
 
 // UpdateShard returns an ActionNode
 func UpdateShard() *ActionNode {
 	return (&ActionNode{
 		Action: ShardActionUpdateShard,
-	}).SetGuid()
+	}).Init()
 }
 
 // methods to build the keyspace action nodes
@@ -110,21 +105,21 @@ func UpdateShard() *ActionNode {
 func RebuildKeyspace() *ActionNode {
 	return (&ActionNode{
 		Action: KeyspaceActionRebuild,
-	}).SetGuid()
+	}).Init()
 }
 
 // SetKeyspaceShardingInfo returns an ActionNode
 func SetKeyspaceShardingInfo() *ActionNode {
 	return (&ActionNode{
 		Action: KeyspaceActionSetShardingInfo,
-	}).SetGuid()
+	}).Init()
 }
 
 // SetKeyspaceServedFrom returns an ActionNode
 func SetKeyspaceServedFrom() *ActionNode {
 	return (&ActionNode{
 		Action: KeyspaceActionSetServedFrom,
-	}).SetGuid()
+	}).Init()
 }
 
 // ApplySchemaKeyspace returns an ActionNode
@@ -134,7 +129,7 @@ func ApplySchemaKeyspace(change string) *ActionNode {
 		Args: &ApplySchemaKeyspaceArgs{
 			Change: change,
 		},
-	}).SetGuid()
+	}).Init()
 }
 
 // MigrateServedFrom returns an ActionNode
@@ -144,7 +139,7 @@ func MigrateServedFrom(servedType topodatapb.TabletType) *ActionNode {
 		Args: &MigrateServedFromArgs{
 			ServedType: servedType,
 		},
-	}).SetGuid()
+	}).Init()
 }
 
 // KeyspaceCreateShard returns an ActionNode to use to lock a keyspace
@@ -152,5 +147,5 @@ func MigrateServedFrom(servedType topodatapb.TabletType) *ActionNode {
 func KeyspaceCreateShard() *ActionNode {
 	return (&ActionNode{
 		Action: KeyspaceActionCreateShard,
-	}).SetGuid()
+	}).Init()
 }

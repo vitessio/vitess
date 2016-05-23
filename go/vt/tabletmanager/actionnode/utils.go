@@ -174,12 +174,10 @@ func (n *ActionNode) unlockKeyspace(ctx context.Context, ts topo.Server, keyspac
 	// first update the actionNode
 	if actionError != nil {
 		log.Infof("Unlocking keyspace %v for action %v with error %v", keyspace, n.Action, actionError)
-		n.Error = actionError.Error()
-		n.State = ActionStateFailed
+		n.Status = "Error: " + actionError.Error()
 	} else {
 		log.Infof("Unlocking keyspace %v for successful action %v", keyspace, n.Action)
-		n.Error = ""
-		n.State = ActionStateDone
+		n.Status = "Done"
 	}
 	j, err := n.ToJSON()
 	if err != nil {
@@ -324,12 +322,10 @@ func (n *ActionNode) UnlockShard(ctx context.Context, ts topo.Server, keyspace, 
 	// first update the actionNode
 	if actionError != nil {
 		log.Infof("Unlocking shard %v/%v for action %v with error %v", keyspace, shard, n.Action, actionError)
-		n.Error = actionError.Error()
-		n.State = ActionStateFailed
+		n.Status = "Error: " + actionError.Error()
 	} else {
 		log.Infof("Unlocking shard %v/%v for successful action %v", keyspace, shard, n.Action)
-		n.Error = ""
-		n.State = ActionStateDone
+		n.Status = "Done"
 	}
 	j, err := n.ToJSON()
 	if err != nil {
