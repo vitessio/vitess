@@ -83,6 +83,8 @@ func (e *TabletStats) String() string {
 // HealthCheck defines the interface of health checking module.
 type HealthCheck interface {
 	// SetListener sets the listener for healthcheck updates. It should not block.
+	// Note that the default implementation requires to set the listener before
+	// any tablets are added to the healthcheck.
 	SetListener(listener HealthCheckStatsListener)
 	// AddTablet adds the tablet, and starts health check.
 	AddTablet(cell, name string, tablet *topodatapb.Tablet)
@@ -434,8 +436,21 @@ func (hc *HealthCheckImpl) deleteConn(tablet *topodatapb.Tablet) {
 	hc.deleteTabletFromTargetProtected(hcc.target, tablet)
 }
 
-// SetListener sets the listener for healthcheck updates. It should not block.
+// SetListener sets the listener for healthcheck updates.
+// It should not block.
+// It must be called after NewHealthCheck and before any tablets are added
+// (either through AddTablet or through a Watcher).
 func (hc *HealthCheckImpl) SetListener(listener HealthCheckStatsListener) {
+	if hc.listener != nil {
+		panic("must not call SetListener twice")
+	}
+
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	if len(hc.addrToConns) > 0 {
+		panic("must not call SetListener after tablets were added")
+	}
+
 	hc.listener = listener
 }
 
