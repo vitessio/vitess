@@ -45,37 +45,13 @@ type rpcContext struct {
 
 // ShardReplicationStatuses returns the ReplicationStatus for each tablet in a shard.
 func (wr *Wrangler) ShardReplicationStatuses(ctx context.Context, keyspace, shard string) ([]*topo.TabletInfo, []*replicationdatapb.Status, error) {
-	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// lock the shard
-	actionNode := actionnode.CheckShard()
-	lockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	tabletMap, posMap, err := wr.shardReplicationStatuses(ctx, shardInfo)
-	return tabletMap, posMap, wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
-}
-
-func (wr *Wrangler) shardReplicationStatuses(ctx context.Context, shardInfo *topo.ShardInfo) ([]*topo.TabletInfo, []*replicationdatapb.Status, error) {
-	// FIXME(msolomon) this assumes no hierarchical replication, which is currently the case.
-	tabletMap, err := wr.ts.GetTabletMapForShard(ctx, shardInfo.Keyspace(), shardInfo.ShardName())
+	tabletMap, err := wr.ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
 		return nil, nil, err
 	}
 	tablets := topotools.CopyMapValues(tabletMap, []*topo.TabletInfo{}).([]*topo.TabletInfo)
-	stats, err := wr.tabletReplicationStatuses(ctx, tablets)
-	return tablets, stats, err
-}
 
-// tabletReplicationStatuses returns the ReplicationStatus of each tablet in
-// tablets.
-func (wr *Wrangler) tabletReplicationStatuses(ctx context.Context, tablets []*topo.TabletInfo) ([]*replicationdatapb.Status, error) {
-	wr.logger.Infof("tabletReplicationStatuses: %v", tablets)
+	wr.logger.Infof("Gathering tablet replication status for: %v", tablets)
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	result := make([]*replicationdatapb.Status, len(tablets))
@@ -110,7 +86,7 @@ func (wr *Wrangler) tabletReplicationStatuses(ctx context.Context, tablets []*to
 		}
 	}
 	wg.Wait()
-	return result, rec.Error()
+	return tablets, result, rec.Error()
 }
 
 // ReparentTablet tells a tablet to reparent this tablet to the current
@@ -152,13 +128,14 @@ func (wr *Wrangler) ReparentTablet(ctx context.Context, tabletAlias *topodatapb.
 }
 
 // InitShardMaster will make the provided tablet the master for the shard.
-func (wr *Wrangler) InitShardMaster(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, force bool, waitSlaveTimeout time.Duration) error {
+func (wr *Wrangler) InitShardMaster(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (err error) {
 	// lock the shard
 	actionNode := actionnode.ReparentShard(initShardMasterOperation, masterElectTabletAlias)
-	lockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
-	if err != nil {
-		return err
+	ctx, unlock, lockErr := actionNode.LockShardContext(ctx, wr.ts, keyspace, shard)
+	if lockErr != nil {
+		return lockErr
 	}
+	defer unlock(ctx, &err)
 
 	// Create reusable Reparent event with available info
 	ev := &events.Reparent{}
@@ -170,9 +147,7 @@ func (wr *Wrangler) InitShardMaster(ctx context.Context, keyspace, shard string,
 	} else {
 		event.DispatchUpdate(ev, "finished InitShardMaster")
 	}
-
-	// and unlock
-	return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
+	return err
 }
 
 func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, force bool, waitSlaveTimeout time.Duration) error {
@@ -325,13 +300,14 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 
 // PlannedReparentShard will make the provided tablet the master for the shard,
 // when both the current and new master are reachable and in good shape.
-func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) error {
+func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) (err error) {
 	// lock the shard
 	actionNode := actionnode.ReparentShard(plannedReparentShardOperation, masterElectTabletAlias)
-	lockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
-	if err != nil {
-		return err
+	ctx, unlock, lockErr := actionNode.LockShardContext(ctx, wr.ts, keyspace, shard)
+	if lockErr != nil {
+		return lockErr
 	}
+	defer unlock(ctx, &err)
 
 	// Create reusable Reparent event with available info
 	ev := &events.Reparent{}
@@ -343,9 +319,7 @@ func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard st
 	} else {
 		event.DispatchUpdate(ev, "finished PlannedReparentShard")
 	}
-
-	// and unlock
-	return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
+	return err
 }
 
 func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) error {
@@ -454,13 +428,14 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 
 // EmergencyReparentShard will make the provided tablet the master for
 // the shard, when the old master is completely unreachable.
-func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) error {
+func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) (err error) {
 	// lock the shard
 	actionNode := actionnode.ReparentShard(emergencyReparentShardOperation, masterElectTabletAlias)
-	lockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
-	if err != nil {
-		return err
+	ctx, unlock, lockErr := actionNode.LockShardContext(ctx, wr.ts, keyspace, shard)
+	if lockErr != nil {
+		return lockErr
 	}
+	defer unlock(ctx, &err)
 
 	// Create reusable Reparent event with available info
 	ev := &events.Reparent{}
@@ -472,9 +447,7 @@ func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard 
 	} else {
 		event.DispatchUpdate(ev, "finished EmergencyReparentShard")
 	}
-
-	// and unlock
-	return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
+	return err
 }
 
 func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) error {

@@ -26,28 +26,19 @@ import (
 
 // keyspace related methods for Wrangler
 
-func (wr *Wrangler) lockKeyspace(ctx context.Context, keyspace string, actionNode *actionnode.ActionNode) (lockPath string, err error) {
-	return actionNode.LockKeyspace(ctx, wr.ts, keyspace)
-}
-
-func (wr *Wrangler) unlockKeyspace(ctx context.Context, keyspace string, actionNode *actionnode.ActionNode, lockPath string, actionError error) error {
-	return actionNode.UnlockKeyspace(ctx, wr.ts, keyspace, lockPath, actionError)
-}
-
 // SetKeyspaceShardingInfo locks a keyspace and sets its ShardingColumnName
 // and ShardingColumnType
-func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType, force bool) error {
+func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType, force bool) (err error) {
+	// Lock the keyspace
 	actionNode := actionnode.SetKeyspaceShardingInfo()
-	lockPath, err := wr.lockKeyspace(ctx, keyspace, actionNode)
-	if err != nil {
-		return err
+	ctx, unlock, lockErr := actionNode.LockKeyspaceContext(ctx, wr.ts, keyspace)
+	if lockErr != nil {
+		return lockErr
 	}
+	defer unlock(ctx, &err)
 
-	err = wr.setKeyspaceShardingInfo(ctx, keyspace, shardingColumnName, shardingColumnType, force)
-	return wr.unlockKeyspace(ctx, keyspace, actionNode, lockPath, err)
-}
-
-func (wr *Wrangler) setKeyspaceShardingInfo(ctx context.Context, keyspace, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType, force bool) error {
+	// FIXME(alainjobart) add a UpdateKeyspaceFields, use it here,
+	// do not lock at all.
 	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
 	if err != nil {
 		return err
@@ -76,18 +67,8 @@ func (wr *Wrangler) setKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 
 // MigrateServedTypes is used during horizontal splits to migrate a
 // served type from a list of shards to another.
-func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType topodatapb.TabletType, reverse, skipReFreshState bool, filteredReplicationWaitTime time.Duration) error {
-	actionNode := actionnode.MigrateServedTypes(servedType)
-	lockPath, err := wr.lockKeyspace(ctx, keyspace, actionNode)
-	if err != nil {
-		return err
-	}
-
-	err = wr.migrateServedTypesLocked(ctx, keyspace, shard, cells, servedType, reverse, skipReFreshState, filteredReplicationWaitTime)
-	return wr.unlockKeyspace(ctx, keyspace, actionNode, lockPath, err)
-}
-
-func (wr *Wrangler) migrateServedTypesLocked(ctx context.Context, keyspace, shard string, cells []string, servedType topodatapb.TabletType, reverse, skipReFreshState bool, filteredReplicationWaitTime time.Duration) error {
+func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType topodatapb.TabletType, reverse, skipReFreshState bool, filteredReplicationWaitTime time.Duration) (err error) {
+	// check input parameters
 	if servedType == topodatapb.TabletType_MASTER {
 		// we cannot migrate a master back, since when master migration
 		// is done, the source shards are dead
@@ -99,6 +80,14 @@ func (wr *Wrangler) migrateServedTypesLocked(ctx context.Context, keyspace, shar
 			return fmt.Errorf("Cannot skip refresh state for master migration on %v/%v", keyspace, shard)
 		}
 	}
+
+	// lock the keyspace
+	actionNode := actionnode.MigrateServedTypes(servedType)
+	ctx, unlock, lockErr := actionNode.LockKeyspaceContext(ctx, wr.ts, keyspace)
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(ctx, &err)
 
 	// find overlapping shards in this keyspace
 	wr.Logger().Infof("Finding the overlapping shards in keyspace %v", keyspace)
@@ -142,50 +131,22 @@ func (wr *Wrangler) migrateServedTypesLocked(ctx context.Context, keyspace, shar
 		}
 	}
 
-	// lock the shards: sources, then destinations
-	// (note they're all ordered by shard name)
-	actionNode := actionnode.MigrateServedTypes(servedType)
-	sourceLockPath := make([]string, len(sourceShards))
-	for i, si := range sourceShards {
-		sourceLockPath[i], err = wr.lockShard(ctx, si.Keyspace(), si.ShardName(), actionNode)
-		if err != nil {
-			wr.Logger().Errorf("Failed to lock source shard %v/%v, may need to unlock other shards manually", si.Keyspace(), si.ShardName())
-			return err
-		}
-	}
-	destinationLockPath := make([]string, len(destinationShards))
-	for i, si := range destinationShards {
-		destinationLockPath[i], err = wr.lockShard(ctx, si.Keyspace(), si.ShardName(), actionNode)
-		if err != nil {
-			wr.Logger().Errorf("Failed to lock destination shard %v/%v, may need to unlock other shards manually", si.Keyspace(), si.ShardName())
-			return err
-		}
-	}
-
-	// record the action error and all unlock errors
-	rec := concurrency.AllErrorRecorder{}
-
 	// execute the migration
-	rec.RecordError(wr.migrateServedTypes(ctx, keyspace, sourceShards, destinationShards, cells, servedType, reverse, filteredReplicationWaitTime))
-
-	// unlock the shards, we're done
-	for i := len(destinationShards) - 1; i >= 0; i-- {
-		rec.RecordError(wr.unlockShard(ctx, destinationShards[i].Keyspace(), destinationShards[i].ShardName(), actionNode, destinationLockPath[i], nil))
-	}
-	for i := len(sourceShards) - 1; i >= 0; i-- {
-		rec.RecordError(wr.unlockShard(ctx, sourceShards[i].Keyspace(), sourceShards[i].ShardName(), actionNode, sourceLockPath[i], nil))
+	if err = wr.migrateServedTypes(ctx, keyspace, sourceShards, destinationShards, cells, servedType, reverse, filteredReplicationWaitTime); err != nil {
+		return err
 	}
 
-	// rebuild the keyspace serving graph if there was no error
-	if !rec.HasErrors() {
-		rec.RecordError(wr.RebuildKeyspaceLocked(ctx, keyspace, cells))
+	// rebuild the keyspace serving graph now that there is no error
+	if err = topotools.RebuildKeyspaceLocked(ctx, wr.logger, wr.ts, keyspace, cells); err != nil {
+		return err
 	}
 
 	// Send a refresh to the tablets we just disabled, iff:
 	// - we're not migrating a master
 	// - we don't have any errors
 	// - we're not told to skip the refresh
-	if servedType != topodatapb.TabletType_MASTER && !rec.HasErrors() && !skipReFreshState {
+	if servedType != topodatapb.TabletType_MASTER && !skipReFreshState {
+		rec := concurrency.AllErrorRecorder{}
 		var refreshShards []*topo.ShardInfo
 		if reverse {
 			// For a backwards migration, we just disabled query service on the destination shards
@@ -197,9 +158,10 @@ func (wr *Wrangler) migrateServedTypesLocked(ctx context.Context, keyspace, shar
 		for _, si := range refreshShards {
 			rec.RecordError(wr.RefreshTablesByShard(ctx, si, servedType, cells))
 		}
+		return rec.Error()
 	}
 
-	return rec.Error()
+	return nil
 }
 
 func (wr *Wrangler) getMastersPosition(ctx context.Context, shards []*topo.ShardInfo) (map[*topo.ShardInfo]string, error) {
@@ -568,7 +530,7 @@ func formatEndpointStats(ts *discovery.TabletStats) string {
 
 // MigrateServedFrom is used during vertical splits to migrate a
 // served type from a keyspace to another.
-func (wr *Wrangler) MigrateServedFrom(ctx context.Context, keyspace, shard string, servedType topodatapb.TabletType, cells []string, reverse bool, filteredReplicationWaitTime time.Duration) error {
+func (wr *Wrangler) MigrateServedFrom(ctx context.Context, keyspace, shard string, servedType topodatapb.TabletType, cells []string, reverse bool, filteredReplicationWaitTime time.Duration) (err error) {
 	// read the destination keyspace, check it
 	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
 	if err != nil {
@@ -593,45 +555,23 @@ func (wr *Wrangler) MigrateServedFrom(ctx context.Context, keyspace, shard strin
 		return err
 	}
 
-	// lock the keyspace and shards
+	// lock the keyspace
 	actionNode := actionnode.MigrateServedFrom(servedType)
-	keyspaceLockPath, err := wr.lockKeyspace(ctx, keyspace, actionNode)
-	if err != nil {
-		wr.Logger().Errorf("Failed to lock destination keyspace %v", keyspace)
-		return err
+	ctx, unlock, lockErr := actionNode.LockKeyspaceContext(ctx, wr.ts, keyspace)
+	if lockErr != nil {
+		return lockErr
 	}
-	destinationShardLockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
-	if err != nil {
-		wr.Logger().Errorf("Failed to lock destination shard %v/%v", keyspace, shard)
-		wr.unlockKeyspace(ctx, keyspace, actionNode, keyspaceLockPath, nil)
-		return err
-	}
-	sourceKeyspace := si.SourceShards[0].Keyspace
-	sourceShard := si.SourceShards[0].Shard
-	sourceShardLockPath, err := wr.lockShard(ctx, sourceKeyspace, sourceShard, actionNode)
-	if err != nil {
-		wr.Logger().Errorf("Failed to lock source shard %v/%v", sourceKeyspace, sourceShard)
-		wr.unlockShard(ctx, keyspace, shard, actionNode, destinationShardLockPath, nil)
-		wr.unlockKeyspace(ctx, keyspace, actionNode, keyspaceLockPath, nil)
-		return err
-	}
-
-	// record the action error and all unlock errors
-	rec := concurrency.AllErrorRecorder{}
+	defer unlock(ctx, &err)
 
 	// execute the migration
-	rec.RecordError(wr.migrateServedFrom(ctx, ki, si, servedType, cells, reverse, filteredReplicationWaitTime))
-
-	rec.RecordError(wr.unlockShard(ctx, sourceKeyspace, sourceShard, actionNode, sourceShardLockPath, nil))
-	rec.RecordError(wr.unlockShard(ctx, keyspace, shard, actionNode, destinationShardLockPath, nil))
-	rec.RecordError(wr.unlockKeyspace(ctx, keyspace, actionNode, keyspaceLockPath, nil))
+	err = wr.migrateServedFrom(ctx, ki, si, servedType, cells, reverse, filteredReplicationWaitTime)
 
 	// rebuild the keyspace serving graph if there was no error
-	if rec.Error() == nil {
-		rec.RecordError(wr.RebuildKeyspaceGraph(ctx, keyspace, cells))
+	if err == nil {
+		err = topotools.RebuildKeyspaceLocked(ctx, wr.logger, wr.ts, keyspace, cells)
 	}
 
-	return rec.Error()
+	return err
 }
 
 func (wr *Wrangler) migrateServedFrom(ctx context.Context, ki *topo.KeyspaceInfo, destinationShard *topo.ShardInfo, servedType topodatapb.TabletType, cells []string, reverse bool, filteredReplicationWaitTime time.Duration) (err error) {
@@ -792,18 +732,16 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 }
 
 // SetKeyspaceServedFrom locks a keyspace and changes its ServerFromMap
-func (wr *Wrangler) SetKeyspaceServedFrom(ctx context.Context, keyspace string, servedType topodatapb.TabletType, cells []string, sourceKeyspace string, remove bool) error {
+func (wr *Wrangler) SetKeyspaceServedFrom(ctx context.Context, keyspace string, servedType topodatapb.TabletType, cells []string, sourceKeyspace string, remove bool) (err error) {
+	// Lock the keyspace
 	actionNode := actionnode.SetKeyspaceServedFrom()
-	lockPath, err := wr.lockKeyspace(ctx, keyspace, actionNode)
-	if err != nil {
-		return err
+	ctx, unlock, lockErr := actionNode.LockKeyspaceContext(ctx, wr.ts, keyspace)
+	if lockErr != nil {
+		return lockErr
 	}
+	defer unlock(ctx, &err)
 
-	err = wr.setKeyspaceServedFrom(ctx, keyspace, servedType, cells, sourceKeyspace, remove)
-	return wr.unlockKeyspace(ctx, keyspace, actionNode, lockPath, err)
-}
-
-func (wr *Wrangler) setKeyspaceServedFrom(ctx context.Context, keyspace string, servedType topodatapb.TabletType, cells []string, sourceKeyspace string, remove bool) error {
+	// FIXME(alainjobart) update to UpdateKeyspaceFields
 	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
 	if err != nil {
 		return err

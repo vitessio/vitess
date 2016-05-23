@@ -19,15 +19,15 @@ import (
 )
 
 // RebuildKeyspace rebuilds the serving graph data while locking out other changes.
-func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace string, cells []string) error {
-	node := actionnode.RebuildKeyspace()
-	lockPath, err := node.LockKeyspace(ctx, ts, keyspace)
-	if err != nil {
-		return err
+func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace string, cells []string) (err error) {
+	actionNode := actionnode.RebuildKeyspace()
+	ctx, unlock, lockErr := actionNode.LockKeyspaceContext(ctx, ts, keyspace)
+	if lockErr != nil {
+		return lockErr
 	}
+	defer unlock(ctx, &err)
 
-	err = RebuildKeyspaceLocked(ctx, log, ts, keyspace, cells)
-	return node.UnlockKeyspace(ctx, ts, keyspace, lockPath, err)
+	return RebuildKeyspaceLocked(ctx, log, ts, keyspace, cells)
 }
 
 // findCellsForRebuild will find all the cells in the given keyspace
@@ -57,6 +57,9 @@ func findCellsForRebuild(ki *topo.KeyspaceInfo, shardMap map[string]*topo.ShardI
 // copies in each cell.
 func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace string, cells []string) error {
 	log.Infof("rebuildKeyspace %v", keyspace)
+	if err := actionnode.CheckKeyspaceLocked(ctx, keyspace); err != nil {
+		return err
+	}
 
 	ki, err := ts.GetKeyspace(ctx, keyspace)
 	if err != nil {

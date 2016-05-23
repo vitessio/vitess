@@ -18,11 +18,6 @@ func (wr *Wrangler) RebuildKeyspaceGraph(ctx context.Context, keyspace string, c
 	return topotools.RebuildKeyspace(ctx, wr.logger, wr.ts, keyspace, cells)
 }
 
-// RebuildKeyspaceLocked rebuilds the serving graph data assuming the keyspace lock is held
-func (wr *Wrangler) RebuildKeyspaceLocked(ctx context.Context, keyspace string, cells []string) error {
-	return topotools.RebuildKeyspaceLocked(ctx, wr.logger, wr.ts, keyspace, cells)
-}
-
 func strInList(sl []string, s string) bool {
 	for _, x := range sl {
 		if x == s {

@@ -94,7 +94,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 // DeleteTablet removes a tablet from a shard.
 // - if allowMaster is set, we can Delete a master tablet (and clear
 // its record from the Shard record if it was the master).
-func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias, allowMaster bool) error {
+func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias, allowMaster bool) (err error) {
 	// load the tablet, see if we'll need to rebuild
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -111,30 +111,25 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 	}
 
 	// update the Shard object if the master was scrapped.
-	// we lock the shard to not conflict with reparent operations.
 	if wasMaster {
+		// We lock the shard to not conflict with reparent operations.
 		actionNode := actionnode.UpdateShard()
-		lockPath, err := wr.lockShard(ctx, ti.Keyspace, ti.Shard, actionNode)
-		if err != nil {
-			return err
+		ctx, unlock, lockErr := actionNode.LockShardContext(ctx, wr.ts, ti.Keyspace, ti.Shard)
+		if lockErr != nil {
+			return lockErr
 		}
+		defer unlock(ctx, &err)
 
 		// update the shard record's master
-		if _, err := wr.ts.UpdateShardFields(ctx, ti.Keyspace, ti.Shard, func(s *topodatapb.Shard) error {
+		_, err = wr.ts.UpdateShardFields(ctx, ti.Keyspace, ti.Shard, func(s *topodatapb.Shard) error {
 			if !topoproto.TabletAliasEqual(s.MasterAlias, tabletAlias) {
 				wr.Logger().Warningf("Deleting master %v from shard %v/%v but master in Shard object was %v", topoproto.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard, topoproto.TabletAliasString(s.MasterAlias))
 				return topo.ErrNoUpdateNeeded
 			}
 			s.MasterAlias = nil
 			return nil
-		}); err != nil {
-			return wr.unlockShard(ctx, ti.Keyspace, ti.Shard, actionNode, lockPath, err)
-		}
-
-		// and unlock
-		if err := wr.unlockShard(ctx, ti.Keyspace, ti.Shard, actionNode, lockPath, err); err != nil {
-			return err
-		}
+		})
+		return err
 	}
 
 	return nil
