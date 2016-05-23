@@ -715,7 +715,7 @@ func (itmc *internalTabletManagerClient) SetMaster(ctx context.Context, tablet *
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) SlaveWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, args *actionnode.SlaveWasRestartedArgs) error {
+func (itmc *internalTabletManagerClient) SlaveWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
 

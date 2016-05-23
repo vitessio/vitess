@@ -17,13 +17,6 @@ The naming conventions are:
 Note it's OK to rename the structures as the type name is not saved in json.
 */
 
-// tablet action node structures
-
-// SlaveWasRestartedArgs is the paylod for SlaveWasRestarted
-type SlaveWasRestartedArgs struct {
-	Parent *topodatapb.TabletAlias
-}
-
 // shard action node structures
 
 // SetShardServedTypesArgs is the payload for SetShardServedTypes

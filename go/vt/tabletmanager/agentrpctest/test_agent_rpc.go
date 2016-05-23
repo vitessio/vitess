@@ -21,7 +21,6 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -1039,30 +1038,28 @@ func agentRPCTestSetMasterPanic(ctx context.Context, t *testing.T, client tmclie
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-var testSlaveWasRestartedArgs = &actionnode.SlaveWasRestartedArgs{
-	Parent: &topodatapb.TabletAlias{
-		Cell: "prison",
-		Uid:  42,
-	},
+var testSlaveWasRestartedParent = &topodatapb.TabletAlias{
+	Cell: "prison",
+	Uid:  42,
 }
 var testSlaveWasRestartedCalled = false
 
-func (fra *fakeRPCAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error {
+func (fra *fakeRPCAgent) SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "SlaveWasRestarted swrd", swrd, testSlaveWasRestartedArgs)
+	compare(fra.t, "SlaveWasRestarted parent", parent, testSlaveWasRestartedParent)
 	testSlaveWasRestartedCalled = true
 	return nil
 }
 
 func agentRPCTestSlaveWasRestarted(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.SlaveWasRestarted(ctx, tablet, testSlaveWasRestartedArgs)
+	err := client.SlaveWasRestarted(ctx, tablet, testSlaveWasRestartedParent)
 	compareError(t, "SlaveWasRestarted", err, true, testSlaveWasRestartedCalled)
 }
 
 func agentRPCTestSlaveWasRestartedPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.SlaveWasRestarted(ctx, tablet, testSlaveWasRestartedArgs)
+	err := client.SlaveWasRestarted(ctx, tablet, testSlaveWasRestartedParent)
 	expectRPCWrapLockActionPanic(t, err)
 }
 

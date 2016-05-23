@@ -10,7 +10,6 @@ import (
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -100,7 +99,7 @@ type RPCAgent interface {
 
 	SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error
 
-	SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error
+	SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error
 
 	StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error)
 

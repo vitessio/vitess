@@ -414,9 +414,7 @@ func (s *server) SlaveWasRestarted(ctx context.Context, request *tabletmanagerda
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &tabletmanagerdatapb.SlaveWasRestartedResponse{}
 	return response, s.agent.RPCWrapLockAction(ctx, actionnode.TabletActionSlaveWasRestarted, request, response, true, func() error {
-		return s.agent.SlaveWasRestarted(ctx, &actionnode.SlaveWasRestartedArgs{
-			Parent: request.Parent,
-		})
+		return s.agent.SlaveWasRestarted(ctx, request.Parent)
 	})
 }
 
