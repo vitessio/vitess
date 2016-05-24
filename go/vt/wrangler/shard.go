@@ -34,9 +34,9 @@ func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.Shar
 	}
 
 	// run the update
-	_, err := wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(s *topodatapb.Shard) error {
+	_, err := wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(s *topo.ShardInfo) error {
 		wasUpdated := false
-		if !topoproto.ShardHasCell(s, tabletAlias.Cell) {
+		if !s.HasCell(tabletAlias.Cell) {
 			s.Cells = append(s.Cells, tabletAlias.Cell)
 			wasUpdated = true
 		}
@@ -102,14 +102,14 @@ func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard s
 	defer unlock(ctx, &err)
 
 	// update the shard
-	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(s *topodatapb.Shard) error {
+	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
 		if len(tables) == 0 && !remove {
 			// we are setting the DisableQueryService flag only
-			return topo.ShardUpdateDisableQueryService(ctx, s, keyspace, shard, tabletType, cells, disableQueryService)
+			return si.UpdateDisableQueryService(ctx, tabletType, cells, disableQueryService)
 		}
 
 		// we are setting / removing the blacklisted tables only
-		return topo.ShardUpdateSourceBlacklistedTables(ctx, s, keyspace, shard, tabletType, cells, remove, tables)
+		return si.UpdateSourceBlacklistedTables(ctx, tabletType, cells, remove, tables)
 	})
 	return err
 }

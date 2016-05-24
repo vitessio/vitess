@@ -113,8 +113,8 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 	}
 
 	other := &topodatapb.TabletAlias{Cell: "ny", Uid: 82873}
-	_, err = tts.UpdateShardFields(ctx, "test_keyspace", "b0-c0", func(shard *topodatapb.Shard) error {
-		shard.MasterAlias = other
+	_, err = tts.UpdateShardFields(ctx, "test_keyspace", "b0-c0", func(si *topo.ShardInfo) error {
+		si.MasterAlias = other
 		return nil
 	})
 	if err != nil {

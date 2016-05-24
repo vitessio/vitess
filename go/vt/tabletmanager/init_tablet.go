@@ -128,12 +128,12 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 
 	// See if we need to add the tablet's cell to the shard's cell list.
 	if !si.HasCell(agent.TabletAlias.Cell) {
-		si, err = agent.TopoServer.UpdateShardFields(ctx, *initKeyspace, shard, func(shard *topodatapb.Shard) error {
-			if topoproto.ShardHasCell(shard, agent.TabletAlias.Cell) {
+		si, err = agent.TopoServer.UpdateShardFields(ctx, *initKeyspace, shard, func(si *topo.ShardInfo) error {
+			if si.HasCell(agent.TabletAlias.Cell) {
 				// Someone else already did it.
 				return topo.ErrNoUpdateNeeded
 			}
-			shard.Cells = append(shard.Cells, agent.TabletAlias.Cell)
+			si.Cells = append(si.Cells, agent.TabletAlias.Cell)
 			return nil
 		})
 		if err != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -34,8 +35,8 @@ func TestShardReplicationStatuses(t *testing.T) {
 	slave := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 
 	// mark the master inside the shard
-	if _, err := ts.UpdateShardFields(ctx, "test_keyspace", "0", func(s *topodatapb.Shard) error {
-		s.MasterAlias = master.Tablet.Alias
+	if _, err := ts.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
+		si.MasterAlias = master.Tablet.Alias
 		return nil
 	}); err != nil {
 		t.Fatalf("UpdateShardFields failed: %v", err)
@@ -101,8 +102,8 @@ func TestReparentTablet(t *testing.T) {
 	slave := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 
 	// mark the master inside the shard
-	if _, err := ts.UpdateShardFields(ctx, "test_keyspace", "0", func(s *topodatapb.Shard) error {
-		s.MasterAlias = master.Tablet.Alias
+	if _, err := ts.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
+		si.MasterAlias = master.Tablet.Alias
 		return nil
 	}); err != nil {
 		t.Fatalf("UpdateShardFields failed: %v", err)

@@ -207,13 +207,16 @@ func (ts Server) UpdateShard(ctx context.Context, si *ShardInfo) error {
 // If the update succeeds, it returns the updated ShardInfo.
 // If the update method returns ErrNoUpdateNeeded, nothing is written,
 // and nil,nil is returned.
-func (ts Server) UpdateShardFields(ctx context.Context, keyspace, shard string, update func(*topodatapb.Shard) error) (*ShardInfo, error) {
+//
+// Note the callback method takes a ShardInfo, so it can get the
+// keyspace and shard from it, or use all the ShardInfo methods.
+func (ts Server) UpdateShardFields(ctx context.Context, keyspace, shard string, update func(*ShardInfo) error) (*ShardInfo, error) {
 	for {
 		si, err := ts.GetShard(ctx, keyspace, shard)
 		if err != nil {
 			return nil, err
 		}
-		if err = update(si.Shard); err != nil {
+		if err = update(si); err != nil {
 			if err == ErrNoUpdateNeeded {
 				return nil, nil
 			}
@@ -330,10 +333,10 @@ func (ts Server) DeleteShard(ctx context.Context, keyspace, shard string) error 
 	return nil
 }
 
-// ShardGetTabletControl returns the Shard_TabletControl for the given tablet type,
+// GetTabletControl returns the Shard_TabletControl for the given tablet type,
 // or nil if it is not in the map.
-func ShardGetTabletControl(s *topodatapb.Shard, tabletType topodatapb.TabletType) *topodatapb.Shard_TabletControl {
-	for _, tc := range s.TabletControls {
+func (si *ShardInfo) GetTabletControl(tabletType topodatapb.TabletType) *topodatapb.Shard_TabletControl {
+	for _, tc := range si.TabletControls {
 		if tc.TabletType == tabletType {
 			return tc
 		}
@@ -341,29 +344,29 @@ func ShardGetTabletControl(s *topodatapb.Shard, tabletType topodatapb.TabletType
 	return nil
 }
 
-// ShardUpdateSourceBlacklistedTables will add or remove the listed tables
+// UpdateSourceBlacklistedTables will add or remove the listed tables
 // in the shard record's TabletControl structures. Note we don't
 // support a lot of the corner cases:
 // - only support one table list per shard. If we encounter a different
 //   table list that the provided one, we error out.
 // - we don't support DisableQueryService at the same time as BlacklistedTables,
 //   because it's not used in the same context (vertical vs horizontal sharding)
-func ShardUpdateSourceBlacklistedTables(ctx context.Context, s *topodatapb.Shard, keyspace, shard string, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error {
-	if err := CheckKeyspaceLocked(ctx, keyspace); err != nil {
+func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error {
+	if err := CheckKeyspaceLocked(ctx, si.keyspace); err != nil {
 		return err
 	}
-	tc := ShardGetTabletControl(s, tabletType)
+	tc := si.GetTabletControl(tabletType)
 	if tc == nil {
 		// handle the case where the TabletControl object is new
 		if remove {
 			// we try to remove from something that doesn't exist,
 			// log, but we're done.
-			log.Warningf("Trying to remove TabletControl.BlacklistedTables for missing type %v in shard %v/%v", tabletType, keyspace, shard)
+			log.Warningf("Trying to remove TabletControl.BlacklistedTables for missing type %v in shard %v/%v", tabletType, si.keyspace, si.shardName)
 			return nil
 		}
 
 		// trying to add more constraints with no existing record
-		s.TabletControls = append(s.TabletControls, &topodatapb.Shard_TabletControl{
+		si.TabletControls = append(si.TabletControls, &topodatapb.Shard_TabletControl{
 			TabletType:          tabletType,
 			Cells:               cells,
 			DisableQueryService: false,
@@ -375,14 +378,14 @@ func ShardUpdateSourceBlacklistedTables(ctx context.Context, s *topodatapb.Shard
 	// we have an existing record, check table lists matches and
 	// DisableQueryService is not set
 	if tc.DisableQueryService {
-		return fmt.Errorf("cannot safely alter BlacklistedTables as DisableQueryService is set for shard %v/%v", keyspace, shard)
+		return fmt.Errorf("cannot safely alter BlacklistedTables as DisableQueryService is set for shard %v/%v", si.keyspace, si.shardName)
 	}
 
 	if remove {
-		shardRemoveCellsFromTabletControl(s, tc, tabletType, cells)
+		si.removeCellsFromTabletControl(tc, tabletType, cells)
 	} else {
 		if !reflect.DeepEqual(tc.BlacklistedTables, tables) {
-			return fmt.Errorf("trying to use two different sets of blacklisted tables for shard %v/%v: %v and %v", keyspace, shard, tc.BlacklistedTables, tables)
+			return fmt.Errorf("trying to use two different sets of blacklisted tables for shard %v/%v: %v and %v", si.keyspace, si.shardName, tc.BlacklistedTables, tables)
 		}
 
 		tc.Cells = addCells(tc.Cells, cells)
@@ -390,27 +393,27 @@ func ShardUpdateSourceBlacklistedTables(ctx context.Context, s *topodatapb.Shard
 	return nil
 }
 
-// ShardUpdateDisableQueryService will make sure the disableQueryService is
+// UpdateDisableQueryService will make sure the disableQueryService is
 // set appropriately in the shard record. Note we don't support a lot
 // of the corner cases:
 // - we don't support DisableQueryService at the same time as BlacklistedTables,
 //   because it's not used in the same context (vertical vs horizontal sharding)
-func ShardUpdateDisableQueryService(ctx context.Context, s *topodatapb.Shard, keyspace, shard string, tabletType topodatapb.TabletType, cells []string, disableQueryService bool) error {
-	if err := CheckKeyspaceLocked(ctx, keyspace); err != nil {
+func (si *ShardInfo) UpdateDisableQueryService(ctx context.Context, tabletType topodatapb.TabletType, cells []string, disableQueryService bool) error {
+	if err := CheckKeyspaceLocked(ctx, si.keyspace); err != nil {
 		return err
 	}
-	tc := ShardGetTabletControl(s, tabletType)
+	tc := si.GetTabletControl(tabletType)
 	if tc == nil {
 		// handle the case where the TabletControl object is new
 		if disableQueryService {
-			s.TabletControls = append(s.TabletControls, &topodatapb.Shard_TabletControl{
+			si.TabletControls = append(si.TabletControls, &topodatapb.Shard_TabletControl{
 				TabletType:          tabletType,
 				Cells:               cells,
 				DisableQueryService: true,
 				BlacklistedTables:   nil,
 			})
 		} else {
-			log.Warningf("Trying to remove TabletControl.DisableQueryService for missing type %v for shard %v/%v", tabletType, keyspace, shard)
+			log.Warningf("Trying to remove TabletControl.DisableQueryService for missing type %v for shard %v/%v", tabletType, si.keyspace, si.shardName)
 		}
 		return nil
 	}
@@ -421,28 +424,28 @@ func ShardUpdateDisableQueryService(ctx context.Context, s *topodatapb.Shard, ke
 		return fmt.Errorf("cannot safely alter DisableQueryService as BlacklistedTables is set")
 	}
 	if !tc.DisableQueryService {
-		return fmt.Errorf("cannot safely alter DisableQueryService as DisableQueryService is not set, this record should not be there for shard %v/%v", keyspace, shard)
+		return fmt.Errorf("cannot safely alter DisableQueryService as DisableQueryService is not set, this record should not be there for shard %v/%v", si.keyspace, si.shardName)
 	}
 
 	if disableQueryService {
 		tc.Cells = addCells(tc.Cells, cells)
 	} else {
-		shardRemoveCellsFromTabletControl(s, tc, tabletType, cells)
+		si.removeCellsFromTabletControl(tc, tabletType, cells)
 	}
 	return nil
 }
 
-func shardRemoveCellsFromTabletControl(s *topodatapb.Shard, tc *topodatapb.Shard_TabletControl, tabletType topodatapb.TabletType, cells []string) {
-	result, emptyList := removeCells(tc.Cells, cells, s.Cells)
+func (si *ShardInfo) removeCellsFromTabletControl(tc *topodatapb.Shard_TabletControl, tabletType topodatapb.TabletType, cells []string) {
+	result, emptyList := removeCells(tc.Cells, cells, si.Cells)
 	if emptyList {
 		// we don't have any cell left, we need to clear this record
 		var tabletControls []*topodatapb.Shard_TabletControl
-		for _, tc := range s.TabletControls {
+		for _, tc := range si.TabletControls {
 			if tc.TabletType != tabletType {
 				tabletControls = append(tabletControls, tc)
 			}
 		}
-		s.TabletControls = tabletControls
+		si.TabletControls = tabletControls
 	} else {
 		tc.Cells = result
 	}

@@ -81,13 +81,13 @@ func TestUpdateSourceBlacklistedTables(t *testing.T) {
 
 	// check we enforce the keyspace lock
 	ctx := context.Background()
-	if err := ShardUpdateSourceBlacklistedTables(ctx, si.Shard, si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY, nil, false, nil); err == nil || err.Error() != "keyspace ks is not locked (no locksInfo)" {
+	if err := si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_RDONLY, nil, false, nil); err == nil || err.Error() != "keyspace ks is not locked (no locksInfo)" {
 		t.Fatalf("unlocked keyspace produced wrong error: %v", err)
 	}
 	ctx = lockedKeyspaceContext("ks")
 
 	// add one cell
-	if err := ShardUpdateSourceBlacklistedTables(ctx, si.Shard, si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY, []string{"first"}, false, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
+	if err := si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_RDONLY, []string{"first"}, false, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
 		{
 			TabletType:        topodatapb.TabletType_RDONLY,
 			Cells:             []string{"first"},
@@ -98,24 +98,24 @@ func TestUpdateSourceBlacklistedTables(t *testing.T) {
 	}
 
 	// remove that cell, going back
-	if err := ShardUpdateSourceBlacklistedTables(ctx, si.Shard, si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY, []string{"first"}, true, nil); err != nil || len(si.TabletControls) != 0 {
+	if err := si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_RDONLY, []string{"first"}, true, nil); err != nil || len(si.TabletControls) != 0 {
 		t.Fatalf("going back should have remove the record: %v", si)
 	}
 
 	// re-add a cell, then another with different table list to
 	// make sure it fails
-	if err := ShardUpdateSourceBlacklistedTables(ctx, si.Shard, si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY, []string{"first"}, false, []string{"t1", "t2"}); err != nil {
+	if err := si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_RDONLY, []string{"first"}, false, []string{"t1", "t2"}); err != nil {
 		t.Fatalf("one cell add failed: %v", si)
 	}
-	if err := ShardUpdateSourceBlacklistedTables(ctx, si.Shard, si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY, []string{"second"}, false, []string{"t2", "t3"}); err == nil || err.Error() != "trying to use two different sets of blacklisted tables for shard ks/sh: [t1 t2] and [t2 t3]" {
+	if err := si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_RDONLY, []string{"second"}, false, []string{"t2", "t3"}); err == nil || err.Error() != "trying to use two different sets of blacklisted tables for shard ks/sh: [t1 t2] and [t2 t3]" {
 		t.Fatalf("different table list should fail: %v", err)
 	}
-	if err := ShardUpdateDisableQueryService(ctx, si.Shard, si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY, []string{"first"}, true); err == nil || err.Error() != "cannot safely alter DisableQueryService as BlacklistedTables is set" {
+	if err := si.UpdateDisableQueryService(ctx, topodatapb.TabletType_RDONLY, []string{"first"}, true); err == nil || err.Error() != "cannot safely alter DisableQueryService as BlacklistedTables is set" {
 		t.Fatalf("UpdateDisableQueryService should fail: %v", err)
 	}
 
 	// add another cell, see the list grow
-	if err := ShardUpdateSourceBlacklistedTables(ctx, si.Shard, si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY, []string{"second"}, false, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
+	if err := si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_RDONLY, []string{"second"}, false, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
 		{
 			TabletType:        topodatapb.TabletType_RDONLY,
 			Cells:             []string{"first", "second"},
@@ -126,7 +126,7 @@ func TestUpdateSourceBlacklistedTables(t *testing.T) {
 	}
 
 	// add all cells, see the list grow to all
-	if err := ShardUpdateSourceBlacklistedTables(ctx, si.Shard, si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY, nil, false, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
+	if err := si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_RDONLY, nil, false, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
 		{
 			TabletType:        topodatapb.TabletType_RDONLY,
 			Cells:             nil,
@@ -137,7 +137,7 @@ func TestUpdateSourceBlacklistedTables(t *testing.T) {
 	}
 
 	// remove one cell from the full list
-	if err := ShardUpdateSourceBlacklistedTables(ctx, si.Shard, si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY, []string{"second"}, true, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
+	if err := si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_RDONLY, []string{"second"}, true, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
 		{
 			TabletType:        topodatapb.TabletType_RDONLY,
 			Cells:             []string{"first", "third"},
@@ -155,13 +155,13 @@ func TestUpdateDisableQueryService(t *testing.T) {
 
 	// check we enforce the keyspace lock
 	ctx := context.Background()
-	if err := ShardUpdateDisableQueryService(ctx, si.Shard, si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY, nil, true); err == nil || err.Error() != "keyspace ks is not locked (no locksInfo)" {
+	if err := si.UpdateDisableQueryService(ctx, topodatapb.TabletType_RDONLY, nil, true); err == nil || err.Error() != "keyspace ks is not locked (no locksInfo)" {
 		t.Fatalf("unlocked keyspace produced wrong error: %v", err)
 	}
 	ctx = lockedKeyspaceContext("ks")
 
 	// add one cell
-	if err := ShardUpdateDisableQueryService(ctx, si.Shard, si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY, []string{"first"}, true); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
+	if err := si.UpdateDisableQueryService(ctx, topodatapb.TabletType_RDONLY, []string{"first"}, true); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
 		{
 			TabletType:          topodatapb.TabletType_RDONLY,
 			Cells:               []string{"first"},
@@ -172,21 +172,21 @@ func TestUpdateDisableQueryService(t *testing.T) {
 	}
 
 	// remove that cell, going back
-	if err := ShardUpdateDisableQueryService(ctx, si.Shard, si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY, []string{"first"}, false); err != nil || len(si.TabletControls) != 0 {
+	if err := si.UpdateDisableQueryService(ctx, topodatapb.TabletType_RDONLY, []string{"first"}, false); err != nil || len(si.TabletControls) != 0 {
 		t.Fatalf("going back should have remove the record: %v %v", err, si)
 	}
 
 	// re-add a cell, then another with a table list to
 	// make sure it fails
-	if err := ShardUpdateDisableQueryService(ctx, si.Shard, si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY, []string{"first"}, true); err != nil {
+	if err := si.UpdateDisableQueryService(ctx, topodatapb.TabletType_RDONLY, []string{"first"}, true); err != nil {
 		t.Fatalf("one cell add failed: %v", si)
 	}
-	if err := ShardUpdateSourceBlacklistedTables(ctx, si.Shard, si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY, []string{"second"}, false, []string{"t1", "t1"}); err == nil || err.Error() != "cannot safely alter BlacklistedTables as DisableQueryService is set for shard ks/sh" {
+	if err := si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_RDONLY, []string{"second"}, false, []string{"t1", "t1"}); err == nil || err.Error() != "cannot safely alter BlacklistedTables as DisableQueryService is set for shard ks/sh" {
 		t.Fatalf("UpdateSourceBlacklistedTables should fail: %v", err)
 	}
 
 	// add another cell, see the list grow
-	if err := ShardUpdateDisableQueryService(ctx, si.Shard, si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY, []string{"second"}, true); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
+	if err := si.UpdateDisableQueryService(ctx, topodatapb.TabletType_RDONLY, []string{"second"}, true); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
 		{
 			TabletType:          topodatapb.TabletType_RDONLY,
 			Cells:               []string{"first", "second"},
@@ -197,7 +197,7 @@ func TestUpdateDisableQueryService(t *testing.T) {
 	}
 
 	// add all cells, see the list grow to all
-	if err := ShardUpdateDisableQueryService(ctx, si.Shard, si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY, nil, true); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
+	if err := si.UpdateDisableQueryService(ctx, topodatapb.TabletType_RDONLY, nil, true); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
 		{
 			TabletType:          topodatapb.TabletType_RDONLY,
 			Cells:               nil,
@@ -208,7 +208,7 @@ func TestUpdateDisableQueryService(t *testing.T) {
 	}
 
 	// remove one cell from the full list
-	if err := ShardUpdateDisableQueryService(ctx, si.Shard, si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY, []string{"second"}, false); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
+	if err := si.UpdateDisableQueryService(ctx, topodatapb.TabletType_RDONLY, []string{"second"}, false); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
 		{
 			TabletType:          topodatapb.TabletType_RDONLY,
 			Cells:               []string{"first", "third"},

@@ -202,7 +202,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 					disallowQueryReason = "master tablet with filtered replication on"
 				}
 			}
-			if tc := topo.ShardGetTabletControl(shardInfo.Shard, newTablet.Type); tc != nil {
+			if tc := shardInfo.GetTabletControl(newTablet.Type); tc != nil {
 				if topo.InCellList(newTablet.Alias.Cell, tc.Cells) {
 					if tc.DisableQueryService {
 						allowQuery = false

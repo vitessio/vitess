@@ -32,16 +32,6 @@ const (
 	emergencyReparentShardOperation = "EmergencyReparentShard"
 )
 
-// FIXME(alainjobart) rework this ShardReplicationStatuses function,
-// it's clumpsy
-
-// helper struct to queue up results
-type rpcContext struct {
-	tablet *topo.TabletInfo
-	status *replicationdatapb.Status
-	err    error
-}
-
 // ShardReplicationStatuses returns the ReplicationStatus for each tablet in a shard.
 func (wr *Wrangler) ShardReplicationStatuses(ctx context.Context, keyspace, shard string) ([]*topo.TabletInfo, []*replicationdatapb.Status, error) {
 	tabletMap, err := wr.ts.GetTabletMapForShard(ctx, keyspace, shard)
@@ -266,8 +256,8 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
 	}
 	if !topoproto.TabletAliasEqual(shardInfo.MasterAlias, masterElectTabletAlias) {
-		if _, err := wr.ts.UpdateShardFields(ctx, keyspace, shard, func(s *topodatapb.Shard) error {
-			s.MasterAlias = masterElectTabletAlias
+		if _, err := wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+			si.MasterAlias = masterElectTabletAlias
 			return nil
 		}); err != nil {
 			wgSlaves.Wait()
@@ -406,8 +396,8 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
 	}
 	wr.logger.Infof("updating shard record with new master %v", masterElectTabletAlias)
-	if _, err := wr.ts.UpdateShardFields(ctx, keyspace, shard, func(s *topodatapb.Shard) error {
-		s.MasterAlias = masterElectTabletAlias
+	if _, err := wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		si.MasterAlias = masterElectTabletAlias
 		return nil
 	}); err != nil {
 		wgSlaves.Wait()
@@ -598,8 +588,8 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
 	}
 	wr.logger.Infof("updating shard record with new master %v", topoproto.TabletAliasString(masterElectTabletAlias))
-	if _, err := wr.ts.UpdateShardFields(ctx, keyspace, shard, func(s *topodatapb.Shard) error {
-		s.MasterAlias = masterElectTabletAlias
+	if _, err := wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		si.MasterAlias = masterElectTabletAlias
 		return nil
 	}); err != nil {
 		wgSlaves.Wait()
