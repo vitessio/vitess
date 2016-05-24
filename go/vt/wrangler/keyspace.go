@@ -36,8 +36,7 @@ func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 	}
 	defer unlock(ctx, &err)
 
-	// FIXME(alainjobart) add a UpdateKeyspaceFields, use it here,
-	// do not lock at all.
+	// and change it
 	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
 	if err != nil {
 		return err
@@ -756,7 +755,7 @@ func (wr *Wrangler) SetKeyspaceServedFrom(ctx context.Context, keyspace string, 
 	}
 	defer unlock(ctx, &err)
 
-	// FIXME(alainjobart) update to UpdateKeyspaceFields
+	// and update it
 	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
 	if err != nil {
 		return err

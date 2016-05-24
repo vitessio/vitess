@@ -137,7 +137,7 @@ func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) []*topodatapb.SrvKeys
 	return result
 }
 
-// CreateKeyspace wraps the underlying Impl.DeleteKeyspaceShards
+// CreateKeyspace wraps the underlying Impl.CreateKeyspace
 // and dispatches the event.
 func (ts Server) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
 	if err := ts.Impl.CreateKeyspace(ctx, keyspace, value); err != nil {
@@ -165,14 +165,15 @@ func (ts Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceInf
 	}, nil
 }
 
-// UpdateKeyspace updates the keyspace data, with the right version
+// UpdateKeyspace updates the keyspace data. It checks the keyspace is locked.
 func (ts Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
-	var version int64 = -1
-	if ki.version != 0 {
-		version = ki.version
+	// make sure it is locked first
+	if err := CheckKeyspaceLocked(ctx, ki.keyspace); err != nil {
+		return err
 	}
 
-	newVersion, err := ts.Impl.UpdateKeyspace(ctx, ki.keyspace, ki.Keyspace, version)
+	// call the Impl's version
+	newVersion, err := ts.Impl.UpdateKeyspace(ctx, ki.keyspace, ki.Keyspace, ki.version)
 	if err != nil {
 		return err
 	}
@@ -183,7 +184,6 @@ func (ts Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 		Keyspace:     ki.Keyspace,
 		Status:       "updated",
 	})
-
 	return nil
 }
 

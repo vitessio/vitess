@@ -85,7 +85,7 @@ type Impl interface {
 	// Can return ErrNoNode if the keyspace doesn't exist yet,
 	// or ErrBadVersion if the version has changed.
 	//
-	// Do not use directly, but instead use topo.UpdateKeyspace.
+	// Do not use directly, but instead use Server.UpdateKeyspace.
 	UpdateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace, existingVersion int64) (newVersion int64, err error)
 
 	// DeleteKeyspace deletes the specified keyspace.

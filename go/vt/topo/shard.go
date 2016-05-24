@@ -186,12 +186,7 @@ func (ts Server) updateShard(ctx context.Context, si *ShardInfo) error {
 	span.Annotate("shard", si.shardName)
 	defer span.Finish()
 
-	var version int64 = -1
-	if si.version != 0 {
-		version = si.version
-	}
-
-	newVersion, err := ts.Impl.UpdateShard(ctx, si.keyspace, si.shardName, si.Shard, version)
+	newVersion, err := ts.Impl.UpdateShard(ctx, si.keyspace, si.shardName, si.Shard, si.version)
 	if err != nil {
 		return err
 	}
