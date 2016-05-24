@@ -116,7 +116,10 @@ func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration, healthC
 	if hcConnCounters == nil {
 		hcConnCounters = stats.NewMultiCountersFunc("HealthcheckConnections"+statsSuffix, []string{"keyspace", "shardname", "tablettype"}, hc.servingConnStats)
 	}
+
+	hc.wg.Add(1)
 	go func() {
+		defer hc.wg.Done()
 		// Start another go routine to check timeout.
 		// Currently vttablet sends healthcheck response every 20 seconds.
 		// We set the default timeout to 1 minute (20s * 3),
@@ -149,6 +152,8 @@ type HealthCheckImpl struct {
 	retryDelay         time.Duration
 	healthCheckTimeout time.Duration
 	closeChan          chan struct{} // signals the process gorouting to terminate
+	// wg keeps track of all launched Go routines.
+	wg sync.WaitGroup
 
 	// mu protects all the following fields
 	// when locking both mutex from HealthCheck and healthCheckConn, HealthCheck.mu goes first.
@@ -199,6 +204,7 @@ func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 
 // checkConn performs health checking on the given tablet.
 func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, tablet *topodatapb.Tablet) {
+	defer hc.wg.Done()
 	defer func() {
 		hcc.mu.Lock()
 		if hcc.conn != nil {
@@ -478,6 +484,7 @@ func (hc *HealthCheckImpl) AddTablet(cell, name string, tablet *topodatapb.Table
 	hc.addrToConns[key] = hcc
 	hc.mu.Unlock()
 
+	hc.wg.Add(1)
 	go hc.checkConn(hcc, cell, name, tablet)
 }
 
@@ -756,6 +763,8 @@ func (hc *HealthCheckImpl) CacheStatus() TabletsCacheStatusList {
 }
 
 // Close stops the healthcheck.
+// After Close() returned, it's guaranteed that the listener won't be called
+// anymore.
 func (hc *HealthCheckImpl) Close() error {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
@@ -763,6 +772,7 @@ func (hc *HealthCheckImpl) Close() error {
 	for _, hcc := range hc.addrToConns {
 		hcc.cancelFunc()
 	}
+	hc.wg.Wait()
 	hc.addrToConns = make(map[string]*healthCheckConn)
 	hc.targetToTablets = make(map[string]map[string]map[topodatapb.TabletType][]*topodatapb.Tablet)
 	return nil
