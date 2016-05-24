@@ -215,6 +215,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, ta
 	}()
 	// retry health check if it fails
 	for {
+		// Try to connect to the tablet.
 		stream, err := hcc.connect(hc, tablet)
 		if err != nil {
 			select {
@@ -228,9 +229,16 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, ta
 			target := hcc.target
 			hcc.mu.Unlock()
 			hcErrorCounters.Add([]string{target.Keyspace, target.Shard, strings.ToLower(target.TabletType.String())}, 1)
-			time.Sleep(hc.retryDelay)
+
+			// Sleep until the next retry is up or the context is done/canceled.
+			select {
+			case <-hcc.ctx.Done():
+			case <-time.After(hc.retryDelay):
+			}
 			continue
 		}
+
+		// Read stream health responses.
 		for {
 			reconnect, err := hcc.processResponse(hc, tablet, stream)
 			if err != nil {
@@ -265,7 +273,12 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, ta
 					hcc.conn = nil
 					hcc.target = &querypb.Target{}
 					hcc.mu.Unlock()
-					time.Sleep(hc.retryDelay)
+
+					// Sleep until the next retry is up or the context is done/canceled.
+					select {
+					case <-hcc.ctx.Done():
+					case <-time.After(hc.retryDelay):
+					}
 					break
 				}
 			}
