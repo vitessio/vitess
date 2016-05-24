@@ -327,62 +327,36 @@ func (wr *Wrangler) migrateServedTypesLocked(ctx context.Context, keyspace strin
 		}
 	}
 
-	// Check and update all shard records, in memory only.
+	// Check and update all source shard records.
 	// We remember if we need to refresh the state of the source tablets
 	// so their query service is enabled again, for reverse migration.
-	needToRefreshSourceTablets := false
-	for _, si := range sourceShards {
-		if err := si.UpdateServedTypesMap(servedType, cells, !reverse); err != nil {
-			return err
-		}
-		if tc := si.GetTabletControl(servedType); reverse && tc != nil && tc.DisableQueryService {
-			// this is a backward migration, where the
-			// source tablets were disabled previously, so
-			// we need to refresh them
-			if err := si.UpdateDisableQueryService(ctx, servedType, cells, false); err != nil {
-				return err
-			}
-			needToRefreshSourceTablets = true
-		}
-		if !reverse && servedType != topodatapb.TabletType_MASTER {
-			// this is a forward migration, we need to disable
-			// query service on the source shards.
-			// (this was already done for masters earlier)
-			if err := si.UpdateDisableQueryService(ctx, servedType, cells, true); err != nil {
-				return err
-			}
-		}
-	}
-	// We remember if we need to refresh the state of the destination tablets
-	// so their query service will be enabled.
-	needToRefreshDestinationTablets := false
-	for _, si := range destinationShards {
-		if err := si.UpdateServedTypesMap(servedType, cells, reverse); err != nil {
-			return err
-		}
-		if tc := si.GetTabletControl(servedType); !reverse && tc != nil && tc.DisableQueryService {
-			// This is a forwards migration, and the destination query service was already in a disabled state.
-			// We need to enable and force a refresh, otherwise it's possible that both the source and destination
-			// will have query service disabled at the same time, and queries would have nowhere to go.
-			if err := si.UpdateDisableQueryService(ctx, servedType, cells, false); err != nil {
-				return err
-			}
-			needToRefreshDestinationTablets = true
-		}
-		if reverse && servedType != topodatapb.TabletType_MASTER {
-			// this is a backwards migration, we need to disable
-			// query service on the destination shards.
-			// (we're not allowed to reverse a master migration)
-			if err := si.UpdateDisableQueryService(ctx, servedType, cells, true); err != nil {
-				return err
-			}
-		}
-	}
-
-	// All is good, we can save the shards now
 	event.DispatchUpdate(ev, "updating source shards")
-	for _, si := range sourceShards {
-		if err := wr.ts.UpdateShard(ctx, si); err != nil {
+	needToRefreshSourceTablets := false
+	for i, si := range sourceShards {
+		sourceShards[i], err = wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
+			if err := si.UpdateServedTypesMap(servedType, cells, !reverse); err != nil {
+				return err
+			}
+			if tc := si.GetTabletControl(servedType); reverse && tc != nil && tc.DisableQueryService {
+				// this is a backward migration, where the
+				// source tablets were disabled previously, so
+				// we need to refresh them
+				if err := si.UpdateDisableQueryService(ctx, servedType, cells, false); err != nil {
+					return err
+				}
+				needToRefreshSourceTablets = true
+			}
+			if !reverse && servedType != topodatapb.TabletType_MASTER {
+				// this is a forward migration, we need to
+				// disable query service on the source shards.
+				// (this was already done for masters earlier)
+				if err := si.UpdateDisableQueryService(ctx, servedType, cells, true); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
 			return err
 		}
 	}
@@ -392,9 +366,41 @@ func (wr *Wrangler) migrateServedTypesLocked(ctx context.Context, keyspace strin
 			wr.RefreshTablesByShard(ctx, si, servedType, cells)
 		}
 	}
+
+	// We remember if we need to refresh the state of the
+	// destination tablets so their query service will be enabled.
 	event.DispatchUpdate(ev, "updating destination shards")
-	for _, si := range destinationShards {
-		if err := wr.ts.UpdateShard(ctx, si); err != nil {
+	needToRefreshDestinationTablets := false
+	for i, si := range destinationShards {
+		destinationShards[i], err = wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
+			if err := si.UpdateServedTypesMap(servedType, cells, reverse); err != nil {
+				return err
+			}
+			if tc := si.GetTabletControl(servedType); !reverse && tc != nil && tc.DisableQueryService {
+				// This is a forwards migration, and the
+				// destination query service was already in a
+				// disabled state. We need to enable and force
+				// a refresh, otherwise it's possible that both
+				// the source and destination will have query
+				// service disabled at the same time, and
+				// queries would have nowhere to go.
+				if err := si.UpdateDisableQueryService(ctx, servedType, cells, false); err != nil {
+					return err
+				}
+				needToRefreshDestinationTablets = true
+			}
+			if reverse && servedType != topodatapb.TabletType_MASTER {
+				// this is a backwards migration, we need to
+				// disable query service on the destination
+				// shards. (we're not allowed to reverse a
+				// master migration).
+				if err := si.UpdateDisableQueryService(ctx, servedType, cells, true); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
 			return err
 		}
 	}
@@ -718,8 +724,14 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 
 	// Update the destination shard (no more source shard)
 	event.DispatchUpdate(ev, "updating destination shard")
-	destinationShard.SourceShards = nil
-	if err := wr.ts.UpdateShard(ctx, destinationShard); err != nil {
+	destinationShard, err = wr.ts.UpdateShardFields(ctx, destinationShard.Keyspace(), destinationShard.ShardName(), func(si *topo.ShardInfo) error {
+		if len(si.SourceShards) != 1 {
+			return fmt.Errorf("unexpected concurrent access for destination shard %v/%v SourceShards array", si.Keyspace(), si.ShardName())
+		}
+		si.SourceShards = nil
+		return nil
+	})
+	if err != nil {
 		return err
 	}
 

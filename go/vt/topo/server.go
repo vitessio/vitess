@@ -115,11 +115,10 @@ type Impl interface {
 
 	// UpdateShard updates the shard information
 	// pointed at by si.keyspace / si.shard to the *si value.
-	// This will only be called with a lock on the shard.
 	// Can return ErrNoNode if the shard doesn't exist yet,
 	// or ErrBadVersion if the version has changed.
 	//
-	// Do not use directly, but instead use topo.UpdateShard.
+	// Do not use directly, but instead use topo.UpdateShardFields.
 	UpdateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard, existingVersion int64) (newVersion int64, err error)
 
 	// ValidateShard performs routine checks on the shard.

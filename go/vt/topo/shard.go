@@ -172,9 +172,14 @@ func (ts Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardIn
 	}, nil
 }
 
-// UpdateShard updates the shard data, with the right version.
-// It also creates a span, and dispatches the event.
+// UpdateShard masks ts.Impl.UpdateShard so nobody is tempted to use it.
 func (ts Server) UpdateShard(ctx context.Context, si *ShardInfo) error {
+	return fmt.Errorf("do not call this function directly, use UpdateShardFields instead")
+}
+
+// updateShard updates the shard data, with the right version.
+// It also creates a span, and dispatches the event.
+func (ts Server) updateShard(ctx context.Context, si *ShardInfo) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateShard")
 	span.Annotate("keyspace", si.keyspace)
@@ -222,7 +227,7 @@ func (ts Server) UpdateShardFields(ctx context.Context, keyspace, shard string, 
 			}
 			return nil, err
 		}
-		if err = ts.UpdateShard(ctx, si); err != ErrBadVersion {
+		if err = ts.updateShard(ctx, si); err != ErrBadVersion {
 			return si, err
 		}
 	}

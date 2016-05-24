@@ -46,13 +46,14 @@ func TestTabletExternallyReparented(t *testing.T) {
 
 	// Add a new Cell to the Shard, that doesn't map to any read topo cell,
 	// to simulate a data center being unreachable.
-	si, err := ts.GetShard(ctx, "test_keyspace", "0")
+	_, err := ts.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
+		if !si.HasCell("cell666") {
+			si.Cells = append(si.Cells, "cell666")
+		}
+		return nil
+	})
 	if err != nil {
-		t.Fatalf("GetShard failed: %v", err)
-	}
-	si.Cells = append(si.Cells, "cell666")
-	if err := ts.UpdateShard(ctx, si); err != nil {
-		t.Fatalf("UpdateShard failed: %v", err)
+		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
 
 	// Slightly unrelated test: make sure we can find the tablets

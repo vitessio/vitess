@@ -69,16 +69,11 @@ func (wr *Wrangler) SetShardServedTypes(ctx context.Context, keyspace, shard str
 	}
 	defer unlock(ctx, &err)
 
-	// FIXME(alainjobart) switch to UpdateShardFields
-	si, err := wr.ts.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
-
-	if err := si.UpdateServedTypesMap(servedType, cells, remove); err != nil {
-		return err
-	}
-	return wr.ts.UpdateShard(ctx, si)
+	// and update the shard
+	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		return si.UpdateServedTypesMap(servedType, cells, remove)
+	})
+	return err
 }
 
 // SetShardTabletControl changes the TabletControl records
@@ -218,21 +213,27 @@ func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell s
 	}
 
 	// now we can update the shard
-	// FIXME(alainjobart) switch to UpdateShardFields
 	wr.Logger().Infof("Removing cell %v from shard %v/%v", cell, keyspace, shard)
-	newCells := make([]string, 0, len(shardInfo.Cells)-1)
-	for _, c := range shardInfo.Cells {
-		if c != cell {
-			newCells = append(newCells, c)
+	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		// since no lock is taken, protect against corner cases.
+		if len(si.Cells) == 0 {
+			return topo.ErrNoUpdateNeeded
 		}
-	}
-	shardInfo.Cells = newCells
-
-	return wr.ts.UpdateShard(ctx, shardInfo)
+		var newCells []string
+		for _, c := range si.Cells {
+			if c != cell {
+				newCells = append(newCells, c)
+			}
+		}
+		si.Cells = newCells
+		return nil
+	})
+	return err
 }
 
 // SourceShardDelete will delete a SourceShard inside a shard, by index.
 func (wr *Wrangler) SourceShardDelete(ctx context.Context, keyspace, shard string, uid uint32) (err error) {
+	// lock the keyspace
 	lock := topo.UpdateShardLock()
 	ctx, unlock, lockErr := lock.LockKeyspace(ctx, wr.ts, keyspace)
 	if lockErr != nil {
@@ -240,29 +241,26 @@ func (wr *Wrangler) SourceShardDelete(ctx context.Context, keyspace, shard strin
 	}
 	defer unlock(ctx, &err)
 
-	// FIXME(alainjobart) switch to UpdateShardFields
-	si, err := wr.ts.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
-	newSourceShards := make([]*topodatapb.Shard_SourceShard, 0, 0)
-	for _, ss := range si.SourceShards {
-		if ss.Uid != uid {
-			newSourceShards = append(newSourceShards, ss)
+	// remove the source shard
+	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		var newSourceShards []*topodatapb.Shard_SourceShard
+		for _, ss := range si.SourceShards {
+			if ss.Uid != uid {
+				newSourceShards = append(newSourceShards, ss)
+			}
 		}
-	}
-	if len(newSourceShards) == len(si.SourceShards) {
-		return fmt.Errorf("no SourceShard with uid %v", uid)
-	}
-	if len(newSourceShards) == 0 {
-		newSourceShards = nil
-	}
-	si.SourceShards = newSourceShards
-	return wr.ts.UpdateShard(ctx, si)
+		if len(newSourceShards) == len(si.SourceShards) {
+			return fmt.Errorf("no SourceShard with uid %v", uid)
+		}
+		si.SourceShards = newSourceShards
+		return nil
+	})
+	return err
 }
 
 // SourceShardAdd will add a new SourceShard inside a shard
 func (wr *Wrangler) SourceShardAdd(ctx context.Context, keyspace, shard string, uid uint32, skeyspace, sshard string, keyRange *topodatapb.KeyRange, tables []string) (err error) {
+	// lock the keyspace
 	lock := topo.UpdateShardLock()
 	ctx, unlock, lockErr := lock.LockKeyspace(ctx, wr.ts, keyspace)
 	if lockErr != nil {
@@ -270,25 +268,23 @@ func (wr *Wrangler) SourceShardAdd(ctx context.Context, keyspace, shard string, 
 	}
 	defer unlock(ctx, &err)
 
-	// FIXME(alainjobart) switch to UpdateShardFields
-	si, err := wr.ts.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
-
-	// check the uid is not used already
-	for _, ss := range si.SourceShards {
-		if ss.Uid == uid {
-			return fmt.Errorf("uid %v is already in use", uid)
+	// and update the shard
+	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		// check the uid is not used already
+		for _, ss := range si.SourceShards {
+			if ss.Uid == uid {
+				return fmt.Errorf("uid %v is already in use", uid)
+			}
 		}
-	}
 
-	si.SourceShards = append(si.SourceShards, &topodatapb.Shard_SourceShard{
-		Uid:      uid,
-		Keyspace: skeyspace,
-		Shard:    sshard,
-		KeyRange: keyRange,
-		Tables:   tables,
+		si.SourceShards = append(si.SourceShards, &topodatapb.Shard_SourceShard{
+			Uid:      uid,
+			Keyspace: skeyspace,
+			Shard:    sshard,
+			KeyRange: keyRange,
+			Tables:   tables,
+		})
+		return nil
 	})
-	return wr.ts.UpdateShard(ctx, si)
+	return err
 }
