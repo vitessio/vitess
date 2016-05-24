@@ -780,7 +780,6 @@ func (hc *HealthCheckImpl) CacheStatus() TabletsCacheStatusList {
 // anymore.
 func (hc *HealthCheckImpl) Close() error {
 	hc.mu.Lock()
-	defer hc.mu.Unlock()
 	close(hc.closeChan)
 	for _, hcc := range hc.addrToConns {
 		hcc.cancelFunc()
@@ -788,6 +787,14 @@ func (hc *HealthCheckImpl) Close() error {
 	hc.wg.Wait()
 	hc.addrToConns = make(map[string]*healthCheckConn)
 	hc.targetToTablets = make(map[string]map[string]map[topodatapb.TabletType][]*topodatapb.Tablet)
+	// Release the lock early or a pending checkHealthCheckTimeout cannot get a
+	// read lock on it.
+	hc.mu.Unlock()
+
+	// Wait for the checkHealthCheckTimeout Go routine and each Go routine per
+	// tablet.
+	hc.wg.Wait()
+
 	return nil
 }
 
