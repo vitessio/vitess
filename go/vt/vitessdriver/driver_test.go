@@ -129,14 +129,9 @@ func TestOpen_InvalidJson(t *testing.T) {
 	}
 }
 
-func TestOpen_KeyspaceAndShardBelongTogether(t *testing.T) {
-	_, err := drv{}.Open(`{"keyspace": "ks1"}`)
-	want := "Always set both keyspace and shard or leave both empty."
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, want %s", err, want)
-	}
-
-	_, err = drv{}.Open(`{"shard": "0"}`)
+func TestOpen_ShardRequiresKeyspace(t *testing.T) {
+	_, err := drv{}.Open(`{"shard": "0"}`)
+	want := "the shard parameter requires a keyspace parameter. shard: 0"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, want %s", err, want)
 	}

@@ -952,8 +952,10 @@ class TestVTGateFunctions(unittest.TestCase):
   def test_vtclient(self):
     """This test uses vtclient to send and receive various queries.
     """
+    # specify a good default keyspace for the connection here.
     utils.vtgate.vtclient(
         'insert into vt_user_extra(user_id, email) values (:v1, :v2)',
+        keyspace='user',
         bindvars=[10, 'test 10'])
 
     out, _ = utils.vtgate.vtclient(
@@ -986,6 +988,15 @@ class TestVTGateFunctions(unittest.TestCase):
         u'fields': [u'user_id', u'email'],
         u'rows': None,
         })
+
+    # check that specifying an invalid keyspace is propagated and triggers an
+    # error
+    _, err = utils.vtgate.vtclient(
+        'insert into vt_user_extra(user_id, email) values (:v1, :v2)',
+        keyspace='invalid',
+        bindvars=[10, 'test 10'],
+        raise_on_error=False)
+    self.assertIn('keyspace invalid not found in vschema', err)
 
   def test_vtctl_vtgate_execute(self):
     """This test uses 'vtctl VtGateExecute' to send and receive various queries.

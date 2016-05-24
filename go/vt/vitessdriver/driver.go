@@ -111,8 +111,8 @@ func (d drv) Open(name string) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	if (c.Keyspace != "" && c.Shard == "") || (c.Keyspace == "" && c.Shard != "") {
-		return nil, fmt.Errorf("Always set both keyspace and shard or leave both empty. keyspace: %v shard: %v", c.Keyspace, c.Shard)
+	if c.Keyspace == "" && c.Shard != "" {
+		return nil, fmt.Errorf("the shard parameter requires a keyspace parameter. shard: %v", c.Shard)
 	}
 	if c.useExecuteShards() {
 		log.Infof("Sending queries only to keyspace/shard: %v/%v", c.Keyspace, c.Shard)
