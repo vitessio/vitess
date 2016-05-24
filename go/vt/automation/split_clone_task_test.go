@@ -17,17 +17,17 @@ func TestSplitCloneTask(t *testing.T) {
 	vtworkerclient.RegisterFactory("fake", fake.FakeVtworkerClientFactory)
 	defer vtworkerclient.UnregisterFactoryForTest("fake")
 	flag.Set("vtworker_client_protocol", "fake")
-	fake.RegisterResult([]string{"SplitClone", "--exclude_tables=unrelated1", "--min_healthy_rdonly_endpoints=1", "test_keyspace/0"},
+	fake.RegisterResult([]string{"SplitClone", "--exclude_tables=unrelated1", "--min_healthy_rdonly_tablets=1", "test_keyspace/0"},
 		"",  // No output.
 		nil) // No error.
 
 	task := &SplitCloneTask{}
 	parameters := map[string]string{
-		"keyspace":                     "test_keyspace",
-		"source_shard":                 "0",
-		"vtworker_endpoint":            "localhost:15001",
-		"exclude_tables":               "unrelated1",
-		"min_healthy_rdonly_endpoints": "1",
+		"keyspace":                   "test_keyspace",
+		"source_shard":               "0",
+		"vtworker_endpoint":          "localhost:15001",
+		"exclude_tables":             "unrelated1",
+		"min_healthy_rdonly_tablets": "1",
 	}
 
 	err := validateParameters(task, parameters)

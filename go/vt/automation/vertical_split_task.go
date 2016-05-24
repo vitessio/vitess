@@ -34,7 +34,7 @@ func (t *VerticalSplitTask) Run(parameters map[string]string) ([]*automationpb.T
 
 	// Optional parameters.
 	// Example: 1
-	minHealthyRdonlyEndPoints := parameters["min_healthy_rdonly_endpoints"]
+	minHealthyRdonlyTablets := parameters["min_healthy_rdonly_tablets"]
 
 	var newTasks []*automationpb.TaskContainer
 	copySchemaTasks := NewTaskContainer()
@@ -52,11 +52,11 @@ func (t *VerticalSplitTask) Run(parameters map[string]string) ([]*automationpb.T
 	for _, shard := range shards {
 		// TODO(mberlin): Add a semaphore as argument to limit the parallism.
 		AddTask(vSplitCloneTasks, "VerticalSplitCloneTask", map[string]string{
-			"dest_keyspace":                destKeyspace,
-			"shard":                        shard,
-			"tables":                       tables,
-			"vtworker_endpoint":            vtworkerEndpoint,
-			"min_healthy_rdonly_endpoints": minHealthyRdonlyEndPoints,
+			"dest_keyspace":              destKeyspace,
+			"shard":                      shard,
+			"tables":                     tables,
+			"vtworker_endpoint":          vtworkerEndpoint,
+			"min_healthy_rdonly_tablets": minHealthyRdonlyTablets,
 		})
 	}
 	newTasks = append(newTasks, vSplitCloneTasks)
@@ -77,10 +77,10 @@ func (t *VerticalSplitTask) Run(parameters map[string]string) ([]*automationpb.T
 	for _, shard := range shards {
 		vSplitDiffTask := NewTaskContainer()
 		AddTask(vSplitDiffTask, "VerticalSplitDiffTask", map[string]string{
-			"dest_keyspace":                destKeyspace,
-			"shard":                        shard,
-			"vtworker_endpoint":            vtworkerEndpoint,
-			"min_healthy_rdonly_endpoints": minHealthyRdonlyEndPoints,
+			"dest_keyspace":              destKeyspace,
+			"shard":                      shard,
+			"vtworker_endpoint":          vtworkerEndpoint,
+			"min_healthy_rdonly_tablets": minHealthyRdonlyTablets,
 		})
 		newTasks = append(newTasks, vSplitDiffTask)
 	}
@@ -109,5 +109,5 @@ func (t *VerticalSplitTask) RequiredParameters() []string {
 
 // OptionalParameters is part of the Task interface.
 func (t *VerticalSplitTask) OptionalParameters() []string {
-	return []string{"min_healthy_rdonly_endpoints"}
+	return []string{"min_healthy_rdonly_tablets"}
 }

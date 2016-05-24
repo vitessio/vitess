@@ -33,9 +33,9 @@ func TestVerticalSplitTask(t *testing.T) {
 	vtctld.RegisterResult([]string{"CopySchemaShard", "--tables=table1,table2", "source_keyspace/0", "destination_keyspace/0"},
 		"",  // No output.
 		nil) // No error.
-	vtworker.RegisterResult([]string{"VerticalSplitClone", "--tables=table1,table2", "--min_healthy_rdonly_endpoints=1", "destination_keyspace/0"}, "", nil)
+	vtworker.RegisterResult([]string{"VerticalSplitClone", "--tables=table1,table2", "--min_healthy_rdonly_tablets=1", "destination_keyspace/0"}, "", nil)
 	vtctld.RegisterResult([]string{"WaitForFilteredReplication", "-max_delay", "30s", "destination_keyspace/0"}, "", nil)
-	vtworker.RegisterResult([]string{"VerticalSplitDiff", "--min_healthy_rdonly_endpoints=1", "destination_keyspace/0"}, "", nil)
+	vtworker.RegisterResult([]string{"VerticalSplitDiff", "--min_healthy_rdonly_tablets=1", "destination_keyspace/0"}, "", nil)
 	vtctld.RegisterResult([]string{"MigrateServedFrom", "destination_keyspace/0", "rdonly"}, "", nil)
 	vtctld.RegisterResult([]string{"MigrateServedFrom", "destination_keyspace/0", "replica"}, "", nil)
 	vtctld.RegisterResult([]string{"MigrateServedFrom", "destination_keyspace/0", "master"},
@@ -53,13 +53,13 @@ func TestVerticalSplitTask(t *testing.T) {
 	enqueueRequest := &automationpb.EnqueueClusterOperationRequest{
 		Name: "VerticalSplitTask",
 		Parameters: map[string]string{
-			"source_keyspace":              "source_keyspace",
-			"dest_keyspace":                "destination_keyspace",
-			"shard_list":                   "0",
-			"tables":                       "table1,table2",
-			"vtctld_endpoint":              "localhost:15000",
-			"vtworker_endpoint":            "localhost:15001",
-			"min_healthy_rdonly_endpoints": "1",
+			"source_keyspace":            "source_keyspace",
+			"dest_keyspace":              "destination_keyspace",
+			"shard_list":                 "0",
+			"tables":                     "table1,table2",
+			"vtctld_endpoint":            "localhost:15000",
+			"vtworker_endpoint":          "localhost:15001",
+			"min_healthy_rdonly_tablets": "1",
 		},
 	}
 	enqueueResponse, err := scheduler.EnqueueClusterOperation(context.Background(), enqueueRequest)

@@ -21,8 +21,8 @@ func TestHorizontalReshardingTaskEmittedTasks(t *testing.T) {
 		"vtctld_endpoint":   "localhost:15000",
 		"vtworker_endpoint": "localhost:15001",
 		// Optional parameters.
-		"exclude_tables":               "unrelated1,unrelated2",
-		"min_healthy_rdonly_endpoints": "1",
+		"exclude_tables":             "unrelated1,unrelated2",
+		"min_healthy_rdonly_tablets": "1",
 	}
 
 	err := validateParameters(reshardingTask, parameters)

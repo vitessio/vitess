@@ -36,19 +36,19 @@ import (
 type SplitCloneWorker struct {
 	StatusWorker
 
-	wr                        *wrangler.Wrangler
-	cell                      string
-	keyspace                  string
-	shard                     string
-	excludeTables             []string
-	strategy                  *splitStrategy
-	sourceReaderCount         int
-	destinationPackCount      int
-	minTableSizeForSplit      uint64
-	destinationWriterCount    int
-	minHealthyRdonlyEndPoints int
-	maxTPS                    int64
-	cleaner                   *wrangler.Cleaner
+	wr                      *wrangler.Wrangler
+	cell                    string
+	keyspace                string
+	shard                   string
+	excludeTables           []string
+	strategy                *splitStrategy
+	sourceReaderCount       int
+	destinationPackCount    int
+	minTableSizeForSplit    uint64
+	destinationWriterCount  int
+	minHealthyRdonlyTablets int
+	maxTPS                  int64
+	cleaner                 *wrangler.Cleaner
 
 	// populated during WorkerStateInit, read-only after that
 	keyspaceInfo      *topo.KeyspaceInfo
@@ -62,7 +62,7 @@ type SplitCloneWorker struct {
 	// It must be closed at the end of the command.
 	healthCheck discovery.HealthCheck
 	// destinationShardWatchers contains a TopologyWatcher for each destination
-	// shard. It updates the list of endpoints in the healthcheck if replicas are
+	// shard. It updates the list of tablets in the healthcheck if replicas are
 	// added/removed.
 	// Each watcher must be stopped at the end of the command.
 	destinationShardWatchers []*discovery.TopologyWatcher
@@ -86,7 +86,7 @@ type SplitCloneWorker struct {
 }
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
-func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyEndPoints int, maxTPS int64) (Worker, error) {
+func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
 	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
@@ -98,20 +98,20 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 		return nil, fmt.Errorf("-max_tps must be >= -destination_writer_count: %v >= %v", maxTPS, destinationWriterCount)
 	}
 	return &SplitCloneWorker{
-		StatusWorker:              NewStatusWorker(),
-		wr:                        wr,
-		cell:                      cell,
-		keyspace:                  keyspace,
-		shard:                     shard,
-		excludeTables:             excludeTables,
-		strategy:                  strategy,
-		sourceReaderCount:         sourceReaderCount,
-		destinationPackCount:      destinationPackCount,
-		minTableSizeForSplit:      minTableSizeForSplit,
-		destinationWriterCount:    destinationWriterCount,
-		minHealthyRdonlyEndPoints: minHealthyRdonlyEndPoints,
-		maxTPS:  maxTPS,
-		cleaner: &wrangler.Cleaner{},
+		StatusWorker:            NewStatusWorker(),
+		wr:                      wr,
+		cell:                    cell,
+		keyspace:                keyspace,
+		shard:                   shard,
+		excludeTables:           excludeTables,
+		strategy:                strategy,
+		sourceReaderCount:       sourceReaderCount,
+		destinationPackCount:    destinationPackCount,
+		minTableSizeForSplit:    minTableSizeForSplit,
+		destinationWriterCount:  destinationWriterCount,
+		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
+		maxTPS:                  maxTPS,
+		cleaner:                 &wrangler.Cleaner{},
 
 		destinationDbNames:    make(map[string]string),
 		destinationThrottlers: make(map[string]*throttler.Throttler),
@@ -327,10 +327,10 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	scw.setState(WorkerStateFindTargets)
 	var err error
 
-	// find an appropriate endpoint in the source shards
+	// find an appropriate tablet in the source shards
 	scw.sourceAliases = make([]*topodatapb.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
-		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyEndPoints)
+		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyTablets)
 		if err != nil {
 			return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
 		}
@@ -391,7 +391,7 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 		}
 		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
 		scw.destinationDbNames[keyspaceAndShard] = ti.DbName()
-		
+
 		// TODO(mberlin): Verify on the destination master that the
 		// _vt.blp_checkpoint table has the latest schema.
 
