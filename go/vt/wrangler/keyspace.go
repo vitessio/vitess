@@ -295,7 +295,8 @@ func (wr *Wrangler) migrateServedTypesLocked(ctx context.Context, keyspace strin
 	// - switch the source shards to read-only by disabling query service
 	// - gather all replication points
 	// - wait for filtered replication to catch up before we continue
-	// - disable filtered replication after the fact
+	// - we will disable filtered replication after the fact in the
+	//   next phases
 	if servedType == topodatapb.TabletType_MASTER {
 		event.DispatchUpdate(ev, "disabling query service on all source masters")
 		for i, si := range sourceShards {
@@ -319,10 +320,6 @@ func (wr *Wrangler) migrateServedTypesLocked(ctx context.Context, keyspace strin
 		event.DispatchUpdate(ev, "waiting for destination masters to catch up")
 		if err := wr.waitForFilteredReplication(ctx, masterPositions, destinationShards, filteredReplicationWaitTime); err != nil {
 			return err
-		}
-
-		for _, si := range destinationShards {
-			si.SourceShards = nil
 		}
 	}
 
@@ -396,6 +393,12 @@ func (wr *Wrangler) migrateServedTypesLocked(ctx context.Context, keyspace strin
 				if err := si.UpdateDisableQueryService(ctx, servedType, cells, true); err != nil {
 					return err
 				}
+			}
+
+			// for master migration, also disable filtered
+			// replication
+			if servedType == topodatapb.TabletType_MASTER {
+				si.SourceShards = nil
 			}
 			return nil
 		})
