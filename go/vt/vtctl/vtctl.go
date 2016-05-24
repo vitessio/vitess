@@ -85,6 +85,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -129,6 +130,10 @@ type commandGroup struct {
 	name     string
 	commands []command
 }
+
+// commandsMutex protects commands at init time. We use servenv, which calls
+// all Run hooks in parallel.
+var commandsMutex sync.Mutex
 
 var commands = []commandGroup{
 	{
@@ -380,6 +385,8 @@ func init() {
 }
 
 func addCommand(groupName string, c command) {
+	commandsMutex.Lock()
+	defer commandsMutex.Unlock()
 	for i, group := range commands {
 		if group.name == groupName {
 			commands[i].commands = append(commands[i].commands, c)
@@ -390,6 +397,8 @@ func addCommand(groupName string, c command) {
 }
 
 func addCommandGroup(groupName string) {
+	commandsMutex.Lock()
+	defer commandsMutex.Unlock()
 	commands = append(commands, commandGroup{
 		name: groupName,
 	})
