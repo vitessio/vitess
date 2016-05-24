@@ -88,10 +88,12 @@ func (wr *Wrangler) SetShardServedTypes(ctx context.Context, keyspace, shard str
 // - if disableQueryService is not set, and tables is empty, we remove
 //   the TabletControl record for the cells
 func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, cells []string, remove, disableQueryService bool, tables []string) (err error) {
+	// check input
 	if disableQueryService && len(tables) > 0 {
 		return fmt.Errorf("SetShardTabletControl cannot have both DisableQueryService set and tables set")
 	}
 
+	// lock the keyspace
 	lock := topo.UpdateShardLock()
 	ctx, unlock, lockErr := lock.LockKeyspace(ctx, wr.ts, keyspace)
 	if lockErr != nil {
@@ -99,24 +101,17 @@ func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard s
 	}
 	defer unlock(ctx, &err)
 
-	// FIXME(alainjobart) switch to UpdateShardFields
-	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
+	// update the shard
+	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(s *topodatapb.Shard) error {
+		if len(tables) == 0 && !remove {
+			// we are setting the DisableQueryService flag only
+			return topo.ShardUpdateDisableQueryService(ctx, s, keyspace, shard, tabletType, cells, disableQueryService)
+		}
 
-	if len(tables) == 0 && !remove {
-		// we are setting the DisableQueryService flag only
-		if err := shardInfo.UpdateDisableQueryService(tabletType, cells, disableQueryService); err != nil {
-			return fmt.Errorf("UpdateDisableQueryService(%v/%v) failed: %v", shardInfo.Keyspace(), shardInfo.ShardName(), err)
-		}
-	} else {
 		// we are setting / removing the blacklisted tables only
-		if err := shardInfo.UpdateSourceBlacklistedTables(tabletType, cells, remove, tables); err != nil {
-			return fmt.Errorf("UpdateSourceBlacklistedTables(%v/%v) failed: %v", shardInfo.Keyspace(), shardInfo.ShardName(), err)
-		}
-	}
-	return wr.ts.UpdateShard(ctx, shardInfo)
+		return topo.ShardUpdateSourceBlacklistedTables(ctx, s, keyspace, shard, tabletType, cells, remove, tables)
+	})
+	return err
 }
 
 // DeleteShard will do all the necessary changes in the topology server

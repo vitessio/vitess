@@ -131,7 +131,7 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 	}
 
 	// execute the migration
-	if err = wr.migrateServedTypes(ctx, keyspace, sourceShards, destinationShards, cells, servedType, reverse, filteredReplicationWaitTime); err != nil {
+	if err = wr.migrateServedTypesLocked(ctx, keyspace, sourceShards, destinationShards, cells, servedType, reverse, filteredReplicationWaitTime); err != nil {
 		return err
 	}
 
@@ -262,8 +262,8 @@ func (wr *Wrangler) refreshMasters(ctx context.Context, shards []*topo.ShardInfo
 	return rec.Error()
 }
 
-// migrateServedTypes operates with all concerned shards locked.
-func (wr *Wrangler) migrateServedTypes(ctx context.Context, keyspace string, sourceShards, destinationShards []*topo.ShardInfo, cells []string, servedType topodatapb.TabletType, reverse bool, filteredReplicationWaitTime time.Duration) (err error) {
+// migrateServedTypesLocked operates with the keyspace locked
+func (wr *Wrangler) migrateServedTypesLocked(ctx context.Context, keyspace string, sourceShards, destinationShards []*topo.ShardInfo, cells []string, servedType topodatapb.TabletType, reverse bool, filteredReplicationWaitTime time.Duration) (err error) {
 
 	// re-read all the shards so we are up to date
 	wr.Logger().Infof("Re-reading all shards")
@@ -299,11 +299,11 @@ func (wr *Wrangler) migrateServedTypes(ctx context.Context, keyspace string, sou
 	// - disable filtered replication after the fact
 	if servedType == topodatapb.TabletType_MASTER {
 		event.DispatchUpdate(ev, "disabling query service on all source masters")
-		for _, si := range sourceShards {
-			if err := si.UpdateDisableQueryService(topodatapb.TabletType_MASTER, nil, true); err != nil {
-				return err
-			}
-			if err := wr.ts.UpdateShard(ctx, si); err != nil {
+		for i, si := range sourceShards {
+			// update our internal record too
+			if sourceShards[i], err = wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(s *topodatapb.Shard) error {
+				return topo.ShardUpdateDisableQueryService(ctx, s, si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER, nil, true)
+			}); err != nil {
 				return err
 			}
 		}
@@ -335,11 +335,11 @@ func (wr *Wrangler) migrateServedTypes(ctx context.Context, keyspace string, sou
 		if err := si.UpdateServedTypesMap(servedType, cells, !reverse); err != nil {
 			return err
 		}
-		if tc := si.GetTabletControl(servedType); reverse && tc != nil && tc.DisableQueryService {
+		if tc := topo.ShardGetTabletControl(si.Shard, servedType); reverse && tc != nil && tc.DisableQueryService {
 			// this is a backward migration, where the
 			// source tablets were disabled previously, so
 			// we need to refresh them
-			if err := si.UpdateDisableQueryService(servedType, cells, false); err != nil {
+			if err := topo.ShardUpdateDisableQueryService(ctx, si.Shard, si.Keyspace(), si.ShardName(), servedType, cells, false); err != nil {
 				return err
 			}
 			needToRefreshSourceTablets = true
@@ -348,7 +348,7 @@ func (wr *Wrangler) migrateServedTypes(ctx context.Context, keyspace string, sou
 			// this is a forward migration, we need to disable
 			// query service on the source shards.
 			// (this was already done for masters earlier)
-			if err := si.UpdateDisableQueryService(servedType, cells, true); err != nil {
+			if err := topo.ShardUpdateDisableQueryService(ctx, si.Shard, si.Keyspace(), si.ShardName(), servedType, cells, true); err != nil {
 				return err
 			}
 		}
@@ -360,11 +360,11 @@ func (wr *Wrangler) migrateServedTypes(ctx context.Context, keyspace string, sou
 		if err := si.UpdateServedTypesMap(servedType, cells, reverse); err != nil {
 			return err
 		}
-		if tc := si.GetTabletControl(servedType); !reverse && tc != nil && tc.DisableQueryService {
+		if tc := topo.ShardGetTabletControl(si.Shard, servedType); !reverse && tc != nil && tc.DisableQueryService {
 			// This is a forwards migration, and the destination query service was already in a disabled state.
 			// We need to enable and force a refresh, otherwise it's possible that both the source and destination
 			// will have query service disabled at the same time, and queries would have nowhere to go.
-			if err := si.UpdateDisableQueryService(servedType, cells, false); err != nil {
+			if err := topo.ShardUpdateDisableQueryService(ctx, si.Shard, si.Keyspace(), si.ShardName(), servedType, cells, false); err != nil {
 				return err
 			}
 			needToRefreshDestinationTablets = true
@@ -373,7 +373,7 @@ func (wr *Wrangler) migrateServedTypes(ctx context.Context, keyspace string, sou
 			// this is a backwards migration, we need to disable
 			// query service on the destination shards.
 			// (we're not allowed to reverse a master migration)
-			if err := si.UpdateDisableQueryService(servedType, cells, true); err != nil {
+			if err := topo.ShardUpdateDisableQueryService(ctx, si.Shard, si.Keyspace(), si.ShardName(), servedType, cells, true); err != nil {
 				return err
 			}
 		}
@@ -550,13 +550,19 @@ func (wr *Wrangler) MigrateServedFrom(ctx context.Context, keyspace, shard strin
 
 	// check the migration is valid before locking (will also be checked
 	// after locking to be sure)
-	if err := ki.CheckServedFromMigration(servedType, cells, si.SourceShards[0].Keyspace, !reverse); err != nil {
+	sourceKeyspace := si.SourceShards[0].Keyspace
+	if err := ki.CheckServedFromMigration(servedType, cells, sourceKeyspace, !reverse); err != nil {
 		return err
 	}
 
-	// lock the keyspace
+	// lock the keyspaces, source first.
 	lock := topo.MigrateServedFromLock(servedType)
-	ctx, unlock, lockErr := lock.LockKeyspace(ctx, wr.ts, keyspace)
+	ctx, unlock, lockErr := lock.LockKeyspace(ctx, wr.ts, sourceKeyspace)
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(ctx, &err)
+	ctx, unlock, lockErr = lock.LockKeyspace(ctx, wr.ts, keyspace)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -637,11 +643,10 @@ func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.Keysp
 
 	// Save the source shard (its blacklisted tables field has changed)
 	event.DispatchUpdate(ev, "updating source shard")
-	if err := sourceShard.UpdateSourceBlacklistedTables(servedType, cells, reverse, tables); err != nil {
-		return fmt.Errorf("UpdateSourceBlacklistedTables(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
-	}
-	if err := wr.ts.UpdateShard(ctx, sourceShard); err != nil {
-		return fmt.Errorf("UpdateShard(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
+	if _, err := wr.ts.UpdateShardFields(ctx, sourceShard.Keyspace(), sourceShard.ShardName(), func(s *topodatapb.Shard) error {
+		return topo.ShardUpdateSourceBlacklistedTables(ctx, s, sourceShard.Keyspace(), sourceShard.ShardName(), servedType, cells, reverse, tables)
+	}); err != nil {
+		return err
 	}
 
 	// Now refresh the source servers so they reload their
@@ -677,11 +682,10 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 
 	// Update source shard (more blacklisted tables)
 	event.DispatchUpdate(ev, "updating source shard")
-	if err := sourceShard.UpdateSourceBlacklistedTables(topodatapb.TabletType_MASTER, nil, false, tables); err != nil {
-		return fmt.Errorf("UpdateSourceBlacklistedTables(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
-	}
-	if err := wr.ts.UpdateShard(ctx, sourceShard); err != nil {
-		return fmt.Errorf("UpdateShard(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
+	if _, err := wr.ts.UpdateShardFields(ctx, sourceShard.Keyspace(), sourceShard.ShardName(), func(s *topodatapb.Shard) error {
+		return topo.ShardUpdateSourceBlacklistedTables(ctx, s, sourceShard.Keyspace(), sourceShard.ShardName(), topodatapb.TabletType_MASTER, nil, false, tables)
+	}); err != nil {
+		return err
 	}
 
 	// Now refresh the blacklisted table list on the source master
