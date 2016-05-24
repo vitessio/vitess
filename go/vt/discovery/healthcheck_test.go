@@ -29,7 +29,7 @@ func TestHealthCheck(t *testing.T) {
 	tablet := topo.NewTablet(0, "cell", "a")
 	tablet.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse)
-	fakeConn := createFakeConn(tablet, input)
+	createFakeConn(tablet, input)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	l := newListener()
 	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, time.Hour, "" /* statsSuffix */).(*HealthCheckImpl)
@@ -158,7 +158,6 @@ func TestHealthCheck(t *testing.T) {
 
 	// remove tablet
 	hc.deleteConn(tablet)
-	close(fakeConn.hcChan)
 	t.Logf(`hc.RemoveTablet({Host: "a", PortMap: {"vt": 1}})`)
 	want = &TabletStats{
 		Tablet:  tablet,
@@ -167,7 +166,7 @@ func TestHealthCheck(t *testing.T) {
 		Serving: false,
 		Stats:   &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
 		TabletExternallyReparentedTimestamp: 0,
-		LastError:                           fmt.Errorf("recv error"),
+		LastError:                           context.Canceled,
 	}
 	res = <-l.output
 	if !reflect.DeepEqual(res, want) {
@@ -276,22 +275,31 @@ type fakeConn struct {
 
 type streamHealthReader struct {
 	c <-chan *querypb.StreamHealthResponse
+	// ctx is the client context which can be used to cancel an ongoing RPC.
+	ctx context.Context
 }
 
 // Recv implements tabletconn.StreamHealthReader.
 // It returns one response from the chan.
 func (r *streamHealthReader) Recv() (*querypb.StreamHealthResponse, error) {
-	resp, ok := <-r.c
-	if !ok {
-		return nil, fmt.Errorf("recv error")
+	select {
+	case resp, ok := <-r.c:
+		if !ok {
+			return nil, fmt.Errorf("recv error (should not happen)")
+		}
+		return resp, nil
+	case <-r.ctx.Done():
+		// Return error because the context is done e.g. when the tablet was removed
+		// from the healthcheck and the connection was closed.
+		return nil, r.ctx.Err()
 	}
-	return resp, nil
 }
 
 // StreamHealth implements tabletconn.TabletConn.
 func (fc *fakeConn) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
 	return &streamHealthReader{
-		c: fc.hcChan,
+		c:   fc.hcChan,
+		ctx: ctx,
 	}, nil
 }
 
