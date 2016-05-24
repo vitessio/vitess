@@ -44,7 +44,7 @@ func TestVitess(t *testing.T) {
 	}
 	port := int(fport.(float64))
 	ctx := context.Background()
-	conn, err := vtgateconn.DialProtocol(ctx, vtgateProtocol(), fmt.Sprintf("localhost:%d", port), 5*time.Second)
+	conn, err := vtgateconn.DialProtocol(ctx, vtgateProtocol(), fmt.Sprintf("localhost:%d", port), 5*time.Second, "")
 	if err != nil {
 		t.Error(err)
 		return

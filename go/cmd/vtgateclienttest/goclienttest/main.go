@@ -24,7 +24,7 @@ import (
 func TestGoClient(t *testing.T, protocol, addr string) {
 	// Create a client connecting to the server
 	ctx := context.Background()
-	conn, err := vtgateconn.DialProtocol(ctx, protocol, addr, 30*time.Second)
+	conn, err := vtgateconn.DialProtocol(ctx, protocol, addr, 30*time.Second, "conn_ks")
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
