@@ -8,6 +8,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -32,6 +33,7 @@ import (
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
 )
 
 // tablet contains all the data for an individual tablet.
@@ -168,6 +170,160 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 	// sharding queries.
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
 	for keyspace := range keyspaceMap {
+		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil); err != nil {
+			log.Fatalf("cannot rebuild %v: %v", keyspace, err)
+		}
+	}
+
+	// Register the tablet dialer for tablet server
+	tabletconn.RegisterDialer("internal", dialer)
+	*tabletconn.TabletProtocol = "internal"
+
+	// Register the tablet manager client factory for tablet manager
+	tmclient.RegisterTabletManagerClientFactory("internal", func() tmclient.TabletManagerClient {
+		return &internalTabletManagerClient{}
+	})
+	*tmclient.TabletManagerProtocol = "internal"
+
+	// run healthcheck on all vttablets
+	tmc := tmclient.NewTabletManagerClient()
+	for _, tablet := range tabletMap {
+		tabletInfo, err := ts.GetTablet(ctx, tablet.agent.TabletAlias)
+		if err != nil {
+			log.Fatalf("cannot find tablet: %+v", tablet.agent.TabletAlias)
+		}
+		tmc.RunHealthCheck(ctx, tabletInfo.Tablet)
+	}
+}
+
+// initTabletMapProto creates the action agents and associated data structures
+// for all tablets, based on the vttest proto parameter.
+func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, formal *vindexes.VSchemaFormal, mycnf *mysqlctl.Mycnf) {
+	// parse the input topology
+	var tpb *vttestpb.VTTestTopology
+	if err := proto.UnmarshalText(topoProto, tpb); err != nil {
+		log.Fatalf("cannot parse topology: %v", err)
+	}
+
+	tabletMap = make(map[uint32]*tablet)
+
+	ctx := context.Background()
+
+	// disable publishing of stats from query service
+	flag.Lookup("queryserver-config-enable-publish-stats").Value.Set("false")
+
+	// iterate through the keyspaces
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
+	var uid uint32 = 1
+	for _, kpb := range tpb.Keyspaces {
+		keyspace := kpb.Name
+
+		// if we have a redirect, create a completely redirected
+		// keyspace and move on
+		if kpb.ServedFrom != "" {
+			if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
+				ServedFroms: []*topodatapb.Keyspace_ServedFrom{
+					{
+						TabletType: topodatapb.TabletType_MASTER,
+						Keyspace:   kpb.ServedFrom,
+					},
+					{
+						TabletType: topodatapb.TabletType_REPLICA,
+						Keyspace:   kpb.ServedFrom,
+					},
+					{
+						TabletType: topodatapb.TabletType_RDONLY,
+						Keyspace:   kpb.ServedFrom,
+					},
+				},
+			}); err != nil {
+				log.Fatalf("CreateKeyspace(%v) failed: %v", keyspace, err)
+			}
+			continue
+		}
+
+		// create a regular keyspace
+		sct, err := key.ParseKeyspaceIDType(kpb.ShardingColumnType)
+		if err != nil {
+			log.Fatalf("parseKeyspaceIDType(%v) failed: %v", kpb.ShardingColumnType, err)
+		}
+		if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
+			ShardingColumnName: kpb.ShardingColumnName,
+			ShardingColumnType: sct,
+		}); err != nil {
+			log.Fatalf("CreateKeyspace(%v) failed: %v", keyspace, err)
+		}
+
+		// iterate through the shards
+		for _, spb := range kpb.Shards {
+			shard := spb.Name
+			dbname := spb.DbName
+			dbcfgs.App.DbName = dbname
+
+			// create the master
+			alias := &topodatapb.TabletAlias{
+				Cell: cell,
+				Uid:  uid,
+			}
+			log.Infof("Creating master tablet %v for %v/%v", topoproto.TabletAliasString(alias), keyspace, shard)
+			flag.Lookup("debug-url-prefix").Value.Set(fmt.Sprintf("/debug-%d", uid))
+			masterController := tabletserver.NewServer()
+			masterAgent := tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), masterController, dbcfgs, mysqld, keyspace, shard, dbname, "replica")
+			if err := masterAgent.TabletExternallyReparented(ctx, ""); err != nil {
+				log.Fatalf("TabletExternallyReparented failed on master: %v", err)
+			}
+			tabletMap[uid] = &tablet{
+				keyspace:   keyspace,
+				shard:      shard,
+				tabletType: topodatapb.TabletType_MASTER,
+				dbname:     dbname,
+
+				qsc:   masterController,
+				agent: masterAgent,
+			}
+			uid++
+
+			// create a replica slave
+			alias = &topodatapb.TabletAlias{
+				Cell: cell,
+				Uid:  uid,
+			}
+			log.Infof("Creating replica tablet %v for %v/%v", topoproto.TabletAliasString(alias), keyspace, shard)
+			flag.Lookup("debug-url-prefix").Value.Set(fmt.Sprintf("/debug-%d", uid))
+			replicaController := tabletserver.NewServer()
+			tabletMap[uid] = &tablet{
+				keyspace:   keyspace,
+				shard:      shard,
+				tabletType: topodatapb.TabletType_REPLICA,
+				dbname:     dbname,
+
+				qsc:   replicaController,
+				agent: tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), replicaController, dbcfgs, mysqld, keyspace, shard, dbname, "replica"),
+			}
+			uid++
+
+			// create a rdonly slave
+			alias = &topodatapb.TabletAlias{
+				Cell: cell,
+				Uid:  uid,
+			}
+			log.Infof("Creating rdonly tablet %v for %v/%v", topoproto.TabletAliasString(alias), keyspace, shard)
+			flag.Lookup("debug-url-prefix").Value.Set(fmt.Sprintf("/debug-%d", uid))
+			rdonlyController := tabletserver.NewServer()
+			tabletMap[uid] = &tablet{
+				keyspace:   keyspace,
+				shard:      shard,
+				tabletType: topodatapb.TabletType_RDONLY,
+				dbname:     dbname,
+
+				qsc:   rdonlyController,
+				agent: tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), rdonlyController, dbcfgs, mysqld, keyspace, shard, dbname, "rdonly"),
+			}
+			uid++
+		}
+
+		// Rebuild the SrvKeyspace object, we we can support
+		// range-based sharding queries.
 		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil); err != nil {
 			log.Fatalf("cannot rebuild %v: %v", keyspace, err)
 		}

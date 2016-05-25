@@ -37,7 +37,7 @@ message Keyspace {
   string sharding_column_type = 4;
 
   // redirects all traffic to another keyspace. If set, shards is ignored.
-  string redirect = 5;
+  string served_from = 5;
 }
 
 // VTTestTopology describes the keyspaces in the topology.
