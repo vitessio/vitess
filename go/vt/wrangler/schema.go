@@ -199,12 +199,11 @@ func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *topodatapb
 // and fail if not (unless force is specified).
 func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace, change string, allowLongUnavailability bool, waitSlaveTimeout time.Duration) (err error) {
 	// lock the keyspace
-	lock := topo.ApplySchemaKeyspaceLock(change)
-	ctx, unlock, lockErr := lock.LockKeyspace(ctx, wr.ts, keyspace)
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "ApplySchemaKeyspace")
 	if lockErr != nil {
 		return lockErr
 	}
-	defer unlock(ctx, &err)
+	defer unlock(&err)
 
 	// apply the schema change
 	executor := schemamanager.NewTabletExecutor(wr.tmc, wr.ts)

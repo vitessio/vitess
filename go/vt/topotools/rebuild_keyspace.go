@@ -19,12 +19,11 @@ import (
 
 // RebuildKeyspace rebuilds the serving graph data while locking out other changes.
 func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace string, cells []string) (err error) {
-	lock := topo.RebuildKeyspaceLock()
-	ctx, unlock, lockErr := lock.LockKeyspace(ctx, ts, keyspace)
+	ctx, unlock, lockErr := ts.LockKeyspace(ctx, keyspace, "RebuildKeyspace")
 	if lockErr != nil {
 		return lockErr
 	}
-	defer unlock(ctx, &err)
+	defer unlock(&err)
 
 	return RebuildKeyspaceLocked(ctx, log, ts, keyspace, cells)
 }

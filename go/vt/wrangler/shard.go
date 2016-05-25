@@ -62,12 +62,11 @@ func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.Shar
 // This is an emergency manual operation.
 func (wr *Wrangler) SetShardServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType topodatapb.TabletType, remove bool) (err error) {
 	// lock the keyspace to not conflict with resharding operations
-	lock := topo.SetShardServedTypesLock(cells, servedType)
-	ctx, unlock, lockErr := lock.LockKeyspace(ctx, wr.ts, keyspace)
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "SetShardServedTypes(%v,%v,%v)", cells, servedType, remove)
 	if lockErr != nil {
 		return lockErr
 	}
-	defer unlock(ctx, &err)
+	defer unlock(&err)
 
 	// and update the shard
 	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
@@ -82,6 +81,8 @@ func (wr *Wrangler) SetShardServedTypes(ctx context.Context, keyspace, shard str
 // - if disableQueryService is set, tables has to be empty
 // - if disableQueryService is not set, and tables is empty, we remove
 //   the TabletControl record for the cells
+//
+// This takes the keyspace lock as to not interfere with resharding operations.
 func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, cells []string, remove, disableQueryService bool, tables []string) (err error) {
 	// check input
 	if disableQueryService && len(tables) > 0 {
@@ -89,12 +90,11 @@ func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard s
 	}
 
 	// lock the keyspace
-	lock := topo.UpdateShardLock()
-	ctx, unlock, lockErr := lock.LockKeyspace(ctx, wr.ts, keyspace)
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "SetShardTabletControl")
 	if lockErr != nil {
 		return lockErr
 	}
-	defer unlock(ctx, &err)
+	defer unlock(&err)
 
 	// update the shard
 	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
@@ -232,14 +232,15 @@ func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell s
 }
 
 // SourceShardDelete will delete a SourceShard inside a shard, by index.
+//
+// This takes the keyspace lock as not to interfere with resharding operations.
 func (wr *Wrangler) SourceShardDelete(ctx context.Context, keyspace, shard string, uid uint32) (err error) {
 	// lock the keyspace
-	lock := topo.UpdateShardLock()
-	ctx, unlock, lockErr := lock.LockKeyspace(ctx, wr.ts, keyspace)
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "SourceShardDelete(%v)", uid)
 	if lockErr != nil {
 		return lockErr
 	}
-	defer unlock(ctx, &err)
+	defer unlock(&err)
 
 	// remove the source shard
 	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
@@ -261,12 +262,11 @@ func (wr *Wrangler) SourceShardDelete(ctx context.Context, keyspace, shard strin
 // SourceShardAdd will add a new SourceShard inside a shard
 func (wr *Wrangler) SourceShardAdd(ctx context.Context, keyspace, shard string, uid uint32, skeyspace, sshard string, keyRange *topodatapb.KeyRange, tables []string) (err error) {
 	// lock the keyspace
-	lock := topo.UpdateShardLock()
-	ctx, unlock, lockErr := lock.LockKeyspace(ctx, wr.ts, keyspace)
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "SourceShardAdd(%v)", uid)
 	if lockErr != nil {
 		return lockErr
 	}
-	defer unlock(ctx, &err)
+	defer unlock(&err)
 
 	// and update the shard
 	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {

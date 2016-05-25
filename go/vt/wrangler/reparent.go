@@ -119,12 +119,11 @@ func (wr *Wrangler) ReparentTablet(ctx context.Context, tabletAlias *topodatapb.
 // InitShardMaster will make the provided tablet the master for the shard.
 func (wr *Wrangler) InitShardMaster(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (err error) {
 	// lock the shard
-	lock := topo.ReparentShardLock(initShardMasterOperation, masterElectTabletAlias)
-	ctx, unlock, lockErr := lock.LockShard(ctx, wr.ts, keyspace, shard)
+	ctx, unlock, lockErr := wr.ts.LockShard(ctx, keyspace, shard, "InitShardMaster(%v)", topoproto.TabletAliasString(masterElectTabletAlias))
 	if lockErr != nil {
 		return lockErr
 	}
-	defer unlock(ctx, &err)
+	defer unlock(&err)
 
 	// Create reusable Reparent event with available info
 	ev := &events.Reparent{}
@@ -291,12 +290,11 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 // when both the current and new master are reachable and in good shape.
 func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) (err error) {
 	// lock the shard
-	lock := topo.ReparentShardLock(plannedReparentShardOperation, masterElectTabletAlias)
-	ctx, unlock, lockErr := lock.LockShard(ctx, wr.ts, keyspace, shard)
+	ctx, unlock, lockErr := wr.ts.LockShard(ctx, keyspace, shard, "PlannedReparentShard(%v)", topoproto.TabletAliasString(masterElectTabletAlias))
 	if lockErr != nil {
 		return lockErr
 	}
-	defer unlock(ctx, &err)
+	defer unlock(&err)
 
 	// Create reusable Reparent event with available info
 	ev := &events.Reparent{}
@@ -419,12 +417,11 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 // the shard, when the old master is completely unreachable.
 func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) (err error) {
 	// lock the shard
-	lock := topo.ReparentShardLock(emergencyReparentShardOperation, masterElectTabletAlias)
-	ctx, unlock, lockErr := lock.LockShard(ctx, wr.ts, keyspace, shard)
+	ctx, unlock, lockErr := wr.ts.LockShard(ctx, keyspace, shard, "EmergencyReparentShard(%v)", topoproto.TabletAliasString(masterElectTabletAlias))
 	if lockErr != nil {
 		return lockErr
 	}
-	defer unlock(ctx, &err)
+	defer unlock(&err)
 
 	// Create reusable Reparent event with available info
 	ev := &events.Reparent{}

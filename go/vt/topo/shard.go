@@ -173,8 +173,8 @@ func (ts Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardIn
 }
 
 // UpdateShard masks ts.Impl.UpdateShard so nobody is tempted to use it.
-func (ts Server) UpdateShard(ctx context.Context, si *ShardInfo) error {
-	return fmt.Errorf("do not call this function directly, use UpdateShardFields instead")
+func (ts Server) UpdateShard() error {
+	panic("do not call this function directly, use UpdateShardFields instead")
 }
 
 // updateShard updates the shard data, with the right version.
@@ -229,17 +229,15 @@ func (ts Server) UpdateShardFields(ctx context.Context, keyspace, shard string, 
 }
 
 // CreateShard creates a new shard and tries to fill in the right information.
-// This should be called while holding the keyspace lock for the shard.
-// (call topotools.CreateShard to do that for you).
-// In unit tests (that are not parallel), this function can be called directly.
+// This will lock the Keyspace, as we may be looking at other shard servedTypes.
+// Using GetOrCreateShard is probably a better idea for most use cases.
 func (ts Server) CreateShard(ctx context.Context, keyspace, shard string) (err error) {
 	// Lock the keyspace, because we'll be looking at ServedTypes.
-	lock := KeyspaceCreateShardLock()
-	ctx, unlock, lockErr := lock.LockKeyspace(ctx, ts, keyspace)
+	ctx, unlock, lockErr := ts.LockKeyspace(ctx, keyspace, "CreateShard")
 	if lockErr != nil {
 		return lockErr
 	}
-	defer unlock(ctx, &err)
+	defer unlock(&err)
 
 	// validate parameters
 	name, keyRange, err := ValidateShardName(shard)
