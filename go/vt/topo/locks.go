@@ -113,7 +113,7 @@ var locksKey locksKeyType
 //   * 'vtctl SetShardTabletControl' emergency operations
 //   * 'vtctl SourceShardAdd' and 'vtctl SourceShardDelete' emergency operations
 // * keyspace-wide schema changes
-func (ts Server) LockKeyspace(ctx context.Context, keyspace string, format string, v ...interface{}) (context.Context, func(*error), error) {
+func (ts Server) LockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
 		i = &locksInfo{
@@ -130,7 +130,7 @@ func (ts Server) LockKeyspace(ctx context.Context, keyspace string, format strin
 	}
 
 	// lock
-	l := newLock(fmt.Sprintf(format, v...))
+	l := newLock(action)
 	lockPath, err := l.lockKeyspace(ctx, ts, keyspace)
 	if err != nil {
 		return nil, nil, err
@@ -146,11 +146,23 @@ func (ts Server) LockKeyspace(ctx context.Context, keyspace string, format strin
 		defer i.mu.Unlock()
 
 		if _, ok := i.info[keyspace]; !ok {
-			*finalErr = fmt.Errorf("trying to unlock keyspace %v multiple times", keyspace)
+			if *finalErr != nil {
+				log.Errorf("trying to unlock keyspace %v multiple times", keyspace)
+			} else {
+				*finalErr = fmt.Errorf("trying to unlock keyspace %v multiple times", keyspace)
+			}
 			return
 		}
 
-		*finalErr = l.unlockKeyspace(ctx, ts, keyspace, lockPath, *finalErr)
+		err := l.unlockKeyspace(ctx, ts, keyspace, lockPath, *finalErr)
+		if *finalErr != nil {
+			if err != nil {
+				// both error are set, just log the unlock error
+				log.Errorf("unlockKeyspace(%v) failed: %v", keyspace, err)
+			}
+		} else {
+			*finalErr = err
+		}
 		delete(i.info, keyspace)
 	}, nil
 }
@@ -225,22 +237,9 @@ func (l *Lock) unlockKeyspace(ctx context.Context, ts Server, keyspace string, l
 	}
 	j, err := l.ToJSON()
 	if err != nil {
-		if actionError != nil {
-			// this will be masked
-			log.Warningf("node.ToJSON failed: %v", err)
-			return actionError
-		}
 		return err
 	}
-	err = ts.UnlockKeyspaceForAction(ctx, keyspace, lockPath, j)
-	if actionError != nil {
-		if err != nil {
-			// this will be masked
-			log.Warningf("UnlockKeyspaceForAction failed: %v", err)
-		}
-		return actionError
-	}
-	return err
+	return ts.UnlockKeyspaceForAction(ctx, keyspace, lockPath, j)
 }
 
 // LockShard will lock the shard, and return:
@@ -259,7 +258,7 @@ func (l *Lock) unlockKeyspace(ctx context.Context, ts Server, keyspace string, l
 // * operations that we don't want to conflict with re-parenting:
 //   * DeleteTablet when it's the shard's current master
 //
-func (ts Server) LockShard(ctx context.Context, keyspace, shard string, format string, v ...interface{}) (context.Context, func(*error), error) {
+func (ts Server) LockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
 		i = &locksInfo{
@@ -277,7 +276,7 @@ func (ts Server) LockShard(ctx context.Context, keyspace, shard string, format s
 	}
 
 	// lock
-	l := newLock(fmt.Sprintf(format, v...))
+	l := newLock(action)
 	lockPath, err := l.lockShard(ctx, ts, keyspace, shard)
 	if err != nil {
 		return nil, nil, err
@@ -293,11 +292,23 @@ func (ts Server) LockShard(ctx context.Context, keyspace, shard string, format s
 		defer i.mu.Unlock()
 
 		if _, ok := i.info[mapKey]; !ok {
-			*finalErr = fmt.Errorf("trying to unlock shard %v/%v multiple times", keyspace, shard)
+			if *finalErr != nil {
+				log.Errorf("trying to unlock shard %v/%v multiple times", keyspace, shard)
+			} else {
+				*finalErr = fmt.Errorf("trying to unlock shard %v/%v multiple times", keyspace, shard)
+			}
 			return
 		}
 
-		*finalErr = l.unlockShard(ctx, ts, keyspace, shard, lockPath, *finalErr)
+		err := l.unlockShard(ctx, ts, keyspace, shard, lockPath, *finalErr)
+		if *finalErr != nil {
+			if err != nil {
+				// both error are set, just log the unlock error
+				log.Warningf("unlockShard(%s/%s) failed: %v", keyspace, shard, err)
+			}
+		} else {
+			*finalErr = err
+		}
 		delete(i.info, mapKey)
 	}, nil
 }
@@ -374,20 +385,7 @@ func (l *Lock) unlockShard(ctx context.Context, ts Server, keyspace, shard strin
 	}
 	j, err := l.ToJSON()
 	if err != nil {
-		if actionError != nil {
-			// this will be masked
-			log.Warningf("node.ToJSON failed: %v", err)
-			return actionError
-		}
 		return err
 	}
-	err = ts.UnlockShardForAction(ctx, keyspace, shard, lockPath, j)
-	if actionError != nil {
-		if err != nil {
-			// this will be masked
-			log.Warningf("UnlockShardForAction failed: %v", err)
-		}
-		return actionError
-	}
-	return err
+	return ts.UnlockShardForAction(ctx, keyspace, shard, lockPath, j)
 }

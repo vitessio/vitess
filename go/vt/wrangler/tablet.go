@@ -112,7 +112,7 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 	// update the Shard object if the master was scrapped.
 	if wasMaster {
 		// We lock the shard to not conflict with reparent operations.
-		ctx, unlock, lockErr := wr.ts.LockShard(ctx, ti.Keyspace, ti.Shard, "DeleteTablet(%v)", topoproto.TabletAliasString(tabletAlias))
+		ctx, unlock, lockErr := wr.ts.LockShard(ctx, ti.Keyspace, ti.Shard, fmt.Sprintf("DeleteTablet(%v)", topoproto.TabletAliasString(tabletAlias)))
 		if lockErr != nil {
 			return lockErr
 		}

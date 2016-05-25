@@ -62,7 +62,7 @@ func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.Shar
 // This is an emergency manual operation.
 func (wr *Wrangler) SetShardServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType topodatapb.TabletType, remove bool) (err error) {
 	// lock the keyspace to not conflict with resharding operations
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "SetShardServedTypes(%v,%v,%v)", cells, servedType, remove)
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, fmt.Sprintf("SetShardServedTypes(%v,%v,%v)", cells, servedType, remove))
 	if lockErr != nil {
 		return lockErr
 	}
@@ -236,7 +236,7 @@ func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell s
 // This takes the keyspace lock as not to interfere with resharding operations.
 func (wr *Wrangler) SourceShardDelete(ctx context.Context, keyspace, shard string, uid uint32) (err error) {
 	// lock the keyspace
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "SourceShardDelete(%v)", uid)
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, fmt.Sprintf("SourceShardDelete(%v)", uid))
 	if lockErr != nil {
 		return lockErr
 	}
@@ -262,7 +262,7 @@ func (wr *Wrangler) SourceShardDelete(ctx context.Context, keyspace, shard strin
 // SourceShardAdd will add a new SourceShard inside a shard
 func (wr *Wrangler) SourceShardAdd(ctx context.Context, keyspace, shard string, uid uint32, skeyspace, sshard string, keyRange *topodatapb.KeyRange, tables []string) (err error) {
 	// lock the keyspace
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "SourceShardAdd(%v)", uid)
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, fmt.Sprintf("SourceShardAdd(%v)", uid))
 	if lockErr != nil {
 		return lockErr
 	}

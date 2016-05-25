@@ -79,7 +79,7 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 	}
 
 	// lock the keyspace
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "MigrateServedTypes(%v)", servedType)
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, fmt.Sprintf("MigrateServedTypes(%v)", servedType))
 	if lockErr != nil {
 		return lockErr
 	}
@@ -562,12 +562,12 @@ func (wr *Wrangler) MigrateServedFrom(ctx context.Context, keyspace, shard strin
 	}
 
 	// lock the keyspaces, source first.
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, sourceKeyspace, "MigrateServedFrom(%v)", servedType)
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, sourceKeyspace, fmt.Sprintf("MigrateServedFrom(%v)", servedType))
 	if lockErr != nil {
 		return lockErr
 	}
 	defer unlock(&err)
-	ctx, unlock, lockErr = wr.ts.LockKeyspace(ctx, keyspace, "MigrateServedFrom(%v)", servedType)
+	ctx, unlock, lockErr = wr.ts.LockKeyspace(ctx, keyspace, fmt.Sprintf("MigrateServedFrom(%v)", servedType))
 	if lockErr != nil {
 		return lockErr
 	}
