@@ -199,7 +199,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 // for all tablets, based on the vttest proto parameter.
 func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, formal *vindexes.VSchemaFormal, mycnf *mysqlctl.Mycnf) {
 	// parse the input topology
-	var tpb *vttestpb.VTTestTopology
+	tpb := &vttestpb.VTTestTopology{}
 	if err := proto.UnmarshalText(topoProto, tpb); err != nil {
 		log.Fatalf("cannot parse topology: %v", err)
 	}

@@ -30,6 +30,10 @@ import urllib
 
 import unittest
 
+from google.protobuf import text_format
+
+from vtproto import vttest_pb2
+
 from vtdb import vtgate_client
 from vtdb import vtgate_cursor
 from vtdb import dbexceptions
@@ -51,13 +55,17 @@ class TestMysqlctl(unittest.TestCase):
   def test_standalone(self):
     """Sample test for run_local_database.py as a standalone process."""
 
+    topology = vttest_pb2.VTTestTopology()
+    keyspace = topology.keyspaces.add(name='test_keyspace')
+    keyspace.shards.add(name='-80', db_name='test_keyspace_0')
+    keyspace.shards.add(name='80-', db_name='test_keyspace_1')
+
     # launch a backend database based on the provided topology and schema
     port = environment.reserve_ports(1)
     args = [environment.run_local_database,
             '--port', str(port),
-            '--topology',
-            'test_keyspace/-80:test_keyspace_0,'
-            'test_keyspace/80-:test_keyspace_1',
+            '--proto_topo', text_format.MessageToString(topology,
+                                                        as_one_line=True),
             '--schema_dir', os.path.join(environment.vttop, 'test',
                                          'vttest_schema'),
             '--web_dir', environment.vttop + '/web/vtctld',
