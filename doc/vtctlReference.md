@@ -492,7 +492,7 @@ Executes the given SQL query with the provided bound variables against the vtgat
 
 #### Example
 
-<pre class="command-example">VtGateExecute -server &lt;vtgate&gt; [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet type&gt;] [-json] &lt;sql&gt;</pre>
+<pre class="command-example">VtGateExecute -server &lt;vtgate&gt; [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-keyspace &lt;default keyspace&gt;] [-tablet_type &lt;tablet type&gt;] [-json] &lt;sql&gt;</pre>
 
 #### Flags
 
@@ -500,6 +500,7 @@ Executes the given SQL query with the provided bound variables against the vtgat
 | :-------- | :--------- | :--------- |
 | connect_timeout | Duration | Connection timeout for vtgate client |
 | json | Boolean | Output JSON instead of human-readable table |
+| keyspace | string | default keyspace to use |
 | server | string | VtGate server to connect to |
 | tablet_type | string | tablet type to query |
 

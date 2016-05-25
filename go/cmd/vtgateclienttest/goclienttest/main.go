@@ -12,6 +12,8 @@ import (
 	"golang.org/x/net/context"
 )
 
+const connectionKeyspace = "conn_ks"
+
 // This file contains the reference test for clients. It tests
 // all the corner cases of the API, and makes sure the go client
 // is full featured.
@@ -24,7 +26,7 @@ import (
 func TestGoClient(t *testing.T, protocol, addr string) {
 	// Create a client connecting to the server
 	ctx := context.Background()
-	conn, err := vtgateconn.DialProtocol(ctx, protocol, addr, 30*time.Second, "conn_ks")
+	conn, err := vtgateconn.DialProtocol(ctx, protocol, addr, 30*time.Second, connectionKeyspace)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}

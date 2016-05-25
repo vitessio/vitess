@@ -47,7 +47,7 @@ func init() {
 		addCommand(queriesGroupName, command{
 			"VtGateExecute",
 			commandVtGateExecute,
-			"-server <vtgate> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] [-json] <sql>",
+			"-server <vtgate> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-keyspace <default keyspace>] [-tablet_type <tablet type>] [-json] <sql>",
 			"Executes the given SQL query with the provided bound variables against the vtgate server."})
 		addCommand(queriesGroupName, command{
 			"VtGateExecuteShards",
