@@ -29,7 +29,7 @@ func TestHealthCheck(t *testing.T) {
 	tablet := topo.NewTablet(0, "cell", "a")
 	tablet.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse)
-	fakeConn := createFakeConn(tablet, input)
+	createFakeConn(tablet, input)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	l := newListener()
 	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, time.Hour, "" /* statsSuffix */).(*HealthCheckImpl)
@@ -158,7 +158,6 @@ func TestHealthCheck(t *testing.T) {
 
 	// remove tablet
 	hc.deleteConn(tablet)
-	close(fakeConn.hcChan)
 	t.Logf(`hc.RemoveTablet({Host: "a", PortMap: {"vt": 1}})`)
 	want = &TabletStats{
 		Tablet:  tablet,
@@ -167,7 +166,7 @@ func TestHealthCheck(t *testing.T) {
 		Serving: false,
 		Stats:   &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
 		TabletExternallyReparentedTimestamp: 0,
-		LastError:                           fmt.Errorf("recv error"),
+		LastError:                           context.Canceled,
 	}
 	res = <-l.output
 	if !reflect.DeepEqual(res, want) {
@@ -179,6 +178,78 @@ func TestHealthCheck(t *testing.T) {
 	}
 	// close healthcheck
 	hc.Close()
+}
+
+// TestHealthCheckCloseWaitsForGoRoutines tests that Close() waits for all Go
+// routines to finish and the listener won't be called anymore.
+func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
+	tablet := topo.NewTablet(0, "cell", "a")
+	tablet.PortMap["vt"] = 1
+	input := make(chan *querypb.StreamHealthResponse, 1)
+	createFakeConn(tablet, input)
+
+	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
+
+	l := newListener()
+	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, time.Hour, "" /* statsSuffix */).(*HealthCheckImpl)
+	hc.SetListener(l)
+	hc.AddTablet("cell", "", tablet)
+	t.Logf(`hc = HealthCheck(); hc.AddTablet("cell", "", {Host: "a", PortMap: {"vt": 1}})`)
+
+	// Verify that the listener works in general.
+	shr := &querypb.StreamHealthResponse{
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Serving: true,
+		TabletExternallyReparentedTimestamp: 10,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+	want := &TabletStats{
+		Tablet:  tablet,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		TabletExternallyReparentedTimestamp: 10,
+	}
+	input <- shr
+	t.Logf(`input <- %v`, shr)
+	res := <-l.output
+	if !reflect.DeepEqual(res, want) {
+		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
+	}
+
+	// Change input to distinguish between stats sent before and after Close().
+	shr.TabletExternallyReparentedTimestamp = 11
+	// Close the healthcheck. Tablet connections are closed asynchronously and
+	// Close() will block until all Go routines (one per connection) are done.
+	hc.Close()
+
+	// Try to send more updates. They should be ignored and the listener should
+	// not be called from any Go routine anymore.
+	// Note that this code is racy by nature. If there is a regression, it should
+	// fail in some cases.
+	input <- shr
+	t.Logf(`input <- %v`, shr)
+	select {
+	case res := <-l.output:
+		if res.TabletExternallyReparentedTimestamp == 10 && res.LastError == context.Canceled {
+			// HealthCheck repeats the previous stats if there is an error.
+			// This is expected.
+			break
+		}
+		t.Fatalf("healthCheck still running after Close(): listener received: %v but should not have been called", res)
+	case <-time.After(1 * time.Millisecond):
+		// No response after timeout. Close probably closed all Go routines
+		// properly and won't use the listener anymore.
+	}
+
+	// Check if there are more updates than the one emitted during Close().
+	select {
+	case res := <-l.output:
+		t.Fatalf("healthCheck still running after Close(): listener received: %v but should not have been called", res)
+	case <-time.After(1 * time.Millisecond):
+		// No response after timeout. Listener probably not called again. Success.
+	}
 }
 
 func TestHealthCheckTimeout(t *testing.T) {
@@ -276,22 +347,31 @@ type fakeConn struct {
 
 type streamHealthReader struct {
 	c <-chan *querypb.StreamHealthResponse
+	// ctx is the client context which can be used to cancel an ongoing RPC.
+	ctx context.Context
 }
 
 // Recv implements tabletconn.StreamHealthReader.
 // It returns one response from the chan.
 func (r *streamHealthReader) Recv() (*querypb.StreamHealthResponse, error) {
-	resp, ok := <-r.c
-	if !ok {
-		return nil, fmt.Errorf("recv error")
+	select {
+	case resp, ok := <-r.c:
+		if !ok {
+			return nil, fmt.Errorf("recv error (should not happen)")
+		}
+		return resp, nil
+	case <-r.ctx.Done():
+		// Return error because the context is done e.g. when the tablet was removed
+		// from the healthcheck and the connection was closed.
+		return nil, r.ctx.Err()
 	}
-	return resp, nil
 }
 
 // StreamHealth implements tabletconn.TabletConn.
 func (fc *fakeConn) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
 	return &streamHealthReader{
-		c: fc.hcChan,
+		c:   fc.hcChan,
+		ctx: ctx,
 	}, nil
 }
 
