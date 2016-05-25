@@ -103,7 +103,7 @@ def setUpModule():
                         'SplitClone',
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
-                        '--min_healthy_rdonly_endpoints', '1',
+                        '--min_healthy_rdonly_tablets', '1',
                         'test_keyspace/0'],
                        auto_log=True)
     dst_master.wait_for_binlog_player_count(1)

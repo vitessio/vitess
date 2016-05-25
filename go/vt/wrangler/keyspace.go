@@ -488,7 +488,7 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	defer watcher.Stop()
 
 	if err := discovery.WaitForTablets(ctx, hc, cell, keyspace, shard, []topodatapb.TabletType{servedType}); err != nil {
-		return fmt.Errorf("%v: error waiting for initial %v endpoints for %v/%v: %v", cell, servedType, keyspace, shard, err)
+		return fmt.Errorf("%v: error waiting for initial %v tablets for %v/%v: %v", cell, servedType, keyspace, shard, err)
 	}
 
 	wr.Logger().Infof("%v: Waiting for %.1f seconds to make sure that the discovery module retrieves healthcheck information from all tablets.",
@@ -537,7 +537,7 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 
 			var l []string
 			for _, ts := range notDrainedHealtyTablets {
-				l = append(l, formatEndpointStats(ts))
+				l = append(l, formatTabletStats(ts))
 			}
 			return fmt.Errorf("%v: WaitForDrain failed for %v tablets in %v/%v. Only %d/%d tablets were drained. err: %v List of tablets which were not drained: %v",
 				cell, servedType, keyspace, shard, len(drainedHealthyTablets), len(healthyTablets), ctx.Err(), strings.Join(l, ";"))
@@ -548,7 +548,7 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	return nil
 }
 
-func formatEndpointStats(ts *discovery.TabletStats) string {
+func formatTabletStats(ts *discovery.TabletStats) string {
 	webURL := "unknown http port"
 	if webPort, ok := ts.Tablet.PortMap["vt"]; ok {
 		webURL = fmt.Sprintf("http://%v:%d/", ts.Tablet.Hostname, webPort)

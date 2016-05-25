@@ -44,8 +44,8 @@ const verticalSplitDiffHTML2 = `
   <p>Shard involved: {{.Keyspace}}/{{.Shard}}</p>
   <h1>Vertical Split Diff Action</h1>
     <form action="/Diffs/VerticalSplitDiff" method="post">
-      <LABEL for="minHealthyRdonlyEndPoints">Minimum Number of required healthy RDONLY tablets: </LABEL>
-        <INPUT type="text" id="minHealthyRdonlyEndPoints" name="minHealthyRdonlyEndPoints" value="{{.DefaultMinHealthyRdonlyEndPoints}}"></BR>      <INPUT type="hidden" name="keyspace" value="{{.Keyspace}}"/>
+      <LABEL for="minHealthyRdonlyTablets">Minimum Number of required healthy RDONLY tablets: </LABEL>
+        <INPUT type="text" id="minHealthyRdonlyTablets" name="minHealthyRdonlyTablets" value="{{.DefaultMinHealthyRdonlyTablets}}"></BR>      <INPUT type="hidden" name="keyspace" value="{{.Keyspace}}"/>
       <INPUT type="hidden" name="shard" value="{{.Shard}}"/>
       <INPUT type="submit" name="submit" value="Vertical Split Diff"/>
     </form>
@@ -56,7 +56,7 @@ var verticalSplitDiffTemplate = mustParseTemplate("verticalSplitDiff", verticalS
 var verticalSplitDiffTemplate2 = mustParseTemplate("verticalSplitDiff2", verticalSplitDiffHTML2)
 
 func commandVerticalSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
-	minHealthyRdonlyEndPoints := subFlags.Int("min_healthy_rdonly_endpoints", defaultMinHealthyRdonlyEndPoints, "minimum number of healthy rdonly endpoints before taking out one")
+	minHealthyRdonlyTablets := subFlags.Int("min_healthy_rdonly_tablets", defaultMinHealthyRdonlyTablets, "minimum number of healthy RDONLY tablets before taking out one")
 	if err := subFlags.Parse(args); err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func commandVerticalSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *fla
 	if err != nil {
 		return nil, err
 	}
-	return NewVerticalSplitDiffWorker(wr, wi.cell, keyspace, shard, *minHealthyRdonlyEndPoints), nil
+	return NewVerticalSplitDiffWorker(wr, wi.cell, keyspace, shard, *minHealthyRdonlyTablets), nil
 }
 
 // shardsWithTablesSources returns all the shards that have SourceShards set
@@ -156,19 +156,19 @@ func interactiveVerticalSplitDiff(ctx context.Context, wi *Instance, wr *wrangle
 		result := make(map[string]interface{})
 		result["Keyspace"] = keyspace
 		result["Shard"] = shard
-		result["DefaultMinHealthyRdonlyEndPoints"] = fmt.Sprintf("%v", defaultMinHealthyRdonlyEndPoints)
+		result["DefaultMinHealthyRdonlyTablets"] = fmt.Sprintf("%v", defaultMinHealthyRdonlyTablets)
 		return nil, verticalSplitDiffTemplate2, result, nil
 	}
 
 	// get other parameters
-	minHealthyRdonlyEndPointsStr := r.FormValue("minHealthyRdonlyEndPoints")
-	minHealthyRdonlyEndPoints, err := strconv.ParseInt(minHealthyRdonlyEndPointsStr, 0, 64)
+	minHealthyRdonlyTabletsStr := r.FormValue("minHealthyRdonlyTablets")
+	minHealthyRdonlyTablets, err := strconv.ParseInt(minHealthyRdonlyTabletsStr, 0, 64)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse minHealthyRdonlyEndPoints: %s", err)
+		return nil, nil, nil, fmt.Errorf("cannot parse minHealthyRdonlyTablets: %s", err)
 	}
 
 	// start the diff job
-	wrk := NewVerticalSplitDiffWorker(wr, wi.cell, keyspace, shard, int(minHealthyRdonlyEndPoints))
+	wrk := NewVerticalSplitDiffWorker(wr, wi.cell, keyspace, shard, int(minHealthyRdonlyTablets))
 	return wrk, nil, nil, nil
 }
 

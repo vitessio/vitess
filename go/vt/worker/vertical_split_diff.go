@@ -27,12 +27,12 @@ import (
 type VerticalSplitDiffWorker struct {
 	StatusWorker
 
-	wr                        *wrangler.Wrangler
-	cell                      string
-	keyspace                  string
-	shard                     string
-	minHealthyRdonlyEndPoints int
-	cleaner                   *wrangler.Cleaner
+	wr                      *wrangler.Wrangler
+	cell                    string
+	keyspace                string
+	shard                   string
+	minHealthyRdonlyTablets int
+	cleaner                 *wrangler.Cleaner
 
 	// populated during WorkerStateInit, read-only after that
 	keyspaceInfo *topo.KeyspaceInfo
@@ -48,15 +48,15 @@ type VerticalSplitDiffWorker struct {
 }
 
 // NewVerticalSplitDiffWorker returns a new VerticalSplitDiffWorker object.
-func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, minHealthyRdonlyEndPoints int) Worker {
+func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, minHealthyRdonlyTablets int) Worker {
 	return &VerticalSplitDiffWorker{
 		StatusWorker: NewStatusWorker(),
 		wr:           wr,
 		cell:         cell,
 		keyspace:     keyspace,
 		shard:        shard,
-		minHealthyRdonlyEndPoints: minHealthyRdonlyEndPoints,
-		cleaner:                   &wrangler.Cleaner{},
+		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
+		cleaner:                 &wrangler.Cleaner{},
 	}
 }
 
@@ -187,15 +187,15 @@ func (vsdw *VerticalSplitDiffWorker) init(ctx context.Context) error {
 func (vsdw *VerticalSplitDiffWorker) findTargets(ctx context.Context) error {
 	vsdw.SetState(WorkerStateFindTargets)
 
-	// find an appropriate endpoint in destination shard
+	// find an appropriate tablet in destination shard
 	var err error
-	vsdw.destinationAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.keyspace, vsdw.shard, vsdw.minHealthyRdonlyEndPoints)
+	vsdw.destinationAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.keyspace, vsdw.shard, vsdw.minHealthyRdonlyTablets)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", vsdw.cell, vsdw.keyspace, vsdw.shard, err)
 	}
 
-	// find an appropriate endpoint in the source shard
-	vsdw.sourceAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard, vsdw.minHealthyRdonlyEndPoints)
+	// find an appropriate tablet in the source shard
+	vsdw.sourceAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard, vsdw.minHealthyRdonlyTablets)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard, err)
 	}

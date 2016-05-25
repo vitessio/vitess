@@ -412,7 +412,7 @@ index by_msg (msg)
                         '--tables', 'moving.*,view1',
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
-                        '--min_healthy_rdonly_endpoints', '1',
+                        '--min_healthy_rdonly_tablets', '1',
                         'destination_keyspace/0'],
                        auto_log=True)
 
@@ -446,7 +446,7 @@ index by_msg (msg)
     # use vtworker to compare the data
     logging.debug('Running vtworker VerticalSplitDiff')
     utils.run_vtworker(['-cell', 'test_nj', 'VerticalSplitDiff',
-                        '--min_healthy_rdonly_endpoints', '1',
+                        '--min_healthy_rdonly_tablets', '1',
                         'destination_keyspace/0'], auto_log=True)
 
     utils.pause('Good time to test vtworker for diffs')

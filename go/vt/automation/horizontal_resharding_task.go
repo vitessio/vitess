@@ -33,7 +33,7 @@ func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*automat
 	// Example: unrelated1,unrelated2
 	excludeTables := parameters["exclude_tables"]
 	// Example: 1
-	minHealthyRdonlyEndPoints := parameters["min_healthy_rdonly_endpoints"]
+	minHealthyRdonlyTablets := parameters["min_healthy_rdonly_tablets"]
 
 	var newTasks []*automationpb.TaskContainer
 	copySchemaTasks := NewTaskContainer()
@@ -51,11 +51,11 @@ func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*automat
 	for _, sourceShard := range sourceShards {
 		// TODO(mberlin): Add a semaphore as argument to limit the parallism.
 		AddTask(splitCloneTasks, "SplitCloneTask", map[string]string{
-			"keyspace":                     keyspace,
-			"source_shard":                 sourceShard,
-			"vtworker_endpoint":            vtworkerEndpoint,
-			"exclude_tables":               excludeTables,
-			"min_healthy_rdonly_endpoints": minHealthyRdonlyEndPoints,
+			"keyspace":                   keyspace,
+			"source_shard":               sourceShard,
+			"vtworker_endpoint":          vtworkerEndpoint,
+			"exclude_tables":             excludeTables,
+			"min_healthy_rdonly_tablets": minHealthyRdonlyTablets,
 		})
 	}
 	newTasks = append(newTasks, splitCloneTasks)
@@ -76,11 +76,11 @@ func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*automat
 	for _, destShard := range destShards {
 		splitDiffTask := NewTaskContainer()
 		AddTask(splitDiffTask, "SplitDiffTask", map[string]string{
-			"keyspace":                     keyspace,
-			"dest_shard":                   destShard,
-			"vtworker_endpoint":            vtworkerEndpoint,
-			"exclude_tables":               excludeTables,
-			"min_healthy_rdonly_endpoints": minHealthyRdonlyEndPoints,
+			"keyspace":                   keyspace,
+			"dest_shard":                 destShard,
+			"vtworker_endpoint":          vtworkerEndpoint,
+			"exclude_tables":             excludeTables,
+			"min_healthy_rdonly_tablets": minHealthyRdonlyTablets,
 		})
 		newTasks = append(newTasks, splitDiffTask)
 	}
@@ -109,5 +109,5 @@ func (t *HorizontalReshardingTask) RequiredParameters() []string {
 
 // OptionalParameters is part of the Task interface.
 func (t *HorizontalReshardingTask) OptionalParameters() []string {
-	return []string{"exclude_tables", "min_healthy_rdonly_endpoints"}
+	return []string{"exclude_tables", "min_healthy_rdonly_tablets"}
 }

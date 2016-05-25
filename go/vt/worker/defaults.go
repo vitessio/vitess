@@ -11,9 +11,9 @@ const (
 	// defaultDestinationPackCount is the number of rows which will be aggreated
 	// into one transaction. Note that higher values will increase memory
 	// consumption in vtworker, vttablet and mysql.
-	defaultDestinationPackCount      = 1000
-	defaultMinTableSizeForSplit      = 1024 * 1024
-	defaultDestinationWriterCount    = 20
-	defaultMinHealthyRdonlyEndPoints = 2
-	defaultMaxTPS                    = throttler.MaxRateModuleDisabled
+	defaultDestinationPackCount    = 1000
+	defaultMinTableSizeForSplit    = 1024 * 1024
+	defaultDestinationWriterCount  = 20
+	defaultMinHealthyRdonlyTablets = 2
+	defaultMaxTPS                  = throttler.MaxRateModuleDisabled
 )

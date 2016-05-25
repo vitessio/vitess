@@ -36,19 +36,19 @@ import (
 type VerticalSplitCloneWorker struct {
 	StatusWorker
 
-	wr                        *wrangler.Wrangler
-	cell                      string
-	destinationKeyspace       string
-	destinationShard          string
-	tables                    []string
-	strategy                  *splitStrategy
-	sourceReaderCount         int
-	destinationPackCount      int
-	minTableSizeForSplit      uint64
-	destinationWriterCount    int
-	minHealthyRdonlyEndPoints int
-	maxTPS                    int64
-	cleaner                   *wrangler.Cleaner
+	wr                      *wrangler.Wrangler
+	cell                    string
+	destinationKeyspace     string
+	destinationShard        string
+	tables                  []string
+	strategy                *splitStrategy
+	sourceReaderCount       int
+	destinationPackCount    int
+	minTableSizeForSplit    uint64
+	destinationWriterCount  int
+	minHealthyRdonlyTablets int
+	maxTPS                  int64
+	cleaner                 *wrangler.Cleaner
 
 	// populated during WorkerStateInit, read-only after that
 	sourceKeyspace string
@@ -60,7 +60,7 @@ type VerticalSplitCloneWorker struct {
 	// It must be closed at the end of the command.
 	healthCheck discovery.HealthCheck
 	// destinationShardWatchers contains a TopologyWatcher for each destination
-	// shard. It updates the list of endpoints in the healthcheck if replicas are
+	// shard. It updates the list of tablets in the healthcheck if replicas are
 	// added/removed.
 	// Each watcher must be stopped at the end of the command.
 	destinationShardWatchers []*discovery.TopologyWatcher
@@ -84,7 +84,7 @@ type VerticalSplitCloneWorker struct {
 }
 
 // NewVerticalSplitCloneWorker returns a new VerticalSplitCloneWorker object.
-func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspace, destinationShard string, tables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyEndPoints int, maxTPS int64) (Worker, error) {
+func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspace, destinationShard string, tables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
 	if len(tables) == 0 {
 		return nil, errors.New("list of tablets to be split out must not be empty")
 	}
@@ -99,20 +99,20 @@ func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspac
 		return nil, fmt.Errorf("-max_tps must be >= -destination_writer_count: %v >= %v", maxTPS, destinationWriterCount)
 	}
 	return &VerticalSplitCloneWorker{
-		StatusWorker:              NewStatusWorker(),
-		wr:                        wr,
-		cell:                      cell,
-		destinationKeyspace:       destinationKeyspace,
-		destinationShard:          destinationShard,
-		tables:                    tables,
-		strategy:                  strategy,
-		sourceReaderCount:         sourceReaderCount,
-		destinationPackCount:      destinationPackCount,
-		minTableSizeForSplit:      minTableSizeForSplit,
-		destinationWriterCount:    destinationWriterCount,
-		minHealthyRdonlyEndPoints: minHealthyRdonlyEndPoints,
-		maxTPS:  maxTPS,
-		cleaner: &wrangler.Cleaner{},
+		StatusWorker:            NewStatusWorker(),
+		wr:                      wr,
+		cell:                    cell,
+		destinationKeyspace:     destinationKeyspace,
+		destinationShard:        destinationShard,
+		tables:                  tables,
+		strategy:                strategy,
+		sourceReaderCount:       sourceReaderCount,
+		destinationPackCount:    destinationPackCount,
+		minTableSizeForSplit:    minTableSizeForSplit,
+		destinationWriterCount:  destinationWriterCount,
+		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
+		maxTPS:                  maxTPS,
+		cleaner:                 &wrangler.Cleaner{},
 
 		destinationDbNames:    make(map[string]string),
 		destinationThrottlers: make(map[string]*throttler.Throttler),
@@ -301,9 +301,9 @@ func (vscw *VerticalSplitCloneWorker) init(ctx context.Context) error {
 func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	vscw.setState(WorkerStateFindTargets)
 
-	// find an appropriate endpoint in the source shard
+	// find an appropriate tablet in the source shard
 	var err error
-	vscw.sourceAlias, err = FindWorkerTablet(ctx, vscw.wr, vscw.cleaner, vscw.cell, vscw.sourceKeyspace, "0", vscw.minHealthyRdonlyEndPoints)
+	vscw.sourceAlias, err = FindWorkerTablet(ctx, vscw.wr, vscw.cleaner, vscw.cell, vscw.sourceKeyspace, "0", vscw.minHealthyRdonlyTablets)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/0: %v", vscw.cell, vscw.sourceKeyspace, err)
 	}
@@ -359,7 +359,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	keyspaceAndShard := topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)
 	vscw.destinationDbNames[keyspaceAndShard] = ti.DbName()
 
-  // TODO(mberlin): Verify on the destination master that the
+	// TODO(mberlin): Verify on the destination master that the
 	// _vt.blp_checkpoint table has the latest schema.
 
 	vscw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Tablet.Alias), vscw.destinationKeyspace, vscw.destinationShard)

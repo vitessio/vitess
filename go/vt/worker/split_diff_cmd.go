@@ -50,8 +50,8 @@ const splitDiffHTML2 = `
         <INPUT type="text" id="sourceUID" name="sourceUID" value="{{.DefaultSourceUID}}"></BR>
       <LABEL for="excludeTables">Exclude Tables: </LABEL>
         <INPUT type="text" id="excludeTables" name="excludeTables" value=""></BR>
-      <LABEL for="minHealthyRdonlyEndPoints">Minimum Number of required healthy RDONLY tablets: </LABEL>
-        <INPUT type="text" id="minHealthyRdonlyEndPoints" name="minHealthyRdonlyEndPoints" value="{{.DefaultMinHealthyRdonlyEndPoints}}"></BR>
+      <LABEL for="minHealthyRdonlyTablets">Minimum Number of required healthy RDONLY tablets: </LABEL>
+        <INPUT type="text" id="minHealthyRdonlyTablets" name="minHealthyRdonlyTablets" value="{{.DefaultMinHealthyRdonlyTablets}}"></BR>
       <INPUT type="hidden" name="keyspace" value="{{.Keyspace}}"/>
       <INPUT type="hidden" name="shard" value="{{.Shard}}"/>
       <INPUT type="submit" name="submit" value="Split Diff"/>
@@ -65,7 +65,7 @@ var splitDiffTemplate2 = mustParseTemplate("splitDiff2", splitDiffHTML2)
 func commandSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	sourceUID := subFlags.Int("source_uid", 0, "uid of the source shard to run the diff against")
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
-	minHealthyRdonlyEndPoints := subFlags.Int("min_healthy_rdonly_endpoints", defaultMinHealthyRdonlyEndPoints, "minimum number of healthy rdonly endpoints before taking out one")
+	minHealthyRdonlyTablets := subFlags.Int("min_healthy_rdonly_tablets", defaultMinHealthyRdonlyTablets, "minimum number of healthy RDONLY tablets before taking out one")
 	if err := subFlags.Parse(args); err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func commandSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSe
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	return NewSplitDiffWorker(wr, wi.cell, keyspace, shard, uint32(*sourceUID), excludeTableArray, *minHealthyRdonlyEndPoints), nil
+	return NewSplitDiffWorker(wr, wi.cell, keyspace, shard, uint32(*sourceUID), excludeTableArray, *minHealthyRdonlyTablets), nil
 }
 
 // shardsWithSources returns all the shards that have SourceShards set
@@ -170,7 +170,7 @@ func interactiveSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.Wrangl
 		result["Keyspace"] = keyspace
 		result["Shard"] = shard
 		result["DefaultSourceUID"] = "0"
-		result["DefaultMinHealthyRdonlyEndPoints"] = fmt.Sprintf("%v", defaultMinHealthyRdonlyEndPoints)
+		result["DefaultMinHealthyRdonlyTablets"] = fmt.Sprintf("%v", defaultMinHealthyRdonlyTablets)
 		return nil, splitDiffTemplate2, result, nil
 	}
 
@@ -185,14 +185,14 @@ func interactiveSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.Wrangl
 	if excludeTables != "" {
 		excludeTableArray = strings.Split(excludeTables, ",")
 	}
-	minHealthyRdonlyEndPointsStr := r.FormValue("minHealthyRdonlyEndPoints")
-	minHealthyRdonlyEndPoints, err := strconv.ParseInt(minHealthyRdonlyEndPointsStr, 0, 64)
+	minHealthyRdonlyTabletsStr := r.FormValue("minHealthyRdonlyTablets")
+	minHealthyRdonlyTablets, err := strconv.ParseInt(minHealthyRdonlyTabletsStr, 0, 64)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse minHealthyRdonlyEndPoints: %s", err)
+		return nil, nil, nil, fmt.Errorf("cannot parse minHealthyRdonlyTablets: %s", err)
 	}
 
 	// start the diff job
-	wrk := NewSplitDiffWorker(wr, wi.cell, keyspace, shard, uint32(sourceUID), excludeTableArray, int(minHealthyRdonlyEndPoints))
+	wrk := NewSplitDiffWorker(wr, wi.cell, keyspace, shard, uint32(sourceUID), excludeTableArray, int(minHealthyRdonlyTablets))
 	return wrk, nil, nil, nil
 }
 
