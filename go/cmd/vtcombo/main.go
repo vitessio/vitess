@@ -38,10 +38,15 @@ const (
 )
 
 var (
+	// old-style parameters, will go away soon
 	topology           = flag.String("topology", "", "Define which shards exist in the test topology in the form <keyspace>/<shardrange>:<dbname>,... The dbname must be unique among all shards, since they share a MySQL instance in the test environment.")
 	shardingColumnName = flag.String("sharding_column_name", "", "Specifies the column to use for sharding operations")
 	shardingColumnType = flag.String("sharding_column_type", "", "Specifies the type of the column to use for sharding operations")
-	vschemaFile        = flag.String("vschema", "", "vschema file")
+
+	// new-style parameter
+	protoTopo = flag.String("proto_topo", "", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
+
+	vschemaFile = flag.String("vschema", "", "vschema file")
 
 	ts topo.Server
 )
@@ -98,7 +103,11 @@ func main() {
 	log.Infof("v3 is enabled: loaded vschema from file")
 
 	// tablets configuration and init
-	initTabletMap(ts, *topology, mysqld, dbcfgs, formal, mycnf)
+	if *protoTopo != "" {
+		initTabletMapProto(ts, *protoTopo, mysqld, dbcfgs, formal, mycnf)
+	} else {
+		initTabletMap(ts, *topology, mysqld, dbcfgs, formal, mycnf)
+	}
 
 	// vtgate configuration and init
 	resilientSrvTopoServer := vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")

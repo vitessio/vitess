@@ -19,7 +19,7 @@ namespace Vitess\Proto\Vttest {
     public $sharding_column_type = null;
     
     /**  @var string */
-    public $redirect = null;
+    public $served_from = null;
     
 
     /** @var \Closure[] */
@@ -62,10 +62,10 @@ namespace Vitess\Proto\Vttest {
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
-      // OPTIONAL STRING redirect = 5
+      // OPTIONAL STRING served_from = 5
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 5;
-      $f->name      = "redirect";
+      $f->name      = "served_from";
       $f->type      = \DrSlump\Protobuf::TYPE_STRING;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
@@ -246,39 +246,39 @@ namespace Vitess\Proto\Vttest {
     }
     
     /**
-     * Check if <redirect> has a value
+     * Check if <served_from> has a value
      *
      * @return boolean
      */
-    public function hasRedirect(){
+    public function hasServedFrom(){
       return $this->_has(5);
     }
     
     /**
-     * Clear <redirect> value
+     * Clear <served_from> value
      *
      * @return \Vitess\Proto\Vttest\Keyspace
      */
-    public function clearRedirect(){
+    public function clearServedFrom(){
       return $this->_clear(5);
     }
     
     /**
-     * Get <redirect> value
+     * Get <served_from> value
      *
      * @return string
      */
-    public function getRedirect(){
+    public function getServedFrom(){
       return $this->_get(5);
     }
     
     /**
-     * Set <redirect> value
+     * Set <served_from> value
      *
      * @param string $value
      * @return \Vitess\Proto\Vttest\Keyspace
      */
-    public function setRedirect( $value){
+    public function setServedFrom( $value){
       return $this->_set(5, $value);
     }
   }
