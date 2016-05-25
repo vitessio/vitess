@@ -10,5 +10,7 @@ RUN apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 0xcbcb082a1bb943db 
 # Bootstrap Vitess
 WORKDIR /vt/src/github.com/youtube/vitess
 USER vitess
+# Required by e2e test dependencies e.g. test/environment.py.
+ENV USER vitess
 ENV MYSQL_FLAVOR MariaDB
 RUN ./bootstrap.sh --skip_root_installs

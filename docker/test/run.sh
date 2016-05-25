@@ -22,7 +22,7 @@ fi
 # Mirror permissions to "other" from the owning group (for which we assume it has at least rX permissions).
 chmod -R o=g .
 
-args="$args -e USER=vitess -v /dev/log:/dev/log"
+args="$args -v /dev/log:/dev/log"
 args="$args -v $PWD:/tmp/src"
 
 # Share maven dependency cache so they don't have to be redownloaded every time.
