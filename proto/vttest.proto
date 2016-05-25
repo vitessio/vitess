@@ -1,0 +1,47 @@
+// This file contains the vttest topology configuration structures.
+// It is much easier to define these in a proto format, so multiple
+// languages can easily use it.
+//
+// VTTestTopology can be passed in from any language that wants to
+// bring up a cluster to py/vttest/run_local_database.py, that will in turn
+// send it to vtcombo (both as proto compact text format).
+// It is recommended to create a VTTestTopology in the test native language,
+// and pass it to after encoding into CompactText (as opposed to writing the
+// encoded version manually, too error-prone).
+
+syntax = "proto3";
+
+package vttest;
+
+// Shard describes a single shard in a keyspace.
+message Shard {
+  // name has to be unique in a keyspace.
+  string name = 1;
+
+  // db_name is the mysql db name for this shard. Has to be globally unique.
+  string db_name = 2;
+}
+
+// Keyspace describes a single keyspace.
+message Keyspace {
+  // name has to be unique in a VTTestTopology.
+  string name = 1;
+
+  // shards inside this keyspace. Ignored if redirect is set.
+  repeated Shard shards = 2;
+
+  // sharding_column_name for this keyspace. Used for v2 calls, but not for v3.
+  string sharding_column_name = 3;
+
+  // sharding_column_type for this keyspace. Used for v2 calls, but not for v3.
+  string sharding_column_type = 4;
+
+  // redirects all traffic to another keyspace. If set, shards is ignored.
+  string redirect = 5;
+}
+
+// VTTestTopology describes the keyspaces in the topology.
+message VTTestTopology {
+  // all keyspaces in the topology.
+  repeated Keyspace keyspaces = 1;
+}
