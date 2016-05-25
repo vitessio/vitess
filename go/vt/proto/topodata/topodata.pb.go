@@ -217,23 +217,31 @@ func (m *Tablet) GetTags() map[string]string {
 
 // A Shard contains data about a subset of the data whithin a keyspace.
 type Shard struct {
-	// master_alias is the tablet alias of the master for the shard.
-	// If it is unset, then there is no master in this shard yet.
+	// No lock is necessary to update this field, when for instance
+	// TabletExternallyReparented updates this. However, we lock the
+	// shard for reparenting operations (InitShardMaster,
+	// PlannedReparentShard,EmergencyReparentShard), to guarantee
+	// exclusive operation.
 	MasterAlias *TabletAlias `protobuf:"bytes,1,opt,name=master_alias,json=masterAlias" json:"master_alias,omitempty"`
 	// key_range is the KeyRange for this shard. It can be unset if:
 	// - we are not using range-based sharding in this shard.
 	// - the shard covers the entire keyrange.
 	// This must match the shard name based on our other conventions, but
 	// helpful to have it decomposed here.
+	// Once set at creation time, it is never changed.
 	KeyRange *KeyRange `protobuf:"bytes,2,opt,name=key_range,json=keyRange" json:"key_range,omitempty"`
 	// served_types has at most one entry per TabletType
+	// The keyspace lock is always taken when changing this.
 	ServedTypes []*Shard_ServedType `protobuf:"bytes,3,rep,name=served_types,json=servedTypes" json:"served_types,omitempty"`
 	// SourceShards is the list of shards we're replicating from,
 	// using filtered replication.
+	// The keyspace lock is always taken when changing this.
 	SourceShards []*Shard_SourceShard `protobuf:"bytes,4,rep,name=source_shards,json=sourceShards" json:"source_shards,omitempty"`
 	// Cells is the list of cells that contain tablets for this shard.
+	// No lock is necessary to update this field.
 	Cells []string `protobuf:"bytes,5,rep,name=cells" json:"cells,omitempty"`
-	// tablet_controls has at most one entry per TabletType
+	// tablet_controls has at most one entry per TabletType.
+	// The keyspace lock is always taken when changing this.
 	TabletControls []*Shard_TabletControl `protobuf:"bytes,6,rep,name=tablet_controls,json=tabletControls" json:"tablet_controls,omitempty"`
 }
 
