@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -40,7 +39,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 
 	if createShardAndKeyspace {
 		// create the parent keyspace and shard if needed
-		si, err = topotools.GetOrCreateShard(ctx, wr.ts, tablet.Keyspace, tablet.Shard)
+		si, err = wr.ts.GetOrCreateShard(ctx, tablet.Keyspace, tablet.Shard)
 	} else {
 		si, err = wr.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 		if err == topo.ErrNoNode {
@@ -94,7 +93,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 // DeleteTablet removes a tablet from a shard.
 // - if allowMaster is set, we can Delete a master tablet (and clear
 // its record from the Shard record if it was the master).
-func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias, allowMaster bool) error {
+func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias, allowMaster bool) (err error) {
 	// load the tablet, see if we'll need to rebuild
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -111,30 +110,24 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 	}
 
 	// update the Shard object if the master was scrapped.
-	// we lock the shard to not conflict with reparent operations.
 	if wasMaster {
-		actionNode := actionnode.UpdateShard()
-		lockPath, err := wr.lockShard(ctx, ti.Keyspace, ti.Shard, actionNode)
-		if err != nil {
-			return err
+		// We lock the shard to not conflict with reparent operations.
+		ctx, unlock, lockErr := wr.ts.LockShard(ctx, ti.Keyspace, ti.Shard, fmt.Sprintf("DeleteTablet(%v)", topoproto.TabletAliasString(tabletAlias)))
+		if lockErr != nil {
+			return lockErr
 		}
+		defer unlock(&err)
 
 		// update the shard record's master
-		if _, err := wr.ts.UpdateShardFields(ctx, ti.Keyspace, ti.Shard, func(s *topodatapb.Shard) error {
-			if !topoproto.TabletAliasEqual(s.MasterAlias, tabletAlias) {
-				wr.Logger().Warningf("Deleting master %v from shard %v/%v but master in Shard object was %v", topoproto.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard, topoproto.TabletAliasString(s.MasterAlias))
+		_, err = wr.ts.UpdateShardFields(ctx, ti.Keyspace, ti.Shard, func(si *topo.ShardInfo) error {
+			if !topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) {
+				wr.Logger().Warningf("Deleting master %v from shard %v/%v but master in Shard object was %v", topoproto.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard, topoproto.TabletAliasString(si.MasterAlias))
 				return topo.ErrNoUpdateNeeded
 			}
-			s.MasterAlias = nil
+			si.MasterAlias = nil
 			return nil
-		}); err != nil {
-			return wr.unlockShard(ctx, ti.Keyspace, ti.Shard, actionNode, lockPath, err)
-		}
-
-		// and unlock
-		if err := wr.unlockShard(ctx, ti.Keyspace, ti.Shard, actionNode, lockPath, err); err != nil {
-			return err
-		}
+		})
+		return err
 	}
 
 	return nil

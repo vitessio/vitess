@@ -392,18 +392,21 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 	}
 
 	// now add the source in shard
-	si.SourceShards = []*topodatapb.Shard_SourceShard{
-		{
-			Uid:      1,
-			Keyspace: "ks",
-			Shard:    "-80",
-			KeyRange: &topodatapb.KeyRange{
-				End: []byte{0x80},
+	si, err = ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
+		si.SourceShards = []*topodatapb.Shard_SourceShard{
+			{
+				Uid:      1,
+				Keyspace: "ks",
+				Shard:    "-80",
+				KeyRange: &topodatapb.KeyRange{
+					End: []byte{0x80},
+				},
 			},
-		},
-	}
-	if err := ts.UpdateShard(ctx, si); err != nil {
-		t.Fatalf("UpdateShard failed: %v", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
 
 	// now we have a source, adding players
@@ -557,22 +560,21 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 		Shard:    "40-60",
 	}
 
-	si, err := ts.GetShard(ctx, "ks", "40-60")
-	if err != nil {
-		t.Fatalf("GetShard failed: %v", err)
-	}
-	si.SourceShards = []*topodatapb.Shard_SourceShard{
-		{
-			Uid:      1,
-			Keyspace: "ks",
-			Shard:    "-80",
-			KeyRange: &topodatapb.KeyRange{
-				End: []byte{0x80},
+	si, err := ts.UpdateShardFields(ctx, "ks", "40-60", func(si *topo.ShardInfo) error {
+		si.SourceShards = []*topodatapb.Shard_SourceShard{
+			{
+				Uid:      1,
+				Keyspace: "ks",
+				Shard:    "-80",
+				KeyRange: &topodatapb.KeyRange{
+					End: []byte{0x80},
+				},
 			},
-		},
-	}
-	if err := ts.UpdateShard(ctx, si); err != nil {
-		t.Fatalf("UpdateShard failed: %v", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
 
 	// now we have a source, adding players
@@ -769,23 +771,22 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 		Shard:    "0",
 	}
 
-	si, err := ts.GetShard(ctx, "destination", "0")
-	if err != nil {
-		t.Fatalf("GetShard failed: %v", err)
-	}
-	si.SourceShards = []*topodatapb.Shard_SourceShard{
-		{
-			Uid:      1,
-			Keyspace: "source",
-			Shard:    "0",
-			Tables: []string{
-				"table1",
-				"funtables_*",
+	si, err := ts.UpdateShardFields(ctx, "destination", "0", func(si *topo.ShardInfo) error {
+		si.SourceShards = []*topodatapb.Shard_SourceShard{
+			{
+				Uid:      1,
+				Keyspace: "source",
+				Shard:    "0",
+				Tables: []string{
+					"table1",
+					"funtables_*",
+				},
 			},
-		},
-	}
-	if err := ts.UpdateShard(ctx, si); err != nil {
-		t.Fatalf("UpdateShard failed: %v", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
 
 	// now we have a source, adding players

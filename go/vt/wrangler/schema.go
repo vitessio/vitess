@@ -18,7 +18,6 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/schemamanager"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
@@ -195,26 +194,27 @@ func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *topodatapb
 }
 
 // ApplySchemaKeyspace applies a schema change to an entire keyspace.
-// take a keyspace lock to do this.
-// first we will validate the Preflight works the same on all shard masters
-// and fail if not (unless force is specified)
-func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace, change string, allowLongUnavailability bool, waitSlaveTimeout time.Duration) error {
-	actionNode := actionnode.ApplySchemaKeyspace(change)
-	lockPath, err := wr.lockKeyspace(ctx, keyspace, actionNode)
-	if err != nil {
-		return err
+// Takes a keyspace lock to do this.
+// First we will validate the Preflight works the same on all shard masters
+// and fail if not (unless force is specified).
+func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace, change string, allowLongUnavailability bool, waitSlaveTimeout time.Duration) (err error) {
+	// lock the keyspace
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "ApplySchemaKeyspace")
+	if lockErr != nil {
+		return lockErr
 	}
+	defer unlock(&err)
+
+	// apply the schema change
 	executor := schemamanager.NewTabletExecutor(wr.tmc, wr.ts)
 	if allowLongUnavailability {
 		executor.AllowBigSchemaChange()
 	}
-	err = schemamanager.Run(
+	return schemamanager.Run(
 		ctx,
 		schemamanager.NewPlainController(change, keyspace),
 		executor,
 	)
-
-	return wr.unlockKeyspace(ctx, keyspace, actionNode, lockPath, err)
 }
 
 // CopySchemaShardFromShard copies the schema from a source shard to the specified destination shard.

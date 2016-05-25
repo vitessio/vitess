@@ -21,7 +21,6 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -1039,30 +1038,28 @@ func agentRPCTestSetMasterPanic(ctx context.Context, t *testing.T, client tmclie
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-var testSlaveWasRestartedArgs = &actionnode.SlaveWasRestartedArgs{
-	Parent: &topodatapb.TabletAlias{
-		Cell: "prison",
-		Uid:  42,
-	},
+var testSlaveWasRestartedParent = &topodatapb.TabletAlias{
+	Cell: "prison",
+	Uid:  42,
 }
 var testSlaveWasRestartedCalled = false
 
-func (fra *fakeRPCAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error {
+func (fra *fakeRPCAgent) SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "SlaveWasRestarted swrd", swrd, testSlaveWasRestartedArgs)
+	compare(fra.t, "SlaveWasRestarted parent", parent, testSlaveWasRestartedParent)
 	testSlaveWasRestartedCalled = true
 	return nil
 }
 
 func agentRPCTestSlaveWasRestarted(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.SlaveWasRestarted(ctx, tablet, testSlaveWasRestartedArgs)
+	err := client.SlaveWasRestarted(ctx, tablet, testSlaveWasRestartedParent)
 	compareError(t, "SlaveWasRestarted", err, true, testSlaveWasRestartedCalled)
 }
 
 func agentRPCTestSlaveWasRestartedPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.SlaveWasRestarted(ctx, tablet, testSlaveWasRestartedArgs)
+	err := client.SlaveWasRestarted(ctx, tablet, testSlaveWasRestartedParent)
 	expectRPCWrapLockActionPanic(t, err)
 }
 
@@ -1143,7 +1140,7 @@ func agentRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.
 //
 
 // RPCWrap is part of the RPCAgent interface
-func (fra *fakeRPCAgent) RPCWrap(ctx context.Context, name string, args, reply interface{}, f func() error) (err error) {
+func (fra *fakeRPCAgent) RPCWrap(ctx context.Context, name tabletmanager.TabletAction, args, reply interface{}, f func() error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = fmt.Errorf("RPCWrap caught panic during %v", name)
@@ -1153,7 +1150,7 @@ func (fra *fakeRPCAgent) RPCWrap(ctx context.Context, name string, args, reply i
 }
 
 // RPCWrapLock is part of the RPCAgent interface
-func (fra *fakeRPCAgent) RPCWrapLock(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) (err error) {
+func (fra *fakeRPCAgent) RPCWrapLock(ctx context.Context, name tabletmanager.TabletAction, args, reply interface{}, verbose bool, f func() error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = fmt.Errorf("RPCWrapLock caught panic during %v", name)
@@ -1163,7 +1160,7 @@ func (fra *fakeRPCAgent) RPCWrapLock(ctx context.Context, name string, args, rep
 }
 
 // RPCWrapLockAction is part of the RPCAgent interface
-func (fra *fakeRPCAgent) RPCWrapLockAction(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) (err error) {
+func (fra *fakeRPCAgent) RPCWrapLockAction(ctx context.Context, name tabletmanager.TabletAction, args, reply interface{}, verbose bool, f func() error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = fmt.Errorf("RPCWrapLockAction caught panic during %v", name)

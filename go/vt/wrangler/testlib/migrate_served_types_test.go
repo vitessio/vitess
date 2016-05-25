@@ -31,6 +31,17 @@ func checkShardServedTypes(t *testing.T, ts topo.Server, shard string, expected 
 	}
 }
 
+func checkShardSourceShards(t *testing.T, ts topo.Server, shard string, expected int) {
+	ctx := context.Background()
+	si, err := ts.GetShard(ctx, "ks", shard)
+	if err != nil {
+		t.Fatalf("GetShard failed: %v", err)
+	}
+	if len(si.SourceShards) != expected {
+		t.Fatalf("shard %v has wrong SourceShards: %#v", shard, si.SourceShards)
+	}
+}
+
 func TestMigrateServedTypes(t *testing.T) {
 	db := fakesqldb.Register()
 	ts := zktestserver.New(t, []string{"cell1", "cell2"})
@@ -142,12 +153,16 @@ func TestMigrateServedTypes(t *testing.T) {
 	defer dest2Master.StopActionLoop(t)
 
 	// simulate the clone, by fixing the dest shard record
+	checkShardSourceShards(t, ts, "-80", 0)
+	checkShardSourceShards(t, ts, "80-", 0)
 	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/-80", "0", "ks/0"}); err != nil {
 		t.Fatalf("SourceShardAdd failed: %v", err)
 	}
 	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/80-", "0", "ks/0"}); err != nil {
 		t.Fatalf("SourceShardAdd failed: %v", err)
 	}
+	checkShardSourceShards(t, ts, "-80", 1)
+	checkShardSourceShards(t, ts, "80-", 1)
 
 	// migrate rdonly over
 	if err := vp.Run([]string{"MigrateServedTypes", "ks/0", "rdonly"}); err != nil {
@@ -157,6 +172,8 @@ func TestMigrateServedTypes(t *testing.T) {
 	checkShardServedTypes(t, ts, "0", 2)
 	checkShardServedTypes(t, ts, "-80", 1)
 	checkShardServedTypes(t, ts, "80-", 1)
+	checkShardSourceShards(t, ts, "-80", 1)
+	checkShardSourceShards(t, ts, "80-", 1)
 
 	// migrate replica over
 	if err := vp.Run([]string{"MigrateServedTypes", "ks/0", "replica"}); err != nil {
@@ -166,6 +183,8 @@ func TestMigrateServedTypes(t *testing.T) {
 	checkShardServedTypes(t, ts, "0", 1)
 	checkShardServedTypes(t, ts, "-80", 2)
 	checkShardServedTypes(t, ts, "80-", 2)
+	checkShardSourceShards(t, ts, "-80", 1)
+	checkShardSourceShards(t, ts, "80-", 1)
 
 	// migrate master over
 	if err := vp.Run([]string{"MigrateServedTypes", "ks/0", "master"}); err != nil {
@@ -175,4 +194,6 @@ func TestMigrateServedTypes(t *testing.T) {
 	checkShardServedTypes(t, ts, "0", 0)
 	checkShardServedTypes(t, ts, "-80", 3)
 	checkShardServedTypes(t, ts, "80-", 3)
+	checkShardSourceShards(t, ts, "-80", 0)
+	checkShardSourceShards(t, ts, "80-", 0)
 }

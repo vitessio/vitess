@@ -85,6 +85,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -96,7 +97,6 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -130,6 +130,10 @@ type commandGroup struct {
 	name     string
 	commands []command
 }
+
+// commandsMutex protects commands at init time. We use servenv, which calls
+// all Run hooks in parallel.
+var commandsMutex sync.Mutex
 
 var commands = []commandGroup{
 	{
@@ -381,6 +385,8 @@ func init() {
 }
 
 func addCommand(groupName string, c command) {
+	commandsMutex.Lock()
+	defer commandsMutex.Unlock()
 	for i, group := range commands {
 		if group.name == groupName {
 			commands[i].commands = append(commands[i].commands, c)
@@ -391,6 +397,8 @@ func addCommand(groupName string, c command) {
 }
 
 func addCommandGroup(groupName string) {
+	commandsMutex.Lock()
+	defer commandsMutex.Unlock()
 	commands = append(commands, commandGroup{
 		name: groupName,
 	})
@@ -417,15 +425,6 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 		shard = "<null>"
 	}
 	return fmt.Sprintf("%v %v %v %v %v %v %v", topoproto.TabletAliasString(ti.Alias), keyspace, shard, strings.ToLower(ti.Type.String()), ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(ti.Tags))
-}
-
-func fmtAction(action *actionnode.ActionNode) string {
-	state := string(action.State)
-	// FIXME(msolomon) The default state should really just have the value "queued".
-	if action.State == actionnode.ActionStateQueued {
-		state = "queued"
-	}
-	return fmt.Sprintf("%v %v %v %v %v", action.Path, action.Action, state, action.ActionGuid, action.Error)
 }
 
 func listTabletsByShard(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) error {
@@ -1061,7 +1060,7 @@ func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		}
 	}
 
-	err = topotools.CreateShard(ctx, wr.TopoServer(), keyspace, shard)
+	err = wr.TopoServer().CreateShard(ctx, keyspace, shard)
 	if *force && err == topo.ErrNodeExists {
 		log.Infof("shard %v/%v already exists (ignoring error with -force)", keyspace, shard)
 		err = nil

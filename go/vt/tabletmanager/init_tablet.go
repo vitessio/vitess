@@ -17,7 +17,6 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/topotools"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -101,7 +100,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	log.Infof("Reading shard record %v/%v", *initKeyspace, shard)
 
 	// read the shard, create it if necessary
-	si, err := topotools.GetOrCreateShard(ctx, agent.TopoServer, *initKeyspace, shard)
+	si, err := agent.TopoServer.GetOrCreateShard(ctx, *initKeyspace, shard)
 	if err != nil {
 		return fmt.Errorf("InitTablet cannot GetOrCreateShard shard: %v", err)
 	}
@@ -129,12 +128,12 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 
 	// See if we need to add the tablet's cell to the shard's cell list.
 	if !si.HasCell(agent.TabletAlias.Cell) {
-		si, err = agent.TopoServer.UpdateShardFields(ctx, *initKeyspace, shard, func(shard *topodatapb.Shard) error {
-			if topoproto.ShardHasCell(shard, agent.TabletAlias.Cell) {
+		si, err = agent.TopoServer.UpdateShardFields(ctx, *initKeyspace, shard, func(si *topo.ShardInfo) error {
+			if si.HasCell(agent.TabletAlias.Cell) {
 				// Someone else already did it.
 				return topo.ErrNoUpdateNeeded
 			}
-			shard.Cells = append(shard.Cells, agent.TabletAlias.Cell)
+			si.Cells = append(si.Cells, agent.TabletAlias.Cell)
 			return nil
 		})
 		if err != nil {

@@ -18,7 +18,6 @@ import (
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
@@ -254,7 +253,7 @@ func (client *FakeTabletManagerClient) SetMaster(ctx context.Context, tablet *to
 }
 
 // SlaveWasRestarted is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) SlaveWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, args *actionnode.SlaveWasRestartedArgs) error {
+func (client *FakeTabletManagerClient) SlaveWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error {
 	return nil
 }
 

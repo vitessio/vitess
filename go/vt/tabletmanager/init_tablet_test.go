@@ -11,6 +11,7 @@ import (
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
@@ -99,13 +100,12 @@ func TestInitTablet(t *testing.T) {
 	}
 
 	// update shard's master to our alias, then try to init again
-	si, err = ts.GetShard(ctx, "test_keyspace", "-80")
+	si, err = agent.TopoServer.UpdateShardFields(ctx, "test_keyspace", "-80", func(si *topo.ShardInfo) error {
+		si.MasterAlias = tabletAlias
+		return nil
+	})
 	if err != nil {
-		t.Fatalf("GetShard failed: %v", err)
-	}
-	si.MasterAlias = tabletAlias
-	if err := ts.UpdateShard(ctx, si); err != nil {
-		t.Fatalf("UpdateShard failed: %v", err)
+		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
 	if err := agent.InitTablet(port, gRPCPort); err != nil {
 		t.Fatalf("InitTablet(type, healthcheck) failed: %v", err)
