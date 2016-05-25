@@ -8,6 +8,7 @@ The `vitess/bootstrap` image comes in different flavors:
 * `vitess/bootstrap:common` - dependencies that are common to all flavors
 * `vitess/bootstrap:mariadb` - bootstrap image for MariaDB
 * `vitess/bootstrap:mysql56` - bootstrap image for MySQL 5.6
+* `vitess/bootstrap:mysql57` - bootstrap image for MySQL 5.7
 * `vitess/bootstrap:percona` - bootstrap image for Percona Server
 
 **NOTE: Unlike the base image that builds Vitess itself, this bootstrap image
@@ -39,6 +40,8 @@ Makefile target to build every flavor:
     ``` sh
     vitess$ ./test.go -pull=false -flavor=mariadb
     vitess$ ./test.go -pull=false -flavor=mysql56
+    vitess$ ./test.go -pull=false -flavor=mysql57
+    vitess$ ./test.go -pull=false -flavor=percona
     ...
     ```
 
@@ -48,6 +51,8 @@ Makefile target to build every flavor:
     $ docker push vitess/bootstrap:common
     $ docker push vitess/bootstrap:mariadb
     $ docker push vitess/bootstrap:mysql56
+    $ docker push vitess/bootstrap:mysql57
+    $ docker push vitess/bootstrap:percona
     ...
     ```
 
