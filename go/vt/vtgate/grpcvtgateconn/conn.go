@@ -58,7 +58,7 @@ func dial(ctx context.Context, addr string, timeout time.Duration) (vtgateconn.I
 	}, nil
 }
 
-func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session interface{}) (*sqltypes.Result, interface{}, error) {
+func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session interface{}) (*sqltypes.Result, interface{}, error) {
 	var s *vtgatepb.Session
 	if session != nil {
 		s = session.(*vtgatepb.Session)
@@ -71,6 +71,7 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
 		Session:    s,
 		Query:      q,
+		Keyspace:   keyspace,
 		TabletType: tabletType,
 	}
 	response, err := conn.c.Execute(ctx, request)
@@ -255,7 +256,7 @@ func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 	return sqltypes.CustomProto3ToResult(a.fields, qr), nil
 }
 
-func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error) {
+func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error) {
 	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, err
@@ -263,6 +264,7 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVar
 	req := &vtgatepb.StreamExecuteRequest{
 		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
 		Query:      q,
+		Keyspace:   keyspace,
 		TabletType: tabletType,
 	}
 	stream, err := conn.c.StreamExecute(ctx, req)
