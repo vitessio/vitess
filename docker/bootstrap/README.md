@@ -32,27 +32,18 @@ Makefile target to build every flavor:
 1.  Build new bootstrap images.
 
     ``` sh
-    make docker_bootstrap
+    vitess$ make docker_bootstrap
     ```
 
 1.  For each flavor, run all tests and make sure that they pass.
 
     ``` sh
-    vitess$ ./test.go -pull=false -flavor=mariadb
-    vitess$ ./test.go -pull=false -flavor=mysql56
-    vitess$ ./test.go -pull=false -flavor=mysql57
-    vitess$ ./test.go -pull=false -flavor=percona
-    ...
+    vitess$ make docker_bootstrap_test
     ```
 
 1.  When all tests passed, push each image to Docker Hub.
 
     ``` sh
-    $ docker push vitess/bootstrap:common
-    $ docker push vitess/bootstrap:mariadb
-    $ docker push vitess/bootstrap:mysql56
-    $ docker push vitess/bootstrap:mysql57
-    $ docker push vitess/bootstrap:percona
-    ...
+    vitess$ make docker_bootstrap_push
     ```
 
