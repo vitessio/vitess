@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
-"""Command-line tool for starting a local Vitess database for testing.
+r"""Command-line tool for starting a local Vitess database for testing.
 
 USAGE:
 
   $ run_local_database --port 12345 \
-    --topology test_keyspace/-80:test_keyspace_0,test_keyspace/80-:test_keyspace_1 \
+    --proto_topo <vttest proto as string> \
     --schema_dir /path/to/schema/dir
 
 It will run the tool, logging to stderr. On stdout, a small json structure
@@ -24,26 +24,45 @@ import os
 import re
 import sys
 
+from google.protobuf import text_format
+
 from vttest import environment
 from vttest import local_database
 from vttest import mysql_flavor
-from vttest import vt_processes
 from vttest import init_data_options
+
+from vtproto import vttest_pb2
 
 shard_exp = re.compile(r'(.+)/(.+):(.+)')
 
 
 def main(cmdline_options):
-  shards = []
+  topology = vttest_pb2.VTTestTopology()
 
-  for shard in cmdline_options.topology.split(','):
-    m = shard_exp.match(shard)
-    if m:
-      shards.append(
-          vt_processes.ShardInfo(m.group(1), m.group(2), m.group(3)))
-    else:
-      sys.stderr.write('invalid --shard flag format: %s\n' % shard)
-      sys.exit(1)
+  if cmdline_options.topology:
+    # old style topology, will disappear soon. Build a new style
+    # topology from it.
+    keyspaces = {}
+
+    for shard in cmdline_options.topology.split(','):
+      m = shard_exp.match(shard)
+      if not m:
+        sys.stderr.write('invalid --shard flag format: %s\n' % shard)
+        sys.exit(1)
+
+      keyspace = m.group(1)
+      shard_name = m.group(2)
+      db_name = m.group(3)
+
+      if keyspace not in keyspaces:
+        kpb = topology.keyspaces.add(name=keyspace)
+        keyspaces[keyspace] = kpb
+
+      keyspaces[keyspace].shards.add(name=shard_name, db_name_override=db_name)
+
+  elif cmdline_options.proto_topo:
+    # new style topology, just parse it as text
+    topology = text_format.Parse(cmdline_options.proto_topo, topology)
 
   environment.base_port = cmdline_options.port
 
@@ -56,7 +75,7 @@ def main(cmdline_options):
     init_data_opts.null_probability = cmdline_options.null_probability
 
   with local_database.LocalDatabase(
-      shards,
+      topology,
       cmdline_options.schema_dir,
       cmdline_options.vschema,
       cmdline_options.mysql_only,
@@ -83,10 +102,15 @@ if __name__ == '__main__':
       'will be chosen.')
   parser.add_option(
       '-t', '--topology',
-      help='Define which shards exist in the test topology in the'
+      help='DEPRECATED, use proto_topo instead.'
+      ' Define which shards exist in the test topology in the'
       ' form <keyspace>/<shardrange>:<dbname>,... The dbname'
       ' must be unique among all shards, since they share'
       ' a MySQL instance in the test environment.')
+  parser.add_option(
+      '-o', '--proto_topo',
+      help='Define the fake cluster topology as a compact text format encoded'
+      ' vttest proto. See vttest.proto for more information.')
   parser.add_option(
       '-s', '--schema_dir',
       help='Directory for initial schema files. Within this dir,'

@@ -21,7 +21,10 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/sqldb"
+
+	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
 )
 
 // Handle allows you to interact with the processes launched by vttest.
@@ -73,10 +76,25 @@ func SchemaDirectory(dir string) VitessOption {
 
 // Topology is used to pass in the topology string.
 // It cannot be used at the same time as MySQLOnly.
+//
+// DEPRECATED. Please use ProtoTopo that allows the specification of a
+// lot more options.
 func Topology(topo string) VitessOption {
 	return VitessOption{
 		beforeRun: func(hdl *Handle) error {
 			hdl.cmd.Args = append(hdl.cmd.Args, "--topology", topo)
+			return nil
+		},
+	}
+}
+
+// ProtoTopo is used to pass in the topology as a vttest proto definition.
+// See vttest.proto for more information.
+// It cannot be used at the same time as MySQLOnly.
+func ProtoTopo(topo *vttestpb.VTTestTopology) VitessOption {
+	return VitessOption{
+		beforeRun: func(hdl *Handle) error {
+			hdl.cmd.Args = append(hdl.cmd.Args, "--proto_topo", proto.CompactTextString(topo))
 			return nil
 		},
 	}
