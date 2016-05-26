@@ -114,12 +114,16 @@ php_proto:
 	docker rm vitess_php-proto
 
 # This rule builds the bootstrap images for all flavors.
+DOCKER_IMAGES_FOR_TEST = mariadb mysql56 mysql57 percona
+DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
 docker_bootstrap:
-	docker/bootstrap/build.sh common
-	docker/bootstrap/build.sh mariadb
-	docker/bootstrap/build.sh mysql56
-	docker/bootstrap/build.sh mysql57
-	docker/bootstrap/build.sh percona
+	for i in $(DOCKER_IMAGES); do echo "image: $$i"; docker/bootstrap/build.sh $$i || exit 1; done
+
+docker_bootstrap_test:
+	for i in $(DOCKER_IMAGES_FOR_TEST); do echo "image: $$i"; ./test.go -pull=false -flavor=$$i || exit 1; done
+
+docker_bootstrap_push:
+	for i in $(DOCKER_IMAGES); do echo "image: $$i"; docker push vitess/bootstrap:$$i || exit 1; done
 
 docker_base:
 	# Fix permissions before copying files, to avoid AUFS bug.
