@@ -7,13 +7,13 @@ import org.apache.hadoop.conf.Configuration;
  * Collection of configuration properties used for {@link VitessInputFormat}
  */
 public class VitessConf {
-  public static final String HOSTS = "vitess.vtgate.hosts";
-  public static final String CONN_TIMEOUT_MS = "vitess.vtgate.conn_timeout_ms";
-  public static final String INPUT_KEYSPACE = "vitess.vtgate.com.youtube.vitess.hadoop.keyspace";
-  public static final String INPUT_QUERY = "vitess.vtgate.com.youtube.vitess.hadoop.input_query";
-  public static final String SPLITS = "vitess.vtgate.com.youtube.vitess.hadoop.splits";
-  public static final String SPLIT_COLUMN = "vitess.vtgate.com.youtube.vitess.hadoop.splitcolumn";
-  public static final String RPC_FACTORY_CLASS = "vtgate.rpcclient.factory";
+  public static final String HOSTS = "vitess.client.hosts";
+  public static final String CONN_TIMEOUT_MS = "vitess.client.conn_timeout_ms";
+  public static final String INPUT_KEYSPACE = "vitess.client.keyspace";
+  public static final String INPUT_QUERY = "vitess.client.input_query";
+  public static final String SPLITS = "vitess.client.splits";
+  public static final String SPLIT_COLUMN = "vitess.client.split_column";
+  public static final String RPC_FACTORY_CLASS = "vitess.client.factory";
   public static final String HOSTS_DELIM = ",";
 
   private Configuration conf;
