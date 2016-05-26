@@ -131,6 +131,10 @@ class LocalDatabase(object):
 
     cmds = []
     for kpb in self.topology.keyspaces:
+      if kpb.served_from:
+        # redirected keyspaces have no underlying database
+        continue
+
       for spb in kpb.shards:
         db_name = spb.db_name_override
         if not db_name:
@@ -149,6 +153,10 @@ class LocalDatabase(object):
       raise Exception('schema_dir "%s" is not a directory.' % self.schema_dir)
 
     for kpb in self.topology.keyspaces:
+      if kpb.served_from:
+        # redirected keyspaces have no underlying database
+        continue
+
       keyspace = kpb.name
       keyspace_dir = os.path.join(self.schema_dir, keyspace)
       if not os.path.isdir(keyspace_dir):
@@ -177,6 +185,10 @@ class LocalDatabase(object):
     """Populates all shards with randomly generated data."""
 
     for kpb in self.topology.keyspaces:
+      if kpb.served_from:
+        # redirected keyspaces have no underlying database
+        continue
+
       for spb in kpb.shards:
         db_name = spb.db_name_override
         if not db_name:

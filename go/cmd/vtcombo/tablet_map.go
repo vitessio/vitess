@@ -75,7 +75,7 @@ func createTablet(ctx context.Context, ts topo.Server, cell string, uid uint32, 
 	tabletMap[uid] = &tablet{
 		keyspace:   keyspace,
 		shard:      shard,
-		tabletType: topodatapb.TabletType_MASTER,
+		tabletType: tabletType,
 		dbname:     dbname,
 
 		qsc:   controller,
