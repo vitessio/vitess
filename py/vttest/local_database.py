@@ -132,7 +132,10 @@ class LocalDatabase(object):
     cmds = []
     for kpb in self.topology.keyspaces:
       for spb in kpb.shards:
-        cmds.append('create database `%s`' % spb.db_name)
+        db_name = spb.db_name_override
+        if not db_name:
+          db_name = 'vt_%s_%s' % (kpb.name, spb.name)
+        cmds.append('create database `%s`' % db_name)
     logging.info('Creating databases')
     self.mysql_execute(cmds)
 
@@ -165,14 +168,20 @@ class LocalDatabase(object):
 
         # Run the cmds on each shard in the keyspace.
         for spb in kpb.shards:
-          self.mysql_execute(cmds, db_name=spb.db_name)
+          db_name = spb.db_name_override
+          if not db_name:
+            db_name = 'vt_%s_%s' % (kpb.name, spb.name)
+          self.mysql_execute(cmds, db_name=db_name)
 
   def populate_with_random_data(self):
     """Populates all shards with randomly generated data."""
 
     for kpb in self.topology.keyspaces:
       for spb in kpb.shards:
-        self.populate_shard_with_random_data(spb.db_name)
+        db_name = spb.db_name_override
+        if not db_name:
+          db_name = 'vt_%s_%s' % (kpb.name, spb.name)
+        self.populate_shard_with_random_data(db_name)
 
   def populate_shard_with_random_data(self, db_name):
     """Populates the given database with randomly generated data.

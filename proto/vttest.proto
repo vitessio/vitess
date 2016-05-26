@@ -1,13 +1,20 @@
 // This file contains the vttest topology configuration structures.
-// It is much easier to define these in a proto format, so multiple
-// languages can easily use it.
 //
-// VTTestTopology can be passed in from any language that wants to
-// bring up a cluster to py/vttest/run_local_database.py, that will in turn
-// send it to vtcombo (both as proto compact text format).
-// It is recommended to create a VTTestTopology in the test native language,
-// and pass it to after encoding into CompactText (as opposed to writing the
-// encoded version manually, too error-prone).
+// The protobuf message "VTTestTopology" specifies the Vitess and
+// database configuration of the "vttest" test component which can be
+// used in end-to-end tests to test an application against an actual
+// Vitess and MySQL server.
+//
+// To start a "vttest" instance, pass the "VTTestTopology" message,
+// encoded in the protobuf compact text format, to
+// py/vttest/run_local_database.py which in turn will send it to the
+// Vitess test binary called "vtcombo".
+//
+// To encode a "VTTestTopology" message in the protobuf compact text
+// format, create the protobuf in your test's native language first
+// and then use the protobuf library to encode it as text.
+// For an example in Python, see: test/vttest_sample_test.py
+// In go, see: go/vt/vttest/local_cluster_test.go
 
 syntax = "proto3";
 
@@ -15,11 +22,15 @@ package vttest;
 
 // Shard describes a single shard in a keyspace.
 message Shard {
-  // name has to be unique in a keyspace.
+  // name has to be unique in a keyspace. For unsharded keyspaces, it
+  // should be '0'. For sharded keyspace, it should be derived from
+  // the keyrange, like '-80' or '40-80'.
   string name = 1;
 
-  // db_name is the mysql db name for this shard. Has to be globally unique.
-  string db_name = 2;
+  // db_name_override is the mysql db name for this shard. Has to be
+  // globally unique. If not specified, we will by default use
+  // 'vt_<keyspace>_<shard>'.
+  string db_name_override = 2;
 }
 
 // Keyspace describes a single keyspace.

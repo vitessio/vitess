@@ -10,7 +10,7 @@ namespace Vitess\Proto\Vttest {
     public $name = null;
     
     /**  @var string */
-    public $db_name = null;
+    public $db_name_override = null;
     
 
     /** @var \Closure[] */
@@ -28,10 +28,10 @@ namespace Vitess\Proto\Vttest {
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
-      // OPTIONAL STRING db_name = 2
+      // OPTIONAL STRING db_name_override = 2
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 2;
-      $f->name      = "db_name";
+      $f->name      = "db_name_override";
       $f->type      = \DrSlump\Protobuf::TYPE_STRING;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
@@ -81,39 +81,39 @@ namespace Vitess\Proto\Vttest {
     }
     
     /**
-     * Check if <db_name> has a value
+     * Check if <db_name_override> has a value
      *
      * @return boolean
      */
-    public function hasDbName(){
+    public function hasDbNameOverride(){
       return $this->_has(2);
     }
     
     /**
-     * Clear <db_name> value
+     * Clear <db_name_override> value
      *
      * @return \Vitess\Proto\Vttest\Shard
      */
-    public function clearDbName(){
+    public function clearDbNameOverride(){
       return $this->_clear(2);
     }
     
     /**
-     * Get <db_name> value
+     * Get <db_name_override> value
      *
      * @return string
      */
-    public function getDbName(){
+    public function getDbNameOverride(){
       return $this->_get(2);
     }
     
     /**
-     * Set <db_name> value
+     * Set <db_name_override> value
      *
      * @param string $value
      * @return \Vitess\Proto\Vttest\Shard
      */
-    public function setDbName( $value){
+    public function setDbNameOverride( $value){
       return $this->_set(2, $value);
     }
   }

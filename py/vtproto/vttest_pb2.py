@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vttest.proto',
   package='vttest',
   syntax='proto3',
-  serialized_pb=_b('\n\x0cvttest.proto\x12\x06vttest\"&\n\x05Shard\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0f\n\x07\x64\x62_name\x18\x02 \x01(\t\"\x88\x01\n\x08Keyspace\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x1d\n\x06shards\x18\x02 \x03(\x0b\x32\r.vttest.Shard\x12\x1c\n\x14sharding_column_name\x18\x03 \x01(\t\x12\x1c\n\x14sharding_column_type\x18\x04 \x01(\t\x12\x13\n\x0bserved_from\x18\x05 \x01(\t\"5\n\x0eVTTestTopology\x12#\n\tkeyspaces\x18\x01 \x03(\x0b\x32\x10.vttest.Keyspaceb\x06proto3')
+  serialized_pb=_b('\n\x0cvttest.proto\x12\x06vttest\"/\n\x05Shard\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x18\n\x10\x64\x62_name_override\x18\x02 \x01(\t\"\x88\x01\n\x08Keyspace\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x1d\n\x06shards\x18\x02 \x03(\x0b\x32\r.vttest.Shard\x12\x1c\n\x14sharding_column_name\x18\x03 \x01(\t\x12\x1c\n\x14sharding_column_type\x18\x04 \x01(\t\x12\x13\n\x0bserved_from\x18\x05 \x01(\t\"5\n\x0eVTTestTopology\x12#\n\tkeyspaces\x18\x01 \x03(\x0b\x32\x10.vttest.Keyspaceb\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -41,7 +41,7 @@ _SHARD = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='db_name', full_name='vttest.Shard.db_name', index=1,
+      name='db_name_override', full_name='vttest.Shard.db_name_override', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
@@ -60,7 +60,7 @@ _SHARD = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=24,
-  serialized_end=62,
+  serialized_end=71,
 )
 
 
@@ -118,8 +118,8 @@ _KEYSPACE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=65,
-  serialized_end=201,
+  serialized_start=74,
+  serialized_end=210,
 )
 
 
@@ -149,8 +149,8 @@ _VTTESTTOPOLOGY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=203,
-  serialized_end=256,
+  serialized_start=212,
+  serialized_end=265,
 )
 
 _KEYSPACE.fields_by_name['shards'].message_type = _SHARD

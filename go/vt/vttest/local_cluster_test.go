@@ -25,8 +25,7 @@ func TestVitess(t *testing.T) {
 				Name: "test_keyspace",
 				Shards: []*vttestpb.Shard{
 					{
-						Name:   "0",
-						DbName: "test_keyspace",
+						Name: "0",
 					},
 				},
 			},

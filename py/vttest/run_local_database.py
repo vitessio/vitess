@@ -58,7 +58,7 @@ def main(cmdline_options):
         kpb = topology.keyspaces.add(name=keyspace)
         keyspaces[keyspace] = kpb
 
-      keyspaces[keyspace].shards.add(name=shard_name, db_name=db_name)
+      keyspaces[keyspace].shards.add(name=shard_name, db_name_override=db_name)
 
   elif cmdline_options.proto_topo:
     # new style topology, just parse it as text

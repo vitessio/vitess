@@ -277,7 +277,7 @@ func createSourceTablet(t *testing.T, name string, ts topo.Server, keyspace, sha
 			tabletType: topodatapb.TabletType_REPLICA,
 		}, nil
 	})
-	flag.Lookup("tablet_protocol").Value.Set(name)
+	flag.Set("tablet_protocol", name)
 }
 
 // checkBlpPositionList will ask the BinlogPlayerMap for its BlpPositionList,
@@ -353,7 +353,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 	binlogplayer.RegisterClientFactory("test_horizontal", func() binlogplayer.Client {
 		return <-clientSyncChannel
 	})
-	flag.Lookup("binlog_player_protocol").Value.Set("test_horizontal")
+	flag.Set("binlog_player_protocol", "test_horizontal")
 
 	// create the BinlogPlayerMap on the local tablet
 	// (note that local tablet is never in the topology, we don't
@@ -536,7 +536,7 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 	binlogplayer.RegisterClientFactory("test_horizontal_until", func() binlogplayer.Client {
 		return <-clientSyncChannel
 	})
-	flag.Lookup("binlog_player_protocol").Value.Set("test_horizontal_until")
+	flag.Set("binlog_player_protocol", "test_horizontal_until")
 
 	// create the BinlogPlayerMap on the local tablet
 	// (note that local tablet is never in the topology, we don't

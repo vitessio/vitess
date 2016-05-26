@@ -51,15 +51,48 @@ type tablet struct {
 // tabletMap maps the tablet uid to the tablet record
 var tabletMap map[uint32]*tablet
 
+// createTablet creates an individual tablet, with its agent, and adds
+// it to the map. If it's a master tablet, it also issues a TER.
+func createTablet(ctx context.Context, ts topo.Server, cell string, uid uint32, keyspace, shard, dbname string, tabletType topodatapb.TabletType, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs) error {
+	alias := &topodatapb.TabletAlias{
+		Cell: cell,
+		Uid:  uid,
+	}
+	log.Infof("Creating %v tablet %v for %v/%v", tabletType, topoproto.TabletAliasString(alias), keyspace, shard)
+	flag.Set("debug-url-prefix", fmt.Sprintf("/debug-%d", uid))
+
+	controller := tabletserver.NewServer()
+	initTabletType := tabletType
+	if tabletType == topodatapb.TabletType_MASTER {
+		initTabletType = topodatapb.TabletType_REPLICA
+	}
+	agent := tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), controller, dbcfgs, mysqld, keyspace, shard, dbname, strings.ToLower(initTabletType.String()))
+	if tabletType == topodatapb.TabletType_MASTER {
+		if err := agent.TabletExternallyReparented(ctx, ""); err != nil {
+			return fmt.Errorf("TabletExternallyReparented failed on master %v: %v", topoproto.TabletAliasString(alias), err)
+		}
+	}
+	tabletMap[uid] = &tablet{
+		keyspace:   keyspace,
+		shard:      shard,
+		tabletType: topodatapb.TabletType_MASTER,
+		dbname:     dbname,
+
+		qsc:   controller,
+		agent: agent,
+	}
+	return nil
+}
+
 // initTabletMap creates the action agents and associated data structures
 // for all tablets
-func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, formal *vindexes.VSchemaFormal, mycnf *mysqlctl.Mycnf) {
+func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, formal *vindexes.VSchemaFormal, mycnf *mysqlctl.Mycnf) error {
 	tabletMap = make(map[uint32]*tablet)
 
 	ctx := context.Background()
 
 	// disable publishing of stats from query service
-	flag.Lookup("queryserver-config-enable-publish-stats").Value.Set("false")
+	flag.Set("queryserver-config-enable-publish-stats", "false")
 
 	var uid uint32 = 1
 	keyspaceMap := make(map[string]bool)
@@ -67,7 +100,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		slash := strings.IndexByte(entry, '/')
 		column := strings.IndexByte(entry, ':')
 		if slash == -1 || column == -1 {
-			log.Fatalf("invalid topology entry: %v", entry)
+			return fmt.Errorf("invalid topology entry: %v", entry)
 		}
 
 		keyspace := entry[:slash]
@@ -85,7 +118,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 				var err error
 				sct, err = key.ParseKeyspaceIDType(*shardingColumnType)
 				if err != nil {
-					log.Fatalf("parseKeyspaceIDType(%v) failed: %v", *shardingColumnType, err)
+					return fmt.Errorf("parseKeyspaceIDType(%v) failed: %v", *shardingColumnType, err)
 				}
 				scn = *shardingColumnName
 			}
@@ -94,83 +127,40 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 				ShardingColumnName: scn,
 				ShardingColumnType: sct,
 			}); err != nil {
-				log.Fatalf("CreateKeyspace(%v) failed: %v", keyspace, err)
+				return fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
 			}
 			keyspaceMap[keyspace] = true
 			vs := formal.Keyspaces[keyspace]
 			if err := ts.SaveVSchema(ctx, keyspace, &vs); err != nil {
-				log.Fatalf("SaveVSchema failed: %v", err)
+				return fmt.Errorf("SaveVSchema failed: %v", err)
 			}
 		}
 
 		// create the master
-		alias := &topodatapb.TabletAlias{
-			Cell: cell,
-			Uid:  uid,
-		}
-		log.Infof("Creating master tablet %v for %v/%v", topoproto.TabletAliasString(alias), keyspace, shard)
-		flag.Lookup("debug-url-prefix").Value.Set(fmt.Sprintf("/debug-%d", uid))
-		masterController := tabletserver.NewServer()
-		masterAgent := tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), masterController, dbcfgs, mysqld, keyspace, shard, dbname, "replica")
-		if err := masterAgent.TabletExternallyReparented(ctx, ""); err != nil {
-			log.Fatalf("TabletExternallyReparented failed on master: %v", err)
-		}
-		tabletMap[uid] = &tablet{
-			keyspace:   keyspace,
-			shard:      shard,
-			tabletType: topodatapb.TabletType_MASTER,
-			dbname:     dbname,
-
-			qsc:   masterController,
-			agent: masterAgent,
+		if err := createTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_MASTER, mysqld, dbcfgs); err != nil {
+			return err
 		}
 		uid++
 
 		// create a replica slave
-		alias = &topodatapb.TabletAlias{
-			Cell: cell,
-			Uid:  uid,
-		}
-		log.Infof("Creating replica tablet %v for %v/%v", topoproto.TabletAliasString(alias), keyspace, shard)
-		flag.Lookup("debug-url-prefix").Value.Set(fmt.Sprintf("/debug-%d", uid))
-		replicaController := tabletserver.NewServer()
-		tabletMap[uid] = &tablet{
-			keyspace:   keyspace,
-			shard:      shard,
-			tabletType: topodatapb.TabletType_REPLICA,
-			dbname:     dbname,
-
-			qsc:   replicaController,
-			agent: tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), replicaController, dbcfgs, mysqld, keyspace, shard, dbname, "replica"),
+		if err := createTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_REPLICA, mysqld, dbcfgs); err != nil {
+			return err
 		}
 		uid++
 
 		// create a rdonly slave
-		alias = &topodatapb.TabletAlias{
-			Cell: cell,
-			Uid:  uid,
-		}
-		log.Infof("Creating rdonly tablet %v for %v/%v", topoproto.TabletAliasString(alias), keyspace, shard)
-		flag.Lookup("debug-url-prefix").Value.Set(fmt.Sprintf("/debug-%d", uid))
-		rdonlyController := tabletserver.NewServer()
-		tabletMap[uid] = &tablet{
-			keyspace:   keyspace,
-			shard:      shard,
-			tabletType: topodatapb.TabletType_RDONLY,
-			dbname:     dbname,
-
-			qsc:   rdonlyController,
-			agent: tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), rdonlyController, dbcfgs, mysqld, keyspace, shard, dbname, "rdonly"),
+		if err := createTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_RDONLY, mysqld, dbcfgs); err != nil {
+			return err
 		}
 		uid++
 	}
 
-	// Rebuild the SrvKeyspace objects, we we can support range-based
+	// Rebuild the SrvKeyspace objects, so we can support range-based
 	// sharding queries.
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
 	for keyspace := range keyspaceMap {
 		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil); err != nil {
-			log.Fatalf("cannot rebuild %v: %v", keyspace, err)
+			return fmt.Errorf("cannot rebuild %v: %v", keyspace, err)
 		}
 	}
 
@@ -189,19 +179,21 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 	for _, tablet := range tabletMap {
 		tabletInfo, err := ts.GetTablet(ctx, tablet.agent.TabletAlias)
 		if err != nil {
-			log.Fatalf("cannot find tablet: %+v", tablet.agent.TabletAlias)
+			return fmt.Errorf("cannot find tablet: %+v", tablet.agent.TabletAlias)
 		}
 		tmc.RunHealthCheck(ctx, tabletInfo.Tablet)
 	}
+
+	return nil
 }
 
 // initTabletMapProto creates the action agents and associated data structures
 // for all tablets, based on the vttest proto parameter.
-func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, formal *vindexes.VSchemaFormal, mycnf *mysqlctl.Mycnf) {
+func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, formal *vindexes.VSchemaFormal, mycnf *mysqlctl.Mycnf) error {
 	// parse the input topology
 	tpb := &vttestpb.VTTestTopology{}
 	if err := proto.UnmarshalText(topoProto, tpb); err != nil {
-		log.Fatalf("cannot parse topology: %v", err)
+		return fmt.Errorf("cannot parse topology: %v", err)
 	}
 
 	tabletMap = make(map[uint32]*tablet)
@@ -209,7 +201,7 @@ func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlD
 	ctx := context.Background()
 
 	// disable publishing of stats from query service
-	flag.Lookup("queryserver-config-enable-publish-stats").Value.Set("false")
+	flag.Set("queryserver-config-enable-publish-stats", "false")
 
 	// iterate through the keyspaces
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
@@ -217,10 +209,19 @@ func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlD
 	for _, kpb := range tpb.Keyspaces {
 		keyspace := kpb.Name
 
-		// if we have a redirect, create a completely redirected
-		// keyspace and move on
+		// First parse the ShardingColumnType.
+		// Note if it's empty, we will return 'UNSET'.
+		sct, err := key.ParseKeyspaceIDType(kpb.ShardingColumnType)
+		if err != nil {
+			return fmt.Errorf("parseKeyspaceIDType(%v) failed: %v", kpb.ShardingColumnType, err)
+		}
+
 		if kpb.ServedFrom != "" {
+			// if we have a redirect, create a completely redirected
+			// keyspace and no tablet
 			if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
+				ShardingColumnName: kpb.ShardingColumnName,
+				ShardingColumnType: sct,
 				ServedFroms: []*topodatapb.Keyspace_ServedFrom{
 					{
 						TabletType: topodatapb.TabletType_MASTER,
@@ -236,95 +237,51 @@ func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlD
 					},
 				},
 			}); err != nil {
-				log.Fatalf("CreateKeyspace(%v) failed: %v", keyspace, err)
+				return fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
 			}
-			continue
+
+		} else {
+			// create a regular keyspace
+			if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
+				ShardingColumnName: kpb.ShardingColumnName,
+				ShardingColumnType: sct,
+			}); err != nil {
+				return fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
+			}
+
+			// iterate through the shards
+			for _, spb := range kpb.Shards {
+				shard := spb.Name
+				dbname := spb.DbNameOverride
+				if dbname == "" {
+					dbname = fmt.Sprintf("vt_%v_%v", keyspace, shard)
+				}
+				dbcfgs.App.DbName = dbname
+
+				// create the master
+				if err := createTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_MASTER, mysqld, dbcfgs); err != nil {
+					return err
+				}
+				uid++
+
+				// create a replica slave
+				if err := createTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_REPLICA, mysqld, dbcfgs); err != nil {
+					return err
+				}
+				uid++
+
+				// create a rdonly slave
+				if err := createTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_RDONLY, mysqld, dbcfgs); err != nil {
+					return err
+				}
+				uid++
+			}
 		}
 
-		// create a regular keyspace
-		sct, err := key.ParseKeyspaceIDType(kpb.ShardingColumnType)
-		if err != nil {
-			log.Fatalf("parseKeyspaceIDType(%v) failed: %v", kpb.ShardingColumnType, err)
-		}
-		if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
-			ShardingColumnName: kpb.ShardingColumnName,
-			ShardingColumnType: sct,
-		}); err != nil {
-			log.Fatalf("CreateKeyspace(%v) failed: %v", keyspace, err)
-		}
-
-		// iterate through the shards
-		for _, spb := range kpb.Shards {
-			shard := spb.Name
-			dbname := spb.DbName
-			dbcfgs.App.DbName = dbname
-
-			// create the master
-			alias := &topodatapb.TabletAlias{
-				Cell: cell,
-				Uid:  uid,
-			}
-			log.Infof("Creating master tablet %v for %v/%v", topoproto.TabletAliasString(alias), keyspace, shard)
-			flag.Lookup("debug-url-prefix").Value.Set(fmt.Sprintf("/debug-%d", uid))
-			masterController := tabletserver.NewServer()
-			masterAgent := tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), masterController, dbcfgs, mysqld, keyspace, shard, dbname, "replica")
-			if err := masterAgent.TabletExternallyReparented(ctx, ""); err != nil {
-				log.Fatalf("TabletExternallyReparented failed on master: %v", err)
-			}
-			tabletMap[uid] = &tablet{
-				keyspace:   keyspace,
-				shard:      shard,
-				tabletType: topodatapb.TabletType_MASTER,
-				dbname:     dbname,
-
-				qsc:   masterController,
-				agent: masterAgent,
-			}
-			uid++
-
-			// create a replica slave
-			alias = &topodatapb.TabletAlias{
-				Cell: cell,
-				Uid:  uid,
-			}
-			log.Infof("Creating replica tablet %v for %v/%v", topoproto.TabletAliasString(alias), keyspace, shard)
-			flag.Lookup("debug-url-prefix").Value.Set(fmt.Sprintf("/debug-%d", uid))
-			replicaController := tabletserver.NewServer()
-			tabletMap[uid] = &tablet{
-				keyspace:   keyspace,
-				shard:      shard,
-				tabletType: topodatapb.TabletType_REPLICA,
-				dbname:     dbname,
-
-				qsc:   replicaController,
-				agent: tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), replicaController, dbcfgs, mysqld, keyspace, shard, dbname, "replica"),
-			}
-			uid++
-
-			// create a rdonly slave
-			alias = &topodatapb.TabletAlias{
-				Cell: cell,
-				Uid:  uid,
-			}
-			log.Infof("Creating rdonly tablet %v for %v/%v", topoproto.TabletAliasString(alias), keyspace, shard)
-			flag.Lookup("debug-url-prefix").Value.Set(fmt.Sprintf("/debug-%d", uid))
-			rdonlyController := tabletserver.NewServer()
-			tabletMap[uid] = &tablet{
-				keyspace:   keyspace,
-				shard:      shard,
-				tabletType: topodatapb.TabletType_RDONLY,
-				dbname:     dbname,
-
-				qsc:   rdonlyController,
-				agent: tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), rdonlyController, dbcfgs, mysqld, keyspace, shard, dbname, "rdonly"),
-			}
-			uid++
-		}
-
-		// Rebuild the SrvKeyspace object, we we can support
-		// range-based sharding queries.
+		// Rebuild the SrvKeyspace object, so we can support
+		// range-based sharding queries, and export the redirects.
 		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil); err != nil {
-			log.Fatalf("cannot rebuild %v: %v", keyspace, err)
+			return fmt.Errorf("cannot rebuild %v: %v", keyspace, err)
 		}
 	}
 
@@ -343,10 +300,12 @@ func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlD
 	for _, tablet := range tabletMap {
 		tabletInfo, err := ts.GetTablet(ctx, tablet.agent.TabletAlias)
 		if err != nil {
-			log.Fatalf("cannot find tablet: %+v", tablet.agent.TabletAlias)
+			return fmt.Errorf("cannot find tablet: %+v", tablet.agent.TabletAlias)
 		}
 		tmc.RunHealthCheck(ctx, tabletInfo.Tablet)
 	}
+
+	return nil
 }
 
 //

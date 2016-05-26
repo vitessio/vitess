@@ -104,9 +104,15 @@ func main() {
 
 	// tablets configuration and init
 	if *protoTopo != "" {
-		initTabletMapProto(ts, *protoTopo, mysqld, dbcfgs, formal, mycnf)
+		if err := initTabletMapProto(ts, *protoTopo, mysqld, dbcfgs, formal, mycnf); err != nil {
+			log.Errorf("initTabletMapProto failed: %v", err)
+			exit.Return(1)
+		}
 	} else {
-		initTabletMap(ts, *topology, mysqld, dbcfgs, formal, mycnf)
+		if err := initTabletMap(ts, *topology, mysqld, dbcfgs, formal, mycnf); err != nil {
+			log.Errorf("initTabletMap failed: %v", err)
+			exit.Return(1)
+		}
 	}
 
 	// vtgate configuration and init

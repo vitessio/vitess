@@ -57,8 +57,8 @@ class TestMysqlctl(unittest.TestCase):
 
     topology = vttest_pb2.VTTestTopology()
     keyspace = topology.keyspaces.add(name='test_keyspace')
-    keyspace.shards.add(name='-80', db_name='test_keyspace_0')
-    keyspace.shards.add(name='80-', db_name='test_keyspace_1')
+    keyspace.shards.add(name='-80')
+    keyspace.shards.add(name='80-')
 
     # launch a backend database based on the provided topology and schema
     port = environment.reserve_ports(1)
