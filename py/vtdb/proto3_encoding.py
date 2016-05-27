@@ -363,6 +363,8 @@ class Proto3Connection(object):
 
     else:
       request = vtgate_pb2.ExecuteRequest()
+      if keyspace_name:
+        request.keyspace = keyspace_name
       routing_kwargs = {}
       method_name = 'Execute'
 
@@ -500,6 +502,8 @@ class Proto3Connection(object):
 
     else:
       request = vtgate_pb2.StreamExecuteRequest()
+      if keyspace_name:
+        request.keyspace = keyspace_name
       routing_kwargs = {}
       method_name = 'StreamExecute'
 
