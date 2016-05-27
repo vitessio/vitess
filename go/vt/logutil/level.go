@@ -9,8 +9,9 @@ func init() {
 	if threshold == nil {
 		panic("the logging module doesn't specify a stderrthreshold flag")
 	}
-	if err := threshold.Value.Set("WARNING"); err != nil {
+	const warningLevel = "1"
+	if err := threshold.Value.Set(warningLevel); err != nil {
 		panic(err)
 	}
-	threshold.DefValue = "WARNING"
+	threshold.DefValue = warningLevel
 }

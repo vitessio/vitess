@@ -475,6 +475,13 @@ class TestVTGateFunctions(unittest.TestCase):
     result = shard_1_master.mquery('vt_user', 'select id, name from vt_user')
     self.assertEqual(result, ((6L, 'test 6'),))
 
+    # test passing in the keyspace in the cursor
+    lcursor = vtgate_conn.cursor(
+        tablet_type='master', keyspace='lookup', writable=True)
+    with self.assertRaisesRegexp(
+        dbexceptions.DatabaseError, '.*table vt_user not found in schema.*'):
+      lcursor.execute('select id, name from vt_user', {})
+
   def test_user2(self):
     # user2 is for testing non-unique vindexes
     vtgate_conn = get_connection()

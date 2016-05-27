@@ -25,8 +25,7 @@ refers to creating shards that each cover a particular range of keyspace IDs.
 
 Often, the keyspace ID is computed as the hash of some column in your data,
 such as the user ID. This would result in randomly spreading users across
-the range-based shards, a technique called
-[consistent hashing](https://en.wikipedia.org/wiki/Consistent_hashing).
+the range-based shards.
 Using this technique means you can split a given shard by replacing it with two
 or more new shards that combine to cover the original range of keyspace IDs,
 without having to move any records in other shards.

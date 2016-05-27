@@ -84,6 +84,7 @@
             <include>topodata.proto</include>
             <include>vtgate.proto</include>
             <include>vtrpc.proto</include>
+            <include>vttest.proto</include>
           </includes>
         </configuration>
         <executions>

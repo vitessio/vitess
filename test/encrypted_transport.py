@@ -336,6 +336,48 @@ class TestSecure(unittest.TestCase):
       self.assertIn('cannot run PASS_SELECT on table', s)
     conn.close()
 
+    # now restart vtgate in the mode where we don't use SSL
+    # for client connections, but we copy effective caller id
+    # into immediate caller id.
+    utils.vtgate.kill()
+    utils.VtGate().start(extra_args=tabletconn_extra_args('vttablet-client-1')+
+                         ['-grpc_use_effective_callerid'])
+
+    protocol, addr = utils.vtgate.rpc_endpoint(python=True)
+    conn = vtgate_client.connect(protocol, addr, 30.0)
+    cursor = conn.cursor(tablet_type='master', keyspace='test_keyspace',
+                         shards=['0'])
+
+    # not passing any immediate caller id should fail as using
+    # the unsecure user "unsecure grpc client"
+    cursor.set_effective_caller_id(None)
+    try:
+      cursor.execute('select * from vt_insert_test', {})
+      self.fail('Execute went through')
+    except dbexceptions.DatabaseError, e:
+      s = str(e)
+      self.assertIn('table acl error', s)
+      self.assertIn('cannot run PASS_SELECT on table', s)
+      self.assertIn('unsecure grpc client', s)
+
+    # 'vtgate client 1' is authorized to access vt_insert_test
+    cursor.set_effective_caller_id(vtgate_client.CallerID(
+        principal='vtgate client 1'))
+    cursor.execute('select * from vt_insert_test', {})
+
+    # 'vtgate client 2' is not authorized to access vt_insert_test
+    cursor.set_effective_caller_id(vtgate_client.CallerID(
+        principal='vtgate client 2'))
+    try:
+      cursor.execute('select * from vt_insert_test', {})
+      self.fail('Execute went through')
+    except dbexceptions.DatabaseError, e:
+      s = str(e)
+      self.assertIn('table acl error', s)
+      self.assertIn('cannot run PASS_SELECT on table', s)
+
+    conn.close()
+
 
 if __name__ == '__main__':
   utils.main()

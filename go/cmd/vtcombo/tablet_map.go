@@ -208,6 +208,7 @@ func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlD
 	var uid uint32 = 1
 	for _, kpb := range tpb.Keyspaces {
 		keyspace := kpb.Name
+		vs := formal.Keyspaces[keyspace]
 
 		// First parse the ShardingColumnType.
 		// Note if it's empty, we will return 'UNSET'.
@@ -239,7 +240,9 @@ func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlD
 			}); err != nil {
 				return fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
 			}
-
+			if err := ts.SaveVSchema(ctx, keyspace, &vs); err != nil {
+				return fmt.Errorf("SaveVSchema failed: %v", err)
+			}
 		} else {
 			// create a regular keyspace
 			if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
@@ -247,6 +250,9 @@ func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlD
 				ShardingColumnType: sct,
 			}); err != nil {
 				return fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
+			}
+			if err := ts.SaveVSchema(ctx, keyspace, &vs); err != nil {
+				return fmt.Errorf("SaveVSchema failed: %v", err)
 			}
 
 			// iterate through the shards

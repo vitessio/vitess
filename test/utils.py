@@ -759,11 +759,11 @@ def run_vtctl_json(clargs, auto_log=True):
 
 def get_log_level():
   if options.verbose == 2:
-    return 'INFO'
+    return '0'
   elif options.verbose == 1:
-    return 'WARNING'
+    return '1'
   else:
-    return 'ERROR'
+    return '2'
 
 
 def set_log_level(verbose):

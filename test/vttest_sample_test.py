@@ -176,7 +176,7 @@ class TestMysqlctl(unittest.TestCase):
         environment.binary_args('vtctlclient') +
         ['-vtctl_client_protocol', protocol,
          '-server', vtgate_addr,
-         '-stderrthreshold', 'INFO',
+         '-stderrthreshold', '0',
          'ListAllTablets', 'test',
         ], trap_output=True)
     num_master = 0

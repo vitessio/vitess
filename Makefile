@@ -80,7 +80,7 @@ site_integration_test:
 	go run test.go -docker=false -tag=site_test
 
 java_test:
-	go install ./go/cmd/vtgateclienttest
+	go install ./go/cmd/vtgateclienttest ./go/cmd/vtcombo
 	mvn -f java/pom.xml clean verify
 
 php_test:
