@@ -197,7 +197,7 @@ func (plr *Planner) ServeHTTP(response http.ResponseWriter, request *http.Reques
 		}
 	} else if request.URL.Path == "/debug/vschema" {
 		response.Header().Set("Content-Type", "application/json; charset=utf-8")
-		b, err := json.MarshalIndent(plr.VSchema(), "", " ")
+		b, err := json.MarshalIndent(plr.VSchema().Keyspaces, "", " ")
 		if err != nil {
 			response.Write([]byte(err.Error()))
 			return

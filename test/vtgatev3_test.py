@@ -116,18 +116,18 @@ vschema = {
         "name_user2_map": {
           "type": "lookup_hash",
           "params": {
-            "Table": "name_user2_map",
-            "From": "name",
-            "To": "user2_id"
+            "table": "name_user2_map",
+            "from": "name",
+            "to": "user2_id"
           },
           "owner": "vt_user2"
         },
         "music_user_map": {
           "type": "lookup_hash_unique",
           "params": {
-            "Table": "music_user_map",
-            "From": "music_id",
-            "To": "user_id"
+            "table": "music_user_map",
+            "from": "music_id",
+            "to": "user_id"
           },
           "owner": "vt_music"
         }

@@ -18,18 +18,18 @@ import (
 // used for building routing plans.
 type VSchema struct {
 	tables    map[string]*Table
-	Keyspaces map[string]*KeyspaceSchema
+	Keyspaces map[string]*KeyspaceSchema `json:"keyspaces"`
 }
 
 // Table represents a table in VSchema.
 type Table struct {
-	IsSequence     bool
-	Name           string
-	Keyspace       *Keyspace
-	ColumnVindexes []*ColumnVindex
-	Ordered        []*ColumnVindex
-	Owned          []*ColumnVindex
-	AutoIncrement  *AutoIncrement
+	IsSequence     bool            `json:"is_sequence,omitempty"`
+	Name           string          `json:"name"`
+	Keyspace       *Keyspace       `json:"-"`
+	ColumnVindexes []*ColumnVindex `json:"column_vindexes,omitempty"`
+	Ordered        []*ColumnVindex `json:"ordered,omitempty"`
+	Owned          []*ColumnVindex `json:"owned,omitempty"`
+	AutoIncrement  *AutoIncrement  `json:"auto_increment,omitempty"`
 }
 
 // Keyspace contains the keyspcae info for each Table.
@@ -40,11 +40,11 @@ type Keyspace struct {
 
 // ColumnVindex contains the index info for each index of a table.
 type ColumnVindex struct {
-	Column cistring.CIString
-	Type   string
-	Name   string
-	Owned  bool
-	Vindex Vindex
+	Column cistring.CIString `json:"column"`
+	Type   string            `json:"type"`
+	Name   string            `json:"name"`
+	Owned  bool              `json:"owned,omitempty"`
+	Vindex Vindex            `json:"vindex"`
 }
 
 // KeyspaceSchema contains the schema(table) for a keyspace.
@@ -53,13 +53,24 @@ type KeyspaceSchema struct {
 	Tables   map[string]*Table
 }
 
+// MarshalJSON returns a JSON representation of KeyspaceSchema.
+func (ks *KeyspaceSchema) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Sharded bool              `json:"sharded,omitempty"`
+		Tables  map[string]*Table `json:"tables,omitempty"`
+	}{
+		Sharded: ks.Keyspace.Sharded,
+		Tables:  ks.Tables,
+	})
+}
+
 // AutoIncrement contains the auto-inc information for a table.
 type AutoIncrement struct {
-	Column   cistring.CIString
-	Sequence *Table
+	Column   cistring.CIString `json:"column"`
+	Sequence *Table            `json:"sequence"`
 	// ColumnVindexNum is the index of the ColumnVindex
 	// if the column is also a ColumnVindex. Otherwise, it's -1.
-	ColumnVindexNum int
+	ColumnVindexNum int `json:"column_vindex_num"`
 }
 
 // BuildVSchema builds a VSchema from a VSchemaFormal.

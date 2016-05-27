@@ -59,7 +59,7 @@ func (vc *vcursor) Execute(query string, bindvars map[string]interface{}) (*sqlt
 var lhm Vindex
 
 func init() {
-	h, err := CreateVindex("lookup_hash", "nn", map[string]string{"Table": "t", "From": "fromc", "To": "toc"})
+	h, err := CreateVindex("lookup_hash", "nn", map[string]string{"table": "t", "from": "fromc", "to": "toc"})
 	if err != nil {
 		panic(err)
 	}

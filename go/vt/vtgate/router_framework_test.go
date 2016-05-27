@@ -23,18 +23,18 @@ var routerVSchema = `
 			"type": "lookup_hash_unique",
 			"owner": "music",
 			"params": {
-				"Table": "music_user_map",
-				"From": "music_id",
-				"To": "user_id"
+				"table": "music_user_map",
+				"from": "music_id",
+				"to": "user_id"
 			}
 		},
 		"name_user_map": {
 			"type": "lookup_hash",
 			"owner": "user",
 			"params": {
-				"Table": "name_user_map",
-				"From": "name",
-				"To": "user_id"
+				"table": "name_user_map",
+				"from": "name",
+				"to": "user_id"
 			}
 		},
 		"idx1": {
