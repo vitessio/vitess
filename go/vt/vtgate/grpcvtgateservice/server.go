@@ -6,6 +6,8 @@
 package grpcvtgateservice
 
 import (
+	"flag"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
@@ -29,6 +31,10 @@ const (
 	unsecureClient = "unsecure grpc client"
 )
 
+var (
+	useEffective = flag.Bool("grpc_use_effective_callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
+)
+
 // VTGate is the public structure that is exported via gRPC
 type VTGate struct {
 	server vtgateservice.VTGateService
@@ -36,26 +42,26 @@ type VTGate struct {
 
 // immediateCallerID tries to extract the common name of the certificate
 // that was used to connect to vtgate. If it fails for any reason,
-// it will return unsecureClient. That immediate caller id is then inserted
+// it will return "". That immediate caller id is then inserted
 // into a Context, and will be used when talking to vttablet.
 // vttablet in turn can use table ACLs to validate access is authorized.
 func immediateCallerID(ctx context.Context) string {
 	p, ok := peer.FromContext(ctx)
 	if !ok {
-		return unsecureClient
+		return ""
 	}
 	if p.AuthInfo == nil {
-		return unsecureClient
+		return ""
 	}
 	tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
 	if !ok {
-		return unsecureClient
+		return ""
 	}
 	if len(tlsInfo.State.VerifiedChains) < 1 {
-		return unsecureClient
+		return ""
 	}
 	if len(tlsInfo.State.VerifiedChains[0]) < 1 {
-		return unsecureClient
+		return ""
 	}
 	cert := tlsInfo.State.VerifiedChains[0][0]
 	return cert.Subject.CommonName
@@ -64,9 +70,16 @@ func immediateCallerID(ctx context.Context) string {
 // withCallerIDContext creates a context that extracts what we need
 // from the incoming call and can be forwarded for use when talking to vttablet.
 func withCallerIDContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerID) context.Context {
+	immediate := immediateCallerID(ctx)
+	if immediate == "" && *useEffective && effectiveCallerID != nil {
+		immediate = effectiveCallerID.Principal
+	}
+	if immediate == "" {
+		immediate = unsecureClient
+	}
 	return callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		effectiveCallerID,
-		callerid.NewImmediateCallerID(immediateCallerID(ctx)))
+		callerid.NewImmediateCallerID(immediate))
 }
 
 // Execute is the RPC version of vtgateservice.VTGateService method

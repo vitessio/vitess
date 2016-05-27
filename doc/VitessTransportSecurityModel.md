@@ -45,6 +45,8 @@ queries. There are two different Caller IDs:
 
 ## gRPC Transport
 
+### gRPC Encrypted Transport
+
 When using gRPC transport, Vitess can use the usual TLS security features
 (familiarity with SSL / TLS is necessary here):
 
@@ -70,12 +72,33 @@ Note this is not enabled by default, as usually the different Vitess servers
 will run on a private network (in a Cloud environment, usually all local traffic
 is already secured over a VPN, for instance).
 
+### Certificates and Caller ID
+
 Additionally, if a client uses a certificate to connect to Vitess (vtgate), the
 common name of that certificate is passed to vttablet as the Immediate Caller
 ID. It can then be used by table ACLs, to grant read, write or admin access to
 individual tables. This should be used if different clients should have
 different access to Vitess tables.
 
+### Caller ID Override
+
+In a private network, where SSL security is not required, it might still be
+desirable to use table ACLs as a safety mechanism to prevent a user from
+accessing sensitive data. The gRPC connector provides the
+grpc\_use\_effective\_callerid flag for this purpose: if specified when running
+vtgate, the Effective Caller ID's principal is copied into the Immediate Caller
+ID, and then used throughout the Vitess stack.
+
+**Important**: this is not secure. Any user code can provide any value for
+the Effective Caller ID's principal, and therefore access any data. This is
+intended as a safety feature to make sure some applications do not misbehave.
+Therefore, this flag is not enabled by default.
+
+### Example
+
 For a concrete example, see
 [test/encrypted\_transport.py](https://github.com/youtube/vitess/blob/master/test/encrypted_transport.py)
-in the source tree.
+in the source tree. It first sets up all the certificates, and some table ACLs,
+then uses the python client to connect with SSL. It also exercises the
+grpc\_use\_effective\_callerid flag, by connecting without SSL.
+
