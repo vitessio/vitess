@@ -35,6 +35,10 @@ func (fhc *fakeHealthCheck) Reset() {
 	fhc.items = make(map[string]*fhcItem)
 }
 
+// RegisterStats is part of the HealthCheck interface.
+func (fhc *fakeHealthCheck) RegisterStats() {
+}
+
 // SetListener sets the listener for healthcheck updates.
 func (fhc *fakeHealthCheck) SetListener(listener discovery.HealthCheckStatsListener) {
 }

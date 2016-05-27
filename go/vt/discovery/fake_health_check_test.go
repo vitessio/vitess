@@ -16,6 +16,10 @@ type fakeHealthCheck struct {
 	tablets map[string]*topodatapb.Tablet
 }
 
+// RegisterStats is part of the HealthCheck interface.
+func (*fakeHealthCheck) RegisterStats() {
+}
+
 // SetListener sets the listener for healthcheck updates.
 func (*fakeHealthCheck) SetListener(listener HealthCheckStatsListener) {
 }

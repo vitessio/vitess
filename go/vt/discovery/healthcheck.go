@@ -81,6 +81,9 @@ func (e *TabletStats) String() string {
 
 // HealthCheck defines the interface of health checking module.
 type HealthCheck interface {
+	// RegisterStats registers the connection counts stats.
+	// It can only be called on one Healthcheck object per process.
+	RegisterStats()
 	// SetListener sets the listener for healthcheck updates. It should not block.
 	// Note that the default implementation requires to set the listener before
 	// any tablets are added to the healthcheck.
@@ -103,7 +106,7 @@ type HealthCheck interface {
 }
 
 // NewHealthCheck creates a new HealthCheck object.
-func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration, healthCheckTimeout time.Duration, statsSuffix string) HealthCheck {
+func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration, healthCheckTimeout time.Duration) HealthCheck {
 	hc := &HealthCheckImpl{
 		addrToConns:        make(map[string]*healthCheckConn),
 		targetToTablets:    make(map[string]map[string]map[topodatapb.TabletType][]*topodatapb.Tablet),
@@ -178,6 +181,11 @@ type healthCheckConn struct {
 	stats                               *querypb.RealtimeStats
 	lastError                           error
 	lastResponseTimestamp               time.Time // timestamp of the last healthcheck response
+}
+
+// RegisterStats registers the connection counts stats
+func (hc *HealthCheckImpl) RegisterStats() {
+	stats.NewMultiCountersFunc("HealthcheckConnections", []string{"keyspace", "shardname", "tablettype"}, hc.servingConnStats)
 }
 
 // servingConnStats returns the number of serving tablets per keyspace/shard/tablet type.

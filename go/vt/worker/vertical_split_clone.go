@@ -328,7 +328,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet.Tablet)
 
 	// Initialize healthcheck and add destination shards to it.
-	vscw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout, "" /* statsSuffix */)
+	vscw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
 	watcher := discovery.NewShardReplicationWatcher(vscw.wr.TopoServer(), vscw.healthCheck,
 		vscw.cell, vscw.destinationKeyspace, vscw.destinationShard,
 		*healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
