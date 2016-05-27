@@ -153,7 +153,7 @@ public class Row {
    *
    * @param columnIndex 1-based column number (0 is invalid)
    */
-  protected ByteString getRawValue(int columnIndex) throws SQLException {
+  public ByteString getRawValue(int columnIndex) throws SQLException {
     checkArgument(columnIndex >= 1, "columnIndex out of range: %s", columnIndex);
     if (columnIndex > values.size()) {
       throw new SQLDataException("invalid columnIndex: " + columnIndex);

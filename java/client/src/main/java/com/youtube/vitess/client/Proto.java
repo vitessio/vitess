@@ -64,8 +64,8 @@ public class Proto {
         case UNAUTHENTICATED:
           throw new SQLInvalidAuthorizationSpecException(error.toString(), sqlState, errno);
         default:
-          throw new SQLNonTransientException(
-              "Vitess RPC error: " + error.toString(), sqlState, errno);
+          throw new SQLNonTransientException("Vitess RPC error: " + error.toString(), sqlState,
+              errno);
       }
     }
   }
@@ -125,6 +125,10 @@ public class Proto {
   }
 
   public static BindVariable buildBindVariable(Object value) {
+    if (value instanceof BindVariable) {
+      return (BindVariable) value;
+    }
+
     BindVariable.Builder builder = BindVariable.newBuilder();
 
     if (value instanceof Iterable<?>) {
@@ -153,11 +157,8 @@ public class Proto {
   public static EntityId buildEntityId(byte[] keyspaceId, Object value) {
     TypedValue tval = new TypedValue(value);
 
-    return EntityId.newBuilder()
-        .setKeyspaceId(ByteString.copyFrom(keyspaceId))
-        .setType(tval.type)
-        .setValue(tval.value)
-        .build();
+    return EntityId.newBuilder().setKeyspaceId(ByteString.copyFrom(keyspaceId)).setType(tval.type)
+        .setValue(tval.value).build();
   }
 
   /**
@@ -177,40 +178,35 @@ public class Proto {
   /**
    * bindShardQuery creates a BoundShardQuery.
    */
-  public static BoundShardQuery bindShardQuery(
-      String keyspace, Iterable<String> shards, BoundQuery query) {
-    return BoundShardQuery.newBuilder()
-        .setKeyspace(keyspace)
-        .addAllShards(shards)
-        .setQuery(query)
+  public static BoundShardQuery bindShardQuery(String keyspace, Iterable<String> shards,
+      BoundQuery query) {
+    return BoundShardQuery.newBuilder().setKeyspace(keyspace).addAllShards(shards).setQuery(query)
         .build();
   }
 
   /**
    * bindShardQuery creates a BoundShardQuery.
    */
-  public static BoundShardQuery bindShardQuery(
-      String keyspace, Iterable<String> shards, String query, Map<String, ?> vars) {
+  public static BoundShardQuery bindShardQuery(String keyspace, Iterable<String> shards,
+      String query, Map<String, ?> vars) {
     return bindShardQuery(keyspace, shards, bindQuery(query, vars));
   }
 
   /**
    * bindKeyspaceIdQuery creates a BoundKeyspaceIdQuery.
    */
-  public static BoundKeyspaceIdQuery bindKeyspaceIdQuery(
-      String keyspace, Iterable<byte[]> keyspaceIds, BoundQuery query) {
-    return BoundKeyspaceIdQuery.newBuilder()
-        .setKeyspace(keyspace)
+  public static BoundKeyspaceIdQuery bindKeyspaceIdQuery(String keyspace,
+      Iterable<byte[]> keyspaceIds, BoundQuery query) {
+    return BoundKeyspaceIdQuery.newBuilder().setKeyspace(keyspace)
         .addAllKeyspaceIds(Iterables.transform(keyspaceIds, BYTE_ARRAY_TO_BYTE_STRING))
-        .setQuery(query)
-        .build();
+        .setQuery(query).build();
   }
 
   /**
    * bindKeyspaceIdQuery creates a BoundKeyspaceIdQuery.
    */
-  public static BoundKeyspaceIdQuery bindKeyspaceIdQuery(
-      String keyspace, Iterable<byte[]> keyspaceIds, String query, Map<String, ?> vars) {
+  public static BoundKeyspaceIdQuery bindKeyspaceIdQuery(String keyspace,
+      Iterable<byte[]> keyspaceIds, String query, Map<String, ?> vars) {
     return bindKeyspaceIdQuery(keyspace, keyspaceIds, bindQuery(query, vars));
   }
 
@@ -257,9 +253,7 @@ public class Proto {
         // Bytes
         this.type = Query.Type.VARBINARY;
         this.value = ByteString.copyFrom((byte[]) value);
-      } else if (value instanceof Integer
-          || value instanceof Long
-          || value instanceof Short
+      } else if (value instanceof Integer || value instanceof Long || value instanceof Short
           || value instanceof Byte) {
         // Int32, Int64, Short, Byte
         this.type = Query.Type.INT64;

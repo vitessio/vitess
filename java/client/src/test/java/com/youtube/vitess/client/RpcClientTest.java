@@ -417,7 +417,7 @@ public abstract class RpcClientTest {
       } catch (Exception e) {
         Assert.assertEquals(cls, e.getClass());
 
-        if (error == "integrity error") {
+        if (error.equals("integrity error")) {
           // The mock test server sends back errno:1062 sqlstate:23000 for this case.
           // Make sure these values get properly extracted by the client.
           SQLException sqlException = (SQLException) e;
@@ -435,7 +435,7 @@ public abstract class RpcClientTest {
       } catch (Exception e) {
         Assert.assertEquals(cls, e.getClass());
 
-        if (error == "integrity error") {
+        if (error.equals("integrity error")) {
           // The mock test server sends back errno:1062 sqlstate:23000 for this case.
           // Make sure these values get properly extracted by the client.
           SQLException sqlException = (SQLException) e;
