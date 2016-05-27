@@ -430,13 +430,14 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 			},
 		},
 	})
+
+	// Mock out the throttler settings result.
+	vtClientMock.AddResult(mockedThrottlerSettings)
+
 	vtClientSyncChannel <- vtClientMock
 	if !mysqlDaemon.BinlogPlayerEnabled {
 		t.Errorf("mysqlDaemon.BinlogPlayerEnabled should be true")
 	}
-
-	// Mock out the throttler settings result.
-	vtClientMock.AddResult(mockedThrottlerSettings)
 
 	// the client will then try to connect to the remote tablet.
 	// give it what it needs.
@@ -599,10 +600,6 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 	}
 	vtClientMock := binlogplayer.NewVtClientMock()
 	vtClientMock.AddResult(startPos)
-	vtClientSyncChannel <- vtClientMock
-	if !mysqlDaemon.BinlogPlayerEnabled {
-		t.Errorf("mysqlDaemon.BinlogPlayerEnabled should be true")
-	}
 
 	// Mock out the throttler settings result.
 	vtClientMock.AddResult(mockedThrottlerSettings)
@@ -610,6 +607,11 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 	// restarted again with the RunUntil() call.
 	vtClientMock.AddResult(startPos)
 	vtClientMock.AddResult(mockedThrottlerSettings)
+
+	vtClientSyncChannel <- vtClientMock
+	if !mysqlDaemon.BinlogPlayerEnabled {
+		t.Errorf("mysqlDaemon.BinlogPlayerEnabled should be true")
+	}
 
 	// the client will then try to connect to the remote tablet.
 	// give it what it needs.
@@ -810,14 +812,14 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 			},
 		},
 	})
-	vtClientSyncChannel <- vtClientMock
-	if !mysqlDaemon.BinlogPlayerEnabled {
-		t.Errorf("mysqlDaemon.BinlogPlayerEnabled should be true")
-	}
 
 	// Mock out the throttler settings result.
 	vtClientMock.AddResult(mockedThrottlerSettings)
 
+	vtClientSyncChannel <- vtClientMock
+	if !mysqlDaemon.BinlogPlayerEnabled {
+		t.Errorf("mysqlDaemon.BinlogPlayerEnabled should be true")
+	}
 	// the client will then try to connect to the remote tablet.
 	// give it what it needs.
 	fbc := newFakeBinlogClient(t, 100)
