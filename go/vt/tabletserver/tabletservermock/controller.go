@@ -6,6 +6,8 @@
 package tabletservermock
 
 import (
+	"sync"
+
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -38,6 +40,9 @@ type StateChange struct {
 
 // Controller is a mock tabletserver.Controller
 type Controller struct {
+	// mu protects the fields in this structure
+	mu sync.Mutex
+
 	// CurrentTarget stores the last known target
 	CurrentTarget querypb.Target
 
@@ -84,12 +89,18 @@ func (tqsc *Controller) AddStatusPart() {
 
 // InitDBConfig is part of the tabletserver.Controller interface
 func (tqsc *Controller) InitDBConfig(target querypb.Target, dbConfigs dbconfigs.DBConfigs, schemaOverrides []tabletserver.SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+
 	tqsc.CurrentTarget = target
 	return nil
 }
 
 // SetServingType is part of the tabletserver.Controller interface
 func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (bool, error) {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+
 	stateChanged := false
 	if tqsc.SetServingTypeError == nil {
 		stateChanged = tqsc.QueryServiceEnabled != serving || tqsc.CurrentTarget.TabletType != tabletType
@@ -108,16 +119,25 @@ func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, serving
 
 // IsServing is part of the tabletserver.Controller interface
 func (tqsc *Controller) IsServing() bool {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+
 	return tqsc.QueryServiceEnabled
 }
 
 // IsHealthy is part of the tabletserver.Controller interface
 func (tqsc *Controller) IsHealthy() error {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+
 	return tqsc.IsHealthyError
 }
 
 // ReloadSchema is part of the tabletserver.Controller interface
 func (tqsc *Controller) ReloadSchema() {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+
 	tqsc.ReloadSchemaCount++
 }
 
@@ -150,6 +170,9 @@ func (tqsc *Controller) QueryServiceStats() *tabletserver.QueryServiceStats {
 
 // BroadcastHealth is part of the tabletserver.Controller interface
 func (tqsc *Controller) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats) {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+
 	tqsc.BroadcastData <- &BroadcastData{
 		TERTimestamp:  terTimestamp,
 		RealtimeStats: *stats,
@@ -159,5 +182,8 @@ func (tqsc *Controller) BroadcastHealth(terTimestamp int64, stats *querypb.Realt
 
 // EnterLameduck implements tabletserver.Controller.
 func (tqsc *Controller) EnterLameduck() {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+
 	tqsc.IsInLameduck = true
 }
