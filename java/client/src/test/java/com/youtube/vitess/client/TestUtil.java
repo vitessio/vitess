@@ -11,6 +11,8 @@ import org.apache.log4j.Logger;
 import org.joda.time.Duration;
 import org.junit.Assert;
 
+import vttest.Vttest.VTTestTopology;
+
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.lang.reflect.Type;
@@ -72,7 +74,7 @@ public class TestUtil {
     testEnv.clearTestOutput();
   }
 
-  public static TestEnv getTestEnv(String keyspace, String topology) {
+  public static TestEnv getTestEnv(String keyspace, VTTestTopology topology) {
     String testEnvClass = System.getProperty(PROPERTY_KEY_CLIENT_TEST_ENV);
     try {
       Class<?> clazz = Class.forName(testEnvClass);

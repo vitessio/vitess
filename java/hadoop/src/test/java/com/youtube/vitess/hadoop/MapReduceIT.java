@@ -22,6 +22,10 @@ import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 
+import vttest.Vttest.Keyspace;
+import vttest.Vttest.Shard;
+import vttest.Vttest.VTTestTopology;
+
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.sql.SQLException;
@@ -182,7 +186,10 @@ public class MapReduceIT extends HadoopTestCase {
    * Create env with two shards each having a master, replica, and rdonly.
    */
   static TestEnv getTestEnv() {
-    String topology = "test_keyspace/-80:test_keyspace_0,test_keyspace/80-:test_keyspace_1";
+    Keyspace keyspace = Keyspace.newBuilder().setName("test_keyspace")
+        .addShards(Shard.newBuilder().setName("-80").build())
+        .addShards(Shard.newBuilder().setName("80-").build()).build();
+    VTTestTopology topology = VTTestTopology.newBuilder().addKeyspaces(keyspace).build();
     TestEnv env = TestUtil.getTestEnv("test_keyspace", topology);
     return env;
   }

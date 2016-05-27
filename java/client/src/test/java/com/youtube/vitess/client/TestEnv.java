@@ -2,6 +2,8 @@ package com.youtube.vitess.client;
 
 import org.apache.commons.io.FileUtils;
 
+import vttest.Vttest.VTTestTopology;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -12,17 +14,17 @@ import java.util.List;
  * Helper class to hold the configurations for VtGate setup used in integration tests
  */
 public class TestEnv {
-  private String topology;
+  private VTTestTopology topology;
   private String keyspace;
   private String outputPath;
   private Process pythonScriptProcess;
   private int port;
 
-  public void setTopology(String topology) {
+  public void setTopology(VTTestTopology topology) {
     this.topology = topology;
   }
 
-  public String getTopology() {
+  public VTTestTopology getTopology() {
     return this.topology;
   }
 
@@ -63,8 +65,8 @@ public class TestEnv {
     command.add(vtTop + "/py/vttest/run_local_database.py");
     command.add("--port");
     command.add(Integer.toString(port));
-    command.add("--topology");
-    command.add(getTopology());
+    command.add("--proto_topo");
+    command.add(getTopology().toString());
     command.add("--schema_dir");
     command.add(schemaDir);
     command.add("--vschema");
