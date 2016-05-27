@@ -114,9 +114,9 @@ type lookup struct {
 }
 
 func (lkp *lookup) Init(m map[string]string) {
-	t := m["Table"]
-	from := m["From"]
-	to := m["To"]
+	t := m["table"]
+	from := m["from"]
+	to := m["to"]
 
 	lkp.Table = t
 	lkp.From = from
