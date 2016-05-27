@@ -45,7 +45,6 @@ import (
 )
 
 var (
-	hcConnCounters  *stats.MultiCountersFunc
 	hcErrorCounters *stats.MultiCounters
 )
 
@@ -112,9 +111,6 @@ func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration, healthC
 		retryDelay:         retryDelay,
 		healthCheckTimeout: healthCheckTimeout,
 		closeChan:          make(chan struct{}),
-	}
-	if hcConnCounters == nil {
-		hcConnCounters = stats.NewMultiCountersFunc("HealthcheckConnections"+statsSuffix, []string{"keyspace", "shardname", "tablettype"}, hc.servingConnStats)
 	}
 
 	hc.wg.Add(1)
