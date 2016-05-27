@@ -891,7 +891,7 @@ func TestValidate(t *testing.T) {
 	}
 }
 
-func TestVSchemaJSON(t *testing.T) {
+func TestVSchemaPBJSON(t *testing.T) {
 	in := `
 	{
 		"sharded": true,
@@ -942,6 +942,90 @@ func TestVSchemaJSON(t *testing.T) {
 		gs, _ := json.Marshal(got)
 		ws, _ := json.Marshal(want)
 		t.Errorf("VSchemaFormalForKeyspace():\n%s, want\n%s", gs, ws)
+	}
+}
+
+func TestVSchemaJSON(t *testing.T) {
+	lkp, _ := NewLookupHash("n2", map[string]string{
+		"from":  "f",
+		"table": "t",
+		"to":    "2",
+	})
+	in := map[string]*KeyspaceSchema{
+		"unsharded": {
+			Keyspace: &Keyspace{
+				Name: "k1",
+			},
+			Tables: map[string]*Table{
+				"t1": {
+					Name: "n1",
+				},
+				"t2": {
+					IsSequence: true,
+					Name:       "n2",
+				},
+			},
+		},
+		"sharded": {
+			Keyspace: &Keyspace{
+				Name:    "k2",
+				Sharded: true,
+			},
+			Tables: map[string]*Table{
+				"t3": {
+					Name: "n3",
+					ColumnVindexes: []*ColumnVindex{{
+						Column: cistring.New("aa"),
+						Type:   "vtype",
+						Name:   "vname",
+						Owned:  true,
+						Vindex: lkp,
+					}},
+				},
+			},
+		},
+	}
+	out, err := json.MarshalIndent(in, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	want := `{
+  "sharded": {
+    "sharded": true,
+    "tables": {
+      "t3": {
+        "name": "n3",
+        "column_vindexes": [
+          {
+            "column": "aa",
+            "type": "vtype",
+            "name": "vname",
+            "owned": true,
+            "vindex": {
+              "table": "t",
+              "from": "f",
+              "to": "2"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "unsharded": {
+    "tables": {
+      "t1": {
+        "name": "n1"
+      },
+      "t2": {
+        "is_sequence": true,
+        "name": "n2"
+      }
+    }
+  }
+}`
+	if got != want {
+		t.Errorf("json.Marshal():\n%s, want\n%s", got, want)
 	}
 }
 
