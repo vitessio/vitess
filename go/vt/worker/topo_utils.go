@@ -37,7 +37,7 @@ func FindHealthyRdonlyTablet(ctx context.Context, wr *wrangler.Wrangler, cell, k
 	defer busywaitCancel()
 
 	// Use a healthcheck instance to get the health of all RDONLY tablets.
-	healthCheck := discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout, "" /* statsSuffix */)
+	healthCheck := discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
 	watcher := discovery.NewShardReplicationWatcher(wr.TopoServer(), healthCheck, cell, keyspace, shard, *healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 	defer watcher.Stop()
 	defer healthCheck.Close()

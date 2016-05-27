@@ -58,7 +58,8 @@ func main() {
 
 	resilientSrvTopoServer = vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
 
-	healthCheck = discovery.NewHealthCheck(*healthCheckConnTimeout, *healthCheckRetryDelay, *healthCheckTimeout, "" /* statsSuffix */)
+	healthCheck = discovery.NewHealthCheck(*healthCheckConnTimeout, *healthCheckRetryDelay, *healthCheckTimeout)
+	healthCheck.RegisterStats()
 
 	tabletTypes := make([]topodatapb.TabletType, 0, 1)
 	if len(*tabletTypesToWait) != 0 {

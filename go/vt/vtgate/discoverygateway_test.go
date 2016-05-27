@@ -117,8 +117,8 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	want := "shard, host: ks.0.replica, <nil>, no valid tablet"
 	err := f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
-	if hc.GetStatsFromTargetCounter != 1 {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
+	if hc.GetStatsFromTargetCounter.Get() != 1 {
+		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter.Get())
 	}
 
 	// tablet with error
@@ -127,8 +127,8 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	want = "shard, host: ks.0.replica, <nil>, no valid tablet"
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
-	if hc.GetStatsFromTargetCounter != 1 {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
+	if hc.GetStatsFromTargetCounter.Get() != 1 {
+		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter.Get())
 	}
 
 	// tablet without connection
@@ -137,8 +137,8 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	want = fmt.Sprintf(`shard, host: ks.0.replica, <nil>, no valid tablet`)
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
-	if hc.GetStatsFromTargetCounter != 1 {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
+	if hc.GetStatsFromTargetCounter.Get() != 1 {
+		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter.Get())
 	}
 
 	// retry error
@@ -153,8 +153,8 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
 		t.Errorf("wanted error: %+v, got error: %v", wants, err)
 	}
-	if hc.GetStatsFromTargetCounter != 3 {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 3", hc.GetStatsFromTargetCounter)
+	if hc.GetStatsFromTargetCounter.Get() != 3 {
+		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 3", hc.GetStatsFromTargetCounter.Get())
 	}
 
 	// fatal error
@@ -169,13 +169,13 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
 		t.Errorf("wanted error: %+v, got error: %v", wants, err)
 	}
-	wantCounter := 3
+	var wantCounter int32 = 3
 	if streaming {
 		// streaming query does not retry on fatal
 		wantCounter = 1
 	}
-	if hc.GetStatsFromTargetCounter != wantCounter {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want %v", hc.GetStatsFromTargetCounter, wantCounter)
+	if hc.GetStatsFromTargetCounter.Get() != wantCounter {
+		t.Errorf("hc.GetStatsFromTargetCounter = %v; want %v", hc.GetStatsFromTargetCounter.Get(), wantCounter)
 	}
 
 	// server error - no retry
@@ -184,8 +184,8 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	want = fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: err`, ep1)
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_BAD_INPUT)
-	if hc.GetStatsFromTargetCounter != 1 {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
+	if hc.GetStatsFromTargetCounter.Get() != 1 {
+		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter.Get())
 	}
 
 	// conn error - no retry
@@ -194,8 +194,8 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	want = fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: conn`, ep1)
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
-	if hc.GetStatsFromTargetCounter != 1 {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
+	if hc.GetStatsFromTargetCounter.Get() != 1 {
+		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter.Get())
 	}
 
 	// no failure
@@ -205,8 +205,8 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	if hc.GetStatsFromTargetCounter != 1 {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
+	if hc.GetStatsFromTargetCounter.Get() != 1 {
+		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter.Get())
 	}
 }
 
@@ -229,8 +229,8 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
 		t.Errorf("wanted error: %+v, got error: %v", wants, err)
 	}
-	if hc.GetStatsFromTargetCounter != 1 {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
+	if hc.GetStatsFromTargetCounter.Get() != 1 {
+		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter.Get())
 	}
 
 	// conn error - no retry
@@ -239,8 +239,8 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	want := fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: conn`, ep1)
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
-	if hc.GetStatsFromTargetCounter != 1 {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
+	if hc.GetStatsFromTargetCounter.Get() != 1 {
+		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter.Get())
 	}
 }
 

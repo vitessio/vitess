@@ -1,6 +1,7 @@
 package vtgate
 
 import (
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -23,16 +24,21 @@ type fakeHealthCheck struct {
 	items map[string]*fhcItem
 
 	// GetStatsFromTargetCounter counts GetTabletStatsFromTarget() being called.
-	GetStatsFromTargetCounter int
+	// (it can be accessed concurrently by 'multiGo', so using atomic)
+	GetStatsFromTargetCounter sync2.AtomicInt32
 	// GetStatsFromKeyspaceShardCounter counts GetTabletStatsFromKeyspaceShard() being called.
 	GetStatsFromKeyspaceShardCounter int
 }
 
 // Reset cleans up the internal state.
 func (fhc *fakeHealthCheck) Reset() {
-	fhc.GetStatsFromTargetCounter = 0
+	fhc.GetStatsFromTargetCounter.Set(0)
 	fhc.GetStatsFromKeyspaceShardCounter = 0
 	fhc.items = make(map[string]*fhcItem)
+}
+
+// RegisterStats is part of the HealthCheck interface.
+func (fhc *fakeHealthCheck) RegisterStats() {
 }
 
 // SetListener sets the listener for healthcheck updates.
@@ -74,7 +80,7 @@ func (fhc *fakeHealthCheck) GetTabletStatsFromKeyspaceShard(keyspace, shard stri
 
 // GetTabletStatsFromTarget returns all TabletStats for the given target.
 func (fhc *fakeHealthCheck) GetTabletStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*discovery.TabletStats {
-	fhc.GetStatsFromTargetCounter++
+	fhc.GetStatsFromTargetCounter.Add(1)
 	var res []*discovery.TabletStats
 	for _, item := range fhc.items {
 		if item.ts.Target == nil {
