@@ -71,10 +71,7 @@ spec:
           -queryserver-config-transaction-cap 300
           -queryserver-config-schema-reload-time 1
           -queryserver-config-pool-size 100
-          -enable-rowcache
           -enable_replication_reporter
-          -rowcache-bin /usr/bin/memcached
-          -rowcache-socket $VTDATAROOT/{{tablet_subdir}}/memcache.sock" vitess
       env:
         - name: GOMAXPROCS
           value: "16"

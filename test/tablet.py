@@ -397,7 +397,7 @@ class Tablet(object):
                stderr=utils.devnull, stdout=utils.devnull)
 
   def start_vttablet(
-      self, port=None, memcache=False,
+      self, port=None,
       wait_for_state='SERVING', filecustomrules=None, zkcustomrules=None,
       schema_override=None,
       repl_extra_flags=None, table_acl_config=None,
@@ -496,12 +496,6 @@ class Tablet(object):
                  '-log_dir', environment.vtlogroot])
 
     self._add_dbconfigs(args, repl_extra_flags)
-
-    if memcache:
-      args.extend(['-rowcache-bin', environment.memcached_bin()])
-      memcache_socket = os.path.join(self.tablet_dir, 'memcache.sock')
-      args.extend(['-rowcache-socket', memcache_socket])
-      args.extend(['-enable-rowcache'])
 
     if filecustomrules:
       args.extend(['-filecustomrules', filecustomrules])
