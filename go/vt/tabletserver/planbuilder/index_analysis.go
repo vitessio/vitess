@@ -57,14 +57,6 @@ func (is *indexScore) GetScore() scoreValue {
 	return perfectScore
 }
 
-func newIndexScoreList(indexes []*schema.Index) []*indexScore {
-	scoreList := make([]*indexScore, len(indexes))
-	for i, v := range indexes {
-		scoreList[i] = newIndexScore(v)
-	}
-	return scoreList
-}
-
 func getPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (pkValues []interface{}, err error) {
 	pkindexScore := newIndexScore(pkIndex)
 	pkValues = make([]interface{}, len(pkindexScore.ColumnMatch))
@@ -95,43 +87,4 @@ func getPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (pkValu
 		return pkValues, nil
 	}
 	return nil, nil
-}
-
-func getIndexMatch(conditions []sqlparser.BoolExpr, indexes []*schema.Index) *schema.Index {
-	indexScores := newIndexScoreList(indexes)
-	for _, condition := range conditions {
-		var col string
-		switch condition := condition.(type) {
-		case *sqlparser.ComparisonExpr:
-			col = condition.Left.(*sqlparser.ColName).Name.Original()
-		case *sqlparser.RangeCond:
-			col = condition.Left.(*sqlparser.ColName).Name.Original()
-		default:
-			panic("unreachaable")
-		}
-		for _, index := range indexScores {
-			index.FindMatch(col)
-		}
-	}
-	highScore := noMatch
-	highScorer := -1
-	for i, index := range indexScores {
-		curScore := index.GetScore()
-		if curScore == noMatch {
-			continue
-		}
-		if curScore == perfectScore {
-			highScorer = i
-			break
-		}
-		// Prefer secondary index over primary key
-		if curScore >= highScore {
-			highScore = curScore
-			highScorer = i
-		}
-	}
-	if highScorer == -1 {
-		return nil
-	}
-	return indexes[highScorer]
 }

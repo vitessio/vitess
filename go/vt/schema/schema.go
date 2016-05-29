@@ -14,12 +14,10 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
-// Cache types
+// Table types
 const (
-	CacheNone = 0
-	CacheRW   = 1
-	CacheW    = 2
-	Sequence  = 3
+	NoType = iota
+	Sequence
 )
 
 // TableColumn contains info about a table's column.
@@ -50,17 +48,6 @@ func NewTable(name string) *Table {
 	return &Table{
 		Name: name,
 	}
-}
-
-// IsCached returns true if the table has a rowcache association.
-func (ta *Table) IsCached() bool {
-	return ta.Type == CacheRW || ta.Type == CacheW
-}
-
-// IsReadCached returns true if the rowcache can be used for reads.
-// TODO(sougou): remove after deprecating schema overrides.
-func (ta *Table) IsReadCached() bool {
-	return ta.Type == CacheRW
 }
 
 // AddColumn adds a column to the Table.

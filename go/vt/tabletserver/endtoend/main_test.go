@@ -5,7 +5,6 @@
 package endtoend
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -19,11 +18,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 	"github.com/youtube/vitess/go/vt/vttest"
-
-	// import mysql to register mysql connection function
-
-	// import memcache to register memcache connection function
-	_ "github.com/youtube/vitess/go/memcache"
 )
 
 var (
@@ -47,14 +41,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		var schemaOverrides []tabletserver.SchemaOverride
-		err = json.Unmarshal([]byte(schemaOverrideJSON), &schemaOverrides)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
-		}
-
-		err = framework.StartServer(connParams, schemaOverrides)
+		err = framework.StartServer(connParams)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
@@ -238,25 +225,3 @@ var tableACLConfig = `{
     }
   ]
 }`
-
-var schemaOverrideJSON = `[{
-	"Name": "vitess_view",
-	"PKColumns": ["key2"],
-	"Cache": {
-		"Type": "RW"
-	}
-}, {
-	"Name": "vitess_part1",
-	"PKColumns": ["key2"],
-	"Cache": {
-		"Type": "W",
-		"Table": "vitess_view"
-	}
-}, {
-	"Name": "vitess_part2",
-	"PKColumns": ["key3"],
-	"Cache": {
-		"Type": "W",
-		"Table": "vitess_view"
-	}
-}]`

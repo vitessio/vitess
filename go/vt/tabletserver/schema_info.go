@@ -36,7 +36,6 @@ const maxTableCount = 10000
 const (
 	debugQueryPlansKey = "query_plans"
 	debugQueryStatsKey = "query_stats"
-	debugTableStatsKey = "table_stats"
 	debugSchemaKey     = "schema"
 	debugQueryRulesKey = "query_rules"
 )
@@ -83,28 +82,11 @@ func (ep *ExecPlan) Stats() (queryCount int64, duration time.Duration, rowCount,
 	return
 }
 
-// SchemaOverride is a way to specify how the schema loaded by SchemaInfo
-// must be overridden. Name is the name of the table, PKColumns specifies
-// the new prmiary keys. Cache.Type specifies the rowcache operation for
-// the table. It can be "R", which is read-only, or "RW" for read-write, and
-// Table specifies the rowcache table to operate on.
-// The purpose of this override is mainly to allow views to benefit from
-// the rowcache. It has its downsides. Use carefully.
-type SchemaOverride struct {
-	Name      string
-	PKColumns []string
-	Cache     *struct {
-		Type  string
-		Table string
-	}
-}
-
 // SchemaInfo stores the schema info and performs operations that
-// keep itself and the rowcache up-to-date.
+// keep itself up-to-date.
 type SchemaInfo struct {
 	mu         sync.Mutex
 	tables     map[string]*TableInfo
-	overrides  []SchemaOverride
 	lastChange int64
 	reloadTime time.Duration
 
@@ -112,7 +94,6 @@ type SchemaInfo struct {
 	// their own synchronization.
 	queries           *cache.LRUCache
 	connPool          *ConnPool
-	cachePool         *CachePool
 	ticks             *timer.Timer
 	endpoints         map[string]string
 	queryRuleSources  *QueryRuleInfo
@@ -126,14 +107,12 @@ func NewSchemaInfo(
 	queryCacheSize int,
 	reloadTime time.Duration,
 	idleTimeout time.Duration,
-	cachePool *CachePool,
 	endpoints map[string]string,
 	enablePublishStats bool,
 	queryServiceStats *QueryServiceStats) *SchemaInfo {
 	si := &SchemaInfo{
 		queries:           cache.NewLRUCache(int64(queryCacheSize)),
 		connPool:          NewConnPool("", 3, idleTimeout, enablePublishStats, queryServiceStats, checker),
-		cachePool:         cachePool,
 		ticks:             timer.NewTimer(reloadTime),
 		endpoints:         endpoints,
 		reloadTime:        reloadTime,
@@ -148,8 +127,6 @@ func NewSchemaInfo(
 			return fmt.Sprintf("%v", si.queries.Oldest())
 		}))
 		stats.Publish(statsPrefix+"SchemaReloadTime", stats.DurationFunc(si.ticks.Interval))
-		_ = stats.NewMultiCountersFunc(statsPrefix+"RowcacheStats", []string{"Table", "Stats"}, si.getRowcacheStats)
-		_ = stats.NewMultiCountersFunc(statsPrefix+"RowcacheInvalidations", []string{"Table"}, si.getRowcacheInvalidations)
 		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryCounts", []string{"Table", "Plan"}, si.getQueryCount)
 		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
 		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
@@ -166,7 +143,7 @@ func NewSchemaInfo(
 }
 
 // Open initializes the current SchemaInfo for service by loading the necessary info from the specified database.
-func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrides []SchemaOverride, strictMode bool) {
+func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, strictMode bool) {
 	ctx := context.Background()
 	si.connPool.Open(appParams, dbaParams)
 	// Get time first because it needs a connection from the pool.
@@ -202,7 +179,6 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 				tableName,
 				row[1].String(), // table_type
 				row[3].String(), // table_comment
-				si.cachePool,
 			)
 			if err != nil {
 				si.recordSchemaError(err, tableName)
@@ -225,10 +201,6 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 		si.mu.Lock()
 		defer si.mu.Unlock()
 		si.tables = tables
-		if schemaOverrides != nil {
-			si.overrides = schemaOverrides
-			si.override()
-		}
 		si.lastChange = curTime
 	}()
 	// Clear is not really needed. Doing it for good measure.
@@ -244,49 +216,6 @@ func (si *SchemaInfo) recordSchemaError(err error, tableName string) {
 	si.queryServiceStats.InternalErrors.Add("Schema", 1)
 }
 
-// override should be called with a lock on mu held.
-func (si *SchemaInfo) override() {
-	for _, override := range si.overrides {
-		table, ok := si.tables[override.Name]
-		if !ok {
-			log.Warningf("Table not found for override: %v", override)
-			continue
-		}
-		if override.PKColumns != nil {
-			if err := table.SetPK(override.PKColumns); err != nil {
-				log.Warningf("%v: %v", err, override)
-				continue
-			}
-		}
-		if si.cachePool.IsClosed() || override.Cache == nil {
-			continue
-		}
-		switch override.Cache.Type {
-		case "RW":
-			table.Type = schema.CacheRW
-			table.Cache = NewRowCache(table, si.cachePool)
-		case "W":
-			table.Type = schema.CacheW
-			if override.Cache.Table == "" {
-				log.Warningf("Incomplete cache specs: %v", override)
-				continue
-			}
-			totable, ok := si.tables[override.Cache.Table]
-			if !ok {
-				log.Warningf("Table not found: %v", override)
-				continue
-			}
-			if totable.Cache == nil {
-				log.Warningf("Table has no cache: %v", override)
-				continue
-			}
-			table.Cache = totable.Cache
-		default:
-			log.Warningf("Ignoring cache override: %v", override)
-		}
-	}
-}
-
 // Close shuts down SchemaInfo. It can be re-opened after Close.
 func (si *SchemaInfo) Close() {
 	si.ticks.Stop()
@@ -296,7 +225,6 @@ func (si *SchemaInfo) Close() {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 	si.tables = nil
-	si.overrides = nil
 }
 
 // Reload reloads the schema info from the db. Any tables that have changed
@@ -391,7 +319,6 @@ func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string)
 		tableName,
 		row[1].String(), // table_type
 		row[3].String(), // table_comment
-		si.cachePool,
 	)
 	if err != nil {
 		si.recordSchemaError(err, tableName)
@@ -413,22 +340,10 @@ func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string)
 	si.tables[tableName] = tableInfo
 
 	switch tableInfo.Type {
-	case schema.CacheNone:
+	case schema.NoType:
 		log.Infof("Initialized table: %s", tableName)
-	case schema.CacheRW:
-		log.Infof("Initialized cached table: %s, prefix: %s", tableName, tableInfo.Cache.prefix)
-	case schema.CacheW:
-		log.Infof("Initialized write-only cached table: %s, prefix: %s", tableName, tableInfo.Cache.prefix)
 	case schema.Sequence:
 		log.Infof("Initialized sequence: %s", tableName)
-	}
-
-	// If the table has an override, re-apply all overrides.
-	for _, o := range si.overrides {
-		if o.Name == tableName {
-			si.override()
-			return
-		}
 	}
 }
 
@@ -590,34 +505,6 @@ func (si *SchemaInfo) ReloadTime() time.Duration {
 	return si.reloadTime
 }
 
-func (si *SchemaInfo) getRowcacheStats() map[string]int64 {
-	si.mu.Lock()
-	defer si.mu.Unlock()
-	tstats := make(map[string]int64)
-	for k, v := range si.tables {
-		if v.IsCached() {
-			hits, absent, misses, _ := v.Stats()
-			tstats[k+".Hits"] = hits
-			tstats[k+".Absent"] = absent
-			tstats[k+".Misses"] = misses
-		}
-	}
-	return tstats
-}
-
-func (si *SchemaInfo) getRowcacheInvalidations() map[string]int64 {
-	si.mu.Lock()
-	defer si.mu.Unlock()
-	tstats := make(map[string]int64)
-	for k, v := range si.tables {
-		if v.IsCached() {
-			_, _, _, invalidations := v.Stats()
-			tstats[k] = invalidations
-		}
-	}
-	return tstats
-}
-
 func (si *SchemaInfo) getTableRows() map[string]int64 {
 	si.mu.Lock()
 	defer si.mu.Unlock()
@@ -728,8 +615,6 @@ func (si *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Requ
 		si.handleHTTPQueryPlans(response, request)
 	} else if ep, ok := si.endpoints[debugQueryStatsKey]; ok && request.URL.Path == ep {
 		si.handleHTTPQueryStats(response, request)
-	} else if ep, ok := si.endpoints[debugTableStatsKey]; ok && request.URL.Path == ep {
-		si.handleHTTPTableStats(response, request)
 	} else if ep, ok := si.endpoints[debugSchemaKey]; ok && request.URL.Path == ep {
 		si.handleHTTPSchema(response, request)
 	} else if ep, ok := si.endpoints[debugQueryRulesKey]; ok && request.URL.Path == ep {
@@ -775,32 +660,6 @@ func (si *SchemaInfo) handleHTTPQueryStats(response http.ResponseWriter, request
 	} else {
 		response.Write(b)
 	}
-}
-
-func (si *SchemaInfo) handleHTTPTableStats(response http.ResponseWriter, request *http.Request) {
-	response.Header().Set("Content-Type", "application/json; charset=utf-8")
-	tstats := make(map[string]struct{ hits, absent, misses, invalidations int64 })
-	var temp, totals struct{ hits, absent, misses, invalidations int64 }
-	func() {
-		si.mu.Lock()
-		defer si.mu.Unlock()
-		for k, v := range si.tables {
-			if v.IsCached() {
-				temp.hits, temp.absent, temp.misses, temp.invalidations = v.Stats()
-				tstats[k] = temp
-				totals.hits += temp.hits
-				totals.absent += temp.absent
-				totals.misses += temp.misses
-				totals.invalidations += temp.invalidations
-			}
-		}
-	}()
-	response.Write([]byte("{\n"))
-	for k, v := range tstats {
-		fmt.Fprintf(response, "\"%s\": {\"Hits\": %v, \"Absent\": %v, \"Misses\": %v, \"Invalidations\": %v},\n", k, v.hits, v.absent, v.misses, v.invalidations)
-	}
-	fmt.Fprintf(response, "\"Totals\": {\"Hits\": %v, \"Absent\": %v, \"Misses\": %v, \"Invalidations\": %v}\n", totals.hits, totals.absent, totals.misses, totals.invalidations)
-	response.Write([]byte("}\n"))
 }
 
 func (si *SchemaInfo) handleHTTPSchema(response http.ResponseWriter, request *http.Request) {

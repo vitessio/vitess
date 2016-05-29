@@ -22,10 +22,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
 )
 
-// spotCheckMultiplier determines the precision of the
-// spot check ratio: 1e6 == 6 digits
-const spotCheckMultiplier = 1e6
-
 // QueryEngine implements the core functionality of tabletserver.
 // It assumes that no requests will be sent to it before Open is
 // called and succeeds.
@@ -47,7 +43,6 @@ type QueryEngine struct {
 	dbconfigs  dbconfigs.DBConfigs
 
 	// Pools
-	cachePool      *CachePool
 	connPool       *ConnPool
 	streamConnPool *ConnPool
 
@@ -58,7 +53,6 @@ type QueryEngine struct {
 	tasks        sync.WaitGroup
 
 	// Vars
-	spotCheckFreq    sync2.AtomicInt64
 	strictMode       sync2.AtomicInt64
 	autoCommit       sync2.AtomicInt64
 	maxResultSize    sync2.AtomicInt64
@@ -115,26 +109,15 @@ func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
 func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 	qe := &QueryEngine{config: config}
 	qe.queryServiceStats = NewQueryServiceStats(config.StatsPrefix, config.EnablePublishStats)
-
-	qe.cachePool = NewCachePool(
-		config.PoolNamePrefix+"Rowcache",
-		config.RowCache,
-		time.Duration(config.IdleTimeout*1e9),
-		config.DebugURLPrefix+"/memcache/",
-		config.EnablePublishStats,
-		qe.queryServiceStats,
-	)
 	qe.schemaInfo = NewSchemaInfo(
 		config.StatsPrefix,
 		checker,
 		config.QueryCacheSize,
 		time.Duration(config.SchemaReloadTime*1e9),
 		time.Duration(config.IdleTimeout*1e9),
-		qe.cachePool,
 		map[string]string{
 			debugQueryPlansKey: config.DebugURLPrefix + "/query_plans",
 			debugQueryStatsKey: config.DebugURLPrefix + "/query_stats",
-			debugTableStatsKey: config.DebugURLPrefix + "/table_stats",
 			debugSchemaKey:     config.DebugURLPrefix + "/schema",
 			debugQueryRulesKey: config.DebugURLPrefix + "/query_rules",
 		},
@@ -173,7 +156,6 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 	http.Handle(config.DebugURLPrefix+"/consolidations", qe.consolidator)
 	qe.streamQList = NewQueryList()
 
-	qe.spotCheckFreq = sync2.NewAtomicInt64(int64(config.SpotCheckRatio * spotCheckMultiplier))
 	if config.StrictMode {
 		qe.strictMode.Set(1)
 	}
@@ -209,9 +191,6 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 		stats.Publish(config.StatsPrefix+"MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
 		stats.Publish(config.StatsPrefix+"MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
 		stats.Publish(config.StatsPrefix+"StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
-		stats.Publish(config.StatsPrefix+"RowcacheSpotCheckRatio", stats.FloatFunc(func() float64 {
-			return float64(qe.spotCheckFreq.Get()) / spotCheckMultiplier
-		}))
 		stats.Publish(config.StatsPrefix+"TableACLExemptCount", stats.IntFunc(qe.tableaclExemptCount.Get))
 		tableACLAllowedName = "TableACLAllowed"
 		tableACLDeniedName = "TableACLDenied"
@@ -226,7 +205,7 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 }
 
 // Open must be called before sending requests to QueryEngine.
-func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs, schemaOverrides []SchemaOverride) {
+func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) {
 	qe.dbconfigs = dbconfigs
 	appParams := dbconfigs.App.ConnParams
 	// Create dba params based on App connection params
@@ -241,20 +220,9 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs, schemaOverrides []Sch
 	if qe.strictMode.Get() != 0 {
 		strictMode = true
 	}
-	if !strictMode && qe.config.RowCache.Enabled {
-		panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Rowcache cannot be enabled when queryserver-config-strict-mode is false"))
-	}
-	if qe.config.RowCache.Enabled {
-		qe.cachePool.Open()
-		log.Infof("rowcache is enabled")
-	} else {
-		log.Infof("rowcache is not enabled")
-	}
 
 	start := time.Now()
-	// schemaInfo depends on cachePool. Every table that has a rowcache
-	// points to the cachePool.
-	qe.schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, strictMode)
+	qe.schemaInfo.Open(&appParams, &dbaParams, strictMode)
 	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 
 	qe.connPool.Open(&appParams, &dbaParams)
@@ -312,44 +280,4 @@ func (qe *QueryEngine) Close() {
 	qe.streamConnPool.Close()
 	qe.connPool.Close()
 	qe.schemaInfo.Close()
-	qe.cachePool.Close()
-}
-
-// Commit commits the specified transaction.
-func (qe *QueryEngine) Commit(ctx context.Context, logStats *LogStats, transactionID int64) {
-	dirtyTables, err := qe.txPool.SafeCommit(ctx, transactionID)
-	for tableName, invalidList := range dirtyTables {
-		tableInfo := qe.schemaInfo.GetTable(tableName)
-		if tableInfo == nil {
-			continue
-		}
-		invalidations := int64(0)
-		for key := range invalidList {
-			// Use context.Background, becaause we don't want to fail
-			// these deletes.
-			tableInfo.Cache.Delete(context.Background(), key)
-			invalidations++
-		}
-		logStats.CacheInvalidations += invalidations
-		tableInfo.invalidations.Add(invalidations)
-	}
-	if err != nil {
-		panic(err)
-	}
-}
-
-// ClearRowcache invalidates all items in the rowcache.
-func (qe *QueryEngine) ClearRowcache(ctx context.Context) error {
-	if qe.cachePool.IsClosed() {
-		return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "rowcache is not up")
-	}
-	conn := qe.cachePool.Get(ctx)
-	defer func() { qe.cachePool.Put(conn) }()
-
-	if err := conn.FlushAll(); err != nil {
-		conn.Close()
-		conn = nil
-		return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "%s", err)
-	}
-	return nil
 }

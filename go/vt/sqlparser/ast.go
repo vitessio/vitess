@@ -6,8 +6,6 @@ package sqlparser
 
 import (
 	"errors"
-	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/youtube/vitess/go/cistring"
@@ -1580,49 +1578,6 @@ func (node *Limit) WalkSubtree(visit Visit) error {
 		node.Offset,
 		node.Rowcount,
 	)
-}
-
-// Limits returns the values of the LIMIT clause as interfaces.
-// The returned values can be nil for absent field, string for
-// bind variable names, or int64 for an actual number.
-// Otherwise, it's an error.
-func (node *Limit) Limits() (offset, rowcount interface{}, err error) {
-	if node == nil {
-		return nil, nil, nil
-	}
-	switch v := node.Offset.(type) {
-	case NumVal:
-		o, err := strconv.ParseInt(string(v), 0, 64)
-		if err != nil {
-			return nil, nil, err
-		}
-		if o < 0 {
-			return nil, nil, fmt.Errorf("negative offset: %d", o)
-		}
-		offset = o
-	case ValArg:
-		offset = string(v)
-	case nil:
-		// pass
-	default:
-		return nil, nil, fmt.Errorf("unexpected node for offset: %+v", v)
-	}
-	switch v := node.Rowcount.(type) {
-	case NumVal:
-		rc, err := strconv.ParseInt(string(v), 0, 64)
-		if err != nil {
-			return nil, nil, err
-		}
-		if rc < 0 {
-			return nil, nil, fmt.Errorf("negative limit: %d", rc)
-		}
-		rowcount = rc
-	case ValArg:
-		rowcount = string(v)
-	default:
-		return nil, nil, fmt.Errorf("unexpected node for rowcount: %+v", v)
-	}
-	return offset, rowcount, nil
 }
 
 // Values represents a VALUES clause.

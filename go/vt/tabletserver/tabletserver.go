@@ -98,14 +98,12 @@ type TabletServer struct {
 	// before starting the tabletserver. For backward compatibility,
 	// we temporarily allow them to be changed until the migration
 	// to the new API is complete.
-	dbconfigs       dbconfigs.DBConfigs
-	schemaOverrides []SchemaOverride
-	mysqld          mysqlctl.MysqlDaemon
+	dbconfigs dbconfigs.DBConfigs
+	mysqld    mysqlctl.MysqlDaemon
 
 	// The following variables should only be accessed within
 	// the context of a startRequest-endRequest.
-	qe          *QueryEngine
-	invalidator *RowcacheInvalidator
+	qe *QueryEngine
 
 	// checkMySQLThrottler is used to throttle the number of
 	// requests sent to CheckMySQL.
@@ -149,7 +147,6 @@ func NewTabletServer(config Config) *TabletServer {
 		history:             history.New(10),
 	}
 	tsv.qe = NewQueryEngine(tsv, config)
-	tsv.invalidator = NewRowcacheInvalidator(config.StatsPrefix, tsv, tsv.qe, config.EnablePublishStats)
 	if config.EnablePublishStats {
 		stats.Publish(config.StatsPrefix+"TabletState", stats.IntFunc(func() int64 {
 			tsv.mu.Lock()
@@ -233,7 +230,7 @@ func (tsv *TabletServer) IsServing() bool {
 
 // InitDBConfig inititalizes the db config variables for TabletServer. You must call this function before
 // calling StartService or SetServingType.
-func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbconfigs dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
+func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbconfigs dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) error {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state != StateNotConnected {
@@ -241,17 +238,16 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbconfigs dbconfigs
 	}
 	tsv.target = target
 	tsv.dbconfigs = dbconfigs
-	tsv.schemaOverrides = schemaOverrides
 	tsv.mysqld = mysqld
 	return nil
 }
 
 // StartService is a convenience function for InitDBConfig->SetServingType
 // with serving=true.
-func (tsv *TabletServer) StartService(target querypb.Target, dbconfigs dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) (err error) {
+func (tsv *TabletServer) StartService(target querypb.Target, dbconfigs dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) (err error) {
 	// Save tablet type away to prevent data races
 	tabletType := target.TabletType
-	err = tsv.InitDBConfig(target, dbconfigs, schemaOverrides, mysqld)
+	err = tsv.InitDBConfig(target, dbconfigs, mysqld)
 	if err != nil {
 		return err
 	}
@@ -364,7 +360,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 	}
 	c.Close()
 
-	tsv.qe.Open(tsv.dbconfigs, tsv.schemaOverrides)
+	tsv.qe.Open(tsv.dbconfigs)
 	return tsv.serveNewType()
 }
 
@@ -377,22 +373,8 @@ func (tsv *TabletServer) serveNewType() (err error) {
 			err = x.(error)
 		}
 	}()
-
-	if tsv.needInvalidator(tsv.target) {
-		tsv.invalidator.Open(tsv.dbconfigs.App.DbName, tsv.mysqld)
-	} else {
-		tsv.invalidator.Close()
-	}
 	tsv.transition(StateServing)
 	return nil
-}
-
-// needInvalidator returns true if the rowcache invalidator needs to be enabled.
-func (tsv *TabletServer) needInvalidator(target querypb.Target) bool {
-	if !tsv.config.RowCache.Enabled {
-		return false
-	}
-	return target.TabletType != topodatapb.TabletType_MASTER
 }
 
 func (tsv *TabletServer) gracefulStop() {
@@ -424,8 +406,6 @@ func (tsv *TabletServer) StopService() {
 		tsv.transition(StateNotConnected)
 	}()
 	log.Infof("Shutting down query service")
-
-	tsv.invalidator.Close()
 	tsv.qe.Close()
 }
 
@@ -579,7 +559,7 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 		tsv.endRequest(false)
 	}(time.Now())
 
-	tsv.qe.Commit(ctx, logStats, transactionID)
+	tsv.qe.txPool.Commit(ctx, transactionID)
 	return nil
 }
 
@@ -1312,16 +1292,6 @@ func (tsv *TabletServer) SetMaxDMLRows(val int) {
 // MaxDMLRows returns the max result size.
 func (tsv *TabletServer) MaxDMLRows() int {
 	return int(tsv.qe.maxDMLRows.Get())
-}
-
-// SetSpotCheckRatio sets the spot check ration.
-func (tsv *TabletServer) SetSpotCheckRatio(val float64) {
-	tsv.qe.spotCheckFreq.Set(int64(val * spotCheckMultiplier))
-}
-
-// SpotCheckRatio returns the spot check ratio.
-func (tsv *TabletServer) SpotCheckRatio() float64 {
-	return float64(tsv.qe.spotCheckFreq.Get()) / spotCheckMultiplier
 }
 
 func init() {

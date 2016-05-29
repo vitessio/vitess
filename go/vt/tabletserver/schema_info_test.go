@@ -18,7 +18,6 @@ import (
 
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 
@@ -166,34 +165,6 @@ func TestSchemaInfoOpenFailedDueToTableInfoErr(t *testing.T) {
 		vtrpcpb.ErrorCode_INTERNAL_ERROR,
 	)
 	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, false)
-}
-
-func TestSchemaInfoOpenWithSchemaOverride(t *testing.T) {
-	fakecacheservice.Register()
-	db := fakesqldb.Register()
-	for query, result := range getSchemaInfoTestSupportedQueries() {
-		db.AddQuery(query, result)
-	}
-	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second, false)
-	appParams := sqldb.ConnParams{Engine: db.Name}
-	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	schemaInfo.cachePool.Open()
-	defer schemaInfo.cachePool.Close()
-	schemaOverrides := getSchemaInfoTestSchemaOverride()
-	// test cache type RW
-	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, true)
-	testTableInfo := schemaInfo.GetTable("test_table_01")
-	if testTableInfo.Table.Type != schema.CacheRW {
-		t.Fatalf("test_table_01's cache type should be RW")
-	}
-	schemaInfo.Close()
-	// test cache type W
-	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, true)
-	testTableInfo = schemaInfo.GetTable("test_table_02")
-	if testTableInfo.Table.Type != schema.CacheW {
-		t.Fatalf("test_table_02's cache type should be W")
-	}
-	schemaInfo.Close()
 }
 
 func TestSchemaInfoReload(t *testing.T) {

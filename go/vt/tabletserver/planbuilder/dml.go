@@ -7,7 +7,6 @@ package planbuilder
 import (
 	"errors"
 	"fmt"
-	"strconv"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/schema"
@@ -106,26 +105,10 @@ func analyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan,
 }
 
 func analyzeSet(set *sqlparser.Set) (plan *ExecPlan) {
-	plan = &ExecPlan{
+	return &ExecPlan{
 		PlanID:    PlanSet,
 		FullQuery: GenerateFullQuery(set),
 	}
-	if len(set.Exprs) > 1 { // Multiple set values
-		return plan
-	}
-	updateExpr := set.Exprs[0]
-	plan.SetKey = updateExpr.Name.Name.Original()
-	numExpr, ok := updateExpr.Expr.(sqlparser.NumVal)
-	if !ok {
-		return plan
-	}
-	val := string(numExpr)
-	if ival, err := strconv.ParseInt(val, 0, 64); err == nil {
-		plan.SetValue = ival
-	} else if fval, err := strconv.ParseFloat(val, 64); err == nil {
-		plan.SetValue = fval
-	}
-	return plan
 }
 
 func analyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.Index) (pkValues []interface{}, err error) {
@@ -135,7 +118,6 @@ func analyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.Index
 			continue
 		}
 		if !sqlparser.IsValue(expr.Expr) {
-			log.Warningf("expression is too complex %v", expr)
 			return nil, ErrTooComplex
 		}
 		if pkValues == nil {
@@ -151,17 +133,17 @@ func analyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.Index
 }
 
 func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan, err error) {
-	// Default plan
 	plan = &ExecPlan{
 		PlanID:     PlanPassSelect,
 		FieldQuery: GenerateFieldQuery(sel),
 		FullQuery:  GenerateSelectLimitQuery(sel),
 	}
+	if sel.Lock != "" {
+		plan.PlanID = PlanSelectLock
+	}
 
-	// from
-	tableName, hasHints := analyzeFrom(sel.From)
+	tableName := analyzeFrom(sel.From)
 	if tableName == "" {
-		plan.Reason = ReasonTable
 		return plan, nil
 	}
 	tableInfo, err := plan.setTableInfo(tableName, getTable)
@@ -177,113 +159,7 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 		plan.PlanID = PlanNextval
 		plan.FieldQuery = nil
 		plan.FullQuery = nil
-		return plan, nil
 	}
-
-	// There are bind variables in the SELECT list
-	if plan.FieldQuery == nil {
-		plan.Reason = ReasonSelectList
-		return plan, nil
-	}
-
-	if sel.Distinct != "" || sel.GroupBy != nil || sel.Having != nil {
-		plan.Reason = ReasonSelect
-		return plan, nil
-	}
-
-	// Don't improve the plan if the select is locking the row
-	if sel.Lock != "" {
-		plan.Reason = ReasonLock
-		return plan, nil
-	}
-
-	// Further improvements possible only if table is row-cached
-	if !tableInfo.IsReadCached() {
-		plan.Reason = ReasonNocache
-		return plan, nil
-	}
-
-	// Select expressions
-	selects, err := analyzeSelectExprs(sel.SelectExprs, tableInfo)
-	if err != nil {
-		return nil, err
-	}
-	if selects == nil {
-		plan.Reason = ReasonSelectList
-		return plan, nil
-	}
-	plan.ColumnNumbers = selects
-
-	// where
-	conditions := analyzeWhere(sel.Where)
-	if conditions == nil {
-		plan.Reason = ReasonWhere
-		return plan, nil
-	}
-
-	// order
-	if sel.OrderBy != nil {
-		plan.Reason = ReasonOrder
-		return plan, nil
-	}
-
-	// This check should never fail because we only cache tables with primary keys.
-	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name.Lowered() != "primary" {
-		panic("unexpected")
-	}
-
-	pkValues, err := getPKValues(conditions, tableInfo.Indexes[0])
-	if err != nil {
-		return nil, err
-	}
-	if pkValues != nil {
-		plan.IndexUsed = "PRIMARY"
-		offset, rowcount, err := sel.Limit.Limits()
-		if err != nil {
-			return nil, err
-		}
-		if offset != nil {
-			plan.Reason = ReasonLimit
-			return plan, nil
-		}
-		plan.Limit = rowcount
-		plan.PlanID = PlanPKIn
-		plan.OuterQuery = GenerateSelectOuterQuery(sel, tableInfo)
-		plan.PKValues = pkValues
-		return plan, nil
-	}
-
-	// TODO: Analyze hints to improve plan.
-	if hasHints {
-		plan.Reason = ReasonHasHints
-		return plan, nil
-	}
-
-	indexUsed := getIndexMatch(conditions, tableInfo.Indexes)
-	if indexUsed == nil {
-		plan.Reason = ReasonNoIndexMatch
-		return plan, nil
-	}
-	plan.IndexUsed = indexUsed.Name.Original()
-	if plan.IndexUsed == "PRIMARY" {
-		plan.Reason = ReasonPKIndex
-		return plan, nil
-	}
-	var missing bool
-	for _, cnum := range selects {
-		if indexUsed.FindDataColumn(tableInfo.Columns[cnum].Name.Original()) != -1 {
-			continue
-		}
-		missing = true
-		break
-	}
-	if !missing {
-		plan.Reason = ReasonCovering
-		return plan, nil
-	}
-	plan.PlanID = PlanSelectSubquery
-	plan.OuterQuery = GenerateSelectOuterQuery(sel, tableInfo)
-	plan.Subquery = GenerateSelectSubquery(sel, tableInfo, plan.IndexUsed)
 	return plan, nil
 }
 
@@ -314,15 +190,15 @@ func analyzeSelectExprs(exprs sqlparser.SelectExprs, table *schema.Table) (selec
 	return selects, nil
 }
 
-func analyzeFrom(tableExprs sqlparser.TableExprs) (tablename string, hasHints bool) {
+func analyzeFrom(tableExprs sqlparser.TableExprs) string {
 	if len(tableExprs) > 1 {
-		return "", false
+		return ""
 	}
 	node, ok := tableExprs[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return "", false
+		return ""
 	}
-	return sqlparser.GetTableName(node.Expr), node.Hints != nil
+	return sqlparser.GetTableName(node.Expr)
 }
 
 func analyzeWhere(node *sqlparser.Where) (conditions []sqlparser.BoolExpr) {

@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"net/url"
-	"strconv"
 
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -56,42 +55,6 @@ func Init() {
 	TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
 }
 
-// RowCacheConfig encapsulates the configuration for RowCache
-type RowCacheConfig struct {
-	Enabled     bool
-	Binary      string
-	Memory      int
-	Socket      string
-	Connections int
-	Threads     int
-	LockPaged   bool
-	StatsPrefix string
-}
-
-// GetSubprocessFlags returns the flags to use to call memcached
-func (c *RowCacheConfig) GetSubprocessFlags(socket string) []string {
-	cmd := []string{}
-	if c.Binary == "" {
-		return cmd
-	}
-	cmd = append(cmd, c.Binary)
-	cmd = append(cmd, "-s", socket)
-	if c.Memory > 0 {
-		// memory is given in bytes and rowcache expects in MBs
-		cmd = append(cmd, "-m", strconv.Itoa(c.Memory/1000000))
-	}
-	if c.Connections > 0 {
-		cmd = append(cmd, "-c", strconv.Itoa(c.Connections))
-	}
-	if c.Threads > 0 {
-		cmd = append(cmd, "-t", strconv.Itoa(c.Threads))
-	}
-	if c.LockPaged {
-		cmd = append(cmd, "-k")
-	}
-	return cmd
-}
-
 // Config contains all the configuration for query service
 type Config struct {
 	PoolSize             int
@@ -106,8 +69,6 @@ type Config struct {
 	QueryTimeout         float64
 	TxPoolTimeout        float64
 	IdleTimeout          float64
-	RowCache             RowCacheConfig
-	SpotCheckRatio       float64
 	StrictMode           bool
 	StrictTableAcl       bool
 	TerseErrors          bool
@@ -140,8 +101,6 @@ var DefaultQsConfig = Config{
 	TxPoolTimeout:        1,
 	IdleTimeout:          30 * 60,
 	StreamBufferSize:     32 * 1024,
-	RowCache:             RowCacheConfig{Memory: -1, Connections: -1, Threads: -1},
-	SpotCheckRatio:       0,
 	StrictMode:           true,
 	StrictTableAcl:       false,
 	TerseErrors:          false,
@@ -184,7 +143,7 @@ type Controller interface {
 	AddStatusPart()
 
 	// InitDBConfig sets up the db config vars.
-	InitDBConfig(querypb.Target, dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error
+	InitDBConfig(querypb.Target, dbconfigs.DBConfigs, mysqlctl.MysqlDaemon) error
 
 	// SetServingType transitions the query service to the required serving type.
 	// Returns true if the state of QueryService or the tablet type changed.

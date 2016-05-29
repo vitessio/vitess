@@ -23,15 +23,12 @@ import (
 
 	// import mysql to register mysql connection function
 	_ "github.com/youtube/vitess/go/mysql"
-	// import memcache to register memcache connection function
-	_ "github.com/youtube/vitess/go/memcache"
 )
 
 var (
 	enforceTableACLConfig = flag.Bool("enforce-tableacl-config", false, "if this flag is true, vttablet will fail to start if a valid tableacl config does not exist")
 	tableAclConfig        = flag.String("table-acl-config", "", "path to table access checker config file")
 	tabletPath            = flag.String("tablet-path", "", "tablet alias")
-	overridesFile         = flag.String("schema-override", "", "schema overrides file")
 
 	agent *tabletmanager.ActionAgent
 )
@@ -123,7 +120,7 @@ func main() {
 	if servenv.GRPCPort != nil {
 		gRPCPort = int32(*servenv.GRPCPort)
 	}
-	agent, err = tabletmanager.NewActionAgent(context.Background(), mysqld, qsc, tabletAlias, dbcfgs, mycnf, int32(*servenv.Port), gRPCPort, *overridesFile)
+	agent, err = tabletmanager.NewActionAgent(context.Background(), mysqld, qsc, tabletAlias, dbcfgs, mycnf, int32(*servenv.Port), gRPCPort)
 	if err != nil {
 		log.Error(err)
 		exit.Return(1)

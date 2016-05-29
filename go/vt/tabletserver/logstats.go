@@ -24,10 +24,8 @@ import (
 var StatsLogger = streamlog.New("TabletServer", 50)
 
 const (
-	// QuerySourceRowcache means query result is found in rowcache.
-	QuerySourceRowcache = 1 << iota
 	// QuerySourceConsolidator means query result is found in consolidator.
-	QuerySourceConsolidator
+	QuerySourceConsolidator = 1 << iota
 	// QuerySourceMySQL means query result is returned from MySQL.
 	QuerySourceMySQL
 )
@@ -157,14 +155,10 @@ func (stats *LogStats) FmtQuerySources() string {
 	if stats.QuerySources == 0 {
 		return "none"
 	}
-	sources := make([]string, 3)
+	sources := make([]string, 2)
 	n := 0
 	if stats.QuerySources&QuerySourceMySQL != 0 {
 		sources[n] = "mysql"
-		n++
-	}
-	if stats.QuerySources&QuerySourceRowcache != 0 {
-		sources[n] = "rowcache"
 		n++
 	}
 	if stats.QuerySources&QuerySourceConsolidator != 0 {

@@ -11,8 +11,6 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/sync2"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 	"golang.org/x/net/context"
@@ -22,7 +20,6 @@ import (
 // It's a superset of schema.Table.
 type TableInfo struct {
 	*schema.Table
-	Cache *RowCache
 
 	// Seq must be locked before accessing the sequence vars.
 	// If CurVal==LastVal, we have to cache new values.
@@ -30,22 +27,17 @@ type TableInfo struct {
 	NextVal   int64
 	Increment int64
 	LastVal   int64
-
-	// rowcache stats updated by query_executor.go and query_engine.go.
-	hits, absent, misses, invalidations sync2.AtomicInt64
 }
 
 // NewTableInfo creates a new TableInfo.
-func NewTableInfo(conn *DBConn, tableName string, tableType string, comment string, cachePool *CachePool) (ti *TableInfo, err error) {
+func NewTableInfo(conn *DBConn, tableName string, tableType string, comment string) (ti *TableInfo, err error) {
 	ti, err = loadTableInfo(conn, tableName)
 	if err != nil {
 		return nil, err
 	}
 	if strings.Contains(comment, "vitess_sequence") {
 		ti.Type = schema.Sequence
-		return ti, nil
 	}
-	ti.initRowCache(conn, tableType, comment, cachePool)
 	return ti, nil
 }
 
@@ -162,49 +154,4 @@ func (ti *TableInfo) fetchIndexes(conn *DBConn) error {
 		}
 	}
 	return nil
-}
-
-func (ti *TableInfo) initRowCache(conn *DBConn, tableType string, comment string, cachePool *CachePool) {
-	if cachePool.IsClosed() {
-		return
-	}
-
-	if strings.Contains(comment, "vitess_nocache") {
-		log.Infof("%s commented as vitess_nocache. Will not be cached.", ti.Name)
-		return
-	}
-
-	if tableType == "VIEW" {
-		log.Infof("%s is a view. Will not be cached.", ti.Name)
-		return
-	}
-
-	if ti.PKColumns == nil {
-		log.Infof("Table %s has no primary key. Will not be cached.", ti.Name)
-		return
-	}
-	for _, col := range ti.PKColumns {
-		if sqltypes.IsIntegral(ti.Columns[col].Type) || ti.Columns[col].Type == sqltypes.VarBinary {
-			continue
-		}
-		log.Infof("Table %s pk has unsupported column types. Will not be cached.", ti.Name)
-		return
-	}
-
-	ti.Type = schema.CacheRW
-	ti.Cache = NewRowCache(ti, cachePool)
-}
-
-// StatsJSON returns a JSON representation of the TableInfo stats.
-func (ti *TableInfo) StatsJSON() string {
-	if ti.Cache == nil {
-		return fmt.Sprintf("null")
-	}
-	h, a, m, i := ti.Stats()
-	return fmt.Sprintf("{\"Hits\": %v, \"Absent\": %v, \"Misses\": %v, \"Invalidations\": %v}", h, a, m, i)
-}
-
-// Stats returns the stats for TableInfo.
-func (ti *TableInfo) Stats() (hits, absent, misses, invalidations int64) {
-	return ti.hits.Get(), ti.absent.Get(), ti.misses.Get(), ti.invalidations.Get()
 }

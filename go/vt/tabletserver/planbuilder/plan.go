@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tableacl"
@@ -28,15 +27,13 @@ const (
 	// PlanPassSelect is pass through select statements. This is the
 	// default plan for select statements.
 	PlanPassSelect PlanType = iota
+	// PlanSelectLock is for a select that locks.
+	PlanSelectLock
+	// PlanNextval is for NEXTVAL
+	PlanNextval
 	// PlanPassDML is pass through update & delete statements. This is
 	// the default plan for update and delete statements.
 	PlanPassDML
-	// PlanPKEqual is deprecated. Use PlanPKIn instead.
-	PlanPKEqual
-	// PlanPKIn is select statement with a single IN clause on primary key
-	PlanPKIn
-	// PlanSelectSubquery is select statement with a subselect statement
-	PlanSelectSubquery
 	// PlanDMLPK is an update or delete with an equality where clause(s)
 	// on primary key(s)
 	PlanDMLPK
@@ -47,6 +44,8 @@ const (
 	PlanInsertPK
 	// PlanInsertSubquery is same as PlanDMLSubquery but for inserts
 	PlanInsertSubquery
+	// PlanUpsertPK is for insert ... on duplicate key constructs
+	PlanUpsertPK
 	// PlanSet is for SET statements
 	PlanSet
 	// PlanDDL is for DDL statements
@@ -55,10 +54,6 @@ const (
 	PlanSelectStream
 	// PlanOther is for SHOW, DESCRIBE & EXPLAIN statements
 	PlanOther
-	// PlanUpsertPK is for insert ... on duplicate key constructs
-	PlanUpsertPK
-	// PlanNextval is for NEXTVAL
-	PlanNextval
 	// NumPlans stores the total number of plans
 	NumPlans
 )
@@ -66,20 +61,18 @@ const (
 // Must exactly match order of plan constants.
 var planName = []string{
 	"PASS_SELECT",
+	"SELECT_LOCK",
+	"NEXTVAL",
 	"PASS_DML",
-	"PK_EQUAL",
-	"PK_IN",
-	"SELECT_SUBQUERY",
 	"DML_PK",
 	"DML_SUBQUERY",
 	"INSERT_PK",
 	"INSERT_SUBQUERY",
+	"UPSERT_PK",
 	"SET",
 	"DDL",
 	"SELECT_STREAM",
 	"OTHER",
-	"UPSERT_PK",
-	"NEXTVAL",
 }
 
 func (pt PlanType) String() string {
@@ -101,7 +94,7 @@ func PlanByName(s string) (pt PlanType, ok bool) {
 
 // IsSelect returns true if PlanType is about a select query.
 func (pt PlanType) IsSelect() bool {
-	return pt == PlanPassSelect || pt == PlanPKIn || pt == PlanSelectSubquery || pt == PlanSelectStream
+	return pt == PlanPassSelect || pt == PlanSelectLock
 }
 
 // MarshalJSON returns a json string for PlanType.
@@ -116,8 +109,7 @@ func (pt PlanType) MinRole() tableacl.Role {
 
 var tableAclRoles = map[PlanType]tableacl.Role{
 	PlanPassSelect:     tableacl.READER,
-	PlanPKIn:           tableacl.READER,
-	PlanSelectSubquery: tableacl.READER,
+	PlanSelectLock:     tableacl.READER,
 	PlanSet:            tableacl.READER,
 	PlanPassDML:        tableacl.WRITER,
 	PlanDMLPK:          tableacl.WRITER,
@@ -137,20 +129,9 @@ type ReasonType int
 // Reason codes give a hint about why a certain plan was chosen.
 const (
 	ReasonDefault ReasonType = iota
-	ReasonSelect
 	ReasonTable
-	ReasonNocache
-	ReasonSelectList
-	ReasonLock
-	ReasonWhere
-	ReasonOrder
-	ReasonLimit
-	ReasonPKIndex
-	ReasonCovering
-	ReasonNoIndexMatch
 	ReasonTableNoIndex
 	ReasonPKChange
-	ReasonHasHints
 	ReasonComplexExpr
 	ReasonUpsert
 )
@@ -158,20 +139,9 @@ const (
 // Must exactly match order of reason constants.
 var reasonName = []string{
 	"DEFAULT",
-	"SELECT",
 	"TABLE",
-	"NOCACHE",
-	"SELECT_LIST",
-	"LOCK",
-	"WHERE",
-	"ORDER",
-	"LIMIT",
-	"PKINDEX",
-	"COVERING",
-	"NOINDEX_MATCH",
 	"TABLE_NOINDEX",
 	"PK_CHANGE",
-	"HAS_HINTS",
 	"COMPLEX_EXPR",
 	"UPSERT",
 }
@@ -204,32 +174,22 @@ type ExecPlan struct {
 
 	// For PK plans, only OuterQuery is set.
 	// For SUBQUERY plans, Subquery is also set.
-	// IndexUsed is set only for PlanSelectSubquery
 	OuterQuery  *sqlparser.ParsedQuery `json:",omitempty"`
 	Subquery    *sqlparser.ParsedQuery `json:",omitempty"`
 	UpsertQuery *sqlparser.ParsedQuery `json:",omitempty"`
-	IndexUsed   string                 `json:",omitempty"`
 
-	// For selects, columns to be returned
-	// For PlanInsertSubquery, columns to be inserted
+	// PlanInsertSubquery: columns to be inserted.
 	ColumnNumbers []int `json:",omitempty"`
 
-	// PlanPKIn, PlanDMLPK: where clause values
-	// PlanInsertPK: values clause
+	// PlanDMLPK: where clause values.
+	// PlanInsertPK: values clause.
 	PKValues []interface{} `json:",omitempty"`
 
-	// PK_IN. Limit clause value.
-	Limit interface{} `json:",omitempty"`
-
-	// For update: set clause if pk is changing
+	// For update: set clause if pk is changing.
 	SecondaryPKValues []interface{} `json:",omitempty"`
 
-	// For PlanInsertSubquery: pk columns in the subquery result
+	// For PlanInsertSubquery: pk columns in the subquery result.
 	SubqueryPKColumns []int `json:",omitempty"`
-
-	// PlanSet
-	SetKey   string      `json:",omitempty"`
-	SetValue interface{} `json:",omitempty"`
 }
 
 func (plan *ExecPlan) setTableInfo(tableName string, getTable TableGetter) (*schema.Table, error) {
@@ -250,14 +210,29 @@ func GetExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 	if err != nil {
 		return nil, err
 	}
-	plan, err = analyzeSQL(statement, getTable)
-	if err != nil {
-		return nil, err
+	switch stmt := statement.(type) {
+	case *sqlparser.Union:
+		return &ExecPlan{
+			PlanID:     PlanPassSelect,
+			FieldQuery: GenerateFieldQuery(stmt),
+			FullQuery:  GenerateFullQuery(stmt),
+		}, nil
+	case *sqlparser.Select:
+		return analyzeSelect(stmt, getTable)
+	case *sqlparser.Insert:
+		return analyzeInsert(stmt, getTable)
+	case *sqlparser.Update:
+		return analyzeUpdate(stmt, getTable)
+	case *sqlparser.Delete:
+		return analyzeDelete(stmt, getTable)
+	case *sqlparser.Set:
+		return analyzeSet(stmt), nil
+	case *sqlparser.DDL:
+		return analyzeDDL(stmt, getTable), nil
+	case *sqlparser.Other:
+		return &ExecPlan{PlanID: PlanOther}, nil
 	}
-	if plan.PlanID == PlanPassDML {
-		log.Warningf("PASS_DML: %s", sql)
-	}
-	return plan, nil
+	return nil, errors.New("invalid SQL")
 }
 
 // GetStreamExecPlan generates a ExecPlan given a sql query and a TableGetter.
@@ -277,15 +252,9 @@ func GetStreamExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err er
 		if stmt.Lock != "" {
 			return nil, errors.New("select with lock not allowed for streaming")
 		}
-		tableName, _ := analyzeFrom(stmt.From)
-		// This will block usage of NEXTVAL.
-		if tableName == "dual" {
-			return nil, errors.New("select from dual not allowed for streaming")
-		}
-		if tableName != "" {
+		if tableName := analyzeFrom(stmt.From); tableName != "" {
 			plan.setTableInfo(tableName, getTable)
 		}
-
 	case *sqlparser.Union:
 		// pass
 	default:
@@ -293,31 +262,4 @@ func GetStreamExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err er
 	}
 
 	return plan, nil
-}
-
-func analyzeSQL(statement sqlparser.Statement, getTable TableGetter) (plan *ExecPlan, err error) {
-	switch stmt := statement.(type) {
-	case *sqlparser.Union:
-		return &ExecPlan{
-			PlanID:     PlanPassSelect,
-			FieldQuery: GenerateFieldQuery(stmt),
-			FullQuery:  GenerateFullQuery(stmt),
-			Reason:     ReasonSelect,
-		}, nil
-	case *sqlparser.Select:
-		return analyzeSelect(stmt, getTable)
-	case *sqlparser.Insert:
-		return analyzeInsert(stmt, getTable)
-	case *sqlparser.Update:
-		return analyzeUpdate(stmt, getTable)
-	case *sqlparser.Delete:
-		return analyzeDelete(stmt, getTable)
-	case *sqlparser.Set:
-		return analyzeSet(stmt), nil
-	case *sqlparser.DDL:
-		return analyzeDDL(stmt, getTable), nil
-	case *sqlparser.Other:
-		return &ExecPlan{PlanID: PlanOther}, nil
-	}
-	return nil, errors.New("invalid SQL")
 }
