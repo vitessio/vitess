@@ -91,7 +91,7 @@ func (*mariaDB10) WaitMasterPos(mysqld *Mysqld, targetPos replication.Position, 
 func (*mariaDB10) ResetReplicationCommands() []string {
 	return []string{
 		"STOP SLAVE",
-		"RESET SLAVE",
+		"RESET SLAVE ALL", // "ALL" makes it forget the master host:port.
 		"RESET MASTER",
 		"SET GLOBAL gtid_slave_pos = ''",
 	}
