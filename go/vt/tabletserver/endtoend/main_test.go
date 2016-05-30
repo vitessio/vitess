@@ -79,54 +79,29 @@ func initTableACL() error {
 	return nil
 }
 
-var testSchema = `create table vitess_test(intval int, floatval float, charval varchar(256), binval varbinary(256), primary key(intval)) comment 'vitess_nocache';
+var testSchema = `create table vitess_test(intval int, floatval float, charval varchar(256), binval varbinary(256), primary key(intval));
 insert into vitess_test values(1, 1.12345, 0xC2A2, 0x00FF), (2, null, '', null), (3, null, null, null);
 
-create table vitess_a(eid bigint default 1, id int default 1, name varchar(128), foo varbinary(128), primary key(eid, id)) comment 'vitess_nocache';
-create table vitess_b(eid bigint, id int, primary key(eid, id)) comment 'vitess_nocache';
-create table vitess_c(eid bigint, name varchar(128), foo varbinary(128), primary key(eid, name)) comment 'vitess_nocache';
-create table vitess_d(eid bigint, id int) comment 'vitess_nocache';
-create table vitess_e(eid bigint auto_increment, id int default 1, name varchar(128) default 'name', foo varchar(128), primary key(eid, id, name)) comment 'vitess_nocache';
-create table vitess_f(vb varbinary(16) default 'ab', id int, primary key(vb)) comment 'vitess_nocache';
-create table upsert_test(id1 int, id2 int, primary key (id1)) comment 'vitess_nocache';
+create table vitess_a(eid bigint default 1, id int default 1, name varchar(128), foo varbinary(128), primary key(eid, id));
+create table vitess_b(eid bigint, id int, primary key(eid, id));
+create table vitess_c(eid bigint, name varchar(128), foo varbinary(128), primary key(eid, name));
+create table vitess_d(eid bigint, id int);
+create table vitess_e(eid bigint auto_increment, id int default 1, name varchar(128) default 'name', foo varchar(128), primary key(eid, id, name));
+create table vitess_f(vb varbinary(16) default 'ab', id int, primary key(vb));
+create table upsert_test(id1 int, id2 int, primary key (id1));
 create unique index id2_idx on upsert_test(id2);
 insert into vitess_a(eid, id, name, foo) values(1, 1, 'abcd', 'efgh'), (1, 2, 'bcde', 'fghi');
 insert into vitess_b(eid, id) values(1, 1), (1, 2);
 insert into vitess_c(eid, name, foo) values(10, 'abcd', '20'), (11, 'bcde', '30');
-create table vitess_mixed_case(Col1 int, COL2 int, primary key(col1)) comment 'vitess_nocache';
+create table vitess_mixed_case(Col1 int, COL2 int, primary key(col1));
 
-create table vitess_cached1(eid bigint, name varchar(128), foo varbinary(128), primary key(eid));
-create index aname1 on vitess_cached1(name);
-insert into vitess_cached1 values (1, 'a', 'abcd');
-insert into vitess_cached1 values (2, 'a', 'abcd');
-insert into vitess_cached1 values (3, 'c', 'abcd');
-insert into vitess_cached1 values (4, 'd', 'abcd');
-insert into vitess_cached1 values (5, 'e', 'efgh');
-insert into vitess_cached1 values (9, 'i', 'ijkl');
+create table vitess_big(id int, string1 varchar(128), string2 varchar(100), string3 char(1), string4 varchar(50), string5 varchar(50), string6 varchar(16), string7 varchar(120), bigint1 bigint(20), bigint2 bigint(20), integer1 int, tinyint1 tinyint(4), primary key(id));
 
-create table vitess_cached2(eid bigint, bid varbinary(16), name varchar(128), foo varbinary(128), primary key(eid, bid));
-create index aname2 on vitess_cached2(eid, name);
-insert into vitess_cached2 values (1, 'foo', 'abcd1', 'efgh');
-insert into vitess_cached2 values (1, 'bar', 'abcd1', 'efgh');
-insert into vitess_cached2 values (2, 'foo', 'abcd2', 'efgh');
-insert into vitess_cached2 values (2, 'bar', 'abcd2', 'efgh');
-
-create table vitess_big(id int, string1 varchar(128), string2 varchar(100), string3 char(1), string4 varchar(50), string5 varchar(50), string6 varchar(16), string7 varchar(120), bigint1 bigint(20), bigint2 bigint(20), integer1 int, tinyint1 tinyint(4), primary key(id)) comment 'vitess_big';
-
-create table vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny)) comment 'vitess_nocache';
-create table vitess_fracts(id int, deci decimal(5,2), num numeric(5,2), f float, d double, primary key(id)) comment 'vitess_nocache';
-create table vitess_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb)) comment 'vitess_nocache';
-create table vitess_misc(id int, b bit(8), d date, dt datetime, t time, primary key(id)) comment 'vitess_nocache';
+create table vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny));
+create table vitess_fracts(id int, deci decimal(5,2), num numeric(5,2), f float, d double, primary key(id));
+create table vitess_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb));
+create table vitess_misc(id int, b bit(8), d date, dt datetime, t time, primary key(id));
 create table vitess_unsupported(id int, pt point, primary key(id));
-
-create table vitess_part1(key1 bigint, key2 bigint, data1 int, primary key(key1, key2));
-create unique index vitess_key2 on vitess_part1(key2);
-create table vitess_part2(key3 bigint, data2 int, primary key(key3));
-create view vitess_view as select key2, key1, data1, data2 from vitess_part1, vitess_part2 where key2=key3;
-insert into vitess_part1 values(10, 1, 1);
-insert into vitess_part1 values(10, 2, 2);
-insert into vitess_part2 values(1, 3);
-insert into vitess_part2 values(2, 4);
 
 create table vitess_seq(id int, next_id bigint, cache bigint, increment bigint, primary key(id)) comment 'vitess_sequence';
 insert into vitess_seq values(0, 1, 3, 2);

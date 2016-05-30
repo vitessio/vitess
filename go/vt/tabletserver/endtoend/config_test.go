@@ -61,21 +61,6 @@ func TestConfigVars(t *testing.T) {
 		tag: "QueryTimeout",
 		val: int(framework.BaseConfig.QueryTimeout * 1e9),
 	}, {
-		tag: "RowcacheConnPoolAvailable",
-		val: framework.BaseConfig.RowCache.Connections - 50,
-	}, {
-		tag: "RowcacheConnPoolCapacity",
-		val: framework.BaseConfig.RowCache.Connections - 50,
-	}, {
-		tag: "RowcacheConnPoolIdleTimeout",
-		val: int(framework.BaseConfig.IdleTimeout * 1e9),
-	}, {
-		tag: "RowcacheConnPoolMaxCap",
-		val: framework.BaseConfig.RowCache.Connections - 50,
-	}, {
-		tag: "RowcacheSpotCheckRatio",
-		val: 0,
-	}, {
 		tag: "SchemaReloadTime",
 		val: int(framework.BaseConfig.SchemaReloadTime * 1e9),
 	}, {

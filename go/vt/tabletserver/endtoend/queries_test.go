@@ -18,13 +18,7 @@ RowsAffected mismatch: 2, want 1
 Rewritten mismatch:
 '[select eid, id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1 select /* fail */ eid, id from vitess_a union select eid, id from vitess_b]' does not match
 '[select eid id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1 select /* fail */ eid, id from vitess_a union select eid, id from vitess_b]'
-Plan mismatch: PASS_SELECT, want aa
-Hits mismatch on table stats: 0, want 1
-Hits mismatch on query info: 0, want 1
-Misses mismatch on table stats: 0, want 2
-Misses mismatch on query info: 0, want 2
-Absent mismatch on table stats: 0, want 3
-Absent mismatch on query info: 0, want 3`
+Plan mismatch: PASS_SELECT, want aa`
 
 func TestTheFramework(t *testing.T) {
 	client := framework.NewClient()
@@ -41,11 +35,8 @@ func TestTheFramework(t *testing.T) {
 			"select eid id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1",
 			"select /* fail */ eid, id from vitess_a union select eid, id from vitess_b",
 		},
-		Plan:   "aa",
-		Table:  "bb",
-		Hits:   1,
-		Misses: 2,
-		Absent: 3,
+		Plan:  "aa",
+		Table: "bb",
 	}
 	err := expectFail.Test("", client)
 	if err == nil || err.Error() != frameworkErrors {
