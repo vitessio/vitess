@@ -87,8 +87,8 @@ func (*mysql56) WaitMasterPos(mysqld *Mysqld, targetPos replication.Position, wa
 func (*mysql56) ResetReplicationCommands() []string {
 	return []string{
 		"STOP SLAVE",
-		"RESET SLAVE",
-		"RESET MASTER", // This will also clear gtid_executed and gtid_purged.
+		"RESET SLAVE ALL", // "ALL" makes it forget the master host:port.
+		"RESET MASTER",    // This will also clear gtid_executed and gtid_purged.
 	}
 }
 

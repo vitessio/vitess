@@ -146,7 +146,7 @@ func TestMysql56VersionMatch(t *testing.T) {
 func TestMysql56ResetReplicationCommands(t *testing.T) {
 	want := []string{
 		"STOP SLAVE",
-		"RESET SLAVE",
+		"RESET SLAVE ALL",
 		"RESET MASTER",
 	}
 	if got := (&mysql56{}).ResetReplicationCommands(); !reflect.DeepEqual(got, want) {
