@@ -259,6 +259,9 @@ func NewActionAgent(
 		agent.initHealthCheck()
 	}
 
+	// Start periodic Orchestrator self-registration, if configured.
+	go orcDiscoverLoop(agent)
+
 	return agent, nil
 }
 
