@@ -537,17 +537,19 @@ func (node Nextval) WalkSubtree(visit Visit) error {
 }
 
 // Columns represents an insert column list.
-// The syntax for Columns is a subset of SelectExprs.
-// So, it's castable to a SelectExprs and can be analyzed
-// as such.
-type Columns []SelectExpr
+type Columns []ColIdent
 
 // Format formats the node.
 func (node Columns) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	buf.Myprintf("(%v)", SelectExprs(node))
+	prefix := "("
+	for _, n := range node {
+		buf.Myprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
 }
 
 // WalkSubtree walks the nodes of the subtree
@@ -1635,7 +1637,7 @@ func (node UpdateExprs) WalkSubtree(visit Visit) error {
 
 // UpdateExpr represents an update expression.
 type UpdateExpr struct {
-	Name *ColName
+	Name ColIdent
 	Expr ValExpr
 }
 

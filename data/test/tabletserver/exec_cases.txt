@@ -144,24 +144,6 @@
   "FullQuery": "select eid from a limit :#maxLimit lock in share mode"
 }
 
-# complex where (expression)
-"select * from a where eid+1 = 1"
-{
-  "PlanID": "PASS_SELECT",
-  "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where eid + 1 = 1 limit :#maxLimit"
-}
-
-# complex where (non-value operand)
-"select * from a where eid = id"
-{
-  "PlanID": "PASS_SELECT",
-  "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where eid = id limit :#maxLimit"
-}
-
 # insert cross-db
 "insert into b.a (eid, id) values (1, :a)"
 {
@@ -170,18 +152,8 @@
   "FullQuery": "insert into b.a(eid, id) values (1, :a)"
 }
 
-# insert with qualified column names
-"insert into a (a.eid, id) values (1, 2)"
-{
-  "PlanID": "INSERT_PK",
-  "TableName": "a",
-  "FullQuery": "insert into a(a.eid, id) values (1, 2)",
-  "OuterQuery": "insert into a(a.eid, id) values (1, 2)",
-  "PKValues": [1, 2]
-}
-
 # insert sub-select
-"insert into a (a.eid, id) values (select * from b)"
+"insert into a (eid, id) values (select * from b)"
 "row subquery not supported for inserts"
 
 # insert with bind value
@@ -384,17 +356,6 @@
 "update b set eid=1.2"
 "type mismatch: strconv.ParseUint: parsing "1.2": invalid syntax"
 
-# pk changed as qualified column name
-"update b set a.eid=1"
-{
-  "PlanID": "DML_SUBQUERY",
-  "TableName": "b",
-  "FullQuery": "update b set a.eid = 1",
-  "OuterQuery": "update b set a.eid = 1 where :#pk",
-  "Subquery": "select eid, id from b limit :#maxLimit for update",
-  "SecondaryPKValues": [1, null]
-}
-
 # complex pk change
 "update b set eid=foo()"
 {
@@ -431,16 +392,6 @@
   "TableName": "a",
   "FullQuery": "update a set name = 'foo' where eid = 1 and id = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
-  "PKValues": [1, 1]
-}
-
-# update with qualified column name
-"update a set a.name='foo' where eid=1 and id=1"
-{
-  "PlanID": "DML_PK",
-  "TableName": "a",
-  "FullQuery": "update a set a.name = 'foo' where eid = 1 and id = 1",
-  "OuterQuery": "update a set a.name = 'foo' where :#pk",
   "PKValues": [1, 1]
 }
 
@@ -652,9 +603,33 @@
   "PlanID": "OTHER"
 }
 
-# table not found
+# table not found select
 "select * from aaaa"
 "table aaaa not found in schema"
+
+# table not found update
+"update aaaa set a=1"
+"table aaaa not found in schema"
+
+# table not found update
+"delete from aaaa"
+"table aaaa not found in schema"
+
+# table not found update
+"insert into aaaa values(1)"
+"table aaaa not found in schema"
+
+# column not found insert with subquery
+"insert into a(missing) select * from b"
+"column missing not found in table a"
+
+# bad pk value update
+"update a set name='foo' where eid=1.0 and id=1"
+"type mismatch: strconv.ParseUint: parsing "1.0": invalid syntax"
+
+# bad pk value delete
+"delete from a where eid=1.0 and id=1"
+"type mismatch: strconv.ParseUint: parsing "1.0": invalid syntax"
 
 # syntax error
 "syntax error"

@@ -22,15 +22,6 @@ func GetTableName(node SimpleTableExpr) string {
 	return ""
 }
 
-// GetColName returns the column name, only if
-// it's a simple expression. Otherwise, it returns "".
-func GetColName(node Expr) ColIdent {
-	if n, ok := node.(*ColName); ok {
-		return n.Name
-	}
-	return ColIdent{}
-}
-
 // IsColName returns true if the ValExpr is a *ColName.
 func IsColName(node ValExpr) bool {
 	_, ok := node.(*ColName)

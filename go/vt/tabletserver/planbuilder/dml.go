@@ -113,7 +113,7 @@ func analyzeSet(set *sqlparser.Set) (plan *ExecPlan) {
 
 func analyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.Index) (pkValues []interface{}, err error) {
 	for _, expr := range exprs {
-		index := pkIndex.FindColumn(sqlparser.GetColName(expr.Name).Original())
+		index := pkIndex.FindColumn(expr.Name.Original())
 		if index == -1 {
 			continue
 		}
@@ -161,33 +161,6 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 		plan.FullQuery = nil
 	}
 	return plan, nil
-}
-
-func analyzeSelectExprs(exprs sqlparser.SelectExprs, table *schema.Table) (selects []int, err error) {
-	selects = make([]int, 0, len(exprs))
-	for _, expr := range exprs {
-		switch expr := expr.(type) {
-		case *sqlparser.StarExpr:
-			// Append all columns.
-			for colIndex := range table.Columns {
-				selects = append(selects, colIndex)
-			}
-		case *sqlparser.NonStarExpr:
-			name := sqlparser.GetColName(expr.Expr)
-			if name.Original() == "" {
-				// Not a simple column name.
-				return nil, nil
-			}
-			colIndex := table.FindColumn(name.Original())
-			if colIndex == -1 {
-				return nil, fmt.Errorf("column %s not found in table %s", name, table.Name)
-			}
-			selects = append(selects, colIndex)
-		default:
-			return nil, fmt.Errorf("unsupported construct: %s", sqlparser.String(expr))
-		}
-	}
-	return selects, nil
 }
 
 func analyzeFrom(tableExprs sqlparser.TableExprs) string {
@@ -286,16 +259,17 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 		plan.OuterQuery = GenerateInsertOuterQuery(ins)
 		plan.Subquery = GenerateSelectLimitQuery(sel)
 		if len(ins.Columns) != 0 {
-			plan.ColumnNumbers, err = analyzeSelectExprs(sqlparser.SelectExprs(ins.Columns), tableInfo)
-			if err != nil {
-				return nil, err
+			for _, col := range ins.Columns {
+				colIndex := tableInfo.FindColumn(col.Original())
+				if colIndex == -1 {
+					return nil, fmt.Errorf("column %v not found in table %s", col, tableInfo.Name)
+				}
+				plan.ColumnNumbers = append(plan.ColumnNumbers, colIndex)
 			}
 		} else {
-			// StarExpr node will expand into all columns
-			n := sqlparser.SelectExprs{&sqlparser.StarExpr{}}
-			plan.ColumnNumbers, err = analyzeSelectExprs(n, tableInfo)
-			if err != nil {
-				return nil, err
+			// Add all columns.
+			for colIndex := range tableInfo.Columns {
+				plan.ColumnNumbers = append(plan.ColumnNumbers, colIndex)
 			}
 		}
 		plan.SubqueryPKColumns = pkColumnNumbers
@@ -355,7 +329,7 @@ func getInsertPKColumns(columns sqlparser.Columns, tableInfo *schema.Table) (pkC
 		pkColumnNumbers[i] = -1
 	}
 	for i, column := range columns {
-		index := pkIndex.FindColumn(sqlparser.GetColName(column.(*sqlparser.NonStarExpr).Expr).Original())
+		index := pkIndex.FindColumn(column.Original())
 		if index == -1 {
 			continue
 		}
