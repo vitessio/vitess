@@ -16,8 +16,8 @@ spec:
         httpGet:
           path: /debug/vars
           port: {{port}}
-        initialDelaySeconds: 30
-        timeoutSeconds: 5
+        initialDelaySeconds: 60
+        timeoutSeconds: 10
       volumeMounts:
         - name: syslog
           mountPath: /dev/log
@@ -77,6 +77,8 @@ spec:
           -db-config-filtered-charset utf8
           -enable_semi_sync
           -enable_replication_reporter
+          -orc_api_url http://orchestrator/api
+          -orc_discover_interval 5m
           -restore_from_backup {{backup_flags}}" vitess
     - name: mysql
       image: vitess/lite
