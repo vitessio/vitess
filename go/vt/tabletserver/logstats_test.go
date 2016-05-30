@@ -81,11 +81,6 @@ func TestLogStatsFormatQuerySources(t *testing.T) {
 		t.Fatalf("'mysql' should be in formated query sources")
 	}
 
-	logStats.QuerySources |= QuerySourceRowcache
-	if !strings.Contains(logStats.FmtQuerySources(), "rowcache") {
-		t.Fatalf("'rowcache' should be in formated query sources")
-	}
-
 	logStats.QuerySources |= QuerySourceConsolidator
 	if !strings.Contains(logStats.FmtQuerySources(), "consolidator") {
 		t.Fatalf("'consolidator' should be in formated query sources")

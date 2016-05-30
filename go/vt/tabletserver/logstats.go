@@ -43,10 +43,6 @@ type LogStats struct {
 	EndTime              time.Time
 	MysqlResponseTime    time.Duration
 	WaitingForConnection time.Duration
-	CacheHits            int64
-	CacheAbsent          int64
-	CacheMisses          int64
-	CacheInvalidations   int64
 	QuerySources         byte
 	Rows                 [][]sqltypes.Value
 	TransactionID        int64
@@ -199,7 +195,7 @@ func (stats *LogStats) Format(params url.Values) string {
 	// TODO: remove username here we fully enforce immediate caller id
 	remoteAddr, username := stats.RemoteAddrUsername()
 	return fmt.Sprintf(
-		"%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%v\t%v\t%v\t%v\t%q\t\n",
+		"%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%q\t\n",
 		stats.Method,
 		remoteAddr,
 		username,
@@ -218,10 +214,6 @@ func (stats *LogStats) Format(params url.Values) string {
 		stats.WaitingForConnection.Seconds(),
 		stats.RowsAffected,
 		stats.SizeOfResponse(),
-		stats.CacheHits,
-		stats.CacheMisses,
-		stats.CacheAbsent,
-		stats.CacheInvalidations,
 		stats.ErrorStr(),
 	)
 }

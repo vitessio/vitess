@@ -6,7 +6,6 @@ package tabletserver
 
 import (
 	"net/http"
-	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -50,7 +49,6 @@ type QueryEngine struct {
 	txPool       *TxPool
 	consolidator *sync2.Consolidator
 	streamQList  *QueryList
-	tasks        sync.WaitGroup
 
 	// Vars
 	strictMode       sync2.AtomicInt64
@@ -80,12 +78,6 @@ type compiledPlan struct {
 	*ExecPlan
 	BindVars      map[string]interface{}
 	TransactionID int64
-}
-
-// CacheInvalidator provides the abstraction needed for an instant invalidation
-// vs. delayed invalidation in the case of in-transaction dmls
-type CacheInvalidator interface {
-	Delete(key string)
 }
 
 // Helper method for conn pools to convert errors
@@ -230,25 +222,6 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) {
 	qe.txPool.Open(&appParams, &dbaParams)
 }
 
-// Launch launches the specified function inside a goroutine.
-// If Close or WaitForTxEmpty is called while a goroutine is running,
-// QueryEngine will not return until the existing functions have completed.
-// This functionality allows us to launch tasks with the assurance that
-// the QueryEngine will not be closed underneath us.
-func (qe *QueryEngine) Launch(f func()) {
-	qe.tasks.Add(1)
-	go func() {
-		defer func() {
-			qe.tasks.Done()
-			if x := recover(); x != nil {
-				qe.queryServiceStats.InternalErrors.Add("Task", 1)
-				log.Errorf("task error: %v", x)
-			}
-		}()
-		f()
-	}()
-}
-
 // IsMySQLReachable returns true if we can connect to MySQL.
 func (qe *QueryEngine) IsMySQLReachable() bool {
 	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App.ConnParams, qe.queryServiceStats.MySQLStats)
@@ -274,7 +247,6 @@ func (qe *QueryEngine) WaitForTxEmpty() {
 // You must ensure that no more queries will be sent
 // before calling Close.
 func (qe *QueryEngine) Close() {
-	qe.tasks.Wait()
 	// Close in reverse order of Open.
 	qe.txPool.Close()
 	qe.streamConnPool.Close()

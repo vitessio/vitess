@@ -24,6 +24,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	sql := fmt.Sprintf("alter table %s add test_column int", tableName)
 	db := fakesqldb.Register()
 	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("commit", &sqltypes.Result{})
 	db.AddQuery(sql, &sqltypes.Result{})
 
 	txPool := newTxPool(true)
@@ -35,13 +36,10 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	ctx := context.Background()
 	transactionID := txPool.Begin(ctx)
 	txConn := txPool.Get(transactionID)
-	defer txPool.SafeCommit(ctx, transactionID)
+	defer txPool.Commit(ctx, transactionID)
 	txConn.RecordQuery(sql)
 	_, err := txConn.Exec(ctx, sql, 1, true)
 	txConn.Recycle()
-	txConn.DirtyKeys(tableName)
-	dk := txConn.DirtyKeys(tableName)
-	dk.Delete(tableName)
 	if err != nil {
 		t.Fatalf("got error: %v", err)
 	}
@@ -186,10 +184,8 @@ func TestTxPoolSafeCommitFail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("got exec error: %v", err)
 	}
-	_, err = txPool.SafeCommit(ctx, transactionID)
-	if err == nil {
-		t.Fatalf("comit should get exec failure")
-	}
+	defer handleAndVerifyTabletError(t, "commit should get exec failure", vtrpcpb.ErrorCode_UNKNOWN_ERROR)
+	txPool.Commit(ctx, transactionID)
 }
 
 func TestTxPoolRollbackFail(t *testing.T) {

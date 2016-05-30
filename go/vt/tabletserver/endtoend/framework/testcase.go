@@ -93,11 +93,6 @@ func (tc *TestCase) Test(name string, client *QueryClient) error {
 	catcher := NewQueryCatcher()
 	defer catcher.Close()
 
-	var tstart TableStat
-	if tc.Table != "" {
-		tstart = TableStats()[tc.Table]
-	}
-
 	qr, err := exec(client, tc.Query, tc.BindVars)
 	if err != nil {
 		return fmt.Errorf("%s: Execute failed: %v", name, err)
@@ -140,22 +135,6 @@ func (tc *TestCase) Test(name string, client *QueryClient) error {
 	if tc.Plan != "" {
 		if queryInfo.PlanType != tc.Plan {
 			errs = append(errs, fmt.Sprintf("Plan mismatch: %s, want %s", queryInfo.PlanType, tc.Plan))
-		}
-	}
-
-	if tc.Table != "" {
-		tend := TableStats()[tc.Table]
-		if err = checkStat("Hits", tc.Hits, tend.Hits-tstart.Hits, queryInfo.CacheHits); err != nil {
-			errs = append(errs, err.Error())
-		}
-		if err = checkStat("Misses", tc.Misses, tend.Misses-tstart.Misses, queryInfo.CacheMisses); err != nil {
-			errs = append(errs, err.Error())
-		}
-		if err = checkStat("Absent", tc.Absent, tend.Absent-tstart.Absent, queryInfo.CacheAbsent); err != nil {
-			errs = append(errs, err.Error())
-		}
-		if err = checkStat("Invalidations", tc.Invalidations, tend.Invalidations-tstart.Invalidations, queryInfo.CacheInvalidations); err != nil {
-			errs = append(errs, err.Error())
 		}
 	}
 	if len(errs) != 0 {

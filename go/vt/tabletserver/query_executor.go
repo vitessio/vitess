@@ -540,48 +540,6 @@ func (qre *QueryExecutor) execSet() (*sqltypes.Result, error) {
 	return qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 }
 
-func parseInt64(v interface{}) (int64, error) {
-	if ival, ok := v.(int64); ok {
-		return ival, nil
-	}
-	return -1, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "got %v, want int64", v)
-}
-
-func parseFloat64(v interface{}) (float64, error) {
-	if ival, ok := v.(int64); ok {
-		return float64(ival), nil
-	}
-	if fval, ok := v.(float64); ok {
-		return fval, nil
-	}
-	return -1, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "got %v, want int64 or float64", v)
-}
-
-func parseDuration(v interface{}) (time.Duration, error) {
-	val, err := parseFloat64(v)
-	if err != nil {
-		return 0, err
-	}
-	// time.Duration is an int64, have to multiple by 1e9 because
-	// val might be in range (0, 1)
-	return time.Duration(val * 1e9), nil
-}
-
-func rowsAreEqual(row1, row2 []sqltypes.Value) bool {
-	if len(row1) != len(row2) {
-		return false
-	}
-	for i := 0; i < len(row1); i++ {
-		if row1[i].IsNull() && row2[i].IsNull() {
-			continue
-		}
-		if (row1[i].IsNull() && !row2[i].IsNull()) || (!row1[i].IsNull() && row2[i].IsNull()) || row1[i].String() != row2[i].String() {
-			return false
-		}
-	}
-	return true
-}
-
 func (qre *QueryExecutor) getConn(pool *ConnPool) (*DBConn, error) {
 	span := trace.NewSpanFromContext(qre.ctx)
 	span.StartLocal("QueryExecutor.getConn")

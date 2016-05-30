@@ -20,6 +20,13 @@ const (
 	Sequence
 )
 
+// TypeNames allows to fetch a the type name for a table.
+// Count must match the number of table types.
+var TypeNames = []string{
+	"none",
+	"sequence",
+}
+
 // TableColumn contains info about a table's column.
 type TableColumn struct {
 	Name    cistring.CIString

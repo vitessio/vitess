@@ -78,7 +78,7 @@ func schemazHandler(tables []*schema.Table, w http.ResponseWriter, r *http.Reque
 		Type  []string
 		Table *schema.Table
 	}{
-		Type: []string{"none", "read-write", "write-only", "sequence"},
+		Type: schema.TypeNames,
 	}
 	for _, Value := range sorter.rows {
 		envelope.Table = Value
