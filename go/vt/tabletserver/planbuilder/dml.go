@@ -46,16 +46,10 @@ func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan,
 
 	plan.OuterQuery = GenerateUpdateOuterQuery(upd)
 
-	if conditions := analyzeWhere(upd.Where); conditions != nil {
-		pkValues, err := getPKValues(conditions, tableInfo.Indexes[0])
-		if err != nil {
-			return nil, err
-		}
-		if pkValues != nil {
-			plan.PlanID = PlanDMLPK
-			plan.PKValues = pkValues
-			return plan, nil
-		}
+	if pkValues := analyzeWhere(upd.Where, tableInfo.Indexes[0]); pkValues != nil {
+		plan.PlanID = PlanDMLPK
+		plan.PKValues = pkValues
+		return plan, nil
 	}
 
 	plan.PlanID = PlanDMLSubquery
@@ -87,16 +81,10 @@ func analyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan,
 
 	plan.OuterQuery = GenerateDeleteOuterQuery(del)
 
-	if conditions := analyzeWhere(del.Where); conditions != nil {
-		pkValues, err := getPKValues(conditions, tableInfo.Indexes[0])
-		if err != nil {
-			return nil, err
-		}
-		if pkValues != nil {
-			plan.PlanID = PlanDMLPK
-			plan.PKValues = pkValues
-			return plan, nil
-		}
+	if pkValues := analyzeWhere(del.Where, tableInfo.Indexes[0]); pkValues != nil {
+		plan.PlanID = PlanDMLPK
+		plan.PKValues = pkValues
+		return plan, nil
 	}
 
 	plan.PlanID = PlanDMLSubquery
@@ -174,22 +162,23 @@ func analyzeFrom(tableExprs sqlparser.TableExprs) string {
 	return sqlparser.GetTableName(node.Expr)
 }
 
-func analyzeWhere(node *sqlparser.Where) (conditions []sqlparser.BoolExpr) {
+func analyzeWhere(node *sqlparser.Where, pkIndex *schema.Index) []interface{} {
 	if node == nil {
 		return nil
 	}
-	return analyzeBoolean(node.Expr)
+	conditions := analyzeBoolean(node.Expr)
+	if conditions == nil {
+		return nil
+	}
+	return getPKValues(conditions, pkIndex)
 }
 
-func analyzeBoolean(node sqlparser.BoolExpr) (conditions []sqlparser.BoolExpr) {
+func analyzeBoolean(node sqlparser.BoolExpr) (conditions []*sqlparser.ComparisonExpr) {
 	switch node := node.(type) {
 	case *sqlparser.AndExpr:
 		left := analyzeBoolean(node.Left)
 		right := analyzeBoolean(node.Right)
 		if left == nil || right == nil {
-			return nil
-		}
-		if sqlparser.HasINClause(left) && sqlparser.HasINClause(right) {
 			return nil
 		}
 		return append(left, right...)
@@ -200,29 +189,48 @@ func analyzeBoolean(node sqlparser.BoolExpr) (conditions []sqlparser.BoolExpr) {
 		case sqlparser.StringIn(
 			node.Operator,
 			sqlparser.EqualStr,
-			sqlparser.LessThanStr,
-			sqlparser.GreaterThanStr,
-			sqlparser.LessEqualStr,
-			sqlparser.GreaterEqualStr,
-			sqlparser.NullSafeEqualStr,
 			sqlparser.LikeStr):
 			if sqlparser.IsColName(node.Left) && sqlparser.IsValue(node.Right) {
-				return []sqlparser.BoolExpr{node}
+				return []*sqlparser.ComparisonExpr{node}
 			}
 		case node.Operator == sqlparser.InStr:
 			if sqlparser.IsColName(node.Left) && sqlparser.IsSimpleTuple(node.Right) {
-				return []sqlparser.BoolExpr{node}
+				return []*sqlparser.ComparisonExpr{node}
 			}
-		}
-	case *sqlparser.RangeCond:
-		if node.Operator != sqlparser.BetweenStr {
-			return nil
-		}
-		if sqlparser.IsColName(node.Left) && sqlparser.IsValue(node.From) && sqlparser.IsValue(node.To) {
-			return []sqlparser.BoolExpr{node}
 		}
 	}
 	return nil
+}
+
+func getPKValues(conditions []*sqlparser.ComparisonExpr, pkIndex *schema.Index) []interface{} {
+	pkValues := make([]interface{}, len(pkIndex.Columns))
+	inClauseSeen := false
+	for _, condition := range conditions {
+		if condition.Operator == sqlparser.InStr {
+			if inClauseSeen {
+				return nil
+			}
+			inClauseSeen = true
+		}
+		index := pkIndex.FindColumn(condition.Left.(*sqlparser.ColName).Name.Original())
+		if index == -1 {
+			return nil
+		}
+		if pkValues[index] != nil {
+			return nil
+		}
+		var err error
+		pkValues[index], err = sqlparser.AsInterface(condition.Right)
+		if err != nil {
+			return nil
+		}
+	}
+	for _, v := range pkValues {
+		if v == nil {
+			return nil
+		}
+	}
+	return pkValues
 }
 
 func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan, err error) {
@@ -299,11 +307,8 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 	}
 	plan.SecondaryPKValues, err = analyzeUpdateExpressions(sqlparser.UpdateExprs(ins.OnDup), tableInfo.Indexes[0])
 	if err != nil {
-		if err == ErrTooComplex {
-			plan.Reason = ReasonPKChange
-			return plan, nil
-		}
-		return nil, err
+		plan.Reason = ReasonPKChange
+		return plan, nil
 	}
 	plan.PlanID = PlanUpsertPK
 	newins := *ins

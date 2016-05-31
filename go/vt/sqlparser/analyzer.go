@@ -47,16 +47,6 @@ func IsNull(node ValExpr) bool {
 	return false
 }
 
-// HasINClause returns true if any of the conditions has an IN clause.
-func HasINClause(conditions []BoolExpr) bool {
-	for _, node := range conditions {
-		if c, ok := node.(*ComparisonExpr); ok && c.Operator == InStr {
-			return true
-		}
-	}
-	return false
-}
-
 // IsSimpleTuple returns true if the ValExpr is a ValTuple that
 // contains simple values or if it's a list arg.
 func IsSimpleTuple(node ValExpr) bool {

@@ -405,6 +405,16 @@
   "Subquery": "select eid, id from a where eid = 1 limit :#maxLimit for update"
 }
 
+# bad pk
+"update a set name='foo' where eid=1.0 and id=1"
+{
+  "PlanID": "DML_SUBQUERY",
+  "TableName": "a",
+  "FullQuery": "update a set name = 'foo' where eid = 1.0 and id = 1",
+  "OuterQuery": "update a set name = 'foo' where :#pk",
+  "Subquery": "select eid, id from a where eid = 1.0 and id = 1 limit :#maxLimit for update"
+}
+
 # partial pk with limit
 "update a set name='foo' where eid=1 limit 10"
 {
@@ -432,6 +442,56 @@
   "Reason": "TABLE_NOINDEX",
   "TableName": "c",
   "FullQuery": "update c set eid = 1"
+}
+
+# complex expression in where
+"update a set name='foo' where eid+1=1 and id=1"
+{
+  "PlanID":"DML_SUBQUERY",
+  "TableName":"a",
+  "FullQuery":"update a set name = 'foo' where eid + 1 = 1 and id = 1",
+  "OuterQuery":"update a set name = 'foo' where :#pk",
+  "Subquery":"select eid, id from a where eid + 1 = 1 and id = 1 limit :#maxLimit for update"
+}
+
+# parenthesized expressions in where
+"update a set name='foo' where (eid=1) and id=1"
+{
+  "PlanID": "DML_PK",
+  "TableName": "a",
+  "FullQuery": "update a set name = 'foo' where (eid = 1) and id = 1",
+  "OuterQuery": "update a set name = 'foo' where :#pk",
+  "PKValues": [1, 1]
+}
+
+# in clause expression in where
+"update a set name='foo' where eid in (1, 2) and id=1"
+{
+  "PlanID":"DML_PK",
+  "TableName":"a",
+  "FullQuery":"update a set name = 'foo' where eid in (1, 2) and id = 1",
+  "OuterQuery":"update a set name = 'foo' where :#pk",
+  "PKValues":[[1,2],1]
+}
+
+# double in clause
+"update a set name='foo' where eid in (1, 2) and id in (1, 2)"
+{
+  "PlanID":"DML_SUBQUERY",
+  "TableName":"a",
+  "FullQuery":"update a set name = 'foo' where eid in (1, 2) and id in (1, 2)",
+  "OuterQuery":"update a set name = 'foo' where :#pk",
+  "Subquery":"select eid, id from a where eid in (1, 2) and id in (1, 2) limit :#maxLimit for update"
+}
+
+# double use of pk
+"update a set name='foo' where eid=1 and eid=2"
+{
+  "PlanID":"DML_SUBQUERY",
+  "TableName":"a",
+  "FullQuery":"update a set name = 'foo' where eid = 1 and eid = 2",
+  "OuterQuery":"update a set name = 'foo' where :#pk",
+  "Subquery":"select eid, id from a where eid = 1 and eid = 2 limit :#maxLimit for update"
 }
 
 # delete cross-db
@@ -482,6 +542,16 @@
   "Subquery": "select eid, id from a where eid = 1 limit :#maxLimit for update"
 }
 
+# bad pk value delete
+"delete from a where eid=1.0 and id=1"
+{
+  "PlanID": "DML_SUBQUERY",
+  "TableName": "a",
+  "FullQuery": "delete from a where eid = 1.0 and id = 1",
+  "OuterQuery": "delete from a where :#pk",
+  "Subquery": "select eid, id from a where eid = 1.0 and id = 1 limit :#maxLimit for update"
+}
+
 # non-pk
 "delete from a where eid=1 and name='foo'"
 {
@@ -499,6 +569,56 @@
   "Reason": "TABLE_NOINDEX",
   "TableName": "c",
   "FullQuery": "delete from c"
+}
+
+# delete complex expression in where
+"delete from a where eid+1=1 and id=1"
+{
+  "PlanID":"DML_SUBQUERY",
+  "TableName":"a",
+  "FullQuery":"delete from a where eid + 1 = 1 and id = 1",
+  "OuterQuery":"delete from a where :#pk",
+  "Subquery":"select eid, id from a where eid + 1 = 1 and id = 1 limit :#maxLimit for update"
+}
+
+# parenthesized expressions in where
+"delete from a where (eid=1) and id=1"
+{
+  "PlanID": "DML_PK",
+  "TableName": "a",
+  "FullQuery": "delete from a where (eid = 1) and id = 1",
+  "OuterQuery": "delete from a where :#pk",
+  "PKValues": [1, 1]
+}
+
+# delete in clause expression in where
+"delete from a where eid in (1, 2) and id=1"
+{
+  "PlanID":"DML_PK",
+  "TableName":"a",
+  "FullQuery":"delete from a where eid in (1, 2) and id = 1",
+  "OuterQuery":"delete from a where :#pk",
+  "PKValues":[[1,2],1]
+}
+
+# delete double in clause
+"delete from a where eid in (1, 2) and id in (1, 2)"
+{
+  "PlanID":"DML_SUBQUERY",
+  "TableName":"a",
+  "FullQuery":"delete from a where eid in (1, 2) and id in (1, 2)",
+  "OuterQuery":"delete from a where :#pk",
+  "Subquery":"select eid, id from a where eid in (1, 2) and id in (1, 2) limit :#maxLimit for update"
+}
+
+# delete double use of pk
+"delete from a where eid=1 and eid=2"
+{
+  "PlanID":"DML_SUBQUERY",
+  "TableName":"a",
+  "FullQuery":"delete from a where eid = 1 and eid = 2",
+  "OuterQuery":"delete from a where :#pk",
+  "Subquery":"select eid, id from a where eid = 1 and eid = 2 limit :#maxLimit for update"
 }
 
 # sequence
@@ -622,14 +742,6 @@
 # column not found insert with subquery
 "insert into a(missing) select * from b"
 "column missing not found in table a"
-
-# bad pk value update
-"update a set name='foo' where eid=1.0 and id=1"
-"type mismatch: strconv.ParseUint: parsing "1.0": invalid syntax"
-
-# bad pk value delete
-"delete from a where eid=1.0 and id=1"
-"type mismatch: strconv.ParseUint: parsing "1.0": invalid syntax"
 
 # syntax error
 "syntax error"
