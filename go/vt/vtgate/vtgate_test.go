@@ -40,7 +40,7 @@ func init() {
 }
 `
 	hcVTGateTest = newFakeHealthCheck()
-	Init(context.Background(), hcVTGateTest, topo.Server{}, new(sandboxTopo), "aa", 10, nil, 0)
+	Init(context.Background(), hcVTGateTest, topo.Server{}, new(sandboxTopo), "aa", 10, nil)
 }
 
 func TestVTGateExecute(t *testing.T) {
