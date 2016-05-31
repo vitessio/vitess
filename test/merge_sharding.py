@@ -257,8 +257,8 @@ index by_msg (msg)
     shard_2_replica.init_tablet('replica', 'test_keyspace', '80-')
     shard_2_rdonly.init_tablet('rdonly', 'test_keyspace', '80-')
 
+    # rebuild and check SrvKeyspace
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
-
     ks = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_keyspace'])
     self.assertEqual(ks['sharding_column_name'], 'custom_sharding_key')
 

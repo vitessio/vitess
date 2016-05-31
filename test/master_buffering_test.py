@@ -106,8 +106,6 @@ def setup_tablets():
       shard='0',
       tablet_index=1)
 
-  utils.run_vtctl(['RebuildKeyspaceGraph', KEYSPACE_NAME], auto_log=True)
-
   for t in [shard_0_master, shard_0_replica1]:
     t.create_db('vt_test_keyspace')
     for create_table in create_tables:
@@ -127,9 +125,6 @@ def setup_tablets():
 
   for t in [shard_0_master, shard_0_replica1]:
     t.wait_for_vttablet_state('SERVING')
-
-  utils.run_vtctl(
-      ['RebuildKeyspaceGraph', KEYSPACE_NAME], auto_log=True)
 
   utils.check_srv_keyspace(
       'test_nj', KEYSPACE_NAME,

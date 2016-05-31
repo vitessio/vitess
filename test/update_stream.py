@@ -87,7 +87,7 @@ def setUpModule():
     utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'replica')
     master_tablet.wait_for_vttablet_state('SERVING')
     replica_tablet.wait_for_vttablet_state('SERVING')
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+#    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # reset counter so tests don't assert
     tablet.Tablet.tablets_running = 0
