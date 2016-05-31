@@ -203,11 +203,6 @@ class TestVerticalSplit(unittest.TestCase, base_sharding.BaseShardingTest):
     for t in replica_tablets:
       t.wait_for_vttablet_state('SERVING')
 
-#    utils.run_vtctl(
-#        ['RebuildKeyspaceGraph', 'source_keyspace'], auto_log=True)
-#    utils.run_vtctl(
-#        ['RebuildKeyspaceGraph', 'destination_keyspace'], auto_log=True)
-
   def _create_source_schema(self):
     create_table_template = '''create table %s(
 id bigint not null,
