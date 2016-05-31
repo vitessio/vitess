@@ -7,7 +7,6 @@ RUN apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 0xcbcb082a1bb943db 
  && apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       bzip2 \
-      memcached \
       mariadb-server \
  && rm -rf /var/lib/apt/lists/*
 

@@ -125,7 +125,6 @@ This command performs the following actions:
 1. Promotes the master-elect tablet to be the new master. In addition to
    changing its tablet type to <code>master</code>, the master-elect
    performs any other changes that might be required for its new state.
-   For example, it might need to modify the way its rowcache works.
 1. Ensures replication is functioning properly via the following steps:
    1.  On the master-elect tablet, Vitess inserts an entry in a test table
        and then updates the <code>MasterAlias</code> record of the global

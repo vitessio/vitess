@@ -8,7 +8,6 @@ RUN apt-key adv --recv-keys --keyserver pgp.mit.edu 5072E1F5 \
  && DEBIAN_FRONTEND=noninteractive \
     apt-get install -y --no-install-recommends \
       bzip2 \
-      memcached \
       libmysqlclient18 \
       mysql-client \
       mysql-server \
