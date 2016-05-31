@@ -11,7 +11,6 @@ addons:
       # NOTE: When you add a dependency, don't forget to add comment why it's necessary.
       - automake
       - libtool
-      - memcached
       - php5-cli
       - php5-dev
       - python-dev

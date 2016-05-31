@@ -51,13 +51,6 @@ esac
 
 mkdir -p $VTDATAROOT/backups
 
-# Look for memcached.
-memcached_path=`which memcached`
-if [ -z "$memcached_path" ]; then
-  echo "Can't find memcached. Please make sure it is available in PATH."
-  exit 1
-fi
-
 # Start 5 vttablets by default.
 # Pass a list of UID indices on the command line to override.
 uids=${@:-'0 1 2 3 4'}
