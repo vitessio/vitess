@@ -18,9 +18,20 @@ var (
 // - Return the list if there is 0 or 1 tablet.
 // - Return the list if all tablets have <=30s lag.
 // - Filter by replication lag: for each tablet, if the mean value without it is more than 0.7 of the mean value across all tablets, it is valid.
+// - Make sure we return at least two tablets (if there is one with <2h replication lag).
+// - If one tablet is removed, run above steps again in case there are two tablets with high replication lag. (It should cover most cases.)
 // For example, lags of (5s, 10s, 15s, 120s) return the first three;
 // lags of (30m, 35m, 40m, 45m) return all.
 func FilterByReplicationLag(tabletStatsList []*TabletStats) []*TabletStats {
+	res := filterByLag(tabletStatsList)
+	// run the filter again if exact one tablet is removed.
+	if len(res) > 2 && len(res) == len(tabletStatsList)-1 {
+		res = filterByLag(res)
+	}
+	return res
+}
+
+func filterByLag(tabletStatsList []*TabletStats) []*TabletStats {
 	list := make([]*TabletStats, 0, len(tabletStatsList))
 	// filter non-serving tablets
 	for _, ts := range tabletStatsList {
