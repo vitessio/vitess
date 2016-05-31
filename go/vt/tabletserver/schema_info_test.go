@@ -8,7 +8,6 @@ import (
 	"expvar"
 	"fmt"
 	"math"
-	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -18,8 +17,6 @@ import (
 
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/schema"
-	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -27,7 +24,6 @@ import (
 )
 
 func TestSchemaInfoStrictMode(t *testing.T) {
-	fakecacheservice.Register()
 	db := fakesqldb.Register()
 	for query, result := range getSchemaInfoBaseTestQueries() {
 		db.AddQuery(query, result)
@@ -36,19 +32,16 @@ func TestSchemaInfoStrictMode(t *testing.T) {
 	t.Log(schemaInfo)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	schemaInfo.cachePool.Open()
-	defer schemaInfo.cachePool.Close()
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because of underlying "+
 			"connection cannot verify strict mode",
 		vtrpcpb.ErrorCode_INTERNAL_ERROR,
 	)
-	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, true)
+	schemaInfo.Open(&appParams, &dbaParams, true)
 }
 
 func TestSchemaInfoOpenFailedDueToMissMySQLTime(t *testing.T) {
-	fakecacheservice.Register()
 	db := fakesqldb.Register()
 	db.AddQuery("select unix_timestamp()", &sqltypes.Result{
 		// make this query fail
@@ -60,18 +53,15 @@ func TestSchemaInfoOpenFailedDueToMissMySQLTime(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	schemaInfo.cachePool.Open()
-	defer schemaInfo.cachePool.Close()
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because of it could not get MySQL time",
 		vtrpcpb.ErrorCode_UNKNOWN_ERROR,
 	)
-	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, false)
+	schemaInfo.Open(&appParams, &dbaParams, false)
 }
 
 func TestSchemaInfoOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
-	fakecacheservice.Register()
 	db := fakesqldb.Register()
 	db.AddQuery("select unix_timestamp()", &sqltypes.Result{
 		RowsAffected: 1,
@@ -83,18 +73,15 @@ func TestSchemaInfoOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	schemaInfo.cachePool.Open()
-	defer schemaInfo.cachePool.Close()
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because of incorrect MySQL row number",
 		vtrpcpb.ErrorCode_UNKNOWN_ERROR,
 	)
-	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, false)
+	schemaInfo.Open(&appParams, &dbaParams, false)
 }
 
 func TestSchemaInfoOpenFailedDueToInvalidTimeFormat(t *testing.T) {
-	fakecacheservice.Register()
 	db := fakesqldb.Register()
 	db.AddQuery("select unix_timestamp()", &sqltypes.Result{
 		RowsAffected: 1,
@@ -106,18 +93,15 @@ func TestSchemaInfoOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	schemaInfo.cachePool.Open()
-	defer schemaInfo.cachePool.Close()
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because it could not get MySQL time",
 		vtrpcpb.ErrorCode_UNKNOWN_ERROR,
 	)
-	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, false)
+	schemaInfo.Open(&appParams, &dbaParams, false)
 }
 
 func TestSchemaInfoOpenFailedDueToExecErr(t *testing.T) {
-	fakecacheservice.Register()
 	db := fakesqldb.Register()
 	for query, result := range getSchemaInfoBaseTestQueries() {
 		db.AddQuery(query, result)
@@ -129,18 +113,15 @@ func TestSchemaInfoOpenFailedDueToExecErr(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	schemaInfo.cachePool.Open()
-	defer schemaInfo.cachePool.Close()
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because conn.Exec failed",
 		vtrpcpb.ErrorCode_UNKNOWN_ERROR,
 	)
-	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, false)
+	schemaInfo.Open(&appParams, &dbaParams, false)
 }
 
 func TestSchemaInfoOpenFailedDueToTableInfoErr(t *testing.T) {
-	fakecacheservice.Register()
 	db := fakesqldb.Register()
 	for query, result := range getSchemaInfoBaseTestQueries() {
 		db.AddQuery(query, result)
@@ -158,46 +139,15 @@ func TestSchemaInfoOpenFailedDueToTableInfoErr(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	schemaInfo.cachePool.Open()
-	defer schemaInfo.cachePool.Close()
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because NewTableInfo failed",
 		vtrpcpb.ErrorCode_INTERNAL_ERROR,
 	)
-	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, false)
-}
-
-func TestSchemaInfoOpenWithSchemaOverride(t *testing.T) {
-	fakecacheservice.Register()
-	db := fakesqldb.Register()
-	for query, result := range getSchemaInfoTestSupportedQueries() {
-		db.AddQuery(query, result)
-	}
-	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second, false)
-	appParams := sqldb.ConnParams{Engine: db.Name}
-	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	schemaInfo.cachePool.Open()
-	defer schemaInfo.cachePool.Close()
-	schemaOverrides := getSchemaInfoTestSchemaOverride()
-	// test cache type RW
-	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, true)
-	testTableInfo := schemaInfo.GetTable("test_table_01")
-	if testTableInfo.Table.Type != schema.CacheRW {
-		t.Fatalf("test_table_01's cache type should be RW")
-	}
-	schemaInfo.Close()
-	// test cache type W
-	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, true)
-	testTableInfo = schemaInfo.GetTable("test_table_02")
-	if testTableInfo.Table.Type != schema.CacheW {
-		t.Fatalf("test_table_02's cache type should be W")
-	}
-	schemaInfo.Close()
+	schemaInfo.Open(&appParams, &dbaParams, false)
 }
 
 func TestSchemaInfoReload(t *testing.T) {
-	fakecacheservice.Register()
 	db := fakesqldb.Register()
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
@@ -206,10 +156,7 @@ func TestSchemaInfoReload(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 10*time.Second, idleTimeout, false)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	schemaInfo.cachePool.Open()
-	defer schemaInfo.cachePool.Close()
-	// test cache type RW
-	schemaInfo.Open(&appParams, &dbaParams, nil, true)
+	schemaInfo.Open(&appParams, &dbaParams, true)
 	defer schemaInfo.Close()
 	// this new table does not exist
 	newTable := "test_table_04"
@@ -278,7 +225,6 @@ func TestSchemaInfoReload(t *testing.T) {
 }
 
 func TestSchemaInfoCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
-	fakecacheservice.Register()
 	db := fakesqldb.Register()
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
@@ -294,9 +240,7 @@ func TestSchemaInfoCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, true)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	schemaInfo.cachePool.Open()
-	defer schemaInfo.cachePool.Close()
-	schemaInfo.Open(&appParams, &dbaParams, getSchemaInfoTestSchemaOverride(), false)
+	schemaInfo.Open(&appParams, &dbaParams, false)
 	defer schemaInfo.Close()
 	originalSchemaErrorCount := schemaInfo.queryServiceStats.InternalErrors.Counts()["Schema"]
 	// should silently fail: no errors returned, but increment a counter
@@ -310,7 +254,6 @@ func TestSchemaInfoCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 }
 
 func TestSchemaInfoCreateOrUpdateTable(t *testing.T) {
-	fakecacheservice.Register()
 	db := fakesqldb.Register()
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
@@ -326,15 +269,12 @@ func TestSchemaInfoCreateOrUpdateTable(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	schemaInfo.cachePool.Open()
-	defer schemaInfo.cachePool.Close()
-	schemaInfo.Open(&appParams, &dbaParams, getSchemaInfoTestSchemaOverride(), false)
+	schemaInfo.Open(&appParams, &dbaParams, false)
 	schemaInfo.CreateOrUpdateTable(context.Background(), "test_table_01")
 	schemaInfo.Close()
 }
 
 func TestSchemaInfoDropTable(t *testing.T) {
-	fakecacheservice.Register()
 	db := fakesqldb.Register()
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
@@ -350,9 +290,7 @@ func TestSchemaInfoDropTable(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	schemaInfo.cachePool.Open()
-	defer schemaInfo.cachePool.Close()
-	schemaInfo.Open(&appParams, &dbaParams, getSchemaInfoTestSchemaOverride(), false)
+	schemaInfo.Open(&appParams, &dbaParams, false)
 	tableInfo := schemaInfo.GetTable(existingTable)
 	if tableInfo == nil {
 		t.Fatalf("table: %s should exist", existingTable)
@@ -366,7 +304,6 @@ func TestSchemaInfoDropTable(t *testing.T) {
 }
 
 func TestSchemaInfoGetPlanPanicDuetoEmptyQuery(t *testing.T) {
-	fakecacheservice.Register()
 	db := fakesqldb.Register()
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
@@ -374,11 +311,7 @@ func TestSchemaInfoGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second, false)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	schemaInfo.cachePool.Open()
-	defer schemaInfo.cachePool.Close()
-	schemaOverrides := getSchemaInfoTestSchemaOverride()
-	// test cache type RW
-	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, true)
+	schemaInfo.Open(&appParams, &dbaParams, true)
 	defer schemaInfo.Close()
 
 	ctx := context.Background()
@@ -392,7 +325,6 @@ func TestSchemaInfoGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 }
 
 func TestSchemaInfoQueryCacheFailDueToInvalidCacheSize(t *testing.T) {
-	fakecacheservice.Register()
 	db := fakesqldb.Register()
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
@@ -400,11 +332,7 @@ func TestSchemaInfoQueryCacheFailDueToInvalidCacheSize(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second, false)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	schemaInfo.cachePool.Open()
-	defer schemaInfo.cachePool.Close()
-	schemaOverrides := getSchemaInfoTestSchemaOverride()
-	// test cache type RW
-	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, true)
+	schemaInfo.Open(&appParams, &dbaParams, true)
 	defer schemaInfo.Close()
 	defer handleAndVerifyTabletError(
 		t,
@@ -415,7 +343,6 @@ func TestSchemaInfoQueryCacheFailDueToInvalidCacheSize(t *testing.T) {
 }
 
 func TestSchemaInfoQueryCache(t *testing.T) {
-	fakecacheservice.Register()
 	db := fakesqldb.Register()
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
@@ -429,11 +356,7 @@ func TestSchemaInfoQueryCache(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second, true)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	schemaInfo.cachePool.Open()
-	defer schemaInfo.cachePool.Close()
-	schemaOverrides := getSchemaInfoTestSchemaOverride()
-	// test cache type RW
-	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, true)
+	schemaInfo.Open(&appParams, &dbaParams, true)
 	defer schemaInfo.Close()
 
 	ctx := context.Background()
@@ -454,7 +377,6 @@ func TestSchemaInfoQueryCache(t *testing.T) {
 }
 
 func TestSchemaInfoExportVars(t *testing.T) {
-	fakecacheservice.Register()
 	db := fakesqldb.Register()
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
@@ -462,9 +384,7 @@ func TestSchemaInfoExportVars(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, true)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	schemaInfo.cachePool.Open()
-	defer schemaInfo.cachePool.Close()
-	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, true)
+	schemaInfo.Open(&appParams, &dbaParams, true)
 	defer schemaInfo.Close()
 	expvar.Do(func(kv expvar.KeyValue) {
 		_ = kv.Value.String()
@@ -472,7 +392,6 @@ func TestSchemaInfoExportVars(t *testing.T) {
 }
 
 func TestUpdatedMysqlStats(t *testing.T) {
-	fakecacheservice.Register()
 	db := fakesqldb.Register()
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
@@ -481,9 +400,7 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 10*time.Second, idleTimeout, false)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	schemaInfo.cachePool.Open()
-	defer schemaInfo.cachePool.Close()
-	schemaInfo.Open(&appParams, &dbaParams, nil, true)
+	schemaInfo.Open(&appParams, &dbaParams, true)
 	defer schemaInfo.Close()
 	// Add new table
 	tableName := "mysql_stats_test_table"
@@ -547,7 +464,6 @@ func TestUpdatedMysqlStats(t *testing.T) {
 }
 
 func TestSchemaInfoStatsURL(t *testing.T) {
-	fakecacheservice.Register()
 	db := fakesqldb.Register()
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
@@ -557,9 +473,7 @@ func TestSchemaInfoStatsURL(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	schemaInfo.cachePool.Open()
-	defer schemaInfo.cachePool.Close()
-	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, true)
+	schemaInfo.Open(&appParams, &dbaParams, true)
 	defer schemaInfo.Close()
 	// warm up cache
 	ctx := context.Background()
@@ -574,10 +488,6 @@ func TestSchemaInfoStatsURL(t *testing.T) {
 	response = httptest.NewRecorder()
 	schemaInfo.ServeHTTP(response, request)
 
-	request, _ = http.NewRequest("GET", schemaInfo.endpoints[debugTableStatsKey], nil)
-	response = httptest.NewRecorder()
-	schemaInfo.ServeHTTP(response, request)
-
 	request, _ = http.NewRequest("GET", schemaInfo.endpoints[debugSchemaKey], nil)
 	response = httptest.NewRecorder()
 	schemaInfo.ServeHTTP(response, request)
@@ -587,24 +497,6 @@ func TestSchemaInfoStatsURL(t *testing.T) {
 	schemaInfo.ServeHTTP(response, request)
 }
 
-func newTestSchemaInfoCachePool(enablePublishStats bool, queryServiceStats *QueryServiceStats) *CachePool {
-	rowCacheConfig := RowCacheConfig{
-		Binary:      "ls",
-		Connections: 100,
-	}
-	randID := rand.Int63()
-	name := fmt.Sprintf("TestCachePool-%d-", randID)
-	statsURL := fmt.Sprintf("/debug/cache-%d", randID)
-	return NewCachePool(
-		name,
-		rowCacheConfig,
-		1*time.Second,
-		statsURL,
-		enablePublishStats,
-		queryServiceStats,
-	)
-}
-
 func getSchemaInfoBaseTestQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// queries for schema info
@@ -612,105 +504,6 @@ func getSchemaInfoBaseTestQueries() map[string]*sqltypes.Result {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.MakeString([]byte("1427325875"))},
-			},
-		},
-	}
-}
-
-func getSchemaInfoTestSchemaOverride() []SchemaOverride {
-	return []SchemaOverride{
-		{
-			Name:      "test_table_01",
-			PKColumns: []string{"pk"},
-			Cache: &struct {
-				Type  string
-				Table string
-			}{
-				Type:  "RW",
-				Table: "test_table_01",
-			},
-		},
-		// this should be ignored by schema info due to unknown table
-		{
-			Name:      "unknown_table",
-			PKColumns: []string{"column_01"},
-			Cache: &struct {
-				Type  string
-				Table string
-			}{
-				Type:  "RW",
-				Table: "test_table",
-			},
-		},
-		// this should be ignored by schema info due to invalid primary key column
-		{
-			Name:      "test_table_01",
-			PKColumns: []string{"unknown_column"},
-			Cache: &struct {
-				Type  string
-				Table string
-			}{
-				Type:  "RW",
-				Table: "test_table",
-			},
-		},
-		{
-			Name:      "test_table_02",
-			PKColumns: []string{"pk"},
-			Cache: &struct {
-				Type  string
-				Table string
-			}{
-				Type:  "W",
-				Table: "test_table_02",
-			},
-		},
-		{
-			Name:      "test_table_02",
-			PKColumns: []string{"pk"},
-			Cache: &struct {
-				Type  string
-				Table string
-			}{
-				Type: "W",
-				// table is missing
-				Table: "",
-			},
-		},
-		{
-			Name:      "test_table_02",
-			PKColumns: []string{"pk"},
-			Cache: &struct {
-				Type  string
-				Table string
-			}{
-				Type: "W",
-				// table does not exist
-				Table: "unknown_table",
-			},
-		},
-		{
-			Name:      "test_table_02",
-			PKColumns: []string{"pk"},
-			Cache: &struct {
-				Type  string
-				Table string
-			}{
-				Type: "W",
-				// table does not have cache
-				Table: "test_table_03",
-			},
-		},
-		{
-			Name:      "test_table_02",
-			PKColumns: []string{"pk"},
-			Cache: &struct {
-				Type  string
-				Table string
-			}{
-				// cache type unknown
-				Type:  "UNKNOWN",
-				Table: "test_table_02",
 			},
 		},
 	}

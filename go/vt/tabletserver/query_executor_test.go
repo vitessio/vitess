@@ -20,7 +20,6 @@ import (
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
-	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 
@@ -38,7 +37,7 @@ func TestQueryExecutorPlanDDL(t *testing.T) {
 	}
 	db.AddQuery(query, want)
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanDDL, qre.plan.PlanID)
@@ -74,7 +73,7 @@ func TestQueryExecutorPlanPassDmlStrictMode(t *testing.T) {
 	tsv.StopService()
 
 	// strict mode
-	tsv = newTestTabletServer(ctx, enableRowCache|enableStrict, db)
+	tsv = newTestTabletServer(ctx, enableStrict, db)
 	qre = newTestQueryExecutor(ctx, tsv, query, newTransaction(tsv))
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
@@ -115,7 +114,7 @@ func TestQueryExecutorPlanPassDmlStrictModeAutoCommit(t *testing.T) {
 
 	// strict mode
 	// update should fail because strict mode is not enabled
-	tsv = newTestTabletServer(ctx, enableRowCache|enableStrict, db)
+	tsv = newTestTabletServer(ctx, enableStrict, db)
 	qre = newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
@@ -140,7 +139,7 @@ func TestQueryExecutorPlanInsertPk(t *testing.T) {
 	}
 	query := "insert into test_table values(1)"
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanInsertPK, qre.plan.PlanID)
@@ -172,7 +171,7 @@ func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
 
 	db.AddQuery(insertQuery, &sqltypes.Result{})
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanInsertSubquery, qre.plan.PlanID)
@@ -204,7 +203,7 @@ func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 
 	db.AddQuery(insertQuery, &sqltypes.Result{})
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, newTransaction(tsv))
 
 	defer tsv.StopService()
@@ -227,7 +226,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	}
 	query := "insert into test_table values(1) on duplicate key update val=1"
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanUpsertPK, qre.plan.PlanID)
@@ -283,7 +282,7 @@ func TestQueryExecutorPlanDmlPk(t *testing.T) {
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, newTransaction(tsv))
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
@@ -303,7 +302,7 @@ func TestQueryExecutorPlanDmlAutoCommit(t *testing.T) {
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanDMLPK, qre.plan.PlanID)
@@ -324,7 +323,7 @@ func TestQueryExecutorPlanDmlSubQuery(t *testing.T) {
 	db.AddQuery(query, want)
 	db.AddQuery(expandedQuery, want)
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, newTransaction(tsv))
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
@@ -346,7 +345,7 @@ func TestQueryExecutorPlanDmlSubQueryAutoCommit(t *testing.T) {
 	db.AddQuery(query, want)
 	db.AddQuery(expandedQuery, want)
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanDMLSubquery, qre.plan.PlanID)
@@ -369,7 +368,7 @@ func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
 	}
 	db.AddQuery(query, want)
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, enableRowCache|enableSchemaOverrides|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, newTransaction(tsv))
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
@@ -427,10 +426,10 @@ func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 		Fields: getTestTableFields(),
 	})
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, enableRowCache|enableSchemaOverrides|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanSelectLock, qre.plan.PlanID)
 	_, err := qre.Execute()
 	if err == nil {
 		t.Fatal("got: nil, want: error")
@@ -456,96 +455,10 @@ func TestQueryExecutorPlanPassSelect(t *testing.T) {
 		Fields: getTestTableFields(),
 	})
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, enableRowCache|enableSchemaOverrides|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-}
-
-func TestQueryExecutorPlanPKIn(t *testing.T) {
-	db := setUpQueryExecutorTest()
-	query := "select * from test_table where pk in (1, 2, 3) limit 1000"
-	expandedQuery := "select pk, name, addr from test_table where pk in (1, 2, 3)"
-	want := &sqltypes.Result{
-		Fields:       getTestTableFields(),
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("20")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("30")),
-			},
-		},
-	}
-	db.AddQuery(query, want)
-	db.AddQuery(expandedQuery, want)
-	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
-		Fields: getTestTableFields(),
-	})
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, enableRowCache|enableSchemaOverrides|enableStrict, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanPKIn, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-
-	cachedQuery := "select pk, name, addr from test_table where pk in (1)"
-	db.AddQuery(cachedQuery, &sqltypes.Result{
-		Fields:       getTestTableFields(),
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("20")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("30")),
-			},
-		},
-	})
-
-	nonCachedQuery := "select pk, name, addr from test_table where pk in (2, 3)"
-	db.AddQuery(nonCachedQuery, &sqltypes.Result{})
-	db.AddQuery(cachedQuery, want)
-	// run again, this time pk=1 should hit the rowcache
-	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-}
-
-func TestQueryExecutorPlanSelectSubQuery(t *testing.T) {
-	db := setUpQueryExecutorTest()
-	query := "select * from test_table where name = 1 limit 1000"
-	expandedQuery := "select pk from test_table use index (`index`) where name = 1 limit 1000"
-	want := &sqltypes.Result{
-		Fields: getTestTableFields(),
-	}
-	db.AddQuery(query, want)
-	db.AddQuery(expandedQuery, want)
-
-	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
-		Fields: getTestTableFields(),
-	})
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, enableRowCache|enableSchemaOverrides|enableStrict, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanSelectSubquery, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
@@ -560,7 +473,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	setQuery := "set unknown_key = 1"
 	db.AddQuery(setQuery, &sqltypes.Result{})
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	defer tsv.StopService()
 	qre := newTestQueryExecutor(ctx, tsv, setQuery, 0)
 	checkPlanID(t, planbuilder.PlanSet, qre.plan.PlanID)
@@ -588,7 +501,7 @@ func TestQueryExecutorPlanOther(t *testing.T) {
 	}
 	db.AddQuery(query, want)
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, enableRowCache|enableSchemaOverrides|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanOther, qre.plan.PlanID)
@@ -615,7 +528,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	updateQuery := "update `seq` set next_id = 7 where id = 0"
 	db.AddQuery(updateQuery, &sqltypes.Result{})
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	defer tsv.StopService()
 	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
 	checkPlanID(t, planbuilder.PlanNextval, qre.plan.PlanID)
@@ -670,7 +583,7 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 		t.Fatalf("unable to load tableacl config, error: %v", err)
 	}
 
-	tsv := newTestTabletServer(ctx, enableRowCache|enableSchemaOverrides|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
@@ -716,7 +629,7 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 		t.Fatalf("unable to load tableacl config, error: %v", err)
 	}
 	// without enabling Config.StrictTableAcl
-	tsv := newTestTabletServer(ctx, enableRowCache|enableSchemaOverrides|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
 	got, err := qre.Execute()
@@ -729,7 +642,7 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	tsv.StopService()
 
 	// enable Config.StrictTableAcl
-	tsv = newTestTabletServer(ctx, enableRowCache|enableSchemaOverrides|enableStrict|enableStrictTableAcl, db)
+	tsv = newTestTabletServer(ctx, enableStrict|enableStrictTableAcl, db)
 	qre = newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
@@ -782,7 +695,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	}
 
 	// enable Config.StrictTableAcl
-	tsv := newTestTabletServer(ctx, enableRowCache|enableSchemaOverrides|enableStrict|enableStrictTableAcl, db)
+	tsv := newTestTabletServer(ctx, enableStrict|enableStrictTableAcl, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
@@ -861,7 +774,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 		username,
 	}, ".")
 	// enable Config.StrictTableAcl
-	tsv := newTestTabletServer(ctx, enableRowCache|enableSchemaOverrides|enableStrict|enableStrictTableAcl, db)
+	tsv := newTestTabletServer(ctx, enableStrict|enableStrictTableAcl, db)
 	tsv.qe.enableTableAclDryRun = true
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
@@ -899,7 +812,7 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	alterRule.SetIPCond(bannedAddr)
 	alterRule.SetUserCond(bannedUser)
 	alterRule.SetQueryCond("select.*")
-	alterRule.AddPlanCond(planbuilder.PlanSelectSubquery)
+	alterRule.AddPlanCond(planbuilder.PlanPassSelect)
 	alterRule.AddTableCond("test_table")
 
 	rulesName := "blacklistedRulesQRFail"
@@ -911,7 +824,7 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 		username:   bannedUser,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
-	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	tsv.qe.schemaInfo.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
 	tsv.qe.schemaInfo.queryRuleSources.RegisterQueryRuleSource(rulesName)
 	defer tsv.qe.schemaInfo.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
@@ -923,7 +836,7 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 
-	checkPlanID(t, planbuilder.PlanSelectSubquery, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
 	// execute should fail because query has been blacklisted
 	_, err := qre.Execute()
 	if err == nil {
@@ -959,7 +872,7 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	alterRule.SetIPCond(bannedAddr)
 	alterRule.SetUserCond(bannedUser)
 	alterRule.SetQueryCond("select.*")
-	alterRule.AddPlanCond(planbuilder.PlanSelectSubquery)
+	alterRule.AddPlanCond(planbuilder.PlanPassSelect)
 	alterRule.AddTableCond("test_table")
 
 	rulesName := "blacklistedRulesQRRetry"
@@ -971,7 +884,7 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 		username:   bannedUser,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
-	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
+	tsv := newTestTabletServer(ctx, enableStrict, db)
 	tsv.qe.schemaInfo.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
 	tsv.qe.schemaInfo.queryRuleSources.RegisterQueryRuleSource(rulesName)
 	defer tsv.qe.schemaInfo.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
@@ -983,7 +896,7 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 
-	checkPlanID(t, planbuilder.PlanSelectSubquery, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
 	_, err := qre.Execute()
 	if err == nil {
 		t.Fatal("got: nil, want: error")
@@ -1000,10 +913,8 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 type executorFlags int64
 
 const (
-	noFlags        executorFlags = iota
-	enableRowCache               = 1 << iota
-	enableSchemaOverrides
-	enableStrict
+	noFlags      executorFlags = 0
+	enableStrict               = 1 << iota
 	enableStrictTableAcl
 )
 
@@ -1013,11 +924,9 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	config := DefaultQsConfig
 	config.StatsPrefix = fmt.Sprintf("Stats-%d-", randID)
 	config.DebugURLPrefix = fmt.Sprintf("/debug-%d-", randID)
-	config.RowCache.StatsPrefix = fmt.Sprintf("Stats-%d-", randID)
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	config.PoolSize = 100
 	config.TransactionCap = 100
-	config.SpotCheckRatio = 1.0
 	config.EnablePublishStats = false
 	config.EnableAutoCommit = true
 
@@ -1025,11 +934,6 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 		config.StrictMode = true
 	} else {
 		config.StrictMode = false
-	}
-	if flags&enableRowCache > 0 {
-		config.RowCache.Enabled = true
-		config.RowCache.Binary = "ls"
-		config.RowCache.Connections = 100
 	}
 	if flags&enableStrictTableAcl > 0 {
 		config.StrictTableAcl = true
@@ -1039,12 +943,8 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	tsv := NewTabletServer(config)
 	testUtils := newTestUtils()
 	dbconfigs := testUtils.newDBConfigs(db)
-	schemaOverrides := []SchemaOverride{}
-	if flags&enableSchemaOverrides > 0 {
-		schemaOverrides = getTestTableSchemaOverrides()
-	}
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	tsv.StartService(target, dbconfigs, schemaOverrides, testUtils.newMysqld(&dbconfigs))
+	tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
 	return tsv
 }
 
@@ -1076,7 +976,6 @@ func testCommitHelper(t *testing.T, tsv *TabletServer, queryExecutor *QueryExecu
 }
 
 func setUpQueryExecutorTest() *fakesqldb.DB {
-	fakecacheservice.Register()
 	db := fakesqldb.Register()
 	initQueryExecutorTestDB(db)
 	return db
@@ -1103,22 +1002,6 @@ func checkPlanID(
 	if expectedPlanID != actualPlanID {
 		t.Fatalf("expect to get PlanID: %s, but got %s",
 			expectedPlanID.String(), actualPlanID.String())
-	}
-}
-
-func getTestTableSchemaOverrides() []SchemaOverride {
-	return []SchemaOverride{
-		{
-			Name:      "test_table",
-			PKColumns: []string{"pk"},
-			Cache: &struct {
-				Type  string
-				Table string
-			}{
-				Type:  "RW",
-				Table: "test_table",
-			},
-		},
 	}
 }
 

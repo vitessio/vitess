@@ -18,13 +18,7 @@ RowsAffected mismatch: 2, want 1
 Rewritten mismatch:
 '[select eid, id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1 select /* fail */ eid, id from vitess_a union select eid, id from vitess_b]' does not match
 '[select eid id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1 select /* fail */ eid, id from vitess_a union select eid, id from vitess_b]'
-Plan mismatch: PASS_SELECT, want aa
-Hits mismatch on table stats: 0, want 1
-Hits mismatch on query info: 0, want 1
-Misses mismatch on table stats: 0, want 2
-Misses mismatch on query info: 0, want 2
-Absent mismatch on table stats: 0, want 3
-Absent mismatch on query info: 0, want 3`
+Plan mismatch: PASS_SELECT, want aa`
 
 func TestTheFramework(t *testing.T) {
 	client := framework.NewClient()
@@ -41,11 +35,8 @@ func TestTheFramework(t *testing.T) {
 			"select eid id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1",
 			"select /* fail */ eid, id from vitess_a union select eid, id from vitess_b",
 		},
-		Plan:   "aa",
-		Table:  "bb",
-		Hits:   1,
-		Misses: 2,
-		Absent: 3,
+		Plan:  "aa",
+		Table: "bb",
 	}
 	err := expectFail.Test("", client)
 	if err == nil || err.Error() != frameworkErrors {
@@ -548,29 +539,6 @@ func TestNocacheCases(t *testing.T) {
 			},
 		},
 		&framework.MultiCase{
-			Name: "insert with qualified column name",
-			Cases: []framework.Testable{
-				framework.TestQuery("begin"),
-				&framework.TestCase{
-					Query: "insert /* qualified */ into vitess_a(vitess_a.eid, id, name, foo) values (4, 1, 'aaaa', 'cccc')",
-					Rewritten: []string{
-						"insert /* qualified */ into vitess_a(vitess_a.eid, id, name, foo) values (4, 1, 'aaaa', 'cccc') /* _stream vitess_a (eid id ) (4 1 )",
-					},
-					RowsAffected: 1,
-				},
-				framework.TestQuery("commit"),
-				&framework.TestCase{
-					Query: "select * from vitess_a where eid = 4 and id = 1",
-					Result: [][]string{
-						{"4", "1", "aaaa", "cccc"},
-					},
-				},
-				framework.TestQuery("begin"),
-				framework.TestQuery("delete from vitess_a where eid>1"),
-				framework.TestQuery("commit"),
-			},
-		},
-		&framework.MultiCase{
 			Name: "insert with mixed case column names",
 			Cases: []framework.Testable{
 				framework.TestQuery("begin"),
@@ -1036,29 +1004,6 @@ func TestNocacheCases(t *testing.T) {
 					Query: "update vitess_a set eid = 2 where eid = 1 and id = 1",
 					Rewritten: []string{
 						"update vitess_a set eid = 2 where (eid = 1 and id = 1) /* _stream vitess_a (eid id ) (1 1 ) (2 1 )",
-					},
-					RowsAffected: 1,
-				},
-				framework.TestQuery("commit"),
-				&framework.TestCase{
-					Query: "select eid from vitess_a where id = 1",
-					Result: [][]string{
-						{"2"},
-					},
-				},
-				framework.TestQuery("begin"),
-				framework.TestQuery("update vitess_a set eid=1 where id=1"),
-				framework.TestQuery("commit"),
-			},
-		},
-		&framework.MultiCase{
-			Name: "pk change with qualifed column name update",
-			Cases: []framework.Testable{
-				framework.TestQuery("begin"),
-				&framework.TestCase{
-					Query: "update vitess_a set vitess_a.eid = 2 where eid = 1 and id = 1",
-					Rewritten: []string{
-						"update vitess_a set vitess_a.eid = 2 where (eid = 1 and id = 1) /* _stream vitess_a (eid id ) (1 1 ) (2 1 )",
 					},
 					RowsAffected: 1,
 				},

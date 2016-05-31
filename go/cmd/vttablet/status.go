@@ -68,7 +68,6 @@ var (
     <td width="25%" border="">
       <a href="/healthz">Health Check</a></br>
       <a href="/debug/health">Query Service Health Check</a></br>
-      <a href="/debug/memcache/">Memcache</a></br>
       <a href="/streamqueryz">Current Stream Queries</a></br>
     </td>
   </tr>

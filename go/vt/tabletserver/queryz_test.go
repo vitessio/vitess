@@ -25,7 +25,7 @@ func TestQueryzHandler(t *testing.T) {
 		ExecPlan: &planbuilder.ExecPlan{
 			TableName: "test_table",
 			PlanID:    planbuilder.PlanPassSelect,
-			Reason:    planbuilder.ReasonSelect,
+			Reason:    planbuilder.ReasonTable,
 		},
 	}
 	plan1.AddStats(10, 1*time.Second, 2, 0)
@@ -59,7 +59,7 @@ func TestQueryzHandler(t *testing.T) {
 		`<td>select name from test_table</td>`,
 		`<td>test_table</td>`,
 		`<td>PASS_SELECT</td>`,
-		`<td>SELECT</td>`,
+		`<td>TABLE</td>`,
 		`<td>10</td>`,
 		`<td>1.000000</td>`,
 		`<td>2</td>`,

@@ -23,10 +23,8 @@ package tabletmanager
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path"
@@ -82,7 +80,6 @@ type ActionAgent struct {
 	TabletAlias         *topodatapb.TabletAlias
 	MysqlDaemon         mysqlctl.MysqlDaemon
 	DBConfigs           dbconfigs.DBConfigs
-	SchemaOverrides     []tabletserver.SchemaOverride
 	BinlogPlayerMap     *BinlogPlayerMap
 
 	// exportStats is set only for production tablet.
@@ -174,25 +171,6 @@ type ActionAgent struct {
 	_slaveStopped *bool
 }
 
-func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
-	var schemaOverrides []tabletserver.SchemaOverride
-	if overridesFile == "" {
-		return schemaOverrides
-	}
-	data, err := ioutil.ReadFile(overridesFile)
-	if err != nil {
-		log.Warningf("can't read overridesFile %v: %v", overridesFile, err)
-		return schemaOverrides
-	}
-	if err = json.Unmarshal(data, &schemaOverrides); err != nil {
-		log.Warningf("can't parse overridesFile %v: %v", overridesFile, err)
-		return schemaOverrides
-	}
-	data, _ = json.MarshalIndent(schemaOverrides, "", "  ")
-	log.Infof("schemaOverrides: %s\n", data)
-	return schemaOverrides
-}
-
 // NewActionAgent creates a new ActionAgent and registers all the
 // associated services.
 //
@@ -206,10 +184,7 @@ func NewActionAgent(
 	dbcfgs dbconfigs.DBConfigs,
 	mycnf *mysqlctl.Mycnf,
 	port, gRPCPort int32,
-	overridesFile string,
 ) (agent *ActionAgent, err error) {
-	schemaOverrides := loadSchemaOverrides(overridesFile)
-
 	topoServer := topo.GetServer()
 
 	agent = &ActionAgent{
@@ -220,7 +195,6 @@ func NewActionAgent(
 		TabletAlias:         tabletAlias,
 		MysqlDaemon:         mysqld,
 		DBConfigs:           dbcfgs,
-		SchemaOverrides:     schemaOverrides,
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
@@ -300,7 +274,6 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *t
 		TabletAlias:         tabletAlias,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           dbconfigs.DBConfigs{},
-		SchemaOverrides:     nil,
 		BinlogPlayerMap:     nil,
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
@@ -327,7 +300,6 @@ func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *
 		TabletAlias:         tabletAlias,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           dbcfgs,
-		SchemaOverrides:     nil,
 		BinlogPlayerMap:     nil,
 		skipMysqlPortCheck:  true,
 		History:             history.New(historyLength),
@@ -593,7 +565,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
-	}, agent.DBConfigs, agent.SchemaOverrides, agent.MysqlDaemon); err != nil {
+	}, agent.DBConfigs, agent.MysqlDaemon); err != nil {
 		return fmt.Errorf("failed to InitDBConfig: %v", err)
 	}
 

@@ -109,14 +109,14 @@ func buildAutoIncrementPlan(ins *sqlparser.Insert, autoinc *vindexes.AutoIncreme
 func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString) (row sqlparser.ValTuple, pos int) {
 	pos = -1
 	for i, column := range ins.Columns {
-		if col.Equal(cistring.CIString(sqlparser.GetColName(column.(*sqlparser.NonStarExpr).Expr))) {
+		if col.Equal(cistring.CIString(column)) {
 			pos = i
 			break
 		}
 	}
 	if pos == -1 {
 		pos = len(ins.Columns)
-		ins.Columns = append(ins.Columns, &sqlparser.NonStarExpr{Expr: &sqlparser.ColName{Name: sqlparser.ColIdent(col)}})
+		ins.Columns = append(ins.Columns, sqlparser.ColIdent(col))
 		ins.Rows.(sqlparser.Values)[0] = append(ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple), &sqlparser.NullVal{})
 	}
 	return ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple), pos

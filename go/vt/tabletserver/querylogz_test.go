@@ -40,10 +40,6 @@ func TestQuerylogzHandler(t *testing.T) {
 	logStats.StartTime, _ = time.Parse("Jan 2 15:04:05", "Nov 29 13:33:09")
 	logStats.MysqlResponseTime = 1 * time.Millisecond
 	logStats.WaitingForConnection = 10 * time.Nanosecond
-	logStats.CacheHits = 17
-	logStats.CacheAbsent = 5
-	logStats.CacheMisses = 2
-	logStats.CacheInvalidations = 3
 	logStats.TransactionID = 131
 	logStats.ctx = callerid.NewContext(
 		context.Background(),
@@ -68,10 +64,6 @@ func TestQuerylogzHandler(t *testing.T) {
 		`<td>none</td>`,
 		`<td>1000</td>`,
 		`<td>0</td>`,
-		`<td>17</td>`,
-		`<td>2</td>`,
-		`<td>5</td>`,
-		`<td>3</td>`,
 		`<td>131</td>`,
 		`<td></td>`,
 	}
@@ -101,10 +93,6 @@ func TestQuerylogzHandler(t *testing.T) {
 		`<td>none</td>`,
 		`<td>1000</td>`,
 		`<td>0</td>`,
-		`<td>17</td>`,
-		`<td>2</td>`,
-		`<td>5</td>`,
-		`<td>3</td>`,
 		`<td>131</td>`,
 		`<td></td>`,
 	}
@@ -134,10 +122,6 @@ func TestQuerylogzHandler(t *testing.T) {
 		`<td>none</td>`,
 		`<td>1000</td>`,
 		`<td>0</td>`,
-		`<td>17</td>`,
-		`<td>2</td>`,
-		`<td>5</td>`,
-		`<td>3</td>`,
 		`<td>131</td>`,
 		`<td></td>`,
 	}

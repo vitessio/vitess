@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"net/url"
-	"strconv"
 
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -37,7 +36,6 @@ func init() {
 	flag.Float64Var(&qsConfig.QueryTimeout, "queryserver-config-query-timeout", DefaultQsConfig.QueryTimeout, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
 	flag.Float64Var(&qsConfig.TxPoolTimeout, "queryserver-config-txpool-timeout", DefaultQsConfig.TxPoolTimeout, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
 	flag.Float64Var(&qsConfig.IdleTimeout, "queryserver-config-idle-timeout", DefaultQsConfig.IdleTimeout, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
-	flag.Float64Var(&qsConfig.SpotCheckRatio, "queryserver-config-spot-check-ratio", DefaultQsConfig.SpotCheckRatio, "query server rowcache spot check frequency (in [0, 1]), if rowcache is enabled, this value determines how often a row retrieved from the rowcache is spot-checked against MySQL.")
 	flag.BoolVar(&qsConfig.StrictMode, "queryserver-config-strict-mode", DefaultQsConfig.StrictMode, "allow only predictable DMLs and enforces MySQL's STRICT_TRANS_TABLES")
 	// tableacl related configurations.
 	flag.BoolVar(&qsConfig.StrictTableAcl, "queryserver-config-strict-table-acl", DefaultQsConfig.StrictTableAcl, "only allow queries that pass table acl checks")
@@ -45,14 +43,6 @@ func init() {
 	flag.StringVar(&qsConfig.TableAclExemptACL, "queryserver-config-acl-exempt-acl", DefaultQsConfig.TableAclExemptACL, "an acl that exempt from table acl checking (this acl is free to access any vitess tables).")
 	flag.BoolVar(&qsConfig.TerseErrors, "queryserver-config-terse-errors", DefaultQsConfig.TerseErrors, "prevent bind vars from escaping in returned errors")
 	flag.BoolVar(&qsConfig.EnablePublishStats, "queryserver-config-enable-publish-stats", DefaultQsConfig.EnablePublishStats, "set this flag to true makes queryservice publish monitoring stats")
-	flag.BoolVar(&qsConfig.RowCache.Enabled, "enable-rowcache", DefaultQsConfig.RowCache.Enabled, "set this flag to enable rowcache. The rest of the rowcache parameters will also need to be accordingly specified.")
-	flag.StringVar(&qsConfig.RowCache.Binary, "rowcache-bin", DefaultQsConfig.RowCache.Binary, "rowcache binary file, vttablet launches a memcached if rowcache is enabled. This config specifies the location of the memcache binary.")
-	flag.IntVar(&qsConfig.RowCache.Memory, "rowcache-memory", DefaultQsConfig.RowCache.Memory, "rowcache max memory usage in MB")
-	flag.StringVar(&qsConfig.RowCache.Socket, "rowcache-socket", DefaultQsConfig.RowCache.Socket, "socket filename hint: a unique filename will be generated based on this input")
-	flag.IntVar(&qsConfig.RowCache.Connections, "rowcache-connections", DefaultQsConfig.RowCache.Connections, "rowcache max simultaneous connections")
-	flag.IntVar(&qsConfig.RowCache.Threads, "rowcache-threads", DefaultQsConfig.RowCache.Threads, "rowcache number of threads")
-	flag.BoolVar(&qsConfig.RowCache.LockPaged, "rowcache-lock-paged", DefaultQsConfig.RowCache.LockPaged, "whether rowcache locks down paged memory")
-	flag.StringVar(&qsConfig.RowCache.StatsPrefix, "rowcache-stats-prefix", DefaultQsConfig.RowCache.StatsPrefix, "rowcache stats prefix, rowcache will export various metrics and this config specifies the metric prefix")
 	flag.StringVar(&qsConfig.StatsPrefix, "stats-prefix", DefaultQsConfig.StatsPrefix, "prefix for variable names exported via expvar")
 	flag.StringVar(&qsConfig.DebugURLPrefix, "debug-url-prefix", DefaultQsConfig.DebugURLPrefix, "debug url prefix, vttablet will report various system debug pages and this config controls the prefix of these debug urls")
 	flag.StringVar(&qsConfig.PoolNamePrefix, "pool-name-prefix", DefaultQsConfig.PoolNamePrefix, "pool name prefix, vttablet has several pools and each of them has a name. This config specifies the prefix of these pool names")
@@ -63,42 +53,6 @@ func init() {
 func Init() {
 	StatsLogger.ServeLogs(*queryLogHandler, buildFmter(StatsLogger))
 	TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
-}
-
-// RowCacheConfig encapsulates the configuration for RowCache
-type RowCacheConfig struct {
-	Enabled     bool
-	Binary      string
-	Memory      int
-	Socket      string
-	Connections int
-	Threads     int
-	LockPaged   bool
-	StatsPrefix string
-}
-
-// GetSubprocessFlags returns the flags to use to call memcached
-func (c *RowCacheConfig) GetSubprocessFlags(socket string) []string {
-	cmd := []string{}
-	if c.Binary == "" {
-		return cmd
-	}
-	cmd = append(cmd, c.Binary)
-	cmd = append(cmd, "-s", socket)
-	if c.Memory > 0 {
-		// memory is given in bytes and rowcache expects in MBs
-		cmd = append(cmd, "-m", strconv.Itoa(c.Memory/1000000))
-	}
-	if c.Connections > 0 {
-		cmd = append(cmd, "-c", strconv.Itoa(c.Connections))
-	}
-	if c.Threads > 0 {
-		cmd = append(cmd, "-t", strconv.Itoa(c.Threads))
-	}
-	if c.LockPaged {
-		cmd = append(cmd, "-k")
-	}
-	return cmd
 }
 
 // Config contains all the configuration for query service
@@ -115,8 +69,6 @@ type Config struct {
 	QueryTimeout         float64
 	TxPoolTimeout        float64
 	IdleTimeout          float64
-	RowCache             RowCacheConfig
-	SpotCheckRatio       float64
 	StrictMode           bool
 	StrictTableAcl       bool
 	TerseErrors          bool
@@ -149,8 +101,6 @@ var DefaultQsConfig = Config{
 	TxPoolTimeout:        1,
 	IdleTimeout:          30 * 60,
 	StreamBufferSize:     32 * 1024,
-	RowCache:             RowCacheConfig{Memory: -1, Connections: -1, Threads: -1},
-	SpotCheckRatio:       0,
 	StrictMode:           true,
 	StrictTableAcl:       false,
 	TerseErrors:          false,
@@ -193,7 +143,7 @@ type Controller interface {
 	AddStatusPart()
 
 	// InitDBConfig sets up the db config vars.
-	InitDBConfig(querypb.Target, dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error
+	InitDBConfig(querypb.Target, dbconfigs.DBConfigs, mysqlctl.MysqlDaemon) error
 
 	// SetServingType transitions the query service to the required serving type.
 	// Returns true if the state of QueryService or the tablet type changed.

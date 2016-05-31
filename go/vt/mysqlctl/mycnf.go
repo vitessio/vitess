@@ -68,7 +68,7 @@ type Mycnf struct {
 	RelayLogInfoPath string
 
 	// BinLogPath is the base path for binlogs
-	// (used by vt software for binlog streaming and rowcache invalidation)
+	// (used by vt software for binlog streaming)
 	BinLogPath string
 
 	// MasterInfoFile is the master.info file location.

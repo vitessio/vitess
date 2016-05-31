@@ -67,15 +67,6 @@ func GenerateSelectLimitQuery(selStmt sqlparser.SelectStatement) *sqlparser.Pars
 	return buf.ParsedQuery()
 }
 
-// GenerateSelectOuterQuery generates the outer query for dmls.
-func GenerateSelectOuterQuery(sel *sqlparser.Select, tableInfo *schema.Table) *sqlparser.ParsedQuery {
-	buf := sqlparser.NewTrackedBuffer(nil)
-	fmt.Fprintf(buf, "select ")
-	writeColumnList(buf, tableInfo.Columns)
-	buf.Myprintf(" from %v where %a", sel.From, ":#pk")
-	return buf.ParsedQuery()
-}
-
 // GenerateInsertOuterQuery generates the outer query for inserts.
 func GenerateInsertOuterQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
@@ -101,25 +92,6 @@ func GenerateDeleteOuterQuery(del *sqlparser.Delete) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("delete %vfrom %v where %a", del.Comments, del.Table, ":#pk")
 	return buf.ParsedQuery()
-}
-
-// GenerateSelectSubquery generates the subquery for selects.
-func GenerateSelectSubquery(sel *sqlparser.Select, tableInfo *schema.Table, index string) *sqlparser.ParsedQuery {
-	hint := &sqlparser.IndexHints{Type: sqlparser.UseStr, Indexes: []sqlparser.ColIdent{sqlparser.NewColIdent(index)}}
-	tableExpr := sel.From[0].(*sqlparser.AliasedTableExpr)
-	savedHint := tableExpr.Hints
-	tableExpr.Hints = hint
-	defer func() {
-		tableExpr.Hints = savedHint
-	}()
-	return GenerateSubquery(
-		tableInfo.Indexes[0].Columns,
-		tableExpr,
-		sel.Where,
-		sel.OrderBy,
-		sel.Limit,
-		false,
-	)
 }
 
 // GenerateUpdateSubquery generates the subquery for updats.
@@ -163,12 +135,4 @@ func GenerateSubquery(columns []cistring.CIString, table *sqlparser.AliasedTable
 		buf.Myprintf(sqlparser.ForUpdateStr)
 	}
 	return buf.ParsedQuery()
-}
-
-func writeColumnList(buf *sqlparser.TrackedBuffer, columns []schema.TableColumn) {
-	i := 0
-	for i = 0; i < len(columns)-1; i++ {
-		fmt.Fprintf(buf, "%v, ", columns[i].Name)
-	}
-	fmt.Fprintf(buf, "%v", columns[i].Name)
 }

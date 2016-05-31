@@ -40,7 +40,6 @@ func TestInitTablet(t *testing.T) {
 		TabletAlias:     tabletAlias,
 		MysqlDaemon:     mysqlDaemon,
 		DBConfigs:       dbconfigs.DBConfigs{},
-		SchemaOverrides: nil,
 		BinlogPlayerMap: nil,
 		batchCtx:        ctx,
 		History:         history.New(historyLength),

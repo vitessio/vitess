@@ -239,15 +239,6 @@
 				"worker_test"
 			]
 		},
-		"rowcache_invalidator": {
-			"File": "rowcache_invalidator.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"schema": {
 			"File": "schema.py",
 			"Args": [],

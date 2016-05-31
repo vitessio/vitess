@@ -28,7 +28,7 @@ import vtgate_gateway_flavor.discoverygateway
 # sanity check the environment
 if os.environ['USER'] == 'root':
   sys.stderr.write(
-      'ERROR: Vitess and its dependencies (mysqld and memcached) '
+      'ERROR: Vitess and mysqld '
       'should not be run as root.\n')
   sys.exit(1)
 if 'VTTOP' not in os.environ:
@@ -71,13 +71,6 @@ skip_build = False
 # location of the run_local_database.py file
 run_local_database = os.path.join(vtroot, 'py-vtdb', 'vttest',
                                   'run_local_database.py')
-
-
-def memcached_bin():
-  in_vt = os.path.join(vtroot, 'bin', 'memcached')
-  if os.path.exists(in_vt):
-    return in_vt
-  return 'memcached'
 
 # url to hit to force the logs to flush.
 flush_logs_url = '/debug/flushlogs'
