@@ -107,6 +107,61 @@ func TestFilterByReplicationLag(t *testing.T) {
 	if len(got) != 4 || !reflect.DeepEqual(got[0], ts1) || !reflect.DeepEqual(got[1], ts2) || !reflect.DeepEqual(got[2], ts3) || !reflect.DeepEqual(got[3], ts4) {
 		t.Errorf("FilterByReplicationLag([30m, 35m, 40m, 45m]) = %+v, want all", got)
 	}
+	// lags of (1s, 1s, 1m, 40m, 40m) - not run filter the second time as first run removed two items.
+	ts1 = &TabletStats{
+		Tablet:  topo.NewTablet(1, "cell", "host1"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
+	}
+	ts2 = &TabletStats{
+		Tablet:  topo.NewTablet(2, "cell", "host2"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
+	}
+	ts3 = &TabletStats{
+		Tablet:  topo.NewTablet(3, "cell", "host3"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1 * 60},
+	}
+	ts4 = &TabletStats{
+		Tablet:  topo.NewTablet(4, "cell", "host4"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 40 * 60},
+	}
+	ts5 := &TabletStats{
+		Tablet:  topo.NewTablet(5, "cell", "host5"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 40 * 60},
+	}
+	got = FilterByReplicationLag([]*TabletStats{ts1, ts2, ts3, ts4, ts5})
+	if len(got) != 3 || !reflect.DeepEqual(got[0], ts1) || !reflect.DeepEqual(got[1], ts2) || !reflect.DeepEqual(got[2], ts3) {
+		t.Errorf("FilterByReplicationLag([1s, 1s, 1m, 40m, 40m]) = %+v, want [1s, 1s, 1m]", got)
+	}
+	// lags of (1s, 1s, 10m, 40m) - run filter twice to remove two items
+	ts1 = &TabletStats{
+		Tablet:  topo.NewTablet(1, "cell", "host1"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
+	}
+	ts2 = &TabletStats{
+		Tablet:  topo.NewTablet(2, "cell", "host2"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
+	}
+	ts3 = &TabletStats{
+		Tablet:  topo.NewTablet(3, "cell", "host3"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 10 * 60},
+	}
+	ts4 = &TabletStats{
+		Tablet:  topo.NewTablet(4, "cell", "host4"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 40 * 60},
+	}
+	got = FilterByReplicationLag([]*TabletStats{ts1, ts2, ts3, ts4})
+	if len(got) != 2 || !reflect.DeepEqual(got[0], ts1) || !reflect.DeepEqual(got[1], ts2) {
+		t.Errorf("FilterByReplicationLag([1s, 1s, 10m, 40m]) = %+v, want [1s, 1s]", got)
+	}
 	// lags of (1m, 100m) - return at least 2 items to avoid overloading if the 2nd one is not delayed too much
 	ts1 = &TabletStats{
 		Tablet:  topo.NewTablet(1, "cell", "host1"),
