@@ -405,7 +405,6 @@ primary key (name)
     shard_1_rdonly1.init_tablet('rdonly', 'test_keyspace', '80-')
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
-
     ks = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_keyspace'])
     self.assertEqual(ks['sharding_column_name'], 'custom_sharding_key')
 
