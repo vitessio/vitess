@@ -361,12 +361,15 @@ var commands = []commandGroup{
 	},
 	{
 		"Serving Graph", []command{
-			{"GetSrvKeyspace", commandGetSrvKeyspace,
-				"<cell> <keyspace>",
-				"Outputs a JSON structure that contains information about the SrvKeyspace."},
 			{"GetSrvKeyspaceNames", commandGetSrvKeyspaceNames,
 				"<cell>",
 				"Outputs a list of keyspace names."},
+			{"GetSrvKeyspace", commandGetSrvKeyspace,
+				"<cell> <keyspace>",
+				"Outputs a JSON structure that contains information about the SrvKeyspace."},
+			{"GetSrvVSchema", commandGetSrvVSchema,
+				"<cell>",
+				"Outputs a JSON structure that contains information about the SrvVSchema."},
 		},
 	},
 	{
@@ -2082,21 +2085,6 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	return topotools.RebuildVSchema(ctx, wr.Logger(), wr.TopoServer(), cells)
 }
 
-func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <cell> and <keyspace> arguments are required for the GetSrvKeyspace command.")
-	}
-
-	srvKeyspace, err := wr.TopoServer().GetSrvKeyspace(ctx, subFlags.Arg(0), subFlags.Arg(1))
-	if err != nil {
-		return err
-	}
-	return printJSON(wr.Logger(), srvKeyspace)
-}
-
 func commandGetSrvKeyspaceNames(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -2113,6 +2101,36 @@ func commandGetSrvKeyspaceNames(ctx context.Context, wr *wrangler.Wrangler, subF
 		wr.Logger().Printf("%v\n", ks)
 	}
 	return nil
+}
+
+func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("The <cell> and <keyspace> arguments are required for the GetSrvKeyspace command.")
+	}
+
+	srvKeyspace, err := wr.TopoServer().GetSrvKeyspace(ctx, subFlags.Arg(0), subFlags.Arg(1))
+	if err != nil {
+		return err
+	}
+	return printJSON(wr.Logger(), srvKeyspace)
+}
+
+func commandGetSrvVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("The <cell> argument is required for the GetSrvVSchema command.")
+	}
+
+	srvVSchema, err := wr.TopoServer().GetSrvVSchema(ctx, subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	return printJSON(wr.Logger(), srvVSchema)
 }
 
 func commandGetShardReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
