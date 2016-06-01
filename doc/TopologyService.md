@@ -154,10 +154,19 @@ shard):
   the values are list of shards to use for serving.
 * it also contains the global Keyspace fields, copied for fast access.
 
-It can be rebuilt by running `vtctl RebuildKeyspaceGraph`. It is not
-automatically rebuilt when adding new tablets in a cell, as this would cause too
-much overhead and is only needed once per cell/keyspace. It may also be changed
+It can be rebuilt by running `vtctl RebuildKeyspaceGraph`. It is
+automatically rebuilt when a tablet starts up in a cell and the SrvKeyspace
+for that cell / keyspace doesn't exist yet. It will also be changed
 during horizontal and vertical splits.
+
+#### SrvVSchema
+
+It is the local roll-up for the VSchema. It contains the VSchema for all
+keyspaces in a single object.
+
+It can be rebuilt by running `vtctl RebuildVSchemaGraph`. It is automatically
+rebuilt when using `vtctl ApplyVSchema` (unless prevented by flags).
+
 
 ## Workflows Involving the Topology Server
 
@@ -223,6 +232,7 @@ recommended, for reliability reasons.
 * Tablet: `/zk/<cell>/vt/tablets/<uid>`
 * Replication Graph: `/zk/<cell>/vt/replication/<keyspace>/<shard>`
 * SrvKeyspace: `/zk/<cell>/vt/ns/<keyspace>`
+* SrvVSchema: `/zk/<cell>/vt/vschema`
 
 We provide the 'zk' utility for easy access to the topology data in
 ZooKeeper. For instance:
@@ -255,4 +265,5 @@ We use the following paths:
 * Tablet: `/vt/tablets/<cell>-<uid>/_Data`
 * Replication Graph: `/vt/replication/<keyspace>/<shard>/_Data`
 * SrvKeyspace: `/vt/ns/<keyspace>/_Data`
+* SrvVSchema: `/vt/ns/_VSchema`
 

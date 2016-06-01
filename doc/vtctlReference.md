@@ -295,7 +295,7 @@ Rebuilds the serving data for the keyspace. This command may trigger an update t
 
 #### Example
 
-<pre class="command-example">RebuildKeyspaceGraph [-cells=a,b] &lt;keyspace&gt; ...</pre>
+<pre class="command-example">RebuildKeyspaceGraph [-cells=c1,c2,...] &lt;keyspace&gt; ...</pre>
 
 #### Flags
 
@@ -808,6 +808,7 @@ Outputs a JSON structure that contains information about the ShardReplication.
 * [GetPermissions](#getpermissions)
 * [GetSchema](#getschema)
 * [GetVSchema](#getvschema)
+* [RebuildVSchemaGraph](#rebuildvschemagraph)
 * [ReloadSchema](#reloadschema)
 * [ValidatePermissionsKeyspace](#validatepermissionskeyspace)
 * [ValidatePermissionsShard](#validatepermissionsshard)
@@ -845,16 +846,18 @@ Applies the schema change to the specified keyspace on every master, running in 
 
 ### ApplyVSchema
 
-Applies the VTGate routing schema.
+Applies the VTGate routing schema to the provided keyspace.
 
 #### Example
 
-<pre class="command-example">ApplyVSchema {-vschema=&lt;vschema&gt; || -vschema_file=&lt;vschema file&gt;} &lt;keyspace&gt;</pre>
+<pre class="command-example">ApplyVSchema {-vschema=&lt;vschema&gt; || -vschema_file=&lt;vschema file&gt;} [-cells=c1,c2,...] [-skip_rebuild] &lt;keyspace&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
+| cells | string | If specified, limits the rebuild to the cells, after upload. Ignored if skipRebuild is set. |
+| skip_rebuild | Boolean | If set, do no rebuild the SrvSchema objects. |
 | vschema | string | Identifies the VTGate routing schema |
 | vschema_file | string | Identifies the VTGate routing schema file |
 
@@ -955,6 +958,26 @@ Displays the VTGate routing schema.
 #### Errors
 
 * The <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;GetVSchema&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+
+
+### RebuildVSchemaGraph
+
+Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cells (or all cells if none provided).
+
+#### Example
+
+<pre class="command-example">RebuildVSchemaGraph [-cells=c1,c2,...]</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| cells | string | Specifies a comma-separated list of cells to look for tablets |
+
+
+#### Errors
+
+* <code>&lt;RebuildVSchemaGraph&gt;</code> doesn't take any arguments. This error occurs if the command is not called with exactly 0 arguments.
 
 
 ### ReloadSchema
@@ -1096,6 +1119,7 @@ Validates that the master version matches all of the slaves.
 
 * [GetSrvKeyspace](#getsrvkeyspace)
 * [GetSrvKeyspaceNames](#getsrvkeyspacenames)
+* [GetSrvVSchema](#getsrvvschema)
 
 ### GetSrvKeyspace
 
@@ -1130,6 +1154,23 @@ Outputs a list of keyspace names.
 #### Errors
 
 * The <code>&lt;cell&gt;</code> argument is required for the <code>&lt;GetSrvKeyspaceNames&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+
+
+### GetSrvVSchema
+
+Outputs a JSON structure that contains information about the SrvVSchema.
+
+#### Example
+
+<pre class="command-example">GetSrvVSchema &lt;cell&gt;</pre>
+
+#### Arguments
+
+* <code>&lt;cell&gt;</code> &ndash; Required. A cell is a location for a service. Generally, a cell resides in only one cluster. In Vitess, the terms "cell" and "data center" are interchangeable. The argument value is a string that does not contain whitespace.
+
+#### Errors
+
+* The <code>&lt;cell&gt;</code> argument is required for the <code>&lt;GetSrvVSchema&gt;</code> command. This error occurs if the command is not called with exactly one argument.
 
 
 ## Shards
