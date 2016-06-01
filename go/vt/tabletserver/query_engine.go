@@ -214,7 +214,7 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) {
 	}
 
 	start := time.Now()
-	qe.schemaInfo.Open(&appParams, &dbaParams, strictMode)
+	qe.schemaInfo.Open(&dbaParams, strictMode)
 	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 
 	qe.connPool.Open(&appParams, &dbaParams)

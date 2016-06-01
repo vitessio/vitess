@@ -143,9 +143,9 @@ func NewSchemaInfo(
 }
 
 // Open initializes the current SchemaInfo for service by loading the necessary info from the specified database.
-func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, strictMode bool) {
+func (si *SchemaInfo) Open(dbaParams *sqldb.ConnParams, strictMode bool) {
 	ctx := context.Background()
-	si.connPool.Open(appParams, dbaParams)
+	si.connPool.Open(dbaParams, dbaParams)
 	// Get time first because it needs a connection from the pool.
 	curTime := si.mysqlTime(ctx)
 
