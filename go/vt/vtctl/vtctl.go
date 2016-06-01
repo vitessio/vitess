@@ -270,7 +270,7 @@ var commands = []commandGroup{
 				"[-source=<source keyspace name>] [-remove] [-cells=c1,c2,...] <keyspace name> <tablet type>",
 				"Changes the ServedFromMap manually. This command is intended for emergency fixes. This field is automatically set when you call the *MigrateServedFrom* command. This command does not rebuild the serving graph."},
 			{"RebuildKeyspaceGraph", commandRebuildKeyspaceGraph,
-				"[-cells=a,b] <keyspace> ...",
+				"[-cells=c1,c2,...] <keyspace> ...",
 				"Rebuilds the serving data for the keyspace. This command may trigger an update to all connected clients."},
 			{"ValidateKeyspace", commandValidateKeyspace,
 				"[-ping-tablets] <keyspace name>",
@@ -352,8 +352,11 @@ var commands = []commandGroup{
 				"<keyspace>",
 				"Displays the VTGate routing schema."},
 			{"ApplyVSchema", commandApplyVSchema,
-				"{-vschema=<vschema> || -vschema_file=<vschema file>} <keyspace>",
-				"Applies the VTGate routing schema."},
+				"{-vschema=<vschema> || -vschema_file=<vschema file>} [-cells=c1,c2,...] [-skip_rebuild] <keyspace>",
+				"Applies the VTGate routing schema to the provided keyspace."},
+			{"RebuildVSchemaGraph", commandRebuildVSchemaGraph,
+				"[-cells=c1,c2,...]",
+				"Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cells (or all cells if none provided)."},
 		},
 	},
 	{
@@ -2022,9 +2025,27 @@ func commandGetVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	return nil
 }
 
+func commandRebuildVSchemaGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	var cells flagutil.StringListValue
+	subFlags.Var(&cells, "cells", "Specifies a comma-separated list of cells to look for tablets")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 0 {
+		return fmt.Errorf("RebuildVSchemaGraph doesn't take any arguments.")
+	}
+
+	return topotools.RebuildVSchema(ctx, wr.Logger(), wr.TopoServer(), cells)
+}
+
 func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	vschema := subFlags.String("vschema", "", "Identifies the VTGate routing schema")
 	vschemaFile := subFlags.String("vschema_file", "", "Identifies the VTGate routing schema file")
+	skipRebuild := subFlags.Bool("skip_rebuild", false, "If set, do no rebuild the SrvSchema objects.")
+	var cells flagutil.StringListValue
+	subFlags.Var(&cells, "cells", "If specified, limits the rebuild to the cells, after upload. Ignored if skipRebuild is set.")
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2050,7 +2071,15 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	keyspace := subFlags.Arg(0)
-	return wr.TopoServer().SaveVSchema(ctx, keyspace, &vs)
+	if err := wr.TopoServer().SaveVSchema(ctx, keyspace, &vs); err != nil {
+		return err
+	}
+
+	if *skipRebuild {
+		wr.Logger().Warningf("Skipping rebuild of SrvVSchema, will need to run RebuildVSchemaGraph for changes to take effect")
+		return nil
+	}
+	return topotools.RebuildVSchema(ctx, wr.Logger(), wr.TopoServer(), cells)
 }
 
 func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

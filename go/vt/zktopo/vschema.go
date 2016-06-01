@@ -15,6 +15,7 @@ import (
 	"launchpad.net/gozk/zookeeper"
 
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 )
 
@@ -43,7 +44,7 @@ func (zkts *Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb
 	data, _, err := zkts.zconn.Get(vschemaPath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			return &vschemapb.Keyspace{}, nil
+			return nil, topo.ErrNoNode
 		}
 		return nil, err
 	}

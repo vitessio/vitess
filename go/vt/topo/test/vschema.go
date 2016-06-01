@@ -31,11 +31,8 @@ func checkVSchema(t *testing.T, ts topo.Impl) {
 
 	got, err := ts.GetVSchema(ctx, "test_keyspace")
 	want := &vschemapb.Keyspace{}
-	if err != nil {
+	if err != topo.ErrNoNode {
 		t.Error(err)
-	}
-	if !proto.Equal(got, want) {
-		t.Errorf("GetVSchema: %s, want nil", got)
 	}
 
 	err = ts.SaveVSchema(ctx, "test_keyspace", &vschemapb.Keyspace{
