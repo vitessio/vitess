@@ -285,6 +285,8 @@ type Impl interface {
 	SaveVSchema(ctx context.Context, keyspace string, vschema *vschemapb.Keyspace) error
 
 	// GetVSchema retrieves the schema from the topo server.
+	//
+	// Can return ErrNoNode
 	GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error)
 
 	// WatchVSchema returns a channel that receives notifications

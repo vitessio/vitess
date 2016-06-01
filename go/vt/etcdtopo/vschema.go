@@ -36,7 +36,7 @@ func (s *Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Ke
 	if err != nil {
 		err = convertError(err)
 		if err == topo.ErrNoNode {
-			return &vschemapb.Keyspace{}, nil
+			return nil, topo.ErrNoNode
 		}
 		return nil, err
 	}
