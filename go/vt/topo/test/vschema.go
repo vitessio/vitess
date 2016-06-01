@@ -15,8 +15,9 @@ import (
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
-// CheckVSchema runs the tests on the VSchema part of the API
-func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
+// checkVSchema runs the tests on the VSchema part of the API
+func checkVSchema(t *testing.T, ts topo.Impl) {
+	ctx := context.Background()
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
@@ -132,9 +133,11 @@ func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
 	}
 }
 
-// CheckWatchVSchema makes sure WatchVSchema works as expected
-func CheckWatchVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
+// checkWatchVSchema makes sure WatchVSchema works as expected
+func checkWatchVSchema(t *testing.T, ts topo.Impl) {
+	ctx := context.Background()
 	keyspace := "test_keyspace"
+	emptyContents := &vschemapb.Keyspace{}
 
 	// start watching, should get nil first
 	ctx, cancel := context.WithCancel(ctx)
@@ -148,7 +151,13 @@ func CheckWatchVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
 	}
 
 	// update the VSchema, should get a notification
-	newContents := &vschemapb.Keyspace{}
+	newContents := &vschemapb.Keyspace{
+		Tables: map[string]*vschemapb.Table{
+			"table1": {
+				Type: "sequence",
+			},
+		},
+	}
 	if err := ts.SaveVSchema(ctx, keyspace, newContents); err != nil {
 		t.Fatalf("SaveVSchema failed: %v", err)
 	}
@@ -177,7 +186,7 @@ func CheckWatchVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
 		if !ok {
 			t.Fatalf("watch channel is closed???")
 		}
-		if vs == nil {
+		if vs == nil || proto.Equal(vs, emptyContents) {
 			break
 		}
 

@@ -1,7 +1,3 @@
-// Package test contains utilities to test topo.Impl
-// implementations. If you are testing your implementation, you will
-// want to call CheckAll in your test method. For an example, look at
-// the tests in github.com/youtube/vitess/go/vt/zktopo.
 package test
 
 import (
@@ -27,8 +23,9 @@ func tabletEqual(left, right *topodatapb.Tablet) (bool, error) {
 	return string(lj) == string(rj), nil
 }
 
-// CheckTablet verifies the topo server API is correct for managing tablets.
-func CheckTablet(ctx context.Context, t *testing.T, ts topo.Impl) {
+// checkTablet verifies the topo server API is correct for managing tablets.
+func checkTablet(t *testing.T, ts topo.Impl) {
+	ctx := context.Background()
 	tts := topo.Server{Impl: ts}
 
 	cell := getLocalCell(ctx, t, ts)
