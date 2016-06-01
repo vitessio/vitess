@@ -169,12 +169,16 @@ message ReloadSchemaResponse {
 }
 
 message PreflightSchemaRequest {
-  string change = 1;
+  repeated string changes = 1;
 }
 
 message PreflightSchemaResponse {
-  SchemaDefinition before_schema = 1;
-  SchemaDefinition after_schema = 2;
+  // before_schemas holds the schema before each change.
+  // The number of elements is identical to the length of "changes" in the request.
+  repeated SchemaDefinition before_schemas = 1;
+  // after_schemas holds the schema after each change.
+  // The number of elements is identical to the length of "changes" in the request.
+  repeated SchemaDefinition after_schemas = 2;
 }
 
 message ApplySchemaRequest {

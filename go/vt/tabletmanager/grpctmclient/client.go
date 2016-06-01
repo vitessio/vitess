@@ -253,22 +253,28 @@ func (client *Client) ReloadSchema(ctx context.Context, tablet *topodatapb.Table
 }
 
 // PreflightSchema is part of the tmclient.TabletManagerClient interface.
-func (client *Client) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, change string) (*tmutils.SchemaChangeResult, error) {
+func (client *Client) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, changes []string) ([]*tmutils.SchemaChangeResult, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer cc.Close()
+
 	response, err := c.PreflightSchema(ctx, &tabletmanagerdatapb.PreflightSchemaRequest{
-		Change: change,
+		Changes: changes,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &tmutils.SchemaChangeResult{
-		BeforeSchema: response.BeforeSchema,
-		AfterSchema:  response.AfterSchema,
-	}, err
+
+	diffs := make([]*tmutils.SchemaChangeResult, len(changes))
+	for i := 0; i < len(changes); i++ {
+		diffs[i] = &tmutils.SchemaChangeResult{
+			BeforeSchema: response.BeforeSchemas[i],
+			AfterSchema:  response.AfterSchemas[i],
+		}
+	}
+	return diffs, nil
 }
 
 // ApplySchema is part of the tmclient.TabletManagerClient interface.

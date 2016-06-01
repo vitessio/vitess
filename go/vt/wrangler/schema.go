@@ -185,12 +185,12 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 }
 
 // PreflightSchema will try a schema change on the remote tablet.
-func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *topodatapb.TabletAlias, change string) (*tmutils.SchemaChangeResult, error) {
+func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *topodatapb.TabletAlias, changes []string) ([]*tmutils.SchemaChangeResult, error) {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
 	}
-	return wr.tmc.PreflightSchema(ctx, ti.Tablet, change)
+	return wr.tmc.PreflightSchema(ctx, ti.Tablet, changes)
 }
 
 // ApplySchemaKeyspace applies a schema change to an entire keyspace.

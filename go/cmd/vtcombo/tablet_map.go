@@ -715,16 +715,16 @@ func (itmc *internalTabletManagerClient) ReloadSchema(ctx context.Context, table
 	})
 }
 
-func (itmc *internalTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, change string) (*tmutils.SchemaChangeResult, error) {
+func (itmc *internalTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, changes []string) ([]*tmutils.SchemaChangeResult, error) {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	var result *tmutils.SchemaChangeResult
+	var result []*tmutils.SchemaChangeResult
 	if err := t.agent.RPCWrapLockAction(ctx, tabletmanager.TabletActionPreflightSchema, nil, nil, true, func() error {
-		scr, err := t.agent.PreflightSchema(ctx, change)
+		diffs, err := t.agent.PreflightSchema(ctx, changes)
 		if err == nil {
-			result = scr
+			result = diffs
 		}
 		return err
 	}); err != nil {

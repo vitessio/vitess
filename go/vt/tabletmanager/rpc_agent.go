@@ -193,7 +193,7 @@ type RPCAgent interface {
 
 	ReloadSchema(ctx context.Context)
 
-	PreflightSchema(ctx context.Context, change string) (*tmutils.SchemaChangeResult, error)
+	PreflightSchema(ctx context.Context, changes []string) ([]*tmutils.SchemaChangeResult, error)
 
 	ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error)
 

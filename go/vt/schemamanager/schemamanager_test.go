@@ -244,11 +244,14 @@ func (client *fakeTabletManagerClient) AddSchemaDefinition(
 	client.schemaDefinitions[dbName] = schemaDefinition
 }
 
-func (client *fakeTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, change string) (*tmutils.SchemaChangeResult, error) {
-	result, ok := client.preflightSchemas[change]
-	if !ok {
-		var scr tmutils.SchemaChangeResult
-		return &scr, nil
+func (client *fakeTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, changes []string) ([]*tmutils.SchemaChangeResult, error) {
+	var result []*tmutils.SchemaChangeResult
+	for _, change := range changes {
+		scr, ok := client.preflightSchemas[change]
+		if !ok {
+			result = append(result, &tmutils.SchemaChangeResult{})
+		}
+		result = append(result, scr)
 	}
 	return result, nil
 }

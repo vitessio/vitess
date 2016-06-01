@@ -65,7 +65,7 @@ type MysqlDaemon interface {
 
 	// Schema related methods
 	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
-	PreflightSchemaChange(dbName string, change string) (*tmutils.SchemaChangeResult, error)
+	PreflightSchemaChange(dbName string, changes []string) ([]*tmutils.SchemaChangeResult, error)
 	ApplySchemaChange(dbName string, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error)
 
 	// GetAppConnection returns a app connection to be able to talk to the database.
@@ -176,7 +176,7 @@ type FakeMysqlDaemon struct {
 
 	// PreflightSchemaChangeResult will be returned by PreflightSchemaChange.
 	// If nil we'll return an error.
-	PreflightSchemaChangeResult *tmutils.SchemaChangeResult
+	PreflightSchemaChangeResult []*tmutils.SchemaChangeResult
 
 	// ApplySchemaChangeResult will be returned by ApplySchemaChange.
 	// If nil we'll return an error.
@@ -435,7 +435,7 @@ func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []str
 }
 
 // PreflightSchemaChange is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) PreflightSchemaChange(dbName string, change string) (*tmutils.SchemaChangeResult, error) {
+func (fmd *FakeMysqlDaemon) PreflightSchemaChange(dbName string, changes []string) ([]*tmutils.SchemaChangeResult, error) {
 	if fmd.PreflightSchemaChangeResult == nil {
 		return nil, fmt.Errorf("no preflight result defined")
 	}

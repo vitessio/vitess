@@ -198,60 +198,71 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, erro
 	return columns, err
 }
 
-// PreflightSchemaChange will apply the schema change to a fake
-// database that has the same schema as the target database, see if it
-// works.
-func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*tmutils.SchemaChangeResult, error) {
-	// gather current schema on real database
-	beforeSchema, err := mysqld.GetSchema(dbName, nil, nil, true)
+// PreflightSchemaChange checks the schema changes in "changes" by applying them
+// to an intermediate database that has the same schema as the target database.
+func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]*tmutils.SchemaChangeResult, error) {
+	diffs := make([]*tmutils.SchemaChangeResult, len(changes))
+
+	// Get current schema from the real database.
+	originalSchema, err := mysqld.GetSchema(dbName, nil, nil, true)
 	if err != nil {
 		return nil, err
 	}
 
-	// populate temporary database with it
-	sql := "SET sql_log_bin = 0;\n"
-	sql += "DROP DATABASE IF EXISTS _vt_preflight;\n"
-	sql += "CREATE DATABASE _vt_preflight;\n"
-	sql += "USE _vt_preflight;\n"
-	for _, td := range beforeSchema.TableDefinitions {
+	// Populate temporary database with it.
+	initialCopySQL := "SET sql_log_bin = 0;\n"
+	initialCopySQL += "DROP DATABASE IF EXISTS _vt_preflight;\n"
+	initialCopySQL += "CREATE DATABASE _vt_preflight;\n"
+	initialCopySQL += "USE _vt_preflight;\n"
+	for _, td := range originalSchema.TableDefinitions {
 		if td.Type == tmutils.TableBaseTable {
-			sql += td.Schema + ";\n"
+			initialCopySQL += td.Schema + ";\n"
 		}
 	}
-	for _, td := range beforeSchema.TableDefinitions {
+	for _, td := range originalSchema.TableDefinitions {
 		if td.Type == tmutils.TableView {
 			// Views will have {{.DatabaseName}} in there, replace
 			// it with _vt_preflight
 			s := strings.Replace(td.Schema, "`{{.DatabaseName}}`", "`_vt_preflight`", -1)
-			sql += s + ";\n"
+			initialCopySQL += s + ";\n"
 		}
 	}
-	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
+	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, initialCopySQL); err != nil {
 		return nil, err
 	}
 
-	// apply schema change to the temporary database
-	sql = "SET sql_log_bin = 0;\n"
-	sql += "USE _vt_preflight;\n"
-	sql += change
-	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
-		return nil, err
-	}
+	// For each change, record the schema before and after.
+	for i, change := range changes {
+		beforeSchema, err := mysqld.GetSchema("_vt_preflight", nil, nil, true)
+		if err != nil {
+			return nil, err
+		}
 
-	// get the result
-	afterSchema, err := mysqld.GetSchema("_vt_preflight", nil, nil, true)
-	if err != nil {
-		return nil, err
+		// apply schema change to the temporary database
+		sql := "SET sql_log_bin = 0;\n"
+		sql += "USE _vt_preflight;\n"
+		sql += change
+		if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
+			return nil, err
+		}
+
+		// get the result
+		afterSchema, err := mysqld.GetSchema("_vt_preflight", nil, nil, true)
+		if err != nil {
+			return nil, err
+		}
+
+		diffs[i] = &tmutils.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}
 	}
 
 	// and clean up the extra database
-	sql = "SET sql_log_bin = 0;\n"
-	sql += "DROP DATABASE _vt_preflight;\n"
-	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
+	dropSQL := "SET sql_log_bin = 0;\n"
+	dropSQL += "DROP DATABASE _vt_preflight;\n"
+	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, dropSQL); err != nil {
 		return nil, err
 	}
 
-	return &tmutils.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
+	return diffs, nil
 }
 
 // ApplySchemaChange will apply the schema change to the given database.

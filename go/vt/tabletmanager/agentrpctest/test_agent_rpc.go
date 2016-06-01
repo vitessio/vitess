@@ -507,17 +507,19 @@ func agentRPCTestReloadSchemaPanic(ctx context.Context, t *testing.T, client tmc
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-var testPreflightSchema = "change table add table cloth"
-var testSchemaChangeResult = &tmutils.SchemaChangeResult{
-	BeforeSchema: testGetSchemaReply,
-	AfterSchema:  testGetSchemaReply,
+var testPreflightSchema = []string{"change table add table cloth"}
+var testSchemaChangeResult = []*tmutils.SchemaChangeResult{
+	{
+		BeforeSchema: testGetSchemaReply,
+		AfterSchema:  testGetSchemaReply,
+	},
 }
 
-func (fra *fakeRPCAgent) PreflightSchema(ctx context.Context, change string) (*tmutils.SchemaChangeResult, error) {
+func (fra *fakeRPCAgent) PreflightSchema(ctx context.Context, changes []string) ([]*tmutils.SchemaChangeResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "PreflightSchema result", change, testPreflightSchema)
+	compare(fra.t, "PreflightSchema result", changes, testPreflightSchema)
 	return testSchemaChangeResult, nil
 }
 
@@ -544,12 +546,12 @@ func (fra *fakeRPCAgent) ApplySchema(ctx context.Context, change *tmutils.Schema
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	compare(fra.t, "ApplySchema change", change, testSchemaChange)
-	return testSchemaChangeResult, nil
+	return testSchemaChangeResult[0], nil
 }
 
 func agentRPCTestApplySchema(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	scr, err := client.ApplySchema(ctx, tablet, testSchemaChange)
-	compareError(t, "ApplySchema", err, scr, testSchemaChangeResult)
+	compareError(t, "ApplySchema", err, scr, testSchemaChangeResult[0])
 }
 
 func agentRPCTestApplySchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
