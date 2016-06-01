@@ -195,6 +195,10 @@ type Impl interface {
 	// Serving Graph management, per cell.
 	//
 
+	// GetSrvKeyspaceNames returns the list of visible Keyspaces
+	// in this cell. They shall be sorted.
+	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
+
 	// WatchSrvKeyspace returns a channel that receives notifications
 	// every time the SrvKeyspace for the given keyspace / cell changes.
 	// It should receive a notification with the initial value fairly
@@ -223,9 +227,29 @@ type Impl interface {
 	// Can return ErrNoNode.
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
 
-	// GetSrvKeyspaceNames returns the list of visible Keyspaces
-	// in this cell. They shall be sorted.
-	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
+	// WatchSrvVSchema returns a channel that receives notifications
+	// every time the SrvVSchema for the given cell changes.
+	// It should receive a notification with the initial value fairly
+	// quickly after this is set. A value of nil means the SrvVSchema
+	// object doesn't exist or is empty. To stop watching this
+	// SrvVSchema object, cancel the context.
+	// If the underlying topo.Server encounters an error watching the node,
+	// it should retry on a regular basis until it can succeed.
+	// The initial error returned by this method is meant to catch
+	// the obvious bad cases (invalid cell, ...)
+	// that are never going to work. Mutiple notifications with the
+	// same contents may be sent (for instance, when the schema graph
+	// is rebuilt, but the content of SrvVSchema is the same,
+	// the object version will change, most likely triggering the
+	// notification, but the content hasn't changed).
+	WatchSrvVSchema(ctx context.Context, cell string) (notifications <-chan *vschemapb.SrvVSchema, err error)
+
+	// UpdateSrvVSchema updates the serving records for a cell.
+	UpdateSrvVSchema(ctx context.Context, cell string, srvVSchema *vschemapb.SrvVSchema) error
+
+	// GetSrvVSchema reads a SrvVSchema record.
+	// Can return ErrNoNode.
+	GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.SrvVSchema, error)
 
 	//
 	// Keyspace and Shard locks for actions, global.

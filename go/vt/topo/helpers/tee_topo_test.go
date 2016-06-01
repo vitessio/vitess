@@ -48,54 +48,9 @@ func newFakeTeeServer(t *testing.T) topo.Impl {
 	return NewTee(s1, s2, false)
 }
 
-func TestKeyspace(t *testing.T) {
-	ctx := context.Background()
-	ts := newFakeTeeServer(t)
-	test.CheckKeyspace(ctx, t, ts)
-}
-
-func TestShard(t *testing.T) {
-	ctx := context.Background()
-	ts := newFakeTeeServer(t)
-	test.CheckShard(ctx, t, ts)
-}
-
-func TestTablet(t *testing.T) {
-	ctx := context.Background()
-	ts := newFakeTeeServer(t)
-	test.CheckTablet(ctx, t, ts)
-}
-
-func TestServingGraph(t *testing.T) {
-	ctx := context.Background()
-	ts := newFakeTeeServer(t)
-	test.CheckServingGraph(ctx, t, ts)
-}
-
-func TestWatchSrvKeyspace(t *testing.T) {
+func TestTeeTopo(t *testing.T) {
 	zktopo.WatchSleepDuration = 2 * time.Millisecond
-	ts := newFakeTeeServer(t)
-	test.CheckWatchSrvKeyspace(context.Background(), t, ts)
-}
-
-func TestShardReplication(t *testing.T) {
-	ctx := context.Background()
-	ts := newFakeTeeServer(t)
-	test.CheckShardReplication(ctx, t, ts)
-}
-
-func TestKeyspaceLock(t *testing.T) {
-	ctx := context.Background()
-	ts := newFakeTeeServer(t)
-	test.CheckKeyspaceLock(ctx, t, ts)
-}
-
-func TestShardLock(t *testing.T) {
-	ctx := context.Background()
-	if testing.Short() {
-		t.Skip("skipping wait-based test in short mode.")
-	}
-
-	ts := newFakeTeeServer(t)
-	test.CheckShardLock(ctx, t, ts)
+	test.TopoServerTestSuite(t, func() topo.Impl {
+		return newFakeTeeServer(t)
+	})
 }

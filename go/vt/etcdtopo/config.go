@@ -98,3 +98,11 @@ func srvKeyspaceDirPath(keyspace string) string {
 func srvKeyspaceFilePath(keyspace string) string {
 	return path.Join(srvKeyspaceDirPath(keyspace), srvKeyspaceFilename)
 }
+
+func srvVSchemaDirPath() string {
+	return servingDirPath
+}
+
+func srvVSchemaFilePath() string {
+	return path.Join(srvVSchemaDirPath(), vschemaFilename)
+}
