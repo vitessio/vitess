@@ -240,6 +240,26 @@ class TestSchema(unittest.TestCase):
     self._check_tables(shard_0_master, 5)
     self._check_tables(shard_1_master, 5)
 
+  def test_schema_changes_drop_and_create(self):
+    """Tests that a DROP and CREATE table will pass PreflightSchema check.
+
+    PreflightSchema checks each SQL statement separately. When doing so, it must
+    consider previous statements within the same ApplySchema command. For
+    example, a CREATE after DROP must not fail: When CREATE is checked, DROP
+    must have been executed first.
+    See: https://github.com/youtube/vitess/issues/1731#issuecomment-222914389
+    """
+    self._apply_initial_schema()
+    self._check_tables(shard_0_master, 4)
+    self._check_tables(shard_1_master, 4)
+
+    drop_and_create = ('DROP TABLE vt_select_test01;\n' +
+                       self._create_test_table_sql('vt_select_test01'))
+    self._apply_schema(test_keyspace, drop_and_create)
+    # check number of tables
+    self._check_tables(shard_0_master, 4)
+    self._check_tables(shard_1_master, 4)
+
   def test_vtctl_copyschemashard_use_tablet_as_source(self):
     self._test_vtctl_copyschemashard(shard_0_master.tablet_alias)
 
