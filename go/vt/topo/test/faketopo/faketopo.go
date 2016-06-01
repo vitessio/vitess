@@ -200,9 +200,4 @@ func (ft FakeTopo) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.
 	return nil, errNotImplemented
 }
 
-// WatchVSchema implements topo.Server.WatchSrvKeyspace
-func (ft FakeTopo) WatchVSchema(ctx context.Context, keyspace string) (<-chan *vschemapb.Keyspace, error) {
-	return nil, errNotImplemented
-}
-
 var _ topo.Impl = (*FakeTopo)(nil) // compile-time interface check

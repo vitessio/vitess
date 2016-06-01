@@ -697,10 +697,4 @@ func (tee *Tee) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Key
 	return tee.readFrom.GetVSchema(ctx, keyspace)
 }
 
-// WatchVSchema is part of the topo.Server interface.
-// We only watch for changes on the primary.
-func (tee *Tee) WatchVSchema(ctx context.Context, keyspace string) (<-chan *vschemapb.Keyspace, error) {
-	return tee.primary.WatchVSchema(ctx, keyspace)
-}
-
 var _ topo.Impl = (*Tee)(nil) // compile-time interface check
