@@ -14,7 +14,7 @@ import (
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
-// VSchema represents the denormalized version of VSchemaFormal,
+// VSchema represents the denormalized version of SrvVSchema,
 // used for building routing plans.
 type VSchema struct {
 	tables    map[string]*Table
@@ -73,8 +73,8 @@ type AutoIncrement struct {
 	ColumnVindexNum int `json:"column_vindex_num"`
 }
 
-// BuildVSchema builds a VSchema from a VSchemaFormal.
-func BuildVSchema(source *VSchemaFormal) (vschema *VSchema, err error) {
+// BuildVSchema builds a VSchema from a SrvVSchema.
+func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema, err error) {
 	vschema = &VSchema{
 		tables:    make(map[string]*Table),
 		Keyspaces: make(map[string]*KeyspaceSchema),
@@ -98,9 +98,9 @@ func BuildKeyspaceSchema(input *vschemapb.Keyspace, keyspace string) (*KeyspaceS
 	if input == nil {
 		input = &vschemapb.Keyspace{}
 	}
-	formal := &VSchemaFormal{
-		Keyspaces: map[string]vschemapb.Keyspace{
-			keyspace: *input,
+	formal := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			keyspace: input,
 		},
 	}
 	vschema := &VSchema{
@@ -122,7 +122,7 @@ func ValidateKeyspace(input *vschemapb.Keyspace) error {
 	return err
 }
 
-func buildKeyspaces(source *VSchemaFormal, vschema *VSchema) {
+func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	for ksname, ks := range source.Keyspaces {
 		vschema.Keyspaces[ksname] = &KeyspaceSchema{
 			Keyspace: &Keyspace{
@@ -134,7 +134,7 @@ func buildKeyspaces(source *VSchemaFormal, vschema *VSchema) {
 	}
 }
 
-func buildTables(source *VSchemaFormal, vschema *VSchema) error {
+func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 	for ksname, ks := range source.Keyspaces {
 		keyspace := vschema.Keyspaces[ksname].Keyspace
 		vindexes := make(map[string]Vindex)
@@ -205,7 +205,7 @@ func buildTables(source *VSchemaFormal, vschema *VSchema) error {
 	return nil
 }
 
-func resolveAutoIncrement(source *VSchemaFormal, vschema *VSchema) error {
+func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
 		for tname, table := range ks.Tables {
@@ -288,15 +288,9 @@ func colVindexSorted(cvs []*ColumnVindex) (sorted []*ColumnVindex) {
 	return sorted
 }
 
-// VSchemaFormal is the formal representation of the vschema
-// as loaded from the source.
-type VSchemaFormal struct {
-	Keyspaces map[string]vschemapb.Keyspace
-}
-
 // LoadFormal loads the JSON representation of VSchema from a file.
-func LoadFormal(filename string) (*VSchemaFormal, error) {
-	formal := &VSchemaFormal{}
+func LoadFormal(filename string) (*vschemapb.SrvVSchema, error) {
+	formal := &vschemapb.SrvVSchema{}
 	if filename == "" {
 		return formal, nil
 	}
