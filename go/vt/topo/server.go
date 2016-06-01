@@ -288,18 +288,6 @@ type Impl interface {
 	//
 	// Can return ErrNoNode
 	GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error)
-
-	// WatchVSchema returns a channel that receives notifications
-	// every time the VSchema for the given keyspace changes.
-	// It should receive a notification with the initial value fairly
-	// quickly after this is set. To stop watching this
-	// VSchema object, cancel the context.
-	// If the underlying topo.Server encounters an error watching the node,
-	// it should retry on a regular basis until it can succeed.
-	// The initial error returned by this method is meant to catch
-	// the obvious bad cases (invalid keyspace, ...)
-	// that are never going to work.
-	WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan *vschemapb.Keyspace, err error)
 }
 
 // Server is a wrapper type that can have extra methods.
