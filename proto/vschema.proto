@@ -54,3 +54,9 @@ message AutoIncrement {
   // The sequence must match a table of type SEQUENCE.
   string sequence = 2;
 }
+
+// SrvVSchema is the roll-up of all the Keyspace schema for a cell.
+message SrvVSchema {
+  // keyspaces is a map of keyspace name -> Keyspace object.
+  map<string, Keyspace> keyspaces = 1;
+}
