@@ -24,6 +24,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 // Planner is used to compute the plan. It contains
@@ -67,14 +69,56 @@ func (plr *Planner) WatchSrvVSchema(ctx context.Context, cell string) {
 
 	go func() {
 		foundFirstValue := false
+
+		// Create a closure to save the vschema. If the value
+		// passed is nil, it means we encountered an error and
+		// we don't know the real value. In this case, we want
+		// to use the previous value if it was set, or an
+		// empty vschema if it wasn't.
+		saveVSchema := func(v *vschemapb.SrvVSchema) {
+			// transform the provided SrvVSchema into a VSchema
+			var vschema *vindexes.VSchema
+			if v != nil {
+				var err error
+				vschema, err = vindexes.BuildVSchema(v)
+				if err != nil {
+					log.Warningf("Error creating VSchema for cell %v (will try again next update): %v", cell, err)
+					v = nil
+				}
+			}
+			if v == nil {
+				// we encountered an error, build an
+				// empty vschema
+				vschema, _ = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
+			}
+
+			// save our value
+			plr.mu.Lock()
+			if v != nil {
+				// no errors, we can save our schema
+				plr.vschema = vschema
+			} else {
+				// we had an error, use the empty vschema
+				// if we had nothing before.
+				if plr.vschema == nil {
+					plr.vschema = vschema
+				}
+			}
+			plr.mu.Unlock()
+			plr.plans.Clear()
+
+			// notify the listener
+			if !foundFirstValue {
+				foundFirstValue = true
+				wg.Done()
+			}
+		}
+
 		for {
 			n, err := plr.serv.WatchSrvVSchema(ctx, cell)
 			if err != nil {
 				log.Warningf("Error watching vschema for cell %s (will wait 5s before retrying): %v", cell, err)
-				if !foundFirstValue {
-					foundFirstValue = true
-					wg.Done()
-				}
+				saveVSchema(nil)
 				time.Sleep(5 * time.Second)
 				continue
 			}
@@ -82,40 +126,15 @@ func (plr *Planner) WatchSrvVSchema(ctx context.Context, cell string) {
 			for value := range n {
 				if value == nil {
 					log.Warningf("Got an empty vschema for cell %v", cell)
-					if !foundFirstValue {
-						foundFirstValue = true
-						wg.Done()
-					}
+					saveVSchema(&vschemapb.SrvVSchema{})
 					continue
 				}
 
-				vschema, err := vindexes.BuildVSchema(value)
-				if err != nil {
-					log.Warningf("Error creating VSchema for cell %v (will try again next update): %v", cell, err)
-					if !foundFirstValue {
-						foundFirstValue = true
-						wg.Done()
-					}
-					continue
-				}
-
-				// save our value
-				plr.mu.Lock()
-				plr.vschema = vschema
-				plr.mu.Unlock()
-				plr.plans.Clear()
-
-				if !foundFirstValue {
-					foundFirstValue = true
-					wg.Done()
-				}
+				saveVSchema(value)
 			}
 
 			log.Warningf("Watch on vschema for cell %v ended, will wait 5s before retrying", cell)
-			if !foundFirstValue {
-				foundFirstValue = true
-				wg.Done()
-			}
+			saveVSchema(nil)
 			time.Sleep(5 * time.Second)
 		}
 	}()

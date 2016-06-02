@@ -98,12 +98,15 @@ def setUpModule():
 
     utils.run_vtctl(['ReloadSchema', master_tablet.tablet_alias])
     utils.run_vtctl(['ReloadSchema', replica_tablet.tablet_alias])
+    utils.run_vtctl(['RebuildVSchemaGraph'])
 
     utils.VtGate().start(tablets=[master_tablet, replica_tablet])
     utils.vtgate.wait_for_endpoints('test_keyspace.0.master', 1)
     utils.vtgate.wait_for_endpoints('test_keyspace.0.replica', 1)
 
-    # wait for the master and slave tablet's ReloadSchema to have worked
+    # Wait for the master and slave tablet's ReloadSchema to have worked.
+    # Note we don't specify a keyspace name, there is only one, vschema
+    # will just use that single keyspace.
     timeout = 10
     while True:
       try:

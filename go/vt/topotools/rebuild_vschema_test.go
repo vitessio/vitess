@@ -32,7 +32,12 @@ func TestRebuildVSchema(t *testing.T) {
 		}
 	}
 
-	// create a keyspace, rebuild, should see no change (no vschema)
+	// create a keyspace, rebuild, should see an empty entry
+	emptyKs1SrvVSchema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks1": {},
+		},
+	}
 	if err := ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace(ks1) failed: %v", err)
 	}
@@ -40,7 +45,7 @@ func TestRebuildVSchema(t *testing.T) {
 		t.Errorf("RebuildVSchema failed: %v", err)
 	}
 	for _, cell := range cells {
-		if v, err := ts.GetSrvVSchema(ctx, cell); err != nil || !proto.Equal(v, emptySrvVSchema) {
+		if v, err := ts.GetSrvVSchema(ctx, cell); err != nil || !proto.Equal(v, emptyKs1SrvVSchema) {
 			t.Errorf("unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
 		}
 	}

@@ -48,17 +48,17 @@ func RebuildVSchema(ctx context.Context, log logutil.Logger, ts topo.Server, cel
 
 			k, err := ts.GetVSchema(ctx, keyspace)
 			if err == topo.ErrNoNode {
-				return
+				err = nil
+				k = &vschemapb.Keyspace{}
 			}
+
 			mu.Lock()
 			defer mu.Unlock()
-
 			if err != nil {
 				log.Errorf("GetVSchema(%v) failed: %v", keyspace, err)
 				finalErr = err
 				return
 			}
-
 			srvVSchema.Keyspaces[keyspace] = k
 		}(keyspace)
 	}
