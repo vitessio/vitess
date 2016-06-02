@@ -144,68 +144,34 @@ RemoveBackup <keyspace/shard> <backup name>
 
 ## Bootstrapping a new tablet
 
-The following steps explain how the backup process is used to bootstrap
-new tablets as part of the normal lifecyle of a shard:
+Bootstrapping a new tablet is almost identical to restoring an existing tablet.
+The only thing you need to be cautious about is that the tablet specifies its keyspace, shard and tablet type when it registers itself at the topology.
+Specifically, make sure that the following vttablet parameters are set:
 
-1. A shard is initially created without an existing backup, and all
-    of the shard's tablets are started as spares.
+``` sh
+    -init_keyspace <keyspace>
+    -init_shard <shard>
+    -target_tablet_type replica|rdonly
+```
 
-1. By default, Vitess enables health checks on each tablet. As long as
-    these default checks are used, each tablet recognizes that replication
-    is not running and remains in an unhealthy state as a spare tablet.
+The bootstrapped tablet will restore the data from the backup and then apply changes, which occurred after the backup, by restarting replication.
 
-1. After the requisite number of spare tablets is running, vtctl's
-    [InitShardMaster](/reference/vtctl.html#initshardmaster) command
-    designates one tablet as the master. The remaining tablets are
-    slaves of the master tablet. In the serving graph, the master
-    tablet is in a healthy state, but the slaves remain unhealthy
-    because no database exists.
 
-1. The initial schema is applied to the master using either usual schema
-    change tools or vtctl's
-    [CopySchemaShard](/reference/vtctl.html#copyschemashard) command.
-    That command is typically used during resharding to clone data to a
-    destination shard. After being applied to the master tablet, the
-    schema propagates to the slave tablets.
+## Backup Frequency
 
-1. The slave tablets all transition to a healthy state like
-   <code>rdonly</code> or <code>replica</code>. At this point,
-   the shard is working and functional.
+We recommend to take backups regularly e.g. you should set up a cron
+job for it.
 
-1. Once the shard is accumulating data, a cron job runs regularly to
-    create new backups. Backups are created frequently enough to ensure
-    that one is always available if needed.
+To determine the proper frequency for creating backups, consider
+the amount of time that you keep replication logs and allow enough
+time to investigate and fix problems in the event that a backup
+operation fails.
 
-    To determine the proper frequency for creating backups, consider
-    the amount of time that you keep replication logs and allow enough
-    time to investigate and fix problems in the event that a backup
-    operation fails.
-
-    For example, suppose you typically keep four days of replication logs
-    and you create daily backups. In that case, even if a backup fails,
-    you have at least a couple of days from the time of the failure to
-    investigate and fix the problem.
-
-1. When a spare tablet comes up, it restores the latest backup, which
-    contains data as well as the backup's replication position. The
-    tablet then resets its master to the current shard master and starts
-    replicating.
-
-    This process is the same for new slave tablets and slave tablets that
-    are being restarted. For example, to add a new rdonly tablet to your
-    existing implementation, you would run the following steps:
-
-    1. Run the vtctl [InitTablet](/reference/vtctl.html#inittablet)
-        command to create the new tablet as a spare. Specify the
-        appropriate values for the <nobr><code>-keyspace</code></nobr>
-        and <nobr><code>-shard</code></nobr> flags, enabling Vitess to
-        identify the master tablet associated with the new spare.
-
-    1. Start the tablet using the flags specified in the
-        [Prerequisites](#prerequisites) section. As described earlier in
-        this step, the new tablet will load the latest backup, reset its
-        master tablet, and start replicating.
-
+For example, suppose you typically keep four days of replication logs
+and you create daily backups. In that case, even if a backup fails,
+you have at least a couple of days from the time of the failure to
+investigate and fix the problem.
+        
 ## Concurrency
 
 The back-up and restore processes simultaneously copy and either
