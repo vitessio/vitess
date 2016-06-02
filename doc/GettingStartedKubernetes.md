@@ -491,6 +491,18 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     # 2015-10-21.042940.test-0000000104
     ```
 
+1. **Initialize Vitess Routing Schema**
+
+    In the examples, we are just using a single database with no specific
+    configuration. So we just need to make that (empty) configuration visible
+    for serving. This is done by running the following command:
+    
+    ``` sh
+    vitess/examples/kubernetes$ ./kvtctl.sh RebuildVSchemaGraph
+    ```
+    
+    (As it works, this command will not display any output.)
+
 1.  **Start vtgate**
 
     Vitess uses [vtgate](http://vitess.io/overview/#vtgate) to route each client
