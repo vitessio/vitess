@@ -97,15 +97,14 @@ Also, Vitess adds comments to the rewritten statements that identify the primary
 key affected by that statement. This allows us to produce an Update Stream (see
 section below).
 
-## Vitess Pivot
+## Vitess Pivot Schema Changes
 
-In a Vitess shard, we have a master and multiple slaves (replicas, batch,
-…). Slaves are brought up by restoring a recent backup, and catching up on
-replication. It is possible to efficiently and safely re-parent the master
-to a slave on demand. We use statement based replication. The combination
-of all these features makes our pivot workflow work very well.
+Within YouTube, we also use a combination of statement based replication and
+backups to apply long-running schema changes without disrupting ongoing
+operations. See the [pivot tutorial](/user-guide/pivot-schema-changes.html)
+for a detailed example.
 
-The pivot operation works as follows:
+This operation, internally dubbed as **pivot**, works as follows:
 
 * Pick a slave, take it out of service. It is not used by clients any more.
 * Stop replication on the slave.
