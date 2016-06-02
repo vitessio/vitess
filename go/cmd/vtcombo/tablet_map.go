@@ -25,13 +25,14 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
 )
 
@@ -86,7 +87,7 @@ func createTablet(ctx context.Context, ts topo.Server, cell string, uid uint32, 
 
 // initTabletMap creates the action agents and associated data structures
 // for all tablets
-func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, formal *vindexes.VSchemaFormal, mycnf *mysqlctl.Mycnf) error {
+func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, formal *vschemapb.SrvVSchema, mycnf *mysqlctl.Mycnf) error {
 	tabletMap = make(map[uint32]*tablet)
 
 	ctx := context.Background()
@@ -131,7 +132,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 			}
 			keyspaceMap[keyspace] = true
 			vs := formal.Keyspaces[keyspace]
-			if err := ts.SaveVSchema(ctx, keyspace, &vs); err != nil {
+			if err := ts.SaveVSchema(ctx, keyspace, vs); err != nil {
 				return fmt.Errorf("SaveVSchema failed: %v", err)
 			}
 		}
@@ -189,7 +190,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 
 // initTabletMapProto creates the action agents and associated data structures
 // for all tablets, based on the vttest proto parameter.
-func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, formal *vindexes.VSchemaFormal, mycnf *mysqlctl.Mycnf) error {
+func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, formal *vschemapb.SrvVSchema, mycnf *mysqlctl.Mycnf) error {
 	// parse the input topology
 	tpb := &vttestpb.VTTestTopology{}
 	if err := proto.UnmarshalText(topoProto, tpb); err != nil {
@@ -240,9 +241,6 @@ func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlD
 			}); err != nil {
 				return fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
 			}
-			if err := ts.SaveVSchema(ctx, keyspace, &vs); err != nil {
-				return fmt.Errorf("SaveVSchema failed: %v", err)
-			}
 		} else {
 			// create a regular keyspace
 			if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
@@ -250,9 +248,6 @@ func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlD
 				ShardingColumnType: sct,
 			}); err != nil {
 				return fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
-			}
-			if err := ts.SaveVSchema(ctx, keyspace, &vs); err != nil {
-				return fmt.Errorf("SaveVSchema failed: %v", err)
 			}
 
 			// iterate through the shards
@@ -284,11 +279,21 @@ func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlD
 			}
 		}
 
+		// create the vschema
+		if err := ts.SaveVSchema(ctx, keyspace, vs); err != nil {
+			return fmt.Errorf("SaveVSchema failed: %v", err)
+		}
+
 		// Rebuild the SrvKeyspace object, so we can support
 		// range-based sharding queries, and export the redirects.
 		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil); err != nil {
 			return fmt.Errorf("cannot rebuild %v: %v", keyspace, err)
 		}
+	}
+
+	// Rebuild the SrvVSchema object
+	if err := topotools.RebuildVSchema(ctx, wr.Logger(), ts, []string{cell}); err != nil {
+		return fmt.Errorf("RebuildVSchemaGraph failed: %v", err)
 	}
 
 	// Register the tablet dialer for tablet server

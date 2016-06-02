@@ -170,9 +170,9 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, c
 	return result, err
 }
 
-// WatchVSchema is part of the SrvTopoServer API
-func (server *ResilientSrvTopoServer) WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan *vschemapb.Keyspace, err error) {
-	return server.topoServer.WatchVSchema(ctx, keyspace)
+// WatchSrvVSchema is part of the SrvTopoServer API
+func (server *ResilientSrvTopoServer) WatchSrvVSchema(ctx context.Context, cell string) (notifications <-chan *vschemapb.SrvVSchema, err error) {
+	return server.topoServer.WatchSrvVSchema(ctx, cell)
 }
 
 func (server *ResilientSrvTopoServer) getSrvKeyspaceEntry(cell, keyspace string) *srvKeyspaceEntry {

@@ -15,8 +15,9 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// CheckKeyspace tests the keyspace part of the API
-func CheckKeyspace(ctx context.Context, t *testing.T, ts topo.Impl) {
+// checkKeyspace tests the keyspace part of the API
+func checkKeyspace(t *testing.T, ts topo.Impl) {
+	ctx := context.Background()
 	keyspaces, err := ts.GetKeyspaces(ctx)
 	if err != nil {
 		t.Errorf("GetKeyspaces(empty): %v", err)

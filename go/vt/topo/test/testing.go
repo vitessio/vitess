@@ -1,7 +1,7 @@
 // Package test contains utilities to test topo.Impl
 // implementations. If you are testing your implementation, you will
-// want to call CheckAll in your test method. For an example, look at
-// the tests in github.com/youtube/vitess/go/vt/zktopo.
+// want to call TopoServerTestSuite in your test method. For an
+// example, look at the tests in github.com/youtube/vitess/go/vt/zktopo.
 package test
 
 import (
@@ -30,4 +30,66 @@ func getLocalCell(ctx context.Context, t *testing.T, ts topo.Impl) string {
 		t.Fatalf("provided topo.Impl doesn't have enough cells (need at least 1): %v", cells)
 	}
 	return cells[0]
+}
+
+// TopoServerTestSuite runs the full topo.Impl test suite.
+// The factory method should return a topo server that has a single cell
+// called 'test'.
+func TopoServerTestSuite(t *testing.T, factory func() topo.Impl) {
+	var ts topo.Impl
+
+	t.Log("=== checkKeyspace")
+	ts = factory()
+	checkKeyspace(t, ts)
+	ts.Close()
+
+	t.Log("=== checkShard")
+	ts = factory()
+	checkShard(t, ts)
+	ts.Close()
+
+	t.Log("=== checkTablet")
+	ts = factory()
+	checkTablet(t, ts)
+	ts.Close()
+
+	t.Log("=== checkShardReplication")
+	ts = factory()
+	checkShardReplication(t, ts)
+	ts.Close()
+
+	t.Log("=== checkSrvKeyspace")
+	ts = factory()
+	checkSrvKeyspace(t, ts)
+	ts.Close()
+
+	t.Log("=== checkWatchSrvKeyspace")
+	ts = factory()
+	checkWatchSrvKeyspace(t, ts)
+	ts.Close()
+
+	t.Log("=== checkSrvVSchema")
+	ts = factory()
+	checkSrvVSchema(t, ts)
+	ts.Close()
+
+	t.Log("=== checkWatchSrvVSchema")
+	ts = factory()
+	checkWatchSrvVSchema(t, ts)
+	ts.Close()
+
+	t.Log("=== checkKeyspaceLock")
+	ts = factory()
+	checkKeyspaceLock(t, ts)
+	ts.Close()
+
+	t.Log("=== checkShardLock")
+	ts = factory()
+	checkShardLock(t, ts)
+	ts.Close()
+
+	t.Log("=== checkVSchema")
+	ts = factory()
+	checkVSchema(t, ts)
+	ts.Close()
 }

@@ -9,10 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test"
-	"golang.org/x/net/context"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func newTestServer(t *testing.T, cells []string) *Server {
@@ -33,55 +36,21 @@ func newTestServer(t *testing.T, cells []string) *Server {
 	return s
 }
 
-func TestKeyspace(t *testing.T) {
-	ctx := context.Background()
-	ts := newTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckKeyspace(ctx, t, ts)
+func TestEtcdTopo(t *testing.T) {
+	test.TopoServerTestSuite(t, func() topo.Impl {
+		return newTestServer(t, []string{"test"})
+	})
 }
 
-func TestShard(t *testing.T) {
-	ctx := context.Background()
-	ts := newTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckShard(ctx, t, ts)
-}
-
-func TestTablet(t *testing.T) {
-	ctx := context.Background()
-	ts := newTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckTablet(ctx, t, ts)
-}
-
-func TestShardReplication(t *testing.T) {
-	ctx := context.Background()
-	ts := newTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckShardReplication(ctx, t, ts)
-}
-
-func TestServingGraph(t *testing.T) {
-	ctx := context.Background()
-	ts := newTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckServingGraph(ctx, t, ts)
-}
-
-func TestWatchSrvKeyspace(t *testing.T) {
-	ctx := context.Background()
-	ts := newTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckWatchSrvKeyspace(ctx, t, ts)
-}
-
+// Test etcd-specific heartbeat (TTL).
 func TestKeyspaceLock(t *testing.T) {
 	ctx := context.Background()
 	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckKeyspaceLock(ctx, t, ts)
 
-	// Test etcd-specific heartbeat (TTL).
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
+		t.Fatalf("CreateKeyspace: %v", err)
+	}
 
 	// Long TTL, unlock before timeout.
 	*lockTTL = 1000 * time.Second
@@ -129,26 +98,4 @@ func TestKeyspaceLock(t *testing.T) {
 		t.Fatalf("UnlockKeyspaceForAction = %v, want %v", err, topo.ErrNoNode)
 	}
 	ignoreTTLRefresh = false
-}
-
-func TestShardLock(t *testing.T) {
-	ctx := context.Background()
-	if testing.Short() {
-		t.Skip("skipping wait-based test in short mode.")
-	}
-
-	ts := newTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckShardLock(ctx, t, ts)
-}
-
-func TestVSchema(t *testing.T) {
-	ctx := context.Background()
-	if testing.Short() {
-		t.Skip("skipping wait-based test in short mode.")
-	}
-
-	ts := newTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckVSchema(ctx, t, ts)
 }

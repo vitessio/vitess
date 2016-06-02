@@ -17,16 +17,6 @@ var errNotImplemented = errors.New("Not implemented")
 // FakeTopo is a topo.Server implementation that always returns errNotImplemented errors.
 type FakeTopo struct{}
 
-// GetSrvKeyspaceNames implements topo.Server.
-func (ft FakeTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
-	return nil, errNotImplemented
-}
-
-// GetSrvKeyspace implements topo.Server.
-func (ft FakeTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
-	return nil, errNotImplemented
-}
-
 // Close implements topo.Server.
 func (ft FakeTopo) Close() {}
 
@@ -140,6 +130,11 @@ func (ft FakeTopo) DeleteKeyspaceReplication(ctx context.Context, cell, keyspace
 	return errNotImplemented
 }
 
+// GetSrvKeyspaceNames implements topo.Server.
+func (ft FakeTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
+	return nil, errNotImplemented
+}
+
 // WatchSrvKeyspace implements topo.Server.WatchSrvKeyspace
 func (ft FakeTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, error) {
 	return nil, errNotImplemented
@@ -153,6 +148,26 @@ func (ft FakeTopo) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string,
 // DeleteSrvKeyspace implements topo.Server.
 func (ft FakeTopo) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) error {
 	return errNotImplemented
+}
+
+// GetSrvKeyspace implements topo.Server.
+func (ft FakeTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
+	return nil, errNotImplemented
+}
+
+// WatchSrvVSchema implements topo.Server.WatchSrvVSchema
+func (ft FakeTopo) WatchSrvVSchema(ctx context.Context, cell string) (<-chan *vschemapb.SrvVSchema, error) {
+	return nil, errNotImplemented
+}
+
+// UpdateSrvVSchema implements topo.Server.
+func (ft FakeTopo) UpdateSrvVSchema(ctx context.Context, cell string, srvVSchema *vschemapb.SrvVSchema) error {
+	return errNotImplemented
+}
+
+// GetSrvVSchema implements topo.Server.
+func (ft FakeTopo) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.SrvVSchema, error) {
+	return nil, errNotImplemented
 }
 
 // LockKeyspaceForAction implements topo.Server.
@@ -182,11 +197,6 @@ func (ft FakeTopo) SaveVSchema(context.Context, string, *vschemapb.Keyspace) err
 
 // GetVSchema implements topo.Server.
 func (ft FakeTopo) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error) {
-	return nil, errNotImplemented
-}
-
-// WatchVSchema implements topo.Server.WatchSrvKeyspace
-func (ft FakeTopo) WatchVSchema(ctx context.Context, keyspace string) (<-chan *vschemapb.Keyspace, error) {
 	return nil, errNotImplemented
 }
 

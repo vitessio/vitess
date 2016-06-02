@@ -323,6 +323,13 @@ class TestVTGateFunctions(unittest.TestCase):
     return vtgate_conn._execute(
         sql, bind_vars, tablet_type='master', keyspace_name=None)
 
+  def test_srv_vschema(self):
+    """Makes sure the SrvVSchema object is properly built."""
+    v = utils.run_vtctl_json(['GetSrvVSchema', 'test_nj'])
+    self.assertEqual(len(v['keyspaces']), 2, 'wrong vschema: %s' % str(v))
+    self.assertIn('user', v['keyspaces'])
+    self.assertIn('lookup', v['keyspaces'])
+
   def test_user(self):
     count = 4
     vtgate_conn = get_connection()

@@ -542,6 +542,18 @@ lock service. ZooKeeper is included in the Vitess distribution.
     `-file_backup_storage_root` flag on *vtctld* and *vttablet*, as demonstrated
     in `vtctld-up.sh` and `vttablet-up.sh`.
 
+1. **Initialize Vitess Routing Schema**
+
+    In the examples, we are just using a single database with no specific
+    configuration. So we just need to make that (empty) configuration visible
+    for serving. This is done by running the following command:
+    
+    ``` sh
+    vitess/examples/local$ ./lvtctl.sh RebuildVSchemaGraph
+    ```
+    
+    (As it works, this command will not display any output.)
+
 1.  **Start vtgate**
 
     Vitess uses *vtgate* to route each client query to

@@ -7,6 +7,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
@@ -15,70 +16,11 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-func TestKeyspace(t *testing.T) {
-	ctx := context.Background()
-	ts := newTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckKeyspace(ctx, t, ts)
-}
-
-func TestShard(t *testing.T) {
-	ctx := context.Background()
-	ts := newTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckShard(ctx, t, ts)
-}
-
-func TestTablet(t *testing.T) {
-	ctx := context.Background()
-	ts := newTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckTablet(ctx, t, ts)
-}
-
-func TestShardReplication(t *testing.T) {
-	ctx := context.Background()
-	ts := newTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckShardReplication(ctx, t, ts)
-}
-
-func TestServingGraph(t *testing.T) {
-	ts := newTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckServingGraph(context.Background(), t, ts)
-}
-
-func TestWatchSrvKeyspace(t *testing.T) {
+func TestZkTopo(t *testing.T) {
 	zktopo.WatchSleepDuration = 2 * time.Millisecond
-	ts := newTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckWatchSrvKeyspace(context.Background(), t, ts)
-}
-
-func TestKeyspaceLock(t *testing.T) {
-	ctx := context.Background()
-	ts := newTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckKeyspaceLock(ctx, t, ts)
-}
-
-func TestShardLock(t *testing.T) {
-	ctx := context.Background()
-	if testing.Short() {
-		t.Skip("skipping wait-based test in short mode.")
-	}
-
-	ts := newTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckShardLock(ctx, t, ts)
-}
-
-func TestVSchema(t *testing.T) {
-	ctx := context.Background()
-	ts := newTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckVSchema(ctx, t, ts)
+	test.TopoServerTestSuite(t, func() topo.Impl {
+		return newTestServer(t, []string{"test"})
+	})
 }
 
 // TestPurgeActions is a ZK specific unit test
