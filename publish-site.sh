@@ -1,4 +1,4 @@
-#! /bin/bash 
+#!/bin/bash
 
 set -e
 
@@ -42,6 +42,12 @@ if [[ "$1" == "--docker" ]]; then
   docker run -ti --name=vitess_publish_site -v $PWD/vitess.io:/in vitess/publish-site bash -c \
     'cp -R /in /out && cd /out && bundle install && bundle exec jekyll build'
   docker cp vitess_publish_site:/out/. vitess.io/
+  # There are cases where docker cp copies the contents of "out" in a
+  # subdirectory "out" on the destination. If that happens, move/overwrite
+  # everything up by one directory level.
+  if [ -d vitess.io/out/ ]; then
+    cp -a vitess.io/out/* vitess.io/
+  fi
   docker rm vitess_publish_site
 else
   (cd vitess.io && bundle install && bundle exec jekyll build)
