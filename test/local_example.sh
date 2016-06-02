@@ -64,6 +64,12 @@ until ./lvtctl.sh ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace;
   retry_with_timeout
 done
 
+echo "Rebuild vschema..."
+start=`date +%s`
+until ./lvtctl.sh RebuildVSchemaGraph; do
+  retry_with_timeout
+done
+
 echo "Run Python client script..."
 # Retry until vtgate is ready.
 start=`date +%s`
