@@ -121,6 +121,11 @@ type ActionAgent struct {
 	// over the record.
 	initialTablet *topodatapb.Tablet
 
+	// orc is an optional client for Orchestrator HTTP API calls.
+	// If this is nil, those calls will be skipped.
+	// It's only set once in NewActionAgent() and never modified after that.
+	orc *orcClient
+
 	// mutex protects all the following fields (that start with '_'),
 	// only hold the mutex to update the fields, nothing else.
 	mutex sync.Mutex
@@ -187,6 +192,11 @@ func NewActionAgent(
 ) (agent *ActionAgent, err error) {
 	topoServer := topo.GetServer()
 
+	orc, err := newOrcClient()
+	if err != nil {
+		return nil, err
+	}
+
 	agent = &ActionAgent{
 		QueryServiceControl: queryServiceControl,
 		HealthReporter:      health.DefaultAggregator,
@@ -197,6 +207,7 @@ func NewActionAgent(
 		DBConfigs:           dbcfgs,
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
+		orc:                 orc,
 	}
 	agent.registerQueryRuleSources()
 
@@ -260,7 +271,9 @@ func NewActionAgent(
 	}
 
 	// Start periodic Orchestrator self-registration, if configured.
-	go orcDiscoverLoop(agent)
+	if agent.orc != nil {
+		go agent.orc.DiscoverLoop(agent)
+	}
 
 	return agent, nil
 }

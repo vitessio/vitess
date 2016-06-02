@@ -54,6 +54,17 @@ func (agent *ActionAgent) StopSlave(ctx context.Context) error {
 	// restart ourselves (in replication_reporter).
 	agent.setSlaveStopped(true)
 
+	// Also tell Orchestrator we're stopped on purpose for some Vitess task.
+	// Do this in the background, as it's best-effort.
+	go func() {
+		if agent.orc == nil {
+			return
+		}
+		if err := agent.orc.BeginMaintenance(agent.Tablet(), "vttablet has been told to StopSlave"); err != nil {
+			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
+		}
+	}()
+
 	return mysqlctl.StopSlave(agent.MysqlDaemon, agent.hookExtraEnv())
 }
 
@@ -83,6 +94,17 @@ func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position string,
 // Should be called under RPCWrapLock.
 func (agent *ActionAgent) StartSlave(ctx context.Context) error {
 	agent.setSlaveStopped(false)
+
+	// Tell Orchestrator we're no longer stopped on purpose.
+	// Do this in the background, as it's best-effort.
+	go func() {
+		if agent.orc == nil {
+			return
+		}
+		if err := agent.orc.EndMaintenance(agent.Tablet()); err != nil {
+			log.Warningf("Orchestrator EndMaintenance failed: %v", err)
+		}
+	}()
 
 	if *enableSemiSync {
 		if err := agent.enableSemiSync(false); err != nil {
