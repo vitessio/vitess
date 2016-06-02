@@ -49,9 +49,9 @@ func TestInitTablet(t *testing.T) {
 	// let's use a real tablet in a shard, that will create
 	// the keyspace and shard.
 	*tabletHostname = "localhost"
-	*initTabletType = "replica"
 	*initKeyspace = "test_keyspace"
 	*initShard = "-80"
+	*initTabletType = "replica"
 	tabletAlias = &topodatapb.TabletAlias{
 		Cell: "cell1",
 		Uid:  2,
@@ -82,20 +82,6 @@ func TestInitTablet(t *testing.T) {
 	}
 	if ti.PortMap["grpc"] != gRPCPort {
 		t.Errorf("wrong gRPC port for tablet: %v", ti.PortMap["grpc"])
-	}
-
-	// try to init again, this time with old deprecated target_tablet_type
-	*initTabletType = ""
-	*targetTabletType = "replica"
-	if err := agent.InitTablet(port, gRPCPort); err != nil {
-		t.Fatalf("InitTablet(type, healthcheck) failed: %v", err)
-	}
-	ti, err = ts.GetTablet(ctx, tabletAlias)
-	if err != nil {
-		t.Fatalf("GetTablet failed: %v", err)
-	}
-	if ti.Type != topodatapb.TabletType_REPLICA {
-		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
 
 	// update shard's master to our alias, then try to init again
@@ -137,7 +123,6 @@ func TestInitTablet(t *testing.T) {
 	// init again with the tablet_type set, using init_tablet_type
 	// (also check db name override and tags here)
 	*initTabletType = "replica"
-	*targetTabletType = ""
 	*initDbNameOverride = "DBNAME"
 	initTags.Set("aaa:bbb")
 	if err := agent.InitTablet(port, gRPCPort); err != nil {

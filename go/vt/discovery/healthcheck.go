@@ -20,10 +20,6 @@
 //
 // Internally, the HealthCheck module is connected to each tablet and has a
 // streaming RPC (StreamHealth) open to receive periodic health infos.
-//
-// NOTE: This requires that the health check is enabled on the tablet.
-// As of 04/2016 you enable the health check by setting the vttablet flag
-// --target_tablet_type to the tablet's type i.e. REPLICA or RDONLY.
 package discovery
 
 import (

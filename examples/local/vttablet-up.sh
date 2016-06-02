@@ -98,7 +98,7 @@ for uid_index in $uids; do
     -tablet_hostname "$tablet_hostname" \
     -init_keyspace $keyspace \
     -init_shard $shard \
-    -target_tablet_type $tablet_type \
+    -init_tablet_type $tablet_type \
     -health_check_interval 5s \
     -enable_semi_sync \
     -enable_replication_reporter \
