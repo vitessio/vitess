@@ -113,7 +113,7 @@ change to the specified keyspace, it performs the following steps:
    database, applies the change there to validate it, and retrieves
    the resulting schema. By doing so, Vitess verifies that the change
    succeeds without actually touching live database tables.
-1. It applies the Sql command on the master tablet in each shard.
+1. It applies the SQL command on the master tablet in each shard.
 
 The following sample command applies the SQL in the **user_table.sql**
 file to the **user** keyspace:
@@ -151,3 +151,6 @@ impact of a potential change:
   shard's master tablet has 100,000 rows or less.
 * For all other statements, the table on the shard's master tablet
   must have 2 million rows or less.
+
+If a schema change gets rejected because it affects too many rows, you can specify the flag `-allow_long_unavailability` to tell `ApplySchema` to skip this check.
+However, we do not recommend this. Instead, you should apply large schema changes by using the [pivot process](/user-guide/vitess-replication.html#vitess-pivot).
