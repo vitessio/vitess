@@ -31,6 +31,7 @@ access to the location where you are storing backups.
           Current plugin options available are:
           <ul>
           <li><code>gcs</code>: For Google Cloud Storage.</li>
+          <li><code>ceph</code>: For Ceph Object Gateway S3 API.</li>
           <li><code>file</code>: For NFS or any other filesystem-mounted network drive.</li>
           </ul>
       </td>
@@ -46,6 +47,10 @@ access to the location where you are storing backups.
     <tr>
       <td><nobr><code>-gcs_backup_storage_bucket</code></nobr></td>
       <td>For the <code>gcs</code> plugin, this identifies the <a href="https://cloud.google.com/storage/docs/concepts-techniques#concepts">bucket</a> to use.</td>
+    </tr>
+    <tr>
+      <td><nobr><code>-ceph_backup_storage_config</code></nobr></td>
+      <td>For the <code>ceph</code> plugin, this identifies the path to a text file with a JSON object as configuration. The JSON object requires the following keys: <code>accessKey</code>, <code>secretKey</code>, <code>endPoint</code> and <code>bucket</code>.</td>
     </tr>
     <tr>
       <td><nobr><code>-restore_from_backup</code></nobr></td>
