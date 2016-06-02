@@ -30,8 +30,8 @@ Any upgrade should be a rolling release i.e. usually one tablet at a time within
 
 ## Upgrading the Master Tablet
 
-The `master` tablet of each shard should always be updated at last in the following manner:
+The *master* tablet of each shard should always be updated at last in the following manner:
 
-- verify that all `replica` tablets in the shard have been upgraded
-- reparent away from the current `master` to a `replica` tablet
-- upgrade old `master` tablet
+- verify that all *replica* tablets in the shard have been upgraded
+- reparent away from the current *master* to a *replica* tablet
+- upgrade old *master* tablet
