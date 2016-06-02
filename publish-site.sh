@@ -12,7 +12,7 @@ git checkout master README.md
 git checkout master index.md
 git checkout master vitess.io
 
-mkdir vitess.io/_includes/doc
+mkdir -p vitess.io/_includes/doc
 mkdir -p vitess.io/_posts/doc
 
 # create ref files for each doc
