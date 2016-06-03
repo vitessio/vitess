@@ -5,7 +5,9 @@ primary key information, and so forth.
 
 This document describes the <code>[vtctl](/reference/vtctl.html)</code>
 commands that you can use to [review](#reviewing-your-schema) or
-[update](#changing-your-schema) your schema in Vitess. 
+[update](#changing-your-schema) your schema in Vitess.
+
+Note that this functionality is not recommended for long-running schema changes. In such cases, we recommend to do a [pivot schema change](/user-guide/pivot-schema-changes.html) instead.
 
 ## Reviewing your schema
 
@@ -153,4 +155,4 @@ impact of a potential change:
   must have 2 million rows or less.
 
 If a schema change gets rejected because it affects too many rows, you can specify the flag `-allow_long_unavailability` to tell `ApplySchema` to skip this check.
-However, we do not recommend this. Instead, you should apply large schema changes by using the [pivot process](/user-guide/vitess-replication.html#vitess-pivot).
+However, we do not recommend this. Instead, you should apply large schema changes by following the [pivot process](/user-guide/pivot-schema-changes.html).
