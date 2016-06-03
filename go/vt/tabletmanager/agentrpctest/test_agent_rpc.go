@@ -15,7 +15,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -170,6 +169,7 @@ func agentRPCTestDialExpiredContext(ctx context.Context, t *testing.T, client tm
 	if err == nil {
 		t.Fatal("agentRPCTestDialExpiredContext: RPC with expired context did not fail")
 	}
+	// The context was already expired when we created it. Here we only verify that it returns the expected error.
 	select {
 	case <-expiredCtx.Done():
 		if err := expiredCtx.Err(); err != context.DeadlineExceeded {
@@ -177,31 +177,6 @@ func agentRPCTestDialExpiredContext(ctx context.Context, t *testing.T, client tm
 		}
 	default:
 		t.Errorf("agentRPCTestDialExpiredContext: context.Done() not closed")
-	}
-}
-
-// agentRPCTestDialTimeout verifies that
-// the context returns the right DeadlineExceeded Err() for
-// RPCs failed due to an expired context during .Dial().
-func agentRPCTestDialTimeout(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	// Connect to a non-existing tablet.
-	// For example, this provokes gRPC to return error grpc.ErrClientConnTimeout.
-	invalidTablet := proto.Clone(tablet).(*topodatapb.Tablet)
-	invalidTablet.Hostname = "Non-Existent.Server"
-
-	shortCtx, cancel := context.WithTimeout(ctx, time.Millisecond)
-	defer cancel()
-	err := client.Ping(shortCtx, invalidTablet)
-	if err == nil {
-		t.Fatal("agentRPCTestDialTimeout: connect to non-existant tablet did not fail")
-	}
-	select {
-	case <-shortCtx.Done():
-		if err := shortCtx.Err(); err != context.DeadlineExceeded {
-			t.Errorf("agentRPCTestDialTimeout: got %v want context.DeadlineExceeded", err)
-		}
-	default:
-		t.Errorf("agentRPCTestDialTimeout: context.Done() not closed")
 	}
 }
 
@@ -1197,7 +1172,6 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 
 	// Test RPC specific methods of the interface.
 	agentRPCTestDialExpiredContext(ctx, t, client, tablet)
-	agentRPCTestDialTimeout(ctx, t, client, tablet)
 	agentRPCTestRPCTimeout(ctx, t, client, tablet, fakeAgent.(*fakeRPCAgent))
 
 	// Various read-only methods
