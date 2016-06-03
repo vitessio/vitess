@@ -172,6 +172,10 @@ def mysql_binary_path(name):
   return os.path.join(vt_mysql_root, 'bin', name)
 
 
+def lameduck_flag(lameduck_period):
+  return ['-lameduck-period', lameduck_period]
+
+
 # pylint: disable=unused-argument
 def add_options(parser):
   """Add environment-specific command-line options."""
