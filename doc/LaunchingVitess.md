@@ -539,7 +539,7 @@ There are a few variables with the above prefix:
 
 * Available is a gauge that tells you the number of available connections in the pool in real-time. Capacity-Available is the number of connections in use. Note that this number could be misleading if the traffic is spiky.
 
-##### Other *Pool variables
+##### Other Pool variables
 
 Just like TransactionPool, there are variables for other pools:
 
