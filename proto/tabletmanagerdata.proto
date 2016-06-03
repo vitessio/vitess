@@ -43,6 +43,13 @@ message SchemaDefinition {
   string version = 3;
 }
 
+message SchemaChangeResult {
+  // before_schema holds the schema before each change.
+  SchemaDefinition before_schema = 1;
+  // after_schema holds the schema after each change.
+  SchemaDefinition after_schema = 2;
+}
+
 // UserPermission describes a single row in the mysql.user table
 // Primary key is Host+User
 // PasswordChecksum is the crc64 of the password, for security reasons
@@ -169,12 +176,13 @@ message ReloadSchemaResponse {
 }
 
 message PreflightSchemaRequest {
-  string change = 1;
+  repeated string changes = 1;
 }
 
 message PreflightSchemaResponse {
-  SchemaDefinition before_schema = 1;
-  SchemaDefinition after_schema = 2;
+  // change_results has for each change the schema before and after it.
+  // The number of elements is identical to the length of "changes" in the request.
+  repeated SchemaChangeResult change_results = 1;
 }
 
 message ApplySchemaRequest {

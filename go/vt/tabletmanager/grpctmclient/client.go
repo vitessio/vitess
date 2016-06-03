@@ -253,26 +253,25 @@ func (client *Client) ReloadSchema(ctx context.Context, tablet *topodatapb.Table
 }
 
 // PreflightSchema is part of the tmclient.TabletManagerClient interface.
-func (client *Client) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, change string) (*tmutils.SchemaChangeResult, error) {
+func (client *Client) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer cc.Close()
+
 	response, err := c.PreflightSchema(ctx, &tabletmanagerdatapb.PreflightSchemaRequest{
-		Change: change,
+		Changes: changes,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &tmutils.SchemaChangeResult{
-		BeforeSchema: response.BeforeSchema,
-		AfterSchema:  response.AfterSchema,
-	}, err
+
+	return response.ChangeResults, nil
 }
 
 // ApplySchema is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
+func (client *Client) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -288,7 +287,7 @@ func (client *Client) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet
 	if err != nil {
 		return nil, err
 	}
-	return &tmutils.SchemaChangeResult{
+	return &tabletmanagerdatapb.SchemaChangeResult{
 		BeforeSchema: response.BeforeSchema,
 		AfterSchema:  response.AfterSchema,
 	}, nil

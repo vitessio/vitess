@@ -193,9 +193,9 @@ type RPCAgent interface {
 
 	ReloadSchema(ctx context.Context)
 
-	PreflightSchema(ctx context.Context, change string) (*tmutils.SchemaChangeResult, error)
+	PreflightSchema(ctx context.Context, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error)
 
-	ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error)
+	ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 
 	ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error)
 

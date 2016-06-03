@@ -162,10 +162,11 @@ class TestSchema(unittest.TestCase):
         'Unexpected table count on %s (not %d): got tables: %s' %
         (tablet_obj.tablet_alias, expected_count, str(tables)))
 
-  def _apply_schema(self, keyspace, sql):
-    utils.run_vtctl(['ApplySchema',
-                     '-sql=' + sql,
-                     keyspace])
+  def _apply_schema(self, keyspace, sql, expect_fail=False):
+    return utils.run_vtctl(['ApplySchema',
+                            '-sql=' + sql,
+                            keyspace],
+                           expect_fail=expect_fail)
 
   def _get_schema(self, tablet_alias):
     return utils.run_vtctl_json(['GetSchema',
@@ -239,6 +240,41 @@ class TestSchema(unittest.TestCase):
     # check number of tables
     self._check_tables(shard_0_master, 5)
     self._check_tables(shard_1_master, 5)
+
+  def test_schema_changes_drop_and_create(self):
+    """Tests that a DROP and CREATE table will pass PreflightSchema check.
+
+    PreflightSchema checks each SQL statement separately. When doing so, it must
+    consider previous statements within the same ApplySchema command. For
+    example, a CREATE after DROP must not fail: When CREATE is checked, DROP
+    must have been executed first.
+    See: https://github.com/youtube/vitess/issues/1731#issuecomment-222914389
+    """
+    self._apply_initial_schema()
+    self._check_tables(shard_0_master, 4)
+    self._check_tables(shard_1_master, 4)
+
+    drop_and_create = ('DROP TABLE vt_select_test01;\n' +
+                       self._create_test_table_sql('vt_select_test01'))
+    self._apply_schema(test_keyspace, drop_and_create)
+    # check number of tables
+    self._check_tables(shard_0_master, 4)
+    self._check_tables(shard_1_master, 4)
+
+  def test_schema_changes_preflight_errors_partially(self):
+    """Tests that some SQL statements fail properly during PreflightSchema."""
+    self._apply_initial_schema()
+    self._check_tables(shard_0_master, 4)
+    self._check_tables(shard_1_master, 4)
+
+    # Second statement will fail because the table already exists.
+    create_error = (self._create_test_table_sql('vt_select_test05') + ';\n' +
+                    self._create_test_table_sql('vt_select_test01'))
+    stdout = self._apply_schema(test_keyspace, create_error, expect_fail=True)
+    self.assertIn('already exists', ''.join(stdout))
+    # check number of tables
+    self._check_tables(shard_0_master, 4)
+    self._check_tables(shard_1_master, 4)
 
   def test_vtctl_copyschemashard_use_tablet_as_source(self):
     self._test_vtctl_copyschemashard(shard_0_master.tablet_alias)
