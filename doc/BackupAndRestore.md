@@ -151,7 +151,7 @@ Specifically, make sure that the following vttablet parameters are set:
 ``` sh
     -init_keyspace <keyspace>
     -init_shard <shard>
-    -target_tablet_type replica|rdonly
+    -init_tablet_type replica|rdonly
 ```
 
 The bootstrapped tablet will restore the data from the backup and then apply changes, which occurred after the backup, by restarting replication.
