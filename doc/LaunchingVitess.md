@@ -389,49 +389,27 @@ This is the most important source of information for monitoring. There are other
 Vitess has a structured way of exporting certain performance stats. The most common one is the Histogram structure, which is used by Queries:
 
 ```
-
   "Queries": {
-
     "Histograms": {
-
       "PASS_SELECT": {
-
         "1000000": 1138196,
-
         "10000000": 1138313,
-
         "100000000": 1138342,
-
         "1000000000": 1138342,
-
         "10000000000": 1138342,
-
         "500000": 1133195,
-
         "5000000": 1138277,
-
         "50000000": 1138342,
-
         "500000000": 1138342,
-
         "5000000000": 1138342,
-
         "Count": 1138342,
-
         "Time": 387710449887,
-
         "inf": 1138342
-
       }
-
     },
-
     "TotalCount": 1138342,
-
     "TotalTime": 387710449887
-
   },
-
 ```
 
 The histograms are broken out into query categories. In the above case, "PASS_SELECT" is the only category.  An entry like `"500000": 1133195` means that `1133195` queries took under `500000` nanoseconds to execute.
@@ -461,37 +439,21 @@ Use this variable to track:
 ##### Results
 
 ```
-
   "Results": {
-
     "0": 0,
-
     "1": 0,
-
     "10": 1138326,
-
     "100": 1138326,
-
     "1000": 1138342,
-
     "10000": 1138342,
-
     "5": 1138326,
-
     "50": 1138326,
-
     "500": 1138342,
-
     "5000": 1138342,
-
     "Count": 1138342,
-
     "Total": 1140438,
-
     "inf": 1138342
-
   }
-
 ```
 
 Results is a simple histogram with no timing info. It gives you a histogram view of the number of rows returned per query.
@@ -515,19 +477,12 @@ This variable used to report connection pool waits, but a refactor moved those v
 ##### Errors
 
 ```
-
   "Errors": {
-
     "Deadlock": 0,
-
     "Fail": 1,
-
     "NotInTx": 0,
-
     "TxPoolFull": 0
-
   },
-
 ```
 
 Errors are reported under different categories. It’s beneficial to track each category separately as it will be more helpful for troubleshooting. Right now, there are four categories. The category list may vary as Vitess evolves.
@@ -539,27 +494,16 @@ VTTablet also exports an InfoErrors variable that tracks inconsequential errors 
 ##### InternalErrors
 
 ```
-
   "InternalErrors": {
-
     "HungQuery": 0,
-
     "Invalidation": 0,
-
     "MemcacheStats": 0,
-
     "Mismatch": 0,
-
     "Panic": 0,
-
     "Schema": 0,
-
     "StrayTransactions": 0,
-
     "Task": 0
-
   },
-
 ```
 
 An internal error is an unexpected situation in code that may possibly point to a bug. Such errors may not cause outages, but even a single error needs be escalated for root cause analysis.
@@ -567,15 +511,10 @@ An internal error is an unexpected situation in code that may possibly point to 
 ##### Kills
 
 ```
-
   "Kills": {
-
     "Queries": 2,
-
     "Transactions": 0
-
   },
-
 ```
 
 Kills reports the queries and transactions killed by VTTablet due to timeout. It’s a very important variable to look at during outages.
@@ -585,21 +524,13 @@ Kills reports the queries and transactions killed by VTTablet due to timeout. It
 There are a few variables with the above prefix:
 
 ```
-
   "TransactionPoolAvailable": 300,
-
   "TransactionPoolCapacity": 300,
-
   "TransactionPoolIdleTimeout": 600000000000,
-
   "TransactionPoolMaxCap": 300,
-
   "TransactionPoolTimeout": 30000000000,
-
   "TransactionPoolWaitCount": 0,
-
   "TransactionPoolWaitTime": 0,
-
 ```
 
 * WaitCount will give you how often the transaction pool gets full that causes new transactions to wait.
