@@ -9,12 +9,15 @@ package vtgate
 import (
 	"fmt"
 	"math"
+	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
@@ -83,6 +86,8 @@ type RegisterVTGate func(vtgateservice.VTGateService)
 // RegisterVTGates stores register funcs for VTGate server.
 var RegisterVTGates []RegisterVTGate
 
+var vtgateOnce sync.Once
+
 // Init initializes VTGate server.
 func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *VTGate {
 	if rpcVTGate != nil {
@@ -124,7 +129,29 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 			f(rpcVTGate)
 		}
 	})
+	vtgateOnce.Do(rpcVTGate.registerDebugHealthHandler)
 	return rpcVTGate
+}
+
+func (vtg *VTGate) registerDebugHealthHandler() {
+	http.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
+			acl.SendError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		if err := vtg.IsHealthy(); err != nil {
+			w.Write([]byte("not ok"))
+			return
+		}
+		w.Write([]byte("ok"))
+	})
+}
+
+// IsHealthy returns nil if server is healthy.
+// Otherwise, it returns an error indicating the reason.
+func (vtg *VTGate) IsHealthy() error {
+	return nil
 }
 
 // Execute executes a non-streaming query by routing based on the values in the query.

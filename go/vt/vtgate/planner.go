@@ -38,7 +38,7 @@ type Planner struct {
 	plans   *cache.LRUCache
 }
 
-var once sync.Once
+var plannerOnce sync.Once
 
 // NewPlanner creates a new planner for VTGate.
 // It will watch the vschema in the topology until the ctx is closed.
@@ -49,7 +49,7 @@ func NewPlanner(ctx context.Context, serv topo.SrvTopoServer, cell string, cache
 		plans: cache.NewLRUCache(int64(cacheSize)),
 	}
 	plr.WatchSrvVSchema(ctx, cell)
-	once.Do(func() {
+	plannerOnce.Do(func() {
 		http.Handle("/debug/query_plans", plr)
 		http.Handle("/debug/vschema", plr)
 	})
