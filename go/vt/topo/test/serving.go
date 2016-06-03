@@ -251,7 +251,7 @@ func checkWatchSrvVSchema(t *testing.T, ts topo.Impl) {
 	}
 
 	// update with an empty value, should get a notification
-	if err := ts.UpdateSrvVSchema(ctx, cell, nil); err != nil {
+	if err := ts.UpdateSrvVSchema(ctx, cell, emptySrvVSchema); err != nil {
 		t.Fatalf("UpdateSrvVSchema failed: %v", err)
 	}
 	for {
