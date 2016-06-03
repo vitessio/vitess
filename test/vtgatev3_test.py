@@ -4,6 +4,7 @@
 import itertools
 import logging
 import unittest
+import urllib
 
 import environment
 import keyspace_util
@@ -322,6 +323,12 @@ class TestVTGateFunctions(unittest.TestCase):
   def execute_on_master(self, vtgate_conn, sql, bind_vars):
     return vtgate_conn._execute(
         sql, bind_vars, tablet_type='master', keyspace_name=None)
+
+  def test_health(self):
+    f = urllib.urlopen('http://localhost:%d/debug/health' % utils.vtgate.port)
+    response = f.read()
+    f.close()
+    self.assertEqual(response, 'ok')
 
   def test_srv_vschema(self):
     """Makes sure the SrvVSchema object is properly built."""
