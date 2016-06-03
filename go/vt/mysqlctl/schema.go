@@ -200,8 +200,8 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, erro
 
 // PreflightSchemaChange checks the schema changes in "changes" by applying them
 // to an intermediate database that has the same schema as the target database.
-func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]*tmutils.SchemaChangeResult, error) {
-	diffs := make([]*tmutils.SchemaChangeResult, len(changes))
+func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
+	results := make([]*tabletmanagerdatapb.SchemaChangeResult, len(changes))
 
 	// Get current schema from the real database.
 	originalSchema, err := mysqld.GetSchema(dbName, nil, nil, true)
@@ -252,7 +252,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]
 			return nil, err
 		}
 
-		diffs[i] = &tmutils.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}
+		results[i] = &tabletmanagerdatapb.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}
 	}
 
 	// and clean up the extra database
@@ -262,11 +262,11 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]
 		return nil, err
 	}
 
-	return diffs, nil
+	return results, nil
 }
 
 // ApplySchemaChange will apply the schema change to the given database.
-func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
+func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	// check current schema matches
 	beforeSchema, err := mysqld.GetSchema(dbName, nil, nil, true)
 	if err != nil {
@@ -286,7 +286,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *tmutils.SchemaCha
 					// no diff between the schema we expect
 					// after the change and the current
 					// schema, we already applied it
-					return &tmutils.SchemaChangeResult{
+					return &tabletmanagerdatapb.SchemaChangeResult{
 						BeforeSchema: beforeSchema,
 						AfterSchema:  beforeSchema}, nil
 				}
@@ -335,5 +335,5 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *tmutils.SchemaCha
 		}
 	}
 
-	return &tmutils.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
+	return &tabletmanagerdatapb.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
 }

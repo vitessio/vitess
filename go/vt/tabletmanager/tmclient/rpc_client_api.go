@@ -71,10 +71,10 @@ type TabletManagerClient interface {
 	ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet) error
 
 	// PreflightSchema will test a list of schema changes.
-	PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, changes []string) ([]*tmutils.SchemaChangeResult, error)
+	PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error)
 
 	// ApplySchema will apply a schema change
-	ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error)
+	ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 
 	// ExecuteFetchAsDba executes a query remotely using the DBA pool
 	ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, query string, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error)

@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -25,7 +26,7 @@ type TabletExecutor struct {
 	tmClient             tmclient.TabletManagerClient
 	topoServer           topo.Server
 	tablets              []*topodatapb.Tablet
-	schemaDiffs          []*tmutils.SchemaChangeResult
+	schemaDiffs          []*tabletmanagerdatapb.SchemaChangeResult
 	isClosed             bool
 	allowBigSchemaChange bool
 }

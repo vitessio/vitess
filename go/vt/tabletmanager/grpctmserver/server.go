@@ -155,14 +155,9 @@ func (s *server) PreflightSchema(ctx context.Context, request *tabletmanagerdata
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &tabletmanagerdatapb.PreflightSchemaResponse{}
 	return response, s.agent.RPCWrapLockAction(ctx, tabletmanager.TabletActionPreflightSchema, request, response, true, func() error {
-		diffs, err := s.agent.PreflightSchema(ctx, request.Changes)
+		results, err := s.agent.PreflightSchema(ctx, request.Changes)
 		if err == nil {
-			response.BeforeSchemas = make([]*tabletmanagerdatapb.SchemaDefinition, len(request.Changes))
-			response.AfterSchemas = make([]*tabletmanagerdatapb.SchemaDefinition, len(request.Changes))
-			for i := 0; i < len(request.Changes); i++ {
-				response.BeforeSchemas[i] = diffs[i].BeforeSchema
-				response.AfterSchemas[i] = diffs[i].AfterSchema
-			}
+			response.ChangeResults = results
 		}
 		return err
 	})

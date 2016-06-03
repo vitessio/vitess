@@ -715,30 +715,30 @@ func (itmc *internalTabletManagerClient) ReloadSchema(ctx context.Context, table
 	})
 }
 
-func (itmc *internalTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, changes []string) ([]*tmutils.SchemaChangeResult, error) {
+func (itmc *internalTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	var result []*tmutils.SchemaChangeResult
+	var results []*tabletmanagerdatapb.SchemaChangeResult
 	if err := t.agent.RPCWrapLockAction(ctx, tabletmanager.TabletActionPreflightSchema, nil, nil, true, func() error {
-		diffs, err := t.agent.PreflightSchema(ctx, changes)
+		r, err := t.agent.PreflightSchema(ctx, changes)
 		if err == nil {
-			result = diffs
+			results = r
 		}
 		return err
 	}); err != nil {
 		return nil, err
 	}
-	return result, nil
+	return results, nil
 }
 
-func (itmc *internalTabletManagerClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
+func (itmc *internalTabletManagerClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	var result *tmutils.SchemaChangeResult
+	var result *tabletmanagerdatapb.SchemaChangeResult
 	if err := t.agent.RPCWrapLockAction(ctx, tabletmanager.TabletActionApplySchema, nil, nil, true, func() error {
 		scr, err := t.agent.ApplySchema(ctx, change)
 		if err == nil {

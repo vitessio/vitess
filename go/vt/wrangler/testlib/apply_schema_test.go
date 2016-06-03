@@ -63,7 +63,7 @@ func TestApplySchema_AllowLongUnavailability(t *testing.T) {
 			},
 		},
 	}
-	preflightSchemaChanges := []*tmutils.SchemaChangeResult{
+	preflightSchemaChanges := []*tabletmanagerdatapb.SchemaChangeResult{
 		{
 			BeforeSchema: beforeSchema,
 			AfterSchema:  afterSchema,

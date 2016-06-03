@@ -508,14 +508,14 @@ func agentRPCTestReloadSchemaPanic(ctx context.Context, t *testing.T, client tmc
 }
 
 var testPreflightSchema = []string{"change table add table cloth"}
-var testSchemaChangeResult = []*tmutils.SchemaChangeResult{
+var testSchemaChangeResult = []*tabletmanagerdatapb.SchemaChangeResult{
 	{
 		BeforeSchema: testGetSchemaReply,
 		AfterSchema:  testGetSchemaReply,
 	},
 }
 
-func (fra *fakeRPCAgent) PreflightSchema(ctx context.Context, changes []string) ([]*tmutils.SchemaChangeResult, error) {
+func (fra *fakeRPCAgent) PreflightSchema(ctx context.Context, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -541,7 +541,7 @@ var testSchemaChange = &tmutils.SchemaChange{
 	AfterSchema:      testGetSchemaReply,
 }
 
-func (fra *fakeRPCAgent) ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
+func (fra *fakeRPCAgent) ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
