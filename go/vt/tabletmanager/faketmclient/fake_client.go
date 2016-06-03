@@ -27,8 +27,6 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-type timeoutError error
-
 // NewFakeTabletManagerClient should be used to create a new FakeTabletManagerClient.
 // There is intentionally no init in this file with a call to RegisterTabletManagerClientFactory.
 // There shouldn't be any legitimate use-case where we would want to start a vitess cluster
@@ -280,18 +278,4 @@ func (e *eofEventStream) Recv() (*logutilpb.Event, error) {
 // Backup is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int) (logutil.EventStream, error) {
 	return &eofEventStream{}, nil
-}
-
-//
-// RPC related methods
-//
-
-// IsTimeoutError is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) IsTimeoutError(err error) bool {
-	switch err.(type) {
-	case timeoutError:
-		return true
-	default:
-		return false
-	}
 }

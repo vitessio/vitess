@@ -159,25 +159,31 @@ func agentRPCTestPingPanic(ctx context.Context, t *testing.T, client tmclient.Ta
 	expectRPCWrapPanic(t, err)
 }
 
-// agentRPCTestIsTimeoutErrorDialExpiredContext verifies that
-// client.IsTimeoutError() returns true for RPCs failed due to an expired
-// context before .Dial().
-func agentRPCTestIsTimeoutErrorDialExpiredContext(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+// agentRPCTestDialExpiredContext verifies that
+// the context returns the right DeadlineExceeded Err() for
+// RPCs failed due to an expired context before .Dial().
+func agentRPCTestDialExpiredContext(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	// Using a timeout of 0 here such that .Dial() will fail immediately.
 	expiredCtx, cancel := context.WithTimeout(ctx, 0)
 	defer cancel()
 	err := client.Ping(expiredCtx, tablet)
 	if err == nil {
-		t.Fatal("agentRPCTestIsTimeoutErrorDialExpiredContext: RPC with expired context did not fail")
+		t.Fatal("agentRPCTestDialExpiredContext: RPC with expired context did not fail")
 	}
-	if !client.IsTimeoutError(err) {
-		t.Errorf("agentRPCTestIsTimeoutErrorDialExpiredContext: want: IsTimeoutError() = true. error: %v", err)
+	select {
+	case <-expiredCtx.Done():
+		if err := expiredCtx.Err(); err != context.DeadlineExceeded {
+			t.Errorf("agentRPCTestDialExpiredContext: got %v want context.DeadlineExceeded", err)
+		}
+	default:
+		t.Errorf("agentRPCTestDialExpiredContext: context.Done() not closed")
 	}
 }
 
-// agentRPCTestIsTimeoutErrorDialTimeout verifies that client.IsTimeoutError()
-// returns true for RPCs failed due to a connect timeout during .Dial().
-func agentRPCTestIsTimeoutErrorDialTimeout(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+// agentRPCTestDialTimeout verifies that
+// the context returns the right DeadlineExceeded Err() for
+// RPCs failed due to an expired context during .Dial().
+func agentRPCTestDialTimeout(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	// Connect to a non-existing tablet.
 	// For example, this provokes gRPC to return error grpc.ErrClientConnTimeout.
 	invalidTablet := proto.Clone(tablet).(*topodatapb.Tablet)
@@ -187,31 +193,42 @@ func agentRPCTestIsTimeoutErrorDialTimeout(ctx context.Context, t *testing.T, cl
 	defer cancel()
 	err := client.Ping(shortCtx, invalidTablet)
 	if err == nil {
-		t.Fatal("agentRPCTestIsTimeoutErrorDialTimeout: connect to non-existant tablet did not fail")
+		t.Fatal("agentRPCTestDialTimeout: connect to non-existant tablet did not fail")
 	}
-	if !client.IsTimeoutError(err) {
-		t.Errorf("agentRPCTestIsTimeoutErrorDialTimeout: want: IsTimeoutError() = true. error: %v", err)
+	select {
+	case <-shortCtx.Done():
+		if err := shortCtx.Err(); err != context.DeadlineExceeded {
+			t.Errorf("agentRPCTestDialTimeout: got %v want context.DeadlineExceeded", err)
+		}
+	default:
+		t.Errorf("agentRPCTestDialTimeout: context.Done() not closed")
 	}
 }
 
-// agentRPCTestIsTimeoutErrorRPC verifies that client.IsTimeoutError() returns
-// true for RPCs failed due to an expired context during RPC execution.
-func agentRPCTestIsTimeoutErrorRPC(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, fakeAgent *fakeRPCAgent) {
+// agentRPCTestRPCTimeout verifies that
+// the context returns the right DeadlineExceeded Err() for
+// RPCs failed due to an expired context during execution.
+func agentRPCTestRPCTimeout(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, fakeAgent *fakeRPCAgent) {
 	// We must use a timeout > 0 such that the context deadline hasn't expired
 	// yet in grpctmclient.Client.dial().
 	// NOTE: This might still race e.g. when test execution takes too long the
 	//       context will be expired in dial() already. In such cases coverage
 	//       will be reduced but the test will not flake.
-	shortCtx, cancel := context.WithTimeout(ctx, time.Millisecond)
+	shortCtx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
 	defer cancel()
 	fakeAgent.setSlow(true)
 	defer func() { fakeAgent.setSlow(false) }()
 	err := client.Ping(shortCtx, tablet)
 	if err == nil {
-		t.Fatal("agentRPCTestIsTimeoutErrorRPC: RPC with expired context did not fail")
+		t.Fatal("agentRPCTestRPCTimeout: RPC with expired context did not fail")
 	}
-	if !client.IsTimeoutError(err) {
-		t.Errorf("agentRPCTestIsTimeoutErrorRPC: want: IsTimeoutError() = true. error: %v", err)
+	select {
+	case <-shortCtx.Done():
+		if err := shortCtx.Err(); err != context.DeadlineExceeded {
+			t.Errorf("agentRPCTestRPCTimeout: got %v want context.DeadlineExceeded", err)
+		}
+	default:
+		t.Errorf("agentRPCTestRPCTimeout: context.Done() not closed")
 	}
 }
 
@@ -1179,9 +1196,9 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	ctx := context.Background()
 
 	// Test RPC specific methods of the interface.
-	agentRPCTestIsTimeoutErrorDialExpiredContext(ctx, t, client, tablet)
-	agentRPCTestIsTimeoutErrorDialTimeout(ctx, t, client, tablet)
-	agentRPCTestIsTimeoutErrorRPC(ctx, t, client, tablet, fakeAgent.(*fakeRPCAgent))
+	agentRPCTestDialExpiredContext(ctx, t, client, tablet)
+	agentRPCTestDialTimeout(ctx, t, client, tablet)
+	agentRPCTestRPCTimeout(ctx, t, client, tablet, fakeAgent.(*fakeRPCAgent))
 
 	// Various read-only methods
 	agentRPCTestPing(ctx, t, client, tablet)
