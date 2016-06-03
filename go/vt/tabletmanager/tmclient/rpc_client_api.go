@@ -182,13 +182,6 @@ type TabletManagerClient interface {
 
 	// Backup creates a database backup
 	Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int) (logutil.EventStream, error)
-
-	//
-	// RPC related methods
-	//
-
-	// IsTimeoutError checks if an error was caused by an RPC layer timeout vs an application-specific one
-	IsTimeoutError(err error) bool
 }
 
 // TabletManagerClientFactory is the factory method to create

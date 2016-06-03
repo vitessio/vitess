@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/hook"
@@ -676,21 +675,4 @@ func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, con
 		stream: stream,
 		cc:     cc,
 	}, nil
-}
-
-//
-// RPC related methods
-//
-
-// IsTimeoutError is part of the tmclient.TabletManagerClient interface.
-func (client *Client) IsTimeoutError(err error) bool {
-	if err == grpc.ErrClientConnTimeout || grpc.Code(err) == codes.DeadlineExceeded {
-		return true
-	}
-	switch err.(type) {
-	case timeoutError:
-		return true
-	default:
-		return false
-	}
 }
