@@ -514,7 +514,7 @@ class Tablet(object):
     if self.grpc_enabled():
       args.extend(['-grpc_port', str(self.grpc_port)])
     if lameduck_period:
-      args.extend(['-lameduck-period', lameduck_period])
+      args.extend(environment.lameduck_flag(lameduck_period))
     if grace_period:
       args.extend(['-serving_state_grace_period', grace_period])
     if security_policy:
