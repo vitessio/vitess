@@ -141,6 +141,11 @@ func addDirectory(fes []FileEntry, base string, baseDir string, subDir string) (
 		return nil, err
 	}
 	for _, fi := range fis {
+		// Ignore special un-replicated _vt.local_metadata table,
+		// but keep the .frm file so InnoDB doesn't get confused on restore.
+		if subDir == "_vt" && fi.Name() == "local_metadata.ibd" {
+			continue
+		}
 		fes = append(fes, FileEntry{
 			Base: base,
 			Name: path.Join(subDir, fi.Name()),

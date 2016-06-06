@@ -11,6 +11,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -50,14 +51,26 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 	pos, err := mysqlctl.Restore(ctx, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv())
 	switch err {
 	case nil:
+		// Populate local_metadata before starting replication,
+		// so it's there before we start announcing ourself.
+		if err := agent.populateLocalMetadata(ctx); err != nil {
+			return err
+		}
+
 		// Reconnect to master.
 		if err := agent.startReplication(ctx, pos); err != nil {
 			return err
 		}
 	case mysqlctl.ErrNoBackup:
 		log.Infof("Auto-restore is enabled, but no backups were found. Starting up empty.")
+		if err := agent.populateLocalMetadata(ctx); err != nil {
+			return err
+		}
 	case mysqlctl.ErrExistingDB:
 		log.Infof("Auto-restore is enabled, but mysqld already contains data. Assuming vttablet was just restarted.")
+		if err := agent.populateLocalMetadata(ctx); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("Can't restore backup: %v", err)
 	}
@@ -94,6 +107,14 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos replication.
 		// If we had instead considered this fatal, all tablets would crash-loop
 		// until a master appears, which would make it impossible to elect a master.
 		log.Warningf("Can't start replication after restore: shard %v/%v has no master.", tablet.Keyspace, tablet.Shard)
+		return nil
+	}
+	if topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) {
+		// We used to be the master before we got restarted in an empty data dir,
+		// and no other master has been elected in the meantime.
+		// This shouldn't happen, so we'll let the operator decide which tablet
+		// should actually be promoted to master.
+		log.Warningf("Can't start replication after restore: master record still points to this tablet.")
 		return nil
 	}
 	ti, err := agent.TopoServer.GetTablet(ctx, si.MasterAlias)
