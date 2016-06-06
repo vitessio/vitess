@@ -276,6 +276,24 @@ class TestSchema(unittest.TestCase):
     self._check_tables(shard_0_master, 4)
     self._check_tables(shard_1_master, 4)
 
+  def test_schema_changes_drop_if_exists(self):
+    self._apply_initial_schema()
+    self._check_tables(shard_0_master, 4)
+    self._check_tables(shard_1_master, 4)
+
+    drop_table = ('DROP TABLE vt_select_test06;\n')
+    stdout = self._apply_schema(test_keyspace, drop_table, expect_fail=True)
+    self.assertIn('Unknown table', ''.join(stdout))
+
+    #This Query may not result in schema change and should be allowed
+    drop_if_exists = ('DROP TABLE IF EXISTS vt_select_test06;\n')
+    self._apply_schema(test_keyspace, drop_if_exists)
+
+  # check number of tables
+    self._check_tables(shard_0_master, 4)
+    self._check_tables(shard_1_master, 4)
+
+
   def test_vtctl_copyschemashard_use_tablet_as_source(self):
     self._test_vtctl_copyschemashard(shard_0_master.tablet_alias)
 
