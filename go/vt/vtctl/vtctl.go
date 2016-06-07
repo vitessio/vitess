@@ -210,7 +210,7 @@ var commands = []commandGroup{
 				"Validates that all nodes that are reachable from this shard are consistent."},
 			{"ShardReplicationPositions", commandShardReplicationPositions,
 				"<keyspace/shard>",
-				"Shows the replication status of each slave machine in the shard graph. In this case, the status refers to the replication lag between the master vttablet and the slave vttablet. In Vitess, data is always written to the master vttablet first and then replicated to all slave vttablets."},
+				"Shows the replication status of each slave machine in the shard graph. In this case, the status refers to the replication lag between the master vttablet and the slave vttablet. In Vitess, data is always written to the master vttablet first and then replicated to all slave vttablets. Output is sorted by tablet type, then replication position. Use ctrl-C to interrupt command and see partial result if needed."},
 			{"ListShardTablets", commandListShardTablets,
 				"<keyspace/shard>",
 				"Lists all tablets in the specified shard."},
