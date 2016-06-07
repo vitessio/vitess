@@ -91,10 +91,7 @@ func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 	return nil
 }
 
-func (exec *TabletExecutor) getParsedDDLS(ctx context.Context, sqls []string) ([]*sqlparser.DDL, error) {
-	if exec.isClosed {
-		return nil, fmt.Errorf("executor is closed")
-	}
+func parseDDLs(sqls []string) ([]*sqlparser.DDL, error) {
 	parsedDDLs := make([]*sqlparser.DDL, len(sqls))
 	for i, sql := range sqls {
 		stat, err := sqlparser.Parse(sql)
@@ -107,7 +104,7 @@ func (exec *TabletExecutor) getParsedDDLS(ctx context.Context, sqls []string) ([
 		}
 		parsedDDLs[i] = ddl
 	}
-	return parsedDDLs,nil
+	return parsedDDLs, nil
 }
 
 // Validate validates a list of sql statements.
@@ -116,7 +113,10 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 		return fmt.Errorf("executor is closed")
 	}
 
-	parsedDDLs, err := exec.getParsedDDLS(ctx,sqls)
+	parsedDDLs, err := parseDDLs(sqls)
+	if err != nil {
+		return err
+	}
 
 	bigSchemaChange, err := exec.detectBigSchemaChanges(ctx, parsedDDLs)
 	if bigSchemaChange && exec.allowBigSchemaChange {
@@ -169,7 +169,10 @@ func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []s
 		return err
 	}
 
-	parsedDDLs, err := exec.getParsedDDLS(ctx,sqls)
+	parsedDDLs, err := parseDDLs(sqls)
+	if err != nil {
+		return err
+	}
 
 	for i, schemaDiff := range schemaDiffs {
 		diffs := tmutils.DiffSchemaToArray(
@@ -177,7 +180,12 @@ func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []s
 			schemaDiff.BeforeSchema,
 			"AfterSchema",
 			schemaDiff.AfterSchema)
-		if len(diffs) == 0 && parsedDDLs[i].Action!= sqlparser.DropStr{
+		if len(diffs) == 0 {
+			if parsedDDLs[i].Action == sqlparser.DropStr {
+				// DROP IF EXISTS on a nonexistent table does not change the schema. It's safe to ignore.
+				// TODO(mberlin): Extend sqlparser to find out if the DDL contains IF EXISTS and check for it as well.
+				continue
+			}
 			return fmt.Errorf("Schema change: '%s' does not introduce any table definition change.", sqls[i])
 		}
 	}
