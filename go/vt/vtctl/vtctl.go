@@ -2185,10 +2185,9 @@ func (rts rTablets) Len() int { return len(rts) }
 func (rts rTablets) Swap(i, j int) { rts[i], rts[j] = rts[j], rts[i] }
 
 // Sort for tablet replication.
-// master first, then i/o position, then sql position
+// Tablet type first (with master first), then replication positions.
 func (rts rTablets) Less(i, j int) bool {
-	// NOTE: Swap order of unpack to reverse sort
-	l, r := rts[j], rts[i]
+	l, r := rts[i], rts[j]
 	// l or r ReplicationStatus would be nil if we failed to get
 	// the position (put them at the beginning of the list)
 	if l.Status == nil {
