@@ -15,6 +15,14 @@
 // and then use the protobuf library to encode it as text.
 // For an example in Python, see: test/vttest_sample_test.py
 // In go, see: go/vt/vttest/local_cluster_test.go
+//
+// Sample encoded proto configurations would be as follow. Note there are
+// multiple encoding options, see the proto documentation for more info
+// (first and last quote not included in the encoding):
+// - single keyspace named test_keyspace with one shard '0':
+//   'keyspaces:<name:"test_keyspace" shards:<name:"0" > > '
+// - two keyspaces, one with two shards, the other one with a redirect:
+//   'keyspaces { name: "test_keyspace" shards { name: "-80" } shards { name: "80-" } } keyspaces { name: "redirect" served_from: "test_keyspace" }'
 
 syntax = "proto3";
 
