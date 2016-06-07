@@ -37,10 +37,6 @@ var (
 	name        = flag.String("tablet_manager_grpc_server_name", "", "the server name to use to validate server certificate")
 )
 
-type timeoutError struct {
-	error
-}
-
 func init() {
 	tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
 		return NewClient()
