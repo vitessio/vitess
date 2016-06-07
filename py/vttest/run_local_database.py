@@ -21,7 +21,6 @@ import json
 import logging
 import optparse
 import os
-import re
 import sys
 
 from google.protobuf import text_format
@@ -32,8 +31,6 @@ from vttest import mysql_flavor
 from vttest import init_data_options
 
 from vtproto import vttest_pb2
-
-shard_exp = re.compile(r'(.+)/(.+):(.+)')
 
 
 def main(cmdline_options):
