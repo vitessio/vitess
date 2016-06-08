@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
-"""Command-line tool for starting a local Vitess database for testing.
+r"""Command-line tool for starting a local Vitess database for testing.
 
 USAGE:
 
   $ run_local_database --port 12345 \
-    --topology test_keyspace/-80:test_keyspace_0,test_keyspace/80-:test_keyspace_1 \
+    --proto_topo <vttest proto as string> \
     --schema_dir /path/to/schema/dir
 
 It will run the tool, logging to stderr. On stdout, a small json structure
@@ -21,29 +21,23 @@ import json
 import logging
 import optparse
 import os
-import re
 import sys
+
+from google.protobuf import text_format
 
 from vttest import environment
 from vttest import local_database
 from vttest import mysql_flavor
-from vttest import vt_processes
 from vttest import init_data_options
 
-shard_exp = re.compile(r'(.+)/(.+):(.+)')
+from vtproto import vttest_pb2
 
 
 def main(cmdline_options):
-  shards = []
-
-  for shard in cmdline_options.topology.split(','):
-    m = shard_exp.match(shard)
-    if m:
-      shards.append(
-          vt_processes.ShardInfo(m.group(1), m.group(2), m.group(3)))
-    else:
-      sys.stderr.write('invalid --shard flag format: %s\n' % shard)
-      sys.exit(1)
+  topology = vttest_pb2.VTTestTopology()
+  if cmdline_options.proto_topo:
+    # Text-encoded proto topology object, just parse it.
+    topology = text_format.Parse(cmdline_options.proto_topo, topology)
 
   environment.base_port = cmdline_options.port
 
@@ -56,7 +50,7 @@ def main(cmdline_options):
     init_data_opts.null_probability = cmdline_options.null_probability
 
   with local_database.LocalDatabase(
-      shards,
+      topology,
       cmdline_options.schema_dir,
       cmdline_options.vschema,
       cmdline_options.mysql_only,
@@ -82,11 +76,9 @@ if __name__ == '__main__':
       help='Port to use for vtcombo. If this is 0, a random port '
       'will be chosen.')
   parser.add_option(
-      '-t', '--topology',
-      help='Define which shards exist in the test topology in the'
-      ' form <keyspace>/<shardrange>:<dbname>,... The dbname'
-      ' must be unique among all shards, since they share'
-      ' a MySQL instance in the test environment.')
+      '-o', '--proto_topo',
+      help='Define the fake cluster topology as a compact text format encoded'
+      ' vttest proto. See vttest.proto for more information.')
   parser.add_option(
       '-s', '--schema_dir',
       help='Directory for initial schema files. Within this dir,'

@@ -111,11 +111,8 @@ func (util *testUtils) newQueryServiceConfig() Config {
 	config := DefaultQsConfig
 	config.StatsPrefix = fmt.Sprintf("Stats-%d-", randID)
 	config.DebugURLPrefix = fmt.Sprintf("/debug-%d-", randID)
-	config.RowCache.StatsPrefix = fmt.Sprintf("Stats-%d-", randID)
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	config.StrictMode = true
-	config.RowCache.Binary = "ls"
-	config.RowCache.Connections = 100
 	config.EnablePublishStats = false
 	return config
 }
@@ -145,11 +142,9 @@ func newTestSchemaInfo(
 		queryCacheSize,
 		reloadTime,
 		idleTimeout,
-		newTestSchemaInfoCachePool(enablePublishStats, queryServiceStats),
 		map[string]string{
 			debugQueryPlansKey: fmt.Sprintf("/debug/query_plans_%d", randID),
 			debugQueryStatsKey: fmt.Sprintf("/debug/query_stats_%d", randID),
-			debugTableStatsKey: fmt.Sprintf("/debug/table_stats_%d", randID),
 			debugSchemaKey:     fmt.Sprintf("/debug/schema_%d", randID),
 		},
 		enablePublishStats,

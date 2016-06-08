@@ -11,6 +11,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
@@ -33,13 +34,12 @@ func TestPermissions(t *testing.T) {
 	replica := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
 
 	// mark the master inside the shard
-	si, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
+	_, err := ts.UpdateShardFields(ctx, master.Tablet.Keyspace, master.Tablet.Shard, func(si *topo.ShardInfo) error {
+		si.MasterAlias = master.Tablet.Alias
+		return nil
+	})
 	if err != nil {
-		t.Fatalf("GetShard failed: %v", err)
-	}
-	si.MasterAlias = master.Tablet.Alias
-	if err := ts.UpdateShard(ctx, si); err != nil {
-		t.Fatalf("UpdateShard failed: %v", err)
+		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
 
 	// master will be asked for permissions

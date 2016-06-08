@@ -10,6 +10,7 @@ import (
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // SetSourceShards is a utility function to override the SourceShards fields
@@ -39,14 +40,14 @@ func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string,
 	}
 
 	// Update the shard with the new source shards.
-	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(s *topodatapb.Shard) error {
+	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
 		// If the shard already has sources, maybe it's already been restored,
 		// so let's be safe and abort right here.
-		if len(s.SourceShards) > 0 {
-			return fmt.Errorf("Shard %v/%v already has SourceShards, not overwriting them (full record: %v)", keyspace, shard, s)
+		if len(si.SourceShards) > 0 {
+			return fmt.Errorf("Shard %v/%v already has SourceShards, not overwriting them (full record: %v)", keyspace, shard, *si.Shard)
 		}
 
-		s.SourceShards = sourceShards
+		si.SourceShards = sourceShards
 		return nil
 	})
 	return err

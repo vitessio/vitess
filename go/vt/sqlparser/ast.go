@@ -6,8 +6,6 @@ package sqlparser
 
 import (
 	"errors"
-	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/youtube/vitess/go/cistring"
@@ -539,17 +537,19 @@ func (node Nextval) WalkSubtree(visit Visit) error {
 }
 
 // Columns represents an insert column list.
-// The syntax for Columns is a subset of SelectExprs.
-// So, it's castable to a SelectExprs and can be analyzed
-// as such.
-type Columns []SelectExpr
+type Columns []ColIdent
 
 // Format formats the node.
 func (node Columns) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	buf.Myprintf("(%v)", SelectExprs(node))
+	prefix := "("
+	for _, n := range node {
+		buf.Myprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
 }
 
 // WalkSubtree walks the nodes of the subtree
@@ -1582,49 +1582,6 @@ func (node *Limit) WalkSubtree(visit Visit) error {
 	)
 }
 
-// Limits returns the values of the LIMIT clause as interfaces.
-// The returned values can be nil for absent field, string for
-// bind variable names, or int64 for an actual number.
-// Otherwise, it's an error.
-func (node *Limit) Limits() (offset, rowcount interface{}, err error) {
-	if node == nil {
-		return nil, nil, nil
-	}
-	switch v := node.Offset.(type) {
-	case NumVal:
-		o, err := strconv.ParseInt(string(v), 0, 64)
-		if err != nil {
-			return nil, nil, err
-		}
-		if o < 0 {
-			return nil, nil, fmt.Errorf("negative offset: %d", o)
-		}
-		offset = o
-	case ValArg:
-		offset = string(v)
-	case nil:
-		// pass
-	default:
-		return nil, nil, fmt.Errorf("unexpected node for offset: %+v", v)
-	}
-	switch v := node.Rowcount.(type) {
-	case NumVal:
-		rc, err := strconv.ParseInt(string(v), 0, 64)
-		if err != nil {
-			return nil, nil, err
-		}
-		if rc < 0 {
-			return nil, nil, fmt.Errorf("negative limit: %d", rc)
-		}
-		rowcount = rc
-	case ValArg:
-		rowcount = string(v)
-	default:
-		return nil, nil, fmt.Errorf("unexpected node for rowcount: %+v", v)
-	}
-	return offset, rowcount, nil
-}
-
 // Values represents a VALUES clause.
 type Values []RowTuple
 
@@ -1680,7 +1637,7 @@ func (node UpdateExprs) WalkSubtree(visit Visit) error {
 
 // UpdateExpr represents an update expression.
 type UpdateExpr struct {
-	Name *ColName
+	Name ColIdent
 	Expr ValExpr
 }
 

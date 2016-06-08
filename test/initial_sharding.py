@@ -274,8 +274,6 @@ index by_msg (msg)
         shard='0',
         tablet_index=2)
 
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
-
     for t in [shard_master, shard_replica, shard_rdonly1]:
       t.create_db('vt_test_keyspace')
 
@@ -295,7 +293,6 @@ index by_msg (msg)
     utils.wait_for_tablet_type(shard_rdonly1.tablet_alias, 'rdonly')
     for t in [shard_master, shard_replica, shard_rdonly1]:
       t.wait_for_vttablet_state('SERVING')
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # create the tables and add startup values
     self._create_schema()
@@ -368,8 +365,6 @@ index by_msg (msg)
         shard='80-',
         tablet_index=2)
 
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
-
     for t in [shard_0_master, shard_0_replica,
               shard_1_master, shard_1_replica]:
       t.create_db('vt_test_keyspace')
@@ -398,8 +393,6 @@ index by_msg (msg)
                        shard_1_master, shard_1_replica, shard_1_rdonly1]
     for t in sharded_tablets:
       t.wait_for_vttablet_state('SERVING')
-
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # must restart vtgate after tablets are up, or else wait until 1min refresh
     # we want cache_ttl at zero so we re-read the topology for every test query.
@@ -451,7 +444,7 @@ index by_msg (msg)
                         '--exclude_tables', 'unrelated',
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
-                        '--min_healthy_rdonly_endpoints', '1',
+                        '--min_healthy_rdonly_tablets', '1',
                         'test_keyspace/0'],
                        auto_log=True)
 
@@ -493,13 +486,13 @@ index by_msg (msg)
     for t in [shard_0_rdonly1, shard_1_rdonly1]:
       utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
     utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
-                        '--min_healthy_rdonly_endpoints', '1',
+                        '--min_healthy_rdonly_tablets', '1',
                         'test_keyspace/-80'],
                        auto_log=True)
 
     logging.debug('Running vtworker SplitDiff for 80-')
     utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
-                        '--min_healthy_rdonly_endpoints', '1',
+                        '--min_healthy_rdonly_tablets', '1',
                         'test_keyspace/80-'],
                        auto_log=True)
 

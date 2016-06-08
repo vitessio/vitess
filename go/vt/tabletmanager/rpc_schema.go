@@ -32,19 +32,19 @@ func (agent *ActionAgent) ReloadSchema(ctx context.Context) {
 	agent.QueryServiceControl.ReloadSchema()
 }
 
-// PreflightSchema will try out the schema change
+// PreflightSchema will try out the schema changes in "changes".
 // Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) PreflightSchema(ctx context.Context, change string) (*tmutils.SchemaChangeResult, error) {
+func (agent *ActionAgent) PreflightSchema(ctx context.Context, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	// get the db name from the tablet
 	dbName := topoproto.TabletDbName(agent.Tablet())
 
 	// and preflight the change
-	return agent.MysqlDaemon.PreflightSchemaChange(dbName, change)
+	return agent.MysqlDaemon.PreflightSchemaChange(dbName, changes)
 }
 
 // ApplySchema will apply a schema change
 // Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
+func (agent *ActionAgent) ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	// get the db name from the tablet
 	dbName := topoproto.TabletDbName(agent.Tablet())
 

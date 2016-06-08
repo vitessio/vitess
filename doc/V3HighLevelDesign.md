@@ -1521,7 +1521,7 @@ Join
 select :_a_col+b.col from b where b.foo=:_a_bar
 ```
 
-*However, such queries are not very efficient for VTTablet. It can’t cache field info, or use rowcache. Such push-downs don’t benefit MySQL either. So, it’s better to wait till VTGate implements the ability to evaluate expressions.*
+*However, such queries are not very efficient for VTTablet. It can’t cache field info. Such push-downs don’t benefit MySQL either. So, it’s better to wait till VTGate implements the ability to evaluate expressions.*
 
 SELECT can also contain subqueries. The same restriction as WHERE clauses can be applied here: If the keyspace id of the subquery is not the same as the outer query’s, we fail the query. Otherwise, we push it down.
 

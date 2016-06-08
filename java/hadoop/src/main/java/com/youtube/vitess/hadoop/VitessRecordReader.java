@@ -7,6 +7,7 @@ import com.youtube.vitess.client.RpcClient;
 import com.youtube.vitess.client.RpcClientFactory;
 import com.youtube.vitess.client.VTGateBlockingConn;
 import com.youtube.vitess.client.cursor.Cursor;
+import com.youtube.vitess.client.cursor.Row;
 import com.youtube.vitess.proto.Query.BoundQuery;
 import com.youtube.vitess.proto.Topodata.TabletType;
 import com.youtube.vitess.proto.Vtgate.SplitQueryResponse;
@@ -41,17 +42,16 @@ public class VitessRecordReader extends RecordReader<NullWritable, RowWritable> 
     this.split = (VitessInputSplit) split;
     conf = new VitessConf(context.getConfiguration());
     try {
+      @SuppressWarnings("unchecked")
       Class<? extends RpcClientFactory> rpcFactoryClass =
           (Class<? extends RpcClientFactory>) Class.forName(conf.getRpcFactoryClass());
       List<String> addressList = Arrays.asList(conf.getHosts().split(","));
       int index = new Random().nextInt(addressList.size());
       HostAndPort hostAndPort = HostAndPort.fromString(addressList.get(index));
-      RpcClient rpcClient =
-          rpcFactoryClass
-              .newInstance()
-              .create(
-                  Context.getDefault().withDeadlineAfter(Duration.millis(conf.getTimeoutMs())),
-                  new InetSocketAddress(hostAndPort.getHostText(), hostAndPort.getPort()));
+
+      RpcClient rpcClient = rpcFactoryClass.newInstance().create(
+          Context.getDefault().withDeadlineAfter(Duration.millis(conf.getTimeoutMs())),
+          new InetSocketAddress(hostAndPort.getHostText(), hostAndPort.getPort()));
       vtgate = new VTGateBlockingConn(rpcClient);
     } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
       throw new RuntimeException(e);
@@ -100,30 +100,25 @@ public class VitessRecordReader extends RecordReader<NullWritable, RowWritable> 
         if (splitInfo.hasKeyRangePart()) {
           BoundQuery query = splitInfo.getQuery();
           SplitQueryResponse.KeyRangePart keyRangePart = splitInfo.getKeyRangePart();
-          cursor =
-              vtgate.streamExecuteKeyRanges(
-                  Context.getDefault(),
-                  query.getSql(),
-                  keyRangePart.getKeyspace(),
-                  keyRangePart.getKeyRangesList(),
-                  query.getBindVariables(),
-                  TabletType.RDONLY);
+          cursor = vtgate.streamExecuteKeyRanges(Context.getDefault(), query.getSql(),
+              keyRangePart.getKeyspace(), keyRangePart.getKeyRangesList(), query.getBindVariables(),
+              TabletType.RDONLY);
         } else if (splitInfo.hasShardPart()) {
           BoundQuery query = splitInfo.getQuery();
           SplitQueryResponse.ShardPart shardPart = splitInfo.getShardPart();
-          cursor =
-              vtgate.streamExecuteShards(
-                  Context.getDefault(),
-                  query.getSql(),
-                  shardPart.getKeyspace(),
-                  shardPart.getShardsList(),
-                  query.getBindVariables(),
-                  TabletType.RDONLY);
+          cursor = vtgate.streamExecuteShards(Context.getDefault(), query.getSql(),
+              shardPart.getKeyspace(), shardPart.getShardsList(), query.getBindVariables(),
+              TabletType.RDONLY);
         } else {
           throw new IllegalArgumentException("unknown split info: " + splitInfo);
         }
       }
-      currentRow = new RowWritable(cursor.next());
+      Row row = cursor.next();
+      if (row == null) {
+        currentRow = null;
+      } else {
+        currentRow = new RowWritable(row);
+      }
     } catch (SQLException e) {
       throw new RuntimeException(e);
     }

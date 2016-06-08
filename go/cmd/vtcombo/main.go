@@ -38,10 +38,15 @@ const (
 )
 
 var (
+	// old-style parameters, will go away soon
 	topology           = flag.String("topology", "", "Define which shards exist in the test topology in the form <keyspace>/<shardrange>:<dbname>,... The dbname must be unique among all shards, since they share a MySQL instance in the test environment.")
 	shardingColumnName = flag.String("sharding_column_name", "", "Specifies the column to use for sharding operations")
 	shardingColumnType = flag.String("sharding_column_type", "", "Specifies the type of the column to use for sharding operations")
-	vschemaFile        = flag.String("vschema", "", "vschema file")
+
+	// new-style parameter
+	protoTopo = flag.String("proto_topo", "", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
+
+	vschemaFile = flag.String("vschema", "", "vschema file")
 
 	ts topo.Server
 )
@@ -98,17 +103,27 @@ func main() {
 	log.Infof("v3 is enabled: loaded vschema from file")
 
 	// tablets configuration and init
-	initTabletMap(ts, *topology, mysqld, dbcfgs, formal, mycnf)
+	if *protoTopo != "" {
+		if err := initTabletMapProto(ts, *protoTopo, mysqld, dbcfgs, formal, mycnf); err != nil {
+			log.Errorf("initTabletMapProto failed: %v", err)
+			exit.Return(1)
+		}
+	} else {
+		if err := initTabletMap(ts, *topology, mysqld, dbcfgs, formal, mycnf); err != nil {
+			log.Errorf("initTabletMap failed: %v", err)
+			exit.Return(1)
+		}
+	}
 
 	// vtgate configuration and init
 	resilientSrvTopoServer := vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
-	healthCheck := discovery.NewHealthCheck(30*time.Second /*connTimeoutTotal*/, 1*time.Millisecond /*retryDelay*/, 1*time.Hour /*healthCheckTimeout*/, "" /* statsSuffix */)
+	healthCheck := discovery.NewHealthCheck(30*time.Second /*connTimeoutTotal*/, 1*time.Millisecond /*retryDelay*/, 1*time.Hour /*healthCheckTimeout*/)
 	tabletTypesToWait := []topodatapb.TabletType{
 		topodatapb.TabletType_MASTER,
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
 	}
-	vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, cell, 2 /*retryCount*/, tabletTypesToWait, 0 /*maxInFlight*/)
+	vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, cell, 2 /*retryCount*/, tabletTypesToWait)
 
 	// vtctld configuration and init
 	vtctld.InitVtctld(ts)

@@ -151,8 +151,6 @@ def setup_sharded_keyspace():
       shard='80-',
       tablet_index=1)
 
-  utils.run_vtctl(['RebuildKeyspaceGraph', SHARDED_KEYSPACE], auto_log=True)
-
   for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
     t.create_db('vt_test_keyspace_sharded')
     t.mquery(shard_0_master.dbname, create_vt_insert_test)
@@ -173,9 +171,9 @@ def setup_sharded_keyspace():
   for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
     t.wait_for_vttablet_state('SERVING')
 
+  # rebuild to be sure we have the latest data
   utils.run_vtctl(
       ['RebuildKeyspaceGraph', SHARDED_KEYSPACE], auto_log=True)
-
   utils.check_srv_keyspace('test_nj', SHARDED_KEYSPACE,
                            'Partitions(master): -80 80-\n'
                            'Partitions(rdonly): -80 80-\n'
@@ -198,8 +196,6 @@ def setup_unsharded_keyspace():
       shard='0',
       tablet_index=1)
 
-  utils.run_vtctl(['RebuildKeyspaceGraph', UNSHARDED_KEYSPACE], auto_log=True)
-
   for t in [unsharded_master, unsharded_replica]:
     t.create_db('vt_test_keyspace_unsharded')
     t.mquery(unsharded_master.dbname, create_vt_insert_test)
@@ -218,8 +214,8 @@ def setup_unsharded_keyspace():
   for t in [unsharded_master, unsharded_replica]:
     t.wait_for_vttablet_state('SERVING')
 
+  # rebuild to be sure we have the right version
   utils.run_vtctl(['RebuildKeyspaceGraph', UNSHARDED_KEYSPACE], auto_log=True)
-
   utils.check_srv_keyspace('test_nj', UNSHARDED_KEYSPACE,
                            'Partitions(master): -\n'
                            'Partitions(rdonly): -\n'

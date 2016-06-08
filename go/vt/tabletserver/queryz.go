@@ -137,7 +137,10 @@ func queryzHandler(si *SchemaInfo, w http.ResponseWriter, r *http.Request) {
 			Reason: plan.Reason,
 		}
 		Value.Count, Value.tm, Value.Rows, Value.Errors = plan.Stats()
-		timepq := time.Duration(int64(Value.tm) / Value.Count)
+		var timepq time.Duration
+		if Value.Count != 0 {
+			timepq = time.Duration(int64(Value.tm) / Value.Count)
+		}
 		if timepq < 10*time.Millisecond {
 			Value.Color = "low"
 		} else if timepq < 100*time.Millisecond {

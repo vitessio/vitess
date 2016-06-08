@@ -18,7 +18,6 @@ import (
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
@@ -27,8 +26,6 @@ import (
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
-
-type timeoutError error
 
 // NewFakeTabletManagerClient should be used to create a new FakeTabletManagerClient.
 // There is intentionally no init in this file with a call to RegisterTabletManagerClientFactory.
@@ -123,13 +120,13 @@ func (client *FakeTabletManagerClient) ReloadSchema(ctx context.Context, tablet 
 }
 
 // PreflightSchema is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, change string) (*tmutils.SchemaChangeResult, error) {
-	return &tmutils.SchemaChangeResult{}, nil
+func (client *FakeTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
+	return make([]*tabletmanagerdatapb.SchemaChangeResult, len(changes)), nil
 }
 
 // ApplySchema is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
-	return &tmutils.SchemaChangeResult{}, nil
+func (client *FakeTabletManagerClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
+	return &tabletmanagerdatapb.SchemaChangeResult{}, nil
 }
 
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
@@ -254,7 +251,7 @@ func (client *FakeTabletManagerClient) SetMaster(ctx context.Context, tablet *to
 }
 
 // SlaveWasRestarted is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) SlaveWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, args *actionnode.SlaveWasRestartedArgs) error {
+func (client *FakeTabletManagerClient) SlaveWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error {
 	return nil
 }
 
@@ -281,18 +278,4 @@ func (e *eofEventStream) Recv() (*logutilpb.Event, error) {
 // Backup is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int) (logutil.EventStream, error) {
 	return &eofEventStream{}, nil
-}
-
-//
-// RPC related methods
-//
-
-// IsTimeoutError is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) IsTimeoutError(err error) bool {
-	switch err.(type) {
-	case timeoutError:
-		return true
-	default:
-		return false
-	}
 }

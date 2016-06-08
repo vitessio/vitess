@@ -10,9 +10,10 @@ import time
 import urllib2
 import warnings
 
+import MySQLdb
+
 import environment
 from mysql_flavor import mysql_flavor
-import MySQLdb
 from protocols_flavor import protocols_flavor
 from topo_flavor.server import topo_server
 import utils
@@ -307,7 +308,7 @@ class Tablet(object):
     rows = self.mquery('', 'show databases')
     for row in rows:
       dbname = row[0]
-      if dbname in ['information_schema', 'mysql']:
+      if dbname in ['information_schema', 'performance_schema', 'mysql', 'sys']:
         continue
       self.drop_db(dbname)
 
@@ -397,7 +398,7 @@ class Tablet(object):
                stderr=utils.devnull, stdout=utils.devnull)
 
   def start_vttablet(
-      self, port=None, memcache=False,
+      self, port=None,
       wait_for_state='SERVING', filecustomrules=None, zkcustomrules=None,
       schema_override=None,
       repl_extra_flags=None, table_acl_config=None,
@@ -497,12 +498,6 @@ class Tablet(object):
 
     self._add_dbconfigs(args, repl_extra_flags)
 
-    if memcache:
-      args.extend(['-rowcache-bin', environment.memcached_bin()])
-      memcache_socket = os.path.join(self.tablet_dir, 'memcache.sock')
-      args.extend(['-rowcache-socket', memcache_socket])
-      args.extend(['-enable-rowcache'])
-
     if filecustomrules:
       args.extend(['-filecustomrules', filecustomrules])
     if zkcustomrules:
@@ -520,7 +515,7 @@ class Tablet(object):
     if self.grpc_enabled():
       args.extend(['-grpc_port', str(self.grpc_port)])
     if lameduck_period:
-      args.extend(['-lameduck-period', lameduck_period])
+      args.extend(environment.lameduck_flag(lameduck_period))
     if grace_period:
       args.extend(['-serving_state_grace_period', grace_period])
     if security_policy:
@@ -590,7 +585,7 @@ class Tablet(object):
           (self.tablet_alias, expected, last_seen_state),
           timeout, sleep_time=0.1)
 
-  def wait_for_mysqlctl_socket(self, timeout=30.0):
+  def wait_for_mysqlctl_socket(self, timeout=60.0):
     mysql_sock = os.path.join(self.tablet_dir, 'mysql.sock')
     mysqlctl_sock = os.path.join(self.tablet_dir, 'mysqlctl.sock')
     while True:

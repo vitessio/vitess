@@ -17,7 +17,6 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/topotools"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -28,7 +27,7 @@ var (
 	initKeyspace       = flag.String("init_keyspace", "", "(init parameter) keyspace to use for this tablet")
 	initShard          = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
 	initTags           flagutil.StringMapValue
-	initTabletType     = flag.String("init_tablet_type", "", "(init parameter) the tablet type to use for this tablet. Incompatible with target_tablet_type.")
+	initTabletType     = flag.String("init_tablet_type", "", "(init parameter) the tablet type to use for this tablet.")
 	initTimeout        = flag.Duration("init_timeout", 1*time.Minute, "(init parameter) timeout to use for the init phase.")
 )
 
@@ -38,70 +37,40 @@ func init() {
 
 // InitTablet initializes the tablet record if necessary.
 func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
-	// only enabled if one of init_tablet_type (when healthcheck
-	// is disabled) or init_keyspace (when healthcheck is enabled)
-	// is passed in, then check other parameters
-	if *initTabletType == "" && *initKeyspace == "" {
+	// it should be either we have all three of init_keyspace,
+	// init_shard and init_tablet_type, or none.
+	if *initKeyspace == "" && *initShard == "" && *initTabletType == "" {
+		// not initializing the record
 		return nil
 	}
+	if *initKeyspace == "" || *initShard == "" || *initTabletType == "" {
+		return fmt.Errorf("either need all of init_keyspace, init_shard and init_tablet_type, or none")
+	}
 
-	// figure out our default target type
-	var tabletType topodatapb.TabletType
-	if *initTabletType != "" {
-		if *targetTabletType != "" {
-			log.Fatalf("cannot specify both target_tablet_type and init_tablet_type parameters (as they might conflict)")
-		}
+	// parse init_tablet_type
+	tabletType, err := topoproto.ParseTabletType(*initTabletType)
+	if err != nil {
+		return fmt.Errorf("invalid init_tablet_type %v: %v", *initTabletType, err)
+	}
+	if tabletType == topodatapb.TabletType_MASTER {
+		// We disallow MASTER, so we don't have to change
+		// shard.MasterAlias, and deal with the corner cases.
+		return fmt.Errorf("init_tablet_type cannot be master, use replica instead")
+	}
 
-		// use the type specified on the command line
-		var err error
-		tabletType, err = topoproto.ParseTabletType(*initTabletType)
-		if err != nil {
-			log.Fatalf("Invalid init_tablet_type %v: %v", *initTabletType, err)
-		}
-
-		if tabletType == topodatapb.TabletType_MASTER {
-			// We disallow MASTER, so we don't have to change
-			// shard.MasterAlias, and deal with the corner cases.
-			log.Fatalf("init_tablet_type cannot be master, use replica instead")
-		}
-
-	} else if *targetTabletType != "" {
-		// use the targetTabletType, check it's not master.
-		// FIXME(alainjobart): refactor the flags: we should switch
-		// to init_tablet_type, and always enable healthcheck.
-		var err error
-		tabletType, err = topoproto.ParseTabletType(*targetTabletType)
-		if err != nil {
-			log.Fatalf("Invalid target_tablet_type %v: %v", *targetTabletType, err)
-		}
-
-		if tabletType == topodatapb.TabletType_MASTER {
-			// We disallow MASTER, so we don't have to change
-			// shard.MasterAlias, and deal with the corner cases.
-			log.Fatalf("target_tablet_type cannot be master. Use replica instead.")
-		}
-	} else {
-		log.Fatalf("if init tablet is enabled (by specifying init_keyspace), one of init_tablet_type or target_tablet_type needs to be specified")
+	// parse and validate shard name
+	shard, _, err := topo.ValidateShardName(*initShard)
+	if err != nil {
+		return fmt.Errorf("cannot validate shard name %v: %v", *initShard, err)
 	}
 
 	// create a context for this whole operation
 	ctx, cancel := context.WithTimeout(agent.batchCtx, *initTimeout)
 	defer cancel()
 
-	// since we're assigned to a shard, make sure it exists, see if
-	// we are its master, and update its cells list if necessary
-	if *initKeyspace == "" || *initShard == "" {
-		log.Fatalf("if init tablet is enabled and the target type is not idle, init_keyspace and init_shard also need to be specified")
-	}
-	shard, _, err := topo.ValidateShardName(*initShard)
-	if err != nil {
-		log.Fatalf("cannot validate shard name: %v", err)
-	}
-
-	log.Infof("Reading shard record %v/%v", *initKeyspace, shard)
-
 	// read the shard, create it if necessary
-	si, err := topotools.GetOrCreateShard(ctx, agent.TopoServer, *initKeyspace, shard)
+	log.Infof("Reading shard record %v/%v", *initKeyspace, shard)
+	si, err := agent.TopoServer.GetOrCreateShard(ctx, *initKeyspace, shard)
 	if err != nil {
 		return fmt.Errorf("InitTablet cannot GetOrCreateShard shard: %v", err)
 	}
@@ -129,12 +98,12 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 
 	// See if we need to add the tablet's cell to the shard's cell list.
 	if !si.HasCell(agent.TabletAlias.Cell) {
-		si, err = agent.TopoServer.UpdateShardFields(ctx, *initKeyspace, shard, func(shard *topodatapb.Shard) error {
-			if topoproto.ShardHasCell(shard, agent.TabletAlias.Cell) {
+		si, err = agent.TopoServer.UpdateShardFields(ctx, *initKeyspace, shard, func(si *topo.ShardInfo) error {
+			if si.HasCell(agent.TabletAlias.Cell) {
 				// Someone else already did it.
 				return topo.ErrNoUpdateNeeded
 			}
-			shard.Cells = append(shard.Cells, agent.TabletAlias.Cell)
+			si.Cells = append(si.Cells, agent.TabletAlias.Cell)
 			return nil
 		})
 		if err != nil {

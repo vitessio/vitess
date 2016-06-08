@@ -1,7 +1,3 @@
-// Package test contains utilities to test topo.Impl
-// implementations. If you are testing your implementation, you will
-// want to call CheckAll in your test method. For an example, look at
-// the tests in github.com/youtube/vitess/go/vt/zktopo.
 package test
 
 import (
@@ -28,8 +24,9 @@ func shardEqual(left, right *topodatapb.Shard) (bool, error) {
 	return string(lj) == string(rj), nil
 }
 
-// CheckShard verifies the Shard operations work correctly
-func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
+// checkShard verifies the Shard operations work correctly
+func checkShard(t *testing.T, ts topo.Impl) {
+	ctx := context.Background()
 	tts := topo.Server{Impl: ts}
 
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
@@ -113,8 +110,8 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 	}
 
 	other := &topodatapb.TabletAlias{Cell: "ny", Uid: 82873}
-	_, err = tts.UpdateShardFields(ctx, "test_keyspace", "b0-c0", func(shard *topodatapb.Shard) error {
-		shard.MasterAlias = other
+	_, err = tts.UpdateShardFields(ctx, "test_keyspace", "b0-c0", func(si *topo.ShardInfo) error {
+		si.MasterAlias = other
 		return nil
 	})
 	if err != nil {

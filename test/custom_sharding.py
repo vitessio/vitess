@@ -143,9 +143,6 @@ class TestCustomSharding(unittest.TestCase):
     for t in [shard_0_master, shard_0_replica, shard_0_rdonly]:
       t.wait_for_vttablet_state('SERVING')
 
-    utils.run_vtctl(
-        ['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
-
     self._check_shards_count_in_srv_keyspace(1)
     s = utils.run_vtctl_json(['GetShard', 'test_keyspace/0'])
     self.assertEqual(len(s['served_types']), 3)
@@ -200,10 +197,12 @@ primary key (id)
     utils.wait_for_tablet_type(shard_1_rdonly.tablet_alias, 'rdonly')
     for t in [shard_1_master, shard_1_replica, shard_1_rdonly]:
       t.wait_for_vttablet_state('SERVING')
-    utils.run_vtctl(
-        ['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
     utils.run_vtctl(['CopySchemaShard', shard_0_rdonly.tablet_alias,
                      'test_keyspace/1'], auto_log=True)
+
+    # we need to rebuild SrvKeyspace here to account for the new shards.
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+    self._check_shards_count_in_srv_keyspace(2)
 
     # must start vtgate after tablets are up, or else wait until 1min refresh
     utils.VtGate().start(tablets=[
@@ -242,9 +241,6 @@ primary key (id)
     self._insert_data('1', 400, 10, table='data2')
     self._check_data('0', 300, 10, table='data2')
     self._check_data('1', 400, 10, table='data2')
-
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
-    self._check_shards_count_in_srv_keyspace(2)
 
     # Now test SplitQuery API works (used in MapReduce usually, but bringing
     # up a full MR-capable cluster is too much for this test environment)

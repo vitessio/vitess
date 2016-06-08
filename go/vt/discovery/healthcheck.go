@@ -20,10 +20,6 @@
 //
 // Internally, the HealthCheck module is connected to each tablet and has a
 // streaming RPC (StreamHealth) open to receive periodic health infos.
-//
-// NOTE: This requires that the health check is enabled on the tablet.
-// As of 04/2016 you enable the health check by setting the vttablet flag
-// --target_tablet_type to the tablet's type i.e. REPLICA or RDONLY.
 package discovery
 
 import (
@@ -45,7 +41,6 @@ import (
 )
 
 var (
-	hcConnCounters  *stats.MultiCountersFunc
 	hcErrorCounters *stats.MultiCounters
 )
 
@@ -82,7 +77,12 @@ func (e *TabletStats) String() string {
 
 // HealthCheck defines the interface of health checking module.
 type HealthCheck interface {
+	// RegisterStats registers the connection counts stats.
+	// It can only be called on one Healthcheck object per process.
+	RegisterStats()
 	// SetListener sets the listener for healthcheck updates. It should not block.
+	// Note that the default implementation requires to set the listener before
+	// any tablets are added to the healthcheck.
 	SetListener(listener HealthCheckStatsListener)
 	// AddTablet adds the tablet, and starts health check.
 	AddTablet(cell, name string, tablet *topodatapb.Tablet)
@@ -102,7 +102,7 @@ type HealthCheck interface {
 }
 
 // NewHealthCheck creates a new HealthCheck object.
-func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration, healthCheckTimeout time.Duration, statsSuffix string) HealthCheck {
+func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration, healthCheckTimeout time.Duration) HealthCheck {
 	hc := &HealthCheckImpl{
 		addrToConns:        make(map[string]*healthCheckConn),
 		targetToTablets:    make(map[string]map[string]map[topodatapb.TabletType][]*topodatapb.Tablet),
@@ -111,10 +111,10 @@ func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration, healthC
 		healthCheckTimeout: healthCheckTimeout,
 		closeChan:          make(chan struct{}),
 	}
-	if hcConnCounters == nil {
-		hcConnCounters = stats.NewMultiCountersFunc("HealthcheckConnections"+statsSuffix, []string{"keyspace", "shardname", "tablettype"}, hc.servingConnStats)
-	}
+
+	hc.wg.Add(1)
 	go func() {
+		defer hc.wg.Done()
 		// Start another go routine to check timeout.
 		// Currently vttablet sends healthcheck response every 20 seconds.
 		// We set the default timeout to 1 minute (20s * 3),
@@ -141,12 +141,14 @@ func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration, healthC
 
 // HealthCheckImpl performs health checking and notifies downstream components about any changes.
 type HealthCheckImpl struct {
-	// set at construction time
+	// Immutable fields set at construction time.
 	listener           HealthCheckStatsListener
 	connTimeout        time.Duration
 	retryDelay         time.Duration
 	healthCheckTimeout time.Duration
 	closeChan          chan struct{} // signals the process gorouting to terminate
+	// wg keeps track of all launched Go routines.
+	wg sync.WaitGroup
 
 	// mu protects all the following fields
 	// when locking both mutex from HealthCheck and healthCheckConn, HealthCheck.mu goes first.
@@ -177,6 +179,11 @@ type healthCheckConn struct {
 	lastResponseTimestamp               time.Time // timestamp of the last healthcheck response
 }
 
+// RegisterStats registers the connection counts stats
+func (hc *HealthCheckImpl) RegisterStats() {
+	stats.NewMultiCountersFunc("HealthcheckConnections", []string{"keyspace", "shardname", "tablettype"}, hc.servingConnStats)
+}
+
 // servingConnStats returns the number of serving tablets per keyspace/shard/tablet type.
 func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 	res := make(map[string]int64)
@@ -197,6 +204,7 @@ func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 
 // checkConn performs health checking on the given tablet.
 func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, tablet *topodatapb.Tablet) {
+	defer hc.wg.Done()
 	defer func() {
 		hcc.mu.Lock()
 		if hcc.conn != nil {
@@ -207,6 +215,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, ta
 	}()
 	// retry health check if it fails
 	for {
+		// Try to connect to the tablet.
 		stream, err := hcc.connect(hc, tablet)
 		if err != nil {
 			select {
@@ -220,9 +229,16 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, ta
 			target := hcc.target
 			hcc.mu.Unlock()
 			hcErrorCounters.Add([]string{target.Keyspace, target.Shard, strings.ToLower(target.TabletType.String())}, 1)
-			time.Sleep(hc.retryDelay)
+
+			// Sleep until the next retry is up or the context is done/canceled.
+			select {
+			case <-hcc.ctx.Done():
+			case <-time.After(hc.retryDelay):
+			}
 			continue
 		}
+
+		// Read stream health responses.
 		for {
 			reconnect, err := hcc.processResponse(hc, tablet, stream)
 			if err != nil {
@@ -257,7 +273,12 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, ta
 					hcc.conn = nil
 					hcc.target = &querypb.Target{}
 					hcc.mu.Unlock()
-					time.Sleep(hc.retryDelay)
+
+					// Sleep until the next retry is up or the context is done/canceled.
+					select {
+					case <-hcc.ctx.Done():
+					case <-time.After(hc.retryDelay):
+					}
 					break
 				}
 			}
@@ -434,8 +455,21 @@ func (hc *HealthCheckImpl) deleteConn(tablet *topodatapb.Tablet) {
 	hc.deleteTabletFromTargetProtected(hcc.target, tablet)
 }
 
-// SetListener sets the listener for healthcheck updates. It should not block.
+// SetListener sets the listener for healthcheck updates.
+// It should not block.
+// It must be called after NewHealthCheck and before any tablets are added
+// (either through AddTablet or through a Watcher).
 func (hc *HealthCheckImpl) SetListener(listener HealthCheckStatsListener) {
+	if hc.listener != nil {
+		panic("must not call SetListener twice")
+	}
+
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	if len(hc.addrToConns) > 0 {
+		panic("must not call SetListener after tablets were added")
+	}
+
 	hc.listener = listener
 }
 
@@ -463,6 +497,7 @@ func (hc *HealthCheckImpl) AddTablet(cell, name string, tablet *topodatapb.Table
 	hc.addrToConns[key] = hcc
 	hc.mu.Unlock()
 
+	hc.wg.Add(1)
 	go hc.checkConn(hcc, cell, name, tablet)
 }
 
@@ -741,16 +776,24 @@ func (hc *HealthCheckImpl) CacheStatus() TabletsCacheStatusList {
 }
 
 // Close stops the healthcheck.
+// After Close() returned, it's guaranteed that the listener won't be called
+// anymore.
 func (hc *HealthCheckImpl) Close() error {
 	hc.mu.Lock()
-	defer hc.mu.Unlock()
 	close(hc.closeChan)
-	hc.listener = nil
 	for _, hcc := range hc.addrToConns {
 		hcc.cancelFunc()
 	}
 	hc.addrToConns = make(map[string]*healthCheckConn)
 	hc.targetToTablets = make(map[string]map[string]map[topodatapb.TabletType][]*topodatapb.Tablet)
+	// Release the lock early or a pending checkHealthCheckTimeout cannot get a
+	// read lock on it.
+	hc.mu.Unlock()
+
+	// Wait for the checkHealthCheckTimeout Go routine and each Go routine per
+	// tablet.
+	hc.wg.Wait()
+
 	return nil
 }
 

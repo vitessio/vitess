@@ -1,4 +1,4 @@
-FROM vitess/bootstrap:mysql56
+FROM vitess/bootstrap:mysql57
 
 # Re-copy sources from working tree
 USER root

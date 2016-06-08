@@ -99,7 +99,7 @@ func TestFilterByPlan(t *testing.T) {
 
 	qr2 := NewQueryRule("rule 2", "r2", QRFail)
 	qr2.AddPlanCond(planbuilder.PlanPassSelect)
-	qr2.AddPlanCond(planbuilder.PlanPKIn)
+	qr2.AddPlanCond(planbuilder.PlanSelectLock)
 	qr2.AddBindVarCond("a", true, false, QRNoOp, nil)
 
 	qr3 := NewQueryRule("rule 3", "r3", QRFail)
@@ -166,7 +166,7 @@ func TestFilterByPlan(t *testing.T) {
 		t.Errorf("qrs1:\n%s, want\n%s", got, want)
 	}
 
-	qrs1 = qrs.filterByPlan("insert", planbuilder.PlanPKIn, "a")
+	qrs1 = qrs.filterByPlan("insert", planbuilder.PlanSelectLock, "a")
 	got = marshalled(qrs1)
 	if got != want {
 		t.Errorf("qrs1:\n%s, want\n%s", got, want)

@@ -13,7 +13,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -23,12 +22,8 @@ import (
 // that they have a new master, and also tell all the masters. The
 // masters will be scrapped if they don't answer.
 // We execute all the actions in parallel.
-func RestartSlavesExternal(ts topo.Server, log logutil.Logger, slaveTabletMap, masterTabletMap map[topodatapb.TabletAlias]*topo.TabletInfo, masterElectTabletAlias *topodatapb.TabletAlias, slaveWasRestarted func(*topo.TabletInfo, *actionnode.SlaveWasRestartedArgs) error) {
+func RestartSlavesExternal(ts topo.Server, log logutil.Logger, slaveTabletMap, masterTabletMap map[topodatapb.TabletAlias]*topo.TabletInfo, masterElectTabletAlias *topodatapb.TabletAlias, slaveWasRestarted func(*topo.TabletInfo, *topodatapb.TabletAlias) error) {
 	wg := sync.WaitGroup{}
-
-	swrd := actionnode.SlaveWasRestartedArgs{
-		Parent: masterElectTabletAlias,
-	}
 
 	log.Infof("Updating individual tablets with the right master...")
 
@@ -36,7 +31,7 @@ func RestartSlavesExternal(ts topo.Server, log logutil.Logger, slaveTabletMap, m
 	for _, ti := range slaveTabletMap {
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
-			if err := slaveWasRestarted(ti, &swrd); err != nil {
+			if err := slaveWasRestarted(ti, masterElectTabletAlias); err != nil {
 				log.Warningf("Slave %v had an error: %v", ti.Alias, err)
 			}
 			wg.Done()
@@ -47,7 +42,7 @@ func RestartSlavesExternal(ts topo.Server, log logutil.Logger, slaveTabletMap, m
 	for _, ti := range masterTabletMap {
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
-			err := slaveWasRestarted(ti, &swrd)
+			err := slaveWasRestarted(ti, masterElectTabletAlias)
 			if err != nil {
 				// the old master can be annoying if left
 				// around in the replication graph, so if we

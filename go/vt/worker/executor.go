@@ -118,7 +118,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
 				return nil
 			}
 
-			succeeded, finalErr := e.checkError(err, isRetry, master)
+			succeeded, finalErr := e.checkError(tryCtx, err, isRetry, master)
 			if succeeded {
 				// We can ignore the error and don't have to retry.
 				return nil
@@ -152,8 +152,21 @@ func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
 // checkError returns true if the error can be ignored and the command
 // succeeded, false if the error is retryable and a non-nil error if the
 // command must not be retried.
-func (e *executor) checkError(err error, isRetry bool, master *discovery.TabletStats) (bool, error) {
+func (e *executor) checkError(ctx context.Context, err error, isRetry bool, master *discovery.TabletStats) (bool, error) {
 	tabletString := fmt.Sprintf("%v (%v/%v)", topoproto.TabletAliasString(master.Tablet.Alias), e.keyspace, e.shard)
+
+	// first see if it was a context timeout.
+	select {
+	case <-ctx.Done():
+		if ctx.Err() == context.DeadlineExceeded {
+			e.wr.Logger().Warningf("ExecuteFetch failed on %v; will retry because it was a timeout error on the context", tabletString)
+			statsRetryCount.Add(1)
+			statsRetryCounters.Add(retryCategoryTimeoutError, 1)
+			return false, nil
+		}
+	default:
+	}
+
 	// If the ExecuteFetch call failed because of an application error, we will try to figure out why.
 	// We need to extract the MySQL error number, and will attempt to retry if we think the error is recoverable.
 	match := errExtract.FindStringSubmatch(err.Error())
@@ -162,10 +175,6 @@ func (e *executor) checkError(err error, isRetry bool, master *discovery.TabletS
 		errNo = match[1]
 	}
 	switch {
-	case e.wr.TabletManagerClient().IsTimeoutError(err):
-		e.wr.Logger().Warningf("ExecuteFetch failed on %v; will retry because it was a timeout error: %v", tabletString, err)
-		statsRetryCount.Add(1)
-		statsRetryCounters.Add(retryCategoryTimeoutError, 1)
 	case errNo == "1290":
 		e.wr.Logger().Warningf("ExecuteFetch failed on %v; will reresolve and retry because it's due to a MySQL read-only error: %v", tabletString, err)
 		statsRetryCount.Add(1)

@@ -277,7 +277,7 @@ func createSourceTablet(t *testing.T, name string, ts topo.Server, keyspace, sha
 			tabletType: topodatapb.TabletType_REPLICA,
 		}, nil
 	})
-	flag.Lookup("tablet_protocol").Value.Set(name)
+	flag.Set("tablet_protocol", name)
 }
 
 // checkBlpPositionList will ask the BinlogPlayerMap for its BlpPositionList,
@@ -353,7 +353,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 	binlogplayer.RegisterClientFactory("test_horizontal", func() binlogplayer.Client {
 		return <-clientSyncChannel
 	})
-	flag.Lookup("binlog_player_protocol").Value.Set("test_horizontal")
+	flag.Set("binlog_player_protocol", "test_horizontal")
 
 	// create the BinlogPlayerMap on the local tablet
 	// (note that local tablet is never in the topology, we don't
@@ -392,18 +392,21 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 	}
 
 	// now add the source in shard
-	si.SourceShards = []*topodatapb.Shard_SourceShard{
-		{
-			Uid:      1,
-			Keyspace: "ks",
-			Shard:    "-80",
-			KeyRange: &topodatapb.KeyRange{
-				End: []byte{0x80},
+	si, err = ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
+		si.SourceShards = []*topodatapb.Shard_SourceShard{
+			{
+				Uid:      1,
+				Keyspace: "ks",
+				Shard:    "-80",
+				KeyRange: &topodatapb.KeyRange{
+					End: []byte{0x80},
+				},
 			},
-		},
-	}
-	if err := ts.UpdateShard(ctx, si); err != nil {
-		t.Fatalf("UpdateShard failed: %v", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
 
 	// now we have a source, adding players
@@ -427,13 +430,14 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 			},
 		},
 	})
+
+	// Mock out the throttler settings result.
+	vtClientMock.AddResult(mockedThrottlerSettings)
+
 	vtClientSyncChannel <- vtClientMock
 	if !mysqlDaemon.BinlogPlayerEnabled {
 		t.Errorf("mysqlDaemon.BinlogPlayerEnabled should be true")
 	}
-
-	// Mock out the throttler settings result.
-	vtClientMock.AddResult(mockedThrottlerSettings)
 
 	// the client will then try to connect to the remote tablet.
 	// give it what it needs.
@@ -533,7 +537,7 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 	binlogplayer.RegisterClientFactory("test_horizontal_until", func() binlogplayer.Client {
 		return <-clientSyncChannel
 	})
-	flag.Lookup("binlog_player_protocol").Value.Set("test_horizontal_until")
+	flag.Set("binlog_player_protocol", "test_horizontal_until")
 
 	// create the BinlogPlayerMap on the local tablet
 	// (note that local tablet is never in the topology, we don't
@@ -557,22 +561,21 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 		Shard:    "40-60",
 	}
 
-	si, err := ts.GetShard(ctx, "ks", "40-60")
-	if err != nil {
-		t.Fatalf("GetShard failed: %v", err)
-	}
-	si.SourceShards = []*topodatapb.Shard_SourceShard{
-		{
-			Uid:      1,
-			Keyspace: "ks",
-			Shard:    "-80",
-			KeyRange: &topodatapb.KeyRange{
-				End: []byte{0x80},
+	si, err := ts.UpdateShardFields(ctx, "ks", "40-60", func(si *topo.ShardInfo) error {
+		si.SourceShards = []*topodatapb.Shard_SourceShard{
+			{
+				Uid:      1,
+				Keyspace: "ks",
+				Shard:    "-80",
+				KeyRange: &topodatapb.KeyRange{
+					End: []byte{0x80},
+				},
 			},
-		},
-	}
-	if err := ts.UpdateShard(ctx, si); err != nil {
-		t.Fatalf("UpdateShard failed: %v", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
 
 	// now we have a source, adding players
@@ -597,10 +600,6 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 	}
 	vtClientMock := binlogplayer.NewVtClientMock()
 	vtClientMock.AddResult(startPos)
-	vtClientSyncChannel <- vtClientMock
-	if !mysqlDaemon.BinlogPlayerEnabled {
-		t.Errorf("mysqlDaemon.BinlogPlayerEnabled should be true")
-	}
 
 	// Mock out the throttler settings result.
 	vtClientMock.AddResult(mockedThrottlerSettings)
@@ -608,6 +607,11 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 	// restarted again with the RunUntil() call.
 	vtClientMock.AddResult(startPos)
 	vtClientMock.AddResult(mockedThrottlerSettings)
+
+	vtClientSyncChannel <- vtClientMock
+	if !mysqlDaemon.BinlogPlayerEnabled {
+		t.Errorf("mysqlDaemon.BinlogPlayerEnabled should be true")
+	}
 
 	// the client will then try to connect to the remote tablet.
 	// give it what it needs.
@@ -769,23 +773,22 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 		Shard:    "0",
 	}
 
-	si, err := ts.GetShard(ctx, "destination", "0")
-	if err != nil {
-		t.Fatalf("GetShard failed: %v", err)
-	}
-	si.SourceShards = []*topodatapb.Shard_SourceShard{
-		{
-			Uid:      1,
-			Keyspace: "source",
-			Shard:    "0",
-			Tables: []string{
-				"table1",
-				"funtables_*",
+	si, err := ts.UpdateShardFields(ctx, "destination", "0", func(si *topo.ShardInfo) error {
+		si.SourceShards = []*topodatapb.Shard_SourceShard{
+			{
+				Uid:      1,
+				Keyspace: "source",
+				Shard:    "0",
+				Tables: []string{
+					"table1",
+					"funtables_*",
+				},
 			},
-		},
-	}
-	if err := ts.UpdateShard(ctx, si); err != nil {
-		t.Fatalf("UpdateShard failed: %v", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
 
 	// now we have a source, adding players
@@ -809,14 +812,14 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 			},
 		},
 	})
-	vtClientSyncChannel <- vtClientMock
-	if !mysqlDaemon.BinlogPlayerEnabled {
-		t.Errorf("mysqlDaemon.BinlogPlayerEnabled should be true")
-	}
 
 	// Mock out the throttler settings result.
 	vtClientMock.AddResult(mockedThrottlerSettings)
 
+	vtClientSyncChannel <- vtClientMock
+	if !mysqlDaemon.BinlogPlayerEnabled {
+		t.Errorf("mysqlDaemon.BinlogPlayerEnabled should be true")
+	}
 	// the client will then try to connect to the remote tablet.
 	// give it what it needs.
 	fbc := newFakeBinlogClient(t, 100)

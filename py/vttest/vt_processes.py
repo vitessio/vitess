@@ -10,20 +10,9 @@ import subprocess
 import time
 import urllib
 
+from google.protobuf import text_format
+
 from vttest import environment
-
-
-class ShardInfo(object):
-  """Contains the description for setting up a test shard.
-
-  Every shard should have a unique db_name, since they're all stored in a single
-  MySQL instance for the purpose of this test.
-  """
-
-  def __init__(self, keyspace, shard_name, db_name):
-    self.keyspace = keyspace
-    self.name = shard_name
-    self.db_name = db_name
 
 
 class VtProcess(object):
@@ -88,9 +77,12 @@ class VtProcess(object):
     return '%s:%u' % (socket.getfqdn(), self.port)
 
   def grpc_addr(self):
-    """Return the grpc host:port of the process.
+    """Get the grpc address of the process.
 
-    Only call this is environment.get_protocol() == 'grpc'."""
+    Returns:
+      the grpc host:port of the process.
+    Only call this is environment.get_protocol() == 'grpc'.
+    """
     return '%s:%u' % (socket.getfqdn(), self.grpc_port)
 
   def get_vars(self):
@@ -132,17 +124,15 @@ class VtcomboProcess(VtProcess):
       '-queryserver-config-txpool-timeout', '300',
       ]
 
-  def __init__(self, directory, shards, mysql_db, vschema, charset,
+  def __init__(self, directory, topology, mysql_db, vschema, charset,
                web_dir=None):
     VtProcess.__init__(self, 'vtcombo-%s' % os.environ['USER'], directory,
                        environment.vtcombo_binary, port_name='vtcombo')
-    topology = ','.join(['%s/%s:%s' % (shard.keyspace, shard.name,
-                                       shard.db_name) for shard in shards])
     self.extraparams = [
         '-db-config-app-charset', charset,
         '-db-config-app-uname', mysql_db.username(),
         '-db-config-app-pass', mysql_db.password(),
-        '-topology', topology,
+        '-proto_topo', text_format.MessageToString(topology, as_one_line=True),
         '-mycnf_server_id', '1',
         '-mycnf_socket_file', mysql_db.unix_socket(),
     ] + self.QUERYSERVER_PARAMETERS + environment.extra_vtcombo_parameters()
@@ -162,14 +152,15 @@ class VtcomboProcess(VtProcess):
 vtcombo_process = None
 
 
-def start_vt_processes(directory, shards, mysql_db, vschema,
+def start_vt_processes(directory, topology, mysql_db, vschema,
                        charset='utf8', web_dir=None):
   """Start the vt processes.
 
-  Parameters:
+  Args:
     directory: the toplevel directory for the processes (logs, ...)
-    shards: an array of ShardInfo objects.
+    topology: a vttest.VTTestTopology object.
     mysql_db: an instance of the mysql_db.MySqlDB class.
+    vschema: the vschema file to use.
     charset: the character set for the database connections.
     web_dir: contains the web app for vtctld side of vtcombo.
   """
@@ -177,7 +168,7 @@ def start_vt_processes(directory, shards, mysql_db, vschema,
 
   logging.info('start_vt_processes(directory=%s,vtcombo_binary=%s)',
                directory, environment.vtcombo_binary)
-  vtcombo_process = VtcomboProcess(directory, shards, mysql_db, vschema,
+  vtcombo_process = VtcomboProcess(directory, topology, mysql_db, vschema,
                                    charset, web_dir=web_dir)
   vtcombo_process.wait_start()
 

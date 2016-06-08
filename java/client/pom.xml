@@ -25,6 +25,16 @@
       <artifactId>commons-collections4</artifactId>
       <version>4.1</version>
     </dependency>
+    <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+      <version>2.5</version>
+    </dependency>
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+      <version>2.6.2</version>
+    </dependency>
   </dependencies>
 
   <pluginRepositories>
@@ -74,6 +84,7 @@
             <include>topodata.proto</include>
             <include>vtgate.proto</include>
             <include>vtrpc.proto</include>
+            <include>vttest.proto</include>
           </includes>
         </configuration>
         <executions>

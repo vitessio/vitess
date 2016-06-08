@@ -86,7 +86,6 @@ If you're considering a NoSQL solution primarily because of concerns about the s
   * Connection pooling - Scale front-end connections while optimizing MySQL performance.
   * Query de-duping – Reuse results of an in-flight query for any identical requests received while the in-flight query was still executing.
   * Transaction manager – Limit number of concurrent transactions and manage deadlines to optimize overall throughput.
-  * Rowcache – Maintain a row-based cache (using memcached) to more efficiently field queries that require random access by primary key, very useful for OLTP workloads. (The MySQL buffer cache is optimized for range scans over indices and tables.). This can replace a custom caching layer implementation at the application layer.<br><br>
 
 * **Protection**
 
@@ -117,7 +116,7 @@ The Vitess platform consists of a number of server processes, command-line utili
 
 Depending on the current state of your application, you could arrive at a full Vitess implementation through a number of different process flows. For example, if you're building a service from scratch, your first step with Vitess would be to define your database topology. However, if you need to scale your existing database, you'd likely start by deploying a connection proxy.
 
-Vitess tools and servers are designed to help you whether you start with a complete fleet of databases or start small and scale over time. For smaller implementations, vttablet features like connection pooling and rowcache help you get more from your existing hardware. Vitess' automation tools then provide additional benefits for larger implementations.
+Vitess tools and servers are designed to help you whether you start with a complete fleet of databases or start small and scale over time. For smaller implementations, vttablet features like connection pooling and query rewriting help you get more from your existing hardware. Vitess' automation tools then provide additional benefits for larger implementations.
 
 The diagram below illustrates Vitess' components:
 

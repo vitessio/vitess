@@ -22,7 +22,7 @@ replicate from that master.
 
 ## MySQL requirements
 
-Vitess supports [MySQL 5.6](https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-howto.html) and [MariaDB](https://mariadb.com/kb/en/mariadb/global-transaction-id/) implementations.
+Vitess supports [MySQL 5.6](https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-howto.html), [MySQL 5.7](https://dev.mysql.com/doc/refman/5.7/en/replication-gtids-howto.html) and [MariaDB](https://mariadb.com/kb/en/mariadb/global-transaction-id/) implementations.
 
 ### GTIDs
 Vitess requires the use of global transaction identifiers
@@ -72,7 +72,7 @@ This command performs the following actions:
 1. Puts the current master tablet in read-only mode.
 1. Shuts down the current master's query service, which is the part of
    the system that handles user SQL queries. At this point, Vitess does
-   not handle any user SQL queries utnil the new master is configured
+   not handle any user SQL queries until the new master is configured
    and can be used a few seconds later.
 1. Retrieves the current master's replication position.
 1. Instructs the master-elect tablet to wait for replication data and
@@ -125,7 +125,6 @@ This command performs the following actions:
 1. Promotes the master-elect tablet to be the new master. In addition to
    changing its tablet type to <code>master</code>, the master-elect
    performs any other changes that might be required for its new state.
-   For example, it might need to modify the way its rowcache works.
 1. Ensures replication is functioning properly via the following steps:
    1.  On the master-elect tablet, Vitess inserts an entry in a test table
        and then updates the <code>MasterAlias</code> record of the global

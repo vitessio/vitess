@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -220,13 +221,14 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 
 	// also change the master alias in the Shard object, to make sure it
 	// is set back.
-	si, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
+	_, err := ts.UpdateShardFields(ctx, master.Tablet.Keyspace, master.Tablet.Shard, func(si *topo.ShardInfo) error {
+		// note it's OK to retry this and increment mutiple times,
+		// we just want it to be different
+		si.MasterAlias.Uid++
+		return nil
+	})
 	if err != nil {
-		t.Fatalf("GetShard failed: %v", err)
-	}
-	si.MasterAlias.Uid++
-	if err := ts.UpdateShard(ctx, si); err != nil {
-		t.Fatalf("UpdateShard failed: %v", err)
+		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
 
 	// run InitShardMaster without force, it fails because master is
@@ -244,7 +246,7 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	if master.FakeMysqlDaemon.ReadOnly {
 		t.Errorf("master was not turned read-write")
 	}
-	si, err = ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
+	si, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}

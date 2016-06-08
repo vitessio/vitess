@@ -1,7 +1,3 @@
-// Package test contains utilities to test topo.Impl
-// implementations. If you are testing your implementation, you will
-// want to call CheckAll in your test method. For an example, look at
-// the tests in github.com/youtube/vitess/go/vt/zktopo.
 package test
 
 import (
@@ -13,8 +9,9 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// CheckShardReplication tests ShardReplication objects
-func CheckShardReplication(ctx context.Context, t *testing.T, ts topo.Impl) {
+// checkShardReplication tests ShardReplication objects
+func checkShardReplication(t *testing.T, ts topo.Impl) {
+	ctx := context.Background()
 	cell := getLocalCell(ctx, t, ts)
 	if _, err := ts.GetShardReplication(ctx, cell, "test_keyspace", "-10"); err != topo.ErrNoNode {
 		t.Errorf("GetShardReplication(not there): %v", err)

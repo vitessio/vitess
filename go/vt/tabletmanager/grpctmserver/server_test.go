@@ -34,7 +34,7 @@ func TestGRPCTMServer(t *testing.T) {
 	go s.Serve(listener)
 
 	// Create a gRPC client to talk to the fake tablet.
-	client := &grpctmclient.Client{}
+	client := grpctmclient.NewClient()
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "test",

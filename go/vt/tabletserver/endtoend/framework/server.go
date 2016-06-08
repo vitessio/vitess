@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
-	"path"
 	"time"
 
 	"github.com/youtube/vitess/go/sqldb"
@@ -18,7 +16,6 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/vttest"
 )
 
 var (
@@ -35,7 +32,7 @@ var (
 // StartServer starts the server and initializes
 // all the global variables. This function should only be called
 // once at the beginning of the test.
-func StartServer(connParams sqldb.ConnParams, schemaOverrides []tabletserver.SchemaOverride) error {
+func StartServer(connParams sqldb.ConnParams) error {
 	dbcfgs := dbconfigs.DBConfigs{
 		App: dbconfigs.DBConfig{
 			ConnParams: connParams,
@@ -53,10 +50,6 @@ func StartServer(connParams sqldb.ConnParams, schemaOverrides []tabletserver.Sch
 		&dbcfgs.Repl)
 
 	BaseConfig = tabletserver.DefaultQsConfig
-	BaseConfig.RowCache.Enabled = true
-	BaseConfig.RowCache.Binary = vttest.MemcachedPath()
-	BaseConfig.RowCache.Socket = path.Join(os.TempDir(), "memcache.sock")
-	BaseConfig.RowCache.Connections = 100
 	BaseConfig.EnableAutoCommit = true
 	BaseConfig.StrictTableAcl = true
 
@@ -68,7 +61,7 @@ func StartServer(connParams sqldb.ConnParams, schemaOverrides []tabletserver.Sch
 
 	Server = tabletserver.NewTabletServer(BaseConfig)
 	Server.Register()
-	err := Server.StartService(Target, dbcfgs, schemaOverrides, mysqld)
+	err := Server.StartService(Target, dbcfgs, mysqld)
 	if err != nil {
 		return fmt.Errorf("could not start service: %v\n", err)
 	}

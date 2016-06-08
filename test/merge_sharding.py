@@ -257,8 +257,8 @@ index by_msg (msg)
     shard_2_replica.init_tablet('replica', 'test_keyspace', '80-')
     shard_2_rdonly.init_tablet('rdonly', 'test_keyspace', '80-')
 
+    # rebuild and check SrvKeyspace
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
-
     ks = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_keyspace'])
     self.assertEqual(ks['sharding_column_name'], 'custom_sharding_key')
 
@@ -333,7 +333,7 @@ index by_msg (msg)
                         'SplitClone',
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
-                        '--min_healthy_rdonly_endpoints', '1',
+                        '--min_healthy_rdonly_tablets', '1',
                         'test_keyspace/-80'],
                        auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_0_rdonly.tablet_alias,
@@ -381,7 +381,7 @@ index by_msg (msg)
     logging.debug('Running vtworker SplitDiff on first half')
     utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
                         '--exclude_tables', 'unrelated',
-                        '--min_healthy_rdonly_endpoints', '1',
+                        '--min_healthy_rdonly_tablets', '1',
                         '--source_uid', '0',
                         'test_keyspace/-80'],
                        auto_log=True)
@@ -392,7 +392,7 @@ index by_msg (msg)
     logging.debug('Running vtworker SplitDiff on second half')
     utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
                         '--exclude_tables', 'unrelated',
-                        '--min_healthy_rdonly_endpoints', '1',
+                        '--min_healthy_rdonly_tablets', '1',
                         '--source_uid', '1',
                         'test_keyspace/-80'],
                        auto_log=True)

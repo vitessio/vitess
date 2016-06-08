@@ -84,6 +84,64 @@ def make_row(row, convs):
   return converted_row
 
 
+def convert_value(value, proto_value, allow_lists=False):
+  """Convert a variable from python type to proto type+value.
+
+  Args:
+    value: the python value.
+    proto_value: the proto3 object, needs a type and value field.
+    allow_lists: allows the use of python lists.
+  """
+  if isinstance(value, int):
+    proto_value.type = query_pb2.INT64
+    proto_value.value = str(value)
+  elif isinstance(value, long):
+    if value < INT_UPPERBOUND_PLUS_ONE:
+      proto_value.type = query_pb2.INT64
+    else:
+      proto_value.type = query_pb2.UINT64
+    proto_value.value = str(value)
+  elif isinstance(value, float):
+    proto_value.type = query_pb2.FLOAT64
+    proto_value.value = str(value)
+  elif hasattr(value, '__sql_literal__'):
+    proto_value.type = query_pb2.VARBINARY
+    proto_value.value = str(value.__sql_literal__())
+  elif isinstance(value, datetime.datetime):
+    proto_value.type = query_pb2.VARBINARY
+    proto_value.value = times.DateTimeToString(value)
+  elif isinstance(value, datetime.date):
+    proto_value.type = query_pb2.VARBINARY
+    proto_value.value = times.DateToString(value)
+  elif isinstance(value, str):
+    proto_value.type = query_pb2.VARBINARY
+    proto_value.value = value
+  elif isinstance(value, field_types.NoneType):
+    proto_value.type = query_pb2.NULL_TYPE
+  elif allow_lists and isinstance(value, (set, tuple, list)):
+    # this only works for bind variables, not for entities.
+    proto_value.type = query_pb2.TUPLE
+    for v in list(value):
+      proto_v = proto_value.values.add()
+      convert_value(v, proto_v)
+  else:
+    proto_value.type = query_pb2.VARBINARY
+    proto_value.value = str(value)
+
+
+def convert_bind_vars(bind_variables, request_bind_variables):
+  """Convert binding variables to proto3.
+
+  Args:
+    bind_variables: a map of strings to python native types.
+    request_bind_variables: the proto3 object to add bind variables to.
+  """
+  if not bind_variables:
+    return
+  for key, val in bind_variables.iteritems():
+    convert_value(val, request_bind_variables[key], allow_lists=True)
+
+
 class Proto3Connection(object):
   """A base class for proto3-based python connectors.
 
@@ -126,62 +184,6 @@ class Proto3Connection(object):
     if response.HasField('session') and response.session:
       self.session = response.session
 
-  def _convert_value(self, value, proto_value, allow_lists=False):
-    """Convert a variable from python type to proto type+value.
-
-    Args:
-      value: the python value.
-      proto_value: the proto3 object, needs a type and value field.
-      allow_lists: allows the use of python lists.
-    """
-    if isinstance(value, int):
-      proto_value.type = query_pb2.INT64
-      proto_value.value = str(value)
-    elif isinstance(value, long):
-      if value < INT_UPPERBOUND_PLUS_ONE:
-        proto_value.type = query_pb2.INT64
-      else:
-        proto_value.type = query_pb2.UINT64
-      proto_value.value = str(value)
-    elif isinstance(value, float):
-      proto_value.type = query_pb2.FLOAT64
-      proto_value.value = str(value)
-    elif hasattr(value, '__sql_literal__'):
-      proto_value.type = query_pb2.VARBINARY
-      proto_value.value = str(value.__sql_literal__())
-    elif isinstance(value, datetime.datetime):
-      proto_value.type = query_pb2.VARBINARY
-      proto_value.value = times.DateTimeToString(value)
-    elif isinstance(value, datetime.date):
-      proto_value.type = query_pb2.VARBINARY
-      proto_value.value = times.DateToString(value)
-    elif isinstance(value, str):
-      proto_value.type = query_pb2.VARBINARY
-      proto_value.value = value
-    elif isinstance(value, field_types.NoneType):
-      proto_value.type = query_pb2.NULL_TYPE
-    elif allow_lists and isinstance(value, (set, tuple, list)):
-      # this only works for bind variables, not for entities.
-      proto_value.type = query_pb2.TUPLE
-      for v in list(value):
-        proto_v = proto_value.values.add()
-        self._convert_value(v, proto_v)
-    else:
-      proto_value.type = query_pb2.VARBINARY
-      proto_value.value = str(value)
-
-  def _convert_bind_vars(self, bind_variables, request_bind_variables):
-    """Convert binding variables to proto3.
-
-    Args:
-      bind_variables: a map of strings to python native types.
-      request_bind_variables: the proto3 object to add bind variables to.
-    """
-    if not bind_variables:
-      return
-    for key, val in bind_variables.iteritems():
-      self._convert_value(val, request_bind_variables[key], allow_lists=True)
-
   def _convert_entity_ids(self, entity_keyspace_ids, request_eki):
     """Convert external entity id map to ProtoBuffer.
 
@@ -192,7 +194,7 @@ class Proto3Connection(object):
     for xid, kid in entity_keyspace_ids.iteritems():
       eid = request_eki.add()
       eid.keyspace_id = kid
-      self._convert_value(xid, eid, allow_lists=False)
+      convert_value(xid, eid, allow_lists=False)
 
   def _add_key_ranges(self, request, key_ranges):
     """Adds the provided keyrange.KeyRange objects to the proto3 request.
@@ -363,11 +365,13 @@ class Proto3Connection(object):
 
     else:
       request = vtgate_pb2.ExecuteRequest()
+      if keyspace_name:
+        request.keyspace = keyspace_name
       routing_kwargs = {}
       method_name = 'Execute'
 
     request.query.sql = sql
-    self._convert_bind_vars(bind_variables, request.query.bind_variables)
+    convert_bind_vars(bind_variables, request.query.bind_variables)
     request.tablet_type = topodata_pb2.TabletType.Value(tablet_type.upper())
     request.not_in_transaction = not_in_transaction
     self._add_caller_id(request, effective_caller_id)
@@ -417,7 +421,7 @@ class Proto3Connection(object):
           sql_list, bind_variables_list, keyspace_list, keyspace_ids_list):
         query = request.queries.add(keyspace=keyspace_name)
         query.query.sql = sql
-        self._convert_bind_vars(bind_variables, query.query.bind_variables)
+        convert_bind_vars(bind_variables, query.query.bind_variables)
         query.keyspace_ids.extend(keyspace_ids)
       method_name = 'ExecuteBatchKeyspaceIds'
     else:
@@ -426,7 +430,7 @@ class Proto3Connection(object):
           sql_list, bind_variables_list, keyspace_list, shards_list):
         query = request.queries.add(keyspace=keyspace_name)
         query.query.sql = sql
-        self._convert_bind_vars(bind_variables, query.query.bind_variables)
+        convert_bind_vars(bind_variables, query.query.bind_variables)
         query.shards.extend(shards)
       method_name = 'ExecuteBatchShards'
 
@@ -500,11 +504,13 @@ class Proto3Connection(object):
 
     else:
       request = vtgate_pb2.StreamExecuteRequest()
+      if keyspace_name:
+        request.keyspace = keyspace_name
       routing_kwargs = {}
       method_name = 'StreamExecute'
 
     request.query.sql = sql
-    self._convert_bind_vars(bind_variables, request.query.bind_variables)
+    convert_bind_vars(bind_variables, request.query.bind_variables)
     request.tablet_type = topodata_pb2.TabletType.Value(tablet_type.upper())
     self._add_caller_id(request, effective_caller_id)
     return request, routing_kwargs, method_name

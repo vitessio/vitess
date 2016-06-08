@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -25,7 +26,7 @@ type TabletExecutor struct {
 	tmClient             tmclient.TabletManagerClient
 	topoServer           topo.Server
 	tablets              []*topodatapb.Tablet
-	schemaDiffs          []*tmutils.SchemaChangeResult
+	schemaDiffs          []*tabletmanagerdatapb.SchemaChangeResult
 	isClosed             bool
 	allowBigSchemaChange bool
 }
@@ -153,23 +154,21 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 }
 
 func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []string) error {
-	exec.schemaDiffs = make([]*tmutils.SchemaChangeResult, len(sqls))
-	for i := range sqls {
-		schemaDiff, err := exec.tmClient.PreflightSchema(
-			ctx, exec.tablets[0], sqls[i])
-		if err != nil {
-			return err
-		}
-		exec.schemaDiffs[i] = schemaDiff
+	schemaDiffs, err := exec.tmClient.PreflightSchema(ctx, exec.tablets[0], sqls)
+	if err != nil {
+		return err
+	}
+	for i, schemaDiff := range schemaDiffs {
 		diffs := tmutils.DiffSchemaToArray(
 			"BeforeSchema",
-			exec.schemaDiffs[i].BeforeSchema,
+			schemaDiff.BeforeSchema,
 			"AfterSchema",
-			exec.schemaDiffs[i].AfterSchema)
+			schemaDiff.AfterSchema)
 		if len(diffs) == 0 {
 			return fmt.Errorf("Schema change: '%s' does not introduce any table definition change.", sqls[i])
 		}
 	}
+	exec.schemaDiffs = schemaDiffs
 	return nil
 }
 

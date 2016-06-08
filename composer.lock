@@ -4,8 +4,8 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "hash": "f94639fdd21d6d8c0d4303d1f31a2ac7",
-    "content-hash": "54e74f04ae871f8c990be820ed4d2404",
+    "hash": "0cd710cc0ecaf561decfc222218510ab",
+    "content-hash": "5ab396f6457dc803b81cb295390ba83f",
     "packages": [
         {
             "name": "datto/protobuf-php",
@@ -13,12 +13,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/stanley-cheung/Protobuf-PHP.git",
-                "reference": "b0a40f3150e5cd5b002f1cb16c021f4a59e20d6d"
+                "reference": "dbbe0846ee99e9579a0e5b09abf03e671614f0a8"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/stanley-cheung/Protobuf-PHP/zipball/b0a40f3150e5cd5b002f1cb16c021f4a59e20d6d",
-                "reference": "b0a40f3150e5cd5b002f1cb16c021f4a59e20d6d",
+                "url": "https://api.github.com/repos/stanley-cheung/Protobuf-PHP/zipball/dbbe0846ee99e9579a0e5b09abf03e671614f0a8",
+                "reference": "dbbe0846ee99e9579a0e5b09abf03e671614f0a8",
                 "shasum": ""
             },
             "require": {
@@ -59,7 +59,7 @@
             "support": {
                 "source": "https://github.com/stanley-cheung/Protobuf-PHP/tree/master"
             },
-            "time": "2015-12-10 06:02:49"
+            "time": "2016-05-18 22:11:39"
         },
         {
             "name": "firebase/php-jwt",
@@ -106,16 +106,16 @@
         },
         {
             "name": "google/auth",
-            "version": "dev-master",
+            "version": "v0.7",
             "source": {
                 "type": "git",
                 "url": "https://github.com/google/google-auth-library-php.git",
-                "reference": "45c5e62244995d4dae51aa379894401ebe992b4d"
+                "reference": "f3288860ce7b3076a6768e4ff7b85e0f6100e221"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/google/google-auth-library-php/zipball/45c5e62244995d4dae51aa379894401ebe992b4d",
-                "reference": "45c5e62244995d4dae51aa379894401ebe992b4d",
+                "url": "https://api.github.com/repos/google/google-auth-library-php/zipball/f3288860ce7b3076a6768e4ff7b85e0f6100e221",
+                "reference": "f3288860ce7b3076a6768e4ff7b85e0f6100e221",
                 "shasum": ""
             },
             "require": {
@@ -149,7 +149,7 @@
                 "google",
                 "oauth2"
             ],
-            "time": "2016-02-24 18:00:02"
+            "time": "2016-03-03 02:03:58"
         },
         {
             "name": "grpc/grpc",
@@ -157,16 +157,17 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/grpc/grpc.git",
-                "reference": "22648b7f7c83d80b71ac312864f760775f8d5abd"
+                "reference": "768c769acef173ef6ba4fc076e782607816c5ab9"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/grpc/grpc/zipball/22648b7f7c83d80b71ac312864f760775f8d5abd",
-                "reference": "22648b7f7c83d80b71ac312864f760775f8d5abd",
+                "url": "https://api.github.com/repos/grpc/grpc/zipball/768c769acef173ef6ba4fc076e782607816c5ab9",
+                "reference": "768c769acef173ef6ba4fc076e782607816c5ab9",
                 "shasum": ""
             },
             "require": {
-                "google/auth": "dev-master",
+                "datto/protobuf-php": "dev-master",
+                "google/auth": "v0.7",
                 "php": ">=5.5.0"
             },
             "type": "library",
@@ -184,7 +185,7 @@
             "keywords": [
                 "rpc"
             ],
-            "time": "2016-02-23 02:54:24"
+            "time": "2016-04-29 18:06:37"
         },
         {
             "name": "guzzlehttp/guzzle",
@@ -192,12 +193,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/guzzle.git",
-                "reference": "739b9c8378c462943c42fee5353453ab4164ed8e"
+                "reference": "b1a96f6134f69cb41f8538d3a6491f4bb1dbab78"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/guzzle/zipball/739b9c8378c462943c42fee5353453ab4164ed8e",
-                "reference": "739b9c8378c462943c42fee5353453ab4164ed8e",
+                "url": "https://api.github.com/repos/guzzle/guzzle/zipball/b1a96f6134f69cb41f8538d3a6491f4bb1dbab78",
+                "reference": "b1a96f6134f69cb41f8538d3a6491f4bb1dbab78",
                 "shasum": ""
             },
             "require": {
@@ -246,20 +247,20 @@
                 "rest",
                 "web service"
             ],
-            "time": "2016-02-17 21:09:10"
+            "time": "2016-05-08 19:39:56"
         },
         {
             "name": "guzzlehttp/promises",
-            "version": "dev-master",
+            "version": "1.2.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/promises.git",
-                "reference": "976e0f50981f845dcee1c25bfcac2304a7bb5583"
+                "reference": "c10d860e2a9595f8883527fa0021c7da9e65f579"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/promises/zipball/976e0f50981f845dcee1c25bfcac2304a7bb5583",
-                "reference": "976e0f50981f845dcee1c25bfcac2304a7bb5583",
+                "url": "https://api.github.com/repos/guzzle/promises/zipball/c10d860e2a9595f8883527fa0021c7da9e65f579",
+                "reference": "c10d860e2a9595f8883527fa0021c7da9e65f579",
                 "shasum": ""
             },
             "require": {
@@ -297,7 +298,7 @@
             "keywords": [
                 "promise"
             ],
-            "time": "2016-02-26 22:29:15"
+            "time": "2016-05-18 16:56:05"
         },
         {
             "name": "guzzlehttp/psr7",
@@ -412,7 +413,6 @@
     "minimum-stability": "dev",
     "stability-flags": {
         "datto/protobuf-php": 20,
-        "google/auth": 20,
         "grpc/grpc": 20
     },
     "prefer-stable": false,

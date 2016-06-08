@@ -36,7 +36,7 @@ without any real downtime for your application.
 ## Range-based Sharding
 
 Vitess uses range-based sharding to manage data across multiple shards.
-(Vitess can also support a [custom sharding](#custom-sharding) scheme.
+(Vitess can also support a [custom sharding](#custom-sharding) scheme.)
 
 In range-based sharding, each record in a keyspace is associated with
 a sharding key that is stored with the record. The sharding key value
@@ -85,6 +85,8 @@ sharding key column in each table has the same name and column type.
 A common example of a sharding key is the 64-bit hash of a user ID. The
 hashing function ensures that the sharding keys are evenly distributed
 in the space.
+
+**Note:** If the vtgate v3 API is used, the sharding key value is no longer materialized. Instead, vtgate can calculate it on the fly when reading and inserting data. (A valid VSchema is required to tell vtgate how to calculate the sharding key value.) 
 
 ### Key Ranges and Partitions
 
@@ -161,7 +163,7 @@ Requirement | Action
 ----------- | ------
 Uniformly increase read capacity | Add replicas or split shards
 Uniformly increase write capacity | Split shards
-Reclaim overprovisioned resources | Merge shards and/or keyspaces (*not implemented yet*)
+Reclaim overprovisioned resources | Merge shards and/or keyspaces
 Increase geo-diversity | Add new cells and replicas
 Cool a hot tablet | For read access, add replicas or split shards. For write access, split shards.
 

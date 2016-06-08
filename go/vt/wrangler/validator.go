@@ -108,8 +108,6 @@ func (wr *Wrangler) validateKeyspace(ctx context.Context, keyspace string, pingT
 	}
 }
 
-// FIXME(msolomon) This validate presumes the master is up and running.
-// Even when that isn't true, there are validation processes that might be valuable.
 func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, pingTablets bool, wg *sync.WaitGroup, results chan<- error) {
 	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {

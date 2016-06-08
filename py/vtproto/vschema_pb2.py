@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vschema.proto',
   package='vschema',
   syntax='proto3',
-  serialized_pb=_b('\n\rvschema.proto\x12\x07vschema\"\xfe\x01\n\x08Keyspace\x12\x0f\n\x07sharded\x18\x01 \x01(\x08\x12\x31\n\x08vindexes\x18\x02 \x03(\x0b\x32\x1f.vschema.Keyspace.VindexesEntry\x12-\n\x06tables\x18\x03 \x03(\x0b\x32\x1d.vschema.Keyspace.TablesEntry\x1a@\n\rVindexesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1e\n\x05value\x18\x02 \x01(\x0b\x32\x0f.vschema.Vindex:\x02\x38\x01\x1a=\n\x0bTablesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1d\n\x05value\x18\x02 \x01(\x0b\x32\x0e.vschema.Table:\x02\x38\x01\"\x81\x01\n\x06Vindex\x12\x0c\n\x04type\x18\x01 \x01(\t\x12+\n\x06params\x18\x02 \x03(\x0b\x32\x1b.vschema.Vindex.ParamsEntry\x12\r\n\x05owner\x18\x03 \x01(\t\x1a-\n\x0bParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"u\n\x05Table\x12\x0c\n\x04type\x18\x01 \x01(\t\x12.\n\x0f\x63olumn_vindexes\x18\x02 \x03(\x0b\x32\x15.vschema.ColumnVindex\x12.\n\x0e\x61uto_increment\x18\x03 \x01(\x0b\x32\x16.vschema.AutoIncrement\",\n\x0c\x43olumnVindex\x12\x0e\n\x06\x63olumn\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\"1\n\rAutoIncrement\x12\x0e\n\x06\x63olumn\x18\x01 \x01(\t\x12\x10\n\x08sequence\x18\x02 \x01(\tb\x06proto3')
+  serialized_pb=_b('\n\rvschema.proto\x12\x07vschema\"\xfe\x01\n\x08Keyspace\x12\x0f\n\x07sharded\x18\x01 \x01(\x08\x12\x31\n\x08vindexes\x18\x02 \x03(\x0b\x32\x1f.vschema.Keyspace.VindexesEntry\x12-\n\x06tables\x18\x03 \x03(\x0b\x32\x1d.vschema.Keyspace.TablesEntry\x1a@\n\rVindexesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1e\n\x05value\x18\x02 \x01(\x0b\x32\x0f.vschema.Vindex:\x02\x38\x01\x1a=\n\x0bTablesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1d\n\x05value\x18\x02 \x01(\x0b\x32\x0e.vschema.Table:\x02\x38\x01\"\x81\x01\n\x06Vindex\x12\x0c\n\x04type\x18\x01 \x01(\t\x12+\n\x06params\x18\x02 \x03(\x0b\x32\x1b.vschema.Vindex.ParamsEntry\x12\r\n\x05owner\x18\x03 \x01(\t\x1a-\n\x0bParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"u\n\x05Table\x12\x0c\n\x04type\x18\x01 \x01(\t\x12.\n\x0f\x63olumn_vindexes\x18\x02 \x03(\x0b\x32\x15.vschema.ColumnVindex\x12.\n\x0e\x61uto_increment\x18\x03 \x01(\x0b\x32\x16.vschema.AutoIncrement\",\n\x0c\x43olumnVindex\x12\x0e\n\x06\x63olumn\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\"1\n\rAutoIncrement\x12\x0e\n\x06\x63olumn\x18\x01 \x01(\t\x12\x10\n\x08sequence\x18\x02 \x01(\t\"\x88\x01\n\nSrvVSchema\x12\x35\n\tkeyspaces\x18\x01 \x03(\x0b\x32\".vschema.SrvVSchema.KeyspacesEntry\x1a\x43\n\x0eKeyspacesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12 \n\x05value\x18\x02 \x01(\x0b\x32\x11.vschema.Keyspace:\x02\x38\x01\x62\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -347,6 +347,74 @@ _AUTOINCREMENT = _descriptor.Descriptor(
   serialized_end=629,
 )
 
+
+_SRVVSCHEMA_KEYSPACESENTRY = _descriptor.Descriptor(
+  name='KeyspacesEntry',
+  full_name='vschema.SrvVSchema.KeyspacesEntry',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='key', full_name='vschema.SrvVSchema.KeyspacesEntry.key', index=0,
+      number=1, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='value', full_name='vschema.SrvVSchema.KeyspacesEntry.value', index=1,
+      number=2, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=701,
+  serialized_end=768,
+)
+
+_SRVVSCHEMA = _descriptor.Descriptor(
+  name='SrvVSchema',
+  full_name='vschema.SrvVSchema',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='keyspaces', full_name='vschema.SrvVSchema.keyspaces', index=0,
+      number=1, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+  ],
+  extensions=[
+  ],
+  nested_types=[_SRVVSCHEMA_KEYSPACESENTRY, ],
+  enum_types=[
+  ],
+  options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=632,
+  serialized_end=768,
+)
+
 _KEYSPACE_VINDEXESENTRY.fields_by_name['value'].message_type = _VINDEX
 _KEYSPACE_VINDEXESENTRY.containing_type = _KEYSPACE
 _KEYSPACE_TABLESENTRY.fields_by_name['value'].message_type = _TABLE
@@ -357,11 +425,15 @@ _VINDEX_PARAMSENTRY.containing_type = _VINDEX
 _VINDEX.fields_by_name['params'].message_type = _VINDEX_PARAMSENTRY
 _TABLE.fields_by_name['column_vindexes'].message_type = _COLUMNVINDEX
 _TABLE.fields_by_name['auto_increment'].message_type = _AUTOINCREMENT
+_SRVVSCHEMA_KEYSPACESENTRY.fields_by_name['value'].message_type = _KEYSPACE
+_SRVVSCHEMA_KEYSPACESENTRY.containing_type = _SRVVSCHEMA
+_SRVVSCHEMA.fields_by_name['keyspaces'].message_type = _SRVVSCHEMA_KEYSPACESENTRY
 DESCRIPTOR.message_types_by_name['Keyspace'] = _KEYSPACE
 DESCRIPTOR.message_types_by_name['Vindex'] = _VINDEX
 DESCRIPTOR.message_types_by_name['Table'] = _TABLE
 DESCRIPTOR.message_types_by_name['ColumnVindex'] = _COLUMNVINDEX
 DESCRIPTOR.message_types_by_name['AutoIncrement'] = _AUTOINCREMENT
+DESCRIPTOR.message_types_by_name['SrvVSchema'] = _SRVVSCHEMA
 
 Keyspace = _reflection.GeneratedProtocolMessageType('Keyspace', (_message.Message,), dict(
 
@@ -422,6 +494,21 @@ AutoIncrement = _reflection.GeneratedProtocolMessageType('AutoIncrement', (_mess
   ))
 _sym_db.RegisterMessage(AutoIncrement)
 
+SrvVSchema = _reflection.GeneratedProtocolMessageType('SrvVSchema', (_message.Message,), dict(
+
+  KeyspacesEntry = _reflection.GeneratedProtocolMessageType('KeyspacesEntry', (_message.Message,), dict(
+    DESCRIPTOR = _SRVVSCHEMA_KEYSPACESENTRY,
+    __module__ = 'vschema_pb2'
+    # @@protoc_insertion_point(class_scope:vschema.SrvVSchema.KeyspacesEntry)
+    ))
+  ,
+  DESCRIPTOR = _SRVVSCHEMA,
+  __module__ = 'vschema_pb2'
+  # @@protoc_insertion_point(class_scope:vschema.SrvVSchema)
+  ))
+_sym_db.RegisterMessage(SrvVSchema)
+_sym_db.RegisterMessage(SrvVSchema.KeyspacesEntry)
+
 
 _KEYSPACE_VINDEXESENTRY.has_options = True
 _KEYSPACE_VINDEXESENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
@@ -429,6 +516,8 @@ _KEYSPACE_TABLESENTRY.has_options = True
 _KEYSPACE_TABLESENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
 _VINDEX_PARAMSENTRY.has_options = True
 _VINDEX_PARAMSENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
+_SRVVSCHEMA_KEYSPACESENTRY.has_options = True
+_SRVVSCHEMA_KEYSPACESENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
 import abc
 from grpc.beta import implementations as beta_implementations
 from grpc.framework.common import cardinality

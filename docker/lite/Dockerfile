@@ -3,12 +3,11 @@ FROM debian:jessie
 
 # Install dependencies
 RUN apt-key adv --recv-keys --keyserver pgp.mit.edu 5072E1F5 \
- && echo 'deb http://repo.mysql.com/apt/debian/ jessie mysql-5.6' > /etc/apt/sources.list.d/mysql.list \
+ && echo 'deb http://repo.mysql.com/apt/debian/ jessie mysql-5.7' > /etc/apt/sources.list.d/mysql.list \
  && apt-get update \
  && DEBIAN_FRONTEND=noninteractive \
     apt-get install -y --no-install-recommends \
       bzip2 \
-      memcached \
       libmysqlclient18 \
       mysql-client \
       mysql-server \

@@ -172,21 +172,21 @@ func (ts Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardIn
 	}, nil
 }
 
-// UpdateShard updates the shard data, with the right version.
+// UpdateShard masks ts.Impl.UpdateShard so nobody is tempted to use it.
+func (ts Server) UpdateShard() error {
+	panic("do not call this function directly, use UpdateShardFields instead")
+}
+
+// updateShard updates the shard data, with the right version.
 // It also creates a span, and dispatches the event.
-func (ts Server) UpdateShard(ctx context.Context, si *ShardInfo) error {
+func (ts Server) updateShard(ctx context.Context, si *ShardInfo) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateShard")
 	span.Annotate("keyspace", si.keyspace)
 	span.Annotate("shard", si.shardName)
 	defer span.Finish()
 
-	var version int64 = -1
-	if si.version != 0 {
-		version = si.version
-	}
-
-	newVersion, err := ts.Impl.UpdateShard(ctx, si.keyspace, si.shardName, si.Shard, version)
+	newVersion, err := ts.Impl.UpdateShard(ctx, si.keyspace, si.shardName, si.Shard, si.version)
 	if err != nil {
 		return err
 	}
@@ -207,29 +207,39 @@ func (ts Server) UpdateShard(ctx context.Context, si *ShardInfo) error {
 // If the update succeeds, it returns the updated ShardInfo.
 // If the update method returns ErrNoUpdateNeeded, nothing is written,
 // and nil,nil is returned.
-func (ts Server) UpdateShardFields(ctx context.Context, keyspace, shard string, update func(*topodatapb.Shard) error) (*ShardInfo, error) {
+//
+// Note the callback method takes a ShardInfo, so it can get the
+// keyspace and shard from it, or use all the ShardInfo methods.
+func (ts Server) UpdateShardFields(ctx context.Context, keyspace, shard string, update func(*ShardInfo) error) (*ShardInfo, error) {
 	for {
 		si, err := ts.GetShard(ctx, keyspace, shard)
 		if err != nil {
 			return nil, err
 		}
-		if err = update(si.Shard); err != nil {
+		if err = update(si); err != nil {
 			if err == ErrNoUpdateNeeded {
 				return nil, nil
 			}
 			return nil, err
 		}
-		if err = ts.UpdateShard(ctx, si); err != ErrBadVersion {
+		if err = ts.updateShard(ctx, si); err != ErrBadVersion {
 			return si, err
 		}
 	}
 }
 
 // CreateShard creates a new shard and tries to fill in the right information.
-// This should be called while holding the keyspace lock for the shard.
-// (call topotools.CreateShard to do that for you).
-// In unit tests (that are not parallel), this function can be called directly.
-func (ts Server) CreateShard(ctx context.Context, keyspace, shard string) error {
+// This will lock the Keyspace, as we may be looking at other shard servedTypes.
+// Using GetOrCreateShard is probably a better idea for most use cases.
+func (ts Server) CreateShard(ctx context.Context, keyspace, shard string) (err error) {
+	// Lock the keyspace, because we'll be looking at ServedTypes.
+	ctx, unlock, lockErr := ts.LockKeyspace(ctx, keyspace, "CreateShard")
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
+
+	// validate parameters
 	name, keyRange, err := ValidateShardName(shard)
 	if err != nil {
 		return err
@@ -269,6 +279,8 @@ func (ts Server) CreateShard(ctx context.Context, keyspace, shard string) error 
 	}
 
 	if err := ts.Impl.CreateShard(ctx, keyspace, name, value); err != nil {
+		// return error as is, we need to propagate
+		// ErrNodeExists for instance.
 		return err
 	}
 
@@ -279,6 +291,29 @@ func (ts Server) CreateShard(ctx context.Context, keyspace, shard string) error 
 		Status:       "created",
 	})
 	return nil
+}
+
+// GetOrCreateShard will return the shard object, or create one if it doesn't
+// already exist. Note the shard creation is protected by a keyspace Lock.
+func (ts Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) (si *ShardInfo, err error) {
+	si, err = ts.GetShard(ctx, keyspace, shard)
+	if err != ErrNoNode {
+		return
+	}
+
+	// create the keyspace, maybe it already exists
+	if err = ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil && err != ErrNodeExists {
+		return nil, fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
+	}
+
+	// now try to create with the lock, may already exist
+	if err = ts.CreateShard(ctx, keyspace, shard); err != nil && err != ErrNodeExists {
+		return nil, fmt.Errorf("CreateShard(%v/%v) failed: %v", keyspace, shard, err)
+	}
+
+	// try to read the shard again, maybe someone created it
+	// in between the original GetShard and the LockKeyspace
+	return ts.GetShard(ctx, keyspace, shard)
 }
 
 // DeleteShard wraps the underlying Impl.DeleteShard
@@ -314,7 +349,12 @@ func (si *ShardInfo) GetTabletControl(tabletType topodatapb.TabletType) *topodat
 //   table list that the provided one, we error out.
 // - we don't support DisableQueryService at the same time as BlacklistedTables,
 //   because it's not used in the same context (vertical vs horizontal sharding)
-func (si *ShardInfo) UpdateSourceBlacklistedTables(tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error {
+//
+// This function should be called while holding the keyspace lock.
+func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error {
+	if err := CheckKeyspaceLocked(ctx, si.keyspace); err != nil {
+		return err
+	}
 	tc := si.GetTabletControl(tabletType)
 	if tc == nil {
 		// handle the case where the TabletControl object is new
@@ -358,7 +398,11 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(tabletType topodatapb.TabletT
 // of the corner cases:
 // - we don't support DisableQueryService at the same time as BlacklistedTables,
 //   because it's not used in the same context (vertical vs horizontal sharding)
-func (si *ShardInfo) UpdateDisableQueryService(tabletType topodatapb.TabletType, cells []string, disableQueryService bool) error {
+// This function should be called while holding the keyspace lock.
+func (si *ShardInfo) UpdateDisableQueryService(ctx context.Context, tabletType topodatapb.TabletType, cells []string, disableQueryService bool) error {
+	if err := CheckKeyspaceLocked(ctx, si.keyspace); err != nil {
+		return err
+	}
 	tc := si.GetTabletControl(tabletType)
 	if tc == nil {
 		// handle the case where the TabletControl object is new
@@ -370,7 +414,7 @@ func (si *ShardInfo) UpdateDisableQueryService(tabletType topodatapb.TabletType,
 				BlacklistedTables:   nil,
 			})
 		} else {
-			log.Warningf("Trying to remove TabletControl.DisableQueryService for missing type: %v", tabletType)
+			log.Warningf("Trying to remove TabletControl.DisableQueryService for missing type %v for shard %v/%v", tabletType, si.keyspace, si.shardName)
 		}
 		return nil
 	}
@@ -381,7 +425,7 @@ func (si *ShardInfo) UpdateDisableQueryService(tabletType topodatapb.TabletType,
 		return fmt.Errorf("cannot safely alter DisableQueryService as BlacklistedTables is set")
 	}
 	if !tc.DisableQueryService {
-		return fmt.Errorf("cannot safely alter DisableQueryService as DisableQueryService is not set, this record should not be there")
+		return fmt.Errorf("cannot safely alter DisableQueryService as DisableQueryService is not set, this record should not be there for shard %v/%v", si.keyspace, si.shardName)
 	}
 
 	if disableQueryService {

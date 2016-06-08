@@ -5,7 +5,9 @@ primary key information, and so forth.
 
 This document describes the <code>[vtctl](/reference/vtctl.html)</code>
 commands that you can use to [review](#reviewing-your-schema) or
-[update](#changing-your-schema) your schema in Vitess. 
+[update](#changing-your-schema) your schema in Vitess.
+
+Note that this functionality is not recommended for long-running schema changes. In such cases, we recommend to do a [pivot schema change](/user-guide/pivot-schema-changes.html) instead.
 
 ## Reviewing your schema
 
@@ -113,7 +115,7 @@ change to the specified keyspace, it performs the following steps:
    database, applies the change there to validate it, and retrieves
    the resulting schema. By doing so, Vitess verifies that the change
    succeeds without actually touching live database tables.
-1. It applies the Sql command on the master tablet in each shard.
+1. It applies the SQL command on the master tablet in each shard.
 
 The following sample command applies the SQL in the **user_table.sql**
 file to the **user** keyspace:
@@ -151,3 +153,6 @@ impact of a potential change:
   shard's master tablet has 100,000 rows or less.
 * For all other statements, the table on the shard's master tablet
   must have 2 million rows or less.
+
+If a schema change gets rejected because it affects too many rows, you can specify the flag `-allow_long_unavailability` to tell `ApplySchema` to skip this check.
+However, we do not recommend this. Instead, you should apply large schema changes by following the [pivot process](/user-guide/pivot-schema-changes.html).

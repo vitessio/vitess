@@ -80,7 +80,7 @@ site_integration_test:
 	go run test.go -docker=false -tag=site_test
 
 java_test:
-	go install ./go/cmd/vtgateclienttest
+	go install ./go/cmd/vtgateclienttest ./go/cmd/vtcombo
 	mvn -f java/pom.xml clean verify
 
 php_test:
@@ -114,16 +114,25 @@ php_proto:
 	docker rm vitess_php-proto
 
 # This rule builds the bootstrap images for all flavors.
+DOCKER_IMAGES_FOR_TEST = mariadb mysql56 mysql57 percona
+DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
 docker_bootstrap:
-	docker/bootstrap/build.sh common
-	docker/bootstrap/build.sh mariadb
-	docker/bootstrap/build.sh mysql56
-	docker/bootstrap/build.sh percona
+	for i in $(DOCKER_IMAGES); do echo "image: $$i"; docker/bootstrap/build.sh $$i || exit 1; done
+
+docker_bootstrap_test:
+	for i in $(DOCKER_IMAGES_FOR_TEST); do echo "image: $$i"; ./test.go -pull=false -flavor=$$i || exit 1; done
+
+docker_bootstrap_push:
+	for i in $(DOCKER_IMAGES); do echo "image: $$i"; docker push vitess/bootstrap:$$i || exit 1; done
 
 docker_base:
 	# Fix permissions before copying files, to avoid AUFS bug.
 	chmod -R o=g *
 	docker build -t vitess/base .
+
+docker_base_mysql56:
+	chmod -R o=g *
+	docker build -f Dockerfile.percona -t vitess/base:mysql56 .
 
 docker_base_percona:
 	chmod -R o=g *
@@ -135,6 +144,9 @@ docker_base_mariadb:
 
 docker_lite:
 	cd docker/lite && ./build.sh
+
+docker_lite_mysql56:
+	cd docker/lite && ./build.sh mysql56
 
 docker_lite_mariadb:
 	cd docker/lite && ./build.sh mariadb

@@ -7,18 +7,19 @@
 package vtgate
 
 import (
-	"errors"
 	"fmt"
 	"math"
+	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -34,7 +35,6 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 const errDupKey = "errno 1062"
@@ -52,11 +52,6 @@ var (
 	errorsByKeyspace  *stats.Rates
 	errorsByDbType    *stats.Rates
 
-	errTooManyInFlight = vterrors.FromError(
-		vtrpcpb.ErrorCode_TRANSIENT_ERROR,
-		errors.New("request_backlog: too many requests in flight"),
-	)
-
 	// Error counters should be global so they can be set from anywhere
 	normalErrors   *stats.MultiCounters
 	infoErrors     *stats.Counters
@@ -70,9 +65,6 @@ type VTGate struct {
 	router       *Router
 	timings      *stats.MultiTimings
 	rowsReturned *stats.MultiCounters
-
-	maxInFlight int64
-	inFlight    sync2.AtomicInt64
 
 	// the throttled loggers for all errors, one per API entry
 	logExecute                  *logutil.ThrottledLogger
@@ -94,8 +86,10 @@ type RegisterVTGate func(vtgateservice.VTGateService)
 // RegisterVTGates stores register funcs for VTGate server.
 var RegisterVTGates []RegisterVTGate
 
+var vtgateOnce sync.Once
+
 // Init initializes VTGate server.
-func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType, maxInFlight int) *VTGate {
+func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *VTGate {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
@@ -103,9 +97,6 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 		resolver:     NewResolver(hc, topoServer, serv, "VttabletCall", cell, retryCount, tabletTypesToWait),
 		timings:      stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
 		rowsReturned: stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
-
-		maxInFlight: int64(maxInFlight),
-		inFlight:    sync2.NewAtomicInt64(0),
 
 		logExecute:                  logutil.NewThrottledLogger("Execute", 5*time.Second),
 		logExecuteShards:            logutil.NewThrottledLogger("ExecuteShards", 5*time.Second),
@@ -138,7 +129,29 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 			f(rpcVTGate)
 		}
 	})
+	vtgateOnce.Do(rpcVTGate.registerDebugHealthHandler)
 	return rpcVTGate
+}
+
+func (vtg *VTGate) registerDebugHealthHandler() {
+	http.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
+			acl.SendError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		if err := vtg.IsHealthy(); err != nil {
+			w.Write([]byte("not ok"))
+			return
+		}
+		w.Write([]byte("ok"))
+	})
+}
+
+// IsHealthy returns nil if server is healthy.
+// Otherwise, it returns an error indicating the reason.
+func (vtg *VTGate) IsHealthy() error {
+	return nil
 }
 
 // Execute executes a non-streaming query by routing based on the values in the query.
@@ -146,12 +159,6 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 	startTime := time.Now()
 	statsKey := []string{"Execute", "Any", strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
-
-	x := vtg.inFlight.Add(1)
-	defer vtg.inFlight.Add(-1)
-	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return nil, errTooManyInFlight
-	}
 
 	qr, err := vtg.router.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, notInTransaction)
 	if err == nil {
@@ -176,12 +183,6 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 	startTime := time.Now()
 	statsKey := []string{"ExecuteShards", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
-
-	x := vtg.inFlight.Add(1)
-	defer vtg.inFlight.Add(-1)
-	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return nil, errTooManyInFlight
-	}
 
 	sql = sqlannotation.AddFilteredReplicationUnfriendlyIfDML(sql)
 
@@ -221,12 +222,6 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVaria
 	statsKey := []string{"ExecuteKeyspaceIds", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
 
-	x := vtg.inFlight.Add(1)
-	defer vtg.inFlight.Add(-1)
-	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return nil, errTooManyInFlight
-	}
-
 	sql = sqlannotation.AddIfDML(sql, keyspaceIds)
 
 	qr, err := vtg.resolver.ExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, session, notInTransaction)
@@ -253,12 +248,6 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, sql string, bindVariabl
 	startTime := time.Now()
 	statsKey := []string{"ExecuteKeyRanges", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
-
-	x := vtg.inFlight.Add(1)
-	defer vtg.inFlight.Add(-1)
-	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return nil, errTooManyInFlight
-	}
 
 	sql = sqlannotation.AddFilteredReplicationUnfriendlyIfDML(sql)
 
@@ -287,12 +276,6 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, sql string, bindVariabl
 	statsKey := []string{"ExecuteEntityIds", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
 
-	x := vtg.inFlight.Add(1)
-	defer vtg.inFlight.Add(-1)
-	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return nil, errTooManyInFlight
-	}
-
 	sql = sqlannotation.AddFilteredReplicationUnfriendlyIfDML(sql)
 
 	qr, err := vtg.resolver.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction)
@@ -320,12 +303,6 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.B
 	startTime := time.Now()
 	statsKey := []string{"ExecuteBatchShards", "", ""}
 	defer vtg.timings.Record(statsKey, startTime)
-
-	x := vtg.inFlight.Add(1)
-	defer vtg.inFlight.Add(-1)
-	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return nil, errTooManyInFlight
-	}
 
 	annotateBoundShardQueriesAsUnfriendly(queries)
 
@@ -362,12 +339,6 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgat
 	statsKey := []string{"ExecuteBatchKeyspaceIds", "", ""}
 	defer vtg.timings.Record(statsKey, startTime)
 
-	x := vtg.inFlight.Add(1)
-	defer vtg.inFlight.Add(-1)
-	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return nil, errTooManyInFlight
-	}
-
 	annotateBoundKeyspaceIDQueries(queries)
 
 	qrs, err := vtg.resolver.ExecuteBatchKeyspaceIds(
@@ -400,12 +371,6 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables 
 	startTime := time.Now()
 	statsKey := []string{"StreamExecute", "Any", strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
-
-	x := vtg.inFlight.Add(1)
-	defer vtg.inFlight.Add(-1)
-	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return errTooManyInFlight
-	}
 
 	var rowCount int64
 	err := vtg.router.StreamExecute(
@@ -443,12 +408,6 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bin
 	startTime := time.Now()
 	statsKey := []string{"StreamExecuteKeyspaceIds", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
-
-	x := vtg.inFlight.Add(1)
-	defer vtg.inFlight.Add(-1)
-	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return errTooManyInFlight
-	}
 
 	var rowCount int64
 	err := vtg.resolver.StreamExecuteKeyspaceIds(
@@ -489,12 +448,6 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, sql string, bindV
 	statsKey := []string{"StreamExecuteKeyRanges", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
 
-	x := vtg.inFlight.Add(1)
-	defer vtg.inFlight.Add(-1)
-	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return errTooManyInFlight
-	}
-
 	var rowCount int64
 	err := vtg.resolver.StreamExecuteKeyRanges(
 		ctx,
@@ -528,12 +481,6 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 	startTime := time.Now()
 	statsKey := []string{"StreamExecuteShards", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
-
-	x := vtg.inFlight.Add(1)
-	defer vtg.inFlight.Add(-1)
-	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return errTooManyInFlight
-	}
 
 	var rowCount int64
 	err := vtg.resolver.StreamExecute(

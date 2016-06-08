@@ -15,13 +15,11 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -160,59 +158,52 @@ func agentRPCTestPingPanic(ctx context.Context, t *testing.T, client tmclient.Ta
 	expectRPCWrapPanic(t, err)
 }
 
-// agentRPCTestIsTimeoutErrorDialExpiredContext verifies that
-// client.IsTimeoutError() returns true for RPCs failed due to an expired
-// context before .Dial().
-func agentRPCTestIsTimeoutErrorDialExpiredContext(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+// agentRPCTestDialExpiredContext verifies that
+// the context returns the right DeadlineExceeded Err() for
+// RPCs failed due to an expired context before .Dial().
+func agentRPCTestDialExpiredContext(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	// Using a timeout of 0 here such that .Dial() will fail immediately.
 	expiredCtx, cancel := context.WithTimeout(ctx, 0)
 	defer cancel()
 	err := client.Ping(expiredCtx, tablet)
 	if err == nil {
-		t.Fatal("agentRPCTestIsTimeoutErrorDialExpiredContext: RPC with expired context did not fail")
+		t.Fatal("agentRPCTestDialExpiredContext: RPC with expired context did not fail")
 	}
-	if !client.IsTimeoutError(err) {
-		t.Errorf("agentRPCTestIsTimeoutErrorDialExpiredContext: want: IsTimeoutError() = true. error: %v", err)
-	}
-}
-
-// agentRPCTestIsTimeoutErrorDialTimeout verifies that client.IsTimeoutError()
-// returns true for RPCs failed due to a connect timeout during .Dial().
-func agentRPCTestIsTimeoutErrorDialTimeout(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	// Connect to a non-existing tablet.
-	// For example, this provokes gRPC to return error grpc.ErrClientConnTimeout.
-	invalidTablet := proto.Clone(tablet).(*topodatapb.Tablet)
-	invalidTablet.Hostname = "Non-Existent.Server"
-
-	shortCtx, cancel := context.WithTimeout(ctx, time.Millisecond)
-	defer cancel()
-	err := client.Ping(shortCtx, invalidTablet)
-	if err == nil {
-		t.Fatal("agentRPCTestIsTimeoutErrorDialTimeout: connect to non-existant tablet did not fail")
-	}
-	if !client.IsTimeoutError(err) {
-		t.Errorf("agentRPCTestIsTimeoutErrorDialTimeout: want: IsTimeoutError() = true. error: %v", err)
+	// The context was already expired when we created it. Here we only verify that it returns the expected error.
+	select {
+	case <-expiredCtx.Done():
+		if err := expiredCtx.Err(); err != context.DeadlineExceeded {
+			t.Errorf("agentRPCTestDialExpiredContext: got %v want context.DeadlineExceeded", err)
+		}
+	default:
+		t.Errorf("agentRPCTestDialExpiredContext: context.Done() not closed")
 	}
 }
 
-// agentRPCTestIsTimeoutErrorRPC verifies that client.IsTimeoutError() returns
-// true for RPCs failed due to an expired context during RPC execution.
-func agentRPCTestIsTimeoutErrorRPC(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, fakeAgent *fakeRPCAgent) {
+// agentRPCTestRPCTimeout verifies that
+// the context returns the right DeadlineExceeded Err() for
+// RPCs failed due to an expired context during execution.
+func agentRPCTestRPCTimeout(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, fakeAgent *fakeRPCAgent) {
 	// We must use a timeout > 0 such that the context deadline hasn't expired
 	// yet in grpctmclient.Client.dial().
 	// NOTE: This might still race e.g. when test execution takes too long the
 	//       context will be expired in dial() already. In such cases coverage
 	//       will be reduced but the test will not flake.
-	shortCtx, cancel := context.WithTimeout(ctx, time.Millisecond)
+	shortCtx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
 	defer cancel()
 	fakeAgent.setSlow(true)
 	defer func() { fakeAgent.setSlow(false) }()
 	err := client.Ping(shortCtx, tablet)
 	if err == nil {
-		t.Fatal("agentRPCTestIsTimeoutErrorRPC: RPC with expired context did not fail")
+		t.Fatal("agentRPCTestRPCTimeout: RPC with expired context did not fail")
 	}
-	if !client.IsTimeoutError(err) {
-		t.Errorf("agentRPCTestIsTimeoutErrorRPC: want: IsTimeoutError() = true. error: %v", err)
+	select {
+	case <-shortCtx.Done():
+		if err := shortCtx.Err(); err != context.DeadlineExceeded {
+			t.Errorf("agentRPCTestRPCTimeout: got %v want context.DeadlineExceeded", err)
+		}
+	default:
+		t.Errorf("agentRPCTestRPCTimeout: context.Done() not closed")
 	}
 }
 
@@ -508,17 +499,19 @@ func agentRPCTestReloadSchemaPanic(ctx context.Context, t *testing.T, client tmc
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-var testPreflightSchema = "change table add table cloth"
-var testSchemaChangeResult = &tmutils.SchemaChangeResult{
-	BeforeSchema: testGetSchemaReply,
-	AfterSchema:  testGetSchemaReply,
+var testPreflightSchema = []string{"change table add table cloth"}
+var testSchemaChangeResult = []*tabletmanagerdatapb.SchemaChangeResult{
+	{
+		BeforeSchema: testGetSchemaReply,
+		AfterSchema:  testGetSchemaReply,
+	},
 }
 
-func (fra *fakeRPCAgent) PreflightSchema(ctx context.Context, change string) (*tmutils.SchemaChangeResult, error) {
+func (fra *fakeRPCAgent) PreflightSchema(ctx context.Context, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "PreflightSchema result", change, testPreflightSchema)
+	compare(fra.t, "PreflightSchema result", changes, testPreflightSchema)
 	return testSchemaChangeResult, nil
 }
 
@@ -540,17 +533,17 @@ var testSchemaChange = &tmutils.SchemaChange{
 	AfterSchema:      testGetSchemaReply,
 }
 
-func (fra *fakeRPCAgent) ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
+func (fra *fakeRPCAgent) ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	compare(fra.t, "ApplySchema change", change, testSchemaChange)
-	return testSchemaChangeResult, nil
+	return testSchemaChangeResult[0], nil
 }
 
 func agentRPCTestApplySchema(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	scr, err := client.ApplySchema(ctx, tablet, testSchemaChange)
-	compareError(t, "ApplySchema", err, scr, testSchemaChangeResult)
+	compareError(t, "ApplySchema", err, scr, testSchemaChangeResult[0])
 }
 
 func agentRPCTestApplySchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
@@ -1039,30 +1032,28 @@ func agentRPCTestSetMasterPanic(ctx context.Context, t *testing.T, client tmclie
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-var testSlaveWasRestartedArgs = &actionnode.SlaveWasRestartedArgs{
-	Parent: &topodatapb.TabletAlias{
-		Cell: "prison",
-		Uid:  42,
-	},
+var testSlaveWasRestartedParent = &topodatapb.TabletAlias{
+	Cell: "prison",
+	Uid:  42,
 }
 var testSlaveWasRestartedCalled = false
 
-func (fra *fakeRPCAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error {
+func (fra *fakeRPCAgent) SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "SlaveWasRestarted swrd", swrd, testSlaveWasRestartedArgs)
+	compare(fra.t, "SlaveWasRestarted parent", parent, testSlaveWasRestartedParent)
 	testSlaveWasRestartedCalled = true
 	return nil
 }
 
 func agentRPCTestSlaveWasRestarted(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.SlaveWasRestarted(ctx, tablet, testSlaveWasRestartedArgs)
+	err := client.SlaveWasRestarted(ctx, tablet, testSlaveWasRestartedParent)
 	compareError(t, "SlaveWasRestarted", err, true, testSlaveWasRestartedCalled)
 }
 
 func agentRPCTestSlaveWasRestartedPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.SlaveWasRestarted(ctx, tablet, testSlaveWasRestartedArgs)
+	err := client.SlaveWasRestarted(ctx, tablet, testSlaveWasRestartedParent)
 	expectRPCWrapLockActionPanic(t, err)
 }
 
@@ -1143,7 +1134,7 @@ func agentRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.
 //
 
 // RPCWrap is part of the RPCAgent interface
-func (fra *fakeRPCAgent) RPCWrap(ctx context.Context, name string, args, reply interface{}, f func() error) (err error) {
+func (fra *fakeRPCAgent) RPCWrap(ctx context.Context, name tabletmanager.TabletAction, args, reply interface{}, f func() error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = fmt.Errorf("RPCWrap caught panic during %v", name)
@@ -1153,7 +1144,7 @@ func (fra *fakeRPCAgent) RPCWrap(ctx context.Context, name string, args, reply i
 }
 
 // RPCWrapLock is part of the RPCAgent interface
-func (fra *fakeRPCAgent) RPCWrapLock(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) (err error) {
+func (fra *fakeRPCAgent) RPCWrapLock(ctx context.Context, name tabletmanager.TabletAction, args, reply interface{}, verbose bool, f func() error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = fmt.Errorf("RPCWrapLock caught panic during %v", name)
@@ -1163,7 +1154,7 @@ func (fra *fakeRPCAgent) RPCWrapLock(ctx context.Context, name string, args, rep
 }
 
 // RPCWrapLockAction is part of the RPCAgent interface
-func (fra *fakeRPCAgent) RPCWrapLockAction(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) (err error) {
+func (fra *fakeRPCAgent) RPCWrapLockAction(ctx context.Context, name tabletmanager.TabletAction, args, reply interface{}, verbose bool, f func() error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = fmt.Errorf("RPCWrapLockAction caught panic during %v", name)
@@ -1182,9 +1173,8 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	ctx := context.Background()
 
 	// Test RPC specific methods of the interface.
-	agentRPCTestIsTimeoutErrorDialExpiredContext(ctx, t, client, tablet)
-	agentRPCTestIsTimeoutErrorDialTimeout(ctx, t, client, tablet)
-	agentRPCTestIsTimeoutErrorRPC(ctx, t, client, tablet, fakeAgent.(*fakeRPCAgent))
+	agentRPCTestDialExpiredContext(ctx, t, client, tablet)
+	agentRPCTestRPCTimeout(ctx, t, client, tablet, fakeAgent.(*fakeRPCAgent))
 
 	// Various read-only methods
 	agentRPCTestPing(ctx, t, client, tablet)

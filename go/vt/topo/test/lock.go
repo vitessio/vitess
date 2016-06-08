@@ -1,7 +1,3 @@
-// Package test contains utilities to test topo.Impl
-// implementations. If you are testing your implementation, you will
-// want to call CheckAll in your test method. For an example, look at
-// the tests in github.com/youtube/vitess/go/vt/zktopo.
 package test
 
 import (
@@ -19,14 +15,20 @@ import (
 // waiting for a topo lock than sleeping that amount.
 var timeUntilLockIsTaken = 10 * time.Millisecond
 
-// CheckKeyspaceLock checks we can take a keyspace lock as expected.
-func CheckKeyspaceLock(ctx context.Context, t *testing.T, ts topo.Impl) {
+// checkKeyspaceLock checks we can take a keyspace lock as expected.
+func checkKeyspaceLock(t *testing.T, ts topo.Impl) {
+	ctx := context.Background()
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
+	t.Log("===      checkKeyspaceLockTimeout")
 	checkKeyspaceLockTimeout(ctx, t, ts)
+
+	t.Log("===      checkKeyspaceLockMissing")
 	checkKeyspaceLockMissing(ctx, t, ts)
+
+	t.Log("===      checkKeyspaceLockUnblocks")
 	checkKeyspaceLockUnblocks(ctx, t, ts)
 }
 
@@ -113,8 +115,9 @@ func checkKeyspaceLockUnblocks(ctx context.Context, t *testing.T, ts topo.Impl) 
 	}
 }
 
-// CheckShardLock checks we can take a shard lock
-func CheckShardLock(ctx context.Context, t *testing.T, ts topo.Impl) {
+// checkShardLock checks we can take a shard lock
+func checkShardLock(t *testing.T, ts topo.Impl) {
+	ctx := context.Background()
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
@@ -124,8 +127,13 @@ func CheckShardLock(ctx context.Context, t *testing.T, ts topo.Impl) {
 		t.Fatalf("CreateShard: %v", err)
 	}
 
+	t.Log("===     checkShardLockTimeout")
 	checkShardLockTimeout(ctx, t, ts)
+
+	t.Log("===     checkShardLockMissing")
 	checkShardLockMissing(ctx, t, ts)
+
+	t.Log("===     checkShardLockUnblocks")
 	checkShardLockUnblocks(ctx, t, ts)
 }
 

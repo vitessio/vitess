@@ -21,6 +21,10 @@ import thread
 from CGIHTTPServer import CGIHTTPRequestHandler
 from BaseHTTPServer import HTTPServer
 
+from google.protobuf import text_format
+
+from vtproto import vttest_pb2
+
 
 def start_http_server(port):
   httpd = HTTPServer(('', port), CGIHTTPRequestHandler)
@@ -29,10 +33,19 @@ def start_http_server(port):
 
 def start_vitess():
   """This is the main start function."""
+
+  topology = vttest_pb2.VTTestTopology()
+  keyspace = topology.keyspaces.add(name='user')
+  keyspace.shards.add(name='-80')
+  keyspace.shards.add(name='80-')
+  keyspace = topology.keyspaces.add(name='lookup')
+  keyspace.shards.add(name='0')
+
   vttop = os.environ['VTTOP']
   args = [os.path.join(vttop, 'py/vttest/run_local_database.py'),
           '--port', '12345',
-          '--topology', 'user/-80:user0,user/80-:user1,lookup/0:lookup',
+          '--proto_topo', text_format.MessageToString(topology,
+                                                      as_one_line=True),
           '--web_dir', os.path.join(vttop, 'web/vtctld'),
           '--schema_dir', os.path.join(vttop, 'examples/demo/schema'),
           '--vschema', os.path.join(vttop, 'examples/demo/schema/vschema.json')]

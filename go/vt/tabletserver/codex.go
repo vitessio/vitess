@@ -178,51 +178,6 @@ func validateValue(col *schema.TableColumn, value sqltypes.Value) error {
 	return nil
 }
 
-// getLimit resolves the rowcount or offset of the limit clause value.
-// It returns -1 if it's not set.
-func getLimit(limit interface{}, bv map[string]interface{}) (int64, error) {
-	switch lim := limit.(type) {
-	case string:
-		lookup, ok := bv[lim[1:]]
-		if !ok {
-			return -1, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "missing bind var %s", lim)
-		}
-		var newlim int64
-		switch l := lookup.(type) {
-		case int64:
-			newlim = l
-		case int32:
-			newlim = int64(l)
-		case int:
-			newlim = int64(l)
-		default:
-			return -1, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "want number type for %s, got %T", lim, lookup)
-		}
-		if newlim < 0 {
-			return -1, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "negative limit %d", newlim)
-		}
-		return newlim, nil
-	case int64:
-		return lim, nil
-	default:
-		return -1, nil
-	}
-}
-
-func buildKey(row []sqltypes.Value) (key string) {
-	buf := &bytes.Buffer{}
-	for i, pkValue := range row {
-		if pkValue.IsNull() {
-			return ""
-		}
-		pkValue.EncodeASCII(buf)
-		if i != len(row)-1 {
-			buf.WriteByte('.')
-		}
-	}
-	return buf.String()
-}
-
 func buildStreamComment(tableInfo *TableInfo, pkValueList [][]sqltypes.Value, secondaryList [][]sqltypes.Value) []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, 256))
 	fmt.Fprintf(buf, " /* _stream %s (", tableInfo.Name)
@@ -247,16 +202,6 @@ func buildPKValueList(buf *bytes.Buffer, tableInfo *TableInfo, pkValueList [][]s
 		}
 		buf.WriteString(")")
 	}
-}
-
-func applyFilter(columnNumbers []int, input []sqltypes.Value) (output []sqltypes.Value) {
-	output = make([]sqltypes.Value, len(columnNumbers))
-	for colIndex, colPointer := range columnNumbers {
-		if colPointer >= 0 {
-			output[colIndex] = input[colPointer]
-		}
-	}
-	return output
 }
 
 func applyFilterWithPKDefaults(tableInfo *TableInfo, columnNumbers []int, input []sqltypes.Value) (output []sqltypes.Value) {

@@ -100,7 +100,7 @@
       0,
       1
     ],
-    "Type": 1
+    "Type": 0
   },
   {
     "Name": "b",
@@ -306,52 +306,11 @@
     "PKColumns": [
       0
     ],
-    "Type": 1
-  },
-  {
-    "Name": "e",
-    "Columns": [
-      {
-        "Name": "eid",
-        "Category": 1,
-        "IsAuto": false,
-        "Default": 0
-      },
-      {
-        "Name": "id",
-        "Category": 1,
-        "IsAuto": false,
-        "Default": 0
-      }
-    ],
-    "Indexes": [
-      {
-        "Name": "PRIMARY",
-        "Columns": [
-          "eid",
-          "id"
-        ],
-        "Cardinality": [
-          1,
-          1
-        ],
-        "DataColumns": [
-          "eid",
-          "id"
-        ]
-      }
-    ],
-    "PKColumns": [
-      0,
-      1,
-      0,
-      1
-    ],
-    "Type": 2
+    "Type": 0
   },
   {
     "Name": "seq",
-    "Type": 3
+    "Type": 1
   },
   {
     "Name": "dual",

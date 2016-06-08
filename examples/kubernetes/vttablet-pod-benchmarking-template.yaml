@@ -54,7 +54,7 @@ spec:
           -tablet_hostname $(hostname -i)
           -init_keyspace {{keyspace}}
           -init_shard {{shard}}
-          -target_tablet_type {{tablet_type}}
+          -init_tablet_type {{tablet_type}}
           -mysqlctl_socket $VTDATAROOT/mysqlctl.sock
           -db-config-app-uname vt_app
           -db-config-app-dbname vt_{{keyspace}}
@@ -71,10 +71,7 @@ spec:
           -queryserver-config-transaction-cap 300
           -queryserver-config-schema-reload-time 1
           -queryserver-config-pool-size 100
-          -enable-rowcache
-          -enable_replication_reporter
-          -rowcache-bin /usr/bin/memcached
-          -rowcache-socket $VTDATAROOT/{{tablet_subdir}}/memcache.sock" vitess
+          -enable_replication_reporter" vitess
       env:
         - name: GOMAXPROCS
           value: "16"

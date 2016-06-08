@@ -35,10 +35,6 @@ var (
 				<th>Sources</th>
 				<th>RowsAffected</th>
 				<th>Response Size</th>
-				<th>Cache Hits</th>
-				<th>Cache Misses</th>
-				<th>Cache Absent</th>
-				<th>Cache Invalidations</th>
 				<th>Transaction ID</th>
 				<th>Error</th>
 			</tr>
@@ -66,10 +62,6 @@ var (
 			<td>{{.FmtQuerySources}}</td>
 			<td>{{.RowsAffected}}</td>
 			<td>{{.SizeOfResponse}}</td>
-			<td>{{.CacheHits}}</td>
-			<td>{{.CacheMisses}}</td>
-			<td>{{.CacheAbsent}}</td>
-			<td>{{.CacheInvalidations}}</td>
 			<td>{{.TransactionID}}</td>
 			<td>{{.ErrorStr}}</td>
 		</tr>

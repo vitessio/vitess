@@ -12,7 +12,6 @@ import (
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -71,11 +70,11 @@ type TabletManagerClient interface {
 	// ReloadSchema asks the remote tablet to reload its schema
 	ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet) error
 
-	// PreflightSchema will test a schema change
-	PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, change string) (*tmutils.SchemaChangeResult, error)
+	// PreflightSchema will test a list of schema changes.
+	PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error)
 
 	// ApplySchema will apply a schema change
-	ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error)
+	ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 
 	// ExecuteFetchAsDba executes a query remotely using the DBA pool
 	ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, query string, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error)
@@ -168,7 +167,7 @@ type TabletManagerClient interface {
 	SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error
 
 	// SlaveWasRestarted tells the remote tablet its master has changed
-	SlaveWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, args *actionnode.SlaveWasRestartedArgs) error
+	SlaveWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error
 
 	// StopReplicationAndGetStatus stops replication and returns the
 	// current position.
@@ -183,13 +182,6 @@ type TabletManagerClient interface {
 
 	// Backup creates a database backup
 	Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int) (logutil.EventStream, error)
-
-	//
-	// RPC related methods
-	//
-
-	// IsTimeoutError checks if an error was caused by an RPC layer timeout vs an application-specific one
-	IsTimeoutError(err error) bool
 }
 
 // TabletManagerClientFactory is the factory method to create

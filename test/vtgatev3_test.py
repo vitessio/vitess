@@ -4,6 +4,7 @@
 import itertools
 import logging
 import unittest
+import urllib
 
 import environment
 import keyspace_util
@@ -116,18 +117,18 @@ vschema = {
         "name_user2_map": {
           "type": "lookup_hash",
           "params": {
-            "Table": "name_user2_map",
-            "From": "name",
-            "To": "user2_id"
+            "table": "name_user2_map",
+            "from": "name",
+            "to": "user2_id"
           },
           "owner": "vt_user2"
         },
         "music_user_map": {
           "type": "lookup_hash_unique",
           "params": {
-            "Table": "music_user_map",
-            "From": "music_id",
-            "To": "user_id"
+            "table": "music_user_map",
+            "from": "music_id",
+            "to": "user_id"
           },
           "owner": "vt_music"
         }
@@ -323,6 +324,19 @@ class TestVTGateFunctions(unittest.TestCase):
     return vtgate_conn._execute(
         sql, bind_vars, tablet_type='master', keyspace_name=None)
 
+  def test_health(self):
+    f = urllib.urlopen('http://localhost:%d/debug/health' % utils.vtgate.port)
+    response = f.read()
+    f.close()
+    self.assertEqual(response, 'ok')
+
+  def test_srv_vschema(self):
+    """Makes sure the SrvVSchema object is properly built."""
+    v = utils.run_vtctl_json(['GetSrvVSchema', 'test_nj'])
+    self.assertEqual(len(v['keyspaces']), 2, 'wrong vschema: %s' % str(v))
+    self.assertIn('user', v['keyspaces'])
+    self.assertIn('lookup', v['keyspaces'])
+
   def test_user(self):
     count = 4
     vtgate_conn = get_connection()
@@ -474,6 +488,13 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(result, ((2L, 'test 2'), (3L, 'test 3')))
     result = shard_1_master.mquery('vt_user', 'select id, name from vt_user')
     self.assertEqual(result, ((6L, 'test 6'),))
+
+    # test passing in the keyspace in the cursor
+    lcursor = vtgate_conn.cursor(
+        tablet_type='master', keyspace='lookup', writable=True)
+    with self.assertRaisesRegexp(
+        dbexceptions.DatabaseError, '.*table vt_user not found in schema.*'):
+      lcursor.execute('select id, name from vt_user', {})
 
   def test_user2(self):
     # user2 is for testing non-unique vindexes
@@ -952,8 +973,10 @@ class TestVTGateFunctions(unittest.TestCase):
   def test_vtclient(self):
     """This test uses vtclient to send and receive various queries.
     """
+    # specify a good default keyspace for the connection here.
     utils.vtgate.vtclient(
         'insert into vt_user_extra(user_id, email) values (:v1, :v2)',
+        keyspace='user',
         bindvars=[10, 'test 10'])
 
     out, _ = utils.vtgate.vtclient(
@@ -986,6 +1009,15 @@ class TestVTGateFunctions(unittest.TestCase):
         u'fields': [u'user_id', u'email'],
         u'rows': None,
         })
+
+    # check that specifying an invalid keyspace is propagated and triggers an
+    # error
+    _, err = utils.vtgate.vtclient(
+        'insert into vt_user_extra(user_id, email) values (:v1, :v2)',
+        keyspace='invalid',
+        bindvars=[10, 'test 10'],
+        raise_on_error=False)
+    self.assertIn('keyspace invalid not found in vschema', err)
 
   def test_vtctl_vtgate_execute(self):
     """This test uses 'vtctl VtGateExecute' to send and receive various queries.

@@ -63,9 +63,11 @@ func TestApplySchema_AllowLongUnavailability(t *testing.T) {
 			},
 		},
 	}
-	preflightSchemaChange := &tmutils.SchemaChangeResult{
-		BeforeSchema: beforeSchema,
-		AfterSchema:  afterSchema,
+	preflightSchemaChanges := []*tabletmanagerdatapb.SchemaChangeResult{
+		{
+			BeforeSchema: beforeSchema,
+			AfterSchema:  afterSchema,
+		},
 	}
 
 	tShard1 := NewFakeTablet(t, wr, cells[0], 0,
@@ -77,7 +79,7 @@ func TestApplySchema_AllowLongUnavailability(t *testing.T) {
 		defer ft.StopActionLoop(t)
 
 		ft.FakeMysqlDaemon.Schema = beforeSchema
-		ft.FakeMysqlDaemon.PreflightSchemaChangeResult = preflightSchemaChange
+		ft.FakeMysqlDaemon.PreflightSchemaChangeResult = preflightSchemaChanges
 	}
 
 	changeToDb := "USE vt_ks"

@@ -509,6 +509,17 @@ func (tee *Tee) DeleteKeyspaceReplication(ctx context.Context, cell, keyspace st
 // Serving Graph management, per cell.
 //
 
+// GetSrvKeyspaceNames is part of the topo.Server interface
+func (tee *Tee) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
+	return tee.readFrom.GetSrvKeyspaceNames(ctx, cell)
+}
+
+// WatchSrvKeyspace is part of the topo.Server interface.
+// We only watch for changes on the primary.
+func (tee *Tee) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, error) {
+	return tee.primary.WatchSrvKeyspace(ctx, cell, keyspace)
+}
+
 // UpdateSrvKeyspace is part of the topo.Server interface
 func (tee *Tee) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error {
 	if err := tee.primary.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace); err != nil {
@@ -541,15 +552,28 @@ func (tee *Tee) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*top
 	return tee.readFrom.GetSrvKeyspace(ctx, cell, keyspace)
 }
 
-// GetSrvKeyspaceNames is part of the topo.Server interface
-func (tee *Tee) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
-	return tee.readFrom.GetSrvKeyspaceNames(ctx, cell)
+// WatchSrvVSchema is part of the topo.Server interface.
+// We only watch for changes on the primary.
+func (tee *Tee) WatchSrvVSchema(ctx context.Context, cell string) (<-chan *vschemapb.SrvVSchema, error) {
+	return tee.primary.WatchSrvVSchema(ctx, cell)
 }
 
-// WatchSrvKeyspace is part of the topo.Server interface.
-// We only watch for changes on the primary.
-func (tee *Tee) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, error) {
-	return tee.primary.WatchSrvKeyspace(ctx, cell, keyspace)
+// UpdateSrvVSchema is part of the topo.Server interface
+func (tee *Tee) UpdateSrvVSchema(ctx context.Context, cell string, srvVSchema *vschemapb.SrvVSchema) error {
+	if err := tee.primary.UpdateSrvVSchema(ctx, cell, srvVSchema); err != nil {
+		return err
+	}
+
+	if err := tee.secondary.UpdateSrvVSchema(ctx, cell, srvVSchema); err != nil {
+		// not critical enough to fail
+		log.Warningf("secondary.UpdateSrvVSchema(%v) failed: %v", cell, err)
+	}
+	return nil
+}
+
+// GetSrvVSchema is part of the topo.Server interface
+func (tee *Tee) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.SrvVSchema, error) {
+	return tee.readFrom.GetSrvVSchema(ctx, cell)
 }
 
 //
@@ -671,12 +695,6 @@ func (tee *Tee) SaveVSchema(ctx context.Context, keyspace string, contents *vsch
 // GetVSchema is part of the topo.Server interface
 func (tee *Tee) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error) {
 	return tee.readFrom.GetVSchema(ctx, keyspace)
-}
-
-// WatchVSchema is part of the topo.Server interface.
-// We only watch for changes on the primary.
-func (tee *Tee) WatchVSchema(ctx context.Context, keyspace string) (<-chan *vschemapb.Keyspace, error) {
-	return tee.primary.WatchVSchema(ctx, keyspace)
 }
 
 var _ topo.Impl = (*Tee)(nil) // compile-time interface check

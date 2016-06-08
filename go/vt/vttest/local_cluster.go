@@ -21,7 +21,10 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/sqldb"
+
+	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
 )
 
 // Handle allows you to interact with the processes launched by vttest.
@@ -71,12 +74,13 @@ func SchemaDirectory(dir string) VitessOption {
 	}
 }
 
-// Topology is used to pass in the topology string.
+// ProtoTopo is used to pass in the topology as a vttest proto definition.
+// See vttest.proto for more information.
 // It cannot be used at the same time as MySQLOnly.
-func Topology(topo string) VitessOption {
+func ProtoTopo(topo *vttestpb.VTTestTopology) VitessOption {
 	return VitessOption{
 		beforeRun: func(hdl *Handle) error {
-			hdl.cmd.Args = append(hdl.cmd.Args, "--topology", topo)
+			hdl.cmd.Args = append(hdl.cmd.Args, "--proto_topo", proto.CompactTextString(topo))
 			return nil
 		},
 	}
@@ -84,14 +88,30 @@ func Topology(topo string) VitessOption {
 
 // MySQLOnly is used to launch only a mysqld instance, with the specified db name.
 // Use it before Schema option.
-// It cannot be used at the same as Topology.
+// It cannot be used at the same as ProtoTopo.
 func MySQLOnly(dbName string) VitessOption {
 	return VitessOption{
 		beforeRun: func(hdl *Handle) error {
+			// the way to pass the dbname for creation in
+			// is to provide a topology
+			topo := &vttestpb.VTTestTopology{
+				Keyspaces: []*vttestpb.Keyspace{
+					{
+						Name: dbName,
+						Shards: []*vttestpb.Shard{
+							{
+								Name:           "0",
+								DbNameOverride: dbName,
+							},
+						},
+					},
+				},
+			}
+
 			hdl.dbname = dbName
 			hdl.cmd.Args = append(hdl.cmd.Args,
-				"--topology", fmt.Sprintf("%s/0:%s", dbName, dbName),
-				"--mysql_only")
+				"--mysql_only",
+				"--proto_topo", proto.CompactTextString(topo))
 			return nil
 		},
 	}

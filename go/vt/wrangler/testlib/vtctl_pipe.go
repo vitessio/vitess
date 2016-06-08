@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,12 +27,7 @@ import (
 	_ "github.com/youtube/vitess/go/vt/vtctl/grpcvtctlclient"
 )
 
-var servenvInitialized = false
-
-func init() {
-	// make sure we use the right protocol
-	flag.Set("vtctl_client_protocol", "grpc")
-}
+var servenvInitialized sync.Once
 
 // VtctlPipe is a vtctl server based on a topo server, and a client that
 // is connected to it via gRPC.
@@ -44,11 +40,14 @@ type VtctlPipe struct {
 // NewVtctlPipe creates a new VtctlPipe based on the given topo server.
 func NewVtctlPipe(t *testing.T, ts topo.Server) *VtctlPipe {
 	// Register all vtctl commands
-	if !servenvInitialized {
+	servenvInitialized.Do(func() {
+		// make sure we use the right protocol
+		flag.Set("vtctl_client_protocol", "grpc")
+
+		// Enable all query groups
 		flag.Set("enable_queries", "true")
 		servenv.FireRunHooks()
-		servenvInitialized = true
-	}
+	})
 
 	// Listen on a random port
 	listener, err := net.Listen("tcp", ":0")

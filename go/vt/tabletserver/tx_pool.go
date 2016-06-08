@@ -170,22 +170,15 @@ func (axp *TxPool) Begin(ctx context.Context) int64 {
 	return transactionID
 }
 
-// SafeCommit commits the specified transaction. Unlike other functions, it
-// returns an error on failure instead of panic. The connection becomes free
-// and can be reused in the future.
-func (axp *TxPool) SafeCommit(ctx context.Context, transactionID int64) (invalidList map[string]DirtyKeys, err error) {
-	defer handleError(&err, nil, axp.queryServiceStats)
-
+// Commit commits the specified transaction.
+func (axp *TxPool) Commit(ctx context.Context, transactionID int64) {
 	conn := axp.Get(transactionID)
 	defer conn.discard(TxCommit)
-	// Assign this upfront to make sure we always return the invalidList.
-	invalidList = conn.dirtyTables
 	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
-	if _, fetchErr := conn.Exec(ctx, "commit", 1, false); fetchErr != nil {
+	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
 		conn.Close()
-		err = NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, fetchErr)
+		panic(NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err))
 	}
-	return
 }
 
 // Rollback rolls back the specified transaction.
@@ -235,8 +228,7 @@ func (axp *TxPool) SetTimeout(timeout time.Duration) {
 	axp.ticks.SetInterval(timeout / 10)
 }
 
-// TxConnection is meant for executing transactions. It keeps track
-// of dirty keys for rowcache invalidation. It can return itself to
+// TxConnection is meant for executing transactions. It can return itself to
 // the tx pool correctly. It also does not retry statements if there
 // are failures.
 type TxConnection struct {
@@ -246,7 +238,6 @@ type TxConnection struct {
 	inUse             bool
 	StartTime         time.Time
 	EndTime           time.Time
-	dirtyTables       map[string]DirtyKeys
 	Queries           []string
 	Conclusion        string
 	LogToFile         sync2.AtomicInt32
@@ -260,22 +251,10 @@ func newTxConnection(conn *DBConn, transactionID int64, pool *TxPool, immediate 
 		TransactionID:     transactionID,
 		pool:              pool,
 		StartTime:         time.Now(),
-		dirtyTables:       make(map[string]DirtyKeys),
 		Queries:           make([]string, 0, 8),
 		ImmediateCallerID: immediate,
 		EffectiveCallerID: effective,
 	}
-}
-
-// DirtyKeys returns the list of rowcache keys that became dirty
-// during the transaction.
-func (txc *TxConnection) DirtyKeys(tableName string) DirtyKeys {
-	if list, ok := txc.dirtyTables[tableName]; ok {
-		return list
-	}
-	list := make(DirtyKeys)
-	txc.dirtyTables[tableName] = list
-	return list
 }
 
 // Exec executes the statement for the current transaction.
@@ -346,13 +325,4 @@ func (txc *TxConnection) Format(params url.Values) string {
 		txc.Conclusion,
 		strings.Join(txc.Queries, ";"),
 	)
-}
-
-// DirtyKeys provides a cache-like interface, where
-// it just adds keys to its likst as Delete gets called.
-type DirtyKeys map[string]bool
-
-// Delete just keeps track of what needs to be deleted
-func (dk DirtyKeys) Delete(key string) {
-	dk[key] = true
 }

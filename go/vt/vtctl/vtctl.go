@@ -85,6 +85,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -96,7 +97,6 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -130,6 +130,10 @@ type commandGroup struct {
 	name     string
 	commands []command
 }
+
+// commandsMutex protects commands at init time. We use servenv, which calls
+// all Run hooks in parallel.
+var commandsMutex sync.Mutex
 
 var commands = []commandGroup{
 	{
@@ -206,7 +210,7 @@ var commands = []commandGroup{
 				"Validates that all nodes that are reachable from this shard are consistent."},
 			{"ShardReplicationPositions", commandShardReplicationPositions,
 				"<keyspace/shard>",
-				"Shows the replication status of each slave machine in the shard graph. In this case, the status refers to the replication lag between the master vttablet and the slave vttablet. In Vitess, data is always written to the master vttablet first and then replicated to all slave vttablets."},
+				"Shows the replication status of each slave machine in the shard graph. In this case, the status refers to the replication lag between the master vttablet and the slave vttablet. In Vitess, data is always written to the master vttablet first and then replicated to all slave vttablets. Output is sorted by tablet type, then replication position. Use ctrl-C to interrupt command and see partial result if needed."},
 			{"ListShardTablets", commandListShardTablets,
 				"<keyspace/shard>",
 				"Lists all tablets in the specified shard."},
@@ -266,7 +270,7 @@ var commands = []commandGroup{
 				"[-source=<source keyspace name>] [-remove] [-cells=c1,c2,...] <keyspace name> <tablet type>",
 				"Changes the ServedFromMap manually. This command is intended for emergency fixes. This field is automatically set when you call the *MigrateServedFrom* command. This command does not rebuild the serving graph."},
 			{"RebuildKeyspaceGraph", commandRebuildKeyspaceGraph,
-				"[-cells=a,b] <keyspace> ...",
+				"[-cells=c1,c2,...] <keyspace> ...",
 				"Rebuilds the serving data for the keyspace. This command may trigger an update to all connected clients."},
 			{"ValidateKeyspace", commandValidateKeyspace,
 				"[-ping-tablets] <keyspace name>",
@@ -348,18 +352,24 @@ var commands = []commandGroup{
 				"<keyspace>",
 				"Displays the VTGate routing schema."},
 			{"ApplyVSchema", commandApplyVSchema,
-				"{-vschema=<vschema> || -vschema_file=<vschema file>} <keyspace>",
-				"Applies the VTGate routing schema."},
+				"{-vschema=<vschema> || -vschema_file=<vschema file>} [-cells=c1,c2,...] [-skip_rebuild] <keyspace>",
+				"Applies the VTGate routing schema to the provided keyspace."},
+			{"RebuildVSchemaGraph", commandRebuildVSchemaGraph,
+				"[-cells=c1,c2,...]",
+				"Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cells (or all cells if none provided)."},
 		},
 	},
 	{
 		"Serving Graph", []command{
-			{"GetSrvKeyspace", commandGetSrvKeyspace,
-				"<cell> <keyspace>",
-				"Outputs a JSON structure that contains information about the SrvKeyspace."},
 			{"GetSrvKeyspaceNames", commandGetSrvKeyspaceNames,
 				"<cell>",
 				"Outputs a list of keyspace names."},
+			{"GetSrvKeyspace", commandGetSrvKeyspace,
+				"<cell> <keyspace>",
+				"Outputs a JSON structure that contains information about the SrvKeyspace."},
+			{"GetSrvVSchema", commandGetSrvVSchema,
+				"<cell>",
+				"Outputs a JSON structure that contains information about the SrvVSchema."},
 		},
 	},
 	{
@@ -381,6 +391,8 @@ func init() {
 }
 
 func addCommand(groupName string, c command) {
+	commandsMutex.Lock()
+	defer commandsMutex.Unlock()
 	for i, group := range commands {
 		if group.name == groupName {
 			commands[i].commands = append(commands[i].commands, c)
@@ -391,6 +403,8 @@ func addCommand(groupName string, c command) {
 }
 
 func addCommandGroup(groupName string) {
+	commandsMutex.Lock()
+	defer commandsMutex.Unlock()
 	commands = append(commands, commandGroup{
 		name: groupName,
 	})
@@ -417,15 +431,6 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 		shard = "<null>"
 	}
 	return fmt.Sprintf("%v %v %v %v %v %v %v", topoproto.TabletAliasString(ti.Alias), keyspace, shard, strings.ToLower(ti.Type.String()), ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(ti.Tags))
-}
-
-func fmtAction(action *actionnode.ActionNode) string {
-	state := string(action.State)
-	// FIXME(msolomon) The default state should really just have the value "queued".
-	if action.State == actionnode.ActionStateQueued {
-		state = "queued"
-	}
-	return fmt.Sprintf("%v %v %v %v %v", action.Path, action.Action, state, action.ActionGuid, action.Error)
 }
 
 func listTabletsByShard(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) error {
@@ -1061,7 +1066,7 @@ func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		}
 	}
 
-	err = topotools.CreateShard(ctx, wr.TopoServer(), keyspace, shard)
+	err = wr.TopoServer().CreateShard(ctx, keyspace, shard)
 	if *force && err == topo.ErrNodeExists {
 		log.Infof("shard %v/%v already exists (ignoring error with -force)", keyspace, shard)
 		err = nil
@@ -2023,9 +2028,27 @@ func commandGetVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	return nil
 }
 
+func commandRebuildVSchemaGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	var cells flagutil.StringListValue
+	subFlags.Var(&cells, "cells", "Specifies a comma-separated list of cells to look for tablets")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 0 {
+		return fmt.Errorf("RebuildVSchemaGraph doesn't take any arguments.")
+	}
+
+	return topotools.RebuildVSchema(ctx, wr.Logger(), wr.TopoServer(), cells)
+}
+
 func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	vschema := subFlags.String("vschema", "", "Identifies the VTGate routing schema")
 	vschemaFile := subFlags.String("vschema_file", "", "Identifies the VTGate routing schema file")
+	skipRebuild := subFlags.Bool("skip_rebuild", false, "If set, do no rebuild the SrvSchema objects.")
+	var cells flagutil.StringListValue
+	subFlags.Var(&cells, "cells", "If specified, limits the rebuild to the cells, after upload. Ignored if skipRebuild is set.")
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2051,22 +2074,15 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	keyspace := subFlags.Arg(0)
-	return wr.TopoServer().SaveVSchema(ctx, keyspace, &vs)
-}
-
-func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
+	if err := wr.TopoServer().SaveVSchema(ctx, keyspace, &vs); err != nil {
 		return err
 	}
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <cell> and <keyspace> arguments are required for the GetSrvKeyspace command.")
-	}
 
-	srvKeyspace, err := wr.TopoServer().GetSrvKeyspace(ctx, subFlags.Arg(0), subFlags.Arg(1))
-	if err != nil {
-		return err
+	if *skipRebuild {
+		wr.Logger().Warningf("Skipping rebuild of SrvVSchema, will need to run RebuildVSchemaGraph for changes to take effect")
+		return nil
 	}
-	return printJSON(wr.Logger(), srvKeyspace)
+	return topotools.RebuildVSchema(ctx, wr.Logger(), wr.TopoServer(), cells)
 }
 
 func commandGetSrvKeyspaceNames(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2085,6 +2101,36 @@ func commandGetSrvKeyspaceNames(ctx context.Context, wr *wrangler.Wrangler, subF
 		wr.Logger().Printf("%v\n", ks)
 	}
 	return nil
+}
+
+func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("The <cell> and <keyspace> arguments are required for the GetSrvKeyspace command.")
+	}
+
+	srvKeyspace, err := wr.TopoServer().GetSrvKeyspace(ctx, subFlags.Arg(0), subFlags.Arg(1))
+	if err != nil {
+		return err
+	}
+	return printJSON(wr.Logger(), srvKeyspace)
+}
+
+func commandGetSrvVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("The <cell> argument is required for the GetSrvVSchema command.")
+	}
+
+	srvVSchema, err := wr.TopoServer().GetSrvVSchema(ctx, subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	return printJSON(wr.Logger(), srvVSchema)
 }
 
 func commandGetShardReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2139,10 +2185,9 @@ func (rts rTablets) Len() int { return len(rts) }
 func (rts rTablets) Swap(i, j int) { rts[i], rts[j] = rts[j], rts[i] }
 
 // Sort for tablet replication.
-// master first, then i/o position, then sql position
+// Tablet type first (with master first), then replication positions.
 func (rts rTablets) Less(i, j int) bool {
-	// NOTE: Swap order of unpack to reverse sort
-	l, r := rts[j], rts[i]
+	l, r := rts[i], rts[j]
 	// l or r ReplicationStatus would be nil if we failed to get
 	// the position (put them at the beginning of the list)
 	if l.Status == nil {

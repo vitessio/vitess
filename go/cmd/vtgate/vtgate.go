@@ -27,7 +27,6 @@ import (
 var (
 	cell                   = flag.String("cell", "test_nj", "cell to use")
 	retryCount             = flag.Int("retry-count", 2, "retry count")
-	maxInFlight            = flag.Int("max-in-flight", 0, "maximum number of calls to allow simultaneously")
 	healthCheckConnTimeout = flag.Duration("healthcheck_conn_timeout", 3*time.Second, "healthcheck connection timeout")
 	healthCheckRetryDelay  = flag.Duration("healthcheck_retry_delay", 2*time.Millisecond, "health check retry delay")
 	healthCheckTimeout     = flag.Duration("healthcheck_timeout", time.Minute, "the health check timeout period")
@@ -58,7 +57,8 @@ func main() {
 
 	resilientSrvTopoServer = vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
 
-	healthCheck = discovery.NewHealthCheck(*healthCheckConnTimeout, *healthCheckRetryDelay, *healthCheckTimeout, "" /* statsSuffix */)
+	healthCheck = discovery.NewHealthCheck(*healthCheckConnTimeout, *healthCheckRetryDelay, *healthCheckTimeout)
+	healthCheck.RegisterStats()
 
 	tabletTypes := make([]topodatapb.TabletType, 0, 1)
 	if len(*tabletTypesToWait) != 0 {
@@ -71,7 +71,7 @@ func main() {
 			tabletTypes = append(tabletTypes, tt)
 		}
 	}
-	vtg := vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, *cell, *retryCount, tabletTypes, *maxInFlight)
+	vtg := vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, *cell, *retryCount, tabletTypes)
 
 	servenv.OnRun(func() {
 		addStatusParts(vtg)

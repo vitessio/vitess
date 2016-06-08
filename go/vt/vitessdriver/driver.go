@@ -111,8 +111,8 @@ func (d drv) Open(name string) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	if (c.Keyspace != "" && c.Shard == "") || (c.Keyspace == "" && c.Shard != "") {
-		return nil, fmt.Errorf("Always set both keyspace and shard or leave both empty. keyspace: %v shard: %v", c.Keyspace, c.Shard)
+	if c.Keyspace == "" && c.Shard != "" {
+		return nil, fmt.Errorf("the shard parameter requires a keyspace parameter. shard: %v", c.Shard)
 	}
 	if c.useExecuteShards() {
 		log.Infof("Sending queries only to keyspace/shard: %v/%v", c.Keyspace, c.Shard)
@@ -143,13 +143,21 @@ type Configuration struct {
 	// Format: hostname:port
 	Address string
 
-	// Keyspace of a specific keyspace and shard to target. Disables vtgate v3.
+	// Keyspace of a specific keyspace to target.
 	//
-	// If Keyspace and Shard are not empty, vtgate v1 instead of v3 will be used
-	// and all requests will be sent only to that particular shard.
-	// This functionality is meant for initial migrations from MySQL/MariaDB to Vitess.
+	// If Shard is also specified, vtgate v1 will be used instead
+	// of v3 (ExecuteShards and StreamExecuteShards), and all
+	// requests will be sent only to that particular shard.  This
+	// functionality is meant for initial migrations from
+	// MySQL/MariaDB to Vitess.
+	//
+	// If Shard is not specified, we will use the v3 API (Execute
+	// and StreamExecute calls), and specify this Keyspace as the
+	// default keyspace value.
 	Keyspace string
-	// Shard of a specific keyspace and shard to target. Disables vtgate v3.
+
+	// Shard of a specific keyspace and shard to target. See
+	// Keyspace comment, this will disable vtgate v3.
 	Shard string
 
 	// TabletType is the type of tablet you want to access and affects the
@@ -210,9 +218,9 @@ type conn struct {
 func (c *conn) dial() error {
 	var err error
 	if c.Protocol == "" {
-		c.vtgateConn, err = vtgateconn.Dial(context.Background(), c.Address, c.Timeout)
+		c.vtgateConn, err = vtgateconn.Dial(context.Background(), c.Address, c.Timeout, c.Keyspace)
 	} else {
-		c.vtgateConn, err = vtgateconn.DialProtocol(context.Background(), c.Protocol, c.Address, c.Timeout)
+		c.vtgateConn, err = vtgateconn.DialProtocol(context.Background(), c.Protocol, c.Address, c.Timeout, c.Keyspace)
 	}
 	return err
 }

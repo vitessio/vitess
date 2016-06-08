@@ -12,18 +12,18 @@
         "name_user_idx": {
           "type": "lookup_hash",
           "params": {
-            "Table": "name_user_idx",
-            "From": "name",
-            "To": "user_id"
+            "table": "name_user_idx",
+            "from": "name",
+            "to": "user_id"
           },
           "owner": "user"
         },
         "music_user_idx": {
           "type": "lookup_hash_unique",
           "params": {
-            "Table": "music_user_idx",
-            "From": "music_id",
-            "To": "user_id"
+            "table": "music_user_idx",
+            "from": "music_id",
+            "to": "user_id"
           },
           "owner": "music"
         },

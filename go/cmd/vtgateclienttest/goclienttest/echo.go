@@ -108,6 +108,7 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"callerId":   callerIDEcho,
 		"query":      echoPrefix + query,
 		"bindVars":   bindVarsEcho,
+		"keyspace":   connectionKeyspace,
 		"tabletType": tabletTypeEcho,
 	})
 
@@ -211,6 +212,7 @@ func testEchoStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"callerId":   callerIDEcho,
 		"query":      echoPrefix + query,
 		"bindVars":   bindVarsEcho,
+		"keyspace":   connectionKeyspace,
 		"tabletType": tabletTypeEcho,
 	})
 
@@ -273,6 +275,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"callerId":         callerIDEcho,
 		"query":            echoPrefix + query,
 		"bindVars":         bindVarsEcho,
+		"keyspace":         connectionKeyspace,
 		"tabletType":       tabletTypeEcho,
 		"session":          sessionEcho,
 		"notInTransaction": "false",

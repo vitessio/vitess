@@ -59,6 +59,20 @@ func getSandbox(keyspace string) *sandbox {
 	return ksToSandbox[keyspace]
 }
 
+func getSandboxSrvVSchema() *vschemapb.SrvVSchema {
+	result := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{},
+	}
+	sandboxMu.Lock()
+	defer sandboxMu.Unlock()
+	for keyspace, sandbox := range ksToSandbox {
+		var vs vschemapb.Keyspace
+		_ = json.Unmarshal([]byte(sandbox.VSchema), &vs)
+		result.Keyspaces[keyspace] = &vs
+	}
+	return result
+}
+
 func addSandboxServedFrom(keyspace, servedFrom string) {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
@@ -243,13 +257,11 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 	return createShardedSrvKeyspace(sand.ShardSpec, sand.KeyspaceServedFrom)
 }
 
-// WatchVSchema is part of SrvTopoServer.
-func (sct *sandboxTopo) WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan *vschemapb.Keyspace, err error) {
-	result := make(chan *vschemapb.Keyspace, 1)
-	value := getSandbox(keyspace).VSchema
-	var vs vschemapb.Keyspace
-	_ = json.Unmarshal([]byte(value), &vs)
-	result <- &vs
+// WatchSrvVSchema is part of SrvTopoServer.
+func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string) (notifications <-chan *vschemapb.SrvVSchema, err error) {
+	result := make(chan *vschemapb.SrvVSchema, 1)
+	value := getSandboxSrvVSchema()
+	result <- value
 	return result, nil
 }
 

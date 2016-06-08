@@ -1,0 +1,66 @@
+// This file contains the vttest topology configuration structures.
+//
+// The protobuf message "VTTestTopology" specifies the Vitess and
+// database configuration of the "vttest" test component which can be
+// used in end-to-end tests to test an application against an actual
+// Vitess and MySQL server.
+//
+// To start a "vttest" instance, pass the "VTTestTopology" message,
+// encoded in the protobuf compact text format, to
+// py/vttest/run_local_database.py which in turn will send it to the
+// Vitess test binary called "vtcombo".
+//
+// To encode a "VTTestTopology" message in the protobuf compact text
+// format, create the protobuf in your test's native language first
+// and then use the protobuf library to encode it as text.
+// For an example in Python, see: test/vttest_sample_test.py
+// In go, see: go/vt/vttest/local_cluster_test.go
+//
+// Sample encoded proto configurations would be as follow. Note there are
+// multiple encoding options, see the proto documentation for more info
+// (first and last quote not included in the encoding):
+// - single keyspace named test_keyspace with one shard '0':
+//   'keyspaces:<name:"test_keyspace" shards:<name:"0" > > '
+// - two keyspaces, one with two shards, the other one with a redirect:
+//   'keyspaces { name: "test_keyspace" shards { name: "-80" } shards { name: "80-" } } keyspaces { name: "redirect" served_from: "test_keyspace" }'
+
+syntax = "proto3";
+
+package vttest;
+
+// Shard describes a single shard in a keyspace.
+message Shard {
+  // name has to be unique in a keyspace. For unsharded keyspaces, it
+  // should be '0'. For sharded keyspace, it should be derived from
+  // the keyrange, like '-80' or '40-80'.
+  string name = 1;
+
+  // db_name_override is the mysql db name for this shard. Has to be
+  // globally unique. If not specified, we will by default use
+  // 'vt_<keyspace>_<shard>'.
+  string db_name_override = 2;
+}
+
+// Keyspace describes a single keyspace.
+message Keyspace {
+  // name has to be unique in a VTTestTopology.
+  string name = 1;
+
+  // shards inside this keyspace. Ignored if redirect is set.
+  repeated Shard shards = 2;
+
+  // sharding_column_name for this keyspace. Used for v2 calls, but not for v3.
+  string sharding_column_name = 3;
+
+  // sharding_column_type for this keyspace. Used for v2 calls, but not for v3.
+  string sharding_column_type = 4;
+
+  // redirects all traffic to another keyspace. If set, shards is ignored.
+  string served_from = 5;
+}
+
+// VTTestTopology describes the keyspaces in the topology.
+message VTTestTopology {
+  // all keyspaces in the topology.
+  repeated Keyspace keyspaces = 1;
+}

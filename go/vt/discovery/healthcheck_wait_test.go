@@ -114,7 +114,7 @@ func TestWaitForTablets(t *testing.T) {
 	input := make(chan *querypb.StreamHealthResponse)
 	createFakeConn(tablet, input)
 
-	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, 1*time.Hour, "" /* statsSuffix */)
+	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, 1*time.Hour)
 	hc.AddTablet("cell", "", tablet)
 
 	// this should time out

@@ -30,6 +30,7 @@ import (
 type queryExecute struct {
 	SQL              string
 	BindVariables    map[string]interface{}
+	Keyspace         string
 	TabletType       topodatapb.TabletType
 	Session          *vtgatepb.Session
 	NotInTransaction bool
@@ -210,7 +211,7 @@ func (conn *FakeVTGateConn) AddSplitQueryV2(
 }
 
 // Execute please see vtgateconn.Impl.Execute
-func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session interface{}) (*sqltypes.Result, interface{}, error) {
+func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session interface{}) (*sqltypes.Result, interface{}, error) {
 	var s *vtgatepb.Session
 	if session != nil {
 		s = session.(*vtgatepb.Session)
@@ -222,6 +223,7 @@ func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars ma
 	query := &queryExecute{
 		SQL:           sql,
 		BindVariables: bindVars,
+		Keyspace:      keyspace,
 		TabletType:    tabletType,
 		Session:       s,
 	}
@@ -305,7 +307,7 @@ func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 }
 
 // StreamExecute please see vtgateconn.Impl.StreamExecute
-func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error) {
+func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType) (sqltypes.ResultStream, error) {
 	response, ok := conn.execMap[sql]
 	if !ok {
 		return nil, fmt.Errorf("no match for: %s", sql)
@@ -313,6 +315,7 @@ func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, sql string, bindV
 	query := &queryExecute{
 		SQL:           sql,
 		BindVariables: bindVars,
+		Keyspace:      keyspace,
 		TabletType:    tabletType,
 	}
 	if !reflect.DeepEqual(query, response.execQuery) {

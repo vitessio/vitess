@@ -718,7 +718,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	vtgateconn.RegisterDialer("test", func(ctx context.Context, address string, timeout time.Duration) (vtgateconn.Impl, error) {
 		return impl, nil
 	})
-	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "", 0)
+	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "", 0, "connection_ks")
 	if err != nil {
 		t.Fatalf("Got err: %v from vtgateconn.DialProtocol", err)
 	}
@@ -766,7 +766,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 
 // TestErrorSuite runs all the tests that expect errors
 func TestErrorSuite(t *testing.T, fakeServer vtgateservice.VTGateService) {
-	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "", 0)
+	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "", 0, "connection_ks")
 	if err != nil {
 		t.Fatalf("Got err: %v from vtgateconn.DialProtocol", err)
 	}
@@ -1767,6 +1767,7 @@ var execMap = map[string]struct {
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
+			Keyspace:   "connection_ks",
 			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    nil,
 		},
@@ -1875,6 +1876,7 @@ var execMap = map[string]struct {
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
+			Keyspace:   "connection_ks",
 			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    nil,
 		},
@@ -1983,6 +1985,7 @@ var execMap = map[string]struct {
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
+			Keyspace:   "connection_ks",
 			TabletType: topodatapb.TabletType_MASTER,
 			Session:    session1,
 		},

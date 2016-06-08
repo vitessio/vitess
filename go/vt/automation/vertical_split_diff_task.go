@@ -18,8 +18,8 @@ type VerticalSplitDiffTask struct {
 // Run is part of the Task interface.
 func (t *VerticalSplitDiffTask) Run(parameters map[string]string) ([]*automationpb.TaskContainer, string, error) {
 	args := []string{"VerticalSplitDiff"}
-	if minHealthyRdonlyEndPoints := parameters["min_healthy_rdonly_endpoints"]; minHealthyRdonlyEndPoints != "" {
-		args = append(args, "--min_healthy_rdonly_endpoints="+minHealthyRdonlyEndPoints)
+	if minHealthyRdonlyTablets := parameters["min_healthy_rdonly_tablets"]; minHealthyRdonlyTablets != "" {
+		args = append(args, "--min_healthy_rdonly_tablets="+minHealthyRdonlyTablets)
 	}
 	args = append(args, topoproto.KeyspaceShardString(parameters["dest_keyspace"], parameters["shard"]))
 	output, err := ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], args)
@@ -39,5 +39,5 @@ func (t *VerticalSplitDiffTask) RequiredParameters() []string {
 
 // OptionalParameters is part of the Task interface.
 func (t *VerticalSplitDiffTask) OptionalParameters() []string {
-	return []string{"min_healthy_rdonly_endpoints"}
+	return []string{"min_healthy_rdonly_tablets"}
 }

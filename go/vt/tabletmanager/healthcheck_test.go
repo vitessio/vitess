@@ -18,9 +18,9 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
 
@@ -516,22 +516,21 @@ func TestTabletControl(t *testing.T) {
 	}
 
 	// now update the shard
-	si, err := agent.TopoServer.GetShard(ctx, "test_keyspace", "0")
+	_, err = agent.TopoServer.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
+		si.TabletControls = []*topodatapb.Shard_TabletControl{
+			{
+				TabletType:          topodatapb.TabletType_REPLICA,
+				DisableQueryService: true,
+			},
+		}
+		return nil
+	})
 	if err != nil {
-		t.Fatalf("GetShard failed: %v", err)
-	}
-	si.TabletControls = []*topodatapb.Shard_TabletControl{
-		{
-			TabletType:          topodatapb.TabletType_REPLICA,
-			DisableQueryService: true,
-		},
-	}
-	if err := agent.TopoServer.UpdateShard(ctx, si); err != nil {
-		t.Fatalf("UpdateShard failed: %v", err)
+		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
 
 	// now refresh the tablet state, as the resharding process would do
-	agent.RPCWrapLockAction(ctx, actionnode.TabletActionRefreshState, "", "", true, func() error {
+	agent.RPCWrapLockAction(ctx, TabletActionRefreshState, "", "", true, func() error {
 		agent.RefreshState(ctx)
 		return nil
 	})
@@ -641,19 +640,18 @@ func TestTabletControl(t *testing.T) {
 		t.Errorf("invalid tabletserver target: got = %v, want = %v", got, topodatapb.TabletType_REPLICA)
 	}
 
-	// now clear TabletControl, run health check, make sure we go back healthy
-	// and serving.
-	si, err = agent.TopoServer.GetShard(ctx, "test_keyspace", "0")
+	// now clear TabletControl, run health check, make sure we go
+	// back healthy and serving.
+	_, err = agent.TopoServer.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
+		si.TabletControls = nil
+		return nil
+	})
 	if err != nil {
-		t.Fatalf("GetShard failed: %v", err)
-	}
-	si.TabletControls = nil
-	if err := agent.TopoServer.UpdateShard(ctx, si); err != nil {
-		t.Fatalf("UpdateShard failed: %v", err)
+		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
 
 	// now refresh the tablet state, as the resharding process would do
-	agent.RPCWrapLockAction(ctx, actionnode.TabletActionRefreshState, "", "", true, func() error {
+	agent.RPCWrapLockAction(ctx, TabletActionRefreshState, "", "", true, func() error {
 		agent.RefreshState(ctx)
 		return nil
 	})
@@ -711,7 +709,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 
 	// Run TER to turn us into a proper master, wait for it to finish.
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 19 * time.Second
-	if err := agent.RPCWrapLock(ctx, actionnode.TabletActionExternallyReparented, "", "", false, func() error {
+	if err := agent.RPCWrapLock(ctx, TabletActionExternallyReparented, "", "", false, func() error {
 		return agent.TabletExternallyReparented(ctx, "unused_id")
 	}); err != nil {
 		t.Fatal(err)
@@ -761,25 +759,25 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Simulate a vertical split resharding where we set SourceShards in the topo
-	// and enable filtered replication.
-	si, err := agent.TopoServer.GetShard(ctx, "test_keyspace", "0")
-	if err != nil {
-		t.Fatalf("GetShard failed: %v", err)
-	}
-	si.SourceShards = []*topodatapb.Shard_SourceShard{
-		{
-			Uid:      1,
-			Keyspace: "source_keyspace",
-			Shard:    "0",
-			Tables: []string{
-				"table1",
+	// Simulate a vertical split resharding where we set
+	// SourceShards in the topo and enable filtered replication.
+	_, err = agent.TopoServer.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
+		si.SourceShards = []*topodatapb.Shard_SourceShard{
+			{
+				Uid:      1,
+				Keyspace: "source_keyspace",
+				Shard:    "0",
+				Tables: []string{
+					"table1",
+				},
 			},
-		},
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
-	if err := agent.TopoServer.UpdateShard(ctx, si); err != nil {
-		t.Fatalf("UpdateShard failed: %v", err)
-	}
+
 	// Mock out the BinlogPlayer client. Tell the BinlogPlayer not to start.
 	vtClientMock := binlogplayer.NewVtClientMock()
 	vtClientMock.AddResult(&sqltypes.Result{
@@ -798,7 +796,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	// Refresh the tablet state, as vtworker would do.
 	// Since we change the QueryService state, we'll also trigger a health broadcast.
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 21 * time.Second
-	agent.RPCWrapLockAction(ctx, actionnode.TabletActionRefreshState, "", "", true, func() error {
+	agent.RPCWrapLockAction(ctx, TabletActionRefreshState, "", "", true, func() error {
 		agent.RefreshState(ctx)
 		return nil
 	})
@@ -847,19 +845,19 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	// NOTE: No state change here since nothing has changed.
 
 	// Simulate migration to destination master i.e. remove SourceShards.
-	si, err = agent.TopoServer.GetShard(ctx, "test_keyspace", "0")
+	_, err = agent.TopoServer.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
+		si.SourceShards = nil
+		return nil
+	})
 	if err != nil {
-		t.Fatalf("GetShard failed: %v", err)
+		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
-	si.SourceShards = nil
-	if err = agent.TopoServer.UpdateShard(ctx, si); err != nil {
-		t.Fatalf("UpdateShard failed: %v", err)
-	}
+
 	// Refresh the tablet state, as vtctl MigrateServedFrom would do.
 	// This should also trigger a health broadcast since the QueryService state
 	// changes from NOT_SERVING to SERVING.
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 23 * time.Second
-	agent.RPCWrapLockAction(ctx, actionnode.TabletActionRefreshState, "", "", true, func() error {
+	agent.RPCWrapLockAction(ctx, TabletActionRefreshState, "", "", true, func() error {
 		agent.RefreshState(ctx)
 		return nil
 	})

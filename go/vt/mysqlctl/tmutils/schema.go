@@ -251,11 +251,3 @@ type SchemaChange struct {
 	BeforeSchema     *tabletmanagerdatapb.SchemaDefinition
 	AfterSchema      *tabletmanagerdatapb.SchemaDefinition
 }
-
-// SchemaChangeResult contains before and after table schemas for
-// a schema change sql.
-// It should not be sent over the wire, it's just a set of parameters.
-type SchemaChangeResult struct {
-	BeforeSchema *tabletmanagerdatapb.SchemaDefinition
-	AfterSchema  *tabletmanagerdatapb.SchemaDefinition
-}

@@ -29,14 +29,14 @@ import (
 type SplitDiffWorker struct {
 	StatusWorker
 
-	wr                        *wrangler.Wrangler
-	cell                      string
-	keyspace                  string
-	shard                     string
-	sourceUID                 uint32
-	excludeTables             []string
-	minHealthyRdonlyEndPoints int
-	cleaner                   *wrangler.Cleaner
+	wr                      *wrangler.Wrangler
+	cell                    string
+	keyspace                string
+	shard                   string
+	sourceUID               uint32
+	excludeTables           []string
+	minHealthyRdonlyTablets int
+	cleaner                 *wrangler.Cleaner
 
 	// populated during WorkerStateInit, read-only after that
 	keyspaceInfo *topo.KeyspaceInfo
@@ -52,17 +52,17 @@ type SplitDiffWorker struct {
 }
 
 // NewSplitDiffWorker returns a new SplitDiffWorker object.
-func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, sourceUID uint32, excludeTables []string, minHealthyRdonlyEndPoints int) Worker {
+func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, sourceUID uint32, excludeTables []string, minHealthyRdonlyTablets int) Worker {
 	return &SplitDiffWorker{
-		StatusWorker:              NewStatusWorker(),
-		wr:                        wr,
-		cell:                      cell,
-		keyspace:                  keyspace,
-		shard:                     shard,
-		sourceUID:                 sourceUID,
-		excludeTables:             excludeTables,
-		minHealthyRdonlyEndPoints: minHealthyRdonlyEndPoints,
-		cleaner:                   &wrangler.Cleaner{},
+		StatusWorker:            NewStatusWorker(),
+		wr:                      wr,
+		cell:                    cell,
+		keyspace:                keyspace,
+		shard:                   shard,
+		sourceUID:               sourceUID,
+		excludeTables:           excludeTables,
+		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
+		cleaner:                 &wrangler.Cleaner{},
 	}
 }
 
@@ -198,17 +198,17 @@ func (sdw *SplitDiffWorker) init(ctx context.Context) error {
 func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 	sdw.SetState(WorkerStateFindTargets)
 
-	// find an appropriate endpoint in destination shard
+	// find an appropriate tablet in destination shard
 	var err error
-	sdw.destinationAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, sdw.shard, sdw.minHealthyRdonlyEndPoints)
+	sdw.destinationAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, sdw.shard, sdw.minHealthyRdonlyTablets)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", sdw.cell, sdw.keyspace, sdw.shard, err)
 	}
 
-	// find an appropriate endpoint in the source shard
+	// find an appropriate tablet in the source shard
 	for _, ss := range sdw.shardInfo.SourceShards {
 		if ss.Uid == sdw.sourceUID {
-			sdw.sourceAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, ss.Shard, sdw.minHealthyRdonlyEndPoints)
+			sdw.sourceAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, ss.Shard, sdw.minHealthyRdonlyTablets)
 			if err != nil {
 				return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", sdw.cell, sdw.keyspace, ss.Shard, err)
 			}

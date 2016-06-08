@@ -20,8 +20,8 @@ func (t *SplitDiffTask) Run(parameters map[string]string) ([]*automationpb.TaskC
 	if excludeTables := parameters["exclude_tables"]; excludeTables != "" {
 		args = append(args, "--exclude_tables="+excludeTables)
 	}
-	if minHealthyRdonlyEndPoints := parameters["min_healthy_rdonly_endpoints"]; minHealthyRdonlyEndPoints != "" {
-		args = append(args, "--min_healthy_rdonly_endpoints="+minHealthyRdonlyEndPoints)
+	if minHealthyRdonlyTablets := parameters["min_healthy_rdonly_tablets"]; minHealthyRdonlyTablets != "" {
+		args = append(args, "--min_healthy_rdonly_tablets="+minHealthyRdonlyTablets)
 	}
 	args = append(args, topoproto.KeyspaceShardString(parameters["keyspace"], parameters["dest_shard"]))
 	output, err := ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], args)
@@ -41,5 +41,5 @@ func (t *SplitDiffTask) RequiredParameters() []string {
 
 // OptionalParameters is part of the Task interface.
 func (t *SplitDiffTask) OptionalParameters() []string {
-	return []string{"exclude_tables", "min_healthy_rdonly_endpoints"}
+	return []string{"exclude_tables", "min_healthy_rdonly_tablets"}
 }

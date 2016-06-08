@@ -30,6 +30,10 @@ import urllib
 
 import unittest
 
+from google.protobuf import text_format
+
+from vtproto import vttest_pb2
+
 from vtdb import vtgate_client
 from vtdb import vtgate_cursor
 from vtdb import dbexceptions
@@ -51,13 +55,18 @@ class TestMysqlctl(unittest.TestCase):
   def test_standalone(self):
     """Sample test for run_local_database.py as a standalone process."""
 
+    topology = vttest_pb2.VTTestTopology()
+    keyspace = topology.keyspaces.add(name='test_keyspace')
+    keyspace.shards.add(name='-80')
+    keyspace.shards.add(name='80-')
+    topology.keyspaces.add(name='redirect', served_from='test_keyspace')
+
     # launch a backend database based on the provided topology and schema
     port = environment.reserve_ports(1)
     args = [environment.run_local_database,
             '--port', str(port),
-            '--topology',
-            'test_keyspace/-80:test_keyspace_0,'
-            'test_keyspace/80-:test_keyspace_1',
+            '--proto_topo', text_format.MessageToString(topology,
+                                                        as_one_line=True),
             '--schema_dir', os.path.join(environment.vttop, 'test',
                                          'vttest_schema'),
             '--web_dir', environment.vttop + '/web/vtctld',
@@ -129,11 +138,12 @@ class TestMysqlctl(unittest.TestCase):
       bind_variables['id'] = i
       cursor.execute(insert, bind_variables)
     cursor.commit()
+    cursor.close()
 
-    # Try to fetch a large number of rows
+    # Try to fetch a large number of rows, from a rdonly
     # (more than one streaming result packet).
     stream_cursor = conn.cursor(
-        tablet_type='master', keyspace='test_keyspace',
+        tablet_type='rdonly', keyspace='test_keyspace',
         keyspace_ids=[pack_kid(keyspace_id)],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
     stream_cursor.execute('select * from test_table where id >= :id_start',
@@ -141,8 +151,19 @@ class TestMysqlctl(unittest.TestCase):
     self.assertEqual(rowcount, len(list(stream_cursor.fetchall())))
     stream_cursor.close()
 
-    # Clean up.
+    # try to read a row using the redirected keyspace, to a replica this time
+    row_id = 123
+    keyspace_id = get_keyspace_id(row_id)
+    cursor = conn.cursor(
+        tablet_type='replica', keyspace='redirect',
+        keyspace_ids=[pack_kid(keyspace_id)])
+    cursor.execute(
+        'select * from test_table where id=:id', {'id': row_id})
+    result = cursor.fetchall()
+    self.assertEqual(result[0][1], 'test 123')
     cursor.close()
+
+    # Clean up the connection
     conn.close()
 
     # Test we can connect to vtcombo for vtctl actions
@@ -155,7 +176,7 @@ class TestMysqlctl(unittest.TestCase):
         environment.binary_args('vtctlclient') +
         ['-vtctl_client_protocol', protocol,
          '-server', vtgate_addr,
-         '-stderrthreshold', 'INFO',
+         '-stderrthreshold', '0',
          'ListAllTablets', 'test',
         ], trap_output=True)
     num_master = 0

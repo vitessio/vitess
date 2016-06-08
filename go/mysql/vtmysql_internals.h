@@ -27,8 +27,15 @@ my_socket vio_fd(Vio* vio);
 #define vio_socket_shutdown(vio, how) shutdown(vio_fd(vio), how)
 #endif
 
-// cli_safe_read is declared in sql_common.h.
+// cli_safe_read is declared in sql_common.h, which we can't assume
+// we have, so we declare it manually.
+#if MYSQL_VERSION_ID >= 50700 && MYSQL_VERSION_ID < 100000
+// MySQL 5.7
+unsigned long cli_safe_read(MYSQL *mysql, my_bool *is_data_packet);
+#else
+// MySQL 5.6 and MariaDB
 unsigned long cli_safe_read(MYSQL *mysql);
+#endif // MYSQL_VERSION_ID >= 50700 && MYSQL_VERSION_ID < 100000
 
 // st_mysql_methods and simple_command are declared in mysql.h in
 // Google MySQL 5.1 (VERSION_ID=501xx), but were moved to sql_common.h in

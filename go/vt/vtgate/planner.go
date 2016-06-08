@@ -13,17 +13,19 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 // Planner is used to compute the plan. It contains
@@ -36,7 +38,7 @@ type Planner struct {
 	plans   *cache.LRUCache
 }
 
-var once sync.Once
+var plannerOnce sync.Once
 
 // NewPlanner creates a new planner for VTGate.
 // It will watch the vschema in the topology until the ctx is closed.
@@ -46,101 +48,99 @@ func NewPlanner(ctx context.Context, serv topo.SrvTopoServer, cell string, cache
 		cell:  cell,
 		plans: cache.NewLRUCache(int64(cacheSize)),
 	}
-	plr.WatchVSchema(ctx)
-	once.Do(func() {
+	plr.WatchSrvVSchema(ctx, cell)
+	plannerOnce.Do(func() {
 		http.Handle("/debug/query_plans", plr)
 		http.Handle("/debug/vschema", plr)
 	})
 	return plr
 }
 
-// WatchVSchema watches the VSchema from the topo. The function does
+// WatchSrvVSchema watches the SrvVSchema from the topo. The function does
 // not return an error. It instead logs warnings on failure.
-// We get the list of keyspaces to watch at the beginning (because it's easier)
-// and we don't watch that. So when adding a new keyspace, for now,
-// vtgate needs to be restarted (after having rebuilt the serving graph).
-// This could be fixed by adding a WatchSrvKeyspaceNames API to topo.Server,
-// and when it triggers we'd diff the values, and terminate the missing
-// SrvKeyspaces, and start watching the new SrvKeyspaces.
-func (plr *Planner) WatchVSchema(ctx context.Context) {
-	keyspaces, err := plr.serv.GetSrvKeyspaceNames(ctx, plr.cell)
-	if err != nil {
-		log.Warningf("Error loading vschema: could not read keyspaces: %v", err)
-		return
-	}
+// The SrvVSchema object is roll-up of all the Keyspace information,
+// so when a keyspace is added or removed, it will be properly updated.
+//
+// This function will wait until the first value has either been processed
+// or triggered an error before returning.
+func (plr *Planner) WatchSrvVSchema(ctx context.Context, cell string) {
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 
-	// mu protects formal
-	var mu sync.Mutex
-	formal := &vindexes.VSchemaFormal{
-		Keyspaces: make(map[string]vschemapb.Keyspace),
-	}
+	go func() {
+		foundFirstValue := false
 
-	notifications := make(map[string]<-chan *vschemapb.Keyspace)
-	for _, keyspace := range keyspaces {
-		n, err := plr.serv.WatchVSchema(ctx, keyspace)
-		if err != nil {
-			log.Warningf("Error watching vschema for keyspace %s (will not watch it): %v", keyspace, err)
-			continue
-		}
-
-		firstValue, ok := <-n
-		if !ok {
-			log.Warningf("Error getting first value for keyspace %s (will not watch it): %v", keyspace, err)
-			continue
-		}
-		if firstValue != nil {
-			formal.Keyspaces[keyspace] = *firstValue
-		} else {
-			formal.Keyspaces[keyspace] = vschemapb.Keyspace{}
-		}
-		notifications[keyspace] = n
-	}
-
-	// we got the initial set of values, now build the first version
-	vschema, err := vindexes.BuildVSchema(formal)
-	if err != nil {
-		log.Warningf("Error creating initial VSchema (will keep watching keyspaces): %v", err)
-	} else {
-		plr.mu.Lock()
-		plr.vschema = vschema
-		plr.mu.Unlock()
-	}
-
-	processKeyspace := func(keyspace string, kschema *vschemapb.Keyspace) error {
-		// Note we use a closure here to allow for defer()
-		// to work properly
-
-		// rebuild the new component
-		mu.Lock()
-		defer mu.Unlock()
-		if kschema == nil {
-			formal.Keyspaces[keyspace] = vschemapb.Keyspace{}
-		} else {
-			formal.Keyspaces[keyspace] = *kschema
-		}
-		vschema, err := vindexes.BuildVSchema(formal)
-		if err != nil {
-			return fmt.Errorf("Error creating VSchema (will try again when newer parts come in): %v", err)
-		}
-
-		plr.mu.Lock()
-		plr.vschema = vschema
-		plr.mu.Unlock()
-		plr.plans.Clear()
-
-		return nil
-	}
-
-	// start the background watches
-	for keyspace, n := range notifications {
-		go func(keyspace string, n <-chan *vschemapb.Keyspace) {
-			for kschema := range n {
-				if err := processKeyspace(keyspace, kschema); err != nil {
-					log.Warningf("%v", err)
+		// Create a closure to save the vschema. If the value
+		// passed is nil, it means we encountered an error and
+		// we don't know the real value. In this case, we want
+		// to use the previous value if it was set, or an
+		// empty vschema if it wasn't.
+		saveVSchema := func(v *vschemapb.SrvVSchema) {
+			// transform the provided SrvVSchema into a VSchema
+			var vschema *vindexes.VSchema
+			if v != nil {
+				var err error
+				vschema, err = vindexes.BuildVSchema(v)
+				if err != nil {
+					log.Warningf("Error creating VSchema for cell %v (will try again next update): %v", cell, err)
+					v = nil
 				}
 			}
-		}(keyspace, n)
-	}
+			if v == nil {
+				// we encountered an error, build an
+				// empty vschema
+				vschema, _ = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
+			}
+
+			// save our value
+			plr.mu.Lock()
+			if v != nil {
+				// no errors, we can save our schema
+				plr.vschema = vschema
+			} else {
+				// we had an error, use the empty vschema
+				// if we had nothing before.
+				if plr.vschema == nil {
+					plr.vschema = vschema
+				}
+			}
+			plr.mu.Unlock()
+			plr.plans.Clear()
+
+			// notify the listener
+			if !foundFirstValue {
+				foundFirstValue = true
+				wg.Done()
+			}
+		}
+
+		for {
+			n, err := plr.serv.WatchSrvVSchema(ctx, cell)
+			if err != nil {
+				log.Warningf("Error watching vschema for cell %s (will wait 5s before retrying): %v", cell, err)
+				saveVSchema(nil)
+				time.Sleep(5 * time.Second)
+				continue
+			}
+
+			for value := range n {
+				if value == nil {
+					log.Warningf("Got an empty vschema for cell %v", cell)
+					saveVSchema(&vschemapb.SrvVSchema{})
+					continue
+				}
+
+				saveVSchema(value)
+			}
+
+			log.Warningf("Watch on vschema for cell %v ended, will wait 5s before retrying", cell)
+			saveVSchema(nil)
+			time.Sleep(5 * time.Second)
+		}
+	}()
+
+	// wait for the first value to have been processed
+	wg.Wait()
 }
 
 // VSchema returns the VSchema.
@@ -197,7 +197,7 @@ func (plr *Planner) ServeHTTP(response http.ResponseWriter, request *http.Reques
 		}
 	} else if request.URL.Path == "/debug/vschema" {
 		response.Header().Set("Content-Type", "application/json; charset=utf-8")
-		b, err := json.MarshalIndent(plr.VSchema(), "", " ")
+		b, err := json.MarshalIndent(plr.VSchema().Keyspaces, "", " ")
 		if err != nil {
 			response.Write([]byte(err.Error()))
 			return

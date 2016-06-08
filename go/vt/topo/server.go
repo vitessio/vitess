@@ -85,7 +85,7 @@ type Impl interface {
 	// Can return ErrNoNode if the keyspace doesn't exist yet,
 	// or ErrBadVersion if the version has changed.
 	//
-	// Do not use directly, but instead use topo.UpdateKeyspace.
+	// Do not use directly, but instead use Server.UpdateKeyspace.
 	UpdateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace, existingVersion int64) (newVersion int64, err error)
 
 	// DeleteKeyspace deletes the specified keyspace.
@@ -115,11 +115,10 @@ type Impl interface {
 
 	// UpdateShard updates the shard information
 	// pointed at by si.keyspace / si.shard to the *si value.
-	// This will only be called with a lock on the shard.
 	// Can return ErrNoNode if the shard doesn't exist yet,
 	// or ErrBadVersion if the version has changed.
 	//
-	// Do not use directly, but instead use topo.UpdateShard.
+	// Do not use directly, but instead use topo.UpdateShardFields.
 	UpdateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard, existingVersion int64) (newVersion int64, err error)
 
 	// ValidateShard performs routine checks on the shard.
@@ -196,6 +195,10 @@ type Impl interface {
 	// Serving Graph management, per cell.
 	//
 
+	// GetSrvKeyspaceNames returns the list of visible Keyspaces
+	// in this cell. They shall be sorted.
+	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
+
 	// WatchSrvKeyspace returns a channel that receives notifications
 	// every time the SrvKeyspace for the given keyspace / cell changes.
 	// It should receive a notification with the initial value fairly
@@ -224,9 +227,29 @@ type Impl interface {
 	// Can return ErrNoNode.
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
 
-	// GetSrvKeyspaceNames returns the list of visible Keyspaces
-	// in this cell. They shall be sorted.
-	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
+	// WatchSrvVSchema returns a channel that receives notifications
+	// every time the SrvVSchema for the given cell changes.
+	// It should receive a notification with the initial value fairly
+	// quickly after this is set. A value of nil means the SrvVSchema
+	// object doesn't exist or is empty. To stop watching this
+	// SrvVSchema object, cancel the context.
+	// If the underlying topo.Server encounters an error watching the node,
+	// it should retry on a regular basis until it can succeed.
+	// The initial error returned by this method is meant to catch
+	// the obvious bad cases (invalid cell, ...)
+	// that are never going to work. Mutiple notifications with the
+	// same contents may be sent (for instance, when the schema graph
+	// is rebuilt, but the content of SrvVSchema is the same,
+	// the object version will change, most likely triggering the
+	// notification, but the content hasn't changed).
+	WatchSrvVSchema(ctx context.Context, cell string) (notifications <-chan *vschemapb.SrvVSchema, err error)
+
+	// UpdateSrvVSchema updates the serving records for a cell.
+	UpdateSrvVSchema(ctx context.Context, cell string, srvVSchema *vschemapb.SrvVSchema) error
+
+	// GetSrvVSchema reads a SrvVSchema record.
+	// Can return ErrNoNode.
+	GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.SrvVSchema, error)
 
 	//
 	// Keyspace and Shard locks for actions, global.
@@ -262,19 +285,9 @@ type Impl interface {
 	SaveVSchema(ctx context.Context, keyspace string, vschema *vschemapb.Keyspace) error
 
 	// GetVSchema retrieves the schema from the topo server.
+	//
+	// Can return ErrNoNode
 	GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error)
-
-	// WatchVSchema returns a channel that receives notifications
-	// every time the VSchema for the given keyspace changes.
-	// It should receive a notification with the initial value fairly
-	// quickly after this is set. To stop watching this
-	// VSchema object, cancel the context.
-	// If the underlying topo.Server encounters an error watching the node,
-	// it should retry on a regular basis until it can succeed.
-	// The initial error returned by this method is meant to catch
-	// the obvious bad cases (invalid keyspace, ...)
-	// that are never going to work.
-	WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan *vschemapb.Keyspace, err error)
 }
 
 // Server is a wrapper type that can have extra methods.
@@ -290,7 +303,7 @@ type Server struct {
 type SrvTopoServer interface {
 	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
-	WatchVSchema(ctx context.Context, keyspace string) (notifications <-chan *vschemapb.Keyspace, err error)
+	WatchSrvVSchema(ctx context.Context, cell string) (notifications <-chan *vschemapb.SrvVSchema, err error)
 }
 
 // Registry for Server implementations.

@@ -47,7 +47,7 @@ func init() {
 		addCommand(queriesGroupName, command{
 			"VtGateExecute",
 			commandVtGateExecute,
-			"-server <vtgate> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] [-json] <sql>",
+			"-server <vtgate> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-keyspace <default keyspace>] [-tablet_type <tablet type>] [-json] <sql>",
 			"Executes the given SQL query with the provided bound variables against the vtgate server."})
 		addCommand(queriesGroupName, command{
 			"VtGateExecuteShards",
@@ -138,6 +138,7 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	server := subFlags.String("server", "", "VtGate server to connect to")
 	bindVariables := newBindvars(subFlags)
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vtgate client")
+	keyspace := subFlags.String("keyspace", "", "default keyspace to use")
 	tabletType := subFlags.String("tablet_type", "master", "tablet type to query")
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
 
@@ -152,7 +153,7 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		return err
 	}
 
-	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout)
+	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout, *keyspace)
 	if err != nil {
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
@@ -192,7 +193,7 @@ func commandVtGateExecuteShards(ctx context.Context, wr *wrangler.Wrangler, subF
 		shards = strings.Split(*shardsStr, ",")
 	}
 
-	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout)
+	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout, "")
 	if err != nil {
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
@@ -239,7 +240,7 @@ func commandVtGateExecuteKeyspaceIds(ctx context.Context, wr *wrangler.Wrangler,
 		}
 	}
 
-	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout)
+	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout, "")
 	if err != nil {
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
@@ -269,7 +270,7 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return fmt.Errorf("the <sql> argument is required for the VtGateSplitQuery command")
 	}
 
-	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout)
+	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout, "")
 	if err != nil {
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}

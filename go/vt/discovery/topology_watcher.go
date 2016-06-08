@@ -62,6 +62,8 @@ type TopologyWatcher struct {
 	sem             chan int
 	ctx             context.Context
 	cancelFunc      context.CancelFunc
+	// wg keeps track of all launched Go routines.
+	wg sync.WaitGroup
 
 	// mu protects all variables below
 	mu      sync.Mutex
@@ -81,12 +83,14 @@ func NewTopologyWatcher(topoServer topo.Server, hc HealthCheck, cell string, ref
 		tablets:         make(map[string]*tabletInfo),
 	}
 	tw.ctx, tw.cancelFunc = context.WithCancel(context.Background())
+	tw.wg.Add(1)
 	go tw.watch()
 	return tw
 }
 
 // watch polls all tablets and notifies HealthCheck by adding/removing tablets.
 func (tw *TopologyWatcher) watch() {
+	defer tw.wg.Done()
 	ticker := time.NewTicker(tw.refreshInterval)
 	defer ticker.Stop()
 	for {
@@ -158,4 +162,6 @@ func (tw *TopologyWatcher) loadTablets() {
 // Stop stops the watcher. It does not clean up the tablets added to HealthCheck.
 func (tw *TopologyWatcher) Stop() {
 	tw.cancelFunc()
+	// wait for watch goroutine to finish.
+	tw.wg.Wait()
 }

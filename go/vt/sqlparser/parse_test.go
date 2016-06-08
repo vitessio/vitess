@@ -396,14 +396,14 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "insert /* multi-value list */ into a values (1, 2), (3, 4)",
 	}, {
-		input:  "insert /* set */ into a set a = 1, a.b = 2",
-		output: "insert /* set */ into a(a, a.b) values (1, 2)",
+		input:  "insert /* set */ into a set a = 1, b = 2",
+		output: "insert /* set */ into a(a, b) values (1, 2)",
 	}, {
 		input: "insert /* value expression list */ into a values (a + 1, 2 * 3)",
 	}, {
 		input: "insert /* column list */ into a(a, b) values (1, 2)",
 	}, {
-		input: "insert /* qualified column list */ into a(a, a.b) values (1, 2)",
+		input: "insert /* qualified column list */ into a(a, b) values (1, 2)",
 	}, {
 		input: "insert /* select */ into a select b, c from d",
 	}, {
@@ -412,8 +412,6 @@ func TestValid(t *testing.T) {
 		input: "update /* simple */ a set b = 3",
 	}, {
 		input: "update /* a.b */ a.b set b = 3",
-	}, {
-		input: "update /* b.c */ a set b.c = 3",
 	}, {
 		input: "update /* list */ a set b = 3, c = 4",
 	}, {

@@ -4,7 +4,10 @@
 
 package vindexes
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 func init() {
 	Register("lookup_hash", NewLookupHash)
@@ -58,6 +61,11 @@ func (vind *LookupHash) Delete(vcursor VCursor, ids []interface{}, ksid []byte) 
 	return vind.lkp.Delete(vcursor, ids, ksid)
 }
 
+// MarshalJSON returns a JSON representation of LookupHash.
+func (vind *LookupHash) MarshalJSON() ([]byte, error) {
+	return json.Marshal(vind.lkp)
+}
+
 //====================================================================
 
 // LookupHashUnique defines a vindex that uses a lookup table.
@@ -105,18 +113,25 @@ func (vind *LookupHashUnique) Delete(vcursor VCursor, ids []interface{}, ksid []
 	return vind.lkp.Delete(vcursor, ids, ksid)
 }
 
+// MarshalJSON returns a JSON representation of LookupHashUnique.
+func (vind *LookupHashUnique) MarshalJSON() ([]byte, error) {
+	return json.Marshal(vind.lkp)
+}
+
 //====================================================================
 
 // lookup implements the functions for the Lookup vindexes.
 type lookup struct {
-	Table, From, To    string
+	Table              string `json:"table"`
+	From               string `json:"from"`
+	To                 string `json:"to"`
 	sel, ver, ins, del string
 }
 
 func (lkp *lookup) Init(m map[string]string) {
-	t := m["Table"]
-	from := m["From"]
-	to := m["To"]
+	t := m["table"]
+	from := m["from"]
+	to := m["to"]
 
 	lkp.Table = t
 	lkp.From = from

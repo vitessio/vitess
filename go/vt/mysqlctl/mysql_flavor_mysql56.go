@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
-// mysql56 is the implementation of MysqlFlavor for MySQL 5.6.
+// mysql56 is the implementation of MysqlFlavor for MySQL 5.6+.
 type mysql56 struct {
 }
 
@@ -24,7 +24,7 @@ const mysql56FlavorID = "MySQL56"
 
 // VersionMatch implements MysqlFlavor.VersionMatch().
 func (*mysql56) VersionMatch(version string) bool {
-	return strings.HasPrefix(version, "5.6")
+	return strings.HasPrefix(version, "5.6") || strings.HasPrefix(version, "5.7")
 }
 
 // MasterPosition implements MysqlFlavor.MasterPosition().
@@ -87,8 +87,8 @@ func (*mysql56) WaitMasterPos(mysqld *Mysqld, targetPos replication.Position, wa
 func (*mysql56) ResetReplicationCommands() []string {
 	return []string{
 		"STOP SLAVE",
-		"RESET SLAVE",
-		"RESET MASTER", // This will also clear gtid_executed and gtid_purged.
+		"RESET SLAVE ALL", // "ALL" makes it forget the master host:port.
+		"RESET MASTER",    // This will also clear gtid_executed and gtid_purged.
 	}
 }
 

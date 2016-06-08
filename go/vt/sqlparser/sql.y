@@ -214,9 +214,9 @@ insert_statement:
   {
     cols := make(Columns, 0, len($7))
     vals := make(ValTuple, 0, len($7))
-    for _, col := range $7 {
-      cols = append(cols, &NonStarExpr{Expr: col.Name})
-      vals = append(vals, col.Expr)
+    for _, updateList := range $7 {
+      cols = append(cols, updateList.Name)
+      vals = append(vals, updateList.Expr)
     }
     $$ = &Insert{Comments: Comments($2), Ignore: $3, Table: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)}
   }
@@ -1017,13 +1017,13 @@ column_list_opt:
   }
 
 column_list:
-  column_name
+  sql_id
   {
-    $$ = Columns{&NonStarExpr{Expr: $1}}
+    $$ = Columns{$1}
   }
-| column_list ',' column_name
+| column_list ',' sql_id
   {
-    $$ = append($$, &NonStarExpr{Expr: $3})
+    $$ = append($$, $3)
   }
 
 on_dup_opt:
@@ -1076,7 +1076,7 @@ update_list:
   }
 
 update_expression:
-  column_name '=' value_expression
+  sql_id '=' value_expression
   {
     $$ = &UpdateExpr{Name: $1, Expr: $3}
   }

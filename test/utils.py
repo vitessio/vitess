@@ -759,11 +759,11 @@ def run_vtctl_json(clargs, auto_log=True):
 
 def get_log_level():
   if options.verbose == 2:
-    return 'INFO'
+    return '0'
   elif options.verbose == 1:
-    return 'WARNING'
+    return '1'
   else:
-    return 'ERROR'
+    return '2'
 
 
 def set_log_level(verbose):
@@ -1089,20 +1089,23 @@ class Vtctld(object):
     if protocols_flavor().vtctl_client_protocol() == 'grpc':
       self.grpc_port = environment.reserve_ports(1)
 
-  def start(self):
+  def start(self, enable_schema_change_dir=False):
     args = environment.binary_args('vtctld') + [
         '-enable_queries',
         '-web_dir', environment.vttop + '/web/vtctld',
         '--log_dir', environment.vtlogroot,
         '--port', str(self.port),
-        '--schema_change_dir', self.schema_change_dir,
-        '--schema_change_controller', 'local',
-        '--schema_change_check_interval', '1',
         '-tablet_manager_protocol',
         protocols_flavor().tablet_manager_protocol(),
         '-vtgate_protocol', protocols_flavor().vtgate_protocol(),
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
     ] + environment.topo_server().flags()
+    if enable_schema_change_dir:
+      args += [
+          '--schema_change_dir', self.schema_change_dir,
+          '--schema_change_controller', 'local',
+          '--schema_change_check_interval', '1',
+      ]
     if protocols_flavor().service_map():
       args.extend(['-service_map', ','.join(protocols_flavor().service_map())])
     if protocols_flavor().vtctl_client_protocol() == 'grpc':

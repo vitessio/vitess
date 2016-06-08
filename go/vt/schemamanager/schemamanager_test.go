@@ -107,7 +107,7 @@ func TestSchemaManagerRun(t *testing.T) {
 	controller := newFakeController(
 		[]string{sql}, false, false, false)
 	fakeTmc := newFakeTabletManagerClient()
-	fakeTmc.AddSchemaChange(sql, &tmutils.SchemaChangeResult{
+	fakeTmc.AddSchemaChange(sql, &tabletmanagerdatapb.SchemaChangeResult{
 		BeforeSchema: &tabletmanagerdatapb.SchemaDefinition{},
 		AfterSchema: &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
@@ -154,7 +154,7 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 	sql := "create table test_table (pk int)"
 	controller := newFakeController([]string{sql}, false, false, false)
 	fakeTmc := newFakeTabletManagerClient()
-	fakeTmc.AddSchemaChange(sql, &tmutils.SchemaChangeResult{
+	fakeTmc.AddSchemaChange(sql, &tabletmanagerdatapb.SchemaChangeResult{
 		BeforeSchema: &tabletmanagerdatapb.SchemaDefinition{},
 		AfterSchema: &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
@@ -222,7 +222,7 @@ func newFakeExecutor() *TabletExecutor {
 func newFakeTabletManagerClient() *fakeTabletManagerClient {
 	return &fakeTabletManagerClient{
 		TabletManagerClient: faketmclient.NewFakeTabletManagerClient(),
-		preflightSchemas:    make(map[string]*tmutils.SchemaChangeResult),
+		preflightSchemas:    make(map[string]*tabletmanagerdatapb.SchemaChangeResult),
 		schemaDefinitions:   make(map[string]*tabletmanagerdatapb.SchemaDefinition),
 	}
 }
@@ -230,12 +230,11 @@ func newFakeTabletManagerClient() *fakeTabletManagerClient {
 type fakeTabletManagerClient struct {
 	tmclient.TabletManagerClient
 	EnableExecuteFetchAsDbaError bool
-	preflightSchemas             map[string]*tmutils.SchemaChangeResult
+	preflightSchemas             map[string]*tabletmanagerdatapb.SchemaChangeResult
 	schemaDefinitions            map[string]*tabletmanagerdatapb.SchemaDefinition
 }
 
-func (client *fakeTabletManagerClient) AddSchemaChange(
-	sql string, schemaResult *tmutils.SchemaChangeResult) {
+func (client *fakeTabletManagerClient) AddSchemaChange(sql string, schemaResult *tabletmanagerdatapb.SchemaChangeResult) {
 	client.preflightSchemas[sql] = schemaResult
 }
 
@@ -244,11 +243,15 @@ func (client *fakeTabletManagerClient) AddSchemaDefinition(
 	client.schemaDefinitions[dbName] = schemaDefinition
 }
 
-func (client *fakeTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, change string) (*tmutils.SchemaChangeResult, error) {
-	result, ok := client.preflightSchemas[change]
-	if !ok {
-		var scr tmutils.SchemaChangeResult
-		return &scr, nil
+func (client *fakeTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
+	var result []*tabletmanagerdatapb.SchemaChangeResult
+	for _, change := range changes {
+		scr, ok := client.preflightSchemas[change]
+		if ok {
+			result = append(result, scr)
+		} else {
+			result = append(result, &tabletmanagerdatapb.SchemaChangeResult{})
+		}
 	}
 	return result, nil
 }
