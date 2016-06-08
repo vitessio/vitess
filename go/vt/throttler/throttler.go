@@ -1,3 +1,7 @@
+// Copyright 2016, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 // Package throttler provides a client-side, local throttler which is used to
 // throttle (and actively pace) writes during the resharding process.
 //
