@@ -142,11 +142,16 @@ func TestTabletExecutorExecute(t *testing.T) {
 	if result.ExecutorErr == "" {
 		t.Fatalf("execute should fail, call execute.Open first")
 	}
+}
 
+func TestTabletExecutorExecute_PreflightWithoutChangesIsAnError(t *testing.T) {
+	executor := newFakeExecutor()
+	ctx := context.Background()
 	executor.Open(ctx, "test_keyspace")
 	defer executor.Close()
 
-	result = executor.Execute(ctx, sqls)
+	sqls := []string{"DROP TABLE unknown_table"}
+	result := executor.Execute(ctx, sqls)
 	if result.ExecutorErr == "" {
 		t.Fatalf("execute should fail, ddl does not introduce any table schema change")
 	}
