@@ -36,7 +36,7 @@ var factories = make(map[string]Factory)
 // RegisterFactory allows a client implementation to register itself.
 func RegisterFactory(name string, factory Factory) {
 	if _, ok := factories[name]; ok {
-		log.Fatalf("RegisterFactory %s already exists", name)
+		log.Fatalf("RegisterFactory: %s already exists", name)
 	}
 	factories[name] = factory
 }

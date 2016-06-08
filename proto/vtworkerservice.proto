@@ -7,7 +7,7 @@ package vtworkerservice;
 
 import "vtworkerdata.proto";
 
-// Service Vtworker contains the vtworker RPC calls.
+// Vtworker contains the vtworker RPC calls.
 service Vtworker {
   // ExecuteVtworkerCommand allows to run a vtworker command by specifying the
   // same arguments as on the command line.
