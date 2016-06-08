@@ -10,9 +10,10 @@ import time
 import urllib2
 import warnings
 
+import MySQLdb
+
 import environment
 from mysql_flavor import mysql_flavor
-import MySQLdb
 from protocols_flavor import protocols_flavor
 from topo_flavor.server import topo_server
 import utils
@@ -584,7 +585,7 @@ class Tablet(object):
           (self.tablet_alias, expected, last_seen_state),
           timeout, sleep_time=0.1)
 
-  def wait_for_mysqlctl_socket(self, timeout=30.0):
+  def wait_for_mysqlctl_socket(self, timeout=60.0):
     mysql_sock = os.path.join(self.tablet_dir, 'mysql.sock')
     mysqlctl_sock = os.path.join(self.tablet_dir, 'mysqlctl.sock')
     while True:
