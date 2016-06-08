@@ -50,7 +50,7 @@ def setUpModule():
     # run checks now before we start the tablets
     utils.validate_topology()
 
-    utils.Vtctld().start()
+    utils.Vtctld().start(enable_schema_change_dir=True)
 
     # create databases, start the tablets
     for t in initial_tablets:
