@@ -64,6 +64,9 @@ type Throttler struct {
 	// unit describes the entity the throttler is limiting e.g. "queries" or
 	// "transactions". It is used for example in the webinterface.
 	unit string
+	// manager is where this throttler registers and unregisters itself
+	// at creation and deletion (Close) respectively.
+	manager *Manager
 
 	closed bool
 	// modules is the list of modules which can limit the current rate. The order
@@ -107,15 +110,15 @@ type Throttler struct {
 // "transactions".
 // name describes the Throttler instance and will be used by the webinterface.
 func NewThrottler(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64) (*Throttler, error) {
-	return newThrottler(name, unit, threadCount, maxRate, maxReplicationLag, time.Now)
+	return newThrottler(GlobalManager, name, unit, threadCount, maxRate, maxReplicationLag, time.Now)
 }
 
 // newThrottlerWithClock should only be used for testing.
 func newThrottlerWithClock(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
-	return newThrottler(name, unit, threadCount, maxRate, maxReplicationLag, nowFunc)
+	return newThrottler(GlobalManager, name, unit, threadCount, maxRate, maxReplicationLag, nowFunc)
 }
 
-func newThrottler(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
+func newThrottler(manager *Manager, name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
 	// Verify input parameters.
 	if maxRate < 0 {
 		return nil, fmt.Errorf("maxRate must be >= 0: %v", maxRate)
@@ -145,6 +148,7 @@ func newThrottler(name, unit string, threadCount int, maxRate int64, maxReplicat
 	t := &Throttler{
 		name:             name,
 		unit:             unit,
+		manager:          manager,
 		modules:          modules,
 		maxRateModule:    maxRateModule,
 		rateUpdateChan:   rateUpdateChan,
@@ -156,6 +160,10 @@ func newThrottler(name, unit string, threadCount int, maxRate int64, maxReplicat
 
 	// Initialize maxRate.
 	t.updateMaxRate()
+
+	if err := t.manager.registerThrottler(name, t); err != nil {
+		return nil, err
+	}
 
 	// Watch for rate updates from the modules and update the internal maxRate.
 	go func() {
@@ -208,6 +216,7 @@ func (t *Throttler) Close() {
 	}
 	close(t.rateUpdateChan)
 	t.closed = true
+	t.manager.unregisterThrottler(t.name)
 }
 
 // updateMaxRate recalculates the current max rate and updates all
