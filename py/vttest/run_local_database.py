@@ -21,7 +21,6 @@ import json
 import logging
 import optparse
 import os
-import re
 import sys
 
 from google.protobuf import text_format
@@ -33,35 +32,11 @@ from vttest import init_data_options
 
 from vtproto import vttest_pb2
 
-shard_exp = re.compile(r'(.+)/(.+):(.+)')
-
 
 def main(cmdline_options):
   topology = vttest_pb2.VTTestTopology()
-
-  if cmdline_options.topology:
-    # old style topology, will disappear soon. Build a new style
-    # topology from it.
-    keyspaces = {}
-
-    for shard in cmdline_options.topology.split(','):
-      m = shard_exp.match(shard)
-      if not m:
-        sys.stderr.write('invalid --shard flag format: %s\n' % shard)
-        sys.exit(1)
-
-      keyspace = m.group(1)
-      shard_name = m.group(2)
-      db_name = m.group(3)
-
-      if keyspace not in keyspaces:
-        kpb = topology.keyspaces.add(name=keyspace)
-        keyspaces[keyspace] = kpb
-
-      keyspaces[keyspace].shards.add(name=shard_name, db_name_override=db_name)
-
-  elif cmdline_options.proto_topo:
-    # new style topology, just parse it as text
+  if cmdline_options.proto_topo:
+    # Text-encoded proto topology object, just parse it.
     topology = text_format.Parse(cmdline_options.proto_topo, topology)
 
   environment.base_port = cmdline_options.port
@@ -100,13 +75,6 @@ if __name__ == '__main__':
       '-p', '--port', type='int',
       help='Port to use for vtcombo. If this is 0, a random port '
       'will be chosen.')
-  parser.add_option(
-      '-t', '--topology',
-      help='DEPRECATED, use proto_topo instead.'
-      ' Define which shards exist in the test topology in the'
-      ' form <keyspace>/<shardrange>:<dbname>,... The dbname'
-      ' must be unique among all shards, since they share'
-      ' a MySQL instance in the test environment.')
   parser.add_option(
       '-o', '--proto_topo',
       help='Define the fake cluster topology as a compact text format encoded'

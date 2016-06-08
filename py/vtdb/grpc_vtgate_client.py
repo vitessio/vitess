@@ -79,7 +79,13 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     to it will just close the channel.
     """
     if self.session and self.session.in_transaction:
-      self.rollback()
+      # If the endpoint is not responding, this would exception out,
+      # just when we want to not connect to the endpoint any more.
+      # Let's swallow that exception.
+      try:
+        self.rollback()
+      except dbexceptions.TimeoutError:
+        pass
     self.stub = None
 
   def is_closed(self):

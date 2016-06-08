@@ -231,7 +231,6 @@ class TestReparent(unittest.TestCase):
     self._check_master_tablet(tablet_62344)
 
     # Perform a graceful reparent operation to another cell.
-    utils.pause('test_reparent_cross_cell PlannedReparentShard')
     utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/' + shard_id,
                      tablet_31981.tablet_alias], auto_log=True)
     utils.validate_topology()
@@ -296,11 +295,14 @@ class TestReparent(unittest.TestCase):
     utils.validate_topology()
 
     # Run this to make sure it succeeds.
-    utils.run_vtctl(['ShardReplicationPositions', 'test_keyspace/' + shard_id],
-                    stdout=utils.devnull)
+    stdout, _ = utils.run_vtctl(['ShardReplicationPositions',
+                                 'test_keyspace/' + shard_id],
+                                trap_output=True)
+    lines = stdout.splitlines()
+    self.assertEqual(len(lines), 4)  # one master, three slaves
+    self.assertIn('master', lines[0])  # master first
 
     # Perform a graceful reparent operation.
-    utils.pause('_test_reparent_graceful PlannedReparentShard')
     utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/' + shard_id,
                      tablet_62044.tablet_alias], auto_log=True)
     utils.validate_topology()

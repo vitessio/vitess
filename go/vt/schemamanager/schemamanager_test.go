@@ -247,10 +247,11 @@ func (client *fakeTabletManagerClient) PreflightSchema(ctx context.Context, tabl
 	var result []*tabletmanagerdatapb.SchemaChangeResult
 	for _, change := range changes {
 		scr, ok := client.preflightSchemas[change]
-		if !ok {
+		if ok {
+			result = append(result, scr)
+		} else {
 			result = append(result, &tabletmanagerdatapb.SchemaChangeResult{})
 		}
-		result = append(result, scr)
 	}
 	return result, nil
 }

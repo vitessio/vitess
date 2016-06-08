@@ -210,7 +210,7 @@ var commands = []commandGroup{
 				"Validates that all nodes that are reachable from this shard are consistent."},
 			{"ShardReplicationPositions", commandShardReplicationPositions,
 				"<keyspace/shard>",
-				"Shows the replication status of each slave machine in the shard graph. In this case, the status refers to the replication lag between the master vttablet and the slave vttablet. In Vitess, data is always written to the master vttablet first and then replicated to all slave vttablets."},
+				"Shows the replication status of each slave machine in the shard graph. In this case, the status refers to the replication lag between the master vttablet and the slave vttablet. In Vitess, data is always written to the master vttablet first and then replicated to all slave vttablets. Output is sorted by tablet type, then replication position. Use ctrl-C to interrupt command and see partial result if needed."},
 			{"ListShardTablets", commandListShardTablets,
 				"<keyspace/shard>",
 				"Lists all tablets in the specified shard."},
@@ -2185,10 +2185,9 @@ func (rts rTablets) Len() int { return len(rts) }
 func (rts rTablets) Swap(i, j int) { rts[i], rts[j] = rts[j], rts[i] }
 
 // Sort for tablet replication.
-// master first, then i/o position, then sql position
+// Tablet type first (with master first), then replication positions.
 func (rts rTablets) Less(i, j int) bool {
-	// NOTE: Swap order of unpack to reverse sort
-	l, r := rts[j], rts[i]
+	l, r := rts[i], rts[j]
 	// l or r ReplicationStatus would be nil if we failed to get
 	// the position (put them at the beginning of the list)
 	if l.Status == nil {

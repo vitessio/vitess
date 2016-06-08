@@ -296,7 +296,7 @@ func TestMariadbPromoteSlaveCommands(t *testing.T) {
 func TestMariadbResetReplicationCommands(t *testing.T) {
 	want := []string{
 		"STOP SLAVE",
-		"RESET SLAVE",
+		"RESET SLAVE ALL",
 		"RESET MASTER",
 		"SET GLOBAL gtid_slave_pos = ''",
 	}
