@@ -584,7 +584,7 @@ class Tablet(object):
           (self.tablet_alias, expected, last_seen_state),
           timeout, sleep_time=0.1)
 
-  def wait_for_mysqlctl_socket(self, timeout=30.0):
+  def wait_for_mysqlctl_socket(self, timeout=60.0):
     mysql_sock = os.path.join(self.tablet_dir, 'mysql.sock')
     mysqlctl_sock = os.path.join(self.tablet_dir, 'mysqlctl.sock')
     while True:
