@@ -7,6 +7,8 @@ import unittest
 import urllib
 import urllib2
 
+import MySQLdb
+
 from vtproto import topodata_pb2
 
 import environment
@@ -382,11 +384,15 @@ class TestTabletManager(unittest.TestCase):
         'insert into repl_test_table values (123)'], write=True)
     timeout = 10.0
     while True:
-      result = tablet_62044.mquery('vt_test_keyspace',
-                                   'select * from repl_test_table')
-      if result:
-        self.assertEqual(result[0][0], 123L)
-        break
+      try:
+        result = tablet_62044.mquery('vt_test_keyspace',
+                                     'select * from repl_test_table')
+        if result:
+          self.assertEqual(result[0][0], 123L)
+          break
+      except MySQLdb.ProgrammingError:
+        # Maybe the create table hasn't gone trough yet, we wait more
+        logging.exception('got this exception waiting for data, ignoring it')
       timeout = utils.wait_step(
           'slave replication repaired by replication_reporter', timeout)
 

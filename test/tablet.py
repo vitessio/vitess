@@ -10,9 +10,10 @@ import time
 import urllib2
 import warnings
 
+import MySQLdb
+
 import environment
 from mysql_flavor import mysql_flavor
-import MySQLdb
 from protocols_flavor import protocols_flavor
 from topo_flavor.server import topo_server
 import utils
