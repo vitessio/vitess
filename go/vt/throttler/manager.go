@@ -50,6 +50,18 @@ func (m *Manager) unregisterThrottler(name string) {
 	delete(m.throttlers, name)
 }
 
+// MaxRates returns the max rate of all known throttlers.
+func (m *Manager) MaxRates() map[string]int64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rates := make(map[string]int64, len(m.throttlers))
+	for name, t := range m.throttlers {
+		rates[name] = t.MaxRate()
+	}
+	return rates
+}
+
 // SetMaxRate sets the max rate on all known throttlers.
 func (m *Manager) SetMaxRate(rate int64) []string {
 	m.mu.Lock()

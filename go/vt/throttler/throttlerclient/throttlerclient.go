@@ -20,6 +20,9 @@ var protocol = flag.String("throttler_client_protocol", "grpc", "the protocol to
 
 // Client defines the generic RPC interface for the throttler service.
 type Client interface {
+	// MaxRates returns the current max rate for each throttler of the process.
+	MaxRates(ctx context.Context) (map[string]int64, error)
+
 	// SetMaxRate allows to change the current max rate for all throttlers
 	// of the process.
 	SetMaxRate(ctx context.Context, rate int64) ([]string, error)

@@ -31,6 +31,8 @@ func TestSuite(t *testing.T, c throttlerclient.Client) {
 	}
 	defer tf.tearDown()
 
+	tf.maxRates(t, c)
+
 	tf.setMaxRate(t, c)
 
 	// TODO(mberlin): Add a test for panic handling.
@@ -56,6 +58,25 @@ func (tf *testFixture) setUp() error {
 func (tf *testFixture) tearDown() {
 	for _, t := range tf.throttlers {
 		t.Close()
+	}
+}
+
+func (tf *testFixture) maxRates(t *testing.T, client throttlerclient.Client) {
+	_, err := client.SetMaxRate(context.Background(), 23)
+	if err != nil {
+		t.Fatalf("Cannot execute remote command: %v", err)
+	}
+
+	got, err := client.MaxRates(context.Background())
+	if err != nil {
+		t.Fatalf("Cannot execute remote command: %v", err)
+	}
+	want := map[string]int64{
+		"t1": 23,
+		"t2": 23,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("rate was not updated on all registered throttlers. got = %v, want = %v", got, throttlerNames)
 	}
 }
 

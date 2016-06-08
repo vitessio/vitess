@@ -268,6 +268,11 @@ func (t *Throttler) updateMaxRate() {
 	t.threadRunningsLastUpdate = threadsRunning
 }
 
+// MaxRate returns the current rate of the MaxRateModule.
+func (t *Throttler) MaxRate() int64 {
+	return t.maxRateModule.MaxRate()
+}
+
 // SetMaxRate updates the rate of the MaxRateModule.
 func (t *Throttler) SetMaxRate(rate int64) {
 	t.maxRateModule.SetMaxRate(rate)

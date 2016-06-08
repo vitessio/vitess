@@ -10,6 +10,9 @@ import "throttlerdata.proto";
 
 // Throttler defines the throttler RPC calls.
 service Throttler {
+  // MaxRates returns the current max rate for each throttler of the process.
+  rpc MaxRates (throttlerdata.MaxRatesRequest) returns (throttlerdata.MaxRatesResponse) {};
+
   // SetMaxRate allows to change the current max rate for all throttlers
   // of the process.
   rpc SetMaxRate (throttlerdata.SetMaxRateRequest) returns (throttlerdata.SetMaxRateResponse) {};
