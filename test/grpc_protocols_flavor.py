@@ -60,6 +60,7 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
         'grpc-vtworker',
         'grpc-tabletmanager',
         'grpc-vtgateservice',
+        'grpc-throttler',
         ]
 
   def vttest_protocol(self):
