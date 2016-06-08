@@ -66,7 +66,7 @@ type Throttler struct {
 	unit string
 	// manager is where this throttler registers and unregisters itself
 	// at creation and deletion (Close) respectively.
-	manager *Manager
+	manager *managerImpl
 
 	closed bool
 	// modules is the list of modules which can limit the current rate. The order
@@ -118,7 +118,7 @@ func newThrottlerWithClock(name, unit string, threadCount int, maxRate int64, ma
 	return newThrottler(GlobalManager, name, unit, threadCount, maxRate, maxReplicationLag, nowFunc)
 }
 
-func newThrottler(manager *Manager, name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
+func newThrottler(manager *managerImpl, name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
 	// Verify input parameters.
 	if maxRate < 0 {
 		return nil, fmt.Errorf("maxRate must be >= 0: %v", maxRate)

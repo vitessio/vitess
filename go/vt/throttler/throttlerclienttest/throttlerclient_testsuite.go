@@ -15,6 +15,7 @@ package throttlerclienttest
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -34,8 +35,15 @@ func TestSuite(t *testing.T, c throttlerclient.Client) {
 	tf.maxRates(t, c)
 
 	tf.setMaxRate(t, c)
+}
 
-	// TODO(mberlin): Add a test for panic handling.
+// TestSuitePanics tests the panic handling of each RPC method. Unlike TestSuite
+// it does not use the real throttler.managerImpl. Instead, it uses FakeManager
+// which allows us to panic on each RPC.
+func TestSuitePanics(t *testing.T, c throttlerclient.Client) {
+	maxRatesPanics(t, c)
+
+	setMaxRatePanics(t, c)
 }
 
 var throttlerNames = []string{"t1", "t2"}
@@ -89,4 +97,44 @@ func (tf *testFixture) setMaxRate(t *testing.T, client throttlerclient.Client) {
 	if !reflect.DeepEqual(got, throttlerNames) {
 		t.Fatalf("rate was not updated on all registered throttlers. got = %v, want = %v", got, throttlerNames)
 	}
+}
+
+// FakeManager implements the throttler.Manager interface and panics on all
+// methods defined in the interface.
+type FakeManager struct {
+}
+
+const panicMsg = "RPC server implementation should handle this"
+
+// MaxRates implements the throttler.Manager interface. It always panics.
+func (fm *FakeManager) MaxRates() map[string]int64 {
+	panic(panicMsg)
+}
+
+// SetMaxRate implements the throttler.Manager interface. It always panics.
+func (fm *FakeManager) SetMaxRate(int64) []string {
+	panic(panicMsg)
+}
+
+// Test methods which test for each RPC that panics are caught.
+
+func maxRatesPanics(t *testing.T, client throttlerclient.Client) {
+	_, err := client.MaxRates(context.Background())
+	if !errorFromPanicHandler(err) {
+		t.Fatalf("MaxRates RPC implementation does not catch panics properly: %v", err)
+	}
+}
+
+func setMaxRatePanics(t *testing.T, client throttlerclient.Client) {
+	_, err := client.SetMaxRate(context.Background(), 23)
+	if !errorFromPanicHandler(err) {
+		t.Fatalf("SetMaxRate RPC implementation does not catch panics properly: %v", err)
+	}
+}
+
+func errorFromPanicHandler(err error) bool {
+	if err == nil || !strings.Contains(err.Error(), panicMsg) {
+		return false
+	}
+	return true
 }

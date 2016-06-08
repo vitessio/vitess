@@ -14,21 +14,32 @@ import (
 // GlobalManager is the per-process manager which manages all active throttlers.
 var GlobalManager = newManager()
 
-// Manager controls multiple throttlers and also aggregates their statistics.
-type Manager struct {
+// Manager defines the public interface of the throttler manager. It is used
+// for example by the different RPC implementations.
+type Manager interface {
+	// MaxRates returns the max rate of all known throttlers.
+	MaxRates() map[string]int64
+
+	// SetMaxRate sets the max rate on all known throttlers.
+	SetMaxRate(rate int64) []string
+}
+
+// managerImpl controls multiple throttlers and also aggregates their
+// statistics. It implements the "Manager" interface.
+type managerImpl struct {
 	// mu guards all fields in this group.
 	mu sync.Mutex
 	// throttlers tracks all running throttlers (by their name).
 	throttlers map[string]*Throttler
 }
 
-func newManager() *Manager {
-	return &Manager{
+func newManager() *managerImpl {
+	return &managerImpl{
 		throttlers: make(map[string]*Throttler),
 	}
 }
 
-func (m *Manager) registerThrottler(name string, throttler *Throttler) error {
+func (m *managerImpl) registerThrottler(name string, throttler *Throttler) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -39,7 +50,7 @@ func (m *Manager) registerThrottler(name string, throttler *Throttler) error {
 	return nil
 }
 
-func (m *Manager) unregisterThrottler(name string) {
+func (m *managerImpl) unregisterThrottler(name string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -51,7 +62,7 @@ func (m *Manager) unregisterThrottler(name string) {
 }
 
 // MaxRates returns the max rate of all known throttlers.
-func (m *Manager) MaxRates() map[string]int64 {
+func (m *managerImpl) MaxRates() map[string]int64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -63,7 +74,7 @@ func (m *Manager) MaxRates() map[string]int64 {
 }
 
 // SetMaxRate sets the max rate on all known throttlers.
-func (m *Manager) SetMaxRate(rate int64) []string {
+func (m *managerImpl) SetMaxRate(rate int64) []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

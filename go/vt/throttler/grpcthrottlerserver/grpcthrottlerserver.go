@@ -19,17 +19,19 @@ import (
 
 // Server is the gRPC server implementation of the Throttler service.
 type Server struct {
-	manager *throttler.Manager
+	manager throttler.Manager
 }
 
 // NewServer creates a new RPC server for a given throttler manager.
-func NewServer(m *throttler.Manager) *Server {
+func NewServer(m throttler.Manager) *Server {
 	return &Server{m}
 }
 
 // MaxRates implements the gRPC server interface. returns the current max
 // rate for each throttler of the process.
 func (s *Server) MaxRates(ctx context.Context, request *throttlerdata.MaxRatesRequest) (_ *throttlerdata.MaxRatesResponse, err error) {
+	defer servenv.HandlePanic("throttler", &err)
+
 	rates := s.manager.MaxRates()
 	return &throttlerdata.MaxRatesResponse{
 		Rates: rates,
@@ -38,7 +40,9 @@ func (s *Server) MaxRates(ctx context.Context, request *throttlerdata.MaxRatesRe
 
 // SetMaxRate implements the gRPC server interface. It sets the rate on all
 // throttlers controlled by the manager.
-func (s *Server) SetMaxRate(ctx context.Context, request *throttlerdata.SetMaxRateRequest) (*throttlerdata.SetMaxRateResponse, error) {
+func (s *Server) SetMaxRate(ctx context.Context, request *throttlerdata.SetMaxRateRequest) (_ *throttlerdata.SetMaxRateResponse, err error) {
+	defer servenv.HandlePanic("throttler", &err)
+
 	names := s.manager.SetMaxRate(request.Rate)
 	return &throttlerdata.SetMaxRateResponse{
 		Names: names,
@@ -46,7 +50,7 @@ func (s *Server) SetMaxRate(ctx context.Context, request *throttlerdata.SetMaxRa
 }
 
 // StartServer registers the Server instance with the gRPC server.
-func StartServer(s *grpc.Server, m *throttler.Manager) {
+func StartServer(s *grpc.Server, m throttler.Manager) {
 	throttlerservice.RegisterThrottlerServer(s, NewServer(m))
 }
 
