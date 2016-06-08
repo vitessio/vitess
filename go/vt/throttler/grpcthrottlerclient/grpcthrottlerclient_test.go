@@ -15,7 +15,8 @@ import (
 	"google.golang.org/grpc"
 )
 
-// Test gRPC interface using a throttler client and server.
+// TestThrottlerServer tests the gRPC implementation using a throttler client
+// and server.
 func TestThrottlerServer(t *testing.T) {
 	s, port := startGRPCServer(t)
 	// Use the global manager which is a singleton.
@@ -31,7 +32,8 @@ func TestThrottlerServer(t *testing.T) {
 	throttlerclienttest.TestSuite(t, client)
 }
 
-// Test panic handling in the throttler server.
+// TestThrottlerServerPanics tests the panic handling of the gRPC throttler
+// server implementation.
 func TestThrottlerServerPanics(t *testing.T) {
 	s, port := startGRPCServer(t)
 	// For testing the panic handling, use a fake Manager instead.

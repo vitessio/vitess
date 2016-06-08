@@ -44,8 +44,8 @@ func factory(addr string) (throttlerclient.Client, error) {
 	return &client{conn, gRPCClient}, nil
 }
 
-// MaxRates is part of the ThrottlerClient interface and returns the current
-// max rate for each throttler of the process.
+// MaxRates is part of the throttlerclient.Client interface and returns the
+// current max rate for each throttler of the process.
 func (c *client) MaxRates(ctx context.Context) (map[string]int64, error) {
 	response, err := c.gRPCClient.MaxRates(ctx, &throttlerdata.MaxRatesRequest{})
 	if err != nil {
@@ -54,8 +54,8 @@ func (c *client) MaxRates(ctx context.Context) (map[string]int64, error) {
 	return response.Rates, nil
 }
 
-// SetMaxRate is part of the ThrottlerClient interface and sets the rate on all
-// throttlers of the server.
+// SetMaxRate is part of the throttlerclient.Client interface and sets the rate
+// on all throttlers of the server.
 func (c *client) SetMaxRate(ctx context.Context, rate int64) ([]string, error) {
 	request := &throttlerdata.SetMaxRateRequest{
 		Rate: rate,
@@ -68,7 +68,7 @@ func (c *client) SetMaxRate(ctx context.Context, rate int64) ([]string, error) {
 	return response.Names, nil
 }
 
-// Close is part of the ThrottlerClient interface.
+// Close is part of the throttlerclient.Client interface.
 func (c *client) Close() {
 	c.conn.Close()
 }

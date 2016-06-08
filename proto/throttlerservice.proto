@@ -1,6 +1,6 @@
-// RPC interface for the internal resharding throttler (go/vt/throttler) which
-// is used by the resharding clone process (vtworker) and filtered replication
-// (vttablet).
+// gRPC RPC interface for the internal resharding throttler (go/vt/throttler)
+// which is used by the resharding clone process (vtworker) and filtered
+// replication (vttablet).
 
 syntax = "proto3";
 

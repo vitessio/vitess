@@ -23,5 +23,5 @@ message SetMaxRateRequest {
 // SetMaxRateResponse is returned by the SetMaxRate RPC.
 message SetMaxRateResponse {
   // names is the list of throttler names which were updated.
-	repeated string names = 1;
+  repeated string names = 1;
 }

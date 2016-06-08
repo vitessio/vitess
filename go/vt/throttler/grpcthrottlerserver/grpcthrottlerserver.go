@@ -27,9 +27,9 @@ func NewServer(m throttler.Manager) *Server {
 	return &Server{m}
 }
 
-// MaxRates implements the gRPC server interface. returns the current max
+// MaxRates implements the gRPC server interface. It returns the current max
 // rate for each throttler of the process.
-func (s *Server) MaxRates(ctx context.Context, request *throttlerdata.MaxRatesRequest) (_ *throttlerdata.MaxRatesResponse, err error) {
+func (s *Server) MaxRates(_ context.Context, request *throttlerdata.MaxRatesRequest) (_ *throttlerdata.MaxRatesResponse, err error) {
 	defer servenv.HandlePanic("throttler", &err)
 
 	rates := s.manager.MaxRates()
@@ -40,7 +40,7 @@ func (s *Server) MaxRates(ctx context.Context, request *throttlerdata.MaxRatesRe
 
 // SetMaxRate implements the gRPC server interface. It sets the rate on all
 // throttlers controlled by the manager.
-func (s *Server) SetMaxRate(ctx context.Context, request *throttlerdata.SetMaxRateRequest) (_ *throttlerdata.SetMaxRateResponse, err error) {
+func (s *Server) SetMaxRate(_ context.Context, request *throttlerdata.SetMaxRateRequest) (_ *throttlerdata.SetMaxRateResponse, err error) {
 	defer servenv.HandlePanic("throttler", &err)
 
 	names := s.manager.SetMaxRate(request.Rate)
