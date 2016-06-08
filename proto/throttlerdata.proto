@@ -1,0 +1,16 @@
+// Data structures for the throttler RPC interface.
+
+syntax = "proto3";
+
+package throttlerdata;
+
+// SetMaxRateRequest is the payload for the SetMaxRate RPC.
+message SetMaxRateRequest {
+  int64 rate = 1;
+}
+
+// SetMaxRateResponse is returned by the SetMaxRate RPC.
+message SetMaxRateResponse {
+  // names is the list of throttler names which were updated.
+	repeated string names = 1;
+}
