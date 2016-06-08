@@ -69,6 +69,9 @@ type Throttler struct {
 	// modules is the list of modules which can limit the current rate. The order
 	// of the list defines the priority of the module. (Lower rates trump.)
 	modules []Module
+	// maxRateModule is stored in its own field because we need it when we want
+	// to change its maxRate. It's also included in the "modules" list.
+	maxRateModule *MaxRateModule
 	// rateUpdateChan is used to notify the throttler that the current max rate
 	// must be recalculated and updated.
 	rateUpdateChan chan struct{}
@@ -123,7 +126,8 @@ func newThrottler(name, unit string, threadCount int, maxRate int64, maxReplicat
 
 	// Enable the configured modules.
 	var modules []Module
-	modules = append(modules, NewMaxRateModule(maxRate))
+	maxRateModule := NewMaxRateModule(maxRate)
+	modules = append(modules, maxRateModule)
 	// TODO(mberlin): Append ReplicationLagModule once it's implemented.
 
 	// Start each module (which might start own Go routines).
@@ -142,6 +146,7 @@ func newThrottler(name, unit string, threadCount int, maxRate int64, maxReplicat
 		name:             name,
 		unit:             unit,
 		modules:          modules,
+		maxRateModule:    maxRateModule,
 		rateUpdateChan:   rateUpdateChan,
 		threadThrottlers: threadThrottlers,
 		threadFinished:   make([]bool, threadCount, threadCount),
@@ -252,4 +257,9 @@ func (t *Throttler) updateMaxRate() {
 			maxRatePerThread + remainderPerThread[threadID])
 	}
 	t.threadRunningsLastUpdate = threadsRunning
+}
+
+// SetMaxRate updates the rate of the MaxRateModule.
+func (t *Throttler) SetMaxRate(rate int64) {
+	t.maxRateModule.SetMaxRate(rate)
 }
