@@ -116,7 +116,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 
 	// no tablet
 	hc.Reset()
-	want := "shard, host: ks.0.replica, <nil>, no valid tablet"
+	want := "shard, host: ks.0.replica, no valid tablet"
 	err := f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 	if hc.GetStatsFromTargetCounter.Get() != 1 {
@@ -126,7 +126,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	// tablet with error
 	hc.Reset()
 	hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, fmt.Errorf("no connection"), nil)
-	want = "shard, host: ks.0.replica, <nil>, no valid tablet"
+	want = "shard, host: ks.0.replica, no valid tablet"
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 	if hc.GetStatsFromTargetCounter.Get() != 1 {
@@ -136,7 +136,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	// tablet without connection
 	hc.Reset()
 	ep1 := hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, nil, nil)
-	want = fmt.Sprintf(`shard, host: ks.0.replica, <nil>, no valid tablet`)
+	want = fmt.Sprintf(`shard, host: ks.0.replica, no valid tablet`)
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 	if hc.GetStatsFromTargetCounter.Get() != 1 {

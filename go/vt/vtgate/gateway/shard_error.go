@@ -6,7 +6,11 @@ package gateway
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/youtube/vitess/go/vt/vterrors"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -35,4 +39,27 @@ func (e *ShardError) Error() string {
 // This is part of vterrors.VtError interface.
 func (e *ShardError) VtErrorCode() vtrpcpb.ErrorCode {
 	return e.ErrorCode
+}
+
+// NewShardError returns a ShardError which preserves the original
+// error code if possible, adds the connection context and adds a bit
+// to determine whether the keyspace/shard needs to be re-resolved for
+// a potential sharding event.
+func NewShardError(in error, keyspace, shard string, tabletType topodatapb.TabletType, tablet *topodatapb.Tablet, inTransaction bool) error {
+	if in == nil {
+		return nil
+	}
+	var shardIdentifier string
+	if tablet != nil {
+		shardIdentifier = fmt.Sprintf("%s.%s.%s, %+v", keyspace, shard, strings.ToLower(tabletType.String()), tablet)
+	} else {
+		shardIdentifier = fmt.Sprintf("%s.%s.%s", keyspace, shard, strings.ToLower(tabletType.String()))
+	}
+
+	return &ShardError{
+		ShardIdentifier: shardIdentifier,
+		InTransaction:   inTransaction,
+		Err:             in,
+		ErrorCode:       vterrors.RecoverVtErrorCode(in),
+	}
 }
