@@ -498,16 +498,19 @@ primary key (name)
     utils.run_vtctl(['ChangeSlaveType', shard_1_slave2.tablet_alias, 'spare'])
     shard_1_slave2.wait_for_vttablet_state('NOT_SERVING')
 
-    # the worker will do everything. We test with source_reader_count=10
-    # (down from default=20) as connection pool is not big enough for 20.
-    # min_table_size_for_split is set to 1 as to force a split even on the
-    # small table we have.
     # we need to create the schema, and the worker will do data copying
     for keyspace_shard in ('test_keyspace/80-c0', 'test_keyspace/c0-'):
       utils.run_vtctl(['CopySchemaShard', '--exclude_tables', 'unrelated',
                        shard_1_rdonly1.tablet_alias, keyspace_shard],
                       auto_log=True)
 
+    # the worker will do everything. We test with source_reader_count=10
+    # (down from default=20) as connection pool is not big enough for 20.
+    # min_table_size_for_split is set to 1 as to force a split even on the
+    # small table we have.
+    # --max_tps is only specified to enable the throttler and ensure that the
+    # code is executed. But the intent here is not to throttle the test, hence
+    # the rate limit is set very high.
     utils.run_vtworker(['--cell', 'test_nj',
                         '--command_display_interval', '10ms',
                         'SplitClone',
@@ -515,6 +518,7 @@ primary key (name)
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
                         '--min_healthy_rdonly_tablets', '1',
+                        '--max_tps', '9999',
                         'test_keyspace/80-'],
                        auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly1.tablet_alias,
@@ -535,6 +539,10 @@ primary key (name)
 
     # check that binlog server exported the stats vars
     self.check_binlog_server_vars(shard_1_slave1, horizontal=True)
+
+    # Check that the throttler was enabled.
+    self.check_binlog_throttler(shard_2_master.rpc_endpoint(), 9999)
+    self.check_binlog_throttler(shard_3_master.rpc_endpoint(), 9999)
 
     # testing filtered replication: insert a bunch of data on shard 1,
     # check we get most of it after a few seconds, wait for binlog server

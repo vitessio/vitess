@@ -161,3 +161,28 @@ class BaseShardingTest(object):
     status = tablet_obj.get_status()
     self.assertIn('No binlog player is running', status)
     self.assertIn('</html>', status)
+
+  def check_binlog_throttler(self, dest_master_addr, rate):
+    """Checks that the throttler is configured correctly.
+
+    We assume it was enabled by SplitClone with the flag --max_tps 9999.
+
+    Args:
+      dest_master_addr: vttablet endpoint. Format: host:port
+      rate:             expected initial rate the throttler was started with
+    """
+    stdout, _ = utils.run_vtctl(['ThrottlerMaxRates', '--server',
+                                 dest_master_addr], auto_log=True)
+    self.assertIn('| BinlogPlayer/0 | %d |' % rate, stdout)
+    self.assertIn('1 active throttler(s)', stdout)
+
+    # Check that it's possible to change the max rate on the throttler.
+    new_rate = 'unlimited'
+    stdout, _ = utils.run_vtctl(['ThrottlerSetMaxRate', '--server',
+                                 dest_master_addr, new_rate],
+                                auto_log=True)
+    self.assertIn('1 active throttler(s)', stdout)
+    stdout, _ = utils.run_vtctl(['ThrottlerMaxRates', '--server',
+                                 dest_master_addr], auto_log=True)
+    self.assertIn('| BinlogPlayer/0 | %s |' % new_rate, stdout)
+    self.assertIn('1 active throttler(s)', stdout)
