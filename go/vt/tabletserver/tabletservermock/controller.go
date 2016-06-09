@@ -40,40 +40,36 @@ type StateChange struct {
 
 // Controller is a mock tabletserver.Controller
 type Controller struct {
-	// mu protects the fields in this structure
-	mu sync.Mutex
-
-	// CurrentTarget stores the last known target
-	CurrentTarget querypb.Target
-
-	// QueryServiceEnabled is a state variable
-	QueryServiceEnabled bool
-
-	// IsInLameduck is a state variable
-	IsInLameduck bool
-
-	// SetServingTypeError is the return value for SetServingType
-	SetServingTypeError error
-
-	// IsHealthy is the return value for IsHealthy
-	IsHealthyError error
-
-	// ReloadSchemaCount counts how many times ReloadSchema was called
-	ReloadSchemaCount int
-
-	// BroadcastData is a channel where we send BroadcastHealth data
+	// BroadcastData is a channel where we send BroadcastHealth data.
+	// Set at construction time.
 	BroadcastData chan *BroadcastData
 
 	// StateChanges has the list of state changes done by SetServingType().
+	// Set at construction time.
 	StateChanges chan *StateChange
+
+	// CurrentTarget stores the last known target.
+	CurrentTarget querypb.Target
+
+	// SetServingTypeError is the return value for SetServingType.
+	SetServingTypeError error
+
+	// mu protects the next fields in this structure. They are
+	// accessed by both the methods in this interface, and the
+	// background health check.
+	mu sync.Mutex
+
+	// QueryServiceEnabled is a state variable.
+	queryServiceEnabled bool
+
+	// isInLameduck is a state variable.
+	isInLameduck bool
 }
 
 // NewController returns a mock of tabletserver.Controller
 func NewController() *Controller {
 	return &Controller{
-		QueryServiceEnabled: false,
-		IsHealthyError:      nil,
-		ReloadSchemaCount:   0,
+		queryServiceEnabled: false,
 		BroadcastData:       make(chan *BroadcastData, 10),
 		StateChanges:        make(chan *StateChange, 10),
 	}
@@ -103,9 +99,9 @@ func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, serving
 
 	stateChanged := false
 	if tqsc.SetServingTypeError == nil {
-		stateChanged = tqsc.QueryServiceEnabled != serving || tqsc.CurrentTarget.TabletType != tabletType
+		stateChanged = tqsc.queryServiceEnabled != serving || tqsc.CurrentTarget.TabletType != tabletType
 		tqsc.CurrentTarget.TabletType = tabletType
-		tqsc.QueryServiceEnabled = serving
+		tqsc.queryServiceEnabled = serving
 	}
 	if stateChanged {
 		tqsc.StateChanges <- &StateChange{
@@ -113,7 +109,7 @@ func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, serving
 			TabletType: tabletType,
 		}
 	}
-	tqsc.IsInLameduck = false
+	tqsc.isInLameduck = false
 	return stateChanged, tqsc.SetServingTypeError
 }
 
@@ -122,23 +118,16 @@ func (tqsc *Controller) IsServing() bool {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
 
-	return tqsc.QueryServiceEnabled
+	return tqsc.queryServiceEnabled
 }
 
 // IsHealthy is part of the tabletserver.Controller interface
 func (tqsc *Controller) IsHealthy() error {
-	tqsc.mu.Lock()
-	defer tqsc.mu.Unlock()
-
-	return tqsc.IsHealthyError
+	return nil
 }
 
 // ReloadSchema is part of the tabletserver.Controller interface
 func (tqsc *Controller) ReloadSchema() {
-	tqsc.mu.Lock()
-	defer tqsc.mu.Unlock()
-
-	tqsc.ReloadSchemaCount++
 }
 
 //ClearQueryPlanCache is part of the tabletserver.Controller interface
@@ -176,7 +165,7 @@ func (tqsc *Controller) BroadcastHealth(terTimestamp int64, stats *querypb.Realt
 	tqsc.BroadcastData <- &BroadcastData{
 		TERTimestamp:  terTimestamp,
 		RealtimeStats: *stats,
-		Serving:       tqsc.QueryServiceEnabled && (!tqsc.IsInLameduck),
+		Serving:       tqsc.queryServiceEnabled && (!tqsc.isInLameduck),
 	}
 }
 
@@ -185,5 +174,13 @@ func (tqsc *Controller) EnterLameduck() {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
 
-	tqsc.IsInLameduck = true
+	tqsc.isInLameduck = true
+}
+
+// SetQueryServiceEnabledForTests can set queryServiceEnabled in tests.
+func (tqsc *Controller) SetQueryServiceEnabledForTests(enabled bool) {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+
+	tqsc.queryServiceEnabled = enabled
 }
