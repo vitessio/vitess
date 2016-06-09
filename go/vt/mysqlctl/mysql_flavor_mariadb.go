@@ -100,13 +100,17 @@ func (*mariaDB10) ResetReplicationCommands() []string {
 // PromoteSlaveCommands implements MysqlFlavor.PromoteSlaveCommands().
 func (*mariaDB10) PromoteSlaveCommands() []string {
 	return []string{
-		"RESET SLAVE",
+		"RESET SLAVE ALL", // "ALL" makes it forget the master host:port.
 	}
 }
 
 // SetSlavePositionCommands implements MysqlFlavor.
 func (*mariaDB10) SetSlavePositionCommands(pos replication.Position) ([]string, error) {
 	return []string{
+		// RESET MASTER will clear out gtid_binlog_pos,
+		// which then guarantees that gtid_current_pos = gtid_slave_pos,
+		// since gtid_current_pos = MAX(gtid_binlog_pos, gtid_slave_pos).
+		"RESET MASTER",
 		fmt.Sprintf("SET GLOBAL gtid_slave_pos = '%s'", pos),
 	}, nil
 }
@@ -115,7 +119,12 @@ func (*mariaDB10) SetSlavePositionCommands(pos replication.Position) ([]string, 
 func (*mariaDB10) SetMasterCommands(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
 	// Make CHANGE MASTER TO command.
 	args := changeMasterArgs(params, masterHost, masterPort, masterConnectRetry)
-	args = append(args, "MASTER_USE_GTID = slave_pos")
+	// MASTER_USE_GTID = current_pos means it will request binlogs starting at
+	// MAX(master position, slave position), which handles the case where a
+	// demoted master is being converted back into a slave. In that case, the
+	// slave position might be behind the master position, since it stopped
+	// updating when the server was promoted to master.
+	args = append(args, "MASTER_USE_GTID = current_pos")
 	changeMasterTo := "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
 
 	return []string{changeMasterTo}, nil

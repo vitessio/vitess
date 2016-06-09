@@ -181,6 +181,7 @@ func TestMariadbMakeBinlogEvent(t *testing.T) {
 func TestMariadbSetSlavePositionCommands(t *testing.T) {
 	pos := replication.Position{GTIDSet: replication.MariadbGTID{Domain: 1, Server: 41983, Sequence: 12345}}
 	want := []string{
+		"RESET MASTER",
 		"SET GLOBAL gtid_slave_pos = '1-41983-12345'",
 	}
 
@@ -209,7 +210,7 @@ func TestMariadbSetMasterCommands(t *testing.T) {
   MASTER_USER = 'username',
   MASTER_PASSWORD = 'password',
   MASTER_CONNECT_RETRY = 1234,
-  MASTER_USE_GTID = slave_pos`,
+  MASTER_USE_GTID = current_pos`,
 	}
 
 	got, err := (&mariaDB10{}).SetMasterCommands(params, masterHost, masterPort, masterConnectRetry)
@@ -247,7 +248,7 @@ func TestMariadbSetMasterCommandsSSL(t *testing.T) {
   MASTER_SSL_CAPATH = 'ssl-ca-path',
   MASTER_SSL_CERT = 'ssl-cert',
   MASTER_SSL_KEY = 'ssl-key',
-  MASTER_USE_GTID = slave_pos`,
+  MASTER_USE_GTID = current_pos`,
 	}
 
 	got, err := (&mariaDB10{}).SetMasterCommands(params, masterHost, masterPort, masterConnectRetry)
@@ -287,7 +288,7 @@ func TestMariadbParseReplicationPosition(t *testing.T) {
 }
 
 func TestMariadbPromoteSlaveCommands(t *testing.T) {
-	want := []string{"RESET SLAVE"}
+	want := []string{"RESET SLAVE ALL"}
 	if got := (&mariaDB10{}).PromoteSlaveCommands(); !reflect.DeepEqual(got, want) {
 		t.Errorf("(&mariaDB10{}).PromoteSlaveCommands() = %#v, want %#v", got, want)
 	}
