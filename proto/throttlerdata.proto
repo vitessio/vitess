@@ -1,0 +1,27 @@
+// Data structures for the throttler RPC interface.
+
+syntax = "proto3";
+
+package throttlerdata;
+
+// MaxRatesRequest is the payload for the MaxRates RPC.
+message MaxRatesRequest {
+}
+
+// MaxRatesResponse is returned by the MaxRates RPC.
+message MaxRatesResponse {
+  // max_rates returns the max rate for each throttler. It's keyed by the
+  // throttler name.
+  map<string, int64> rates = 1;
+}
+
+// SetMaxRateRequest is the payload for the SetMaxRate RPC.
+message SetMaxRateRequest {
+  int64 rate = 1;
+}
+
+// SetMaxRateResponse is returned by the SetMaxRate RPC.
+message SetMaxRateResponse {
+  // names is the list of throttler names which were updated.
+  repeated string names = 1;
+}

@@ -1,0 +1,19 @@
+// gRPC RPC interface for the internal resharding throttler (go/vt/throttler)
+// which is used by the resharding clone process (vtworker) and filtered
+// replication (vttablet).
+
+syntax = "proto3";
+
+package throttlerservice;
+
+import "throttlerdata.proto";
+
+// Throttler defines the throttler RPC calls.
+service Throttler {
+  // MaxRates returns the current max rate for each throttler of the process.
+  rpc MaxRates (throttlerdata.MaxRatesRequest) returns (throttlerdata.MaxRatesResponse) {};
+
+  // SetMaxRate allows to change the current max rate for all throttlers
+  // of the process.
+  rpc SetMaxRate (throttlerdata.SetMaxRateRequest) returns (throttlerdata.SetMaxRateResponse) {};
+}

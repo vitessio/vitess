@@ -1,3 +1,7 @@
+// Copyright 2016, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 // Package throttler provides a client-side, local throttler which is used to
 // throttle (and actively pace) writes during the resharding process.
 //
@@ -60,11 +64,17 @@ type Throttler struct {
 	// unit describes the entity the throttler is limiting e.g. "queries" or
 	// "transactions". It is used for example in the webinterface.
 	unit string
+	// manager is where this throttler registers and unregisters itself
+	// at creation and deletion (Close) respectively.
+	manager *managerImpl
 
 	closed bool
 	// modules is the list of modules which can limit the current rate. The order
 	// of the list defines the priority of the module. (Lower rates trump.)
 	modules []Module
+	// maxRateModule is stored in its own field because we need it when we want
+	// to change its maxRate. It's also included in the "modules" list.
+	maxRateModule *MaxRateModule
 	// rateUpdateChan is used to notify the throttler that the current max rate
 	// must be recalculated and updated.
 	rateUpdateChan chan struct{}
@@ -100,15 +110,15 @@ type Throttler struct {
 // "transactions".
 // name describes the Throttler instance and will be used by the webinterface.
 func NewThrottler(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64) (*Throttler, error) {
-	return newThrottler(name, unit, threadCount, maxRate, maxReplicationLag, time.Now)
+	return newThrottler(GlobalManager, name, unit, threadCount, maxRate, maxReplicationLag, time.Now)
 }
 
 // newThrottlerWithClock should only be used for testing.
 func newThrottlerWithClock(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
-	return newThrottler(name, unit, threadCount, maxRate, maxReplicationLag, nowFunc)
+	return newThrottler(GlobalManager, name, unit, threadCount, maxRate, maxReplicationLag, nowFunc)
 }
 
-func newThrottler(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
+func newThrottler(manager *managerImpl, name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
 	// Verify input parameters.
 	if maxRate < 0 {
 		return nil, fmt.Errorf("maxRate must be >= 0: %v", maxRate)
@@ -119,7 +129,8 @@ func newThrottler(name, unit string, threadCount int, maxRate int64, maxReplicat
 
 	// Enable the configured modules.
 	var modules []Module
-	modules = append(modules, NewMaxRateModule(maxRate))
+	maxRateModule := NewMaxRateModule(maxRate)
+	modules = append(modules, maxRateModule)
 	// TODO(mberlin): Append ReplicationLagModule once it's implemented.
 
 	// Start each module (which might start own Go routines).
@@ -137,7 +148,9 @@ func newThrottler(name, unit string, threadCount int, maxRate int64, maxReplicat
 	t := &Throttler{
 		name:             name,
 		unit:             unit,
+		manager:          manager,
 		modules:          modules,
+		maxRateModule:    maxRateModule,
 		rateUpdateChan:   rateUpdateChan,
 		threadThrottlers: threadThrottlers,
 		threadFinished:   make([]bool, threadCount, threadCount),
@@ -147,6 +160,10 @@ func newThrottler(name, unit string, threadCount int, maxRate int64, maxReplicat
 
 	// Initialize maxRate.
 	t.updateMaxRate()
+
+	if err := t.manager.registerThrottler(name, t); err != nil {
+		return nil, err
+	}
 
 	// Watch for rate updates from the modules and update the internal maxRate.
 	go func() {
@@ -199,6 +216,7 @@ func (t *Throttler) Close() {
 	}
 	close(t.rateUpdateChan)
 	t.closed = true
+	t.manager.unregisterThrottler(t.name)
 }
 
 // updateMaxRate recalculates the current max rate and updates all
@@ -248,4 +266,14 @@ func (t *Throttler) updateMaxRate() {
 			maxRatePerThread + remainderPerThread[threadID])
 	}
 	t.threadRunningsLastUpdate = threadsRunning
+}
+
+// MaxRate returns the current rate of the MaxRateModule.
+func (t *Throttler) MaxRate() int64 {
+	return t.maxRateModule.MaxRate()
+}
+
+// SetMaxRate updates the rate of the MaxRateModule.
+func (t *Throttler) SetMaxRate(rate int64) {
+	t.maxRateModule.SetMaxRate(rate)
 }

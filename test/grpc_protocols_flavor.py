@@ -54,11 +54,12 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
 
   def service_map(self):
     return [
+        'grpc-tabletmanager',
+        'grpc-throttler',
         'grpc-queryservice',
         'grpc-updatestream',
         'grpc-vtctl',
         'grpc-vtworker',
-        'grpc-tabletmanager',
         'grpc-vtgateservice',
         ]
 
