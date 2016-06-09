@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package vtgate
+package gateway
 
 import (
 	"flag"
@@ -38,7 +38,7 @@ const (
 )
 
 func init() {
-	RegisterGatewayCreator(gatewayImplementationDiscovery, createDiscoveryGateway)
+	RegisterCreator(gatewayImplementationDiscovery, createDiscoveryGateway)
 }
 
 func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) Gateway {
@@ -230,8 +230,8 @@ func (dg *discoveryGateway) Close(ctx context.Context) error {
 	return nil
 }
 
-// CacheStatus returns a list of GatewayTabletCacheStatus per tablet.
-func (dg *discoveryGateway) CacheStatus() GatewayTabletCacheStatusList {
+// CacheStatus returns a list of TabletCacheStatus per tablet.
+func (dg *discoveryGateway) CacheStatus() TabletCacheStatusList {
 	return nil
 }
 

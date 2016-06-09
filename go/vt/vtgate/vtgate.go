@@ -30,6 +30,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
+	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -696,7 +697,7 @@ func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, keyspace string) (*topoda
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
-func (vtg *VTGate) GetGatewayCacheStatus() GatewayTabletCacheStatusList {
+func (vtg *VTGate) GetGatewayCacheStatus() gateway.TabletCacheStatusList {
 	return vtg.resolver.GetGatewayCacheStatus()
 }
 
@@ -726,7 +727,7 @@ func isErrorCausedByVTGate(err error) bool {
 		switch e := e.(type) {
 		case *ScatterConnError:
 			errQueue = append(errQueue, e.Errs...)
-		case *ShardError:
+		case *gateway.ShardError:
 			errQueue = append(errQueue, e.Err)
 		case tabletconn.OperationalError:
 			// this is a failure to communicate with vttablet

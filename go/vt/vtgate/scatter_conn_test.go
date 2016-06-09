@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -395,7 +396,7 @@ func TestScatterConnError(t *testing.T) {
 	err := &ScatterConnError{
 		Retryable: false,
 		Errs: []error{
-			&ShardError{ErrorCode: vtrpcpb.ErrorCode_PERMISSION_DENIED, Err: &tabletconn.ServerError{Err: "tabletconn error"}},
+			&gateway.ShardError{ErrorCode: vtrpcpb.ErrorCode_PERMISSION_DENIED, Err: &tabletconn.ServerError{Err: "tabletconn error"}},
 			fmt.Errorf("generic error"),
 			tabletconn.ConnClosed,
 		},

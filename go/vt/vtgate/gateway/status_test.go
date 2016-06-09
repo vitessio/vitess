@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package vtgate
+package gateway
 
 import (
 	"reflect"
@@ -12,15 +12,15 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-func TestGatwayTabletStatusAggregator(t *testing.T) {
-	aggr := &GatewayTabletStatusAggregator{
+func TestTabletStatusAggregator(t *testing.T) {
+	aggr := &TabletStatusAggregator{
 		Keyspace:   "k",
 		Shard:      "s",
 		TabletType: topodatapb.TabletType_REPLICA,
 		Name:       "n",
 		Addr:       "a",
 	}
-	t.Logf("aggr = GatwayTabletStatusAggregator{k, s, replica, n, a}")
+	t.Logf("aggr = TabletStatusAggregator{k, s, replica, n, a}")
 	qi := &queryInfo{
 		aggr:       aggr,
 		addr:       "",
@@ -50,7 +50,7 @@ func TestGatwayTabletStatusAggregator(t *testing.T) {
 	}
 	aggr.processQueryInfo(qi)
 	t.Logf("aggr.processQueryInfo(, replica, 3ms, true)")
-	want := &GatewayTabletCacheStatus{
+	want := &TabletCacheStatus{
 		Keyspace:   "k",
 		Shard:      "s",
 		Name:       "n",
@@ -88,7 +88,7 @@ func TestGatwayTabletStatusAggregator(t *testing.T) {
 	}
 	aggr.processQueryInfo(qi)
 	t.Logf("aggr.processQueryInfo(, master, 6ms, true)")
-	want = &GatewayTabletCacheStatus{
+	want = &TabletCacheStatus{
 		Keyspace:   "k",
 		Shard:      "s",
 		Name:       "n",

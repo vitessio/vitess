@@ -1,4 +1,4 @@
-package vtgate
+package gateway
 
 import (
 	"fmt"

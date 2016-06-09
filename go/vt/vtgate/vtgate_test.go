@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -973,9 +974,9 @@ func TestIsErrorCausedByVTGate(t *testing.T) {
 		ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
 		Err:        "vttablet: retry: error message",
 	}
-	shardConnUnknownErr := &ShardError{Err: unknownError}
-	shardConnServerErr := &ShardError{Err: serverError}
-	shardConnCancelledErr := &ShardError{Err: context.Canceled}
+	shardConnUnknownErr := &gateway.ShardError{Err: unknownError}
+	shardConnServerErr := &gateway.ShardError{Err: serverError}
+	shardConnCancelledErr := &gateway.ShardError{Err: context.Canceled}
 	scatterConnErrAllUnknownErrs := &ScatterConnError{
 		Errs: []error{unknownError, unknownError, unknownError},
 	}

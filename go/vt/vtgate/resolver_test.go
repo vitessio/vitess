@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -569,8 +570,8 @@ func TestIsRetryableError(t *testing.T) {
 		{fmt.Errorf("generic error"), false},
 		{&ScatterConnError{Retryable: true}, true},
 		{&ScatterConnError{Retryable: false}, false},
-		{&ShardError{ErrorCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED}, true},
-		{&ShardError{ErrorCode: vtrpcpb.ErrorCode_INTERNAL_ERROR}, false},
+		{&gateway.ShardError{ErrorCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED}, true},
+		{&gateway.ShardError{ErrorCode: vtrpcpb.ErrorCode_INTERNAL_ERROR}, false},
 		// tabletconn.ServerError will not come directly here,
 		// they'll be wrapped in ScatterConnError or ShardConnError.
 		// So they can't be retried as is.
