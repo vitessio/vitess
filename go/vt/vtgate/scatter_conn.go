@@ -769,7 +769,7 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	return &ScatterConnError{
 		Retryable:  allRetryableError,
 		Errs:       errors,
-		serverCode: aggregateVtGateErrorCodes(errors),
+		serverCode: vterrors.AggregateVtGateErrorCodes(errors),
 	}
 }
 
