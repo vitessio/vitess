@@ -6,6 +6,7 @@ package throttler
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 
 	log "github.com/golang/glog"
@@ -83,5 +84,6 @@ func (m *managerImpl) SetMaxRate(rate int64) []string {
 		t.SetMaxRate(rate)
 		names = append(names, name)
 	}
+	sort.Strings(names)
 	return names
 }
