@@ -276,6 +276,34 @@ class TestSchema(unittest.TestCase):
     self._check_tables(shard_0_master, 4)
     self._check_tables(shard_1_master, 4)
 
+  def test_schema_changes_drop_nonexistent_tables(self):
+    """Tests the PreflightSchema logic for dropping nonexistent tables.
+
+    If a table does not exist, DROP TABLE should error during preflight
+    because the statement does not change the schema as there is
+    nothing to drop.
+    In case of DROP TABLE IF EXISTS though, it should not error as this
+    is the MySQL behavior the user expects.
+    """
+    self._apply_initial_schema()
+    self._check_tables(shard_0_master, 4)
+    self._check_tables(shard_1_master, 4)
+
+    # TODO(mberlin): This currently fails during the actual change.
+    # schemamanager should fail in preflight instead. Change the error message
+    # we check for once schemamanager prevents this in the preflight phase.
+    drop_table = ('DROP TABLE nonexistent_table;')
+    stdout = self._apply_schema(test_keyspace, drop_table, expect_fail=True)
+    self.assertIn('Unknown table', ''.join(stdout))
+
+    # This Query may not result in schema change and should be allowed.
+    drop_if_exists = ('DROP TABLE IF EXISTS nonexistent_table;')
+    self._apply_schema(test_keyspace, drop_if_exists)
+
+    self._check_tables(shard_0_master, 4)
+    self._check_tables(shard_1_master, 4)
+
+
   def test_vtctl_copyschemashard_use_tablet_as_source(self):
     self._test_vtctl_copyschemashard(shard_0_master.tablet_alias)
 

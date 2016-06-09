@@ -91,23 +91,33 @@ func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 	return nil
 }
 
+func parseDDLs(sqls []string) ([]*sqlparser.DDL, error) {
+	parsedDDLs := make([]*sqlparser.DDL, len(sqls))
+	for i, sql := range sqls {
+		stat, err := sqlparser.Parse(sql)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse sql: %s, got error: %v", sql, err)
+		}
+		ddl, ok := stat.(*sqlparser.DDL)
+		if !ok {
+			return nil, fmt.Errorf("schema change works for DDLs only, but get non DDL statement: %s", sql)
+		}
+		parsedDDLs[i] = ddl
+	}
+	return parsedDDLs, nil
+}
+
 // Validate validates a list of sql statements.
 func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 	if exec.isClosed {
 		return fmt.Errorf("executor is closed")
 	}
-	parsedDDLs := make([]*sqlparser.DDL, len(sqls))
-	for i, sql := range sqls {
-		stat, err := sqlparser.Parse(sql)
-		if err != nil {
-			return fmt.Errorf("failed to parse sql: %s, got error: %v", sql, err)
-		}
-		ddl, ok := stat.(*sqlparser.DDL)
-		if !ok {
-			return fmt.Errorf("schema change works for DDLs only, but get non DDL statement: %s", sql)
-		}
-		parsedDDLs[i] = ddl
+
+	parsedDDLs, err := parseDDLs(sqls)
+	if err != nil {
+		return err
 	}
+
 	bigSchemaChange, err := exec.detectBigSchemaChanges(ctx, parsedDDLs)
 	if bigSchemaChange && exec.allowBigSchemaChange {
 		log.Warning("Processing big schema change. This may cause visible MySQL downtime.")
@@ -158,6 +168,12 @@ func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []s
 	if err != nil {
 		return err
 	}
+
+	parsedDDLs, err := parseDDLs(sqls)
+	if err != nil {
+		return err
+	}
+
 	for i, schemaDiff := range schemaDiffs {
 		diffs := tmutils.DiffSchemaToArray(
 			"BeforeSchema",
@@ -165,6 +181,11 @@ func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []s
 			"AfterSchema",
 			schemaDiff.AfterSchema)
 		if len(diffs) == 0 {
+			if parsedDDLs[i].Action == sqlparser.DropStr {
+				// DROP IF EXISTS on a nonexistent table does not change the schema. It's safe to ignore.
+				// TODO(mberlin): Extend sqlparser to find out if the DDL contains IF EXISTS and check for it as well.
+				continue
+			}
 			return fmt.Errorf("Schema change: '%s' does not introduce any table definition change.", sqls[i])
 		}
 	}
