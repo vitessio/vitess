@@ -34,7 +34,6 @@ type ScatterConn struct {
 	timings              *stats.MultiTimings
 	tabletCallErrorCount *stats.MultiCounters
 	gateway              Gateway
-	testGateway          Gateway // test health checking module
 }
 
 // shardActionFunc defines the contract for a shard action

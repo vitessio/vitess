@@ -51,7 +51,6 @@ func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, se
 		tabletTypesToWait: tabletTypesToWait,
 		tabletsWatchers:   make([]*discovery.TopologyWatcher, 0, 1),
 	}
-	dg.hc.SetListener(dg)
 	log.Infof("loading tablets for cells: %v", *cellsToWatch)
 	for _, c := range strings.Split(*cellsToWatch, ",") {
 		if c == "" {
@@ -234,10 +233,6 @@ func (dg *discoveryGateway) Close(ctx context.Context) error {
 // CacheStatus returns a list of GatewayTabletCacheStatus per tablet.
 func (dg *discoveryGateway) CacheStatus() GatewayTabletCacheStatusList {
 	return nil
-}
-
-// StatsUpdate receives updates about target and realtime stats changes.
-func (dg *discoveryGateway) StatsUpdate(*discovery.TabletStats) {
 }
 
 // withRetry gets available connections and executes the action. If there are retryable errors,
