@@ -37,6 +37,9 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
   def tabletconn_protocol(self):
     return 'grpc'
 
+  def throttler_client_protocol(self):
+    return 'grpc'
+
   def vtgate_protocol(self):
     return 'grpc'
 
