@@ -50,6 +50,7 @@ spec:
               -tablet_protocol grpc
               -tablet_manager_protocol grpc
               -etcd_global_addrs http://etcd-global:4001
+              -enable_queries
               {{backup_flags}}" vitess
       volumes:
         - name: syslog
