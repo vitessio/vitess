@@ -51,7 +51,7 @@ type Controller struct {
 	// CurrentTarget stores the last known target.
 	CurrentTarget querypb.Target
 
-	// SetServingTypeError is the return value for SetServingType
+	// SetServingTypeError is the return value for SetServingType.
 	SetServingTypeError error
 
 	// mu protects the next fields in this structure. They are
@@ -59,10 +59,10 @@ type Controller struct {
 	// background health check.
 	mu sync.Mutex
 
-	// QueryServiceEnabled is a state variable
+	// QueryServiceEnabled is a state variable.
 	queryServiceEnabled bool
 
-	// isInLameduck is a state variable
+	// isInLameduck is a state variable.
 	isInLameduck bool
 }
 
