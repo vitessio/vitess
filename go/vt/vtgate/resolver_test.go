@@ -15,6 +15,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
+	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
@@ -179,8 +180,8 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 func testResolverGeneric(t *testing.T, name string, action func(hc discovery.HealthCheck) (*sqltypes.Result, error)) {
 	// successful execute
 	s := createSandbox(name)
-	sbc0 := &sandboxConn{}
-	sbc1 := &sandboxConn{}
+	sbc0 := &sandboxconn.SandboxConn{}
+	sbc1 := &sandboxconn.SandboxConn{}
 	hc := newFakeHealthCheck()
 	hc.addTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
 	hc.addTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
@@ -198,8 +199,8 @@ func testResolverGeneric(t *testing.T, name string, action func(hc discovery.Hea
 
 	// non-retryable failure
 	s.Reset()
-	sbc0 = &sandboxConn{mustFailServer: 1}
-	sbc1 = &sandboxConn{mustFailRetry: 1}
+	sbc0 = &sandboxconn.SandboxConn{MustFailServer: 1}
+	sbc1 = &sandboxconn.SandboxConn{MustFailRetry: 1}
 	hc.Reset()
 	hc.addTestTablet("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
 	hc.addTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
@@ -231,8 +232,8 @@ func testResolverGeneric(t *testing.T, name string, action func(hc discovery.Hea
 
 	// retryable failure, no sharding event
 	s.Reset()
-	sbc0 = &sandboxConn{mustFailRetry: 1}
-	sbc1 = &sandboxConn{mustFailFatal: 1}
+	sbc0 = &sandboxconn.SandboxConn{MustFailRetry: 1}
+	sbc1 = &sandboxconn.SandboxConn{MustFailFatal: 1}
 	hc.Reset()
 	hc.addTestTablet("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
 	hc.addTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
@@ -265,14 +266,14 @@ func testResolverGeneric(t *testing.T, name string, action func(hc discovery.Hea
 	// no failure, initial vertical resharding
 	s.Reset()
 	addSandboxServedFrom(name, name+"ServedFrom0")
-	sbc0 = &sandboxConn{}
-	sbc1 = &sandboxConn{}
+	sbc0 = &sandboxconn.SandboxConn{}
+	sbc1 = &sandboxconn.SandboxConn{}
 	hc.Reset()
 	hc.addTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
 	hc.addTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 	s0 := createSandbox(name + "ServedFrom0") // make sure we have a fresh copy
 	s0.ShardSpec = "-80-"
-	sbc2 := &sandboxConn{}
+	sbc2 := &sandboxconn.SandboxConn{}
 	hc.addTestTablet("aa", "1.1.1.1", 1003, name+"ServedFrom0", "-80", topodatapb.TabletType_MASTER, true, 1, nil, sbc2)
 	_, err = action(hc)
 	if err != nil {
@@ -300,8 +301,8 @@ func testResolverGeneric(t *testing.T, name string, action func(hc discovery.Hea
 
 	// retryable failure, vertical resharding
 	s.Reset()
-	sbc0 = &sandboxConn{}
-	sbc1 = &sandboxConn{mustFailFatal: 1}
+	sbc0 = &sandboxconn.SandboxConn{}
+	sbc1 = &sandboxconn.SandboxConn{MustFailFatal: 1}
 	hc.Reset()
 	hc.addTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
 	hc.addTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
@@ -333,8 +334,8 @@ func testResolverGeneric(t *testing.T, name string, action func(hc discovery.Hea
 
 	// retryable failure, horizontal resharding
 	s.Reset()
-	sbc0 = &sandboxConn{}
-	sbc1 = &sandboxConn{mustFailRetry: 1}
+	sbc0 = &sandboxconn.SandboxConn{}
+	sbc1 = &sandboxconn.SandboxConn{MustFailRetry: 1}
 	hc.Reset()
 	hc.addTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
 	hc.addTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
@@ -368,8 +369,8 @@ func testResolverGeneric(t *testing.T, name string, action func(hc discovery.Hea
 func testResolverStreamGeneric(t *testing.T, name string, action func(hc discovery.HealthCheck) (*sqltypes.Result, error)) {
 	// successful execute
 	s := createSandbox(name)
-	sbc0 := &sandboxConn{}
-	sbc1 := &sandboxConn{}
+	sbc0 := &sandboxconn.SandboxConn{}
+	sbc1 := &sandboxconn.SandboxConn{}
 	hc := newFakeHealthCheck()
 	hc.addTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
 	hc.addTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
@@ -383,8 +384,8 @@ func testResolverStreamGeneric(t *testing.T, name string, action func(hc discove
 
 	// failure
 	s.Reset()
-	sbc0 = &sandboxConn{mustFailRetry: 1}
-	sbc1 = &sandboxConn{}
+	sbc0 = &sandboxconn.SandboxConn{MustFailRetry: 1}
+	sbc1 = &sandboxconn.SandboxConn{}
 	hc.Reset()
 	hc.addTestTablet("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
 	hc.addTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
@@ -464,8 +465,8 @@ func TestResolverBuildEntityIds(t *testing.T) {
 func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
 	keyspace := "TestResolverDmlOnMultipleKeyspaceIds"
 	createSandbox(keyspace)
-	sbc0 := &sandboxConn{}
-	sbc1 := &sandboxConn{}
+	sbc0 := &sandboxconn.SandboxConn{}
+	sbc1 := &sandboxconn.SandboxConn{}
 	hc := newFakeHealthCheck()
 	hc.addTestTablet("aa", "1.1.1.1", 1001, keyspace, "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc0)
 	hc.addTestTablet("aa", "1.1.1.1", 1002, keyspace, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
@@ -488,7 +489,7 @@ func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
 func TestResolverExecBatchReresolve(t *testing.T) {
 	keyspace := "TestResolverExecBatchReresolve"
 	createSandbox(keyspace)
-	sbc := &sandboxConn{mustFailRetry: 20}
+	sbc := &sandboxconn.SandboxConn{MustFailRetry: 20}
 	hc := newFakeHealthCheck()
 	hc.addTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 
@@ -525,7 +526,7 @@ func TestResolverExecBatchReresolve(t *testing.T) {
 func TestResolverExecBatchAsTransaction(t *testing.T) {
 	keyspace := "TestResolverExecBatchAsTransaction"
 	createSandbox(keyspace)
-	sbc := &sandboxConn{mustFailRetry: 20}
+	sbc := &sandboxconn.SandboxConn{MustFailRetry: 20}
 	hc := newFakeHealthCheck()
 	hc.addTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 

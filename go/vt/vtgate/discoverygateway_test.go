@@ -8,6 +8,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
@@ -143,8 +144,8 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 
 	// retry error
 	hc.Reset()
-	ep1 = hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailRetry: 1})
-	ep2 := hc.addTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailRetry: 1})
+	ep1 = hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxconn.SandboxConn{MustFailRetry: 1})
+	ep2 := hc.addTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil, &sandboxconn.SandboxConn{MustFailRetry: 1})
 	wants := map[string]int{
 		fmt.Sprintf(`shard, host: ks.0.replica, %+v, retry: err`, ep1): 0,
 		fmt.Sprintf(`shard, host: ks.0.replica, %+v, retry: err`, ep2): 0,
@@ -159,8 +160,8 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 
 	// fatal error
 	hc.Reset()
-	ep1 = hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailFatal: 1})
-	ep2 = hc.addTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailFatal: 1})
+	ep1 = hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxconn.SandboxConn{MustFailFatal: 1})
+	ep2 = hc.addTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil, &sandboxconn.SandboxConn{MustFailFatal: 1})
 	wants = map[string]int{
 		fmt.Sprintf(`shard, host: ks.0.replica, %+v, fatal: err`, ep1): 0,
 		fmt.Sprintf(`shard, host: ks.0.replica, %+v, fatal: err`, ep2): 0,
@@ -180,7 +181,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 
 	// server error - no retry
 	hc.Reset()
-	ep1 = hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailServer: 1})
+	ep1 = hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxconn.SandboxConn{MustFailServer: 1})
 	want = fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: err`, ep1)
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_BAD_INPUT)
@@ -190,7 +191,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 
 	// conn error - no retry
 	hc.Reset()
-	ep1 = hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailConn: 1})
+	ep1 = hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxconn.SandboxConn{MustFailConn: 1})
 	want = fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: conn`, ep1)
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
@@ -200,7 +201,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 
 	// no failure
 	hc.Reset()
-	hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{})
+	hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxconn.SandboxConn{})
 	err = f(dg, keyspace, shard, tabletType)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -219,8 +220,8 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 
 	// retry error - no retry
 	hc.Reset()
-	ep1 := hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailRetry: 1})
-	ep2 := hc.addTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailRetry: 1})
+	ep1 := hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxconn.SandboxConn{MustFailRetry: 1})
+	ep2 := hc.addTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil, &sandboxconn.SandboxConn{MustFailRetry: 1})
 	wants := map[string]int{
 		fmt.Sprintf(`shard, host: ks.0.replica, %+v, retry: err`, ep1): 0,
 		fmt.Sprintf(`shard, host: ks.0.replica, %+v, retry: err`, ep2): 0,
@@ -235,7 +236,7 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 
 	// conn error - no retry
 	hc.Reset()
-	ep1 = hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailConn: 1})
+	ep1 = hc.addTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxconn.SandboxConn{MustFailConn: 1})
 	want := fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: conn`, ep1)
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
