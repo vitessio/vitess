@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
@@ -29,7 +30,7 @@ import (
 
 // This file uses the sandbox_test framework.
 
-var hcVTGateTest *fakeHealthCheck
+var hcVTGateTest *discovery.FakeHealthCheck
 
 func init() {
 	getSandbox(KsTestUnsharded).VSchema = `
@@ -40,7 +41,7 @@ func init() {
 	}
 }
 `
-	hcVTGateTest = newFakeHealthCheck()
+	hcVTGateTest = discovery.NewFakeHealthCheck()
 	Init(context.Background(), hcVTGateTest, topo.Server{}, new(sandboxTopo), "aa", 10, nil)
 }
 
@@ -48,7 +49,7 @@ func TestVTGateExecute(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	sbc := &sandboxconn.SandboxConn{}
 	hcVTGateTest.Reset()
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil, sbc)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 	qr, err := rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
@@ -109,7 +110,7 @@ func TestVTGateExecuteWithKeyspace(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	sbc := &sandboxconn.SandboxConn{}
 	hcVTGateTest.Reset()
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil, sbc)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 	qr, err := rpcVTGate.Execute(context.Background(),
 		"select id from none",
 		nil,
@@ -142,7 +143,7 @@ func TestVTGateExecuteShards(t *testing.T) {
 	createSandbox(ks)
 	sbc := &sandboxconn.SandboxConn{}
 	hcVTGateTest.Reset()
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1001, ks, shard, topodatapb.TabletType_REPLICA, true, 1, nil, sbc)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard, topodatapb.TabletType_REPLICA, true, 1, nil, sbc)
 	qr, err := rpcVTGate.ExecuteShards(context.Background(),
 		"query",
 		nil,
@@ -217,8 +218,8 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 	sbc1 := &sandboxconn.SandboxConn{}
 	sbc2 := &sandboxconn.SandboxConn{}
 	hcVTGateTest.Reset()
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1001, ks, shard1, topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1002, ks, shard2, topodatapb.TabletType_MASTER, true, 1, nil, sbc2)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard1, topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1002, ks, shard2, topodatapb.TabletType_MASTER, true, 1, nil, sbc2)
 	// Test for successful execution
 	qr, err := rpcVTGate.ExecuteKeyspaceIds(context.Background(),
 		"query",
@@ -290,8 +291,8 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 	sbc1 := &sandboxconn.SandboxConn{}
 	sbc2 := &sandboxconn.SandboxConn{}
 	hcVTGateTest.Reset()
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1001, ks, shard1, topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1002, ks, shard2, topodatapb.TabletType_MASTER, true, 1, nil, sbc2)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard1, topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1002, ks, shard2, topodatapb.TabletType_MASTER, true, 1, nil, sbc2)
 	// Test for successful execution
 	qr, err := rpcVTGate.ExecuteKeyRanges(context.Background(),
 		"query",
@@ -365,8 +366,8 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 	sbc1 := &sandboxconn.SandboxConn{}
 	sbc2 := &sandboxconn.SandboxConn{}
 	hcVTGateTest.Reset()
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1001, ks, shard1, topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1002, ks, shard2, topodatapb.TabletType_MASTER, true, 1, nil, sbc2)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard1, topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1002, ks, shard2, topodatapb.TabletType_MASTER, true, 1, nil, sbc2)
 	// Test for successful execution
 	qr, err := rpcVTGate.ExecuteEntityIds(context.Background(),
 		"query",
@@ -464,8 +465,8 @@ func TestVTGateExecuteBatchShards(t *testing.T) {
 	sbc1 := &sandboxconn.SandboxConn{}
 	sbc2 := &sandboxconn.SandboxConn{}
 	hcVTGateTest.Reset()
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1001, ks, shard1, topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1002, ks, shard2, topodatapb.TabletType_MASTER, true, 1, nil, sbc2)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard1, topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1002, ks, shard2, topodatapb.TabletType_MASTER, true, 1, nil, sbc2)
 	qrl, err := rpcVTGate.ExecuteBatchShards(context.Background(),
 		[]*vtgatepb.BoundShardQuery{{
 			Query: &querypb.BoundQuery{
@@ -528,8 +529,8 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 	sbc1 := &sandboxconn.SandboxConn{}
 	sbc2 := &sandboxconn.SandboxConn{}
 	hcVTGateTest.Reset()
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1001, ks, shard1, topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1002, ks, shard2, topodatapb.TabletType_MASTER, true, 1, nil, sbc2)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard1, topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1002, ks, shard2, topodatapb.TabletType_MASTER, true, 1, nil, sbc2)
 	kid10 := []byte{0x10}
 	kid30 := []byte{0x30}
 	qrl, err := rpcVTGate.ExecuteBatchKeyspaceIds(context.Background(),
@@ -592,7 +593,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 	createSandbox(ks)
 	sbc := &sandboxconn.SandboxConn{}
 	hcVTGateTest.Reset()
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1001, ks, shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 	var qrs []*sqltypes.Result
 	err := rpcVTGate.StreamExecute(context.Background(),
 		"select id from t1",
@@ -620,8 +621,8 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 	sbc := &sandboxconn.SandboxConn{}
 	sbc1 := &sandboxconn.SandboxConn{}
 	hcVTGateTest.Reset()
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1001, ks, shard1, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1002, ks, shard2, topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard1, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1002, ks, shard2, topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 	// Test for successful execution
 	var qrs []*sqltypes.Result
 	err := rpcVTGate.StreamExecuteKeyspaceIds(context.Background(),
@@ -685,8 +686,8 @@ func TestVTGateStreamExecuteKeyRanges(t *testing.T) {
 	sbc := &sandboxconn.SandboxConn{}
 	sbc1 := &sandboxconn.SandboxConn{}
 	hcVTGateTest.Reset()
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1001, ks, shard1, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1002, ks, shard2, topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard1, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1002, ks, shard2, topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
 	// Test for successful execution
 	var qrs []*sqltypes.Result
 	err := rpcVTGate.StreamExecuteKeyRanges(context.Background(),
@@ -729,7 +730,7 @@ func TestVTGateStreamExecuteShards(t *testing.T) {
 	createSandbox(ks)
 	sbc := &sandboxconn.SandboxConn{}
 	hcVTGateTest.Reset()
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1001, ks, shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 	// Test for successful execution
 	var qrs []*sqltypes.Result
 	err := rpcVTGate.StreamExecuteShards(context.Background(),
@@ -759,7 +760,7 @@ func TestVTGateSplitQuery(t *testing.T) {
 	port := int32(1001)
 	for _, kr := range keyranges {
 		sbc := &sandboxconn.SandboxConn{}
-		hcVTGateTest.addTestTablet("aa", "1.1.1.1", port, keyspace, key.KeyRangeString(kr), topodatapb.TabletType_RDONLY, true, 1, nil, sbc)
+		hcVTGateTest.AddTestTablet("aa", "1.1.1.1", port, keyspace, key.KeyRangeString(kr), topodatapb.TabletType_RDONLY, true, 1, nil, sbc)
 		port++
 	}
 	sql := "select col1, col2 from table"
@@ -822,7 +823,7 @@ func TestVTGateSplitQueryV2Sharded(t *testing.T) {
 	port := int32(1001)
 	for _, kr := range keyranges {
 		sbc := &sandboxconn.SandboxConn{}
-		hcVTGateTest.addTestTablet("aa", "1.1.1.1", port, keyspace, key.KeyRangeString(kr), topodatapb.TabletType_RDONLY, true, 1, nil, sbc)
+		hcVTGateTest.AddTestTablet("aa", "1.1.1.1", port, keyspace, key.KeyRangeString(kr), topodatapb.TabletType_RDONLY, true, 1, nil, sbc)
 		port++
 	}
 	sql := "select col1, col2 from table"
@@ -901,7 +902,7 @@ func TestVTGateSplitQueryV2Unsharded(t *testing.T) {
 	createSandbox(keyspace)
 	sbc := &sandboxconn.SandboxConn{}
 	hcVTGateTest.Reset()
-	hcVTGateTest.addTestTablet("aa", "1.1.1.1", 1001, keyspace, "0", topodatapb.TabletType_RDONLY, true, 1, nil, sbc)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, keyspace, "0", topodatapb.TabletType_RDONLY, true, 1, nil, sbc)
 	sql := "select col1, col2 from table"
 	bindVars := map[string]interface{}{"bv1": nil}
 	splitColumns := []string{"sc1", "sc2"}
@@ -1268,8 +1269,8 @@ func setUpSandboxWithTwoShards(keyspace string) (string, []*sandboxconn.SandboxC
 	shards := []*sandboxconn.SandboxConn{{}, {}}
 	createSandbox(keyspace)
 	hcVTGateTest.Reset()
-	hcVTGateTest.addTestTablet("aa", "-20", 1, keyspace, "-20", topodatapb.TabletType_MASTER, true, 1, nil, shards[0])
-	hcVTGateTest.addTestTablet("aa", "20-40", 1, keyspace, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, shards[1])
+	hcVTGateTest.AddTestTablet("aa", "-20", 1, keyspace, "-20", topodatapb.TabletType_MASTER, true, 1, nil, shards[0])
+	hcVTGateTest.AddTestTablet("aa", "20-40", 1, keyspace, "20-40", topodatapb.TabletType_MASTER, true, 1, nil, shards[1])
 	return keyspace, shards
 }
 

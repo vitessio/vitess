@@ -13,6 +13,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -597,7 +598,7 @@ func TestSelectINFail(t *testing.T) {
 func TestSelectScatter(t *testing.T) {
 	// Special setup: Don't use createRouterEnv.
 	cell := "aa"
-	hc := newFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck()
 	s := createSandbox("TestRouter")
 	s.VSchema = routerVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
@@ -606,7 +607,7 @@ func TestSelectScatter(t *testing.T) {
 	for _, shard := range shards {
 		sbc := &sandboxconn.SandboxConn{}
 		conns = append(conns, sbc)
-		hc.addTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
+		hc.AddTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
@@ -630,7 +631,7 @@ func TestSelectScatter(t *testing.T) {
 func TestStreamSelectScatter(t *testing.T) {
 	// Special setup: Don't use createRouterEnv.
 	cell := "aa"
-	hc := newFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck()
 	s := createSandbox("TestRouter")
 	s.VSchema = routerVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
@@ -639,7 +640,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	for _, shard := range shards {
 		sbc := &sandboxconn.SandboxConn{}
 		conns = append(conns, sbc)
-		hc.addTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
+		hc.AddTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
@@ -672,7 +673,7 @@ func TestStreamSelectScatter(t *testing.T) {
 func TestSelectScatterFail(t *testing.T) {
 	// Special setup: Don't use createRouterEnv.
 	cell := "aa"
-	hc := newFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck()
 	s := createSandbox("TestRouter")
 	s.VSchema = routerVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
@@ -682,7 +683,7 @@ func TestSelectScatterFail(t *testing.T) {
 	for _, shard := range shards {
 		sbc := &sandboxconn.SandboxConn{}
 		conns = append(conns, sbc)
-		hc.addTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
+		hc.AddTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)

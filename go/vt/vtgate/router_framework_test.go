@@ -6,6 +6,7 @@ package vtgate
 
 import (
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
@@ -157,17 +158,17 @@ var unshardedVSchema = `
 
 func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
-	hc := newFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck()
 	s := createSandbox("TestRouter")
 	s.VSchema = routerVSchema
 	sbc1 = &sandboxconn.SandboxConn{}
 	sbc2 = &sandboxconn.SandboxConn{}
-	hc.addTestTablet(cell, "-20", 1, "TestRouter", "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
-	hc.addTestTablet(cell, "40-60", 1, "TestRouter", "40-60", topodatapb.TabletType_MASTER, true, 1, nil, sbc2)
+	hc.AddTestTablet(cell, "-20", 1, "TestRouter", "-20", topodatapb.TabletType_MASTER, true, 1, nil, sbc1)
+	hc.AddTestTablet(cell, "40-60", 1, "TestRouter", "40-60", topodatapb.TabletType_MASTER, true, 1, nil, sbc2)
 
 	createSandbox(KsTestUnsharded)
 	sbclookup = &sandboxconn.SandboxConn{}
-	hc.addTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil, sbclookup)
+	hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil, sbclookup)
 
 	bad := createSandbox("TestBadSharding")
 	bad.VSchema = badVSchema
