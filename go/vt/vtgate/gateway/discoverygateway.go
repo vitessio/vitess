@@ -55,11 +55,10 @@ type discoveryGateway struct {
 	// We create one per cell.
 	tabletsWatchers []*discovery.TopologyWatcher
 
-	// mu protects all fields below
+	// mu protects all fields below.
 	mu sync.RWMutex
-
-	// statusAggregators is map indexed by the key
-	// cell/keyspace/shard/tablet_type
+	// statusAggregators is a map indexed by the key
+	// keyspace/shard/tablet_type.
 	statusAggregators map[string]*TabletStatusAggregator
 }
 
@@ -451,11 +450,7 @@ func (dg *discoveryGateway) getStatsAggregator(keyspace, shard string, tabletTyp
 	if ok {
 		return aggr
 	}
-	aggr = NewTabletStatusAggregator()
-	aggr.Keyspace = keyspace
-	aggr.Shard = shard
-	aggr.TabletType = tabletType
-	aggr.Name = key
+	aggr = NewTabletStatusAggregator(keyspace, shard, tabletType, key)
 	dg.statusAggregators[key] = aggr
 	return aggr
 }

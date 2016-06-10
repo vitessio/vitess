@@ -82,13 +82,6 @@ type TabletCacheStatus struct {
 	AvgLatency float64 // in milliseconds
 }
 
-// NewTabletStatusAggregator creates a TabletStatusAggregator.
-func NewTabletStatusAggregator() *TabletStatusAggregator {
-	tsa := &TabletStatusAggregator{}
-	registerAggregator(tsa)
-	return tsa
-}
-
 //
 // TabletStatusAggregator definitions
 //
@@ -118,6 +111,18 @@ type queryInfo struct {
 	tabletType topodatapb.TabletType
 	elapsed    time.Duration
 	hasError   bool
+}
+
+// NewTabletStatusAggregator creates a TabletStatusAggregator.
+func NewTabletStatusAggregator(keyspace, shard string, tabletType topodatapb.TabletType, name string) *TabletStatusAggregator {
+	tsa := &TabletStatusAggregator{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: tabletType,
+		Name:       name,
+	}
+	registerAggregator(tsa)
+	return tsa
 }
 
 // UpdateQueryInfo updates the aggregator with the given information about a query.

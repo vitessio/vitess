@@ -44,7 +44,7 @@ func (e *ShardError) VtErrorCode() vtrpcpb.ErrorCode {
 // NewShardError returns a ShardError which preserves the original
 // error code if possible, adds the connection context and adds a bit
 // to determine whether the keyspace/shard needs to be re-resolved for
-// a potential sharding event.
+// a potential sharding event (namely, if we were in a transaction).
 func NewShardError(in error, keyspace, shard string, tabletType topodatapb.TabletType, tablet *topodatapb.Tablet, inTransaction bool) error {
 	if in == nil {
 		return nil

@@ -12,7 +12,7 @@ import (
 )
 
 // This file contains the definitions for a FakeHealthCheck class to
-// simulate a HealthCheck module. Note is not in a sub-package because
+// simulate a HealthCheck module. Note it is not in a sub-package because
 // otherwise it couldn't be used in this package's tests because of
 // circular dependencies.
 
