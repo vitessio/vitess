@@ -8,13 +8,13 @@ If a schema change is not long-running, please use the simpler [vtctl ApplySchem
 
 One solution to realize such long-running schema changes is to use a temporary table and keep it in sync with triggers as [originally proposed by Shlomi](http://code.openark.org/blog/mysql/online-alter-table-now-available-in-openark-kit) and further refined by others ([Percona's pt-online-schema-change](https://www.percona.com/doc/percona-toolkit/2.2/pt-online-schema-change.html), [Square's Shift](https://github.com/square/shift)).
 
-Here we describe an alternative solution which uses a combination of MySQL's statement based replication and backups to apply the change to all tablets. Since the long-running schema change is applied to an offline tablet, ongoing operations are not affected. Internally within Google this process is dubbed **pivot** and therefore we refer to it by this name throughout the document. 
+Here we describe an alternative solution which uses a combination of MySQL's statement based replication and backups to apply the changes to all tablets. Since the long-running schema changes are applied to an offline tablet, ongoing operations are not affected. Internally within Google this process is dubbed **pivot** and therefore we refer to it by this name throughout the document.
 
 This tutorial outlines the necessary manual steps for a pivot and is based on the [Vitess Kubernetes Getting Started Guide](http://vitess.io/getting-started/). Eventually, we plan to provide an integrated solution within Vitess which will automate the steps for you.
 
 **At the high level, a pivot comprises the following phases:**
 
-1. Apply the schema change to an offline tablet.
+1. Apply the schema changes to an offline tablet.
 1. Re-enable replication on the tablet, let it catch up and then create a backup of it.
 1. Restore all remaining tablets (excluding the master) from the backup.
 1. Failover the master to a replica tablet which has the new schema. Restore the old master from the backup.
@@ -24,21 +24,21 @@ This tutorial outlines the necessary manual steps for a pivot and is based on th
 
 The key here is that the new schema is backward compatible with respect to statements sent by the app. The replication stream remains backward compatible as well because we use statement based replication. As a consequence, the new schema must not be used until it has been changed on all tablets. If the schema would have been used e.g. when an insert uses a new column, replication would break on tablets which have the old schema. Pivoting all tablets first ensures this doesn't happen.
 
-Also note that the change is applied to only one tablet and then all other tablets are restored from the backup. This is more efficient than applying the long-running change on every single tablet.
+Also note that the changes are applied to only one tablet and then all other tablets are restored from the backup. This is more efficient than applying the long-running changes on every single tablet.
 
 Now let's carry out an actual pivot based on our Guestbook example schema. We'll add a column to it.
 
 ## Prerequisites
 
-We assume that you have followed the [Kubernetes Getting Started Guide] up to and including the step "9. Create a table".
+We assume that you have followed the [Vitess Kubernetes Getting Started Guide](http://vitess.io/getting-started/) up to and including the step "9. Create a table".
 
 Furthermore, we assume that the tablet with the ID 100 is the current master.
 
 ## Remarks
 
-Note: The example uses the `vtctl ExecuteFetchAsDba` command for demonstration purposes only. It is not recommended for daily operations since queries are executed with SUPER rights and e.g. can insert data on a read-only slave.
+Note: The example uses the `vtctl ExecuteFetchAsDba` command to read rows for demonstration purposes only. It is not recommended for daily operations since queries are executed with SUPER rights and e.g. can insert data on a read-only slave.
 
-Throughout the tutorial many steps are marked as "optional" or meant for verification only. They are not relevant for the pivot process. However, they help to explain what is happening under the hood e.g. that a tablet did catch up to the latest GTID.
+Throughout the tutorial many steps are marked as "optional" or meant for verification only (e.g. looking at the GTIDs with `vtctl ShardReplicationPositions`). They are not relevant for the pivot process. However, they help to explain what is happening under the hood e.g. that a tablet did catch up to the latest GTID.
 
 ## Pivot Steps
 
@@ -96,7 +96,7 @@ The GTID increased by one from 7 to 8 and all replicas catched up to it.
 
 ### Apply the schema to an offline tablet
 
-Let's take the *rdonly* tablet with the ID 104 offline and apply the change there:
+Let's take the *rdonly* tablet with the ID 104 offline and apply the changes there:
 
 ``` sh
 vitess/examples/kubernetes$ ./kvtctl.sh StopSlave test-0000000104
@@ -169,7 +169,10 @@ test-0000000100 test_keyspace 0 master 10.64.4.5:15002 10.64.4.5:3306 [] MySQL56
 
 Note that the tablet with the ID 104 is lagging behind by one transaction now (8 instead of 9) because we stopped replication on it.
 
-Apply the schema change on the *rdonly* tablet. We'll add the column `views` to the `messages` table.
+Apply a schema change on the *rdonly* tablet. We'll add the column `views` to the `messages` table.
+
+Since the tablet is a slave and read-only, we will have to use `ExecuteFetchAsDba` to execute the SQL statement with SUPER rights.
+
 
 ``` sh
 vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba -disable_binlogs test-0000000104 "ALTER TABLE messages ADD views BIGINT(20) UNSIGNED NULL"
