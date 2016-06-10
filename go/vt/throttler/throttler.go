@@ -86,11 +86,6 @@ type Throttler struct {
 
 	nowFunc func() time.Time
 
-	// The group below is unguarded because it's only accessed by the update Go
-	// routine which reads the rateUpdateChan channel.
-	maxRate          int64
-	maxRatePerThread int64
-
 	mu sync.Mutex
 	// runningThreads tracks which threads have not finished yet.
 	runningThreads map[int]bool
@@ -240,10 +235,6 @@ func (t *Throttler) updateMaxRate() {
 	threadsRunning := len(t.runningThreads)
 	if threadsRunning == 0 {
 		// Throttler is done. Set rates don't matter anymore.
-		return
-	}
-	if maxRate == t.maxRate && threadsRunning == t.threadRunningsLastUpdate {
-		// Rate for each thread is unchanged.
 		return
 	}
 
