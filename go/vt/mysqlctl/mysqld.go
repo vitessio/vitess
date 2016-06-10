@@ -60,7 +60,6 @@ type Mysqld struct {
 	replParams    *sqldb.ConnParams
 	dbaMysqlStats *stats.Timings
 	tabletDir     string
-	SnapshotDir   string
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
@@ -108,7 +107,6 @@ func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *sqldb.Con
 		replParams:    repl,
 		dbaMysqlStats: dbaMysqlStats,
 		tabletDir:     TabletDir(config.ServerID),
-		SnapshotDir:   SnapshotDir(config.ServerID),
 	}
 }
 

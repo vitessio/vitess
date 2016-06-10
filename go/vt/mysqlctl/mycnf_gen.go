@@ -74,11 +74,6 @@ func TabletDir(uid uint32) string {
 	return fmt.Sprintf("%s/vt_%010d", env.VtDataRoot(), uid)
 }
 
-// SnapshotDir returns the default directory for a tablet's snapshots
-func SnapshotDir(uid uint32) string {
-	return fmt.Sprintf("%s/%s/vt_%010d", env.VtDataRoot(), snapshotDir, uid)
-}
-
 // mycnfFile returns the default location of the my.cnf file.
 func mycnfFile(uid uint32) string {
 	return path.Join(TabletDir(uid), "my.cnf")
