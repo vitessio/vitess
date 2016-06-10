@@ -14,6 +14,7 @@ import unittest
 
 from vtdb import keyrange_constants
 
+import base_sharding
 import environment
 import tablet
 import utils
@@ -155,7 +156,7 @@ def tearDownModule():
   shard_1_rdonly1.remove_tree()
 
 
-class TestBaseSplitClone(unittest.TestCase):
+class TestBaseSplitClone(unittest.TestCase, base_sharding.BaseShardingTest):
   """Abstract test base class for testing the SplitClone worker."""
 
   def __init__(self, *args, **kwargs):
@@ -434,12 +435,16 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
         ['--cell', 'test_nj'],
         auto_log=True)
 
+    # --max_tps is only specified to enable the throttler and ensure that the
+    # code is executed. But the intent here is not to throttle the test, hence
+    # the rate limit is set very high.
     workerclient_proc = utils.run_vtworker_client_bg(
         ['SplitClone',
          '--source_reader_count', '1',
          '--destination_pack_count', '1',
          '--destination_writer_count', '1',
          '--min_healthy_rdonly_tablets', '1',
+         '--max_tps', '9999',
          'test_keyspace/0'],
         worker_rpc_port)
 
@@ -452,6 +457,12 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
           'WorkerRetryCount >= 2',
           condition_fn=lambda v: v.get('WorkerRetryCount') >= 2)
       logging.debug('Worker has retried at least twice, starting reparent now')
+
+      # vtworker is blocked at this point. This is a good time to test that its
+      # throttler server is reacting to RPCs.
+      self.check_binlog_throttler('localhost:%d' % worker_rpc_port,
+                                  ['test_keyspace/-80', 'test_keyspace/80-'],
+                                  9999)
 
       # Bring back masters. Since we test with semi-sync now, we need at least
       # one replica for the new master. This test is already quite expensive,

@@ -799,6 +799,12 @@ class Tablet(object):
     ]
     return utils.run_vtctl(args, auto_log=auto_log)
 
+  def rpc_endpoint(self):
+    """Returns the protocol and endpoint to use for RPCs."""
+    if self.grpc_enabled():
+      return 'localhost:%d' % self.grpc_port
+    return 'localhost:%d' % self.port
+
 
 def kill_tablets(tablets):
   for t in tablets:

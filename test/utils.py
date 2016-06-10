@@ -735,6 +735,8 @@ def run_vtctl_vtctl(clargs, auto_log=False, expect_fail=False,
   args.extend(['-tablet_manager_protocol',
                protocols_flavor().tablet_manager_protocol()])
   args.extend(['-tablet_protocol', protocols_flavor().tabletconn_protocol()])
+  args.extend(['-throttler_client_protocol',
+               protocols_flavor().throttler_client_protocol()])
   args.extend(['-vtgate_protocol', protocols_flavor().vtgate_protocol()])
 
   if auto_log:
@@ -1097,8 +1099,10 @@ class Vtctld(object):
         '--port', str(self.port),
         '-tablet_manager_protocol',
         protocols_flavor().tablet_manager_protocol(),
-        '-vtgate_protocol', protocols_flavor().vtgate_protocol(),
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
+        '-throttler_client_protocol',
+        protocols_flavor().throttler_client_protocol(),
+        '-vtgate_protocol', protocols_flavor().vtgate_protocol(),
     ] + environment.topo_server().flags()
     if enable_schema_change_dir:
       args += [

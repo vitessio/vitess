@@ -5,6 +5,7 @@
 package testlib
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -82,6 +83,22 @@ func (vp *VtctlPipe) Close() {
 // Run executes the provided command remotely, logs the output in the
 // test logs, and returns the command error.
 func (vp *VtctlPipe) Run(args []string) error {
+	return vp.run(args, func(line string) {
+		vp.t.Log(line)
+	})
+}
+
+// RunAndOutput is similar to Run, but returns the output as a multi-line string
+// instead of logging it.
+func (vp *VtctlPipe) RunAndOutput(args []string) (string, error) {
+	var output bytes.Buffer
+	err := vp.run(args, func(line string) {
+		output.WriteString(line)
+	})
+	return output.String(), err
+}
+
+func (vp *VtctlPipe) run(args []string, outputFunc func(string)) error {
 	actionTimeout := 30 * time.Second
 	ctx := context.Background()
 
@@ -93,7 +110,7 @@ func (vp *VtctlPipe) Run(args []string) error {
 		le, err := stream.Recv()
 		switch err {
 		case nil:
-			vp.t.Logf(logutil.EventString(le))
+			outputFunc(logutil.EventString(le))
 		case io.EOF:
 			return nil
 		default:

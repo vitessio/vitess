@@ -46,6 +46,13 @@ class ProtocolsFlavor(object):
     """The protocol to use for connections from vtctl/vtgate to vttablet."""
     raise NotImplementedError('Not implemented in the base class')
 
+  def throttler_client_protocol(self):
+    """Client protocol for the resharding throttler.
+
+    This RPC interface is enabled in vtworker and vttablet.
+    """
+    raise NotImplementedError('Not implemented in the base class')
+
   def vtgate_protocol(self):
     """The protocol to use to talk to vtgate, in go."""
     raise NotImplementedError('Not implemented in the base class')
