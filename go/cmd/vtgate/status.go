@@ -258,7 +258,7 @@ func addStatusParts(vtgate *vtgate.VTGate) {
 	servenv.AddStatusPart("Gateway Status", gatewayStatusTemplate, func() interface{} {
 		return vtgate.GetGatewayCacheStatus()
 	})
-	servenv.AddStatusPart("Health Check Cache (NOT FOR QUERY ROUTING)", healthCheckTemplate, func() interface{} {
+	servenv.AddStatusPart("Health Check Cache", healthCheckTemplate, func() interface{} {
 		return healthCheck.CacheStatus()
 	})
 	if onStatusRegistered != nil {

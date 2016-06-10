@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package vtgate
+package vterrors
 
 import (
 	"errors"
@@ -11,13 +11,12 @@ import (
 	"testing"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 var errGeneric = errors.New("generic error")
 
 func errFromCode(c vtrpcpb.ErrorCode) error {
-	return vterrors.FromError(c, errGeneric)
+	return FromError(c, errGeneric)
 }
 
 func TestAggregateVtGateErrorCodes(t *testing.T) {
@@ -61,9 +60,9 @@ func TestAggregateVtGateErrorCodes(t *testing.T) {
 		},
 	}
 	for _, tc := range testcases {
-		out := aggregateVtGateErrorCodes(tc.input)
+		out := AggregateVtGateErrorCodes(tc.input)
 		if out != tc.expected {
-			t.Errorf("aggregateVtGateErrorCodes(%v) = %v \nwant: %v",
+			t.Errorf("AggregateVtGateErrorCodes(%v) = %v \nwant: %v",
 				tc.input, out, tc.expected)
 		}
 	}
@@ -84,16 +83,16 @@ func TestAggregateVtGateErrors(t *testing.T) {
 				errFromCode(vtrpcpb.ErrorCode_TRANSIENT_ERROR),
 				errFromCode(vtrpcpb.ErrorCode_BAD_INPUT),
 			},
-			expected: vterrors.FromError(
+			expected: FromError(
 				vtrpcpb.ErrorCode_BAD_INPUT,
-				vterrors.ConcatenateErrors([]error{errGeneric, errGeneric, errGeneric}),
+				ConcatenateErrors([]error{errGeneric, errGeneric, errGeneric}),
 			),
 		},
 	}
 	for _, tc := range testcases {
 		out := AggregateVtGateErrors(tc.input)
 		if !reflect.DeepEqual(out, tc.expected) {
-			t.Errorf("aggregateVtGateErrors(%+v) = %+v \nwant: %+v",
+			t.Errorf("AggregateVtGateErrors(%+v) = %+v \nwant: %+v",
 				tc.input, out, tc.expected)
 		}
 	}

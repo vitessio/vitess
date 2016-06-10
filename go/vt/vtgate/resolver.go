@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -61,7 +62,7 @@ func isRetryableError(err error) bool {
 	switch e := err.(type) {
 	case *ScatterConnError:
 		return e.Retryable
-	case *ShardError:
+	case *gateway.ShardError:
 		return e.ErrorCode == vtrpcpb.ErrorCode_QUERY_NOT_SERVED
 	default:
 		return false
@@ -364,7 +365,7 @@ func (res *Resolver) Rollback(ctx context.Context, inSession *vtgatepb.Session) 
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
-func (res *Resolver) GetGatewayCacheStatus() GatewayTabletCacheStatusList {
+func (res *Resolver) GetGatewayCacheStatus() gateway.TabletCacheStatusList {
 	return res.scatterConn.GetGatewayCacheStatus()
 }
 

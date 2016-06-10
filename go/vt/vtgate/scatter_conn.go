@@ -21,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -33,8 +34,7 @@ import (
 type ScatterConn struct {
 	timings              *stats.MultiTimings
 	tabletCallErrorCount *stats.MultiCounters
-	gateway              Gateway
-	testGateway          Gateway // test health checking module
+	gateway              gateway.Gateway
 }
 
 // shardActionFunc defines the contract for a shard action
@@ -61,7 +61,7 @@ func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv topo.
 	if statsName != "" {
 		tabletCallErrorCountStatsName = statsName + "ErrorCount"
 	}
-	gateway := GetGatewayCreator()(hc, topoServer, serv, cell, retryCount, tabletTypesToWait)
+	gateway := gateway.GetCreator()(hc, topoServer, serv, cell, retryCount, tabletTypesToWait)
 
 	return &ScatterConn{
 		timings:              stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
@@ -731,7 +731,7 @@ func (stc *ScatterConn) Close() error {
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
-func (stc *ScatterConn) GetGatewayCacheStatus() GatewayTabletCacheStatusList {
+func (stc *ScatterConn) GetGatewayCacheStatus() gateway.TabletCacheStatusList {
 	return stc.gateway.CacheStatus()
 }
 
@@ -761,7 +761,7 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	}
 	allRetryableError := true
 	for _, e := range errors {
-		connError, ok := e.(*ShardError)
+		connError, ok := e.(*gateway.ShardError)
 		if !ok || (connError.ErrorCode != vtrpcpb.ErrorCode_QUERY_NOT_SERVED && connError.ErrorCode != vtrpcpb.ErrorCode_INTERNAL_ERROR) || connError.InTransaction {
 			allRetryableError = false
 			break
@@ -770,7 +770,7 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	return &ScatterConnError{
 		Retryable:  allRetryableError,
 		Errs:       errors,
-		serverCode: aggregateVtGateErrorCodes(errors),
+		serverCode: vterrors.AggregateVtGateErrorCodes(errors),
 	}
 }
 

@@ -22,7 +22,7 @@ func TestShardReplicationWatcher(t *testing.T) {
 
 func checkWatcher(t *testing.T, cellTablets bool) {
 	ft := newFakeTopo(cellTablets)
-	fhc := newFakeHealthCheck()
+	fhc := NewFakeHealthCheck()
 	t.Logf(`ft = FakeTopo(); fhc = FakeHealthCheck()`)
 	var tw *TopologyWatcher
 	if cellTablets {

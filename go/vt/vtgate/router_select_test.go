@@ -13,7 +13,9 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 
@@ -143,7 +145,7 @@ func TestStreamUnsharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantResult := singleRowResult
+	wantResult := sandboxconn.SingleRowResult
 	if !reflect.DeepEqual(result, wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
@@ -368,7 +370,7 @@ func TestSelectCaseSensitivity(t *testing.T) {
 func TestSelectEqualNotFound(t *testing.T) {
 	router, _, _, sbclookup := createRouterEnv()
 
-	sbclookup.setResults([]*sqltypes.Result{{}})
+	sbclookup.SetResults([]*sqltypes.Result{{}})
 	result, err := routerExec(router, "select id from music where id = 1", nil)
 	if err != nil {
 		t.Error(err)
@@ -378,7 +380,7 @@ func TestSelectEqualNotFound(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
-	sbclookup.setResults([]*sqltypes.Result{{}})
+	sbclookup.SetResults([]*sqltypes.Result{{}})
 	result, err = routerExec(router, "select id from user where name = 'foo'", nil)
 	if err != nil {
 		t.Error(err)
@@ -397,7 +399,7 @@ func TestStreamSelectEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantResult := singleRowResult
+	wantResult := sandboxconn.SingleRowResult
 	if !reflect.DeepEqual(result, wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
@@ -426,7 +428,7 @@ func TestSelectEqualFail(t *testing.T) {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
-	sbclookup.mustFailServer = 1
+	sbclookup.MustFailServer = 1
 	_, err = routerExec(router, "select id from music where id = 1", nil)
 	want = "paramsSelectEqual: lookup.Map"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
@@ -441,7 +443,7 @@ func TestSelectEqualFail(t *testing.T) {
 	}
 	s.ShardSpec = DefaultShardSpec
 
-	sbclookup.mustFailServer = 1
+	sbclookup.MustFailServer = 1
 	_, err = routerExec(router, "select id from user where name = 'foo'", nil)
 	want = "paramsSelectEqual: lookup.Map"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
@@ -533,7 +535,7 @@ func TestStreamSelectIN(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantResult := singleRowResult
+	wantResult := sandboxconn.SingleRowResult
 	if !reflect.DeepEqual(result, wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
@@ -544,10 +546,10 @@ func TestStreamSelectIN(t *testing.T) {
 		t.Error(err)
 	}
 	wantResult = &sqltypes.Result{
-		Fields: singleRowResult.Fields,
+		Fields: sandboxconn.SingleRowResult.Fields,
 		Rows: [][]sqltypes.Value{
-			singleRowResult.Rows[0],
-			singleRowResult.Rows[0],
+			sandboxconn.SingleRowResult.Rows[0],
+			sandboxconn.SingleRowResult.Rows[0],
 		},
 		RowsAffected: 2,
 	}
@@ -560,7 +562,7 @@ func TestStreamSelectIN(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantResult = singleRowResult
+	wantResult = sandboxconn.SingleRowResult
 	if !reflect.DeepEqual(result, wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
@@ -596,16 +598,16 @@ func TestSelectINFail(t *testing.T) {
 func TestSelectScatter(t *testing.T) {
 	// Special setup: Don't use createRouterEnv.
 	cell := "aa"
-	hc := newFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck()
 	s := createSandbox("TestRouter")
 	s.VSchema = routerVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
-	var conns []*sandboxConn
+	var conns []*sandboxconn.SandboxConn
 	for _, shard := range shards {
-		sbc := &sandboxConn{}
+		sbc := &sandboxconn.SandboxConn{}
 		conns = append(conns, sbc)
-		hc.addTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
+		hc.AddTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
@@ -629,16 +631,16 @@ func TestSelectScatter(t *testing.T) {
 func TestStreamSelectScatter(t *testing.T) {
 	// Special setup: Don't use createRouterEnv.
 	cell := "aa"
-	hc := newFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck()
 	s := createSandbox("TestRouter")
 	s.VSchema = routerVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
-	var conns []*sandboxConn
+	var conns []*sandboxconn.SandboxConn
 	for _, shard := range shards {
-		sbc := &sandboxConn{}
+		sbc := &sandboxconn.SandboxConn{}
 		conns = append(conns, sbc)
-		hc.addTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
+		hc.AddTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
@@ -650,16 +652,16 @@ func TestStreamSelectScatter(t *testing.T) {
 		t.Error(err)
 	}
 	wantResult := &sqltypes.Result{
-		Fields: singleRowResult.Fields,
+		Fields: sandboxconn.SingleRowResult.Fields,
 		Rows: [][]sqltypes.Value{
-			singleRowResult.Rows[0],
-			singleRowResult.Rows[0],
-			singleRowResult.Rows[0],
-			singleRowResult.Rows[0],
-			singleRowResult.Rows[0],
-			singleRowResult.Rows[0],
-			singleRowResult.Rows[0],
-			singleRowResult.Rows[0],
+			sandboxconn.SingleRowResult.Rows[0],
+			sandboxconn.SingleRowResult.Rows[0],
+			sandboxconn.SingleRowResult.Rows[0],
+			sandboxconn.SingleRowResult.Rows[0],
+			sandboxconn.SingleRowResult.Rows[0],
+			sandboxconn.SingleRowResult.Rows[0],
+			sandboxconn.SingleRowResult.Rows[0],
+			sandboxconn.SingleRowResult.Rows[0],
 		},
 		RowsAffected: 8,
 	}
@@ -671,17 +673,17 @@ func TestStreamSelectScatter(t *testing.T) {
 func TestSelectScatterFail(t *testing.T) {
 	// Special setup: Don't use createRouterEnv.
 	cell := "aa"
-	hc := newFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck()
 	s := createSandbox("TestRouter")
 	s.VSchema = routerVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	s.SrvKeyspaceMustFail = 1
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
-	var conns []*sandboxConn
+	var conns []*sandboxconn.SandboxConn
 	for _, shard := range shards {
-		sbc := &sandboxConn{}
+		sbc := &sandboxconn.SandboxConn{}
 		conns = append(conns, sbc)
-		hc.addTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
+		hc.AddTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil, sbc)
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
@@ -718,13 +720,13 @@ func TestSimpleJoin(t *testing.T) {
 	}
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			singleRowResult.Fields[0],
-			singleRowResult.Fields[0],
+			sandboxconn.SingleRowResult.Fields[0],
+			sandboxconn.SingleRowResult.Fields[0],
 		},
 		Rows: [][]sqltypes.Value{
 			{
-				singleRowResult.Rows[0][0],
-				singleRowResult.Rows[0][0],
+				sandboxconn.SingleRowResult.Rows[0][0],
+				sandboxconn.SingleRowResult.Rows[0][0],
 			},
 		},
 		RowsAffected: 1,
@@ -777,13 +779,13 @@ func TestSimpleJoinStream(t *testing.T) {
 	}
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			singleRowResult.Fields[0],
-			singleRowResult.Fields[0],
+			sandboxconn.SingleRowResult.Fields[0],
+			sandboxconn.SingleRowResult.Fields[0],
 		},
 		Rows: [][]sqltypes.Value{
 			{
-				singleRowResult.Rows[0][0],
-				singleRowResult.Rows[0][0],
+				sandboxconn.SingleRowResult.Rows[0][0],
+				sandboxconn.SingleRowResult.Rows[0][0],
 			},
 		},
 		RowsAffected: 0,
@@ -807,7 +809,7 @@ func TestVarJoin(t *testing.T) {
 			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
 		}},
 	}}
-	sbc1.setResults(result1)
+	sbc1.SetResults(result1)
 	_, err := routerExec(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
 	if err != nil {
 		t.Error(err)
@@ -845,7 +847,7 @@ func TestVarJoinStream(t *testing.T) {
 			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
 		}},
 	}}
-	sbc1.setResults(result1)
+	sbc1.SetResults(result1)
 	_, err := routerStream(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1")
 	if err != nil {
 		t.Error(err)
@@ -888,20 +890,20 @@ func TestLeftJoin(t *testing.T) {
 			{"id", sqltypes.Int32},
 		},
 	}}
-	sbc1.setResults(result1)
-	sbc2.setResults(emptyResult)
+	sbc1.SetResults(result1)
+	sbc2.SetResults(emptyResult)
 	result, err := routerExec(router, "select u1.id, u2.id from user u1 left join user u2 on u2.id = u1.col where u1.id = 1", nil)
 	if err != nil {
 		t.Error(err)
 	}
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			singleRowResult.Fields[0],
-			singleRowResult.Fields[0],
+			sandboxconn.SingleRowResult.Fields[0],
+			sandboxconn.SingleRowResult.Fields[0],
 		},
 		Rows: [][]sqltypes.Value{
 			{
-				singleRowResult.Rows[0][0],
+				sandboxconn.SingleRowResult.Rows[0][0],
 				{},
 			},
 		},
@@ -931,20 +933,20 @@ func TestLeftJoinStream(t *testing.T) {
 			{"id", sqltypes.Int32},
 		},
 	}}
-	sbc1.setResults(result1)
-	sbc2.setResults(emptyResult)
+	sbc1.SetResults(result1)
+	sbc2.SetResults(emptyResult)
 	result, err := routerStream(router, "select u1.id, u2.id from user u1 left join user u2 on u2.id = u1.col where u1.id = 1")
 	if err != nil {
 		t.Error(err)
 	}
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			singleRowResult.Fields[0],
-			singleRowResult.Fields[0],
+			sandboxconn.SingleRowResult.Fields[0],
+			sandboxconn.SingleRowResult.Fields[0],
 		},
 		Rows: [][]sqltypes.Value{
 			{
-				singleRowResult.Rows[0][0],
+				sandboxconn.SingleRowResult.Rows[0][0],
 				{},
 			},
 		},
@@ -959,7 +961,7 @@ func TestEmptyJoin(t *testing.T) {
 	router, sbc1, _, _ := createRouterEnv()
 	// Empty result requires a field query for the second part of join,
 	// which is sent to shard 0.
-	sbc1.setResults([]*sqltypes.Result{{
+	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{"id", sqltypes.Int32},
 		},
@@ -999,7 +1001,7 @@ func TestEmptyJoinStream(t *testing.T) {
 	router, sbc1, _, _ := createRouterEnv()
 	// Empty result requires a field query for the second part of join,
 	// which is sent to shard 0.
-	sbc1.setResults([]*sqltypes.Result{{
+	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{"id", sqltypes.Int32},
 		},
@@ -1038,7 +1040,7 @@ func TestEmptyJoinStream(t *testing.T) {
 func TestEmptyJoinRecursive(t *testing.T) {
 	router, sbc1, _, _ := createRouterEnv()
 	// Make sure it also works recursively.
-	sbc1.setResults([]*sqltypes.Result{{
+	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{"id", sqltypes.Int32},
 		},
@@ -1086,7 +1088,7 @@ func TestEmptyJoinRecursive(t *testing.T) {
 func TestEmptyJoinRecursiveStream(t *testing.T) {
 	router, sbc1, _, _ := createRouterEnv()
 	// Make sure it also works recursively.
-	sbc1.setResults([]*sqltypes.Result{{
+	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{"id", sqltypes.Int32},
 		},
@@ -1135,7 +1137,7 @@ func TestJoinErrors(t *testing.T) {
 	router, sbc1, sbc2, _ := createRouterEnv()
 
 	// First query fails
-	sbc1.mustFailServer = 1
+	sbc1.MustFailServer = 1
 	_, err := routerExec(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
 	want := "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -1143,12 +1145,12 @@ func TestJoinErrors(t *testing.T) {
 	}
 
 	// Field query fails
-	sbc2.setResults([]*sqltypes.Result{{
+	sbc2.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{"id", sqltypes.Int32},
 		},
 	}})
-	sbc1.mustFailServer = 1
+	sbc1.MustFailServer = 1
 	_, err = routerExec(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 3", nil)
 	want = "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -1156,7 +1158,7 @@ func TestJoinErrors(t *testing.T) {
 	}
 
 	// Second query fails
-	sbc1.setResults([]*sqltypes.Result{{
+	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{"id", sqltypes.Int32},
 			{"col", sqltypes.Int32},
@@ -1166,7 +1168,7 @@ func TestJoinErrors(t *testing.T) {
 			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
 		}},
 	}})
-	sbc2.mustFailServer = 1
+	sbc2.MustFailServer = 1
 	_, err = routerExec(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
 	want = "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -1174,13 +1176,13 @@ func TestJoinErrors(t *testing.T) {
 	}
 
 	// Nested join query fails on get fields
-	sbc2.setResults([]*sqltypes.Result{{
+	sbc2.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{"id", sqltypes.Int32},
 			{"col", sqltypes.Int32},
 		},
 	}})
-	sbc1.mustFailServer = 1
+	sbc1.MustFailServer = 1
 	_, err = routerExec(router, "select u1.id, u2.id from user u1 join (user u2 join user u3 on u3.id = u2.col) where u1.id = 3", nil)
 	want = "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -1188,12 +1190,12 @@ func TestJoinErrors(t *testing.T) {
 	}
 
 	// Field query fails on stream join
-	sbc2.setResults([]*sqltypes.Result{{
+	sbc2.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{"id", sqltypes.Int32},
 		},
 	}})
-	sbc1.mustFailServer = 1
+	sbc1.MustFailServer = 1
 	_, err = routerStream(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 3")
 	want = "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -1201,7 +1203,7 @@ func TestJoinErrors(t *testing.T) {
 	}
 
 	// Second query fails on stream join
-	sbc1.setResults([]*sqltypes.Result{{
+	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{"id", sqltypes.Int32},
 			{"col", sqltypes.Int32},
@@ -1211,7 +1213,7 @@ func TestJoinErrors(t *testing.T) {
 			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
 		}},
 	}})
-	sbc2.mustFailServer = 1
+	sbc2.MustFailServer = 1
 	_, err = routerStream(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1")
 	want = "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {

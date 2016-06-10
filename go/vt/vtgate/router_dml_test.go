@@ -11,6 +11,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -52,7 +53,7 @@ func TestUpdateEqual(t *testing.T) {
 
 	sbc1.Queries = nil
 	sbc2.Queries = nil
-	sbclookup.setResults([]*sqltypes.Result{{}})
+	sbclookup.SetResults([]*sqltypes.Result{{}})
 	_, err = routerExec(router, "update music set a=2 where id = 2", nil)
 	if err != nil {
 		t.Error(err)
@@ -134,7 +135,7 @@ func TestUpdateEqualFail(t *testing.T) {
 func TestDeleteEqual(t *testing.T) {
 	router, sbc, _, sbclookup := createRouterEnv()
 
-	sbc.setResults([]*sqltypes.Result{{
+	sbc.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{"name", sqltypes.VarChar},
 		},
@@ -172,7 +173,7 @@ func TestDeleteEqual(t *testing.T) {
 
 	sbc.Queries = nil
 	sbclookup.Queries = nil
-	sbc.setResults([]*sqltypes.Result{{}})
+	sbc.SetResults([]*sqltypes.Result{{}})
 	_, err = routerExec(router, "delete from user where id = 1", nil)
 	if err != nil {
 		t.Error(err)
@@ -193,7 +194,7 @@ func TestDeleteEqual(t *testing.T) {
 
 	sbc.Queries = nil
 	sbclookup.Queries = nil
-	sbclookup.setResults([]*sqltypes.Result{{}})
+	sbclookup.SetResults([]*sqltypes.Result{{}})
 	_, err = routerExec(router, "delete from music where id = 1", nil)
 	if err != nil {
 		t.Error(err)
@@ -215,7 +216,7 @@ func TestDeleteEqual(t *testing.T) {
 func TestDeleteComments(t *testing.T) {
 	router, sbc, _, sbclookup := createRouterEnv()
 
-	sbc.setResults([]*sqltypes.Result{{
+	sbc.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{"name", sqltypes.VarChar},
 		},
@@ -390,7 +391,7 @@ func TestInsertComments(t *testing.T) {
 func TestInsertGenerator(t *testing.T) {
 	router, sbc, _, sbclookup := createRouterEnv()
 
-	sbclookup.setResults([]*sqltypes.Result{{
+	sbclookup.SetResults([]*sqltypes.Result{{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 		}},
@@ -425,7 +426,7 @@ func TestInsertGenerator(t *testing.T) {
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: \n%#v, want \n%#v\n", sbclookup.Queries, wantQueries)
 	}
-	wantResult := *singleRowResult
+	wantResult := *sandboxconn.SingleRowResult
 	wantResult.InsertID = 1
 	if !reflect.DeepEqual(result, &wantResult) {
 		t.Errorf("result: %+v, want %+v", result, &wantResult)
@@ -465,7 +466,7 @@ func TestInsertLookupOwned(t *testing.T) {
 func TestInsertLookupOwnedGenerator(t *testing.T) {
 	router, sbc, _, sbclookup := createRouterEnv()
 
-	sbclookup.setResults([]*sqltypes.Result{{
+	sbclookup.SetResults([]*sqltypes.Result{{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("4")),
 		}},
@@ -500,7 +501,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries:\n%+v, want\n%+v\n", sbclookup.Queries, wantQueries)
 	}
-	wantResult := *singleRowResult
+	wantResult := *sandboxconn.SingleRowResult
 	wantResult.InsertID = 4
 	if !reflect.DeepEqual(result, &wantResult) {
 		t.Errorf("result:\n%+v, want\n%+v", result, &wantResult)
@@ -573,14 +574,14 @@ func TestInsertFail(t *testing.T) {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
-	sbclookup.mustFailServer = 1
+	sbclookup.MustFailServer = 1
 	_, err = routerExec(router, "insert into user(id, v, name) values (null, 2, 'myname')", nil)
 	want = "execInsertSharded: "
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
-	sbclookup.mustFailServer = 1
+	sbclookup.MustFailServer = 1
 	_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
 	want = "lookup.Create: "
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
@@ -593,14 +594,14 @@ func TestInsertFail(t *testing.T) {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
-	sbclookup.mustFailServer = 1
+	sbclookup.MustFailServer = 1
 	_, err = routerExec(router, "insert into music_extra_reversed(music_id, user_id) values (1, 1)", nil)
 	want = "execInsertSharded: lookup.Map"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
-	sbclookup.setResults([]*sqltypes.Result{{}})
+	sbclookup.SetResults([]*sqltypes.Result{{}})
 	_, err = routerExec(router, "insert into music_extra_reversed(music_id, user_id) values (1, 1)", nil)
 	want = "execInsertSharded: could not map 1 to a keyspace id"
 	if err == nil || err.Error() != want {
@@ -622,14 +623,14 @@ func TestInsertFail(t *testing.T) {
 	}
 	getSandbox("TestRouter").ShardSpec = DefaultShardSpec
 
-	sbclookup.mustFailServer = 1
+	sbclookup.MustFailServer = 1
 	_, err = routerExec(router, "insert into music(user_id, id) values (1, null)", nil)
 	want = "execInsertSharded:"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
-	sbclookup.mustFailServer = 1
+	sbclookup.MustFailServer = 1
 	_, err = routerExec(router, "insert into music(user_id, id) values (1, 2)", nil)
 	want = "lookup.Create: shard, host: TestUnsharded.0.master"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
@@ -654,7 +655,7 @@ func TestInsertFail(t *testing.T) {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
-	sbc.mustFailServer = 1
+	sbc.MustFailServer = 1
 	_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
 	want = "execInsertSharded: shard, host: TestRouter.-20.master"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
@@ -673,8 +674,8 @@ func TestInsertFail(t *testing.T) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
-	sbc.setResults([]*sqltypes.Result{{RowsAffected: 1, InsertID: 1}})
-	sbclookup.setResults([]*sqltypes.Result{{
+	sbc.SetResults([]*sqltypes.Result{{RowsAffected: 1, InsertID: 1}})
+	sbclookup.SetResults([]*sqltypes.Result{{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 		}},

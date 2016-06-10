@@ -2,11 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package vtgate
+package vterrors
 
 import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // A list of all vtrpcpb.ErrorCodes, ordered by priority. These priorities are
@@ -47,12 +46,13 @@ var errorPriorities = map[vtrpcpb.ErrorCode]int{
 	vtrpcpb.ErrorCode_UNAUTHENTICATED:    PriorityUnauthenticated,
 }
 
-// aggregateVtGateErrorCodes aggregates a list of errors into a single error code.
-// It does so by finding the highest priority error code in the list.
-func aggregateVtGateErrorCodes(errors []error) vtrpcpb.ErrorCode {
+// AggregateVtGateErrorCodes aggregates a list of errors into a single
+// error code.  It does so by finding the highest priority error code
+// in the list.
+func AggregateVtGateErrorCodes(errors []error) vtrpcpb.ErrorCode {
 	highCode := vtrpcpb.ErrorCode_SUCCESS
 	for _, e := range errors {
-		code := vterrors.RecoverVtErrorCode(e)
+		code := RecoverVtErrorCode(e)
 		if errorPriorities[code] > errorPriorities[highCode] {
 			highCode = code
 		}
@@ -60,13 +60,13 @@ func aggregateVtGateErrorCodes(errors []error) vtrpcpb.ErrorCode {
 	return highCode
 }
 
-// AggregateVtGateErrors aggregates several VtErrors.
+// AggregateVtGateErrors aggregates several errors into a single one.
 func AggregateVtGateErrors(errors []error) error {
 	if len(errors) == 0 {
 		return nil
 	}
-	return vterrors.FromError(
-		aggregateVtGateErrorCodes(errors),
-		vterrors.ConcatenateErrors(errors),
+	return FromError(
+		AggregateVtGateErrorCodes(errors),
+		ConcatenateErrors(errors),
 	)
 }

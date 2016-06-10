@@ -150,11 +150,17 @@ type HealthCheckImpl struct {
 	// wg keeps track of all launched Go routines.
 	wg sync.WaitGroup
 
-	// mu protects all the following fields
-	// when locking both mutex from HealthCheck and healthCheckConn, HealthCheck.mu goes first.
-	mu              sync.RWMutex
-	addrToConns     map[string]*healthCheckConn                                          // addrToConns maps from address to the healthCheckConn object.
-	targetToTablets map[string]map[string]map[topodatapb.TabletType][]*topodatapb.Tablet // targetToTablets maps from keyspace/shard/tablettype to a list of tablets.
+	// mu protects all the following fields.
+	// When locking both mutex from HealthCheck and healthCheckConn,
+	// HealthCheck.mu goes first.
+	mu sync.RWMutex
+
+	// addrToConns maps from address to the healthCheckConn object.
+	addrToConns map[string]*healthCheckConn
+
+	// targetToTablets maps from keyspace/shard/tablettype to a
+	// list of tablets.
+	targetToTablets map[string]map[string]map[topodatapb.TabletType][]*topodatapb.Tablet
 }
 
 // healthCheckConn contains details about a tablet.
@@ -166,8 +172,9 @@ type healthCheckConn struct {
 	cancelFunc context.CancelFunc
 	tablet     *topodatapb.Tablet
 
-	// mu protects all the following fields
-	// when locking both mutex from HealthCheck and healthCheckConn, HealthCheck.mu goes first.
+	// mu protects all the following fields.
+	// When locking both mutex from HealthCheck and healthCheckConn,
+	// HealthCheck.mu goes first.
 	mu                                  sync.RWMutex
 	conn                                tabletconn.TabletConn
 	target                              *querypb.Target
