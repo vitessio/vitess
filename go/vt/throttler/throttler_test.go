@@ -253,8 +253,6 @@ func TestThreadFinished(t *testing.T) {
 	// Second second: One thread finishes, other one gets remaining 1 QPS extra.
 	fc.setNow(1000 * time.Millisecond)
 	throttler.ThreadFinished(1)
-	// ThreadFinished() is idempotent.
-	throttler.ThreadFinished(1)
 
 	// Max rate update to threadThrottlers happens asynchronously. Wait for it.
 	timer := time.NewTimer(2 * time.Second)
@@ -392,4 +390,21 @@ func TestClose(t *testing.T) {
 		}
 	}()
 	throttler.Throttle(0)
+}
+
+func TestThreadFinished_SecondCallPanics(t *testing.T) {
+	fc := &fakeClock{}
+	throttler, _ := newThrottlerWithClock("test", "queries", 1, 1, ReplicationLagModuleDisabled, fc.now)
+	throttler.ThreadFinished(0)
+
+	defer func() {
+		msg := recover()
+		if msg == nil {
+			t.Fatal("Second ThreadFinished() after ThreadFinished() should panic")
+		}
+		if !strings.Contains(msg.(string), "already finished") {
+			t.Fatalf("ThreadFinished() after ThreadFinished() panic'd for wrong reason: %v", msg)
+		}
+	}()
+	throttler.ThreadFinished(0)
 }

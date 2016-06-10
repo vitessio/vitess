@@ -192,7 +192,7 @@ func (t *Throttler) Throttle(threadID int) time.Duration {
 // After ThreadFinished() is called, Throttle() must not be called anymore.
 func (t *Throttler) ThreadFinished(threadID int) {
 	if t.threadFinished[threadID] {
-		return
+		panic(fmt.Sprintf("BUG: thread with ID: %v already finished", threadID))
 	}
 
 	t.mu.Lock()
