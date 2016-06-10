@@ -69,7 +69,21 @@ def tearDownModule():
 
 class TestBackup(unittest.TestCase):
 
+  def setUp(self):
+    for t in tablet_master, tablet_replica1:
+      t.create_db('vt_test_keyspace')
+
+    tablet_master.init_tablet('master', 'test_keyspace', '0', start=True,
+                              supports_backups=True)
+    tablet_replica1.init_tablet('replica', 'test_keyspace', '0', start=True,
+                                supports_backups=True)
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
+                     tablet_master.tablet_alias])
+
   def tearDown(self):
+    for t in tablet_master, tablet_replica1:
+      t.kill_vttablet()
+
     tablet.Tablet.check_vttablet_count()
     environment.topo_server().wipe()
     for t in [tablet_master, tablet_replica1, tablet_replica2]:
@@ -83,11 +97,38 @@ class TestBackup(unittest.TestCase):
   primary key (id)
   ) Engine=InnoDB'''
 
-  def _insert_master(self, index):
-    tablet_master.mquery(
+  def _insert_data(self, t, index):
+    t.mquery(
         'vt_test_keyspace',
         "insert into vt_insert_test (msg) values ('test %s')" %
         index, write=True)
+
+  def _check_data(self, t, count, msg):
+    timeout = 10
+    while True:
+      try:
+        result = t.mquery(
+            'vt_test_keyspace', 'select count(*) from vt_insert_test')
+        if result[0][0] == count:
+          break
+      except MySQLdb.DatabaseError:
+        # ignore exceptions, we'll just timeout (the tablet creation
+        # can take some time to replicate, and we get a 'table vt_insert_test
+        # does not exist exception in some rare cases)
+        logging.exception('exception waiting for data to replicate')
+      timeout = utils.wait_step(msg, timeout)
+
+  def _restore(self, t):
+    # erase mysql
+    t.reset_replication()
+    t.set_semi_sync_enabled(master=False)
+    t.clean_dbs()
+    # start tablet with restore enabled
+    t.start_vttablet(wait_for_state='SERVING',
+                     init_tablet_type='replica',
+                     init_keyspace='test_keyspace',
+                     init_shard='0',
+                     supports_backups=True)
 
   def test_backup(self):
     """Test backup flow.
@@ -102,55 +143,23 @@ class TestBackup(unittest.TestCase):
     - check all data is right (before+after backup data)
     - list the backup, remove it
     """
-    for t in tablet_master, tablet_replica1:
-      t.create_db('vt_test_keyspace')
-
-    tablet_master.init_tablet('master', 'test_keyspace', '0', start=True,
-                              supports_backups=True)
-    tablet_replica1.init_tablet('replica', 'test_keyspace', '0', start=True,
-                                supports_backups=True)
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
-                     tablet_master.tablet_alias])
 
     # insert data on master, wait for slave to get it
     tablet_master.mquery('vt_test_keyspace', self._create_vt_insert_test)
-    self._insert_master(1)
-    timeout = 10
-    while True:
-      try:
-        result = tablet_replica1.mquery(
-            'vt_test_keyspace', 'select count(*) from vt_insert_test')
-        if result[0][0] == 1:
-          break
-      except MySQLdb.DatabaseError:
-        # ignore exceptions, we'll just timeout (the tablet creation
-        # can take some time to replicate, and we get a 'table vt_insert_test
-        # does not exist exception in some rare cases)
-        logging.exception('exception waiting for data to replicate')
-      timeout = utils.wait_step('slave tablet getting data', timeout)
+    self._insert_data(tablet_master, 1)
+    self._check_data(tablet_replica1, 1, 'replica1 tablet getting data')
 
     # backup the slave
     utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
 
     # insert more data on the master
-    self._insert_master(2)
+    self._insert_data(tablet_master, 2)
 
-    # now bring up the other slave, replication lag check on,
-    # init_tablet on, restore on.
-    tablet_replica2.start_vttablet(wait_for_state='SERVING',
-                                   init_tablet_type='replica',
-                                   init_keyspace='test_keyspace',
-                                   init_shard='0',
-                                   supports_backups=True)
+    # now bring up the other slave, letting it restore from backup.
+    self._restore(tablet_replica2)
 
     # check the new slave has the data
-    timeout = 10
-    while True:
-      result = tablet_replica2.mquery(
-          'vt_test_keyspace', 'select count(*) from vt_insert_test')
-      if result[0][0] == 2:
-        break
-      timeout = utils.wait_step('new slave tablet getting data', timeout)
+    self._check_data(tablet_replica2, 2, 'replica2 tablet getting data')
 
     # list the backups
     backups, _ = utils.run_vtctl(tablet.get_backup_storage_flags() +
@@ -175,8 +184,48 @@ class TestBackup(unittest.TestCase):
     logging.debug('list of backups after remove: %s', backups)
     self.assertEqual(len(backups), 0)
 
-    for t in tablet_master, tablet_replica1, tablet_replica2:
-      t.kill_vttablet()
+    tablet_replica2.kill_vttablet()
+
+  def test_master_slave_same_backup(self):
+    """Test a master and slave from the same backup.
+
+    Check that a slave and master both restored from the same backup
+    can replicate successfully.
+    """
+
+    # insert data on master, wait for slave to get it
+    tablet_master.mquery('vt_test_keyspace', self._create_vt_insert_test)
+    self._insert_data(tablet_master, 1)
+    self._check_data(tablet_replica1, 1, 'replica1 tablet getting data')
+
+    # backup the slave
+    utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
+
+    # insert more data on the master
+    self._insert_data(tablet_master, 2)
+
+    # now bring up the other slave, letting it restore from backup.
+    self._restore(tablet_replica2)
+
+    # check the new slave has the data
+    self._check_data(tablet_replica2, 2, 'replica2 tablet getting data')
+
+    # Promote replica2 to master.
+    utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/0',
+                     tablet_replica2.tablet_alias])
+
+    # insert more data on replica2 (current master)
+    self._insert_data(tablet_replica2, 3)
+
+    # Force replica1 to restore from backup.
+    tablet_replica1.kill_vttablet()
+    self._restore(tablet_replica1)
+
+    # wait for replica1 to catch up.
+    self._check_data(tablet_replica1, 3,
+                     'replica1 getting data from restored master')
+
+    tablet_replica2.kill_vttablet()
 
 if __name__ == '__main__':
   utils.main()
