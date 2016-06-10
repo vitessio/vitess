@@ -45,7 +45,7 @@ public class VitessVTGateManager {
                 synchronized (VitessVTGateManager.class) {
                     if (!vtGateConnHashMap.containsKey(identifier)) {
                         updateVtGateConnHashMap(identifier, hostInfo.getHostname(),
-                            hostInfo.getPort(), vitessJDBCUrl.getUsername());
+                            hostInfo.getPort(), vitessJDBCUrl.getUsername(), vitessJDBCUrl.getKeyspace());
                     }
                 }
                 vtGateIdentifiers.add(identifier);
@@ -87,6 +87,23 @@ public class VitessVTGateManager {
     }
 
     /**
+     * Create vtGateConn object with given identifier.
+     *
+     * @param hostname
+     * @param port
+     * @param username
+     * @param keyspace
+     * @return
+     */
+    private static VTGateConn getVtGateConn(String hostname, int port, String username, String keyspace) {
+        Context context = CommonUtils.createContext(username, Constants.CONNECTION_TIMEOUT);
+        InetSocketAddress inetSocketAddress = new InetSocketAddress(hostname, port);
+        RpcClient client = new GrpcClientFactory().create(context, inetSocketAddress);
+        return (new VTGateConn(client,keyspace));
+    }
+
+
+    /**
      * Create VTGateConne and update vtGateConnHashMap.
      *
      * @param identifier
@@ -95,8 +112,8 @@ public class VitessVTGateManager {
      * @param username
      */
     private static void updateVtGateConnHashMap(String identifier, String hostname, int port,
-        String username) {
-        vtGateConnHashMap.put(identifier, getVtGateConn(hostname, port, username));
+        String username, String keyspace) {
+        vtGateConnHashMap.put(identifier, getVtGateConn(hostname, port, username, keyspace));
     }
 
     public static void close() throws SQLException {

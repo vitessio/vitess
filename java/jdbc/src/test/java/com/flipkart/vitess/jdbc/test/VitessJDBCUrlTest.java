@@ -103,5 +103,25 @@ public class VitessJDBCUrlTest {
         Assert.assertEquals("user", vitessJDBCUrl.getUsername());
     }
 
+    @Test public void testWithKeyspaceandCatalog() throws Exception {
+        Properties info = new Properties();
+        System.out.println("I am here");
+        VitessJDBCUrl vitessJDBCUrl =
+            new VitessJDBCUrl("jdbc:vitess://user:password@10.33.17.231:15991/vt_shipment/shipment",
+                info);
+        Assert.assertEquals(1, vitessJDBCUrl.getHostInfos().size());
+        Assert.assertEquals("vt_shipment",vitessJDBCUrl.getKeyspace());
+        Assert.assertEquals("shipment",vitessJDBCUrl.getCatalog());
+    }
+
+    @Test public void testWithKeyspace() throws Exception {
+        Properties info = new Properties();
+        VitessJDBCUrl vitessJDBCUrl =
+            new VitessJDBCUrl("jdbc:vitess://user:password@10.33.17.231:15991/vt_shipment",
+                info);
+        Assert.assertEquals(1, vitessJDBCUrl.getHostInfos().size());
+        Assert.assertEquals("vt_shipment",vitessJDBCUrl.getKeyspace());
+        Assert.assertEquals("vt_shipment",vitessJDBCUrl.getCatalog());
+    }
 
 }
