@@ -183,6 +183,7 @@ func TestMariadbSetSlavePositionCommands(t *testing.T) {
 	want := []string{
 		"RESET MASTER",
 		"SET GLOBAL gtid_slave_pos = '1-41983-12345'",
+		"SET GLOBAL gtid_binlog_state = '1-41983-12345'",
 	}
 
 	got, err := (&mariaDB10{}).SetSlavePositionCommands(pos)
