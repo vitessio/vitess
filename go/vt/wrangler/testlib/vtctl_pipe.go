@@ -5,11 +5,11 @@
 package testlib
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
 	"net"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -91,11 +91,11 @@ func (vp *VtctlPipe) Run(args []string) error {
 // RunAndOutput is similar to Run, but returns the output as a multi-line string
 // instead of logging it.
 func (vp *VtctlPipe) RunAndOutput(args []string) (string, error) {
-	var output []string
+	var output bytes.Buffer
 	err := vp.run(args, func(line string) {
-		output = append(output, line)
+		output.WriteString(line)
 	})
-	return strings.Join(output, ""), err
+	return output.String(), err
 }
 
 func (vp *VtctlPipe) run(args []string, outputFunc func(string)) error {
