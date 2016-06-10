@@ -6,6 +6,7 @@ Commands are listed in the following groups:
 * [Keyspaces](#keyspaces)
 * [Queries](#queries)
 * [Replication Graph](#replication-graph)
+* [Resharding Throttler](#resharding-throttler)
 * [Schema, Version, Permissions](#schema-version-permissions)
 * [Serving Graph](#serving-graph)
 * [Shards](#shards)
@@ -800,6 +801,65 @@ Outputs a JSON structure that contains information about the ShardReplication.
 * The <code>&lt;cell&gt;</code> and <code>&lt;keyspace/shard&gt;</code> arguments are required for the <code>&lt;GetShardReplication&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
 
 
+## Resharding Throttler
+
+* [ThrottlerMaxRates](#throttlermaxrates)
+* [ThrottlerSetMaxRate](#throttlersetmaxrate)
+
+### ThrottlerMaxRates
+
+Returns the current max rate of all active resharding throttlers on the server.
+
+#### Example
+
+<pre class="command-example">ThrottlerMaxRates -server &lt;vtworker or vttablet&gt;</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| server | string | vtworker or vttablet to connect to |
+
+
+#### Arguments
+
+* <code>&lt;vtworker or vttablet&gt;</code> &ndash; Required.
+
+#### Errors
+
+* the ThrottlerSetMaxRate command does not accept any positional parameters This error occurs if the command is not called with exactly 0 arguments.
+* error creating a throttler client for <code>&lt;server&gt;</code> '%v': %v
+* failed to get the throttler rate from <code>&lt;server&gt;</code> '%v': %v
+
+
+### ThrottlerSetMaxRate
+
+Sets the max rate for all active resharding throttlers on the server.
+
+#### Example
+
+<pre class="command-example">ThrottlerSetMaxRate -server &lt;vtworker or vttablet&gt; &lt;rate&gt;</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| server | string | vtworker or vttablet to connect to |
+
+
+#### Arguments
+
+* <code>&lt;vtworker or vttablet&gt;</code> &ndash; Required.
+* <code>&lt;rate&gt;</code> &ndash; Required.
+
+#### Errors
+
+* the <code>&lt;rate&gt;</code> argument is required for the <code>&lt;ThrottlerSetMaxRate&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* failed to parse rate '%v' as integer value: %v
+* error creating a throttler client for <code>&lt;server&gt;</code> '%v': %v
+* failed to set the throttler rate on <code>&lt;server&gt;</code> '%v': %v
+
+
 ## Schema, Version, Permissions
 
 * [ApplySchema](#applyschema)
@@ -1512,7 +1572,7 @@ Walks through a ShardReplication object and fixes the first error that it encoun
 
 ### ShardReplicationPositions
 
-Shows the replication status of each slave machine in the shard graph. In this case, the status refers to the replication lag between the master vttablet and the slave vttablet. In Vitess, data is always written to the master vttablet first and then replicated to all slave vttablets.
+Shows the replication status of each slave machine in the shard graph. In this case, the status refers to the replication lag between the master vttablet and the slave vttablet. In Vitess, data is always written to the master vttablet first and then replicated to all slave vttablets. Output is sorted by tablet type, then replication position. Use ctrl-C to interrupt command and see partial result if needed.
 
 #### Example
 
