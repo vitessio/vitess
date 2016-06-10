@@ -91,6 +91,9 @@ class TestBackup(unittest.TestCase):
       t.set_semi_sync_enabled(master=False)
       t.clean_dbs()
 
+    for backup in self._list_backups():
+      self._remove_backup(backup)
+
   _create_vt_insert_test = '''create table vt_insert_test (
   id bigint auto_increment,
   msg varchar(64),
@@ -119,16 +122,36 @@ class TestBackup(unittest.TestCase):
       timeout = utils.wait_step(msg, timeout)
 
   def _restore(self, t):
-    # erase mysql
-    t.reset_replication()
-    t.set_semi_sync_enabled(master=False)
-    t.clean_dbs()
+    # erase mysql and tablet dir
+    self._reset_tablet_dir(t)
     # start tablet with restore enabled
     t.start_vttablet(wait_for_state='SERVING',
                      init_tablet_type='replica',
                      init_keyspace='test_keyspace',
                      init_shard='0',
                      supports_backups=True)
+
+  def _reset_tablet_dir(self, t):
+    """Stop mysql, delete everything including tablet dir, restart mysql."""
+    utils.wait_procs([t.teardown_mysql()])
+    t.remove_tree()
+    proc = t.init_mysql()
+    if use_mysqlctld:
+      t.wait_for_mysqlctl_socket()
+    else:
+      utils.wait_procs([proc])
+
+  def _list_backups(self):
+    backups, _ = utils.run_vtctl(tablet.get_backup_storage_flags() +
+                                 ['ListBackups', 'test_keyspace/0'],
+                                 mode=utils.VTCTL_VTCTL, trap_output=True)
+    return backups.splitlines()
+
+  def _remove_backup(self, backup):
+    utils.run_vtctl(
+        tablet.get_backup_storage_flags() +
+        ['RemoveBackup', 'test_keyspace/0', backup],
+        auto_log=True, mode=utils.VTCTL_VTCTL)
 
   def test_backup(self):
     """Test backup flow.
@@ -162,25 +185,16 @@ class TestBackup(unittest.TestCase):
     self._check_data(tablet_replica2, 2, 'replica2 tablet getting data')
 
     # list the backups
-    backups, _ = utils.run_vtctl(tablet.get_backup_storage_flags() +
-                                 ['ListBackups', 'test_keyspace/0'],
-                                 mode=utils.VTCTL_VTCTL, trap_output=True)
-    backups = backups.splitlines()
+    backups = self._list_backups()
     logging.debug('list of backups: %s', backups)
     self.assertEqual(len(backups), 1)
     self.assertTrue(backups[0].endswith(tablet_replica1.tablet_alias))
 
     # remove the backup
-    utils.run_vtctl(
-        tablet.get_backup_storage_flags() +
-        ['RemoveBackup', 'test_keyspace/0', backups[0]],
-        auto_log=True, mode=utils.VTCTL_VTCTL)
+    self._remove_backup(backups[0])
 
     # make sure the list of backups is empty now
-    backups, _ = utils.run_vtctl(tablet.get_backup_storage_flags() +
-                                 ['ListBackups', 'test_keyspace/0'],
-                                 mode=utils.VTCTL_VTCTL, trap_output=True)
-    backups = backups.splitlines()
+    backups = self._list_backups()
     logging.debug('list of backups after remove: %s', backups)
     self.assertEqual(len(backups), 0)
 
@@ -226,6 +240,39 @@ class TestBackup(unittest.TestCase):
                      'replica1 getting data from restored master')
 
     tablet_replica2.kill_vttablet()
+
+  def test_restore_old_master(self):
+    """Test that a former master replicates correctly after being restored.
+
+    - Take a backup.
+    - Reparent from old master to new master.
+    - Delete the old master and force it to restore from a previous backup.
+    """
+
+    # insert data on master, wait for slave to get it
+    tablet_master.mquery('vt_test_keyspace', self._create_vt_insert_test)
+    self._insert_data(tablet_master, 1)
+    self._check_data(tablet_replica1, 1, 'replica1 tablet getting data')
+
+    # backup the slave
+    utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
+
+    # insert more data on the master
+    self._insert_data(tablet_master, 2)
+
+    # reparent to replica1
+    utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/0',
+                     tablet_replica1.tablet_alias])
+
+    # insert more data on new master
+    self._insert_data(tablet_replica1, 3)
+
+    # force the old master to restore at the latest backup.
+    tablet_master.kill_vttablet()
+    self._restore(tablet_master)
+
+    # wait for it to catch up.
+    self._check_data(tablet_master, 3, 'former master catches up after restore')
 
 if __name__ == '__main__':
   utils.main()
