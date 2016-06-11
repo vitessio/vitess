@@ -110,6 +110,7 @@ public class VitessVTGateManager {
      * @param hostname
      * @param port
      * @param username
+     * @param keyspace
      */
     private static void updateVtGateConnHashMap(String identifier, String hostname, int port,
         String username, String keyspace) {

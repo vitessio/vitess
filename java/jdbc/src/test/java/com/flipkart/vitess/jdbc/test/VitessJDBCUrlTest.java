@@ -105,7 +105,6 @@ public class VitessJDBCUrlTest {
 
     @Test public void testWithKeyspaceandCatalog() throws Exception {
         Properties info = new Properties();
-        System.out.println("I am here");
         VitessJDBCUrl vitessJDBCUrl =
             new VitessJDBCUrl("jdbc:vitess://user:password@10.33.17.231:15991/vt_shipment/shipment",
                 info);

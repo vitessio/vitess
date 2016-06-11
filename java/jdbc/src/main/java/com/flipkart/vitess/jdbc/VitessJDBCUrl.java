@@ -78,7 +78,7 @@ public class VitessJDBCUrl {
             throw new SQLException(Constants.SQLExceptionMessages.MALFORMED_URL);
         }
         this.keyspace = m.group(7);
-        this.catalog = (m.group(8) == null ? m.group(7) : m.group(8));;
+        this.catalog = (m.group(8) == null ? m.group(7) : m.group(8));
         this.hostInfos = getURLHostInfos(postUrl);
 
         String tabletType = info.getProperty(Constants.Property.TABLET_TYPE);
