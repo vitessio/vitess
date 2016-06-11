@@ -222,19 +222,20 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 // 1 - ask the master of the destination shard to pause filtered replication,
 //   and return the source binlog positions
 //   (add a cleanup task to restart filtered replication on master)
-// 2 - stop all the source tablets at a binlog position higher than the
+// 2 - stop the source tablet at a binlog position higher than the
 //   destination master. Get that new list of positions.
-//   (add a cleanup task to restart binlog replication on them, and change
-//    the existing ChangeSlaveType cleanup action to 'spare' type)
+//   (add a cleanup task to restart binlog replication on the source tablet, and
+//    change the existing ChangeSlaveType cleanup action to 'spare' type)
 // 3 - ask the master of the destination shard to resume filtered replication
 //   up to the new list of positions, and return its binlog position.
 // 4 - wait until the destination tablet is equal or passed that master
 //   binlog position, and stop its replication.
 //   (add a cleanup task to restart binlog replication on it, and change
 //    the existing ChangeSlaveType cleanup action to 'spare' type)
-// 5 - restart filtered replication on destination master.
+// 5 - restart filtered replication on the destination master.
 //   (remove the cleanup task that does the same)
-// At this point, all source and destination tablets are stopped at the same point.
+// At this point, the source and the destination tablet are stopped at the same
+// point.
 
 func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	sdw.SetState(WorkerStateSyncReplication)
@@ -373,8 +374,6 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 		return rec.Error()
 	}
 
-	// TODO(alainjobart) Checking against each source may be
-	// overkill, if all sources have the same schema?
 	sdw.wr.Logger().Infof("Diffing the schema...")
 	rec = &concurrency.AllErrorRecorder{}
 	tmutils.DiffSchema("destination", sdw.destinationSchemaDefinition, "source", sdw.sourceSchemaDefinition, rec)
@@ -407,11 +406,12 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	// we'll filter.
 	overlap, err := key.KeyRangesOverlap(sdw.shardInfo.KeyRange, sdw.shardInfo.SourceShards[sdw.sourceUID].KeyRange)
 	if err != nil {
-		return fmt.Errorf("Source shard doesn't overlap with destination????: %v", err)
+		return fmt.Errorf("Source shard doesn't overlap with destination: %v", err)
 	}
 
 	// run the diffs, 8 at a time
 	sdw.wr.Logger().Infof("Running the diffs...")
+	// TODO(mberlin): Parameterize the hard coded value 8.
 	sem := sync2.NewSemaphore(8, 0)
 	for _, tableDefinition := range sdw.destinationSchemaDefinition.TableDefinitions {
 		wg.Add(1)
@@ -431,7 +431,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 				sourceQueryResultReader, err = TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.sourceAlias, tableDefinition, overlap, keyspaceSchema, sdw.keyspaceInfo.ShardingColumnName, sdw.keyspaceInfo.ShardingColumnType)
 			}
 			if err != nil {
-				newErr := fmt.Errorf("TableScanByKeyRange(source) failed: %v", err)
+				newErr := fmt.Errorf("TableScan(ByKeyRange?)(source) failed: %v", err)
 				rec.RecordError(newErr)
 				sdw.wr.Logger().Errorf("%v", newErr)
 				return
@@ -447,7 +447,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 				destinationQueryResultReader, err = TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, tableDefinition, overlap, keyspaceSchema, sdw.keyspaceInfo.ShardingColumnName, sdw.keyspaceInfo.ShardingColumnType)
 			}
 			if err != nil {
-				newErr := fmt.Errorf("TableScanByKeyRange(destination) failed: %v", err)
+				newErr := fmt.Errorf("TableScan(ByKeyRange?)(destination) failed: %v", err)
 				rec.RecordError(newErr)
 				sdw.wr.Logger().Errorf("%v", newErr)
 				return

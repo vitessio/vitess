@@ -75,7 +75,7 @@ type v3KeyRangeFilter struct {
 	keyRange *topodatapb.KeyRange
 }
 
-// Recv is part of sqltypes.ResultStream interface
+// Recv is part of sqltypes.ResultStream interface.
 func (f *v3KeyRangeFilter) Recv() (*sqltypes.Result, error) {
 	r, err := f.input.Recv()
 	if err != nil {
@@ -298,8 +298,8 @@ func (dr *DiffReport) String() string {
 	return fmt.Sprintf("DiffReport{%v processed, %v matching, %v mismatched, %v extra left, %v extra right, %v q/s}", dr.processedRows, dr.matchingRows, dr.mismatchedRows, dr.extraRowsLeft, dr.extraRowsRight, dr.processingQPS)
 }
 
-// RowsEqual returns the index of the first different fields, or -1 if
-// both rows are the same
+// RowsEqual returns the index of the first different column, or -1 if
+// both rows are the same.
 func RowsEqual(left, right []sqltypes.Value) int {
 	for i, l := range left {
 		if !bytes.Equal(l.Raw(), right[i].Raw()) {
@@ -313,6 +313,8 @@ func RowsEqual(left, right []sqltypes.Value) int {
 // -1 if left is smaller than right
 // 0 if left and right are equal
 // +1 if left is bigger than right
+// It compares only up to and including the first "compareCount" columns of each
+// row.
 // TODO: This can panic if types for left and right don't match.
 func CompareRows(fields []*querypb.Field, compareCount int, left, right []sqltypes.Value) (int, error) {
 	for i := 0; i < compareCount; i++ {
@@ -450,7 +452,7 @@ func (rd *RowDiffer) Go(log logutil.Logger) (dr DiffReport, err error) {
 			continue
 		}
 
-		// have to find the 'smallest' raw and advance it
+		// have to find the 'smallest' row and advance it
 		c, err := CompareRows(rd.left.Fields(), rd.pkFieldCount, left, right)
 		if err != nil {
 			return dr, err
