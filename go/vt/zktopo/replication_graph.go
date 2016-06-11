@@ -34,7 +34,7 @@ func (zkts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keys
 	// create the parent directory to be sure it's here
 	zkDir := path.Join("/zk", cell, "vt", "replication", keyspace)
 	if _, err := zk.CreateRecursive(zkts.zconn, zkDir, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-		return err
+		return convertError(err)
 	}
 
 	// now update the data
@@ -58,10 +58,7 @@ func (zkts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keys
 	}
 	err := zkts.zconn.RetryChange(zkPath, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return err
+		return convertError(err)
 	}
 	return nil
 }
@@ -71,10 +68,7 @@ func (zkts *Server) GetShardReplication(ctx context.Context, cell, keyspace, sha
 	zkPath := shardReplicationPath(cell, keyspace, shard)
 	data, _, err := zkts.zconn.Get(zkPath)
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return nil, err
+		return nil, convertError(err)
 	}
 
 	sr := &topodatapb.ShardReplication{}
@@ -90,10 +84,7 @@ func (zkts *Server) DeleteShardReplication(ctx context.Context, cell, keyspace, 
 	zkPath := shardReplicationPath(cell, keyspace, shard)
 	err := zkts.zconn.Delete(zkPath, -1)
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return err
+		return convertError(err)
 	}
 	return nil
 }
@@ -103,10 +94,7 @@ func (zkts *Server) DeleteKeyspaceReplication(ctx context.Context, cell, keyspac
 	zkPath := keyspaceReplicationPath(cell, keyspace)
 	err := zkts.zconn.Delete(zkPath, -1)
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return err
+		return convertError(err)
 	}
 	return nil
 }

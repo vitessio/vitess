@@ -59,7 +59,7 @@ func (zkts *Server) PurgeActions(zkActionPath string, canBePurged func(data stri
 
 	children, _, err := zkts.zconn.Children(zkActionPath)
 	if err != nil {
-		return err
+		return convertError(err)
 	}
 
 	sort.Strings(children)
@@ -95,7 +95,7 @@ func (zkts *Server) PruneActionLogs(zkActionLogPath string, keepCount int) (prun
 	// get sorted list of children
 	children, _, err := zkts.zconn.Children(zkActionLogPath)
 	if err != nil {
-		return 0, err
+		return 0, convertError(err)
 	}
 	sort.Strings(children)
 
