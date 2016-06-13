@@ -55,7 +55,6 @@ spec:
           -port {{port}}
           -grpc_port {{grpc_port}}
           -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream'
-          -binlog_player_protocol grpc
           -tablet-path {{alias}}
           -tablet_hostname $(hostname -i)
           -init_keyspace {{keyspace}}
