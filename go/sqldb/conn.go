@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/stats"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -26,9 +25,6 @@ var (
 	// mu protects conns.
 	mu    sync.Mutex
 	conns = make(map[string]NewConnFunc)
-	// Keep track of the total number of connections opened to MySQL. This is mainly
-	// useful for tests, where we use this to approximate the number of ports that we used.
-	connCount = stats.NewInt("mysql-new-connection-count")
 )
 
 // Conn defines the behavior for the low level db connection
@@ -88,7 +84,6 @@ func Register(name string, fn NewConnFunc) {
 
 // Connect returns a sqldb.Conn using the default connection creation function.
 func Connect(params ConnParams) (Conn, error) {
-	connCount.Add(1)
 	// Use a lock-free fast path for default.
 	if params.Engine == "" {
 		return defaultConn(params)
