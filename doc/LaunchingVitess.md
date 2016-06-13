@@ -60,13 +60,32 @@ Vitess doesn’t support multi-master setup. It has alternate ways of addressing
 
 ### Big Data Queries
 
-TODO: Elaborate.
+There are two main ways to access the data for offline data processing (as
+opposed to online web or direct access to the live data): sending queries to
+rdonly servers, or using a Map Reduce framework.
 
-We support rdonly for batch queries. Do not use replica servers.
+#### Batch Queries
 
-Hadoop connector.
+These are regular queries, but they can consume a lot of data. Typically, the
+streaming APIs are used, to consume large quantities of data.
 
-No complicated SQL queries, preference is to process data in Map Reduce framework.
+These queries are just sent to the *rdonly* servers (also known as *batch*
+servers). They can take as much resources as they want without affecting live
+traffic.
+
+#### Map Reduce
+
+Vitess supports Map-Reduce access to the data. Vitess provides a Hadoop
+connector, that can also be used with Apache Spark. See the (Hadoop package
+documentation)[https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/com/youtube/vitess/hadoop]
+for more information.
+
+With a Map-Reduce framework, Vitess does not support very complicated
+queries. In part because it would be difficult and not very efficient, but also
+because the Map-Reduce frameworks are usually very good at data processing. So
+instead of doing very complex SQL queries and have processed results, it is
+recommended to just dump the input data out of Vitess (with simple *select*
+statements), and process it with a Map-Reduce pipeline.
 
 ## Multi-cell Deployment
 
@@ -74,11 +93,39 @@ TODO: Elaborate
 
 Choosing master cell, master cells can become master. Vitess supports cross-cell failovers. Rdonlys can be in any cell, where batch jobs need to run. Replica-only cells can serve read-only traffic.
 
-## Lock server
+## Lock Server - Topology Service
 
-Vitess is a highly available service, and Vitess itself needs to store a small amount of metadata very reliably. For that purpose, Vitess needs a highly available and consistent data store.
+Vitess is a highly available service, and Vitess itself needs to store a small
+amount of metadata very reliably. For that purpose, Vitess needs a highly
+available and consistent data store.
 
-Lock servers were built for this exact purpose, and Vitess needs one such cluster to be setup to run smoothly. Vitess can be customized to utilize any lock server, and by default it supports zookeeper and etcd.
+Lock servers were built for this exact purpose, and Vitess needs one such
+cluster to be setup to run smoothly. Vitess can be customized to utilize any
+lock server, and by default it supports zookeeper and etcd. We call this
+component
+[Topology Service](https://github.com/youtube/vitess/blob/master/doc/TopologyService.md).
+
+As Vitess is meant to run in multiple data centers / regions (called cells
+below), it relies on two different lock servers:
+
+* global instance: it contains global meta data, like the list of Keyspaces /
+  Shards, the VSchema, ... It should be reliable and distributed across multiple
+  cells. Running Vitess processes almost never access the global instance.
+* per-cell instance (local): It should be running only in the local cell. It
+  contains aggregates of all the global data, plus local running tablet
+  information. Running Vitess processes get most of their topology data from the
+  local instance.
+
+This separation is key to higher reliability. A single cell going bad is never
+critical for Vitess, as the global instance is configured to survive it, and
+other cells can take over the production traffic. The global instance can be
+unavailable for minutes and not affect serving at all (it would affect VSchema
+changes for instance, but these are not critical, they can wait for the global
+instance to be back).
+
+If Vitess is only running in one cell, both global and local instances can share
+the same lock service instance. It is always possible to split them later when
+expanding to multiple cells.
 
 ## Monitoring
 
@@ -94,9 +141,30 @@ Vitess was built on bare metal and later adapted to run in the cloud. This gives
 
 ## Development Workflow
 
-TODO: Elaborate.
+Vitess provides binaries and scripts to make unit testing of the application
+code very easy. With these tools, we recommend to unit test all the application
+features if possible.
 
-Vttest for unit tests / integration tests using full production schema / vschema. Always use multiple shards for sharded keyspaces in tests (2).
+A production environment for a Vitess cluster involves a topology service,
+multiple database instances, a vtgate pool and at least one vtctld process,
+possibly in multiple data centers. The vttest library uses the *vtcombo* binary
+to combine all the Vitess processes into just one. The various databases are
+also combined into a single MySQL instance (using different database names for
+each shard). The database schema is initialized at startup. The (optional)
+VSchema is also initialized at startup.
+
+A few things to consider:
+
+* Use the same database schema in tests as the production schema.
+* Use the same VSchema in tests as the production VSchema.
+* When a production keyspace is sharded, use a sharded test keyspace as
+  well. Just two shards is usually enough, to minimize test startup time, while
+  still re-producing the production environment.
+* *vtcombo* can also start the *vtctld* component, so the test environment is
+  visible with the Vitess UI.
+* See
+  (vttest.proto)[https://github.com/youtube/vitess/blob/master/proto/vttest.proto]
+  for more information.
 
 ## Using Vitess in you Application
 
@@ -108,7 +176,7 @@ If using low-level API directly, importance of using bind vars.
 
 TODO: Balancing traffic between master, replica & rdonly. Explain how to target the right target type.
 
-Includes Query Verification: A sharded Vitess is not 100% backward compatible with MySQL. Some queries that used to work will cease to work. It’s important that you run all your queries on a sharded test environment (TODO: Link to vttest doc) to make sure none will fail on production.
+Includes Query Verification: A sharded Vitess is not 100% backward compatible with MySQL. Some queries that used to work will cease to work. It’s important that you run all your queries on a sharded test environment -- see the (Development Workflow)[#development-workflow] section above -- to make sure none will fail on production.
 
 # Preparing for Production
 
@@ -156,9 +224,22 @@ You may have to add a few more app class machines to absorb any additional CPU a
 
 ## Lock Service Setup
 
-TODO: Elaborate.
+The Lock Service should be running, and both the global and local instances
+should be up. See the
+[Topology Service](https://github.com/youtube/vitess/blob/master/doc/TopologyService.md)
+document for more information.
 
-Per cell requirements, global lockserver… Link to document.
+Each lock service implementation supports a couple configuration command line
+parameters, they need to be specified for each Vitess process.
+
+For sizing purposes, the Vitess processes do not access the lock service very
+much. Each *vtgate* process keeps a few watches on a few local nodes (VSchema
+and SrvKeyspace). Each *vttablet* process will keep its on Tablet record up to
+date, but it usually doesn't change. The *vtctld* process will access it a lot
+more, but only on demand to display web pages.
+
+As mentioned previously, if the setup is only in one cell, the global and local
+instances can be combined. Just use different top-level directories.
 
 ## Production Testing
 
@@ -310,13 +391,30 @@ Vitess servers write to log files, and they are rotated when they reach a maximu
 
 ### gRPC
 
-TODO: Elaborate, and add link to Transport Security document.
+Vitess uses gRPC for communication between client and Vitess, and between Vitess
+servers. By default, Vitess does not use SSL.
+
+Also, even without using SSL, we allow the use of an application-provided
+CallerID object. It allows unsecure but easy to use authorization using Table
+ACLs.
+
+See the
+[Transport Security Model document](http://vitess.io/user-guide/transport-security-model.html)
+for more information on how to setup both of these features, and what command
+line parameters exist.
 
 ## Lock Server Configuration
 
-TODO: Elaborate.
+Vttablet, vtgate, vtctld need the right command line parameters to find the topo server. First the *topo\_implementation* flag needs to be set to one of *zookeeper* or *etcd*. Then each is configured as follows:
 
-Vttablet, vtgate, vtctld need the right command line parameters to find the topo server.
+* zookeeper: it is configured using the *ZK\_CLIENT\_CONFIG* environment
+  variable, that points at a JSON file that contains the global and local cells
+  configurations. For instance, this can be the contents of the file:
+  ```{"cell1": "server1:port1,server2:port2", "cell2":
+  "server1:port1,server2:port2", "global": "server1:port1,server2:port2"}```
+* etcd: the *etcd\_global\_addrs* parameter needs to point at the global
+  instance. Then inside that global instance, the */vt/cells/<cell name>* path
+  needs to point at each cell instance.
 
 ## VTTablet
 
@@ -360,7 +458,7 @@ VTTablet requires multiple user credentials to perform its tasks. Any requests c
 
 * **db-config-app-charset**: The only supported character set is utf8. Vitess still works with latin1, but it’s getting deprecated.
 
-For other credentials, replace the "app" part of the command line argument with “dba”, “repl”, or “filtered”. TODO: Expand these out.
+For other credentials, replace the "app" part of the command line argument with “dba”, “repl”, or “filtered”.
 
 Different users we have:
 
