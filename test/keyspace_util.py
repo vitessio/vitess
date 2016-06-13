@@ -55,8 +55,6 @@ class TestEnv(object):
         self._init_tablet(keyspace, shard, 'rdonly', i, tablet_index)
         tablet_index += 1
 
-    utils.run_vtctl(['RebuildKeyspaceGraph', keyspace], auto_log=True)
-
     # Start tablets.
     for shard in shards:
       self._start_tablet(keyspace, shard, 'master', None)
@@ -77,14 +75,7 @@ class TestEnv(object):
       t.tablet_type = 'master'
 
     for t in self.tablets:
-      if t.tablet_type == 'replica':
-        utils.wait_for_tablet_type(t.tablet_alias, 'replica')
-      elif t.tablet_type == 'rdonly':
-        utils.wait_for_tablet_type(t.tablet_alias, 'rdonly')
-    for t in self.tablets:
       t.wait_for_vttablet_state('SERVING')
-
-    utils.run_vtctl(['RebuildKeyspaceGraph', keyspace], auto_log=True)
 
     for ddl in ddls:
       fname = os.path.join(environment.tmproot, 'ddl.sql')
