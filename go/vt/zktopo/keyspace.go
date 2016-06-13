@@ -54,7 +54,7 @@ func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *
 			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 				alreadyExists = true
 			} else {
-				return fmt.Errorf("error creating keyspace: %v %v", zkPath, err)
+				return convertError(err)
 			}
 		}
 	}
@@ -73,10 +73,7 @@ func (zkts *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *
 	}
 	stat, err := zkts.zconn.Set(keyspacePath, string(data), int(existingVersion))
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return -1, err
+		return -1, convertError(err)
 	}
 
 	return int64(stat.Version()), nil
@@ -87,10 +84,7 @@ func (zkts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 	keyspacePath := path.Join(GlobalKeyspacesPath, keyspace)
 	err := zk.DeleteRecursive(zkts.zconn, keyspacePath, -1)
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return err
+		return convertError(err)
 	}
 	return nil
 }
@@ -100,10 +94,7 @@ func (zkts *Server) GetKeyspace(ctx context.Context, keyspace string) (*topodata
 	keyspacePath := path.Join(GlobalKeyspacesPath, keyspace)
 	data, stat, err := zkts.zconn.Get(keyspacePath)
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return nil, 0, err
+		return nil, 0, convertError(err)
 	}
 
 	k := &topodatapb.Keyspace{}
@@ -118,7 +109,8 @@ func (zkts *Server) GetKeyspace(ctx context.Context, keyspace string) (*topodata
 func (zkts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 	children, _, err := zkts.zconn.Children(GlobalKeyspacesPath)
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+		err = convertError(err)
+		if err == topo.ErrNoNode {
 			return nil, nil
 		}
 		return nil, err
@@ -132,7 +124,7 @@ func (zkts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 func (zkts *Server) DeleteKeyspaceShards(ctx context.Context, keyspace string) error {
 	shardsPath := path.Join(GlobalKeyspacesPath, keyspace, "shards")
 	if err := zk.DeleteRecursive(zkts.zconn, shardsPath, -1); err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
-		return err
+		return convertError(err)
 	}
 	return nil
 }

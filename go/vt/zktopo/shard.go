@@ -47,7 +47,7 @@ func (zkts *Server) CreateShard(ctx context.Context, keyspace, shard string, val
 			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 				alreadyExists = true
 			} else {
-				return fmt.Errorf("error creating shard: %v %v", zkPath, err)
+				return convertError(err)
 			}
 		}
 	}
@@ -66,10 +66,7 @@ func (zkts *Server) UpdateShard(ctx context.Context, keyspace, shard string, val
 	}
 	stat, err := zkts.zconn.Set(shardPath, string(data), int(existingVersion))
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return -1, err
+		return -1, convertError(err)
 	}
 	return int64(stat.Version()), nil
 }
@@ -84,7 +81,7 @@ func (zkts *Server) ValidateShard(ctx context.Context, keyspace, shard string) e
 	for _, zkPath := range zkPaths {
 		_, _, err := zkts.zconn.Get(zkPath)
 		if err != nil {
-			return err
+			return convertError(err)
 		}
 	}
 	return nil
@@ -95,10 +92,7 @@ func (zkts *Server) GetShard(ctx context.Context, keyspace, shard string) (*topo
 	shardPath := path.Join(GlobalKeyspacesPath, keyspace, "shards", shard)
 	data, stat, err := zkts.zconn.Get(shardPath)
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return nil, 0, err
+		return nil, 0, convertError(err)
 	}
 
 	s := &topodatapb.Shard{}
@@ -114,10 +108,7 @@ func (zkts *Server) GetShardNames(ctx context.Context, keyspace string) ([]strin
 	shardsPath := path.Join(GlobalKeyspacesPath, keyspace, "shards")
 	children, _, err := zkts.zconn.Children(shardsPath)
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return nil, err
+		return nil, convertError(err)
 	}
 
 	sort.Strings(children)
@@ -129,10 +120,7 @@ func (zkts *Server) DeleteShard(ctx context.Context, keyspace, shard string) err
 	shardPath := path.Join(GlobalKeyspacesPath, keyspace, "shards", shard)
 	err := zk.DeleteRecursive(zkts.zconn, shardPath, -1)
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return err
+		return convertError(err)
 	}
 	return nil
 }

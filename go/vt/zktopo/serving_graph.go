@@ -51,7 +51,8 @@ func zkPathForSrvVSchema(cell string) string {
 func (zkts *Server) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
 	children, _, err := zkts.zconn.Children(zkPathForSrvKeyspaces(cell))
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+		err = convertError(err)
+		if err == topo.ErrNoNode {
 			return nil, nil
 		}
 		return nil, err
@@ -150,7 +151,7 @@ func (zkts *Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string
 	if zookeeper.IsError(err, zookeeper.ZNONODE) {
 		_, err = zk.CreateRecursive(zkts.zconn, path, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	}
-	return err
+	return convertError(err)
 }
 
 // DeleteSrvKeyspace is part of the topo.Server interface
@@ -158,10 +159,7 @@ func (zkts *Server) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string
 	path := zkPathForSrvKeyspace(cell, keyspace)
 	err := zkts.zconn.Delete(path, -1)
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return err
+		return convertError(err)
 	}
 	return nil
 }
@@ -171,10 +169,7 @@ func (zkts *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (
 	path := zkPathForSrvKeyspace(cell, keyspace)
 	data, _, err := zkts.zconn.Get(path)
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return nil, err
+		return nil, convertError(err)
 	}
 	if len(data) == 0 {
 		return nil, topo.ErrNoNode
@@ -275,7 +270,7 @@ func (zkts *Server) UpdateSrvVSchema(ctx context.Context, cell string, srvVSchem
 	if zookeeper.IsError(err, zookeeper.ZNONODE) {
 		_, err = zk.CreateRecursive(zkts.zconn, path, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	}
-	return err
+	return convertError(err)
 }
 
 // GetSrvVSchema is part of the topo.Server interface
@@ -283,10 +278,7 @@ func (zkts *Server) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.
 	path := zkPathForSrvVSchema(cell)
 	data, _, err := zkts.zconn.Get(path)
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return nil, err
+		return nil, convertError(err)
 	}
 	if len(data) == 0 {
 		return nil, topo.ErrNoNode

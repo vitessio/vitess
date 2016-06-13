@@ -19,7 +19,7 @@ This file contains the cell management methods of zktopo.Server
 func (zkts *Server) GetKnownCells(ctx context.Context) ([]string, error) {
 	cellsWithGlobal, err := zk.ZkKnownCells()
 	if err != nil {
-		return cellsWithGlobal, err
+		return cellsWithGlobal, convertError(err)
 	}
 	cells := make([]string, 0, len(cellsWithGlobal))
 	for _, cell := range cellsWithGlobal {
