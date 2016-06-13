@@ -21,7 +21,8 @@ import (
 // FakeQueryService implements a programmable fake for the query service
 // server side.
 type FakeQueryService struct {
-	t *testing.T
+	t              *testing.T
+	TestingGateway bool
 
 	// these fields are used to simulate and synchronize on errors
 	HasError      bool
@@ -36,6 +37,10 @@ type FakeQueryService struct {
 
 	// ExpectedTransactionID is what transactionID to expect for Execute
 	ExpectedTransactionID int64
+
+	// StreamHealthResponse is what we return for StreamHealth.
+	// If not set, return TestStreamHealthStreamHealthResponse
+	StreamHealthResponse *querypb.StreamHealthResponse
 }
 
 // HandlePanic is part of the queryservice.QueryService interface
@@ -475,7 +480,11 @@ func (f *FakeQueryService) StreamHealthRegister(c chan<- *querypb.StreamHealthRe
 	if f.Panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	c <- TestStreamHealthStreamHealthResponse
+	shr := f.StreamHealthResponse
+	if shr == nil {
+		shr = TestStreamHealthStreamHealthResponse
+	}
+	c <- shr
 	return 1, nil
 }
 

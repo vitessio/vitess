@@ -62,9 +62,11 @@ func testErrorHelper(t *testing.T, f *FakeQueryService, name string, ef func(con
 
 		// Double-check we always get a ServerError, although
 		// we don't really care that much.
-		if _, ok := err.(*tabletconn.ServerError); !ok {
-			t.Errorf("error wasn't a tabletconn.ServerError for %v?", name)
-			continue
+		if !f.TestingGateway {
+			if _, ok := err.(*tabletconn.ServerError); !ok {
+				t.Errorf("error wasn't a tabletconn.ServerError for %v?", name)
+				continue
+			}
 		}
 
 		// and last we check we preserve the text, with the right prefix
@@ -511,7 +513,9 @@ func testStreamHealthPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQue
 	})
 }
 
-// TestSuite runs all the tests
+// TestSuite runs all the tests.
+// If fake.TestingGateway is set, we only test the calls that can go through
+// a gateway.
 func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *FakeQueryService) {
 	tests := []func(*testing.T, tabletconn.TabletConn, *FakeQueryService){
 		// positive test cases
@@ -524,7 +528,6 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testExecuteBatch,
 		testBeginExecuteBatch,
 		testSplitQuery,
-		testStreamHealth,
 
 		// error test cases
 		testBeginError,
@@ -538,7 +541,6 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testBeginExecuteBatchErrorInBegin,
 		testBeginExecuteBatchErrorInExecuteBatch,
 		testSplitQueryError,
-		testStreamHealthError,
 
 		// panic test cases
 		testBeginPanics,
@@ -550,7 +552,19 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testExecuteBatchPanics,
 		testBeginExecuteBatchPanics,
 		testSplitQueryPanics,
-		testStreamHealthPanics,
+	}
+
+	if !fake.TestingGateway {
+		tests = append(tests, []func(*testing.T, tabletconn.TabletConn, *FakeQueryService){
+			// positive test cases
+			testStreamHealth,
+
+			// error test cases
+			testStreamHealthError,
+
+			// panic test cases
+			testStreamHealthPanics,
+		}...)
 	}
 
 	// make sure we use the right client
