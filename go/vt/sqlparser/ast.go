@@ -393,10 +393,14 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CreateStr:
 		buf.Myprintf("%s table %v", node.Action, node.NewName)
+	case DropStr:
+		exists := ""
+		if node.IfExists {
+			exists = " if exists"
+		}
+		buf.Myprintf("%s table%s %v", node.Action, exists, node.Table)
 	case RenameStr:
 		buf.Myprintf("%s table %v %v", node.Action, node.Table, node.NewName)
-	case DropStr:
-		buf.Myprintf("%s table %v %t", node.Action, node.Table, node.IfExists)
 	default:
 		buf.Myprintf("%s table %v", node.Action, node.Table)
 	}
