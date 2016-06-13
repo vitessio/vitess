@@ -530,6 +530,27 @@ func (vtg *VTGate) Rollback(ctx context.Context, session *vtgatepb.Session) erro
 	return formatError(vtg.resolver.Rollback(ctx, session))
 }
 
+// isKeyspaceRangeBasedSharded returns true if a keyspace is sharded
+// by range.  This is true when there is a ShardingColumnType defined
+// in the SrvKeyspace (that is using the range-based sharding with the
+// client specifying the sharding key), or when the VSchema for the
+// keyspace is Sharded.
+func (vtg *VTGate) isKeyspaceRangeBasedSharded(keyspace string, srvKeyspace *topodatapb.SrvKeyspace) bool {
+	if srvKeyspace.ShardingColumnType != topodatapb.KeyspaceIdType_UNSET {
+		// We are using range based sharding with the application
+		// providing the sharding key value.
+		return true
+	}
+	if vtg.router.IsKeyspaceRangeBasedSharded(keyspace) {
+		// We are using range based sharding with the VSchema
+		// poviding the routing information
+		return true
+	}
+
+	// Not range based sharded, might be un-sharded or custom sharded.
+	return false
+}
+
 // SplitQuery splits a query into sub queries by appending keyranges and
 // primary key range clauses. Rows corresponding to the sub queries
 // are guaranteed to be non-overlapping and will add up to the rows of
@@ -545,7 +566,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, keyspace string, sql string, 
 	// sharding_column_type != KeyspaceIdType_UNSET can happen in one of the following two cases:
 	// 1. We are querying a sharded keyspace;
 	// 2. We are querying an unsharded keyspace which is being sharded.
-	if srvKeyspace.ShardingColumnType != topodatapb.KeyspaceIdType_UNSET {
+	if vtg.isKeyspaceRangeBasedSharded(keyspace, srvKeyspace) {
 		// we are using range-based sharding, so the result
 		// will be a list of Splits with KeyRange clauses
 		keyRangeByShard := make(map[string]*topodatapb.KeyRange)
@@ -600,7 +621,7 @@ func (vtg *VTGate) SplitQueryV2(
 	// sharding_column_type != KeyspaceIdType_UNSET can happen in one of the following two cases:
 	// 1. We are querying a sharded keyspace;
 	// 2. We are querying an unsharded keyspace which is being sharded.
-	if srvKeyspace.ShardingColumnType != topodatapb.KeyspaceIdType_UNSET {
+	if vtg.isKeyspaceRangeBasedSharded(keyspace, srvKeyspace) {
 		// Index the shard references in 'shardRefs' by shard name.
 		shardRefByName := make(map[string]*topodatapb.ShardReference, len(shardRefs))
 		for _, shardRef := range shardRefs {
