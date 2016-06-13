@@ -64,7 +64,7 @@ public class VitessJDBCUrl {
         property1=value1.. */
 
         final Pattern p = Pattern
-            .compile("^jdbc:(vitess)://((\\w+)(:(\\w*))?@)?(\\S+)/(\\w+)/(\\w+)(\\?(\\S+))?");
+            .compile("^jdbc:(vitess)://((\\w+)(:(\\w*))?@)?([^/]*)/([^/?]*)/?(\\w+)?(\\?(\\S+))?");
         final Matcher m = p.matcher(url);
         if (!m.find()) {
             throw new SQLException(Constants.SQLExceptionMessages.MALFORMED_URL);
@@ -78,7 +78,7 @@ public class VitessJDBCUrl {
             throw new SQLException(Constants.SQLExceptionMessages.MALFORMED_URL);
         }
         this.keyspace = m.group(7);
-        this.catalog = m.group(8);
+        this.catalog = (m.group(8) == null ? m.group(7) : m.group(8));
         this.hostInfos = getURLHostInfos(postUrl);
 
         String tabletType = info.getProperty(Constants.Property.TABLET_TYPE);
