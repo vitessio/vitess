@@ -20,7 +20,6 @@ $VTROOT/bin/vtgate \
   -cells_to_watch $cell \
   -tablet_types_to_wait MASTER,REPLICA \
   -gateway_implementation discoverygateway \
-  -tablet_protocol grpc \
   -service_map 'grpc-vtgateservice' \
   -pid_file $VTDATAROOT/tmp/vtgate.pid \
   > $VTDATAROOT/tmp/vtgate.out 2>&1 &

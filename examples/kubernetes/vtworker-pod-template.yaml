@@ -27,8 +27,6 @@ spec:
           -topo_implementation etcd
           -etcd_global_addrs http://etcd-global:4001
           -cell {{cell}}
-          -tablet_protocol grpc
-          -tablet_manager_protocol grpc
           -use_v3_resharding_mode
           {{vtworker_command}}" vitess
   restartPolicy: Never

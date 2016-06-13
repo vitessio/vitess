@@ -47,8 +47,6 @@ spec:
               -grpc_port 15999
               -service_map 'grpc-vtctl'
               -topo_implementation etcd
-              -tablet_protocol grpc
-              -tablet_manager_protocol grpc
               -etcd_global_addrs http://etcd-global:4001
               {{backup_flags}}" vitess
       volumes:

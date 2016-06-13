@@ -42,7 +42,6 @@ spec:
               -alsologtostderr
               -port 15001
               -grpc_port 15991
-              -tablet_protocol grpc
               -service_map 'grpc-vtgateservice'
               -cells_to_watch {{cell}}
               -tablet_types_to_wait MASTER,REPLICA
