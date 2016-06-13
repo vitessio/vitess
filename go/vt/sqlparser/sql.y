@@ -155,7 +155,8 @@ func forceEOF(yylex interface{}) {
 %type <updateExpr> update_expression
 %type <empty> for_from
 %type <str> ignore_opt
-%type <empty> exists_opt not_exists_opt non_rename_operation to_opt constraint_opt using_opt
+%type <byt> exists_opt
+%type <empty> not_exists_opt non_rename_operation to_opt constraint_opt using_opt
 %type <colIdent> sql_id as_ci_opt
 %type <tableIdent> table_id as_opt_id
 %type <empty> as_opt
@@ -278,7 +279,11 @@ rename_statement:
 drop_statement:
   DROP TABLE exists_opt table_id
   {
-    $$ = &DDL{Action: DropStr, Table: $4}
+    var exists bool
+    if $3 != 0 {
+      exists = true
+    }
+    $$ = &DDL{Action: DropStr, Table: $4, IfExists: exists}
   }
 | DROP INDEX ID ON table_id
   {
@@ -287,7 +292,11 @@ drop_statement:
   }
 | DROP VIEW exists_opt sql_id force_eof
   {
-    $$ = &DDL{Action: DropStr, Table: TableIdent($4.Lowered())}
+    var exists bool
+        if $3 != 0 {
+          exists = true
+        }
+    $$ = &DDL{Action: DropStr, Table: TableIdent($4.Lowered()), IfExists: exists}
   }
 
 analyze_statement:
@@ -1086,9 +1095,9 @@ for_from:
 | FROM
 
 exists_opt:
-  { $$ = struct{}{} }
+  { $$ = 0 }
 | IF EXISTS
-  { $$ = struct{}{} }
+  { $$ = 1 }
 
 not_exists_opt:
   { $$ = struct{}{} }

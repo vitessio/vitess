@@ -7,6 +7,7 @@ package sqlparser
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 )
 
 // TrackedBuffer is used to rebuild a query from the ast.
@@ -81,6 +82,14 @@ func (buf *TrackedBuffer) Myprintf(format string, values ...interface{}) {
 			}
 		case 'a':
 			buf.WriteArg(values[fieldnum].(string))
+		case 't':
+			switch v := values[fieldnum].(type) {
+			case bool:
+				s := strconv.FormatBool(v)
+				buf.WriteString(s)
+			default:
+				panic(fmt.Sprintf("unexpected type %T", v))
+			}
 		default:
 			panic("unexpected")
 		}
