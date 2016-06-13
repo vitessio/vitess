@@ -46,40 +46,49 @@ func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
-	flags := dbconfigs.AppConfig | dbconfigs.DbaConfig |
+	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.DbaConfig |
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
-	dbconfigs.RegisterFlags(flags)
+	dbconfigs.RegisterFlags(dbconfigFlags)
 	flag.Parse()
 
-	mycnf := mysqlctl.NewMycnf(uint32(*tabletUID), int32(*mysqlPort))
-	if *mysqlSocket != "" {
-		mycnf.SocketFile = *mysqlSocket
-	}
-
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, flags)
-	if err != nil {
-		log.Errorf("%v", err)
-		exit.Return(255)
-	}
-	mysqld = mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnParams, &dbcfgs.Repl)
-
-	// Register OnTerm handler before mysqld starts, so we get notified if mysqld
-	// dies on its own without us (or our RPC client) telling it to.
+	// We'll register this OnTerm handler before mysqld starts, so we get notified
+	// if mysqld dies on its own without us (or our RPC client) telling it to.
 	mysqldTerminated := make(chan struct{})
-	mysqld.OnTerm(func() {
+	onTermFunc := func() {
 		close(mysqldTerminated)
-	})
+	}
 
 	// Start or Init mysqld as needed.
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
-	if _, err = os.Stat(mycnf.DataDir); os.IsNotExist(err) {
-		log.Infof("mysql data dir (%s) doesn't exist, initializing", mycnf.DataDir)
+	tabletDir := mysqlctl.TabletDir(uint32(*tabletUID))
+	if _, statErr := os.Stat(tabletDir); os.IsNotExist(statErr) {
+		// Generate my.cnf from scratch and use it to find mysqld.
+		log.Infof("tablet dir (%s) doesn't exist, initializing", tabletDir)
+
+		var err error
+		mysqld, err = mysqlctl.CreateMysqld(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort), dbconfigFlags)
+		if err != nil {
+			log.Errorf("failed to initialize mysql config: %v", err)
+			exit.Return(1)
+		}
+		mysqld.OnTerm(onTermFunc)
+
 		if err := mysqld.Init(ctx, *initDBSQLFile); err != nil {
 			log.Errorf("failed to initialize mysql data dir and start mysqld: %v", err)
 			exit.Return(1)
 		}
 	} else {
-		log.Infof("mysql data dir (%s) already exists, starting without init", mycnf.DataDir)
+		// There ought to be an existing my.cnf, so use it to find mysqld.
+		log.Infof("tablet dir (%s) already exists, starting without init", tabletDir)
+
+		var err error
+		mysqld, err = mysqlctl.OpenMysqld(uint32(*tabletUID), dbconfigFlags)
+		if err != nil {
+			log.Errorf("failed to find mysql config: %v", err)
+			exit.Return(1)
+		}
+		mysqld.OnTerm(onTermFunc)
+
 		if err := mysqld.Start(ctx); err != nil {
 			log.Errorf("failed to start mysqld: %v", err)
 			exit.Return(1)

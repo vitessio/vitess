@@ -88,7 +88,7 @@ func (util *testUtils) newMysqld(dbconfigs *dbconfigs.DBConfigs) mysqlctl.MysqlD
 	return mysqlctl.NewMysqld(
 		"",
 		"",
-		mysqlctl.NewMycnf(0, 6802),
+		mysqlctl.NewMycnf(11111, 22222, 6802),
 		&dbconfigs.Dba,
 		&dbconfigs.App.ConnParams,
 		&dbconfigs.Repl,
