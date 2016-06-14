@@ -289,7 +289,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     (http://kubernetes.io/v1.1/docs/user-guide/ui.html),
     where you can monitor nodes, pods, and services:
 
-    http://localhost:8001/api/v1/proxy/namespaces/kube-system/services/kube-ui/
+    http://localhost:8001/api/v1/proxy/namespaces/kube-system/services/kubernetes-dashboard/
 
 1.  **Use vtctlclient to send commands to vtctld**
 
@@ -648,6 +648,7 @@ command to check the pod output:
 $ kubectl logs vttablet-100 vttablet
 
 # show logs for container 'mysql' within pod 'vttablet-100'
+# Note that this is NOT MySQL error log.
 $ kubectl logs vttablet-100 mysql
 ```
 
@@ -715,17 +716,11 @@ simple queries or commands through `vtctlclient` like this:
 # Send a query to tablet 100 in cell 'test'.
 vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000100 "SELECT VERSION()"
 ### example output:
-# {
-#   "Fields": null,
-#   "RowsAffected": 1,
-#   "InsertId": 0,
-#   "Rows": [
-#     [
-#       "10.0.20-MariaDB-1~wheezy-log"
-#     ]
-#   ],
-#   "Err": null
-# }
+# +------------+
+# | VERSION()  |
+# +------------+
+# | 5.7.13-log |
+# +------------+
 ```
 
 If you need a truly direct connection to mysqld, you can [launch a shell]
