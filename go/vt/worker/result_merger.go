@@ -14,22 +14,22 @@ import (
 // The output stream will be sorted by ascending primary key order.
 // It implements the ResultReader interface.
 type ResultMerger struct {
-	input  []ResultReader
+	inputs []ResultReader
 	fields []*querypb.Field
 }
 
 // NewResultMerger returns a new ResultMerger.
-func NewResultMerger(input []ResultReader) (*ResultMerger, error) {
-	if len(input) < 1 {
-		panic("list of input ResultReader is empty")
+func NewResultMerger(inputs []ResultReader) (*ResultMerger, error) {
+	if len(inputs) < 2 {
+		panic("ResultMerger requires at least two ResultReaders as input")
 	}
-	fields := input[0].Fields()
-	if err := checkFieldsEqual(fields, input); err != nil {
+	fields := inputs[0].Fields()
+	if err := checkFieldsEqual(fields, inputs); err != nil {
 		return nil, err
 	}
 
 	return &ResultMerger{
-		input:  input,
+		inputs: inputs,
 		fields: fields,
 	}, nil
 }
@@ -44,19 +44,19 @@ func (rm *ResultMerger) Fields() []*querypb.Field {
 // It implements the ResultReader interface.
 func (rm *ResultMerger) Next() (*sqltypes.Result, error) {
 	// TODO(mberlin): Implement this function.
-	return rm.input[0].Next()
+	return rm.inputs[0].Next()
 }
 
-func checkFieldsEqual(fields []*querypb.Field, input []ResultReader) error {
-	for i := 1; i < len(input); i++ {
-		otherFields := input[i].Fields()
+func checkFieldsEqual(fields []*querypb.Field, inputs []ResultReader) error {
+	for i := 1; i < len(inputs); i++ {
+		otherFields := inputs[i].Fields()
 		if len(fields) != len(otherFields) {
-			return fmt.Errorf("input ResultReader have conflicting Fields data: ResultReader[0]: %v != ResultReader[%d]: %v", fields, i, otherFields)
+			return fmt.Errorf("input ResultReaders have conflicting Fields data: ResultReader[0]: %v != ResultReader[%d]: %v", fields, i, otherFields)
 		}
 		for j, field := range fields {
 			otherField := otherFields[j]
 			if !proto.Equal(field, otherField) {
-				return fmt.Errorf("input ResultReader have conflicting Fields data: ResultReader[0]: %v != ResultReader[%d]: %v", fields, i, otherFields)
+				return fmt.Errorf("input ResultReaders have conflicting Fields data: ResultReader[0]: %v != ResultReader[%d]: %v", fields, i, otherFields)
 			}
 		}
 	}
