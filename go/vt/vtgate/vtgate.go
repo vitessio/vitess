@@ -563,9 +563,6 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, keyspace string, sql string, 
 		return nil, err
 	}
 	perShardSplitCount := int64(math.Ceil(float64(splitCount) / float64(len(shards))))
-	// sharding_column_type != KeyspaceIdType_UNSET can happen in one of the following two cases:
-	// 1. We are querying a sharded keyspace;
-	// 2. We are querying an unsharded keyspace which is being sharded.
 	if vtg.isKeyspaceRangeBasedSharded(keyspace, srvKeyspace) {
 		// we are using range-based sharding, so the result
 		// will be a list of Splits with KeyRange clauses
@@ -576,9 +573,8 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, keyspace string, sql string, 
 		return vtg.resolver.scatterConn.SplitQueryKeyRange(ctx, sql, bindVariables, splitColumn, perShardSplitCount, keyRangeByShard, keyspace)
 	}
 
-	// sharding_column_type == KeyspaceIdType_UNSET can happen in one of the following two cases:
-	// 1. We are querying a sharded keyspace which uses custom sharding;
-	// 2. We are querying a unsharded keyspace which is NOT being sharded.
+	// we are using custome sharding (or no sharding), so the
+	// result will be a list of Splits with Shard clauses.
 	shardNames := make([]string, len(shards))
 	for i, shard := range shards {
 		shardNames[i] = shard.Name
@@ -618,9 +614,6 @@ func (vtg *VTGate) SplitQueryV2(
 	// keyspace is custom sharded or unsharded we return 'ShardParts'.
 	var querySplitToQueryPartFunc func(
 		querySplit *querytypes.QuerySplit, shard string) (*vtgatepb.SplitQueryResponse_Part, error)
-	// sharding_column_type != KeyspaceIdType_UNSET can happen in one of the following two cases:
-	// 1. We are querying a sharded keyspace;
-	// 2. We are querying an unsharded keyspace which is being sharded.
 	if vtg.isKeyspaceRangeBasedSharded(keyspace, srvKeyspace) {
 		// Index the shard references in 'shardRefs' by shard name.
 		shardRefByName := make(map[string]*topodatapb.ShardReference, len(shardRefs))
