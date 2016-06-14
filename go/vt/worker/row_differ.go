@@ -68,14 +68,14 @@ func (rd *RowDiffer2) Go(log logutil.Logger) (DiffReport, error) {
 			advanceRight = false
 		}
 		dr.processedRows++
+		if left == nil && right == nil {
+			// No more rows from either side. We're done.
+			return dr, nil
+		}
 		if left == nil {
-			// no more rows from the left
-			if right == nil {
-				// no more rows from right either, we're done
-				return dr, nil
-			}
-
-			// drain right, update count
+			// No more rows on the left side.
+			// We know we have rows on the right side left.
+			// Drain the right side to find out how many extra rows there are.
 			count, err := rd.right.Drain()
 			if err != nil {
 				return dr, err
@@ -84,8 +84,9 @@ func (rd *RowDiffer2) Go(log logutil.Logger) (DiffReport, error) {
 			return dr, nil
 		}
 		if right == nil {
-			// no more rows from the right
-			// we know we have rows from left, drain, update count
+			// No more rows on the right side.
+			// We know we have rows on the left side left.
+			// Drain the left side to find out how many extra rows there are.
 			count, err := rd.left.Drain()
 			if err != nil {
 				return dr, err
@@ -107,7 +108,7 @@ func (rd *RowDiffer2) Go(log logutil.Logger) (DiffReport, error) {
 		if f >= rd.pkFieldCount {
 			// rows have the same primary key, only content is different
 			if dr.mismatchedRows < 10 {
-				log.Errorf("Different content %v in same PK: %v != %v", dr.mismatchedRows, left, right)
+				log.Errorf("Different content %v in same PK (only the first 10 errors of this type will be logged): %v != %v", dr.mismatchedRows, left, right)
 			}
 			dr.mismatchedRows++
 			advanceLeft = true
@@ -122,14 +123,14 @@ func (rd *RowDiffer2) Go(log logutil.Logger) (DiffReport, error) {
 		}
 		if c < 0 {
 			if dr.extraRowsLeft < 10 {
-				log.Errorf("Extra row %v on left: %v", dr.extraRowsLeft, left)
+				log.Errorf("Extra row %v on left (only the first 10 errors of this type will be logged): %v", dr.extraRowsLeft, left)
 			}
 			dr.extraRowsLeft++
 			advanceLeft = true
 			continue
 		} else if c > 0 {
 			if dr.extraRowsRight < 10 {
-				log.Errorf("Extra row %v on right: %v", dr.extraRowsRight, right)
+				log.Errorf("Extra row %v on right (only the first 10 errors of this type will be logged): %v", dr.extraRowsRight, right)
 			}
 			dr.extraRowsRight++
 			advanceRight = true
@@ -140,7 +141,7 @@ func (rd *RowDiffer2) Go(log logutil.Logger) (DiffReport, error) {
 		// they're the same. Logging a regular difference
 		// then, and advancing both.
 		if dr.mismatchedRows < 10 {
-			log.Errorf("Different content %v in same PK: %v != %v", dr.mismatchedRows, left, right)
+			log.Errorf("Different content %v in same PK (only the first 10 errors of this type will be logged): %v != %v", dr.mismatchedRows, left, right)
 		}
 		dr.mismatchedRows++
 		advanceLeft = true
