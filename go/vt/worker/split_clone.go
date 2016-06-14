@@ -639,22 +639,32 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					destReaders[shardIndex] = destResultReader
 				}
 
-				sourceMerger, err := NewResultMerger(sourceReaders)
-				if err != nil {
-					processError("NewResultMerger for source tablets failed: %v", err)
-					return
+				var sourceReader ResultReader
+				var destReader ResultReader
+				if len(sourceReaders) >= 2 {
+					sourceReader, err = NewResultMerger(sourceReaders)
+					if err != nil {
+						processError("NewResultMerger for source tablets failed: %v", err)
+						return
+					}
+				} else {
+					sourceReader = sourceReaders[0]
 				}
-				destMerger, err := NewResultMerger(destReaders)
-				if err != nil {
-					processError("NewResultMerger for dest tablets failed: %v", err)
-					return
+				if len(destReaders) >= 2 {
+					destReader, err = NewResultMerger(destReaders)
+					if err != nil {
+						processError("NewResultMerger for dest tablets failed: %v", err)
+						return
+					}
+				} else {
+					destReader = destReaders[0]
 				}
 
 				// TODO(mberlin): Pass "insertChannels" to RowDiffer2.
 				// TODO(mberlin): Let RowDiffer2 emit repair SQLs for every found difference. It will also require the keyResolver to make the decision which source row goes to which destination shard.
 				// TODO(mberlin): Write a RowAggregator which will be used by RowDiffer2 to combine multiple repair SQLs into larger ones.
 				// Compare the data and repair any differences.
-				differ, err := NewRowDiffer2(sourceMerger, destMerger, td)
+				differ, err := NewRowDiffer2(sourceReader, destReader, td)
 				if err != nil {
 					processError("NewResultMerger for dest tablets failed: %v", err)
 					return
