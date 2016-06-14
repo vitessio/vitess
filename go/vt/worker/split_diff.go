@@ -148,6 +148,9 @@ func (sdw *SplitDiffWorker) run(ctx context.Context) error {
 	if err := sdw.diff(ctx); err != nil {
 		return fmt.Errorf("diff() failed: %v", err)
 	}
+	if err := checkDone(ctx); err != nil {
+		return err
+	}
 
 	return nil
 }

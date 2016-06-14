@@ -256,6 +256,9 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 	if err := scw.copy(ctx); err != nil {
 		return fmt.Errorf("copy() failed: %v", err)
 	}
+	if err := checkDone(ctx); err != nil {
+		return err
+	}
 
 	return nil
 }

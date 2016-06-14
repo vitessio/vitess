@@ -72,7 +72,7 @@ func resetVars() {
 	statsRetryCounters.Reset()
 }
 
-// checkDone returns ctx.Err() iff ctx.Done()
+// checkDone returns ctx.Err() iff ctx.Done().
 func checkDone(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
