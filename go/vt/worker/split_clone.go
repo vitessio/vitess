@@ -575,59 +575,99 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	// Now for each table, read data chunks and send them to all
 	// insertChannels
 	sourceWaitGroup := sync.WaitGroup{}
-	for shardIndex := range scw.sourceShards {
-		sema := sync2.NewSemaphore(scw.sourceReaderCount, 0)
-		for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
-			if td.Type == tmutils.TableView {
-				continue
-			}
+	sema := sync2.NewSemaphore(scw.sourceReaderCount, 0)
+	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
+		if td.Type == tmutils.TableView {
+			continue
+		}
 
-			var keyResolver keyspaceIDResolver
-			if *useV3ReshardingMode {
-				keyResolver, err = newV3ResolverFromTableDefinition(scw.keyspaceSchema, td)
-				if err != nil {
-					return fmt.Errorf("cannot resolve v3 sharding keys for keyspace %v: %v", scw.keyspace, err)
-				}
-			} else {
-				keyResolver, err = newV2Resolver(scw.keyspaceInfo, td)
-				if err != nil {
-					return fmt.Errorf("cannot resolve sharding keys for keyspace %v: %v", scw.keyspace, err)
-				}
-			}
-			rowSplitter := NewRowSplitter(scw.destinationShards, keyResolver)
-
-			chunks, err := FindChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
+		var keyResolver keyspaceIDResolver
+		if *useV3ReshardingMode {
+			keyResolver, err = newV3ResolverFromTableDefinition(scw.keyspaceSchema, td)
 			if err != nil {
-				return err
+				return fmt.Errorf("cannot resolve v3 sharding keys for keyspace %v: %v", scw.keyspace, err)
 			}
-			scw.tableStatusList.setThreadCount(tableIndex, len(chunks)-1)
+		} else {
+			keyResolver, err = newV2Resolver(scw.keyspaceInfo, td)
+			if err != nil {
+				return fmt.Errorf("cannot resolve sharding keys for keyspace %v: %v", scw.keyspace, err)
+			}
+		}
 
-			for chunkIndex := 0; chunkIndex < len(chunks)-1; chunkIndex++ {
-				sourceWaitGroup.Add(1)
-				go func(td *tabletmanagerdatapb.TableDefinition, tableIndex, chunkIndex int) {
-					defer sourceWaitGroup.Done()
+		// TODO(mberlin): Re-think how MIN, MAX of the primary key should be determined when we no longer loop over the source shards.
+		chunks, err := FindChunks(ctx, scw.wr, scw.sourceTablets[0], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
+		if err != nil {
+			return err
+		}
+		scw.tableStatusList.setThreadCount(tableIndex, len(chunks)-1)
 
-					sema.Acquire()
-					defer sema.Release()
+		for chunkIndex := 0; chunkIndex < len(chunks)-1; chunkIndex++ {
+			sourceWaitGroup.Add(1)
+			go func(td *tabletmanagerdatapb.TableDefinition, tableIndex, chunkIndex int) {
+				defer sourceWaitGroup.Done()
 
-					scw.tableStatusList.threadStarted(tableIndex)
+				sema.Acquire()
+				defer sema.Release()
 
-					// build the query, and start the streaming
+				scw.tableStatusList.threadStarted(tableIndex)
+
+				// TODO(mberlin): Get destination tablets and populate destAliases.
+				destAliases := make([]*topodatapb.TabletAlias, len(scw.destinationShards))
+
+				// Set up readers for the diff. There will be one reader for every
+				// source and destination shard.
+				sourceReaders := make([]ResultReader, len(scw.sourceShards))
+				destReaders := make([]ResultReader, len(scw.destinationShards))
+				for shardIndex := range scw.sourceShards {
 					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, scw.sourceAliases[shardIndex].String())
-					rr, err := NewQueryResultReaderForTablet(ctx, scw.wr.TopoServer(), scw.sourceAliases[shardIndex], selectSQL)
+					sourceResultReader, err := NewQueryResultReaderForTablet(ctx, scw.wr.TopoServer(), scw.sourceAliases[shardIndex], selectSQL)
 					if err != nil {
-						processError("NewQueryResultReaderForTablet failed: %v", err)
+						processError("NewQueryResultReaderForTablet for source tablets failed: %v", err)
 						return
 					}
-					defer rr.Close()
-
-					// process the data
-					if err := scw.processData(ctx, td, tableIndex, rr, rowSplitter, insertChannels, scw.destinationPackCount); err != nil {
-						processError("processData failed: %v", err)
+					defer sourceResultReader.Close()
+					sourceReaders[shardIndex] = sourceResultReader
+				}
+				for shardIndex := range scw.destinationShards {
+					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, destAliases[shardIndex].String())
+					destResultReader, err := NewQueryResultReaderForTablet(ctx, scw.wr.TopoServer(), destAliases[shardIndex], selectSQL)
+					if err != nil {
+						processError("NewQueryResultReaderForTablet for dest tablets failed: %v", err)
+						return
 					}
-					scw.tableStatusList.threadDone(tableIndex)
-				}(td, tableIndex, chunkIndex)
-			}
+					defer destResultReader.Close()
+					destReaders[shardIndex] = destResultReader
+				}
+
+				sourceMerger, err := NewResultMerger(sourceReaders)
+				if err != nil {
+					processError("NewResultMerger for source tablets failed: %v", err)
+					return
+				}
+				destMerger, err := NewResultMerger(destReaders)
+				if err != nil {
+					processError("NewResultMerger for dest tablets failed: %v", err)
+					return
+				}
+
+				// TODO(mberlin): Pass "insertChannels" to RowDiffer2.
+				// TODO(mberlin): Let RowDiffer2 emit repair SQLs for every found difference. It will also require the keyResolver to make the decision which source row goes to which destination shard.
+				// TODO(mberlin): Write a RowAggregator which will be used by RowDiffer2 to combine multiple repair SQLs into larger ones.
+				// Compare the data and repair any differences.
+				differ, err := NewRowDiffer2(sourceMerger, destMerger, td)
+				if err != nil {
+					processError("NewResultMerger for dest tablets failed: %v", err)
+					return
+				}
+				// Ignore the diff report because all diffs should get repaired.
+				_ /* DiffReport */, err = differ.Go(scw.wr.Logger())
+				if err != nil {
+					processError("RowDiffer failed: %v", err)
+					return
+				}
+
+				scw.tableStatusList.threadDone(tableIndex)
+			}(td, tableIndex, chunkIndex)
 		}
 	}
 	sourceWaitGroup.Wait()
@@ -763,6 +803,7 @@ func (scw *SplitCloneWorker) processData(ctx context.Context, td *tabletmanagerd
 		scw.tableStatusList.addCopiedRows(tableIndex, len(r.Rows))
 
 		// see if we reach the destination pack count
+		// TODO(mberlin): Count pack per destination instead of per source. Otherwise, the destination writes will become smaller with an increasing resharding factor.
 		packCount++
 		if packCount < destinationPackCount {
 			continue
