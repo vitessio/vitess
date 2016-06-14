@@ -56,6 +56,7 @@ type SplitCloneWorker struct {
 	keyspaceInfo      *topo.KeyspaceInfo
 	sourceShards      []*topo.ShardInfo
 	destinationShards []*topo.ShardInfo
+	keyspaceSchema    *vindexes.KeyspaceSchema
 
 	// populated during WorkerStateFindTargets, read-only after that
 	sourceAliases []*topodatapb.TabletAlias
@@ -326,6 +327,24 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 		}
 	}
 
+	// read the vschema if needed
+	var keyspaceSchema *vindexes.KeyspaceSchema
+	if *useV3ReshardingMode {
+		kschema, err := scw.wr.TopoServer().GetVSchema(ctx, scw.keyspace)
+		if err != nil {
+			return fmt.Errorf("cannot load VSchema for keyspace %v: %v", scw.keyspace, err)
+		}
+		if kschema == nil {
+			return fmt.Errorf("no VSchema for keyspace %v", scw.keyspace)
+		}
+
+		keyspaceSchema, err = vindexes.BuildKeyspaceSchema(kschema, scw.keyspace)
+		if err != nil {
+			return fmt.Errorf("cannot build vschema for keyspace %v: %v", scw.keyspace, err)
+		}
+		scw.keyspaceSchema = keyspaceSchema
+	}
+
 	return nil
 }
 
@@ -514,23 +533,6 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 		}(si.Keyspace(), si.ShardName(), insertChannels[shardIndex])
 	}
 
-	// read the vschema if needed
-	var keyspaceSchema *vindexes.KeyspaceSchema
-	if *useV3ReshardingMode {
-		kschema, err := scw.wr.TopoServer().GetVSchema(ctx, scw.keyspace)
-		if err != nil {
-			return fmt.Errorf("cannot load VSchema for keyspace %v: %v", scw.keyspace, err)
-		}
-		if kschema == nil {
-			return fmt.Errorf("no VSchema for keyspace %v", scw.keyspace)
-		}
-
-		keyspaceSchema, err = vindexes.BuildKeyspaceSchema(kschema, scw.keyspace)
-		if err != nil {
-			return fmt.Errorf("cannot build vschema for keyspace %v: %v", scw.keyspace, err)
-		}
-	}
-
 	// Now for each table, read data chunks and send them to all
 	// insertChannels
 	sourceWaitGroup := sync.WaitGroup{}
@@ -543,7 +545,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 
 			var keyResolver keyspaceIDResolver
 			if *useV3ReshardingMode {
-				keyResolver, err = newV3ResolverFromTableDefinition(keyspaceSchema, td)
+				keyResolver, err = newV3ResolverFromTableDefinition(scw.keyspaceSchema, td)
 				if err != nil {
 					return fmt.Errorf("cannot resolve v3 sharding keys for keyspace %v: %v", scw.keyspace, err)
 				}
