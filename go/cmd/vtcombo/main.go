@@ -5,7 +5,8 @@
 // vtcombo: a single binary that contains:
 // - a ZK topology server based on an in-memory map.
 // - one vtgate instance.
-// - many vttablet instaces.
+// - many vttablet instances.
+// - a vtctld instance so it's easy to see the topology.
 package main
 
 import (
@@ -24,7 +25,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctld"
 	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk/fakezk"
 
@@ -37,15 +37,9 @@ const (
 )
 
 var (
-	// old-style parameters, will go away soon
-	topology           = flag.String("topology", "", "Define which shards exist in the test topology in the form <keyspace>/<shardrange>:<dbname>,... The dbname must be unique among all shards, since they share a MySQL instance in the test environment.")
-	shardingColumnName = flag.String("sharding_column_name", "", "Specifies the column to use for sharding operations")
-	shardingColumnType = flag.String("sharding_column_type", "", "Specifies the type of the column to use for sharding operations")
-
-	// new-style parameter
 	protoTopo = flag.String("proto_topo", "", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
 
-	vschemaFile = flag.String("vschema", "", "vschema file")
+	schemaDir = flag.String("schema_dir", "", "Schema base directory. Should contain one directory per keyspace, with a vschema.json file if necessary.")
 
 	ts topo.Server
 )
@@ -93,25 +87,10 @@ func main() {
 	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnParams, &dbcfgs.Repl)
 	servenv.OnClose(mysqld.Close)
 
-	// vschema
-	formal, err := vindexes.LoadFormal(*vschemaFile)
-	if err != nil {
-		log.Errorf("ReadFile failed: %v %v", *vschemaFile, err)
-		exit.Return(1)
-	}
-	log.Infof("v3 is enabled: loaded vschema from file")
-
 	// tablets configuration and init
-	if *protoTopo != "" {
-		if err := initTabletMapProto(ts, *protoTopo, mysqld, dbcfgs, formal, mycnf); err != nil {
-			log.Errorf("initTabletMapProto failed: %v", err)
-			exit.Return(1)
-		}
-	} else {
-		if err := initTabletMap(ts, *topology, mysqld, dbcfgs, formal, mycnf); err != nil {
-			log.Errorf("initTabletMap failed: %v", err)
-			exit.Return(1)
-		}
+	if err := initTabletMap(ts, *protoTopo, mysqld, dbcfgs, *schemaDir, mycnf); err != nil {
+		log.Errorf("initTabletMapProto failed: %v", err)
+		exit.Return(1)
 	}
 
 	// vtgate configuration and init
