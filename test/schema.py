@@ -289,9 +289,6 @@ class TestSchema(unittest.TestCase):
     self._check_tables(shard_0_master, 4)
     self._check_tables(shard_1_master, 4)
 
-    # TODO(mberlin): This currently fails during the actual change.
-    # schemamanager should fail in preflight instead. Change the error message
-    # we check for once schemamanager prevents this in the preflight phase.
     drop_table = ('DROP TABLE nonexistent_table;')
     stdout = self._apply_schema(test_keyspace, drop_table, expect_fail=True)
     self.assertIn('Unknown table', ''.join(stdout))
@@ -302,7 +299,6 @@ class TestSchema(unittest.TestCase):
 
     self._check_tables(shard_0_master, 4)
     self._check_tables(shard_1_master, 4)
-
 
   def test_vtctl_copyschemashard_use_tablet_as_source(self):
     self._test_vtctl_copyschemashard(shard_0_master.tablet_alias)
