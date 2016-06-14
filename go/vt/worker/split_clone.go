@@ -5,6 +5,7 @@
 package worker
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -29,6 +30,13 @@ import (
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+)
+
+type clonePhase string
+
+const (
+	online  clonePhase = "online clone"
+	offline clonePhase = "offline clone"
 )
 
 // SplitCloneWorker will clone the data within a keyspace from a
@@ -77,8 +85,9 @@ type SplitCloneWorker struct {
 	// Throttler instance which will limit the write throughput.
 	destinationThrottlers map[string]*throttler.Throttler
 
-	// populated during WorkerStateCopy
+	// populated during WorkerStateCloneOffline
 	// tableStatusList holds the status for each table.
+	// TODO(mberlin): Have one per phase or reset it after the online phase.
 	tableStatusList tableStatusList
 	// aliases of tablets that need to have their schema reloaded.
 	// Only populated once, read-only after that.
@@ -159,7 +168,7 @@ func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
 	result := "<b>Working on:</b> " + scw.keyspace + "/" + scw.shard + "</br>\n"
 	result += "<b>State:</b> " + state.String() + "</br>\n"
 	switch state {
-	case WorkerStateCopy:
+	case WorkerStateCloneOnline, WorkerStateCloneOffline:
 		result += "<b>Running</b>:</br>\n"
 		result += "<b>Copying from</b>: " + scw.formatSources() + "</br>\n"
 		statuses, eta := scw.tableStatusList.format()
@@ -181,7 +190,7 @@ func (scw *SplitCloneWorker) StatusAsText() string {
 	result := "Working on: " + scw.keyspace + "/" + scw.shard + "\n"
 	result += "State: " + state.String() + "\n"
 	switch state {
-	case WorkerStateCopy:
+	case WorkerStateCloneOnline, WorkerStateCloneOffline:
 		result += "Running:\n"
 		result += "Copying from: " + scw.formatSources() + "\n"
 		statuses, eta := scw.tableStatusList.format()
@@ -237,7 +246,7 @@ func (scw *SplitCloneWorker) Run(ctx context.Context) error {
 }
 
 func (scw *SplitCloneWorker) run(ctx context.Context) error {
-	// first state: read what we need to do
+	// Phase 1: read what we need to do.
 	if err := scw.init(ctx); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
@@ -245,20 +254,44 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 		return err
 	}
 
-	// second state: find targets
-	if err := scw.findTargets(ctx); err != nil {
-		return fmt.Errorf("findTargets() failed: %v", err)
+	// Phase 2: Find destination master tablets.
+	if err := scw.findDestinationMasters(ctx); err != nil {
+		return fmt.Errorf("findDestinationMasters() failed: %v", err)
 	}
 	if err := checkDone(ctx); err != nil {
 		return err
 	}
 
-	// third state: copy data
-	if err := scw.copy(ctx); err != nil {
-		return fmt.Errorf("copy() failed: %v", err)
-	}
-	if err := checkDone(ctx); err != nil {
-		return err
+	// TODO(mberlin): Uncomment once online clone is implemented.
+	//	// Phase 3: (optional) online clone.
+	//	if scw.online {
+	//    // 3a: TODO(mberlin): Select source tablets.
+	//		// 3b: Clone the data.
+	//		if err := scw.clone(ctx, online); err != nil {
+	//			return fmt.Errorf("online clone() failed: %v", err)
+	//		}
+	//		if err := checkDone(ctx); err != nil {
+	//			return err
+	//		}
+	//	}
+
+	// Phase 4: offline clone.
+	if scw.offline {
+		// 4a: Take source tablets out of serving for an exact snapshot.
+		if err := scw.findSourceTablets(ctx); err != nil {
+			return fmt.Errorf("findSourceTablets() failed: %v", err)
+		}
+		if err := checkDone(ctx); err != nil {
+			return err
+		}
+
+		// 4b: Clone the data.
+		if err := scw.clone(ctx, offline); err != nil {
+			return fmt.Errorf("offline clone() failed: %v", err)
+		}
+		if err := checkDone(ctx); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -348,17 +381,17 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	return nil
 }
 
-// findTargets phase:
+// findOfflineSourceTablets phase:
 // - find one rdonly in the source shard
 // - mark it as 'worker' pointing back to us
-// - get the aliases of all the targets
-func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
+// - get the aliases of all the source tablets
+func (scw *SplitCloneWorker) findSourceTablets(ctx context.Context) error {
 	scw.setState(WorkerStateFindTargets)
-	var err error
 
 	// find an appropriate tablet in the source shards
 	scw.sourceAliases = make([]*topodatapb.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
+		var err error
 		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyTablets)
 		if err != nil {
 			return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
@@ -369,6 +402,7 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	// get the tablet info for them, and stop their replication
 	scw.sourceTablets = make([]*topo.TabletInfo, len(scw.sourceAliases))
 	for i, alias := range scw.sourceAliases {
+		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		scw.sourceTablets[i], err = scw.wr.TopoServer().GetTablet(shortCtx, alias)
 		cancel()
@@ -377,7 +411,7 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 		}
 
 		shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-		err := scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i].Tablet)
+		err = scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i].Tablet)
 		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot stop replication on tablet %v", topoproto.TabletAliasString(alias))
@@ -385,6 +419,15 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 
 		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i].Tablet)
 	}
+
+	return nil
+}
+
+// findDestinationMasters finds for each destination shard the current master.
+// It also initializes the healthCheck instance which is used by the write
+// throttlers.
+func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
+	scw.setState(WorkerStateFindTargets)
 
 	// Initialize healthcheck and add destination shards to it.
 	scw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
@@ -463,11 +506,15 @@ func (scw *SplitCloneWorker) findReloadTargets(ctx context.Context) error {
 //	- copy the data from source tablets to destination masters (with replication on)
 // Assumes that the schema has already been created on each destination tablet
 // (probably from vtctl's CopySchemaShard)
-func (scw *SplitCloneWorker) copy(ctx context.Context) error {
-	scw.setState(WorkerStateCopy)
+func (scw *SplitCloneWorker) clone(ctx context.Context, clonePhase clonePhase) error {
+	cloneState := WorkerStateCloneOnline
+	if clonePhase == offline {
+		cloneState = WorkerStateCloneOffline
+	}
+	scw.setState(cloneState)
 	start := time.Now()
 	defer func() {
-		statsStateDurationsNs.Set(string(WorkerStateCopy), time.Now().Sub(start).Nanoseconds())
+		statsStateDurationsNs.Set(string(cloneState), time.Now().Sub(start).Nanoseconds())
 	}()
 
 	// get source schema from the first shard
@@ -601,86 +648,93 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 		return firstError
 	}
 
-	// then create and populate the blp_checkpoint table
-	if scw.strategy.skipPopulateBlpCheckpoint {
-		scw.wr.Logger().Infof("Skipping populating the blp_checkpoint table")
-	} else {
-		queries := make([]string, 0, 4)
-		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
-		flags := ""
-		if scw.strategy.dontStartBinlogPlayer {
-			flags = binlogplayer.BlpFlagDontStart
-		}
-
-		// get the current position from the sources
-		for shardIndex := range scw.sourceShards {
-			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-			status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex].Tablet)
-			cancel()
-			if err != nil {
-				return err
+	if clonePhase == offline {
+		// Create and populate the blp_checkpoint table to give filtered replication
+		// a starting point.
+		if scw.strategy.skipPopulateBlpCheckpoint {
+			scw.wr.Logger().Infof("Skipping populating the blp_checkpoint table")
+		} else {
+			queries := make([]string, 0, 4)
+			queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
+			flags := ""
+			if scw.strategy.dontStartBinlogPlayer {
+				flags = binlogplayer.BlpFlagDontStart
 			}
 
-			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(uint32(shardIndex), status.Position, scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), flags))
-		}
-
-		for _, si := range scw.destinationShards {
-			destinationWaitGroup.Add(1)
-			go func(keyspace, shard string) {
-				defer destinationWaitGroup.Done()
-				scw.wr.Logger().Infof("Making and populating blp_checkpoint table")
-				keyspaceAndShard := topoproto.KeyspaceShardString(keyspace, shard)
-				if err := runSQLCommands(ctx, scw.wr, scw.healthCheck, keyspace, shard, scw.destinationDbNames[keyspaceAndShard], queries); err != nil {
-					processError("blp_checkpoint queries failed: %v", err)
-				}
-			}(si.Keyspace(), si.ShardName())
-		}
-		destinationWaitGroup.Wait()
-		if firstError != nil {
-			return firstError
-		}
-	}
-
-	// Now we're done with data copy, update the shard's source info.
-	// TODO(alainjobart) this is a superset, some shards may not
-	// overlap, have to deal with this better (for N -> M splits
-	// where both N>1 and M>1)
-	if scw.strategy.skipSetSourceShards {
-		scw.wr.Logger().Infof("Skipping setting SourceShard on destination shards.")
-	} else {
-		for _, si := range scw.destinationShards {
-			scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", si.Keyspace(), si.ShardName())
-			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-			err := scw.wr.SetSourceShards(shortCtx, si.Keyspace(), si.ShardName(), scw.sourceAliases, nil)
-			cancel()
-			if err != nil {
-				return fmt.Errorf("failed to set source shards: %v", err)
-			}
-		}
-	}
-
-	err = scw.findReloadTargets(ctx)
-	if err != nil {
-		return fmt.Errorf("failed before reloading schema on destination tablets: %v", err)
-	}
-	// And force a schema reload on all destination tablets.
-	// The master tablet will end up starting filtered replication
-	// at this point.
-	for shardIndex := range scw.destinationShards {
-		for _, tabletAlias := range scw.reloadAliases[shardIndex] {
-			destinationWaitGroup.Add(1)
-			go func(ti *topo.TabletInfo) {
-				defer destinationWaitGroup.Done()
-				scw.wr.Logger().Infof("Reloading schema on tablet %v", ti.AliasString())
+			// get the current position from the sources
+			for shardIndex := range scw.sourceShards {
 				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-				err := scw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti.Tablet)
+				status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex].Tablet)
 				cancel()
 				if err != nil {
-					processError("ReloadSchema failed on tablet %v: %v", ti.AliasString(), err)
+					return err
 				}
-			}(scw.reloadTablets[shardIndex][*tabletAlias])
+
+				queries = append(queries, binlogplayer.PopulateBlpCheckpoint(uint32(shardIndex), status.Position, scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), flags))
+			}
+
+			for _, si := range scw.destinationShards {
+				destinationWaitGroup.Add(1)
+				go func(keyspace, shard string) {
+					defer destinationWaitGroup.Done()
+					scw.wr.Logger().Infof("Making and populating blp_checkpoint table")
+					keyspaceAndShard := topoproto.KeyspaceShardString(keyspace, shard)
+					if err := runSQLCommands(ctx, scw.wr, scw.healthCheck, keyspace, shard, scw.destinationDbNames[keyspaceAndShard], queries); err != nil {
+						processError("blp_checkpoint queries failed: %v", err)
+					}
+				}(si.Keyspace(), si.ShardName())
+			}
+			destinationWaitGroup.Wait()
+			if firstError != nil {
+				return firstError
+			}
 		}
-	}
+
+		// Configure filtered replication by setting the SourceShard info.
+		// The master tablets won't enable filtered replication (the binlog player)
+		//  until they re-read the topology due to a restart or a reload.
+		// TODO(alainjobart) this is a superset, some shards may not
+		// overlap, have to deal with this better (for N -> M splits
+		// where both N>1 and M>1)
+		if scw.strategy.skipSetSourceShards {
+			scw.wr.Logger().Infof("Skipping setting SourceShard on destination shards.")
+		} else {
+			for _, si := range scw.destinationShards {
+				scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", si.Keyspace(), si.ShardName())
+				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+				err := scw.wr.SetSourceShards(shortCtx, si.Keyspace(), si.ShardName(), scw.sourceAliases, nil)
+				cancel()
+				if err != nil {
+					return fmt.Errorf("failed to set source shards: %v", err)
+				}
+			}
+		}
+
+		// Force a schema reload on all destination tablets.
+		// The master tablet will end up starting filtered replication at this point.
+		//
+		// Find all tablets first, then reload them in parallel.
+		err = scw.findReloadTargets(ctx)
+		if err != nil {
+			return fmt.Errorf("failed before reloading schema on destination tablets: %v", err)
+		}
+		for shardIndex := range scw.destinationShards {
+			for _, tabletAlias := range scw.reloadAliases[shardIndex] {
+				destinationWaitGroup.Add(1)
+				go func(ti *topo.TabletInfo) {
+					defer destinationWaitGroup.Done()
+					scw.wr.Logger().Infof("Reloading schema on tablet %v", ti.AliasString())
+					shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+					err := scw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti.Tablet)
+					cancel()
+					if err != nil {
+						processError("ReloadSchema failed on tablet %v: %v", ti.AliasString(), err)
+					}
+				}(scw.reloadTablets[shardIndex][*tabletAlias])
+			}
+		}
+	} // clonePhase == offline
+
 	destinationWaitGroup.Wait()
 	return firstError
 }

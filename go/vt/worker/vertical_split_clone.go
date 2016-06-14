@@ -72,7 +72,7 @@ type VerticalSplitCloneWorker struct {
 	// Throttler instance which will limit the write throughput.
 	destinationThrottlers map[string]*throttler.Throttler
 
-	// populated during WorkerStateCopy
+	// populated during WorkerStateClone
 	// tableStatusList holds the status for each table.
 	tableStatusList tableStatusList
 	// aliases of tablets that need to have their schema reloaded.
@@ -144,7 +144,7 @@ func (vscw *VerticalSplitCloneWorker) StatusAsHTML() template.HTML {
 	result := "<b>Working on:</b> " + vscw.destinationKeyspace + "/" + vscw.destinationShard + "</br>\n"
 	result += "<b>State:</b> " + state.String() + "</br>\n"
 	switch state {
-	case WorkerStateCopy:
+	case WorkerStateCloneOffline:
 		result += "<b>Running</b>:</br>\n"
 		result += "<b>Copying from</b>: " + topoproto.TabletAliasString(vscw.sourceAlias) + "</br>\n"
 		statuses, eta := vscw.tableStatusList.format()
@@ -166,7 +166,7 @@ func (vscw *VerticalSplitCloneWorker) StatusAsText() string {
 	result := "Working on: " + vscw.destinationKeyspace + "/" + vscw.destinationShard + "\n"
 	result += "State: " + state.String() + "\n"
 	switch state {
-	case WorkerStateCopy:
+	case WorkerStateCloneOffline:
 		result += "Running:\n"
 		result += "Copying from: " + topoproto.TabletAliasString(vscw.sourceAlias) + "\n"
 		statuses, eta := vscw.tableStatusList.format()
@@ -239,7 +239,7 @@ func (vscw *VerticalSplitCloneWorker) run(ctx context.Context) error {
 	}
 
 	// third state: copy data
-	if err := vscw.copy(ctx); err != nil {
+	if err := vscw.clone(ctx); err != nil {
 		return fmt.Errorf("copy() failed: %v", err)
 	}
 	if err := checkDone(ctx); err != nil {
@@ -387,15 +387,15 @@ func (vscw *VerticalSplitCloneWorker) findReloadTargets(ctx context.Context) err
 	return nil
 }
 
-// copy phase:
+// clone phase:
 //	- copy the data from source tablets to destination masters (with replication on)
 // Assumes that the schema has already been created on each destination tablet
 // (probably from vtctl's CopySchemaShard)
-func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
-	vscw.setState(WorkerStateCopy)
+func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
+	vscw.setState(WorkerStateCloneOffline)
 	start := time.Now()
 	defer func() {
-		statsStateDurationsNs.Set(string(WorkerStateCopy), time.Now().Sub(start).Nanoseconds())
+		statsStateDurationsNs.Set(string(WorkerStateCloneOffline), time.Now().Sub(start).Nanoseconds())
 	}()
 
 	// get source schema
