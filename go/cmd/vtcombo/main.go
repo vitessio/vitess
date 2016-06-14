@@ -9,7 +9,6 @@
 package main
 
 import (
-	"expvar"
 	"flag"
 	"time"
 
@@ -133,7 +132,6 @@ func main() {
 		// FIXME(alainjobart): stop vtgate
 	})
 	servenv.OnClose(func() {
-		log.Infof("Total count of new connections to MySQL: %v", expvar.Get("mysql-new-connection-count"))
 		// We will still use the topo server during lameduck period
 		// to update our state, so closing it in OnClose()
 		topo.CloseServers()
