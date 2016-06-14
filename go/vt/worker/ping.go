@@ -37,7 +37,7 @@ func (pw *PingWorker) StatusAsHTML() template.HTML {
 	result := "<b>Ping Command with message:</b> '" + pw.message + "'</br>\n"
 	result += "<b>State:</b> " + state.String() + "</br>\n"
 	switch state {
-	case WorkerStateCopy:
+	case WorkerStateDebugRunning:
 		result += "<b>Running</b>:</br>\n"
 		result += "Logging message: '" + pw.message + "'</br>\n"
 	case WorkerStateDone:
@@ -55,7 +55,7 @@ func (pw *PingWorker) StatusAsText() string {
 	result := "Ping Command with message: '" + pw.message + "'\n"
 	result += "State: " + state.String() + "\n"
 	switch state {
-	case WorkerStateCopy:
+	case WorkerStateDebugRunning:
 		result += "Logging message: '" + pw.message + "'\n"
 	case WorkerStateDone:
 		result += "Logged message: '" + pw.message + "'\n"
@@ -79,7 +79,7 @@ func (pw *PingWorker) Run(ctx context.Context) error {
 
 func (pw *PingWorker) run(ctx context.Context) error {
 	// We reuse the Copy state to reflect that the logging is in progress.
-	pw.SetState(WorkerStateCopy)
+	pw.SetState(WorkerStateDebugRunning)
 	pw.wr.Logger().Printf("Ping command was called with message: '%v'.\n", pw.message)
 	pw.SetState(WorkerStateDone)
 
