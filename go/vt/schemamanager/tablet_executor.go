@@ -181,9 +181,8 @@ func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []s
 			"AfterSchema",
 			schemaDiff.AfterSchema)
 		if len(diffs) == 0 {
-			if parsedDDLs[i].Action == sqlparser.DropStr {
+			if parsedDDLs[i].Action == sqlparser.DropStr && parsedDDLs[i].IfExists {
 				// DROP IF EXISTS on a nonexistent table does not change the schema. It's safe to ignore.
-				// TODO(mberlin): Extend sqlparser to find out if the DDL contains IF EXISTS and check for it as well.
 				continue
 			}
 			return fmt.Errorf("Schema change: '%s' does not introduce any table definition change.", sqls[i])
