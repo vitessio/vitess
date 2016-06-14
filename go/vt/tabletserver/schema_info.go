@@ -152,8 +152,10 @@ func (si *SchemaInfo) Open(dbaParams *sqldb.ConnParams, strictMode bool) {
 	conn := getOrPanic(ctx, si.connPool)
 	defer conn.Recycle()
 
-	if strictMode && !conn.VerifyStrict() {
-		panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not verify strict mode"))
+	if strictMode {
+		if err := conn.VerifyMode(); err != nil {
+			panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err.Error()))
+		}
 	}
 
 	tableData, err := conn.Exec(ctx, baseShowTables, maxTableCount, false)
