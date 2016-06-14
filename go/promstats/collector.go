@@ -1,3 +1,6 @@
+/*
+Package promstats contains adapters to publish stats variables to prometheus (http://prometheus.io)
+*/
 package promstats
 
 import (
