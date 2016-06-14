@@ -41,9 +41,9 @@ For true snapshot, the queries must be sent to the master within a transaction. 
 
 To summarize, these are the various levels of consistency supported: TODO: This will look better in a table:
 
-* REPLICA/RDONLY read: Very fast and very scalable. Data can be stale.
-* MASTER read: Fast, does not scale well geographically. Data is up-to-date (read-after-write consistency).
-* Master transactions: Snapshot consistency for a single shard. Fast, does not scale well geographically. Single-shard ACID writes supported, with support coming in the near future for cross-shard atomic writes.
+* REPLICA/RDONLY read: Servers be scaled geographically. Local reads are fast, but can be stale depending on replica lag.
+* MASTER read: There is only one worldwide master per shard. Reads coming from remote locations will be subject to network latency and reliability, but the data will be up-to-date (read-after-write consistency). The isolation level is READ_COMMITTED.
+* MASTER transactions: These exhibit the same properties as MASTER reads. However, you get REPEATABLE_READ consistency and ACID writes for a single shard. Support is underway for cross-shard Atomic transactions.
 
 ### No multi-master
 
