@@ -353,7 +353,7 @@ var commands = []commandGroup{
 				"Displays the VTGate routing schema."},
 			{"ApplyVSchema", commandApplyVSchema,
 				"{-vschema=<vschema> || -vschema_file=<vschema file>} [-cells=c1,c2,...] [-skip_rebuild] <keyspace>",
-				"Applies the VTGate routing schema to the provided keyspace."},
+				"Applies the VTGate routing schema to the provided keyspace. Shows the result after application."},
 			{"RebuildVSchemaGraph", commandRebuildVSchemaGraph,
 				"[-cells=c1,c2,...]",
 				"Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cells (or all cells if none provided)."},
@@ -2076,6 +2076,13 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	keyspace := subFlags.Arg(0)
 	if err := wr.TopoServer().SaveVSchema(ctx, keyspace, &vs); err != nil {
 		return err
+	}
+
+	b, err := json.MarshalIndent(&vs, "", "  ")
+	if err != nil {
+		wr.Logger().Errorf("Failed to marshal VSchema for display: %v", err)
+	} else {
+		wr.Logger().Printf("Uploaded VSchema object:\n%s\nIf this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).\n", b)
 	}
 
 	if *skipRebuild {
