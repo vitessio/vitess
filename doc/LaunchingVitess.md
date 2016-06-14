@@ -616,7 +616,11 @@ These variables are yet another view of Queries, but broken out by user, table a
 
 ##### DataFree, DataLength, IndexLength, TableRows
 
-These variables are updated periodically from the information_schema. They can be used for planning purposes, or to track unusual changes in table stats.
+These variables are updated periodically from information_schema.tables. They represent statistical information as reported by MySQL about each table. They can be used for planning purposes, or to track unusual changes in table stats.
+* DataFree represents data_free
+* DataLength represents data_length
+* IndexLength represents index_length
+* TableRows represents table_rows
 
 #### /debug/health
 
