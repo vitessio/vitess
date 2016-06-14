@@ -142,9 +142,9 @@ func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*
 	return dbc.conn.ExecuteStreamFetch(query, callback, streamBufferSize)
 }
 
-// VerifyStrict returns true if MySQL is in STRICT mode.
-func (dbc *DBConn) VerifyStrict() bool {
-	return dbc.conn.VerifyStrict()
+// VerifyMode returns an error if the connection mode is incorrect.
+func (dbc *DBConn) VerifyMode() error {
+	return dbc.conn.VerifyMode()
 }
 
 // Close closes the DBConn.

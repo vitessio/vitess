@@ -557,6 +557,12 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
 			},
 		},
+		"select @@autocommit": {
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				{sqltypes.MakeString([]byte("1"))},
+			},
+		},
 		baseShowTables: {
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{

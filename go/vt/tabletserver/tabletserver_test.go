@@ -1377,6 +1377,12 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
 			},
 		},
+		"select @@autocommit": {
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				{sqltypes.MakeString([]byte("1"))},
+			},
+		},
 		"select * from test_table where 1 != 1": {
 			Fields: getTestTableFields(),
 		},
