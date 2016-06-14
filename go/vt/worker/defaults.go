@@ -7,6 +7,8 @@ package worker
 import "github.com/youtube/vitess/go/vt/throttler"
 
 const (
+	defaultOnline            = true
+	defaultOffline           = true
 	defaultSourceReaderCount = 10
 	// defaultDestinationPackCount is the number of StreamExecute responses which
 	// will be aggreated into one transaction. See the vttablet flag

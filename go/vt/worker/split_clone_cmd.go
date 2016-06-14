@@ -50,6 +50,10 @@ const splitCloneHTML2 = `
   <p>Shard involved: {{.Keyspace}}/{{.Shard}}</p>
   <h1>Split Clone Action</h1>
     <form action="/Clones/SplitClone" method="post">
+      <LABEL for="online">Do Online Copy: (optional approximate copy, source and destination tablets will not be put out of serving, minimizes downtime during offline copy)</LABEL>
+        <INPUT type="checkbox" id="online" name="online" value="true"{{if .DefaultOnline}} checked{{end}}></BR>
+      <LABEL for="offline">Do Offline Copy: (exact copy at a specific GTID, required before shard migration, source and destination tablets will be put out of serving during copy)</LABEL>
+        <INPUT type="checkbox" id="offline" name="offline" value="true"{{if .DefaultOnline}} checked{{end}}></BR>
       <LABEL for="excludeTables">Exclude Tables: </LABEL>
         <INPUT type="text" id="excludeTables" name="excludeTables" value="moving.*"></BR>
       <LABEL for="strategy">Strategy: </LABEL>
@@ -85,6 +89,8 @@ var splitCloneTemplate = mustParseTemplate("splitClone", splitCloneHTML)
 var splitCloneTemplate2 = mustParseTemplate("splitClone2", splitCloneHTML2)
 
 func commandSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
+	online := subFlags.Bool("online", defaultOnline, "do online copy (optional approximate copy, source and destination tablets will not be put out of serving, minimizes downtime during offline copy)")
+	offline := subFlags.Bool("offline", defaultOffline, "do offline copy (exact copy at a specific GTID, required before shard migration, source and destination tablets will be put out of serving during copy)")
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'vtworker SplitClone --strategy=-help k/s' for more info")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
@@ -109,7 +115,7 @@ func commandSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagS
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	worker, err := NewSplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, *strategy, *sourceReaderCount, *destinationPackCount, uint64(*minTableSizeForSplit), *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS)
+	worker, err := NewSplitCloneWorker(wr, wi.cell, keyspace, shard, *online, *offline, excludeTableArray, *strategy, *sourceReaderCount, *destinationPackCount, uint64(*minTableSizeForSplit), *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create split clone worker: %v", err)
 	}
@@ -186,6 +192,8 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 		result := make(map[string]interface{})
 		result["Keyspace"] = keyspace
 		result["Shard"] = shard
+		result["DefaultOnline"] = defaultOnline
+		result["DefaultOffline"] = defaultOffline
 		result["DefaultSourceReaderCount"] = fmt.Sprintf("%v", defaultSourceReaderCount)
 		result["DefaultDestinationPackCount"] = fmt.Sprintf("%v", defaultDestinationPackCount)
 		result["DefaultMinTableSizeForSplit"] = fmt.Sprintf("%v", defaultMinTableSizeForSplit)
@@ -196,7 +204,10 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 	}
 
 	// get other parameters
-	destinationPackCountStr := r.FormValue("destinationPackCount")
+	onlineStr := r.FormValue("online")
+	online := onlineStr == "true"
+	offlineStr := r.FormValue("offline")
+	offline := offlineStr == "true"
 	excludeTables := r.FormValue("excludeTables")
 	var excludeTableArray []string
 	if excludeTables != "" {
@@ -207,6 +218,7 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot parse sourceReaderCount: %s", err)
 	}
+	destinationPackCountStr := r.FormValue("destinationPackCount")
 	destinationPackCount, err := strconv.ParseInt(destinationPackCountStr, 0, 64)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot parse destinationPackCount: %s", err)
@@ -233,7 +245,7 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 	}
 
 	// start the clone job
-	wrk, err := NewSplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, strategy, int(sourceReaderCount), int(destinationPackCount), uint64(minTableSizeForSplit), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS)
+	wrk, err := NewSplitCloneWorker(wr, wi.cell, keyspace, shard, online, offline, excludeTableArray, strategy, int(sourceReaderCount), int(destinationPackCount), uint64(minTableSizeForSplit), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot create worker: %v", err)
 	}
@@ -243,6 +255,6 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 func init() {
 	AddCommand("Clones", Command{"SplitClone",
 		commandSplitClone, interactiveSplitClone,
-		"[--exclude_tables=''] [--strategy=''] <keyspace/shard>",
+		"[--online=false] [--offline=false] [--exclude_tables=''] [--strategy=''] <keyspace/shard>",
 		"Replicates the data and creates configuration for a horizontal split."})
 }

@@ -40,6 +40,8 @@ type SplitCloneWorker struct {
 	cell                    string
 	keyspace                string
 	shard                   string
+	online                  bool
+	offline                 bool
 	excludeTables           []string
 	strategy                *splitStrategy
 	sourceReaderCount       int
@@ -86,7 +88,7 @@ type SplitCloneWorker struct {
 }
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
-func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
+func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
 	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
@@ -97,12 +99,17 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 	if maxTPS != throttler.MaxRateModuleDisabled && maxTPS < int64(destinationWriterCount) {
 		return nil, fmt.Errorf("-max_tps must be >= -destination_writer_count: %v >= %v", maxTPS, destinationWriterCount)
 	}
+	if !online && !offline {
+		return nil, errors.New("at least one clone phase (-online, -offline) must be enabled (and not set to false)")
+	}
 	return &SplitCloneWorker{
 		StatusWorker:            NewStatusWorker(),
 		wr:                      wr,
 		cell:                    cell,
 		keyspace:                keyspace,
 		shard:                   shard,
+		online:                  online,
+		offline:                 offline,
 		excludeTables:           excludeTables,
 		strategy:                strategy,
 		sourceReaderCount:       sourceReaderCount,
