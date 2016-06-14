@@ -1,4 +1,11 @@
 // Package gatewaytest contains a test suite to run against a Gateway object.
+// We re-use the tabletconn test suite, as it tests all queries and parameters
+// go through. There are two exceptions:
+// - the health check: we just make that one work, so the gateway knows the
+//   tablet is healthy.
+// - the error type returned: it's not a TabletError any more, but a ShardError.
+//   We still check the error code is correct though which is really all we care
+//   about.
 package gatewaytest
 
 import (
