@@ -412,21 +412,31 @@ TODO: Change this section to link to auto-generated descriptions.
 
 ### DB config parameters
 
-VTTablet requires multiple user credentials to perform its tasks. Any requests coming from the app will only use the app credentials. VTTablet is required to run on the same machine as MySQL. Therefore, it’s most beneficial to use the more efficient unix socket connections.
+VTTablet requires multiple user credentials to perform its tasks. Since it's required to run on the same machine as MySQL, it’s most beneficial to use the more efficient unix socket connections.
 
+**app** credentials are for serving app queries:
 * **db-config-app-unixsocket**: MySQL socket name to connect to.
 * **db-config-app-uname**: App username.
 * **db-config-app-pass**: Password for the app username. If you need a more secure way of managing and supplying passwords, VTTablet does allow you to plug into a "password server" that can securely supply and refresh usernames and passwords. Please contact the Vitess team for help if you’d like to write such a custom plugin.
 * **db-config-app-charset**: The only supported character set is utf8. Vitess still works with latin1, but it’s getting deprecated.
 
-For other credentials, replace the "app" part of the command line argument with “dba”, “repl”, or “filtered”.
+**dba** credentials will be used for housekeeping work like loading the schema or killing runaway queries:
+* **db-config-dba-unixsocket**
+* **db-config-dba-uname**
+* **db-config-dba-pass**
+* **db-config-dba-charset**
 
-Different users we have:
+**repl** credentials are for managing replication:
+* **db-config-repl-unixsocket**
+* **db-config-repl-uname**
+* **db-config-repl-pass**
+* **db-config-repl-charset**
 
-* App: used to fulfill app requests.
-* Dba: used by Vitess to perform schema related, and query management tasks.
-* Repl: used by Vitess to tell mysqld which credentials to use to connect to master for replication.
-* Filtered: to apply filtered replication statements. (app creds cannot be used because replication statements might be from non-app users e.g. a schema change. also helpful for isolating app traffic during resharding e.g. you could block app traffic explicitly.) TODO: See if this can be merged with repl.
+**filtered** credentials are for performing resharding:
+* **db-config-filtered-unixsocket**
+* **db-config-filtered-uname**
+* **db-config-filtered-pass**
+* **db-config-filtered-charset**
 
 ### Monitoring
 
