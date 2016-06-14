@@ -30,8 +30,10 @@ const (
 	// destination tablets are at the same GTID during the diff.
 	WorkerStateSyncReplication StatusWorkerState = "synchronizing replication"
 
-	// WorkerStateCopy is set when the worker copies the data.
-	WorkerStateCopy StatusWorkerState = "copying the data"
+	// WorkerStateCloneOnline is set when the worker copies the data in the online phase.
+	WorkerStateCloneOnline StatusWorkerState = "cloning the data (online)"
+	// WorkerStateCloneOffline is set when the worker copies the data in the offline phase.
+	WorkerStateCloneOffline StatusWorkerState = "cloning the data (offline)"
 
 	// WorkerStateDiff is set when the worker compares the data.
 	WorkerStateDiff StatusWorkerState = "running the diff"

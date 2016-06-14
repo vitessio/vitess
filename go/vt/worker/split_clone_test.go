@@ -325,7 +325,7 @@ func TestSplitCloneV2_Throttled(t *testing.T) {
 	//           throttle request interval (negligible backoff)
 	// - 3rd tx: throttled for 33 ms at least since 2nd tx happened
 	want := 33 * time.Millisecond
-	copyDuration := time.Duration(statsStateDurationsNs.Counts()[string(WorkerStateCopy)]) * time.Nanosecond
+	copyDuration := time.Duration(statsStateDurationsNs.Counts()[string(WorkerStateCloneOffline)]) * time.Nanosecond
 	if copyDuration < want {
 		t.Errorf("throttled copy was too fast: %v < %v", copyDuration, want)
 	}
