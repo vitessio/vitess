@@ -42,7 +42,10 @@ func NewRowDiffer2(left, right *QueryResultReader, tableDefinition *tabletmanage
 
 // Go runs the diff. If there is no error, it will drain both sides.
 // If an error occurs, it will just return it and stop.
-func (rd *RowDiffer2) Go(log logutil.Logger) (dr DiffReport, err error) {
+func (rd *RowDiffer2) Go(log logutil.Logger) (DiffReport, error) {
+
+	var dr DiffReport
+	var err error
 
 	dr.startingTime = time.Now()
 	defer dr.ComputeQPS()
@@ -53,16 +56,14 @@ func (rd *RowDiffer2) Go(log logutil.Logger) (dr DiffReport, err error) {
 	advanceRight := true
 	for {
 		if advanceLeft {
-			left, err = rd.left.Next()
-			if err != nil {
-				return
+			if left, err = rd.left.Next(); err != nil {
+				return dr, err
 			}
 			advanceLeft = false
 		}
 		if advanceRight {
-			right, err = rd.right.Next()
-			if err != nil {
-				return
+			if right, err = rd.right.Next(); err != nil {
+				return dr, err
 			}
 			advanceRight = false
 		}
@@ -71,26 +72,26 @@ func (rd *RowDiffer2) Go(log logutil.Logger) (dr DiffReport, err error) {
 			// no more rows from the left
 			if right == nil {
 				// no more rows from right either, we're done
-				return
+				return dr, nil
 			}
 
 			// drain right, update count
-			if count, err := rd.right.Drain(); err != nil {
+			count, err := rd.right.Drain()
+			if err != nil {
 				return dr, err
-			} else {
-				dr.extraRowsRight += 1 + count
 			}
-			return
+			dr.extraRowsRight += 1 + count
+			return dr, nil
 		}
 		if right == nil {
 			// no more rows from the right
 			// we know we have rows from left, drain, update count
-			if count, err := rd.left.Drain(); err != nil {
+			count, err := rd.left.Drain()
+			if err != nil {
 				return dr, err
-			} else {
-				dr.extraRowsLeft += 1 + count
 			}
-			return
+			dr.extraRowsLeft += 1 + count
+			return dr, nil
 		}
 
 		// we have both left and right, compare
