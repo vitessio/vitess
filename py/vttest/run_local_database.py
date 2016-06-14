@@ -52,7 +52,6 @@ def main(cmdline_options):
   with local_database.LocalDatabase(
       topology,
       cmdline_options.schema_dir,
-      cmdline_options.vschema,
       cmdline_options.mysql_only,
       init_data_opts,
       web_dir=cmdline_options.web_dir) as local_db:
@@ -87,10 +86,6 @@ if __name__ == '__main__':
       ' after the database is created on each shard.'
       ' If the directory contains a vschema.json file, it'
       ' will be used as the vschema for the V3 API.')
-  parser.add_option(
-      '-e', '--vschema',
-      help='If this file is specified, it will be used'
-      ' as the vschema for the V3 API.')
   parser.add_option(
       '-m', '--mysql_only', action='store_true',
       help='If this flag is set only mysql is initialized.'

@@ -1,0 +1,102 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    },
+    "unicode_loose_md5": {
+      "type": "unicode_loose_md5"
+    },
+    "name_user_idx": {
+      "type": "lookup_hash",
+      "params": {
+        "table": "name_user_idx",
+        "from": "name",
+        "to": "user_id"
+      },
+      "owner": "user"
+    },
+    "music_user_idx": {
+      "type": "lookup_hash_unique",
+      "params": {
+        "table": "music_user_idx",
+        "from": "music_id",
+        "to": "user_id"
+      },
+      "owner": "music"
+    },
+    "keyspace_idx": {
+      "type": "numeric"
+    }
+  },
+  "tables": {
+    "user": {
+      "column_vindexes": [
+        {
+          "column": "user_id",
+          "name": "hash"
+        },
+        {
+          "column": "name",
+          "name": "name_user_idx"
+        }
+      ],
+      "auto_increment": {
+        "column": "user_id",
+        "sequence": "user_seq"
+      }
+    },
+    "user_extra": {
+      "column_vindexes": [
+        {
+          "column": "user_id",
+          "name": "hash"
+        }
+      ]
+    },
+    "music": {
+      "column_vindexes": [
+        {
+          "column": "user_id",
+          "name": "hash"
+        },
+        {
+          "column": "music_id",
+          "name": "music_user_idx"
+        }
+      ],
+      "auto_increment": {
+        "column": "music_id",
+        "sequence": "music_seq"
+      }
+    },
+    "music_extra": {
+      "column_vindexes": [
+        {
+          "column": "music_id",
+          "name": "music_user_idx"
+        },
+        {
+          "column": "keyspace_id",
+          "name": "keyspace_idx"
+        }
+      ]
+    },
+    "name_info": {
+      "column_vindexes": [
+        {
+          "column": "name",
+          "name": "unicode_loose_md5"
+        }
+      ]
+    },
+    "music_user_idx": {
+      "column_vindexes": [
+        {
+          "column": "music_id",
+          "name": "hash"
+        }
+      ]
+    }
+  }
+}

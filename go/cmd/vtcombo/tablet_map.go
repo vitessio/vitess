@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -26,13 +28,13 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
 )
 
@@ -87,7 +89,7 @@ func createTablet(ctx context.Context, ts topo.Server, cell string, uid uint32, 
 
 // initTabletMap creates the action agents and associated data structures
 // for all tablets, based on the vttest proto parameter.
-func initTabletMap(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, formal *vschemapb.SrvVSchema, mycnf *mysqlctl.Mycnf) error {
+func initTabletMap(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, schemaDir string, mycnf *mysqlctl.Mycnf) error {
 	// parse the input topology
 	tpb := &vttestpb.VTTestTopology{}
 	if err := proto.UnmarshalText(topoProto, tpb); err != nil {
@@ -106,7 +108,6 @@ func initTabletMap(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlDaemon
 	var uid uint32 = 1
 	for _, kpb := range tpb.Keyspaces {
 		keyspace := kpb.Name
-		vs := formal.Keyspaces[keyspace]
 
 		// First parse the ShardingColumnType.
 		// Note if it's empty, we will return 'UNSET'.
@@ -176,9 +177,22 @@ func initTabletMap(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlDaemon
 			}
 		}
 
-		// create the vschema
-		if err := ts.SaveVSchema(ctx, keyspace, vs); err != nil {
-			return fmt.Errorf("SaveVSchema failed: %v", err)
+		// vschema for the keyspace
+		if schemaDir != "" {
+			f := path.Join(schemaDir, keyspace, "vschema.json")
+			if _, err := os.Stat(f); err == nil {
+				// load the vschema
+				formal, err := vindexes.LoadFormalKeyspace(f)
+				if err != nil {
+					return fmt.Errorf("cannot load vschema file %v for keyspace %v: %v", f, keyspace, err)
+				}
+
+				if err := ts.SaveVSchema(ctx, keyspace, formal); err != nil {
+					return fmt.Errorf("SaveVSchema(%v) failed: %v", keyspace, err)
+				}
+			} else {
+				log.Infof("File %v doesn't exist, skipping vschema for keyspace %v", f, keyspace)
+			}
 		}
 
 		// Rebuild the SrvKeyspace object, so we can support

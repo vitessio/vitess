@@ -25,7 +25,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctld"
 	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk/fakezk"
 
@@ -40,7 +39,7 @@ const (
 var (
 	protoTopo = flag.String("proto_topo", "", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
 
-	vschemaFile = flag.String("vschema", "", "vschema file")
+	schemaDir = flag.String("schema_dir", "", "Schema base directory. Should contain one directory per keyspace, with a vschema.json file if necessary.")
 
 	ts topo.Server
 )
@@ -88,16 +87,8 @@ func main() {
 	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnParams, &dbcfgs.Repl)
 	servenv.OnClose(mysqld.Close)
 
-	// vschema
-	formal, err := vindexes.LoadFormal(*vschemaFile)
-	if err != nil {
-		log.Errorf("ReadFile failed: %v %v", *vschemaFile, err)
-		exit.Return(1)
-	}
-	log.Infof("v3 is enabled: loaded vschema from file")
-
 	// tablets configuration and init
-	if err := initTabletMap(ts, *protoTopo, mysqld, dbcfgs, formal, mycnf); err != nil {
+	if err := initTabletMap(ts, *protoTopo, mysqld, dbcfgs, *schemaDir, mycnf); err != nil {
 		log.Errorf("initTabletMapProto failed: %v", err)
 		exit.Return(1)
 	}

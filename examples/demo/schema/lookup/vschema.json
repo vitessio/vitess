@@ -1,0 +1,12 @@
+{
+  "sharded": false,
+  "tables": {
+    "user_seq": {
+      "type": "sequence"
+    },
+    "music_seq": {
+      "type": "sequence"
+    },
+    "name_user_idx": {}
+  }
+}
