@@ -24,13 +24,15 @@ type RowDiffer2 struct {
 }
 
 // NewRowDiffer2 returns a new RowDiffer2
-func NewRowDiffer2(left, right *QueryResultReader, tableDefinition *tabletmanagerdatapb.TableDefinition) (*RowDiffer2, error) {
-	if len(left.Fields) != len(right.Fields) {
+func NewRowDiffer2(left, right ResultReader, tableDefinition *tabletmanagerdatapb.TableDefinition) (*RowDiffer2, error) {
+	leftFields := left.Fields()
+	rightFields := right.Fields()
+	if len(leftFields) != len(rightFields) {
 		return nil, fmt.Errorf("Cannot diff inputs with different types")
 	}
-	for i, field := range left.Fields {
-		if field.Type != right.Fields[i].Type {
-			return nil, fmt.Errorf("Cannot diff inputs with different types: field %v types are %v and %v", i, field.Type, right.Fields[i].Type)
+	for i, field := range leftFields {
+		if field.Type != rightFields[i].Type {
+			return nil, fmt.Errorf("Cannot diff inputs with different types: field %v types are %v and %v", i, field.Type, rightFields[i].Type)
 		}
 	}
 	return &RowDiffer2{

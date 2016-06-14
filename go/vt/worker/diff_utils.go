@@ -29,8 +29,8 @@ import (
 
 // QueryResultReader will stream rows towards the output channel.
 type QueryResultReader struct {
-	Output sqltypes.ResultStream
-	Fields []*querypb.Field
+	output sqltypes.ResultStream
+	fields []*querypb.Field
 	conn   tabletconn.TabletConn
 }
 
@@ -61,10 +61,25 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 	}
 
 	return &QueryResultReader{
-		Output: stream,
-		Fields: cols.Fields,
+		output: stream,
+		fields: cols.Fields,
 		conn:   conn,
 	}, nil
+}
+
+// Next returns the next result on the stream. It implements ResultReader.
+func (qrr *QueryResultReader) Next() (*sqltypes.Result, error) {
+	return qrr.output.Recv()
+}
+
+// Fields returns the field data. It implements ResultReader.
+func (qrr *QueryResultReader) Fields() []*querypb.Field {
+	return qrr.fields
+}
+
+// Close closes the connection to the tablet.
+func (qrr *QueryResultReader) Close() {
+	qrr.conn.Close()
 }
 
 // v3KeyRangeFilter is a sqltypes.ResultStream implementation that filters
@@ -156,8 +171,8 @@ func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server
 		}
 
 		// with extra filter
-		scan.Output = &v3KeyRangeFilter{
-			input:    scan.Output,
+		scan.output = &v3KeyRangeFilter{
+			input:    scan.output,
 			resolver: keyResolver.(*v3Resolver),
 			keyRange: keyRange,
 		}
@@ -206,22 +221,17 @@ func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server
 	return NewQueryResultReaderForTablet(ctx, ts, tabletAlias, sql)
 }
 
-// Close closes the connection to the tablet.
-func (qrr *QueryResultReader) Close() {
-	qrr.conn.Close()
-}
-
-// RowReader returns individual rows from a QueryResultReader
+// RowReader returns individual rows from a ResultReader.
 type RowReader struct {
-	queryResultReader *QueryResultReader
-	currentResult     *sqltypes.Result
-	currentIndex      int
+	resultReader  ResultReader
+	currentResult *sqltypes.Result
+	currentIndex  int
 }
 
 // NewRowReader returns a RowReader based on the QueryResultReader
-func NewRowReader(queryResultReader *QueryResultReader) *RowReader {
+func NewRowReader(resultReader ResultReader) *RowReader {
 	return &RowReader{
-		queryResultReader: queryResultReader,
+		resultReader: resultReader,
 	}
 }
 
@@ -232,7 +242,7 @@ func NewRowReader(queryResultReader *QueryResultReader) *RowReader {
 func (rr *RowReader) Next() ([]sqltypes.Value, error) {
 	for rr.currentResult == nil || rr.currentIndex == len(rr.currentResult.Rows) {
 		var err error
-		rr.currentResult, err = rr.queryResultReader.Output.Recv()
+		rr.currentResult, err = rr.resultReader.Next()
 		if err != nil {
 			if err != io.EOF {
 				return nil, err
@@ -248,7 +258,7 @@ func (rr *RowReader) Next() ([]sqltypes.Value, error) {
 
 // Fields returns the types for the rows
 func (rr *RowReader) Fields() []*querypb.Field {
-	return rr.queryResultReader.Fields
+	return rr.resultReader.Fields()
 }
 
 // Drain will empty the RowReader and return how many rows we got
@@ -363,12 +373,14 @@ type RowDiffer struct {
 
 // NewRowDiffer returns a new RowDiffer
 func NewRowDiffer(left, right *QueryResultReader, tableDefinition *tabletmanagerdatapb.TableDefinition) (*RowDiffer, error) {
-	if len(left.Fields) != len(right.Fields) {
+	leftFields := left.Fields()
+	rightFields := right.Fields()
+	if len(leftFields) != len(rightFields) {
 		return nil, fmt.Errorf("Cannot diff inputs with different types")
 	}
-	for i, field := range left.Fields {
-		if field.Type != right.Fields[i].Type {
-			return nil, fmt.Errorf("Cannot diff inputs with different types: field %v types are %v and %v", i, field.Type, right.Fields[i].Type)
+	for i, field := range leftFields {
+		if field.Type != rightFields[i].Type {
+			return nil, fmt.Errorf("Cannot diff inputs with different types: field %v types are %v and %v", i, field.Type, rightFields[i].Type)
 		}
 	}
 	return &RowDiffer{

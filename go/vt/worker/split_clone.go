@@ -614,15 +614,15 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 
 					// build the query, and start the streaming
 					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, scw.sourceAliases[shardIndex].String())
-					qrr, err := NewQueryResultReaderForTablet(ctx, scw.wr.TopoServer(), scw.sourceAliases[shardIndex], selectSQL)
+					rr, err := NewQueryResultReaderForTablet(ctx, scw.wr.TopoServer(), scw.sourceAliases[shardIndex], selectSQL)
 					if err != nil {
 						processError("NewQueryResultReaderForTablet failed: %v", err)
 						return
 					}
-					defer qrr.Close()
+					defer rr.Close()
 
 					// process the data
-					if err := scw.processData(ctx, td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount); err != nil {
+					if err := scw.processData(ctx, td, tableIndex, rr, rowSplitter, insertChannels, scw.destinationPackCount); err != nil {
 						processError("processData failed: %v", err)
 					}
 					scw.tableStatusList.threadDone(tableIndex)
@@ -733,13 +733,14 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 
 // processData pumps the data out of the provided QueryResultReader.
 // It returns any error the source encounters.
-func (scw *SplitCloneWorker) processData(ctx context.Context, td *tabletmanagerdatapb.TableDefinition, tableIndex int, qrr *QueryResultReader, rowSplitter *RowSplitter, insertChannels []chan string, destinationPackCount int) error {
+func (scw *SplitCloneWorker) processData(ctx context.Context, td *tabletmanagerdatapb.TableDefinition, tableIndex int, rr ResultReader, rowSplitter *RowSplitter, insertChannels []chan string, destinationPackCount int) error {
 	baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
 	sr := rowSplitter.StartSplit()
 	packCount := 0
 
+	fields := rr.Fields()
 	for {
-		r, err := qrr.Output.Recv()
+		r, err := rr.Next()
 		if err != nil {
 			// we are done, see if there was an error
 			if err != io.EOF {
@@ -750,7 +751,7 @@ func (scw *SplitCloneWorker) processData(ctx context.Context, td *tabletmanagerd
 			// the return value, we don't care
 			// here if we're aborted)
 			if packCount > 0 {
-				rowSplitter.Send(qrr.Fields, sr, baseCmd, insertChannels, ctx.Done())
+				rowSplitter.Send(fields, sr, baseCmd, insertChannels, ctx.Done())
 			}
 			return nil
 		}
@@ -768,7 +769,7 @@ func (scw *SplitCloneWorker) processData(ctx context.Context, td *tabletmanagerd
 		}
 
 		// send the rows to be inserted
-		if aborted := rowSplitter.Send(qrr.Fields, sr, baseCmd, insertChannels, ctx.Done()); aborted {
+		if aborted := rowSplitter.Send(fields, sr, baseCmd, insertChannels, ctx.Done()); aborted {
 			return nil
 		}
 

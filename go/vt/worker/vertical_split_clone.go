@@ -577,8 +577,9 @@ func (vscw *VerticalSplitCloneWorker) processData(ctx context.Context, td *table
 	var rows [][]sqltypes.Value
 	packCount := 0
 
+	fields := qrr.Fields()
 	for {
-		r, err := qrr.Output.Recv()
+		r, err := qrr.Next()
 		if err != nil {
 			// we are done, see if there was an error
 			if err != io.EOF {
@@ -587,7 +588,7 @@ func (vscw *VerticalSplitCloneWorker) processData(ctx context.Context, td *table
 
 			// send the remainder if any
 			if packCount > 0 {
-				cmd := baseCmd + makeValueString(qrr.Fields, rows)
+				cmd := baseCmd + makeValueString(fields, rows)
 				select {
 				case insertChannel <- cmd:
 				case <-ctx.Done():
@@ -608,7 +609,7 @@ func (vscw *VerticalSplitCloneWorker) processData(ctx context.Context, td *table
 		}
 
 		// send the rows to be inserted
-		cmd := baseCmd + makeValueString(qrr.Fields, rows)
+		cmd := baseCmd + makeValueString(fields, rows)
 		select {
 		case insertChannel <- cmd:
 		case <-ctx.Done():
