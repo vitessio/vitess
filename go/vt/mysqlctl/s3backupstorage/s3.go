@@ -1,4 +1,10 @@
-// Package s3backupstorage implements the BackupStorage interface for AWS S3
+// Package s3backupstorage implements the BackupStorage interface for AWS S3.
+//
+// AWS access credentials are configured via standard AWS means, such as:
+// - AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables
+// - credentials file at ~/.aws/credentials
+// - if running on an EC2 instance, an IAM role
+// See details at http://blogs.aws.amazon.com/security/post/Tx3D6U6WSFGOK2H/A-New-and-Standardized-Way-to-Manage-Credentials-in-the-AWS-SDKs
 package s3backupstorage
 
 import (
@@ -127,20 +133,20 @@ func (bs *S3BackupStorage) ListBackups(dir string) ([]backupstorage.BackupHandle
 
 	var subdirs []string
 	for {
-		ojbs, err := c.ListObjectsV2(query)
+		objs, err := c.ListObjectsV2(query)
 		if err != nil {
 			return nil, err
 		}
-		for _, prefix := range ojbs.CommonPrefixes {
+		for _, prefix := range objs.CommonPrefixes {
 			subdir := strings.TrimPrefix(*prefix.Prefix, *searchPrefix)
 			subdir = strings.TrimSuffix(subdir, delimiter)
 			subdirs = append(subdirs, subdir)
 		}
 
-		if ojbs.NextContinuationToken == nil {
+		if objs.NextContinuationToken == nil {
 			break
 		}
-		query.ContinuationToken = ojbs.NextContinuationToken
+		query.ContinuationToken = objs.NextContinuationToken
 	}
 
 	// Backups must be returned in order, oldest first.
