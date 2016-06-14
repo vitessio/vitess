@@ -235,7 +235,7 @@ func initTabletMap(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlDaemon
 //
 
 // dialer is our tabletconn.Dialer
-func dialer(ctx context.Context, tablet *topodatapb.Tablet, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
+func dialer(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return nil, tabletconn.OperationalError("connection refused")

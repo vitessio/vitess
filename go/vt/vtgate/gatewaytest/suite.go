@@ -135,14 +135,18 @@ func TestSuite(t *testing.T, name string, g gateway.Gateway, f *tabletconntest.F
 
 	protocolName := "gateway-test-" + name
 
-	tabletconn.RegisterDialer(protocolName, func(ctx context.Context, tablet *topodatapb.Tablet, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
+	tabletconn.RegisterDialer(protocolName, func(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
 		return &gatewayAdapter{
 			g:          g,
-			keyspace:   keyspace,
-			shard:      shard,
-			tabletType: tabletType,
+			keyspace:   tablet.Keyspace,
+			shard:      tablet.Shard,
+			tabletType: tablet.Type,
 		}, nil
 	})
 
-	tabletconntest.TestSuite(t, protocolName, &topodatapb.Tablet{}, f)
+	tabletconntest.TestSuite(t, protocolName, &topodatapb.Tablet{
+		Keyspace: tabletconntest.TestTarget.Keyspace,
+		Shard:    tabletconntest.TestTarget.Shard,
+		Type:     tabletconntest.TestTarget.TabletType,
+	}, f)
 }

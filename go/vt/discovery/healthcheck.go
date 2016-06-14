@@ -295,9 +295,9 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, ta
 
 // connect creates connection to the tablet and starts streaming.
 func (hcc *healthCheckConn) connect(hc *HealthCheckImpl, tablet *topodatapb.Tablet) (tabletconn.StreamHealthReader, error) {
-	// Keyspace, shard and tabletType are not known yet, but they're unused
-	// by StreamHealth. We'll use SetTarget later to set them.
-	conn, err := tabletconn.GetDialer()(hcc.ctx, tablet, "" /*keyspace*/, "" /*shard*/, topodatapb.TabletType_UNKNOWN, hc.connTimeout)
+	// Keyspace, shard and tabletType are the ones from the tablet
+	// record, but they won't be used just yet.
+	conn, err := tabletconn.GetDialer()(hcc.ctx, tablet, hc.connTimeout)
 	if err != nil {
 		return nil, err
 	}

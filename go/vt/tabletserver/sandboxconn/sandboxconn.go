@@ -23,10 +23,7 @@ import (
 
 // SandboxConn satisfies the TabletConn interface
 type SandboxConn struct {
-	keyspace   string
-	shard      string
-	tabletType topodatapb.TabletType
-	tablet     *topodatapb.Tablet
+	tablet *topodatapb.Tablet
 
 	MustFailRetry  int
 	MustFailFatal  int
@@ -60,7 +57,6 @@ type SandboxConn struct {
 }
 
 // NewSandboxConn returns a new SandboxConn targeted to the provided tablet.
-// Note a SandboxConn can also be just allocated directly.
 func NewSandboxConn(t *topodatapb.Tablet) *SandboxConn {
 	return &SandboxConn{
 		tablet: t,
@@ -255,7 +251,7 @@ func (sbc *SandboxConn) SplitQueryV2(
 			Sql: fmt.Sprintf(
 				"query:%v, splitColumns:%v, splitCount:%v,"+
 					" numRowsPerQueryPart:%v, algorithm:%v, shard:%v",
-				query, splitColumns, splitCount, numRowsPerQueryPart, algorithm, sbc.shard),
+				query, splitColumns, splitCount, numRowsPerQueryPart, algorithm, sbc.tablet.Shard),
 		},
 	}
 	return splits, nil
@@ -272,9 +268,6 @@ func (sbc *SandboxConn) Close() {
 
 // SetTarget is part of the TabletConn interface.
 func (sbc *SandboxConn) SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error {
-	sbc.keyspace = keyspace
-	sbc.shard = shard
-	sbc.tabletType = tabletType
 	return nil
 }
 

@@ -260,8 +260,8 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string) (notif
 	return result, nil
 }
 
-func sandboxDialer(ctx context.Context, tablet *topodatapb.Tablet, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
-	sand := getSandbox(keyspace)
+func sandboxDialer(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
+	sand := getSandbox(tablet.Keyspace)
 	sand.sandmu.Lock()
 	defer sand.sandmu.Unlock()
 	sand.DialCounter++
@@ -275,6 +275,5 @@ func sandboxDialer(ctx context.Context, tablet *topodatapb.Tablet, keyspace, sha
 		return nil, tabletconn.OperationalError(fmt.Sprintf("conn unreachable"))
 	}
 	sbc := sandboxconn.NewSandboxConn(tablet)
-	sbc.SetTarget(keyspace, shard, tabletType)
 	return sbc, nil
 }

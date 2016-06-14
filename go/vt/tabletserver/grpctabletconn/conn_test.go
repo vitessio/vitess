@@ -36,6 +36,9 @@ func TestGRPCTabletConn(t *testing.T) {
 
 	// run the test suite
 	tabletconntest.TestSuite(t, protocolName, &topodatapb.Tablet{
+		Keyspace: tabletconntest.TestTarget.Keyspace,
+		Shard:    tabletconntest.TestTarget.Shard,
+		Type:     tabletconntest.TestTarget.TabletType,
 		Hostname: host,
 		PortMap: map[string]int32{
 			"grpc": int32(port),
@@ -46,6 +49,9 @@ func TestGRPCTabletConn(t *testing.T) {
 	t.Log("Enabling combo Begin / Execute{,Batch}")
 	*combo = true
 	tabletconntest.TestSuite(t, protocolName, &topodatapb.Tablet{
+		Keyspace: tabletconntest.TestTarget.Keyspace,
+		Shard:    tabletconntest.TestTarget.Shard,
+		Type:     tabletconntest.TestTarget.TabletType,
 		Hostname: host,
 		PortMap: map[string]int32{
 			"grpc": int32(port),

@@ -51,6 +51,7 @@ func TestGRPCDiscovery(t *testing.T) {
 		},
 		Keyspace: tabletconntest.TestTarget.Keyspace,
 		Shard:    tabletconntest.TestTarget.Shard,
+		Type:     tabletconntest.TestTarget.TabletType,
 		Hostname: host,
 		PortMap: map[string]int32{
 			"grpc": int32(port),

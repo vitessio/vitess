@@ -605,7 +605,7 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 
 	// create a connection
 	ctx := context.Background()
-	conn, err := tabletconn.GetDialer()(ctx, tablet, TestTarget.Keyspace, TestTarget.Shard, TestTarget.TabletType, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ctx, tablet, 30*time.Second)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}

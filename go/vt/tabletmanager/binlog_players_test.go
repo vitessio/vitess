@@ -121,10 +121,7 @@ func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string
 // fakeTabletConn implement TabletConn interface. We only care about the
 // health check part.
 type fakeTabletConn struct {
-	tablet     *topodatapb.Tablet
-	keyspace   string
-	shard      string
-	tabletType topodatapb.TabletType
+	tablet *topodatapb.Tablet
 }
 
 // Execute is part of the TabletConn interface
@@ -223,9 +220,9 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context) (tabletconn.StreamH
 		c <- &querypb.StreamHealthResponse{
 			Serving: true,
 			Target: &querypb.Target{
-				Keyspace:   ftc.keyspace,
-				Shard:      ftc.shard,
-				TabletType: ftc.tabletType,
+				Keyspace:   ftc.tablet.Keyspace,
+				Shard:      ftc.tablet.Shard,
+				TabletType: ftc.tablet.Type,
 			},
 			RealtimeStats: &querypb.RealtimeStats{},
 		}
@@ -255,10 +252,10 @@ func createSourceTablet(t *testing.T, name string, ts topo.Server, keyspace, sha
 			Cell: "cell1",
 			Uid:  100,
 		},
-		Type:     topodatapb.TabletType_REPLICA,
-		KeyRange: kr,
 		Keyspace: keyspace,
 		Shard:    vshard,
+		Type:     topodatapb.TabletType_REPLICA,
+		KeyRange: kr,
 		PortMap: map[string]int32{
 			"vt": 80,
 		},
@@ -269,12 +266,9 @@ func createSourceTablet(t *testing.T, name string, ts topo.Server, keyspace, sha
 
 	// register a tablet conn dialer that will return the instance
 	// we want
-	tabletconn.RegisterDialer(name, func(ctx context.Context, tablet *topodatapb.Tablet, k, s string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
+	tabletconn.RegisterDialer(name, func(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
 		return &fakeTabletConn{
-			tablet:     tablet,
-			keyspace:   keyspace,
-			shard:      vshard,
-			tabletType: topodatapb.TabletType_REPLICA,
+			tablet: tablet,
 		}, nil
 	})
 	flag.Set("tablet_protocol", name)
