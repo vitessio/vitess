@@ -32,13 +32,6 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-type clonePhase string
-
-const (
-	online  clonePhase = "online clone"
-	offline clonePhase = "offline clone"
-)
-
 // SplitCloneWorker will clone the data within a keyspace from a
 // source set of shards to a destination set of shards.
 type SplitCloneWorker struct {
@@ -286,7 +279,7 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 		}
 
 		// 4b: Clone the data.
-		if err := scw.clone(ctx, offline); err != nil {
+		if err := scw.clone(ctx, WorkerStateCloneOffline); err != nil {
 			return fmt.Errorf("offline clone() failed: %v", err)
 		}
 		if err := checkDone(ctx); err != nil {
@@ -506,15 +499,14 @@ func (scw *SplitCloneWorker) findReloadTargets(ctx context.Context) error {
 //	- copy the data from source tablets to destination masters (with replication on)
 // Assumes that the schema has already been created on each destination tablet
 // (probably from vtctl's CopySchemaShard)
-func (scw *SplitCloneWorker) clone(ctx context.Context, clonePhase clonePhase) error {
-	cloneState := WorkerStateCloneOnline
-	if clonePhase == offline {
-		cloneState = WorkerStateCloneOffline
+func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState) error {
+	if state != WorkerStateCloneOnline && state != WorkerStateCloneOffline {
+		panic(fmt.Sprintf("invalid state passed to clone(): %v", state))
 	}
-	scw.setState(cloneState)
+	scw.setState(state)
 	start := time.Now()
 	defer func() {
-		statsStateDurationsNs.Set(string(cloneState), time.Now().Sub(start).Nanoseconds())
+		statsStateDurationsNs.Set(string(state), time.Now().Sub(start).Nanoseconds())
 	}()
 
 	// get source schema from the first shard
@@ -648,7 +640,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, clonePhase clonePhase) e
 		return firstError
 	}
 
-	if clonePhase == offline {
+	if state == WorkerStateCloneOffline {
 		// Create and populate the blp_checkpoint table to give filtered replication
 		// a starting point.
 		if scw.strategy.skipPopulateBlpCheckpoint {
