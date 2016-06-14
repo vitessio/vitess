@@ -271,7 +271,7 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 	// Phase 4: offline clone.
 	if scw.offline {
 		// 4a: Take source tablets out of serving for an exact snapshot.
-		if err := scw.findSourceTablets(ctx); err != nil {
+		if err := scw.findOfflineSourceTablets(ctx); err != nil {
 			return fmt.Errorf("findSourceTablets() failed: %v", err)
 		}
 		if err := checkDone(ctx); err != nil {
@@ -378,7 +378,7 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 // - find one rdonly in the source shard
 // - mark it as 'worker' pointing back to us
 // - get the aliases of all the source tablets
-func (scw *SplitCloneWorker) findSourceTablets(ctx context.Context) error {
+func (scw *SplitCloneWorker) findOfflineSourceTablets(ctx context.Context) error {
 	scw.setState(WorkerStateFindTargets)
 
 	// find an appropriate tablet in the source shards
