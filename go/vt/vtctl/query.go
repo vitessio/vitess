@@ -285,9 +285,6 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	transactionID := subFlags.Int("transaction_id", 0, "transaction id to use, if inside a transaction.")
 	bindVariables := newBindvars(subFlags)
-	keyspace := subFlags.String("keyspace", "", "keyspace the tablet belongs to")
-	shard := subFlags.String("shard", "", "shard the tablet belongs to")
-	tabletType := subFlags.String("tablet_type", "unknown", "tablet type we expect from the tablet")
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
 
@@ -296,10 +293,6 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	}
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("the <tablet_alias> and <sql> arguments are required for the VtTabletExecute command")
-	}
-	tt, err := topoproto.ParseTabletType(*tabletType)
-	if err != nil {
-		return err
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
@@ -310,7 +303,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *keyspace, *shard, tt, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
@@ -328,19 +321,12 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 }
 
 func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	keyspace := subFlags.String("keyspace", "", "keyspace the tablet belongs to")
-	shard := subFlags.String("shard", "", "shard the tablet belongs to")
-	tabletType := subFlags.String("tablet_type", "unknown", "tablet type we expect from the tablet")
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <tablet_alias> argument is required for the VtTabletBegin command")
-	}
-	tt, err := topoproto.ParseTabletType(*tabletType)
-	if err != nil {
-		return err
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
@@ -351,7 +337,7 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *keyspace, *shard, tt, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
@@ -368,9 +354,6 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 }
 
 func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	keyspace := subFlags.String("keyspace", "", "keyspace the tablet belongs to")
-	shard := subFlags.String("shard", "", "shard the tablet belongs to")
-	tabletType := subFlags.String("tablet_type", "unknown", "tablet type we expect from the tablet")
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -382,10 +365,6 @@ func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	tt, err := topoproto.ParseTabletType(*tabletType)
-	if err != nil {
-		return err
-	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
@@ -395,7 +374,7 @@ func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *keyspace, *shard, tt, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
@@ -405,9 +384,6 @@ func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 }
 
 func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	keyspace := subFlags.String("keyspace", "", "keyspace the tablet belongs to")
-	shard := subFlags.String("shard", "", "shard the tablet belongs to")
-	tabletType := subFlags.String("tablet_type", "unknown", "tablet type we expect from the tablet")
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -419,10 +395,6 @@ func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	if err != nil {
 		return err
 	}
-	tt, err := topoproto.ParseTabletType(*tabletType)
-	if err != nil {
-		return err
-	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
@@ -432,7 +404,7 @@ func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *keyspace, *shard, tt, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
@@ -459,8 +431,7 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 		return err
 	}
 
-	// tablet type is unused for StreamHealth, use UNKNOWN
-	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, "", "", topodatapb.TabletType_UNKNOWN, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}

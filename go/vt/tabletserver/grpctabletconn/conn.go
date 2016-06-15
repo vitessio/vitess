@@ -52,7 +52,7 @@ type gRPCQueryClient struct {
 }
 
 // DialTablet creates and initializes gRPCQueryClient.
-func DialTablet(ctx context.Context, tablet *topodatapb.Tablet, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
+func DialTablet(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
 	// create the RPC client
 	addr := netutil.JoinHostPort(tablet.Hostname, tablet.PortMap["grpc"])
 	opt, err := grpcutils.ClientSecureDialOption(*cert, *key, *ca, *name)
@@ -70,9 +70,9 @@ func DialTablet(ctx context.Context, tablet *topodatapb.Tablet, keyspace, shard 
 		cc:     cc,
 		c:      c,
 		target: &querypb.Target{
-			Keyspace:   keyspace,
-			Shard:      shard,
-			TabletType: tabletType,
+			Keyspace:   tablet.Keyspace,
+			Shard:      tablet.Shard,
+			TabletType: tablet.Type,
 		},
 	}
 
@@ -451,6 +451,12 @@ func (conn *gRPCQueryClient) SplitQueryV2(
 
 // StreamHealth starts a streaming RPC for VTTablet health status updates.
 func (conn *gRPCQueryClient) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return nil, tabletconn.ConnClosed
+	}
+
 	return conn.c.StreamHealth(ctx, &querypb.StreamHealthRequest{})
 }
 

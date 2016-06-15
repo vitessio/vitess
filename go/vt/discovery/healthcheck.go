@@ -37,6 +37,7 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 )
 
@@ -202,7 +203,7 @@ func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 			hcc.mu.RUnlock()
 			continue
 		}
-		key := fmt.Sprintf("%s.%s.%s", hcc.target.Keyspace, hcc.target.Shard, strings.ToLower(hcc.target.TabletType.String()))
+		key := fmt.Sprintf("%s.%s.%s", hcc.target.Keyspace, hcc.target.Shard, topoproto.TabletTypeLString(hcc.target.TabletType))
 		hcc.mu.RUnlock()
 		res[key]++
 	}
@@ -235,7 +236,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, ta
 			hcc.lastError = err
 			target := hcc.target
 			hcc.mu.Unlock()
-			hcErrorCounters.Add([]string{target.Keyspace, target.Shard, strings.ToLower(target.TabletType.String())}, 1)
+			hcErrorCounters.Add([]string{target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType)}, 1)
 
 			// Sleep until the next retry is up or the context is done/canceled.
 			select {
@@ -273,7 +274,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, ta
 					return
 				default:
 				}
-				hcErrorCounters.Add([]string{target.Keyspace, target.Shard, strings.ToLower(target.TabletType.String())}, 1)
+				hcErrorCounters.Add([]string{target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType)}, 1)
 				if reconnect {
 					hcc.mu.Lock()
 					hcc.conn.Close()
@@ -295,9 +296,9 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, ta
 
 // connect creates connection to the tablet and starts streaming.
 func (hcc *healthCheckConn) connect(hc *HealthCheckImpl, tablet *topodatapb.Tablet) (tabletconn.StreamHealthReader, error) {
-	// Keyspace, shard and tabletType are not known yet, but they're unused
-	// by StreamHealth. We'll use SetTarget later to set them.
-	conn, err := tabletconn.GetDialer()(hcc.ctx, tablet, "" /*keyspace*/, "" /*shard*/, topodatapb.TabletType_UNKNOWN, hc.connTimeout)
+	// Keyspace, shard and tabletType are the ones from the tablet
+	// record, but they won't be used just yet.
+	conn, err := tabletconn.GetDialer()(hcc.ctx, tablet, hc.connTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -440,7 +441,7 @@ func (hc *HealthCheckImpl) checkHealthCheckTimeout() {
 		if hc.listener != nil {
 			hc.listener.StatsUpdate(ts)
 		}
-		hcErrorCounters.Add([]string{target.Keyspace, target.Shard, strings.ToLower(target.TabletType.String())}, 1)
+		hcErrorCounters.Add([]string{target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType)}, 1)
 	}
 }
 

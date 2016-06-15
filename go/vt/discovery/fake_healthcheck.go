@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 
@@ -148,11 +149,11 @@ func (fhc *FakeHealthCheck) Reset() {
 
 // AddTestTablet inserts a fake entry into FakeHealthCheck.
 // The Tablet can be talked to using the provided connection.
-func (fhc *FakeHealthCheck) AddTestTablet(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error, conn tabletconn.TabletConn) *topodatapb.Tablet {
-	if conn != nil {
-		conn.SetTarget(keyspace, shard, tabletType)
-	}
+func (fhc *FakeHealthCheck) AddTestTablet(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error) *sandboxconn.SandboxConn {
 	t := topo.NewTablet(0, cell, host)
+	t.Keyspace = keyspace
+	t.Shard = shard
+	t.Type = tabletType
 	t.PortMap["vt"] = port
 	key := TabletToMapKey(t)
 
@@ -176,8 +177,9 @@ func (fhc *FakeHealthCheck) AddTestTablet(cell, host string, port int32, keyspac
 	item.ts.TabletExternallyReparentedTimestamp = reparentTS
 	item.ts.Stats = &querypb.RealtimeStats{}
 	item.ts.LastError = err
+	conn := sandboxconn.NewSandboxConn(t)
 	item.conn = conn
-	return t
+	return conn
 }
 
 // GetAllTablets returns all the tablets we have.
