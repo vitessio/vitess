@@ -437,6 +437,11 @@ func (ra *RowAggregator) KeyspaceAndShard() string {
 // flush sends out the current aggregation buffer. It returns true when the
 // pipeline was aborted.
 func (ra *RowAggregator) flush() bool {
+	if ra.buffer.Len() == 0 {
+		// Already flushed. Not aborted.
+		return false
+	}
+
 	ra.buffer.WriteString(ra.baseCmdTail)
 	// select blocks until sending the SQL succeeded or the context was canceled.
 	select {
