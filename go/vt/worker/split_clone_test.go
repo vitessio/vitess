@@ -151,6 +151,7 @@ func (tc *splitCloneTestCase) setUp(v3 bool) {
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              tmutils.TableBaseTable,
+					// TODO(mberlin): Remove this because the code currently does not use it.
 					// This informs how many rows we can pack into a single insert
 					DataLength: 2048,
 				},
@@ -167,27 +168,29 @@ func (tc *splitCloneTestCase) setUp(v3 bool) {
 		}
 		qs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
 		qs.AddDefaultHealthResponse()
-		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &testQueryService{
-			t: tc.t,
-			StreamHealthQueryService: qs,
-		})
+		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, newTestQueryService(
+			tc.t, sourceRdonly.Target(), qs, complete))
+	}
+	for _, destRdonly := range []*testlib.FakeTablet{leftRdonly, rightRdonly} {
+		qs := fakes.NewStreamHealthQueryService(destRdonly.Target())
+		qs.AddDefaultHealthResponse()
+		grpcqueryservice.RegisterForTest(destRdonly.RPCServer, newTestQueryService(
+			tc.t, destRdonly.Target(), qs, empty))
 	}
 
 	// We read 100 source rows. sourceReaderCount is set to 10, so
 	// we'll have 100/10=10 rows per table chunk.
-	// destinationPackCount is set to 4, so we take 4 source rows
-	// at once. So we'll process 4 + 4 + 2 rows to get to 10.
-	// That means 3 insert statements on each target (each
-	// containing half of the rows, i.e. 2 + 2 + 1 rows). So 3 * 10
-	// = 30 insert statements on each destination.
+	// Since we don't reach the limit of destinationPackCount, there will be
+	// one aggregated insert per chunk. That's 10 inserts for every shard.
+	// (Each aggregated shard will have 5 out of the 10 rows from the chunk.)
 	tc.leftMasterFakeDb = NewFakePoolConnectionQuery(tc.t, "leftMaster")
 	tc.leftReplicaFakeDb = NewFakePoolConnectionQuery(tc.t, "leftReplica")
 	tc.rightMasterFakeDb = NewFakePoolConnectionQuery(tc.t, "rightMaster")
 
-	for i := 1; i <= 30; i++ {
-		tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", nil)
+	for i := 1; i <= 10; i++ {
+		tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", nil)
 		// leftReplica is unused by default.
-		tc.rightMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", nil)
+		tc.rightMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", nil)
 	}
 	expectBlpCheckpointCreationQueries(tc.leftMasterFakeDb)
 	expectBlpCheckpointCreationQueries(tc.rightMasterFakeDb)
@@ -229,11 +232,27 @@ func (tc *splitCloneTestCase) tearDown() {
 type testQueryService struct {
 	t *testing.T
 
+	// target is used in the log output.
+	target querypb.Target
 	*fakes.StreamHealthQueryService
+	fields []*querypb.Field
+	rows   [][]sqltypes.Value
+}
+
+func newTestQueryService(t *testing.T, target querypb.Target, qs *fakes.StreamHealthQueryService, typ rowGeneratorTyp) *testQueryService {
+	fields, rows := generateRows(typ)
+	return &testQueryService{
+		t:      t,
+		target: target,
+		StreamHealthQueryService: qs,
+		fields: fields,
+		rows:   rows,
+	}
 }
 
 func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sendReply func(reply *sqltypes.Result) error) error {
 	// Custom parsing of the query we expect.
+	// Example: SELECT id, msg, keyspace_id FROM table1 WHERE id>=180 AND id<190 ORDER BY id
 	min := splitCloneTestMin
 	max := splitCloneTestMax
 	var err error
@@ -246,47 +265,85 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 			}
 		} else if strings.HasPrefix(part, "id<") {
 			max, err = strconv.Atoi(part[3:])
+			if err != nil {
+				return err
+			}
 		}
 	}
-	sq.t.Logf("testQueryService: got query: %v with min %v max %v", sql, min, max)
+	sq.t.Logf("testQueryService: %v/%v/%v: got query: %v with min %v max %v", sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, sql, min, max)
 
 	// Send the headers
-	if err := sendReply(&sqltypes.Result{
-		Fields: []*querypb.Field{
-			{
-				Name: "id",
-				Type: sqltypes.Int64,
-			},
-			{
-				Name: "msg",
-				Type: sqltypes.VarChar,
-			},
-			{
-				Name: "keyspace_id",
-				Type: sqltypes.Int64,
-			},
-		},
-	}); err != nil {
+	if err := sendReply(&sqltypes.Result{Fields: sq.fields}); err != nil {
 		return err
 	}
 
 	// Send the values
-	ksids := []uint64{0x2000000000000000, 0x6000000000000000}
-	for i := min; i < max; i++ {
-		if err := sendReply(&sqltypes.Result{
-			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
-					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
-					sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[i%2]))),
-				},
-			},
-		}); err != nil {
-			return err
+	rowsAffected := 0
+	for _, row := range sq.rows {
+		primaryKey := row[0].ToNative().(int64)
+		if primaryKey >= int64(min) && primaryKey <= int64(max) {
+			if err := sendReply(&sqltypes.Result{
+				Rows: [][]sqltypes.Value{row},
+			}); err != nil {
+				return err
+			}
+			sq.t.Logf("testQueryService: %v/%v/%v: sent row for id: %v", sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, primaryKey)
+			rowsAffected++
 		}
 	}
-	// SELECT id, msg, keyspace_id FROM table1 WHERE id>=180 AND id<190 ORDER BY id
+
+	if rowsAffected == 0 {
+		sq.t.Logf("testQueryService: %v/%v/%v: no rows were sent (%v are available)", sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, len(sq.rows))
+	}
 	return nil
+}
+
+type rowGeneratorTyp int
+
+const (
+	complete rowGeneratorTyp = iota
+	empty
+)
+
+func generateRows(typ rowGeneratorTyp) ([]*querypb.Field, [][]sqltypes.Value) {
+	// ksids has keyspace ids which are covered by the shard key ranges -40 and 40-80.
+	ksids := []uint64{0x2000000000000000, 0x6000000000000000}
+	switch typ {
+	case complete:
+		fields := v2Fields
+		rows := make([][]sqltypes.Value, splitCloneTestMax-splitCloneTestMin)
+		i := 0
+		for id := splitCloneTestMin; id < splitCloneTestMax; id++ {
+			idValue, _ := sqltypes.BuildValue(int64(id))
+			rows[i] = []sqltypes.Value{
+				idValue,
+				sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", id))),
+				sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[id%2]))),
+			}
+			i++
+		}
+		return fields, rows
+	case empty:
+		return v2Fields, [][]sqltypes.Value{}
+	default:
+		panic(fmt.Sprintf("unknown type: %v", typ))
+	}
+}
+
+var v2Fields = []*querypb.Field{
+	{
+		Name: "id",
+		Type: sqltypes.Int64,
+	},
+	{
+		Name: "msg",
+		Type: sqltypes.VarChar,
+	},
+	// TODO(mberlin): Omit keyspace_id in the v3 test.
+	{
+		Name: "keyspace_id",
+		Type: sqltypes.Int64,
+	},
 }
 
 func TestSplitCloneV2(t *testing.T) {
@@ -345,8 +402,8 @@ func TestSplitCloneV2_RetryDueToReadonly(t *testing.T) {
 	defer tc.tearDown()
 
 	// Provoke a retry to test the error handling.
-	tc.leftMasterFakeDb.addExpectedQueryAtIndex(0, "INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", errReadOnly)
-	tc.rightMasterFakeDb.addExpectedQueryAtIndex(0, "INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", errReadOnly)
+	tc.leftMasterFakeDb.addExpectedQueryAtIndex(0, "INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", errReadOnly)
+	tc.rightMasterFakeDb.addExpectedQueryAtIndex(0, "INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", errReadOnly)
 	// Only wait 1 ms between retries, so that the test passes faster.
 	*executeFetchRetryTime = 1 * time.Millisecond
 
@@ -374,16 +431,16 @@ func TestSplitCloneV2_RetryDueToReparent(t *testing.T) {
 	defer tc.tearDown()
 
 	// Provoke a reparent just before the copy finishes.
-	// leftReplica will take over for the last, 30th, insert and the BLP checkpoint.
-	tc.leftReplicaFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", nil)
+	// leftReplica will take over for the last, 10th, insert and the BLP checkpoint.
+	tc.leftReplicaFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", nil)
 	expectBlpCheckpointCreationQueries(tc.leftReplicaFakeDb)
 
-	// Do not let leftMaster succeed the 30th write.
-	tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(28)
-	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", errReadOnly)
+	// Do not let leftMaster succeed the 10th write.
+	tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(8)
+	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", errReadOnly)
 	tc.leftMasterFakeDb.enableInfinite()
 	// When vtworker encounters the readonly error on leftMaster, do the reparent.
-	tc.leftMasterFakeDb.getEntry(29).AfterFunc = func() {
+	tc.leftMasterFakeDb.getEntry(9).AfterFunc = func() {
 		// Reparent from leftMaster to leftReplica.
 		// NOTE: This step is actually not necessary due to our fakes which bypass
 		//       a lot of logic. Let's keep it for correctness though.
@@ -434,26 +491,26 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
 
-	// leftReplica will take over for the last, 30th, insert and the BLP checkpoint.
-	tc.leftReplicaFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", nil)
+	// leftReplica will take over for the last, 10th, insert and the BLP checkpoint.
+	tc.leftReplicaFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", nil)
 	expectBlpCheckpointCreationQueries(tc.leftReplicaFakeDb)
 
-	// During the 29th write, let the MASTER disappear.
-	tc.leftMasterFakeDb.getEntry(28).AfterFunc = func() {
+	// During the 9th write, let the MASTER disappear.
+	tc.leftMasterFakeDb.getEntry(8).AfterFunc = func() {
 		tc.leftMasterQs.UpdateType(topodatapb.TabletType_REPLICA)
 		tc.leftMasterQs.AddDefaultHealthResponse()
 	}
 
-	// If the HealthCheck didn't pick up the change yet, the 30th write would
+	// If the HealthCheck didn't pick up the change yet, the 10th write would
 	// succeed. To prevent this from happening, replace it with an error.
-	tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(28)
-	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", errReadOnly)
+	tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(8)
+	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", errReadOnly)
 	tc.leftMasterFakeDb.enableInfinite()
 	// vtworker may not retry on leftMaster again if HealthCheck picks up the
 	// change very fast. In that case, the error was never encountered.
 	// Delete it or verifyAllExecutedOrFail() will fail because it was not
 	// processed.
-	defer tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(28)
+	defer tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(8)
 
 	// Wait for a retry due to NoMasterAvailable to happen, expect the 30th write
 	// on leftReplica and change leftReplica from REPLICA to MASTER.
