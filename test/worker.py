@@ -496,8 +496,9 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
       # for each destination shard ("finding targets" state).
       utils.poll_for_vars(
           'vtworker', worker_port,
-          'WorkerState == copying the data',
-          condition_fn=lambda v: v.get('WorkerState') == 'copying the data')
+          'WorkerState == cloning the data (offline)',
+          condition_fn=lambda v: v.get('WorkerState') == 'cloning the'
+          ' data (offline)')
       logging.debug('Worker is in copy state, starting reparent now')
 
       utils.run_vtctl(
