@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"io"
 	"strings"
 	"sync"
 	"time"
@@ -660,11 +659,15 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					destReader = destReaders[0]
 				}
 
-				// TODO(mberlin): Pass "insertChannels" to RowDiffer2.
-				// TODO(mberlin): Let RowDiffer2 emit repair SQLs for every found difference. It will also require the keyResolver to make the decision which source row goes to which destination shard.
-				// TODO(mberlin): Write a RowAggregator which will be used by RowDiffer2 to combine multiple repair SQLs into larger ones.
+				dbNames := make([]string, len(scw.destinationShards))
+				for i, si := range scw.destinationShards {
+					keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
+					dbNames[i] = scw.destinationDbNames[keyspaceAndShard]
+				}
 				// Compare the data and repair any differences.
-				differ, err := NewRowDiffer2(sourceReader, destReader, td)
+				differ, err := NewRowDiffer2(sourceReader, destReader, td, scw.tableStatusList, tableIndex,
+					scw.destinationShards, keyResolver,
+					insertChannels, ctx.Done(), dbNames, scw.destinationPackCount)
 				if err != nil {
 					processError("NewResultMerger for dest tablets failed: %v", err)
 					return
@@ -779,53 +782,4 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 
 	destinationWaitGroup.Wait()
 	return firstError
-}
-
-// processData pumps the data out of the provided QueryResultReader.
-// It returns any error the source encounters.
-func (scw *SplitCloneWorker) processData(ctx context.Context, td *tabletmanagerdatapb.TableDefinition, tableIndex int, rr ResultReader, rowSplitter *RowSplitter, insertChannels []chan string, destinationPackCount int) error {
-	baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
-	sr := rowSplitter.StartSplit()
-	packCount := 0
-
-	fields := rr.Fields()
-	for {
-		r, err := rr.Next()
-		if err != nil {
-			// we are done, see if there was an error
-			if err != io.EOF {
-				return err
-			}
-
-			// send the remainder if any (ignoring
-			// the return value, we don't care
-			// here if we're aborted)
-			if packCount > 0 {
-				rowSplitter.Send(fields, sr, baseCmd, insertChannels, ctx.Done())
-			}
-			return nil
-		}
-
-		// Split the rows by keyspace ID, and insert each chunk into each destination
-		if err := rowSplitter.Split(sr, r.Rows); err != nil {
-			return fmt.Errorf("RowSplitter failed for table %v: %v", td.Name, err)
-		}
-		scw.tableStatusList.addCopiedRows(tableIndex, len(r.Rows))
-
-		// see if we reach the destination pack count
-		// TODO(mberlin): Count pack per destination instead of per source. Otherwise, the destination writes will become smaller with an increasing resharding factor.
-		packCount++
-		if packCount < destinationPackCount {
-			continue
-		}
-
-		// send the rows to be inserted
-		if aborted := rowSplitter.Send(fields, sr, baseCmd, insertChannels, ctx.Done()); aborted {
-			return nil
-		}
-
-		// and reset our row buffer
-		sr = rowSplitter.StartSplit()
-		packCount = 0
-	}
 }

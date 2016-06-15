@@ -115,12 +115,24 @@ func (f *v3KeyRangeFilter) Recv() (*sqltypes.Result, error) {
 // orderedColumns returns the list of columns:
 // - first the primary key columns in the right order
 // - then the rest of the columns
-func orderedColumns(tableDefinition *tabletmanagerdatapb.TableDefinition) []string {
-	result := make([]string, 0, len(tableDefinition.Columns))
-	result = append(result, tableDefinition.PrimaryKeyColumns...)
-	for _, column := range tableDefinition.Columns {
+func orderedColumns(td *tabletmanagerdatapb.TableDefinition) []string {
+	return orderedColumnsHelper(td, true)
+}
+
+// orderedColumnsWithoutPrimaryKeyColumns is identical to orderedColumns but
+// leaves the primary key columns out.
+func orderedColumnsWithoutPrimaryKeyColumns(td *tabletmanagerdatapb.TableDefinition) []string {
+	return orderedColumnsHelper(td, false)
+}
+
+func orderedColumnsHelper(td *tabletmanagerdatapb.TableDefinition, includePrimaryKey bool) []string {
+	var result []string
+	if includePrimaryKey {
+		result = append(result, td.PrimaryKeyColumns...)
+	}
+	for _, column := range td.Columns {
 		found := false
-		for _, primaryKey := range tableDefinition.PrimaryKeyColumns {
+		for _, primaryKey := range td.PrimaryKeyColumns {
 			if primaryKey == column {
 				found = true
 				break
