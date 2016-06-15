@@ -27,10 +27,11 @@ type repairType int
 const (
 	insert repairType = iota
 	update
-	delete
+	// delet is misspelled because "delete" is a reserved word.
+	delet
 )
 
-var repairTypes = []repairType{insert, update, delete}
+var repairTypes = []repairType{insert, update, delet}
 
 // RowDiffer2 will compare and repair two sides. It assumes that the left side
 // is the source of truth and necessary repairs have to be applied to the right
@@ -139,7 +140,7 @@ func (rd *RowDiffer2) Go(log logutil.Logger) (DiffReport, error) {
 			// No more rows on the left side.
 			// We know we have at least one row on the right side left.
 			// Delete the row from the destination.
-			if err := rd.repairRow(right, delete); err != nil {
+			if err := rd.repairRow(right, delet); err != nil {
 				return dr, err
 			}
 			dr.extraRowsRight++
@@ -206,7 +207,7 @@ func (rd *RowDiffer2) Go(log logutil.Logger) (DiffReport, error) {
 			dr.extraRowsRight++
 			advanceRight = true
 			// Delete the row from the destination.
-			if err := rd.repairRow(right, delete); err != nil {
+			if err := rd.repairRow(right, delet); err != nil {
 				return dr, err
 			}
 			continue
@@ -335,7 +336,7 @@ func NewRowAggregator(limit int, keyspaceAndShard string, insertChannel chan str
 		// triggered if a unique, non-primary key index matches the row. In that
 		// case, we would update the wrong row (it gets selected by the unique key
 		// and not the primary key).
-	case delete:
+	case delet:
 		// Example: DELETE FROM test WHERE (id, sub_id) IN ((0, 10), (1, 11))
 		baseCmdHead = "DELETE FROM `" + dbName + "`." + td.Name + " WHERE (" + strings.Join(td.PrimaryKeyColumns, ", ") + ") IN ("
 		baseCmdTail = ")"
@@ -398,7 +399,7 @@ func (ra *RowAggregator) Add(row []sqltypes.Value) bool {
 			ra.buffer.WriteByte('=')
 			row[i].EncodeSQL(&ra.buffer)
 		}
-	case delete:
+	case delet:
 		// Example: (0, 10), (1, 11)
 		ra.buffer.WriteByte('(')
 		for i := 0; i < len(ra.td.PrimaryKeyColumns); i++ {
