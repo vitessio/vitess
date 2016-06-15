@@ -51,6 +51,7 @@ type SplitCloneWorker struct {
 	minHealthyRdonlyTablets int
 	maxTPS                  int64
 	cleaner                 *wrangler.Cleaner
+	tabletTracker           *TabletTracker
 
 	// populated during WorkerStateInit, read-only after that
 	keyspaceInfo      *topo.KeyspaceInfo
@@ -121,6 +122,7 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, on
 		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
 		maxTPS:                  maxTPS,
 		cleaner:                 &wrangler.Cleaner{},
+		tabletTracker:           NewTabletTracker(),
 
 		destinationDbNames:    make(map[string]string),
 		destinationThrottlers: make(map[string]*throttler.Throttler),
@@ -610,9 +612,6 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 
 				scw.tableStatusList.threadStarted(tableIndex)
 
-				// TODO(mberlin): Get destination tablets and populate destAliases.
-				destAliases := make([]*topodatapb.TabletAlias, len(scw.destinationShards))
-
 				// Set up readers for the diff. There will be one reader for every
 				// source and destination shard.
 				sourceReaders := make([]ResultReader, len(scw.sourceShards))
@@ -627,9 +626,20 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					defer sourceResultReader.Close()
 					sourceReaders[shardIndex] = sourceResultReader
 				}
-				for shardIndex := range scw.destinationShards {
-					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, destAliases[shardIndex].String())
-					destResultReader, err := NewQueryResultReaderForTablet(ctx, scw.wr.TopoServer(), destAliases[shardIndex], selectSQL)
+				for shardIndex, si := range scw.destinationShards {
+					// Pick a destination tablet.
+					tablets := discovery.RemoveUnhealthyTablets(
+						scw.healthCheck.GetTabletStatsFromTarget(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY))
+					if len(tablets) == 0 {
+						// TODO(mberlin): Retry here? For how long? 2 hours similar as fetchWithRetries does?
+						processError("no healthy RDONLY tablets in destination shard (%v) available", topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName()))
+						return
+					}
+					destAlias := scw.tabletTracker.Track(tablets)
+					defer scw.tabletTracker.Untrack(destAlias)
+
+					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, destAlias.String())
+					destResultReader, err := NewQueryResultReaderForTablet(ctx, scw.wr.TopoServer(), destAlias, selectSQL)
 					if err != nil {
 						processError("NewQueryResultReaderForTablet for dest tablets failed: %v", err)
 						return
