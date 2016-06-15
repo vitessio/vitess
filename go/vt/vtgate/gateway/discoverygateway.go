@@ -286,7 +286,6 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 	invalidTablets := make(map[string]bool)
 
 	for i := 0; i < dg.retryCount+1; i++ {
-		var tablet *topodatapb.Tablet
 		tablets := dg.getTablets(keyspace, shard, tabletType)
 		if len(tablets) == 0 {
 			// fail fast if there is no tablet
@@ -296,6 +295,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 		shuffleTablets(tablets)
 
 		// skip tablets we tried before
+		var tablet *topodatapb.Tablet
 		for _, t := range tablets {
 			if _, ok := invalidTablets[discovery.TabletToMapKey(t)]; !ok {
 				tablet = t
@@ -387,7 +387,6 @@ func shuffleTablets(tablets []*topodatapb.Tablet) {
 // and selects the usable ones based several rules:
 // master - return one from any cells with latest reparent timestamp;
 // replica - return all from local cell.
-// TODO(liang): select replica by replication lag.
 func (dg *discoveryGateway) getTablets(keyspace, shard string, tabletType topodatapb.TabletType) []*topodatapb.Tablet {
 	tsList := dg.hc.GetTabletStatsFromTarget(keyspace, shard, tabletType)
 	// for master, use any cells and return the one with max reparent timestamp.

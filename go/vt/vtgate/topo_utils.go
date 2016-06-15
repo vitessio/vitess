@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
@@ -83,7 +82,7 @@ func getKeyspaceShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, k
 	if partition == nil {
 		return "", nil, nil, vterrors.NewVitessError(
 			vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
-			"No partition found for tabletType %v in keyspace %v", strings.ToLower(tabletType.String()), keyspace,
+			"No partition found for tabletType %v in keyspace %v", topoproto.TabletTypeLString(tabletType), keyspace,
 		)
 	}
 	return keyspace, srvKeyspace, partition.ShardReferences, nil

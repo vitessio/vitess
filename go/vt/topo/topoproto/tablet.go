@@ -24,6 +24,16 @@ const (
 	vtDbPrefix = "vt_"
 )
 
+// cache the conversion from tablet type enum to lower case string.
+var tabletTypeLowerName map[int32]string
+
+func init() {
+	tabletTypeLowerName = make(map[int32]string, len(topodatapb.TabletType_name))
+	for k, v := range topodatapb.TabletType_name {
+		tabletTypeLowerName[k] = strings.ToLower(v)
+	}
+}
+
 // TabletAliasIsZero returns true iff cell and uid are empty
 func TabletAliasIsZero(ta *topodatapb.TabletAlias) bool {
 	return ta == nil || (ta.Cell == "" && ta.Uid == 0)
@@ -135,6 +145,16 @@ func ParseTabletType(param string) (topodatapb.TabletType, error) {
 		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("unknown TabletType %v", param)
 	}
 	return topodatapb.TabletType(value), nil
+}
+
+// TabletTypeLString returns a lower case version of the tablet type,
+// or "unknown" if not known.
+func TabletTypeLString(tabletType topodatapb.TabletType) string {
+	value, ok := tabletTypeLowerName[int32(tabletType)]
+	if !ok {
+		return "unknown"
+	}
+	return value
 }
 
 // IsTypeInList returns true if the given type is in the list.

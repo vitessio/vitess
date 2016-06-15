@@ -6,8 +6,8 @@ package gateway
 
 import (
 	"fmt"
-	"strings"
 
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -51,9 +51,9 @@ func NewShardError(in error, keyspace, shard string, tabletType topodatapb.Table
 	}
 	var shardIdentifier string
 	if tablet != nil {
-		shardIdentifier = fmt.Sprintf("%s.%s.%s, %+v", keyspace, shard, strings.ToLower(tabletType.String()), tablet)
+		shardIdentifier = fmt.Sprintf("%s.%s.%s, %+v", keyspace, shard, topoproto.TabletTypeLString(tabletType), tablet)
 	} else {
-		shardIdentifier = fmt.Sprintf("%s.%s.%s", keyspace, shard, strings.ToLower(tabletType.String()))
+		shardIdentifier = fmt.Sprintf("%s.%s.%s", keyspace, shard, topoproto.TabletTypeLString(tabletType))
 	}
 
 	return &ShardError{
