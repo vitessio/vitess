@@ -314,7 +314,8 @@ type RowAggregator struct {
 	baseCmdHead          string
 	baseCmdTail          string
 
-	buffer bytes.Buffer
+	buffer       bytes.Buffer
+	bufferedRows int
 }
 
 // NewRowAggregator returns a RowAggregator.
@@ -371,6 +372,10 @@ func (ra *RowAggregator) Add(row []sqltypes.Value) bool {
 	switch ra.repairType {
 	case insert:
 		// Example: (0, 10, 'a'), (1, 11, 'b')
+		if ra.bufferedRows >= 1 {
+			// Second row or higher. Separate it by a comma.
+			ra.buffer.WriteByte(',')
+		}
 		ra.buffer.WriteByte('(')
 		for i, value := range row {
 			if i > 0 {
@@ -401,6 +406,10 @@ func (ra *RowAggregator) Add(row []sqltypes.Value) bool {
 		}
 	case delet:
 		// Example: (0, 10), (1, 11)
+		if ra.bufferedRows >= 1 {
+			// Second row or higher. Separate it by a comma.
+			ra.buffer.WriteByte(',')
+		}
 		ra.buffer.WriteByte('(')
 		for i := 0; i < len(ra.td.PrimaryKeyColumns); i++ {
 			if i > 0 {
@@ -410,14 +419,12 @@ func (ra *RowAggregator) Add(row []sqltypes.Value) bool {
 		}
 		ra.buffer.WriteByte(')')
 	}
+	ra.bufferedRows++
 
 	if ra.buffer.Len() >= ra.limit {
 		if abort := ra.flush(); abort {
 			return true
 		}
-	} else {
-		// There will be another value. Separate it by a comma.
-		ra.buffer.WriteByte(',')
 	}
 
 	return false
@@ -450,5 +457,6 @@ func (ra *RowAggregator) flush() bool {
 		return true
 	}
 	ra.buffer.Reset()
+	ra.bufferedRows = 0
 	return false
 }
