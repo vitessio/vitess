@@ -448,7 +448,7 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 			defer throttler.ThreadFinished(threadID)
 
 			executor := newExecutor(vscw.wr, vscw.healthCheck, throttler, vscw.destinationKeyspace, vscw.destinationShard, threadID)
-			if err := executor.fetchLoop(ctx, vscw.destinationDbNames[keyspaceAndShard], insertChannel); err != nil {
+			if err := executor.fetchLoop(ctx, insertChannel); err != nil {
 				processError("executer.FetchLoop failed: %v", err)
 			}
 		}(j)
@@ -457,6 +457,7 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 	// Now for each table, read data chunks and send them to insertChannel
 	sourceWaitGroup := sync.WaitGroup{}
 	sema := sync2.NewSemaphore(vscw.sourceReaderCount, 0)
+	dbName := vscw.destinationDbNames[topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)]
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
 		if td.Type == tmutils.TableView {
 			continue
@@ -488,7 +489,7 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 				defer qrr.Close()
 
 				// process the data
-				if err := vscw.processData(ctx, td, tableIndex, qrr, insertChannel, vscw.destinationPackCount); err != nil {
+				if err := vscw.processData(ctx, dbName, td, tableIndex, qrr, insertChannel, vscw.destinationPackCount); err != nil {
 					processError("QueryResultReader failed: %v", err)
 				}
 				vscw.tableStatusList.threadDone(tableIndex)
@@ -523,8 +524,7 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 		}
 		queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, vscw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), flags))
 		vscw.wr.Logger().Infof("Making and populating blp_checkpoint table")
-		keyspaceAndShard := topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)
-		if err := runSQLCommands(ctx, vscw.wr, vscw.healthCheck, vscw.destinationKeyspace, vscw.destinationShard, vscw.destinationDbNames[keyspaceAndShard], queries); err != nil {
+		if err := runSQLCommands(ctx, vscw.wr, vscw.healthCheck, vscw.destinationKeyspace, vscw.destinationShard, dbName, queries); err != nil {
 			processError("blp_checkpoint queries failed: %v", err)
 		}
 		if firstError != nil {
@@ -571,9 +571,9 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 
 // processData pumps the data out of the provided QueryResultReader.
 // It returns any error the source encounters.
-func (vscw *VerticalSplitCloneWorker) processData(ctx context.Context, td *tabletmanagerdatapb.TableDefinition, tableIndex int, qrr *QueryResultReader, insertChannel chan string, destinationPackCount int) error {
+func (vscw *VerticalSplitCloneWorker) processData(ctx context.Context, dbName string, td *tabletmanagerdatapb.TableDefinition, tableIndex int, qrr *QueryResultReader, insertChannel chan string, destinationPackCount int) error {
 	// process the data
-	baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
+	baseCmd := "INSERT INTO `" + dbName + "`." + td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
 	var rows [][]sqltypes.Value
 	packCount := 0
 

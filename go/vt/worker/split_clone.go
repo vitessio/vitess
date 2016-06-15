@@ -564,7 +564,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					defer throttler.ThreadFinished(threadID)
 
 					executor := newExecutor(scw.wr, scw.healthCheck, throttler, keyspace, shard, threadID)
-					if err := executor.fetchLoop(ctx, scw.destinationDbNames[keyspaceAndShard], insertChannel); err != nil {
+					if err := executor.fetchLoop(ctx, insertChannel); err != nil {
 						processError("executer.FetchLoop failed: %v", err)
 					}
 				}(j)
