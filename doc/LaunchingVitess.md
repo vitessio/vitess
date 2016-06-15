@@ -39,7 +39,7 @@ This tradeoff allows for better throughput at the expense of stale or possible i
 
 For true snapshot, the queries must be sent to the master within a transaction. For read-after-write consistency, reading from the master without a transaction is sufficient.
 
-To summarize, these are the various levels of consistency supported: TODO: This will look better in a table:
+To summarize, these are the various levels of consistency supported:
 
 * REPLICA/RDONLY read: Servers be scaled geographically. Local reads are fast, but can be stale depending on replica lag.
 * MASTER read: There is only one worldwide master per shard. Reads coming from remote locations will be subject to network latency and reliability, but the data will be up-to-date (read-after-write consistency). The isolation level is READ_COMMITTED.
@@ -426,11 +426,14 @@ VTTablet requires multiple user credentials to perform its tasks. Since it's req
 * **db-config-dba-pass**
 * **db-config-dba-charset**
 
-**repl** credentials are for managing replication:
-* **db-config-repl-unixsocket**
+**repl** credentials are for managing replication. Since repl connections can be used across machines, you can optionally turn on encryption:
 * **db-config-repl-uname**
 * **db-config-repl-pass**
 * **db-config-repl-charset**
+* **db-config-repl-flags**: If you want to enable SSL, this must be set to 2048.
+* **db-config-repl-ssl-ca**
+* **db-config-repl-ssl-cert**
+* **db-config-repl-ssl-key**
 
 **filtered** credentials are for performing resharding:
 * **db-config-filtered-unixsocket**
@@ -627,6 +630,7 @@ These variables are yet another view of Queries, but broken out by user, table a
 ##### DataFree, DataLength, IndexLength, TableRows
 
 These variables are updated periodically from information_schema.tables. They represent statistical information as reported by MySQL about each table. They can be used for planning purposes, or to track unusual changes in table stats.
+
 * DataFree represents data_free
 * DataLength represents data_length
 * IndexLength represents index_length
