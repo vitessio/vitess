@@ -87,6 +87,12 @@ COPY travis /vt/src/github.com/youtube/vitess/travis
 COPY composer.json composer.lock /vt/src/github.com/youtube/vitess/
 COPY vendor/vendor.json /vt/src/github.com/youtube/vitess/vendor/
 
+# Download vendored Go dependencies
+RUN cd /vt/src/github.com/youtube/vitess && \
+    go get -u github.com/kardianos/govendor && \
+    govendor sync && \
+    rm -rf /vt/.cache
+
 # Install gRPC (and protobuf) as root
 RUN export MAKEFLAGS="-j$(nproc)" && \
     cd /vt/dist && \
