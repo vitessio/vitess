@@ -76,7 +76,9 @@ func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position string,
 	if err != nil {
 		return "", err
 	}
-	if err := agent.MysqlDaemon.WaitMasterPos(pos, waitTime); err != nil {
+	waitCtx, cancel := context.WithTimeout(ctx, waitTime)
+	defer cancel()
+	if err := agent.MysqlDaemon.WaitMasterPos(waitCtx, pos); err != nil {
 		return "", err
 	}
 	if err := agent.StopSlave(ctx); err != nil {
@@ -128,7 +130,7 @@ func (agent *ActionAgent) ResetReplication(ctx context.Context) error {
 		return err
 	}
 	agent.setSlaveStopped(true)
-	return agent.MysqlDaemon.ExecuteSuperQueryList(cmds)
+	return agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
 }
 
 // InitMaster enables writes and returns the replication position.
@@ -136,7 +138,7 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 	// we need to insert something in the binlogs, so we can get the
 	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
 	cmds := mysqlctl.CreateReparentJournal()
-	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
+	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return "", err
 	}
 
@@ -181,7 +183,7 @@ func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreat
 	cmds := mysqlctl.CreateReparentJournal()
 	cmds = append(cmds, mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, topoproto.TabletAliasString(masterAlias), pos))
 
-	return agent.MysqlDaemon.ExecuteSuperQueryList(cmds)
+	return agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
 }
 
 // InitSlave sets replication master and position, and waits for the
@@ -216,7 +218,7 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 	cmds = append(cmds, cmds2...)
 	cmds = append(cmds, "START SLAVE")
 
-	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
+	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return err
 	}
 	agent.initReplication = true
@@ -272,16 +274,7 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 		return "", err
 	}
 
-	// TODO(alainjobart) change the flavor API to take the context directly
-	// For now, extract the timeout from the context, or wait forever
-	var waitTimeout time.Duration
-	if deadline, ok := ctx.Deadline(); ok {
-		waitTimeout = deadline.Sub(time.Now())
-		if waitTimeout <= 0 {
-			waitTimeout = time.Millisecond
-		}
-	}
-	if err := agent.MysqlDaemon.WaitMasterPos(pos, waitTimeout); err != nil {
+	if err := agent.MysqlDaemon.WaitMasterPos(ctx, pos); err != nil {
 		return "", err
 	}
 
@@ -356,7 +349,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 	if shouldbeReplicating {
 		cmds = append(cmds, mysqlctl.SQLStartSlave)
 	}
-	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
+	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return err
 	}
 

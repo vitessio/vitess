@@ -620,14 +620,13 @@ func (itmc *internalTabletManagerClient) IgnoreHealthError(ctx context.Context, 
 	})
 }
 
-func (itmc *internalTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet) error {
+func (itmc *internalTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
 	return t.agent.RPCWrapLockAction(ctx, tabletmanager.TabletActionReloadSchema, nil, nil, true, func() error {
-		t.agent.ReloadSchema(ctx)
-		return nil
+		return t.agent.ReloadSchema(ctx, waitPosition)
 	})
 }
 
