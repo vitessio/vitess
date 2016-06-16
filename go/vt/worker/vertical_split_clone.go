@@ -75,10 +75,10 @@ type VerticalSplitCloneWorker struct {
 	// populated during WorkerStateCopy
 	// tableStatusList holds the status for each table.
 	tableStatusList tableStatusList
-	// aliases of tablets that need to have their schema reloaded.
+	// aliases of tablets that need to have their state refreshed.
 	// Only populated once, read-only after that.
-	reloadAliases []*topodatapb.TabletAlias
-	reloadTablets map[topodatapb.TabletAlias]*topo.TabletInfo
+	refreshAliases []*topodatapb.TabletAlias
+	refreshTablets map[topodatapb.TabletAlias]*topo.TabletInfo
 
 	ev *events.VerticalSplitClone
 }
@@ -375,15 +375,15 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	return nil
 }
 
-// Find all tablets on the destination shard. This should be done immediately before reloading
-// the schema on these tablets, to minimize the chances of the topo changing in between.
+// Find all tablets on the destination shard. This should be done immediately before refreshing
+// the state on these tablets, to minimize the chances of the topo changing in between.
 
-func (vscw *VerticalSplitCloneWorker) findReloadTargets(ctx context.Context) error {
-	reloadAliases, reloadTablets, err := resolveReloadTabletsForShard(ctx, vscw.destinationKeyspace, vscw.destinationShard, vscw.wr)
+func (vscw *VerticalSplitCloneWorker) findRefreshTargets(ctx context.Context) error {
+	refreshAliases, refreshTablets, err := resolveRefreshTabletsForShard(ctx, vscw.destinationKeyspace, vscw.destinationShard, vscw.wr)
 	if err != nil {
 		return err
 	}
-	vscw.reloadAliases, vscw.reloadTablets = reloadAliases, reloadTablets
+	vscw.refreshAliases, vscw.refreshTablets = refreshAliases, refreshTablets
 	return nil
 }
 
@@ -545,25 +545,25 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 		}
 	}
 
-	err = vscw.findReloadTargets(ctx)
+	err = vscw.findRefreshTargets(ctx)
 	if err != nil {
-		return fmt.Errorf("failed before reloading schema on destination tablets: %v", err)
+		return fmt.Errorf("failed before refreshing state on destination tablets: %v", err)
 	}
-	// And force a schema reload on all destination tablets.
+	// And force a state refresh (re-read topo) on all destination tablets.
 	// The master tablet will end up starting filtered replication
 	// at this point.
-	for _, tabletAlias := range vscw.reloadAliases {
+	for _, tabletAlias := range vscw.refreshAliases {
 		destinationWaitGroup.Add(1)
 		go func(ti *topo.TabletInfo) {
 			defer destinationWaitGroup.Done()
-			vscw.wr.Logger().Infof("Reloading schema on tablet %v", ti.AliasString())
+			vscw.wr.Logger().Infof("Refreshing state on tablet %v", ti.AliasString())
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-			err := vscw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti.Tablet, "")
+			err := vscw.wr.TabletManagerClient().RefreshState(shortCtx, ti.Tablet)
 			cancel()
 			if err != nil {
-				processError("ReloadSchema failed on tablet %v: %v", ti.AliasString(), err)
+				processError("RefreshState failed on tablet %v: %v", ti.AliasString(), err)
 			}
-		}(vscw.reloadTablets[*tabletAlias])
+		}(vscw.refreshTablets[*tabletAlias])
 	}
 	destinationWaitGroup.Wait()
 	return firstError
