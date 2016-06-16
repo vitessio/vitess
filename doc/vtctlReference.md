@@ -633,9 +633,6 @@ Starts a transaction on the provided server.
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | connect_timeout | Duration | Connection timeout for vttablet client |
-| keyspace | string | keyspace the tablet belongs to |
-| shard | string | shard the tablet belongs to |
-| tablet_type | string | tablet type we expect from the tablet |
 
 
 #### Arguments
@@ -665,9 +662,6 @@ Commits a transaction on the provided server.
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | connect_timeout | Duration | Connection timeout for vttablet client |
-| keyspace | string | keyspace the tablet belongs to |
-| shard | string | shard the tablet belongs to |
-| tablet_type | string | tablet type we expect from the tablet |
 
 
 #### Arguments
@@ -698,9 +692,6 @@ Executes the given query on the given tablet.
 | :-------- | :--------- | :--------- |
 | connect_timeout | Duration | Connection timeout for vttablet client |
 | json | Boolean | Output JSON instead of human-readable table |
-| keyspace | string | keyspace the tablet belongs to |
-| shard | string | shard the tablet belongs to |
-| tablet_type | string | tablet type we expect from the tablet |
 | transaction_id | Int | transaction id to use, if inside a transaction. |
 
 
@@ -732,9 +723,6 @@ Rollbacks a transaction on the provided server.
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | connect_timeout | Duration | Connection timeout for vttablet client |
-| keyspace | string | keyspace the tablet belongs to |
-| shard | string | shard the tablet belongs to |
-| tablet_type | string | tablet type we expect from the tablet |
 
 
 #### Arguments
@@ -883,7 +871,7 @@ Applies the schema change to the specified keyspace on every master, running in 
 
 #### Example
 
-<pre class="command-example">ApplySchema [-allow_long_unavailability] {-sql=&lt;sql&gt; || -sql-file=&lt;filename&gt;} &lt;keyspace&gt;</pre>
+<pre class="command-example">ApplySchema [-allow_long_unavailability] [-wait_slave_timeout=10s] {-sql=&lt;sql&gt; || -sql-file=&lt;filename&gt;} &lt;keyspace&gt;</pre>
 
 #### Flags
 
@@ -892,7 +880,7 @@ Applies the schema change to the specified keyspace on every master, running in 
 | allow_long_unavailability | Boolean | Allow large schema changes which incur a longer unavailability of the database. |
 | sql | string | A list of semicolon-delimited SQL commands |
 | sql-file | string | Identifies the file that contains the SQL commands |
-| wait_slave_timeout | Duration | The amount of time to wait for slaves to catch up during reparenting. The default value is 30 seconds. |
+| wait_slave_timeout | Duration | The amount of time to wait for slaves to receive the schema change via replication. |
 
 
 #### Arguments
@@ -906,7 +894,7 @@ Applies the schema change to the specified keyspace on every master, running in 
 
 ### ApplyVSchema
 
-Applies the VTGate routing schema to the provided keyspace.
+Applies the VTGate routing schema to the provided keyspace. Shows the result after application.
 
 #### Example
 
@@ -938,7 +926,7 @@ Copies the schema from a source shard's master (or a specific tablet) to a desti
 
 #### Example
 
-<pre class="command-example">CopySchemaShard [-tables=&lt;table1&gt;,&lt;table2&gt;,...] [-exclude_tables=&lt;table1&gt;,&lt;table2&gt;,...] [-include-views] {&lt;source keyspace/shard&gt; || &lt;source tablet alias&gt;} &lt;destination keyspace/shard&gt;</pre>
+<pre class="command-example">CopySchemaShard [-tables=&lt;table1&gt;,&lt;table2&gt;,...] [-exclude_tables=&lt;table1&gt;,&lt;table2&gt;,...] [-include-views] [-wait_slave_timeout=10s] {&lt;source keyspace/shard&gt; || &lt;source tablet alias&gt;} &lt;destination keyspace/shard&gt;</pre>
 
 #### Flags
 
@@ -947,6 +935,7 @@ Copies the schema from a source shard's master (or a specific tablet) to a desti
 | exclude_tables | string | Specifies a comma-separated list of regular expressions for which tables to exclude |
 | include-views | Boolean | Includes views in the output |
 | tables | string | Specifies a comma-separated list of regular expressions for which tables  gather schema information for |
+| wait_slave_timeout | Duration | The amount of time to wait for slaves to receive the schema change via replication. |
 
 
 #### Arguments
