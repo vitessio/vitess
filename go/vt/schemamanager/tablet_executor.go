@@ -9,13 +9,11 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/wrangler"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -23,23 +21,22 @@ import (
 
 // TabletExecutor applies schema changes to all tablets.
 type TabletExecutor struct {
-	tmClient             tmclient.TabletManagerClient
-	topoServer           topo.Server
+	wr                   *wrangler.Wrangler
 	tablets              []*topodatapb.Tablet
 	schemaDiffs          []*tabletmanagerdatapb.SchemaChangeResult
 	isClosed             bool
 	allowBigSchemaChange bool
+	keyspace             string
+	waitSlaveTimeout     time.Duration
 }
 
 // NewTabletExecutor creates a new TabletExecutor instance
-func NewTabletExecutor(
-	tmClient tmclient.TabletManagerClient,
-	topoServer topo.Server) *TabletExecutor {
+func NewTabletExecutor(wr *wrangler.Wrangler, waitSlaveTimeout time.Duration) *TabletExecutor {
 	return &TabletExecutor{
-		tmClient:             tmClient,
-		topoServer:           topoServer,
+		wr:                   wr,
 		isClosed:             true,
 		allowBigSchemaChange: false,
+		waitSlaveTimeout:     waitSlaveTimeout,
 	}
 }
 
@@ -60,28 +57,25 @@ func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 	if !exec.isClosed {
 		return nil
 	}
-	shardNames, err := exec.topoServer.GetShardNames(ctx, keyspace)
+	exec.keyspace = keyspace
+	shardNames, err := exec.wr.TopoServer().GetShardNames(ctx, keyspace)
 	if err != nil {
 		return fmt.Errorf("unable to get shard names for keyspace: %s, error: %v", keyspace, err)
 	}
-	log.Infof("Keyspace: %v, Shards: %v\n", keyspace, shardNames)
 	exec.tablets = make([]*topodatapb.Tablet, len(shardNames))
 	for i, shardName := range shardNames {
-		shardInfo, err := exec.topoServer.GetShard(ctx, keyspace, shardName)
-		log.Infof("\tShard: %s, ShardInfo: %v\n", shardName, shardInfo)
+		shardInfo, err := exec.wr.TopoServer().GetShard(ctx, keyspace, shardName)
 		if err != nil {
 			return fmt.Errorf("unable to get shard info, keyspace: %s, shard: %s, error: %v", keyspace, shardName, err)
 		}
 		if !shardInfo.HasMaster() {
-			log.Errorf("shard: %s does not have a master", shardName)
 			return fmt.Errorf("shard: %s does not have a master", shardName)
 		}
-		tabletInfo, err := exec.topoServer.GetTablet(ctx, shardInfo.MasterAlias)
+		tabletInfo, err := exec.wr.TopoServer().GetTablet(ctx, shardInfo.MasterAlias)
 		if err != nil {
 			return fmt.Errorf("unable to get master tablet info, keyspace: %s, shard: %s, error: %v", keyspace, shardName, err)
 		}
 		exec.tablets[i] = tabletInfo.Tablet
-		log.Infof("\t\tTabletInfo: %+v\n", tabletInfo)
 	}
 
 	if len(exec.tablets) == 0 {
@@ -120,7 +114,7 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 
 	bigSchemaChange, err := exec.detectBigSchemaChanges(ctx, parsedDDLs)
 	if bigSchemaChange && exec.allowBigSchemaChange {
-		log.Warning("Processing big schema change. This may cause visible MySQL downtime.")
+		exec.wr.Logger().Warningf("Processing big schema change. This may cause visible MySQL downtime.")
 		return nil
 	}
 	return err
@@ -135,7 +129,7 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 	// Otherwise, Open should fail and executor should fail.
 	masterTabletInfo := exec.tablets[0]
 	// get database schema, excluding views.
-	dbSchema, err := exec.tmClient.GetSchema(
+	dbSchema, err := exec.wr.TabletManagerClient().GetSchema(
 		ctx, masterTabletInfo, []string{}, []string{}, false)
 	if err != nil {
 		return false, fmt.Errorf("unable to get database schema, error: %v", err)
@@ -164,7 +158,7 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 }
 
 func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []string) error {
-	schemaDiffs, err := exec.tmClient.PreflightSchema(ctx, exec.tablets[0], sqls)
+	schemaDiffs, err := exec.wr.TabletManagerClient().PreflightSchema(ctx, exec.tablets[0], sqls)
 	if err != nil {
 		return err
 	}
@@ -203,7 +197,24 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	startTime := time.Now()
 	defer func() { execResult.TotalTimeSpent = time.Since(startTime) }()
 
-	// make sure every schema change introduces a table definition change
+	// Lock the keyspace so our schema change doesn't overlap with other
+	// keyspace-wide operations like resharding migrations.
+	ctx, unlock, lockErr := exec.wr.TopoServer().LockKeyspace(ctx, exec.keyspace, "ApplySchemaKeyspace")
+	if lockErr != nil {
+		execResult.ExecutorErr = lockErr.Error()
+		return &execResult
+	}
+	defer func() {
+		// This is complicated because execResult.ExecutorErr
+		// is not of type error.
+		var unlockErr error
+		unlock(&unlockErr)
+		if execResult.ExecutorErr == "" && unlockErr != nil {
+			execResult.ExecutorErr = unlockErr.Error()
+		}
+	}()
+
+	// Make sure the schema changes introduce a table definition change.
 	if err := exec.preflightSchemaChanges(ctx, sqls); err != nil {
 		execResult.ExecutorErr = err.Error()
 		return &execResult
@@ -225,8 +236,11 @@ func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult 
 	wg.Add(numOfMasterTablets)
 	errChan := make(chan ShardWithError, numOfMasterTablets)
 	successChan := make(chan ShardResult, numOfMasterTablets)
-	for i := range exec.tablets {
-		go exec.executeOneTablet(ctx, &wg, exec.tablets[i], sql, errChan, successChan)
+	for _, tablet := range exec.tablets {
+		go func(tablet *topodatapb.Tablet) {
+			defer wg.Done()
+			exec.executeOneTablet(ctx, tablet, sql, errChan, successChan)
+		}(tablet)
 	}
 	wg.Wait()
 	close(errChan)
@@ -239,21 +253,51 @@ func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult 
 	for r := range successChan {
 		execResult.SuccessShards = append(execResult.SuccessShards, r)
 	}
+
+	if len(execResult.FailedShards) > 0 {
+		return
+	}
+
+	// If all shards succeeded, wait (up to waitSlaveTimeout) for slaves to
+	// execute the schema change via replication. This is best-effort, meaning
+	// we still return overall success if the timeout expires.
+	reloadCtx, cancel := context.WithTimeout(ctx, exec.waitSlaveTimeout)
+	defer cancel()
+	for _, result := range execResult.SuccessShards {
+		wg.Add(1)
+		go func(result ShardResult) {
+			defer wg.Done()
+			exec.wr.ReloadSchemaShard(reloadCtx, exec.keyspace, result.Shard, result.Position)
+		}(result)
+	}
+	wg.Wait()
 }
 
 func (exec *TabletExecutor) executeOneTablet(
 	ctx context.Context,
-	wg *sync.WaitGroup,
-	tabletInfo *topodatapb.Tablet,
+	tablet *topodatapb.Tablet,
 	sql string,
 	errChan chan ShardWithError,
 	successChan chan ShardResult) {
-	defer wg.Done()
-	result, err := exec.tmClient.ExecuteFetchAsDba(ctx, tabletInfo, sql, 10, false, true)
+	result, err := exec.wr.TabletManagerClient().ExecuteFetchAsDba(ctx, tablet, sql, 10, false, true)
 	if err != nil {
-		errChan <- ShardWithError{Shard: tabletInfo.Shard, Err: err.Error()}
-	} else {
-		successChan <- ShardResult{Shard: tabletInfo.Shard, Result: result}
+		errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}
+		return
+	}
+	// Get a replication position that's guaranteed to be after the schema change
+	// was applied on the master.
+	pos, err := exec.wr.TabletManagerClient().MasterPosition(ctx, tablet)
+	if err != nil {
+		errChan <- ShardWithError{
+			Shard: tablet.Shard,
+			Err:   fmt.Sprintf("couldn't get replication position after applying schema change on master: %v", err),
+		}
+		return
+	}
+	successChan <- ShardResult{
+		Shard:    tablet.Shard,
+		Result:   result,
+		Position: pos,
 	}
 }
 
