@@ -235,20 +235,20 @@ func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *topodatapb
 
 // CopySchemaShardFromShard copies the schema from a source shard to the specified destination shard.
 // For both source and destination it picks the master tablet. See also CopySchemaShard.
-func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, excludeTables []string, includeViews bool, sourceKeyspace, sourceShard, destKeyspace, destShard string) error {
+func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, excludeTables []string, includeViews bool, sourceKeyspace, sourceShard, destKeyspace, destShard string, waitSlaveTimeout time.Duration) error {
 	sourceShardInfo, err := wr.ts.GetShard(ctx, sourceKeyspace, sourceShard)
 	if err != nil {
 		return err
 	}
 
-	return wr.CopySchemaShard(ctx, sourceShardInfo.MasterAlias, tables, excludeTables, includeViews, destKeyspace, destShard)
+	return wr.CopySchemaShard(ctx, sourceShardInfo.MasterAlias, tables, excludeTables, includeViews, destKeyspace, destShard, waitSlaveTimeout)
 }
 
 // CopySchemaShard copies the schema from a source tablet to the
 // specified shard.  The schema is applied directly on the master of
 // the destination shard, and is propogated to the replicas through
 // binlogs.
-func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string) error {
+func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string, waitSlaveTimeout time.Duration) error {
 	destShardInfo, err := wr.ts.GetShard(ctx, destKeyspace, destShard)
 	if err != nil {
 		return err
@@ -279,6 +279,12 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 		}
 	}
 
+	// Remember the replication position after all the above were applied.
+	destMasterPos, err := wr.tmc.MasterPosition(ctx, destTabletInfo.Tablet)
+	if err != nil {
+		return fmt.Errorf("CopySchemaShard: can't get replication position after schema applied: %v", err)
+	}
+
 	// Although the copy was successful, we have to verify it to catch the case
 	// where the database already existed on the destination, but with different
 	// options e.g. a different character set.
@@ -292,6 +298,11 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	if diffs != nil {
 		return fmt.Errorf("CopySchemaShard was not successful because the schemas between the two tablets %v and %v differ: %v", sourceTabletAlias, destShardInfo.MasterAlias, diffs)
 	}
+
+	// Notify slaves to reload schema. This is best-effort.
+	reloadCtx, cancel := context.WithTimeout(ctx, waitSlaveTimeout)
+	defer cancel()
+	wr.ReloadSchemaShard(reloadCtx, destKeyspace, destShard, destMasterPos)
 	return nil
 }
 
