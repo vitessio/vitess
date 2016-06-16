@@ -32,24 +32,24 @@ import (
 // Does a topo lookup for a single shard, and returns:
 //	1. Slice of all tablet aliases for the shard.
 //	2. Map of tablet alias : tablet record for all tablets.
-func resolveReloadTabletsForShard(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (reloadAliases []*topodatapb.TabletAlias, reloadTablets map[topodatapb.TabletAlias]*topo.TabletInfo, err error) {
+func resolveRefreshTabletsForShard(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (refreshAliases []*topodatapb.TabletAlias, refreshTablets map[topodatapb.TabletAlias]*topo.TabletInfo, err error) {
 	// Keep a long timeout, because we really don't want the copying to succeed, and then the worker to fail at the end.
 	shortCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	reloadAliases, err = wr.TopoServer().FindAllTabletAliasesInShard(shortCtx, keyspace, shard)
+	refreshAliases, err = wr.TopoServer().FindAllTabletAliasesInShard(shortCtx, keyspace, shard)
 	cancel()
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot find all reload target tablets in %v/%v: %v", keyspace, shard, err)
+		return nil, nil, fmt.Errorf("cannot find all refresh target tablets in %v/%v: %v", keyspace, shard, err)
 	}
-	wr.Logger().Infof("Found %v reload target aliases in shard %v/%v", len(reloadAliases), keyspace, shard)
+	wr.Logger().Infof("Found %v refresh target aliases in shard %v/%v", len(refreshAliases), keyspace, shard)
 
 	shortCtx, cancel = context.WithTimeout(ctx, 5*time.Minute)
-	reloadTablets, err = wr.TopoServer().GetTabletMap(shortCtx, reloadAliases)
+	refreshTablets, err = wr.TopoServer().GetTabletMap(shortCtx, refreshAliases)
 	cancel()
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot read all reload target tablets in %v/%v: %v",
+		return nil, nil, fmt.Errorf("cannot read all refresh target tablets in %v/%v: %v",
 			keyspace, shard, err)
 	}
-	return reloadAliases, reloadTablets, nil
+	return refreshAliases, refreshTablets, nil
 }
 
 var errExtract = regexp.MustCompile(`\(errno (\d+)\)`)
