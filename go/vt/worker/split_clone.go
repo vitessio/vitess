@@ -661,7 +661,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Reloading schema on tablet %v", ti.AliasString())
 				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-				err := scw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti.Tablet)
+				err := scw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti.Tablet, "")
 				cancel()
 				if err != nil {
 					processError("ReloadSchema failed on tablet %v: %v", ti.AliasString(), err)

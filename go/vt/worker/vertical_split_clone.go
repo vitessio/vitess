@@ -558,7 +558,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 			defer destinationWaitGroup.Done()
 			vscw.wr.Logger().Infof("Reloading schema on tablet %v", ti.AliasString())
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-			err := vscw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti.Tablet)
+			err := vscw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti.Tablet, "")
 			cancel()
 			if err != nil {
 				processError("ReloadSchema failed on tablet %v: %v", ti.AliasString(), err)
