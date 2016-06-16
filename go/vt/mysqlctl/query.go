@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -17,8 +19,8 @@ import (
 
 // getPoolReconnect gets a connection from a pool, tests it, and reconnects if
 // it gets errno 2006.
-func getPoolReconnect(pool *dbconnpool.ConnectionPool, timeout time.Duration) (dbconnpool.PoolConnection, error) {
-	conn, err := pool.Get(timeout)
+func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (dbconnpool.PoolConnection, error) {
+	conn, err := pool.Get(ctx)
 	if err != nil {
 		return conn, err
 	}
@@ -36,13 +38,13 @@ func getPoolReconnect(pool *dbconnpool.ConnectionPool, timeout time.Duration) (d
 }
 
 // ExecuteSuperQuery allows the user to execute a query as a super user.
-func (mysqld *Mysqld) ExecuteSuperQuery(query string) error {
-	return mysqld.ExecuteSuperQueryList([]string{query})
+func (mysqld *Mysqld) ExecuteSuperQuery(ctx context.Context, query string) error {
+	return mysqld.ExecuteSuperQueryList(ctx, []string{query})
 }
 
 // ExecuteSuperQueryList alows the user to execute queries as a super user.
-func (mysqld *Mysqld) ExecuteSuperQueryList(queryList []string) error {
-	conn, connErr := getPoolReconnect(mysqld.dbaPool, 0)
+func (mysqld *Mysqld) ExecuteSuperQueryList(ctx context.Context, queryList []string) error {
+	conn, connErr := getPoolReconnect(ctx, mysqld.dbaPool)
 	if connErr != nil {
 		return connErr
 	}
@@ -57,8 +59,8 @@ func (mysqld *Mysqld) ExecuteSuperQueryList(queryList []string) error {
 }
 
 // FetchSuperQuery returns the results of executing a query as a super user.
-func (mysqld *Mysqld) FetchSuperQuery(query string) (*sqltypes.Result, error) {
-	conn, connErr := getPoolReconnect(mysqld.dbaPool, 0)
+func (mysqld *Mysqld) FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error) {
+	conn, connErr := getPoolReconnect(ctx, mysqld.dbaPool)
 	if connErr != nil {
 		return nil, connErr
 	}
@@ -71,11 +73,97 @@ func (mysqld *Mysqld) FetchSuperQuery(query string) (*sqltypes.Result, error) {
 	return qr, nil
 }
 
+// executeFetchContext calls Execute() on the given connection,
+// while respecting Context deadline and cancellation.
+func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn dbconnpool.PoolConnection, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+	done := make(chan struct{})
+	var qr *sqltypes.Result
+	var executeErr error
+
+	// Fast fail if context is done.
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	// Execute the query.
+	go func() {
+		defer close(done)
+
+		qr, executeErr = conn.ExecuteFetch(query, maxrows, wantfields)
+	}()
+
+	// Wait for it to finish.
+	select {
+	case <-done:
+		return qr, executeErr
+	case <-ctx.Done():
+		// If both are done already, we may end up here anyway because select
+		// chooses among multiple ready channels pseudorandomly.
+		// Check the done channel and prefer that one if it's ready.
+		select {
+		case <-done:
+			return qr, executeErr
+		default:
+		}
+
+		// Try to kill the connection.
+		connID := conn.ID()
+		log.Info("Mysqld.executeFetchContext(): killing connID %v due to timeout of query: %v", connID, query)
+		if killErr := mysqld.killConnection(connID); killErr != nil {
+			// Log it, but go ahead and wait for the query anyway.
+			log.Warningf("Mysqld.executeFetchContext(): failed to kill connID %v: %v", connID, killErr)
+		}
+		// Wait for the conn.Execute() call to return.
+		<-done
+		// Close the connection. Upon Recycle() it will be thrown out.
+		conn.Close()
+		// Execute() may have succeeded before we tried to kill it.
+		if executeErr == nil {
+			return qr, executeErr
+		}
+		return nil, ctx.Err()
+	}
+}
+
+// killConnection issues a MySQL KILL command for the given connection ID.
+func (mysqld *Mysqld) killConnection(connID int64) error {
+	// There's no other interface that both types of connection implement.
+	// We only care about one method anyway.
+	var killConn interface {
+		ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
+	}
+
+	// Get another connection with which to kill.
+	// Use background context because the caller's context is likely expired,
+	// which is the reason we're being asked to kill the connection.
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	if poolConn, connErr := getPoolReconnect(ctx, mysqld.dbaPool); connErr == nil {
+		// We got a pool connection.
+		defer poolConn.Recycle()
+		killConn = poolConn
+	} else {
+		// We couldn't get a connection from the pool.
+		// It might be because the connection pool is exhausted,
+		// because some connections need to be killed!
+		// Try to open a new connection without the pool.
+		killConn, connErr = mysqld.GetDbaConnection()
+		if connErr != nil {
+			return connErr
+		}
+	}
+
+	_, err := killConn.ExecuteFetch(fmt.Sprintf("kill %d", connID), 10000, false)
+	return err
+}
+
 // fetchSuperQueryMap returns a map from column names to cell data for a query
 // that should return either 0 or 1 row. If the query returns zero rows, this
 // will return a nil map and nil error.
-func (mysqld *Mysqld) fetchSuperQueryMap(query string) (map[string]string, error) {
-	qr, err := mysqld.FetchSuperQuery(query)
+func (mysqld *Mysqld) fetchSuperQueryMap(ctx context.Context, query string) (map[string]string, error) {
+	qr, err := mysqld.FetchSuperQuery(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -99,9 +187,9 @@ func (mysqld *Mysqld) fetchSuperQueryMap(query string) (map[string]string, error
 
 // fetchVariables returns a map from MySQL variable names to variable value
 // for variables that match the given pattern.
-func (mysqld *Mysqld) fetchVariables(pattern string) (map[string]string, error) {
+func (mysqld *Mysqld) fetchVariables(ctx context.Context, pattern string) (map[string]string, error) {
 	query := fmt.Sprintf("SHOW VARIABLES LIKE '%s'", pattern)
-	qr, err := mysqld.FetchSuperQuery(query)
+	qr, err := mysqld.FetchSuperQuery(ctx, query)
 	if err != nil {
 		return nil, err
 	}
