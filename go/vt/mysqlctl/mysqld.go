@@ -641,8 +641,8 @@ func (mysqld *Mysqld) executeMysqlScript(user string, sql io.Reader) error {
 
 // GetAppConnection returns a connection from the app pool.
 // Recycle needs to be called on the result.
-func (mysqld *Mysqld) GetAppConnection() (dbconnpool.PoolConnection, error) {
-	return mysqld.appPool.Get(0)
+func (mysqld *Mysqld) GetAppConnection(ctx context.Context) (dbconnpool.PoolConnection, error) {
+	return mysqld.appPool.Get(ctx)
 }
 
 // GetDbaConnection creates a new DBConnection.

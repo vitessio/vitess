@@ -430,7 +430,7 @@ func checkNoDB(ctx context.Context, mysqld MysqlDaemon) (bool, error) {
 		return false, err
 	}
 
-	qr, err := mysqld.FetchSuperQuery("SHOW DATABASES")
+	qr, err := mysqld.FetchSuperQuery(ctx, "SHOW DATABASES")
 	if err != nil {
 		return false, fmt.Errorf("checkNoDB failed: %v", err)
 	}
@@ -438,7 +438,7 @@ func checkNoDB(ctx context.Context, mysqld MysqlDaemon) (bool, error) {
 	for _, row := range qr.Rows {
 		if strings.HasPrefix(row[0].String(), "vt_") {
 			dbName := row[0].String()
-			tableQr, err := mysqld.FetchSuperQuery("SHOW TABLES FROM " + dbName)
+			tableQr, err := mysqld.FetchSuperQuery(ctx, "SHOW TABLES FROM "+dbName)
 			if err != nil {
 				return false, fmt.Errorf("checkNoDB failed: %v", err)
 			}
