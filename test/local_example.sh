@@ -12,6 +12,8 @@ exitcode=1
 # Use a minimal number of tablets for the test.
 # This helps with staying under CI resource limits.
 num_tablets=2
+uid_base=100
+cell=test
 tablet_tasks=`seq 0 $[$num_tablets - 1]`
 
 teardown() {
@@ -56,6 +58,18 @@ echo "Initialize shard..."
 start=`date +%s`
 until ./lvtctl.sh InitShardMaster -force test_keyspace/0 test-100; do
   retry_with_timeout
+done
+
+# Run manual health check on each tablet.
+# This is not necessary, but it helps make this test more representative of
+# what a human would do. It simulates the case where a periodic health check
+# occurs before the user gets around to running the next command.
+echo "Running health check on tablets..."
+start=`date +%s`
+for uid_index in $tablet_tasks; do
+  uid=$[$uid_base + $uid_index]
+  printf -v alias '%s-%010d' $cell $uid
+  ./lvtctl.sh RunHealthCheck $alias
 done
 
 echo "Create table..."
