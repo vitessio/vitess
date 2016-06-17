@@ -178,7 +178,7 @@ func (rd *RowDiffer2) Go(log logutil.Logger) (DiffReport, error) {
 			advanceLeft = true
 			advanceRight = true
 			// Update the row on the destination.
-			if err := rd.repairRow(right, update); err != nil {
+			if err := rd.repairRow(left, update); err != nil {
 				return dr, err
 			}
 			continue
