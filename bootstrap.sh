@@ -215,5 +215,10 @@ echo "creating git pre-commit hooks"
 mkdir -p $VTTOP/.git/hooks
 ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
 
+# Download chromedriver
+mkdir -p $VTROOT/dist/chromedriver
+wget -N http://chromedriver.storage.googleapis.com/2.20/chromedriver_linux64.zip
+unzip chromedriver_linux64.zip -d $VTROOT/dist/chromedriver
+
 echo
 echo "bootstrap finished - run 'source dev.env' in your shell before building."

@@ -23,14 +23,14 @@
 <div layout="column">
   <div layout="row" layout-align="start center">
     <h3 flex="50">Keyspace/Shard</h3>
-    <div flex ng-bind="keyspace.name+'/'+shard.name"></div>
+    <div id="keyspace-shard" flex ng-bind="keyspace.name+'/'+shard.name"></div>
   </div>
 
   <md-divider></md-divider>
 
   <div layout="row" layout-align="start center">
     <h3 flex="50">Master Tablet</h3>
-    <div flex>
+    <div id="master-tablet" flex>
       <span ng-if="!shard.master_alias.uid">None</span>
       <span ng-if="shard.master_alias.uid"
         ng-bind="shard.master_alias.cell+'-'+shard.master_alias.uid"></span>
@@ -48,9 +48,9 @@
   <h3>No tablets found.</h3>
 </md-content>
 
-<md-tabs md-border-bottom md-dynamic-height md-center-tabs="false" ng-if="cells.length">
+<md-tabs id="cells" md-border-bottom md-dynamic-height md-center-tabs="false" ng-if="cells.length">
 <md-tab ng-repeat="cell in cells" label="{{cell.name}}" md-on-select="setSelectedCell(cell)">
-<md-content class="md-padding" layout="row" layout-wrap>
+<md-content id="tablets" class="md-padding" layout="row" layout-wrap>
 
 <md-card ng-repeat="tablet in cell.tablets" flex-sm="95" flex-md="95" flex-gt-md="45">
 
