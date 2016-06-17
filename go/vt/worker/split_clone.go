@@ -651,7 +651,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				var sourceReader ResultReader
 				var destReader ResultReader
 				if len(sourceReaders) >= 2 {
-					sourceReader, err = NewResultMerger(sourceReaders)
+					sourceReader, err = NewResultMerger(sourceReaders, len(td.PrimaryKeyColumns))
 					if err != nil {
 						processError("NewResultMerger for source tablets failed: %v", err)
 						return
@@ -660,7 +660,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					sourceReader = sourceReaders[0]
 				}
 				if len(destReaders) >= 2 {
-					destReader, err = NewResultMerger(destReaders)
+					destReader, err = NewResultMerger(destReaders, len(td.PrimaryKeyColumns))
 					if err != nil {
 						processError("NewResultMerger for dest tablets failed: %v", err)
 						return
@@ -679,13 +679,13 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					scw.destinationShards, keyResolver,
 					insertChannels, ctx.Done(), dbNames, scw.destinationPackCount)
 				if err != nil {
-					processError("NewResultMerger for dest tablets failed: %v", err)
+					processError("NewRowDiffer2 failed: %v", err)
 					return
 				}
 				// Ignore the diff report because all diffs should get repaired.
 				_ /* DiffReport */, err = differ.Go(scw.wr.Logger())
 				if err != nil {
-					processError("RowDiffer failed: %v", err)
+					processError("RowDiffer2 failed: %v", err)
 					return
 				}
 

@@ -7,6 +7,7 @@ package worker
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -233,11 +234,16 @@ func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server
 	return NewQueryResultReaderForTablet(ctx, ts, tabletAlias, sql)
 }
 
+// ErrStoppedRowReader is returned by RowReader.Next() when
+// StopAfterCurrentResult() and it finished the current result.
+var ErrStoppedRowReader = errors.New("RowReader won't advance to the next Result because StopAfterCurrentResult() was called")
+
 // RowReader returns individual rows from a ResultReader.
 type RowReader struct {
-	resultReader  ResultReader
-	currentResult *sqltypes.Result
-	currentIndex  int
+	resultReader           ResultReader
+	currentResult          *sqltypes.Result
+	currentIndex           int
+	stopAfterCurrentResult bool
 }
 
 // NewRowReader returns a RowReader based on the QueryResultReader
@@ -253,6 +259,10 @@ func NewRowReader(resultReader ResultReader) *RowReader {
 // (nil, error) if an error occurred
 func (rr *RowReader) Next() ([]sqltypes.Value, error) {
 	for rr.currentResult == nil || rr.currentIndex == len(rr.currentResult.Rows) {
+		if rr.stopAfterCurrentResult {
+			return nil, ErrStoppedRowReader
+		}
+
 		var err error
 		rr.currentResult, err = rr.resultReader.Next()
 		if err != nil {
@@ -263,9 +273,9 @@ func (rr *RowReader) Next() ([]sqltypes.Value, error) {
 		}
 		rr.currentIndex = 0
 	}
-	result := rr.currentResult.Rows[rr.currentIndex]
+	row := rr.currentResult.Rows[rr.currentIndex]
 	rr.currentIndex++
-	return result, nil
+	return row, nil
 }
 
 // Fields returns the types for the rows
@@ -286,6 +296,16 @@ func (rr *RowReader) Drain() (int, error) {
 		}
 		count++
 	}
+}
+
+// StopAfterCurrentResult tells RowReader to keep returning rows in Next()
+// until it has finished the current Result. Once there, Next() will always
+// return the "StoppedRowReader" error.
+// This is feature is necessary for an optimization where the underlying
+// ResultReader is the last input in a merge and we want to switch from reading
+// rows to reading Results.
+func (rr *RowReader) StopAfterCurrentResult() {
+	rr.stopAfterCurrentResult = true
 }
 
 // DiffReport has the stats for a diff job
