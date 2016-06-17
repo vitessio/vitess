@@ -148,7 +148,7 @@ func (cp *ConnPool) SetIdleTimeout(idleTimeout time.Duration) {
 	cp.idleTimeout = idleTimeout
 }
 
-// StatsJSON returns the pool stats as a JSOn object.
+// StatsJSON returns the pool stats as a JSON object.
 func (cp *ConnPool) StatsJSON() string {
 	p := cp.pool()
 	if p == nil {
