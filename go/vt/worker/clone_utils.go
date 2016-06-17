@@ -94,6 +94,7 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 	// eliminate a few cases we don't split tables for
 	if len(td.PrimaryKeyColumns) == 0 {
 		// no primary key, what can we do?
+		// TODO(mberlin): Return an error here.
 		return result, nil
 	}
 	if td.DataLength < minTableSizeForSplit {
@@ -111,6 +112,7 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 	}
 	if len(qr.Rows) != 1 {
 		wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot get min and max", td.Name)
+		// TODO(mberlin): Return an error here?
 		return result, nil
 	}
 
@@ -120,8 +122,11 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 	// Value has a full type.
 	l0 := qr.Rows[0].Lengths[0]
 	l1 := qr.Rows[0].Lengths[1]
+	// TODO(mberlin): Convert to sqltypes.Result here first to simplify treating
+	// NULL results.
 	if l0 < 0 || l1 < 0 {
 		wr.Logger().Infof("Not splitting table %v into multiple chunks, min or max is NULL: %v", td.Name, qr.Rows[0])
+		// TODO(mberlin): Return an error here?
 		return result, nil
 	}
 	minValue := qr.Rows[0].Values[:l0]
@@ -212,6 +217,7 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 func buildSQLFromChunks(wr *wrangler.Wrangler, td *tabletmanagerdatapb.TableDefinition, chunks []string, chunkIndex int, source string) string {
 	selectSQL := "SELECT " + strings.Join(td.Columns, ", ") + " FROM " + td.Name
 	if chunks[chunkIndex] != "" || chunks[chunkIndex+1] != "" {
+		// TODO(mberlin): Move logging out into the actual code which does the reading.
 		wr.Logger().Infof("Starting to stream all data from tablet %v table %v between '%v' and '%v'", source, td.Name, chunks[chunkIndex], chunks[chunkIndex+1])
 		clauses := make([]string, 0, 2)
 		if chunks[chunkIndex] != "" {
