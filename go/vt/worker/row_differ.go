@@ -94,7 +94,7 @@ func NewRowDiffer2(left, right ResultReader, td *tabletmanagerdatapb.TableDefini
 
 func compareFields(left, right []*querypb.Field) error {
 	if len(left) != len(right) {
-		return fmt.Errorf("Cannot diff inputs with different types")
+		return fmt.Errorf("Cannot diff inputs with different number of fields: left: %v right: %v", left, right)
 	}
 	for i, field := range left {
 		if field.Type != right[i].Type {
