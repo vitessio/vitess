@@ -441,8 +441,8 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
     workerclient_proc = utils.run_vtworker_client_bg(
         ['SplitClone',
          '--source_reader_count', '1',
-         '--destination_pack_count', '1',
          '--destination_writer_count', '1',
+         '--write_query_max_rows', '1',
          '--min_healthy_rdonly_tablets', '1',
          '--max_tps', '9999',
          'test_keyspace/0'],

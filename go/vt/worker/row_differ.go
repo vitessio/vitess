@@ -59,23 +59,18 @@ func NewRowDiffer2(left, right ResultReader, td *tabletmanagerdatapb.TableDefini
 	// Parameters required by RowRouter.
 	destinationShards []*topo.ShardInfo, keyResolver keyspaceIDResolver,
 	// Parameters required by RowAggregator.
-	insertChannels []chan string, abort <-chan struct{}, dbNames []string, destinationPackCount int) (*RowDiffer2, error) {
+	insertChannels []chan string, abort <-chan struct{}, dbNames []string, writeQueryMaxRows, writeQueryMaxSize int) (*RowDiffer2, error) {
 
 	if err := compareFields(left.Fields(), right.Fields()); err != nil {
 		return nil, err
 	}
 
 	// Create a RowAggregator for each destination shard and repair type.
-	// Aggregate changes up to 4k * pack count bytes. 4k because we assume that as
-	// the default size of a single response of a streaming read.
-	// TODO(mberlin): Replace the -destination_pack_count with a flag which bounds
-	// the size of the destination writes (in bytes).
-	limit := 4096 * destinationPackCount
 	aggregators := make([][]*RowAggregator, len(destinationShards))
 	for i := range destinationShards {
 		aggregators[i] = make([]*RowAggregator, len(repairTypes))
 		for _, typ := range repairTypes {
-			aggregators[i][typ] = NewRowAggregator(limit,
+			aggregators[i][typ] = NewRowAggregator(writeQueryMaxRows, writeQueryMaxSize,
 				topoproto.KeyspaceShardString(destinationShards[i].Keyspace(), destinationShards[i].ShardName()),
 				insertChannels[i], abort, dbNames[i], td, typ)
 		}
@@ -288,8 +283,8 @@ func (rr *RowRouter) Route(row []sqltypes.Value) (int, error) {
 }
 
 // RowAggregator aggregates SQL repair statements into one statement.
-// Once the limit (in bytes) is reached, the statement will be sent to the
-// destination's insertChannel.
+// Once a limit (maxRows or maxSize) is reached, the statement will be sent to
+// the destination's insertChannel.
 // RowAggregator is also aware of the type of repair statement and constructs
 // the necessary SQL command based on that.
 // Aggregating multiple statements is done to improve the overall performance.
@@ -301,7 +296,8 @@ func (rr *RowRouter) Route(row []sqltypes.Value) (int, error) {
 // then all other fields. The order of these two sets of fields is identical
 // to the order in td.PrimaryKeyColumns and td.Columns respectively.
 type RowAggregator struct {
-	limit int
+	maxRows int
+	maxSize int
 	// keyspaceAndShard is only used for error messages.
 	keyspaceAndShard string
 	insertChannel    chan string
@@ -319,7 +315,7 @@ type RowAggregator struct {
 }
 
 // NewRowAggregator returns a RowAggregator.
-func NewRowAggregator(limit int, keyspaceAndShard string, insertChannel chan string, abort <-chan struct{}, dbName string, td *tabletmanagerdatapb.TableDefinition, repairType repairType) *RowAggregator {
+func NewRowAggregator(maxRows, maxSize int, keyspaceAndShard string, insertChannel chan string, abort <-chan struct{}, dbName string, td *tabletmanagerdatapb.TableDefinition, repairType repairType) *RowAggregator {
 	// Construct head and tail base commands for the repair statement.
 	var baseCmdHead, baseCmdTail string
 	switch repairType {
@@ -330,7 +326,7 @@ func NewRowAggregator(limit int, keyspaceAndShard string, insertChannel chan str
 		// Example: UPDATE test SET msg='a' WHERE id=0 AND sub_id=10
 		baseCmdHead = "UPDATE `" + dbName + "`." + td.Name + " SET "
 		// UPDATE ... SET does not support multiple rows as input.
-		limit = 1
+		maxRows = 1
 		// Note: We cannot use INSERT INTO ... ON DUPLICATE KEY UPDATE here because
 		// it's not recommended for tables with more than one unique (i.e. the
 		// primary key) index. That's because the update function would also be
@@ -349,7 +345,8 @@ func NewRowAggregator(limit int, keyspaceAndShard string, insertChannel chan str
 	nonPrimaryKeyColumns := orderedColumnsWithoutPrimaryKeyColumns(td)
 
 	return &RowAggregator{
-		limit:                limit,
+		maxRows:              maxRows,
+		maxSize:              maxSize,
 		keyspaceAndShard:     keyspaceAndShard,
 		insertChannel:        insertChannel,
 		abort:                abort,
@@ -421,7 +418,7 @@ func (ra *RowAggregator) Add(row []sqltypes.Value) bool {
 	}
 	ra.bufferedRows++
 
-	if ra.buffer.Len() >= ra.limit {
+	if ra.bufferedRows >= ra.maxRows || ra.buffer.Len() >= ra.maxSize {
 		if abort := ra.flush(); abort {
 			return true
 		}

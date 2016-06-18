@@ -178,16 +178,15 @@ func (tc *splitCloneTestCase) setUp(v3 bool) {
 			tc.t, destRdonly.Target(), qs, empty))
 	}
 
-	// We read 100 source rows. sourceReaderCount is set to 10, so
-	// we'll have 100/10=10 rows per table chunk.
-	// Since we don't reach the limit of destinationPackCount, there will be
-	// one aggregated insert per chunk. That's 10 inserts for every shard.
-	// (Each aggregated shard will have 5 out of the 10 rows from the chunk.)
 	tc.leftMasterFakeDb = NewFakePoolConnectionQuery(tc.t, "leftMaster")
 	tc.leftReplicaFakeDb = NewFakePoolConnectionQuery(tc.t, "leftReplica")
 	tc.rightMasterFakeDb = NewFakePoolConnectionQuery(tc.t, "rightMaster")
 
-	for i := 1; i <= 10; i++ {
+	// In the default test case there will be 30 inserts per destination shard
+	// because 10 writer threads will insert 5 rows on each destination shard.
+	// (100 source rows / 10 writers / 2 shards = 5 rows.)
+	// Due to --write_query_max_rows=2 there will be 3 inserts for 5 rows.
+	for i := 1; i <= 30; i++ {
 		tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", nil)
 		// leftReplica is unused by default.
 		tc.rightMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", nil)
@@ -212,8 +211,8 @@ func (tc *splitCloneTestCase) setUp(v3 bool) {
 
 	tc.defaultWorkerArgs = []string{
 		"SplitClone",
+		"-write_query_max_rows", strconv.Itoa(writeQueryMaxRows),
 		"-source_reader_count", "10",
-		"-destination_pack_count", "4",
 		"-min_table_size_for_split", "1",
 		"-destination_writer_count", "10",
 		"ks/-80"}
@@ -373,6 +372,7 @@ func TestSplitCloneV2_Throttled(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Each of the 10 writer threads will issue 3 transactions (30 in total).
 	// 30 transactions (tx) at a rate of 300 TPS should take at least 33 ms since:
 	// 300 TPS across 10 writer threads: 30 tx/second/thread
 	// => minimum request interval between two tx: 1 s / 30 tx/s = 33 ms
@@ -431,16 +431,16 @@ func TestSplitCloneV2_RetryDueToReparent(t *testing.T) {
 	defer tc.tearDown()
 
 	// Provoke a reparent just before the copy finishes.
-	// leftReplica will take over for the last, 10th, insert and the BLP checkpoint.
+	// leftReplica will take over for the last, 30th, insert and the BLP checkpoint.
 	tc.leftReplicaFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", nil)
 	expectBlpCheckpointCreationQueries(tc.leftReplicaFakeDb)
 
-	// Do not let leftMaster succeed the 10th write.
-	tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(8)
+	// Do not let leftMaster succeed the 30th write.
+	tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(28)
 	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", errReadOnly)
 	tc.leftMasterFakeDb.enableInfinite()
 	// When vtworker encounters the readonly error on leftMaster, do the reparent.
-	tc.leftMasterFakeDb.getEntry(9).AfterFunc = func() {
+	tc.leftMasterFakeDb.getEntry(29).AfterFunc = func() {
 		// Reparent from leftMaster to leftReplica.
 		// NOTE: This step is actually not necessary due to our fakes which bypass
 		//       a lot of logic. Let's keep it for correctness though.
@@ -491,26 +491,26 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
 
-	// leftReplica will take over for the last, 10th, insert and the BLP checkpoint.
+	// leftReplica will take over for the last, 30th, insert and the BLP checkpoint.
 	tc.leftReplicaFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", nil)
 	expectBlpCheckpointCreationQueries(tc.leftReplicaFakeDb)
 
-	// During the 9th write, let the MASTER disappear.
-	tc.leftMasterFakeDb.getEntry(8).AfterFunc = func() {
+	// During the 29th write, let the MASTER disappear.
+	tc.leftMasterFakeDb.getEntry(28).AfterFunc = func() {
 		tc.leftMasterQs.UpdateType(topodatapb.TabletType_REPLICA)
 		tc.leftMasterQs.AddDefaultHealthResponse()
 	}
 
-	// If the HealthCheck didn't pick up the change yet, the 10th write would
+	// If the HealthCheck didn't pick up the change yet, the 30th write would
 	// succeed. To prevent this from happening, replace it with an error.
-	tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(8)
+	tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(28)
 	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", errReadOnly)
 	tc.leftMasterFakeDb.enableInfinite()
 	// vtworker may not retry on leftMaster again if HealthCheck picks up the
 	// change very fast. In that case, the error was never encountered.
 	// Delete it or verifyAllExecutedOrFail() will fail because it was not
 	// processed.
-	defer tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(8)
+	defer tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(28)
 
 	// Wait for a retry due to NoMasterAvailable to happen, expect the 30th write
 	// on leftReplica and change leftReplica from REPLICA to MASTER.

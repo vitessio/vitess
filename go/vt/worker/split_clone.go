@@ -45,7 +45,8 @@ type SplitCloneWorker struct {
 	excludeTables           []string
 	strategy                *splitStrategy
 	sourceReaderCount       int
-	destinationPackCount    int
+	writeQueryMaxRows       int
+	writeQueryMaxSize       int
 	minTableSizeForSplit    uint64
 	destinationWriterCount  int
 	minHealthyRdonlyTablets int
@@ -91,7 +92,7 @@ type SplitCloneWorker struct {
 }
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
-func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
+func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, excludeTables []string, strategyStr string, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
 	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
@@ -116,7 +117,8 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, on
 		excludeTables:           excludeTables,
 		strategy:                strategy,
 		sourceReaderCount:       sourceReaderCount,
-		destinationPackCount:    destinationPackCount,
+		writeQueryMaxRows:       writeQueryMaxRows,
+		writeQueryMaxSize:       writeQueryMaxSize,
 		minTableSizeForSplit:    minTableSizeForSplit,
 		destinationWriterCount:  destinationWriterCount,
 		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
@@ -677,7 +679,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				// Compare the data and repair any differences.
 				differ, err := NewRowDiffer2(sourceReader, destReader, td, scw.tableStatusList, tableIndex,
 					scw.destinationShards, keyResolver,
-					insertChannels, ctx.Done(), dbNames, scw.destinationPackCount)
+					insertChannels, ctx.Done(), dbNames, scw.writeQueryMaxRows, scw.writeQueryMaxSize)
 				if err != nil {
 					processError("NewRowDiffer2 failed: %v", err)
 					return
