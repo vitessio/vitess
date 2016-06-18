@@ -76,7 +76,11 @@ func (f *FakePoolConnection) addExpectedExecuteFetchAtIndex(index int, entry Exp
 		f.expectedExecuteFetch = append(f.expectedExecuteFetch, entry)
 	} else {
 		// Grow the slice by one element.
-		f.expectedExecuteFetch = f.expectedExecuteFetch[0 : len(f.expectedExecuteFetch)+1]
+		if cap(f.expectedExecuteFetch) == len(f.expectedExecuteFetch) {
+			f.expectedExecuteFetch = append(f.expectedExecuteFetch, make([]ExpectedExecuteFetch, 1)...)
+		} else {
+			f.expectedExecuteFetch = f.expectedExecuteFetch[0 : len(f.expectedExecuteFetch)+1]
+		}
 		// Use copy to move the upper part of the slice out of the way and open a hole.
 		copy(f.expectedExecuteFetch[index+1:], f.expectedExecuteFetch[index:])
 		// Store the new value.
