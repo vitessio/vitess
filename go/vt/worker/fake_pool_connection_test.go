@@ -118,6 +118,13 @@ func (f *FakePoolConnection) getEntry(index int) *ExpectedExecuteFetch {
 	return &f.expectedExecuteFetch[index]
 }
 
+func (f *FakePoolConnection) deleteAllEntries() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.expectedExecuteFetch = make([]ExpectedExecuteFetch, 0)
+}
+
 func (f *FakePoolConnection) deleteAllEntriesAfterIndex(index int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
