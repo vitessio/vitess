@@ -2,6 +2,7 @@ package worker
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -111,7 +112,7 @@ func (f *FakePoolConnection) getEntry(index int) *ExpectedExecuteFetch {
 	defer f.mu.Unlock()
 
 	if index < 0 || index >= len(f.expectedExecuteFetch) {
-		return nil
+		panic(fmt.Sprintf("index out of range. current length: %v", len(f.expectedExecuteFetch)))
 	}
 
 	return &f.expectedExecuteFetch[index]
@@ -122,7 +123,7 @@ func (f *FakePoolConnection) deleteAllEntriesAfterIndex(index int) {
 	defer f.mu.Unlock()
 
 	if index < 0 || index >= len(f.expectedExecuteFetch) {
-		return
+		panic(fmt.Sprintf("index out of range. current length: %v", len(f.expectedExecuteFetch)))
 	}
 
 	if index+1 < f.expectedExecuteFetchIndex {
