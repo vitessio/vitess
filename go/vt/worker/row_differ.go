@@ -42,7 +42,7 @@ type RowDiffer2 struct {
 	right        *RowReader
 	pkFieldCount int
 	// tableStatusList is used to report the number of repaired rows.
-	tableStatusList tableStatusList
+	tableStatusList *tableStatusList
 	// tableIndex is the index of the table in the schema. It is required for
 	// reporting the number of repaired rows to tableStatusList.
 	tableIndex int
@@ -55,7 +55,7 @@ type RowDiffer2 struct {
 // NewRowDiffer2 returns a new RowDiffer2.
 // We assume that the indexes of the slice parameters always correspond to the
 // same shard e.g. insertChannels[0] refers to destinationShards[0] and so on.
-func NewRowDiffer2(left, right ResultReader, td *tabletmanagerdatapb.TableDefinition, tableStatusList tableStatusList, tableIndex int,
+func NewRowDiffer2(left, right ResultReader, td *tabletmanagerdatapb.TableDefinition, tableStatusList *tableStatusList, tableIndex int,
 	// Parameters required by RowRouter.
 	destinationShards []*topo.ShardInfo, keyResolver keyspaceIDResolver,
 	// Parameters required by RowAggregator.

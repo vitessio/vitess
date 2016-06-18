@@ -82,7 +82,7 @@ type SplitCloneWorker struct {
 	// populated during WorkerStateCloneOffline
 	// tableStatusList holds the status for each table.
 	// TODO(mberlin): Have one per phase or reset it after the online phase.
-	tableStatusList tableStatusList
+	tableStatusList *tableStatusList
 	// aliases of tablets that need to have their schema reloaded.
 	// Only populated once, read-only after that.
 	reloadAliases [][]*topodatapb.TabletAlias
@@ -128,6 +128,8 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, on
 
 		destinationDbNames:    make(map[string]string),
 		destinationThrottlers: make(map[string]*throttler.Throttler),
+
+		tableStatusList: &tableStatusList{},
 
 		ev: &events.SplitClone{
 			Cell:          cell,
@@ -608,6 +610,9 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 			sourceWaitGroup.Add(1)
 			go func(td *tabletmanagerdatapb.TableDefinition, tableIndex, chunkIndex int) {
 				defer sourceWaitGroup.Done()
+
+				// We need our own error per Go routine to avoid races.
+				var err error
 
 				sema.Acquire()
 				defer sema.Release()
