@@ -110,7 +110,7 @@ func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn dbconnpool.P
 		// The context expired or was cancelled.
 		// Try to kill the connection to effectively cancel the ExecuteFetch().
 		connID := conn.ID()
-		log.Info("Mysqld.executeFetchContext(): killing connID %v due to timeout of query: %v", connID, query)
+		log.Infof("Mysqld.executeFetchContext(): killing connID %v due to timeout of query: %v", connID, query)
 		if killErr := mysqld.killConnection(connID); killErr != nil {
 			// Log it, but go ahead and wait for the query anyway.
 			log.Warningf("Mysqld.executeFetchContext(): failed to kill connID %v: %v", connID, killErr)
