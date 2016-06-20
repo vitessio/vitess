@@ -25,19 +25,17 @@ src_replica = tablet.Tablet()
 src_rdonly = tablet.Tablet()
 dst_master = tablet.Tablet()
 dst_replica = tablet.Tablet()
+dst_rdonly = tablet.Tablet()
+
+all_tablets = [src_master, src_replica, src_rdonly, dst_master, dst_replica,
+               dst_rdonly]
 
 
 def setUpModule():
   try:
     environment.topo_server().setup()
 
-    setup_procs = [
-        src_master.init_mysql(),
-        src_replica.init_mysql(),
-        src_rdonly.init_mysql(),
-        dst_master.init_mysql(),
-        dst_replica.init_mysql(),
-        ]
+    setup_procs = [t.init_mysql() for t in all_tablets]
     utils.Vtctld().start()
     utils.wait_procs(setup_procs)
 
@@ -86,8 +84,10 @@ def setUpModule():
     # Create destination shard (won't be serving as there is no DB)
     dst_master.init_tablet('master', 'test_keyspace', '-')
     dst_replica.init_tablet('replica', 'test_keyspace', '-')
+    dst_rdonly.init_tablet('rdonly', 'test_keyspace', '-')
     dst_master.start_vttablet(wait_for_state='NOT_SERVING')
     dst_replica.start_vttablet(wait_for_state='NOT_SERVING')
+    dst_rdonly.start_vttablet(wait_for_state='NOT_SERVING')
 
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/-',
                      dst_master.tablet_alias], auto_log=True)
@@ -120,27 +120,17 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
 
-  tablet.kill_tablets([src_master, src_replica, src_rdonly,
-                       dst_master, dst_replica])
+  tablet.kill_tablets(all_tablets)
 
-  teardown_procs = [
-      src_master.teardown_mysql(),
-      src_replica.teardown_mysql(),
-      src_rdonly.teardown_mysql(),
-      dst_master.teardown_mysql(),
-      dst_replica.teardown_mysql(),
-      ]
+  teardown_procs = [t.teardown_mysql() for t in all_tablets]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
   environment.topo_server().teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
 
-  src_master.remove_tree()
-  src_replica.remove_tree()
-  src_rdonly.remove_tree()
-  dst_master.remove_tree()
-  dst_replica.remove_tree()
+  for t in all_tablets:
+    t.remove_tree()
 
 
 def _get_update_stream(tblt):
