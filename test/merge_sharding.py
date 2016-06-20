@@ -183,10 +183,13 @@ index by_msg (msg)
     return True
 
   def _insert_startup_values(self):
+    # row covered by shard -40 (should be merged).
     self._insert_value(shard_0_master, 'resharding1', 0, 'msg1',
                        0x1000000000000000)
+    # row covered by shard 40-80 (should be merged).
     self._insert_value(shard_1_master, 'resharding1', 1, 'msg2',
                        0x5000000000000000)
+    # row covered by shard 80- (must not be merged).
     self._insert_value(shard_2_master, 'resharding1', 2, 'msg3',
                        0xD000000000000000)
 
