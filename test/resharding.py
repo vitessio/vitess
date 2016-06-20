@@ -150,6 +150,7 @@ class MonitorLagThread(threading.Thread):
     threading.Thread.__init__(self)
     self.tablet = tablet_obj
     self.thread_name = thread_name
+    self.thread_id = thread_id
     self.done = False
     self.max_lag_ms = 0
     self.lag_sum_ms = 0
@@ -164,13 +165,13 @@ class MonitorLagThread(threading.Thread):
             'select time_milli from timestamps where id=%d' %
             self.thread_id)
         if result:
-          lag = long(time.time() * 1000) - long(result[0][0])
-          logging.debug('MonitorLagThread(%s) got %d',
-                        self.thread_name, lag)
+          lag_ms = long(time.time() * 1000) - long(result[0][0])
+          logging.debug('MonitorLagThread(%s) got %d ms',
+                        self.thread_name, lag_ms)
           self.sample_count += 1
-          self.lag_sum += lag
-          if lag > self.max_lag:
-            self.max_lag = lag
+          self.lag_sum_ms += lag_ms
+          if lag_ms > self.max_lag_ms:
+            self.max_lag_ms = lag_ms
         time.sleep(1.0)
     except Exception:
       logging.exception('MonitorLagThread got exception.')
@@ -761,14 +762,14 @@ primary key (name)
     monitor_thread_2.done = True
     insert_thread_1.done = True
     insert_thread_2.done = True
-    logging.debug('DELAY 1: %s max_lag=%d avg_lag=%d',
+    logging.debug('DELAY 1: %s max_lag=%d ms avg_lag=%d ms',
                   monitor_thread_1.thread_name,
-                  monitor_thread_1.max_lag,
-                  monitor_thread_1.lag_sum / monitor_thread_1.sample_count)
-    logging.debug('DELAY 2: %s max_lag=%d avg_lag=%d',
+                  monitor_thread_1.max_lag_ms,
+                  monitor_thread_1.lag_sum_ms / monitor_thread_1.sample_count)
+    logging.debug('DELAY 2: %s max_lag=%d ms avg_lag=%d ms',
                   monitor_thread_2.thread_name,
-                  monitor_thread_2.max_lag,
-                  monitor_thread_2.lag_sum / monitor_thread_2.sample_count)
+                  monitor_thread_2.max_lag_ms,
+                  monitor_thread_2.lag_sum_ms / monitor_thread_2.sample_count)
 
     # mock with the SourceShard records to test 'vtctl SourceShardDelete'
     # and 'vtctl SourceShardAdd'
