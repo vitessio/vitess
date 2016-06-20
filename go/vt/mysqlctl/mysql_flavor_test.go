@@ -7,7 +7,8 @@ package mysqlctl
 import (
 	"os"
 	"testing"
-	"time"
+
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
@@ -26,7 +27,7 @@ func (fakeMysqlFlavor) ParseReplicationPosition(string) (replication.Position, e
 func (fakeMysqlFlavor) SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.Position) error {
 	return nil
 }
-func (fakeMysqlFlavor) WaitMasterPos(mysqld *Mysqld, targetPos replication.Position, waitTimeout time.Duration) error {
+func (fakeMysqlFlavor) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos replication.Position) error {
 	return nil
 }
 func (fakeMysqlFlavor) MasterPosition(mysqld *Mysqld) (replication.Position, error) {

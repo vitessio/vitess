@@ -172,7 +172,7 @@ func (dbc *DBConn) Recycle() {
 func (dbc *DBConn) Kill(reason string) error {
 	dbc.queryServiceStats.KillStats.Add("Queries", 1)
 	log.Infof("Due to %s, killing query %s", reason, dbc.Current())
-	killConn, err := dbc.pool.dbaPool.Get(0)
+	killConn, err := dbc.pool.dbaPool.Get(context.TODO())
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
 		// TODO(aaijazi): Find the right error code for an internal error that we don't want to retry

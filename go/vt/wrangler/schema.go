@@ -17,7 +17,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	"github.com/youtube/vitess/go/vt/schemamanager"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
@@ -42,7 +41,48 @@ func (wr *Wrangler) ReloadSchema(ctx context.Context, tabletAlias *topodatapb.Ta
 		return err
 	}
 
-	return wr.tmc.ReloadSchema(ctx, ti.Tablet)
+	return wr.tmc.ReloadSchema(ctx, ti.Tablet, "")
+}
+
+// ReloadSchemaShard reloads the schema for all slave tablets in a shard,
+// after they reach a given replication position (empty pos means immediate).
+// In general, we don't always expect all slaves to be ready to reload,
+// and the periodic schema reload makes them self-healing anyway.
+// So we do this on a best-effort basis, and log warnings for any tablets
+// that fail to reload within the context deadline.
+// Note that this skips the master because it's assumed that the schema
+// was reloaded there right after applying it.
+func (wr *Wrangler) ReloadSchemaShard(ctx context.Context, keyspace, shard, replicationPos string) {
+	tablets, err := wr.ts.GetTabletMapForShard(ctx, keyspace, shard)
+	if err != nil {
+		if err != topo.ErrPartialResult {
+			// This is best-effort, so just log it and move on.
+			wr.logger.Warningf("Failed to reload schema on slave tablets in %v/%v (use vtctl ReloadSchema to fix individual tablets): %v", keyspace, shard, err)
+			return
+		}
+		// We got a partial result. Do what we can, but warn that some may be missed.
+		wr.logger.Warningf("Failed to fetch all tablets for %v/%v. Some slave tablets may not have schema reloaded (use vtctl ReloadSchema to fix individual tablets)", keyspace, shard)
+	}
+
+	var wg sync.WaitGroup
+	for _, ti := range tablets {
+		if ti.Type == topodatapb.TabletType_MASTER {
+			// We don't need to reload on the master because we assume
+			// ExecuteFetchAsDba() already did that.
+			continue
+		}
+
+		wg.Add(1)
+		go func(tablet *topodatapb.Tablet) {
+			defer wg.Done()
+			if err := wr.tmc.ReloadSchema(ctx, tablet, replicationPos); err != nil {
+				wr.logger.Warningf(
+					"Failed to reload schema on slave tablet %v in %v/%v (use vtctl ReloadSchema to try again): %v",
+					topoproto.TabletAliasString(tablet.Alias), keyspace, shard, err)
+			}
+		}(ti.Tablet)
+	}
+	wg.Wait()
 }
 
 // helper method to asynchronously diff a schema
@@ -193,46 +233,22 @@ func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *topodatapb
 	return wr.tmc.PreflightSchema(ctx, ti.Tablet, changes)
 }
 
-// ApplySchemaKeyspace applies a schema change to an entire keyspace.
-// Takes a keyspace lock to do this.
-// First we will validate the Preflight works the same on all shard masters
-// and fail if not (unless force is specified).
-func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace, change string, allowLongUnavailability bool, waitSlaveTimeout time.Duration) (err error) {
-	// lock the keyspace
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "ApplySchemaKeyspace")
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock(&err)
-
-	// apply the schema change
-	executor := schemamanager.NewTabletExecutor(wr.tmc, wr.ts)
-	if allowLongUnavailability {
-		executor.AllowBigSchemaChange()
-	}
-	return schemamanager.Run(
-		ctx,
-		schemamanager.NewPlainController(change, keyspace),
-		executor,
-	)
-}
-
 // CopySchemaShardFromShard copies the schema from a source shard to the specified destination shard.
 // For both source and destination it picks the master tablet. See also CopySchemaShard.
-func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, excludeTables []string, includeViews bool, sourceKeyspace, sourceShard, destKeyspace, destShard string) error {
+func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, excludeTables []string, includeViews bool, sourceKeyspace, sourceShard, destKeyspace, destShard string, waitSlaveTimeout time.Duration) error {
 	sourceShardInfo, err := wr.ts.GetShard(ctx, sourceKeyspace, sourceShard)
 	if err != nil {
 		return err
 	}
 
-	return wr.CopySchemaShard(ctx, sourceShardInfo.MasterAlias, tables, excludeTables, includeViews, destKeyspace, destShard)
+	return wr.CopySchemaShard(ctx, sourceShardInfo.MasterAlias, tables, excludeTables, includeViews, destKeyspace, destShard, waitSlaveTimeout)
 }
 
 // CopySchemaShard copies the schema from a source tablet to the
 // specified shard.  The schema is applied directly on the master of
 // the destination shard, and is propogated to the replicas through
 // binlogs.
-func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string) error {
+func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string, waitSlaveTimeout time.Duration) error {
 	destShardInfo, err := wr.ts.GetShard(ctx, destKeyspace, destShard)
 	if err != nil {
 		return err
@@ -263,6 +279,12 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 		}
 	}
 
+	// Remember the replication position after all the above were applied.
+	destMasterPos, err := wr.tmc.MasterPosition(ctx, destTabletInfo.Tablet)
+	if err != nil {
+		return fmt.Errorf("CopySchemaShard: can't get replication position after schema applied: %v", err)
+	}
+
 	// Although the copy was successful, we have to verify it to catch the case
 	// where the database already existed on the destination, but with different
 	// options e.g. a different character set.
@@ -276,6 +298,11 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	if diffs != nil {
 		return fmt.Errorf("CopySchemaShard was not successful because the schemas between the two tablets %v and %v differ: %v", sourceTabletAlias, destShardInfo.MasterAlias, diffs)
 	}
+
+	// Notify slaves to reload schema. This is best-effort.
+	reloadCtx, cancel := context.WithTimeout(ctx, waitSlaveTimeout)
+	defer cancel()
+	wr.ReloadSchemaShard(reloadCtx, destKeyspace, destShard, destMasterPos)
 	return nil
 }
 

@@ -49,7 +49,7 @@ func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query string, d
 	}
 
 	if err == nil && reloadSchema {
-		agent.QueryServiceControl.ReloadSchema()
+		agent.QueryServiceControl.ReloadSchema(ctx)
 	}
 	return sqltypes.ResultToProto3(result), err
 }
@@ -58,7 +58,7 @@ func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query string, d
 // Should be called under RPCWrap.
 func (agent *ActionAgent) ExecuteFetchAsApp(ctx context.Context, query string, maxrows int) (*querypb.QueryResult, error) {
 	// get a connection
-	conn, err := agent.MysqlDaemon.GetAppConnection()
+	conn, err := agent.MysqlDaemon.GetAppConnection(ctx)
 	if err != nil {
 		return nil, err
 	}

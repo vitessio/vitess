@@ -53,7 +53,7 @@ func queryReparentJournal(timeCreatedNS int64) string {
 // the row in the reparent_journal table.
 func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error {
 	for {
-		qr, err := mysqld.FetchSuperQuery(queryReparentJournal(timeCreatedNS))
+		qr, err := mysqld.FetchSuperQuery(ctx, queryReparentJournal(timeCreatedNS))
 		if err == nil && len(qr.Rows) == 1 {
 			// we have the row, we're done
 			return nil
@@ -77,7 +77,7 @@ func (mysqld *Mysqld) DemoteMaster() (rp replication.Position, err error) {
 		"FLUSH TABLES WITH READ LOCK",
 		"UNLOCK TABLES",
 	}
-	if err = mysqld.ExecuteSuperQueryList(cmds); err != nil {
+	if err = mysqld.ExecuteSuperQueryList(context.TODO(), cmds); err != nil {
 		return rp, err
 	}
 	return mysqld.MasterPosition()
@@ -95,7 +95,7 @@ func (mysqld *Mysqld) PromoteSlave(hookExtraEnv map[string]string) (replication.
 		return replication.Position{}, err
 	}
 	cmds = append(cmds, flavor.PromoteSlaveCommands()...)
-	if err := mysqld.ExecuteSuperQueryList(cmds); err != nil {
+	if err := mysqld.ExecuteSuperQueryList(context.TODO(), cmds); err != nil {
 		return replication.Position{}, err
 	}
 

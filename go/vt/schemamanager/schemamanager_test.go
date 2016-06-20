@@ -9,12 +9,14 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -77,9 +79,8 @@ func TestSchemaManagerExecutorOpenFail(t *testing.T) {
 	controller := newFakeController(
 		[]string{"create table test_table (pk int);"}, false, false, false)
 	controller.SetKeyspace("unknown_keyspace")
-	executor := NewTabletExecutor(
-		newFakeTabletManagerClient(),
-		newFakeTopo())
+	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(), newFakeTabletManagerClient())
+	executor := NewTabletExecutor(wr, testWaitSlaveTimeout)
 	ctx := context.Background()
 
 	err := Run(ctx, controller, executor)
@@ -91,9 +92,8 @@ func TestSchemaManagerExecutorOpenFail(t *testing.T) {
 func TestSchemaManagerExecutorExecuteFail(t *testing.T) {
 	controller := newFakeController(
 		[]string{"create table test_table (pk int);"}, false, false, false)
-	executor := NewTabletExecutor(
-		newFakeTabletManagerClient(),
-		newFakeTopo())
+	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(), newFakeTabletManagerClient())
+	executor := NewTabletExecutor(wr, testWaitSlaveTimeout)
 	ctx := context.Background()
 
 	err := Run(ctx, controller, executor)
@@ -123,9 +123,8 @@ func TestSchemaManagerRun(t *testing.T) {
 
 	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
 
-	executor := NewTabletExecutor(
-		fakeTmc,
-		newFakeTopo())
+	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(), fakeTmc)
+	executor := NewTabletExecutor(wr, testWaitSlaveTimeout)
 
 	ctx := context.Background()
 	err := Run(ctx, controller, executor)
@@ -170,7 +169,8 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 
 	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
 	fakeTmc.EnableExecuteFetchAsDbaError = true
-	executor := NewTabletExecutor(fakeTmc, newFakeTopo())
+	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(), fakeTmc)
+	executor := NewTabletExecutor(wr, testWaitSlaveTimeout)
 
 	ctx := context.Background()
 	err := Run(ctx, controller, executor)
@@ -214,9 +214,8 @@ func TestSchemaManagerRegisterControllerFactory(t *testing.T) {
 }
 
 func newFakeExecutor() *TabletExecutor {
-	return NewTabletExecutor(
-		newFakeTabletManagerClient(),
-		newFakeTopo())
+	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(), newFakeTabletManagerClient())
+	return NewTabletExecutor(wr, testWaitSlaveTimeout)
 }
 
 func newFakeTabletManagerClient() *fakeTabletManagerClient {
@@ -282,7 +281,7 @@ func newFakeTopo() topo.Server {
 	}
 }
 
-func (topoServer *fakeTopo) GetShardNames(ctx context.Context, keyspace string) ([]string, error) {
+func (ts *fakeTopo) GetShardNames(ctx context.Context, keyspace string) ([]string, error) {
 	if keyspace != "test_keyspace" {
 		return nil, fmt.Errorf("expect to get keyspace: test_keyspace, but got: %s",
 			keyspace)
@@ -290,9 +289,9 @@ func (topoServer *fakeTopo) GetShardNames(ctx context.Context, keyspace string) 
 	return []string{"0", "1", "2"}, nil
 }
 
-func (topoServer *fakeTopo) GetShard(ctx context.Context, keyspace string, shard string) (*topodatapb.Shard, int64, error) {
+func (ts *fakeTopo) GetShard(ctx context.Context, keyspace string, shard string) (*topodatapb.Shard, int64, error) {
 	var masterAlias *topodatapb.TabletAlias
-	if !topoServer.WithEmptyMasterAlias {
+	if !ts.WithEmptyMasterAlias {
 		masterAlias = &topodatapb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  0,
@@ -304,11 +303,19 @@ func (topoServer *fakeTopo) GetShard(ctx context.Context, keyspace string, shard
 	return value, 0, nil
 }
 
-func (topoServer *fakeTopo) GetTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias) (*topodatapb.Tablet, int64, error) {
+func (ts *fakeTopo) GetTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias) (*topodatapb.Tablet, int64, error) {
 	return &topodatapb.Tablet{
 		Alias:    tabletAlias,
 		Keyspace: "test_keyspace",
 	}, 0, nil
+}
+
+func (ts *fakeTopo) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
+	return "", nil
+}
+
+func (ts *fakeTopo) UnlockKeyspaceForAction(ctx context.Context, keyspace, lockPath, results string) error {
+	return nil
 }
 
 type fakeController struct {

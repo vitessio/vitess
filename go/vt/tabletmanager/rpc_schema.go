@@ -5,6 +5,10 @@
 package tabletmanager
 
 import (
+	"fmt"
+
+	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
@@ -19,17 +23,28 @@ func (agent *ActionAgent) GetSchema(ctx context.Context, tables, excludeTables [
 }
 
 // ReloadSchema will reload the schema
-// Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) ReloadSchema(ctx context.Context) {
+// Should be called under RPCWrap.
+// This doesn't need the action mutex because periodic schema reloads happen
+// in the background anyway.
+func (agent *ActionAgent) ReloadSchema(ctx context.Context, waitPosition string) error {
 	if agent.DBConfigs.IsZero() {
 		// we skip this for test instances that can't connect to the DB anyway
-		return
+		return nil
 	}
 
-	// This adds a dependency between tabletmanager and tabletserver,
-	// so it's not ideal. But I (alainjobart) think it's better
-	// to have up to date schema in vttablet.
-	agent.QueryServiceControl.ReloadSchema()
+	if waitPosition != "" {
+		pos, err := replication.DecodePosition(waitPosition)
+		if err != nil {
+			return fmt.Errorf("ReloadSchema: can't parse wait position (%q): %v", waitPosition, err)
+		}
+		log.Infof("ReloadSchema: waiting for replication position: %v", waitPosition)
+		if err := agent.MysqlDaemon.WaitMasterPos(ctx, pos); err != nil {
+			return err
+		}
+	}
+
+	log.Infof("ReloadSchema requested via RPC")
+	return agent.QueryServiceControl.ReloadSchema(ctx)
 }
 
 // PreflightSchema will try out the schema changes in "changes".
@@ -55,6 +70,6 @@ func (agent *ActionAgent) ApplySchema(ctx context.Context, change *tmutils.Schem
 	}
 
 	// and if it worked, reload the schema
-	agent.ReloadSchema(ctx)
+	agent.ReloadSchema(ctx, "")
 	return scr, nil
 }
