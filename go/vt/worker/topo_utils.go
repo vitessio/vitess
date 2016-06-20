@@ -33,14 +33,25 @@ var (
 // minHealthyRdonlyTablets servers to be healthy.
 // May block up to -wait_for_healthy_rdonly_tablets_timeout.
 func FindHealthyRdonlyTablet(ctx context.Context, wr *wrangler.Wrangler, cell, keyspace, shard string, minHealthyRdonlyTablets int) (*topodatapb.TabletAlias, error) {
-	busywaitCtx, busywaitCancel := context.WithTimeout(ctx, *waitForHealthyTabletsTimeout)
-	defer busywaitCancel()
-
 	// Use a healthcheck instance to get the health of all RDONLY tablets.
 	healthCheck := discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
 	watcher := discovery.NewShardReplicationWatcher(wr.TopoServer(), healthCheck, cell, keyspace, shard, *healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 	defer watcher.Stop()
 	defer healthCheck.Close()
+
+	healthyTablets, err := waitForHealthyRdonlyTablets(ctx, wr, healthCheck, cell, keyspace, shard, minHealthyRdonlyTablets)
+	if err != nil {
+		return nil, err
+	}
+
+	// random server in the list is what we want
+	index := rand.Intn(len(healthyTablets))
+	return healthyTablets[index].Tablet.Alias, nil
+}
+
+func waitForHealthyRdonlyTablets(ctx context.Context, wr *wrangler.Wrangler, healthCheck discovery.HealthCheck, cell, keyspace, shard string, minHealthyRdonlyTablets int) ([]*discovery.TabletStats, error) {
+	busywaitCtx, busywaitCancel := context.WithTimeout(ctx, *waitForHealthyTabletsTimeout)
+	defer busywaitCancel()
 
 	start := time.Now()
 	deadlineForLog, _ := busywaitCtx.Deadline()
@@ -80,10 +91,7 @@ func FindHealthyRdonlyTablet(ctx context.Context, wr *wrangler.Wrangler, cell, k
 	}
 	wr.Logger().Infof("At least %v healthy RDONLY tablets are available (required: %v). Took %.1f seconds to find this out.",
 		len(healthyTablets), minHealthyRdonlyTablets, time.Now().Sub(start).Seconds())
-
-	// random server in the list is what we want
-	index := rand.Intn(len(healthyTablets))
-	return healthyTablets[index].Tablet.Alias, nil
+	return healthyTablets, nil
 }
 
 // FindWorkerTablet will:

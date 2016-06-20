@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/throttler"
@@ -66,11 +67,11 @@ type SplitCloneWorker struct {
 	// healthCheck tracks the health of all MASTER and REPLICA tablets.
 	// It must be closed at the end of the command.
 	healthCheck discovery.HealthCheck
-	// destinationShardWatchers contains a TopologyWatcher for each destination
+	// shardWatchers contains a TopologyWatcher for each source and destination
 	// shard. It updates the list of tablets in the healthcheck if replicas are
 	// added/removed.
 	// Each watcher must be stopped at the end of the command.
-	destinationShardWatchers []*discovery.TopologyWatcher
+	shardWatchers []*discovery.TopologyWatcher
 	// destinationDbNames stores for each destination keyspace/shard the MySQL
 	// database name.
 	// Example Map Entry: test_keyspace/-80 => vt_test_keyspace
@@ -226,7 +227,7 @@ func (scw *SplitCloneWorker) Run(ctx context.Context) error {
 		throttler.Close()
 	}
 	// Stop healthcheck.
-	for _, watcher := range scw.destinationShardWatchers {
+	for _, watcher := range scw.shardWatchers {
 		watcher.Stop()
 	}
 	if scw.healthCheck != nil {
@@ -252,9 +253,18 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 		return err
 	}
 
-	// Phase 2: Find destination master tablets.
+	// Phase 2a: Find destination master tablets.
 	if err := scw.findDestinationMasters(ctx); err != nil {
 		return fmt.Errorf("findDestinationMasters() failed: %v", err)
+	}
+	if err := checkDone(ctx); err != nil {
+		return err
+	}
+	// Phase 2b: Wait for minimum number of destination tablets (required for the
+	// diff). Note that while we wait for the minimum number, we'll always use
+	// *all* available RDONLY tablets from each destination shard.
+	if err := scw.waitForDestinationTablets(ctx); err != nil {
+		return fmt.Errorf("waitForDestinationTablets() failed: %v", err)
 	}
 	if err := checkDone(ctx); err != nil {
 		return err
@@ -376,6 +386,16 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 		scw.keyspaceSchema = keyspaceSchema
 	}
 
+	// Initialize healthcheck and add destination shards to it.
+	scw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
+	allShards := append(scw.sourceShards, scw.destinationShards...)
+	for _, si := range allShards {
+		watcher := discovery.NewShardReplicationWatcher(scw.wr.TopoServer(), scw.healthCheck,
+			scw.cell, si.Keyspace(), si.ShardName(),
+			*healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
+		scw.shardWatchers = append(scw.shardWatchers, watcher)
+	}
+
 	return nil
 }
 
@@ -422,19 +442,8 @@ func (scw *SplitCloneWorker) findOfflineSourceTablets(ctx context.Context) error
 }
 
 // findDestinationMasters finds for each destination shard the current master.
-// It also initializes the healthCheck instance which is used by the write
-// throttlers.
 func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 	scw.setState(WorkerStateFindTargets)
-
-	// Initialize healthcheck and add destination shards to it.
-	scw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
-	for _, si := range scw.destinationShards {
-		watcher := discovery.NewShardReplicationWatcher(scw.wr.TopoServer(), scw.healthCheck,
-			scw.cell, si.Keyspace(), si.ShardName(),
-			*healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
-		scw.destinationShardWatchers = append(scw.destinationShardWatchers, watcher)
-	}
 
 	// Make sure we find a master for each destination shard and log it.
 	scw.wr.Logger().Infof("Finding a MASTER tablet for each destination shard...")
@@ -481,6 +490,29 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// waitForDestinationTablets waits for enough serving tablets in the destination
+// shard which can be used as input during the diff.
+func (scw *SplitCloneWorker) waitForDestinationTablets(ctx context.Context) error {
+	scw.setState(WorkerStateFindTargets)
+
+	var wg sync.WaitGroup
+	rec := concurrency.AllErrorRecorder{}
+	for _, si := range scw.destinationShards {
+		wg.Add(1)
+		go func(keyspace, shard string) {
+			defer wg.Done()
+			// We wait for --min_healthy_rdonly_tablets because we will use several
+			// tablets per shard to spread reading the chunks of rows across as many
+			// tablets as possible.
+			if _, err := waitForHealthyRdonlyTablets(ctx, scw.wr, scw.healthCheck, scw.cell, keyspace, shard, scw.minHealthyRdonlyTablets); err != nil {
+				rec.RecordError(err)
+			}
+		}(si.Keyspace(), si.ShardName())
+	}
+	wg.Wait()
+	return rec.Error()
 }
 
 // Find all tablets on all destination shards. This should be done immediately before reloading
