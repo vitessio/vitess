@@ -58,6 +58,7 @@ shard_1_rdonly1 = tablet.Tablet()
 shard_2_master = tablet.Tablet()
 shard_2_replica1 = tablet.Tablet()
 shard_2_replica2 = tablet.Tablet()
+shard_2_rdonly1 = tablet.Tablet()
 # range c0 - ''
 shard_3_master = tablet.Tablet()
 shard_3_replica = tablet.Tablet()
@@ -67,6 +68,7 @@ all_tablets = [shard_0_master, shard_0_replica, shard_0_ny_rdonly,
                shard_1_master, shard_1_slave1, shard_1_slave2,
                shard_1_ny_rdonly, shard_1_rdonly1,
                shard_2_master, shard_2_replica1, shard_2_replica2,
+               shard_2_rdonly1,
                shard_3_master, shard_3_replica, shard_3_rdonly1]
 
 
@@ -138,7 +140,7 @@ class InsertThread(threading.Thread):
 
 
 # MonitorLagThread will get values from a database, and compare the timestamp
-# to evaluate lag. Since the qps is really low, and we send binlogs as chuncks,
+# to evaluate lag. Since the qps is really low, and we send binlogs as chunks,
 # the latency is pretty high (a few seconds).
 class MonitorLagThread(threading.Thread):
 
@@ -299,6 +301,8 @@ primary key (name)
                       0x9000000000000000)
     self._check_value(shard_2_replica2, 'resharding1', 2, 'msg2',
                       0x9000000000000000)
+    self._check_value(shard_2_rdonly1, 'resharding1', 2, 'msg2',
+                      0x9000000000000000)
     self._check_value(shard_3_master, 'resharding1', 2, 'msg2',
                       0x9000000000000000, should_be_here=False)
     self._check_value(shard_3_replica, 'resharding1', 2, 'msg2',
@@ -312,6 +316,8 @@ primary key (name)
     self._check_value(shard_2_replica1, 'resharding1', 3, 'msg3',
                       0xD000000000000000, should_be_here=False)
     self._check_value(shard_2_replica2, 'resharding1', 3, 'msg3',
+                      0xD000000000000000, should_be_here=False)
+    self._check_value(shard_2_rdonly1, 'resharding1', 3, 'msg3',
                       0xD000000000000000, should_be_here=False)
     self._check_value(shard_3_master, 'resharding1', 3, 'msg3',
                       0xD000000000000000)
@@ -457,6 +463,7 @@ primary key (name)
     shard_2_master.init_tablet('master', 'test_keyspace', '80-c0')
     shard_2_replica1.init_tablet('replica', 'test_keyspace', '80-c0')
     shard_2_replica2.init_tablet('replica', 'test_keyspace', '80-c0')
+    shard_2_rdonly1.init_tablet('rdonly', 'test_keyspace', '80-c0')
     shard_3_master.init_tablet('master', 'test_keyspace', 'c0-')
     shard_3_replica.init_tablet('replica', 'test_keyspace', 'c0-')
     shard_3_rdonly1.init_tablet('rdonly', 'test_keyspace', 'c0-')
@@ -465,10 +472,11 @@ primary key (name)
     # so they're all not serving)
     shard_2_master.start_vttablet(wait_for_state=None)
     shard_3_master.start_vttablet(wait_for_state=None)
-    for t in [shard_2_replica1, shard_2_replica2,
+    for t in [shard_2_replica1, shard_2_replica2, shard_2_rdonly1,
               shard_3_replica, shard_3_rdonly1]:
       t.start_vttablet(wait_for_state=None)
     for t in [shard_2_master, shard_2_replica1, shard_2_replica2,
+              shard_2_rdonly1,
               shard_3_master, shard_3_replica, shard_3_rdonly1]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
@@ -813,6 +821,7 @@ primary key (name)
     # kill everything
     tablet.kill_tablets([shard_0_master, shard_0_replica, shard_0_ny_rdonly,
                          shard_2_master, shard_2_replica1, shard_2_replica2,
+                         shard_2_rdonly1,
                          shard_3_master, shard_3_replica, shard_3_rdonly1])
 
 if __name__ == '__main__':
