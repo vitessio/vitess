@@ -50,6 +50,8 @@ type splitCloneTestCase struct {
 	tablets []*testlib.FakeTablet
 
 	// Source tablets.
+	// This test uses two source and destination rdonly tablets because
+	// --min_healthy_rdonly_tablets is set to 2 in the test.
 	sourceRdonlyQs []*testQueryService
 
 	// Destination tablets.
@@ -63,10 +65,10 @@ type splitCloneTestCase struct {
 	leftReplicaFakeDb *FakePoolConnection
 	leftReplicaQs     *fakes.StreamHealthQueryService
 
-	// leftRdonlyQs is a destination and used by the Clone to diff against the source.
-	leftRdonlyQs *testQueryService
-	// rightRdonlyQs is a destination and used by the Clone to diff against the source.
-	rightRdonlyQs *testQueryService
+	// leftRdonlyQs are used by the Clone to diff against the source.
+	leftRdonlyQs []*testQueryService
+	// rightRdonlyQs are used by the Clone to diff against the source.
+	rightRdonlyQs []*testQueryService
 
 	// defaultWorkerArgs are the full default arguments to run SplitClone.
 	defaultWorkerArgs []string
@@ -130,19 +132,24 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency int) {
 
 	leftMaster := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 10,
 		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(tc.t, "ks", "-40"))
-	leftRdonly := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 11,
-		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(tc.t, "ks", "-40"))
 	// leftReplica is used by the reparent test.
-	leftReplica := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 12,
+	leftReplica := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 11,
 		topodatapb.TabletType_REPLICA, db, testlib.TabletKeyspaceShard(tc.t, "ks", "-40"))
 	tc.leftReplica = leftReplica
+	leftRdonly1 := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 12,
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(tc.t, "ks", "-40"))
+	leftRdonly2 := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 13,
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(tc.t, "ks", "-40"))
 
 	rightMaster := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 20,
 		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(tc.t, "ks", "40-80"))
-	rightRdonly := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 21,
+	rightRdonly1 := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 22,
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(tc.t, "ks", "40-80"))
+	rightRdonly2 := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 23,
 		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(tc.t, "ks", "40-80"))
 
-	tc.tablets = []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly, tc.leftReplica, rightMaster, rightRdonly}
+	tc.tablets = []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2,
+		leftMaster, tc.leftReplica, leftRdonly1, leftRdonly2, rightMaster, rightRdonly1, rightRdonly2}
 
 	for _, ft := range tc.tablets {
 		ft.StartActionLoop(tc.t, tc.wi.wr)
@@ -191,15 +198,17 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency int) {
 		tc.sourceRdonlyQs = append(tc.sourceRdonlyQs, qs)
 	}
 	// Set up destination rdonlys which will be used as input for the diff during the clone.
-	shqs := fakes.NewStreamHealthQueryService(leftRdonly.Target())
-	shqs.AddDefaultHealthResponse()
-	tc.leftRdonlyQs = newTestQueryService(tc.t, leftRdonly.Target(), shqs, 0, 2)
-	grpcqueryservice.RegisterForTest(leftRdonly.RPCServer, tc.leftRdonlyQs)
-
-	shqs2 := fakes.NewStreamHealthQueryService(rightRdonly.Target())
-	shqs2.AddDefaultHealthResponse()
-	tc.rightRdonlyQs = newTestQueryService(tc.t, rightRdonly.Target(), shqs2, 1, 2)
-	grpcqueryservice.RegisterForTest(rightRdonly.RPCServer, tc.rightRdonlyQs)
+	for i, destRdonly := range []*testlib.FakeTablet{leftRdonly1, rightRdonly1, leftRdonly2, rightRdonly2} {
+		shqs := fakes.NewStreamHealthQueryService(destRdonly.Target())
+		shqs.AddDefaultHealthResponse()
+		qs := newTestQueryService(tc.t, destRdonly.Target(), shqs, i%2, 2)
+		grpcqueryservice.RegisterForTest(destRdonly.RPCServer, qs)
+		if i%2 == 0 {
+			tc.leftRdonlyQs = append(tc.leftRdonlyQs, qs)
+		} else {
+			tc.rightRdonlyQs = append(tc.rightRdonlyQs, qs)
+		}
+	}
 
 	tc.leftMasterFakeDb = NewFakePoolConnectionQuery(tc.t, "leftMaster")
 	tc.leftReplicaFakeDb = NewFakePoolConnectionQuery(tc.t, "leftReplica")
@@ -414,15 +423,17 @@ func TestSplitCloneV2_Reconciliation(t *testing.T) {
 		qs.addGeneratedRows(100, 200)
 	}
 
-	// Both destination shards have the rows 100-200 as well.
-	tc.leftRdonlyQs.addGeneratedRows(100, 200)
-	tc.rightRdonlyQs.addGeneratedRows(100, 200)
-	// But some data is outdated data and must be updated.
-	tc.leftRdonlyQs.modifyFirstRows(2)
-	tc.rightRdonlyQs.modifyFirstRows(2)
-	// They also have rows which are only on the destination and will get deleted.
-	tc.leftRdonlyQs.addGeneratedRows(200, 210)
-	tc.rightRdonlyQs.addGeneratedRows(200, 210)
+	for i := range []int{0, 1} {
+		// Both destination shards have the rows 100-200 as well.
+		tc.leftRdonlyQs[i].addGeneratedRows(100, 200)
+		tc.rightRdonlyQs[i].addGeneratedRows(100, 200)
+		// But some data is outdated data and must be updated.
+		tc.leftRdonlyQs[i].modifyFirstRows(2)
+		tc.rightRdonlyQs[i].modifyFirstRows(2)
+		// They also have rows which are only on the destination and will get deleted.
+		tc.leftRdonlyQs[i].addGeneratedRows(200, 210)
+		tc.rightRdonlyQs[i].addGeneratedRows(200, 210)
+	}
 
 	// The destination tablets should see inserts, updates and deletes.
 	// Clear the entries added by setUp() because the reconcilation will
