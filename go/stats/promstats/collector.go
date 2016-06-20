@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
+	log "github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/youtube/vitess/go/stats"
 )
@@ -64,7 +64,7 @@ func NewCollector(opts prometheus.Opts, v expvar.Var) prometheus.Collector {
 		// rates for us.
 		return nil
 	default:
-		glog.Warningf("Unsupported type for %s: %T", opts.Name, v)
+		log.Warningf("Unsupported type for %s: %T", opts.Name, v)
 		return nil
 	}
 }
