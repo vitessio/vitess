@@ -101,10 +101,12 @@ def tearDownModule():
 # every 1/5s will update its value with the current timestamp
 class InsertThread(threading.Thread):
 
-  def __init__(self, tablet_obj, object_name, user_id, custom_sharding_key):
+  def __init__(self, tablet_obj, thread_name, thread_id, user_id,
+               custom_sharding_key):
     threading.Thread.__init__(self)
     self.tablet = tablet_obj
-    self.object_name = object_name
+    self.thread_name = thread_name
+    self.thread_id = thread_id
     self.user_id = user_id
     self.custom_sharding_key = custom_sharding_key
     self.str_custom_sharding_key = utils.uint64_to_hex(custom_sharding_key)
@@ -113,10 +115,10 @@ class InsertThread(threading.Thread):
     self.tablet.mquery(
         'vt_test_keyspace',
         ['begin',
-         'insert into timestamps(name, time_milli, custom_sharding_key) '
-         "values('%s', %d, 0x%x) "
+         'insert into timestamps(id, time_milli, custom_sharding_key) '
+         "values(%d, %d, 0x%x) "
          '/* vtgate:: keyspace_id:%s */ /* user_id:%d */' %
-         (self.object_name, long(time.time() * 1000), self.custom_sharding_key,
+         (self.thread_id, long(time.time() * 1000), self.custom_sharding_key,
           self.str_custom_sharding_key, self.user_id),
          'commit'],
         write=True, user='vt_app')
@@ -129,8 +131,8 @@ class InsertThread(threading.Thread):
             'vt_test_keyspace',
             ['begin',
              'update timestamps set time_milli=%d '
-             'where name="%s" /* vtgate:: keyspace_id:%s */ /* user_id:%d */' %
-             (long(time.time() * 1000), self.object_name,
+             'where id=%d /* vtgate:: keyspace_id:%s */ /* user_id:%d */' %
+             (long(time.time() * 1000), self.thread_id,
               self.str_custom_sharding_key, self.user_id),
              'commit'],
             write=True, user='vt_app')
@@ -144,13 +146,13 @@ class InsertThread(threading.Thread):
 # the latency is pretty high (a few seconds).
 class MonitorLagThread(threading.Thread):
 
-  def __init__(self, tablet_obj, object_name):
+  def __init__(self, tablet_obj, thread_name, thread_id):
     threading.Thread.__init__(self)
     self.tablet = tablet_obj
-    self.object_name = object_name
+    self.thread_name = thread_name
     self.done = False
-    self.max_lag = 0
-    self.lag_sum = 0
+    self.max_lag_ms = 0
+    self.lag_sum_ms = 0
     self.sample_count = 0
     self.start()
 
@@ -159,11 +161,12 @@ class MonitorLagThread(threading.Thread):
       while not self.done:
         result = self.tablet.mquery(
             'vt_test_keyspace',
-            'select time_milli from timestamps where name="%s"' %
-            self.object_name)
+            'select time_milli from timestamps where id=%d' %
+            self.thread_id)
         if result:
           lag = long(time.time() * 1000) - long(result[0][0])
-          logging.debug('MonitorLagThread(%s) got %d', self.object_name, lag)
+          logging.debug('MonitorLagThread(%s) got %d',
+                        self.thread_name, lag)
           self.sample_count += 1
           self.lag_sum += lag
           if lag > self.max_lag:
@@ -194,10 +197,10 @@ index by_msg (msg)
         '(id, msg, custom_sharding_key) as select id, msg, custom_sharding_key '
         'from %s')
     create_timestamp_table = '''create table timestamps(
-name varchar(64),
+id int not null,
 time_milli bigint(20) unsigned not null,
 custom_sharding_key ''' + t + ''' not null,
-primary key (name)
+primary key (id)
 ) Engine=InnoDB'''
     create_unrelated_table = '''create table unrelated(
 name varchar(64),
@@ -597,12 +600,12 @@ primary key (name)
 
     # start a thread to insert data into shard_1 in the background
     # with current time, and monitor the delay
-    insert_thread_1 = InsertThread(shard_1_master, 'insert_low', 10000,
+    insert_thread_1 = InsertThread(shard_1_master, 'insert_low', 1, 10000,
                                    0x9000000000000000)
-    insert_thread_2 = InsertThread(shard_1_master, 'insert_high', 10001,
+    insert_thread_2 = InsertThread(shard_1_master, 'insert_high', 2, 10001,
                                    0xD000000000000000)
-    monitor_thread_1 = MonitorLagThread(shard_2_replica2, 'insert_low')
-    monitor_thread_2 = MonitorLagThread(shard_3_replica, 'insert_high')
+    monitor_thread_1 = MonitorLagThread(shard_2_replica2, 'insert_low', 1)
+    monitor_thread_2 = MonitorLagThread(shard_3_replica, 'insert_high', 2)
 
     # tests a failover switching serving to a different replica
     utils.run_vtctl(['ChangeSlaveType', shard_1_slave2.tablet_alias, 'replica'])
@@ -759,11 +762,11 @@ primary key (name)
     insert_thread_1.done = True
     insert_thread_2.done = True
     logging.debug('DELAY 1: %s max_lag=%d avg_lag=%d',
-                  monitor_thread_1.object_name,
+                  monitor_thread_1.thread_name,
                   monitor_thread_1.max_lag,
                   monitor_thread_1.lag_sum / monitor_thread_1.sample_count)
     logging.debug('DELAY 2: %s max_lag=%d avg_lag=%d',
-                  monitor_thread_2.object_name,
+                  monitor_thread_2.thread_name,
                   monitor_thread_2.max_lag,
                   monitor_thread_2.lag_sum / monitor_thread_2.sample_count)
 
