@@ -245,6 +245,7 @@ func (rd *RowDiffer2) repairRow(row []sqltypes.Value, typ repairType) error {
 	if abort := rd.aggregators[destShardIndex][typ].Add(row); abort {
 		return fmt.Errorf("failed to repair row for destination shard: %v because the context was canceled", rd.aggregators[destShardIndex][typ].KeyspaceAndShard())
 	}
+	// TODO(mberlin): Add more fine granular stats here.
 	rd.tableStatusList.addCopiedRows(rd.tableIndex, 1)
 	return nil
 }
