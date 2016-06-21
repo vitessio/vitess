@@ -326,6 +326,15 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 
 	// Phase 4: offline clone.
 	if scw.offline {
+		if scw.online {
+			// Wait until the inserts from the online clone were propagated
+			// from the destination master to the rdonly tablets.
+			// TODO(mberlin): Remove the sleep and get the destination master position
+			// instead and wait until all selected destination tablets have reached
+			// it.
+			time.Sleep(1 * time.Second)
+		}
+
 		// 4a: Take source tablets out of serving for an exact snapshot.
 		if err := scw.findOfflineSourceTablets(ctx); err != nil {
 			return fmt.Errorf("findSourceTablets() failed: %v", err)
