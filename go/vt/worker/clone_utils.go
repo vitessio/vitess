@@ -72,7 +72,7 @@ func runSQLCommands(ctx context.Context, wr *wrangler.Wrangler, healthCheck disc
 			return fmt.Errorf("fillStringTemplate failed: %v", err)
 		}
 
-		executor := newExecutor(wr, healthCheck, nil, keyspace, shard, 0 /* threadID */)
+		executor := newExecutor(wr, healthCheck, nil /* throttler */, keyspace, shard, 0 /* threadID */)
 		if err := executor.fetchWithRetries(ctx, command); err != nil {
 			return err
 		}

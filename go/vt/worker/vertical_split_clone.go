@@ -68,9 +68,6 @@ type VerticalSplitCloneWorker struct {
 	// database name.
 	// Example Map Entry: test_keyspace/-80 => vt_test_keyspace
 	destinationDbNames map[string]string
-	// destionThrottlers stores for each destination keyspace/shard the
-	// Throttler instance which will limit the write throughput.
-	destinationThrottlers map[string]*throttler.Throttler
 
 	// populated during WorkerStateClone
 	// tableStatusList holds the status for each table.
@@ -114,8 +111,7 @@ func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspac
 		maxTPS:                  maxTPS,
 		cleaner:                 &wrangler.Cleaner{},
 
-		destinationDbNames:    make(map[string]string),
-		destinationThrottlers: make(map[string]*throttler.Throttler),
+		destinationDbNames: make(map[string]string),
 
 		ev: &events.VerticalSplitClone{
 			Cell:     cell,
@@ -199,10 +195,6 @@ func (vscw *VerticalSplitCloneWorker) Run(ctx context.Context) error {
 		}
 	}
 
-	// Stop Throttlers.
-	for _, throttler := range vscw.destinationThrottlers {
-		throttler.Close()
-	}
 	// Stop healthcheck.
 	for _, watcher := range vscw.destinationShardWatchers {
 		watcher.Stop()
@@ -365,13 +357,6 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	vscw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Tablet.Alias), vscw.destinationKeyspace, vscw.destinationShard)
 	vscw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The HealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
 
-	// Set up the throttler for the destination shard.
-	t, err := throttler.NewThrottler(
-		keyspaceAndShard, "transactions", vscw.destinationWriterCount, vscw.maxTPS, throttler.ReplicationLagModuleDisabled)
-	if err != nil {
-		return fmt.Errorf("cannot instantiate throttler: %v", err)
-	}
-	vscw.destinationThrottlers[keyspaceAndShard] = t
 	return nil
 }
 
@@ -437,17 +422,20 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 	// always have data. We then have
 	// destinationWriterCount go routines reading from it.
 	insertChannel := make(chan string, vscw.destinationWriterCount*2)
-
+	// Set up the throttler for the destination shard.
+	keyspaceAndShard := topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)
+	destinationThrottler, err := throttler.NewThrottler(
+		keyspaceAndShard, "transactions", vscw.destinationWriterCount, vscw.maxTPS, throttler.ReplicationLagModuleDisabled)
+	if err != nil {
+		return fmt.Errorf("cannot instantiate throttler: %v", err)
+	}
 	for j := 0; j < vscw.destinationWriterCount; j++ {
 		destinationWaitGroup.Add(1)
 		go func(threadID int) {
 			defer destinationWaitGroup.Done()
+			defer destinationThrottler.ThreadFinished(threadID)
 
-			keyspaceAndShard := topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)
-			throttler := vscw.destinationThrottlers[keyspaceAndShard]
-			defer throttler.ThreadFinished(threadID)
-
-			executor := newExecutor(vscw.wr, vscw.healthCheck, throttler, vscw.destinationKeyspace, vscw.destinationShard, threadID)
+			executor := newExecutor(vscw.wr, vscw.healthCheck, destinationThrottler, vscw.destinationKeyspace, vscw.destinationShard, threadID)
 			if err := executor.fetchLoop(ctx, insertChannel); err != nil {
 				processError("executer.FetchLoop failed: %v", err)
 			}
@@ -500,6 +488,8 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 
 	close(insertChannel)
 	destinationWaitGroup.Wait()
+	// Stop Throttler.
+	destinationThrottler.Close()
 	if firstError != nil {
 		return firstError
 	}

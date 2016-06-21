@@ -76,9 +76,6 @@ type SplitCloneWorker struct {
 	// database name.
 	// Example Map Entry: test_keyspace/-80 => vt_test_keyspace
 	destinationDbNames map[string]string
-	// destionThrottlers stores for each destination keyspace/shard the
-	// Throttler instance which will limit the write throughput.
-	destinationThrottlers map[string]*throttler.Throttler
 
 	// tableStatusList* holds the status for each table.
 	// populated during WorkerStateCloneOnline
@@ -128,8 +125,7 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, on
 		cleaner:                 &wrangler.Cleaner{},
 		tabletTracker:           NewTabletTracker(),
 
-		destinationDbNames:    make(map[string]string),
-		destinationThrottlers: make(map[string]*throttler.Throttler),
+		destinationDbNames: make(map[string]string),
 
 		tableStatusListOnline:  &tableStatusList{},
 		tableStatusListOffline: &tableStatusList{},
@@ -268,10 +264,6 @@ func (scw *SplitCloneWorker) Run(ctx context.Context) error {
 		}
 	}
 
-	// Stop Throttlers.
-	for _, throttler := range scw.destinationThrottlers {
-		throttler.Close()
-	}
 	// Stop healthcheck.
 	for _, watcher := range scw.shardWatchers {
 		watcher.Stop()
@@ -524,17 +516,6 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 	}
 	scw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The HealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
 
-	// Set up the throttler for each destination shard.
-	for _, si := range scw.destinationShards {
-		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
-		t, err := throttler.NewThrottler(
-			keyspaceAndShard, "transactions", scw.destinationWriterCount, scw.maxTPS, throttler.ReplicationLagModuleDisabled)
-		if err != nil {
-			return fmt.Errorf("cannot instantiate throttler: %v", err)
-		}
-		scw.destinationThrottlers[keyspaceAndShard] = t
-	}
-
 	return nil
 }
 
@@ -634,6 +615,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	}
 
 	insertChannels := make([]chan string, len(scw.destinationShards))
+	destinationThrottlers := make([]*throttler.Throttler, len(scw.destinationShards))
 	destinationWaitGroup := sync.WaitGroup{}
 	for shardIndex, si := range scw.destinationShards {
 		// we create one channel per destination tablet.  It
@@ -643,21 +625,27 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 		// destinationWriterCount go routines reading from it.
 		insertChannels[shardIndex] = make(chan string, scw.destinationWriterCount*2)
 
+		// Set up the throttler for each destination shard.
+		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
+		t, err := throttler.NewThrottler(
+			keyspaceAndShard, "transactions", scw.destinationWriterCount, scw.maxTPS, throttler.ReplicationLagModuleDisabled)
+		if err != nil {
+			return fmt.Errorf("cannot instantiate throttler: %v", err)
+		}
+		destinationThrottlers[shardIndex] = t
+
 		go func(keyspace, shard string, insertChannel chan string) {
 			for j := 0; j < scw.destinationWriterCount; j++ {
 				destinationWaitGroup.Add(1)
-				go func(threadID int) {
+				go func(throttler *throttler.Throttler, threadID int) {
 					defer destinationWaitGroup.Done()
-
-					keyspaceAndShard := topoproto.KeyspaceShardString(keyspace, shard)
-					throttler := scw.destinationThrottlers[keyspaceAndShard]
 					defer throttler.ThreadFinished(threadID)
 
 					executor := newExecutor(scw.wr, scw.healthCheck, throttler, keyspace, shard, threadID)
 					if err := executor.fetchLoop(ctx, insertChannel); err != nil {
 						processError("executer.FetchLoop failed: %v", err)
 					}
-				}(j)
+				}(t, j)
 			}
 		}(si.Keyspace(), si.ShardName(), insertChannels[shardIndex])
 	}
@@ -791,6 +779,10 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 		close(insertChannels[shardIndex])
 	}
 	destinationWaitGroup.Wait()
+	// Stop Throttlers.
+	for _, throttler := range destinationThrottlers {
+		throttler.Close()
+	}
 	if firstError != nil {
 		return firstError
 	}
