@@ -26,7 +26,9 @@ var _ = math.Inf
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the proto package it is being compiled against.
-const _ = proto.ProtoPackageIsVersion1
+// A compilation error at this line likely means your copy of the
+// proto package needs to be updated.
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 // ExecuteVtworkerCommandRequest is the payload for ExecuteVtworkerCommand.
 type ExecuteVtworkerCommandRequest struct {
@@ -59,6 +61,8 @@ func init() {
 	proto.RegisterType((*ExecuteVtworkerCommandRequest)(nil), "vtworkerdata.ExecuteVtworkerCommandRequest")
 	proto.RegisterType((*ExecuteVtworkerCommandResponse)(nil), "vtworkerdata.ExecuteVtworkerCommandResponse")
 }
+
+func init() { proto.RegisterFile("vtworkerdata.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
 	// 146 bytes of a gzipped FileDescriptorProto
