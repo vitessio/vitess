@@ -301,25 +301,28 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 	// Phase 2b: Wait for minimum number of destination tablets (required for the
 	// diff). Note that while we wait for the minimum number, we'll always use
 	// *all* available RDONLY tablets from each destination shard.
-	if err := scw.waitForDestinationTablets(ctx); err != nil {
-		return fmt.Errorf("waitForDestinationTablets() failed: %v", err)
+	if err := scw.waitForTablets(ctx, scw.destinationShards); err != nil {
+		return fmt.Errorf("waitForDestinationTablets(destinationShards) failed: %v", err)
 	}
 	if err := checkDone(ctx); err != nil {
 		return err
 	}
 
-	// TODO(mberlin): Uncomment once online clone is implemented.
-	//	// Phase 3: (optional) online clone.
-	//	if scw.online {
-	//    // 3a: TODO(mberlin): Select source tablets.
-	//		// 3b: Clone the data.
-	//		if err := scw.clone(ctx, online); err != nil {
-	//			return fmt.Errorf("online clone() failed: %v", err)
-	//		}
-	//		if err := checkDone(ctx); err != nil {
-	//			return err
-	//		}
-	//	}
+	// Phase 3: (optional) online clone.
+	if scw.online {
+		// 3a: Wait for minimum number of source tablets (required for the diff).
+		if err := scw.waitForTablets(ctx, scw.sourceShards); err != nil {
+			return fmt.Errorf("waitForDestinationTablets(sourceShards) failed: %v", err)
+		}
+		// 3b: Clone the data.
+		if err := scw.clone(ctx, WorkerStateCloneOnline); err != nil {
+			return fmt.Errorf("online clone() failed: %v", err)
+		}
+		if err := checkDone(ctx); err != nil {
+			return err
+		}
+		// TODO(mberlin): Output diff report of the online clone.
+	}
 
 	// Phase 4: offline clone.
 	if scw.offline {
@@ -338,6 +341,7 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 		if err := checkDone(ctx); err != nil {
 			return err
 		}
+		// TODO(mberlin): Output diff report of the offline clone.
 	}
 
 	return nil
@@ -513,14 +517,14 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 	return nil
 }
 
-// waitForDestinationTablets waits for enough serving tablets in the destination
+// waitForTablets waits for enough serving tablets in the destination
 // shard which can be used as input during the diff.
-func (scw *SplitCloneWorker) waitForDestinationTablets(ctx context.Context) error {
+func (scw *SplitCloneWorker) waitForTablets(ctx context.Context, shardInfos []*topo.ShardInfo) error {
 	scw.setState(WorkerStateFindTargets)
 
 	var wg sync.WaitGroup
 	rec := concurrency.AllErrorRecorder{}
-	for _, si := range scw.destinationShards {
+	for _, si := range shardInfos {
 		wg.Add(1)
 		go func(keyspace, shard string) {
 			defer wg.Done()
@@ -567,6 +571,21 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 		statsStateDurationsNs.Set(string(state), time.Now().Sub(start).Nanoseconds())
 	}()
 
+	var firstSourceTablet *topodatapb.Tablet
+	if state == WorkerStateCloneOffline {
+		// Use the first source tablet which we took offline.
+		firstSourceTablet = scw.sourceTablets[0]
+	} else {
+		// Pick any healthy serving source tablet.
+		si := scw.sourceShards[0]
+		tablets := discovery.RemoveUnhealthyTablets(
+			scw.healthCheck.GetTabletStatsFromTarget(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY))
+		if len(tablets) == 0 {
+			// TODO(mberlin): Retry here? For how long? 2 hours similar as fetchWithRetries does?
+			return fmt.Errorf("no healthy RDONLY tablets in source shard (%v) available", topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName()))
+		}
+		firstSourceTablet = tablets[0].Tablet
+	}
 	var tableStatusList *tableStatusList
 	if state == WorkerStateCloneOffline {
 		tableStatusList = scw.tableStatusListOffline
@@ -574,19 +593,9 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 		tableStatusList = scw.tableStatusListOnline
 	}
 
-	// get source schema from the first shard
-	// TODO(alainjobart): for now, we assume the schema is compatible
-	// on all source shards. Furthermore, we estimate the number of rows
-	// in each source shard for each table to be about the same
-	// (rowCount is used to estimate an ETA)
-	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, scw.sourceAliases[0], nil, scw.excludeTables, true)
-	cancel()
+	sourceSchemaDefinition, err := scw.getSourceSchema(ctx, firstSourceTablet)
 	if err != nil {
-		return fmt.Errorf("cannot get schema from source %v: %v", topoproto.TabletAliasString(scw.sourceAliases[0]), err)
-	}
-	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
-		return fmt.Errorf("no tables matching the table filter in tablet %v", topoproto.TabletAliasString(scw.sourceAliases[0]))
+		return err
 	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
 	tableStatusList.initialize(sourceSchemaDefinition)
@@ -666,8 +675,9 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 			}
 		}
 
-		// TODO(mberlin): Re-think how MIN, MAX of the primary key should be determined when we no longer loop over the source shards.
-		chunks, err := FindChunks(ctx, scw.wr, scw.sourceTablets[0], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
+		// TODO(mberlin): We're going to chunk *all* source shards based on the MIN
+		// and MAX values of the *first* source shard. Is this going to be a problem?
+		chunks, err := FindChunks(ctx, scw.wr, firstSourceTablet, td, scw.minTableSizeForSplit, scw.sourceReaderCount)
 		if err != nil {
 			return err
 		}
@@ -690,9 +700,26 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				// source and destination shard.
 				sourceReaders := make([]ResultReader, len(scw.sourceShards))
 				destReaders := make([]ResultReader, len(scw.destinationShards))
-				for shardIndex := range scw.sourceShards {
-					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, scw.sourceAliases[shardIndex].String())
-					sourceResultReader, err := NewQueryResultReaderForTablet(ctx, scw.wr.TopoServer(), scw.sourceAliases[shardIndex], selectSQL)
+				for shardIndex, si := range scw.sourceShards {
+					var sourceAlias *topodatapb.TabletAlias
+					if state == WorkerStateCloneOffline {
+						// Use the source tablet which we took offline for this phase.
+						sourceAlias = scw.sourceAliases[shardIndex]
+					} else {
+						// Pick any healthy serving source tablet.
+						tablets := discovery.RemoveUnhealthyTablets(
+							scw.healthCheck.GetTabletStatsFromTarget(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY))
+						if len(tablets) == 0 {
+							// TODO(mberlin): Retry here? For how long? 2 hours similar as fetchWithRetries does?
+							processError("no healthy RDONLY tablets in source shard (%v) available", topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName()))
+							return
+						}
+						sourceAlias = scw.tabletTracker.Track(tablets)
+						defer scw.tabletTracker.Untrack(sourceAlias)
+					}
+
+					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, sourceAlias.String())
+					sourceResultReader, err := NewQueryResultReaderForTablet(ctx, scw.wr.TopoServer(), sourceAlias, selectSQL)
 					if err != nil {
 						processError("NewQueryResultReaderForTablet for source tablets failed: %v", err)
 						return
@@ -701,7 +728,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					sourceReaders[shardIndex] = sourceResultReader
 				}
 				for shardIndex, si := range scw.destinationShards {
-					// Pick a destination tablet.
+					// Pick any healthy serving destination tablet.
 					tablets := discovery.RemoveUnhealthyTablets(
 						scw.healthCheck.GetTabletStatsFromTarget(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY))
 					if len(tablets) == 0 {
@@ -870,4 +897,22 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 
 	destinationWaitGroup.Wait()
 	return firstError
+}
+
+func (scw *SplitCloneWorker) getSourceSchema(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	// get source schema from the first shard
+	// TODO(alainjobart): for now, we assume the schema is compatible
+	// on all source shards. Furthermore, we estimate the number of rows
+	// in each source shard for each table to be about the same
+	// (rowCount is used to estimate an ETA)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, tablet.Alias, nil, scw.excludeTables, true)
+	cancel()
+	if err != nil {
+		return nil, fmt.Errorf("cannot get schema from source %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
+	}
+	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
+		return nil, fmt.Errorf("no tables matching the table filter in tablet %v", topoproto.TabletAliasString(tablet.Alias))
+	}
+	return sourceSchemaDefinition, nil
 }
