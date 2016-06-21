@@ -29,7 +29,9 @@ var _ = math.Inf
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the proto package it is being compiled against.
-const _ = proto.ProtoPackageIsVersion1
+// A compilation error at this line likely means your copy of the
+// proto package needs to be updated.
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 // Keyspace is the vschema for a keyspace.
 type Keyspace struct {
@@ -168,6 +170,8 @@ func init() {
 	proto.RegisterType((*AutoIncrement)(nil), "vschema.AutoIncrement")
 	proto.RegisterType((*SrvVSchema)(nil), "vschema.SrvVSchema")
 }
+
+func init() { proto.RegisterFile("vschema.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
 	// 433 bytes of a gzipped FileDescriptorProto
