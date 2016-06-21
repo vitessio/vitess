@@ -35,12 +35,8 @@ type RowAggregator struct {
 	insertChannel    chan string
 	abort            <-chan struct{}
 	td               *tabletmanagerdatapb.TableDefinition
-	// nonPrimaryKeyColumns is td.Columns filtered by td.PrimaryKeyColumns.
-	// The order of td.Columns is preserved.
-	nonPrimaryKeyColumns []string
-	repairType           repairType
-	baseCmdHead          string
-	baseCmdTail          string
+	repairType       repairType
+	builder          QueryBuilder
 
 	buffer       bytes.Buffer
 	bufferedRows int
@@ -49,44 +45,32 @@ type RowAggregator struct {
 // NewRowAggregator returns a RowAggregator.
 func NewRowAggregator(maxRows, maxSize int, keyspaceAndShard string, insertChannel chan string, abort <-chan struct{}, dbName string, td *tabletmanagerdatapb.TableDefinition, repairType repairType) *RowAggregator {
 	// Construct head and tail base commands for the repair statement.
-	var baseCmdHead, baseCmdTail string
+	var builder QueryBuilder
 	switch repairType {
 	case insert:
 		// Example: INSERT INTO test (id, sub_id, msg) VALUES (0, 10, 'a'), (1, 11, 'b')
-		baseCmdHead = "INSERT INTO `" + dbName + "`." + td.Name + " (" + strings.Join(td.Columns, ", ") + ") VALUES "
+		builder = NewInsertsQueryBuilder(dbName, td)
 	case update:
 		// Example: UPDATE test SET msg='a' WHERE id=0 AND sub_id=10
-		baseCmdHead = "UPDATE `" + dbName + "`." + td.Name + " SET "
+		builder = NewUpdatesQueryBuilder(dbName, td)
 		// UPDATE ... SET does not support multiple rows as input.
 		maxRows = 1
-		// Note: We cannot use INSERT INTO ... ON DUPLICATE KEY UPDATE here because
-		// it's not recommended for tables with more than one unique (i.e. the
-		// primary key) index. That's because the update function would also be
-		// triggered if a unique, non-primary key index matches the row. In that
-		// case, we would update the wrong row (it gets selected by the unique key
-		// and not the primary key).
 	case delet:
 		// Example: DELETE FROM test WHERE (id, sub_id) IN ((0, 10), (1, 11))
-		baseCmdHead = "DELETE FROM `" + dbName + "`." + td.Name + " WHERE (" + strings.Join(td.PrimaryKeyColumns, ", ") + ") IN ("
-		baseCmdTail = ")"
+		builder = NewDeletesQueryBuilder(dbName, td)
 	default:
 		panic(fmt.Sprintf("unknown repairType: %v", repairType))
 	}
 
-	// Build list of non-primary key columns (required for update statements).
-	nonPrimaryKeyColumns := orderedColumnsWithoutPrimaryKeyColumns(td)
-
 	return &RowAggregator{
-		maxRows:              maxRows,
-		maxSize:              maxSize,
-		keyspaceAndShard:     keyspaceAndShard,
-		insertChannel:        insertChannel,
-		abort:                abort,
-		td:                   td,
-		nonPrimaryKeyColumns: nonPrimaryKeyColumns,
-		repairType:           repairType,
-		baseCmdHead:          baseCmdHead,
-		baseCmdTail:          baseCmdTail,
+		maxRows:          maxRows,
+		maxSize:          maxSize,
+		keyspaceAndShard: keyspaceAndShard,
+		insertChannel:    insertChannel,
+		abort:            abort,
+		td:               td,
+		repairType:       repairType,
+		builder:          builder,
 	}
 }
 
@@ -95,59 +79,13 @@ func NewRowAggregator(maxRows, maxSize int, keyspaceAndShard string, insertChann
 // RowAggregator will be in an undefined state and must not be used any longer.
 func (ra *RowAggregator) Add(row []sqltypes.Value) bool {
 	if ra.buffer.Len() == 0 {
-		ra.buffer.WriteString(ra.baseCmdHead)
+		ra.builder.WriteHead(&ra.buffer)
 	}
 
-	switch ra.repairType {
-	case insert:
-		// Example: (0, 10, 'a'), (1, 11, 'b')
-		if ra.bufferedRows >= 1 {
-			// Second row or higher. Separate it by a comma.
-			ra.buffer.WriteByte(',')
-		}
-		ra.buffer.WriteByte('(')
-		for i, value := range row {
-			if i > 0 {
-				ra.buffer.WriteByte(',')
-			}
-			value.EncodeSQL(&ra.buffer)
-		}
-		ra.buffer.WriteByte(')')
-	case update:
-		// Example: msg='a' WHERE id=0 AND sub_id=10
-		nonPrimaryOffset := len(ra.td.PrimaryKeyColumns)
-		for i, column := range ra.nonPrimaryKeyColumns {
-			if i > 0 {
-				ra.buffer.WriteByte(',')
-			}
-			ra.buffer.WriteString(column)
-			ra.buffer.WriteByte('=')
-			row[nonPrimaryOffset+i].EncodeSQL(&ra.buffer)
-		}
-		ra.buffer.WriteString(" WHERE ")
-		for i, pkColumn := range ra.td.PrimaryKeyColumns {
-			if i > 0 {
-				ra.buffer.WriteString(" AND ")
-			}
-			ra.buffer.WriteString(pkColumn)
-			ra.buffer.WriteByte('=')
-			row[i].EncodeSQL(&ra.buffer)
-		}
-	case delet:
-		// Example: (0, 10), (1, 11)
-		if ra.bufferedRows >= 1 {
-			// Second row or higher. Separate it by a comma.
-			ra.buffer.WriteByte(',')
-		}
-		ra.buffer.WriteByte('(')
-		for i := 0; i < len(ra.td.PrimaryKeyColumns); i++ {
-			if i > 0 {
-				ra.buffer.WriteByte(',')
-			}
-			row[i].EncodeSQL(&ra.buffer)
-		}
-		ra.buffer.WriteByte(')')
+	if ra.bufferedRows >= 1 {
+		ra.builder.WriteSeparator(&ra.buffer)
 	}
+	ra.builder.WriteRow(&ra.buffer, row)
 	ra.bufferedRows++
 
 	if ra.bufferedRows >= ra.maxRows || ra.buffer.Len() >= ra.maxSize {
@@ -178,7 +116,7 @@ func (ra *RowAggregator) flush() bool {
 		return false
 	}
 
-	ra.buffer.WriteString(ra.baseCmdTail)
+	ra.builder.WriteTail(&ra.buffer)
 	// select blocks until sending the SQL succeeded or the context was canceled.
 	select {
 	case ra.insertChannel <- ra.buffer.String():
@@ -188,4 +126,160 @@ func (ra *RowAggregator) flush() bool {
 	ra.buffer.Reset()
 	ra.bufferedRows = 0
 	return false
+}
+
+// QueryBuilder defines for a given reconciliation type how we have to
+// build the SQL query for one or more rows.
+type QueryBuilder interface {
+	// WriteHead writes the beginning of the query into the buffer.
+	WriteHead(*bytes.Buffer)
+	// WriteTail writes any required tailing string into the buffer.
+	WriteTail(*bytes.Buffer)
+	// Write the separator between two rows.
+	WriteSeparator(*bytes.Buffer)
+	// Write the row itself.
+	WriteRow(*bytes.Buffer, []sqltypes.Value)
+}
+
+// BaseQueryBuilder partially implements the QueryBuilder interface.
+// It can be used by other QueryBuilder implementations to avoid repeating
+// code.
+type BaseQueryBuilder struct {
+	head      string
+	tail      string
+	separator byte
+}
+
+// WriteHead implements the QueryBuilder interface.
+func (b *BaseQueryBuilder) WriteHead(buffer *bytes.Buffer) {
+	buffer.WriteString(b.head)
+}
+
+// WriteTail implements the QueryBuilder interface.
+func (b *BaseQueryBuilder) WriteTail(buffer *bytes.Buffer) {
+	buffer.WriteString(b.tail)
+}
+
+// WriteSeparator implements the QueryBuilder interface.
+func (b *BaseQueryBuilder) WriteSeparator(buffer *bytes.Buffer) {
+	buffer.WriteByte(b.separator)
+}
+
+// InsertsQueryBuilder implements the QueryBuilder interface for INSERT queries.
+type InsertsQueryBuilder struct {
+	BaseQueryBuilder
+}
+
+// NewInsertsQueryBuilder creates a new InsertsQueryBuilder.
+func NewInsertsQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefinition) *InsertsQueryBuilder {
+	// Example: INSERT INTO test (id, sub_id, msg) VALUES (0, 10, 'a'), (1, 11, 'b')
+	return &InsertsQueryBuilder{
+		BaseQueryBuilder{
+			head:      "INSERT INTO `" + dbName + "`." + td.Name + " (" + strings.Join(td.Columns, ", ") + ") VALUES ",
+			separator: ',',
+		},
+	}
+}
+
+// WriteRow implements the QueryBuilder interface.
+func (*InsertsQueryBuilder) WriteRow(buffer *bytes.Buffer, row []sqltypes.Value) {
+	// Example: (0, 10, 'a'), (1, 11, 'b')
+	buffer.WriteByte('(')
+	for i, value := range row {
+		if i > 0 {
+			buffer.WriteByte(',')
+		}
+		value.EncodeSQL(buffer)
+	}
+	buffer.WriteByte(')')
+}
+
+// UpdatesQueryBuilder implements the QueryBuilder interface for UPDATE queries.
+type UpdatesQueryBuilder struct {
+	BaseQueryBuilder
+	td *tabletmanagerdatapb.TableDefinition
+	// nonPrimaryKeyColumns is td.Columns filtered by td.PrimaryKeyColumns.
+	// The order of td.Columns is preserved.
+	nonPrimaryKeyColumns []string
+}
+
+// NewUpdatesQueryBuilder creates a new UpdatesQueryBuilder.
+func NewUpdatesQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefinition) *UpdatesQueryBuilder {
+	// Example: UPDATE test SET msg='a' WHERE id=0 AND sub_id=10
+	//
+	// Note: We cannot use INSERT INTO ... ON DUPLICATE KEY UPDATE here because
+	// it's not recommended for tables with more than one unique (i.e. the
+	// primary key) index. That's because the update function would also be
+	// triggered if a unique, non-primary key index matches the row. In that
+	// case, we would update the wrong row (it gets selected by the unique key
+	// and not the primary key).
+	return &UpdatesQueryBuilder{
+		BaseQueryBuilder: BaseQueryBuilder{
+			head: "UPDATE `" + dbName + "`." + td.Name + " SET ",
+		},
+		td: td,
+		// Build list of non-primary key columns (required for update statements).
+		nonPrimaryKeyColumns: orderedColumnsWithoutPrimaryKeyColumns(td),
+	}
+}
+
+// WriteSeparator implements the QueryBuilder interface and overrides
+// the BaseQueryBuilder implementation.
+func (b *UpdatesQueryBuilder) WriteSeparator(buffer *bytes.Buffer) {
+	panic("UpdatesQueryBuilder does not support aggregating multiple rows in one query")
+}
+
+// WriteRow implements the QueryBuilder interface.
+func (b *UpdatesQueryBuilder) WriteRow(buffer *bytes.Buffer, row []sqltypes.Value) {
+	// Example: msg='a' WHERE id=0 AND sub_id=10
+	nonPrimaryOffset := len(b.td.PrimaryKeyColumns)
+	for i, column := range b.nonPrimaryKeyColumns {
+		if i > 0 {
+			buffer.WriteByte(',')
+		}
+		buffer.WriteString(column)
+		buffer.WriteByte('=')
+		row[nonPrimaryOffset+i].EncodeSQL(buffer)
+	}
+	buffer.WriteString(" WHERE ")
+	for i, pkColumn := range b.td.PrimaryKeyColumns {
+		if i > 0 {
+			buffer.WriteString(" AND ")
+		}
+		buffer.WriteString(pkColumn)
+		buffer.WriteByte('=')
+		row[i].EncodeSQL(buffer)
+	}
+}
+
+// DeletesQueryBuilder implements the QueryBuilder interface for DELETE queries.
+type DeletesQueryBuilder struct {
+	BaseQueryBuilder
+	td *tabletmanagerdatapb.TableDefinition
+}
+
+// NewDeletesQueryBuilder creates a new DeletesQueryBuilder.
+func NewDeletesQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefinition) *DeletesQueryBuilder {
+	// Example: DELETE FROM test WHERE (id, sub_id) IN ((0, 10), (1, 11))
+	return &DeletesQueryBuilder{
+		BaseQueryBuilder: BaseQueryBuilder{
+			head:      "DELETE FROM `" + dbName + "`." + td.Name + " WHERE (" + strings.Join(td.PrimaryKeyColumns, ", ") + ") IN (",
+			tail:      ")",
+			separator: ',',
+		},
+		td: td,
+	}
+}
+
+// WriteRow implements the QueryBuilder interface.
+func (b *DeletesQueryBuilder) WriteRow(buffer *bytes.Buffer, row []sqltypes.Value) {
+	// Example: (0, 10), (1, 11)
+	buffer.WriteByte('(')
+	for i := 0; i < len(b.td.PrimaryKeyColumns); i++ {
+		if i > 0 {
+			buffer.WriteByte(',')
+		}
+		row[i].EncodeSQL(buffer)
+	}
+	buffer.WriteByte(')')
 }
