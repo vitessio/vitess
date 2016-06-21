@@ -101,7 +101,6 @@ def setUpModule():
     logging.debug('Running the clone worker to start binlog stream...')
     utils.run_vtworker(['--cell', 'test_nj',
                         'SplitClone',
-                        '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
                         '--min_healthy_rdonly_tablets', '1',
                         'test_keyspace/0'],

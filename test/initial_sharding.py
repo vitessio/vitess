@@ -442,7 +442,6 @@ index by_msg (msg)
                         '--command_display_interval', '10ms',
                         'SplitClone',
                         '--exclude_tables', 'unrelated',
-                        '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
                         '--min_healthy_rdonly_tablets', '1',
                         'test_keyspace/0'],

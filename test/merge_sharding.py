@@ -334,7 +334,6 @@ index by_msg (msg)
     utils.run_vtworker(['--cell', 'test_nj',
                         '--command_display_interval', '10ms',
                         'SplitClone',
-                        '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
                         '--min_healthy_rdonly_tablets', '1',
                         'test_keyspace/-80'],
