@@ -80,10 +80,11 @@ type SplitCloneWorker struct {
 	// Throttler instance which will limit the write throughput.
 	destinationThrottlers map[string]*throttler.Throttler
 
+	// tableStatusList* holds the status for each table.
+	// populated during WorkerStateCloneOnline
+	tableStatusListOnline *tableStatusList
 	// populated during WorkerStateCloneOffline
-	// tableStatusList holds the status for each table.
-	// TODO(mberlin): Have one per phase or reset it after the online phase.
-	tableStatusList *tableStatusList
+	tableStatusListOffline *tableStatusList
 	// aliases of tablets that need to have their schema reloaded.
 	// Only populated once, read-only after that.
 	reloadAliases [][]*topodatapb.TabletAlias
@@ -130,7 +131,8 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, on
 		destinationDbNames:    make(map[string]string),
 		destinationThrottlers: make(map[string]*throttler.Throttler),
 
-		tableStatusList: &tableStatusList{},
+		tableStatusListOnline:  &tableStatusList{},
+		tableStatusListOffline: &tableStatusList{},
 
 		ev: &events.SplitClone{
 			Cell:          cell,
@@ -167,16 +169,38 @@ func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
 	result := "<b>Working on:</b> " + scw.keyspace + "/" + scw.shard + "</br>\n"
 	result += "<b>State:</b> " + state.String() + "</br>\n"
 	switch state {
-	case WorkerStateCloneOnline, WorkerStateCloneOffline:
-		result += "<b>Running</b>:</br>\n"
-		result += "<b>Copying from</b>: " + scw.formatSources() + "</br>\n"
-		statuses, eta := scw.tableStatusList.format()
+	case WorkerStateCloneOnline:
+		result += "<b>Running:</b></br>\n"
+		result += "<b>Copying from:</b> " + scw.formatSources() + "</br>\n"
+		statuses, eta := scw.tableStatusListOnline.format()
+		result += "<b>ETA:</b> " + eta.String() + "</br>\n"
+		result += strings.Join(statuses, "</br>\n")
+	case WorkerStateCloneOffline:
+		result += "<b>Running:</b></br>\n"
+		result += "<b>Copying from:</b> " + scw.formatSources() + "</br>\n"
+		statuses, eta := scw.tableStatusListOffline.format()
 		result += "<b>ETA</b>: " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
+		if scw.online {
+			result += "</br>\n"
+			result += "<b>Result from preceding Online Clone:</b></br>\n"
+			statuses, _ := scw.tableStatusListOnline.format()
+			result += strings.Join(statuses, "</br>\n")
+		}
 	case WorkerStateDone:
 		result += "<b>Success</b>:</br>\n"
-		statuses, _ := scw.tableStatusList.format()
-		result += strings.Join(statuses, "</br>\n")
+		if scw.online {
+			result += "</br>\n"
+			result += "<b>Online Clone Result:</b></br>\n"
+			statuses, _ := scw.tableStatusListOnline.format()
+			result += strings.Join(statuses, "</br>\n")
+		}
+		if scw.offline {
+			result += "</br>\n"
+			result += "<b>Offline Clone Result:</b></br>\n"
+			statuses, _ := scw.tableStatusListOffline.format()
+			result += strings.Join(statuses, "</br>\n")
+		}
 	}
 
 	return template.HTML(result)
@@ -189,16 +213,38 @@ func (scw *SplitCloneWorker) StatusAsText() string {
 	result := "Working on: " + scw.keyspace + "/" + scw.shard + "\n"
 	result += "State: " + state.String() + "\n"
 	switch state {
-	case WorkerStateCloneOnline, WorkerStateCloneOffline:
+	case WorkerStateCloneOnline:
 		result += "Running:\n"
 		result += "Copying from: " + scw.formatSources() + "\n"
-		statuses, eta := scw.tableStatusList.format()
+		statuses, eta := scw.tableStatusListOffline.format()
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
+	case WorkerStateCloneOffline:
+		result += "Running:\n"
+		result += "Copying from: " + scw.formatSources() + "\n"
+		statuses, eta := scw.tableStatusListOffline.format()
+		result += "ETA: " + eta.String() + "\n"
+		result += strings.Join(statuses, "\n")
+		if scw.online {
+			result += "\n"
+			result += "Result from preceding Online Clone:\n"
+			statuses, _ := scw.tableStatusListOnline.format()
+			result += strings.Join(statuses, "\n")
+		}
 	case WorkerStateDone:
 		result += "Success:\n"
-		statuses, _ := scw.tableStatusList.format()
-		result += strings.Join(statuses, "\n")
+		if scw.online {
+			result += "\n"
+			result += "Online Clone Result:\n"
+			statuses, _ := scw.tableStatusListOnline.format()
+			result += strings.Join(statuses, "</br>\n")
+		}
+		if scw.offline {
+			result += "\n"
+			result += "Offline Clone Result:\n"
+			statuses, _ := scw.tableStatusListOffline.format()
+			result += strings.Join(statuses, "\n")
+		}
 	}
 	return result
 }
@@ -546,6 +592,13 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 		statsStateDurationsNs.Set(string(state), time.Now().Sub(start).Nanoseconds())
 	}()
 
+	var tableStatusList *tableStatusList
+	if state == WorkerStateCloneOffline {
+		tableStatusList = scw.tableStatusListOffline
+	} else {
+		tableStatusList = scw.tableStatusListOnline
+	}
+
 	// get source schema from the first shard
 	// TODO(alainjobart): for now, we assume the schema is compatible
 	// on all source shards. Furthermore, we estimate the number of rows
@@ -561,7 +614,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 		return fmt.Errorf("no tables matching the table filter in tablet %v", topoproto.TabletAliasString(scw.sourceAliases[0]))
 	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
-	scw.tableStatusList.initialize(sourceSchemaDefinition)
+	tableStatusList.initialize(sourceSchemaDefinition)
 
 	// In parallel, setup the channels to send SQL data chunks to for each destination tablet:
 	//
@@ -636,7 +689,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 		if err != nil {
 			return err
 		}
-		scw.tableStatusList.setThreadCount(tableIndex, len(chunks)-1)
+		tableStatusList.setThreadCount(tableIndex, len(chunks)-1)
 
 		for chunkIndex := 0; chunkIndex < len(chunks)-1; chunkIndex++ {
 			sourceWaitGroup.Add(1)
@@ -649,7 +702,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				sema.Acquire()
 				defer sema.Release()
 
-				scw.tableStatusList.threadStarted(tableIndex)
+				tableStatusList.threadStarted(tableIndex)
 
 				// Set up readers for the diff. There will be one reader for every
 				// source and destination shard.
@@ -714,7 +767,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					dbNames[i] = scw.destinationDbNames[keyspaceAndShard]
 				}
 				// Compare the data and repair any differences.
-				differ, err := NewRowDiffer2(sourceReader, destReader, td, scw.tableStatusList, tableIndex,
+				differ, err := NewRowDiffer2(sourceReader, destReader, td, tableStatusList, tableIndex,
 					scw.destinationShards, keyResolver,
 					insertChannels, ctx.Done(), dbNames, scw.writeQueryMaxRows, scw.writeQueryMaxSize)
 				if err != nil {
@@ -728,7 +781,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					return
 				}
 
-				scw.tableStatusList.threadDone(tableIndex)
+				tableStatusList.threadDone(tableIndex)
 			}(td, tableIndex, chunkIndex)
 		}
 	}
