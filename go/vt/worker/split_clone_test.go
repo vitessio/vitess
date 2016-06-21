@@ -312,7 +312,7 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 			}
 		}
 	}
-	sq.t.Logf("testQueryService: %v/%v/%v: got query: %v with min %v max %v", sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, sql, min, max)
+	sq.t.Logf("testQueryService: %v/%v/%v: got query: %v with min %v max (exclusive) %v", sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, sql, min, max)
 
 	// Send the headers.
 	if err := sendReply(&sqltypes.Result{Fields: sq.fields}); err != nil {
@@ -323,14 +323,14 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 	rowsAffected := 0
 	for _, row := range sq.rows {
 		primaryKey := row[0].ToNative().(int64)
-		if primaryKey >= int64(min) && primaryKey <= int64(max) {
+		if primaryKey >= int64(min) && primaryKey < int64(max) {
 			if err := sendReply(&sqltypes.Result{
 				Rows: [][]sqltypes.Value{row},
 			}); err != nil {
 				return err
 			}
 			// Uncomment the next line during debugging when needed.
-			// sq.t.Logf("testQueryService: %v/%v/%v: sent row for id: %v row: %v", sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, primaryKey, row)
+			// sq.t.Logf("testQueryService: %v/%v/%v/%v: sent row for id: %v row: %v", sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, sq.shardIndex, primaryKey, row)
 			rowsAffected++
 		}
 	}
@@ -425,6 +425,24 @@ func TestSplitCloneV2_Online(t *testing.T) {
 	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
 		t.Fatal(err)
 	}
+	if inserts := statsOnlineInsertsCounters.Counts()["table1"]; inserts != 100 {
+		t.Errorf("wrong number of rows inserted: got = %v, want = %v", inserts, 100)
+	}
+	if updates := statsOnlineUpdatesCounters.Counts()["table1"]; updates != 0 {
+		t.Errorf("wrong number of rows updated: got = %v, want = %v", updates, 0)
+	}
+	if deletes := statsOnlineDeletesCounters.Counts()["table1"]; deletes != 0 {
+		t.Errorf("wrong number of rows deleted: got = %v, want = %v", deletes, 0)
+	}
+	if inserts := statsOfflineInsertsCounters.Counts()["table1"]; inserts != 0 {
+		t.Errorf("no stats for the offline clone phase should have been modified. got inserts = %v", inserts)
+	}
+	if updates := statsOfflineUpdatesCounters.Counts()["table1"]; updates != 0 {
+		t.Errorf("no stats for the offline clone phase should have been modified. got updates = %v", updates)
+	}
+	if deletes := statsOfflineDeletesCounters.Counts()["table1"]; deletes != 0 {
+		t.Errorf("no stats for the offline clone phase should have been modified. got deletes = %v", deletes)
+	}
 }
 
 func TestSplitCloneV2_Online_Offline(t *testing.T) {
@@ -495,6 +513,24 @@ func TestSplitCloneV2_Reconciliation(t *testing.T) {
 	// Run the vtworker command.
 	if err := runCommand(t, tc.wi, tc.wi.wr, tc.defaultWorkerArgs); err != nil {
 		t.Fatal(err)
+	}
+	if inserts := statsOnlineInsertsCounters.Counts()["table1"]; inserts != 0 {
+		t.Errorf("no stats for the online clone phase should have been modified. got inserts = %v", inserts)
+	}
+	if updates := statsOnlineUpdatesCounters.Counts()["table1"]; updates != 0 {
+		t.Errorf("no stats for the online clone phase should have been modified. got updates = %v", updates)
+	}
+	if deletes := statsOnlineDeletesCounters.Counts()["table1"]; deletes != 0 {
+		t.Errorf("no stats for the online clone phase should have been modified. got deletes = %v", deletes)
+	}
+	if inserts := statsOfflineInsertsCounters.Counts()["table1"]; inserts != 4 {
+		t.Errorf("wrong number of rows inserted: got = %v, want = %v", inserts, 4)
+	}
+	if updates := statsOfflineUpdatesCounters.Counts()["table1"]; updates != 4 {
+		t.Errorf("wrong number of rows updated: got = %v, want = %v", updates, 4)
+	}
+	if deletes := statsOfflineDeletesCounters.Counts()["table1"]; deletes != 10 {
+		t.Errorf("wrong number of rows deleted: got = %v, want = %v", deletes, 10)
 	}
 }
 

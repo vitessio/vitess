@@ -55,6 +55,20 @@ var (
 	statsThrottledCounters = stats.NewMultiCounters("WorkerThrottledCounters", []string{"keyspace", "shardname", "thread_id"})
 	// statsStateDurations tracks for each state how much time was spent in it. Mainly used for testing.
 	statsStateDurationsNs = stats.NewCounters("WorkerStateDurations")
+	// statsOnlineInsertsCounters tracks for every table how many rows were
+	// inserted during the online clone (reconciliation) phase.
+	statsOnlineInsertsCounters = stats.NewCounters("OnlineInsertsCounters")
+	// statsOnlineUpdatesCounters tracks for every table how many rows were updated.
+	statsOnlineUpdatesCounters = stats.NewCounters("OnlineUpdatesCounters")
+	// statsOnlineUpdatesCounters tracks for every table how many rows were deleted.
+	statsOnlineDeletesCounters = stats.NewCounters("OnlineDeletesCounters")
+	// statsOfflineInsertsCounters tracks for every table how many rows were
+	// inserted during the online clone (reconciliation) phase.
+	statsOfflineInsertsCounters = stats.NewCounters("OfflineInsertsCounters")
+	// statsOfflineUpdatesCounters tracks for every table how many rows were updated.
+	statsOfflineUpdatesCounters = stats.NewCounters("OfflineUpdatesCounters")
+	// statsOfflineUpdatesCounters tracks for every table how many rows were deleted.
+	statsOfflineDeletesCounters = stats.NewCounters("OfflineDeletesCounters")
 )
 
 const (
@@ -70,6 +84,12 @@ func resetVars() {
 	statsState.Set("")
 	statsRetryCount.Set(0)
 	statsRetryCounters.Reset()
+	statsOnlineInsertsCounters.Reset()
+	statsOnlineUpdatesCounters.Reset()
+	statsOnlineDeletesCounters.Reset()
+	statsOfflineInsertsCounters.Reset()
+	statsOfflineUpdatesCounters.Reset()
+	statsOfflineDeletesCounters.Reset()
 }
 
 // checkDone returns ctx.Err() iff ctx.Done().

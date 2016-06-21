@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -57,7 +58,7 @@ func NewRowDiffer2(left, right ResultReader, td *tabletmanagerdatapb.TableDefini
 	// Parameters required by RowRouter.
 	destinationShards []*topo.ShardInfo, keyResolver keyspaceIDResolver,
 	// Parameters required by RowAggregator.
-	insertChannels []chan string, abort <-chan struct{}, dbNames []string, writeQueryMaxRows, writeQueryMaxSize int) (*RowDiffer2, error) {
+	insertChannels []chan string, abort <-chan struct{}, dbNames []string, writeQueryMaxRows, writeQueryMaxSize int, statCounters []*stats.Counters) (*RowDiffer2, error) {
 
 	if err := compareFields(left.Fields(), right.Fields()); err != nil {
 		return nil, err
@@ -70,7 +71,7 @@ func NewRowDiffer2(left, right ResultReader, td *tabletmanagerdatapb.TableDefini
 		for _, typ := range repairTypes {
 			aggregators[i][typ] = NewRowAggregator(writeQueryMaxRows, writeQueryMaxSize,
 				topoproto.KeyspaceShardString(destinationShards[i].Keyspace(), destinationShards[i].ShardName()),
-				insertChannels[i], abort, dbNames[i], td, typ)
+				insertChannels[i], abort, dbNames[i], td, typ, statCounters)
 		}
 	}
 

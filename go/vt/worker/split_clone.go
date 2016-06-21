@@ -15,6 +15,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/event"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -595,11 +596,15 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 		}
 		firstSourceTablet = tablets[0].Tablet
 	}
+	var statsCounters []*stats.Counters
 	var tableStatusList *tableStatusList
-	if state == WorkerStateCloneOffline {
-		tableStatusList = scw.tableStatusListOffline
-	} else {
+	switch state {
+	case WorkerStateCloneOnline:
+		statsCounters = []*stats.Counters{statsOnlineInsertsCounters, statsOnlineUpdatesCounters, statsOnlineDeletesCounters}
 		tableStatusList = scw.tableStatusListOnline
+	case WorkerStateCloneOffline:
+		statsCounters = []*stats.Counters{statsOfflineInsertsCounters, statsOfflineUpdatesCounters, statsOfflineDeletesCounters}
+		tableStatusList = scw.tableStatusListOffline
 	}
 
 	sourceSchemaDefinition, err := scw.getSourceSchema(ctx, firstSourceTablet)
@@ -787,7 +792,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				// Compare the data and repair any differences.
 				differ, err := NewRowDiffer2(sourceReader, destReader, td, tableStatusList, tableIndex,
 					scw.destinationShards, keyResolver,
-					insertChannels, ctx.Done(), dbNames, scw.writeQueryMaxRows, scw.writeQueryMaxSize)
+					insertChannels, ctx.Done(), dbNames, scw.writeQueryMaxRows, scw.writeQueryMaxSize, statsCounters)
 				if err != nil {
 					processError("NewRowDiffer2 failed: %v", err)
 					return

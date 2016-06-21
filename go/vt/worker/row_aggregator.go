@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/stats"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -37,13 +38,19 @@ type RowAggregator struct {
 	td               *tabletmanagerdatapb.TableDefinition
 	repairType       repairType
 	builder          QueryBuilder
+	// statsCounters has Counters to track how many rows were changed per
+	// repairTyp.
+	statsCounters []*stats.Counters
 
 	buffer       bytes.Buffer
 	bufferedRows int
 }
 
 // NewRowAggregator returns a RowAggregator.
-func NewRowAggregator(maxRows, maxSize int, keyspaceAndShard string, insertChannel chan string, abort <-chan struct{}, dbName string, td *tabletmanagerdatapb.TableDefinition, repairType repairType) *RowAggregator {
+// The index of the elements in statCounters must match the elements
+// in "repairTypes" i.e. the first counter is for inserts, second for updates
+// and the third for deletes.
+func NewRowAggregator(maxRows, maxSize int, keyspaceAndShard string, insertChannel chan string, abort <-chan struct{}, dbName string, td *tabletmanagerdatapb.TableDefinition, repairType repairType, statsCounters []*stats.Counters) *RowAggregator {
 	// Construct head and tail base commands for the repair statement.
 	var builder QueryBuilder
 	switch repairType {
@@ -62,6 +69,10 @@ func NewRowAggregator(maxRows, maxSize int, keyspaceAndShard string, insertChann
 		panic(fmt.Sprintf("unknown repairType: %v", repairType))
 	}
 
+	if len(statsCounters) != len(repairTypes) {
+		panic(fmt.Sprintf("statsCounter has the wrong number of elements. got = %v, want = %v", len(statsCounters), len(repairTypes)))
+	}
+
 	return &RowAggregator{
 		maxRows:          maxRows,
 		maxSize:          maxSize,
@@ -71,6 +82,7 @@ func NewRowAggregator(maxRows, maxSize int, keyspaceAndShard string, insertChann
 		td:               td,
 		repairType:       repairType,
 		builder:          builder,
+		statsCounters:    statsCounters,
 	}
 }
 
@@ -123,6 +135,10 @@ func (ra *RowAggregator) flush() bool {
 	case <-ra.abort:
 		return true
 	}
+
+	// Update our statistics.
+	ra.statsCounters[ra.repairType].Add(ra.td.Name, int64(ra.bufferedRows))
+
 	ra.buffer.Reset()
 	ra.bufferedRows = 0
 	return false
