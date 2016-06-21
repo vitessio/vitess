@@ -55,7 +55,7 @@ type VerticalSplitCloneWorker struct {
 
 	// populated during WorkerStateFindTargets, read-only after that
 	sourceAlias  *topodatapb.TabletAlias
-	sourceTablet *topo.TabletInfo
+	sourceTablet *topodatapb.Tablet
 	// healthCheck tracks the health of all MASTER and REPLICA tablets.
 	// It must be closed at the end of the command.
 	healthCheck discovery.HealthCheck
@@ -303,21 +303,22 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 
 	// get the tablet info for it
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	vscw.sourceTablet, err = vscw.wr.TopoServer().GetTablet(shortCtx, vscw.sourceAlias)
+	ti, err := vscw.wr.TopoServer().GetTablet(shortCtx, vscw.sourceAlias)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot read tablet %v: %v", topoproto.TabletAliasString(vscw.sourceAlias), err)
 	}
+	vscw.sourceTablet = ti.Tablet
 
 	// stop replication on it
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	err = vscw.wr.TabletManagerClient().StopSlave(shortCtx, vscw.sourceTablet.Tablet)
+	err = vscw.wr.TabletManagerClient().StopSlave(shortCtx, vscw.sourceTablet)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot stop replication on tablet %v", topoproto.TabletAliasString(vscw.sourceAlias))
 	}
 
-	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet.Tablet)
+	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet)
 
 	// Initialize healthcheck and add destination shards to it.
 	vscw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
@@ -342,14 +343,8 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	master := masters[0]
 
 	// Get the MySQL database name of the tablet.
-	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	ti, err := vscw.wr.TopoServer().GetTablet(shortCtx, master.Tablet.Alias)
-	cancel()
-	if err != nil {
-		return fmt.Errorf("cannot get the TabletInfo for destination master (%v) to find out its db name: %v", topoproto.TabletAliasString(master.Tablet.Alias), err)
-	}
 	keyspaceAndShard := topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)
-	vscw.destinationDbNames[keyspaceAndShard] = ti.DbName()
+	vscw.destinationDbNames[keyspaceAndShard] = topoproto.TabletDbName(master.Tablet)
 
 	// TODO(mberlin): Verify on the destination master that the
 	// _vt.blp_checkpoint table has the latest schema.
@@ -500,7 +495,7 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 	} else {
 		// get the current position from the source
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		status, err := vscw.wr.TabletManagerClient().SlaveStatus(shortCtx, vscw.sourceTablet.Tablet)
+		status, err := vscw.wr.TabletManagerClient().SlaveStatus(shortCtx, vscw.sourceTablet)
 		cancel()
 		if err != nil {
 			return err

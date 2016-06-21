@@ -63,7 +63,7 @@ type SplitCloneWorker struct {
 
 	// populated during WorkerStateFindTargets, read-only after that
 	sourceAliases []*topodatapb.TabletAlias
-	sourceTablets []*topo.TabletInfo
+	sourceTablets []*topodatapb.Tablet
 	// healthCheck tracks the health of all MASTER and REPLICA tablets.
 	// It must be closed at the end of the command.
 	healthCheck discovery.HealthCheck
@@ -456,24 +456,24 @@ func (scw *SplitCloneWorker) findOfflineSourceTablets(ctx context.Context) error
 	}
 
 	// get the tablet info for them, and stop their replication
-	scw.sourceTablets = make([]*topo.TabletInfo, len(scw.sourceAliases))
+	scw.sourceTablets = make([]*topodatapb.Tablet, len(scw.sourceAliases))
 	for i, alias := range scw.sourceAliases {
-		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		scw.sourceTablets[i], err = scw.wr.TopoServer().GetTablet(shortCtx, alias)
+		ti, err := scw.wr.TopoServer().GetTablet(shortCtx, alias)
 		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot read tablet %v: %v", topoproto.TabletAliasString(alias), err)
 		}
+		scw.sourceTablets[i] = ti.Tablet
 
 		shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-		err = scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i].Tablet)
+		err = scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i])
 		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot stop replication on tablet %v", topoproto.TabletAliasString(alias))
 		}
 
-		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i].Tablet)
+		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i])
 	}
 
 	return nil
@@ -500,14 +500,8 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 		master := masters[0]
 
 		// Get the MySQL database name of the tablet.
-		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		ti, err := scw.wr.TopoServer().GetTablet(shortCtx, master.Tablet.Alias)
-		cancel()
-		if err != nil {
-			return fmt.Errorf("cannot get the TabletInfo for destination master (%v) to find out its db name: %v", topoproto.TabletAliasString(master.Tablet.Alias), err)
-		}
 		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
-		scw.destinationDbNames[keyspaceAndShard] = ti.DbName()
+		scw.destinationDbNames[keyspaceAndShard] = topoproto.TabletDbName(master.Tablet)
 
 		// TODO(mberlin): Verify on the destination master that the
 		// _vt.blp_checkpoint table has the latest schema.
@@ -803,7 +797,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 			// get the current position from the sources
 			for shardIndex := range scw.sourceShards {
 				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-				status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex].Tablet)
+				status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex])
 				cancel()
 				if err != nil {
 					return err
