@@ -75,10 +75,10 @@ type splitCloneTestCase struct {
 }
 
 func (tc *splitCloneTestCase) setUp(v3 bool) {
-	tc.setUpWithConcurreny(v3, 10)
+	tc.setUpWithConcurreny(v3, 10, 2)
 }
 
-func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency int) {
+func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQueryMaxRows int) {
 	// In the default test case there are 100 rows on the source.
 	rowsTotal := 100
 
@@ -219,7 +219,6 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency int) {
 	// (100 source rows / 10 writers / 2 shards = 5 rows.)
 	// Due to --write_query_max_rows=2 there will be 3 inserts for 5 rows.
 	rowsPerDestinationShard := rowsTotal / 2
-	writeQueryMaxRows := 2
 	rowsPerThread := rowsPerDestinationShard / concurrency
 	insertsPerThread := math.Ceil(float64(rowsPerThread) / float64(writeQueryMaxRows))
 	insertsTotal := int(insertsPerThread) * concurrency
@@ -248,6 +247,7 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency int) {
 
 	tc.defaultWorkerArgs = []string{
 		"SplitClone",
+		"-online=false",
 		// --max_tps is only specified to enable the throttler and ensure that the
 		// code is executed. But the intent here is not to throttle the test, hence
 		// the rate limit is set very high.
@@ -396,8 +396,8 @@ var v2Fields = []*querypb.Field{
 	},
 }
 
-// TestSplitCloneV2 tests the simple case where the destination is empty.
-func TestSplitCloneV2(t *testing.T) {
+// TestSplitCloneV2_Offline tests the offline phase with an empty destination.
+func TestSplitCloneV2_Offline(t *testing.T) {
 	tc := &splitCloneTestCase{t: t}
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
@@ -408,35 +408,69 @@ func TestSplitCloneV2(t *testing.T) {
 	}
 }
 
-// TestSplitCloneV2_Reconciliation is identical to TestSplitCloneV2,
+// TestSplitCloneV2_Online tests the online phase with an empty destination.
+func TestSplitCloneV2_Online(t *testing.T) {
+	tc := &splitCloneTestCase{t: t}
+	tc.setUp(false /* v3 */)
+	defer tc.tearDown()
+
+	// In the online phase we won't enable filtered replication. Don't expect it.
+	tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(29)
+	tc.rightMasterFakeDb.deleteAllEntriesAfterIndex(29)
+
+	// Run the vtworker command.
+	args := make([]string, len(tc.defaultWorkerArgs))
+	copy(args, tc.defaultWorkerArgs)
+	args[1] = "-offline=false"
+	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSplitCloneV2_Online_Offline(t *testing.T) {
+	tc := &splitCloneTestCase{t: t}
+	tc.setUp(false /* v3 */)
+	defer tc.tearDown()
+
+	// Run the vtworker command.
+	args := []string{"SplitClone"}
+	args = append(args, tc.defaultWorkerArgs[1:]...)
+	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestSplitCloneV2_Reconciliation is identical to TestSplitCloneV2_Offline,
 // but the destination has existing data which must be reconciled.
 func TestSplitCloneV2_Reconciliation(t *testing.T) {
 	tc := &splitCloneTestCase{t: t}
 	// We reduce the parallelism to 1 to test the order of expected
 	// insert/update/delete statements on the destination master.
-	tc.setUpWithConcurreny(false /* v3 */, 1)
+	tc.setUpWithConcurreny(false /* v3 */, 1, 10)
 	defer tc.tearDown()
 
+	// We assume that an Online Clone ran before which copied the rows 100-199
+	// to the destination.
+	// In this Offline Clone the rows 96-99 are new on the destination, 100-103
+	// must be updated and 190-199 have to be deleted from the destination shards.
+	//
 	// Add data on the source tablets.
 	// In addition, the source has extra rows before the regular rows.
 	for _, qs := range tc.sourceRdonlyQs {
 		qs.clearRows()
 		// Rows 96-100 are not on the destination.
 		qs.addGeneratedRows(96, 100)
-		// Rows 100-200 are on the destination as well.
-		qs.addGeneratedRows(100, 200)
+		// Rows 100-190 are on the destination as well.
+		qs.addGeneratedRows(100, 190)
 	}
 
 	for i := range []int{0, 1} {
-		// Both destination shards have the rows 100-200 as well.
+		// Both destination shards have the rows 100-200.
 		tc.leftRdonlyQs[i].addGeneratedRows(100, 200)
 		tc.rightRdonlyQs[i].addGeneratedRows(100, 200)
 		// But some data is outdated data and must be updated.
 		tc.leftRdonlyQs[i].modifyFirstRows(2)
 		tc.rightRdonlyQs[i].modifyFirstRows(2)
-		// They also have rows which are only on the destination and will get deleted.
-		tc.leftRdonlyQs[i].addGeneratedRows(200, 210)
-		tc.rightRdonlyQs[i].addGeneratedRows(200, 210)
 	}
 
 	// The destination tablets should see inserts, updates and deletes.
@@ -453,15 +487,13 @@ func TestSplitCloneV2_Reconciliation(t *testing.T) {
 	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (96,'Text for 96',2305843009213693952),(98,'Text for 98',2305843009213693952)", nil)
 	tc.rightMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (97,'Text for 97',6917529027641081856),(99,'Text for 99',6917529027641081856)", nil)
 	// Delete statements. (All are combined in one.)
-	tc.leftMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id) IN ((200),(202),(204),(206),(208))", nil)
-	tc.rightMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id) IN ((201),(203),(205),(207),(209))", nil)
+	tc.leftMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id) IN ((190),(192),(194),(196),(198))", nil)
+	tc.rightMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id) IN ((191),(193),(195),(197),(199))", nil)
 	expectBlpCheckpointCreationQueries(tc.leftMasterFakeDb)
 	expectBlpCheckpointCreationQueries(tc.rightMasterFakeDb)
 
 	// Run the vtworker command.
-	args := []string{"SplitClone", "-write_query_max_rows", "10"}
-	args = append(args, tc.defaultWorkerArgs[3:]...)
-	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
+	if err := runCommand(t, tc.wi, tc.wi.wr, tc.defaultWorkerArgs); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -474,8 +506,9 @@ func TestSplitCloneV2_Throttled(t *testing.T) {
 	// Run SplitClone throttled and verify that it took longer than usual (~25ms).
 
 	// Modify args to set -max_tps to 300.
-	args := []string{"SplitClone", "-max_tps", "300"}
-	args = append(args, tc.defaultWorkerArgs[1:]...)
+	args := make([]string, len(tc.defaultWorkerArgs))
+	copy(args, tc.defaultWorkerArgs)
+	args[3] = "300"
 
 	// Run the vtworker command.
 	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
