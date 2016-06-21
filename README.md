@@ -21,7 +21,7 @@ and a more [detailed presentation from @Scale '14](http://youtu.be/5yDO-tmIoXY).
 
 ### Intro
 
- * [Helicopter overview](http://vitess.io):
+ * [A Ten Thousand Foot View](http://vitess.io):
      high level overview of Vitess that should tell you whether Vitess is for you.
  * [Sharding in Vitess](http://vitess.io/user-guide/sharding.html)
 
