@@ -248,6 +248,10 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency int) {
 
 	tc.defaultWorkerArgs = []string{
 		"SplitClone",
+		// --max_tps is only specified to enable the throttler and ensure that the
+		// code is executed. But the intent here is not to throttle the test, hence
+		// the rate limit is set very high.
+		"-max_tps", "9999",
 		"-write_query_max_rows", strconv.Itoa(writeQueryMaxRows),
 		"-source_reader_count", strconv.Itoa(concurrency),
 		"-min_table_size_for_split", "1",

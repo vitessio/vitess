@@ -210,6 +210,10 @@ func TestVerticalSplitClone(t *testing.T) {
 	// Run the vtworker command.
 	args := []string{
 		"VerticalSplitClone",
+		// --max_tps is only specified to enable the throttler and ensure that the
+		// code is executed. But the intent here is not to throttle the test, hence
+		// the rate limit is set very high.
+		"-max_tps", "9999",
 		"-tables", "moving.*,view1",
 		"-source_reader_count", "10",
 		"-destination_pack_count", "4",
