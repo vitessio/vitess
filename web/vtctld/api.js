@@ -14,8 +14,8 @@ app.factory('shards', function($resource) {
   });
 });
 
-app.factory('srvkeyspace', function($resource) {
-  return $resource('../api/srvkeyspace/:cell_keyspace');
+app.factory('srv_keyspace', function($resource) {
+  return $resource('../api/srv_keyspace/:cell_keyspace');
 });
 
 app.factory('tablets', function($resource) {

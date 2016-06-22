@@ -90,6 +90,15 @@ func unmarshalRequest(r *http.Request, v interface{}) error {
 	return json.Unmarshal(data, v)
 }
 
+func addSrvkeyspace(ctx context.Context, ts topo.Server, cell, keyspace string, srvKeyspaces map[string]interface{}) error {
+	srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
+	if err != nil {
+		return fmt.Errorf("invalid keyspace name: %q ", keyspace)
+	}
+	srvKeyspaces[keyspace] = srvKeyspace
+	return nil
+}
+
 func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 	tabletHealthCache := newTabletHealthCache(ts)
 	tmClient := tmclient.NewTabletManagerClient()
@@ -155,20 +164,48 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 		}
 
 		// Get the shard record.
-		//TODO: Attach serving information
 		return ts.GetShard(ctx, keyspace, shard)
 	})
-	//Srvkeyspace
-	handleCollection("srvkeyspace", func(r *http.Request) (interface{}, error) {
+	//SrvKeyspace
+	handleCollection("srv_keyspace", func(r *http.Request) (interface{}, error) {
 		keyspacePath := getItemPath(r.URL.Path)
-		if !strings.Contains(keyspacePath, "/") {
-			return nil, fmt.Errorf("invalid srvkeyspace path: %q", keyspacePath)
-		}
 		parts := strings.SplitN(keyspacePath, "/", 2)
-		cell := parts[0]
-		keyspace := parts[1]
-		//TODO: Attach serving information
-		return ts.GetSrvKeyspace(ctx, cell, keyspace)
+		//If no keyspace is provided returns all srvkeyspaces
+		srvKeyspaces := make(map[string]interface{})
+		if len(parts) == 1 {
+			cell := parts[0]
+			keyspaceNames, err := ts.GetSrvKeyspaceNames(ctx, cell)
+			if err != nil {
+				return nil, fmt.Errorf("invalid cell: %q  expected usage: /srv_keyspace/<cell>", keyspacePath)
+			}
+			numKeyspaces := len(keyspaceNames)
+			for i := 0; i < numKeyspaces; i++ {
+				err := addSrvkeyspace(ctx, ts, cell, keyspaceNames[i], srvKeyspaces)
+				if err != nil {
+					return nil, err
+				}
+			}
+		} else if len(parts) == 2 {
+			//If a keyspace is provided then return the specified srvkeyspace
+			cell := parts[0]
+			keyspace := parts[1]
+			err := addSrvkeyspace(ctx, ts, cell, keyspace, srvKeyspaces)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			//request was incorrectly formatted
+			return nil, fmt.Errorf("invalid srvkeyspace path: %q  expected path: /srv_keyspace/<cell>/<keyspace>", keyspacePath)
+		}
+		//map of srvkeyspace names to srvkeyspaces in wrapped in a Data field
+		//to make client side parsing easier by avoiding extra properties at
+		//the root level.
+		data := struct {
+			Data (map[string]interface{})
+		}{
+			srvKeyspaces,
+		}
+		return data, nil
 	})
 
 	// Tablets
