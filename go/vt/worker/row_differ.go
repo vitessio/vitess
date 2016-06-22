@@ -5,6 +5,7 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
@@ -53,7 +53,7 @@ type RowDiffer2 struct {
 // NewRowDiffer2 returns a new RowDiffer2.
 // We assume that the indexes of the slice parameters always correspond to the
 // same shard e.g. insertChannels[0] refers to destinationShards[0] and so on.
-func NewRowDiffer2(left, right ResultReader, td *tabletmanagerdatapb.TableDefinition, tableStatusList *tableStatusList, tableIndex int,
+func NewRowDiffer2(ctx context.Context, left, right ResultReader, td *tabletmanagerdatapb.TableDefinition, tableStatusList *tableStatusList, tableIndex int,
 	// Parameters required by RowRouter.
 	destinationShards []*topo.ShardInfo, keyResolver keyspaceIDResolver,
 	// Parameters required by RowAggregator.
@@ -68,9 +68,8 @@ func NewRowDiffer2(left, right ResultReader, td *tabletmanagerdatapb.TableDefini
 	for i := range destinationShards {
 		aggregators[i] = make([]*RowAggregator, len(repairTypes))
 		for _, typ := range repairTypes {
-			aggregators[i][typ] = NewRowAggregator(writeQueryMaxRows, writeQueryMaxSize,
-				topoproto.KeyspaceShardString(destinationShards[i].Keyspace(), destinationShards[i].ShardName()),
-				insertChannels[i], abort, dbNames[i], td, typ, statCounters)
+			aggregators[i][typ] = NewRowAggregator(ctx, writeQueryMaxRows, writeQueryMaxSize,
+				insertChannels[i], dbNames[i], td, typ, statCounters)
 		}
 	}
 
@@ -215,8 +214,8 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 	// Close and flush all aggregators in case they have data buffered.
 	for i := range rd.aggregators {
 		for _, aggregator := range rd.aggregators[i] {
-			if abort := aggregator.Close(); abort {
-				return dr, fmt.Errorf("failed to flush RowAggregator for destination shard: %v", aggregator.KeyspaceAndShard())
+			if err := aggregator.Close(); err != nil {
+				return dr, err
 			}
 		}
 	}
@@ -230,8 +229,8 @@ func (rd *RowDiffer2) repairRow(row []sqltypes.Value, typ repairType) error {
 		return err
 	}
 
-	if abort := rd.aggregators[destShardIndex][typ].Add(row); abort {
-		return fmt.Errorf("failed to repair row for destination shard: %v because the context was canceled", rd.aggregators[destShardIndex][typ].KeyspaceAndShard())
+	if err := rd.aggregators[destShardIndex][typ].Add(row); err != nil {
+		return fmt.Errorf("failed to add row update to RowAggregator: %v", err)
 	}
 	// TODO(mberlin): Add more fine granular stats here.
 	rd.tableStatusList.addCopiedRows(rd.tableIndex, 1)

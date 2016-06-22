@@ -6,6 +6,7 @@ package worker
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"strings"
 
@@ -29,15 +30,13 @@ import (
 // then all other fields. The order of these two sets of fields is identical
 // to the order in td.PrimaryKeyColumns and td.Columns respectively.
 type RowAggregator struct {
-	maxRows int
-	maxSize int
-	// keyspaceAndShard is only used for error messages.
-	keyspaceAndShard string
-	insertChannel    chan string
-	abort            <-chan struct{}
-	td               *tabletmanagerdatapb.TableDefinition
-	repairType       repairType
-	builder          QueryBuilder
+	ctx           context.Context
+	maxRows       int
+	maxSize       int
+	insertChannel chan string
+	td            *tabletmanagerdatapb.TableDefinition
+	repairType    repairType
+	builder       QueryBuilder
 	// statsCounters has Counters to track how many rows were changed per
 	// repairTyp.
 	statsCounters []*stats.Counters
@@ -50,7 +49,7 @@ type RowAggregator struct {
 // The index of the elements in statCounters must match the elements
 // in "repairTypes" i.e. the first counter is for inserts, second for updates
 // and the third for deletes.
-func NewRowAggregator(maxRows, maxSize int, keyspaceAndShard string, insertChannel chan string, abort <-chan struct{}, dbName string, td *tabletmanagerdatapb.TableDefinition, repairType repairType, statsCounters []*stats.Counters) *RowAggregator {
+func NewRowAggregator(ctx context.Context, maxRows, maxSize int, insertChannel chan string, dbName string, td *tabletmanagerdatapb.TableDefinition, repairType repairType, statsCounters []*stats.Counters) *RowAggregator {
 	// Construct head and tail base commands for the repair statement.
 	var builder QueryBuilder
 	switch repairType {
@@ -74,22 +73,21 @@ func NewRowAggregator(maxRows, maxSize int, keyspaceAndShard string, insertChann
 	}
 
 	return &RowAggregator{
-		maxRows:          maxRows,
-		maxSize:          maxSize,
-		keyspaceAndShard: keyspaceAndShard,
-		insertChannel:    insertChannel,
-		abort:            abort,
-		td:               td,
-		repairType:       repairType,
-		builder:          builder,
-		statsCounters:    statsCounters,
+		ctx:           ctx,
+		maxRows:       maxRows,
+		maxSize:       maxSize,
+		insertChannel: insertChannel,
+		td:            td,
+		repairType:    repairType,
+		builder:       builder,
+		statsCounters: statsCounters,
 	}
 }
 
 // Add will add a new row which must be repaired.
-// It returns true if the pipeline should be aborted. If that happens,
-// RowAggregator will be in an undefined state and must not be used any longer.
-func (ra *RowAggregator) Add(row []sqltypes.Value) bool {
+// If an error is returned, RowAggregator will be in an undefined state and must
+// not be used any longer.
+func (ra *RowAggregator) Add(row []sqltypes.Value) error {
 	if ra.buffer.Len() == 0 {
 		ra.builder.WriteHead(&ra.buffer)
 	}
@@ -101,39 +99,32 @@ func (ra *RowAggregator) Add(row []sqltypes.Value) bool {
 	ra.bufferedRows++
 
 	if ra.bufferedRows >= ra.maxRows || ra.buffer.Len() >= ra.maxSize {
-		if abort := ra.flush(); abort {
-			return true
+		if err := ra.flush(); err != nil {
+			return err
 		}
 	}
 
-	return false
+	return nil
 }
 
 // Close fluses any pending aggregates which haven't been sent out yet.
-// It returns true if the pipeline was aborted.
-func (ra *RowAggregator) Close() bool {
+func (ra *RowAggregator) Close() error {
 	return ra.flush()
 }
 
-// KeyspaceAndShard returns the keyspace/shard string the aggregator is used for.
-func (ra *RowAggregator) KeyspaceAndShard() string {
-	return ra.keyspaceAndShard
-}
-
-// flush sends out the current aggregation buffer. It returns true when the
-// pipeline was aborted.
-func (ra *RowAggregator) flush() bool {
+// flush sends out the current aggregation buffer.
+func (ra *RowAggregator) flush() error {
 	if ra.buffer.Len() == 0 {
-		// Already flushed. Not aborted.
-		return false
+		// Already flushed.
+		return nil
 	}
 
 	ra.builder.WriteTail(&ra.buffer)
 	// select blocks until sending the SQL succeeded or the context was canceled.
 	select {
 	case ra.insertChannel <- ra.buffer.String():
-	case <-ra.abort:
-		return true
+	case <-ra.ctx.Done():
+		return fmt.Errorf("failed to flush RowAggregator and send the query to a writer thread channel: %v", ra.ctx.Err())
 	}
 
 	// Update our statistics.
@@ -141,7 +132,7 @@ func (ra *RowAggregator) flush() bool {
 
 	ra.buffer.Reset()
 	ra.bufferedRows = 0
-	return false
+	return nil
 }
 
 // QueryBuilder defines for a given reconciliation type how we have to

@@ -793,7 +793,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					dbNames[i] = scw.destinationDbNames[keyspaceAndShard]
 				}
 				// Compare the data and repair any differences.
-				differ, err := NewRowDiffer2(sourceReader, destReader, td, tableStatusList, tableIndex,
+				differ, err := NewRowDiffer2(ctx, sourceReader, destReader, td, tableStatusList, tableIndex,
 					scw.destinationShards, keyResolver,
 					insertChannels, ctx.Done(), dbNames, scw.writeQueryMaxRows, scw.writeQueryMaxSize, statsCounters)
 				if err != nil {
