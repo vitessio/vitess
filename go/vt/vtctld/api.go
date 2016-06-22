@@ -155,7 +155,20 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 		}
 
 		// Get the shard record.
+		//TODO: Attach serving information
 		return ts.GetShard(ctx, keyspace, shard)
+	})
+	//Srvkeyspace
+	handleCollection("srvkeyspace", func(r *http.Request) (interface{}, error) {
+		keyspacePath := getItemPath(r.URL.Path)
+		if !strings.Contains(keyspacePath, "/") {
+			return nil, fmt.Errorf("invalid srvkeyspace path: %q", keyspacePath)
+		}
+		parts := strings.SplitN(keyspacePath, "/", 2)
+		cell := parts[0]
+		keyspace := parts[1]
+		//TODO: Attach serving information
+		return ts.GetSrvKeyspace(ctx, cell, keyspace)
 	})
 
 	// Tablets
