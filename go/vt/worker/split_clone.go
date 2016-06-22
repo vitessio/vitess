@@ -801,7 +801,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					return
 				}
 				// Ignore the diff report because all diffs should get repaired.
-				_ /* DiffReport */, err = differ.Go(scw.wr.Logger())
+				_ /* DiffReport */, err = differ.Go()
 				if err != nil {
 					processError("RowDiffer2 failed: %v", err)
 					return

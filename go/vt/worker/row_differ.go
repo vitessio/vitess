@@ -11,7 +11,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
@@ -100,7 +99,7 @@ func compareFields(left, right []*querypb.Field) error {
 
 // Go runs the diff and repair.
 // If an error occurs, it will return and stop.
-func (rd *RowDiffer2) Go(log logutil.Logger) (DiffReport, error) {
+func (rd *RowDiffer2) Go() (DiffReport, error) {
 	var dr DiffReport
 	var err error
 
@@ -165,9 +164,6 @@ func (rd *RowDiffer2) Go(log logutil.Logger) (DiffReport, error) {
 
 		if f >= rd.pkFieldCount {
 			// rows have the same primary key, only content is different
-			if dr.mismatchedRows < 10 {
-				log.Errorf("Different content %v in same PK (only the first 10 errors of this type will be logged): %v != %v", dr.mismatchedRows, left, right)
-			}
 			dr.mismatchedRows++
 			advanceLeft = true
 			advanceRight = true
@@ -184,9 +180,6 @@ func (rd *RowDiffer2) Go(log logutil.Logger) (DiffReport, error) {
 			return dr, err
 		}
 		if c < 0 {
-			if dr.extraRowsLeft < 10 {
-				log.Errorf("Extra row %v on left (only the first 10 errors of this type will be logged): %v", dr.extraRowsLeft, left)
-			}
 			dr.extraRowsLeft++
 			advanceLeft = true
 			// Add the row on the destination.
@@ -195,9 +188,6 @@ func (rd *RowDiffer2) Go(log logutil.Logger) (DiffReport, error) {
 			}
 			continue
 		} else if c > 0 {
-			if dr.extraRowsRight < 10 {
-				log.Errorf("Extra row %v on right (only the first 10 errors of this type will be logged): %v", dr.extraRowsRight, right)
-			}
 			dr.extraRowsRight++
 			advanceRight = true
 			// Delete the row from the destination.
@@ -213,9 +203,6 @@ func (rd *RowDiffer2) Go(log logutil.Logger) (DiffReport, error) {
 		// they became equal after we parsed them into ints/floats
 		// (due to leading/trailing zeros, for example). So this can happen if MySQL
 		// is inconsistent in how it prints a given number.
-		if dr.mismatchedRows < 10 {
-			log.Errorf("Different content %v in same PK (only the first 10 errors of this type will be logged): %v != %v", dr.mismatchedRows, left, right)
-		}
 		dr.mismatchedRows++
 		advanceLeft = true
 		advanceRight = true
