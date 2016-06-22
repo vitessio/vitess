@@ -224,19 +224,22 @@ func (scw *SplitCloneWorker) StatusAsText() string {
 		result += strings.Join(statuses, "\n")
 		if scw.online {
 			result += "\n"
+			result += "\n"
 			result += "Result from preceding Online Clone:\n"
 			statuses, _ := scw.tableStatusListOnline.format()
 			result += strings.Join(statuses, "\n")
 		}
 	case WorkerStateDone:
-		result += "Success:\n"
+		result += "Success:"
 		if scw.online {
+			result += "\n"
 			result += "\n"
 			result += "Online Clone Result:\n"
 			statuses, _ := scw.tableStatusListOnline.format()
-			result += strings.Join(statuses, "</br>\n")
+			result += strings.Join(statuses, "\n")
 		}
 		if scw.offline {
+			result += "\n"
 			result += "\n"
 			result += "Offline Clone Result:\n"
 			statuses, _ := scw.tableStatusListOffline.format()
