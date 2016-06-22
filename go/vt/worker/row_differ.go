@@ -207,10 +207,12 @@ func (rd *RowDiffer2) Go(log logutil.Logger) (DiffReport, error) {
 			continue
 		}
 
-		// After looking at primary keys more carefully,
-		// they're the same. Logging a regular difference
-		// then, and advancing both.
-		// TODO(mberlin): Does this case happen in practice?
+		// Values of the primary key columns were not binary equal but their parsed
+		// values are.
+		// This happens when the raw values returned by MySQL were different but
+		// they became equal after we parsed them into ints/floats
+		// (due to leading/trailing zeros, for example). So this can happen if MySQL
+		// is inconsistent in how it prints a given number.
 		if dr.mismatchedRows < 10 {
 			log.Errorf("Different content %v in same PK (only the first 10 errors of this type will be logged): %v != %v", dr.mismatchedRows, left, right)
 		}

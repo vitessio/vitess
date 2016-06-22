@@ -175,8 +175,7 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              tmutils.TableBaseTable,
-					// TODO(mberlin): Remove this because the code currently does not use it.
-					// This informs how many rows we can pack into a single insert
+					// Set the table size to a value higher than --min_table_size_for_split.
 					DataLength: 2048,
 				},
 			},

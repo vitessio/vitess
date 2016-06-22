@@ -164,7 +164,7 @@ func TestVerticalSplitClone(t *testing.T) {
 					Columns:           []string{"id", "msg"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              tmutils.TableBaseTable,
-					// This informs how many rows we can pack into a single insert
+					// Set the table size to a value higher than --min_table_size_for_split.
 					DataLength: 2048,
 				},
 				{
