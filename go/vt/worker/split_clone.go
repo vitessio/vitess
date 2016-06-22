@@ -792,7 +792,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
 					dbNames[i] = scw.destinationDbNames[keyspaceAndShard]
 				}
-				// Compare the data and repair any differences.
+				// Compare the data and reconcile any differences.
 				differ, err := NewRowDiffer2(ctx, sourceReader, destReader, td, tableStatusList, tableIndex,
 					scw.destinationShards, keyResolver,
 					insertChannels, ctx.Done(), dbNames, scw.writeQueryMaxRows, scw.writeQueryMaxSize, statsCounters)
@@ -800,7 +800,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					processError("NewRowDiffer2 failed: %v", err)
 					return
 				}
-				// Ignore the diff report because all diffs should get repaired.
+				// Ignore the diff report because all diffs should get reconciled.
 				_ /* DiffReport */, err = differ.Diff()
 				if err != nil {
 					processError("RowDiffer2 failed: %v", err)

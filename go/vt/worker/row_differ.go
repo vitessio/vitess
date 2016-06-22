@@ -19,34 +19,40 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// repairType specifies how a different or missing row must be repaired.
-type repairType int
+// DiffType specifies why a specific row was found as different when comparing
+// a left and right side.
+type DiffType int
 
 const (
-	insert repairType = iota
-	update
-	// delet is misspelled because "delete" is a reserved word.
-	delet
+	// DiffMissing is returned when the row is missing on the right side.
+	DiffMissing DiffType = iota
+	// DiffNotEqual is returned when the row on the left and right side are
+	// not equal.
+	DiffNotEqual
+	// DiffExtraneous is returned when the row exists on the right side, but not
+	// on the left side.
+	DiffExtraneous
 )
 
-var repairTypes = []repairType{insert, update, delet}
+// DiffTypes has the list of available DiffType values, ordered by their value.
+var DiffTypes = []DiffType{DiffMissing, DiffNotEqual, DiffExtraneous}
 
-// RowDiffer2 will compare and repair two sides. It assumes that the left side
-// is the source of truth and necessary repairs have to be applied to the right
-// side.
+// RowDiffer2 will compare and reconcile two sides. It assumes that the left
+// side is the source of truth and necessary reconciliations have to be applied
+// to the right side.
 // It also assumes left and right are sorted by ascending primary key.
 type RowDiffer2 struct {
 	left         *RowReader
 	right        *RowReader
 	pkFieldCount int
-	// tableStatusList is used to report the number of repaired rows.
+	// tableStatusList is used to report the number of reconciled rows.
 	tableStatusList *tableStatusList
 	// tableIndex is the index of the table in the schema. It is required for
-	// reporting the number of repaired rows to tableStatusList.
+	// reporting the number of reconciled rows to tableStatusList.
 	tableIndex int
 	// router returns for a row to which destination shard index it should go.
 	router RowRouter
-	// aggregators are keyed by destination shard and repair type.
+	// aggregators are keyed by destination shard and DiffType.
 	aggregators [][]*RowAggregator
 }
 
@@ -63,11 +69,11 @@ func NewRowDiffer2(ctx context.Context, left, right ResultReader, td *tabletmana
 		return nil, err
 	}
 
-	// Create a RowAggregator for each destination shard and repair type.
+	// Create a RowAggregator for each destination shard and DiffType.
 	aggregators := make([][]*RowAggregator, len(destinationShards))
 	for i := range destinationShards {
-		aggregators[i] = make([]*RowAggregator, len(repairTypes))
-		for _, typ := range repairTypes {
+		aggregators[i] = make([]*RowAggregator, len(DiffTypes))
+		for _, typ := range DiffTypes {
 			aggregators[i][typ] = NewRowAggregator(ctx, writeQueryMaxRows, writeQueryMaxSize,
 				insertChannels[i], dbNames[i], td, typ, statCounters)
 		}
@@ -96,7 +102,7 @@ func compareFields(left, right []*querypb.Field) error {
 	return nil
 }
 
-// Diff runs the diff and repair.
+// Diff runs the diff and reconcile.
 // If an error occurs, it will return and stop.
 func (rd *RowDiffer2) Diff() (DiffReport, error) {
 	var dr DiffReport
@@ -132,7 +138,7 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 			// No more rows on the left side.
 			// We know we have at least one row on the right side left.
 			// Delete the row from the destination.
-			if err := rd.repairRow(right, delet); err != nil {
+			if err := rd.reconcileRow(right, DiffExtraneous); err != nil {
 				return dr, err
 			}
 			dr.extraRowsRight++
@@ -143,7 +149,7 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 			// No more rows on the right side.
 			// We know we have at least one row on the left side left.
 			// Add the row on the destination.
-			if err := rd.repairRow(left, insert); err != nil {
+			if err := rd.reconcileRow(left, DiffMissing); err != nil {
 				return dr, err
 			}
 			dr.extraRowsLeft++
@@ -167,7 +173,7 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 			advanceLeft = true
 			advanceRight = true
 			// Update the row on the destination.
-			if err := rd.repairRow(left, update); err != nil {
+			if err := rd.reconcileRow(left, DiffNotEqual); err != nil {
 				return dr, err
 			}
 			continue
@@ -182,7 +188,7 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 			dr.extraRowsLeft++
 			advanceLeft = true
 			// Add the row on the destination.
-			if err := rd.repairRow(left, insert); err != nil {
+			if err := rd.reconcileRow(left, DiffMissing); err != nil {
 				return dr, err
 			}
 			continue
@@ -190,7 +196,7 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 			dr.extraRowsRight++
 			advanceRight = true
 			// Delete the row from the destination.
-			if err := rd.repairRow(right, delet); err != nil {
+			if err := rd.reconcileRow(right, DiffExtraneous); err != nil {
 				return dr, err
 			}
 			continue
@@ -206,7 +212,7 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 		advanceLeft = true
 		advanceRight = true
 		// Update the row on the destination.
-		if err := rd.repairRow(right, update); err != nil {
+		if err := rd.reconcileRow(right, DiffNotEqual); err != nil {
 			return dr, err
 		}
 	}
@@ -223,7 +229,7 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 	return dr, nil
 }
 
-func (rd *RowDiffer2) repairRow(row []sqltypes.Value, typ repairType) error {
+func (rd *RowDiffer2) reconcileRow(row []sqltypes.Value, typ DiffType) error {
 	destShardIndex, err := rd.router.Route(row)
 	if err != nil {
 		return err

@@ -16,13 +16,13 @@ import (
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
-// RowAggregator aggregates SQL repair statements into one statement.
+// RowAggregator aggregates SQL reconciliation statements into one statement.
 // Once a limit (maxRows or maxSize) is reached, the statement will be sent to
 // the destination's insertChannel.
-// RowAggregator is also aware of the type of repair statement and constructs
-// the necessary SQL command based on that.
+// RowAggregator is also aware of the type of statement (DiffType) and
+// constructs the necessary SQL command based on that.
 // Aggregating multiple statements is done to improve the overall performance.
-// One RowAggregator instance is specific to one destination shard and repair
+// One RowAggregator instance is specific to one destination shard and diff
 // type.
 // Important: The SQL statement generation assumes that the fields of the
 // provided row are in the same order as orderedColumns(td) would return on the
@@ -35,10 +35,10 @@ type RowAggregator struct {
 	maxSize       int
 	insertChannel chan string
 	td            *tabletmanagerdatapb.TableDefinition
-	repairType    repairType
+	diffType      DiffType
 	builder       QueryBuilder
 	// statsCounters has Counters to track how many rows were changed per
-	// repairTyp.
+	// diffTyp.
 	statsCounters []*stats.Counters
 
 	buffer       bytes.Buffer
@@ -47,29 +47,29 @@ type RowAggregator struct {
 
 // NewRowAggregator returns a RowAggregator.
 // The index of the elements in statCounters must match the elements
-// in "repairTypes" i.e. the first counter is for inserts, second for updates
+// in "DiffTypes" i.e. the first counter is for inserts, second for updates
 // and the third for deletes.
-func NewRowAggregator(ctx context.Context, maxRows, maxSize int, insertChannel chan string, dbName string, td *tabletmanagerdatapb.TableDefinition, repairType repairType, statsCounters []*stats.Counters) *RowAggregator {
-	// Construct head and tail base commands for the repair statement.
+func NewRowAggregator(ctx context.Context, maxRows, maxSize int, insertChannel chan string, dbName string, td *tabletmanagerdatapb.TableDefinition, diffType DiffType, statsCounters []*stats.Counters) *RowAggregator {
+	// Construct head and tail base commands for the reconciliation statement.
 	var builder QueryBuilder
-	switch repairType {
-	case insert:
+	switch diffType {
+	case DiffMissing:
 		// Example: INSERT INTO test (id, sub_id, msg) VALUES (0, 10, 'a'), (1, 11, 'b')
 		builder = NewInsertsQueryBuilder(dbName, td)
-	case update:
+	case DiffNotEqual:
 		// Example: UPDATE test SET msg='a' WHERE id=0 AND sub_id=10
 		builder = NewUpdatesQueryBuilder(dbName, td)
 		// UPDATE ... SET does not support multiple rows as input.
 		maxRows = 1
-	case delet:
+	case DiffExtraneous:
 		// Example: DELETE FROM test WHERE (id, sub_id) IN ((0, 10), (1, 11))
 		builder = NewDeletesQueryBuilder(dbName, td)
 	default:
-		panic(fmt.Sprintf("unknown repairType: %v", repairType))
+		panic(fmt.Sprintf("unknown DiffType: %v", diffType))
 	}
 
-	if len(statsCounters) != len(repairTypes) {
-		panic(fmt.Sprintf("statsCounter has the wrong number of elements. got = %v, want = %v", len(statsCounters), len(repairTypes)))
+	if len(statsCounters) != len(DiffTypes) {
+		panic(fmt.Sprintf("statsCounter has the wrong number of elements. got = %v, want = %v", len(statsCounters), len(DiffTypes)))
 	}
 
 	return &RowAggregator{
@@ -78,13 +78,13 @@ func NewRowAggregator(ctx context.Context, maxRows, maxSize int, insertChannel c
 		maxSize:       maxSize,
 		insertChannel: insertChannel,
 		td:            td,
-		repairType:    repairType,
+		diffType:      diffType,
 		builder:       builder,
 		statsCounters: statsCounters,
 	}
 }
 
-// Add will add a new row which must be repaired.
+// Add will add a new row which must be reconciled.
 // If an error is returned, RowAggregator will be in an undefined state and must
 // not be used any longer.
 func (ra *RowAggregator) Add(row []sqltypes.Value) error {
@@ -128,7 +128,7 @@ func (ra *RowAggregator) flush() error {
 	}
 
 	// Update our statistics.
-	ra.statsCounters[ra.repairType].Add(ra.td.Name, int64(ra.bufferedRows))
+	ra.statsCounters[ra.diffType].Add(ra.td.Name, int64(ra.bufferedRows))
 
 	ra.buffer.Reset()
 	ra.bufferedRows = 0
