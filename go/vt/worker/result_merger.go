@@ -28,8 +28,6 @@ type ResultMerger struct {
 	// output is the buffer of merged rows. Once it's full, we'll return it in
 	// Next() (wrapped in a sqltypes.Result).
 	output [][]sqltypes.Value
-	// currentIndex is the index of the next row which will be set in "output".
-	currentIndex int
 	// nextRowHeap is a priority queue whose min value always points to the next
 	// row which should be merged into "output". See Next() for details.
 	nextRowHeap *nextRowHeap
@@ -104,12 +102,11 @@ func (rm *ResultMerger) Next() (*sqltypes.Result, error) {
 
 	// Current output buffer is not full and there is more than one input left.
 	// Keep merging rows from the inputs using the priority queue.
-	for rm.currentIndex < ResultSizeRows && len(rm.inputs) != 0 {
+	for len(rm.output) < ResultSizeRows && len(rm.inputs) != 0 {
 		// Get the next smallest row.
 		next := heap.Pop(rm.nextRowHeap).(*nextRow)
 		// Add it to the output.
-		rm.output[rm.currentIndex] = next.row
-		rm.currentIndex++
+		rm.output = append(rm.output, next.row)
 		// Check if the input we just popped has more rows.
 		if err := next.next(); err != nil {
 			if err == io.EOF {
@@ -143,14 +140,9 @@ func (rm *ResultMerger) Next() (*sqltypes.Result, error) {
 		heap.Push(rm.nextRowHeap, next)
 	}
 
-	if rm.currentIndex < len(rm.output) {
-		// Output is incomplete because it's the very last one. Adjust its length.
-		rm.output = rm.output[:rm.currentIndex]
-	}
-
 	result := &sqltypes.Result{
 		Fields:       rm.fields,
-		RowsAffected: uint64(rm.currentIndex),
+		RowsAffected: uint64(len(rm.output)),
 		Rows:         rm.output,
 	}
 	rm.reset()
@@ -169,8 +161,7 @@ func (rm *ResultMerger) deleteInput(deleteMe ResultReader) {
 
 func (rm *ResultMerger) reset() {
 	// Allocate the full array at once.
-	rm.output = make([][]sqltypes.Value, ResultSizeRows)
-	rm.currentIndex = 0
+	rm.output = make([][]sqltypes.Value, 0, ResultSizeRows)
 }
 
 func checkFieldsEqual(fields []*querypb.Field, inputs []ResultReader) error {
