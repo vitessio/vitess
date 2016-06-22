@@ -91,13 +91,13 @@ class TestMergeSharding(unittest.TestCase, base_sharding.BaseShardingTest):
     create_table_template = '''create table %s(
 id bigint not null,
 msg varchar(64),
-custom_sharding_key ''' + t + ''' not null,
+keyspace_id ''' + t + ''' not null,
 primary key (id),
 index by_msg (msg)
 ) Engine=InnoDB'''
     create_view_template = (
         'create view %s'
-        '(id, msg, custom_sharding_key) as select id, msg, custom_sharding_key '
+        '(id, msg, keyspace_id) as select id, msg, keyspace_id '
         'from %s')
 
     utils.run_vtctl(['ApplySchema',
@@ -115,15 +115,15 @@ index by_msg (msg)
 
   # _insert_value inserts a value in the MySQL database along with the comments
   # required for routing.
-  def _insert_value(self, tablet_obj, table, mid, msg, custom_sharding_key):
-    k = utils.uint64_to_hex(custom_sharding_key)
+  def _insert_value(self, tablet_obj, table, mid, msg, keyspace_id):
+    k = utils.uint64_to_hex(keyspace_id)
     tablet_obj.mquery(
         'vt_test_keyspace',
         ['begin',
-         'insert into %s(id, msg, custom_sharding_key) '
+         'insert into %s(id, msg, keyspace_id) '
          'values(%d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ '
          '/* id:%d */' %
-         (table, mid, msg, custom_sharding_key, k, mid),
+         (table, mid, msg, keyspace_id, k, mid),
          'commit'],
         write=True)
 
@@ -139,27 +139,27 @@ index by_msg (msg)
     """
     return tablet_obj.mquery(
         'vt_test_keyspace',
-        'select id, msg, custom_sharding_key from %s where id=%d' %
+        'select id, msg, keyspace_id from %s where id=%d' %
         (table, mid))
 
-  def _check_value(self, tablet_obj, table, mid, msg, custom_sharding_key,
+  def _check_value(self, tablet_obj, table, mid, msg, keyspace_id,
                    should_be_here=True):
     result = self._get_value(tablet_obj, table, mid)
     if keyspace_id_type == keyrange_constants.KIT_BYTES:
       fmt = '%s'
-      custom_sharding_key = pack_keyspace_id(custom_sharding_key)
+      keyspace_id = pack_keyspace_id(keyspace_id)
     else:
       fmt = '%x'
     if should_be_here:
-      self.assertEqual(result, ((mid, msg, custom_sharding_key),),
-                       ('Bad row in tablet %s for id=%d, custom_sharding_key=' +
+      self.assertEqual(result, ((mid, msg, keyspace_id),),
+                       ('Bad row in tablet %s for id=%d, keyspace_id=' +
                         fmt + ', row=%s') % (tablet_obj.tablet_alias, mid,
-                                             custom_sharding_key, str(result)))
+                                             keyspace_id, str(result)))
     else:
       self.assertEqual(
           len(result), 0,
-          ('Extra row in tablet %s for id=%d, custom_sharding_key=' +
-           fmt + ': %s') % (tablet_obj.tablet_alias, mid, custom_sharding_key,
+          ('Extra row in tablet %s for id=%d, keyspace_id=' +
+           fmt + ': %s') % (tablet_obj.tablet_alias, mid, keyspace_id,
                             str(result)))
 
   # _is_value_present_and_correct tries to read a value.
@@ -167,19 +167,19 @@ index by_msg (msg)
   # if not correct, it will self.fail.
   # if not there, it will return False.
   def _is_value_present_and_correct(
-      self, tablet_obj, table, mid, msg, custom_sharding_key):
+      self, tablet_obj, table, mid, msg, keyspace_id):
     result = self._get_value(tablet_obj, table, mid)
     if not result:
       return False
     if keyspace_id_type == keyrange_constants.KIT_BYTES:
       fmt = '%s'
-      custom_sharding_key = pack_keyspace_id(custom_sharding_key)
+      keyspace_id = pack_keyspace_id(keyspace_id)
     else:
       fmt = '%x'
-    self.assertEqual(result, ((mid, msg, custom_sharding_key),),
+    self.assertEqual(result, ((mid, msg, keyspace_id),),
                      ('Bad row in tablet %s for id=%d, '
-                      'custom_sharding_key=' + fmt) % (
-                          tablet_obj.tablet_alias, mid, custom_sharding_key))
+                      'keyspace_id=' + fmt) % (
+                          tablet_obj.tablet_alias, mid, keyspace_id))
     return True
 
   def _insert_startup_values(self):
@@ -246,7 +246,7 @@ index by_msg (msg)
 
   def test_merge_sharding(self):
     utils.run_vtctl(['CreateKeyspace',
-                     '--sharding_column_name', 'custom_sharding_key',
+                     '--sharding_column_name', 'keyspace_id',
                      '--sharding_column_type', keyspace_id_type,
                      'test_keyspace'])
 
@@ -263,7 +263,7 @@ index by_msg (msg)
     # rebuild and check SrvKeyspace
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
     ks = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_keyspace'])
-    self.assertEqual(ks['sharding_column_name'], 'custom_sharding_key')
+    self.assertEqual(ks['sharding_column_name'], 'keyspace_id')
 
     # create databases so vttablet can start behaving normally
     for t in [shard_0_master, shard_0_replica, shard_0_rdonly,
@@ -324,7 +324,7 @@ index by_msg (msg)
         'Partitions(rdonly): -40 40-80 80-\n'
         'Partitions(replica): -40 40-80 80-\n',
         keyspace_id_type=keyspace_id_type,
-        sharding_column_name='custom_sharding_key')
+        sharding_column_name='keyspace_id')
 
     # copy the schema
     utils.run_vtctl(['CopySchemaShard', shard_0_rdonly.tablet_alias,
@@ -427,7 +427,7 @@ index by_msg (msg)
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -40 40-80 80-\n',
                              keyspace_id_type=keyspace_id_type,
-                             sharding_column_name='custom_sharding_key')
+                             sharding_column_name='keyspace_id')
 
     # now serve replica from the split shards
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/-80', 'replica'],
@@ -437,7 +437,7 @@ index by_msg (msg)
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -80 80-\n',
                              keyspace_id_type=keyspace_id_type,
-                             sharding_column_name='custom_sharding_key')
+                             sharding_column_name='keyspace_id')
 
     # now serve master from the split shards
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/-80', 'master'],
@@ -447,7 +447,7 @@ index by_msg (msg)
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -80 80-\n',
                              keyspace_id_type=keyspace_id_type,
-                             sharding_column_name='custom_sharding_key')
+                             sharding_column_name='keyspace_id')
     utils.check_tablet_query_service(self, shard_0_master, False, True)
     utils.check_tablet_query_service(self, shard_1_master, False, True)
 
