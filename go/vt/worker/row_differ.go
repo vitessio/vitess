@@ -97,9 +97,9 @@ func compareFields(left, right []*querypb.Field) error {
 	return nil
 }
 
-// Go runs the diff and repair.
+// Diff runs the diff and repair.
 // If an error occurs, it will return and stop.
-func (rd *RowDiffer2) Go() (DiffReport, error) {
+func (rd *RowDiffer2) Diff() (DiffReport, error) {
 	var dr DiffReport
 	var err error
 
