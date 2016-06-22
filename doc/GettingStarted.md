@@ -208,7 +208,8 @@ In addition, Vitess requires the software and libraries listed below.
 
     ``` sh
     cd $WORKSPACE
-    git clone https://github.com/youtube/vitess.git src/github.com/youtube/vitess
+    git clone https://github.com/youtube/vitess.git \
+        src/github.com/youtube/vitess
     cd src/github.com/youtube/vitess
     ```
 
