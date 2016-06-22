@@ -452,11 +452,42 @@ func TestSplitCloneV2_Online_Offline(t *testing.T) {
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
 
+	// When the online clone inserted the last rows, modify the destination test
+	// query service such that it will return them as well.
+	tc.leftMasterFakeDb.getEntry(29).AfterFunc = func() {
+		for i := range []int{0, 1} {
+			tc.leftRdonlyQs[i].addGeneratedRows(100, 200)
+		}
+	}
+	tc.rightMasterFakeDb.getEntry(29).AfterFunc = func() {
+		for i := range []int{0, 1} {
+			tc.rightRdonlyQs[i].addGeneratedRows(100, 200)
+		}
+	}
+
 	// Run the vtworker command.
 	args := []string{"SplitClone"}
-	args = append(args, tc.defaultWorkerArgs[1:]...)
+	args = append(args, tc.defaultWorkerArgs[2:]...)
 	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
 		t.Fatal(err)
+	}
+	if inserts := statsOnlineInsertsCounters.Counts()["table1"]; inserts != 100 {
+		t.Errorf("wrong number of rows inserted: got = %v, want = %v", inserts, 100)
+	}
+	if updates := statsOnlineUpdatesCounters.Counts()["table1"]; updates != 0 {
+		t.Errorf("wrong number of rows updated: got = %v, want = %v", updates, 0)
+	}
+	if deletes := statsOnlineDeletesCounters.Counts()["table1"]; deletes != 0 {
+		t.Errorf("wrong number of rows deleted: got = %v, want = %v", deletes, 0)
+	}
+	if inserts := statsOfflineInsertsCounters.Counts()["table1"]; inserts != 0 {
+		t.Errorf("no stats for the offline clone phase should have been modified. got inserts = %v", inserts)
+	}
+	if updates := statsOfflineUpdatesCounters.Counts()["table1"]; updates != 0 {
+		t.Errorf("no stats for the offline clone phase should have been modified. got updates = %v", updates)
+	}
+	if deletes := statsOfflineDeletesCounters.Counts()["table1"]; deletes != 0 {
+		t.Errorf("no stats for the offline clone phase should have been modified. got deletes = %v", deletes)
 	}
 }
 
