@@ -99,7 +99,7 @@ func (ra *RowAggregator) Add(row []sqltypes.Value) error {
 	ra.bufferedRows++
 
 	if ra.bufferedRows >= ra.maxRows || ra.buffer.Len() >= ra.maxSize {
-		if err := ra.flush(); err != nil {
+		if err := ra.Flush(); err != nil {
 			return err
 		}
 	}
@@ -107,13 +107,8 @@ func (ra *RowAggregator) Add(row []sqltypes.Value) error {
 	return nil
 }
 
-// Close fluses any pending aggregates which haven't been sent out yet.
-func (ra *RowAggregator) Close() error {
-	return ra.flush()
-}
-
-// flush sends out the current aggregation buffer.
-func (ra *RowAggregator) flush() error {
+// Flush sends out the current aggregation buffer.
+func (ra *RowAggregator) Flush() error {
 	if ra.buffer.Len() == 0 {
 		// Already flushed.
 		return nil

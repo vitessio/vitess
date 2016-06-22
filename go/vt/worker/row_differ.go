@@ -217,10 +217,10 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 		}
 	}
 
-	// Close and flush all aggregators in case they have data buffered.
+	// Flush all aggregators in case they have buffered queries left.
 	for i := range rd.aggregators {
 		for _, aggregator := range rd.aggregators[i] {
-			if err := aggregator.Close(); err != nil {
+			if err := aggregator.Flush(); err != nil {
 				return dr, err
 			}
 		}
