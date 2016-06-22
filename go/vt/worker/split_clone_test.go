@@ -192,7 +192,7 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 		}
 		shqs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
 		shqs.AddDefaultHealthResponse()
-		qs := newTestQueryService(tc.t, sourceRdonly.Target(), shqs, 0, 1)
+		qs := newTestQueryService(tc.t, sourceRdonly.Target(), shqs, 0, 1, sourceRdonly.Tablet.Alias.Uid)
 		qs.addGeneratedRows(100, 100+rowsTotal)
 		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, qs)
 		tc.sourceRdonlyQs = append(tc.sourceRdonlyQs, qs)
@@ -201,7 +201,7 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 	for i, destRdonly := range []*testlib.FakeTablet{leftRdonly1, rightRdonly1, leftRdonly2, rightRdonly2} {
 		shqs := fakes.NewStreamHealthQueryService(destRdonly.Target())
 		shqs.AddDefaultHealthResponse()
-		qs := newTestQueryService(tc.t, destRdonly.Target(), shqs, i%2, 2)
+		qs := newTestQueryService(tc.t, destRdonly.Target(), shqs, i%2, 2, destRdonly.Tablet.Alias.Uid)
 		grpcqueryservice.RegisterForTest(destRdonly.RPCServer, qs)
 		if i%2 == 0 {
 			tc.leftRdonlyQs = append(tc.leftRdonlyQs, qs)
@@ -277,17 +277,19 @@ type testQueryService struct {
 	*fakes.StreamHealthQueryService
 	shardIndex int
 	shardCount int
+	tabletUID  uint32
 	fields     []*querypb.Field
 	rows       [][]sqltypes.Value
 }
 
-func newTestQueryService(t *testing.T, target querypb.Target, shqs *fakes.StreamHealthQueryService, shardIndex, shardCount int) *testQueryService {
+func newTestQueryService(t *testing.T, target querypb.Target, shqs *fakes.StreamHealthQueryService, shardIndex, shardCount int, tabletUID uint32) *testQueryService {
 	return &testQueryService{
 		t:      t,
 		target: target,
 		StreamHealthQueryService: shqs,
 		shardIndex:               shardIndex,
 		shardCount:               shardCount,
+		tabletUID:                tabletUID,
 		fields:                   v2Fields,
 	}
 }
@@ -312,7 +314,7 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 			}
 		}
 	}
-	sq.t.Logf("testQueryService: %v/%v/%v: got query: %v with min %v max (exclusive) %v", sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, sql, min, max)
+	sq.t.Logf("testQueryService: %v,%v/%v/%v: got query: %v with min %v max (exclusive) %v", sq.tabletUID, sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, sql, min, max)
 
 	// Send the headers.
 	if err := sendReply(&sqltypes.Result{Fields: sq.fields}); err != nil {
@@ -330,13 +332,13 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 				return err
 			}
 			// Uncomment the next line during debugging when needed.
-			// sq.t.Logf("testQueryService: %v/%v/%v/%v: sent row for id: %v row: %v", sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, sq.shardIndex, primaryKey, row)
+			// sq.t.Logf("testQueryService: %v,%v/%v/%v: sent row for id: %v row: %v", sq.tabletUID, sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, primaryKey, row)
 			rowsAffected++
 		}
 	}
 
 	if rowsAffected == 0 {
-		sq.t.Logf("testQueryService: %v/%v/%v: no rows were sent (%v are available)", sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, len(sq.rows))
+		sq.t.Logf("testQueryService: %v,%v/%v/%v: no rows were sent (%v are available)", sq.tabletUID, sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, len(sq.rows))
 	}
 	return nil
 }
