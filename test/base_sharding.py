@@ -7,9 +7,17 @@
 """This module contains a base class and utility functions for sharding tests.
 """
 
+import struct
+
 import logging
 
+from vtdb import keyrange_constants
+
 import utils
+
+
+keyspace_id_type = keyrange_constants.KIT_UINT64
+pack_keyspace_id = struct.Struct('!Q').pack
 
 
 class BaseShardingTest(object):
@@ -18,6 +26,84 @@ class BaseShardingTest(object):
   All sharding tests should inherit from this base class, and use the
   methods as needed.
   """
+
+  # _insert_value inserts a value in the MySQL database along with the comments
+  # required for routing.
+  def _insert_value(self, tablet_obj, table, mid, msg, keyspace_id):
+    k = utils.uint64_to_hex(keyspace_id)
+    tablet_obj.mquery(
+        'vt_test_keyspace',
+        ['begin',
+         'insert into %s(id, msg, keyspace_id) '
+         'values(%d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ '
+         '/* id:%d */' %
+         (table, mid, msg, keyspace_id, k, mid),
+         'commit'],
+        write=True)
+
+  def _get_value(self, tablet_obj, table, mid):
+    """Returns the row(s) from the table for the provided id, using MySQL.
+
+    Args:
+      tablet_obj: the tablet to get data from.
+      table: the table to query.
+      mid: id field of the table.
+    Returns:
+      A tuple of results.
+    """
+    return tablet_obj.mquery(
+        'vt_test_keyspace',
+        'select id, msg, keyspace_id from %s where id=%d' %
+        (table, mid))
+
+  def _check_value(self, tablet_obj, table, mid, msg, keyspace_id,
+                   should_be_here=True):
+    result = self._get_value(tablet_obj, table, mid)
+    if keyspace_id_type == keyrange_constants.KIT_BYTES:
+      fmt = '%s'
+      keyspace_id = pack_keyspace_id(keyspace_id)
+    else:
+      fmt = '%x'
+    if should_be_here:
+      self.assertEqual(result, ((mid, msg, keyspace_id),),
+                       ('Bad row in tablet %s for id=%d, keyspace_id=' +
+                        fmt + ', row=%s') % (tablet_obj.tablet_alias, mid,
+                                             keyspace_id, str(result)))
+    else:
+      self.assertEqual(
+          len(result), 0,
+          ('Extra row in tablet %s for id=%d, keyspace_id=' +
+           fmt + ': %s') % (tablet_obj.tablet_alias, mid, keyspace_id,
+                            str(result)))
+
+  def _is_value_present_and_correct(
+      self, tablet_obj, table, mid, msg, keyspace_id):
+    """_is_value_present_and_correct tries to read a value.
+
+    Args:
+      tablet_obj: the tablet to get data from.
+      table: the table to query.
+      mid: the id of the row to query.
+      msg: expected value of the msg column in the row.
+      keyspace_id: expected value of the keyspace_id column in the row.
+    Returns:
+      True if the value (row) is there and correct.
+      False if the value is not there.
+      If the value is not correct, the method will call self.fail.
+    """
+    result = self._get_value(tablet_obj, table, mid)
+    if not result:
+      return False
+    if keyspace_id_type == keyrange_constants.KIT_BYTES:
+      fmt = '%s'
+      keyspace_id = pack_keyspace_id(keyspace_id)
+    else:
+      fmt = '%x'
+    self.assertEqual(result, ((mid, msg, keyspace_id),),
+                     ('Bad row in tablet %s for id=%d, '
+                      'keyspace_id=' + fmt) % (
+                          tablet_obj.tablet_alias, mid, keyspace_id))
+    return True
 
   def check_binlog_player_vars(self, tablet_obj, source_shards,
                                seconds_behind_master_max=0):

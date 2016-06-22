@@ -16,8 +16,6 @@
 - we remove the original shard
 """
 
-import struct
-
 import logging
 import unittest
 
@@ -27,9 +25,6 @@ import base_sharding
 import environment
 import tablet
 import utils
-
-keyspace_id_type = keyrange_constants.KIT_UINT64
-pack_keyspace_id = struct.Struct('!Q').pack
 
 # initial shard, covers everything
 shard_master = tablet.Tablet()
@@ -92,7 +87,7 @@ index by_msg (msg)
                     auto_log=True)
 
   def _add_sharding_key_to_schema(self):
-    if keyspace_id_type == keyrange_constants.KIT_BYTES:
+    if base_sharding.keyspace_id_type == keyrange_constants.KIT_BYTES:
       t = 'varbinary(64)'
     else:
       t = 'bigint(20) unsigned'
@@ -103,7 +98,7 @@ index by_msg (msg)
                     auto_log=True)
 
   def _mark_sharding_key_not_null(self):
-    if keyspace_id_type == keyrange_constants.KIT_BYTES:
+    if base_sharding.keyspace_id_type == keyrange_constants.KIT_BYTES:
       t = 'varbinary(64)'
     else:
       t = 'bigint(20) unsigned'
@@ -135,64 +130,6 @@ index by_msg (msg)
         'update resharding1 set keyspace_id=0xD000000000000000 where id=3',
         'commit'
         ], write=True)
-
-  # _insert_value inserts a value in the MySQL database along with the comments
-  # required for routing.
-  def _insert_value(self, tablet_obj, table, mid, msg, keyspace_id):
-    k = utils.uint64_to_hex(keyspace_id)
-    tablet_obj.mquery(
-        'vt_test_keyspace',
-        ['begin',
-         'insert into %s(id, msg, keyspace_id) '
-         'values(%d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ '
-         '/* user_id:%d */' %
-         (table, mid, msg, keyspace_id, k, mid),
-         'commit'],
-        write=True)
-
-  def _get_value(self, tablet_obj, table, mid):
-    return tablet_obj.mquery(
-        'vt_test_keyspace',
-        'select id, msg, keyspace_id from %s where id=%d' % (table, mid))
-
-  def _check_value(self, tablet_obj, table, mid, msg, keyspace_id,
-                   should_be_here=True):
-    result = self._get_value(tablet_obj, table, mid)
-    if keyspace_id_type == keyrange_constants.KIT_BYTES:
-      fmt = '%s'
-      keyspace_id = pack_keyspace_id(keyspace_id)
-    else:
-      fmt = '%x'
-    if should_be_here:
-      self.assertEqual(result, ((mid, msg, keyspace_id),),
-                       ('Bad row in tablet %s for id=%d, keyspace_id=' +
-                        fmt + ', row=%s') % (tablet_obj.tablet_alias, mid,
-                                             keyspace_id, str(result)))
-    else:
-      self.assertEqual(
-          len(result), 0,
-          ('Extra row in tablet %s for id=%d, keyspace_id=' +
-           fmt + ': %s') % (tablet_obj.tablet_alias, mid, keyspace_id,
-                            str(result)))
-
-  # _is_value_present_and_correct tries to read a value.
-  # if it is there, it will check it is correct and return True if it is.
-  # if not correct, it will self.fail.
-  # if not there, it will return False.
-  def _is_value_present_and_correct(
-      self, tablet_obj, table, mid, msg, keyspace_id):
-    result = self._get_value(tablet_obj, table, mid)
-    if not result:
-      return False
-    if keyspace_id_type == keyrange_constants.KIT_BYTES:
-      fmt = '%s'
-      keyspace_id = pack_keyspace_id(keyspace_id)
-    else:
-      fmt = '%x'
-    self.assertEqual(result, ((mid, msg, keyspace_id),),
-                     ('Bad row in tablet %s for id=%d, keyspace_id=' + fmt) % (
-                         tablet_obj.tablet_alias, mid, keyspace_id))
-    return True
 
   def _check_startup_values(self):
     # check first value is in the right shard
@@ -326,7 +263,7 @@ index by_msg (msg)
 
     # now we can be a sharded keyspace (and propagate to SrvKeyspace)
     utils.run_vtctl(['SetKeyspaceShardingInfo', 'test_keyspace',
-                     'keyspace_id', keyspace_id_type])
+                     'keyspace_id', base_sharding.keyspace_id_type])
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'],
                     auto_log=True)
 
@@ -427,7 +364,7 @@ index by_msg (msg)
                              'Partitions(master): -\n'
                              'Partitions(rdonly): -\n'
                              'Partitions(replica): -\n',
-                             keyspace_id_type=keyspace_id_type)
+                             keyspace_id_type=base_sharding.keyspace_id_type)
 
     # we need to create the schema, and the worker will do data copying
     for keyspace_shard in ('test_keyspace/-80', 'test_keyspace/80-'):
@@ -512,7 +449,7 @@ index by_msg (msg)
                              'Partitions(master): -\n'
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -\n',
-                             keyspace_id_type=keyspace_id_type)
+                             keyspace_id_type=base_sharding.keyspace_id_type)
 
     # make sure rdonly tablets are back to serving before hitting vtgate.
     for t in [shard_0_rdonly1, shard_1_rdonly1]:
@@ -541,7 +478,7 @@ index by_msg (msg)
                              'Partitions(master): -\n'
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=keyspace_id_type)
+                             keyspace_id_type=base_sharding.keyspace_id_type)
 
     # move replica back and forth
     utils.run_vtctl(
@@ -555,7 +492,7 @@ index by_msg (msg)
                              'Partitions(master): -\n'
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -\n',
-                             keyspace_id_type=keyspace_id_type)
+                             keyspace_id_type=base_sharding.keyspace_id_type)
 
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'replica'],
                     auto_log=True)
@@ -567,7 +504,7 @@ index by_msg (msg)
                              'Partitions(master): -\n'
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=keyspace_id_type)
+                             keyspace_id_type=base_sharding.keyspace_id_type)
 
     # then serve master from the split shards
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'master'],
@@ -576,7 +513,7 @@ index by_msg (msg)
                              'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=keyspace_id_type)
+                             keyspace_id_type=base_sharding.keyspace_id_type)
 
     # check the binlog players are gone now
     self.check_no_binlog_player(shard_0_master)

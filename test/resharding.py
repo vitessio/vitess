@@ -22,7 +22,6 @@ effects, like:
 - makes sure the key range rules are properly enforced on masters.
 """
 
-import struct
 import threading
 import time
 
@@ -37,9 +36,6 @@ import base_sharding
 import environment
 import tablet
 import utils
-
-keyspace_id_type = keyrange_constants.KIT_UINT64
-pack_keyspace_id = struct.Struct('!Q').pack
 
 # initial shards
 # range '' - 80
@@ -137,7 +133,7 @@ class InsertThread(threading.Thread):
              'commit'],
             write=True, user='vt_app')
         time.sleep(0.2)
-    except Exception:
+    except Exception:  # pylint: disable=broad-except
       logging.exception('InsertThread got exception.')
 
 
@@ -173,7 +169,7 @@ class MonitorLagThread(threading.Thread):
           if lag_ms > self.max_lag_ms:
             self.max_lag_ms = lag_ms
         time.sleep(1.0)
-    except Exception:
+    except Exception:  # pylint: disable=broad-except
       logging.exception('MonitorLagThread got exception.')
 
 
@@ -182,7 +178,7 @@ class TestResharding(unittest.TestCase, base_sharding.BaseShardingTest):
   # create_schema will create the same schema on the keyspace
   # then insert some values
   def _create_schema(self):
-    if keyspace_id_type == keyrange_constants.KIT_BYTES:
+    if base_sharding.keyspace_id_type == keyrange_constants.KIT_BYTES:
       t = 'varbinary(64)'
     else:
       t = 'bigint(20) unsigned'
@@ -228,66 +224,6 @@ primary key (name)
                      '-sql=' + create_unrelated_table,
                      'test_keyspace'],
                     auto_log=True)
-
-  # _insert_value inserts a value in the MySQL database along with the comments
-  # required for routing.
-  def _insert_value(self, tablet_obj, table, mid, msg, keyspace_id):
-    k = utils.uint64_to_hex(keyspace_id)
-    tablet_obj.mquery(
-        'vt_test_keyspace',
-        ['begin',
-         'insert into %s(id, msg, keyspace_id) '
-         'values(%d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ '
-         '/* user_id:%d */' %
-         (table, mid, msg, keyspace_id, k, mid),
-         'commit'],
-        write=True)
-
-  def _get_value(self, tablet_obj, table, mid):
-    return tablet_obj.mquery(
-        'vt_test_keyspace',
-        'select id, msg, keyspace_id from %s where id=%d' %
-        (table, mid))
-
-  def _check_value(self, tablet_obj, table, mid, msg, keyspace_id,
-                   should_be_here=True):
-    result = self._get_value(tablet_obj, table, mid)
-    if keyspace_id_type == keyrange_constants.KIT_BYTES:
-      fmt = '%s'
-      keyspace_id = pack_keyspace_id(keyspace_id)
-    else:
-      fmt = '%x'
-    if should_be_here:
-      self.assertEqual(result, ((mid, msg, keyspace_id),),
-                       ('Bad row in tablet %s for id=%d, keyspace_id=' +
-                        fmt + ', row=%s') % (tablet_obj.tablet_alias, mid,
-                                             keyspace_id, str(result)))
-    else:
-      self.assertEqual(
-          len(result), 0,
-          ('Extra row in tablet %s for id=%d, keyspace_id=' +
-           fmt + ': %s') % (tablet_obj.tablet_alias, mid, keyspace_id,
-                            str(result)))
-
-  # _is_value_present_and_correct tries to read a value.
-  # if it is there, it will check it is correct and return True if it is.
-  # if not correct, it will self.fail.
-  # if not there, it will return False.
-  def _is_value_present_and_correct(
-      self, tablet_obj, table, mid, msg, keyspace_id):
-    result = self._get_value(tablet_obj, table, mid)
-    if not result:
-      return False
-    if keyspace_id_type == keyrange_constants.KIT_BYTES:
-      fmt = '%s'
-      keyspace_id = pack_keyspace_id(keyspace_id)
-    else:
-      fmt = '%x'
-    self.assertEqual(result, ((mid, msg, keyspace_id),),
-                     ('Bad row in tablet %s for id=%d, '
-                      'keyspace_id=' + fmt) % (
-                          tablet_obj.tablet_alias, mid, keyspace_id))
-    return True
 
   def _insert_startup_values(self):
     self._insert_value(shard_0_master, 'resharding1', 1, 'msg1',
@@ -403,7 +339,8 @@ primary key (name)
     utils.run_vtctl(['SetKeyspaceShardingInfo', 'test_keyspace',
                      'keyspace_id', 'uint64'], expect_fail=True)
     utils.run_vtctl(['SetKeyspaceShardingInfo', '-force',
-                     'test_keyspace', 'keyspace_id', keyspace_id_type])
+                     'test_keyspace',
+                     'keyspace_id', base_sharding.keyspace_id_type])
 
     shard_0_master.init_tablet('master', 'test_keyspace', '-80')
     shard_0_replica.init_tablet('replica', 'test_keyspace', '-80')
@@ -419,7 +356,8 @@ primary key (name)
     self.assertEqual(ks['sharding_column_name'], 'keyspace_id')
 
     # we set full_mycnf_args to True as a test in the KIT_BYTES case
-    full_mycnf_args = keyspace_id_type == keyrange_constants.KIT_BYTES
+    full_mycnf_args = (base_sharding.keyspace_id_type ==
+                       keyrange_constants.KIT_BYTES)
 
     # create databases so vttablet can start behaving somewhat normally
     for t in [shard_0_master, shard_0_replica, shard_0_ny_rdonly,
@@ -502,7 +440,7 @@ primary key (name)
         'Partitions(master): -80 80-\n'
         'Partitions(rdonly): -80 80-\n'
         'Partitions(replica): -80 80-\n',
-        keyspace_id_type=keyspace_id_type,
+        keyspace_id_type=base_sharding.keyspace_id_type,
         sharding_column_name='keyspace_id')
 
     # disable shard_1_slave2, so we're sure filtered replication will go
@@ -650,13 +588,13 @@ primary key (name)
                              'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-c0 c0-\n'
                              'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=keyspace_id_type,
+                             keyspace_id_type=base_sharding.keyspace_id_type,
                              sharding_column_name='keyspace_id')
     utils.check_srv_keyspace('test_ny', 'test_keyspace',
                              'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=keyspace_id_type,
+                             keyspace_id_type=base_sharding.keyspace_id_type,
                              sharding_column_name='keyspace_id')
     utils.check_tablet_query_service(self, shard_0_ny_rdonly, True, False)
     utils.check_tablet_query_service(self, shard_1_ny_rdonly, True, False)
@@ -669,13 +607,13 @@ primary key (name)
                              'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-c0 c0-\n'
                              'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=keyspace_id_type,
+                             keyspace_id_type=base_sharding.keyspace_id_type,
                              sharding_column_name='keyspace_id')
     utils.check_srv_keyspace('test_ny', 'test_keyspace',
                              'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-c0 c0-\n'
                              'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=keyspace_id_type,
+                             keyspace_id_type=base_sharding.keyspace_id_type,
                              sharding_column_name='keyspace_id')
     utils.check_tablet_query_service(self, shard_0_ny_rdonly, True, False)
     utils.check_tablet_query_service(self, shard_1_ny_rdonly, False, True)
@@ -690,7 +628,7 @@ primary key (name)
                              'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-c0 c0-\n'
                              'Partitions(replica): -80 80-c0 c0-\n',
-                             keyspace_id_type=keyspace_id_type,
+                             keyspace_id_type=base_sharding.keyspace_id_type,
                              sharding_column_name='keyspace_id')
     utils.check_tablet_query_service(self, shard_1_slave2, False, True)
 
@@ -710,7 +648,7 @@ primary key (name)
                              'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-c0 c0-\n'
                              'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=keyspace_id_type,
+                             keyspace_id_type=base_sharding.keyspace_id_type,
                              sharding_column_name='keyspace_id')
 
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'replica'],
@@ -727,7 +665,7 @@ primary key (name)
                              'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-c0 c0-\n'
                              'Partitions(replica): -80 80-c0 c0-\n',
-                             keyspace_id_type=keyspace_id_type,
+                             keyspace_id_type=base_sharding.keyspace_id_type,
                              sharding_column_name='keyspace_id')
 
     # reparent shard_2 to shard_2_replica1, then insert more data and
@@ -785,7 +723,7 @@ primary key (name)
                              'Partitions(master): -80 80-c0 c0-\n'
                              'Partitions(rdonly): -80 80-c0 c0-\n'
                              'Partitions(replica): -80 80-c0 c0-\n',
-                             keyspace_id_type=keyspace_id_type,
+                             keyspace_id_type=base_sharding.keyspace_id_type,
                              sharding_column_name='keyspace_id')
     utils.check_tablet_query_service(self, shard_1_master, False, True)
 
