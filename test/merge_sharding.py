@@ -110,29 +110,29 @@ index by_msg (msg)
 
   def _insert_startup_values(self):
     # row covered by shard -40 (should be merged).
-    self._insert_value(shard_0_master, 'resharding1', 0, 'msg1',
+    self._insert_value(shard_0_master, 'resharding1', 1, 'msg1',
                        0x1000000000000000)
     # row covered by shard 40-80 (should be merged).
-    self._insert_value(shard_1_master, 'resharding1', 1, 'msg2',
+    self._insert_value(shard_1_master, 'resharding1', 2, 'msg2',
                        0x5000000000000000)
     # row covered by shard 80- (must not be merged).
-    self._insert_value(shard_2_master, 'resharding1', 2, 'msg3',
+    self._insert_value(shard_2_master, 'resharding1', 3, 'msg3',
                        0xD000000000000000)
 
   def _check_startup_values(self):
     # check first two values are in the right shard
-    self._check_value(shard_dest_master, 'resharding1', 0, 'msg1',
+    self._check_value(shard_dest_master, 'resharding1', 1, 'msg1',
                       0x1000000000000000)
-    self._check_value(shard_dest_replica, 'resharding1', 0, 'msg1',
+    self._check_value(shard_dest_replica, 'resharding1', 1, 'msg1',
                       0x1000000000000000)
-    self._check_value(shard_dest_rdonly, 'resharding1', 0, 'msg1',
+    self._check_value(shard_dest_rdonly, 'resharding1', 1, 'msg1',
                       0x1000000000000000)
 
-    self._check_value(shard_dest_master, 'resharding1', 1, 'msg2',
+    self._check_value(shard_dest_master, 'resharding1', 2, 'msg2',
                       0x5000000000000000)
-    self._check_value(shard_dest_replica, 'resharding1', 1, 'msg2',
+    self._check_value(shard_dest_replica, 'resharding1', 2, 'msg2',
                       0x5000000000000000)
-    self._check_value(shard_dest_rdonly, 'resharding1', 1, 'msg2',
+    self._check_value(shard_dest_rdonly, 'resharding1', 2, 'msg2',
                       0x5000000000000000)
 
   def _insert_lots(self, count, base=0):
@@ -257,17 +257,57 @@ index by_msg (msg)
                      'test_keyspace/-80'], auto_log=True)
 
     # copy the data (will also start filtered replication), reset source
-    utils.run_vtworker(['--cell', 'test_nj',
-                        '--command_display_interval', '10ms',
-                        'SplitClone',
-                        '--min_table_size_for_split', '1',
-                        '--min_healthy_rdonly_tablets', '1',
-                        'test_keyspace/-80'],
-                       auto_log=True)
+    # Run vtworker as daemon for the following SplitClone commands.
+    worker_proc, worker_port, worker_rpc_port = utils.run_vtworker_bg(
+        ['--cell', 'test_nj', '--command_display_interval', '10ms'],
+        auto_log=True)
+
+    # Initial clone (online).
+    workerclient_proc = utils.run_vtworker_client_bg(
+        ['SplitClone',
+         '--offline=false',
+         '--min_table_size_for_split', '1',
+         '--min_healthy_rdonly_tablets', '1',
+         'test_keyspace/-80'],
+        worker_rpc_port)
+    utils.wait_procs([workerclient_proc])
+    self.verify_reconciliation_counters(worker_port, 'Online', 'resharding1',
+                                        2, 0, 0)
+
+    # Reset vtworker such that we can run the next command.
+    workerclient_proc = utils.run_vtworker_client_bg(['Reset'], worker_rpc_port)
+    utils.wait_procs([workerclient_proc])
+
+    # Modify the destination shard. SplitClone will revert the changes.
+    # Delete row 1 (provokes an insert).
+    shard_dest_master.mquery('vt_test_keyspace',
+                             'delete from resharding1 where id=1', write=True)
+    # Update row 2 (provokes an update).
+    shard_dest_master.mquery(
+        'vt_test_keyspace', "update resharding1 set msg='msg-not-2' where id=2",
+        write=True)
+    # Insert row 0 (provokes a delete).
+    self._insert_value(shard_dest_master, 'resharding1', 0, 'msg0',
+                       0x5000000000000000)
+
+    workerclient_proc = utils.run_vtworker_client_bg(
+        ['SplitClone',
+         '--min_table_size_for_split', '1',
+         '--min_healthy_rdonly_tablets', '1',
+         'test_keyspace/-80'],
+        worker_rpc_port)
+    utils.wait_procs([workerclient_proc])
+    # Change tablets, which were taken offline, back to rdonly.
     utils.run_vtctl(['ChangeSlaveType', shard_0_rdonly.tablet_alias,
                      'rdonly'], auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly.tablet_alias,
                      'rdonly'], auto_log=True)
+    self.verify_reconciliation_counters(worker_port, 'Online', 'resharding1',
+                                        1, 1, 1)
+    self.verify_reconciliation_counters(worker_port, 'Offline', 'resharding1',
+                                        0, 0, 0)
+    # Terminate worker daemon because it is no longer needed.
+    utils.kill_sub_process(worker_proc, soft=True)
 
     # check the startup values are in the right place
     self._check_startup_values()

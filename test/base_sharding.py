@@ -277,3 +277,26 @@ class BaseShardingTest(object):
     for name in names:
       self.assertIn('| %s | %s |' % (name, new_rate), stdout)
     self.assertIn('%d active throttler(s)' % len(names), stdout)
+
+  def verify_reconciliation_counters(self, worker_port, online_or_offline,
+                                     table, inserts, updates, deletes):
+    """Checks that the reconciliation Counters have the expected values."""
+    worker_vars = utils.get_vars(worker_port)
+
+    i = worker_vars['Worker' + online_or_offline + 'InsertsCounters']
+    if inserts == 0:
+      self.assertNotIn(table, i)
+    else:
+      self.assertEqual(i[table], inserts)
+
+    u = worker_vars['Worker' + online_or_offline + 'UpdatesCounters']
+    if updates == 0:
+      self.assertNotIn(table, u)
+    else:
+      self.assertEqual(u[table], updates)
+
+    d = worker_vars['Worker' + online_or_offline + 'DeletesCounters']
+    if deletes == 0:
+      self.assertNotIn(table, d)
+    else:
+      self.assertEqual(d[table], deletes)

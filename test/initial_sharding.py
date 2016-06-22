@@ -132,7 +132,7 @@ index by_msg (msg)
         ], write=True)
 
   def _check_startup_values(self):
-    # check first value is in the right shard
+    # check first value is in the left shard
     for t in [shard_0_master, shard_0_replica, shard_0_rdonly1]:
       self._check_value(t, 'resharding1', 1, 'msg1', 0x1000000000000000)
     for t in [shard_1_master, shard_1_replica, shard_1_rdonly1]:
@@ -375,14 +375,57 @@ index by_msg (msg)
                       auto_log=True)
     utils.run_vtctl(['RunHealthCheck', shard_rdonly1.tablet_alias])
 
-    utils.run_vtworker(['--cell', 'test_nj',
-                        '--command_display_interval', '10ms',
-                        'SplitClone',
-                        '--exclude_tables', 'unrelated',
-                        '--min_table_size_for_split', '1',
-                        '--min_healthy_rdonly_tablets', '1',
-                        'test_keyspace/0'],
-                       auto_log=True)
+    # Run vtworker as daemon for the following SplitClone commands.
+    worker_proc, worker_port, worker_rpc_port = utils.run_vtworker_bg(
+        ['--cell', 'test_nj', '--command_display_interval', '10ms'],
+        auto_log=True)
+
+    # Initial clone (online).
+    workerclient_proc = utils.run_vtworker_client_bg(
+        ['SplitClone',
+         '--offline=false',
+         '--exclude_tables', 'unrelated',
+         '--min_table_size_for_split', '1',
+         '--min_healthy_rdonly_tablets', '1',
+         'test_keyspace/0'],
+        worker_rpc_port)
+    utils.wait_procs([workerclient_proc])
+    self.verify_reconciliation_counters(worker_port, 'Online', 'resharding1',
+                                        3, 0, 0)
+
+    # Reset vtworker such that we can run the next command.
+    workerclient_proc = utils.run_vtworker_client_bg(['Reset'], worker_rpc_port)
+    utils.wait_procs([workerclient_proc])
+
+    # Modify the destination shard. SplitClone will revert the changes.
+    # Delete row 1 (provokes an insert).
+    shard_0_master.mquery('vt_test_keyspace',
+                          'delete from resharding1 where id=1', write=True)
+    # Delete row 2 (provokes an insert).
+    shard_1_master.mquery('vt_test_keyspace',
+                          'delete from resharding1 where id=2', write=True)
+    # Update row 3 (provokes an update).
+    shard_1_master.mquery('vt_test_keyspace',
+                          "update resharding1 set msg='msg-not-3' where id=3",
+                          write=True)
+    # Insert row 4 (provokes a delete).
+    self._insert_value(shard_1_master, 'resharding1', 4, 'msg4',
+                       0xD000000000000000)
+
+    workerclient_proc = utils.run_vtworker_client_bg(
+        ['SplitClone',
+         '--exclude_tables', 'unrelated',
+         '--min_table_size_for_split', '1',
+         '--min_healthy_rdonly_tablets', '1',
+         'test_keyspace/0'],
+        worker_rpc_port)
+    utils.wait_procs([workerclient_proc])
+    self.verify_reconciliation_counters(worker_port, 'Online', 'resharding1',
+                                        2, 1, 1)
+    self.verify_reconciliation_counters(worker_port, 'Offline', 'resharding1',
+                                        0, 0, 0)
+    # Terminate worker daemon because it is no longer needed.
+    utils.kill_sub_process(worker_proc, soft=True)
 
     # check the startup values are in the right place
     self._check_startup_values()

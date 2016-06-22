@@ -454,23 +454,66 @@ primary key (name)
                        shard_1_rdonly1.tablet_alias, keyspace_shard],
                       auto_log=True)
 
+    # Run vtworker as daemon for the following SplitClone commands.
+    worker_proc, worker_port, worker_rpc_port = utils.run_vtworker_bg(
+        ['--cell', 'test_nj', '--command_display_interval', '10ms'],
+        auto_log=True)
+
     # Copy the data from the source to the destination shards.
     # min_table_size_for_split is set to 1 as to force a split even on the
     # small table we have.
     # --max_tps is only specified to enable the throttler and ensure that the
     # code is executed. But the intent here is not to throttle the test, hence
     # the rate limit is set very high.
-    utils.run_vtworker(['--cell', 'test_nj',
-                        '--command_display_interval', '10ms',
-                        'SplitClone',
-                        '--exclude_tables', 'unrelated',
-                        '--min_table_size_for_split', '1',
-                        '--min_healthy_rdonly_tablets', '1',
-                        '--max_tps', '9999',
-                        'test_keyspace/80-'],
-                       auto_log=True)
+    #
+    # Initial clone (online).
+    workerclient_proc = utils.run_vtworker_client_bg(
+        ['SplitClone',
+         '--offline=false',
+         '--exclude_tables', 'unrelated',
+         '--min_table_size_for_split', '1',
+         '--min_healthy_rdonly_tablets', '1',
+         '--max_tps', '9999',
+         'test_keyspace/80-'],
+        worker_rpc_port)
+    utils.wait_procs([workerclient_proc])
+    self.verify_reconciliation_counters(worker_port, 'Online', 'resharding1',
+                                        2, 0, 0)
+
+    # Reset vtworker such that we can run the next command.
+    workerclient_proc = utils.run_vtworker_client_bg(['Reset'], worker_rpc_port)
+    utils.wait_procs([workerclient_proc])
+
+    # Modify the destination shard. SplitClone will revert the changes.
+    # Delete row 2 (provokes an insert).
+    shard_2_master.mquery('vt_test_keyspace',
+                          'delete from resharding1 where id=2', write=True)
+    # Update row 3 (provokes an update).
+    shard_3_master.mquery('vt_test_keyspace',
+                          "update resharding1 set msg='msg-not-3' where id=3",
+                          write=True)
+    # Insert row 4 (provokes a delete).
+    self._insert_value(shard_3_master, 'resharding1', 4, 'msg4',
+                       0xD000000000000000)
+
+    workerclient_proc = utils.run_vtworker_client_bg(
+        ['SplitClone',
+         '--exclude_tables', 'unrelated',
+         '--min_table_size_for_split', '1',
+         '--min_healthy_rdonly_tablets', '1',
+         '--max_tps', '9999',
+         'test_keyspace/80-'],
+        worker_rpc_port)
+    utils.wait_procs([workerclient_proc])
+    # Change tablet, which was taken offline, back to rdonly.
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly1.tablet_alias,
                      'rdonly'], auto_log=True)
+    self.verify_reconciliation_counters(worker_port, 'Online', 'resharding1',
+                                        1, 1, 1)
+    self.verify_reconciliation_counters(worker_port, 'Offline', 'resharding1',
+                                        0, 0, 0)
+    # Terminate worker daemon because it is no longer needed.
+    utils.kill_sub_process(worker_proc, soft=True)
 
     # TODO(alainjobart): experiment with the dontStartBinlogPlayer option
 

@@ -57,18 +57,18 @@ var (
 	statsStateDurationsNs = stats.NewCounters("WorkerStateDurations")
 	// statsOnlineInsertsCounters tracks for every table how many rows were
 	// inserted during the online clone (reconciliation) phase.
-	statsOnlineInsertsCounters = stats.NewCounters("OnlineInsertsCounters")
+	statsOnlineInsertsCounters = stats.NewCounters("WorkerOnlineInsertsCounters")
 	// statsOnlineUpdatesCounters tracks for every table how many rows were updated.
-	statsOnlineUpdatesCounters = stats.NewCounters("OnlineUpdatesCounters")
+	statsOnlineUpdatesCounters = stats.NewCounters("WorkerOnlineUpdatesCounters")
 	// statsOnlineUpdatesCounters tracks for every table how many rows were deleted.
-	statsOnlineDeletesCounters = stats.NewCounters("OnlineDeletesCounters")
+	statsOnlineDeletesCounters = stats.NewCounters("WorkerOnlineDeletesCounters")
 	// statsOfflineInsertsCounters tracks for every table how many rows were
 	// inserted during the online clone (reconciliation) phase.
-	statsOfflineInsertsCounters = stats.NewCounters("OfflineInsertsCounters")
+	statsOfflineInsertsCounters = stats.NewCounters("WorkerOfflineInsertsCounters")
 	// statsOfflineUpdatesCounters tracks for every table how many rows were updated.
-	statsOfflineUpdatesCounters = stats.NewCounters("OfflineUpdatesCounters")
+	statsOfflineUpdatesCounters = stats.NewCounters("WorkerOfflineUpdatesCounters")
 	// statsOfflineUpdatesCounters tracks for every table how many rows were deleted.
-	statsOfflineDeletesCounters = stats.NewCounters("OfflineDeletesCounters")
+	statsOfflineDeletesCounters = stats.NewCounters("WorkerOfflineDeletesCounters")
 )
 
 const (
