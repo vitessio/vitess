@@ -54,9 +54,7 @@ func (t *TabletTracker) Track(stats []*discovery.TabletStats) *topodata.TabletAl
 		for _, stat := range stats {
 			key := topoproto.TabletAliasString(stat.Tablet.Alias)
 			if key == aliasString {
-				count := t.usedTablets[key]
-				count++
-				t.usedTablets[key] = count
+				t.usedTablets[key]++
 				return stat.Tablet.Alias
 			}
 		}
@@ -91,9 +89,10 @@ func (t *TabletTracker) tabletsByUsage() []string {
 	return tablets
 }
 
-// Sort by value taken from: https://groups.google.com/d/msg/golang-nuts/FT7cjmcL7gw/Gj4_aEsE_IsJ
+// Sort by value was originally written by Andrew Gerrand:
+// Source: https://groups.google.com/d/msg/golang-nuts/FT7cjmcL7gw/Gj4_aEsE_IsJ
 
-// Pair represents a table (Key) and its usage (Value).
+// Pair represents a tablet (Key) and its usage (Value).
 type Pair struct {
 	Key   string
 	Value int
