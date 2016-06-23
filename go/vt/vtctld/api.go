@@ -3,6 +3,7 @@ package vtctld
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -20,6 +21,10 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
+)
+
+var (
+	localCell = flag.String("cell", "", "cell to use")
 )
 
 // This file implements a REST-style API for the vtctld web interface.
@@ -175,7 +180,14 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 		if len(parts) != 2 {
 			//request was incorrectly formatted
 			return nil, fmt.Errorf("invalid srvkeyspace path: %q  expected path: /srv_keyspace/<cell>/<keyspace>", keyspacePath)
-		} else if parts[1] == "" {
+		}
+		if parts[0] == "local" {
+			if *localCell == "" {
+				return nil, fmt.Errorf("local cell requested, but not specified. Please set with -cell flag")
+			}
+			parts[0] = *localCell
+		}
+		if parts[1] == "" {
 			cell := parts[0]
 			keyspaceNames, err := ts.GetSrvKeyspaceNames(ctx, cell)
 			if err != nil {

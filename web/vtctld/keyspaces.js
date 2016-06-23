@@ -9,6 +9,10 @@ app.controller('KeyspacesCtrl', function($scope, keyspaces, srv_keyspace, shards
   $scope.actions = actions;
   $scope.servingShards = {};
 
+  $scope.hasServingData = function(keyspace) {
+    return keyspace in $scope.servingShards;
+  }
+
   $scope.isServing = function(name, keyspaceName) {
     return name in $scope.servingShards[keyspaceName];
   }
@@ -22,10 +26,8 @@ app.controller('KeyspacesCtrl', function($scope, keyspaces, srv_keyspace, shards
   }
 
   $scope.refreshData = function() {
-    var cell = "test";
-    var keyspace = "";
     //Refresh set of serving shards
-    refreshSrvKeyspaces(cell, keyspace);
+    refreshSrvKeyspaces("local", "");
     // Get list of keyspace names.
     keyspaces.query(function(ksnames) {
       $scope.keyspaces = [];
