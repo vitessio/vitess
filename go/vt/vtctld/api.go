@@ -172,7 +172,10 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 		parts := strings.SplitN(keyspacePath, "/", 2)
 		//If no keyspace is provided returns all srvkeyspaces
 		srvKeyspaces := make(map[string]interface{})
-		if len(parts) == 1 {
+		if len(parts) != 2 {
+			//request was incorrectly formatted
+			return nil, fmt.Errorf("invalid srvkeyspace path: %q  expected path: /srv_keyspace/<cell>/<keyspace>", keyspacePath)
+		} else if parts[1] == "" {
 			cell := parts[0]
 			keyspaceNames, err := ts.GetSrvKeyspaceNames(ctx, cell)
 			if err != nil {
@@ -185,7 +188,7 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 					return nil, err
 				}
 			}
-		} else if len(parts) == 2 {
+		} else {
 			//If a keyspace is provided then return the specified srvkeyspace
 			cell := parts[0]
 			keyspace := parts[1]
@@ -193,9 +196,6 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 			if err != nil {
 				return nil, err
 			}
-		} else {
-			//request was incorrectly formatted
-			return nil, fmt.Errorf("invalid srvkeyspace path: %q  expected path: /srv_keyspace/<cell>/<keyspace>", keyspacePath)
 		}
 		//map of srvkeyspace names to srvkeyspaces in wrapped in a Data field
 		//to make client side parsing easier by avoiding extra properties at

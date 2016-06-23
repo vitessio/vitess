@@ -13,34 +13,59 @@ app.controller('KeyspacesCtrl', function($scope, keyspaces, srv_keyspace, shards
     return name in $scope.servingShards[keyspaceName];
   }
 
+  //cleaning the data recieved to ensure that it has only keyspace names
+  function stripResource(shardList) {
+    var data = shardList;
+    delete data.$promise;
+    delete data.$resolved;
+    return data;
+  }
+
   $scope.refreshData = function() {
+    var cell = "test";
+    var keyspace = "";
     //Refresh set of serving shards
-    refreshServingShards("test", "");
-    
+    refreshSrvKeyspaces(cell, keyspace);
     // Get list of keyspace names.
     keyspaces.query(function(ksnames) {
       $scope.keyspaces = [];
       ksnames.forEach(function(name) {
-        // Get a list of shards for each keyspace.
-        $scope.keyspaces.push({
+        var keyspace = {
+          servingShards: [],
+          nonServingShards: [],
           name: name,
-          shards: shards.query({keyspace: name})
-        });
+          shards: [],
+        }
+        // Get a list of serving and nonserving shards from each keyspace.
+        keyspace.shards = getKeyspaceShards(keyspace, name);
+        $scope.keyspaces.push(keyspace);
       });
     });
   };
   $scope.refreshData();
   
-  /*Refresh Serving Shards Helper Functions*/
+  function getKeyspaceShards(keyspace, keyspaceName) {
+    shards.query({keyspace: keyspaceName}, function(shardList){
+      $scope.srv_keyspace_query.$promise.then(function(resp) {
+        shardList = stripResource(shardList);
+        var num_shards = shardList.length;
+        for (var i = 0; i < num_shards; i++) {
+          if($scope.isServing(shardList[i], keyspaceName)) {
+             keyspace.servingShards.push(shardList[i]);
+          } else {
+            keyspace.nonServingShards.push(shardList[i]);
+          }
+        }
+      })
+    });
+  }
 
-  
-  function refreshServingShards(cell, keyspace) {
-    var target;
+
+  /*Refresh Serving Shards Helper Functions*/
+  function refreshSrvKeyspaces(cell, keyspace) {
     //Correctly formatting the server parameter depending on keyspace
-    if (keyspace == "") target = cell;
-    else target = cell + "/" + keyspace;
-    //Call to srv_keyspace API
-    srv_keyspace.get({cell_keyspace: target}).$promise.then(function(resp) {
+    $scope.srv_keyspace_query = srv_keyspace.get({cell: cell, keyspace: keyspace});
+    $scope.srv_keyspace_query.$promise.then(function(resp) {
       var srvKeyspaceMap = resp.Data;
       var keyspaceNames = Object.keys(srvKeyspaceMap);
       processSrvkeyspaces(keyspaceNames, srvKeyspaceMap);
@@ -48,7 +73,7 @@ app.controller('KeyspacesCtrl', function($scope, keyspaces, srv_keyspace, shards
   }
 
 
-  function processSrvkeyspaces(keyspaceNames, srvKeyspaceMap){
+   function processSrvkeyspaces(keyspaceNames, srvKeyspaceMap){
     var num_srvKeyspaces = keyspaceNames.length;
     $scope.servingShards = {}; 
     for (var k = 0; k < num_srvKeyspaces; k++) {
