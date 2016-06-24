@@ -8,6 +8,7 @@ script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
 service_type=${VTCTLD_SERVICE_TYPE:-'ClusterIP'}
+cell='test'
 VITESS_NAME=${VITESS_NAME:-'default'}
 
 echo "Creating vtctld $service_type service..."
@@ -20,7 +21,7 @@ cat vtctld-service-template.yaml | sed -e "$sed_script" | $KUBECTL create --name
 echo "Creating vtctld replicationcontroller..."
 # Expand template variables
 sed_script=""
-for var in backup_flags; do
+for var in backup_flags cell; do
   sed_script+="s,{{$var}},${!var},g;"
 done
 

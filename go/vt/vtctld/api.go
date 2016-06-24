@@ -204,7 +204,7 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 		srvKeyspaces := make(map[string]interface{})
 		keyspaceNamesList, err := ts.GetSrvKeyspaceNames(ctx, cell)
 		if err != nil {
-			return nil, fmt.Errorf("can't get list of SrvKeyspaceNames for cell %q: %v", cell, err)
+			return nil, fmt.Errorf("can't get list of SrvKeyspaceNames for cell %q: GetSrvKeyspaceNames returned: %v", cell, err)
 		}
 		for _, keyspaceName := range keyspaceNamesList {
 			err := addSrvkeyspace(ctx, ts, cell, keyspaceName, srvKeyspaces)
