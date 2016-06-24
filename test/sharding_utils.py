@@ -7,7 +7,9 @@ def get_shard_name(shard, num_shards):
   """Returns an appropriate shard name, as a string.
 
   A single shard name is simply 0; otherwise it will attempt to split up 0x100
-  into multiple shards.  For example, shard 1 of 2 is -80, shard 2 of 2 is 80-.
+  into multiple shards.  For example, in a two sharded keyspace, shard 0 is
+  -80, shard 1 is 80-.  This function currently only applies to sharding setups
+  where the shard count is 256 or less, and all shards are equal width.
 
   Args:
     shard: The integer shard index (zero based)

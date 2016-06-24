@@ -111,7 +111,7 @@ for cell in $cells; do
   wait_for_running_tasks etcd-$cell 3
 done
 
-echo 'Running vtctld-up.sh' && ./vtctld-up.sh
+echo 'Running vtctld-up.sh' && TEST_MODE=$TEST_MODE ./vtctld-up.sh
 
 wait_for_running_tasks vtctld 1
 kvtctl="./kvtctl.sh"
