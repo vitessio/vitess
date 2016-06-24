@@ -82,28 +82,15 @@ class TestVtctldWeb(unittest.TestCase):
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace2'], auto_log=True)
 
     # start running all the tablets
-    for t in [shard_0_master, shard_1_master, shard_1_replica]:
-      t.create_db('vt_test_keyspace')
-      t.start_vttablet(wait_for_state=None,
-                       extra_args=utils.vtctld.process_args())
-    shard_0_replica.create_db('vt_test_keyspace')
-    shard_0_replica.start_vttablet(extra_args=utils.vtctld.process_args(),
-                                   wait_for_state=None)
-
-    shard_0_master_ks2.create_db('vt_test_keyspace2')
-    shard_0_master_ks2.start_vttablet(extra_args=utils.vtctld.process_args(),
-                                      wait_for_state=None)
-    for t in [shard_0_replica_ks2, shard_0_rdonly_ks2]:
-      t.create_db('vt_test_keyspace2')
+    for t in tablets:
+      t.create_db('vt_%s' % t.keyspace)
       t.start_vttablet(wait_for_state=None,
                        extra_args=utils.vtctld.process_args())
 
     # wait for the right states
-    for t in [shard_0_master, shard_1_master, shard_0_master_ks2]:
-      t.wait_for_vttablet_state('SERVING')
-    for t in [shard_0_replica, shard_1_replica, shard_0_replica_ks2,
-              shard_0_rdonly_ks2]:
-      t.wait_for_vttablet_state('NOT_SERVING')
+    for t in tablets:
+      t.wait_for_vttablet_state(
+          'SERVING' if t.tablet_type == 'master' else 'NOT_SERVING')
 
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/-80',
                      shard_0_master.tablet_alias], auto_log=True)
