@@ -132,6 +132,9 @@ class VtcomboProcess(VtProcess):
         '-db-config-app-charset', charset,
         '-db-config-app-uname', mysql_db.username(),
         '-db-config-app-pass', mysql_db.password(),
+        '-db-config-dba-charset', charset,
+        '-db-config-dba-uname', mysql_db.username(),
+        '-db-config-dba-pass', mysql_db.password(),
         '-proto_topo', text_format.MessageToString(topology, as_one_line=True),
         '-mycnf_server_id', '1',
         '-mycnf_socket_file', mysql_db.unix_socket(),
@@ -142,11 +145,14 @@ class VtcomboProcess(VtProcess):
       self.extraparams.extend(['-web_dir', web_dir])
     if mysql_db.unix_socket():
       self.extraparams.extend(
-          ['-db-config-app-unixsocket', mysql_db.unix_socket()])
+          ['-db-config-app-unixsocket', mysql_db.unix_socket(),
+           '-db-config-dba-unixsocket', mysql_db.unix_socket()])
     else:
       self.extraparams.extend(
           ['-db-config-app-host', mysql_db.hostname(),
-           '-db-config-app-port', str(mysql_db.port())])
+           '-db-config-app-port', str(mysql_db.port()),
+           '-db-config-dba-host', mysql_db.hostname(),
+           '-db-config-dba-port', str(mysql_db.port())])
 
 
 vtcombo_process = None
