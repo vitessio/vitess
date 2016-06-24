@@ -63,7 +63,7 @@ For example:
 
 // Flags
 var (
-	flavor   = flag.String("flavor", "mysql57", "bootstrap flavor to run against")
+	flavor   = flag.String("flavor", "mariadb,mysql56,mysql57,percona", "comma-separated bootstrap flavor(s) to run against (when using Docker mode)")
 	runCount = flag.Int("runs", 1, "run each test this many times")
 	retryMax = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
 	logPass  = flag.Bool("log-pass", false, "log test output even if it passes")
@@ -115,6 +115,7 @@ type Test struct {
 	Tags []string
 
 	name     string
+	flavor   string
 	runIndex int
 
 	pass, fail int
@@ -147,7 +148,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 
 	var cmd *exec.Cmd
 	if *docker {
-		cmd = exec.Command(path.Join(dir, "docker/test/run.sh"), *flavor, "make build && "+strings.Join(testCmd, " "))
+		cmd = exec.Command(path.Join(dir, "docker/test/run.sh"), t.flavor, "make build && "+strings.Join(testCmd, " "))
 	} else {
 		cmd = exec.Command(testCmd[0], testCmd[1:]...)
 	}
@@ -197,9 +198,9 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 
 func (t *Test) logf(format string, v ...interface{}) {
 	if *runCount > 1 {
-		log.Printf("%v[%v/%v]: %v", t.name, t.runIndex+1, *runCount, fmt.Sprintf(format, v...))
+		log.Printf("%v.%v[%v/%v]: %v", t.flavor, t.name, t.runIndex+1, *runCount, fmt.Sprintf(format, v...))
 	} else {
-		log.Printf("%v: %v", t.name, fmt.Sprintf(format, v...))
+		log.Printf("%v.%v: %v", t.flavor, t.name, fmt.Sprintf(format, v...))
 	}
 }
 
@@ -211,15 +212,10 @@ func main() {
 	}
 	flag.Parse()
 
-	outDirBaseName := "local"
-	if *docker {
-		outDirBaseName = *flavor
-	}
-
 	startTime := time.Now()
 
 	// Make output directory.
-	outDir := path.Join("_test", fmt.Sprintf("%v.%v.%v", outDirBaseName, startTime.Format("20060102-150405"), os.Getpid()))
+	outDir := path.Join("_test", fmt.Sprintf("%v.%v", startTime.Format("20060102-150405"), os.Getpid()))
 	if err := os.MkdirAll(outDir, os.FileMode(0755)); err != nil {
 		log.Fatalf("Can't create output directory: %v", err)
 	}
@@ -256,19 +252,31 @@ func main() {
 		return
 	}
 
-	if *docker {
-		log.Printf("Bootstrap flavor: %v", *flavor)
+	flavors := []string{"local"}
 
-		// Re-pull image.
+	if *docker {
+		log.Printf("Bootstrap flavor(s): %v", *flavor)
+
+		flavors = strings.Split(*flavor, ",")
+
+		// Re-pull image(s).
 		if *pull {
-			image := "vitess/bootstrap:" + *flavor
-			pullTime := time.Now()
-			log.Printf("Pulling %v...", image)
-			cmd := exec.Command("docker", "pull", image)
-			if out, err := cmd.CombinedOutput(); err != nil {
-				log.Fatalf("Can't pull image: %v\n%s", err, out)
+			var wg sync.WaitGroup
+			for _, flavor := range flavors {
+				wg.Add(1)
+				go func(flavor string) {
+					defer wg.Done()
+					image := "vitess/bootstrap:" + flavor
+					pullTime := time.Now()
+					log.Printf("Pulling %v...", image)
+					cmd := exec.Command("docker", "pull", image)
+					if out, err := cmd.CombinedOutput(); err != nil {
+						log.Fatalf("Can't pull image %v: %v\n%s", image, err, out)
+					}
+					log.Printf("Image %v pulled in %v", image, time.Since(pullTime))
+				}(flavor)
 			}
-			log.Printf("Image pulled in %v", time.Since(pullTime))
+			wg.Wait()
 		}
 	} else {
 		if vtDataRoot == "" {
@@ -281,7 +289,7 @@ func main() {
 	testArgs, extraArgs = splitArgs(flag.Args(), "--")
 	tests := selectedTests(testArgs, &config)
 
-	// Duplicate tests.
+	// Duplicate tests for run count.
 	if *runCount > 1 {
 		var dup []*Test
 		for _, t := range tests {
@@ -294,6 +302,17 @@ func main() {
 		}
 		tests = dup
 	}
+
+	// Duplicate tests for flavors.
+	var dup []*Test
+	for _, flavor := range flavors {
+		for _, t := range tests {
+			test := *t
+			test.flavor = flavor
+			dup = append(dup, &test)
+		}
+	}
+	tests = dup
 
 	vtTop := "."
 	tmpDir := ""
@@ -379,7 +398,7 @@ func main() {
 					if *printLog && !*follow {
 						test.logf("%s\n", output)
 					}
-					outFile := fmt.Sprintf("%v-%v.%v.log", test.name, test.runIndex+1, try)
+					outFile := fmt.Sprintf("%v.%v-%v.%v.log", test.flavor, test.name, test.runIndex+1, try)
 					outFilePath := path.Join(outDir, outFile)
 					test.logf("saving test output to %v", outFilePath)
 					if fileErr := ioutil.WriteFile(outFilePath, output, os.FileMode(0644)); fileErr != nil {
@@ -439,20 +458,21 @@ func main() {
 	}
 
 	// Print summary.
-	log.Printf(strings.Repeat("=", 50))
+	log.Printf(strings.Repeat("=", 60))
 	for _, t := range tests {
+		tname := t.flavor + "." + t.name
 		switch {
 		case t.pass > 0 && t.fail == 0:
-			log.Printf("%-32s\tPASS", t.name)
+			log.Printf("%-40s\tPASS", tname)
 		case t.pass > 0 && t.fail > 0:
-			log.Printf("%-32s\tFLAKY (%v/%v failed)", t.name, t.fail, t.pass+t.fail)
+			log.Printf("%-40s\tFLAKY (%v/%v failed)", tname, t.fail, t.pass+t.fail)
 		case t.pass == 0 && t.fail > 0:
-			log.Printf("%-32s\tFAIL (%v tries)", t.name, t.fail)
+			log.Printf("%-40s\tFAIL (%v tries)", tname, t.fail)
 		case t.pass == 0 && t.fail == 0:
-			log.Printf("%-32s\tSKIPPED", t.name)
+			log.Printf("%-40s\tSKIPPED", tname)
 		}
 	}
-	log.Printf(strings.Repeat("=", 50))
+	log.Printf(strings.Repeat("=", 60))
 	skipped := len(tests) - passed - flaky - failed
 	log.Printf("%v PASSED, %v FLAKY, %v FAILED, %v SKIPPED", passed, flaky, failed, skipped)
 	log.Printf("Total time: %v", time.Since(startTime))
