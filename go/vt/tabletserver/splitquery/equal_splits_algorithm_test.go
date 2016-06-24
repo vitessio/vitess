@@ -104,6 +104,31 @@ var equalSplitsAlgorithmTestCases = []equalSplitsAlgorithmTestCaseType{
 		MaxValue:           int64Value(-30),
 		ExpectedBoundaries: []tuple{},
 	},
+	{ // Split the interval [-30, -29] into 4 parts.
+		SplitColumn:        "int64_col",
+		SplitCount:         4,
+		MinValue:           int64Value(-30),
+		MaxValue:           int64Value(-29),
+		ExpectedBoundaries: []tuple{},
+	},
+	{ // Split the interval [-30, -28] into 4 parts.
+		SplitColumn:        "int64_col",
+		SplitCount:         4,
+		MinValue:           int64Value(-30),
+		MaxValue:           int64Value(-28),
+		ExpectedBoundaries: []tuple{{int64Value(-29)}},
+	},
+	{ // Split the  interval [-30, -28] into 4 parts with a floating-point split-column.
+		SplitColumn: "float64_col",
+		SplitCount:  4,
+		MinValue:    float64Value(-30),
+		MaxValue:    float64Value(-28),
+		ExpectedBoundaries: []tuple{
+			{float64Value(-29.5)},
+			{float64Value(-29.0)},
+			{float64Value(-28.5)},
+		},
+	},
 }
 
 func TestEqualSplitsAlgorithm(t *testing.T) {

@@ -120,16 +120,23 @@ func (a *EqualSplitsAlgorithm) generateBoundaries() ([]tuple, error) {
 			a.splitParams.sql)
 		return []tuple{}, nil
 	}
-	// subIntervalSize = (max - min) / a.splitParams.splitCount
-	subIntervalSize := new(big.Rat)
-	subIntervalSize.Sub(max, min)
-	subIntervalSize.Quo(subIntervalSize, new(big.Rat).SetInt64(a.splitParams.splitCount))
-	boundary := new(big.Rat).Set(min) // Copy min into boundary.
 
-	var result []tuple
-	for i := int64(1); i < a.splitParams.splitCount; i++ {
-		boundary.Add(boundary, subIntervalSize)
-		// Here boundary=min+i*subIntervalSize
+	// subIntervalSize = (max - min) / splitCount
+	maxMinDiff := new(big.Rat)
+	maxMinDiff.Sub(max, min)
+	subIntervalSize := new(big.Rat)
+	subIntervalSize.Quo(maxMinDiff, new(big.Rat).SetInt64(a.splitParams.splitCount))
+	// If the split-column type is integral then it's wasteful to have a sub-intervale-size smaller
+	// than 1, as it'll result with some query-parts being trivially empty. We set the
+	// sub-interval size to 1 in this case.
+	one := new(big.Rat).SetInt64(1)
+	if sqltypes.IsIntegral(a.splitParams.splitColumns[0].Type) &&
+		subIntervalSize.Cmp(one) < 0 {
+		subIntervalSize = one
+	}
+	boundary := new(big.Rat).Add(min, subIntervalSize)
+	result := []tuple{}
+	for ; boundary.Cmp(max) < 0; boundary.Add(boundary, subIntervalSize) {
 		boundaryValue := bigRatToValue(boundary, a.splitParams.splitColumns[0].Type)
 		result = append(result, tuple{boundaryValue})
 	}
