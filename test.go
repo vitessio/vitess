@@ -76,6 +76,7 @@ var (
 	keepData = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
 	printLog = flag.Bool("print-log", false, "print the log of each failed test (or all tests if -log-pass) to the console")
 	follow   = flag.Bool("follow", false, "print test output as it runs, instead of waiting to see if it passes or fails")
+	parallel = flag.Int("parallel", 1, "number of tests to run in parallel")
 
 	remoteStats = flag.String("remote-stats", "", "url to send remote stats")
 )
@@ -212,6 +213,14 @@ func main() {
 	}
 	flag.Parse()
 
+	// Sanity checks.
+	if *parallel < 1 {
+		log.Fatalf("Invalid -parallel value: %v", *parallel)
+	}
+	if *parallel > 1 && !*docker {
+		log.Fatalf("Can't use -parallel value > 1 when -docker=false")
+	}
+
 	startTime := time.Now()
 
 	// Make output directory.
@@ -340,7 +349,8 @@ func main() {
 		}
 	}
 
-	// Keep stats.
+	// Keep stats for the overall run.
+	var mu sync.Mutex
 	failed := 0
 	passed := 0
 	flaky := 0
@@ -350,97 +360,125 @@ func main() {
 	signal.Notify(sigchan, syscall.SIGINT)
 
 	// Run tests.
-	stop := make(chan struct{}) // Close this to tell the loop to stop.
-	done := make(chan struct{}) // The loop closes this when it has stopped.
+	stop := make(chan struct{}) // Close this to tell the runners to stop.
+	done := make(chan struct{}) // This gets closed when all runners have stopped.
+	next := make(chan *Test)    // The next test to run.
+	var wg sync.WaitGroup
+
+	// Send all tests into the channel.
 	go func() {
-		defer func() {
-			signal.Stop(sigchan)
-			close(done)
-		}()
-
 		for _, test := range tests {
-			tryMax := *retryMax
-			if test.RetryMax != 0 {
-				tryMax = test.RetryMax
-			}
-			for try := 1; ; try++ {
-				select {
-				case <-stop:
-					test.logf("cancelled")
-					return
-				default:
-				}
-
-				if try > tryMax {
-					// Every try failed.
-					test.logf("retry limit exceeded")
-					failed++
-					break
-				}
-
-				test.logf("running (try %v/%v)...", try, tryMax)
-
-				// Make a unique VTDATAROOT.
-				dataDir, err := ioutil.TempDir(vtDataRoot, "vt_")
-				if err != nil {
-					test.logf("Failed to create temporary subdir in VTDATAROOT: %v", vtDataRoot)
-					failed++
-					break
-				}
-
-				// Run the test.
-				start := time.Now()
-				output, err := test.run(vtTop, dataDir)
-				duration := time.Since(start)
-
-				// Save/print test output.
-				if err != nil || *logPass {
-					if *printLog && !*follow {
-						test.logf("%s\n", output)
-					}
-					outFile := fmt.Sprintf("%v.%v-%v.%v.log", test.flavor, test.name, test.runIndex+1, try)
-					outFilePath := path.Join(outDir, outFile)
-					test.logf("saving test output to %v", outFilePath)
-					if fileErr := ioutil.WriteFile(outFilePath, output, os.FileMode(0644)); fileErr != nil {
-						test.logf("WriteFile error: %v", fileErr)
-					}
-				}
-
-				// Clean up the unique VTDATAROOT.
-				if !*keepData {
-					if err := os.RemoveAll(dataDir); err != nil {
-						test.logf("WARNING: can't remove temporary VTDATAROOT: %v", err)
-					}
-				}
-
-				if err != nil {
-					// This try failed.
-					test.logf("FAILED (try %v/%v) in %v: %v", try, tryMax, duration, err)
-					testFailed(test.name)
-					continue
-				}
-
-				testPassed(test.name, duration)
-
-				if try == 1 {
-					// Passed on the first try.
-					test.logf("PASSED in %v", duration)
-					passed++
-				} else {
-					// Passed, but not on the first try.
-					test.logf("FLAKY (1/%v passed in %v)", try, duration)
-					flaky++
-					testFlaked(test.name, try)
-				}
-				break
-			}
+			next <- test
 		}
+		close(next)
+	}()
+
+	// Start the requested number of parallel runners.
+	for i := 0; i < *parallel; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for test := range next {
+				tryMax := *retryMax
+				if test.RetryMax != 0 {
+					tryMax = test.RetryMax
+				}
+				for try := 1; ; try++ {
+					select {
+					case <-stop:
+						test.logf("cancelled")
+						return
+					default:
+					}
+
+					if try > tryMax {
+						// Every try failed.
+						test.logf("retry limit exceeded")
+						mu.Lock()
+						failed++
+						mu.Unlock()
+						break
+					}
+
+					test.logf("running (try %v/%v)...", try, tryMax)
+
+					// Make a unique VTDATAROOT.
+					dataDir, err := ioutil.TempDir(vtDataRoot, "vt_")
+					if err != nil {
+						test.logf("Failed to create temporary subdir in VTDATAROOT: %v", vtDataRoot)
+						mu.Lock()
+						failed++
+						mu.Unlock()
+						break
+					}
+
+					// Run the test.
+					start := time.Now()
+					output, err := test.run(vtTop, dataDir)
+					duration := time.Since(start)
+
+					// Save/print test output.
+					if err != nil || *logPass {
+						if *printLog && !*follow {
+							test.logf("%s\n", output)
+						}
+						outFile := fmt.Sprintf("%v.%v-%v.%v.log", test.flavor, test.name, test.runIndex+1, try)
+						outFilePath := path.Join(outDir, outFile)
+						test.logf("saving test output to %v", outFilePath)
+						if fileErr := ioutil.WriteFile(outFilePath, output, os.FileMode(0644)); fileErr != nil {
+							test.logf("WriteFile error: %v", fileErr)
+						}
+					}
+
+					// Clean up the unique VTDATAROOT.
+					if !*keepData {
+						if err := os.RemoveAll(dataDir); err != nil {
+							test.logf("WARNING: can't remove temporary VTDATAROOT: %v", err)
+						}
+					}
+
+					if err != nil {
+						// This try failed.
+						test.logf("FAILED (try %v/%v) in %v: %v", try, tryMax, duration, err)
+						mu.Lock()
+						testFailed(test.name)
+						mu.Unlock()
+						continue
+					}
+
+					mu.Lock()
+					testPassed(test.name, duration)
+
+					if try == 1 {
+						// Passed on the first try.
+						test.logf("PASSED in %v", duration)
+						passed++
+					} else {
+						// Passed, but not on the first try.
+						test.logf("FLAKY (1/%v passed in %v)", try, duration)
+						flaky++
+						testFlaked(test.name, try)
+					}
+					mu.Unlock()
+					break
+				}
+			}
+		}()
+	}
+
+	// Close the done channel when all the runners stop.
+	// This lets us select on wg.Wait().
+	go func() {
+		wg.Wait()
+		close(done)
 	}()
 
 	// Stop the loop and kill child processes if we get a signal.
 	select {
 	case <-sigchan:
 		log.Printf("interrupted: skip remaining tests and wait for current test to tear down")
+		signal.Stop(sigchan)
 		// Stop the test loop and wait for it to exit.
 		// Running tests already get the SIGINT themselves.
 		// We mustn't send it again, or it'll abort the teardown process too early.
