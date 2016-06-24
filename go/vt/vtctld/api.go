@@ -175,49 +175,45 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 	handleCollection("srv_keyspace", func(r *http.Request) (interface{}, error) {
 		keyspacePath := getItemPath(r.URL.Path)
 		parts := strings.SplitN(keyspacePath, "/", 2)
-		//If no keyspace is provided returns all srvkeyspaces
-		srvKeyspaces := make(map[string]interface{})
+
+		//request was incorrectly formatted
 		if len(parts) != 2 {
-			//request was incorrectly formatted
 			return nil, fmt.Errorf("invalid srvkeyspace path: %q  expected path: /srv_keyspace/<cell>/<keyspace>", keyspacePath)
 		}
-		if parts[0] == "local" {
+
+		cell := parts[0]
+		keyspace := parts[1]
+
+		if cell == "local" {
 			if *localCell == "" {
 				return nil, fmt.Errorf("local cell requested, but not specified. Please set with -cell flag")
 			}
-			parts[0] = *localCell
+			cell = *localCell
 		}
-		if parts[1] == "" {
-			cell := parts[0]
-			keyspaceNames, err := ts.GetSrvKeyspaceNames(ctx, cell)
+
+		//If a keyspace is provided then return the specified srvkeyspace
+		if keyspace != "" {
+			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
 			if err != nil {
-				return nil, fmt.Errorf("invalid cell: %q  expected usage: /srv_keyspace/<cell>", keyspacePath)
+				return nil, fmt.Errorf("Can't get server keyspace: %v", err)
 			}
-			numKeyspaces := len(keyspaceNames)
-			for i := 0; i < numKeyspaces; i++ {
-				err := addSrvkeyspace(ctx, ts, cell, keyspaceNames[i], srvKeyspaces)
-				if err != nil {
-					return nil, err
-				}
-			}
-		} else {
-			//If a keyspace is provided then return the specified srvkeyspace
-			cell := parts[0]
-			keyspace := parts[1]
-			err := addSrvkeyspace(ctx, ts, cell, keyspace, srvKeyspaces)
+			return srvKeyspace, nil
+		}
+
+		//Else return the srvKeyspace from all keyspaces
+		srvKeyspaces := make(map[string]interface{})
+		keyspaceNamesList, err := ts.GetSrvKeyspaceNames(ctx, cell)
+		if err != nil {
+			return nil, fmt.Errorf("can't get list of SrvKeyspaceNames for cell %q: %v", cell, err)
+		}
+		for _, keyspaceName := range keyspaceNamesList {
+			err := addSrvkeyspace(ctx, ts, cell, keyspaceName, srvKeyspaces)
 			if err != nil {
 				return nil, err
 			}
 		}
-		//map of srvkeyspace names to srvkeyspaces in wrapped in a Data field
-		//to make client side parsing easier by avoiding extra properties at
-		//the root level.
-		data := struct {
-			Data (map[string]interface{})
-		}{
-			srvKeyspaces,
-		}
-		return data, nil
+		return srvKeyspaces, nil
+
 	})
 
 	// Tablets

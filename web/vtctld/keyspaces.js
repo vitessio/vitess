@@ -13,13 +13,14 @@ app.controller('KeyspacesCtrl', function($scope, keyspaces, srv_keyspace, shards
     return keyspace in $scope.servingShards;
   }
 
-  $scope.isServing = function(name, keyspaceName) {
-    return name in $scope.servingShards[keyspaceName];
+  $scope.isServing = function(keyspaceName, shardName) {
+    return keyspaceName in $scope.servingShards && 
+           shardName in $scope.servingShards[keyspaceName];
   }
 
   //cleaning the data recieved to ensure that it has only keyspace names
-  function stripResource(shardList) {
-    var data = shardList;
+  function stripResource(list) {
+    var data = list;
     delete data.$promise;
     delete data.$resolved;
     return data;
@@ -46,13 +47,14 @@ app.controller('KeyspacesCtrl', function($scope, keyspaces, srv_keyspace, shards
   };
   $scope.refreshData();
   
-  function getKeyspaceShards(keyspace, keyspaceName) {
-    shards.query({keyspace: keyspaceName}, function(shardList){
+  function getKeyspaceShards(keyspace) {
+    shards.query({keyspace: keyspace.name}, function(shardList){
+      // Chain this callback onto the srv_keyspace_query, since we need the
+      //result from that as well.
       $scope.srv_keyspace_query.$promise.then(function(resp) {
         shardList = stripResource(shardList);
-        var num_shards = shardList.length;
-        for (var i = 0; i < num_shards; i++) {
-          if($scope.isServing(shardList[i], keyspaceName)) {
+        for (var i = 0; i < shardList.length; i++) {
+          if($scope.isServing(keyspace.name, shardList[i])) {
              keyspace.servingShards.push(shardList[i]);
           } else {
             keyspace.nonServingShards.push(shardList[i]);
@@ -61,36 +63,36 @@ app.controller('KeyspacesCtrl', function($scope, keyspaces, srv_keyspace, shards
       })
     });
   }
-
-
+  
   /*Refresh Serving Shards Helper Functions*/
   function refreshSrvKeyspaces(cell, keyspace) {
     //Correctly formatting the server parameter depending on keyspace
     $scope.srv_keyspace_query = srv_keyspace.get({cell: cell, keyspace: keyspace});
     $scope.srv_keyspace_query.$promise.then(function(resp) {
-      var srvKeyspaceMap = resp.Data;
-      var keyspaceNames = Object.keys(srvKeyspaceMap);
-      processSrvkeyspaces(keyspaceNames, srvKeyspaceMap);
+      var srvKeyspaces = Object.assign({}, resp);
+      srvKeyspaces = stripResource(srvKeyspaces);
+      processSrvkeyspaces(srvKeyspaces);
     });
   }
 
 
-   function processSrvkeyspaces(keyspaceNames, srvKeyspaceMap){
-    var num_srvKeyspaces = keyspaceNames.length;
+   function processSrvkeyspaces(srvKeyspaceMap){
     $scope.servingShards = {}; 
-    for (var k = 0; k < num_srvKeyspaces; k++) {
-      $scope.servingShards[keyspaceNames[k]] = {};
-      var curr_srv_keyspace = srvKeyspaceMap[keyspaceNames[k]];
-      addServingShards(curr_srv_keyspace.partitions, keyspaceNames[k]);
+    for (var keyspaceName in srvKeyspaceMap) {
+      $scope.servingShards[keyspaceName] = {};
+      var curr_srv_keyspace = srvKeyspaceMap[keyspaceName];
+      addServingShards(curr_srv_keyspace.partitions, keyspaceName);
     }
   }
 
   function addServingShards(partitions, keyspaceName){
-    var num_partitions = partitions.length;
+    if(partitions === undefined) {
+      return;
+    }
     //Use master partition srvkeyspace to find serving shards
-    for (var p = 0; p < num_partitions; p++) {
+    for (var p = 0; p < partitions.length; p++) {
       var partition = partitions[p];
-      if (partition.served_type == 1) { //MASTER = 1
+      if (vtTabletTypes[partition.served_type] == 'master') {
         handleMasterPartion(partition, keyspaceName)
         break;
       }
@@ -98,11 +100,13 @@ app.controller('KeyspacesCtrl', function($scope, keyspaces, srv_keyspace, shards
   }
 
   function handleMasterPartion(partition, keyspaceName){
-    var shard_references = partition.shard_references;
-    var num_shards = shard_references.length;
+    var shard_references = partition.shard_references; 
+    if(shard_references === undefined) {
+      return;
+    }
     //Populates the object which is used as a set with the serving shard 
     //names. Value is set to true as a place holder. 
-    for (var s = 0; s < num_shards; s++) {
+    for (var s = 0; s < shard_references.length; s++) {
       $scope.servingShards[keyspaceName][shard_references[s].name] = true;
     }
   }
