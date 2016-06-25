@@ -91,7 +91,7 @@ index by_msg (msg)
       t = 'varbinary(64)'
     else:
       t = 'bigint(20) unsigned'
-    sql = 'alter table %s add keyspace_id ' + t
+    sql = 'alter table %s add custom_ksid_col ' + t
     utils.run_vtctl(['ApplySchema',
                      '-sql=' + sql % ('resharding1'),
                      'test_keyspace'],
@@ -102,7 +102,7 @@ index by_msg (msg)
       t = 'varbinary(64)'
     else:
       t = 'bigint(20) unsigned'
-    sql = 'alter table %s modify keyspace_id ' + t + ' not null'
+    sql = 'alter table %s modify custom_ksid_col ' + t + ' not null'
     utils.run_vtctl(['ApplySchema',
                      '-sql=' + sql % ('resharding1'),
                      'test_keyspace'],
@@ -125,9 +125,9 @@ index by_msg (msg)
   def _backfill_keyspace_id(self, tablet_obj):
     tablet_obj.mquery('vt_test_keyspace', [
         'begin',
-        'update resharding1 set keyspace_id=0x1000000000000000 where id=1',
-        'update resharding1 set keyspace_id=0x9000000000000000 where id=2',
-        'update resharding1 set keyspace_id=0xD000000000000000 where id=3',
+        'update resharding1 set custom_ksid_col=0x1000000000000000 where id=1',
+        'update resharding1 set custom_ksid_col=0x9000000000000000 where id=2',
+        'update resharding1 set custom_ksid_col=0xD000000000000000 where id=3',
         'commit'
         ], write=True)
 
@@ -263,7 +263,7 @@ index by_msg (msg)
 
     # now we can be a sharded keyspace (and propagate to SrvKeyspace)
     utils.run_vtctl(['SetKeyspaceShardingInfo', 'test_keyspace',
-                     'keyspace_id', base_sharding.keyspace_id_type])
+                     'custom_ksid_col', base_sharding.keyspace_id_type])
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'],
                     auto_log=True)
 
@@ -364,7 +364,8 @@ index by_msg (msg)
                              'Partitions(master): -\n'
                              'Partitions(rdonly): -\n'
                              'Partitions(replica): -\n',
-                             keyspace_id_type=base_sharding.keyspace_id_type)
+                             keyspace_id_type=base_sharding.keyspace_id_type,
+                             sharding_column_name='custom_ksid_col')
 
     # we need to create the schema, and the worker will do data copying
     for keyspace_shard in ('test_keyspace/-80', 'test_keyspace/80-'):
@@ -492,7 +493,8 @@ index by_msg (msg)
                              'Partitions(master): -\n'
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -\n',
-                             keyspace_id_type=base_sharding.keyspace_id_type)
+                             keyspace_id_type=base_sharding.keyspace_id_type,
+                             sharding_column_name='custom_ksid_col')
 
     # make sure rdonly tablets are back to serving before hitting vtgate.
     for t in [shard_0_rdonly1, shard_1_rdonly1]:
@@ -521,7 +523,8 @@ index by_msg (msg)
                              'Partitions(master): -\n'
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=base_sharding.keyspace_id_type)
+                             keyspace_id_type=base_sharding.keyspace_id_type,
+                             sharding_column_name='custom_ksid_col')
 
     # move replica back and forth
     utils.run_vtctl(
@@ -535,7 +538,8 @@ index by_msg (msg)
                              'Partitions(master): -\n'
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -\n',
-                             keyspace_id_type=base_sharding.keyspace_id_type)
+                             keyspace_id_type=base_sharding.keyspace_id_type,
+                             sharding_column_name='custom_ksid_col')
 
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'replica'],
                     auto_log=True)
@@ -547,7 +551,8 @@ index by_msg (msg)
                              'Partitions(master): -\n'
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=base_sharding.keyspace_id_type)
+                             keyspace_id_type=base_sharding.keyspace_id_type,
+                             sharding_column_name='custom_ksid_col')
 
     # then serve master from the split shards
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'master'],
@@ -556,7 +561,8 @@ index by_msg (msg)
                              'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=base_sharding.keyspace_id_type)
+                             keyspace_id_type=base_sharding.keyspace_id_type,
+                             sharding_column_name='custom_ksid_col')
 
     # check the binlog players are gone now
     self.check_no_binlog_player(shard_0_master)

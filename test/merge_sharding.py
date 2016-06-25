@@ -86,13 +86,13 @@ class TestMergeSharding(unittest.TestCase, base_sharding.BaseShardingTest):
     create_table_template = '''create table %s(
 id bigint not null,
 msg varchar(64),
-keyspace_id ''' + t + ''' not null,
+custom_ksid_col ''' + t + ''' not null,
 primary key (id),
 index by_msg (msg)
 ) Engine=InnoDB'''
     create_view_template = (
         'create view %s'
-        '(id, msg, keyspace_id) as select id, msg, keyspace_id '
+        '(id, msg, custom_ksid_col) as select id, msg, custom_ksid_col '
         'from %s')
 
     utils.run_vtctl(['ApplySchema',
@@ -172,7 +172,7 @@ index by_msg (msg)
 
   def test_merge_sharding(self):
     utils.run_vtctl(['CreateKeyspace',
-                     '--sharding_column_name', 'keyspace_id',
+                     '--sharding_column_name', 'custom_ksid_col',
                      '--sharding_column_type', base_sharding.keyspace_id_type,
                      'test_keyspace'])
 
@@ -189,7 +189,7 @@ index by_msg (msg)
     # rebuild and check SrvKeyspace
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
     ks = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_keyspace'])
-    self.assertEqual(ks['sharding_column_name'], 'keyspace_id')
+    self.assertEqual(ks['sharding_column_name'], 'custom_ksid_col')
 
     # create databases so vttablet can start behaving normally
     for t in [shard_0_master, shard_0_replica, shard_0_rdonly,
@@ -250,7 +250,7 @@ index by_msg (msg)
         'Partitions(rdonly): -40 40-80 80-\n'
         'Partitions(replica): -40 40-80 80-\n',
         keyspace_id_type=base_sharding.keyspace_id_type,
-        sharding_column_name='keyspace_id')
+        sharding_column_name='custom_ksid_col')
 
     # copy the schema
     utils.run_vtctl(['CopySchemaShard', shard_0_rdonly.tablet_alias,
@@ -393,7 +393,7 @@ index by_msg (msg)
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -40 40-80 80-\n',
                              keyspace_id_type=base_sharding.keyspace_id_type,
-                             sharding_column_name='keyspace_id')
+                             sharding_column_name='custom_ksid_col')
 
     # now serve replica from the split shards
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/-80', 'replica'],
@@ -403,7 +403,7 @@ index by_msg (msg)
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -80 80-\n',
                              keyspace_id_type=base_sharding.keyspace_id_type,
-                             sharding_column_name='keyspace_id')
+                             sharding_column_name='custom_ksid_col')
 
     # now serve master from the split shards
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/-80', 'master'],
@@ -413,7 +413,7 @@ index by_msg (msg)
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -80 80-\n',
                              keyspace_id_type=base_sharding.keyspace_id_type,
-                             sharding_column_name='keyspace_id')
+                             sharding_column_name='custom_ksid_col')
     utils.check_tablet_query_service(self, shard_0_master, False, True)
     utils.check_tablet_query_service(self, shard_1_master, False, True)
 

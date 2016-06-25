@@ -29,12 +29,15 @@ class BaseShardingTest(object):
 
   # _insert_value inserts a value in the MySQL database along with the comments
   # required for routing.
+  # NOTE: We assume that the column name for the keyspace_id is called
+  #       'custom_ksid_col'. This is a regression test which tests for
+  #       places which previously hardcoded the column name to 'keyspace_id'.
   def _insert_value(self, tablet_obj, table, mid, msg, keyspace_id):
     k = utils.uint64_to_hex(keyspace_id)
     tablet_obj.mquery(
         'vt_test_keyspace',
         ['begin',
-         'insert into %s(id, msg, keyspace_id) '
+         'insert into %s(id, msg, custom_ksid_col) '
          'values(%d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ '
          '/* id:%d */' %
          (table, mid, msg, keyspace_id, k, mid),
@@ -53,7 +56,7 @@ class BaseShardingTest(object):
     """
     return tablet_obj.mquery(
         'vt_test_keyspace',
-        'select id, msg, keyspace_id from %s where id=%d' %
+        'select id, msg, custom_ksid_col from %s where id=%d' %
         (table, mid))
 
   def _check_value(self, tablet_obj, table, mid, msg, keyspace_id,
@@ -66,13 +69,13 @@ class BaseShardingTest(object):
       fmt = '%x'
     if should_be_here:
       self.assertEqual(result, ((mid, msg, keyspace_id),),
-                       ('Bad row in tablet %s for id=%d, keyspace_id=' +
+                       ('Bad row in tablet %s for id=%d, custom_ksid_col=' +
                         fmt + ', row=%s') % (tablet_obj.tablet_alias, mid,
                                              keyspace_id, str(result)))
     else:
       self.assertEqual(
           len(result), 0,
-          ('Extra row in tablet %s for id=%d, keyspace_id=' +
+          ('Extra row in tablet %s for id=%d, custom_ksid_col=' +
            fmt + ': %s') % (tablet_obj.tablet_alias, mid, keyspace_id,
                             str(result)))
 
@@ -101,7 +104,7 @@ class BaseShardingTest(object):
       fmt = '%x'
     self.assertEqual(result, ((mid, msg, keyspace_id),),
                      ('Bad row in tablet %s for id=%d, '
-                      'keyspace_id=' + fmt) % (
+                      'custom_ksid_col=' + fmt) % (
                           tablet_obj.tablet_alias, mid, keyspace_id))
     return True
 
