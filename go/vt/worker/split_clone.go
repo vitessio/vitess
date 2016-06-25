@@ -653,6 +653,11 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 			return fmt.Errorf("cannot instantiate throttler: %v", err)
 		}
 		destinationThrottlers[shardIndex] = t
+		defer func(i int) {
+			if t := destinationThrottlers[shardIndex]; t != nil {
+				t.Close()
+			}
+		}(shardIndex)
 
 		go func(keyspace, shard string, insertChannel chan string) {
 			for j := 0; j < scw.destinationWriterCount; j++ {
@@ -818,8 +823,9 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	}
 	destinationWaitGroup.Wait()
 	// Stop Throttlers.
-	for _, throttler := range destinationThrottlers {
-		throttler.Close()
+	for i, t := range destinationThrottlers {
+		t.Close()
+		destinationThrottlers[i] = nil
 	}
 	if firstError != nil {
 		return firstError
