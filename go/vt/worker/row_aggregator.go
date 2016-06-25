@@ -39,7 +39,7 @@ type RowAggregator struct {
 	diffType      DiffType
 	builder       QueryBuilder
 	// statsCounters has Counters to track how many rows were changed per
-	// diffTyp.
+	// diffType.
 	statsCounters []*stats.Counters
 
 	buffer       bytes.Buffer
