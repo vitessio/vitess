@@ -1,8 +1,7 @@
 {
   "name": "Vitess",
   "version": "1.0.0",
-  "description": "A set of servers and tools meant to facilitate scaling of MySQL
-databases for the web",
+  "description": "A set of servers and tools meant to facilitate scaling of MySQL databases for the web",
   "author": "Vitess Team",
   "homepage": "vitess.io",
   "license": "The BSD License (BSD)",
