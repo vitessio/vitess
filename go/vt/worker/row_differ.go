@@ -5,9 +5,10 @@
 package worker
 
 import (
-	"context"
 	"fmt"
 	"time"
+
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"

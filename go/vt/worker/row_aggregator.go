@@ -6,9 +6,10 @@ package worker
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"strings"
+
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
