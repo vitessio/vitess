@@ -342,9 +342,10 @@ def zk_cat_json(path):
 # use as follow:
 #    timeout = 10
 #    while True:
-#      if done:
+#      <step>
+#      if <done>:
 #        break
-#      timeout = utils.wait_step('condition', timeout)
+#      timeout = utils.wait_step('description of condition', timeout)
 def wait_step(msg, timeout, sleep_time=0.1):
   timeout -= sleep_time
   if timeout <= 0:
