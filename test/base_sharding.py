@@ -172,9 +172,16 @@ class BaseShardingTest(object):
       names: Names of the throttlers e.g. BinlogPlayer/0 or <keyspace>/<shard>.
       rate: Expected initial rate the throttler was started with.
     """
-    stdout, _ = utils.run_vtctl(['ThrottlerMaxRates', '--server',
-                                 dest_master_addr], auto_log=True,
-                                trap_output=True)
+    # Avoid flakes by waiting for all throttlers. (Necessary because filtered
+    # replication on vttablet will register the throttler asynchronously.)
+    timeout_s = 10
+    while True:
+      stdout, _ = utils.run_vtctl(['ThrottlerMaxRates', '--server',
+                                   dest_master_addr], auto_log=True,
+                                  trap_output=True)
+      if '%d active throttler(s)' % len(names) in stdout:
+        break
+      timeout_s = utils.wait_step('all throttlers registered', timeout_s)
     for name in names:
       self.assertIn('| %s | %d |' % (name, rate), stdout)
     self.assertIn('%d active throttler(s)' % len(names), stdout)
