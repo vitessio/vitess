@@ -4,8 +4,10 @@
 
 package worker
 
+// TODO(mberlin): Remove this file when SplitClone supports merge-sorting
+// primary key columns based on the MySQL collation.
+
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -31,17 +33,13 @@ import (
 )
 
 const (
-	// splitCloneTestMin is the minimum value of the primary key.
-	splitCloneTestMin int = 100
-	// splitCloneTestMax is the maximum value of the primary key.
-	splitCloneTestMax int = 200
+	// legacySplitCloneTestMin is the minimum value of the primary key.
+	legacySplitCloneTestMin int = 100
+	// legacySplitCloneTestMax is the maximum value of the primary key.
+	legacySplitCloneTestMax int = 200
 )
 
-var (
-	errReadOnly = errors.New("The MariaDB server is running with the --read-only option so it cannot execute this statement (errno 1290) during query:")
-)
-
-type splitCloneTestCase struct {
+type legacySplitCloneTestCase struct {
 	t *testing.T
 
 	ts      topo.Server
@@ -62,7 +60,7 @@ type splitCloneTestCase struct {
 	defaultWorkerArgs []string
 }
 
-func (tc *splitCloneTestCase) setUp(v3 bool) {
+func (tc *legacySplitCloneTestCase) setUp(v3 bool) {
 	*useV3ReshardingMode = v3
 	db := fakesqldb.Register()
 	tc.ts = zktestserver.New(tc.t, []string{"cell1", "cell2"})
@@ -157,7 +155,7 @@ func (tc *splitCloneTestCase) setUp(v3 bool) {
 			},
 		}
 		sourceRdonly.FakeMysqlDaemon.DbAppConnectionFactory = sourceRdonlyFactory(
-			tc.t, "vt_ks.table1", splitCloneTestMin, splitCloneTestMax)
+			tc.t, "vt_ks.table1", legacySplitCloneTestMin, legacySplitCloneTestMax)
 		sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
 			GTIDSet: replication.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
 		}
@@ -167,7 +165,7 @@ func (tc *splitCloneTestCase) setUp(v3 bool) {
 		}
 		qs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
 		qs.AddDefaultHealthResponse()
-		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &testQueryService{
+		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &legacyTestQueryService{
 			t: tc.t,
 			StreamHealthQueryService: qs,
 		})
@@ -216,7 +214,7 @@ func (tc *splitCloneTestCase) setUp(v3 bool) {
 		"ks/-80"}
 }
 
-func (tc *splitCloneTestCase) tearDown() {
+func (tc *legacySplitCloneTestCase) tearDown() {
 	for _, ft := range tc.tablets {
 		ft.StopActionLoop(tc.t)
 	}
@@ -225,17 +223,17 @@ func (tc *splitCloneTestCase) tearDown() {
 	tc.rightMasterFakeDb.verifyAllExecutedOrFail()
 }
 
-// testQueryService is a local QueryService implementation to support the tests.
-type testQueryService struct {
+// legacyTestQueryService is a local QueryService implementation to support the tests.
+type legacyTestQueryService struct {
 	t *testing.T
 
 	*fakes.StreamHealthQueryService
 }
 
-func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sendReply func(reply *sqltypes.Result) error) error {
+func (sq *legacyTestQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sendReply func(reply *sqltypes.Result) error) error {
 	// Custom parsing of the query we expect.
-	min := splitCloneTestMin
-	max := splitCloneTestMax
+	min := legacySplitCloneTestMin
+	max := legacySplitCloneTestMax
 	var err error
 	parts := strings.Split(sql, " ")
 	for _, part := range parts {
@@ -248,7 +246,7 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 			max, err = strconv.Atoi(part[3:])
 		}
 	}
-	sq.t.Logf("testQueryService: got query: %v with min %v max %v", sql, min, max)
+	sq.t.Logf("legacyTestQueryService: got query: %v with min %v max %v", sql, min, max)
 
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{
@@ -290,7 +288,7 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 }
 
 func TestLegacySplitCloneV2(t *testing.T) {
-	tc := &splitCloneTestCase{t: t}
+	tc := &legacySplitCloneTestCase{t: t}
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
 
@@ -301,7 +299,7 @@ func TestLegacySplitCloneV2(t *testing.T) {
 }
 
 func TestLegacySplitCloneV2_Throttled(t *testing.T) {
-	tc := &splitCloneTestCase{t: t}
+	tc := &legacySplitCloneTestCase{t: t}
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
 
@@ -325,7 +323,7 @@ func TestLegacySplitCloneV2_Throttled(t *testing.T) {
 	//           throttle request interval (negligible backoff)
 	// - 3rd tx: throttled for 33 ms at least since 2nd tx happened
 	want := 33 * time.Millisecond
-	copyDuration := time.Duration(statsStateDurationsNs.Counts()[string(WorkerStateCopy)]) * time.Nanosecond
+	copyDuration := time.Duration(statsStateDurationsNs.Counts()[string(WorkerStateCloneOffline)]) * time.Nanosecond
 	if copyDuration < want {
 		t.Errorf("throttled copy was too fast: %v < %v", copyDuration, want)
 	}
@@ -340,7 +338,7 @@ func TestLegacySplitCloneV2_Throttled(t *testing.T) {
 // TestLegacySplitCloneV2 with the additional twist that the destination masters
 // fail the first write because they are read-only and succeed after that.
 func TestLegacySplitCloneV2_RetryDueToReadonly(t *testing.T) {
-	tc := &splitCloneTestCase{t: t}
+	tc := &legacySplitCloneTestCase{t: t}
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
 
@@ -369,7 +367,7 @@ func TestLegacySplitCloneV2_RetryDueToReadonly(t *testing.T) {
 // during a reparent.
 // NOTE: worker.py is an end-to-end test which tests this as well.
 func TestLegacySplitCloneV2_RetryDueToReparent(t *testing.T) {
-	tc := &splitCloneTestCase{t: t}
+	tc := &legacySplitCloneTestCase{t: t}
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
 
@@ -430,7 +428,7 @@ func TestLegacySplitCloneV2_RetryDueToReparent(t *testing.T) {
 // even in a period where no MASTER tablet is available according to the
 // HealthCheck instance.
 func TestLegacySplitCloneV2_NoMasterAvailable(t *testing.T) {
-	tc := &splitCloneTestCase{t: t}
+	tc := &legacySplitCloneTestCase{t: t}
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
 
@@ -489,7 +487,7 @@ func TestLegacySplitCloneV2_NoMasterAvailable(t *testing.T) {
 }
 
 func TestLegacySplitCloneV3(t *testing.T) {
-	tc := &splitCloneTestCase{t: t}
+	tc := &legacySplitCloneTestCase{t: t}
 	tc.setUp(true /* v3 */)
 	defer tc.tearDown()
 

@@ -4,6 +4,9 @@
 
 package worker
 
+// TODO(mberlin): Remove this file when SplitClone supports merge-sorting
+// primary key columns based on the MySQL collation.
+
 import (
 	"flag"
 	"fmt"
@@ -11,22 +14,20 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 
-	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 )
 
-const splitCloneHTML = `
+const legacySplitCloneHTML = `
 <!DOCTYPE html>
 <head>
-  <title>Split Clone Action</title>
+  <title>Legacy Split Clone Action</title>
 </head>
 <body>
-  <h1>Split Clone Action</h1>
+  <h1>Legacy Split Clone Action</h1>
+  <h2>Use this command only when the 'SplitClone' command told you so. Otherwise use the 'SplitClone' command.</h2>
 
     {{if .Error}}
       <b>Error:</b> {{.Error}}</br>
@@ -41,10 +42,10 @@ const splitCloneHTML = `
 </body>
 `
 
-const splitCloneHTML2 = `
+const legacySplitCloneHTML2 = `
 <!DOCTYPE html>
 <head>
-  <title>Split Clone Action</title>
+  <title>Legacy Split Clone Action</title>
 </head>
 <body>
   <p>Shard involved: {{.Keyspace}}/{{.Shard}}</p>
@@ -81,8 +82,8 @@ const splitCloneHTML2 = `
   </body>
 `
 
-var splitCloneTemplate = mustParseTemplate("splitClone", splitCloneHTML)
-var splitCloneTemplate2 = mustParseTemplate("splitClone2", splitCloneHTML2)
+var legacySplitCloneTemplate = mustParseTemplate("splitClone", legacySplitCloneHTML)
+var legacySplitCloneTemplate2 = mustParseTemplate("splitClone2", legacySplitCloneHTML2)
 
 func commandLegacySplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
@@ -116,50 +117,6 @@ func commandLegacySplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag
 	return worker, nil
 }
 
-func keyspacesWithOverlappingShards(ctx context.Context, wr *wrangler.Wrangler) ([]map[string]string, error) {
-	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	keyspaces, err := wr.TopoServer().GetKeyspaces(shortCtx)
-	cancel()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get list of keyspaces: %v", err)
-	}
-
-	wg := sync.WaitGroup{}
-	mu := sync.Mutex{} // protects result
-	result := make([]map[string]string, 0, len(keyspaces))
-	rec := concurrency.AllErrorRecorder{}
-	for _, keyspace := range keyspaces {
-		wg.Add(1)
-		go func(keyspace string) {
-			defer wg.Done()
-			shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-			osList, err := topotools.FindOverlappingShards(shortCtx, wr.TopoServer(), keyspace)
-			cancel()
-			if err != nil {
-				rec.RecordError(err)
-				return
-			}
-			mu.Lock()
-			for _, os := range osList {
-				result = append(result, map[string]string{
-					"Keyspace": os.Left[0].Keyspace(),
-					"Shard":    os.Left[0].ShardName(),
-				})
-			}
-			mu.Unlock()
-		}(keyspace)
-	}
-	wg.Wait()
-
-	if rec.HasErrors() {
-		return nil, rec.Error()
-	}
-	if len(result) == 0 {
-		return nil, fmt.Errorf("There are no keyspaces with overlapping shards")
-	}
-	return result, nil
-}
-
 func interactiveLegacySplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
 	if err := r.ParseForm(); err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot parse form: %s", err)
@@ -177,7 +134,7 @@ func interactiveLegacySplitClone(ctx context.Context, wi *Instance, wr *wrangler
 		} else {
 			result["Choices"] = choices
 		}
-		return nil, splitCloneTemplate, result, nil
+		return nil, legacySplitCloneTemplate, result, nil
 	}
 
 	sourceReaderCountStr := r.FormValue("sourceReaderCount")
@@ -192,7 +149,7 @@ func interactiveLegacySplitClone(ctx context.Context, wi *Instance, wr *wrangler
 		result["DefaultDestinationWriterCount"] = fmt.Sprintf("%v", defaultDestinationWriterCount)
 		result["DefaultMinHealthyRdonlyTablets"] = fmt.Sprintf("%v", defaultMinHealthyRdonlyTablets)
 		result["DefaultMaxTPS"] = fmt.Sprintf("%v", defaultMaxTPS)
-		return nil, splitCloneTemplate2, result, nil
+		return nil, legacySplitCloneTemplate2, result, nil
 	}
 
 	// get other parameters
@@ -244,5 +201,5 @@ func init() {
 	AddCommand("Clones", Command{"LegacySplitClone",
 		commandLegacySplitClone, interactiveLegacySplitClone,
 		"[--exclude_tables=''] [--strategy=''] <keyspace/shard>",
-		"Replicates the data and creates configuration for a horizontal split."})
+		"Old SplitClone code which supports VARCHAR primary key columns. Use this ONLY if SplitClone failed for you."})
 }

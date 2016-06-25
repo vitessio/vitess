@@ -53,7 +53,7 @@ func NewResultMerger(inputs []ResultReader, pkFieldCount int) (*ResultMerger, er
 	for i := 0; i < pkFieldCount; i++ {
 		typ := fields[i].Type
 		if !sqltypes.IsIntegral(typ) && !sqltypes.IsFloat(typ) && !sqltypes.IsBinary(typ) {
-			return nil, fmt.Errorf("unsupported type: %v cannot compare fields with this type", typ)
+			return nil, fmt.Errorf("unsupported type: %v cannot compare fields with this type. Use the vtworker LegacySplitClone command instead", typ)
 		}
 	}
 

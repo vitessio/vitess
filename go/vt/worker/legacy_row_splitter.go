@@ -4,6 +4,9 @@
 
 package worker
 
+// TODO(mberlin): Remove this file when SplitClone supports merge-sorting
+// primary key columns based on the MySQL collation.
+
 import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
@@ -55,12 +58,12 @@ func (rs *RowSplitter) Split(result [][][]sqltypes.Value, rows [][]sqltypes.Valu
 }
 
 // Send will send the rows to the list of channels. Returns true if aborted.
-func (rs *RowSplitter) Send(fields []*querypb.Field, result [][][]sqltypes.Value, baseCmd string, insertChannels []chan string, abort <-chan struct{}) bool {
+func (rs *RowSplitter) Send(fields []*querypb.Field, result [][][]sqltypes.Value, baseCmds []string, insertChannels []chan string, abort <-chan struct{}) bool {
 	for i, c := range insertChannels {
 		// one of the chunks might be empty, so no need
 		// to send data in that case
 		if len(result[i]) > 0 {
-			cmd := baseCmd + makeValueString(fields, result[i])
+			cmd := baseCmds[i] + makeValueString(fields, result[i])
 			// also check on abort, so we don't wait forever
 			select {
 			case c <- cmd:

@@ -4,6 +4,9 @@
 
 package worker
 
+// TODO(mberlin): Remove this file when SplitClone supports merge-sorting
+// primary key columns based on the MySQL collation.
+
 import (
 	"fmt"
 	"html/template"
@@ -57,7 +60,7 @@ type LegacySplitCloneWorker struct {
 
 	// populated during WorkerStateFindTargets, read-only after that
 	sourceAliases []*topodatapb.TabletAlias
-	sourceTablets []*topo.TabletInfo
+	sourceTablets []*topodatapb.Tablet
 	// healthCheck tracks the health of all MASTER and REPLICA tablets.
 	// It must be closed at the end of the command.
 	healthCheck discovery.HealthCheck
@@ -338,23 +341,24 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 	}
 
 	// get the tablet info for them, and stop their replication
-	scw.sourceTablets = make([]*topo.TabletInfo, len(scw.sourceAliases))
+	scw.sourceTablets = make([]*topodatapb.Tablet, len(scw.sourceAliases))
 	for i, alias := range scw.sourceAliases {
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		scw.sourceTablets[i], err = scw.wr.TopoServer().GetTablet(shortCtx, alias)
+		ti, err := scw.wr.TopoServer().GetTablet(shortCtx, alias)
 		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot read tablet %v: %v", topoproto.TabletAliasString(alias), err)
 		}
+		scw.sourceTablets[i] = ti.Tablet
 
 		shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-		err := scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i].Tablet)
+		err = scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i])
 		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot stop replication on tablet %v", topoproto.TabletAliasString(alias))
 		}
 
-		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i].Tablet)
+		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i])
 	}
 
 	// Initialize healthcheck and add destination shards to it.
@@ -435,10 +439,10 @@ func (scw *LegacySplitCloneWorker) findRefreshTargets(ctx context.Context) error
 // Assumes that the schema has already been created on each destination tablet
 // (probably from vtctl's CopySchemaShard)
 func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
-	scw.setState(WorkerStateCopy)
+	scw.setState(WorkerStateCloneOffline)
 	start := time.Now()
 	defer func() {
-		statsStateDurationsNs.Set(string(WorkerStateCopy), time.Now().Sub(start).Nanoseconds())
+		statsStateDurationsNs.Set(string(WorkerStateCloneOffline), time.Now().Sub(start).Nanoseconds())
 	}()
 
 	// get source schema from the first shard
@@ -496,7 +500,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 					defer throttler.ThreadFinished(threadID)
 
 					executor := newExecutor(scw.wr, scw.healthCheck, throttler, keyspace, shard, threadID)
-					if err := executor.fetchLoop(ctx, scw.destinationDbNames[keyspaceAndShard], insertChannel); err != nil {
+					if err := executor.fetchLoop(ctx, insertChannel); err != nil {
 						processError("executer.FetchLoop failed: %v", err)
 					}
 				}(j)
@@ -571,7 +575,12 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 					defer qrr.Close()
 
 					// process the data
-					if err := scw.processData(ctx, td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount); err != nil {
+					dbNames := make([]string, len(scw.destinationShards))
+					for i, si := range scw.destinationShards {
+						keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
+						dbNames[i] = scw.destinationDbNames[keyspaceAndShard]
+					}
+					if err := scw.processData(ctx, dbNames, td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount); err != nil {
 						processError("processData failed: %v", err)
 					}
 					scw.tableStatusList.threadDone(tableIndex)
@@ -603,7 +612,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 		// get the current position from the sources
 		for shardIndex := range scw.sourceShards {
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-			status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex].Tablet)
+			status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex])
 			cancel()
 			if err != nil {
 				return err
@@ -675,13 +684,19 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 
 // processData pumps the data out of the provided QueryResultReader.
 // It returns any error the source encounters.
-func (scw *LegacySplitCloneWorker) processData(ctx context.Context, td *tabletmanagerdatapb.TableDefinition, tableIndex int, qrr *QueryResultReader, rowSplitter *RowSplitter, insertChannels []chan string, destinationPackCount int) error {
-	baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
+func (scw *LegacySplitCloneWorker) processData(ctx context.Context, dbNames []string, td *tabletmanagerdatapb.TableDefinition, tableIndex int, qrr *QueryResultReader, rowSplitter *RowSplitter, insertChannels []chan string, destinationPackCount int) error {
+	// Store the baseCmd per destination shard because each tablet may have a
+	// different dbName.
+	baseCmds := make([]string, len(dbNames))
+	for i, dbName := range dbNames {
+		baseCmds[i] = "INSERT INTO `" + dbName + "`." + td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
+	}
 	sr := rowSplitter.StartSplit()
 	packCount := 0
 
+	fields := qrr.Fields()
 	for {
-		r, err := qrr.Output.Recv()
+		r, err := qrr.Next()
 		if err != nil {
 			// we are done, see if there was an error
 			if err != io.EOF {
@@ -692,7 +707,7 @@ func (scw *LegacySplitCloneWorker) processData(ctx context.Context, td *tabletma
 			// the return value, we don't care
 			// here if we're aborted)
 			if packCount > 0 {
-				rowSplitter.Send(qrr.Fields, sr, baseCmd, insertChannels, ctx.Done())
+				rowSplitter.Send(fields, sr, baseCmds, insertChannels, ctx.Done())
 			}
 			return nil
 		}
@@ -710,7 +725,7 @@ func (scw *LegacySplitCloneWorker) processData(ctx context.Context, td *tabletma
 		}
 
 		// send the rows to be inserted
-		if aborted := rowSplitter.Send(qrr.Fields, sr, baseCmd, insertChannels, ctx.Done()); aborted {
+		if aborted := rowSplitter.Send(fields, sr, baseCmds, insertChannels, ctx.Done()); aborted {
 			return nil
 		}
 
