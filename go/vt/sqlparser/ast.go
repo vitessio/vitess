@@ -374,9 +374,10 @@ func (node *Set) WalkSubtree(visit Visit) error {
 // Table is set for AlterStr, DropStr, RenameStr.
 // NewName is set for AlterStr, CreateStr, RenameStr.
 type DDL struct {
-	Action  string
-	Table   TableIdent
-	NewName TableIdent
+	Action   string
+	Table    TableIdent
+	NewName  TableIdent
+	IfExists bool
 }
 
 // DDL strings.
@@ -392,6 +393,12 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CreateStr:
 		buf.Myprintf("%s table %v", node.Action, node.NewName)
+	case DropStr:
+		exists := ""
+		if node.IfExists {
+			exists = " if exists"
+		}
+		buf.Myprintf("%s table%s %v", node.Action, exists, node.Table)
 	case RenameStr:
 		buf.Myprintf("%s table %v %v", node.Action, node.Table, node.NewName)
 	default:

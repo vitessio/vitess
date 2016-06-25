@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 
@@ -71,7 +72,7 @@ func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv topo.
 }
 
 func (stc *ScatterConn) startAction(name, keyspace, shard string, tabletType topodatapb.TabletType) (time.Time, []string) {
-	statsKey := []string{name, keyspace, shard, strings.ToLower(tabletType.String())}
+	statsKey := []string{name, keyspace, shard, topoproto.TabletTypeLString(tabletType)}
 	startTime := time.Now()
 	return startTime, statsKey
 }

@@ -13,7 +13,6 @@ import (
 	"launchpad.net/gozk/zookeeper"
 
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 )
 
@@ -33,7 +32,7 @@ func (zkts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *v
 	}
 	vschemaPath := path.Join(GlobalKeyspacesPath, keyspace, vschemaPath)
 	_, err = zk.CreateOrUpdate(zkts.zconn, vschemaPath, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
-	return err
+	return convertError(err)
 }
 
 // GetVSchema fetches the JSON vschema from the topo.
@@ -41,10 +40,7 @@ func (zkts *Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb
 	vschemaPath := path.Join(GlobalKeyspacesPath, keyspace, vschemaPath)
 	data, _, err := zkts.zconn.Get(vschemaPath)
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			return nil, topo.ErrNoNode
-		}
-		return nil, err
+		return nil, convertError(err)
 	}
 	var vs vschemapb.Keyspace
 	err = json.Unmarshal([]byte(data), &vs)

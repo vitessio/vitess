@@ -338,9 +338,6 @@ index by_msg (msg)
       if expected and 'moving.*' in expected:
         # table is blacklisted, should get the error
         _, stderr = utils.run_vtctl(['VtTabletExecute', '-json',
-                                     '-keyspace', t.keyspace,
-                                     '-shard', t.shard,
-                                     '-tablet_type', t.tablet_type,
                                      t.tablet_alias,
                                      'select count(1) from %s' % table],
                                     expect_fail=True)

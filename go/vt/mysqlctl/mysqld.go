@@ -60,7 +60,6 @@ type Mysqld struct {
 	replParams    *sqldb.ConnParams
 	dbaMysqlStats *stats.Timings
 	tabletDir     string
-	SnapshotDir   string
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
@@ -107,8 +106,7 @@ func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *sqldb.Con
 		appPool:       appPool,
 		replParams:    repl,
 		dbaMysqlStats: dbaMysqlStats,
-		tabletDir:     TabletDir(config.ServerID),
-		SnapshotDir:   SnapshotDir(config.ServerID),
+		tabletDir:     path.Dir(config.DataDir),
 	}
 }
 
@@ -643,8 +641,8 @@ func (mysqld *Mysqld) executeMysqlScript(user string, sql io.Reader) error {
 
 // GetAppConnection returns a connection from the app pool.
 // Recycle needs to be called on the result.
-func (mysqld *Mysqld) GetAppConnection() (dbconnpool.PoolConnection, error) {
-	return mysqld.appPool.Get(0)
+func (mysqld *Mysqld) GetAppConnection(ctx context.Context) (dbconnpool.PoolConnection, error) {
+	return mysqld.appPool.Get(ctx)
 }
 
 // GetDbaConnection creates a new DBConnection.

@@ -10,8 +10,6 @@ source $script_root/env.sh
 echo "Starting vtworker..."
 exec $VTROOT/bin/vtworker \
   -cell test \
-  -tablet_protocol grpc \
-  -tablet_manager_protocol grpc \
   -log_dir $VTDATAROOT/tmp \
   -alsologtostderr \
   -use_v3_resharding_mode \

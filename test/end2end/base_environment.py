@@ -5,7 +5,7 @@ common to all environments.
 """
 
 import json
-import utils
+import sharding_utils
 
 
 class VitessEnvironmentError(Exception):
@@ -23,6 +23,9 @@ class BaseEnvironment(object):
 
     Args:
       **kwargs: kwargs parameterizing the environment.
+
+    Raises:
+      VitessEnvironmentError: Raised if unsupported
     """
     raise VitessEnvironmentError(
         'Create unsupported in this environment')
@@ -33,11 +36,25 @@ class BaseEnvironment(object):
     Args:
       instance_name: Name of the existing environment instance (string)
     """
-    raise VitessEnvironmentError(
-        'Use named instance unsupported in this environment')
+    self.master_capable_tablets = {}
+    for keyspace, num_shards in zip(self.keyspaces, self.num_shards):
+      self.master_capable_tablets[keyspace] = {}
+      for shard_name in sharding_utils.get_shard_names(num_shards):
+        raw_shard_tablets = self.vtctl_helper.execute_vtctl_command(
+            ['ListShardTablets', '%s/%s' % (keyspace, shard_name)])
+        split_shard_tablets = [
+            t.split(' ') for t in raw_shard_tablets.split('\n') if t]
+        self.master_capable_tablets[keyspace][shard_name] = [
+            t[0] for t in split_shard_tablets
+            if (self.get_tablet_cell(t[0]) in self.primary_cells
+                and (t[3] == 'master' or t[3] == 'replica'))]
 
   def destroy(self):
-    """Teardown the environment."""
+    """Teardown the environment.
+
+    Raises:
+      VitessEnvironmentError: Raised if unsupported
+    """
     raise VitessEnvironmentError(
         'Destroy unsupported in this environment')
 
@@ -49,6 +66,9 @@ class BaseEnvironment(object):
 
     Returns:
       A vtgate connection.
+
+    Raises:
+      VitessEnvironmentError: Raised if unsupported
     """
     raise VitessEnvironmentError(
         'Get VTGate Conn unsupported in this environment')
@@ -68,6 +88,9 @@ class BaseEnvironment(object):
 
     Returns:
       return restart return val
+
+    Raises:
+      VitessEnvironmentError: Raised if unsupported
     """
     raise VitessEnvironmentError(
         'Restart MySQL task unsupported in this environment')
@@ -85,19 +108,26 @@ class BaseEnvironment(object):
       keyspace: Name of the keyspace to reparent (string)
       shard_name: name of the shard to verify (e.g. '-80') (string)
       failover_completion_timeout_s: Failover completion timeout (int)
+
+    Raises:
+      VitessEnvironmentError: Raised if unsupported
     """
     raise VitessEnvironmentError(
         'Wait for good failover status unsupported in this environment')
 
   def wait_for_healthy_tablets(self):
-    """Wait until all tablets report healthy status."""
+    """Wait until all tablets report healthy status.
+
+    Raises:
+      VitessEnvironmentError: Raised if unsupported
+    """
     raise VitessEnvironmentError(
         'Wait for healthy tablets unsupported in this environment')
 
   def get_next_master(self, keyspace, shard_name, cross_cell=False):
     """Determine what instance to select as the next master.
 
-    If the next master is cross-cell, rotate the master cell and use instance 1
+    If the next master is cross-cell, rotate the master cell and use instance 0
     as the master.  Otherwise, rotate the instance number.
 
     Args:
@@ -106,10 +136,25 @@ class BaseEnvironment(object):
       cross_cell: Whether the desired reparent is to another cell (bool).
 
     Returns:
-      Tuple of cell, task num (string, int)
+      Tuple of cell, task num, tablet uid (string, int, string)
     """
-    raise VitessEnvironmentError(
-        'Get next master unsupported in this environment')
+    num_tasks = self.keyspace_alias_to_num_instances_dict[keyspace]['replica']
+    current_master = self.get_current_master_name(keyspace, shard_name)
+    current_master_cell = self.get_tablet_cell(current_master)
+    next_master_cell = current_master_cell
+    next_master_task = 0
+    if cross_cell:
+      next_master_cell = self.primary_cells[(
+          self.primary_cells.index(current_master_cell) + 1) % len(
+              self.primary_cells)]
+    else:
+      next_master_task = (
+          (self.get_tablet_task_number(current_master) + 1) % num_tasks)
+    tablets_in_cell = [tablet for tablet in
+                       self.master_capable_tablets[keyspace][shard_name]
+                       if self.get_tablet_cell(tablet) == next_master_cell]
+    return (next_master_cell, next_master_task,
+            tablets_in_cell[next_master_task])
 
   def get_tablet_task_number(self, tablet_name):
     """Gets a tablet's 0 based task number.
@@ -119,26 +164,29 @@ class BaseEnvironment(object):
 
     Returns:
       0 based task number (int).
+
+    Raises:
+      VitessEnvironmentError: Raised if unsupported
     """
     raise VitessEnvironmentError(
         'Get tablet task number unsupported in this environment')
 
-  def external_reparent(self, keyspace, new_cell, shard, num_shards,
-                        new_task_num):
-    """Perform a reparent through external means (Orchestrator, etc.)
+  def external_reparent(self, keyspace, new_cell, shard, new_task_num):
+    """Perform a reparent through external means (Orchestrator, etc.).
 
     Args:
       keyspace: name of the keyspace to reparent (string)
       new_cell: new master cell (string)
       shard: 0 based shard index to reparent (int)
-      num_shards: total number of shards (int)
       new_task_num: 0 based task num to become next master (int)
+
+    Raises:
+      VitessEnvironmentError: Raised if unsupported
     """
     raise VitessEnvironmentError(
         'External reparent unsupported in this environment')
 
-  def internal_reparent(self, keyspace, new_cell, shard, num_shards,
-                        new_task_num, emergency=False):
+  def internal_reparent(self, keyspace, new_master_uid, emergency=False):
     raise VitessEnvironmentError(
         'Internal reparent unsupported in this environment')
 
@@ -248,6 +296,6 @@ class BaseEnvironment(object):
       List of pairs of tablet's name and type
     """
     tablet_info = []
-    for shard_name in utils.get_shard_names(num_shards):
+    for shard_name in sharding_utils.get_shard_names(num_shards):
       tablet_info += self.get_tablet_types_for_shard(keyspace, shard_name)
     return tablet_info

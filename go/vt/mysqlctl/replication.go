@@ -17,6 +17,8 @@ import (
 	"text/template"
 	"time"
 
+	"golang.org/x/net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
@@ -116,7 +118,7 @@ func WaitForSlaveStart(mysqld MysqlDaemon, slaveStartDeadline int) error {
 
 // StartSlave starts a slave on the provided MysqldDaemon
 func StartSlave(md MysqlDaemon, hookExtraEnv map[string]string) error {
-	if err := md.ExecuteSuperQueryList([]string{SQLStartSlave}); err != nil {
+	if err := md.ExecuteSuperQueryList(context.TODO(), []string{SQLStartSlave}); err != nil {
 		return err
 	}
 
@@ -133,12 +135,12 @@ func StopSlave(md MysqlDaemon, hookExtraEnv map[string]string) error {
 		return err
 	}
 
-	return md.ExecuteSuperQueryList([]string{SQLStopSlave})
+	return md.ExecuteSuperQueryList(context.TODO(), []string{SQLStopSlave})
 }
 
 // GetMysqlPort returns mysql port
 func (mysqld *Mysqld) GetMysqlPort() (int32, error) {
-	qr, err := mysqld.FetchSuperQuery("SHOW VARIABLES LIKE 'port'")
+	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW VARIABLES LIKE 'port'")
 	if err != nil {
 		return 0, err
 	}
@@ -154,7 +156,7 @@ func (mysqld *Mysqld) GetMysqlPort() (int32, error) {
 
 // IsReadOnly return true if the instance is read only
 func (mysqld *Mysqld) IsReadOnly() (bool, error) {
-	qr, err := mysqld.FetchSuperQuery("SHOW VARIABLES LIKE 'read_only'")
+	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW VARIABLES LIKE 'read_only'")
 	if err != nil {
 		return true, err
 	}
@@ -175,7 +177,7 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 	} else {
 		query += "OFF"
 	}
-	return mysqld.ExecuteSuperQuery(query)
+	return mysqld.ExecuteSuperQuery(context.TODO(), query)
 }
 
 var (
@@ -186,12 +188,12 @@ var (
 )
 
 // WaitMasterPos lets slaves wait to given replication position
-func (mysqld *Mysqld) WaitMasterPos(targetPos replication.Position, waitTimeout time.Duration) error {
+func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos replication.Position) error {
 	flavor, err := mysqld.flavor()
 	if err != nil {
 		return fmt.Errorf("WaitMasterPos needs flavor: %v", err)
 	}
-	return flavor.WaitMasterPos(mysqld, targetPos, waitTimeout)
+	return flavor.WaitMasterPos(ctx, mysqld, targetPos)
 }
 
 // SlaveStatus returns the slave replication statuses
@@ -270,7 +272,7 @@ const (
 
 // FindSlaves gets IP addresses for all currently connected slaves.
 func FindSlaves(mysqld MysqlDaemon) ([]string, error) {
-	qr, err := mysqld.FetchSuperQuery("SHOW PROCESSLIST")
+	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW PROCESSLIST")
 	if err != nil {
 		return nil, err
 	}
@@ -291,18 +293,19 @@ func FindSlaves(mysqld MysqlDaemon) ([]string, error) {
 
 // WaitBlpPosition will wait for the filtered replication to reach at least
 // the provided position.
-func WaitBlpPosition(mysqld MysqlDaemon, sql string, replicationPosition string, waitTimeout time.Duration) error {
+func WaitBlpPosition(ctx context.Context, mysqld MysqlDaemon, sql string, replicationPosition string) error {
 	position, err := replication.DecodePosition(replicationPosition)
 	if err != nil {
 		return err
 	}
-	timeOut := time.Now().Add(waitTimeout)
 	for {
-		if time.Now().After(timeOut) {
-			break
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
 		}
 
-		qr, err := mysqld.FetchSuperQuery(sql)
+		qr, err := mysqld.FetchSuperQuery(ctx, sql)
 		if err != nil {
 			return err
 		}
@@ -323,8 +326,6 @@ func WaitBlpPosition(mysqld MysqlDaemon, sql string, replicationPosition string,
 		log.Infof("Sleeping 1 second waiting for binlog replication(%v) to catch up: %v != %v", sql, pos, position)
 		time.Sleep(1 * time.Second)
 	}
-
-	return fmt.Errorf("WaitBlpPosition(%v) timed out", sql)
 }
 
 // EnableBinlogPlayback prepares the server to play back events from a binlog stream.
@@ -361,10 +362,9 @@ func (mysqld *Mysqld) SetSemiSyncEnabled(master, slave bool) error {
 		s = 1
 	}
 
-	err := mysqld.ExecuteSuperQuery(
-		fmt.Sprintf(
-			"SET GLOBAL rpl_semi_sync_master_enabled = %v, GLOBAL rpl_semi_sync_slave_enabled = %v",
-			m, s))
+	err := mysqld.ExecuteSuperQuery(context.TODO(), fmt.Sprintf(
+		"SET GLOBAL rpl_semi_sync_master_enabled = %v, GLOBAL rpl_semi_sync_slave_enabled = %v",
+		m, s))
 	if err != nil {
 		return fmt.Errorf("can't set semi-sync mode: %v; make sure plugins are loaded in my.cnf", err)
 	}
@@ -374,7 +374,7 @@ func (mysqld *Mysqld) SetSemiSyncEnabled(master, slave bool) error {
 // SemiSyncEnabled returns whether semi-sync is enabled for master or slave.
 // If the semi-sync plugin is not loaded, we assume semi-sync is disabled.
 func (mysqld *Mysqld) SemiSyncEnabled() (master, slave bool) {
-	vars, err := mysqld.fetchVariables("rpl_semi_sync_%_enabled")
+	vars, err := mysqld.fetchVariables(context.TODO(), "rpl_semi_sync_%_enabled")
 	if err != nil {
 		return false, false
 	}

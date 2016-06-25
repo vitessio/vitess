@@ -304,3 +304,21 @@ func LoadFormal(filename string) (*vschemapb.SrvVSchema, error) {
 	}
 	return formal, nil
 }
+
+// LoadFormalKeyspace loads the JSON representation of VSchema from a file,
+// for a single keyspace.
+func LoadFormalKeyspace(filename string) (*vschemapb.Keyspace, error) {
+	formal := &vschemapb.Keyspace{}
+	if filename == "" {
+		return formal, nil
+	}
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(data, formal)
+	if err != nil {
+		return nil, err
+	}
+	return formal, nil
+}

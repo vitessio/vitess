@@ -91,7 +91,7 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos replication.
 	if err != nil {
 		return err
 	}
-	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
+	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return fmt.Errorf("failed to set slave position: %v", err)
 	}
 
@@ -135,7 +135,7 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos replication.
 		return fmt.Errorf("MysqlDaemon.SetMasterCommands failed: %v", err)
 	}
 	cmds = append(cmds, "START SLAVE")
-	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
+	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return fmt.Errorf("failed to start replication: %v", err)
 	}
 

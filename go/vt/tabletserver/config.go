@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"net/url"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -162,7 +164,7 @@ type Controller interface {
 	ClearQueryPlanCache()
 
 	// ReloadSchema makes the quey service reload its schema cache
-	ReloadSchema()
+	ReloadSchema(ctx context.Context) error
 
 	// RegisterQueryRuleSource adds a query rule source
 	RegisterQueryRuleSource(ruleSource string)

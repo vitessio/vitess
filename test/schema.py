@@ -65,19 +65,6 @@ def setUpModule():
     shard_0_backup.wait_for_vttablet_state('NOT_SERVING')
     shard_1_master.wait_for_vttablet_state('SERVING')
     shard_1_replica1.wait_for_vttablet_state('NOT_SERVING')
-
-    # make sure all replication is good
-    for t in initial_tablets:
-      t.reset_replication()
-
-    utils.run_vtctl(['InitShardMaster', test_keyspace + '/0',
-                     shard_0_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['InitShardMaster', test_keyspace + '/1',
-                     shard_1_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['ValidateKeyspace', '-ping-tablets', test_keyspace])
-
-    # check after all tablets are here and replication is fixed
-    utils.validate_topology(ping_tablets=True)
   except Exception as setup_exception:  # pylint: disable=broad-except
     try:
       tearDownModule()
@@ -149,10 +136,17 @@ class TestSchema(unittest.TestCase):
     for t in initial_tablets:
       t.create_db(db_name)
 
+    utils.run_vtctl(['InitShardMaster', '-force', test_keyspace + '/0',
+                     shard_0_master.tablet_alias], auto_log=True)
+    utils.run_vtctl(['InitShardMaster', '-force', test_keyspace + '/1',
+                     shard_1_master.tablet_alias], auto_log=True)
+
   def tearDown(self):
     # This test assumes that it can reset the tablets by simply cleaning their
     # databases without restarting the tablets.
     for t in initial_tablets:
+      t.reset_replication()
+      t.set_semi_sync_enabled(master=False)
       t.clean_dbs()
 
   def _check_tables(self, tablet_obj, expected_count):
@@ -166,7 +160,7 @@ class TestSchema(unittest.TestCase):
     return utils.run_vtctl(['ApplySchema',
                             '-sql=' + sql,
                             keyspace],
-                           expect_fail=expect_fail)
+                           expect_fail=expect_fail, auto_log=True)
 
   def _get_schema(self, tablet_alias):
     return utils.run_vtctl_json(['GetSchema',
@@ -230,8 +224,8 @@ class TestSchema(unittest.TestCase):
     with open(sql_path, 'w') as handler:
       handler.write('create table test_table_x (id int)')
 
-    timeout = 10
     # wait until this sql file being consumed by autoschema
+    timeout = 10
     while os.path.isfile(sql_path):
       timeout = utils.wait_step(
           'waiting for vtctld to pick up schema changes',
@@ -289,9 +283,6 @@ class TestSchema(unittest.TestCase):
     self._check_tables(shard_0_master, 4)
     self._check_tables(shard_1_master, 4)
 
-    # TODO(mberlin): This currently fails during the actual change.
-    # schemamanager should fail in preflight instead. Change the error message
-    # we check for once schemamanager prevents this in the preflight phase.
     drop_table = ('DROP TABLE nonexistent_table;')
     stdout = self._apply_schema(test_keyspace, drop_table, expect_fail=True)
     self.assertIn('Unknown table', ''.join(stdout))
@@ -302,7 +293,6 @@ class TestSchema(unittest.TestCase):
 
     self._check_tables(shard_0_master, 4)
     self._check_tables(shard_1_master, 4)
-
 
   def test_vtctl_copyschemashard_use_tablet_as_source(self):
     self._test_vtctl_copyschemashard(shard_0_master.tablet_alias)

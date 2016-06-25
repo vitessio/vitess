@@ -63,11 +63,11 @@ type StreamHealthReader interface {
 // TabletDialer represents a function that will return a TabletConn
 // object that can communicate with a tablet.
 //
-// keyspace, shard and tabletType are remembered and used as Target.
-// Use SetTarget to update them later.
-// If the TabletDialer is used for StreamHealth only, then keyspace, shard
-// and tabletType won't be used.
-type TabletDialer func(ctx context.Context, tablet *topodatapb.Tablet, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (TabletConn, error)
+// The Tablet's keyspace, shard and tabletType are remembered
+// and used as Target. Use SetTarget to update them later.
+// If the TabletDialer is used for StreamHealth only, then the tablet's
+// keyspace, shard and tabletType won't be used.
+type TabletDialer func(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (TabletConn, error)
 
 // TabletConn defines the interface for a vttablet client. It should
 // be thread-safe, so it can be used concurrently used across goroutines.

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/net/context"
@@ -43,10 +42,7 @@ func (zkts *Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet)
 	// Create /zk/<cell>/vt/tablets/<uid>
 	_, err = zk.CreateRecursive(zkts.zconn, zkTabletPath, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-			err = topo.ErrNodeExists
-		}
-		return err
+		return convertError(err)
 	}
 	return nil
 }
@@ -61,13 +57,7 @@ func (zkts *Server) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet,
 
 	stat, err := zkts.zconn.Set(zkTabletPath, string(data), int(existingVersion))
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZBADVERSION) {
-			err = topo.ErrBadVersion
-		} else if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-
-		return 0, err
+		return 0, convertError(err)
 	}
 	return int64(stat.Version()), nil
 }
@@ -76,10 +66,7 @@ func (zkts *Server) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet,
 func (zkts *Server) DeleteTablet(ctx context.Context, alias *topodatapb.TabletAlias) error {
 	zkTabletPath := TabletPathForAlias(alias)
 	if err := zk.DeleteRecursive(zkts.zconn, zkTabletPath, -1); err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return err
+		return convertError(err)
 	}
 	return nil
 }
@@ -89,10 +76,7 @@ func (zkts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias
 	zkTabletPath := TabletPathForAlias(alias)
 	data, stat, err := zkts.zconn.Get(zkTabletPath)
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return nil, 0, err
+		return nil, 0, convertError(err)
 	}
 
 	tablet := &topodatapb.Tablet{}
@@ -107,10 +91,7 @@ func (zkts *Server) GetTabletsByCell(ctx context.Context, cell string) ([]*topod
 	zkTabletsPath := tabletDirectoryForCell(cell)
 	children, _, err := zkts.zconn.Children(zkTabletsPath)
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return nil, err
+		return nil, convertError(err)
 	}
 
 	sort.Strings(children)

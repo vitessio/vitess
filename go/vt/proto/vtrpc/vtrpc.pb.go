@@ -25,7 +25,9 @@ var _ = math.Inf
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the proto package it is being compiled against.
-const _ = proto.ProtoPackageIsVersion1
+// A compilation error at this line likely means your copy of the
+// proto package needs to be updated.
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 // ErrorCode is the enum values for Errors. Internally, errors should
 // be created with one of these codes. These will then be translated over the wire
@@ -186,6 +188,8 @@ func init() {
 	proto.RegisterType((*RPCError)(nil), "vtrpc.RPCError")
 	proto.RegisterEnum("vtrpc.ErrorCode", ErrorCode_name, ErrorCode_value)
 }
+
+func init() { proto.RegisterFile("vtrpc.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
 	// 372 bytes of a gzipped FileDescriptorProto

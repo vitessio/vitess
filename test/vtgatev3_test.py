@@ -260,6 +260,7 @@ def setUpModule():
             create_join_user_extra,
             create_join_name_info,
             ],
+        rdonly_count=1,  # to test SplitQuery
         )
     keyspace_env.launch(
         'lookup',
@@ -1054,6 +1055,33 @@ class TestVTGateFunctions(unittest.TestCase):
         'select user_id, email from vt_user_extra where user_id = :user_id',
         bindvars={'user_id': 11})
     self.assertEqual(len(qr['rows'] or []), 0)
+
+  def test_split_query(self):
+    """This test uses 'vtctl VtGateSplitQuery' to validate the Map-Reduce APIs.
+
+    We want to return KeyRange queries.
+    """
+    sql = 'select id, name from vt_user'
+    s = utils.vtgate.split_query(sql, 'user', 2)
+    self.assertEqual(len(s), 2)
+    first_half_queries = 0
+    second_half_queries = 0
+    for q in s:
+      self.assertEqual(q['query']['sql'], sql)
+      self.assertIn('key_range_part', q)
+      self.assertEqual(len(q['key_range_part']['key_ranges']), 1)
+      kr = q['key_range_part']['key_ranges'][0]
+      eighty_in_base64 = 'gA=='
+      is_first_half = 'start' not in kr and kr['end'] == eighty_in_base64
+      is_second_half = 'end' not in kr and kr['start'] == eighty_in_base64
+      self.assertTrue(is_first_half or is_second_half,
+                      'invalid keyrange %s' % str(kr))
+      if is_first_half:
+        first_half_queries += 1
+      else:
+        second_half_queries += 1
+    self.assertEqual(first_half_queries, 1, 'invalid split %s' % str(s))
+    self.assertEqual(second_half_queries, 1, 'invalid split %s' % str(s))
 
 if __name__ == '__main__':
   utils.main()

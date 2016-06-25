@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -26,13 +28,13 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
 )
 
@@ -86,111 +88,8 @@ func createTablet(ctx context.Context, ts topo.Server, cell string, uid uint32, 
 }
 
 // initTabletMap creates the action agents and associated data structures
-// for all tablets
-func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, formal *vschemapb.SrvVSchema, mycnf *mysqlctl.Mycnf) error {
-	tabletMap = make(map[uint32]*tablet)
-
-	ctx := context.Background()
-
-	// disable publishing of stats from query service
-	flag.Set("queryserver-config-enable-publish-stats", "false")
-
-	var uid uint32 = 1
-	keyspaceMap := make(map[string]bool)
-	for _, entry := range strings.Split(topology, ",") {
-		slash := strings.IndexByte(entry, '/')
-		column := strings.IndexByte(entry, ':')
-		if slash == -1 || column == -1 {
-			return fmt.Errorf("invalid topology entry: %v", entry)
-		}
-
-		keyspace := entry[:slash]
-		shard := entry[slash+1 : column]
-		dbname := entry[column+1:]
-		dbcfgs.App.DbName = dbname
-
-		// create the keyspace if necessary, so we can set the
-		// ShardingColumnName and ShardingColumnType
-		if _, ok := keyspaceMap[keyspace]; !ok {
-			// only set for sharding key info for sharded keyspaces
-			scn := ""
-			sct := topodatapb.KeyspaceIdType_UNSET
-			if shard != "0" {
-				var err error
-				sct, err = key.ParseKeyspaceIDType(*shardingColumnType)
-				if err != nil {
-					return fmt.Errorf("parseKeyspaceIDType(%v) failed: %v", *shardingColumnType, err)
-				}
-				scn = *shardingColumnName
-			}
-
-			if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
-				ShardingColumnName: scn,
-				ShardingColumnType: sct,
-			}); err != nil {
-				return fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
-			}
-			keyspaceMap[keyspace] = true
-			vs := formal.Keyspaces[keyspace]
-			if err := ts.SaveVSchema(ctx, keyspace, vs); err != nil {
-				return fmt.Errorf("SaveVSchema failed: %v", err)
-			}
-		}
-
-		// create the master
-		if err := createTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_MASTER, mysqld, dbcfgs); err != nil {
-			return err
-		}
-		uid++
-
-		// create a replica slave
-		if err := createTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_REPLICA, mysqld, dbcfgs); err != nil {
-			return err
-		}
-		uid++
-
-		// create a rdonly slave
-		if err := createTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_RDONLY, mysqld, dbcfgs); err != nil {
-			return err
-		}
-		uid++
-	}
-
-	// Rebuild the SrvKeyspace objects, so we can support range-based
-	// sharding queries.
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
-	for keyspace := range keyspaceMap {
-		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil); err != nil {
-			return fmt.Errorf("cannot rebuild %v: %v", keyspace, err)
-		}
-	}
-
-	// Register the tablet dialer for tablet server
-	tabletconn.RegisterDialer("internal", dialer)
-	*tabletconn.TabletProtocol = "internal"
-
-	// Register the tablet manager client factory for tablet manager
-	tmclient.RegisterTabletManagerClientFactory("internal", func() tmclient.TabletManagerClient {
-		return &internalTabletManagerClient{}
-	})
-	*tmclient.TabletManagerProtocol = "internal"
-
-	// run healthcheck on all vttablets
-	tmc := tmclient.NewTabletManagerClient()
-	for _, tablet := range tabletMap {
-		tabletInfo, err := ts.GetTablet(ctx, tablet.agent.TabletAlias)
-		if err != nil {
-			return fmt.Errorf("cannot find tablet: %+v", tablet.agent.TabletAlias)
-		}
-		tmc.RunHealthCheck(ctx, tabletInfo.Tablet)
-	}
-
-	return nil
-}
-
-// initTabletMapProto creates the action agents and associated data structures
 // for all tablets, based on the vttest proto parameter.
-func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, formal *vschemapb.SrvVSchema, mycnf *mysqlctl.Mycnf) error {
+func initTabletMap(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, schemaDir string, mycnf *mysqlctl.Mycnf) error {
 	// parse the input topology
 	tpb := &vttestpb.VTTestTopology{}
 	if err := proto.UnmarshalText(topoProto, tpb); err != nil {
@@ -209,7 +108,6 @@ func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlD
 	var uid uint32 = 1
 	for _, kpb := range tpb.Keyspaces {
 		keyspace := kpb.Name
-		vs := formal.Keyspaces[keyspace]
 
 		// First parse the ShardingColumnType.
 		// Note if it's empty, we will return 'UNSET'.
@@ -279,9 +177,22 @@ func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlD
 			}
 		}
 
-		// create the vschema
-		if err := ts.SaveVSchema(ctx, keyspace, vs); err != nil {
-			return fmt.Errorf("SaveVSchema failed: %v", err)
+		// vschema for the keyspace
+		if schemaDir != "" {
+			f := path.Join(schemaDir, keyspace, "vschema.json")
+			if _, err := os.Stat(f); err == nil {
+				// load the vschema
+				formal, err := vindexes.LoadFormalKeyspace(f)
+				if err != nil {
+					return fmt.Errorf("cannot load vschema file %v for keyspace %v: %v", f, keyspace, err)
+				}
+
+				if err := ts.SaveVSchema(ctx, keyspace, formal); err != nil {
+					return fmt.Errorf("SaveVSchema(%v) failed: %v", keyspace, err)
+				}
+			} else {
+				log.Infof("File %v doesn't exist, skipping vschema for keyspace %v", f, keyspace)
+			}
 		}
 
 		// Rebuild the SrvKeyspace object, so we can support
@@ -324,7 +235,7 @@ func initTabletMapProto(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlD
 //
 
 // dialer is our tabletconn.Dialer
-func dialer(ctx context.Context, tablet *topodatapb.Tablet, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
+func dialer(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return nil, tabletconn.OperationalError("connection refused")
@@ -709,14 +620,13 @@ func (itmc *internalTabletManagerClient) IgnoreHealthError(ctx context.Context, 
 	})
 }
 
-func (itmc *internalTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet) error {
+func (itmc *internalTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
 	return t.agent.RPCWrapLockAction(ctx, tabletmanager.TabletActionReloadSchema, nil, nil, true, func() error {
-		t.agent.ReloadSchema(ctx)
-		return nil
+		return t.agent.ReloadSchema(ctx, waitPosition)
 	})
 }
 

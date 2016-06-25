@@ -510,13 +510,14 @@ func TestValid(t *testing.T) {
 		input:  "drop view a",
 		output: "drop table a",
 	}, {
-		input: "drop table a",
+		input:  "drop table a",
+		output: "drop table a",
 	}, {
 		input:  "drop table if exists a",
-		output: "drop table a",
+		output: "drop table if exists a",
 	}, {
 		input:  "drop view if exists a",
-		output: "drop table a",
+		output: "drop table if exists a",
 	}, {
 		input:  "drop index b on a",
 		output: "alter table a",
@@ -579,7 +580,11 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "rename table A to B",
 		output: "rename table A B",
 	}, {
-		input: "drop table B",
+		input:  "drop table B",
+		output: "drop table B",
+	}, {
+		input:  "drop table if exists B",
+		output: "drop table if exists B",
 	}, {
 		input:  "drop index b on A",
 		output: "alter table A",
@@ -625,6 +630,9 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input:  "drop view A",
 		output: "drop table a",
+	}, {
+		input:  "drop view if exists A",
+		output: "drop table if exists a",
 	}, {
 		input:  "select /* lock in SHARE MODE */ 1 from t lock in SHARE MODE",
 		output: "select /* lock in SHARE MODE */ 1 from t lock in share mode",

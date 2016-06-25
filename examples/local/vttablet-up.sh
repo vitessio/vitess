@@ -107,7 +107,6 @@ for uid_index in $uids; do
     -restore_from_backup \
     -port $port \
     -grpc_port $grpc_port \
-    -binlog_player_protocol grpc \
     -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
     -pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
     $dbconfig_flags \

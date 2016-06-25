@@ -142,9 +142,9 @@ func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*
 	return dbc.conn.ExecuteStreamFetch(query, callback, streamBufferSize)
 }
 
-// VerifyStrict returns true if MySQL is in STRICT mode.
-func (dbc *DBConn) VerifyStrict() bool {
-	return dbc.conn.VerifyStrict()
+// VerifyMode returns an error if the connection mode is incorrect.
+func (dbc *DBConn) VerifyMode() error {
+	return dbc.conn.VerifyMode()
 }
 
 // Close closes the DBConn.
@@ -172,7 +172,7 @@ func (dbc *DBConn) Recycle() {
 func (dbc *DBConn) Kill(reason string) error {
 	dbc.queryServiceStats.KillStats.Add("Queries", 1)
 	log.Infof("Due to %s, killing query %s", reason, dbc.Current())
-	killConn, err := dbc.pool.dbaPool.Get(0)
+	killConn, err := dbc.pool.dbaPool.Get(context.TODO())
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
 		// TODO(aaijazi): Find the right error code for an internal error that we don't want to retry

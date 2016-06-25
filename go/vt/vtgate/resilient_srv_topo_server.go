@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"html/template"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -333,7 +333,7 @@ func (st *SrvKeyspaceCacheStatus) StatusAsHTML() template.HTML {
 	if len(st.Value.ServedFrom) > 0 {
 		result += "<b>ServedFrom:</b><br>"
 		for _, sf := range st.Value.ServedFrom {
-			result += "&nbsp;<b>" + strings.ToLower(sf.TabletType.String()) + "</b>&nbsp;" + sf.Keyspace + "<br>"
+			result += "&nbsp;<b>" + topoproto.TabletTypeLString(sf.TabletType) + "</b>&nbsp;" + sf.Keyspace + "<br>"
 		}
 	}
 

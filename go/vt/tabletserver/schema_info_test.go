@@ -143,6 +143,7 @@ func TestSchemaInfoOpenFailedDueToTableInfoErr(t *testing.T) {
 
 func TestSchemaInfoReload(t *testing.T) {
 	db := fakesqldb.Register()
+	ctx := context.Background()
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
 	}
@@ -157,7 +158,7 @@ func TestSchemaInfoReload(t *testing.T) {
 	if tableInfo != nil {
 		t.Fatalf("table: %s exists; expecting nil", newTable)
 	}
-	schemaInfo.Reload()
+	schemaInfo.Reload(ctx)
 	tableInfo = schemaInfo.GetTable(newTable)
 	if tableInfo != nil {
 		t.Fatalf("table: %s exists; expecting nil", newTable)
@@ -193,7 +194,7 @@ func TestSchemaInfoReload(t *testing.T) {
 		Rows:         [][]sqltypes.Value{createTestTableShowIndex("pk")},
 	})
 
-	schemaInfo.Reload()
+	schemaInfo.Reload(ctx)
 	tableInfo = schemaInfo.GetTable(newTable)
 	if tableInfo != nil {
 		t.Fatalf("table: %s exists; expecting nil", newTable)
@@ -210,7 +211,9 @@ func TestSchemaInfoReload(t *testing.T) {
 	if tableInfo != nil {
 		t.Fatalf("table: %s exists; expecting nil", newTable)
 	}
-	schemaInfo.Reload()
+	if err := schemaInfo.Reload(ctx); err != nil {
+		t.Fatalf("schemaInfo.Reload() error: %v", err)
+	}
 	tableInfo = schemaInfo.GetTable(newTable)
 	if tableInfo == nil {
 		t.Fatalf("table: %s should exist", newTable)
@@ -379,6 +382,7 @@ func TestSchemaInfoExportVars(t *testing.T) {
 
 func TestUpdatedMysqlStats(t *testing.T) {
 	db := fakesqldb.Register()
+	ctx := context.Background()
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
 	}
@@ -421,7 +425,9 @@ func TestUpdatedMysqlStats(t *testing.T) {
 		Rows:         [][]sqltypes.Value{createTestTableShowIndex("pk")},
 	})
 
-	schemaInfo.Reload()
+	if err := schemaInfo.Reload(ctx); err != nil {
+		t.Fatalf("schemaInfo.Reload() error: %v", err)
+	}
 	tableInfo := schemaInfo.GetTable(tableName)
 	if tableInfo == nil {
 		t.Fatalf("table: %s should exist", tableName)
@@ -437,7 +443,9 @@ func TestUpdatedMysqlStats(t *testing.T) {
 			createTestTableUpdatedStats(tableName),
 		},
 	})
-	schemaInfo.Reload()
+	if err := schemaInfo.Reload(ctx); err != nil {
+		t.Fatalf("schemaInfo.Reload() error: %v", err)
+	}
 	tableInfo = schemaInfo.GetTable(tableName)
 	tr2 := tableInfo.TableRows
 	dl2 := tableInfo.DataLength
@@ -555,6 +563,12 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
+			},
+		},
+		"select @@autocommit": {
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				{sqltypes.MakeString([]byte("1"))},
 			},
 		},
 		baseShowTables: {

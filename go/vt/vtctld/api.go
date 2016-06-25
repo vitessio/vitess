@@ -8,14 +8,18 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"time"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/logutil"
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 	"github.com/youtube/vitess/go/vt/schemamanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
 // This file implements a REST-style API for the vtctld web interface.
@@ -88,6 +92,7 @@ func unmarshalRequest(r *http.Request, v interface{}) error {
 
 func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 	tabletHealthCache := newTabletHealthCache(ts)
+	tmClient := tmclient.NewTabletManagerClient()
 
 	// Cells
 	handleCollection("cells", func(r *http.Request) (interface{}, error) {
@@ -216,15 +221,25 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 
 	// Schema Change
 	http.HandleFunc(apiPrefix+"schema/apply", func(w http.ResponseWriter, r *http.Request) {
-		req := struct{ Keyspace, SQL string }{}
+		req := struct {
+			Keyspace, SQL       string
+			SlaveTimeoutSeconds int
+		}{}
 		if err := unmarshalRequest(r, &req); err != nil {
 			httpErrorf(w, r, "can't unmarshal request: %v", err)
 			return
 		}
+		if req.SlaveTimeoutSeconds <= 0 {
+			req.SlaveTimeoutSeconds = 10
+		}
+
+		logger := logutil.NewCallbackLogger(func(ev *logutilpb.Event) {
+			w.Write([]byte(logutil.EventString(ev)))
+		})
+		wr := wrangler.New(logger, ts, tmClient)
 
 		executor := schemamanager.NewTabletExecutor(
-			tmclient.NewTabletManagerClient(),
-			ts)
+			wr, time.Duration(req.SlaveTimeoutSeconds)*time.Second)
 
 		schemamanager.Run(ctx,
 			schemamanager.NewUIController(req.SQL, req.Keyspace, w), executor)

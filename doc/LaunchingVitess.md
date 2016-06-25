@@ -29,7 +29,6 @@ Relying on replication also allows you to loosen some of the disk-based durabili
 Distributing your data has its tradeoffs. Before sharding or moving tables to different keyspaces, the application needs to be verified (or changed) such that it can tolerate the following changes:
 
 * Cross-shard reads may not be consistent with each other.
-
 * Cross-shard transactions can fail in the middle and result in partial commits. There is a proposal out to make distributed transactions complete atomically, and on Vitess’ roadmap; however, that is not implemented yet.
 
 Single shard transactions continue to remain ACID, just like MySQL supports it.
@@ -40,33 +39,48 @@ This tradeoff allows for better throughput at the expense of stale or possible i
 
 For true snapshot, the queries must be sent to the master within a transaction. For read-after-write consistency, reading from the master without a transaction is sufficient.
 
-To summarize, these are the various levels of consistency supported: TODO: This will look better in a table:
+To summarize, these are the various levels of consistency supported:
 
-* REPLICA/RDONLY read: Very fast and very scalable. Data can be stale.
-
-* MASTER read: Fast, does not scale well geographically. Data is up-to-date (read-after-write consistency).
-
-* Master transactions: Snapshot consistency for a single shard. Fast, does not scale well geographically. Single-shard ACID writes supported, with support coming in the near future for cross-shard atomic writes.
+* REPLICA/RDONLY read: Servers be scaled geographically. Local reads are fast, but can be stale depending on replica lag.
+* MASTER read: There is only one worldwide master per shard. Reads coming from remote locations will be subject to network latency and reliability, but the data will be up-to-date (read-after-write consistency). The isolation level is READ_COMMITTED.
+* MASTER transactions: These exhibit the same properties as MASTER reads. However, you get REPEATABLE_READ consistency and ACID writes for a single shard. Support is underway for cross-shard Atomic transactions.
 
 ### No multi-master
 
 Vitess doesn’t support multi-master setup. It has alternate ways of addressing most of the use cases that are typically solved by multi-master:
 
 * Scalability: There are situations where multi-master gives you a little bit of additional runway. However, since the statements have to eventually be applied to all masters, it’s not a sustainable strategy. Vitess addresses this problem through sharding, which can scale indefinitely.
-
 * High availability: Vitess integrates with Orchestrator, which is capable of performing a failover to a new master within seconds of failure detection. This is usually sufficient for most applications.
-
 * Low-latency geographically distributed writes: This is one case that is not addressed by Vitess. The current recommendation is to absorb the latency cost of long-distance round-trips for writes. If the data distribution allows, you still have the option of sharding based on geographic affinity. You can then setup masters for different shards to be in different geographic location. This way, most of the master writes can still be local.
 
 ### Big Data Queries
 
-TODO: Elaborate.
+There are two main ways to access the data for offline data processing (as
+opposed to online web or direct access to the live data): sending queries to
+rdonly servers, or using a Map Reduce framework.
 
-We support rdonly for batch queries. Do not use replica servers.
+#### Batch Queries
 
-Hadoop connector.
+These are regular queries, but they can consume a lot of data. Typically, the
+streaming APIs are used, to consume large quantities of data.
 
-No complicated SQL queries, preference is to process data in Map Reduce framework.
+These queries are just sent to the *rdonly* servers (also known as *batch*
+servers). They can take as much resources as they want without affecting live
+traffic.
+
+#### Map Reduce
+
+Vitess supports Map-Reduce access to the data. Vitess provides a Hadoop
+connector, that can also be used with Apache Spark. See the (Hadoop package
+documentation)[https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/com/youtube/vitess/hadoop]
+for more information.
+
+With a Map-Reduce framework, Vitess does not support very complicated
+queries. In part because it would be difficult and not very efficient, but also
+because the Map-Reduce frameworks are usually very good at data processing. So
+instead of doing very complex SQL queries and have processed results, it is
+recommended to just dump the input data out of Vitess (with simple *select*
+statements), and process it with a Map-Reduce pipeline.
 
 ## Multi-cell Deployment
 
@@ -74,11 +88,39 @@ TODO: Elaborate
 
 Choosing master cell, master cells can become master. Vitess supports cross-cell failovers. Rdonlys can be in any cell, where batch jobs need to run. Replica-only cells can serve read-only traffic.
 
-## Lock server
+## Lock Server - Topology Service
 
-Vitess is a highly available service, and Vitess itself needs to store a small amount of metadata very reliably. For that purpose, Vitess needs a highly available and consistent data store.
+Vitess is a highly available service, and Vitess itself needs to store a small
+amount of metadata very reliably. For that purpose, Vitess needs a highly
+available and consistent data store.
 
-Lock servers were built for this exact purpose, and Vitess needs one such cluster to be setup to run smoothly. Vitess can be customized to utilize any lock server, and by default it supports zookeeper and etcd.
+Lock servers were built for this exact purpose, and Vitess needs one such
+cluster to be setup to run smoothly. Vitess can be customized to utilize any
+lock server, and by default it supports zookeeper and etcd. We call this
+component
+[Topology Service](https://github.com/youtube/vitess/blob/master/doc/TopologyService.md).
+
+As Vitess is meant to run in multiple data centers / regions (called cells
+below), it relies on two different lock servers:
+
+* global instance: it contains global meta data, like the list of Keyspaces /
+  Shards, the VSchema, ... It should be reliable and distributed across multiple
+  cells. Running Vitess processes almost never access the global instance.
+* per-cell instance (local): It should be running only in the local cell. It
+  contains aggregates of all the global data, plus local running tablet
+  information. Running Vitess processes get most of their topology data from the
+  local instance.
+
+This separation is key to higher reliability. A single cell going bad is never
+critical for Vitess, as the global instance is configured to survive it, and
+other cells can take over the production traffic. The global instance can be
+unavailable for minutes and not affect serving at all (it would affect VSchema
+changes for instance, but these are not critical, they can wait for the global
+instance to be back).
+
+If Vitess is only running in one cell, both global and local instances can share
+the same lock service instance. It is always possible to split them later when
+expanding to multiple cells.
 
 ## Monitoring
 
@@ -94,9 +136,30 @@ Vitess was built on bare metal and later adapted to run in the cloud. This gives
 
 ## Development Workflow
 
-TODO: Elaborate.
+Vitess provides binaries and scripts to make unit testing of the application
+code very easy. With these tools, we recommend to unit test all the application
+features if possible.
 
-Vttest for unit tests / integration tests using full production schema / vschema. Always use multiple shards for sharded keyspaces in tests (2).
+A production environment for a Vitess cluster involves a topology service,
+multiple database instances, a vtgate pool and at least one vtctld process,
+possibly in multiple data centers. The vttest library uses the *vtcombo* binary
+to combine all the Vitess processes into just one. The various databases are
+also combined into a single MySQL instance (using different database names for
+each shard). The database schema is initialized at startup. The (optional)
+VSchema is also initialized at startup.
+
+A few things to consider:
+
+* Use the same database schema in tests as the production schema.
+* Use the same VSchema in tests as the production VSchema.
+* When a production keyspace is sharded, use a sharded test keyspace as
+  well. Just two shards is usually enough, to minimize test startup time, while
+  still re-producing the production environment.
+* *vtcombo* can also start the *vtctld* component, so the test environment is
+  visible with the Vitess UI.
+* See
+  (vttest.proto)[https://github.com/youtube/vitess/blob/master/proto/vttest.proto]
+  for more information.
 
 ## Using Vitess in you Application
 
@@ -108,7 +171,7 @@ If using low-level API directly, importance of using bind vars.
 
 TODO: Balancing traffic between master, replica & rdonly. Explain how to target the right target type.
 
-Includes Query Verification: A sharded Vitess is not 100% backward compatible with MySQL. Some queries that used to work will cease to work. It’s important that you run all your queries on a sharded test environment (TODO: Link to vttest doc) to make sure none will fail on production.
+Includes Query Verification: A sharded Vitess is not 100% backward compatible with MySQL. Some queries that used to work will cease to work. It’s important that you run all your queries on a sharded test environment -- see the (Development Workflow)[#development-workflow] section above -- to make sure none will fail on production.
 
 # Preparing for Production
 
@@ -156,9 +219,22 @@ You may have to add a few more app class machines to absorb any additional CPU a
 
 ## Lock Service Setup
 
-TODO: Elaborate.
+The Lock Service should be running, and both the global and local instances
+should be up. See the
+[Topology Service](https://github.com/youtube/vitess/blob/master/doc/TopologyService.md)
+document for more information.
 
-Per cell requirements, global lockserver… Link to document.
+Each lock service implementation supports a couple configuration command line
+parameters, they need to be specified for each Vitess process.
+
+For sizing purposes, the Vitess processes do not access the lock service very
+much. Each *vtgate* process keeps a few watches on a few local nodes (VSchema
+and SrvKeyspace). Each *vttablet* process will keep its on Tablet record up to
+date, but it usually doesn't change. The *vtctld* process will access it a lot
+more, but only on demand to display web pages.
+
+As mentioned previously, if the setup is only in one cell, the global and local
+instances can be combined. Just use different top-level directories.
 
 ## Production Testing
 
@@ -167,13 +243,9 @@ Before running Vitess in production, please make yourself comfortable first with
 Here is a short list of all the basic workflows Vitess supports:
 
 * [Failover / Reparents](http://vitess.io/user-guide/reparenting.html)
-
 * [Backup/Restore](http://vitess.io/user-guide/backup-and-restore.html)
-
 * [Schema Management](http://vitess.io/user-guide/schema-management.html) / [Pivot Schema Changes](http://vitess.io/user-guide/pivot-schema-changes.html)
-
 * [Resharding](http://vitess.io/user-guide/sharding.html) / [Horizontal Resharding Tutorial](http://vitess.io/user-guide/horizontal-sharding.html)
-
 * [Upgrading](http://vitess.io/user-guide/upgrading.html)
 
 # Server Configuration
@@ -193,9 +265,7 @@ MySQL versions supported are: MariaDB 10.0, MySQL 5.6 and MySQL 5.7. A number of
 Vitess relies on adding comments to DMLs, which are later parsed on the other end of replication for various post-processing work. The critical ones are:
 
 * Redirect DMLs to the correct shard during resharding workflow.
-
 * Identify which rows have changed for notifying downstream services that wish to subscribe to changes in vitess.
-
 * Workflows that allow you to apply schema changes to replicas first, and rotate the masters, which improves uptime.
 
 In order to achieve this, Vitess also rewrites all your DMLs to be primary-key based. In a way, this also makes statement based replication almost as efficient as row-based replication (RBR). So, there should be no major loss of performance if you switched to SBR in Vitess.
@@ -231,11 +301,8 @@ VTTablet uses connection pools to MySQL. If autocommit was turned off, MySQL wil
 TODO: Elaborate
 
 * read-only
-
 * skip-slave-start
-
 * log-bin
-
 * log-slave-updates
 
 For MariaDB you must use:
@@ -245,7 +312,6 @@ For MariaDB you must use:
 For MySQL 5.6+ you must use:
 
 * gtid_mode
-
 * enforce_gtid_consistency
 
 ### Monitoring
@@ -253,39 +319,24 @@ For MySQL 5.6+ you must use:
 In addition to monitoring the Vitess processes, we recommend to monitor MySQL as well. Here is a list of MySQL metrics you should monitor:
 
 * QPS
-
 * Bytes sent/received
-
 * Replication lag
-
 * Threads running
-
 * Innodb buffer cache hit rate
-
 * CPU, memory and disk usage. For disk, break into bytes read/written, latencies and IOPS.
 
 ### Recap
 
 * 2-4 cores
-
 * 100-300GB data size
-
 * Statement based replication (required)
-
 * Semi-sync replication
-
     * rpl_semi_sync_master_timeout is huge (essentially never; there's no way to actually specify never)
-
     * rpl_semi_sync_master_wait_no_slave = 1
-
     * sync_binlog=0
-
     * innodb_flush_log_at_trx_commit=2
-
 * STRICT_TRANS_TABLES
-
 * auto-commit ON (required)
-
 * Additional parameters as mentioned in above sections.
 
 ## Vitess servers
@@ -310,13 +361,30 @@ Vitess servers write to log files, and they are rotated when they reach a maximu
 
 ### gRPC
 
-TODO: Elaborate, and add link to Transport Security document.
+Vitess uses gRPC for communication between client and Vitess, and between Vitess
+servers. By default, Vitess does not use SSL.
+
+Also, even without using SSL, we allow the use of an application-provided
+CallerID object. It allows unsecure but easy to use authorization using Table
+ACLs.
+
+See the
+[Transport Security Model document](http://vitess.io/user-guide/transport-security-model.html)
+for more information on how to setup both of these features, and what command
+line parameters exist.
 
 ## Lock Server Configuration
 
-TODO: Elaborate.
+Vttablet, vtgate, vtctld need the right command line parameters to find the topo server. First the *topo\_implementation* flag needs to be set to one of *zookeeper* or *etcd*. Then each is configured as follows:
 
-Vttablet, vtgate, vtctld need the right command line parameters to find the topo server.
+* zookeeper: it is configured using the *ZK\_CLIENT\_CONFIG* environment
+  variable, that points at a JSON file that contains the global and local cells
+  configurations. For instance, this can be the contents of the file:
+  ```{"cell1": "server1:port1,server2:port2", "cell2":
+  "server1:port1,server2:port2", "global": "server1:port1,server2:port2"}```
+* etcd: the *etcd\_global\_addrs* parameter needs to point at the global
+  instance. Then inside that global instance, the */vt/cells/<cell name>* path
+  needs to point at each cell instance.
 
 ## VTTablet
 
@@ -325,7 +393,6 @@ TODO auto-generate a different doc from code for the command line parameters, an
 VTTablet has a large number of command line options. Some important ones will be covered here. In terms of provisioning these are the recommended values
 
 * 2-4 cores (in proportion to MySQL cores)
-
 * 2-4 GB RAM
 
 ### Initialization
@@ -337,40 +404,46 @@ VTTablet has a large number of command line options. Some important ones will be
 TODO: Change this section to link to auto-generated descriptions.
 
 * **queryserver-config-pool-size**: This value should typically be set to the max number of simultaneous queries you want MySQL to run. This should typically be around 2-3x the number of allocated CPUs. Around 4-16. There is not much harm in going higher with this value, but you may see no additional benefits.
-
 * **queryserver-config-stream-pool-size**: This value is relevant only if you plan to run streaming queries against the database. It’s recommended that you use rdonly instances for such streaming queries. This value depends on how many simultaneous streaming queries you plan to run. Typical values are in the low 100s.
-
 * **queryserver-config-transaction-cap**: This value should be set to how many concurrent transactions you wish to allow. This should be a function of transaction QPS and transaction length. Typical values are in the low 100s.
-
 * **queryserver-config-query-timeout**: This value should be set to the upper limit you’re willing to allow a query to run before it’s deemed too expensive or detrimental to the rest of the system. VTTablet will kill any query that exceeds this timeout. This value is usually around 15-30s.
-
 * **queryserver-config-transaction-timeout**: This value is meant to protect the situation where a client has crashed without completing a transaction. Typical value for this timeout is 30s.
-
 * **queryserver-config-max-result-size**: This parameter prevents the OLTP application from accidentally requesting too many rows. If the result exceeds the specified number of rows, VTTablet returns an error. The default value is 10,000.
 
 ### DB config parameters
 
-VTTablet requires multiple user credentials to perform its tasks. Any requests coming from the app will only use the app credentials. VTTablet is required to run on the same machine as MySQL. Therefore, it’s most beneficial to use the more efficient unix socket connections.
+VTTablet requires multiple user credentials to perform its tasks. Since it's required to run on the same machine as MySQL, it’s most beneficial to use the more efficient unix socket connections.
+
+**app** credentials are for serving app queries:
 
 * **db-config-app-unixsocket**: MySQL socket name to connect to.
-
 * **db-config-app-uname**: App username.
-
 * **db-config-app-pass**: Password for the app username. If you need a more secure way of managing and supplying passwords, VTTablet does allow you to plug into a "password server" that can securely supply and refresh usernames and passwords. Please contact the Vitess team for help if you’d like to write such a custom plugin.
-
 * **db-config-app-charset**: The only supported character set is utf8. Vitess still works with latin1, but it’s getting deprecated.
 
-For other credentials, replace the "app" part of the command line argument with “dba”, “repl”, or “filtered”. TODO: Expand these out.
+**dba** credentials will be used for housekeeping work like loading the schema or killing runaway queries:
 
-Different users we have:
+* **db-config-dba-unixsocket**
+* **db-config-dba-uname**
+* **db-config-dba-pass**
+* **db-config-dba-charset**
 
-* App: used to fulfill app requests.
+**repl** credentials are for managing replication. Since repl connections can be used across machines, you can optionally turn on encryption:
 
-* Dba: used by Vitess to perform schema related, and query management tasks.
+* **db-config-repl-uname**
+* **db-config-repl-pass**
+* **db-config-repl-charset**
+* **db-config-repl-flags**: If you want to enable SSL, this must be set to 2048.
+* **db-config-repl-ssl-ca**
+* **db-config-repl-ssl-cert**
+* **db-config-repl-ssl-key**
 
-* Repl: used by Vitess to tell mysqld which credentials to use to connect to master for replication.
+**filtered** credentials are for performing resharding:
 
-* Filtered: to apply filtered replication statements. (app creds cannot be used because replication statements might be from non-app users e.g. a schema change. also helpful for isolating app traffic during resharding e.g. you could block app traffic explicitly.) TODO: See if this can be merged with repl.
+* **db-config-filtered-unixsocket**
+* **db-config-filtered-uname**
+* **db-config-filtered-pass**
+* **db-config-filtered-charset**
 
 ### Monitoring
 
@@ -427,13 +500,9 @@ There are other Histogram variables described below, and they will always have t
 Use this variable to track:
 
 * QPS
-
 * Latency
-
 * Per-category QPS. For replicas, the only category will be PASS_SELECT, but there will be more for masters.
-
 * Per-category latency
-
 * Per-category tail latency
 
 ##### Results
@@ -534,9 +603,7 @@ There are a few variables with the above prefix:
 ```
 
 * WaitCount will give you how often the transaction pool gets full that causes new transactions to wait.
-
 * WaitTime/WaitCount will tell you the average wait time.
-
 * Available is a gauge that tells you the number of available connections in the pool in real-time. Capacity-Available is the number of connections in use. Note that this number could be misleading if the traffic is spiky.
 
 ##### Other Pool variables
@@ -544,7 +611,6 @@ There are a few variables with the above prefix:
 Just like TransactionPool, there are variables for other pools:
 
 * ConnPool: This is the pool used for read traffic.
-
 * StreamConnPool: This is the pool used for streaming queries.
 
 There are other internal pools used by VTTablet that are not very consequential.
@@ -567,7 +633,12 @@ These variables are yet another view of Queries, but broken out by user, table a
 
 ##### DataFree, DataLength, IndexLength, TableRows
 
-These variables are updated periodically from the information_schema. They can be used for planning purposes, or to track unusual changes in table stats.
+These variables are updated periodically from information_schema.tables. They represent statistical information as reported by MySQL about each table. They can be used for planning purposes, or to track unusual changes in table stats.
+
+* DataFree represents data_free
+* DataLength represents data_length
+* IndexLength represents index_length
+* TableRows represents table_rows
 
 #### /debug/health
 
@@ -576,21 +647,15 @@ This URL prints out a simple "ok" or “not ok” string that can be used to che
 #### /queryz, /debug/query_stats, /debug/query_plans, /streamqueryz
 
 * /debug/query_stats is a JSON view of the per-query stats. This information is pulled in real-time from the query cache. The per-table stats in /debug/vars are a roll-up of this information.
-
 * /queryz is a human-readable version of /debug/query_stats. If a graph shows a table as a possible source of problems, this is the next place to look at to see if a specific query is the root cause.
-
 * /debug/query_plans is a more static view of the query cache. It just shows how VTTablet will process or rewrite the input query.
-
 * /streamqueryz lists the currently running streaming queries. You have the option to kill any of them from this page.
 
 #### /querylogz, /debug/querylog, /txlogz, /debug/txlog
 
 * /debug/querylog is a never-ending stream of currently executing queries with verbose information about each query. This URL can generate a lot of data because it streams every query processed by VTTablet. The details are as per this function: [https://github.com/youtube/vitess/blob/master/go/vt/tabletserver/logstats.go#L202](https://github.com/youtube/vitess/blob/master/go/vt/tabletserver/logstats.go#L202)
-
 * /querylogz is a limited human readable version of /debug/querylog. It prints the next 300 queries by default. The limit can be specified with a limit=N parameter on the URL.
-
 * /txlogz is like /querylogz, but for transactions.
-
 * /debug/txlog is the JSON counterpart to /txlogz.
 
 #### /consolidations
@@ -600,7 +665,6 @@ This URL has an MRU list of consolidations. This is a way of identifying if mult
 #### /schemaz, /debug/schema
 
 * /schemaz shows the schema info loaded by VTTablet.
-
 * /debug/schema is the JSON version of /schemaz.
 
 #### /debug/query_rules
@@ -616,25 +680,15 @@ This URL prints out a simple "ok" or “not ok” string that can be used to che
 Alerting is built on top of the variables you monitor. Before setting up alerts, you should get some baseline stats and variance, and then you can build meaningful alerting rules. You can use the following list as a guideline to build your own:
 
 * Query latency among all vttablets
-
 * Per keyspace latency
-
 * Errors/query
-
 * Memory usage
-
 * Unhealthy for too long
-
 * Too many vttablets down
-
 * Health has been flapping
-
 * Transaction pool full error rate
-
 * Any internal error
-
 * Traffic out of balance among replicas
-
 * Qps/core too high
 
 ## VTGate
@@ -642,7 +696,6 @@ Alerting is built on top of the variables you monitor. Before setting up alerts,
 A typical VTGate should be provisioned as follows.
 
 * 2-4 cores
-
 * 2-4 GB RAM
 
 Since VTGate is stateless, you can scale it linearly by just adding more servers as needed. Beyond the recommended values, it’s better to add more VTGates than giving more resources to existing servers, as recommended in the philosophy section.
@@ -651,11 +704,11 @@ Load-balancer in front of vtgate to scale up (not covered by Vitess). Stateless,
 
 ### Parameters
 
-* **Cells_to_watch: **which cell vtgate is in and will monitor tablets from. Cross-cell master access needs multiple cells here.
-
+* **cells_to_watch**: which cell vtgate is in and will monitor tablets from. Cross-cell master access needs multiple cells here.
 * **tablet_types_to_wait**: VTGate waits for at least one serving tablet per tablet type specified here during startup, before listening to the serving port. So VTGate does not serve error. It should match the available tablet types VTGate connects to (master, replica, rdonly).
-
-* **d****iscovery_low_replication_lag**: when replication lags of all VTTablet in a particular shard and tablet type are less than or equal the flag (in seconds), VTGate does not filter them by replication lag and uses all to balance traffic.
+* **discovery_low_replication_lag**: when replication lags of all VTTablet in a particular shard and tablet type are less than or equal the flag (in seconds), VTGate does not filter them by replication lag and uses all to balance traffic.
+* **degraded_threshold (30s)**: a tablet will publish itself as degraded if replication lag exceeds this threshold. This will cause VTGates to choose more up-to-date servers over this one. If all servers are degraded, VTGate resorts to serving from all of them.
+* **unhealthy_threshold (2h)**: a tablet will publish itself as unhealthy if replication lag exceeds this threshold.
 
 ### Monitoring
 
@@ -686,15 +739,10 @@ This URL shows the vschema as loaded by VTGate.
 For VTGate, here’s a list of possible variables to alert on:
 
 * Error rate
-
 * Error/query rate
-
 * Error/query/tablet-type rate
-
 * VTGate serving graph is stale by x minutes (lock server is down)
-
 * Qps/core
-
 * Latency
 
 ## Vtctld
@@ -736,11 +784,8 @@ If there is a problem in the system, one or many alerts would typically fire. If
 When an alert fires, you have the following sources of information to perform your investigation:
 
 * Alert values
-
 * Graphs
-
 * Diagnostic URLs
-
 * Log files
 
 Here are a few scenarios:
@@ -762,6 +807,4 @@ Diagnosis 4: No particular transaction seems to be the culprit. Nothing seems to
 TODO: Elaborate.
 
 * Writes are failing
-
 * vtctl TabletExternallyReparented - if external tool (e.g. Orchestrator) has done a failover and Vitess didn't adjust
-

@@ -194,6 +194,20 @@ func (rtr *Router) StreamExecuteRoute(vcursor *requestContext, route *engine.Rou
 	)
 }
 
+// IsKeyspaceRangeBasedSharded returns true if the keyspace in the vschema is
+// marked as sharded.
+func (rtr *Router) IsKeyspaceRangeBasedSharded(keyspace string) bool {
+	vschema := rtr.planner.VSchema()
+	ks, ok := vschema.Keyspaces[keyspace]
+	if !ok {
+		return false
+	}
+	if ks.Keyspace == nil {
+		return false
+	}
+	return ks.Keyspace.Sharded
+}
+
 func (rtr *Router) paramsUnsharded(vcursor *requestContext, route *engine.Route) (*scatterParams, error) {
 	ks, _, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, route.Keyspace.Name, vcursor.tabletType)
 	if err != nil {

@@ -8,6 +8,8 @@ package tabletservermock
 import (
 	"sync"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -127,7 +129,8 @@ func (tqsc *Controller) IsHealthy() error {
 }
 
 // ReloadSchema is part of the tabletserver.Controller interface
-func (tqsc *Controller) ReloadSchema() {
+func (tqsc *Controller) ReloadSchema(ctx context.Context) error {
+	return nil
 }
 
 //ClearQueryPlanCache is part of the tabletserver.Controller interface

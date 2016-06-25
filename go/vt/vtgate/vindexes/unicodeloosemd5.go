@@ -67,14 +67,6 @@ func normalize(in []byte) []byte {
 	// Trailing spaces are ignored by MySQL.
 	in = bytes.TrimRight(in, " ")
 
-	// We use the collation key which can be used to
-	// perform lexical comparisons.
-	return normalizer.Key(new(collate.Buffer), in)
-}
-
-var normalizer *collate.Collator
-
-func init() {
 	// Ref: http://www.unicode.org/reports/tr10/#Introduction.
 	// Unicode seems to define a universal (or default) order.
 	// But various locales have conflicting order,
@@ -85,6 +77,13 @@ func init() {
 	// way to verify this.
 	// Also, the locale differences are not an issue for level 1,
 	// because the conservative comparison makes them all equal.
-	normalizer = collate.New(language.English, collate.Loose)
+	normalizer := collate.New(language.English, collate.Loose)
+
+	// We use the collation key which can be used to
+	// perform lexical comparisons.
+	return normalizer.Key(new(collate.Buffer), in)
+}
+
+func init() {
 	Register("unicode_loose_md5", MewUnicodeLooseMD5)
 }

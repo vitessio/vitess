@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 
+	"golang.org/x/net/context"
+
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
@@ -20,10 +22,11 @@ var autoIncr = regexp.MustCompile(" AUTO_INCREMENT=\\d+")
 // GetSchema returns the schema for database for tables listed in
 // tables. If tables is empty, return the schema for all tables.
 func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	ctx := context.TODO()
 	sd := &tabletmanagerdatapb.SchemaDefinition{}
 
 	// get the database creation command
-	qr, fetchErr := mysqld.FetchSuperQuery("SHOW CREATE DATABASE IF NOT EXISTS " + dbName)
+	qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE DATABASE IF NOT EXISTS `%s`", dbName))
 	if fetchErr != nil {
 		return nil, fetchErr
 	}
@@ -37,7 +40,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 	if !includeViews {
 		sql += " AND table_type = '" + tmutils.TableBaseTable + "'"
 	}
-	qr, err := mysqld.FetchSuperQuery(sql)
+	qr, err := mysqld.FetchSuperQuery(ctx, sql)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +72,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 			}
 		}
 
-		qr, fetchErr := mysqld.FetchSuperQuery("SHOW CREATE TABLE " + dbName + "." + tableName)
+		qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`", dbName, tableName))
 		if fetchErr != nil {
 			return nil, fetchErr
 		}
@@ -130,12 +133,12 @@ func ResolveTables(mysqld MysqlDaemon, dbName string, tables []string) ([]string
 
 // GetColumns returns the columns of table.
 func (mysqld *Mysqld) GetColumns(dbName, table string) ([]string, error) {
-	conn, err := mysqld.dbaPool.Get(0)
+	conn, err := mysqld.dbaPool.Get(context.TODO())
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
-	qr, err := conn.ExecuteFetch(fmt.Sprintf("select * from %v.%v where 1=0", dbName, table), 0, true)
+	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM `%s`.`%s` WHERE 1=0", dbName, table), 0, true)
 	if err != nil {
 		return nil, err
 	}
@@ -149,12 +152,12 @@ func (mysqld *Mysqld) GetColumns(dbName, table string) ([]string, error) {
 
 // GetPrimaryKeyColumns returns the primary key columns of table.
 func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, error) {
-	conn, err := mysqld.dbaPool.Get(0)
+	conn, err := mysqld.dbaPool.Get(context.TODO())
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
-	qr, err := conn.ExecuteFetch(fmt.Sprintf("show index from %v.%v", dbName, table), 100, true)
+	qr, err := conn.ExecuteFetch(fmt.Sprintf("SHOW INDEX FROM `%v`.`%v`", dbName, table), 100, true)
 	if err != nil {
 		return nil, err
 	}
@@ -306,7 +309,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *tmutils.SchemaCha
 	}
 
 	// add a 'use XXX' in front of the SQL
-	sql = "USE " + dbName + ";\n" + sql
+	sql = fmt.Sprintf("USE `%s`;\n%s", dbName, sql)
 
 	// execute the schema change using an external mysql process
 	// (to benefit from the extra commands in mysql cli)

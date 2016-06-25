@@ -180,16 +180,6 @@ class TestSharded(unittest.TestCase):
     qr = shard_1_master.execute(sql)
     self.assertEqual(qr['rows'], [[10, 'test 10'],])
 
-    # make sure that if we use a wrong target, the destination rejects
-    # the query.
-    _, stderr = utils.run_vtctl(['VtTabletExecute', '-json',
-                                 '-keyspace', 'test_keyspace',
-                                 '-shard', '-90',
-                                 '-tablet_type', 'master',
-                                 shard_0_master.tablet_alias, sql],
-                                expect_fail=True)
-    self.assertIn('retry: Invalid shard -90', stderr)
-
     tablet.kill_tablets([shard_0_master, shard_0_replica, shard_1_master,
                          shard_1_replica])
 

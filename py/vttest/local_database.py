@@ -16,7 +16,6 @@ class LocalDatabase(object):
   def __init__(self,
                topology,
                schema_dir,
-               vschema,
                mysql_only,
                init_data_options,
                web_dir=None):
@@ -25,8 +24,6 @@ class LocalDatabase(object):
     Args:
       topology: a vttest.VTTestTopology object describing the topology.
       schema_dir: see the documentation for the corresponding command line
-          flag in run_local_database.py
-      vschema: see the documentation for the corresponding command line
           flag in run_local_database.py
       mysql_only: see the documentation for the corresponding command line
           flag in run_local_database.py
@@ -40,7 +37,6 @@ class LocalDatabase(object):
 
     self.topology = topology
     self.schema_dir = schema_dir
-    self.vschema = vschema
     self.mysql_only = mysql_only
     self.init_data_options = init_data_options
     self.web_dir = web_dir
@@ -61,7 +57,7 @@ class LocalDatabase(object):
       return
 
     vt_processes.start_vt_processes(self.directory, self.topology,
-                                    self.mysql_db, self.vschema,
+                                    self.mysql_db, self.schema_dir,
                                     web_dir=self.web_dir)
 
   def teardown(self):

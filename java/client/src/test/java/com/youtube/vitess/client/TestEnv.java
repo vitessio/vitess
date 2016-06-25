@@ -69,8 +69,6 @@ public class TestEnv {
     command.add(getTopology().toString());
     command.add("--schema_dir");
     command.add(schemaDir);
-    command.add("--vschema");
-    command.add(schemaDir + "/vschema.json");
     return command;
   }
 

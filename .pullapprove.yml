@@ -6,15 +6,13 @@ reviewers:
   name: vitess-eng
   required: 1
   members:
-  - aaijazi
   - alainjobart
   - AndyDiamondstein
   - dumbunny
   - enisoc
   - erzel
-  - guokeno0
-  - guoliang100
   - michael-berlin
   - sougou
   - thompsonja
+  - pivanof
 
