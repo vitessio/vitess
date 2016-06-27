@@ -50,7 +50,7 @@ app.controller('KeyspacesCtrl', function($scope, keyspaces, srv_keyspace, shards
   function getKeyspaceShards(keyspace, SrvKeyspacePromise) {
     shards.query({keyspace: keyspace.name}, function(shardList){
       // Chain this callback onto the promise return from getSrvKeyspaces
-      SrvKeyspacePromise.then(function(resp) {
+      SrvKeyspacePromise.finally(function(resp) {
         shardList = stripResource(shardList);
         for (var i = 0; i < shardList.length; i++) {
           if($scope.isServing(keyspace.name, shardList[i])) {

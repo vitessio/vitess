@@ -13,7 +13,6 @@ source $script_root/env.sh
 
 echo "Starting vtctld..."
 $VTROOT/bin/vtctld \
-  -cell $cell \
   -web_dir $VTTOP/web/vtctld \
   -service_map 'grpc-vtctl' \
   -backup_storage_implementation file \
