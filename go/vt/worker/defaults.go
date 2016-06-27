@@ -10,12 +10,14 @@ const (
 	defaultOnline            = true
 	defaultOffline           = true
 	defaultSourceReaderCount = 10
-	// defaultWriteQueryMaxRows is set to 640 rows based on the assumption that
-	// one row will take 64 bytes on average and our max size is 4 kB * 10.
-	defaultWriteQueryMaxRows = 640
-	// defaultWriteQueryMaxSize caps the write statements which aggregate multiple
+	// defaultWriteQueryMaxRows aggregates up to 100 rows per INSERT or DELETE
+	// query. Higher values are not recommended to avoid overloading MySQL.
+	// The actual row count will be less if defaultWriteQueryMaxSize is reached
+	// first, but always at least 1 row.
+	defaultWriteQueryMaxRows = 100
+	// defaultWriteQueryMaxSize caps the write queries which aggregate multiple
 	// rows. This limit prevents e.g. that MySQL will OOM.
-	defaultWriteQueryMaxSize = 4096 * 10
+	defaultWriteQueryMaxSize = 1024 * 1024
 	// defaultDestinationPackCount is deprecated in favor of the writeQueryMax*
 	// values and currently only used by VerticalSplitClone.
 	// defaultDestinationPackCount is the number of StreamExecute responses which
