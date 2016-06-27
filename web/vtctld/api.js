@@ -14,6 +14,10 @@ app.factory('shards', function($resource) {
   });
 });
 
+app.factory('srv_keyspace', function($resource) {
+  return $resource('../api/srv_keyspace/:cell/:keyspace');
+});
+
 app.factory('tablets', function($resource) {
   return $resource('../api/tablets/:tablet', {}, {
       'action': {method: 'POST'}
