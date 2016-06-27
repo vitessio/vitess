@@ -242,12 +242,16 @@ class TestBackup(unittest.TestCase):
 
     tablet_replica2.kill_vttablet()
 
-  def test_restore_old_master(self):
+  def _restore_old_master_test(self, restore_method):
     """Test that a former master replicates correctly after being restored.
 
     - Take a backup.
     - Reparent from old master to new master.
-    - Delete the old master and force it to restore from a previous backup.
+    - Force old master to restore from a previous backup using restore_method.
+
+    Args:
+      restore_method: function accepting one parameter of type tablet.Tablet,
+          this function is called to force a restore on the provided tablet
     """
 
     # insert data on master, wait for slave to get it
@@ -269,11 +273,32 @@ class TestBackup(unittest.TestCase):
     self._insert_data(tablet_replica1, 3)
 
     # force the old master to restore at the latest backup.
-    tablet_master.kill_vttablet()
-    self._restore(tablet_master)
+    restore_method(tablet_master)
 
     # wait for it to catch up.
     self._check_data(tablet_master, 3, 'former master catches up after restore')
+
+  def test_restore_old_master(self):
+    def _restore_using_kill(t):
+      t.kill_vttablet()
+      self._restore(t)
+
+    self._restore_old_master_test(_restore_using_kill)
+
+  def test_in_place_restore_vtctl(self):
+    def _restore_using_vtctl(t):
+      utils.run_vtctl(['RestoreFromBackup', t.tablet_alias], auto_log=True,
+                      mode=utils.VTCTL_VTCTL)
+
+    self._restore_old_master_test(_restore_using_vtctl)
+
+  def test_in_place_restore_vtctlclient(self):
+    def _restore_using_vtctlclient(t):
+      utils.run_vtctl(['RestoreFromBackup', t.tablet_alias],
+                      mode=utils.VTCTL_VTCTLCLIENT)
+
+    utils.Vtctld().start()
+    self._restore_old_master_test(_restore_using_vtctlclient)
 
 if __name__ == '__main__':
   utils.main()

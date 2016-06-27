@@ -404,3 +404,10 @@ message BackupRequest {
 message BackupResponse {
   logutil.Event event = 1;
 }
+
+message RestoreFromBackupRequest {
+}
+
+message RestoreFromBackupResponse {
+  logutil.Event event = 1;
+}

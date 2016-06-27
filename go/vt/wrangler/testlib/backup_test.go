@@ -153,8 +153,8 @@ func TestBackupRestore(t *testing.T) {
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)
 
-	if err := destTablet.Agent.RestoreFromBackup(ctx); err != nil {
-		t.Fatalf("RestoreFromBackup failed: %v", err)
+	if err := destTablet.Agent.RestoreData(ctx, logutil.NewConsoleLogger(), false /* deleteBeforeRestore */); err != nil {
+		t.Fatalf("RestoreData failed: %v", err)
 	}
 
 	// verify the full status
