@@ -7,6 +7,7 @@ package worker
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"testing"
@@ -48,6 +49,12 @@ type splitCloneTestCase struct {
 	wi      *Instance
 	tablets []*testlib.FakeTablet
 
+	// Source tablets.
+	// This test uses two source and destination rdonly tablets because
+	// --min_healthy_rdonly_tablets is set to 2 in the test.
+	sourceRdonlyQs []*testQueryService
+
+	// Destination tablets.
 	leftMasterFakeDb  *FakePoolConnection
 	leftMasterQs      *fakes.StreamHealthQueryService
 	rightMasterFakeDb *FakePoolConnection
@@ -58,11 +65,23 @@ type splitCloneTestCase struct {
 	leftReplicaFakeDb *FakePoolConnection
 	leftReplicaQs     *fakes.StreamHealthQueryService
 
+	// leftRdonlyQs are used by the Clone to diff against the source.
+	leftRdonlyQs []*testQueryService
+	// rightRdonlyQs are used by the Clone to diff against the source.
+	rightRdonlyQs []*testQueryService
+
 	// defaultWorkerArgs are the full default arguments to run SplitClone.
 	defaultWorkerArgs []string
 }
 
 func (tc *splitCloneTestCase) setUp(v3 bool) {
+	tc.setUpWithConcurreny(v3, 10, 2)
+}
+
+func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQueryMaxRows int) {
+	// In the default test case there are 100 rows on the source.
+	rowsTotal := 100
+
 	*useV3ReshardingMode = v3
 	db := fakesqldb.Register()
 	tc.ts = zktestserver.New(tc.t, []string{"cell1", "cell2"})
@@ -113,19 +132,24 @@ func (tc *splitCloneTestCase) setUp(v3 bool) {
 
 	leftMaster := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 10,
 		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(tc.t, "ks", "-40"))
-	leftRdonly := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 11,
-		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(tc.t, "ks", "-40"))
 	// leftReplica is used by the reparent test.
-	leftReplica := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 12,
+	leftReplica := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 11,
 		topodatapb.TabletType_REPLICA, db, testlib.TabletKeyspaceShard(tc.t, "ks", "-40"))
 	tc.leftReplica = leftReplica
+	leftRdonly1 := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 12,
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(tc.t, "ks", "-40"))
+	leftRdonly2 := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 13,
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(tc.t, "ks", "-40"))
 
 	rightMaster := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 20,
 		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(tc.t, "ks", "40-80"))
-	rightRdonly := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 21,
+	rightRdonly1 := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 22,
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(tc.t, "ks", "40-80"))
+	rightRdonly2 := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 23,
 		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(tc.t, "ks", "40-80"))
 
-	tc.tablets = []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly, tc.leftReplica, rightMaster, rightRdonly}
+	tc.tablets = []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2,
+		leftMaster, tc.leftReplica, leftRdonly1, leftRdonly2, rightMaster, rightRdonly1, rightRdonly2}
 
 	for _, ft := range tc.tablets {
 		ft.StartActionLoop(tc.t, tc.wi.wr)
@@ -151,7 +175,7 @@ func (tc *splitCloneTestCase) setUp(v3 bool) {
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              tmutils.TableBaseTable,
-					// This informs how many rows we can pack into a single insert
+					// Set the table size to a value higher than --min_table_size_for_split.
 					DataLength: 2048,
 				},
 			},
@@ -165,29 +189,42 @@ func (tc *splitCloneTestCase) setUp(v3 bool) {
 			"STOP SLAVE",
 			"START SLAVE",
 		}
-		qs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
-		qs.AddDefaultHealthResponse()
-		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &testQueryService{
-			t: tc.t,
-			StreamHealthQueryService: qs,
-		})
+		shqs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
+		shqs.AddDefaultHealthResponse()
+		qs := newTestQueryService(tc.t, sourceRdonly.Target(), shqs, 0, 1, sourceRdonly.Tablet.Alias.Uid)
+		qs.addGeneratedRows(100, 100+rowsTotal)
+		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, qs)
+		tc.sourceRdonlyQs = append(tc.sourceRdonlyQs, qs)
+	}
+	// Set up destination rdonlys which will be used as input for the diff during the clone.
+	for i, destRdonly := range []*testlib.FakeTablet{leftRdonly1, rightRdonly1, leftRdonly2, rightRdonly2} {
+		shqs := fakes.NewStreamHealthQueryService(destRdonly.Target())
+		shqs.AddDefaultHealthResponse()
+		qs := newTestQueryService(tc.t, destRdonly.Target(), shqs, i%2, 2, destRdonly.Tablet.Alias.Uid)
+		grpcqueryservice.RegisterForTest(destRdonly.RPCServer, qs)
+		if i%2 == 0 {
+			tc.leftRdonlyQs = append(tc.leftRdonlyQs, qs)
+		} else {
+			tc.rightRdonlyQs = append(tc.rightRdonlyQs, qs)
+		}
 	}
 
-	// We read 100 source rows. sourceReaderCount is set to 10, so
-	// we'll have 100/10=10 rows per table chunk.
-	// destinationPackCount is set to 4, so we take 4 source rows
-	// at once. So we'll process 4 + 4 + 2 rows to get to 10.
-	// That means 3 insert statements on each target (each
-	// containing half of the rows, i.e. 2 + 2 + 1 rows). So 3 * 10
-	// = 30 insert statements on each destination.
 	tc.leftMasterFakeDb = NewFakePoolConnectionQuery(tc.t, "leftMaster")
 	tc.leftReplicaFakeDb = NewFakePoolConnectionQuery(tc.t, "leftReplica")
 	tc.rightMasterFakeDb = NewFakePoolConnectionQuery(tc.t, "rightMaster")
 
-	for i := 1; i <= 30; i++ {
-		tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", nil)
+	// In the default test case there will be 30 inserts per destination shard
+	// because 10 writer threads will insert 5 rows on each destination shard.
+	// (100 source rows / 10 writers / 2 shards = 5 rows.)
+	// Due to --write_query_max_rows=2 there will be 3 inserts for 5 rows.
+	rowsPerDestinationShard := rowsTotal / 2
+	rowsPerThread := rowsPerDestinationShard / concurrency
+	insertsPerThread := math.Ceil(float64(rowsPerThread) / float64(writeQueryMaxRows))
+	insertsTotal := int(insertsPerThread) * concurrency
+	for i := 1; i <= insertsTotal; i++ {
+		tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", nil)
 		// leftReplica is unused by default.
-		tc.rightMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", nil)
+		tc.rightMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", nil)
 	}
 	expectBlpCheckpointCreationQueries(tc.leftMasterFakeDb)
 	expectBlpCheckpointCreationQueries(tc.rightMasterFakeDb)
@@ -209,10 +246,15 @@ func (tc *splitCloneTestCase) setUp(v3 bool) {
 
 	tc.defaultWorkerArgs = []string{
 		"SplitClone",
-		"-source_reader_count", "10",
-		"-destination_pack_count", "4",
+		"-online=false",
+		// --max_tps is only specified to enable the throttler and ensure that the
+		// code is executed. But the intent here is not to throttle the test, hence
+		// the rate limit is set very high.
+		"-max_tps", "9999",
+		"-write_query_max_rows", strconv.Itoa(writeQueryMaxRows),
+		"-source_reader_count", strconv.Itoa(concurrency),
 		"-min_table_size_for_split", "1",
-		"-destination_writer_count", "10",
+		"-destination_writer_count", strconv.Itoa(concurrency),
 		"ks/-80"}
 }
 
@@ -229,13 +271,33 @@ func (tc *splitCloneTestCase) tearDown() {
 type testQueryService struct {
 	t *testing.T
 
+	// target is used in the log output.
+	target querypb.Target
 	*fakes.StreamHealthQueryService
+	shardIndex int
+	shardCount int
+	tabletUID  uint32
+	fields     []*querypb.Field
+	rows       [][]sqltypes.Value
+}
+
+func newTestQueryService(t *testing.T, target querypb.Target, shqs *fakes.StreamHealthQueryService, shardIndex, shardCount int, tabletUID uint32) *testQueryService {
+	return &testQueryService{
+		t:      t,
+		target: target,
+		StreamHealthQueryService: shqs,
+		shardIndex:               shardIndex,
+		shardCount:               shardCount,
+		tabletUID:                tabletUID,
+		fields:                   v2Fields,
+	}
 }
 
 func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sendReply func(reply *sqltypes.Result) error) error {
 	// Custom parsing of the query we expect.
-	min := splitCloneTestMin
-	max := splitCloneTestMax
+	// Example: SELECT id, msg, keyspace_id FROM table1 WHERE id>=180 AND id<190 ORDER BY id
+	min := math.MinInt32
+	max := math.MaxInt32
 	var err error
 	parts := strings.Split(sql, " ")
 	for _, part := range parts {
@@ -246,50 +308,97 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 			}
 		} else if strings.HasPrefix(part, "id<") {
 			max, err = strconv.Atoi(part[3:])
+			if err != nil {
+				return err
+			}
 		}
 	}
-	sq.t.Logf("testQueryService: got query: %v with min %v max %v", sql, min, max)
+	sq.t.Logf("testQueryService: %v,%v/%v/%v: got query: %v with min %v max (exclusive) %v", sq.tabletUID, sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, sql, min, max)
 
-	// Send the headers
-	if err := sendReply(&sqltypes.Result{
-		Fields: []*querypb.Field{
-			{
-				Name: "id",
-				Type: sqltypes.Int64,
-			},
-			{
-				Name: "msg",
-				Type: sqltypes.VarChar,
-			},
-			{
-				Name: "keyspace_id",
-				Type: sqltypes.Int64,
-			},
-		},
-	}); err != nil {
+	// Send the headers.
+	if err := sendReply(&sqltypes.Result{Fields: sq.fields}); err != nil {
 		return err
 	}
 
-	// Send the values
-	ksids := []uint64{0x2000000000000000, 0x6000000000000000}
-	for i := min; i < max; i++ {
-		if err := sendReply(&sqltypes.Result{
-			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
-					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
-					sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[i%2]))),
-				},
-			},
-		}); err != nil {
-			return err
+	// Send the values.
+	rowsAffected := 0
+	for _, row := range sq.rows {
+		primaryKey := row[0].ToNative().(int64)
+		if primaryKey >= int64(min) && primaryKey < int64(max) {
+			if err := sendReply(&sqltypes.Result{
+				Rows: [][]sqltypes.Value{row},
+			}); err != nil {
+				return err
+			}
+			// Uncomment the next line during debugging when needed.
+			// sq.t.Logf("testQueryService: %v,%v/%v/%v: sent row for id: %v row: %v", sq.tabletUID, sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, primaryKey, row)
+			rowsAffected++
 		}
 	}
-	// SELECT id, msg, keyspace_id FROM table1 WHERE id>=180 AND id<190 ORDER BY id
+
+	if rowsAffected == 0 {
+		sq.t.Logf("testQueryService: %v,%v/%v/%v: no rows were sent (%v are available)", sq.tabletUID, sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, len(sq.rows))
+	}
 	return nil
 }
 
-func TestSplitCloneV2(t *testing.T) {
+// addGeneratedRows will add from-to generated rows. The rows (their primary
+// key) will be in the range [from, to).
+func (sq *testQueryService) addGeneratedRows(from, to int) {
+	var rows [][]sqltypes.Value
+	// ksids has keyspace ids which are covered by the shard key ranges -40 and 40-80.
+	ksids := []uint64{0x2000000000000000, 0x6000000000000000}
+
+	for id := from; id < to; id++ {
+		// Only return the rows which are covered by this shard.
+		shardIndex := id % 2
+		if sq.shardCount == 1 || shardIndex == sq.shardIndex {
+			idValue, _ := sqltypes.BuildValue(int64(id))
+			rows = append(rows, []sqltypes.Value{
+				idValue,
+				sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", id))),
+				sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[shardIndex]))),
+			})
+		}
+	}
+
+	if sq.rows == nil {
+		sq.rows = rows
+	} else {
+		sq.rows = append(sq.rows, rows...)
+	}
+}
+
+func (sq *testQueryService) modifyFirstRows(count int) {
+	// Modify the text of the first "count" rows.
+	for i := 0; i < count; i++ {
+		row := sq.rows[i]
+		row[1] = sqltypes.MakeString([]byte(fmt.Sprintf("OUTDATED ROW: %v", row[1].String())))
+	}
+}
+
+func (sq *testQueryService) clearRows() {
+	sq.rows = nil
+}
+
+var v2Fields = []*querypb.Field{
+	{
+		Name: "id",
+		Type: sqltypes.Int64,
+	},
+	{
+		Name: "msg",
+		Type: sqltypes.VarChar,
+	},
+	// TODO(mberlin): Omit keyspace_id in the v3 test.
+	{
+		Name: "keyspace_id",
+		Type: sqltypes.Int64,
+	},
+}
+
+// TestSplitCloneV2_Offline tests the offline phase with an empty destination.
+func TestSplitCloneV2_Offline(t *testing.T) {
 	tc := &splitCloneTestCase{t: t}
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
@@ -297,6 +406,163 @@ func TestSplitCloneV2(t *testing.T) {
 	// Run the vtworker command.
 	if err := runCommand(t, tc.wi, tc.wi.wr, tc.defaultWorkerArgs); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestSplitCloneV2_Online tests the online phase with an empty destination.
+func TestSplitCloneV2_Online(t *testing.T) {
+	tc := &splitCloneTestCase{t: t}
+	tc.setUp(false /* v3 */)
+	defer tc.tearDown()
+
+	// In the online phase we won't enable filtered replication. Don't expect it.
+	tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(29)
+	tc.rightMasterFakeDb.deleteAllEntriesAfterIndex(29)
+
+	// Run the vtworker command.
+	args := make([]string, len(tc.defaultWorkerArgs))
+	copy(args, tc.defaultWorkerArgs)
+	args[1] = "-offline=false"
+	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
+		t.Fatal(err)
+	}
+	if inserts := statsOnlineInsertsCounters.Counts()["table1"]; inserts != 100 {
+		t.Errorf("wrong number of rows inserted: got = %v, want = %v", inserts, 100)
+	}
+	if updates := statsOnlineUpdatesCounters.Counts()["table1"]; updates != 0 {
+		t.Errorf("wrong number of rows updated: got = %v, want = %v", updates, 0)
+	}
+	if deletes := statsOnlineDeletesCounters.Counts()["table1"]; deletes != 0 {
+		t.Errorf("wrong number of rows deleted: got = %v, want = %v", deletes, 0)
+	}
+	if inserts := statsOfflineInsertsCounters.Counts()["table1"]; inserts != 0 {
+		t.Errorf("no stats for the offline clone phase should have been modified. got inserts = %v", inserts)
+	}
+	if updates := statsOfflineUpdatesCounters.Counts()["table1"]; updates != 0 {
+		t.Errorf("no stats for the offline clone phase should have been modified. got updates = %v", updates)
+	}
+	if deletes := statsOfflineDeletesCounters.Counts()["table1"]; deletes != 0 {
+		t.Errorf("no stats for the offline clone phase should have been modified. got deletes = %v", deletes)
+	}
+}
+
+func TestSplitCloneV2_Online_Offline(t *testing.T) {
+	tc := &splitCloneTestCase{t: t}
+	tc.setUp(false /* v3 */)
+	defer tc.tearDown()
+
+	// When the online clone inserted the last rows, modify the destination test
+	// query service such that it will return them as well.
+	tc.leftMasterFakeDb.getEntry(29).AfterFunc = func() {
+		for i := range []int{0, 1} {
+			tc.leftRdonlyQs[i].addGeneratedRows(100, 200)
+		}
+	}
+	tc.rightMasterFakeDb.getEntry(29).AfterFunc = func() {
+		for i := range []int{0, 1} {
+			tc.rightRdonlyQs[i].addGeneratedRows(100, 200)
+		}
+	}
+
+	// Run the vtworker command.
+	args := []string{"SplitClone"}
+	args = append(args, tc.defaultWorkerArgs[2:]...)
+	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
+		t.Fatal(err)
+	}
+	if inserts := statsOnlineInsertsCounters.Counts()["table1"]; inserts != 100 {
+		t.Errorf("wrong number of rows inserted: got = %v, want = %v", inserts, 100)
+	}
+	if updates := statsOnlineUpdatesCounters.Counts()["table1"]; updates != 0 {
+		t.Errorf("wrong number of rows updated: got = %v, want = %v", updates, 0)
+	}
+	if deletes := statsOnlineDeletesCounters.Counts()["table1"]; deletes != 0 {
+		t.Errorf("wrong number of rows deleted: got = %v, want = %v", deletes, 0)
+	}
+	if inserts := statsOfflineInsertsCounters.Counts()["table1"]; inserts != 0 {
+		t.Errorf("no stats for the offline clone phase should have been modified. got inserts = %v", inserts)
+	}
+	if updates := statsOfflineUpdatesCounters.Counts()["table1"]; updates != 0 {
+		t.Errorf("no stats for the offline clone phase should have been modified. got updates = %v", updates)
+	}
+	if deletes := statsOfflineDeletesCounters.Counts()["table1"]; deletes != 0 {
+		t.Errorf("no stats for the offline clone phase should have been modified. got deletes = %v", deletes)
+	}
+}
+
+// TestSplitCloneV2_Reconciliation is identical to TestSplitCloneV2_Offline,
+// but the destination has existing data which must be reconciled.
+func TestSplitCloneV2_Reconciliation(t *testing.T) {
+	tc := &splitCloneTestCase{t: t}
+	// We reduce the parallelism to 1 to test the order of expected
+	// insert/update/delete statements on the destination master.
+	tc.setUpWithConcurreny(false /* v3 */, 1, 10)
+	defer tc.tearDown()
+
+	// We assume that an Online Clone ran before which copied the rows 100-199
+	// to the destination.
+	// In this Offline Clone the rows 96-99 are new on the destination, 100-103
+	// must be updated and 190-199 have to be deleted from the destination shards.
+	//
+	// Add data on the source tablets.
+	// In addition, the source has extra rows before the regular rows.
+	for _, qs := range tc.sourceRdonlyQs {
+		qs.clearRows()
+		// Rows 96-100 are not on the destination.
+		qs.addGeneratedRows(96, 100)
+		// Rows 100-190 are on the destination as well.
+		qs.addGeneratedRows(100, 190)
+	}
+
+	for i := range []int{0, 1} {
+		// Both destination shards have the rows 100-200.
+		tc.leftRdonlyQs[i].addGeneratedRows(100, 200)
+		tc.rightRdonlyQs[i].addGeneratedRows(100, 200)
+		// But some data is outdated data and must be updated.
+		tc.leftRdonlyQs[i].modifyFirstRows(2)
+		tc.rightRdonlyQs[i].modifyFirstRows(2)
+	}
+
+	// The destination tablets should see inserts, updates and deletes.
+	// Clear the entries added by setUp() because the reconcilation will
+	// produce different statements in this test case.
+	tc.leftMasterFakeDb.deleteAllEntries()
+	tc.rightMasterFakeDb.deleteAllEntries()
+	// Update statements. (One query will update one row.)
+	tc.leftMasterFakeDb.addExpectedQuery("UPDATE `vt_ks`.table1 SET msg='Text for 100',keyspace_id=2305843009213693952 WHERE id=100", nil)
+	tc.leftMasterFakeDb.addExpectedQuery("UPDATE `vt_ks`.table1 SET msg='Text for 102',keyspace_id=2305843009213693952 WHERE id=102", nil)
+	tc.rightMasterFakeDb.addExpectedQuery("UPDATE `vt_ks`.table1 SET msg='Text for 101',keyspace_id=6917529027641081856 WHERE id=101", nil)
+	tc.rightMasterFakeDb.addExpectedQuery("UPDATE `vt_ks`.table1 SET msg='Text for 103',keyspace_id=6917529027641081856 WHERE id=103", nil)
+	// Insert statements. (All are combined in one.)
+	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (96,'Text for 96',2305843009213693952),(98,'Text for 98',2305843009213693952)", nil)
+	tc.rightMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (97,'Text for 97',6917529027641081856),(99,'Text for 99',6917529027641081856)", nil)
+	// Delete statements. (All are combined in one.)
+	tc.leftMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id) IN ((190),(192),(194),(196),(198))", nil)
+	tc.rightMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id) IN ((191),(193),(195),(197),(199))", nil)
+	expectBlpCheckpointCreationQueries(tc.leftMasterFakeDb)
+	expectBlpCheckpointCreationQueries(tc.rightMasterFakeDb)
+
+	// Run the vtworker command.
+	if err := runCommand(t, tc.wi, tc.wi.wr, tc.defaultWorkerArgs); err != nil {
+		t.Fatal(err)
+	}
+	if inserts := statsOnlineInsertsCounters.Counts()["table1"]; inserts != 0 {
+		t.Errorf("no stats for the online clone phase should have been modified. got inserts = %v", inserts)
+	}
+	if updates := statsOnlineUpdatesCounters.Counts()["table1"]; updates != 0 {
+		t.Errorf("no stats for the online clone phase should have been modified. got updates = %v", updates)
+	}
+	if deletes := statsOnlineDeletesCounters.Counts()["table1"]; deletes != 0 {
+		t.Errorf("no stats for the online clone phase should have been modified. got deletes = %v", deletes)
+	}
+	if inserts := statsOfflineInsertsCounters.Counts()["table1"]; inserts != 4 {
+		t.Errorf("wrong number of rows inserted: got = %v, want = %v", inserts, 4)
+	}
+	if updates := statsOfflineUpdatesCounters.Counts()["table1"]; updates != 4 {
+		t.Errorf("wrong number of rows updated: got = %v, want = %v", updates, 4)
+	}
+	if deletes := statsOfflineDeletesCounters.Counts()["table1"]; deletes != 10 {
+		t.Errorf("wrong number of rows deleted: got = %v, want = %v", deletes, 10)
 	}
 }
 
@@ -308,14 +574,16 @@ func TestSplitCloneV2_Throttled(t *testing.T) {
 	// Run SplitClone throttled and verify that it took longer than usual (~25ms).
 
 	// Modify args to set -max_tps to 300.
-	args := []string{"SplitClone", "-max_tps", "300"}
-	args = append(args, tc.defaultWorkerArgs[1:]...)
+	args := make([]string, len(tc.defaultWorkerArgs))
+	copy(args, tc.defaultWorkerArgs)
+	args[3] = "300"
 
 	// Run the vtworker command.
 	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
 		t.Fatal(err)
 	}
 
+	// Each of the 10 writer threads will issue 3 transactions (30 in total).
 	// 30 transactions (tx) at a rate of 300 TPS should take at least 33 ms since:
 	// 300 TPS across 10 writer threads: 30 tx/second/thread
 	// => minimum request interval between two tx: 1 s / 30 tx/s = 33 ms
@@ -325,7 +593,7 @@ func TestSplitCloneV2_Throttled(t *testing.T) {
 	//           throttle request interval (negligible backoff)
 	// - 3rd tx: throttled for 33 ms at least since 2nd tx happened
 	want := 33 * time.Millisecond
-	copyDuration := time.Duration(statsStateDurationsNs.Counts()[string(WorkerStateCopy)]) * time.Nanosecond
+	copyDuration := time.Duration(statsStateDurationsNs.Counts()[string(WorkerStateCloneOffline)]) * time.Nanosecond
 	if copyDuration < want {
 		t.Errorf("throttled copy was too fast: %v < %v", copyDuration, want)
 	}
@@ -345,8 +613,8 @@ func TestSplitCloneV2_RetryDueToReadonly(t *testing.T) {
 	defer tc.tearDown()
 
 	// Provoke a retry to test the error handling.
-	tc.leftMasterFakeDb.addExpectedQueryAtIndex(0, "INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", errReadOnly)
-	tc.rightMasterFakeDb.addExpectedQueryAtIndex(0, "INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", errReadOnly)
+	tc.leftMasterFakeDb.addExpectedQueryAtIndex(0, "INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", errReadOnly)
+	tc.rightMasterFakeDb.addExpectedQueryAtIndex(0, "INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", errReadOnly)
 	// Only wait 1 ms between retries, so that the test passes faster.
 	*executeFetchRetryTime = 1 * time.Millisecond
 
@@ -375,12 +643,12 @@ func TestSplitCloneV2_RetryDueToReparent(t *testing.T) {
 
 	// Provoke a reparent just before the copy finishes.
 	// leftReplica will take over for the last, 30th, insert and the BLP checkpoint.
-	tc.leftReplicaFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", nil)
+	tc.leftReplicaFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", nil)
 	expectBlpCheckpointCreationQueries(tc.leftReplicaFakeDb)
 
 	// Do not let leftMaster succeed the 30th write.
 	tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(28)
-	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", errReadOnly)
+	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", errReadOnly)
 	tc.leftMasterFakeDb.enableInfinite()
 	// When vtworker encounters the readonly error on leftMaster, do the reparent.
 	tc.leftMasterFakeDb.getEntry(29).AfterFunc = func() {
@@ -435,7 +703,7 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 	defer tc.tearDown()
 
 	// leftReplica will take over for the last, 30th, insert and the BLP checkpoint.
-	tc.leftReplicaFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", nil)
+	tc.leftReplicaFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", nil)
 	expectBlpCheckpointCreationQueries(tc.leftReplicaFakeDb)
 
 	// During the 29th write, let the MASTER disappear.
@@ -447,7 +715,7 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 	// If the HealthCheck didn't pick up the change yet, the 30th write would
 	// succeed. To prevent this from happening, replace it with an error.
 	tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(28)
-	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", errReadOnly)
+	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", errReadOnly)
 	tc.leftMasterFakeDb.enableInfinite()
 	// vtworker may not retry on leftMaster again if HealthCheck picks up the
 	// change very fast. In that case, the error was never encountered.

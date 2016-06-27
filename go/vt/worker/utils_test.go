@@ -78,6 +78,7 @@ func sourceRdonlyFactory(t *testing.T, dbAndTableName string, min, max int) func
 			},
 		},
 	})
+	f.enableInfinite()
 	return f.getFactory()
 }
 

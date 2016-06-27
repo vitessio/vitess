@@ -17,7 +17,7 @@ func TestSplitCloneTask(t *testing.T) {
 	vtworkerclient.RegisterFactory("fake", fake.FakeVtworkerClientFactory)
 	defer vtworkerclient.UnregisterFactoryForTest("fake")
 	flag.Set("vtworker_client_protocol", "fake")
-	fake.RegisterResult([]string{"SplitClone", "--exclude_tables=unrelated1", "--min_healthy_rdonly_tablets=1", "test_keyspace/0"},
+	fake.RegisterResult([]string{"SplitClone", "--exclude_tables=unrelated1", "--write_query_max_rows=1", "--write_query_max_size=1024", "--min_healthy_rdonly_tablets=1", "test_keyspace/0"},
 		"",  // No output.
 		nil) // No error.
 
@@ -27,6 +27,8 @@ func TestSplitCloneTask(t *testing.T) {
 		"source_shard":               "0",
 		"vtworker_endpoint":          "localhost:15001",
 		"exclude_tables":             "unrelated1",
+		"write_query_max_rows":       "1",
+		"write_query_max_size":       "1024",
 		"min_healthy_rdonly_tablets": "1",
 	}
 

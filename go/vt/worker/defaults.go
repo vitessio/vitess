@@ -7,7 +7,19 @@ package worker
 import "github.com/youtube/vitess/go/vt/throttler"
 
 const (
+	defaultOnline            = true
+	defaultOffline           = true
 	defaultSourceReaderCount = 10
+	// defaultWriteQueryMaxRows aggregates up to 100 rows per INSERT or DELETE
+	// query. Higher values are not recommended to avoid overloading MySQL.
+	// The actual row count will be less if defaultWriteQueryMaxSize is reached
+	// first, but always at least 1 row.
+	defaultWriteQueryMaxRows = 100
+	// defaultWriteQueryMaxSize caps the write queries which aggregate multiple
+	// rows. This limit prevents e.g. that MySQL will OOM.
+	defaultWriteQueryMaxSize = 1024 * 1024
+	// defaultDestinationPackCount is deprecated in favor of the writeQueryMax*
+	// values and currently only used by VerticalSplitClone.
 	// defaultDestinationPackCount is the number of StreamExecute responses which
 	// will be aggreated into one transaction. See the vttablet flag
 	// "-queryserver-config-stream-buffer-size" for the size (in bytes) of a

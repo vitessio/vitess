@@ -23,8 +23,11 @@ func (t *SplitCloneTask) Run(parameters map[string]string) ([]*automationpb.Task
 	if excludeTables := parameters["exclude_tables"]; excludeTables != "" {
 		args = append(args, "--exclude_tables="+excludeTables)
 	}
-	if destinationPackCount := parameters["destination_pack_count"]; destinationPackCount != "" {
-		args = append(args, "--destination_pack_count="+destinationPackCount)
+	if writeQueryMaxRows := parameters["write_query_max_rows"]; writeQueryMaxRows != "" {
+		args = append(args, "--write_query_max_rows="+writeQueryMaxRows)
+	}
+	if writeQueryMaxSize := parameters["write_query_max_size"]; writeQueryMaxSize != "" {
+		args = append(args, "--write_query_max_size="+writeQueryMaxSize)
 	}
 	if minHealthyRdonlyTablets := parameters["min_healthy_rdonly_tablets"]; minHealthyRdonlyTablets != "" {
 		args = append(args, "--min_healthy_rdonly_tablets="+minHealthyRdonlyTablets)
@@ -47,5 +50,5 @@ func (t *SplitCloneTask) RequiredParameters() []string {
 
 // OptionalParameters is part of the Task interface.
 func (t *SplitCloneTask) OptionalParameters() []string {
-	return []string{"exclude_tables", "destination_pack_count", "min_healthy_rdonly_tablets"}
+	return []string{"exclude_tables", "write_query_max_rows", "write_query_max_size", "min_healthy_rdonly_tablets"}
 }

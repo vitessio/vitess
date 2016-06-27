@@ -4,7 +4,26 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-"""This test covers a resharding scenario of an already sharded keyspace.
+# TODO(mberlin): Remove this file when SplitClone supports merge-sorting
+# primary key columns based on the MySQL collation.
+
+"""This test covers the vtworker LegacySplitClone command.
+
+The vtworker LegacySplitClone should only be used when it is necessary to
+reshard a table that has textual primary key columns (e.g. VARCHAR).
+This is the case for the "timestamps" table in this end-to-end test.
+
+The reason why only LegacySplitClone supports this use case is because the new
+resharding clone code (as of https://github.com/youtube/vitess/pull/1796)
+requires to sort rows by their primary key. Whereas LegacySplitClone does a
+simple copy and always assumes that the tables on the destination are empty,
+the SplitClone command can diff the source and destination tables. In case of
+a horizontal resharding this requires merge-sorting multiple destination shards.
+Since we currently do not support sorting VARCHAR primary key columns in
+SplitClone (due to missing support for MySQL collations), you'll have to resort
+to LegacySplitClone only for this use case.
+
+Note that this file was copied from the original resharding.py file.
 
 We start with shards -80 and 80-. We then split 80- into 80-c0 and c0-.
 
@@ -22,8 +41,7 @@ effects, like:
 - makes sure the key range rules are properly enforced on masters.
 """
 
-import threading
-import time
+import struct
 
 import logging
 import unittest
@@ -36,6 +54,9 @@ import base_sharding
 import environment
 import tablet
 import utils
+
+keyspace_id_type = keyrange_constants.KIT_UINT64
+pack_keyspace_id = struct.Struct('!Q').pack
 
 # initial shards
 # range '' - 80
@@ -54,7 +75,6 @@ shard_1_rdonly1 = tablet.Tablet()
 shard_2_master = tablet.Tablet()
 shard_2_replica1 = tablet.Tablet()
 shard_2_replica2 = tablet.Tablet()
-shard_2_rdonly1 = tablet.Tablet()
 # range c0 - ''
 shard_3_master = tablet.Tablet()
 shard_3_replica = tablet.Tablet()
@@ -64,7 +84,6 @@ all_tablets = [shard_0_master, shard_0_replica, shard_0_ny_rdonly,
                shard_1_master, shard_1_slave1, shard_1_slave2,
                shard_1_ny_rdonly, shard_1_rdonly1,
                shard_2_master, shard_2_replica1, shard_2_replica2,
-               shard_2_rdonly1,
                shard_3_master, shard_3_replica, shard_3_rdonly1]
 
 
@@ -93,92 +112,12 @@ def tearDownModule():
     t.remove_tree()
 
 
-# InsertThread will insert a value into the timestamps table, and then
-# every 1/5s will update its value with the current timestamp
-class InsertThread(threading.Thread):
-
-  def __init__(self, tablet_obj, thread_name, thread_id, user_id,
-               keyspace_id):
-    threading.Thread.__init__(self)
-    self.tablet = tablet_obj
-    self.thread_name = thread_name
-    self.thread_id = thread_id
-    self.user_id = user_id
-    self.keyspace_id = keyspace_id
-    self.str_keyspace_id = utils.uint64_to_hex(keyspace_id)
-    self.done = False
-
-    self.tablet.mquery(
-        'vt_test_keyspace',
-        ['begin',
-         'insert into timestamps(id, time_milli, custom_ksid_col) '
-         'values(%d, %d, 0x%x) '
-         '/* vtgate:: keyspace_id:%s */ /* user_id:%d */' %
-         (self.thread_id, long(time.time() * 1000), self.keyspace_id,
-          self.str_keyspace_id, self.user_id),
-         'commit'],
-        write=True, user='vt_app')
-    self.start()
-
-  def run(self):
-    try:
-      while not self.done:
-        self.tablet.mquery(
-            'vt_test_keyspace',
-            ['begin',
-             'update timestamps set time_milli=%d '
-             'where id=%d /* vtgate:: keyspace_id:%s */ /* user_id:%d */' %
-             (long(time.time() * 1000), self.thread_id,
-              self.str_keyspace_id, self.user_id),
-             'commit'],
-            write=True, user='vt_app')
-        time.sleep(0.2)
-    except Exception:  # pylint: disable=broad-except
-      logging.exception('InsertThread got exception.')
-
-
-# MonitorLagThread will get values from a database, and compare the timestamp
-# to evaluate lag. Since the qps is really low, and we send binlogs as chunks,
-# the latency is pretty high (a few seconds).
-class MonitorLagThread(threading.Thread):
-
-  def __init__(self, tablet_obj, thread_name, thread_id):
-    threading.Thread.__init__(self)
-    self.tablet = tablet_obj
-    self.thread_name = thread_name
-    self.thread_id = thread_id
-    self.done = False
-    self.max_lag_ms = 0
-    self.lag_sum_ms = 0
-    self.sample_count = 0
-    self.start()
-
-  def run(self):
-    try:
-      while not self.done:
-        result = self.tablet.mquery(
-            'vt_test_keyspace',
-            'select time_milli from timestamps where id=%d' %
-            self.thread_id)
-        if result:
-          lag_ms = long(time.time() * 1000) - long(result[0][0])
-          logging.debug('MonitorLagThread(%s) got %d ms',
-                        self.thread_name, lag_ms)
-          self.sample_count += 1
-          self.lag_sum_ms += lag_ms
-          if lag_ms > self.max_lag_ms:
-            self.max_lag_ms = lag_ms
-        time.sleep(1.0)
-    except Exception:  # pylint: disable=broad-except
-      logging.exception('MonitorLagThread got exception.')
-
-
 class TestResharding(unittest.TestCase, base_sharding.BaseShardingTest):
 
   # create_schema will create the same schema on the keyspace
   # then insert some values
   def _create_schema(self):
-    if base_sharding.keyspace_id_type == keyrange_constants.KIT_BYTES:
+    if keyspace_id_type == keyrange_constants.KIT_BYTES:
       t = 'varbinary(64)'
     else:
       t = 'bigint(20) unsigned'
@@ -194,10 +133,10 @@ index by_msg (msg)
         '(id, msg, custom_ksid_col) as select id, msg, custom_ksid_col '
         'from %s')
     create_timestamp_table = '''create table timestamps(
-id int not null,
+name varchar(64),
 time_milli bigint(20) unsigned not null,
 custom_ksid_col ''' + t + ''' not null,
-primary key (id)
+primary key (name)
 ) Engine=InnoDB'''
     create_unrelated_table = '''create table unrelated(
 name varchar(64),
@@ -241,8 +180,6 @@ primary key (name)
                       0x9000000000000000)
     self._check_value(shard_2_replica2, 'resharding1', 2, 'msg2',
                       0x9000000000000000)
-    self._check_value(shard_2_rdonly1, 'resharding1', 2, 'msg2',
-                      0x9000000000000000)
     self._check_value(shard_3_master, 'resharding1', 2, 'msg2',
                       0x9000000000000000, should_be_here=False)
     self._check_value(shard_3_replica, 'resharding1', 2, 'msg2',
@@ -256,8 +193,6 @@ primary key (name)
     self._check_value(shard_2_replica1, 'resharding1', 3, 'msg3',
                       0xD000000000000000, should_be_here=False)
     self._check_value(shard_2_replica2, 'resharding1', 3, 'msg3',
-                      0xD000000000000000, should_be_here=False)
-    self._check_value(shard_2_rdonly1, 'resharding1', 3, 'msg3',
                       0xD000000000000000, should_be_here=False)
     self._check_value(shard_3_master, 'resharding1', 3, 'msg3',
                       0xD000000000000000)
@@ -329,9 +264,6 @@ primary key (name)
       )
 
   def test_resharding(self):
-    # we're going to reparent and swap these two
-    global shard_2_master, shard_2_replica1
-
     utils.run_vtctl(['CreateKeyspace',
                      '--sharding_column_name', 'bad_column',
                      '--sharding_column_type', 'bytes',
@@ -339,8 +271,7 @@ primary key (name)
     utils.run_vtctl(['SetKeyspaceShardingInfo', 'test_keyspace',
                      'custom_ksid_col', 'uint64'], expect_fail=True)
     utils.run_vtctl(['SetKeyspaceShardingInfo', '-force',
-                     'test_keyspace',
-                     'custom_ksid_col', base_sharding.keyspace_id_type])
+                     'test_keyspace', 'custom_ksid_col', keyspace_id_type])
 
     shard_0_master.init_tablet('master', 'test_keyspace', '-80')
     shard_0_replica.init_tablet('replica', 'test_keyspace', '-80')
@@ -356,8 +287,7 @@ primary key (name)
     self.assertEqual(ks['sharding_column_name'], 'custom_ksid_col')
 
     # we set full_mycnf_args to True as a test in the KIT_BYTES case
-    full_mycnf_args = (base_sharding.keyspace_id_type ==
-                       keyrange_constants.KIT_BYTES)
+    full_mycnf_args = keyspace_id_type == keyrange_constants.KIT_BYTES
 
     # create databases so vttablet can start behaving somewhat normally
     for t in [shard_0_master, shard_0_replica, shard_0_ny_rdonly,
@@ -405,7 +335,6 @@ primary key (name)
     shard_2_master.init_tablet('master', 'test_keyspace', '80-c0')
     shard_2_replica1.init_tablet('replica', 'test_keyspace', '80-c0')
     shard_2_replica2.init_tablet('replica', 'test_keyspace', '80-c0')
-    shard_2_rdonly1.init_tablet('rdonly', 'test_keyspace', '80-c0')
     shard_3_master.init_tablet('master', 'test_keyspace', 'c0-')
     shard_3_replica.init_tablet('replica', 'test_keyspace', 'c0-')
     shard_3_rdonly1.init_tablet('rdonly', 'test_keyspace', 'c0-')
@@ -414,11 +343,10 @@ primary key (name)
     # so they're all not serving)
     shard_2_master.start_vttablet(wait_for_state=None)
     shard_3_master.start_vttablet(wait_for_state=None)
-    for t in [shard_2_replica1, shard_2_replica2, shard_2_rdonly1,
+    for t in [shard_2_replica1, shard_2_replica2,
               shard_3_replica, shard_3_rdonly1]:
       t.start_vttablet(wait_for_state=None)
     for t in [shard_2_master, shard_2_replica1, shard_2_replica2,
-              shard_2_rdonly1,
               shard_3_master, shard_3_replica, shard_3_rdonly1]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
@@ -440,7 +368,7 @@ primary key (name)
         'Partitions(master): -80 80-\n'
         'Partitions(rdonly): -80 80-\n'
         'Partitions(replica): -80 80-\n',
-        keyspace_id_type=base_sharding.keyspace_id_type,
+        keyspace_id_type=keyspace_id_type,
         sharding_column_name='custom_ksid_col')
 
     # disable shard_1_slave2, so we're sure filtered replication will go
@@ -454,66 +382,25 @@ primary key (name)
                        shard_1_rdonly1.tablet_alias, keyspace_shard],
                       auto_log=True)
 
-    # Run vtworker as daemon for the following SplitClone commands.
-    worker_proc, worker_port, worker_rpc_port = utils.run_vtworker_bg(
-        ['--cell', 'test_nj', '--command_display_interval', '10ms'],
-        auto_log=True)
-
-    # Copy the data from the source to the destination shards.
+    # the worker will do everything. We test with source_reader_count=10
+    # (down from default=20) as connection pool is not big enough for 20.
     # min_table_size_for_split is set to 1 as to force a split even on the
     # small table we have.
     # --max_tps is only specified to enable the throttler and ensure that the
     # code is executed. But the intent here is not to throttle the test, hence
     # the rate limit is set very high.
-    #
-    # Initial clone (online).
-    workerclient_proc = utils.run_vtworker_client_bg(
-        ['SplitClone',
-         '--offline=false',
-         '--exclude_tables', 'unrelated',
-         '--min_table_size_for_split', '1',
-         '--min_healthy_rdonly_tablets', '1',
-         '--max_tps', '9999',
-         'test_keyspace/80-'],
-        worker_rpc_port)
-    utils.wait_procs([workerclient_proc])
-    self.verify_reconciliation_counters(worker_port, 'Online', 'resharding1',
-                                        2, 0, 0)
-
-    # Reset vtworker such that we can run the next command.
-    workerclient_proc = utils.run_vtworker_client_bg(['Reset'], worker_rpc_port)
-    utils.wait_procs([workerclient_proc])
-
-    # Modify the destination shard. SplitClone will revert the changes.
-    # Delete row 2 (provokes an insert).
-    shard_2_master.mquery('vt_test_keyspace',
-                          'delete from resharding1 where id=2', write=True)
-    # Update row 3 (provokes an update).
-    shard_3_master.mquery('vt_test_keyspace',
-                          "update resharding1 set msg='msg-not-3' where id=3",
-                          write=True)
-    # Insert row 4 (provokes a delete).
-    self._insert_value(shard_3_master, 'resharding1', 4, 'msg4',
-                       0xD000000000000000)
-
-    workerclient_proc = utils.run_vtworker_client_bg(
-        ['SplitClone',
-         '--exclude_tables', 'unrelated',
-         '--min_table_size_for_split', '1',
-         '--min_healthy_rdonly_tablets', '1',
-         '--max_tps', '9999',
-         'test_keyspace/80-'],
-        worker_rpc_port)
-    utils.wait_procs([workerclient_proc])
-    # Change tablet, which was taken offline, back to rdonly.
+    utils.run_vtworker(['--cell', 'test_nj',
+                        '--command_display_interval', '10ms',
+                        'LegacySplitClone',
+                        '--exclude_tables', 'unrelated',
+                        '--source_reader_count', '10',
+                        '--min_table_size_for_split', '1',
+                        '--min_healthy_rdonly_tablets', '1',
+                        '--max_tps', '9999',
+                        'test_keyspace/80-'],
+                       auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly1.tablet_alias,
                      'rdonly'], auto_log=True)
-    self.verify_reconciliation_counters(worker_port, 'Online', 'resharding1',
-                                        1, 1, 1)
-    self.verify_reconciliation_counters(worker_port, 'Offline', 'resharding1',
-                                        0, 0, 0)
-    # Terminate worker daemon because it is no longer needed.
-    utils.kill_sub_process(worker_proc, soft=True)
 
     # TODO(alainjobart): experiment with the dontStartBinlogPlayer option
 
@@ -578,15 +465,6 @@ primary key (name)
     self.check_running_binlog_player(shard_2_master, 4000, 2000)
     self.check_running_binlog_player(shard_3_master, 4000, 2000)
 
-    # start a thread to insert data into shard_1 in the background
-    # with current time, and monitor the delay
-    insert_thread_1 = InsertThread(shard_1_master, 'insert_low', 1, 10000,
-                                   0x9000000000000000)
-    insert_thread_2 = InsertThread(shard_1_master, 'insert_high', 2, 10001,
-                                   0xD000000000000000)
-    monitor_thread_1 = MonitorLagThread(shard_2_replica2, 'insert_low', 1)
-    monitor_thread_2 = MonitorLagThread(shard_3_replica, 'insert_high', 2)
-
     # tests a failover switching serving to a different replica
     utils.run_vtctl(['ChangeSlaveType', shard_1_slave2.tablet_alias, 'replica'])
     utils.run_vtctl(['ChangeSlaveType', shard_1_slave1.tablet_alias, 'spare'])
@@ -631,13 +509,13 @@ primary key (name)
                              'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-c0 c0-\n'
                              'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=base_sharding.keyspace_id_type,
+                             keyspace_id_type=keyspace_id_type,
                              sharding_column_name='custom_ksid_col')
     utils.check_srv_keyspace('test_ny', 'test_keyspace',
                              'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=base_sharding.keyspace_id_type,
+                             keyspace_id_type=keyspace_id_type,
                              sharding_column_name='custom_ksid_col')
     utils.check_tablet_query_service(self, shard_0_ny_rdonly, True, False)
     utils.check_tablet_query_service(self, shard_1_ny_rdonly, True, False)
@@ -650,13 +528,13 @@ primary key (name)
                              'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-c0 c0-\n'
                              'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=base_sharding.keyspace_id_type,
+                             keyspace_id_type=keyspace_id_type,
                              sharding_column_name='custom_ksid_col')
     utils.check_srv_keyspace('test_ny', 'test_keyspace',
                              'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-c0 c0-\n'
                              'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=base_sharding.keyspace_id_type,
+                             keyspace_id_type=keyspace_id_type,
                              sharding_column_name='custom_ksid_col')
     utils.check_tablet_query_service(self, shard_0_ny_rdonly, True, False)
     utils.check_tablet_query_service(self, shard_1_ny_rdonly, False, True)
@@ -671,7 +549,7 @@ primary key (name)
                              'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-c0 c0-\n'
                              'Partitions(replica): -80 80-c0 c0-\n',
-                             keyspace_id_type=base_sharding.keyspace_id_type,
+                             keyspace_id_type=keyspace_id_type,
                              sharding_column_name='custom_ksid_col')
     utils.check_tablet_query_service(self, shard_1_slave2, False, True)
 
@@ -691,7 +569,7 @@ primary key (name)
                              'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-c0 c0-\n'
                              'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=base_sharding.keyspace_id_type,
+                             keyspace_id_type=keyspace_id_type,
                              sharding_column_name='custom_ksid_col')
 
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'replica'],
@@ -708,21 +586,8 @@ primary key (name)
                              'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-c0 c0-\n'
                              'Partitions(replica): -80 80-c0 c0-\n',
-                             keyspace_id_type=base_sharding.keyspace_id_type,
+                             keyspace_id_type=keyspace_id_type,
                              sharding_column_name='custom_ksid_col')
-
-    # reparent shard_2 to shard_2_replica1, then insert more data and
-    # see it flow through still
-    utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/80-c0',
-                     shard_2_replica1.tablet_alias])
-
-    # update our test variables to point at the new master
-    shard_2_master, shard_2_replica1 = shard_2_replica1, shard_2_master
-
-    logging.debug('Inserting lots of data on source shard after reparenting')
-    self._insert_lots(3000, base=2000)
-    logging.debug('Checking 80 percent of data was sent fairly quickly')
-    self._check_lots_timeout(3000, 80, 10, base=2000)
 
     # use vtworker to compare the data again
     logging.debug('Running vtworker SplitDiff')
@@ -735,20 +600,6 @@ primary key (name)
                     auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_3_rdonly1.tablet_alias, 'rdonly'],
                     auto_log=True)
-
-    # going to migrate the master now, check the delays
-    monitor_thread_1.done = True
-    monitor_thread_2.done = True
-    insert_thread_1.done = True
-    insert_thread_2.done = True
-    logging.debug('DELAY 1: %s max_lag=%d ms avg_lag=%d ms',
-                  monitor_thread_1.thread_name,
-                  monitor_thread_1.max_lag_ms,
-                  monitor_thread_1.lag_sum_ms / monitor_thread_1.sample_count)
-    logging.debug('DELAY 2: %s max_lag=%d ms avg_lag=%d ms',
-                  monitor_thread_2.thread_name,
-                  monitor_thread_2.max_lag_ms,
-                  monitor_thread_2.lag_sum_ms / monitor_thread_2.sample_count)
 
     # mock with the SourceShard records to test 'vtctl SourceShardDelete'
     # and 'vtctl SourceShardAdd'
@@ -766,7 +617,7 @@ primary key (name)
                              'Partitions(master): -80 80-c0 c0-\n'
                              'Partitions(rdonly): -80 80-c0 c0-\n'
                              'Partitions(replica): -80 80-c0 c0-\n',
-                             keyspace_id_type=base_sharding.keyspace_id_type,
+                             keyspace_id_type=keyspace_id_type,
                              sharding_column_name='custom_ksid_col')
     utils.check_tablet_query_service(self, shard_1_master, False, True)
 
@@ -804,7 +655,6 @@ primary key (name)
     # kill everything
     tablet.kill_tablets([shard_0_master, shard_0_replica, shard_0_ny_rdonly,
                          shard_2_master, shard_2_replica1, shard_2_replica2,
-                         shard_2_rdonly1,
                          shard_3_master, shard_3_replica, shard_3_rdonly1])
 
 if __name__ == '__main__':

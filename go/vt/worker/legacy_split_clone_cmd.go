@@ -4,6 +4,9 @@
 
 package worker
 
+// TODO(mberlin): Remove this file when SplitClone supports merge-sorting
+// primary key columns based on the MySQL collation.
+
 import (
 	"flag"
 	"fmt"
@@ -11,22 +14,20 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 
-	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 )
 
-const splitCloneHTML = `
+const legacySplitCloneHTML = `
 <!DOCTYPE html>
 <head>
-  <title>Split Clone Action</title>
+  <title>Legacy Split Clone Action</title>
 </head>
 <body>
-  <h1>Split Clone Action</h1>
+  <h1>Legacy Split Clone Action</h1>
+  <h2>Use this command only when the 'SplitClone' command told you so. Otherwise use the 'SplitClone' command.</h2>
 
     {{if .Error}}
       <b>Error:</b> {{.Error}}</br>
@@ -34,41 +35,35 @@ const splitCloneHTML = `
       <p>Choose the destination keyspace for this action.</p>
       <ul>
       {{range $i, $si := .Choices}}
-        <li><a href="/Clones/SplitClone?keyspace={{$si.Keyspace}}&shard={{$si.Shard}}">{{$si.Keyspace}}/{{$si.Shard}}</a></li>
+        <li><a href="/Clones/LegacySplitClone?keyspace={{$si.Keyspace}}&shard={{$si.Shard}}">{{$si.Keyspace}}/{{$si.Shard}}</a></li>
       {{end}}
       </ul>
     {{end}}
 </body>
 `
 
-const splitCloneHTML2 = `
+const legacySplitCloneHTML2 = `
 <!DOCTYPE html>
 <head>
-  <title>Split Clone Action</title>
+  <title>Legacy Split Clone Action</title>
 </head>
 <body>
   <p>Shard involved: {{.Keyspace}}/{{.Shard}}</p>
   <h1>Split Clone Action</h1>
-    <form action="/Clones/SplitClone" method="post">
-      <LABEL for="online">Do Online Copy: (optional approximate copy, source and destination tablets will not be put out of serving, minimizes downtime during offline copy)</LABEL>
-        <INPUT type="checkbox" id="online" name="online" value="true"{{if .DefaultOnline}} checked{{end}}></BR>
-      <LABEL for="offline">Do Offline Copy: (exact copy at a specific GTID, required before shard migration, source and destination tablets will be put out of serving during copy)</LABEL>
-        <INPUT type="checkbox" id="offline" name="offline" value="true"{{if .DefaultOnline}} checked{{end}}></BR>
+    <form action="/Clones/LegacySplitClone" method="post">
       <LABEL for="excludeTables">Exclude Tables: </LABEL>
         <INPUT type="text" id="excludeTables" name="excludeTables" value="moving.*"></BR>
       <LABEL for="strategy">Strategy: </LABEL>
         <INPUT type="text" id="strategy" name="strategy" value=""></BR>
       <LABEL for="sourceReaderCount">Source Reader Count: </LABEL>
         <INPUT type="text" id="sourceReaderCount" name="sourceReaderCount" value="{{.DefaultSourceReaderCount}}"></BR>
-      <LABEL for="writeQueryMaxRows">Maximum Number of Rows per Write Query: </LABEL>
-        <INPUT type="text" id="writeQueryMaxRows" name="writeQueryMaxRows" value="{{.DefaultWriteQueryMaxRows}}"></BR>
-      <LABEL for="writeQueryMaxSize">Maximum Size (in bytes) per Write Query: </LABEL>
-        <INPUT type="text" id="writeQueryMaxSize" name="writeQueryMaxSize" value="{{.DefaultWriteQueryMaxSize}}"></BR>
+      <LABEL for="destinationPackCount">Destination Pack Count: </LABEL>
+        <INPUT type="text" id="destinationPackCount" name="destinationPackCount" value="{{.DefaultDestinationPackCount}}"></BR>
       <LABEL for="minTableSizeForSplit">Minimun Table Size For Split: </LABEL>
         <INPUT type="text" id="minTableSizeForSplit" name="minTableSizeForSplit" value="{{.DefaultMinTableSizeForSplit}}"></BR>
       <LABEL for="destinationWriterCount">Destination Writer Count: </LABEL>
         <INPUT type="text" id="destinationWriterCount" name="destinationWriterCount" value="{{.DefaultDestinationWriterCount}}"></BR>
-      <LABEL for="minHealthyRdonlyTablets">Minimum Number of required healthy RDONLY tablets in the source and destination shard at start: </LABEL>
+      <LABEL for="minHealthyRdonlyTablets">Minimum Number of required healthy RDONLY tablets: </LABEL>
         <INPUT type="text" id="minHealthyRdonlyTablets" name="minHealthyRdonlyTablets" value="{{.DefaultMinHealthyRdonlyTablets}}"></BR>
       <LABEL for="maxTPS">Maximum Write Transactions/second (If non-zero, writes on the destination will be throttled. Unlimited by default.): </LABEL>
         <INPUT type="text" id="maxTPS" name="maxTPS" value="{{.DefaultMaxTPS}}"></BR>
@@ -87,27 +82,24 @@ const splitCloneHTML2 = `
   </body>
 `
 
-var splitCloneTemplate = mustParseTemplate("splitClone", splitCloneHTML)
-var splitCloneTemplate2 = mustParseTemplate("splitClone2", splitCloneHTML2)
+var legacySplitCloneTemplate = mustParseTemplate("splitClone", legacySplitCloneHTML)
+var legacySplitCloneTemplate2 = mustParseTemplate("splitClone2", legacySplitCloneHTML2)
 
-func commandSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
-	online := subFlags.Bool("online", defaultOnline, "do online copy (optional approximate copy, source and destination tablets will not be put out of serving, minimizes downtime during offline copy)")
-	offline := subFlags.Bool("offline", defaultOffline, "do offline copy (exact copy at a specific GTID, required before shard migration, source and destination tablets will be put out of serving during copy)")
+func commandLegacySplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
-	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'vtworker SplitClone --strategy=-help k/s' for more info")
+	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'vtworker LegacySplitClone --strategy=-help k/s' for more info")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
-	writeQueryMaxRows := subFlags.Int("write_query_max_rows", defaultWriteQueryMaxRows, "maximum number of rows per write query")
-	writeQueryMaxSize := subFlags.Int("write_query_max_size", defaultWriteQueryMaxSize, "maximum size (in bytes) per write query")
+	destinationPackCount := subFlags.Int("destination_pack_count", defaultDestinationPackCount, "number of packets to pack in one destination insert")
 	minTableSizeForSplit := subFlags.Int("min_table_size_for_split", defaultMinTableSizeForSplit, "tables bigger than this size on disk in bytes will be split into source_reader_count chunks if possible")
 	destinationWriterCount := subFlags.Int("destination_writer_count", defaultDestinationWriterCount, "number of concurrent RPCs to execute on the destination")
-	minHealthyRdonlyTablets := subFlags.Int("min_healthy_rdonly_tablets", defaultMinHealthyRdonlyTablets, "minimum number of healthy RDONLY tablets in the source and destination shard at start")
+	minHealthyRdonlyTablets := subFlags.Int("min_healthy_rdonly_tablets", defaultMinHealthyRdonlyTablets, "minimum number of healthy RDONLY tablets before taking out one")
 	maxTPS := subFlags.Int64("max_tps", defaultMaxTPS, "if non-zero, limit copy to maximum number of (write) transactions/second on the destination (unlimited by default)")
 	if err := subFlags.Parse(args); err != nil {
 		return nil, err
 	}
 	if subFlags.NArg() != 1 {
 		subFlags.Usage()
-		return nil, fmt.Errorf("command SplitClone requires <keyspace/shard>")
+		return nil, fmt.Errorf("command LegacySplitClone requires <keyspace/shard>")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
@@ -118,58 +110,14 @@ func commandSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagS
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	worker, err := NewSplitCloneWorker(wr, wi.cell, keyspace, shard, *online, *offline, excludeTableArray, *strategy, *sourceReaderCount, *writeQueryMaxRows, *writeQueryMaxSize, uint64(*minTableSizeForSplit), *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS)
+	worker, err := NewLegacySplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, *strategy, *sourceReaderCount, *destinationPackCount, uint64(*minTableSizeForSplit), *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create split clone worker: %v", err)
 	}
 	return worker, nil
 }
 
-func keyspacesWithOverlappingShards(ctx context.Context, wr *wrangler.Wrangler) ([]map[string]string, error) {
-	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	keyspaces, err := wr.TopoServer().GetKeyspaces(shortCtx)
-	cancel()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get list of keyspaces: %v", err)
-	}
-
-	wg := sync.WaitGroup{}
-	mu := sync.Mutex{} // protects result
-	result := make([]map[string]string, 0, len(keyspaces))
-	rec := concurrency.AllErrorRecorder{}
-	for _, keyspace := range keyspaces {
-		wg.Add(1)
-		go func(keyspace string) {
-			defer wg.Done()
-			shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-			osList, err := topotools.FindOverlappingShards(shortCtx, wr.TopoServer(), keyspace)
-			cancel()
-			if err != nil {
-				rec.RecordError(err)
-				return
-			}
-			mu.Lock()
-			for _, os := range osList {
-				result = append(result, map[string]string{
-					"Keyspace": os.Left[0].Keyspace(),
-					"Shard":    os.Left[0].ShardName(),
-				})
-			}
-			mu.Unlock()
-		}(keyspace)
-	}
-	wg.Wait()
-
-	if rec.HasErrors() {
-		return nil, rec.Error()
-	}
-	if len(result) == 0 {
-		return nil, fmt.Errorf("There are no keyspaces with overlapping shards")
-	}
-	return result, nil
-}
-
-func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
+func interactiveLegacySplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
 	if err := r.ParseForm(); err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot parse form: %s", err)
 	}
@@ -186,7 +134,7 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 		} else {
 			result["Choices"] = choices
 		}
-		return nil, splitCloneTemplate, result, nil
+		return nil, legacySplitCloneTemplate, result, nil
 	}
 
 	sourceReaderCountStr := r.FormValue("sourceReaderCount")
@@ -195,23 +143,17 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 		result := make(map[string]interface{})
 		result["Keyspace"] = keyspace
 		result["Shard"] = shard
-		result["DefaultOnline"] = defaultOnline
-		result["DefaultOffline"] = defaultOffline
 		result["DefaultSourceReaderCount"] = fmt.Sprintf("%v", defaultSourceReaderCount)
-		result["DefaultWriteQueryMaxRows"] = fmt.Sprintf("%v", defaultWriteQueryMaxRows)
-		result["DefaultWriteQueryMaxSize"] = fmt.Sprintf("%v", defaultWriteQueryMaxSize)
+		result["DefaultDestinationPackCount"] = fmt.Sprintf("%v", defaultDestinationPackCount)
 		result["DefaultMinTableSizeForSplit"] = fmt.Sprintf("%v", defaultMinTableSizeForSplit)
 		result["DefaultDestinationWriterCount"] = fmt.Sprintf("%v", defaultDestinationWriterCount)
 		result["DefaultMinHealthyRdonlyTablets"] = fmt.Sprintf("%v", defaultMinHealthyRdonlyTablets)
 		result["DefaultMaxTPS"] = fmt.Sprintf("%v", defaultMaxTPS)
-		return nil, splitCloneTemplate2, result, nil
+		return nil, legacySplitCloneTemplate2, result, nil
 	}
 
 	// get other parameters
-	onlineStr := r.FormValue("online")
-	online := onlineStr == "true"
-	offlineStr := r.FormValue("offline")
-	offline := offlineStr == "true"
+	destinationPackCountStr := r.FormValue("destinationPackCount")
 	excludeTables := r.FormValue("excludeTables")
 	var excludeTableArray []string
 	if excludeTables != "" {
@@ -222,15 +164,9 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot parse sourceReaderCount: %s", err)
 	}
-	writeQueryMaxRowsStr := r.FormValue("writeQueryMaxRows")
-	writeQueryMaxRows, err := strconv.ParseInt(writeQueryMaxRowsStr, 0, 64)
+	destinationPackCount, err := strconv.ParseInt(destinationPackCountStr, 0, 64)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse writeQueryMaxRows: %s", err)
-	}
-	writeQueryMaxSizeStr := r.FormValue("writeQueryMaxSize")
-	writeQueryMaxSize, err := strconv.ParseInt(writeQueryMaxSizeStr, 0, 64)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse writeQueryMaxSize: %s", err)
+		return nil, nil, nil, fmt.Errorf("cannot parse destinationPackCount: %s", err)
 	}
 	minTableSizeForSplitStr := r.FormValue("minTableSizeForSplit")
 	minTableSizeForSplit, err := strconv.ParseInt(minTableSizeForSplitStr, 0, 64)
@@ -254,7 +190,7 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 	}
 
 	// start the clone job
-	wrk, err := NewSplitCloneWorker(wr, wi.cell, keyspace, shard, online, offline, excludeTableArray, strategy, int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize), uint64(minTableSizeForSplit), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS)
+	wrk, err := NewLegacySplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, strategy, int(sourceReaderCount), int(destinationPackCount), uint64(minTableSizeForSplit), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot create worker: %v", err)
 	}
@@ -262,8 +198,8 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 }
 
 func init() {
-	AddCommand("Clones", Command{"SplitClone",
-		commandSplitClone, interactiveSplitClone,
-		"[--online=false] [--offline=false] [--exclude_tables=''] [--strategy=''] <keyspace/shard>",
-		"Replicates the data and creates configuration for a horizontal split."})
+	AddCommand("Clones", Command{"LegacySplitClone",
+		commandLegacySplitClone, interactiveLegacySplitClone,
+		"[--exclude_tables=''] [--strategy=''] <keyspace/shard>",
+		"Old SplitClone code which supports VARCHAR primary key columns. Use this ONLY if SplitClone failed for you."})
 }
