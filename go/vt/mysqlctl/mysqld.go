@@ -521,6 +521,34 @@ func (mysqld *Mysqld) initConfig(root string) error {
 	return ioutil.WriteFile(mysqld.config.path, []byte(configData), 0664)
 }
 
+// ReinitConfig updates the config file as if Mysqld is initializing. At the
+// moment it only randomizes ServerID because it's not safe to restore a replica
+// from a backup and then give it the same ServerID as before, MySQL can then
+// skip transactions in the replication stream with the same server_id.
+func (mysqld *Mysqld) ReinitConfig(ctx context.Context) error {
+	log.Infof("Mysqld.ReinitConfig")
+
+	// Execute as remote action on mysqlctld if requested.
+	if *socketFile != "" {
+		log.Infof("executing Mysqld.ReinitConfig() remotely via mysqlctld server: %v", *socketFile)
+		client, err := mysqlctlclient.New("unix", *socketFile)
+		if err != nil {
+			return fmt.Errorf("can't dial mysqlctld: %v", err)
+		}
+		defer client.Close()
+		return client.ReinitConfig(ctx)
+	}
+
+	if err := mysqld.config.RandomizeMysqlServerID(); err != nil {
+		return err
+	}
+	root, err := vtenv.VtRoot()
+	if err != nil {
+		return err
+	}
+	return mysqld.initConfig(root)
+}
+
 func (mysqld *Mysqld) createDirs() error {
 	log.Infof("creating directory %s", mysqld.tabletDir)
 	if err := os.MkdirAll(mysqld.tabletDir, os.ModePerm); err != nil {

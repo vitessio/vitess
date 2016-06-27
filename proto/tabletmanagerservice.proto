@@ -165,4 +165,7 @@ service TabletManager {
   //
 
   rpc Backup(tabletmanagerdata.BackupRequest) returns (stream tabletmanagerdata.BackupResponse) {};
+
+  // RestoreFromBackup deletes all local data and restores it from the latest backup.
+  rpc RestoreFromBackup(tabletmanagerdata.RestoreFromBackupRequest) returns (stream tabletmanagerdata.RestoreFromBackupResponse) {};
 }

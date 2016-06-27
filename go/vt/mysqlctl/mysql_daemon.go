@@ -32,6 +32,7 @@ type MysqlDaemon interface {
 	Start(ctx context.Context) error
 	Shutdown(ctx context.Context, waitForMysqld bool) error
 	RunMysqlUpgrade() error
+	ReinitConfig(ctx context.Context) error
 	Wait(ctx context.Context) error
 
 	// GetMysqlPort returns the current port mysql is listening on.
@@ -247,6 +248,11 @@ func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, waitForMysqld bool) er
 
 // RunMysqlUpgrade is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) RunMysqlUpgrade() error {
+	return nil
+}
+
+// ReinitConfig is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) ReinitConfig(ctx context.Context) error {
 	return nil
 }
 

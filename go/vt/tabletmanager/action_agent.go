@@ -44,6 +44,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
@@ -257,7 +258,7 @@ func NewActionAgent(
 		go func() {
 			// restoreFromBackup wil just be a regular action
 			// (same as if it was triggered remotely)
-			if err := agent.RestoreFromBackup(batchCtx); err != nil {
+			if err := agent.RestoreData(batchCtx, logutil.NewConsoleLogger(), false /* deleteBeforeRestore */); err != nil {
 				println(fmt.Sprintf("RestoreFromBackup failed: %v", err))
 				log.Fatalf("RestoreFromBackup failed: %v", err)
 			}
