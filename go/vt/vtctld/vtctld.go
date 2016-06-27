@@ -19,8 +19,14 @@ import (
 
 var (
 	webDir = flag.String("web_dir", "", "directory from which to serve vtctld web interface resources")
+	// webDir2 is a temporary additional dir for a new, in-development UI.
+	webDir2 = flag.String("web_dir2", "", "directory from which to serve vtctld2 web interface resources")
+)
 
+const (
 	appPrefix = "/app/"
+	// appPrefix2 is a temporary additional path for a new, in-development UI.
+	appPrefix2 = "/app2/"
 )
 
 // InitVtctld initializes all the vtctld functionnality.
@@ -116,6 +122,23 @@ func InitVtctld(ts topo.Server) {
 			rest = "index.html"
 		}
 		http.ServeFile(w, r, path.Join(*webDir, rest))
+	})
+
+	// Serve the static files for the vtctld2 web app.
+	// This is a temporary additional URL for serving the new,
+	// in-development UI side-by-side with the current one.
+	http.HandleFunc(appPrefix2, func(w http.ResponseWriter, r *http.Request) {
+		// Strip the prefix.
+		parts := strings.SplitN(r.URL.Path, "/", 3)
+		if len(parts) != 3 {
+			http.NotFound(w, r)
+			return
+		}
+		rest := parts[2]
+		if rest == "" {
+			rest = "index.html"
+		}
+		http.ServeFile(w, r, path.Join(*webDir2, rest))
 	})
 
 	// Serve the REST API for the vtctld web app.
