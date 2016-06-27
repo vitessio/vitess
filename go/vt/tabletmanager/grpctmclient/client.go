@@ -672,12 +672,12 @@ func (client *Client) PromoteSlave(ctx context.Context, tablet *topodatapb.Table
 //
 // Backup related methods
 //
-type eventStreamAdapter struct {
+type backupStreamAdapter struct {
 	stream tabletmanagerservicepb.TabletManager_BackupClient
 	cc     *grpc.ClientConn
 }
 
-func (e *eventStreamAdapter) Recv() (*logutilpb.Event, error) {
+func (e *backupStreamAdapter) Recv() (*logutilpb.Event, error) {
 	br, err := e.stream.Recv()
 	if err != nil {
 		e.cc.Close()
@@ -700,7 +700,39 @@ func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, con
 		cc.Close()
 		return nil, err
 	}
-	return &eventStreamAdapter{
+	return &backupStreamAdapter{
+		stream: stream,
+		cc:     cc,
+	}, nil
+}
+
+type restoreFromBackupStreamAdapter struct {
+	stream tabletmanagerservicepb.TabletManager_RestoreFromBackupClient
+	cc     *grpc.ClientConn
+}
+
+func (e *restoreFromBackupStreamAdapter) Recv() (*logutilpb.Event, error) {
+	br, err := e.stream.Recv()
+	if err != nil {
+		e.cc.Close()
+		return nil, err
+	}
+	return br.Event, nil
+}
+
+// RestoreFromBackup is part of the tmclient.TabletManagerClient interface.
+func (client *Client) RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet) (logutil.EventStream, error) {
+	cc, c, err := client.dial(tablet)
+	if err != nil {
+		return nil, err
+	}
+
+	stream, err := c.RestoreFromBackup(ctx, &tabletmanagerdatapb.RestoreFromBackupRequest{})
+	if err != nil {
+		cc.Close()
+		return nil, err
+	}
+	return &restoreFromBackupStreamAdapter{
 		stream: stream,
 		cc:     cc,
 	}, nil

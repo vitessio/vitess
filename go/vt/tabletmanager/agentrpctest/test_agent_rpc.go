@@ -1098,6 +1098,7 @@ func agentRPCTestPromoteSlavePanic(ctx context.Context, t *testing.T, client tmc
 
 var testBackupConcurrency = 24
 var testBackupCalled = false
+var testRestoreFromBackupCalled = false
 
 func (fra *fakeRPCAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger) error {
 	if fra.panics {
@@ -1126,6 +1127,36 @@ func agentRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.
 	e, err := stream.Recv()
 	if err == nil {
 		t.Fatalf("Unexpected Backup logs: %v", e)
+	}
+	expectRPCWrapLockActionPanic(t, err)
+}
+
+func (fra *fakeRPCAgent) RestoreFromBackup(ctx context.Context, logger logutil.Logger) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	logStuff(logger, 10)
+	testRestoreFromBackupCalled = true
+	return nil
+}
+
+func agentRPCTestRestoreFromBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	stream, err := client.RestoreFromBackup(ctx, tablet)
+	if err != nil {
+		t.Fatalf("RestoreFromBackup failed: %v", err)
+	}
+	err = compareLoggedStuff(t, "RestoreFromBackup", stream, 10)
+	compareError(t, "RestoreFromBackup", err, true, testRestoreFromBackupCalled)
+}
+
+func agentRPCTestRestoreFromBackupPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	stream, err := client.RestoreFromBackup(ctx, tablet)
+	if err != nil {
+		t.Fatalf("RestoreFromBackup failed: %v", err)
+	}
+	e, err := stream.Recv()
+	if err == nil {
+		t.Fatalf("Unexpected RestoreFromBackup logs: %v", e)
 	}
 	expectRPCWrapLockActionPanic(t, err)
 }
@@ -1223,6 +1254,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 
 	// Backup / restore related methods
 	agentRPCTestBackup(ctx, t, client, tablet)
+	agentRPCTestRestoreFromBackup(ctx, t, client, tablet)
 
 	//
 	// Tests panic handling everywhere now
@@ -1274,4 +1306,5 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 
 	// Backup / restore related methods
 	agentRPCTestBackupPanic(ctx, t, client, tablet)
+	agentRPCTestRestoreFromBackupPanic(ctx, t, client, tablet)
 }
