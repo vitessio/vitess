@@ -29,6 +29,9 @@ type MysqlctlClient interface {
 	// RunMysqlUpgrade calls Mysqld.RunMysqlUpgrade remotely.
 	RunMysqlUpgrade(ctx context.Context) error
 
+	// ReinitConfig calls Mysqld.ReinitConfig remotely.
+	ReinitConfig(ctx context.Context) error
+
 	// Close will terminate the connection. This object won't be used anymore.
 	Close()
 }

@@ -456,6 +456,23 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 	})
 }
 
+func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBackupRequest, stream tabletmanagerservicepb.TabletManager_RestoreFromBackupServer) error {
+	ctx := callinfo.GRPCCallInfo(stream.Context())
+	return s.agent.RPCWrapLockAction(ctx, tabletmanager.TabletActionRestoreFromBackup, request, nil, true, func() error {
+		// create a logger, send the result back to the caller
+		logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+			// If the client disconnects, we will just fail
+			// to send the log events, but won't interrupt
+			// the backup.
+			stream.Send(&tabletmanagerdatapb.RestoreFromBackupResponse{
+				Event: e,
+			})
+		})
+
+		return s.agent.RestoreFromBackup(ctx, logger)
+	})
+}
+
 // registration glue
 
 func init() {

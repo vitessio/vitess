@@ -582,9 +582,9 @@ func removeExistingFiles(cnf *Mycnf) error {
 // Restore is the main entry point for backup restore.  If there is no
 // appropriate backup on the BackupStorage, Restore logs an error
 // and returns ErrNoBackup. Any other error is returned.
-func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurrency int, hookExtraEnv map[string]string) (replication.Position, error) {
+func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurrency int, hookExtraEnv map[string]string, logger logutil.Logger, deleteBeforeRestore bool) (replication.Position, error) {
 	// find the right backup handle: most recent one, with a MANIFEST
-	log.Infof("Restore: looking for a suitable backup to restore")
+	logger.Infof("Restore: looking for a suitable backup to restore")
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
 		return replication.Position{}, err
@@ -612,54 +612,62 @@ func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurr
 			continue
 		}
 
-		log.Infof("Restore: found backup %v %v to restore with %v files", bh.Directory(), bh.Name(), len(bm.FileEntries))
+		logger.Infof("Restore: found backup %v %v to restore with %v files", bh.Directory(), bh.Name(), len(bm.FileEntries))
 		break
 	}
 	if toRestore < 0 {
-		log.Errorf("No backup to restore on BackupStorage for directory %v", dir)
+		logger.Errorf("No backup to restore on BackupStorage for directory %v", dir)
 		return replication.Position{}, ErrNoBackup
 	}
 
-	log.Infof("Restore: checking no existing data is present")
-	ok, err := checkNoDB(ctx, mysqld)
-	if err != nil {
-		return replication.Position{}, err
-	}
-	if !ok {
-		return replication.Position{}, ErrExistingDB
+	if !deleteBeforeRestore {
+		logger.Infof("Restore: checking no existing data is present")
+		ok, err := checkNoDB(ctx, mysqld)
+		if err != nil {
+			return replication.Position{}, err
+		}
+		if !ok {
+			return replication.Position{}, ErrExistingDB
+		}
 	}
 
-	log.Infof("Restore: shutdown mysqld")
+	logger.Infof("Restore: shutdown mysqld")
 	err = mysqld.Shutdown(ctx, true)
 	if err != nil {
 		return replication.Position{}, err
 	}
 
-	log.Infof("Restore: deleting existing files")
+	logger.Infof("Restore: deleting existing files")
 	if err := removeExistingFiles(mysqld.Cnf()); err != nil {
 		return replication.Position{}, err
 	}
 
-	log.Infof("Restore: copying all files")
+	logger.Infof("Restore: reinit config file")
+	err = mysqld.ReinitConfig(ctx)
+	if err != nil {
+		return replication.Position{}, err
+	}
+
+	logger.Infof("Restore: copying all files")
 	if err := restoreFiles(mysqld.Cnf(), bh, bm.FileEntries, restoreConcurrency); err != nil {
 		return replication.Position{}, err
 	}
 
 	// mysqld needs to be running in order for mysql_upgrade to work.
-	log.Infof("Restore: starting mysqld for mysql_upgrade")
+	logger.Infof("Restore: starting mysqld for mysql_upgrade")
 	err = mysqld.Start(ctx)
 	if err != nil {
 		return replication.Position{}, err
 	}
 
-	log.Infof("Restore: running mysql_upgrade")
+	logger.Infof("Restore: running mysql_upgrade")
 	if err := mysqld.RunMysqlUpgrade(); err != nil {
 		return replication.Position{}, fmt.Errorf("mysql_upgrade failed: %v", err)
 	}
 
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
 	// so that any changes made to system tables take effect.
-	log.Infof("Restore: restarting mysqld after mysql_upgrade")
+	logger.Infof("Restore: restarting mysqld after mysql_upgrade")
 	err = mysqld.Shutdown(ctx, true)
 	if err != nil {
 		return replication.Position{}, err

@@ -7,7 +7,9 @@ package vtctl
 import (
 	"flag"
 	"fmt"
+	"io"
 
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -25,6 +27,12 @@ func init() {
 		commandRemoveBackup,
 		"<keyspace/shard> <backup name>",
 		"Removes a backup for the BackupStorage."})
+
+	addCommand("Tablets", command{
+		"RestoreFromBackup",
+		commandRestoreFromBackup,
+		"<tablet alias>",
+		"Stops mysqld and restores the data from the latest backup."})
 }
 
 func commandListBackups(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -77,4 +85,37 @@ func commandRemoveBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	}
 	defer bs.Close()
 	return bs.RemoveBackup(bucket, name)
+}
+
+func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("The RestoreFromBackup command requires the <tablet alias> argument.")
+	}
+
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return err
+	}
+	stream, err := wr.TabletManagerClient().RestoreFromBackup(ctx, tabletInfo.Tablet)
+	if err != nil {
+		return err
+	}
+	for {
+		e, err := stream.Recv()
+		switch err {
+		case nil:
+			logutil.LogEvent(wr.Logger(), e)
+		case io.EOF:
+			return nil
+		default:
+			return err
+		}
+	}
 }

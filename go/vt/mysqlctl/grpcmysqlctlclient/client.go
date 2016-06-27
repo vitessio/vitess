@@ -60,6 +60,12 @@ func (c *client) RunMysqlUpgrade(ctx context.Context) error {
 	return err
 }
 
+// ReinitConfig is part of the MysqlctlClient interface.
+func (c *client) ReinitConfig(ctx context.Context) error {
+	_, err := c.c.ReinitConfig(ctx, &mysqlctlpb.ReinitConfigRequest{})
+	return err
+}
+
 // Close is part of the MysqlctlClient interface.
 func (c *client) Close() {
 	c.cc.Close()

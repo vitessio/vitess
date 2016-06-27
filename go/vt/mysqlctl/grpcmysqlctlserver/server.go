@@ -37,6 +37,11 @@ func (s *server) RunMysqlUpgrade(ctx context.Context, request *mysqlctlpb.RunMys
 	return &mysqlctlpb.RunMysqlUpgradeResponse{}, s.mysqld.RunMysqlUpgrade()
 }
 
+// ReinitConfig implements the server side of the MysqlctlClient interface.
+func (s *server) ReinitConfig(ctx context.Context, request *mysqlctlpb.ReinitConfigRequest) (*mysqlctlpb.ReinitConfigResponse, error) {
+	return &mysqlctlpb.ReinitConfigResponse{}, s.mysqld.ReinitConfig(ctx)
+}
+
 // StartServer registers the Server for RPCs.
 func StartServer(s *grpc.Server, mysqld *mysqlctl.Mysqld) {
 	mysqlctlpb.RegisterMysqlCtlServer(s, &server{mysqld})

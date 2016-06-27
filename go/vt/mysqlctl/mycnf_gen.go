@@ -8,8 +8,10 @@ package mysqlctl
 
 import (
 	"bytes"
+	"crypto/rand"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"path"
 	"text/template"
 
@@ -43,11 +45,11 @@ const (
 // uid is a unique id for a particular tablet - it must be unique within the
 // tabletservers deployed within a keyspace, lest there be collisions on disk.
 // mysqldPort needs to be unique per instance per machine.
-func NewMycnf(tabletUID, mysqlServerID uint32, mysqlPort int32) *Mycnf {
+func NewMycnf(tabletUID uint32, mysqlPort int32) *Mycnf {
 	cnf := new(Mycnf)
 	cnf.path = mycnfFile(tabletUID)
 	tabletDir := TabletDir(tabletUID)
-	cnf.ServerID = mysqlServerID
+	cnf.ServerID = tabletUID
 	cnf.MysqlPort = mysqlPort
 	cnf.DataDir = path.Join(tabletDir, dataDir)
 	cnf.InnodbDataHomeDir = path.Join(tabletDir, innodbDataSubdir)
@@ -125,4 +127,23 @@ func (cnf *Mycnf) fillMycnfTemplate(tmplSrc string) (string, error) {
 		return "", err
 	}
 	return mycnfData.String(), nil
+}
+
+// RandomizeMysqlServerID generates a random MySQL server_id.
+//
+// The value assigned to ServerID will be in the range [100, 2^32).
+// It avoids 0 because that's reserved for mysqlbinlog dumps.
+// It also avoids 1-99 because low numbers are used for fake slave connections.
+// See NewSlaveConnection() in slave_connection.go for more on that.
+func (cnf *Mycnf) RandomizeMysqlServerID() error {
+	// rand.Int(_, max) returns a value in the range [0, max).
+	bigN, err := rand.Int(rand.Reader, big.NewInt(1<<32-100))
+	if err != nil {
+		return err
+	}
+	n := bigN.Uint64()
+	// n is in the range [0, 2^32 - 100).
+	// Add back 100 to put it in the range [100, 2^32).
+	cnf.ServerID = uint32(n + 100)
+	return nil
 }

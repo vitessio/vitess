@@ -67,3 +67,26 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 
 	return returnErr
 }
+
+// RestoreFromBackup deletes all local data and restores anew from the latest backup.
+// Should be called under RPCWrapLockAction.
+func (agent *ActionAgent) RestoreFromBackup(ctx context.Context, logger logutil.Logger) error {
+	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+	if err != nil {
+		return err
+	}
+	if tablet.Type == topodatapb.TabletType_MASTER {
+		return fmt.Errorf("type MASTER cannot restore from backup, if you really need to do this, restart vttablet in replica mode")
+	}
+
+	// create the loggers: tee to console and source
+	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
+
+	// now we can run restore
+	err = agent.restoreDataLocked(ctx, l, true /* deleteBeforeRestore */)
+
+	// re-run health check to be sure to capture any replication delay
+	agent.runHealthCheckProtected()
+
+	return err
+}

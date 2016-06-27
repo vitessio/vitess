@@ -58,6 +58,20 @@ func initCmd(subFlags *flag.FlagSet, args []string) error {
 	return nil
 }
 
+func reinitConfigCmd(subFlags *flag.FlagSet, args []string) error {
+	// There ought to be an existing my.cnf, so use it to find mysqld.
+	mysqld, err := mysqlctl.OpenMysqld(uint32(*tabletUID), dbconfigFlags)
+	if err != nil {
+		return fmt.Errorf("failed to find mysql config: %v", err)
+	}
+	defer mysqld.Close()
+
+	if err := mysqld.ReinitConfig(context.TODO()); err != nil {
+		return fmt.Errorf("failed to reinit mysql config: %v", err)
+	}
+	return nil
+}
+
 func shutdownCmd(subFlags *flag.FlagSet, args []string) error {
 	waitTime := subFlags.Duration("wait_time", 5*time.Minute, "how long to wait for shutdown")
 	subFlags.Parse(args)
@@ -161,6 +175,8 @@ type command struct {
 var commands = []command{
 	{"init", initCmd, "[-wait_time=5m] [-init_db_sql_file=]",
 		"Initalizes the directory structure and starts mysqld"},
+	{"reinit_config", reinitConfigCmd, "",
+		"Reinitalizes my.cnf file with new server_id"},
 	{"teardown", teardownCmd, "[-wait_time=5m] [-force]",
 		"Shuts mysqld down, and removes the directory"},
 	{"start", startCmd, "[-wait_time=5m]",

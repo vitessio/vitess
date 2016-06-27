@@ -160,6 +160,9 @@ const (
 
 	// TabletActionBackup takes a db backup and stores it into BackupStorage
 	TabletActionBackup TabletAction = "Backup"
+
+	// TabletActionRestoreFromBackup wipes the local data and restores anew from backup.
+	TabletActionRestoreFromBackup TabletAction = "RestoreFromBackup"
 )
 
 // RPCAgent defines the interface implemented by the Agent for RPCs.
@@ -252,6 +255,8 @@ type RPCAgent interface {
 	// Backup / restore related methods
 
 	Backup(ctx context.Context, concurrency int, logger logutil.Logger) error
+
+	RestoreFromBackup(ctx context.Context, logger logutil.Logger) error
 
 	// RPC helpers
 	RPCWrap(ctx context.Context, name TabletAction, args, reply interface{}, f func() error) error
