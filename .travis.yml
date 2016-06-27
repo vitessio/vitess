@@ -28,6 +28,9 @@ addons:
       - time
       # Optional dependency. Without a running syslog daemon, Vitess will keep complaining that it could not log events and spam the logs.
       - rsyslog
+  sauce_connect:
+    username: "vitess"
+    access_key: "2397f603-c2c4-4897-a8ca-587cfd7dc8dd"
 # Cache directories of dependencies which are built by bootstrap.sh
 cache:
   directories:

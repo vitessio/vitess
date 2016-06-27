@@ -104,11 +104,24 @@ class TestVtctldWeb(unittest.TestCase):
     # run checks now
     utils.validate_topology()
 
-    os.environ['webdriver.chrome.driver'] = os.path.join(
-        os.environ['VTROOT'], 'dist')
-
-    # Only testing against Chrome for now
-    cls.driver = webdriver.Chrome()
+    if os.environ.get('CI') == 'true' and os.environ.get('TRAVIS') == 'true':
+      username = os.environ['SAUCE_USERNAME']
+      access_key = os.environ['SAUCE_ACCESS_KEY']
+      capabilities = {}
+      capabilities['tunnel-identifier'] = os.environ['TRAVIS_JOB_NUMBER']
+      capabilities['build'] = os.environ['TRAVIS_BUILD_NUMBER']
+      capabilities['tags'] = [os.environ['TRAVIS_PYTHON_VERSION'], 'CI']
+      capabilities['platform'] = 'Linux'
+      capabilities['browserName'] = 'chrome'
+      hub_url = '%s:%s@localhost:4445' % (username, access_key)
+      cls.driver = webdriver.Remote(
+          desired_capabilities=capabilities,
+          command_executor='http://%s/wd/hub' % hub_url)
+    else:
+      os.environ['webdriver.chrome.driver'] = os.path.join(
+          os.environ['VTROOT'], 'dist')
+      # Only testing against Chrome for now
+      cls.driver = webdriver.Chrome()
 
     cls.vtctl_addr = 'http://localhost:%d' % utils.vtctld.port
 
