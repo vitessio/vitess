@@ -314,22 +314,30 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 
 	// Phase 3: (optional) online clone.
 	if scw.online {
+		scw.wr.Logger().Infof("Online clone will be run now.")
 		// 3a: Wait for minimum number of source tablets (required for the diff).
 		if err := scw.waitForTablets(ctx, scw.sourceShards); err != nil {
 			return fmt.Errorf("waitForDestinationTablets(sourceShards) failed: %v", err)
 		}
 		// 3b: Clone the data.
+		start := time.Now()
 		if err := scw.clone(ctx, WorkerStateCloneOnline); err != nil {
 			return fmt.Errorf("online clone() failed: %v", err)
 		}
+		d := time.Since(start)
 		if err := checkDone(ctx); err != nil {
 			return err
 		}
 		// TODO(mberlin): Output diff report of the online clone.
+		// Round duration to second granularity to make it more readable.
+		scw.wr.Logger().Infof("Online clone finished after %v.", time.Duration(d.Nanoseconds()/time.Second.Nanoseconds()*time.Second.Nanoseconds()))
+	} else {
+		scw.wr.Logger().Infof("Online clone skipped because --online=false was specified.")
 	}
 
 	// Phase 4: offline clone.
 	if scw.offline {
+		scw.wr.Logger().Infof("Offline clone will be run now.")
 		if scw.online {
 			// Wait until the inserts from the online clone were propagated
 			// from the destination master to the rdonly tablets.
@@ -348,13 +356,19 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 		}
 
 		// 4b: Clone the data.
+		start := time.Now()
 		if err := scw.clone(ctx, WorkerStateCloneOffline); err != nil {
 			return fmt.Errorf("offline clone() failed: %v", err)
 		}
+		d := time.Since(start)
 		if err := checkDone(ctx); err != nil {
 			return err
 		}
 		// TODO(mberlin): Output diff report of the offline clone.
+		// Round duration to second granularity to make it more readable.
+		scw.wr.Logger().Infof("Offline clone finished after %v.", time.Duration(d.Nanoseconds()/time.Second.Nanoseconds()*time.Second.Nanoseconds()))
+	} else {
+		scw.wr.Logger().Infof("Offline clone skipped because --offline=false was specified.")
 	}
 
 	return nil
