@@ -110,7 +110,6 @@ class TestVtctldWeb(unittest.TestCase):
       capabilities = {}
       capabilities['tunnel-identifier'] = os.environ['TRAVIS_JOB_NUMBER']
       capabilities['build'] = os.environ['TRAVIS_BUILD_NUMBER']
-      capabilities['tags'] = [os.environ['TRAVIS_PYTHON_VERSION'], 'CI']
       capabilities['platform'] = 'Linux'
       capabilities['browserName'] = 'chrome'
       hub_url = '%s:%s@localhost:4445' % (username, access_key)
