@@ -588,6 +588,11 @@ class TestVtworkerWebinterface(unittest.TestCase):
         raise Exception('Should have thrown an HTTPError for the redirect.')
       except urllib2.HTTPError as e:
         self.assertEqual(e.code, 307)
+      # Wait for the Ping command to finish.
+      utils.poll_for_vars(
+          'vtworker', self.worker_port,
+          'WorkerState == done',
+          condition_fn=lambda v: v.get('WorkerState') == 'done')
       # Verify that the command logged something and its available at /status.
       status = urllib2.urlopen(worker_base_url + '/status').read()
       self.assertIn(
