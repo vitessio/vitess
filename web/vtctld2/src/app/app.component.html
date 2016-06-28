@@ -1,3 +1,15 @@
-<h1>
-  {{title}}
-</h1>
+<md-toolbar color="primary">
+  <span>{{title}}</span>
+</md-toolbar>
+
+<md-sidenav-layout class="flex-grow">
+  <md-sidenav #sidenav mode="side" opened="true">
+    <md-nav-list>
+      <a md-list-item href="#dashboard"><md-icon>dashboard</md-icon> Dashboard</a>
+      <a md-list-item href="#status"><md-icon>timeline</md-icon> Real-time Status</a>
+      <a md-list-item href="#schema"><md-icon>storage</md-icon> Schema Manager</a>
+      <a md-list-item href="#topo"><md-icon>folder</md-icon> Topology Browser</a>
+    </md-nav-list>
+  </md-sidenav>
+  <div class="content">Content</div>
+</md-sidenav-layout>

@@ -1,0 +1,25 @@
+html, body {
+  font-family: 'Roboto', sans-serif;
+  font-size: 14px;
+  height: 100%;
+  margin: 0px;
+  padding: 0px;
+}
+
+.flex-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.flex-grow {
+  flex-grow: 1;
+}
+
+.content {
+  padding: 10px;
+}
+
+md-nav-list md-icon {
+  color: #888;
+  margin-right: 10px;
+}
