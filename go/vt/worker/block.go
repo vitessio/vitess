@@ -35,7 +35,7 @@ func (bw *BlockWorker) StatusAsHTML() template.HTML {
 	result := "<b>Block Command</b> (blocking infinitely until context is cancelled)</br>\n"
 	result += "<b>State:</b> " + state.String() + "</br>\n"
 	switch state {
-	case WorkerStateCopy:
+	case WorkerStateDebugRunning:
 		result += "<b>Running (blocking)</b></br>\n"
 	case WorkerStateDone:
 		result += "<b>Success (unblocked)</b></br>\n"
@@ -51,7 +51,7 @@ func (bw *BlockWorker) StatusAsText() string {
 	result := "Block Command\n"
 	result += "State: " + state.String() + "\n"
 	switch state {
-	case WorkerStateCopy:
+	case WorkerStateDebugRunning:
 		result += "Running (blocking)\n"
 	case WorkerStateDone:
 		result += "Success (unblocked)\n"
@@ -75,7 +75,7 @@ func (bw *BlockWorker) Run(ctx context.Context) error {
 
 func (bw *BlockWorker) run(ctx context.Context) error {
 	// We reuse the Copy state to reflect that the blocking is in progress.
-	bw.SetState(WorkerStateCopy)
+	bw.SetState(WorkerStateDebugRunning)
 	bw.wr.Logger().Printf("Block command was called and will block infinitely until the RPC context is cancelled.\n")
 	select {
 	case <-ctx.Done():

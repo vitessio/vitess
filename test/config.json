@@ -45,7 +45,9 @@
 			"Manual": false,
 			"Shard": 4,
 			"RetryMax": 0,
-			"Tags": []
+			"Tags": [
+				"worker_test"
+			]
 		},
 		"encrypted_replication": {
 			"File": "encrypted_replication.py",
@@ -93,6 +95,17 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
+		},
+		"legacy_resharding": {
+			"File": "legacy_resharding.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"

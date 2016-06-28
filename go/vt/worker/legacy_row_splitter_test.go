@@ -4,6 +4,9 @@
 
 package worker
 
+// TODO(mberlin): Remove this file when SplitClone supports merge-sorting
+// primary key columns based on the MySQL collation.
+
 import (
 	"encoding/hex"
 	"fmt"

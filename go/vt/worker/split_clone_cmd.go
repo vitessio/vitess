@@ -50,19 +50,25 @@ const splitCloneHTML2 = `
   <p>Shard involved: {{.Keyspace}}/{{.Shard}}</p>
   <h1>Split Clone Action</h1>
     <form action="/Clones/SplitClone" method="post">
+      <LABEL for="online">Do Online Copy: (optional approximate copy, source and destination tablets will not be put out of serving, minimizes downtime during offline copy)</LABEL>
+        <INPUT type="checkbox" id="online" name="online" value="true"{{if .DefaultOnline}} checked{{end}}></BR>
+      <LABEL for="offline">Do Offline Copy: (exact copy at a specific GTID, required before shard migration, source and destination tablets will be put out of serving during copy)</LABEL>
+        <INPUT type="checkbox" id="offline" name="offline" value="true"{{if .DefaultOnline}} checked{{end}}></BR>
       <LABEL for="excludeTables">Exclude Tables: </LABEL>
         <INPUT type="text" id="excludeTables" name="excludeTables" value="moving.*"></BR>
       <LABEL for="strategy">Strategy: </LABEL>
         <INPUT type="text" id="strategy" name="strategy" value=""></BR>
       <LABEL for="sourceReaderCount">Source Reader Count: </LABEL>
         <INPUT type="text" id="sourceReaderCount" name="sourceReaderCount" value="{{.DefaultSourceReaderCount}}"></BR>
-      <LABEL for="destinationPackCount">Destination Pack Count: </LABEL>
-        <INPUT type="text" id="destinationPackCount" name="destinationPackCount" value="{{.DefaultDestinationPackCount}}"></BR>
+      <LABEL for="writeQueryMaxRows">Maximum Number of Rows per Write Query: </LABEL>
+        <INPUT type="text" id="writeQueryMaxRows" name="writeQueryMaxRows" value="{{.DefaultWriteQueryMaxRows}}"></BR>
+      <LABEL for="writeQueryMaxSize">Maximum Size (in bytes) per Write Query: </LABEL>
+        <INPUT type="text" id="writeQueryMaxSize" name="writeQueryMaxSize" value="{{.DefaultWriteQueryMaxSize}}"></BR>
       <LABEL for="minTableSizeForSplit">Minimun Table Size For Split: </LABEL>
         <INPUT type="text" id="minTableSizeForSplit" name="minTableSizeForSplit" value="{{.DefaultMinTableSizeForSplit}}"></BR>
       <LABEL for="destinationWriterCount">Destination Writer Count: </LABEL>
         <INPUT type="text" id="destinationWriterCount" name="destinationWriterCount" value="{{.DefaultDestinationWriterCount}}"></BR>
-      <LABEL for="minHealthyRdonlyTablets">Minimum Number of required healthy RDONLY tablets: </LABEL>
+      <LABEL for="minHealthyRdonlyTablets">Minimum Number of required healthy RDONLY tablets in the source and destination shard at start: </LABEL>
         <INPUT type="text" id="minHealthyRdonlyTablets" name="minHealthyRdonlyTablets" value="{{.DefaultMinHealthyRdonlyTablets}}"></BR>
       <LABEL for="maxTPS">Maximum Write Transactions/second (If non-zero, writes on the destination will be throttled. Unlimited by default.): </LABEL>
         <INPUT type="text" id="maxTPS" name="maxTPS" value="{{.DefaultMaxTPS}}"></BR>
@@ -85,13 +91,16 @@ var splitCloneTemplate = mustParseTemplate("splitClone", splitCloneHTML)
 var splitCloneTemplate2 = mustParseTemplate("splitClone2", splitCloneHTML2)
 
 func commandSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
+	online := subFlags.Bool("online", defaultOnline, "do online copy (optional approximate copy, source and destination tablets will not be put out of serving, minimizes downtime during offline copy)")
+	offline := subFlags.Bool("offline", defaultOffline, "do offline copy (exact copy at a specific GTID, required before shard migration, source and destination tablets will be put out of serving during copy)")
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'vtworker SplitClone --strategy=-help k/s' for more info")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
-	destinationPackCount := subFlags.Int("destination_pack_count", defaultDestinationPackCount, "number of packets to pack in one destination insert")
+	writeQueryMaxRows := subFlags.Int("write_query_max_rows", defaultWriteQueryMaxRows, "maximum number of rows per write query")
+	writeQueryMaxSize := subFlags.Int("write_query_max_size", defaultWriteQueryMaxSize, "maximum size (in bytes) per write query")
 	minTableSizeForSplit := subFlags.Int("min_table_size_for_split", defaultMinTableSizeForSplit, "tables bigger than this size on disk in bytes will be split into source_reader_count chunks if possible")
 	destinationWriterCount := subFlags.Int("destination_writer_count", defaultDestinationWriterCount, "number of concurrent RPCs to execute on the destination")
-	minHealthyRdonlyTablets := subFlags.Int("min_healthy_rdonly_tablets", defaultMinHealthyRdonlyTablets, "minimum number of healthy RDONLY tablets before taking out one")
+	minHealthyRdonlyTablets := subFlags.Int("min_healthy_rdonly_tablets", defaultMinHealthyRdonlyTablets, "minimum number of healthy RDONLY tablets in the source and destination shard at start")
 	maxTPS := subFlags.Int64("max_tps", defaultMaxTPS, "if non-zero, limit copy to maximum number of (write) transactions/second on the destination (unlimited by default)")
 	if err := subFlags.Parse(args); err != nil {
 		return nil, err
@@ -109,7 +118,7 @@ func commandSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagS
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	worker, err := NewSplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, *strategy, *sourceReaderCount, *destinationPackCount, uint64(*minTableSizeForSplit), *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS)
+	worker, err := NewSplitCloneWorker(wr, wi.cell, keyspace, shard, *online, *offline, excludeTableArray, *strategy, *sourceReaderCount, *writeQueryMaxRows, *writeQueryMaxSize, uint64(*minTableSizeForSplit), *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create split clone worker: %v", err)
 	}
@@ -186,8 +195,11 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 		result := make(map[string]interface{})
 		result["Keyspace"] = keyspace
 		result["Shard"] = shard
+		result["DefaultOnline"] = defaultOnline
+		result["DefaultOffline"] = defaultOffline
 		result["DefaultSourceReaderCount"] = fmt.Sprintf("%v", defaultSourceReaderCount)
-		result["DefaultDestinationPackCount"] = fmt.Sprintf("%v", defaultDestinationPackCount)
+		result["DefaultWriteQueryMaxRows"] = fmt.Sprintf("%v", defaultWriteQueryMaxRows)
+		result["DefaultWriteQueryMaxSize"] = fmt.Sprintf("%v", defaultWriteQueryMaxSize)
 		result["DefaultMinTableSizeForSplit"] = fmt.Sprintf("%v", defaultMinTableSizeForSplit)
 		result["DefaultDestinationWriterCount"] = fmt.Sprintf("%v", defaultDestinationWriterCount)
 		result["DefaultMinHealthyRdonlyTablets"] = fmt.Sprintf("%v", defaultMinHealthyRdonlyTablets)
@@ -196,7 +208,10 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 	}
 
 	// get other parameters
-	destinationPackCountStr := r.FormValue("destinationPackCount")
+	onlineStr := r.FormValue("online")
+	online := onlineStr == "true"
+	offlineStr := r.FormValue("offline")
+	offline := offlineStr == "true"
 	excludeTables := r.FormValue("excludeTables")
 	var excludeTableArray []string
 	if excludeTables != "" {
@@ -207,9 +222,15 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot parse sourceReaderCount: %s", err)
 	}
-	destinationPackCount, err := strconv.ParseInt(destinationPackCountStr, 0, 64)
+	writeQueryMaxRowsStr := r.FormValue("writeQueryMaxRows")
+	writeQueryMaxRows, err := strconv.ParseInt(writeQueryMaxRowsStr, 0, 64)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse destinationPackCount: %s", err)
+		return nil, nil, nil, fmt.Errorf("cannot parse writeQueryMaxRows: %s", err)
+	}
+	writeQueryMaxSizeStr := r.FormValue("writeQueryMaxSize")
+	writeQueryMaxSize, err := strconv.ParseInt(writeQueryMaxSizeStr, 0, 64)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("cannot parse writeQueryMaxSize: %s", err)
 	}
 	minTableSizeForSplitStr := r.FormValue("minTableSizeForSplit")
 	minTableSizeForSplit, err := strconv.ParseInt(minTableSizeForSplitStr, 0, 64)
@@ -233,7 +254,7 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 	}
 
 	// start the clone job
-	wrk, err := NewSplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, strategy, int(sourceReaderCount), int(destinationPackCount), uint64(minTableSizeForSplit), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS)
+	wrk, err := NewSplitCloneWorker(wr, wi.cell, keyspace, shard, online, offline, excludeTableArray, strategy, int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize), uint64(minTableSizeForSplit), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot create worker: %v", err)
 	}
@@ -243,6 +264,6 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 func init() {
 	AddCommand("Clones", Command{"SplitClone",
 		commandSplitClone, interactiveSplitClone,
-		"[--exclude_tables=''] [--strategy=''] <keyspace/shard>",
+		"[--online=false] [--offline=false] [--exclude_tables=''] [--strategy=''] <keyspace/shard>",
 		"Replicates the data and creates configuration for a horizontal split."})
 }

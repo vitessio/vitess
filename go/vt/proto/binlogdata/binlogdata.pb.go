@@ -34,7 +34,9 @@ var _ = math.Inf
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the proto package it is being compiled against.
-const _ = proto.ProtoPackageIsVersion1
+// A compilation error at this line likely means your copy of the
+// proto package needs to be updated.
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type BinlogTransaction_Statement_Category int32
 
@@ -321,6 +323,8 @@ func init() {
 	proto.RegisterEnum("binlogdata.BinlogTransaction_Statement_Category", BinlogTransaction_Statement_Category_name, BinlogTransaction_Statement_Category_value)
 	proto.RegisterEnum("binlogdata.StreamEvent_Category", StreamEvent_Category_name, StreamEvent_Category_value)
 }
+
+func init() { proto.RegisterFile("binlogdata.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
 	// 664 bytes of a gzipped FileDescriptorProto

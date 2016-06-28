@@ -474,7 +474,7 @@ func agentRPCTestIgnoreHealthErrorPanic(ctx context.Context, t *testing.T, clien
 
 var testReloadSchemaCalled = false
 
-func (fra *fakeRPCAgent) ReloadSchema(ctx context.Context) {
+func (fra *fakeRPCAgent) ReloadSchema(ctx context.Context, waitPosition string) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -482,10 +482,11 @@ func (fra *fakeRPCAgent) ReloadSchema(ctx context.Context) {
 		fra.t.Errorf("ReloadSchema called multiple times?")
 	}
 	testReloadSchemaCalled = true
+	return nil
 }
 
 func agentRPCTestReloadSchema(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.ReloadSchema(ctx, tablet)
+	err := client.ReloadSchema(ctx, tablet, "")
 	if err != nil {
 		t.Errorf("ReloadSchema failed: %v", err)
 	}
@@ -495,8 +496,8 @@ func agentRPCTestReloadSchema(ctx context.Context, t *testing.T, client tmclient
 }
 
 func agentRPCTestReloadSchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.ReloadSchema(ctx, tablet)
-	expectRPCWrapLockActionPanic(t, err)
+	err := client.ReloadSchema(ctx, tablet, "")
+	expectRPCWrapPanic(t, err)
 }
 
 var testPreflightSchema = []string{"change table add table cloth"}

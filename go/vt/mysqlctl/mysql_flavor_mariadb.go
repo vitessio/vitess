@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
@@ -28,7 +30,7 @@ func (*mariaDB10) VersionMatch(version string) bool {
 
 // MasterPosition implements MysqlFlavor.MasterPosition().
 func (flavor *mariaDB10) MasterPosition(mysqld *Mysqld) (rp replication.Position, err error) {
-	qr, err := mysqld.FetchSuperQuery("SELECT @@GLOBAL.gtid_binlog_pos")
+	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SELECT @@GLOBAL.gtid_binlog_pos")
 	if err != nil {
 		return rp, err
 	}
@@ -40,7 +42,7 @@ func (flavor *mariaDB10) MasterPosition(mysqld *Mysqld) (rp replication.Position
 
 // SlaveStatus implements MysqlFlavor.SlaveStatus().
 func (flavor *mariaDB10) SlaveStatus(mysqld *Mysqld) (replication.Status, error) {
-	fields, err := mysqld.fetchSuperQueryMap("SHOW ALL SLAVES STATUS")
+	fields, err := mysqld.fetchSuperQueryMap(context.TODO(), "SHOW ALL SLAVES STATUS")
 	if err != nil {
 		return replication.Status{}, err
 	}
@@ -62,18 +64,22 @@ func (flavor *mariaDB10) SlaveStatus(mysqld *Mysqld) (replication.Status, error)
 //
 // Note: Unlike MASTER_POS_WAIT(), MASTER_GTID_WAIT() will continue waiting even
 // if the slave thread stops. If that is a problem, we'll have to change this.
-func (*mariaDB10) WaitMasterPos(mysqld *Mysqld, targetPos replication.Position, waitTimeout time.Duration) error {
+func (*mariaDB10) WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos replication.Position) error {
 	var query string
-	if waitTimeout == 0 {
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout := deadline.Sub(time.Now())
+		if timeout <= 0 {
+			return fmt.Errorf("timed out waiting for position %v", targetPos)
+		}
+		query = fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s', %.6f)", targetPos, timeout.Seconds())
+	} else {
 		// Omit the timeout to wait indefinitely. In MariaDB, a timeout of 0 means
 		// return immediately.
 		query = fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s')", targetPos)
-	} else {
-		query = fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s', %.6f)", targetPos, waitTimeout.Seconds())
 	}
 
 	log.Infof("Waiting for minimum replication position with query: %v", query)
-	qr, err := mysqld.FetchSuperQuery(query)
+	qr, err := mysqld.FetchSuperQuery(ctx, query)
 	if err != nil {
 		return fmt.Errorf("MASTER_GTID_WAIT() failed: %v", err)
 	}

@@ -20,7 +20,9 @@ import (
 // reached.
 // Should be called under RPCWrapLock.
 func (agent *ActionAgent) WaitBlpPosition(ctx context.Context, blpPosition *tabletmanagerdatapb.BlpPosition, waitTime time.Duration) error {
-	return mysqlctl.WaitBlpPosition(agent.MysqlDaemon, binlogplayer.QueryBlpCheckpoint(blpPosition.Uid), blpPosition.Position, waitTime)
+	waitCtx, cancel := context.WithTimeout(ctx, waitTime)
+	defer cancel()
+	return mysqlctl.WaitBlpPosition(waitCtx, agent.MysqlDaemon, binlogplayer.QueryBlpCheckpoint(blpPosition.Uid), blpPosition.Position)
 }
 
 // StopBlp stops the binlog players, and return their positions.

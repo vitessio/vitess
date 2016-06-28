@@ -342,9 +342,10 @@ def zk_cat_json(path):
 # use as follow:
 #    timeout = 10
 #    while True:
-#      if done:
+#      <step>
+#      if <done>:
 #        break
-#      timeout = utils.wait_step('condition', timeout)
+#      timeout = utils.wait_step('description of condition', timeout)
 def wait_step(msg, timeout, sleep_time=0.1):
   timeout -= sleep_time
   if timeout <= 0:
@@ -1206,41 +1207,3 @@ def uint64_to_hex(integer):
     raise ValueError('Integer out of range: %d' % integer)
   return '%016X' % integer
 
-
-def get_shard_name(shard, num_shards):
-  """Returns an appropriate shard name, as a string.
-
-  A single shard name is simply 0; otherwise it will attempt to split up 0x100
-  into multiple shards.  For example, shard 1 of 2 is -80, shard 2 of 2 is 80-.
-
-  Args:
-    shard: The integer shard index (zero based)
-    num_shards: Total number of shards (int)
-
-  Returns:
-    The shard name as a string.
-  """
-
-  if num_shards == 1:
-    return '0'
-
-  shard_width = 0x100 / num_shards
-
-  if shard == 0:
-    return '-%02x' % shard_width
-  elif shard == num_shards - 1:
-    return '%02x-' % (shard * shard_width)
-  else:
-    return '%02x-%02x' % (shard * shard_width, (shard + 1) * shard_width)
-
-
-def get_shard_names(num_shards):
-  """Create a generator of shard names.
-
-  Args:
-    num_shards: Total number of shards (int)
-
-  Returns:
-    The shard name generator.
-  """
-  return (get_shard_name(x, num_shards) for x in xrange(num_shards))

@@ -7,7 +7,8 @@ package mysqlctl
 import (
 	"fmt"
 	"os"
-	"time"
+
+	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqldb"
@@ -71,7 +72,7 @@ type MysqlFlavor interface {
 
 	// WaitMasterPos waits until slave replication reaches at
 	// least targetPos.
-	WaitMasterPos(mysqld *Mysqld, targetPos replication.Position, waitTimeout time.Duration) error
+	WaitMasterPos(ctx context.Context, mysqld *Mysqld, targetPos replication.Position) error
 
 	// EnableBinlogPlayback prepares the server to play back
 	// events from a binlog stream.  Whatever it does for a given
@@ -119,7 +120,7 @@ func (mysqld *Mysqld) detectFlavor() (MysqlFlavor, error) {
 
 	// If no environment variable set, fall back to auto-detect.
 	log.Infof("MYSQL_FLAVOR empty or unset, attempting to auto-detect...")
-	qr, err := mysqld.FetchSuperQuery("SELECT VERSION()")
+	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SELECT VERSION()")
 	if err != nil {
 		return nil, fmt.Errorf("couldn't SELECT VERSION(): %v", err)
 	}

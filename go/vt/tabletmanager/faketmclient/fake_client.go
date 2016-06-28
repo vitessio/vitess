@@ -115,7 +115,7 @@ func (client *FakeTabletManagerClient) IgnoreHealthError(ctx context.Context, ta
 }
 
 // ReloadSchema is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet) error {
+func (client *FakeTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
 	return nil
 }
 

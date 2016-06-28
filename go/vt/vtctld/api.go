@@ -3,19 +3,28 @@ package vtctld
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"reflect"
 	"strings"
+	"time"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/logutil"
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 	"github.com/youtube/vitess/go/vt/schemamanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/wrangler"
+)
+
+var (
+	localCell = flag.String("cell", "", "cell to use")
 )
 
 // This file implements a REST-style API for the vtctld web interface.
@@ -86,8 +95,18 @@ func unmarshalRequest(r *http.Request, v interface{}) error {
 	return json.Unmarshal(data, v)
 }
 
+func addSrvkeyspace(ctx context.Context, ts topo.Server, cell, keyspace string, srvKeyspaces map[string]interface{}) error {
+	srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
+	if err != nil {
+		return fmt.Errorf("invalid keyspace name: %q ", keyspace)
+	}
+	srvKeyspaces[keyspace] = srvKeyspace
+	return nil
+}
+
 func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 	tabletHealthCache := newTabletHealthCache(ts)
+	tmClient := tmclient.NewTabletManagerClient()
 
 	// Cells
 	handleCollection("cells", func(r *http.Request) (interface{}, error) {
@@ -151,6 +170,50 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 
 		// Get the shard record.
 		return ts.GetShard(ctx, keyspace, shard)
+	})
+	//SrvKeyspace
+	handleCollection("srv_keyspace", func(r *http.Request) (interface{}, error) {
+		keyspacePath := getItemPath(r.URL.Path)
+		parts := strings.SplitN(keyspacePath, "/", 2)
+
+		//request was incorrectly formatted
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid srvkeyspace path: %q  expected path: /srv_keyspace/<cell>/<keyspace>", keyspacePath)
+		}
+
+		cell := parts[0]
+		keyspace := parts[1]
+
+		if cell == "local" {
+			if *localCell == "" {
+				return nil, fmt.Errorf("local cell requested, but not specified. Please set with -cell flag")
+			}
+			cell = *localCell
+		}
+
+		//If a keyspace is provided then return the specified srvkeyspace
+		if keyspace != "" {
+			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
+			if err != nil {
+				return nil, fmt.Errorf("Can't get server keyspace: %v", err)
+			}
+			return srvKeyspace, nil
+		}
+
+		//Else return the srvKeyspace from all keyspaces
+		srvKeyspaces := make(map[string]interface{})
+		keyspaceNamesList, err := ts.GetSrvKeyspaceNames(ctx, cell)
+		if err != nil {
+			return nil, fmt.Errorf("can't get list of SrvKeyspaceNames for cell %q: GetSrvKeyspaceNames returned: %v", cell, err)
+		}
+		for _, keyspaceName := range keyspaceNamesList {
+			err := addSrvkeyspace(ctx, ts, cell, keyspaceName, srvKeyspaces)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return srvKeyspaces, nil
+
 	})
 
 	// Tablets
@@ -216,15 +279,25 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 
 	// Schema Change
 	http.HandleFunc(apiPrefix+"schema/apply", func(w http.ResponseWriter, r *http.Request) {
-		req := struct{ Keyspace, SQL string }{}
+		req := struct {
+			Keyspace, SQL       string
+			SlaveTimeoutSeconds int
+		}{}
 		if err := unmarshalRequest(r, &req); err != nil {
 			httpErrorf(w, r, "can't unmarshal request: %v", err)
 			return
 		}
+		if req.SlaveTimeoutSeconds <= 0 {
+			req.SlaveTimeoutSeconds = 10
+		}
+
+		logger := logutil.NewCallbackLogger(func(ev *logutilpb.Event) {
+			w.Write([]byte(logutil.EventString(ev)))
+		})
+		wr := wrangler.New(logger, ts, tmClient)
 
 		executor := schemamanager.NewTabletExecutor(
-			tmclient.NewTabletManagerClient(),
-			ts)
+			wr, time.Duration(req.SlaveTimeoutSeconds)*time.Second)
 
 		schemamanager.Run(ctx,
 			schemamanager.NewUIController(req.SQL, req.Keyspace, w), executor)

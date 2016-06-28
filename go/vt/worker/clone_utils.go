@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -32,24 +33,24 @@ import (
 // Does a topo lookup for a single shard, and returns:
 //	1. Slice of all tablet aliases for the shard.
 //	2. Map of tablet alias : tablet record for all tablets.
-func resolveReloadTabletsForShard(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (reloadAliases []*topodatapb.TabletAlias, reloadTablets map[topodatapb.TabletAlias]*topo.TabletInfo, err error) {
+func resolveRefreshTabletsForShard(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (refreshAliases []*topodatapb.TabletAlias, refreshTablets map[topodatapb.TabletAlias]*topo.TabletInfo, err error) {
 	// Keep a long timeout, because we really don't want the copying to succeed, and then the worker to fail at the end.
 	shortCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	reloadAliases, err = wr.TopoServer().FindAllTabletAliasesInShard(shortCtx, keyspace, shard)
+	refreshAliases, err = wr.TopoServer().FindAllTabletAliasesInShard(shortCtx, keyspace, shard)
 	cancel()
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot find all reload target tablets in %v/%v: %v", keyspace, shard, err)
+		return nil, nil, fmt.Errorf("cannot find all refresh target tablets in %v/%v: %v", keyspace, shard, err)
 	}
-	wr.Logger().Infof("Found %v reload target aliases in shard %v/%v", len(reloadAliases), keyspace, shard)
+	wr.Logger().Infof("Found %v refresh target aliases in shard %v/%v", len(refreshAliases), keyspace, shard)
 
 	shortCtx, cancel = context.WithTimeout(ctx, 5*time.Minute)
-	reloadTablets, err = wr.TopoServer().GetTabletMap(shortCtx, reloadAliases)
+	refreshTablets, err = wr.TopoServer().GetTabletMap(shortCtx, refreshAliases)
 	cancel()
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot read all reload target tablets in %v/%v: %v",
+		return nil, nil, fmt.Errorf("cannot read all refresh target tablets in %v/%v: %v",
 			keyspace, shard, err)
 	}
-	return reloadAliases, reloadTablets, nil
+	return refreshAliases, refreshTablets, nil
 }
 
 var errExtract = regexp.MustCompile(`\(errno (\d+)\)`)
@@ -72,7 +73,7 @@ func runSQLCommands(ctx context.Context, wr *wrangler.Wrangler, healthCheck disc
 			return fmt.Errorf("fillStringTemplate failed: %v", err)
 		}
 
-		executor := newExecutor(wr, healthCheck, nil, keyspace, shard, 0 /* threadID */)
+		executor := newExecutor(wr, healthCheck, nil /* throttler */, keyspace, shard, 0 /* threadID */)
 		if err := executor.fetchWithRetries(ctx, command); err != nil {
 			return err
 		}
@@ -88,12 +89,13 @@ func runSQLCommands(ctx context.Context, wr *wrangler.Wrangler, healthCheck disc
 // "", "value1", "value2", ""
 // A non-split tablet will just return:
 // "", ""
-func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, td *tabletmanagerdatapb.TableDefinition, minTableSizeForSplit uint64, sourceReaderCount int) ([]string, error) {
+func FindChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodatapb.Tablet, td *tabletmanagerdatapb.TableDefinition, minTableSizeForSplit uint64, sourceReaderCount int) ([]string, error) {
 	result := []string{"", ""}
 
 	// eliminate a few cases we don't split tables for
 	if len(td.PrimaryKeyColumns) == 0 {
 		// no primary key, what can we do?
+		// TODO(mberlin): Return an error here.
 		return result, nil
 	}
 	if td.DataLength < minTableSizeForSplit {
@@ -102,15 +104,16 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 	}
 
 	// get the min and max of the leading column of the primary key
-	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", td.PrimaryKeyColumns[0], td.PrimaryKeyColumns[0], ti.DbName(), td.Name)
+	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", td.PrimaryKeyColumns[0], td.PrimaryKeyColumns[0], topoproto.TabletDbName(tablet), td.Name)
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(shortCtx, ti.Tablet, query, 1)
+	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(shortCtx, tablet, query, 1)
 	cancel()
 	if err != nil {
 		return nil, fmt.Errorf("ExecuteFetchAsApp: %v", err)
 	}
 	if len(qr.Rows) != 1 {
 		wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot get min and max", td.Name)
+		// TODO(mberlin): Return an error here?
 		return result, nil
 	}
 
@@ -120,8 +123,11 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 	// Value has a full type.
 	l0 := qr.Rows[0].Lengths[0]
 	l1 := qr.Rows[0].Lengths[1]
+	// TODO(mberlin): Convert to sqltypes.Result here first to simplify treating
+	// NULL results.
 	if l0 < 0 || l1 < 0 {
 		wr.Logger().Infof("Not splitting table %v into multiple chunks, min or max is NULL: %v", td.Name, qr.Rows[0])
+		// TODO(mberlin): Return an error here?
 		return result, nil
 	}
 	minValue := qr.Rows[0].Values[:l0]
@@ -212,6 +218,7 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 func buildSQLFromChunks(wr *wrangler.Wrangler, td *tabletmanagerdatapb.TableDefinition, chunks []string, chunkIndex int, source string) string {
 	selectSQL := "SELECT " + strings.Join(td.Columns, ", ") + " FROM " + td.Name
 	if chunks[chunkIndex] != "" || chunks[chunkIndex+1] != "" {
+		// TODO(mberlin): Move logging out into the actual code which does the reading.
 		wr.Logger().Infof("Starting to stream all data from tablet %v table %v between '%v' and '%v'", source, td.Name, chunks[chunkIndex], chunks[chunkIndex+1])
 		clauses := make([]string, 0, 2)
 		if chunks[chunkIndex] != "" {

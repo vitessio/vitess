@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
@@ -231,7 +233,7 @@ func TestSchemaReload(t *testing.T) {
 		_, _ = conn.ExecuteFetch("drop table vitess_temp", 10, false)
 		conn.Close()
 	}()
-	framework.Server.ReloadSchema()
+	framework.Server.ReloadSchema(context.Background())
 	client := framework.NewClient()
 	waitTime := 50 * time.Millisecond
 	for i := 0; i < 10; i++ {

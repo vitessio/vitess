@@ -120,7 +120,7 @@ docker_bootstrap:
 	for i in $(DOCKER_IMAGES); do echo "image: $$i"; docker/bootstrap/build.sh $$i || exit 1; done
 
 docker_bootstrap_test:
-	for i in $(DOCKER_IMAGES_FOR_TEST); do echo "image: $$i"; ./test.go -pull=false -flavor=$$i || exit 1; done
+	flavors='$(DOCKER_IMAGES_FOR_TEST)' && ./test.go -pull=false -parallel=4 -flavor=$${flavors// /,}
 
 docker_bootstrap_push:
 	for i in $(DOCKER_IMAGES); do echo "image: $$i"; docker push vitess/bootstrap:$$i || exit 1; done

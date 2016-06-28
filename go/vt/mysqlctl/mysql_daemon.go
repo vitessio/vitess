@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"time"
 
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -57,7 +56,7 @@ type MysqlDaemon interface {
 	// change the read_only state of the server.
 	DemoteMaster() (replication.Position, error)
 
-	WaitMasterPos(replication.Position, time.Duration) error
+	WaitMasterPos(context.Context, replication.Position) error
 
 	// PromoteSlave makes the slave the new master. It will not change
 	// the read_only state of the server.
@@ -69,15 +68,15 @@ type MysqlDaemon interface {
 	ApplySchemaChange(dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 
 	// GetAppConnection returns a app connection to be able to talk to the database.
-	GetAppConnection() (dbconnpool.PoolConnection, error)
+	GetAppConnection(ctx context.Context) (dbconnpool.PoolConnection, error)
 	// GetDbaConnection returns a dba connection.
 	GetDbaConnection() (*dbconnpool.DBConnection, error)
 
 	// ExecuteSuperQueryList executes a list of queries, no result
-	ExecuteSuperQueryList(queryList []string) error
+	ExecuteSuperQueryList(ctx context.Context, queryList []string) error
 
 	// FetchSuperQuery executes one query, returns the result
-	FetchSuperQuery(query string) (*sqltypes.Result, error)
+	FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error)
 
 	// NewSlaveConnection returns a SlaveConnection to the database.
 	NewSlaveConnection() (*SlaveConnection, error)
@@ -328,7 +327,7 @@ func (fmd *FakeMysqlDaemon) DemoteMaster() (replication.Position, error) {
 }
 
 // WaitMasterPos is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) WaitMasterPos(pos replication.Position, waitTimeout time.Duration) error {
+func (fmd *FakeMysqlDaemon) WaitMasterPos(_ context.Context, pos replication.Position) error {
 	if reflect.DeepEqual(fmd.WaitMasterPosition, pos) {
 		return nil
 	}
@@ -341,7 +340,7 @@ func (fmd *FakeMysqlDaemon) PromoteSlave(hookExtraEnv map[string]string) (replic
 }
 
 // ExecuteSuperQueryList is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(queryList []string) error {
+func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queryList []string) error {
 	for _, query := range queryList {
 		// test we still have a query to compare
 		if fmd.ExpectedExecuteSuperQueryCurrent >= len(fmd.ExpectedExecuteSuperQueryList) {
@@ -375,7 +374,7 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(queryList []string) error {
 }
 
 // FetchSuperQuery returns the results from the map, if any
-func (fmd *FakeMysqlDaemon) FetchSuperQuery(query string) (*sqltypes.Result, error) {
+func (fmd *FakeMysqlDaemon) FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error) {
 	if fmd.FetchSuperQueryMap == nil {
 		return nil, fmt.Errorf("unexpected query: %v", query)
 	}
@@ -451,7 +450,7 @@ func (fmd *FakeMysqlDaemon) ApplySchemaChange(dbName string, change *tmutils.Sch
 }
 
 // GetAppConnection is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetAppConnection() (dbconnpool.PoolConnection, error) {
+func (fmd *FakeMysqlDaemon) GetAppConnection(ctx context.Context) (dbconnpool.PoolConnection, error) {
 	if fmd.DbAppConnectionFactory == nil {
 		return nil, fmt.Errorf("no DbAppConnectionFactory set in this FakeMysqlDaemon")
 	}

@@ -1,7 +1,12 @@
+// Copyright 2016, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package worker
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -76,7 +81,11 @@ func (f *FakePoolConnection) addExpectedExecuteFetchAtIndex(index int, entry Exp
 		f.expectedExecuteFetch = append(f.expectedExecuteFetch, entry)
 	} else {
 		// Grow the slice by one element.
-		f.expectedExecuteFetch = f.expectedExecuteFetch[0 : len(f.expectedExecuteFetch)+1]
+		if cap(f.expectedExecuteFetch) == len(f.expectedExecuteFetch) {
+			f.expectedExecuteFetch = append(f.expectedExecuteFetch, make([]ExpectedExecuteFetch, 1)...)
+		} else {
+			f.expectedExecuteFetch = f.expectedExecuteFetch[0 : len(f.expectedExecuteFetch)+1]
+		}
 		// Use copy to move the upper part of the slice out of the way and open a hole.
 		copy(f.expectedExecuteFetch[index+1:], f.expectedExecuteFetch[index:])
 		// Store the new value.
@@ -107,10 +116,17 @@ func (f *FakePoolConnection) getEntry(index int) *ExpectedExecuteFetch {
 	defer f.mu.Unlock()
 
 	if index < 0 || index >= len(f.expectedExecuteFetch) {
-		return nil
+		panic(fmt.Sprintf("index out of range. current length: %v", len(f.expectedExecuteFetch)))
 	}
 
 	return &f.expectedExecuteFetch[index]
+}
+
+func (f *FakePoolConnection) deleteAllEntries() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.expectedExecuteFetch = make([]ExpectedExecuteFetch, 0)
 }
 
 func (f *FakePoolConnection) deleteAllEntriesAfterIndex(index int) {
@@ -118,7 +134,7 @@ func (f *FakePoolConnection) deleteAllEntriesAfterIndex(index int) {
 	defer f.mu.Unlock()
 
 	if index < 0 || index >= len(f.expectedExecuteFetch) {
-		return
+		panic(fmt.Sprintf("index out of range. current length: %v", len(f.expectedExecuteFetch)))
 	}
 
 	if index+1 < f.expectedExecuteFetchIndex {

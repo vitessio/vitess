@@ -6,11 +6,18 @@ package schemamanager
 
 import (
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	"github.com/youtube/vitess/go/vt/wrangler"
+)
+
+var (
+	testWaitSlaveTimeout = 10 * time.Second
 )
 
 func TestTabletExecutorOpen(t *testing.T) {
@@ -31,9 +38,8 @@ func TestTabletExecutorOpen(t *testing.T) {
 func TestTabletExecutorOpenWithEmptyMasterAlias(t *testing.T) {
 	ft := newFakeTopo()
 	ft.Impl.(*fakeTopo).WithEmptyMasterAlias = true
-	executor := NewTabletExecutor(
-		newFakeTabletManagerClient(),
-		ft)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ft, newFakeTabletManagerClient())
+	executor := NewTabletExecutor(wr, testWaitSlaveTimeout)
 	ctx := context.Background()
 
 	if err := executor.Open(ctx, "test_keyspace"); err == nil {
@@ -68,9 +74,8 @@ func TestTabletExecutorValidate(t *testing.T) {
 		},
 	})
 
-	executor := NewTabletExecutor(
-		fakeTmc,
-		newFakeTopo())
+	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(), fakeTmc)
+	executor := NewTabletExecutor(wr, testWaitSlaveTimeout)
 	ctx := context.Background()
 
 	sqls := []string{

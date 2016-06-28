@@ -170,6 +170,10 @@ message IgnoreHealthErrorResponse {
 }
 
 message ReloadSchemaRequest {
+  // wait_position allows scheduling a schema reload to occur after a
+  // given DDL has replicated to this slave, by specifying a replication
+  // position to wait for. Leave empty to trigger the reload immediately.
+  string wait_position = 1;
 }
 
 message ReloadSchemaResponse {

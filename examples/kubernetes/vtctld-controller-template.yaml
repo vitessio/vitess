@@ -40,6 +40,7 @@ spec:
               mkdir -p $VTDATAROOT/tmp &&
               chown -R vitess /vt &&
               su -p -c "/vt/bin/vtctld
+              -cell {{cell}}
               -web_dir $VTTOP/web/vtctld
               -log_dir $VTDATAROOT/tmp
               -alsologtostderr
@@ -48,6 +49,7 @@ spec:
               -service_map 'grpc-vtctl'
               -topo_implementation etcd
               -etcd_global_addrs http://etcd-global:4001
+              {{test_flags}}
               {{backup_flags}}" vitess
       volumes:
         - name: syslog

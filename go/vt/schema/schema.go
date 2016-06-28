@@ -8,6 +8,8 @@ package schema
 // It contains a data structure that's shared between sqlparser & tabletserver
 
 import (
+	"fmt"
+
 	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
@@ -159,4 +161,9 @@ func (idx *Index) FindDataColumn(name string) int {
 		}
 	}
 	return -1
+}
+
+// String() pretty-prints TableColumn into a string.
+func (c *TableColumn) String() string {
+	return fmt.Sprintf("{Name: '%v', Type: %v}", c.Name, c.Type)
 }

@@ -6,11 +6,8 @@ namespace Vitess\Proto\Tabletmanagerdata {
 
   class PreflightSchemaResponse extends \DrSlump\Protobuf\Message {
 
-    /**  @var \Vitess\Proto\Tabletmanagerdata\SchemaDefinition */
-    public $before_schema = null;
-    
-    /**  @var \Vitess\Proto\Tabletmanagerdata\SchemaDefinition */
-    public $after_schema = null;
+    /**  @var \Vitess\Proto\Tabletmanagerdata\SchemaChangeResult[]  */
+    public $change_results = array();
     
 
     /** @var \Closure[] */
@@ -20,22 +17,13 @@ namespace Vitess\Proto\Tabletmanagerdata {
     {
       $descriptor = new \DrSlump\Protobuf\Descriptor(__CLASS__, 'tabletmanagerdata.PreflightSchemaResponse');
 
-      // OPTIONAL MESSAGE before_schema = 1
+      // REPEATED MESSAGE change_results = 1
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 1;
-      $f->name      = "before_schema";
+      $f->name      = "change_results";
       $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
-      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
-      $f->reference = '\Vitess\Proto\Tabletmanagerdata\SchemaDefinition';
-      $descriptor->addField($f);
-
-      // OPTIONAL MESSAGE after_schema = 2
-      $f = new \DrSlump\Protobuf\Field();
-      $f->number    = 2;
-      $f->name      = "after_schema";
-      $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
-      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
-      $f->reference = '\Vitess\Proto\Tabletmanagerdata\SchemaDefinition';
+      $f->rule      = \DrSlump\Protobuf::RULE_REPEATED;
+      $f->reference = '\Vitess\Proto\Tabletmanagerdata\SchemaChangeResult';
       $descriptor->addField($f);
 
       foreach (self::$__extensions as $cb) {
@@ -46,77 +34,60 @@ namespace Vitess\Proto\Tabletmanagerdata {
     }
 
     /**
-     * Check if <before_schema> has a value
+     * Check if <change_results> has a value
      *
      * @return boolean
      */
-    public function hasBeforeSchema(){
+    public function hasChangeResults(){
       return $this->_has(1);
     }
     
     /**
-     * Clear <before_schema> value
+     * Clear <change_results> value
      *
      * @return \Vitess\Proto\Tabletmanagerdata\PreflightSchemaResponse
      */
-    public function clearBeforeSchema(){
+    public function clearChangeResults(){
       return $this->_clear(1);
     }
     
     /**
-     * Get <before_schema> value
+     * Get <change_results> value
      *
-     * @return \Vitess\Proto\Tabletmanagerdata\SchemaDefinition
+     * @param int $idx
+     * @return \Vitess\Proto\Tabletmanagerdata\SchemaChangeResult
      */
-    public function getBeforeSchema(){
-      return $this->_get(1);
+    public function getChangeResults($idx = NULL){
+      return $this->_get(1, $idx);
     }
     
     /**
-     * Set <before_schema> value
+     * Set <change_results> value
      *
-     * @param \Vitess\Proto\Tabletmanagerdata\SchemaDefinition $value
+     * @param \Vitess\Proto\Tabletmanagerdata\SchemaChangeResult $value
      * @return \Vitess\Proto\Tabletmanagerdata\PreflightSchemaResponse
      */
-    public function setBeforeSchema(\Vitess\Proto\Tabletmanagerdata\SchemaDefinition $value){
-      return $this->_set(1, $value);
+    public function setChangeResults(\Vitess\Proto\Tabletmanagerdata\SchemaChangeResult $value, $idx = NULL){
+      return $this->_set(1, $value, $idx);
     }
     
     /**
-     * Check if <after_schema> has a value
+     * Get all elements of <change_results>
      *
-     * @return boolean
+     * @return \Vitess\Proto\Tabletmanagerdata\SchemaChangeResult[]
      */
-    public function hasAfterSchema(){
-      return $this->_has(2);
+    public function getChangeResultsList(){
+     return $this->_get(1);
     }
     
     /**
-     * Clear <after_schema> value
+     * Add a new element to <change_results>
      *
+     * @param \Vitess\Proto\Tabletmanagerdata\SchemaChangeResult $value
      * @return \Vitess\Proto\Tabletmanagerdata\PreflightSchemaResponse
      */
-    public function clearAfterSchema(){
-      return $this->_clear(2);
-    }
-    
-    /**
-     * Get <after_schema> value
-     *
-     * @return \Vitess\Proto\Tabletmanagerdata\SchemaDefinition
-     */
-    public function getAfterSchema(){
-      return $this->_get(2);
-    }
-    
-    /**
-     * Set <after_schema> value
-     *
-     * @param \Vitess\Proto\Tabletmanagerdata\SchemaDefinition $value
-     * @return \Vitess\Proto\Tabletmanagerdata\PreflightSchemaResponse
-     */
-    public function setAfterSchema(\Vitess\Proto\Tabletmanagerdata\SchemaDefinition $value){
-      return $this->_set(2, $value);
+    public function addChangeResults(\Vitess\Proto\Tabletmanagerdata\SchemaChangeResult $value){
+     return $this->_add(1, $value);
     }
   }
 }

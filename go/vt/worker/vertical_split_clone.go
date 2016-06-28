@@ -55,7 +55,7 @@ type VerticalSplitCloneWorker struct {
 
 	// populated during WorkerStateFindTargets, read-only after that
 	sourceAlias  *topodatapb.TabletAlias
-	sourceTablet *topo.TabletInfo
+	sourceTablet *topodatapb.Tablet
 	// healthCheck tracks the health of all MASTER and REPLICA tablets.
 	// It must be closed at the end of the command.
 	healthCheck discovery.HealthCheck
@@ -68,17 +68,14 @@ type VerticalSplitCloneWorker struct {
 	// database name.
 	// Example Map Entry: test_keyspace/-80 => vt_test_keyspace
 	destinationDbNames map[string]string
-	// destionThrottlers stores for each destination keyspace/shard the
-	// Throttler instance which will limit the write throughput.
-	destinationThrottlers map[string]*throttler.Throttler
 
-	// populated during WorkerStateCopy
+	// populated during WorkerStateClone
 	// tableStatusList holds the status for each table.
 	tableStatusList tableStatusList
-	// aliases of tablets that need to have their schema reloaded.
+	// aliases of tablets that need to have their state refreshed.
 	// Only populated once, read-only after that.
-	reloadAliases []*topodatapb.TabletAlias
-	reloadTablets map[topodatapb.TabletAlias]*topo.TabletInfo
+	refreshAliases []*topodatapb.TabletAlias
+	refreshTablets map[topodatapb.TabletAlias]*topo.TabletInfo
 
 	ev *events.VerticalSplitClone
 }
@@ -114,8 +111,7 @@ func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspac
 		maxTPS:                  maxTPS,
 		cleaner:                 &wrangler.Cleaner{},
 
-		destinationDbNames:    make(map[string]string),
-		destinationThrottlers: make(map[string]*throttler.Throttler),
+		destinationDbNames: make(map[string]string),
 
 		ev: &events.VerticalSplitClone{
 			Cell:     cell,
@@ -144,7 +140,7 @@ func (vscw *VerticalSplitCloneWorker) StatusAsHTML() template.HTML {
 	result := "<b>Working on:</b> " + vscw.destinationKeyspace + "/" + vscw.destinationShard + "</br>\n"
 	result += "<b>State:</b> " + state.String() + "</br>\n"
 	switch state {
-	case WorkerStateCopy:
+	case WorkerStateCloneOffline:
 		result += "<b>Running</b>:</br>\n"
 		result += "<b>Copying from</b>: " + topoproto.TabletAliasString(vscw.sourceAlias) + "</br>\n"
 		statuses, eta := vscw.tableStatusList.format()
@@ -166,7 +162,7 @@ func (vscw *VerticalSplitCloneWorker) StatusAsText() string {
 	result := "Working on: " + vscw.destinationKeyspace + "/" + vscw.destinationShard + "\n"
 	result += "State: " + state.String() + "\n"
 	switch state {
-	case WorkerStateCopy:
+	case WorkerStateCloneOffline:
 		result += "Running:\n"
 		result += "Copying from: " + topoproto.TabletAliasString(vscw.sourceAlias) + "\n"
 		statuses, eta := vscw.tableStatusList.format()
@@ -199,10 +195,6 @@ func (vscw *VerticalSplitCloneWorker) Run(ctx context.Context) error {
 		}
 	}
 
-	// Stop Throttlers.
-	for _, throttler := range vscw.destinationThrottlers {
-		throttler.Close()
-	}
 	// Stop healthcheck.
 	for _, watcher := range vscw.destinationShardWatchers {
 		watcher.Stop()
@@ -239,7 +231,7 @@ func (vscw *VerticalSplitCloneWorker) run(ctx context.Context) error {
 	}
 
 	// third state: copy data
-	if err := vscw.copy(ctx); err != nil {
+	if err := vscw.clone(ctx); err != nil {
 		return fmt.Errorf("copy() failed: %v", err)
 	}
 	if err := checkDone(ctx); err != nil {
@@ -303,7 +295,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 
 	// find an appropriate tablet in the source shard
 	var err error
-	vscw.sourceAlias, err = FindWorkerTablet(ctx, vscw.wr, vscw.cleaner, vscw.cell, vscw.sourceKeyspace, "0", vscw.minHealthyRdonlyTablets)
+	vscw.sourceAlias, err = FindWorkerTablet(ctx, vscw.wr, vscw.cleaner, nil /* healthCheck */, vscw.cell, vscw.sourceKeyspace, "0", vscw.minHealthyRdonlyTablets)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/0: %v", vscw.cell, vscw.sourceKeyspace, err)
 	}
@@ -311,21 +303,22 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 
 	// get the tablet info for it
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	vscw.sourceTablet, err = vscw.wr.TopoServer().GetTablet(shortCtx, vscw.sourceAlias)
+	ti, err := vscw.wr.TopoServer().GetTablet(shortCtx, vscw.sourceAlias)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot read tablet %v: %v", topoproto.TabletAliasString(vscw.sourceAlias), err)
 	}
+	vscw.sourceTablet = ti.Tablet
 
 	// stop replication on it
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	err = vscw.wr.TabletManagerClient().StopSlave(shortCtx, vscw.sourceTablet.Tablet)
+	err = vscw.wr.TabletManagerClient().StopSlave(shortCtx, vscw.sourceTablet)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot stop replication on tablet %v", topoproto.TabletAliasString(vscw.sourceAlias))
 	}
 
-	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet.Tablet)
+	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet)
 
 	// Initialize healthcheck and add destination shards to it.
 	vscw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
@@ -350,14 +343,8 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	master := masters[0]
 
 	// Get the MySQL database name of the tablet.
-	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	ti, err := vscw.wr.TopoServer().GetTablet(shortCtx, master.Tablet.Alias)
-	cancel()
-	if err != nil {
-		return fmt.Errorf("cannot get the TabletInfo for destination master (%v) to find out its db name: %v", topoproto.TabletAliasString(master.Tablet.Alias), err)
-	}
 	keyspaceAndShard := topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)
-	vscw.destinationDbNames[keyspaceAndShard] = ti.DbName()
+	vscw.destinationDbNames[keyspaceAndShard] = topoproto.TabletDbName(master.Tablet)
 
 	// TODO(mberlin): Verify on the destination master that the
 	// _vt.blp_checkpoint table has the latest schema.
@@ -365,37 +352,30 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	vscw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Tablet.Alias), vscw.destinationKeyspace, vscw.destinationShard)
 	vscw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The HealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
 
-	// Set up the throttler for the destination shard.
-	t, err := throttler.NewThrottler(
-		keyspaceAndShard, "transactions", vscw.destinationWriterCount, vscw.maxTPS, throttler.ReplicationLagModuleDisabled)
-	if err != nil {
-		return fmt.Errorf("cannot instantiate throttler: %v", err)
-	}
-	vscw.destinationThrottlers[keyspaceAndShard] = t
 	return nil
 }
 
-// Find all tablets on the destination shard. This should be done immediately before reloading
-// the schema on these tablets, to minimize the chances of the topo changing in between.
+// Find all tablets on the destination shard. This should be done immediately before refreshing
+// the state on these tablets, to minimize the chances of the topo changing in between.
 
-func (vscw *VerticalSplitCloneWorker) findReloadTargets(ctx context.Context) error {
-	reloadAliases, reloadTablets, err := resolveReloadTabletsForShard(ctx, vscw.destinationKeyspace, vscw.destinationShard, vscw.wr)
+func (vscw *VerticalSplitCloneWorker) findRefreshTargets(ctx context.Context) error {
+	refreshAliases, refreshTablets, err := resolveRefreshTabletsForShard(ctx, vscw.destinationKeyspace, vscw.destinationShard, vscw.wr)
 	if err != nil {
 		return err
 	}
-	vscw.reloadAliases, vscw.reloadTablets = reloadAliases, reloadTablets
+	vscw.refreshAliases, vscw.refreshTablets = refreshAliases, refreshTablets
 	return nil
 }
 
-// copy phase:
+// clone phase:
 //	- copy the data from source tablets to destination masters (with replication on)
 // Assumes that the schema has already been created on each destination tablet
 // (probably from vtctl's CopySchemaShard)
-func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
-	vscw.setState(WorkerStateCopy)
+func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
+	vscw.setState(WorkerStateCloneOffline)
 	start := time.Now()
 	defer func() {
-		statsStateDurationsNs.Set(string(WorkerStateCopy), time.Now().Sub(start).Nanoseconds())
+		statsStateDurationsNs.Set(string(WorkerStateCloneOffline), time.Now().Sub(start).Nanoseconds())
 	}()
 
 	// get source schema
@@ -437,18 +417,21 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	// always have data. We then have
 	// destinationWriterCount go routines reading from it.
 	insertChannel := make(chan string, vscw.destinationWriterCount*2)
-
+	// Set up the throttler for the destination shard.
+	keyspaceAndShard := topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)
+	destinationThrottler, err := throttler.NewThrottler(
+		keyspaceAndShard, "transactions", vscw.destinationWriterCount, vscw.maxTPS, throttler.ReplicationLagModuleDisabled)
+	if err != nil {
+		return fmt.Errorf("cannot instantiate throttler: %v", err)
+	}
 	for j := 0; j < vscw.destinationWriterCount; j++ {
 		destinationWaitGroup.Add(1)
 		go func(threadID int) {
 			defer destinationWaitGroup.Done()
+			defer destinationThrottler.ThreadFinished(threadID)
 
-			keyspaceAndShard := topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)
-			throttler := vscw.destinationThrottlers[keyspaceAndShard]
-			defer throttler.ThreadFinished(threadID)
-
-			executor := newExecutor(vscw.wr, vscw.healthCheck, throttler, vscw.destinationKeyspace, vscw.destinationShard, threadID)
-			if err := executor.fetchLoop(ctx, vscw.destinationDbNames[keyspaceAndShard], insertChannel); err != nil {
+			executor := newExecutor(vscw.wr, vscw.healthCheck, destinationThrottler, vscw.destinationKeyspace, vscw.destinationShard, threadID)
+			if err := executor.fetchLoop(ctx, insertChannel); err != nil {
 				processError("executer.FetchLoop failed: %v", err)
 			}
 		}(j)
@@ -457,6 +440,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	// Now for each table, read data chunks and send them to insertChannel
 	sourceWaitGroup := sync.WaitGroup{}
 	sema := sync2.NewSemaphore(vscw.sourceReaderCount, 0)
+	dbName := vscw.destinationDbNames[topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)]
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
 		if td.Type == tmutils.TableView {
 			continue
@@ -488,7 +472,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 				defer qrr.Close()
 
 				// process the data
-				if err := vscw.processData(ctx, td, tableIndex, qrr, insertChannel, vscw.destinationPackCount); err != nil {
+				if err := vscw.processData(ctx, dbName, td, tableIndex, qrr, insertChannel, vscw.destinationPackCount); err != nil {
 					processError("QueryResultReader failed: %v", err)
 				}
 				vscw.tableStatusList.threadDone(tableIndex)
@@ -499,6 +483,8 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 
 	close(insertChannel)
 	destinationWaitGroup.Wait()
+	// Stop Throttler.
+	destinationThrottler.Close()
 	if firstError != nil {
 		return firstError
 	}
@@ -509,7 +495,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	} else {
 		// get the current position from the source
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		status, err := vscw.wr.TabletManagerClient().SlaveStatus(shortCtx, vscw.sourceTablet.Tablet)
+		status, err := vscw.wr.TabletManagerClient().SlaveStatus(shortCtx, vscw.sourceTablet)
 		cancel()
 		if err != nil {
 			return err
@@ -523,8 +509,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 		}
 		queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, vscw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), flags))
 		vscw.wr.Logger().Infof("Making and populating blp_checkpoint table")
-		keyspaceAndShard := topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)
-		if err := runSQLCommands(ctx, vscw.wr, vscw.healthCheck, vscw.destinationKeyspace, vscw.destinationShard, vscw.destinationDbNames[keyspaceAndShard], queries); err != nil {
+		if err := runSQLCommands(ctx, vscw.wr, vscw.healthCheck, vscw.destinationKeyspace, vscw.destinationShard, dbName, queries); err != nil {
 			processError("blp_checkpoint queries failed: %v", err)
 		}
 		if firstError != nil {
@@ -545,25 +530,25 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 		}
 	}
 
-	err = vscw.findReloadTargets(ctx)
+	err = vscw.findRefreshTargets(ctx)
 	if err != nil {
-		return fmt.Errorf("failed before reloading schema on destination tablets: %v", err)
+		return fmt.Errorf("failed before refreshing state on destination tablets: %v", err)
 	}
-	// And force a schema reload on all destination tablets.
+	// And force a state refresh (re-read topo) on all destination tablets.
 	// The master tablet will end up starting filtered replication
 	// at this point.
-	for _, tabletAlias := range vscw.reloadAliases {
+	for _, tabletAlias := range vscw.refreshAliases {
 		destinationWaitGroup.Add(1)
 		go func(ti *topo.TabletInfo) {
 			defer destinationWaitGroup.Done()
-			vscw.wr.Logger().Infof("Reloading schema on tablet %v", ti.AliasString())
+			vscw.wr.Logger().Infof("Refreshing state on tablet %v", ti.AliasString())
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-			err := vscw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti.Tablet)
+			err := vscw.wr.TabletManagerClient().RefreshState(shortCtx, ti.Tablet)
 			cancel()
 			if err != nil {
-				processError("ReloadSchema failed on tablet %v: %v", ti.AliasString(), err)
+				processError("RefreshState failed on tablet %v: %v", ti.AliasString(), err)
 			}
-		}(vscw.reloadTablets[*tabletAlias])
+		}(vscw.refreshTablets[*tabletAlias])
 	}
 	destinationWaitGroup.Wait()
 	return firstError
@@ -571,14 +556,15 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 
 // processData pumps the data out of the provided QueryResultReader.
 // It returns any error the source encounters.
-func (vscw *VerticalSplitCloneWorker) processData(ctx context.Context, td *tabletmanagerdatapb.TableDefinition, tableIndex int, qrr *QueryResultReader, insertChannel chan string, destinationPackCount int) error {
+func (vscw *VerticalSplitCloneWorker) processData(ctx context.Context, dbName string, td *tabletmanagerdatapb.TableDefinition, tableIndex int, qrr *QueryResultReader, insertChannel chan string, destinationPackCount int) error {
 	// process the data
-	baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
+	baseCmd := "INSERT INTO `" + dbName + "`." + td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
 	var rows [][]sqltypes.Value
 	packCount := 0
 
+	fields := qrr.Fields()
 	for {
-		r, err := qrr.Output.Recv()
+		r, err := qrr.Next()
 		if err != nil {
 			// we are done, see if there was an error
 			if err != io.EOF {
@@ -587,7 +573,7 @@ func (vscw *VerticalSplitCloneWorker) processData(ctx context.Context, td *table
 
 			// send the remainder if any
 			if packCount > 0 {
-				cmd := baseCmd + makeValueString(qrr.Fields, rows)
+				cmd := baseCmd + makeValueString(fields, rows)
 				select {
 				case insertChannel <- cmd:
 				case <-ctx.Done():
@@ -608,7 +594,7 @@ func (vscw *VerticalSplitCloneWorker) processData(ctx context.Context, td *table
 		}
 
 		// send the rows to be inserted
-		cmd := baseCmd + makeValueString(qrr.Fields, rows)
+		cmd := baseCmd + makeValueString(fields, rows)
 		select {
 		case insertChannel <- cmd:
 		case <-ctx.Done():

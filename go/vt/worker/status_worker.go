@@ -29,10 +29,18 @@ const (
 	// WorkerStateSyncReplication is set when the worker ensures that source and
 	// destination tablets are at the same GTID during the diff.
 	WorkerStateSyncReplication StatusWorkerState = "synchronizing replication"
-	// WorkerStateCopy is set when the worker copies the data.
-	WorkerStateCopy StatusWorkerState = "copying the data"
+
+	// WorkerStateCloneOnline is set when the worker copies the data in the online phase.
+	WorkerStateCloneOnline StatusWorkerState = "cloning the data (online)"
+	// WorkerStateCloneOffline is set when the worker copies the data in the offline phase.
+	WorkerStateCloneOffline StatusWorkerState = "cloning the data (offline)"
+
 	// WorkerStateDiff is set when the worker compares the data.
 	WorkerStateDiff StatusWorkerState = "running the diff"
+
+	// WorkerStateDebugRunning is set when an internal command (e.g. Block or Ping) is currently running.
+	WorkerStateDebugRunning StatusWorkerState = "running an internal debug command"
+
 	// WorkerStateCleanUp is set when the worker reverses the initialization e.g.
 	// the type of a taken out RDONLY tablet is changed back from "worker" to "spare".
 	WorkerStateCleanUp StatusWorkerState = "cleaning up"

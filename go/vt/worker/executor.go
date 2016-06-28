@@ -1,3 +1,7 @@
+// Copyright 2016, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package worker
 
 import (
@@ -44,7 +48,7 @@ func newExecutor(wr *wrangler.Wrangler, healthCheck discovery.HealthCheck, throt
 
 // fetchLoop loops over the provided insertChannel and sends the commands to the
 // current master.
-func (e *executor) fetchLoop(ctx context.Context, dbName string, insertChannel chan string) error {
+func (e *executor) fetchLoop(ctx context.Context, insertChannel chan string) error {
 	for {
 		select {
 		case cmd, ok := <-insertChannel:
@@ -52,7 +56,6 @@ func (e *executor) fetchLoop(ctx context.Context, dbName string, insertChannel c
 				// no more to read, we're done
 				return nil
 			}
-			cmd = "INSERT INTO `" + dbName + "`." + cmd
 			if err := e.fetchWithRetries(ctx, cmd); err != nil {
 				return fmt.Errorf("ExecuteFetch failed: %v", err)
 			}

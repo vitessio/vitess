@@ -22,7 +22,7 @@ const indexHTML = `
 <body>
   <h1>Worker Action Index</h1>
     {{range $i, $group := . }}
-      <li><a href="/{{$group.Name}}">{{$group.Name}}</a>: {{$group.Description}}.</li>
+      <li><a href="/{{$group.Name}}">{{$group.Name}}</a>: {{$group.Description}}</li>
     {{end}}
 </body>
 `
@@ -37,7 +37,7 @@ const subIndexHTML = `
   <h1>{{$name}} Index</h1>
     <p>{{.Description}}</p>
     {{range $i, $cmd := .Commands }}
-      <li><a href="{{$name}}/{{$cmd.Name}}">{{$cmd.Name}}</a>: {{$cmd.Help}}.</li>
+      <li><a href="{{$name}}/{{$cmd.Name}}">{{$cmd.Name}}</a>: {{$cmd.Help}}</li>
     {{end}}
 </body>
 `

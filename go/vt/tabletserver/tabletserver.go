@@ -500,10 +500,9 @@ func (tsv *TabletServer) isMySQLReachable() bool {
 }
 
 // ReloadSchema reloads the schema.
-// If the query service is not running, it's a no-op.
-func (tsv *TabletServer) ReloadSchema() {
+func (tsv *TabletServer) ReloadSchema(ctx context.Context) error {
 	defer logError(tsv.qe.queryServiceStats)
-	tsv.qe.schemaInfo.triggerReload()
+	return tsv.qe.schemaInfo.Reload(ctx)
 }
 
 // ClearQueryPlanCache clears internal query plan cache

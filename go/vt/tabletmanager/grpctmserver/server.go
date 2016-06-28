@@ -145,9 +145,8 @@ func (s *server) IgnoreHealthError(ctx context.Context, request *tabletmanagerda
 func (s *server) ReloadSchema(ctx context.Context, request *tabletmanagerdatapb.ReloadSchemaRequest) (*tabletmanagerdatapb.ReloadSchemaResponse, error) {
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &tabletmanagerdatapb.ReloadSchemaResponse{}
-	return response, s.agent.RPCWrapLockAction(ctx, tabletmanager.TabletActionReloadSchema, request, response, true, func() error {
-		s.agent.ReloadSchema(ctx)
-		return nil
+	return response, s.agent.RPCWrap(ctx, tabletmanager.TabletActionReloadSchema, request, response, func() error {
+		return s.agent.ReloadSchema(ctx, request.WaitPosition)
 	})
 }
 

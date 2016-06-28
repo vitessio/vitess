@@ -10,7 +10,6 @@ import time
 from vtdb import vtgate_client
 import base_environment
 import protocols_flavor
-import utils
 import vtctl_helper
 
 
@@ -65,9 +64,9 @@ class K8sEnvironment(base_environment.BaseEnvironment):
       self.shards.append(shards)
       self.num_shards.append(len(shards))
 
-    # This assumes that all keyspaces/shards use the same set of cells
+    # This assumes that all keyspaces use the same set of cells
     self.cells = json.loads(self.vtctl_helper.execute_vtctl_command(
-        ['GetShard', '%s/%s' % (self.keyspaces[0], self.shards[0][0])]
+        ['GetShard', '%s/%s' % (self.keyspaces[0], self.shards[0].keys()[0])]
         ))['cells']
 
     self.primary_cells = self.cells
@@ -112,6 +111,7 @@ class K8sEnvironment(base_environment.BaseEnvironment):
       self.vtgate_conns[cell] = vtgate_client.connect(
           protocols_flavor.protocols_flavor().vtgate_python_protocol(),
           self.vtgate_addrs[cell], 60)
+    super(K8sEnvironment, self).use_named(instance_name)
 
   def create(self, **kwargs):
     self.create_gke_cluster = (
@@ -172,35 +172,16 @@ class K8sEnvironment(base_environment.BaseEnvironment):
   def wait_for_healthy_tablets(self):
     return 0
 
-  def get_next_master(self, keyspace, shard_name, cross_cell=False):
-    num_tasks = self.keyspace_alias_to_num_instances_dict[keyspace]['replica']
-    current_master = self.get_current_master_name(keyspace, shard_name)
-    current_master_cell = self.get_tablet_cell(current_master)
-    next_master_cell = current_master_cell
-    next_master_task = 1
-    if cross_cell:
-      next_master_cell = self.primary_cells[(
-          self.primary_cells.index(current_master_cell) + 1) % len(
-              self.primary_cells)]
-    else:
-      next_master_task = (
-          (self.get_tablet_task_number(current_master) + 1) % num_tasks)
-    return next_master_cell, next_master_task
-
   def get_tablet_task_number(self, tablet_name):
     tablet_info = json.loads(self.vtctl_helper.execute_vtctl_command(
         ['GetTablet', tablet_name]))
     return tablet_info['alias']['uid'] % 100
 
-  def internal_reparent(self, keyspace, new_cell, shard, num_shards,
-                        new_task_num, emergency=False):
-    shard_name = utils.get_shard_name(shard, num_shards)
-    cell_number = self.cells.index(new_cell) + 1
-    new_master = '%s-%02d00000%d%02d' % (
-        new_cell, cell_number, shard + 1, new_task_num)
+  def internal_reparent(self, keyspace, shard_name, new_master_uid,
+                        emergency=False):
     reparent_command = (
         'EmergencyReparentShard' if emergency else 'PlannedReparentShard')
     self.vtctl_helper.execute_vtctl_command(
-        [reparent_command, '%s/%s' % (keyspace, shard_name), new_master])
+        [reparent_command, '%s/%s' % (keyspace, shard_name), new_master_uid])
     self.vtctl_helper.execute_vtctl_command(['RebuildKeyspaceGraph', keyspace])
     return 0, 'No output'
