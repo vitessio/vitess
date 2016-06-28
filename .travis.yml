@@ -28,6 +28,7 @@ addons:
       - time
       # Optional dependency. Without a running syslog daemon, Vitess will keep complaining that it could not log events and spam the logs.
       - rsyslog
+  sauce_connect: true
 # Cache directories of dependencies which are built by bootstrap.sh
 cache:
   directories:
@@ -78,6 +79,7 @@ env:
     - CC=gcc-4.8
     - CXX=g++-4.8
     - INSTALL_GRPC_PHP="$HOME/.phpenv/lib"
+    - SAUCE_USERNAME=vitess
   matrix:
     # NOTE: Travis CI schedules up to 5 tests simultaneously.
     #       All our tests should be spread out as evenly as possible across these 5 slots.
