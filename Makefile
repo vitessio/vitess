@@ -8,7 +8,7 @@ MAKEFLAGS = -s
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build test clean unit_test unit_test_cover unit_test_race integration_test proto site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test php_test reshard_tests
+.PHONY: all build test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test php_test reshard_tests
 
 all: build test
 
@@ -26,7 +26,7 @@ ifdef VT_MYSQL_ROOT
   endif
 endif
 
-build:
+build: proto
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
@@ -43,6 +43,7 @@ site_test: unit_test site_integration_test
 clean:
 	go clean -i ./go/...
 	rm -rf third_party/acolyte
+	rm -rf go/vt/.proto.tmp
 
 # This will remove object files for all Go projects in the same GOPATH.
 # This is necessary, for example, to make sure dependencies are rebuilt
@@ -94,15 +95,45 @@ install_protoc-gen-go:
 	cp -au vendor/github.com/golang/protobuf $${GOPATH}/src/github.com/golang/
 	go install github.com/golang/protobuf/protoc-gen-go
 
-# This rule rebuilds all the go files from the proto definitions for gRPC.
-# 1. list all proto files.
-# 2. remove 'proto/' prefix and '.proto' suffix.
-# 3. (go) run protoc for each proto and put in go/vt/proto/${proto_file_name}/
-# 4. (python) run protoc for each proto and put in py/vtproto/
-proto: install_protoc-gen-go
-	find proto -maxdepth 1 -name '*.proto' -print | sed 's/^proto\///' | sed 's/\.proto//' | xargs -I{} $$VTROOT/dist/grpc/usr/local/bin/protoc -Iproto proto/{}.proto --go_out=plugins=grpc:go/vt/proto/{}
-	find go/vt/proto -name "*.pb.go" | xargs sed --in-place -r -e 's,import ([a-z0-9_]+) ".",import \1 "github.com/youtube/vitess/go/vt/proto/\1",g'
-	find proto -maxdepth 1 -name '*.proto' -print | sed 's/^proto\///' | sed 's/\.proto//' | xargs -I{} $$VTROOT/dist/grpc/usr/local/bin/protoc -Iproto proto/{}.proto --python_out=py/vtproto --grpc_out=py/vtproto --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/usr/local/bin/grpc_python_plugin
+PROTOC_DIR := $(VTROOT)/dist/grpc/usr/local/bin
+PROTOC_EXISTS := $(shell type -p $(PROTOC_DIR)/protoc)
+ifeq (,$(PROTOC_EXISTS))
+  PROTOC_BINARY := $(shell which protoc)
+  ifeq (,$(PROTOC_BINARY))
+    $(error "Cannot find protoc binary. Did you execute 'source dev.env'?")
+  endif
+  PROTOC_DIR := $(dir $(PROTOC_BINARY))
+endif
+
+PROTO_SRCS = $(wildcard proto/*.proto)
+PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
+PROTO_PY_OUTS = $(foreach name, $(PROTO_SRC_NAMES), py/vtproto/$(name)_pb2.py)
+PROTO_GO_OUTS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/proto/$(name)/$(name).pb.go)
+PROTO_GO_TEMPS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/.proto.tmp/$(name).pb.go)
+
+# This rule rebuilds all the go and python files from the proto definitions for gRPC.
+proto: proto_banner $(PROTO_GO_OUTS) $(PROTO_PY_OUTS)
+
+proto_banner:
+ifndef NOBANNER
+	echo $$(date): Compiling proto definitions
+endif
+
+$(PROTO_PY_OUTS): py/vtproto/%_pb2.py: proto/%.proto
+	$(PROTOC_DIR)/protoc -Iproto $< --python_out=py/vtproto --grpc_out=py/vtproto --plugin=protoc-gen-grpc=$(PROTOC_DIR)/grpc_python_plugin
+
+$(PROTO_GO_OUTS): $(PROTO_GO_TEMPS)
+	for name in $(PROTO_SRC_NAMES); do \
+	  mkdir -p go/vt/proto/$${name}; \
+	  cp -a go/vt/.proto.tmp/$${name}.pb.go go/vt/proto/$${name}/$${name}.pb.go; \
+	done
+
+$(PROTO_GO_TEMPS): install_protoc-gen-go
+
+$(PROTO_GO_TEMPS): go/vt/.proto.tmp/%.pb.go: proto/%.proto
+	mkdir -p go/vt/.proto.tmp
+	$(PROTOC_DIR)/protoc -Iproto $< --go_out=plugins=grpc:go/vt/.proto.tmp
+	sed --in-place -r -e 's,import ([a-z0-9_]+) ".",import \1 "github.com/youtube/vitess/go/vt/proto/\1",g' $@
 
 # Generate the PHP proto files in a Docker container, and copy them back.
 php_proto:
