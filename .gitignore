@@ -62,3 +62,8 @@ _test/
 
 #pom generated file
 /java/jdbc/dependency-reduced-pom.xml
+
+# generated proto files
+go/vt/.proto.tmp
+go/vt/proto
+py/vtproto/*_pb2.py
