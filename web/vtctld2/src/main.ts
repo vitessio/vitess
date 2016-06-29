@@ -8,6 +8,6 @@ if (environment.production) {
 }
 
 bootstrap(AppComponent, [
-	APP_ROUTER_PROVIDERS
+  APP_ROUTER_PROVIDERS
 ])
-.catch(err => console.error(err));
+  .catch(err => console.error(err));
