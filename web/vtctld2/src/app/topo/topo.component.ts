@@ -3,7 +3,7 @@ import { Component } from '@angular/core';
 
 @Component({
   moduleId: module.id,
-  selector: 'topo',
+  selector: 'vt-topo',
   templateUrl: './topo.component.html',
   styleUrls: ['./topo.component.css'],
 })

@@ -3,7 +3,7 @@ import { Component } from '@angular/core';
 
 @Component({
   moduleId: module.id,
-  selector: 'status',
+  selector: 'vt-status',
   templateUrl: './status.component.html',
   styleUrls: ['./status.component.css'],
 })

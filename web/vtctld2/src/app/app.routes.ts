@@ -4,9 +4,6 @@ import { StatusComponent } from './status/status.component'
 import { SchemaComponent } from './schema/schema.component'
 import { TopoComponent } from './topo/topo.component'
 
-//import { CrisisListComponent }  from './crisis-list.component';
-//import { HeroListComponent }    from './hero-list.component';
-
 export const routes: RouterConfig = [
 	{ path: '', component: DashboardComponent},
 	{ path: 'dashboard', component: DashboardComponent},
