@@ -5,6 +5,7 @@ package vtctld
 import (
 	"flag"
 	"net/http"
+	"os"
 	"path"
 	"strings"
 
@@ -138,7 +139,12 @@ func InitVtctld(ts topo.Server) {
 		if rest == "" {
 			rest = "index.html"
 		}
-		http.ServeFile(w, r, path.Join(*webDir2, rest))
+		filePath := path.Join(*webDir2, rest)
+		// If the requested file doesn't exist, serve index.html.
+		if _, err := os.Stat(filePath); err != nil {
+			filePath = path.Join(*webDir2, "index.html")
+		}
+		http.ServeFile(w, r, filePath)
 	})
 
 	// Serve the REST API for the vtctld web app.
