@@ -1,13 +1,13 @@
 import { Injectable } from '@angular/core';
-import { Http, Response } from '@angular/http';
+import { Http } from '@angular/http';
 
 import { Observable }     from 'rxjs/Observable';
 
 @Injectable()
 export class TopoDataService {
-  constructor(private http: Http) { }
-
   private apiUrl = '../api/topodata/';
+
+  constructor(private http: Http) { }
 
   getNode(path: string): Observable<any> {
     return this.http.get(this.apiUrl + path)
