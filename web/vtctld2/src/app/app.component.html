@@ -5,11 +5,11 @@
 <md-sidenav-layout class="flex-grow">
   <md-sidenav #sidenav mode="side" opened="true">
     <md-nav-list>
-      <a md-list-item href="#dashboard"><md-icon>dashboard</md-icon> Dashboard</a>
-      <a md-list-item href="#status"><md-icon>timeline</md-icon> Real-time Status</a>
-      <a md-list-item href="#schema"><md-icon>storage</md-icon> Schema Manager</a>
-      <a md-list-item href="#topo"><md-icon>folder</md-icon> Topology Browser</a>
+      <a md-list-item [routerLink]="['/dashboard']"><md-icon>dashboard</md-icon> Dashboard</a>
+      <a md-list-item [routerLink]="['/status']"><md-icon>timeline</md-icon> Real-time Status</a>
+      <a md-list-item [routerLink]="['/schema']"><md-icon>storage</md-icon> Schema Manager</a>
+      <a md-list-item [routerLink]="['/topo']"><md-icon>folder</md-icon> Topology Browser</a>
     </md-nav-list>
   </md-sidenav>
-  <div class="content">Content</div>
+  <div class="content"><router-outlet></router-outlet></div>
 </md-sidenav-layout>
