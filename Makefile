@@ -142,16 +142,16 @@ docker_base_mariadb:
 	chmod -R o=g *
 	docker build -f Dockerfile.mariadb -t vitess/base:mariadb .
 
-docker_lite:
+docker_lite: docker_base
 	cd docker/lite && ./build.sh
 
-docker_lite_mysql56:
+docker_lite_mysql56: docker_base_mysql56
 	cd docker/lite && ./build.sh mysql56
 
-docker_lite_mariadb:
+docker_lite_mariadb: docker_base_mariadb
 	cd docker/lite && ./build.sh mariadb
 
-docker_lite_percona:
+docker_lite_percona: docker_base_percona
 	cd docker/lite && ./build.sh percona
 
 docker_guestbook:
