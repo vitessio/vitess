@@ -120,10 +120,7 @@ func (bs *CephBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHand
 	if err != nil {
 		return nil, err
 	}
-	//	keeping in view the bucket naming conventions for buckets
-	bucket = strings.ToLower(dir)
-	bucket = strings.Replace(bucket, "/", ".", -1)
-	bucket = strings.Replace(bucket, "_", "-", -1)
+	alterBucketName(dir)
 
 	// List prefixes that begin with dir (i.e. list subdirs).
 	var subdirs []string
@@ -161,10 +158,7 @@ func (bs *CephBackupStorage) StartBackup(dir, name string) (backupstorage.Backup
 	if err != nil {
 		return nil, err
 	}
-	//	keeping in view the bucket naming conventions for buckets
-	bucket = strings.ToLower(dir)
-	bucket = strings.Replace(bucket, "/", ".", -1)
-	bucket = strings.Replace(bucket, "_", "-", -1)
+	alterBucketName(dir)
 
 	err = c.BucketExists(bucket)
 	if err != nil {
@@ -191,10 +185,8 @@ func (bs *CephBackupStorage) RemoveBackup(dir, name string) error {
 	if err != nil {
 		return err
 	}
-	//	keeping in view the bucket naming conventions for buckets
-	bucket = strings.ToLower(dir)
-	bucket = strings.Replace(bucket, "/", ".", -1)
-	bucket = strings.Replace(bucket, "_", "-", -1)
+
+	alterBucketName(dir)
 
 	fullName := objName(dir, name, "")
 	var arr []string
@@ -266,4 +258,11 @@ func init() {
 // It also adds the value of the -gcs_backup_storage_root flag if set.
 func objName(parts ...string) string {
 	return strings.Join(parts, "/")
+}
+
+//	keeping in view the bucket naming conventions
+func alterBucketName(dir string) {
+	bucket = strings.ToLower(dir)
+	bucket = strings.Replace(bucket, "/", ".", -1)
+	bucket = strings.Replace(bucket, "_", "-", -1)
 }
