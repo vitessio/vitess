@@ -12,6 +12,9 @@ import (
 	"strings"
 	"sync"
 
+	"errors"
+
+	log "github.com/golang/glog"
 	minio "github.com/minio/minio-go"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
@@ -29,7 +32,6 @@ var storageConfig struct {
 	AccessKey string `json:"accessKey"`
 	SecretKey string `json:"secretKey"`
 	EndPoint  string `json:"endPoint"`
-	Bucket    string `json:"bucket"`
 }
 
 // CephBackupHandle implements BackupHandle for Ceph Cloud Storage.
@@ -118,6 +120,10 @@ func (bs *CephBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHand
 	if err != nil {
 		return nil, err
 	}
+	//	keeping in view the bucket naming conventions for buckets
+	bucket = strings.ToLower(dir)
+	bucket = strings.Replace(bucket, "/", ".", -1)
+	bucket = strings.Replace(bucket, "_", "-", -1)
 
 	// List prefixes that begin with dir (i.e. list subdirs).
 	var subdirs []string
@@ -155,6 +161,20 @@ func (bs *CephBackupStorage) StartBackup(dir, name string) (backupstorage.Backup
 	if err != nil {
 		return nil, err
 	}
+	//	keeping in view the bucket naming conventions for buckets
+	bucket = strings.ToLower(dir)
+	bucket = strings.Replace(bucket, "/", ".", -1)
+	bucket = strings.Replace(bucket, "_", "-", -1)
+
+	err = c.BucketExists(bucket)
+	if err != nil {
+		log.Info("Bucket: %v doesn't exist, creating new bucket with the required name", bucket)
+		err = c.MakeBucket(bucket, "")
+		if err != nil {
+			log.Info("Error creating Bucket: %v, quitting", bucket)
+			return nil, errors.New("Error creating new bucket: " + bucket)
+		}
+	}
 
 	return &CephBackupHandle{
 		client:   c,
@@ -171,12 +191,12 @@ func (bs *CephBackupStorage) RemoveBackup(dir, name string) error {
 	if err != nil {
 		return err
 	}
+	//	keeping in view the bucket naming conventions for buckets
+	bucket = strings.ToLower(dir)
+	bucket = strings.Replace(bucket, "/", ".", -1)
+	bucket = strings.Replace(bucket, "_", "-", -1)
+
 	fullName := objName(dir, name, "")
-	//	err = c.RemoveObject(bucket, fullName)
-	//      if err != nil {
-	//              return err
-	//      }
-	//      return nil
 	var arr []string
 	doneCh := make(chan struct{})
 	defer close(doneCh)
@@ -224,7 +244,6 @@ func (bs *CephBackupStorage) client() (*minio.Client, error) {
 			return nil, fmt.Errorf("Error parsing the json file : %v", err)
 		}
 
-		bucket = storageConfig.Bucket
 		accessKey := storageConfig.AccessKey
 		secretKey := storageConfig.SecretKey
 		url := storageConfig.EndPoint
