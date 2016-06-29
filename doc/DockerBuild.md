@@ -14,33 +14,39 @@ If you want to customize this image, you can build your own like this:
 
 1.  Go to your `github.com/youtube/vitess` directory.
 
-1.  Build the `vitess/base` image from your working copy.
-    This image will incorporate any local code changes you've made,
-    such as adding plugins.
-
-    You can choose one of the following flavors:
-
-    ```sh
-    vitess$ make docker_base         # MySQL Community Edition
-    vitess$ make docker_base_percona # Percona Server
-    vitess$ make docker_base_mariadb # MariaDB
-    ```
-
-    **Note:** If you don't have a `vitess/bootstrap:<flavor>` image built,
-    Docker will download our bootstrap image from Docker Hub.
-    Usually, you won't need to [build your own bootstrap image](https://github.com/youtube/vitess/blob/master/docker/bootstrap/README.md)
+1.  Usually, you won't need to [build your own bootstrap image]
+    (https://github.com/youtube/vitess/blob/master/docker/bootstrap/README.md)
     unless you edit [bootstrap.sh](https://github.com/youtube/vitess/blob/master/bootstrap.sh)
     or [vendor.json](https://github.com/youtube/vitess/blob/master/vendor/vendor.json),
-    for example to add new dependencies.
+    for example to add new dependencies. If you do need it then build the
+    bootstrap image, otherwise pull the image using one of the following
+    commands depending on the MySQL flavor you want:
 
-1.  Build the `vitess/lite` image from the `vitess/base` image you built.
-    This runs a script that extracts only the files needed to run Vitess,
-    whereas `vitess/base` contains everything needed for development work.
-    You will be asked to authenticate with `sudo`, which is needed to fix up
-    some file permissions.
+    ```sh
+    vitess$ docker pull vitess/bootstrap:mysql57 # MySQL Community Edition 5.7
+    vitess$ docker pull vitess/bootstrap:mysql56 # MySQL Community Edition 5.6
+    vitess$ docker pull vitess/bootstrap:percona # Percona Server
+    vitess$ docker pull vitess/bootstrap:mariadb # MariaDB
+    ```
+
+    **Note:** If you have already downloaded the `vitess/bootstrap:<flavor>`
+    image on your machine before then it could be old, which may cause build
+    failures. So it would be a good idea to always execute this step.
+
+1.  Build the `vitess/lite[:<flavor>]` image. This will build
+    `vitess/base[:<flavor>]` image and run a script that extracts only the files
+    needed to run Vitess (`vitess/base` contains everything needed for
+    development work). You will be asked to authenticate with `sudo`, which is
+    needed to fix up some file permissions.
+
+    Choose one of the following commands (the command without suffix builds
+    default image containing MySQL 5.7):
 
     ```sh
     vitess$ make docker_lite
+    vitess$ make docker_lite_mysql56
+    vitess$ make docker_lite_percona
+    vitess$ make docker_lite_mariadb
     ```
 
 1.  Re-tag the image under your personal repository, then upload it.
@@ -49,6 +55,9 @@ If you want to customize this image, you can build your own like this:
     vitess$ docker tag -f vitess/lite yourname/vitess
     vitess$ docker push yourname/vitess
     ```
+
+    **Note:** If you chose non-default flavor above then change `vitess/lite` in
+    the above command to `vitess/lite:<flavor>`.
 
 1.  Change the Kubernetes configs to point to your personal repository:
 
