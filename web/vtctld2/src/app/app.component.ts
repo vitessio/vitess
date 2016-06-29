@@ -6,6 +6,8 @@ import { MD_LIST_DIRECTIVES } from '@angular2-material/list';
 import { MdIcon, MdIconRegistry } from '@angular2-material/icon';
 import { ROUTER_DIRECTIVES } from '@angular/router';
 
+import './rxjs-operators';
+
 @Component({
   moduleId: module.id,
   selector: 'app-root',
