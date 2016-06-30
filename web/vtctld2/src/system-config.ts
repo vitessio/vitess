@@ -28,6 +28,7 @@ const materialPkgs: string[] = [
   'tabs',
   'icon',
   'list',
+  'progress-bar',
 ];
 
 materialPkgs.forEach((pkg) => {

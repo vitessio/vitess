@@ -1,1 +1,58 @@
 <h1>DASHBOARD</h1>
+<md-card class="keyspaceCard" *ngFor="let keyspace of keyspaces" > 
+  <md-card-title style="font-size:300%">{{keyspace}}</md-card-title>   
+  <md-card-content>
+  	<div class="stats-container">
+      <ul>
+        <li>
+          <span class="vt-stat-value-container">
+            <span class="vt-stat-value">
+              {{keyspaces[keyspace].servingShards.length}}
+            </span>
+          </span>
+          <span class="vt-stat-category">
+            Serving Shards
+          </span>
+        </li>
+        <li>
+      	<span class="vt-stat-value-container">
+          <span class="vt-stat-value">
+      	    {{keyspaces[keyspace].nonservingShards.length}}
+          </span>
+      	</span>
+      	<span class="vt-stat-category">
+          Nonserving Shards
+        </span>
+        </li>
+        <li>
+          <span *ngIf="healthy(keyspace)">
+            <span class="vt-stat-value-container healthy">
+              <span class="vt-stat-value">
+        	      ✓
+              </span>
+        	  </span>
+        	  <span class="vt-stat-category">
+              Healthy
+            </span>
+        	</span>
+        	<span *ngIf="!healthy(keyspace)">
+        	  <span class="vt-stat-value-container unhealthy">
+              <span class="vt-stat-value">
+                !
+              </span>
+            </span>
+        	  <span class="vt-stat-category">
+              Unhealthy
+            </span>
+        	</span>
+        </li>
+      </ul>
+    </div>
+  </md-card-content>
+  <md-card-actions>
+    <a [routerLink]="['/keyspace', keyspace]">
+      <button md-button style="font-size:200%">Reshard</button>
+    </a>
+    <button md-button style="font-size:200%">Backup</button>
+  </md-card-actions>
+</md-card>
