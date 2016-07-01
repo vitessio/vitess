@@ -64,7 +64,7 @@ func NewRowDiffer2(ctx context.Context, left, right ResultReader, td *tabletmana
 	// Parameters required by RowRouter.
 	destinationShards []*topo.ShardInfo, keyResolver keyspaceIDResolver,
 	// Parameters required by RowAggregator.
-	insertChannels []chan string, abort <-chan struct{}, dbNames []string, writeQueryMaxRows, writeQueryMaxSize int, statCounters []*stats.Counters) (*RowDiffer2, error) {
+	insertChannels []chan string, abort <-chan struct{}, dbNames []string, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete int, statCounters []*stats.Counters) (*RowDiffer2, error) {
 
 	if err := compareFields(left.Fields(), right.Fields()); err != nil {
 		return nil, err
@@ -75,7 +75,11 @@ func NewRowDiffer2(ctx context.Context, left, right ResultReader, td *tabletmana
 	for i := range destinationShards {
 		aggregators[i] = make([]*RowAggregator, len(DiffTypes))
 		for _, typ := range DiffTypes {
-			aggregators[i][typ] = NewRowAggregator(ctx, writeQueryMaxRows, writeQueryMaxSize,
+			maxRows := writeQueryMaxRows
+			if typ == DiffExtraneous {
+				maxRows = writeQueryMaxRowsDelete
+			}
+			aggregators[i][typ] = NewRowAggregator(ctx, maxRows, writeQueryMaxSize,
 				insertChannels[i], dbNames[i], td, typ, statCounters)
 		}
 	}

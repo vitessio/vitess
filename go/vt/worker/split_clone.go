@@ -38,17 +38,20 @@ import (
 type SplitCloneWorker struct {
 	StatusWorker
 
-	wr                      *wrangler.Wrangler
-	cell                    string
-	keyspace                string
-	shard                   string
-	online                  bool
-	offline                 bool
-	excludeTables           []string
-	strategy                *splitStrategy
-	sourceReaderCount       int
-	writeQueryMaxRows       int
-	writeQueryMaxSize       int
+	wr                *wrangler.Wrangler
+	cell              string
+	keyspace          string
+	shard             string
+	online            bool
+	offline           bool
+	excludeTables     []string
+	strategy          *splitStrategy
+	sourceReaderCount int
+	writeQueryMaxRows int
+	writeQueryMaxSize int
+	// TODO(mberlin): Delete this when our testing found out that an extra flag
+	// for this is not necessary.
+	writeQueryMaxRowsDelete int
 	minTableSizeForSplit    uint64
 	destinationWriterCount  int
 	minHealthyRdonlyTablets int
@@ -92,7 +95,7 @@ type SplitCloneWorker struct {
 }
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
-func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, excludeTables []string, strategyStr string, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
+func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, excludeTables []string, strategyStr string, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
 	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
@@ -119,6 +122,7 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, on
 		sourceReaderCount:       sourceReaderCount,
 		writeQueryMaxRows:       writeQueryMaxRows,
 		writeQueryMaxSize:       writeQueryMaxSize,
+		writeQueryMaxRowsDelete: writeQueryMaxRowsDelete,
 		minTableSizeForSplit:    minTableSizeForSplit,
 		destinationWriterCount:  destinationWriterCount,
 		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
@@ -814,7 +818,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				// Compare the data and reconcile any differences.
 				differ, err := NewRowDiffer2(ctx, sourceReader, destReader, td, tableStatusList, tableIndex,
 					scw.destinationShards, keyResolver,
-					insertChannels, ctx.Done(), dbNames, scw.writeQueryMaxRows, scw.writeQueryMaxSize, statsCounters)
+					insertChannels, ctx.Done(), dbNames, scw.writeQueryMaxRows, scw.writeQueryMaxSize, scw.writeQueryMaxRowsDelete, statsCounters)
 				if err != nil {
 					processError("NewRowDiffer2 failed: %v", err)
 					return

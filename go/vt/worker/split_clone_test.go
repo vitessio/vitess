@@ -533,17 +533,22 @@ func TestSplitCloneV2_Reconciliation(t *testing.T) {
 	tc.leftMasterFakeDb.addExpectedQuery("UPDATE `vt_ks`.table1 SET msg='Text for 102',keyspace_id=2305843009213693952 WHERE id=102", nil)
 	tc.rightMasterFakeDb.addExpectedQuery("UPDATE `vt_ks`.table1 SET msg='Text for 101',keyspace_id=6917529027641081856 WHERE id=101", nil)
 	tc.rightMasterFakeDb.addExpectedQuery("UPDATE `vt_ks`.table1 SET msg='Text for 103',keyspace_id=6917529027641081856 WHERE id=103", nil)
+	// Delete statements. (First 3 rows on each shard.)
+	tc.leftMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id=190) OR (id=192) OR (id=194)", nil)
+	tc.rightMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id=191) OR (id=193) OR (id=195)", nil)
 	// Insert statements. (All are combined in one.)
 	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (96,'Text for 96',2305843009213693952),(98,'Text for 98',2305843009213693952)", nil)
 	tc.rightMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (97,'Text for 97',6917529027641081856),(99,'Text for 99',6917529027641081856)", nil)
-	// Delete statements. (All are combined in one.)
-	tc.leftMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id=190) OR (id=192) OR (id=194) OR (id=196) OR (id=198)", nil)
-	tc.rightMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id=191) OR (id=193) OR (id=195) OR (id=197) OR (id=199)", nil)
+	// Delete statements (after flush).
+	tc.leftMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id=196) OR (id=198)", nil)
+	tc.rightMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id=197) OR (id=199)", nil)
 	expectBlpCheckpointCreationQueries(tc.leftMasterFakeDb)
 	expectBlpCheckpointCreationQueries(tc.rightMasterFakeDb)
 
 	// Run the vtworker command.
-	if err := runCommand(t, tc.wi, tc.wi.wr, tc.defaultWorkerArgs); err != nil {
+	args := []string{"SplitClone", "--write_query_max_rows_delete", "3"}
+	args = append(args, tc.defaultWorkerArgs[1:]...)
+	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
 		t.Fatal(err)
 	}
 	if inserts := statsOnlineInsertsCounters.Counts()["table1"]; inserts != 0 {
