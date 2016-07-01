@@ -351,7 +351,9 @@
 			"Manual": false,
 			"Shard": 4,
 			"RetryMax": 0,
-			"Tags": []
+			"Tags": [
+				"webdriver"
+			]
 		},
 		"vtgate_utils": {
 			"File": "vtgate_utils_test.py",
