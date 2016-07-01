@@ -517,7 +517,7 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 	// Make sure we find a master for each destination shard and log it.
 	scw.wr.Logger().Infof("Finding a MASTER tablet for each destination shard...")
 	for _, si := range scw.destinationShards {
-		waitCtx, waitCancel := context.WithTimeout(ctx, 10*time.Second)
+		waitCtx, waitCancel := context.WithTimeout(ctx, *waitForHealthyTabletsTimeout)
 		defer waitCancel()
 		if err := discovery.WaitForTablets(waitCtx, scw.healthCheck,
 			scw.cell, si.Keyspace(), si.ShardName(), []topodatapb.TabletType{topodatapb.TabletType_MASTER}); err != nil {

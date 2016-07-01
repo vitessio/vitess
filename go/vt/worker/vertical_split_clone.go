@@ -329,7 +329,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 
 	// Make sure we find a master for each destination shard and log it.
 	vscw.wr.Logger().Infof("Finding a MASTER tablet for each destination shard...")
-	waitCtx, waitCancel := context.WithTimeout(ctx, 10*time.Second)
+	waitCtx, waitCancel := context.WithTimeout(ctx, *waitForHealthyTabletsTimeout)
 	defer waitCancel()
 	if err := discovery.WaitForTablets(waitCtx, vscw.healthCheck,
 		vscw.cell, vscw.destinationKeyspace, vscw.destinationShard, []topodatapb.TabletType{topodatapb.TabletType_MASTER}); err != nil {
