@@ -26,10 +26,7 @@ import (
 // One RowAggregator instance is specific to one destination shard and diff
 // type.
 // Important: The SQL statement generation assumes that the fields of the
-// provided row are in the same order as orderedColumns(td) would return on the
-// provided "td" (TableDefinition). That means primary key fields come first and
-// then all other fields. The order of these two sets of fields is identical
-// to the order in td.PrimaryKeyColumns and td.Columns respectively.
+// provided row are in the same order as "td.Columns".
 type RowAggregator struct {
 	ctx           context.Context
 	maxRows       int

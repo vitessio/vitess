@@ -19,6 +19,13 @@ import utils
 keyspace_id_type = keyrange_constants.KIT_UINT64
 pack_keyspace_id = struct.Struct('!Q').pack
 
+# fixed_parent_id is used as fixed value for the "parent_id" column in all rows.
+# All tests assume a multi-column primary key (parent_id, id) but only adjust
+# the "id" column and use this fixed value for "parent_id".
+# Since parent_id is fixed, not all test code has to include parent_id in a
+# WHERE clause (at the price of a full table scan).
+fixed_parent_id = 86
+
 
 class BaseShardingTest(object):
   """This base class uses unittest.TestCase methods to check various things.
@@ -37,10 +44,10 @@ class BaseShardingTest(object):
     tablet_obj.mquery(
         'vt_test_keyspace',
         ['begin',
-         'insert into %s(id, msg, custom_ksid_col) '
-         'values(%d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ '
+         'insert into %s(parent_id, id, msg, custom_ksid_col) '
+         'values(%d, %d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ '
          '/* id:%d */' %
-         (table, mid, msg, keyspace_id, k, mid),
+         (table, fixed_parent_id, mid, msg, keyspace_id, k, mid),
          'commit'],
         write=True)
 
@@ -56,8 +63,9 @@ class BaseShardingTest(object):
     """
     return tablet_obj.mquery(
         'vt_test_keyspace',
-        'select id, msg, custom_ksid_col from %s where id=%d' %
-        (table, mid))
+        'select parent_id, id, msg, custom_ksid_col from %s '
+        'where parent_id=%d and id=%d' %
+        (table, fixed_parent_id, mid))
 
   def _check_value(self, tablet_obj, table, mid, msg, keyspace_id,
                    should_be_here=True):
@@ -68,7 +76,7 @@ class BaseShardingTest(object):
     else:
       fmt = '%x'
     if should_be_here:
-      self.assertEqual(result, ((mid, msg, keyspace_id),),
+      self.assertEqual(result, ((fixed_parent_id, mid, msg, keyspace_id),),
                        ('Bad row in tablet %s for id=%d, custom_ksid_col=' +
                         fmt + ', row=%s') % (tablet_obj.tablet_alias, mid,
                                              keyspace_id, str(result)))
@@ -102,7 +110,7 @@ class BaseShardingTest(object):
       keyspace_id = pack_keyspace_id(keyspace_id)
     else:
       fmt = '%x'
-    self.assertEqual(result, ((mid, msg, keyspace_id),),
+    self.assertEqual(result, ((fixed_parent_id, mid, msg, keyspace_id),),
                      ('Bad row in tablet %s for id=%d, '
                       'custom_ksid_col=' + fmt) % (
                           tablet_obj.tablet_alias, mid, keyspace_id))

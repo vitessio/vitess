@@ -182,16 +182,20 @@ class TestResharding(unittest.TestCase, base_sharding.BaseShardingTest):
       t = 'varbinary(64)'
     else:
       t = 'bigint(20) unsigned'
+    # Note that the primary key columns are not defined first on purpose to test
+    # that a reordered column list is correctly used everywhere in vtworker.
     create_table_template = '''create table %s(
-id bigint not null,
-msg varchar(64),
 custom_ksid_col ''' + t + ''' not null,
-primary key (id),
+msg varchar(64),
+id bigint not null,
+parent_id bigint not null,
+primary key (parent_id, id),
 index by_msg (msg)
 ) Engine=InnoDB'''
     create_view_template = (
         'create view %s'
-        '(id, msg, custom_ksid_col) as select id, msg, custom_ksid_col '
+        '(parent_id, id, msg, custom_ksid_col)'
+        'as select parent_id, id, msg, custom_ksid_col '
         'from %s')
     create_timestamp_table = '''create table timestamps(
 id int not null,

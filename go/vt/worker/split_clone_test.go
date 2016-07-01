@@ -171,8 +171,12 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 			DatabaseSchema: "",
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 				{
-					Name:              "table1",
-					Columns:           []string{"id", "msg", "keyspace_id"},
+					Name: "table1",
+					// "id" is the last column in the list on purpose to test for
+					// regressions. The reconciliation code will SELECT with the primary
+					// key columns first. The same ordering must be used throughout the
+					// process e.g. by RowAggregator or the v2Resolver.
+					Columns:           []string{"msg", "keyspace_id", "id"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              tmutils.TableBaseTable,
 					// Set the table size to a value higher than --min_table_size_for_split.

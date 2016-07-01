@@ -521,16 +521,16 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 	// Make sure we find a master for each destination shard and log it.
 	scw.wr.Logger().Infof("Finding a MASTER tablet for each destination shard...")
 	for _, si := range scw.destinationShards {
-		waitCtx, waitCancel := context.WithTimeout(ctx, 10*time.Second)
+		waitCtx, waitCancel := context.WithTimeout(ctx, *waitForHealthyTabletsTimeout)
 		defer waitCancel()
 		if err := discovery.WaitForTablets(waitCtx, scw.healthCheck,
 			scw.cell, si.Keyspace(), si.ShardName(), []topodatapb.TabletType{topodatapb.TabletType_MASTER}); err != nil {
-			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v: %v", si.Keyspace(), si.ShardName(), err)
+			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v (in cell: %v): %v", si.Keyspace(), si.ShardName(), scw.cell, err)
 		}
 		masters := discovery.GetCurrentMaster(
 			scw.healthCheck.GetTabletStatsFromTarget(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER))
 		if len(masters) == 0 {
-			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v in HealthCheck: empty TabletStats list", si.Keyspace(), si.ShardName())
+			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v (in cell: %v) in HealthCheck: empty TabletStats list", si.Keyspace(), si.ShardName(), scw.cell)
 		}
 		master := masters[0]
 
@@ -701,6 +701,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 		if td.Type == tmutils.TableView {
 			continue
 		}
+		td = reorderColumnsPrimaryKeyFirst(td)
 
 		var keyResolver keyspaceIDResolver
 		if *useV3ReshardingMode {
