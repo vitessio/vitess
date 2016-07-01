@@ -233,7 +233,7 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 func (rd *RowDiffer2) reconcileRow(row []sqltypes.Value, typ DiffType) error {
 	destShardIndex, err := rd.router.Route(row)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to route row (%v) to correct shard: %v", row, err)
 	}
 
 	if err := rd.aggregators[destShardIndex][typ].Add(row); err != nil {
