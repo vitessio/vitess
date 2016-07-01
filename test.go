@@ -72,6 +72,7 @@ var (
 	docker   = flag.Bool("docker", true, "run tests with Docker")
 	shard    = flag.Int("shard", -1, "if N>=0, run the tests whose Shard field matches N")
 	tag      = flag.String("tag", "", "if provided, only run tests with the given tag. Can't be combined with -shard or explicit test list")
+	exclude  = flag.String("exclude", "", "if provided, exclude tests containing any of the given tags (comma delimited)")
 	reshard  = flag.Int("rebalance", 0, "if N>0, check the stats and group tests into N similarly-sized bins by average run time")
 	keepData = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
 	printLog = flag.Bool("print-log", false, "print the log of each failed test (or all tests if -log-pass) to the console")
@@ -125,6 +126,15 @@ type Test struct {
 func (t *Test) hasTag(want string) bool {
 	for _, got := range t.Tags {
 		if got == want {
+			return true
+		}
+	}
+	return false
+}
+
+func (t *Test) hasAnyTag(want []string) bool {
+	for _, tag := range want {
+		if t.hasTag(tag) {
 			return true
 		}
 	}
@@ -764,8 +774,9 @@ func selectedTests(args []string, config *Config) []*Test {
 	if len(args) == 0 && *shard < 0 {
 		// Run all tests.
 		var names []string
+		excluded_tests := strings.Split(*exclude, ",")
 		for name, t := range config.Tests {
-			if !t.Manual && (*tag == "" || t.hasTag(*tag)) {
+			if !t.Manual && (*tag == "" || t.hasTag(*tag)) && (*exclude == "" || !t.hasAnyTag(excluded_tests)) {
 				names = append(names, name)
 			}
 		}
