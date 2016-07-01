@@ -492,8 +492,10 @@ primary key (name)
     shard_3_master.mquery('vt_test_keyspace',
                           "update resharding1 set msg='msg-not-3' where id=3",
                           write=True)
-    # Insert row 4 (provokes a delete).
+    # Insert row 4 and 5 (provokes a delete).
     self._insert_value(shard_3_master, 'resharding1', 4, 'msg4',
+                       0xD000000000000000)
+    self._insert_value(shard_3_master, 'resharding1', 5, 'msg5',
                        0xD000000000000000)
 
     workerclient_proc = utils.run_vtworker_client_bg(
@@ -509,7 +511,7 @@ primary key (name)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly1.tablet_alias,
                      'rdonly'], auto_log=True)
     self.verify_reconciliation_counters(worker_port, 'Online', 'resharding1',
-                                        1, 1, 1)
+                                        1, 1, 2)
     self.verify_reconciliation_counters(worker_port, 'Offline', 'resharding1',
                                         0, 0, 0)
     # Terminate worker daemon because it is no longer needed.

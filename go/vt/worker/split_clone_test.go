@@ -537,8 +537,8 @@ func TestSplitCloneV2_Reconciliation(t *testing.T) {
 	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (96,'Text for 96',2305843009213693952),(98,'Text for 98',2305843009213693952)", nil)
 	tc.rightMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (97,'Text for 97',6917529027641081856),(99,'Text for 99',6917529027641081856)", nil)
 	// Delete statements. (All are combined in one.)
-	tc.leftMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id) IN ((190),(192),(194),(196),(198))", nil)
-	tc.rightMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id) IN ((191),(193),(195),(197),(199))", nil)
+	tc.leftMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id=190) OR (id=192) OR (id=194) OR (id=196) OR (id=198)", nil)
+	tc.rightMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id=191) OR (id=193) OR (id=195) OR (id=197) OR (id=199)", nil)
 	expectBlpCheckpointCreationQueries(tc.leftMasterFakeDb)
 	expectBlpCheckpointCreationQueries(tc.rightMasterFakeDb)
 
