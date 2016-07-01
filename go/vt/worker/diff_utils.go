@@ -15,6 +15,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/gogo/protobuf/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -113,9 +114,20 @@ func (f *v3KeyRangeFilter) Recv() (*sqltypes.Result, error) {
 	return r, nil
 }
 
+// reorderColumnsPrimaryKeyFirst returns a copy of "td" with the only difference
+// that the Columns field is reordered such that the primary key columns come
+// first. See orderedColumns() for details on the ordering.
+func reorderColumnsPrimaryKeyFirst(td *tabletmanagerdatapb.TableDefinition) *tabletmanagerdatapb.TableDefinition {
+	reorderedTd := proto.Clone(td).(*tabletmanagerdatapb.TableDefinition)
+	reorderedTd.Columns = orderedColumns(td)
+	return reorderedTd
+}
+
 // orderedColumns returns the list of columns:
 // - first the primary key columns in the right order
 // - then the rest of the columns
+// Within the partition of non primary key columns, the order is not changed
+// in comparison to the original order of "td.Columns".
 func orderedColumns(td *tabletmanagerdatapb.TableDefinition) []string {
 	return orderedColumnsHelper(td, true)
 }

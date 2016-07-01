@@ -60,6 +60,9 @@ type RowDiffer2 struct {
 // NewRowDiffer2 returns a new RowDiffer2.
 // We assume that the indexes of the slice parameters always correspond to the
 // same shard e.g. insertChannels[0] refers to destinationShards[0] and so on.
+// The column list td.Columns must be have all primary key columns first and
+// then the non-primary-key columns. The columns in the rows returned by
+// both ResultReader must have the same order as td.Columns.
 func NewRowDiffer2(ctx context.Context, left, right ResultReader, td *tabletmanagerdatapb.TableDefinition, tableStatusList *tableStatusList, tableIndex int,
 	// Parameters required by RowRouter.
 	destinationShards []*topo.ShardInfo, keyResolver keyspaceIDResolver,

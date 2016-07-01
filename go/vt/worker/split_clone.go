@@ -697,6 +697,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 		if td.Type == tmutils.TableView {
 			continue
 		}
+		td = reorderColumnsPrimaryKeyFirst(td)
 
 		var keyResolver keyspaceIDResolver
 		if *useV3ReshardingMode {

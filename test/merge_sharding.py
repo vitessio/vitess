@@ -83,10 +83,12 @@ class TestMergeSharding(unittest.TestCase, base_sharding.BaseShardingTest):
       t = 'varbinary(64)'
     else:
       t = 'bigint(20) unsigned'
+    # Note that "id" is the last column in the definition on purpose to test
+    # that a reordered column list is correctly used everywhere in vtworker.
     create_table_template = '''create table %s(
-id bigint not null,
 msg varchar(64),
 custom_ksid_col ''' + t + ''' not null,
+id bigint not null,
 primary key (id),
 index by_msg (msg)
 ) Engine=InnoDB'''
