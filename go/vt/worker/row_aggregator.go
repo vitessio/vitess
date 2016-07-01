@@ -150,7 +150,7 @@ type QueryBuilder interface {
 type BaseQueryBuilder struct {
 	head      string
 	tail      string
-	separator byte
+	separator string
 }
 
 // WriteHead implements the QueryBuilder interface.
@@ -165,7 +165,10 @@ func (b *BaseQueryBuilder) WriteTail(buffer *bytes.Buffer) {
 
 // WriteSeparator implements the QueryBuilder interface.
 func (b *BaseQueryBuilder) WriteSeparator(buffer *bytes.Buffer) {
-	buffer.WriteByte(b.separator)
+	if b.separator == "" {
+		panic("BaseQueryBuilder.WriteSeparator(): separator not defined")
+	}
+	buffer.WriteString(b.separator)
 }
 
 // InsertsQueryBuilder implements the QueryBuilder interface for INSERT queries.
@@ -179,7 +182,7 @@ func NewInsertsQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefiniti
 	return &InsertsQueryBuilder{
 		BaseQueryBuilder{
 			head:      "INSERT INTO `" + dbName + "`." + td.Name + " (" + strings.Join(td.Columns, ", ") + ") VALUES ",
-			separator: ',',
+			separator: ",",
 		},
 	}
 }
@@ -263,12 +266,15 @@ type DeletesQueryBuilder struct {
 
 // NewDeletesQueryBuilder creates a new DeletesQueryBuilder.
 func NewDeletesQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefinition) *DeletesQueryBuilder {
-	// Example: DELETE FROM test WHERE (id, sub_id) IN ((0, 10), (1, 11))
+	// Example: DELETE FROM test WHERE (id=0 AND sub_id=10) OR (id=1 AND sub_id=11)
+	//
+	// Note that we don't do multi row DELETEs with an IN expression because
+	// there are reports in the wild that MySQL 5.6 would do a full table scan
+	// for such a query. (We haven't confirmed this ourselves.)
 	return &DeletesQueryBuilder{
 		BaseQueryBuilder: BaseQueryBuilder{
-			head:      "DELETE FROM `" + dbName + "`." + td.Name + " WHERE (" + strings.Join(td.PrimaryKeyColumns, ", ") + ") IN (",
-			tail:      ")",
-			separator: ',',
+			head:      "DELETE FROM `" + dbName + "`." + td.Name + " WHERE ",
+			separator: " OR ",
 		},
 		td: td,
 	}
@@ -276,12 +282,14 @@ func NewDeletesQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefiniti
 
 // WriteRow implements the QueryBuilder interface.
 func (b *DeletesQueryBuilder) WriteRow(buffer *bytes.Buffer, row []sqltypes.Value) {
-	// Example: (0, 10), (1, 11)
+	// Example: (id=0 AND sub_id=10) OR (id=1 AND sub_id=11)
 	buffer.WriteByte('(')
-	for i := 0; i < len(b.td.PrimaryKeyColumns); i++ {
+	for i, pkColumn := range b.td.PrimaryKeyColumns {
 		if i > 0 {
-			buffer.WriteByte(',')
+			buffer.WriteString(" AND ")
 		}
+		buffer.WriteString(pkColumn)
+		buffer.WriteByte('=')
 		row[i].EncodeSQL(buffer)
 	}
 	buffer.WriteByte(')')
