@@ -74,12 +74,13 @@ class TestInitialSharding(unittest.TestCase, base_sharding.BaseShardingTest):
 
   # create_schema will create the same schema on the keyspace
   def _create_schema(self):
-    # Note that "id" is the last column in the definition on purpose to test
+    # Note that the primary key columns are not defined first on purpose to test
     # that a reordered column list is correctly used everywhere in vtworker.
     create_table_template = '''create table %s(
 msg varchar(64),
 id bigint not null,
-primary key (id),
+parent_id bigint not null,
+primary key (parent_id, id),
 index by_msg (msg)
 ) Engine=InnoDB'''
 
@@ -115,7 +116,8 @@ index by_msg (msg)
   def _insert_startup_value(self, tablet_obj, table, mid, msg):
     tablet_obj.mquery('vt_test_keyspace', [
         'begin',
-        'insert into %s(id, msg) values(%d, "%s")' % (table, mid, msg),
+        'insert into %s(parent_id, id, msg) values(%d, %d, "%s")' %
+        (table, base_sharding.fixed_parent_id, mid, msg),
         'commit'
         ], write=True)
 
