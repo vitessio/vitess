@@ -748,12 +748,13 @@ func getTestsSorted(names []string, testMap map[string]*Test) []*Test {
 
 func selectedTests(args []string, config *Config) []*Test {
 	var tests []*Test
+	excluded_tests := strings.Split(*exclude, ",")
 	if *shard >= 0 {
 		// Run the tests in a given shard.
 		// This can be combined with positional args.
 		var names []string
 		for name, t := range config.Tests {
-			if t.Shard == *shard {
+			if t.Shard == *shard && (*exclude == "" || !t.hasAnyTag(excluded_tests) {
 				t.name = name
 				names = append(names, name)
 			}
@@ -774,7 +775,6 @@ func selectedTests(args []string, config *Config) []*Test {
 	if len(args) == 0 && *shard < 0 {
 		// Run all tests.
 		var names []string
-		excluded_tests := strings.Split(*exclude, ",")
 		for name, t := range config.Tests {
 			if !t.Manual && (*tag == "" || t.hasTag(*tag)) && (*exclude == "" || !t.hasAnyTag(excluded_tests)) {
 				names = append(names, name)
