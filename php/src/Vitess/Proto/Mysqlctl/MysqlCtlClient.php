@@ -27,5 +27,11 @@ namespace Vitess\Proto\Mysqlctl {
     public function RunMysqlUpgrade(\Vitess\Proto\Mysqlctl\RunMysqlUpgradeRequest $argument, $metadata = array(), $options = array()) {
       return $this->_simpleRequest('/mysqlctl.MysqlCtl/RunMysqlUpgrade', $argument, '\Vitess\Proto\Mysqlctl\RunMysqlUpgradeResponse::deserialize', $metadata, $options);
     }
+    /**
+     * @param Vitess\Proto\Mysqlctl\ReinitConfigRequest $input
+     */
+    public function ReinitConfig(\Vitess\Proto\Mysqlctl\ReinitConfigRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/mysqlctl.MysqlCtl/ReinitConfig', $argument, '\Vitess\Proto\Mysqlctl\ReinitConfigResponse::deserialize', $metadata, $options);
+    }
   }
 }
