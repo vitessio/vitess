@@ -74,8 +74,8 @@ env:
     # As of 07/2015 this value works best in a Travis CI container.
     - VT_GO_PARALLEL=4
     - PATH="$HOME/.phpenv/bin:$PATH"
-    # Add -follow to TEST_FLAGS below to print as the test runs, to diagnose stuck tests. Exclude webdriver tests on Travis PRs since the sauce addon does not work for PRs
-    - TEST_FLAGS="-docker=false -timeout=5m -print-log -remote-stats=http://enisoc.com:15123/travis/stats -exclude=`[ "${TRAVIS_PULL_REQUEST}" = "false" ] && echo '' || echo 'webdriver'`"
+    # Add -follow to TEST_FLAGS below to print as the test runs, to diagnose stuck tests.
+    - TEST_FLAGS="-docker=false -timeout=5m -print-log -remote-stats=http://enisoc.com:15123/travis/stats"
     - CC=gcc-4.8
     - CXX=g++-4.8
     - INSTALL_GRPC_PHP="$HOME/.phpenv/lib"
@@ -107,7 +107,13 @@ before_script:
 script:
   # Log GOMAXPROCS (should be 2 as of 07/2015).
   - go run travis/log_gomaxprocs.go
-  - go run test.go $TEST_FLAGS $TEST_MATRIX
+  - |
+    if [[ $TRAVIS_PULL_REQUEST = "false" ]]; then
+      go run test.go $TEST_FLAGS $TEST_MATRIX
+    else
+      # Exclude webdriver tests on Travis PRs since the sauce addon does not work for PRs
+      go run test.go $TEST_FLAGS $TEST_MATRIX -exclude=webdriver
+    fi
 after_failure:
   # In case of errors, output log files to make it easier to debug the error.
   # List all available files.
