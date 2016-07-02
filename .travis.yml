@@ -108,7 +108,7 @@ script:
   # Log GOMAXPROCS (should be 2 as of 07/2015).
   - go run travis/log_gomaxprocs.go
   - |
-    if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then
+    if [[ $TRAVIS_PULL_REQUEST = "false" ]]; then
       go run test.go $TEST_FLAGS $TEST_MATRIX
     else
       # Exclude webdriver tests on Travis PRs since the sauce addon does not work for PRs
