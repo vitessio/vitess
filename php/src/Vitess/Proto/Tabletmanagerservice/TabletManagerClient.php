@@ -6,8 +6,8 @@ namespace Vitess\Proto\Tabletmanagerservice {
 
   class TabletManagerClient extends \Grpc\BaseStub {
 
-    public function __construct($hostname, $opts) {
-      parent::__construct($hostname, $opts);
+    public function __construct($hostname, $opts, $channel = null) {
+      parent::__construct($hostname, $opts, $channel);
     }
     /**
      * @param Vitess\Proto\Tabletmanagerdata\PingRequest $input
@@ -248,6 +248,12 @@ namespace Vitess\Proto\Tabletmanagerservice {
      */
     public function Backup($argument, $metadata = array(), $options = array()) {
       return $this->_serverStreamRequest('/tabletmanagerservice.TabletManager/Backup', $argument, '\Vitess\Proto\Tabletmanagerdata\BackupResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Tabletmanagerdata\RestoreFromBackupRequest $input
+     */
+    public function RestoreFromBackup($argument, $metadata = array(), $options = array()) {
+      return $this->_serverStreamRequest('/tabletmanagerservice.TabletManager/RestoreFromBackup', $argument, '\Vitess\Proto\Tabletmanagerdata\RestoreFromBackupResponse::deserialize', $metadata, $options);
     }
   }
 }

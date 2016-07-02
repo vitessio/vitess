@@ -6,8 +6,8 @@ namespace Vitess\Proto\Mysqlctl {
 
   class MysqlCtlClient extends \Grpc\BaseStub {
 
-    public function __construct($hostname, $opts) {
-      parent::__construct($hostname, $opts);
+    public function __construct($hostname, $opts, $channel = null) {
+      parent::__construct($hostname, $opts, $channel);
     }
     /**
      * @param Vitess\Proto\Mysqlctl\StartRequest $input
@@ -26,6 +26,12 @@ namespace Vitess\Proto\Mysqlctl {
      */
     public function RunMysqlUpgrade(\Vitess\Proto\Mysqlctl\RunMysqlUpgradeRequest $argument, $metadata = array(), $options = array()) {
       return $this->_simpleRequest('/mysqlctl.MysqlCtl/RunMysqlUpgrade', $argument, '\Vitess\Proto\Mysqlctl\RunMysqlUpgradeResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Mysqlctl\ReinitConfigRequest $input
+     */
+    public function ReinitConfig(\Vitess\Proto\Mysqlctl\ReinitConfigRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/mysqlctl.MysqlCtl/ReinitConfig', $argument, '\Vitess\Proto\Mysqlctl\ReinitConfigResponse::deserialize', $metadata, $options);
     }
   }
 }
