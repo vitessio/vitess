@@ -5,8 +5,11 @@
 package vtgate
 
 import (
+	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
@@ -95,6 +98,8 @@ func (rtr *Router) ExecuteRoute(vcursor *requestContext, route *engine.Route, jo
 		return rtr.execDeleteEqual(vcursor, route)
 	case engine.InsertSharded:
 		return rtr.execInsertSharded(vcursor, route)
+	case engine.MultiInsertSharded:
+		return rtr.execMultiRowInsertSharded(vcursor, route)
 	}
 
 	var err error
@@ -322,7 +327,7 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
-	ksid, err := rtr.handlePrimary(vcursor, keys[0], route.Table.ColumnVindexes[0], vcursor.bindVars)
+	ksid, err := rtr.handlePrimary(vcursor, keys[0], route.Table.ColumnVindexes[0], vcursor.bindVars, 0)
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
@@ -348,6 +353,64 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 		vcursor.notInTransaction)
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
+	}
+	if insertid != 0 {
+		if result.InsertID != 0 {
+			return nil, fmt.Errorf("sequence and db generated a value each for insert")
+		}
+		result.InsertID = uint64(insertid)
+	}
+	return result, nil
+}
+
+func (rtr *Router) execMultiRowInsertSharded(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
+	insertid, err := rtr.handleGenerate(vcursor, route.Generate)
+	if err != nil {
+		return nil, fmt.Errorf("execMultiRowInsertSharded: %v", err)
+	}
+	var firstKsid []byte
+	var ks, shard string
+
+	inputs := route.Values.([][]interface{})
+	for i, input := range inputs {
+		keys, err := rtr.resolveKeys(input, vcursor.bindVars)
+		if err != nil {
+			return nil, fmt.Errorf("execMultiRowInsertSharded: %v", err)
+		}
+		ksid, err := rtr.handlePrimary(vcursor, keys[1], route.Table.ColumnVindexes[0], vcursor.bindVars, i)
+		if err != nil {
+			return nil, fmt.Errorf("execMultiRowInsertSharded: %v", err)
+		}
+		if i == 0 {
+			firstKsid = ksid
+		} else if bytes.Compare(firstKsid, ksid) != 0 {
+			return nil, errors.New("unsupported: multi-row insert replication unfriendly")
+		}
+
+		ks, shard, err = rtr.getRouting(vcursor.ctx, route.Keyspace.Name, vcursor.tabletType, ksid)
+		if err != nil {
+			return nil, fmt.Errorf("execMultiRowInsertSharded: %v", err)
+		}
+		for i := 2; i < len(keys); i++ {
+			err := rtr.handleNonPrimary(vcursor, keys[i], route.Table.ColumnVindexes[i], vcursor.bindVars, ksid)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	rewritten := sqlannotation.AddKeyspaceID(route.Query, firstKsid, vcursor.comments)
+	result, err := rtr.scatterConn.Execute(
+		vcursor.ctx,
+		rewritten,
+		vcursor.bindVars,
+		ks,
+		[]string{shard},
+		vcursor.tabletType,
+		NewSafeSession(vcursor.session),
+		vcursor.notInTransaction)
+
+	if err != nil {
+		return nil, fmt.Errorf("execMultiRowInsertSharded: %v", err)
 	}
 	if insertid != 0 {
 		if result.InsertID != 0 {
@@ -525,7 +588,7 @@ func (rtr *Router) handleGenerate(vcursor *requestContext, gen *engine.Generate)
 	return num, nil
 }
 
-func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{}, colVindex *vindexes.ColumnVindex, bv map[string]interface{}) (ksid []byte, err error) {
+func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{}, colVindex *vindexes.ColumnVindex, bv map[string]interface{}, i int) (ksid []byte, err error) {
 	if vindexKey == nil {
 		return nil, fmt.Errorf("value must be supplied for column %v", colVindex.Column)
 	}
@@ -538,7 +601,7 @@ func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{},
 	if len(ksid) == 0 {
 		return nil, fmt.Errorf("could not map %v to a keyspace id", vindexKey)
 	}
-	bv["_"+colVindex.Column.Original()] = vindexKey
+	bv["_"+colVindex.Column.Original()+strconv.Itoa(i)] = vindexKey
 	return ksid, nil
 }
 

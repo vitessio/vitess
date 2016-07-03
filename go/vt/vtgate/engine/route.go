@@ -190,6 +190,11 @@ const (
 	// for each ColVindex. If the table has an Autoinc column,
 	// A Generate subplan must be created.
 	InsertSharded
+	// MultiInsertUnsharded is for routing a multi-row insert statement
+	// to a multiple shard. Requires: A list of Values, one
+	// for each ColVindex. If the table has an Autoinc column,
+	// A Generate subplan must be created.
+	MultiInsertSharded
 	// NumCodes is the total number of opcodes for routes.
 	NumCodes
 )

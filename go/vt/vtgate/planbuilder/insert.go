@@ -7,6 +7,7 @@ package planbuilder
 import (
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -42,20 +43,27 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 	default:
 		panic("unexpected construct in insert")
 	}
-	if len(values) != 1 {
-		return nil, errors.New("unsupported: multi-row insert")
-	}
-	switch values[0].(type) {
-	case *sqlparser.Subquery:
-		return nil, errors.New("unsupported: subqueries in insert")
-	}
-	row := values[0].(sqlparser.ValTuple)
-	if len(ins.Columns) != len(row) {
-		return nil, errors.New("column list doesn't match values")
-	}
 	colVindexes := route.Table.ColumnVindexes
-	route.Opcode = engine.InsertSharded
-	route.Values = make([]interface{}, 0, len(colVindexes))
+	if len(values) != 1 {
+		route.Opcode = engine.MultiInsertSharded
+		route.Values = make([][]interface{}, len(values))
+		for i := 0; i < len(values); i++ {
+			route.Values.([][]interface{})[i] = make([]interface{}, len(colVindexes))
+		}
+	} else {
+		route.Opcode = engine.InsertSharded
+		route.Values = make([]interface{}, 0, len(colVindexes))
+	}
+	for _, value := range values {
+		switch value.(type) {
+		case *sqlparser.Subquery:
+			return nil, errors.New("unsupported: subqueries in insert")
+		}
+		row := value.(sqlparser.ValTuple)
+		if len(ins.Columns) != len(row) {
+			return nil, errors.New("column list doesn't match values")
+		}
+	}
 	for _, index := range colVindexes {
 		if err := buildIndexPlan(ins, index, route); err != nil {
 			return nil, err
@@ -73,13 +81,20 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 // buildIndexPlan adds the insert value to the Values field for the specified ColumnVindex.
 // This value will be used at the time of insert to validate the vindex value.
 func buildIndexPlan(ins *sqlparser.Insert, colVindex *vindexes.ColumnVindex, route *engine.Route) error {
-	row, pos := findOrInsertPos(ins, colVindex.Column)
-	val, err := valConvert(row[pos])
-	if err != nil {
-		return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
+	rows, pos := findOrInsertPos(ins, colVindex.Column)
+	for i, row := range rows {
+		val, err := valConvert(row.(sqlparser.ValTuple)[pos])
+		if err != nil {
+			return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row.(sqlparser.ValTuple)[pos]), pos, err)
+		}
+		switch route.Values.(type) {
+		case [][]interface{}:
+			route.Values.([][]interface{})[i] = append(route.Values.([][]interface{})[i], val)
+		case []interface{}:
+			route.Values = append(route.Values.([]interface{}), val)
+		}
+		row.(sqlparser.ValTuple)[pos] = sqlparser.ValArg([]byte(":_" + colVindex.Column.Original() + strconv.Itoa(i)))
 	}
-	route.Values = append(route.Values.([]interface{}), val)
-	row[pos] = sqlparser.ValArg([]byte(":_" + colVindex.Column.Original()))
 	return nil
 }
 
@@ -96,17 +111,19 @@ func buildAutoIncrementPlan(ins *sqlparser.Insert, autoinc *vindexes.AutoIncreme
 		route.Values.([]interface{})[autoinc.ColumnVindexNum] = ":" + engine.SeqVarName
 		return nil
 	}
-	row, pos := findOrInsertPos(ins, autoinc.Column)
-	val, err := valConvert(row[pos])
-	if err != nil {
-		return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
+	rows, pos := findOrInsertPos(ins, autoinc.Column)
+	for _, row := range rows {
+		val, err := valConvert(row.(sqlparser.ValTuple)[pos])
+		if err != nil {
+			return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row.(sqlparser.ValTuple)[pos]), pos, err)
+		}
+		route.Generate.Value = val
+		row.(sqlparser.ValTuple)[pos] = sqlparser.ValArg([]byte(":" + engine.SeqVarName))
 	}
-	route.Generate.Value = val
-	row[pos] = sqlparser.ValArg([]byte(":" + engine.SeqVarName))
 	return nil
 }
 
-func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString) (row sqlparser.ValTuple, pos int) {
+func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString) (rows sqlparser.Values, pos int) {
 	pos = -1
 	for i, column := range ins.Columns {
 		if col.Equal(cistring.CIString(column)) {
@@ -119,5 +136,5 @@ func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString) (row sqlparse
 		ins.Columns = append(ins.Columns, sqlparser.ColIdent(col))
 		ins.Rows.(sqlparser.Values)[0] = append(ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple), &sqlparser.NullVal{})
 	}
-	return ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple), pos
+	return ins.Rows.(sqlparser.Values), pos
 }
