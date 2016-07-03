@@ -31,7 +31,3 @@ app.factory('tabletinfo', function($resource) {
 app.factory('topodata', function($resource) {
   return $resource('../api/topodata/:path');
 });
-
-app.factory('vschema', function($resource) {
-  return $resource('../api/vschema/');
-});
