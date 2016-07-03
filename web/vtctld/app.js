@@ -47,16 +47,6 @@ app.constant('routes', [
     controller: 'SchemaCtrl',
     showInNav: true,
     icon: 'storage'
-  },
-  {
-    name: 'vschema',
-    title: 'Routing Indexes',
-    urlBase: '/vschema/',
-    urlPattern: '/vschema/',
-    templateUrl: 'vschema/vschema.html',
-    controller: 'VSchemaCtrl',
-    showInNav: true,
-    icon: 'directions'
   }
 ]);
 
