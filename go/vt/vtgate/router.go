@@ -323,7 +323,7 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
 	input := route.Values.([]interface{})
-	keys, err := rtr.resolveKeys(input, vcursor.bindVars)
+	keys, err := rtr.resolveKeys(input[0].([]interface{}), vcursor.bindVars)
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
@@ -371,13 +371,13 @@ func (rtr *Router) execMultiRowInsertSharded(vcursor *requestContext, route *eng
 	var firstKsid []byte
 	var ks, shard string
 
-	inputs := route.Values.([][]interface{})
+	inputs := route.Values.([]interface{})
 	for i, input := range inputs {
-		keys, err := rtr.resolveKeys(input, vcursor.bindVars)
+		keys, err := rtr.resolveKeys(input.([]interface{}), vcursor.bindVars)
 		if err != nil {
 			return nil, fmt.Errorf("execMultiRowInsertSharded: %v", err)
 		}
-		ksid, err := rtr.handlePrimary(vcursor, keys[1], route.Table.ColumnVindexes[0], vcursor.bindVars, i)
+		ksid, err := rtr.handlePrimary(vcursor, keys[0], route.Table.ColumnVindexes[0], vcursor.bindVars, i)
 		if err != nil {
 			return nil, fmt.Errorf("execMultiRowInsertSharded: %v", err)
 		}
@@ -391,7 +391,7 @@ func (rtr *Router) execMultiRowInsertSharded(vcursor *requestContext, route *eng
 		if err != nil {
 			return nil, fmt.Errorf("execMultiRowInsertSharded: %v", err)
 		}
-		for i := 2; i < len(keys); i++ {
+		for i := 1; i < len(keys); i++ {
 			err := rtr.handleNonPrimary(vcursor, keys[i], route.Table.ColumnVindexes[i], vcursor.bindVars, ksid)
 			if err != nil {
 				return nil, err

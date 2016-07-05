@@ -43,16 +43,10 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 	default:
 		panic("unexpected construct in insert")
 	}
-	colVindexes := route.Table.ColumnVindexes
 	if len(values) != 1 {
 		route.Opcode = engine.MultiInsertSharded
-		route.Values = make([][]interface{}, len(values))
-		for i := 0; i < len(values); i++ {
-			route.Values.([][]interface{})[i] = make([]interface{}, len(colVindexes))
-		}
 	} else {
 		route.Opcode = engine.InsertSharded
-		route.Values = make([]interface{}, 0, len(colVindexes))
 	}
 	for _, value := range values {
 		switch value.(type) {
@@ -64,10 +58,16 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 			return nil, errors.New("column list doesn't match values")
 		}
 	}
+	colVindexes := route.Table.ColumnVindexes
+	var routeValues []interface{}
+	for i := 0; i < len(values); i++ {
+		routeValues = append(routeValues, make([]interface{}, 0, len(colVindexes)))
+	}
 	for _, index := range colVindexes {
-		if err := buildIndexPlan(ins, index, route); err != nil {
+		if err := buildIndexPlan(ins, index, routeValues); err != nil {
 			return nil, err
 		}
+		route.Values = routeValues
 	}
 	if route.Table.AutoIncrement != nil {
 		if err := buildAutoIncrementPlan(ins, route.Table.AutoIncrement, route); err != nil {
@@ -80,19 +80,14 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 
 // buildIndexPlan adds the insert value to the Values field for the specified ColumnVindex.
 // This value will be used at the time of insert to validate the vindex value.
-func buildIndexPlan(ins *sqlparser.Insert, colVindex *vindexes.ColumnVindex, route *engine.Route) error {
+func buildIndexPlan(ins *sqlparser.Insert, colVindex *vindexes.ColumnVindex, routeValues []interface{}) error {
 	rows, pos := findOrInsertPos(ins, colVindex.Column)
 	for i, row := range rows {
 		val, err := valConvert(row.(sqlparser.ValTuple)[pos])
 		if err != nil {
 			return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row.(sqlparser.ValTuple)[pos]), pos, err)
 		}
-		switch route.Values.(type) {
-		case [][]interface{}:
-			route.Values.([][]interface{})[i] = append(route.Values.([][]interface{})[i], val)
-		case []interface{}:
-			route.Values = append(route.Values.([]interface{}), val)
-		}
+		routeValues[i] = append(routeValues[i].([]interface{}), val)
 		row.(sqlparser.ValTuple)[pos] = sqlparser.ValArg([]byte(":_" + colVindex.Column.Original() + strconv.Itoa(i)))
 	}
 	return nil
