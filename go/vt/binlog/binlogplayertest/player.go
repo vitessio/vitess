@@ -71,7 +71,7 @@ var testStreamEvent = &binlogdatapb.StreamEvent{
 			Values:  []byte{'1', '2', '3'},
 		},
 	},
-	Sql:           []byte("test sql"),
+	Sql:           []byte("test sql with invalid utf-8 character \x80"),
 	Timestamp:     372,
 	TransactionId: "StreamEvent returned transaction id",
 }
