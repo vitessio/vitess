@@ -5,6 +5,7 @@
 package worker
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -16,12 +17,12 @@ func TestGreaterThanTupleWhereClause(t *testing.T) {
 	testcases := []struct {
 		columns []string
 		row     []sqltypes.Value
-		want    string
+		want    []string
 	}{
 		{
 			columns: []string{"a"},
 			row:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))},
-			want:    "a>1",
+			want:    []string{"a>1"},
 		},
 		{
 			columns: []string{"a", "b"},
@@ -29,7 +30,7 @@ func TestGreaterThanTupleWhereClause(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 				sqltypes.MakeTrusted(sqltypes.Float32, []byte("2.1")),
 			},
-			want: "(a,b)>(1,2.1)",
+			want: []string{"a>=1", "(a,b)>(1,2.1)"},
 		},
 		{
 			columns: []string{"a", "b", "c"},
@@ -38,13 +39,13 @@ func TestGreaterThanTupleWhereClause(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.Float32, []byte("2.1")),
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("Bär")),
 			},
-			want: "(a,b,c)>(1,2.1,'Bär')",
+			want: []string{"a>=1", "(a,b,c)>(1,2.1,'Bär')"},
 		},
 	}
 
 	for _, tc := range testcases {
 		got := greaterThanTupleWhereClause(tc.columns, tc.row)
-		if got != tc.want {
+		if !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("greaterThanTupleWhereClause(%v, %v) = %v, want = %v", tc.columns, tc.row, got, tc.want)
 		}
 	}
@@ -120,7 +121,7 @@ func TestGenerateQuery(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
 			},
-			want: "SELECT a,b,msg1,msg2 FROM t1 WHERE (a,b)>(1,2) AND a<26 ORDER BY a,b",
+			want: "SELECT a,b,msg1,msg2 FROM t1 WHERE a>=1 AND (a,b)>(1,2) AND a<26 ORDER BY a,b",
 		},
 		{
 			desc:              "no start or end defined but last row (multi-column primary key)",
@@ -131,7 +132,7 @@ func TestGenerateQuery(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
 			},
-			want: "SELECT a,b,msg1,msg2 FROM t1 WHERE (a,b)>(1,2) ORDER BY a,b",
+			want: "SELECT a,b,msg1,msg2 FROM t1 WHERE a>=1 AND (a,b)>(1,2) ORDER BY a,b",
 		},
 	}
 

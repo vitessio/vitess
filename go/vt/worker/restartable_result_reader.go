@@ -157,7 +157,7 @@ func (r *RestartableResultReader) generateQuery() {
 		// had the clause 'WHERE PrimaryKeyColumns[0] < end'.
 		// TODO(mberlin): Write an e2e test to verify that restarts also work with
 		// string types and MySQL collation rules.
-		clauses = append(clauses, greaterThanTupleWhereClause(r.td.PrimaryKeyColumns, r.lastRow))
+		clauses = append(clauses, greaterThanTupleWhereClause(r.td.PrimaryKeyColumns, r.lastRow)...)
 	}
 
 	// end value.
@@ -183,9 +183,9 @@ func (r *RestartableResultReader) generateQuery() {
 // The caller has to ensure that "columns" matches with the values in "row".
 // Examples:
 // one column:    a > 1
-// two columns:   (a,b) > (1,2)
+// two columns:   a>=1 AND (a,b) > (1,2)
 //   (Input for that would be: columns{"a", "b"}, row{1, 2}.)
-// three columns: (a,b,c) > (1,2,3)
+// three columns: a>=1 AND (a,b,c) > (1,2,3)
 //
 // Note that we are using the short-form for row comparisons. This is defined
 // by MySQL. See: http://dev.mysql.com/doc/refman/5.5/en/comparison-operators.html
@@ -193,7 +193,23 @@ func (r *RestartableResultReader) generateQuery() {
 //   For row comparisons, (a, b) < (x, y) is equivalent to:
 //   (a < x) OR ((a = x) AND (b < y))
 // </quote>
-func greaterThanTupleWhereClause(columns []string, row []sqltypes.Value) string {
+//
+// NOTE: If there is more than one column, we add an extra clause for the
+// first column because older MySQL versions seem to do a full table scan
+// when we use the short-form. With the additional clause we skip the full
+// table scan up the primary key we're interested it.
+func greaterThanTupleWhereClause(columns []string, row []sqltypes.Value) []string {
+	var clauses []string
+
+	// Additional clause on the first column for multi-columns.
+	if len(columns) > 1 {
+		var b bytes.Buffer
+		b.WriteString(columns[0])
+		b.WriteString(">=")
+		row[0].EncodeSQL(&b)
+		clauses = append(clauses, b.String())
+	}
+
 	var b bytes.Buffer
 	// List of columns.
 	if len(columns) > 1 {
@@ -220,6 +236,7 @@ func greaterThanTupleWhereClause(columns []string, row []sqltypes.Value) string 
 	if len(columns) > 1 {
 		b.WriteByte(')')
 	}
+	clauses = append(clauses, b.String())
 
-	return b.String()
+	return clauses
 }
