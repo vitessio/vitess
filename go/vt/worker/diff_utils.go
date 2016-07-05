@@ -30,6 +30,9 @@ import (
 )
 
 // QueryResultReader will stream rows towards the output channel.
+// TODO(mberlin): Delete this in favor of RestartableResultReader once
+// we are confident that the new SplitClone code produces the same diff results
+// as the old diff code.
 type QueryResultReader struct {
 	output sqltypes.ResultStream
 	fields []*querypb.Field

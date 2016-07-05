@@ -718,15 +718,15 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 
 		// TODO(mberlin): We're going to chunk *all* source shards based on the MIN
 		// and MAX values of the *first* source shard. Is this going to be a problem?
-		chunks, err := FindChunks(ctx, scw.wr, firstSourceTablet, td, scw.minTableSizeForSplit, scw.sourceReaderCount)
+		chunks, err := generateChunks(ctx, scw.wr, firstSourceTablet, td, scw.minTableSizeForSplit, scw.sourceReaderCount)
 		if err != nil {
 			return err
 		}
 		tableStatusList.setThreadCount(tableIndex, len(chunks)-1)
 
-		for chunkIndex := 0; chunkIndex < len(chunks)-1; chunkIndex++ {
+		for _, c := range chunks {
 			sourceWaitGroup.Add(1)
-			go func(td *tabletmanagerdatapb.TableDefinition, tableIndex, chunkIndex int) {
+			go func(td *tabletmanagerdatapb.TableDefinition, tableIndex int, chunk chunk) {
 				defer sourceWaitGroup.Done()
 
 				// We need our own error per Go routine to avoid races.
@@ -759,10 +759,9 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 						defer scw.tabletTracker.Untrack(sourceAlias)
 					}
 
-					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, sourceAlias.String())
-					sourceResultReader, err := NewQueryResultReaderForTablet(ctx, scw.wr.TopoServer(), sourceAlias, selectSQL)
+					sourceResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), scw.wr.TopoServer(), sourceAlias, td, chunk)
 					if err != nil {
-						processError("NewQueryResultReaderForTablet for source tablets failed: %v", err)
+						processError("NewRestartableResultReader for source tablet: %v failed: %v", sourceAlias, err)
 						return
 					}
 					defer sourceResultReader.Close()
@@ -780,10 +779,9 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					destAlias := scw.tabletTracker.Track(tablets)
 					defer scw.tabletTracker.Untrack(destAlias)
 
-					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, destAlias.String())
-					destResultReader, err := NewQueryResultReaderForTablet(ctx, scw.wr.TopoServer(), destAlias, selectSQL)
+					destResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), scw.wr.TopoServer(), destAlias, td, chunk)
 					if err != nil {
-						processError("NewQueryResultReaderForTablet for dest tablets failed: %v", err)
+						processError("NewQueryResultReaderForTablet for dest tablet: %v failed: %v", destAlias, err)
 						return
 					}
 					defer destResultReader.Close()
@@ -832,7 +830,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				}
 
 				tableStatusList.threadDone(tableIndex)
-			}(td, tableIndex, chunkIndex)
+			}(td, tableIndex, c)
 		}
 	}
 	sourceWaitGroup.Wait()

@@ -549,15 +549,15 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 			}
 			rowSplitter := NewRowSplitter(scw.destinationShards, keyResolver)
 
-			chunks, err := FindChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
+			chunks, err := generateChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
 			if err != nil {
 				return err
 			}
 			scw.tableStatusList.setThreadCount(tableIndex, len(chunks)-1)
 
-			for chunkIndex := 0; chunkIndex < len(chunks)-1; chunkIndex++ {
+			for _, c := range chunks {
 				sourceWaitGroup.Add(1)
-				go func(td *tabletmanagerdatapb.TableDefinition, tableIndex, chunkIndex int) {
+				go func(td *tabletmanagerdatapb.TableDefinition, tableIndex int, chunk chunk) {
 					defer sourceWaitGroup.Done()
 
 					sema.Acquire()
@@ -565,14 +565,13 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 
 					scw.tableStatusList.threadStarted(tableIndex)
 
-					// build the query, and start the streaming
-					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, scw.sourceAliases[shardIndex].String())
-					qrr, err := NewQueryResultReaderForTablet(ctx, scw.wr.TopoServer(), scw.sourceAliases[shardIndex], selectSQL)
+					// Start streaming from the source tablets.
+					rr, err := NewRestartableResultReader(ctx, scw.wr.Logger(), scw.wr.TopoServer(), scw.sourceAliases[shardIndex], td, chunk)
 					if err != nil {
-						processError("NewQueryResultReaderForTablet failed: %v", err)
+						processError("NewRestartableResultReader failed: %v", err)
 						return
 					}
-					defer qrr.Close()
+					defer rr.Close()
 
 					// process the data
 					dbNames := make([]string, len(scw.destinationShards))
@@ -580,11 +579,11 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 						keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
 						dbNames[i] = scw.destinationDbNames[keyspaceAndShard]
 					}
-					if err := scw.processData(ctx, dbNames, td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount); err != nil {
+					if err := scw.processData(ctx, dbNames, td, tableIndex, rr, rowSplitter, insertChannels, scw.destinationPackCount); err != nil {
 						processError("processData failed: %v", err)
 					}
 					scw.tableStatusList.threadDone(tableIndex)
-				}(td, tableIndex, chunkIndex)
+				}(td, tableIndex, c)
 			}
 		}
 	}
@@ -684,7 +683,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 
 // processData pumps the data out of the provided QueryResultReader.
 // It returns any error the source encounters.
-func (scw *LegacySplitCloneWorker) processData(ctx context.Context, dbNames []string, td *tabletmanagerdatapb.TableDefinition, tableIndex int, qrr *QueryResultReader, rowSplitter *RowSplitter, insertChannels []chan string, destinationPackCount int) error {
+func (scw *LegacySplitCloneWorker) processData(ctx context.Context, dbNames []string, td *tabletmanagerdatapb.TableDefinition, tableIndex int, rr ResultReader, rowSplitter *RowSplitter, insertChannels []chan string, destinationPackCount int) error {
 	// Store the baseCmd per destination shard because each tablet may have a
 	// different dbName.
 	baseCmds := make([]string, len(dbNames))
@@ -694,9 +693,9 @@ func (scw *LegacySplitCloneWorker) processData(ctx context.Context, dbNames []st
 	sr := rowSplitter.StartSplit()
 	packCount := 0
 
-	fields := qrr.Fields()
+	fields := rr.Fields()
 	for {
-		r, err := qrr.Next()
+		r, err := rr.Next()
 		if err != nil {
 			// we are done, see if there was an error
 			if err != io.EOF {
