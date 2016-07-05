@@ -1,3 +1,7 @@
+// Copyright 2016, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package worker
 
 import (
@@ -131,7 +135,7 @@ func (r *RestartableResultReader) startStream() error {
 }
 
 func (r *RestartableResultReader) generateQuery() {
-	query := "SELECT " + strings.Join(r.td.Columns, ", ") + " FROM " + r.td.Name
+	query := "SELECT " + strings.Join(r.td.Columns, ",") + " FROM " + r.td.Name
 
 	// Build WHERE clauses.
 	var clauses []string
@@ -153,13 +157,7 @@ func (r *RestartableResultReader) generateQuery() {
 		// had the clause 'WHERE PrimaryKeyColumns[0] < end'.
 		// TODO(mberlin): Write an e2e test to verify that restarts also work with
 		// string types and MySQL collation rules.
-		var b bytes.Buffer
-		for i := 0; i < len(r.td.PrimaryKeyColumns); i++ {
-			b.WriteString(r.td.PrimaryKeyColumns[i])
-			b.WriteString(">")
-			r.lastRow[i].EncodeSQL(&b)
-		}
-		clauses = append(clauses, b.String())
+		clauses = append(clauses, greaterThanTupleWhereClause(r.td.PrimaryKeyColumns, r.lastRow))
 	}
 
 	// end value.
@@ -175,7 +173,53 @@ func (r *RestartableResultReader) generateQuery() {
 		query += " WHERE " + strings.Join(clauses, " AND ")
 	}
 	if len(r.td.PrimaryKeyColumns) > 0 {
-		query += " ORDER BY " + strings.Join(r.td.PrimaryKeyColumns, ", ")
+		query += " ORDER BY " + strings.Join(r.td.PrimaryKeyColumns, ",")
 	}
 	r.query = query
+}
+
+// greaterThanTupleWhereClause builds a greater than (">") WHERE clause
+// expression for the first "columns" in "row".
+// The caller has to ensure that "columns" matches with the values in "row".
+// Examples:
+// one column:    a > 1
+// two columns:   (a,b) > (1,2)
+//   (Input for that would be: columns{"a", "b"}, row{1, 2}.)
+// three columns: (a,b,c) > (1,2,3)
+//
+// Note that we are using the short-form for row comparisons. This is defined
+// by MySQL. See: http://dev.mysql.com/doc/refman/5.5/en/comparison-operators.html
+// <quote>
+//   For row comparisons, (a, b) < (x, y) is equivalent to:
+//   (a < x) OR ((a = x) AND (b < y))
+// </quote>
+func greaterThanTupleWhereClause(columns []string, row []sqltypes.Value) string {
+	var b bytes.Buffer
+	// List of columns.
+	if len(columns) > 1 {
+		b.WriteByte('(')
+	}
+	b.WriteString(strings.Join(columns, ","))
+	if len(columns) > 1 {
+		b.WriteByte(')')
+	}
+
+	// Operator.
+	b.WriteString(">")
+
+	// List of values.
+	if len(columns) > 1 {
+		b.WriteByte('(')
+	}
+	for i := 0; i < len(columns); i++ {
+		if i != 0 {
+			b.WriteByte(',')
+		}
+		row[i].EncodeSQL(&b)
+	}
+	if len(columns) > 1 {
+		b.WriteByte(')')
+	}
+
+	return b.String()
 }
