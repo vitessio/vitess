@@ -552,7 +552,7 @@ func agentRPCTestApplySchemaPanic(ctx context.Context, t *testing.T, client tmcl
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-var testExecuteFetchQuery = []byte("fetch this")
+var testExecuteFetchQuery = []byte("fetch this invalid utf8 character \x80")
 var testExecuteFetchMaxRows = 100
 var testExecuteFetchResult = &querypb.QueryResult{
 	Fields: []*querypb.Field{
