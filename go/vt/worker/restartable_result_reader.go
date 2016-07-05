@@ -81,7 +81,7 @@ func NewRestartableResultReader(ctx context.Context, logger logutil.Logger, ts t
 func (r *RestartableResultReader) Next() (*sqltypes.Result, error) {
 	result, err := r.output.Recv()
 	if err != nil && err != io.EOF {
-		r.logger.Infof("tablet=%v table=%v chunk=%v: Failed to read next rows from active streaming query. Trying to restart stream.", topoproto.TabletAliasString(r.tabletAlias), r.td.Name, r.chunk)
+		r.logger.Infof("tablet=%v table=%v chunk=%v: Failed to read next rows from active streaming query. Trying to restart stream. Original Error: %v", topoproto.TabletAliasString(r.tabletAlias), r.td.Name, r.chunk, err)
 		// Restart streaming query.
 		// Note that we intentionally don't reset "r.conn" here. This restart
 		// mechanism is only meant to fix transient problems which go away at the
