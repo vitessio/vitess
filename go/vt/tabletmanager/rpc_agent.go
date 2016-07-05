@@ -197,9 +197,9 @@ type RPCAgent interface {
 
 	ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 
-	ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error)
+	ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error)
 
-	ExecuteFetchAsApp(ctx context.Context, query string, maxrows int) (*querypb.QueryResult, error)
+	ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error)
 
 	// Replication related methods
 

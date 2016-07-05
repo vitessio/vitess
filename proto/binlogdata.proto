@@ -38,7 +38,7 @@ message BinlogTransaction {
     Charset charset = 2;
 
     // the sql
-    string sql = 3;
+    bytes sql = 3;
   }
 
   // the statements in this transaction
@@ -68,7 +68,7 @@ message StreamEvent {
   repeated query.Row primary_key_values = 4;
 
   // sql is set for SE_DDL or SE_ERR
-  string sql = 5;
+  bytes sql = 5;
 
   // timestamp is set for SE_DML, SE_DDL or SE_ERR
   int64 timestamp = 6;

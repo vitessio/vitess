@@ -263,7 +263,7 @@ func (client *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *to
 	return result, nil
 }
 
-func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, query string, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
+func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
 	if client.EnableExecuteFetchAsDbaError {
 		return nil, fmt.Errorf("ExecuteFetchAsDba occur an unknown error")
 	}

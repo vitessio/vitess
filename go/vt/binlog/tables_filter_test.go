@@ -20,13 +20,13 @@ func TestTablesFilterPass(t *testing.T) {
 		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      "set1",
+				Sql:      []byte("set1"),
 			}, {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-				Sql:      "dml1 /* _stream included1 (id ) (500 ); */",
+				Sql:      []byte("dml1 /* _stream included1 (id ) (500 ); */"),
 			}, {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-				Sql:      "dml2 /* _stream included2 (id ) (500 ); */",
+				Sql:      []byte("dml2 /* _stream included2 (id ) (500 ); */"),
 			},
 		},
 	}
@@ -47,10 +47,10 @@ func TestTablesFilterSkip(t *testing.T) {
 		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      "set1",
+				Sql:      []byte("set1"),
 			}, {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-				Sql:      "dml1 /* _stream excluded1 (id ) (500 ); */",
+				Sql:      []byte("dml1 /* _stream excluded1 (id ) (500 ); */"),
 			},
 		},
 	}
@@ -71,10 +71,10 @@ func TestTablesFilterDDL(t *testing.T) {
 		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      "set1",
+				Sql:      []byte("set1"),
 			}, {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DDL,
-				Sql:      "ddl",
+				Sql:      []byte("ddl"),
 			},
 		},
 	}
@@ -95,13 +95,13 @@ func TestTablesFilterMalformed(t *testing.T) {
 		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      "set1",
+				Sql:      []byte("set1"),
 			}, {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-				Sql:      "ddl",
+				Sql:      []byte("ddl"),
 			}, {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-				Sql:      "dml1 /* _stream excluded1*/",
+				Sql:      []byte("dml1 /* _stream excluded1*/"),
 			},
 		},
 	}

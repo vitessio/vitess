@@ -324,7 +324,7 @@ func (client *Client) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet
 }
 
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, query string, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
+func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
 	c, err := client.dialPool(tablet)
 	if err != nil {
 		return nil, err
@@ -343,7 +343,7 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.
 }
 
 // ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, query string, maxRows int) (*querypb.QueryResult, error) {
+func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int) (*querypb.QueryResult, error) {
 	c, err := client.dialPool(tablet)
 	if err != nil {
 		return nil, err
