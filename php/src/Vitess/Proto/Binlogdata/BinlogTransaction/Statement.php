@@ -41,11 +41,11 @@ namespace Vitess\Proto\Binlogdata\BinlogTransaction {
       $f->reference = '\Vitess\Proto\Binlogdata\Charset';
       $descriptor->addField($f);
 
-      // OPTIONAL STRING sql = 3
+      // OPTIONAL BYTES sql = 3
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 3;
       $f->name      = "sql";
-      $f->type      = \DrSlump\Protobuf::TYPE_STRING;
+      $f->type      = \DrSlump\Protobuf::TYPE_BYTES;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 

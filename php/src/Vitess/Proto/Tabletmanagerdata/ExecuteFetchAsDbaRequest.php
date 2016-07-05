@@ -29,11 +29,11 @@ namespace Vitess\Proto\Tabletmanagerdata {
     {
       $descriptor = new \DrSlump\Protobuf\Descriptor(__CLASS__, 'tabletmanagerdata.ExecuteFetchAsDbaRequest');
 
-      // OPTIONAL STRING query = 1
+      // OPTIONAL BYTES query = 1
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 1;
       $f->name      = "query";
-      $f->type      = \DrSlump\Protobuf::TYPE_STRING;
+      $f->type      = \DrSlump\Protobuf::TYPE_BYTES;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 

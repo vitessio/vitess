@@ -336,7 +336,7 @@ func (wr *Wrangler) applySQLShard(ctx context.Context, tabletInfo *topo.TabletIn
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	// Need to make sure that we enable binlog, since we're only applying the statement on masters.
-	_, err = wr.tmc.ExecuteFetchAsDba(ctx, tabletInfo.Tablet, filledChange, 0, false, reloadSchema)
+	_, err = wr.tmc.ExecuteFetchAsDba(ctx, tabletInfo.Tablet, []byte(filledChange), 0, false, reloadSchema)
 	return err
 }
 

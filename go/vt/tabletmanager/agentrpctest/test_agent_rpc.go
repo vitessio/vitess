@@ -552,7 +552,7 @@ func agentRPCTestApplySchemaPanic(ctx context.Context, t *testing.T, client tmcl
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-var testExecuteFetchQuery = "fetch this"
+var testExecuteFetchQuery = []byte("fetch this")
 var testExecuteFetchMaxRows = 100
 var testExecuteFetchResult = &querypb.QueryResult{
 	Fields: []*querypb.Field{
@@ -580,7 +580,7 @@ var testExecuteFetchResult = &querypb.QueryResult{
 	},
 }
 
-func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -592,7 +592,7 @@ func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query string, db
 	return testExecuteFetchResult, nil
 }
 
-func (fra *fakeRPCAgent) ExecuteFetchAsApp(ctx context.Context, query string, maxrows int) (*querypb.QueryResult, error) {
+func (fra *fakeRPCAgent) ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

@@ -57,16 +57,17 @@ func (evs *EventStreamer) transactionToEvent(trans *binlogdatapb.BinlogTransacti
 	for _, stmt := range trans.Statements {
 		switch stmt.Category {
 		case binlogdatapb.BinlogTransaction_Statement_BL_SET:
-			if strings.HasPrefix(stmt.Sql, binlogSetInsertID) {
-				insertid, err = strconv.ParseInt(stmt.Sql[binlogSetInsertIDLen:], 10, 64)
+			sql := string(stmt.Sql)
+			if strings.HasPrefix(sql, binlogSetInsertID) {
+				insertid, err = strconv.ParseInt(sql[binlogSetInsertIDLen:], 10, 64)
 				if err != nil {
 					binlogStreamerErrors.Add("EventStreamer", 1)
-					log.Errorf("%v: %s", err, stmt.Sql)
+					log.Errorf("%v: %s", err, sql)
 				}
 			}
 		case binlogdatapb.BinlogTransaction_Statement_BL_DML:
 			var dmlEvent *binlogdatapb.StreamEvent
-			dmlEvent, insertid, err = evs.buildDMLEvent(stmt.Sql, insertid)
+			dmlEvent, insertid, err = evs.buildDMLEvent(string(stmt.Sql), insertid)
 			if err != nil {
 				dmlEvent = &binlogdatapb.StreamEvent{
 					Category: binlogdatapb.StreamEvent_SE_ERR,

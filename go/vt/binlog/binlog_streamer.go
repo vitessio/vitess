@@ -254,7 +254,7 @@ func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replic
 			}
 			statements = append(statements, &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      fmt.Sprintf("SET %s=%d", name, value),
+				Sql:      []byte(fmt.Sprintf("SET %s=%d", name, value)),
 			})
 		case ev.IsRand(): // RAND_EVENT
 			seed1, seed2, err := ev.Rand(format)
@@ -263,7 +263,7 @@ func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replic
 			}
 			statements = append(statements, &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      fmt.Sprintf("SET @@RAND_SEED1=%d, @@RAND_SEED2=%d", seed1, seed2),
+				Sql:      []byte(fmt.Sprintf("SET @@RAND_SEED1=%d, @@RAND_SEED2=%d", seed1, seed2)),
 			})
 		case ev.IsQuery(): // QUERY_EVENT
 			// Extract the query string and group into transactions.
@@ -292,11 +292,11 @@ func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replic
 				}
 				setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
 					Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-					Sql:      fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp()),
+					Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
 				}
 				statement := &binlogdatapb.BinlogTransaction_Statement{
 					Category: cat,
-					Sql:      q.SQL,
+					Sql:      []byte(q.SQL),
 				}
 				// If the statement has a charset and it's different than our client's
 				// default charset, send it along with the statement.

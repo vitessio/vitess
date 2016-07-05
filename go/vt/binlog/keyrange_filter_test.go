@@ -22,13 +22,13 @@ func TestKeyRangeFilterPass(t *testing.T) {
 		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      "set1",
+				Sql:      []byte("set1"),
 			}, {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-				Sql:      "dml1 /* vtgate:: keyspace_id:20 */",
+				Sql:      []byte("dml1 /* vtgate:: keyspace_id:20 */"),
 			}, {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-				Sql:      "dml2 /* vtgate:: keyspace_id:02 */",
+				Sql:      []byte("dml2 /* vtgate:: keyspace_id:02 */"),
 			},
 		},
 		TransactionId: "MariaDB/0-41983-1",
@@ -50,10 +50,10 @@ func TestKeyRangeFilterSkip(t *testing.T) {
 		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      "set1",
+				Sql:      []byte("set1"),
 			}, {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-				Sql:      "dml1 /* vtgate:: keyspace_id:20 */",
+				Sql:      []byte("dml1 /* vtgate:: keyspace_id:20 */"),
 			},
 		},
 		TransactionId: "MariaDB/0-41983-1",
@@ -75,10 +75,10 @@ func TestKeyRangeFilterDDL(t *testing.T) {
 		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      "set1",
+				Sql:      []byte("set1"),
 			}, {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DDL,
-				Sql:      "ddl",
+				Sql:      []byte("ddl"),
 			},
 		},
 		TransactionId: "MariaDB/0-41983-1",
@@ -100,16 +100,16 @@ func TestKeyRangeFilterMalformed(t *testing.T) {
 		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      "set1",
+				Sql:      []byte("set1"),
 			}, {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-				Sql:      "ddl",
+				Sql:      []byte("ddl"),
 			}, {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-				Sql:      "dml1 /* vtgate:: keyspace_id:20*/",
+				Sql:      []byte("dml1 /* vtgate:: keyspace_id:20*/"),
 			}, {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-				Sql:      "dml1 /* vtgate:: keyspace_id:2 */", // Odd-length hex string.
+				Sql:      []byte("dml1 /* vtgate:: keyspace_id:2 */"), // Odd-length hex string.
 			},
 		},
 		TransactionId: "MariaDB/0-41983-1",
@@ -129,7 +129,7 @@ func TestKeyRangeFilterMalformed(t *testing.T) {
 func bltToString(tx *binlogdatapb.BinlogTransaction) string {
 	result := ""
 	for _, statement := range tx.Statements {
-		result += fmt.Sprintf("statement: <%d, \"%s\"> ", statement.Category, statement.Sql)
+		result += fmt.Sprintf("statement: <%d, \"%s\"> ", statement.Category, string(statement.Sql))
 	}
 	result += fmt.Sprintf("transaction_id: \"%v\" ", tx.TransactionId)
 	return result
