@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -19,17 +18,14 @@ import (
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 )
 
-// The default values used by these flags cannot be taken from wrangler and
-// actionnode modules, as we don't want to depend on them at all.
 var (
-	actionTimeout = flag.Duration("action_timeout", time.Hour, "timeout for the total command")
-	server        = flag.String("server", "", "server to use for connection")
+	server = flag.String("server", "", "server to use for connection")
 )
 
 func main() {
 	flag.Parse()
 
-	ctx, cancel := context.WithTimeout(context.Background(), *actionTimeout)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)

@@ -203,7 +203,7 @@ message ApplySchemaResponse {
 }
 
 message ExecuteFetchAsDbaRequest {
-  string query = 1;
+  bytes query = 1;
   string db_name = 2;
   uint64 max_rows = 3;
   bool disable_binlogs = 4;
@@ -215,7 +215,7 @@ message ExecuteFetchAsDbaResponse {
 }
 
 message ExecuteFetchAsAppRequest {
-  string query = 1;
+  bytes query = 1;
   uint64 max_rows = 2;
 }
 

@@ -71,7 +71,7 @@ var testStreamEvent = &binlogdatapb.StreamEvent{
 			Values:  []byte{'1', '2', '3'},
 		},
 	},
-	Sql:           "test sql",
+	Sql:           []byte("test sql"),
 	Timestamp:     372,
 	TransactionId: "StreamEvent returned transaction id",
 }
@@ -147,7 +147,7 @@ var testBinlogTransaction = &binlogdatapb.BinlogTransaction{
 				Conn:   130,
 				Server: 140,
 			},
-			Sql: "my statement",
+			Sql: []byte("my statement"),
 		},
 	},
 	Timestamp:     78,

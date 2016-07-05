@@ -33,20 +33,21 @@ func TablesFilterFunc(tables []string, sendReply sendTransactionFunc) sendTransa
 				log.Warningf("Not forwarding DDL: %s", statement.Sql)
 				continue
 			case binlogdatapb.BinlogTransaction_Statement_BL_DML:
-				tableIndex := strings.LastIndex(statement.Sql, streamComment)
+				sql := string(statement.Sql)
+				tableIndex := strings.LastIndex(sql, streamComment)
 				if tableIndex == -1 {
 					updateStreamErrors.Add("TablesStream", 1)
-					log.Errorf("Error parsing table name: %s", statement.Sql)
+					log.Errorf("Error parsing table name: %s", sql)
 					continue
 				}
 				tableStart := tableIndex + len(streamComment)
-				tableEnd := strings.Index(statement.Sql[tableStart:], space)
+				tableEnd := strings.Index(sql[tableStart:], space)
 				if tableEnd == -1 {
 					updateStreamErrors.Add("TablesStream", 1)
-					log.Errorf("Error parsing table name: %s", statement.Sql)
+					log.Errorf("Error parsing table name: %s", sql)
 					continue
 				}
-				tableName := statement.Sql[tableStart : tableStart+tableEnd]
+				tableName := sql[tableStart : tableStart+tableEnd]
 				for _, t := range tables {
 					if t == tableName {
 						filtered = append(filtered, statement)
@@ -56,7 +57,7 @@ func TablesFilterFunc(tables []string, sendReply sendTransactionFunc) sendTransa
 				}
 			case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
 				updateStreamErrors.Add("TablesStream", 1)
-				log.Errorf("Error parsing table name: %s", statement.Sql)
+				log.Errorf("Error parsing table name: %s", string(statement.Sql))
 				continue
 			}
 		}
