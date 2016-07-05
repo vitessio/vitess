@@ -722,7 +722,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 		if err != nil {
 			return err
 		}
-		tableStatusList.setThreadCount(tableIndex, len(chunks)-1)
+		tableStatusList.setThreadCount(tableIndex, len(chunks))
 
 		for _, c := range chunks {
 			sourceWaitGroup.Add(1)
