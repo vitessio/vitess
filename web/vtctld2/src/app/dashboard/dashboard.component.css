@@ -4,21 +4,39 @@ h1 {
 md-card-title {
   text-align: center;
 }
+a:link {
+    text-decoration: none;
+    color:black;
+}
+
+a:visited {
+    text-decoration: none;
+    color:black;
+}
+
+a:hover {
+    text-decoration: none;
+}
+
+a:active {
+    text-decoration: none;
+}
+.vt-row {
+  display: flex;
+  flex-wrap: wrap;
+
+}
 .keyspaceCard {
-  display: inline-block;
+  display: inline-table;
   width: 40%;
-  text-align: center;
-  margin: 1%;
-  background-color: #D8D8D8 ;
+  margin-left: 7%;
+  margin-bottom: 1%;
+  margin-top: 1%;
 }
 .keyspace-content {
-  width: 25%;
-  display: inline-block;
-  background-color: #A0A0A0;
-  margin: 2%;
 }
 .stats-container {
-  width: 90%;
+  width: 80%;
   margin: 0 auto;
 }
 .vt-stat-value-container {
@@ -44,21 +62,32 @@ md-card-title {
   padding: auto;
   vertical-align: middle;
 }
+.vt-actions-container {
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
 li {
   cursor: pointer;
   position: relative;
   left: 0;
   background-color: #EEE;
   margin-top: 1%;
-  /*margin: .5em;*/
   height: 1.6em;
   border-radius: 4px;
-  font-size: 200%;
 }
 ul {
 	text-align: left;
 	list-style-type: none;
   padding: 0;
+}
+.vt-add-container {
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+.vt-add-ks {
+  font-size: 400%;
 }
 .text {
   position: relative;
@@ -76,68 +105,3 @@ ul {
 .inactive {
   background-color: red;
 }
-/* Master Styles */
-h1 {
-  color: #369; 
-  font-family: Arial, Helvetica, sans-serif;   
-  font-size: 250%;
-}
-h2, h3 { 
-  color: #444;
-  font-family: Arial, Helvetica, sans-serif;   
-  font-weight: lighter;
-}
-body { 
-  margin: 2em; 
-}
-body, input[text], button { 
-  color: #888; 
-  font-family: Cambria, Georgia; 
-}
-a {
-  cursor: pointer;
-  cursor: hand;
-}
-button {
-  font-family: Arial;
-  background-color: #eee;
-  border: none;
-  padding: 5px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  cursor: hand;
-}
-button:hover {
-  background-color: #cfd8dc;
-}
-button:disabled {
-  background-color: #eee;
-  color: #aaa; 
-  cursor: auto;
-}
-
-/* Navigation link styles */
-nav a {
-  padding: 5px 10px;
-  text-decoration: none;
-  margin-top: 10px;
-  display: inline-block;
-  background-color: #eee;
-  border-radius: 4px;
-}
-nav a:visited, a:link {
-  color: #607D8B;
-}
-nav a:hover {
-  color: #039be5;
-  background-color: #CFD8DC;
-}
-nav a.router-link-active {
-  color: #039be5;
-}
-
-/* everywhere else */
-* { 
-  font-family: Arial, Helvetica, sans-serif; 
-}
-

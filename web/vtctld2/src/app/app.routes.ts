@@ -9,7 +9,6 @@ import { StatusComponent } from './status/status.component';
 import { TasksComponent } from './tasks/tasks.component';
 import { TopoBrowserComponent } from './topo/topo-browser.component';
 
-
 export const routes: RouterConfig = [
   { path: '', component: DashboardComponent},
   { path: 'dashboard', component: DashboardComponent, canDeactivate: [CanDeactivateGuard]},
