@@ -8,11 +8,11 @@ md-card-title {
   display: table;
 }
 .vt-tabletCard {
-  display: table-row;
+  /*display: table-row;
   margin-left: 2%;
   margin-bottom: 1%;
-  margin-top: 1%;
+  margin-top: 1%;*/
 }
 .vt-tablet-stat{
-  display: table-cell;
+  /*display: table-cell;*/
 }
