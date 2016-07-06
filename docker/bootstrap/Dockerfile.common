@@ -48,8 +48,8 @@ RUN export MAKEFLAGS="-j$(nproc)" && \
 RUN mkdir -p /vt/dist && \
     cd /vt/dist && \
     curl -sL --connect-timeout 10 --retry 3 \
-        http://www-us.apache.org/dist/maven/maven-3/3.3.3/binaries/apache-maven-3.3.3-bin.tar.gz | tar -xz && \
-    mv apache-maven-3.3.3 maven
+        http://www-us.apache.org/dist/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz | tar -xz && \
+    mv apache-maven-3.3.9 maven
 
 # Install etcd v2.0
 RUN mkdir -p /go/src/github.com/coreos && \
