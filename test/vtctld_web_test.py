@@ -214,12 +214,12 @@ class TestVtctldWeb(unittest.TestCase):
             test_keyspace2_serving_shards))
     self.assertListEqual(test_keyspace2_serving_shards, ['0'])
 
-    with  self.assertRaises(NoSuchElementException):
+    with self.assertRaises(NoSuchElementException):
       self._get_inactive_shards('test_keyspace')
       logging.info(
           'Inactive Shards in test_keyspace: %s', ', '.join([]))
 
-    with  self.assertRaises(NoSuchElementException):
+    with self.assertRaises(NoSuchElementException):
       self._get_inactive_shards('test_keyspace2')
       logging.info(
           'Inactive Shards in test_keyspace2: %s', ', '.join([]))
