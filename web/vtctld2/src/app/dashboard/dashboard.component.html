@@ -1,58 +1,84 @@
 <h1>DASHBOARD</h1>
-<md-card class="keyspaceCard" *ngFor="let keyspace of keyspaces" > 
-  <md-card-title style="font-size:300%">{{keyspace}}</md-card-title>   
-  <md-card-content>
-  	<div class="stats-container">
-      <ul>
-        <li>
-          <span class="vt-stat-value-container">
-            <span class="vt-stat-value">
-              {{keyspaces[keyspace].servingShards.length}}
-            </span>
-          </span>
-          <span class="vt-stat-category">
-            Serving Shards
-          </span>
-        </li>
-        <li>
-      	<span class="vt-stat-value-container">
-          <span class="vt-stat-value">
-      	    {{keyspaces[keyspace].nonservingShards.length}}
-          </span>
-      	</span>
-      	<span class="vt-stat-category">
-          Nonserving Shards
-        </span>
-        </li>
-        <li>
-          <span *ngIf="healthy(keyspace)">
-            <span class="vt-stat-value-container healthy">
-              <span class="vt-stat-value">
-        	      ✓
+<div class="vt-row">
+  <div *ngFor="let keyspace of keyspaces" class="keyspaceCard">
+    <a [routerLink]="['/keyspace',keyspace.name]">
+      <md-card>
+        <md-card-title>{{keyspace.name}}</md-card-title>   
+        <md-card-content >
+        	<div class="stats-container">
+            <ul>
+              <li>
+                <span class="vt-stat-value-container">
+                  <span class="vt-stat-value">
+                    {{keyspace.servingShards.length}}
+                  </span>
+                </span>
+                <span class="vt-stat-category">
+                  Serving Shards
+                </span>
+              </li>
+              <li>
+            	<span class="vt-stat-value-container">
+                <span class="vt-stat-value">
+            	    {{keyspace.nonservingShards.length}}
+                </span>
+            	</span>
+            	<span class="vt-stat-category">
+                Nonserving Shards
               </span>
-        	  </span>
-        	  <span class="vt-stat-category">
-              Healthy
-            </span>
-        	</span>
-        	<span *ngIf="!healthy(keyspace)">
-        	  <span class="vt-stat-value-container unhealthy">
-              <span class="vt-stat-value">
-                !
-              </span>
-            </span>
-        	  <span class="vt-stat-category">
-              Unhealthy
-            </span>
-        	</span>
-        </li>
-      </ul>
-    </div>
-  </md-card-content>
-  <md-card-actions>
-    <a [routerLink]="['/keyspace', keyspace]">
-      <button md-button style="font-size:200%">Reshard</button>
+              </li>
+              <li>
+                <span *ngIf="keyspace.healthy">
+                  <span class="vt-stat-value-container healthy">
+                    <span class="vt-stat-value">
+              	      ✓
+                    </span>
+              	  </span>
+              	  <span class="vt-stat-category">
+                    Healthy
+                  </span>
+              	</span>
+              	<span *ngIf="!keyspace.healthy">
+              	  <span class="vt-stat-value-container unhealthy">
+                    <span class="vt-stat-value">
+                      !
+                    </span>
+                  </span>
+              	  <span class="vt-stat-category">
+                    Unhealthy
+                  </span>
+              	</span>
+              </li>
+            </ul>
+          </div>
+        </md-card-content>
+        <md-card-actions>
+          <div class="vt-actions-container">
+            <a md-button>Reshard</a>
+            <a md-button>Backup</a>
+          </div>
+        </md-card-actions>
+      </md-card>
     </a>
-    <button md-button style="font-size:200%">Backup</button>
-  </md-card-actions>
-</md-card>
+  </div>
+
+
+  <div class="keyspaceCard">
+    <a (click)="toggleForm()">
+      <md-card>
+        <md-card-title>New Keyspace</md-card-title>   
+        <md-card-content>
+          <div class="vt-add-container">
+            <span class="vt-add-ks">+</span>
+          </div>
+        </md-card-content>
+        <md-card-actions>
+          <div class="vt-actions-container">
+            <a md-button>Create</a>
+          </div>
+        </md-card-actions>
+      </md-card>
+    </a>
+  </div>
+</div>
+<vt-newkeyspace [(openForm)]="openForm" [toggleForm]="toggleForm" (onClose)="updateOpen($event)"></vt-newkeyspace>

@@ -1,0 +1,14 @@
+<h1>SHARD VIEW</h1>
+
+<div class="vt-tablet-container">
+  <div *ngFor="let tablet of tablets" class="vt-tabletCard">
+    <a>
+      <md-card> 
+        <div class="vt-tablet-stat">{{getName(tablet.type)}}</div>
+        <div class="vt-tablet-stat">{{tablet.status}}</div>
+        <div class="vt-tablet-stat">{{tablet.stat}}</div>
+        <div class="vt-tablet-stat">{{tablet.stat2}}</div>   
+      </md-card>
+    </a>
+  </div>
+</div>
