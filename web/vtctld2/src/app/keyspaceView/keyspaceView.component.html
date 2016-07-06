@@ -1,0 +1,32 @@
+<h1>{{keyspaceName}}</h1>
+<div *ngIf="keyspace.servingShards">
+  <h2>Serving Shards</h2>
+  <div *ngFor="let shard of keyspace.servingShards" class="vt-shardCard">
+    <a [routerLink]="['/keyspace', keyspace.name, '/cell', shard]">
+      <md-card> 
+        <md-card-title>{{shard}}</md-card-title>   
+        <md-card-actions>
+          <div class="vt-actions-container">
+            <a md-button>Reshard</a>
+            <a md-button>Backup</a>
+          </div>
+        </md-card-actions>
+      </md-card>
+    </a>
+  </div>
+</div>
+
+<div *ngIf="keyspace.nonservingShards">
+  <h2>Nonserving Shards</h2>
+  <div *ngFor="let shard of keyspace.nonservingShards" class="vt-shardCard">
+    <md-card> 
+      <md-card-title>{{shard}}</md-card-title>   
+      <md-card-actions>
+        <div class="vt-actions-container">
+          <a md-button>Reshard</a>
+          <a md-button>Backup</a>
+        </div>
+      </md-card-actions>
+    </md-card>
+  </div>
+</div>
