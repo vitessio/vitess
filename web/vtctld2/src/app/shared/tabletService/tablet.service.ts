@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Http } from '@angular/http';
-import { Keyspace } from '../shared/keyspaceObject/keyspace'
+import { Keyspace } from '../keyspaceObject/keyspace'
 
 @Injectable()
 export class TabletService {
