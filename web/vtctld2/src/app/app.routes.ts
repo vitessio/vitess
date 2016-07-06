@@ -5,8 +5,8 @@ import { SchemaComponent } from './schema/schema.component';
 import { StatusComponent } from './status/status.component';
 import { TopoBrowserComponent } from './topo/topo-browser.component';
 import { WorkqueueComponent } from './workqueue/workqueue.component';
-import { KeyspaceViewComponent } from './keyspaceView/keyspaceView.component';
-import {ShardViewComponent } from './shardView/shardView.component';
+import { KeyspaceViewComponent } from './dashboard/keyspaceView/keyspaceView.component';
+import { ShardViewComponent } from './dashboard/shardView/shardView.component';
 
 
 export const routes: RouterConfig = [

@@ -1,6 +1,6 @@
 import { Component, OnInit} from '@angular/core';
 import { ROUTER_DIRECTIVES } from '@angular/router';
-import { KeyspaceService } from '../keyspaceService/keyspace.service';
+import { KeyspaceService } from '../shared/keyspaceService/keyspace.service';
 import { Keyspace } from '../shared/keyspaceObject/keyspace'
 import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
 import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
