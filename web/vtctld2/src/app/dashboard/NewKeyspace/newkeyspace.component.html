@@ -1,0 +1,20 @@
+<div *ngIf="openForm" class="vt-popUpContainer" (click)="callToggleForm()">
+  <md-card class="vt-popUp" (click)="blockClicks($event)">
+    <md-card-title>
+      Create a new Keyspace
+    </md-card-title>
+    <md-card-content>
+    <!--Input fields-->
+    <span class="vt-form-member"><label>Name: </label><input [(ngModel)]="NKS.name" placeholder="name"/></span>
+    <span class="vt-form-member"><label>LowerBound: </label><input [(ngModel)]="NKS.lowerBound" placeholder="lowerBound (ex. 40)"/></span>
+    <span class="vt-form-member"><label>UpperBound: </label><input [(ngModel)]="NKS.upperBound" placeholder="upperBound (ex. 80)"/></span>
+    <span class="vt-form-member"><label>Master Eligable? </label><input [(ngModel)]="NKS.master" type="checkbox"/></span>
+
+    </md-card-content>
+    <md-card-actions>
+      <a md-button (click)="submitForm()">
+        Submit
+      </a>
+    </md-card-actions>
+  </md-card>
+</div>

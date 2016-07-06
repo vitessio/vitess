@@ -19,5 +19,5 @@ module.exports = function(defaults) {
       '@angular2-material/**/*',
       '@vaadin/**/*.+(js|js.map)'
     ]
-  });
+  }); 
 };
