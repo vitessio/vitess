@@ -1,7 +1,6 @@
 import { Component, Input, OnInit, OnDestroy } from '@angular/core';
 import { ROUTER_DIRECTIVES, ActivatedRoute, Router } from '@angular/router';
-import { KeyspaceService } from '../keyspaceService/keyspace.service';
-import { TabletService } from '../tabletService/tablet.service';
+import { TabletService } from '../../shared/tabletService/tablet.service';
 import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
 import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
 
@@ -15,7 +14,6 @@ import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
             MD_CARD_DIRECTIVES,
             MD_BUTTON_DIRECTIVES],
   providers: [
-              KeyspaceService,
               TabletService],
 })
 export class ShardViewComponent implements OnInit, OnDestroy{
@@ -26,7 +24,6 @@ export class ShardViewComponent implements OnInit, OnDestroy{
   constructor(
     private route: ActivatedRoute,
     private router: Router,
-    private keyspaceService: KeyspaceService,
     private tabletService: TabletService) {}
 
   ngOnInit() {
