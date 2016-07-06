@@ -1,46 +1,30 @@
 import { Injectable } from '@angular/core';
+import { Http } from '@angular/http';
+import { Keyspace } from '../shared/keyspaceObject/keyspace'
 
 @Injectable()
 export class KeyspaceService {
-  keyspaces = {
-    KS1: {
-      servingShards: [
-        '-80', 
-        '80-',
-      ],
-      nonservingShards: [
-        '0',
-      ],
-      healthy: true,
-    },
-    KS2: {
-      servingShards: [
-        '-40',
-        '40-80',
-        '80-c0',
-        'c0-',
-      ],
-      nonservingShards: [
-        '0',
-      ],
-      healthy: true,
-    },
-    KS3: {
-      servingShards: [
-      ],
-      nonservingShards: [
-        '0',
-      ],
-      healthy: false,
-    }
-  };
-  listKeyspaces() {
-    return Promise.resolve(Object.keys(this.keyspaces));
-  };
-  healthy(keyspace) {
-    return Promise.resolve(this.keyspaces[keyspace].healthy);
+  private keyspacesUrl = '/app/keyspaces';
+
+  constructor(private http: Http) {}
+
+  getKeyspaces() {
+    return this.http.get(this.keyspacesUrl)
+    .map( (resp) => {
+      return resp.json();
+    })
+    .map ( (keyspaces: any) => {
+      return keyspaces.data;
+    })
   }
+
   getKeyspace(keyspaceName) {
-    return Promise.resolve(this.keyspaces[keyspaceName])
+    return this.http.get(this.keyspacesUrl + '/?name=' + keyspaceName)
+    .map( (resp) => {
+      return resp.json();
+    })
+    .map ( (keyspaces: any) => {
+      return keyspaces.data;
+    })
   }
 }

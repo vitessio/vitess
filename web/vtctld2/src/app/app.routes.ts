@@ -1,11 +1,11 @@
 import { provideRouter, RouterConfig } from '@angular/router';
-import { DashboardComponent } from './dashboard/dashboard.component'
-import { StatusComponent } from './status/status.component'
-import { SchemaComponent } from './schema/schema.component'
+import { DashboardComponent } from './dashboard/dashboard.component';
+import { StatusComponent } from './status/status.component';
+import { SchemaComponent } from './schema/schema.component';
 import { TopoBrowserComponent } from './topo/topo-browser.component';
-import { WorkqueueComponent } from './workqueue/workqueue.component'
-import { KeyspaceComponent } from './keyspace/keyspace.component'
-
+import { WorkqueueComponent } from './workqueue/workqueue.component';
+import { KeyspaceViewComponent } from './keyspaceView/keyspaceView.component';
+import {ShardViewComponent } from './shardView/shardView.component';
 
 
 export const routes: RouterConfig = [
@@ -14,8 +14,9 @@ export const routes: RouterConfig = [
 	{ path: 'status', component: StatusComponent},
 	{ path: 'schema', component: SchemaComponent},
 	{ path: 'topo', component: TopoBrowserComponent },
-        { path: 'queue', component: WorkqueueComponent},
-        { path: 'keyspace/:keyspaceName', component: KeyspaceComponent},
+  { path: 'queue', component: WorkqueueComponent},
+  { path: 'keyspace/:keyspaceName', component: KeyspaceViewComponent},
+  { path: 'keyspace/:keyspaceName/cell/:shardName', component: ShardViewComponent},
 
 ];
 

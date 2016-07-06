@@ -1,0 +1,17 @@
+h1 {
+  text-align: center;
+}
+md-card-title {
+  text-align: center;
+}
+.vt-shardCard {
+  display: inline-table;
+  margin-left: 2%;
+  margin-bottom: 1%;
+  margin-top: 1%;
+}
+.vt-actions-container {
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
