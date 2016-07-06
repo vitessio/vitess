@@ -5,9 +5,11 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     automake \
     bison \
     bzip2 \
+    chromium \
     curl \
     g++ \
     git \
+    libgconf-2-4 \
     libssl-dev \
     libtool \
     make \
@@ -25,6 +27,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     software-properties-common \
     virtualenv \
     unzip \
+    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 # Install newer pip
@@ -67,10 +70,10 @@ ENV GOTOP $VTTOP/go
 ENV PYTOP $VTTOP/py
 ENV VTDATAROOT $VTROOT/vtdataroot
 ENV VTPORTSTART 15000
-ENV PYTHONPATH $VTROOT/dist/py-mock-1.0.1/lib/python2.7/site-packages:$VTROOT/py-vtdb
+ENV PYTHONPATH $VTROOT/dist/py-mock-1.0.1/lib/python2.7/site-packages:$VTROOT/py-vtdb:$VTROOT/dist/selenium/lib/python2.7/site-packages
 ENV GOBIN $VTROOT/bin
 ENV GOPATH $VTROOT
-ENV PATH $VTROOT/bin:$VTROOT/dist/maven/bin:$PATH
+ENV PATH $VTROOT/bin:$VTROOT/dist/maven/bin:$VTROOT/dist/chromedriver:$PATH
 ENV VT_MYSQL_ROOT /usr
 ENV PKG_CONFIG_PATH $VTROOT/lib
 ENV CGO_CFLAGS -I$VTROOT/dist/vt-zookeeper-3.4.6/include/zookeeper
