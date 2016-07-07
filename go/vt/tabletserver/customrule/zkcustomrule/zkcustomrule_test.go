@@ -9,11 +9,12 @@ import (
 	"testing"
 	"time"
 
+	zookeeper "github.com/samuel/go-zookeeper/zk"
+
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/fakezk"
-	"launchpad.net/gozk/zookeeper"
 )
 
 var customRule1 = `[
@@ -40,10 +41,10 @@ var conn zk.Conn
 
 func setUpFakeZk(t *testing.T) {
 	conn = fakezk.NewConn()
-	conn.Create("/zk", "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	conn.Create("/zk/fake", "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	conn.Create("/zk/fake/customrules", "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	conn.Create("/zk/fake/customrules/testrules", "customrule1", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	conn.Create("/zk", "", 0, zookeeper.WorldACL(zookeeper.PermAll))
+	conn.Create("/zk/fake", "", 0, zookeeper.WorldACL(zookeeper.PermAll))
+	conn.Create("/zk/fake/customrules", "", 0, zookeeper.WorldACL(zookeeper.PermAll))
+	conn.Create("/zk/fake/customrules/testrules", "customrule1", 0, zookeeper.WorldACL(zookeeper.PermAll))
 	conn.Set("/zk/fake/customrules/testrules", customRule1, -1)
 }
 
@@ -96,7 +97,7 @@ func TestZkCustomRule(t *testing.T) {
 	}
 
 	// Test rule path revival
-	conn.Create("/zk/fake/customrules/testrules", "customrule2", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	conn.Create("/zk/fake/customrules/testrules", "customrule2", 0, zookeeper.WorldACL(zookeeper.PermAll))
 	conn.Set("/zk/fake/customrules/testrules", customRule2, -1)
 	<-time.After(time.Second) //Wait for the polling thread to respond
 	qrs, _, err = zkcr.GetRules()

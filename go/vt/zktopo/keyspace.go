@@ -10,10 +10,11 @@ import (
 	"path"
 	"sort"
 
+	zookeeper "github.com/samuel/go-zookeeper/zk"
+
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/net/context"
-	"launchpad.net/gozk/zookeeper"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -49,9 +50,9 @@ func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *
 		if i == 0 {
 			c = string(data)
 		}
-		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PermAll))
 		if err != nil {
-			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+			if err == zookeeper.ErrNodeExists {
 				alreadyExists = true
 			} else {
 				return convertError(err)
@@ -123,7 +124,7 @@ func (zkts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 // DeleteKeyspaceShards is part of the topo.Server interface
 func (zkts *Server) DeleteKeyspaceShards(ctx context.Context, keyspace string) error {
 	shardsPath := path.Join(GlobalKeyspacesPath, keyspace, "shards")
-	if err := zk.DeleteRecursive(zkts.zconn, shardsPath, -1); err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
+	if err := zk.DeleteRecursive(zkts.zconn, shardsPath, -1); err != nil && err != zookeeper.ErrNoNode {
 		return convertError(err)
 	}
 	return nil

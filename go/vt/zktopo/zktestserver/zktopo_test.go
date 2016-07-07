@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
+	zookeeper "github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
-	"launchpad.net/gozk/zookeeper"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -36,10 +36,10 @@ func TestPurgeActions(t *testing.T) {
 	actionPath := path.Join(zktopo.GlobalKeyspacesPath, "test_keyspace", "action")
 	zkts := ts.(*TestServer).Impl.(*zktopo.Server)
 
-	if _, err := zk.CreateRecursive(zkts.GetZConn(), actionPath+"/topurge", "purgeme", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+	if _, err := zk.CreateRecursive(zkts.GetZConn(), actionPath+"/topurge", "purgeme", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 		t.Fatalf("CreateRecursive(topurge): %v", err)
 	}
-	if _, err := zk.CreateRecursive(zkts.GetZConn(), actionPath+"/tokeep", "keepme", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+	if _, err := zk.CreateRecursive(zkts.GetZConn(), actionPath+"/tokeep", "keepme", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 		t.Fatalf("CreateRecursive(tokeep): %v", err)
 	}
 
@@ -68,10 +68,10 @@ func TestPruneActionLogs(t *testing.T) {
 	actionLogPath := path.Join(zktopo.GlobalKeyspacesPath, "test_keyspace", "actionlog")
 	zkts := ts.(*TestServer).Impl.(*zktopo.Server)
 
-	if _, err := zk.CreateRecursive(zkts.GetZConn(), actionLogPath+"/0", "first", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+	if _, err := zk.CreateRecursive(zkts.GetZConn(), actionLogPath+"/0", "first", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 		t.Fatalf("CreateRecursive(stale): %v", err)
 	}
-	if _, err := zk.CreateRecursive(zkts.GetZConn(), actionLogPath+"/1", "second", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+	if _, err := zk.CreateRecursive(zkts.GetZConn(), actionLogPath+"/1", "second", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 		t.Fatalf("CreateRecursive(fresh): %v", err)
 	}
 

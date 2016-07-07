@@ -20,8 +20,9 @@ import (
 	"sync"
 	"time"
 
+	zookeeper "github.com/samuel/go-zookeeper/zk"
+
 	"github.com/youtube/vitess/go/zk"
-	"launchpad.net/gozk/zookeeper"
 )
 
 type zconn struct {
@@ -74,7 +75,7 @@ func NewConnFromFile(filename string) zk.Conn {
 		// doesn't exist, but not for a node in the middle of a tree
 		// that already exists. So have to use 'Set' as a backup.
 		if _, err := zk.CreateRecursive(result, k, string(jv), 0, nil); err != nil {
-			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+			if err == zookeeper.ErrNodeExists {
 				_, err = result.Set(k, string(jv), -1)
 			}
 			if err != nil {
@@ -93,7 +94,7 @@ func (conn *zconn) Get(zkPath string) (data string, stat zk.Stat, err error) {
 		return "", nil, err
 	}
 	if len(rest) != 0 {
-		return "", nil, zkError(zookeeper.ZNONODE, "get", zkPath)
+		return "", nil, zookeeper.ErrNoNode
 	}
 	return node.content, node.stat(), nil
 }
@@ -107,7 +108,7 @@ func (conn *zconn) GetW(zkPath string) (data string, stat zk.Stat, watch <-chan 
 	}
 
 	if len(rest) != 0 {
-		return "", nil, nil, zkError(zookeeper.ZNONODE, "getw", zkPath)
+		return "", nil, nil, zookeeper.ErrNoNode
 	}
 	c := make(chan zookeeper.Event, 1)
 	node.changeWatches = append(node.changeWatches, c)
@@ -124,7 +125,7 @@ func (conn *zconn) Children(zkPath string) (children []string, stat zk.Stat, err
 	}
 
 	if len(rest) != 0 {
-		return nil, nil, zkError(zookeeper.ZNONODE, "children", zkPath)
+		return nil, nil, zookeeper.ErrNoNode
 	}
 	for name := range node.children {
 		children = append(children, name)
@@ -142,7 +143,7 @@ func (conn *zconn) ChildrenW(zkPath string) (children []string, stat zk.Stat, wa
 	}
 
 	if len(rest) != 0 {
-		return nil, nil, nil, zkError(zookeeper.ZNONODE, "childrenw", zkPath)
+		return nil, nil, nil, zookeeper.ErrNoNode
 	}
 	c := make(chan zookeeper.Event, 1)
 	node.childrenWatches = append(node.childrenWatches, c)
@@ -155,8 +156,8 @@ func (conn *zconn) ChildrenW(zkPath string) (children []string, stat zk.Stat, wa
 func (conn *zconn) Exists(zkPath string) (stat zk.Stat, err error) {
 	// FIXME(szopa): if the path is bad, Op will be "get."
 	_, stat, err = conn.Get(zkPath)
-	if err != nil && zookeeper.IsError(err, zookeeper.ZNONODE) {
-		err = nil
+	if err == zookeeper.ErrNoNode {
+		return nil, nil
 	}
 	return stat, err
 }
@@ -193,16 +194,16 @@ func (conn *zconn) Create(zkPath, value string, flags int, aclv []zookeeper.ACL)
 		return "", err
 	}
 	if len(rest) == 0 {
-		return "", zkError(zookeeper.ZNODEEXISTS, "create", zkPath)
+		return "", zookeeper.ErrNodeExists
 	}
 
 	if len(rest) > 1 {
-		return "", zkError(zookeeper.ZNONODE, "create", zkPath)
+		return "", zookeeper.ErrNoNode
 	}
 
 	zxid := conn.getZxid()
 	name := rest[0]
-	if (flags & zookeeper.SEQUENCE) != 0 {
+	if (flags & zookeeper.FlagSequence) != 0 {
 		sequence := parent.nextSequence()
 		name += sequence
 		zkPath = zkPath + sequence
@@ -222,9 +223,9 @@ func (conn *zconn) Create(zkPath, value string, flags int, aclv []zookeeper.ACL)
 		},
 	}
 	event := zookeeper.Event{
-		Type:  zookeeper.EVENT_CREATED,
+		Type:  zookeeper.EventNodeCreated,
 		Path:  zkPath,
-		State: zookeeper.STATE_CONNECTED,
+		State: zookeeper.StateConnected,
 	}
 	if watches, ok := conn.existWatches[zkPath]; ok {
 		delete(conn.existWatches, zkPath)
@@ -233,9 +234,9 @@ func (conn *zconn) Create(zkPath, value string, flags int, aclv []zookeeper.ACL)
 		}
 	}
 	childrenEvent := zookeeper.Event{
-		Type:  zookeeper.EVENT_CHILD,
+		Type:  zookeeper.EventNodeChildrenChanged,
 		Path:  zkPath,
-		State: zookeeper.STATE_CONNECTED,
+		State: zookeeper.StateConnected,
 	}
 	for _, watch := range parent.childrenWatches {
 		watch <- childrenEvent
@@ -258,19 +259,19 @@ func (conn *zconn) Set(zkPath, value string, version int) (stat zk.Stat, err err
 	}
 
 	if len(rest) != 0 {
-		return nil, zkError(zookeeper.ZNONODE, "set", zkPath)
+		return nil, zookeeper.ErrNoNode
 	}
 
 	if version != -1 && node.version != version {
-		return nil, zkError(zookeeper.ZBADVERSION, "set", zkPath)
+		return nil, zookeeper.ErrBadVersion
 	}
 	node.content = value
 	node.version++
 	for _, watch := range node.changeWatches {
 		watch <- zookeeper.Event{
-			Type:  zookeeper.EVENT_CHANGED,
+			Type:  zookeeper.EventNodeDataChanged,
 			Path:  zkPath,
-			State: zookeeper.STATE_CONNECTED,
+			State: zookeeper.StateConnected,
 		}
 	}
 	node.changeWatches = nil
@@ -287,19 +288,19 @@ func (conn *zconn) Delete(zkPath string, version int) (err error) {
 	}
 
 	if len(rest) > 0 {
-		return zkError(zookeeper.ZNONODE, "delete", zkPath)
+		return zookeeper.ErrNoNode
 	}
 	if len(node.children) > 0 {
-		return zkError(zookeeper.ZNOTEMPTY, "delete", zkPath)
+		return zookeeper.ErrNotEmpty
 	}
 	if version != -1 && node.version != version {
-		return zkError(zookeeper.ZBADVERSION, "delete", zkPath)
+		return zookeeper.ErrBadVersion
 	}
 	delete(parent.children, node.name)
 	event := zookeeper.Event{
-		Type:  zookeeper.EVENT_DELETED,
+		Type:  zookeeper.EventNodeDeleted,
 		Path:  zkPath,
-		State: zookeeper.STATE_CONNECTED,
+		State: zookeeper.StateConnected,
 	}
 	for _, watch := range node.existWatches {
 		watch <- event
@@ -310,10 +311,10 @@ func (conn *zconn) Delete(zkPath string, version int) (err error) {
 	node.existWatches = nil
 	node.changeWatches = nil
 	childrenEvent := zookeeper.Event{
-		Type:  zookeeper.EVENT_CHILD,
+		Type:  zookeeper.EventNodeChildrenChanged,
 		Path:  zkPath,
-		State: zookeeper.STATE_CONNECTED}
-
+		State: zookeeper.StateConnected,
+	}
 	for _, watch := range parent.childrenWatches {
 		watch <- childrenEvent
 	}
@@ -333,33 +334,6 @@ func (conn *zconn) Close() error {
 	return nil
 }
 
-func (conn *zconn) RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc zk.ChangeFunc) error {
-	for {
-		oldValue, oldStat, err := conn.Get(path)
-		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
-			return err
-		}
-		newValue, err := changeFunc(oldValue, oldStat)
-		if err != nil {
-			return err
-		}
-		if oldStat == nil {
-			_, err := conn.Create(path, newValue, flags, acl)
-			if err == nil || !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-				return err
-			}
-			continue
-		}
-		if newValue == oldValue {
-			return nil // Nothing to do.
-		}
-		_, err = conn.Set(path, newValue, oldStat.Version())
-		if err == nil || !zookeeper.IsError(err, zookeeper.ZBADVERSION) && !zookeeper.IsError(err, zookeeper.ZNONODE) {
-			return err
-		}
-	}
-}
-
 func (conn *zconn) ACL(zkPath string) (acl []zookeeper.ACL, stat zk.Stat, err error) {
 	panic("not implemented")
 }
@@ -372,7 +346,7 @@ func (conn *zconn) getNode(zkPath string, op string) (node *node, parent *node, 
 	// FIXME(szopa): Make sure the path starts with /.
 	parts := strings.Split(zkPath, "/")
 	if parts[0] != "" {
-		return nil, nil, nil, &zookeeper.Error{Code: zookeeper.ZBADARGUMENTS, Path: zkPath, Op: op}
+		return nil, nil, nil, zookeeper.ErrInvalidPath
 	}
 	elements := parts[1:]
 	parent = nil
@@ -386,16 +360,6 @@ func (conn *zconn) getNode(zkPath string, op string) (node *node, parent *node, 
 		current, parent = candidate, candidateParent
 	}
 	return current, parent, []string{}, nil
-}
-
-// zkError creates an appropriate error return from
-// a ZooKeeper status
-func zkError(code zookeeper.ErrorCode, op, path string) error {
-	return &zookeeper.Error{
-		Op:   op,
-		Code: code,
-		Path: path,
-	}
 }
 
 type node struct {

@@ -11,10 +11,11 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	zookeeper "github.com/samuel/go-zookeeper/zk"
+
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/net/context"
-	"launchpad.net/gozk/zookeeper"
 )
 
 /*
@@ -25,7 +26,7 @@ This file contains the lock management code for zktopo.Server
 // queue lock, displays a nice error message if it cant get it
 func (zkts *Server) lockForAction(ctx context.Context, actionDir, contents string) (string, error) {
 	// create the action path
-	actionPath, err := zkts.zconn.Create(actionDir, contents, zookeeper.SEQUENCE|zookeeper.EPHEMERAL, zookeeper.WorldACL(zk.PERM_FILE))
+	actionPath, err := zkts.zconn.Create(actionDir, contents, zookeeper.FlagSequence|zookeeper.FlagEphemeral, zookeeper.WorldACL(zk.PermFile))
 	if err != nil {
 		return "", convertError(err)
 	}
@@ -97,7 +98,7 @@ func (zkts *Server) lockForAction(ctx context.Context, actionDir, contents strin
 func (zkts *Server) unlockForAction(lockPath, results string) error {
 	// Write the data to the actionlog
 	actionLogPath := strings.Replace(lockPath, "/action/", "/actionlog/", 1)
-	if _, err := zk.CreateRecursive(zkts.zconn, actionLogPath, results, 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+	if _, err := zk.CreateRecursive(zkts.zconn, actionLogPath, results, 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 		log.Warningf("Cannot create actionlog path %v (check the permissions with 'zk stat'), will keep the lock, use 'zk rm' to clear the lock", actionLogPath)
 		return convertError(err)
 	}

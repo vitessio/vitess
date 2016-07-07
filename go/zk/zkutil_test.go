@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"launchpad.net/gozk/zookeeper"
+	zookeeper "github.com/samuel/go-zookeeper/zk"
 )
 
 // test implementation of zk Conn
@@ -90,8 +90,7 @@ func (conn *TestZkConn) GetW(path string) (data string, stat Stat, watch <-chan 
 func (conn *TestZkConn) Children(path string) (children []string, stat Stat, err error) {
 	result, ok := conn.children[path]
 	if !ok {
-		zkError := &zookeeper.Error{Op: "TestZkConn: node doesn't exist", Code: zookeeper.ZNONODE, Path: path}
-		return nil, nil, zkError
+		return nil, nil, zookeeper.ErrNoNode
 	}
 	s := &ZkStat{}
 	return result, s, nil
@@ -128,10 +127,6 @@ func (conn *TestZkConn) Delete(path string, version int) (err error) {
 }
 
 func (conn *TestZkConn) Close() error {
-	panic("Should not be used")
-}
-
-func (conn *TestZkConn) RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc ChangeFunc) error {
 	panic("Should not be used")
 }
 

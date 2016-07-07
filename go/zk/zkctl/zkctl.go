@@ -21,8 +21,9 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	zookeeper "github.com/samuel/go-zookeeper/zk"
+
 	"github.com/youtube/vitess/go/vt/env"
-	"launchpad.net/gozk/zookeeper"
 )
 
 const (
@@ -31,10 +32,6 @@ const (
 	// shutdownWaitTime is the number of seconds to wait at Shutdown.
 	shutdownWaitTime = 20
 )
-
-func init() {
-	zookeeper.SetLogLevel(zookeeper.LOG_WARN)
-}
 
 // Zkd manages the running of ZooKeeper servers.
 type Zkd struct {
@@ -183,13 +180,17 @@ func (zkd *Zkd) Init() error {
 	}
 
 	zkAddr := fmt.Sprintf("localhost:%v", zkd.config.ClientPort)
-	zk, session, err := zookeeper.Dial(zkAddr, startWaitTime*time.Second)
+	zk, session, err := zookeeper.Connect([]string{zkAddr}, startWaitTime*time.Second)
 	if err != nil {
 		return err
 	}
 	event := <-session
-	if event.State != zookeeper.STATE_CONNECTED {
-		return err
+	if event.State != zookeeper.StateConnecting {
+		return event.Err
+	}
+	event = <-session
+	if event.State != zookeeper.StateConnected {
+		return event.Err
 	}
 	defer zk.Close()
 
