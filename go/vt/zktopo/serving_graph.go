@@ -50,16 +50,15 @@ func zkPathForSrvVSchema(cell string) string {
 // GetSrvKeyspaceNames is part of the topo.Server interface
 func (zkts *Server) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
 	children, _, err := zkts.zconn.Children(zkPathForSrvKeyspaces(cell))
-	if err != nil {
-		err = convertError(err)
-		if err == topo.ErrNoNode {
-			return nil, nil
-		}
-		return nil, err
+	switch err {
+	case nil:
+		sort.Strings(children)
+		return children, nil
+	case zookeeper.ErrNoNode:
+		return nil, nil
+	default:
+		return nil, convertError(err)
 	}
-
-	sort.Strings(children)
-	return children, nil
 }
 
 // WatchSrvKeyspace is part of the topo.Server interface
