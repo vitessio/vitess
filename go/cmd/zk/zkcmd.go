@@ -438,7 +438,7 @@ func fmtPath(stat zk.Stat, zkPath string, showFullPath bool, longListing bool) {
 		// always print the Local version of the time. zookeeper's
 		// go / C library would return a local time anyway, but
 		// might as well be sure.
-		fmt.Printf("%v %v %v % 8v % 20v %v\n", perms, "zk", "zk", stat.DataLength(), stat.MTime().Local().Format(timeFmt), name)
+		fmt.Printf("%v %v %v % 8v % 20v %v\n", perms, "zk", "zk", stat.DataLength(), zk.Time(stat.Mtime()).Local().Format(timeFmt), name)
 	} else {
 		fmt.Printf("%v\n", name)
 	}
@@ -468,7 +468,7 @@ func cmdTouch(subFlags *flag.FlagSet, args []string) error {
 	data, stat, err := zconn.Get(zkPath)
 	switch {
 	case err == nil:
-		version = stat.Version()
+		version = int(stat.Version())
 	case err == zookeeper.ErrNoNode:
 		create = true
 	default:
@@ -636,7 +636,7 @@ func cmdEdit(subFlags *flag.FlagSet, args []string) error {
 
 	if string(fileData) != data {
 		// data changed - update if we can
-		_, err = zconn.Set(zkPath, string(fileData), stat.Version())
+		_, err = zconn.Set(zkPath, string(fileData), int(stat.Version()))
 		if err != nil {
 			os.Remove(tmpPath)
 			return fmt.Errorf("edit: cannot write zk file %v", err)
@@ -680,8 +680,8 @@ func cmdStat(subFlags *flag.FlagSet, args []string) error {
 			continue
 		}
 		fmt.Printf("Path: %s\n", zkPath)
-		fmt.Printf("Created: %s\n", stat.CTime().Format(timeFmtMicro))
-		fmt.Printf("Modified: %s\n", stat.MTime().Format(timeFmtMicro))
+		fmt.Printf("Created: %s\n", zk.Time(stat.Ctime()).Format(timeFmtMicro))
+		fmt.Printf("Modified: %s\n", zk.Time(stat.Mtime()).Format(timeFmtMicro))
 		fmt.Printf("Size: %v\n", stat.DataLength())
 		fmt.Printf("Children: %v\n", stat.NumChildren())
 		fmt.Printf("Version: %v\n", stat.Version())
@@ -935,7 +935,7 @@ func cmdZip(subFlags *flag.FlagSet, args []string) error {
 			continue
 		}
 		fi := &zip.FileHeader{Name: path, Method: zip.Deflate}
-		fi.SetModTime(stat.MTime())
+		fi.SetModTime(zk.Time(stat.Mtime()))
 		f, err := zipWriter.CreateHeader(fi)
 		if err != nil {
 			return fmt.Errorf("zip: create failed: %v", err)

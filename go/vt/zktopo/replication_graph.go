@@ -48,7 +48,7 @@ func (zkts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keys
 		case zookeeper.ErrNoNode:
 			// empty node, version is 0
 		case nil:
-			version = stat.Version()
+			version = int(stat.Version())
 			if data != "" {
 				if err = json.Unmarshal([]byte(data), sr); err != nil {
 					return fmt.Errorf("bad ShardReplication data %v", err)

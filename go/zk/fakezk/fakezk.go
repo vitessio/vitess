@@ -216,8 +216,8 @@ func (conn *zconn) Create(zkPath, value string, flags int, aclv []zookeeper.ACL)
 		_stat: _stat{
 			name:    name,
 			content: value,
-			mtime:   time.Now(),
-			ctime:   time.Now(),
+			mtime:   zk.ZkTime(time.Now()),
+			ctime:   zk.ZkTime(time.Now()),
 			czxid:   zxid,
 			mzxid:   zxid,
 		},
@@ -262,7 +262,7 @@ func (conn *zconn) Set(zkPath, value string, version int) (stat zk.Stat, err err
 		return nil, zookeeper.ErrNoNode
 	}
 
-	if version != -1 && node.version != version {
+	if version != -1 && node.version != int32(version) {
 		return nil, zookeeper.ErrBadVersion
 	}
 	node.content = value
@@ -293,7 +293,7 @@ func (conn *zconn) Delete(zkPath string, version int) (err error) {
 	if len(node.children) > 0 {
 		return zookeeper.ErrNotEmpty
 	}
-	if version != -1 && node.version != version {
+	if version != -1 && node.version != int32(version) {
 		return zookeeper.ErrBadVersion
 	}
 	delete(parent.children, node.name)
@@ -375,7 +375,7 @@ type node struct {
 }
 
 func (n *node) stat() stat {
-	return stat{_stat: n._stat, numChildren: len(n.children)}
+	return stat{_stat: n._stat, numChildren: int32(len(n.children))}
 }
 
 func (n *node) closeAllWatches() {
@@ -417,14 +417,14 @@ func (n *node) fprintRecursive(level int, buf *bytes.Buffer) {
 type _stat struct {
 	name     string
 	content  string
-	mtime    time.Time
-	ctime    time.Time
+	mtime    int64
+	ctime    int64
 	czxid    int64
 	mzxid    int64
 	pzxid    int64
-	version  int
-	cversion int
-	aversion int
+	version  int32
+	cversion int32
+	aversion int32
 }
 
 // stat is the external structure returned from this package.
@@ -433,7 +433,7 @@ type _stat struct {
 type stat struct {
 	_stat
 
-	numChildren int
+	numChildren int32
 }
 
 func (st stat) Czxid() int64 {
@@ -442,30 +442,30 @@ func (st stat) Czxid() int64 {
 func (st stat) Mzxid() int64 {
 	return st.mzxid
 }
-func (st stat) CTime() time.Time {
+func (st stat) Ctime() int64 {
 	return st.ctime
 }
-func (st stat) MTime() time.Time {
+func (st stat) Mtime() int64 {
 	return st.mtime
 }
-func (st stat) Version() int {
+func (st stat) Version() int32 {
 	return st.version
 }
-func (st stat) CVersion() int {
+func (st stat) Cversion() int32 {
 	return st.cversion
 }
-func (st stat) AVersion() int {
+func (st stat) Aversion() int32 {
 	return st.aversion
 }
 func (st stat) EphemeralOwner() int64 {
 	return 0
 }
 
-func (st stat) DataLength() int {
-	return len(st.content)
+func (st stat) DataLength() int32 {
+	return int32(len(st.content))
 }
 
-func (st stat) NumChildren() int {
+func (st stat) NumChildren() int32 {
 	return st.numChildren
 }
 
