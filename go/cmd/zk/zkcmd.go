@@ -461,14 +461,14 @@ func cmdTouch(subFlags *flag.FlagSet, args []string) error {
 	}
 
 	var (
-		version = -1
-		create  = false
+		version int32 = -1
+		create        = false
 	)
 
 	data, stat, err := zconn.Get(zkPath)
 	switch {
 	case err == nil:
-		version = int(stat.Version())
+		version = stat.Version()
 	case err == zookeeper.ErrNoNode:
 		create = true
 	default:
@@ -636,7 +636,7 @@ func cmdEdit(subFlags *flag.FlagSet, args []string) error {
 
 	if string(fileData) != data {
 		// data changed - update if we can
-		_, err = zconn.Set(zkPath, string(fileData), int(stat.Version()))
+		_, err = zconn.Set(zkPath, string(fileData), stat.Version())
 		if err != nil {
 			os.Remove(tmpPath)
 			return fmt.Errorf("edit: cannot write zk file %v", err)
