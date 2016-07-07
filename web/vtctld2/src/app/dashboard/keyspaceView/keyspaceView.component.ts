@@ -16,7 +16,7 @@ import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
   providers: [KeyspaceService],
 })
 export class KeyspaceViewComponent implements OnInit, OnDestroy{
-  private sub: any;
+  private routeSub: any;
   keyspaceName: string;
   keyspace = {};
   constructor(
@@ -25,15 +25,16 @@ export class KeyspaceViewComponent implements OnInit, OnDestroy{
     private keyspaceService: KeyspaceService) {}
 
   ngOnInit() {
-    this.sub = this.route.params.subscribe(params => {
-       this.keyspaceName = params['keyspaceName']; 
-       this.getKeyspace(this.keyspaceName);
-     });
-    
+    this.routeSub = this.router.routerState.queryParams
+      .subscribe(params => {
+        this.keyspaceName = params['keyspace'];
+        this.getKeyspace(this.keyspaceName);
+      }
+    );
   }
 
   ngOnDestroy() {
-    this.sub.unsubscribe();
+    this.routeSub.unsubscribe();
   }
 
   getKeyspace(keyspaceName) {
@@ -43,4 +44,7 @@ export class KeyspaceViewComponent implements OnInit, OnDestroy{
     });
   }
 
+  getShardParams(shardName: string) {
+    return {keyspace: this.keyspaceName, shard: shardName};
+  }
 }
