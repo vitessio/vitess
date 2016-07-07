@@ -9,13 +9,14 @@ import (
 	"testing"
 
 	log "github.com/golang/glog"
+	zookeeper "github.com/samuel/go-zookeeper/zk"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/fakezk"
-	"golang.org/x/net/context"
-	"launchpad.net/gozk/zookeeper"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -28,7 +29,7 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 	toTS := zktopo.NewServer(toConn)
 
 	for _, zkPath := range []string{"/zk/test_cell/vt", "/zk/global/vt"} {
-		if _, err := zk.CreateRecursive(fromConn, zkPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+		if _, err := zk.CreateRecursive(fromConn, zkPath, "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 			t.Fatalf("cannot init fromTS: %v", err)
 		}
 	}

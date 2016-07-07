@@ -9,10 +9,11 @@ import (
 	"fmt"
 	"path"
 
+	zookeeper "github.com/samuel/go-zookeeper/zk"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
-	"golang.org/x/net/context"
-	"launchpad.net/gozk/zookeeper"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -33,34 +34,57 @@ func shardReplicationPath(cell, keyspace, shard string) string {
 func (zkts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*topodatapb.ShardReplication) error) error {
 	// create the parent directory to be sure it's here
 	zkDir := path.Join("/zk", cell, "vt", "replication", keyspace)
-	if _, err := zk.CreateRecursive(zkts.zconn, zkDir, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+	if _, err := zk.CreateRecursive(zkts.zconn, zkDir, "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil && err != zookeeper.ErrNodeExists {
 		return convertError(err)
 	}
 
 	// now update the data
 	zkPath := shardReplicationPath(cell, keyspace, shard)
-	f := func(oldValue string, oldStat zk.Stat) (string, error) {
+	for {
+		data, stat, err := zkts.zconn.Get(zkPath)
+		version := -1
 		sr := &topodatapb.ShardReplication{}
-		if oldValue != "" {
-			if err := json.Unmarshal([]byte(oldValue), sr); err != nil {
-				return "", err
+		switch err {
+		case zookeeper.ErrNoNode:
+			// empty node, version is 0
+		case nil:
+			version = stat.Version()
+			if data != "" {
+				if err = json.Unmarshal([]byte(data), sr); err != nil {
+					return fmt.Errorf("bad ShardReplication data %v", err)
+				}
 			}
+		default:
+			return convertError(err)
 		}
 
-		if err := update(sr); err != nil {
-			return "", err
+		err = update(sr)
+		switch err {
+		case topo.ErrNoUpdateNeeded:
+			return nil
+		case nil:
+			// keep going
+		default:
+			return err
 		}
-		data, err := json.MarshalIndent(sr, "", "  ")
+
+		// marshall and save
+		d, err := json.MarshalIndent(sr, "", "  ")
 		if err != nil {
-			return "", err
+			return err
 		}
-		return string(data), nil
+		if version == -1 {
+			_, err = zkts.zconn.Create(zkPath, string(d), 0, zookeeper.WorldACL(zookeeper.PermAll))
+			if err != zookeeper.ErrNodeExists {
+				return convertError(err)
+			}
+		} else {
+			_, err = zkts.zconn.Set(zkPath, string(d), version)
+			if err != zookeeper.ErrBadVersion {
+				return convertError(err)
+			}
+		}
 	}
-	err := zkts.zconn.RetryChange(zkPath, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
-	if err != nil {
-		return convertError(err)
-	}
-	return nil
 }
 
 // GetShardReplication is part of the topo.Server interface

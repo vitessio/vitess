@@ -10,8 +10,9 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	zookeeper "github.com/samuel/go-zookeeper/zk"
+
 	"github.com/youtube/vitess/go/stats"
-	"launchpad.net/gozk/zookeeper"
 )
 
 var (
@@ -57,13 +58,13 @@ func (cc *ConnCache) setState(zcell string, state state) {
 func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 	zcell, err := ZkCellFromZkPath(zkPath)
 	if err != nil {
-		return nil, &zookeeper.Error{Op: "dial", Code: zookeeper.ZSYSTEMERROR, SystemError: err, Path: zkPath}
+		return nil, zookeeper.ErrInvalidPath
 	}
 
 	cc.mutex.Lock()
 	if cc.zconnCellMap == nil {
 		cc.mutex.Unlock()
-		return nil, &zookeeper.Error{Op: "dial", Code: zookeeper.ZCLOSING}
+		return nil, zookeeper.ErrClosing
 	}
 
 	conn, ok := cc.zconnCellMap[zcell]
@@ -84,7 +85,7 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 
 	zkAddr, err := ZkPathToZkAddr(zkPath)
 	if err != nil {
-		return nil, &zookeeper.Error{Op: "dial", Code: zookeeper.ZSYSTEMERROR, SystemError: err, Path: zkPath}
+		return nil, zookeeper.ErrInvalidPath
 	}
 
 	cc.setState(zcell, connecting)
@@ -110,10 +111,10 @@ func (cc *ConnCache) handleSessionEvents(cell string, conn Conn, session <-chan 
 	closeRequired := false
 	for event := range session {
 		switch event.State {
-		case zookeeper.STATE_EXPIRED_SESSION, zookeeper.STATE_CONNECTING:
+		case zookeeper.StateExpired, zookeeper.StateConnecting:
 			closeRequired = true
 			fallthrough
-		case zookeeper.STATE_CLOSED:
+		case zookeeper.StateDisconnected:
 			var cached *cachedConn
 			cc.mutex.Lock()
 			if cc.zconnCellMap != nil {

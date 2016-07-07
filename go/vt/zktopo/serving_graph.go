@@ -12,8 +12,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	zookeeper "github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
-	"launchpad.net/gozk/zookeeper"
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
@@ -85,7 +85,7 @@ func (zkts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string)
 			// set the watch
 			data, _, watch, err := zkts.zconn.GetW(filePath)
 			if err != nil {
-				if zookeeper.IsError(err, zookeeper.ZNONODE) {
+				if err == zookeeper.ErrNoNode {
 					// the parent directory doesn't exist
 					notifications <- nil
 				}
@@ -123,8 +123,8 @@ func (zkts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string)
 					continue
 				}
 
-				if !event.Ok() {
-					log.Warningf("received a non-OK event for %v, waiting for %v to retry", filePath, WatchSleepDuration)
+				if event.Err != nil {
+					log.Warningf("received a non-OK event for %v, waiting for %v to retry: %v", filePath, WatchSleepDuration, event.Err)
 					if waitOrInterrupted() {
 						return
 					}
@@ -148,8 +148,8 @@ func (zkts *Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string
 		return err
 	}
 	_, err = zkts.zconn.Set(path, string(data), -1)
-	if zookeeper.IsError(err, zookeeper.ZNONODE) {
-		_, err = zk.CreateRecursive(zkts.zconn, path, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	if err == zookeeper.ErrNoNode {
+		_, err = zk.CreateRecursive(zkts.zconn, path, string(data), 0, zookeeper.WorldACL(zookeeper.PermAll))
 	}
 	return convertError(err)
 }
@@ -204,7 +204,7 @@ func (zkts *Server) WatchSrvVSchema(ctx context.Context, cell string) (<-chan *v
 			// set the watch
 			data, _, watch, err := zkts.zconn.GetW(filePath)
 			if err != nil {
-				if zookeeper.IsError(err, zookeeper.ZNONODE) {
+				if err == zookeeper.ErrNoNode {
 					// the parent directory doesn't exist
 					notifications <- nil
 				}
@@ -242,8 +242,8 @@ func (zkts *Server) WatchSrvVSchema(ctx context.Context, cell string) (<-chan *v
 					continue
 				}
 
-				if !event.Ok() {
-					log.Warningf("received a non-OK event for %v, waiting for %v to retry", filePath, WatchSleepDuration)
+				if event.Err != nil {
+					log.Warningf("received a non-OK event for %v, waiting for %v to retry: %v", filePath, WatchSleepDuration, event.Err)
 					if waitOrInterrupted() {
 						return
 					}
@@ -267,8 +267,8 @@ func (zkts *Server) UpdateSrvVSchema(ctx context.Context, cell string, srvVSchem
 		return err
 	}
 	_, err = zkts.zconn.Set(path, string(data), -1)
-	if zookeeper.IsError(err, zookeeper.ZNONODE) {
-		_, err = zk.CreateRecursive(zkts.zconn, path, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	if err == zookeeper.ErrNoNode {
+		_, err = zk.CreateRecursive(zkts.zconn, path, string(data), 0, zookeeper.WorldACL(zookeeper.PermAll))
 	}
 	return convertError(err)
 }

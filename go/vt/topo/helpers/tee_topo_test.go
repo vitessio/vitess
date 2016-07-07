@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	zookeeper "github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
@@ -16,7 +17,6 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/fakezk"
-	"launchpad.net/gozk/zookeeper"
 )
 
 type fakeServer struct {
@@ -35,10 +35,10 @@ func newFakeTeeServer(t *testing.T) topo.Impl {
 	zconn2 := fakezk.NewConn()
 
 	for _, cell := range cells {
-		if _, err := zk.CreateRecursive(zconn1, fmt.Sprintf("/zk/%v/vt", cell), "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+		if _, err := zk.CreateRecursive(zconn1, fmt.Sprintf("/zk/%v/vt", cell), "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 			t.Fatalf("cannot init ZooKeeper: %v", err)
 		}
-		if _, err := zk.CreateRecursive(zconn2, fmt.Sprintf("/zk/%v/vt", cell), "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+		if _, err := zk.CreateRecursive(zconn2, fmt.Sprintf("/zk/%v/vt", cell), "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 			t.Fatalf("cannot init ZooKeeper: %v", err)
 		}
 	}

@@ -9,10 +9,11 @@ import (
 	"fmt"
 	"sort"
 
+	zookeeper "github.com/samuel/go-zookeeper/zk"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/zk"
-	"golang.org/x/net/context"
-	"launchpad.net/gozk/zookeeper"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -40,7 +41,7 @@ func (zkts *Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet)
 	}
 
 	// Create /zk/<cell>/vt/tablets/<uid>
-	_, err = zk.CreateRecursive(zkts.zconn, zkTabletPath, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	_, err = zk.CreateRecursive(zkts.zconn, zkTabletPath, string(data), 0, zookeeper.WorldACL(zookeeper.PermAll))
 	if err != nil {
 		return convertError(err)
 	}
