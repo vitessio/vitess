@@ -14,6 +14,7 @@ const map: any = {
 
 /** User packages configuration. */
 const packages: any = {
+  'primeng':                    { defaultExtension: 'js' },
   'rxjs':                       { defaultExtension: 'js' },
   '@vaadin/angular2-polymer':   { main: 'index.js', defaultExtension: 'js' },
 };
@@ -33,7 +34,7 @@ const materialPkgs: string[] = [
 
 materialPkgs.forEach((pkg) => {
   packages[`@angular2-material/${pkg}`] = { main: `${pkg}.js` };
-});
+})
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 /***********************************************************************************************
@@ -48,6 +49,7 @@ const barrels: string[] = [
   '@angular/router',
   '@angular/platform-browser',
   '@angular/platform-browser-dynamic',
+  '@angular/forms',
 
   // Thirdparty barrels.
   'rxjs',
@@ -77,4 +79,7 @@ System.config({
 });
 
 // Apply the user's configuration.
-System.config({ map, packages });
+System.config({ 
+    map:map, 
+    packages:packages, 
+  });

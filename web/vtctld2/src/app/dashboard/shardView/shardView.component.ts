@@ -3,6 +3,8 @@ import { ROUTER_DIRECTIVES, ActivatedRoute, Router } from '@angular/router';
 import { TabletService } from '../../shared/tabletService/tablet.service';
 import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
 import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
+import {DataTable} from 'primeng/primeng';
+import {Column} from 'primeng/primeng';
 
 @Component({
   moduleId: module.id,
@@ -12,12 +14,14 @@ import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
   directives: [
             ROUTER_DIRECTIVES,
             MD_CARD_DIRECTIVES,
-            MD_BUTTON_DIRECTIVES],
+            MD_BUTTON_DIRECTIVES,
+            DataTable,
+            Column],
   providers: [
               TabletService],
 })
 export class ShardViewComponent implements OnInit, OnDestroy{
-  private sub: any;
+  private routeSub: any;
   keyspaceName: string;
   shardName: string;
   tablets = [];
@@ -27,19 +31,22 @@ export class ShardViewComponent implements OnInit, OnDestroy{
     private tabletService: TabletService) {}
 
   ngOnInit() {
-    this.sub = this.route.params.subscribe(params => {
-       this.keyspaceName = params['keyspaceName']; 
-       this.shardName = params['shardName'];
-       this.getTablets(this.keyspaceName, this.shardName);
-     }); 
+    this.routeSub = this.router.routerState.queryParams
+      .subscribe(params => {
+        this.keyspaceName = params['keyspace'];
+        this.shardName = params['shard'];
+        this.getTablets(this.keyspaceName, this.shardName);
+      }
+    );
   }
 
   ngOnDestroy() {
-    this.sub.unsubscribe();
+    this.routeSub.unsubscribe();
   }
 
   getTablets(keyspaceName, shardName) {
     this.tabletService.getTablets(keyspaceName, shardName).subscribe((tablets) => {
+      console.log(tablets[0]);
       this.tablets = tablets;
     });
   }
