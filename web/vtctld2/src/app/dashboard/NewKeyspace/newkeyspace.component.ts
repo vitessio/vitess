@@ -23,16 +23,16 @@ export class NewKeyspaceComponent implements OnInit{
   keyspaces = [];
 
   //PopUp code
-  @Input() openForm: boolean;
+  /*@Input() openForm: boolean;
   @Input() toggleForm: any;
-  @Output() onClose = new EventEmitter();
+  @Output() onClose = new EventEmitter();*/
   ngOnInit() {
-    console.log("NKS: ", this.openForm, this.toggleForm);
+    //console.log("NKS: ", this.openForm, this.toggleForm);
   }
-  callToggleForm(){
+  /*callToggleForm(){
     this.onClose.emit({ value:""});
     this.toggleForm();
-  }
+  }*/
   blockClicks(event){
     event.stopPropagation();
   }

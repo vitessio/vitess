@@ -1,14 +1,16 @@
 <h1>SHARD VIEW</h1>
 
 <div class="vt-tablet-container">
-  <div *ngFor="let tablet of tablets" class="vt-tabletCard">
-    <a>
-      <md-card> 
-        <div class="vt-tablet-stat">{{getName(tablet.type)}}</div>
-        <div class="vt-tablet-stat">{{tablet.status}}</div>
-        <div class="vt-tablet-stat">{{tablet.stat}}</div>
-        <div class="vt-tablet-stat">{{tablet.stat2}}</div>   
-      </md-card>
-    </a>
-  </div>
+  <md-card class="vt-tabletCard"> 
+    <p-dataTable [value]="tablets">
+      <p-column field="type" header="Type" sortable="true">
+        <template let-col let-tab="rowData">
+        {{getName(tab[col.field])}}
+        </template>
+      </p-column>
+      <p-column field="status" header="Status" sortable="true"></p-column>
+      <p-column field="stat" header="Stat1" sortable="true"></p-column>
+      <p-column field="stat2" header="Stat2" sortable="true"></p-column>
+    </p-dataTable>
+  </md-card>
 </div>
