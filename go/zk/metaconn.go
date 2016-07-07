@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"launchpad.net/gozk/zookeeper"
+	zookeeper "github.com/samuel/go-zookeeper/zk"
 )
 
 // Stat represents metadata about a ZK node.
@@ -51,14 +51,9 @@ type Conn interface {
 
 	Close() error
 
-	RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc ChangeFunc) error
-
 	ACL(path string) ([]zookeeper.ACL, Stat, error)
 	SetACL(path string, aclv []zookeeper.ACL, version int) error
 }
-
-// ChangeFunc is a function type for use with Conn.RetryChange().
-type ChangeFunc func(oldValue string, oldStat Stat) (newValue string, err error)
 
 // Smooth API to talk to any zk path in the global system.  Emulates
 // "/zk/local" paths by guessing and substituting the correct cell for
@@ -103,7 +98,7 @@ const (
 //
 // https://issues.apache.org/jira/browse/ZOOKEEPER-22
 func shouldRetry(err error) bool {
-	if err != nil && zookeeper.IsError(err, zookeeper.ZCONNECTIONLOSS) {
+	if err == zookeeper.ErrConnectionClosed {
 		// This is slightly gross, but we should inject a bit of backoff
 		// here to give zk a chance to correct itself.
 		time.Sleep(1*time.Second + time.Duration(rand.Int63n(5e9)))
@@ -203,18 +198,18 @@ func (conn *MetaConn) Create(path, value string, flags int, aclv []zookeeper.ACL
 		}
 		path = resolveZkPath(path)
 		pathCreated, err = zconn.Create(path, value, flags, aclv)
-		if err != nil && zookeeper.IsError(err, zookeeper.ZNONODE) {
+		if err == zookeeper.ErrNoNode {
 			parts := strings.Split(path, "/")
 			if len(parts) == 3 && parts[0] == "" && parts[1] == MagicPrefix {
 				// We were asked to create a /zk/<cell> path, but /zk doesn't exist.
 				// We should create /zk automatically in this case, because it's
 				// impossible to create /zk via MetaConn, since there's no cell name.
-				_, err = zconn.Create("/"+MagicPrefix, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+				_, err = zconn.Create("/"+MagicPrefix, "", 0, zookeeper.WorldACL(zookeeper.PermAll))
 				if err != nil {
 					if shouldRetry(err) {
 						continue
 					}
-					if !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+					if err != zookeeper.ErrNodeExists {
 						return "", err
 					}
 				}
@@ -264,15 +259,6 @@ func (conn *MetaConn) Delete(path string, version int) (err error) {
 // Close implements Conn.
 func (conn *MetaConn) Close() error {
 	return conn.connCache.Close()
-}
-
-// RetryChange implements Conn.
-func (conn *MetaConn) RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc ChangeFunc) error {
-	zconn, err := conn.connCache.ConnForPath(path)
-	if err != nil {
-		return err
-	}
-	return zconn.RetryChange(resolveZkPath(path), flags, acl, changeFunc)
 }
 
 // ACL implements Conn.

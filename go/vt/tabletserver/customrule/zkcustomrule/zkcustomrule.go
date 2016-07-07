@@ -11,10 +11,11 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	zookeeper "github.com/samuel/go-zookeeper/zk"
+
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/zk"
-	"launchpad.net/gozk/zookeeper"
 )
 
 var (
@@ -24,10 +25,10 @@ var (
 	zkRulePath = flag.String("zkcustomrules", "", "zookeeper based custom rule path")
 )
 
-// Invalid rule version, used to mark invalid query rules
+// InvalidQueryRulesVersion is used to mark invalid query rules
 const InvalidQueryRulesVersion int64 = -1
 
-// Zookeeper based custom rule source name
+// ZkCustomRuleSource is zookeeper based custom rule source name
 const ZkCustomRuleSource string = "ZK_CUSTOM_RULE"
 
 // ZkCustomRule is Zookeeper backed implementation of CustomRuleManager
@@ -115,13 +116,13 @@ func (zkcr *ZkCustomRule) poll(qsc tabletserver.Controller) {
 			return
 		case event := <-zkcr.watch:
 			switch event.Type {
-			case zookeeper.EVENT_CREATED, zookeeper.EVENT_CHANGED, zookeeper.EVENT_DELETED:
-				err := zkcr.refreshData(qsc, event.Type == zookeeper.EVENT_DELETED) // refresh rules
+			case zookeeper.EventNodeCreated, zookeeper.EventNodeDataChanged, zookeeper.EventNodeDeleted:
+				err := zkcr.refreshData(qsc, event.Type == zookeeper.EventNodeDeleted) // refresh rules
 				if err != nil {
 					// Sleep to avoid busy waiting during connection re-establishment
 					<-time.After(time.Second * sleepDuringZkFailure)
 				}
-			case zookeeper.EVENT_CLOSED:
+			case zookeeper.EventSession:
 				err := zkcr.refreshWatch() // need to to get a new watch
 				if err != nil {
 					// Sleep to avoid busy waiting during connection re-establishment

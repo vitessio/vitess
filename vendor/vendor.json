@@ -443,6 +443,12 @@
 			"revisionTime": "2016-04-11T19:08:41Z"
 		},
 		{
+			"checksumSHA1": "29ex25jYMWbTguVluhjpmJTKtXM=",
+			"path": "github.com/samuel/go-zookeeper/zk",
+			"revision": "e64db453f3512cade908163702045e0f31137843",
+			"revisionTime": "2016-06-16T02:49:54Z"
+		},
+		{
 			"checksumSHA1": "Gv/ks20dikzPV0cMqy8Pz9aZJGU=",
 			"path": "github.com/smartystreets/assertions",
 			"revision": "40711f7748186bbf9c99977cd89f21ce1a229447",

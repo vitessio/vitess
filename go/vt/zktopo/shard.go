@@ -10,10 +10,11 @@ import (
 	"path"
 	"sort"
 
+	zookeeper "github.com/samuel/go-zookeeper/zk"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
-	"golang.org/x/net/context"
-	"launchpad.net/gozk/zookeeper"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -42,9 +43,9 @@ func (zkts *Server) CreateShard(ctx context.Context, keyspace, shard string, val
 		if i == 0 {
 			c = string(data)
 		}
-		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PermAll))
 		if err != nil {
-			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+			if err == zookeeper.ErrNodeExists {
 				alreadyExists = true
 			} else {
 				return convertError(err)

@@ -9,9 +9,10 @@ import (
 	"path"
 	"sort"
 
+	zookeeper "github.com/samuel/go-zookeeper/zk"
+
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
-	"launchpad.net/gozk/zookeeper"
 )
 
 // Server is the zookeeper topo.Server implementation.
@@ -67,7 +68,7 @@ func (zkts *Server) PurgeActions(zkActionPath string, canBePurged func(data stri
 	for i := len(children) - 1; i >= 0; i-- {
 		actionPath := path.Join(zkActionPath, children[i])
 		data, _, err := zkts.zconn.Get(actionPath)
-		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
+		if err != nil && err != zookeeper.ErrNoNode {
 			return fmt.Errorf("PurgeActions(%v) err: %v", zkActionPath, err)
 		}
 		if !canBePurged(data) {
@@ -75,7 +76,7 @@ func (zkts *Server) PurgeActions(zkActionPath string, canBePurged func(data stri
 		}
 
 		err = zk.DeleteRecursive(zkts.zconn, actionPath, -1)
-		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
+		if err != nil && err != zookeeper.ErrNoNode {
 			return fmt.Errorf("PurgeActions(%v) err: %v", zkActionPath, err)
 		}
 	}

@@ -16,8 +16,9 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	zookeeper "github.com/samuel/go-zookeeper/zk"
+
 	"github.com/youtube/vitess/go/fileutil"
-	"launchpad.net/gozk/zookeeper"
 )
 
 var (
@@ -31,10 +32,11 @@ var (
 )
 
 const (
-	// PERM_DIRECTORY are default permissions for a node.
-	PERM_DIRECTORY = zookeeper.PERM_ADMIN | zookeeper.PERM_CREATE | zookeeper.PERM_DELETE | zookeeper.PERM_READ | zookeeper.PERM_WRITE
-	// PERM_FILE allows a zk node to emulate file behavior by disallowing child nodes.
-	PERM_FILE = zookeeper.PERM_ADMIN | zookeeper.PERM_READ | zookeeper.PERM_WRITE
+	// PermDirectory are default permissions for a node.
+	PermDirectory = zookeeper.PermAdmin | zookeeper.PermCreate | zookeeper.PermDelete | zookeeper.PermRead | zookeeper.PermWrite
+
+	// PermFile allows a zk node to emulate file behavior by disallowing child nodes.
+	PermFile = zookeeper.PermAdmin | zookeeper.PermRead | zookeeper.PermWrite
 )
 
 func init() {
@@ -44,14 +46,14 @@ func init() {
 // IsDirectory returns if this node should be treated as a directory.
 func IsDirectory(aclv []zookeeper.ACL) bool {
 	for _, acl := range aclv {
-		if acl.Perms != PERM_DIRECTORY {
+		if acl.Perms != PermDirectory {
 			return false
 		}
 	}
 	return true
 }
 
-// Create a path and any pieces required, think mkdir -p.
+// CreateRecursive creates a path and any pieces required, think mkdir -p.
 // Intermediate znodes are always created empty.
 func CreateRecursive(zconn Conn, zkPath, value string, flags int, aclv []zookeeper.ACL) (pathCreated string, err error) {
 	parts := strings.Split(zkPath, "/")
@@ -60,16 +62,16 @@ func CreateRecursive(zconn Conn, zkPath, value string, flags int, aclv []zookeep
 	}
 
 	pathCreated, err = zconn.Create(zkPath, value, flags, aclv)
-	if zookeeper.IsError(err, zookeeper.ZNONODE) {
+	if err == zookeeper.ErrNoNode {
 		// Make sure that nodes are either "file" or "directory" to mirror file system
 		// semantics.
 		dirAclv := make([]zookeeper.ACL, len(aclv))
 		for i, acl := range aclv {
 			dirAclv[i] = acl
-			dirAclv[i].Perms = PERM_DIRECTORY
+			dirAclv[i].Perms = PermDirectory
 		}
 		_, err = CreateRecursive(zconn, path.Dir(zkPath), "", flags, dirAclv)
-		if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+		if err != nil && err != zookeeper.ErrNodeExists {
 			return "", err
 		}
 		pathCreated, err = zconn.Create(zkPath, value, flags, aclv)
@@ -77,13 +79,14 @@ func CreateRecursive(zconn Conn, zkPath, value string, flags int, aclv []zookeep
 	return
 }
 
+// CreateOrUpdate creates or updates a file.
 func CreateOrUpdate(zconn Conn, zkPath, value string, flags int, aclv []zookeeper.ACL, recursive bool) (pathCreated string, err error) {
 	if recursive {
-		pathCreated, err = CreateRecursive(zconn, zkPath, value, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		pathCreated, err = CreateRecursive(zconn, zkPath, value, 0, zookeeper.WorldACL(zookeeper.PermAll))
 	} else {
-		pathCreated, err = zconn.Create(zkPath, value, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		pathCreated, err = zconn.Create(zkPath, value, 0, zookeeper.WorldACL(zookeeper.PermAll))
 	}
-	if err != nil && zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+	if err == zookeeper.ErrNodeExists {
 		pathCreated = ""
 		_, err = zconn.Set(zkPath, value, -1)
 	}
@@ -113,7 +116,7 @@ func ChildrenRecursive(zconn Conn, zkPath string) ([]string, error) {
 			if zkErr != nil {
 				// If other processes are deleting nodes, we need to ignore
 				// the missing nodes.
-				if !zookeeper.IsError(zkErr, zookeeper.ZNONODE) {
+				if zkErr != zookeeper.ErrNoNode {
 					mutex.Lock()
 					err = zkErr
 					mutex.Unlock()
@@ -221,7 +224,7 @@ func resolveRecursive(zconn Conn, parts []string, toplevel bool) ([]string, erro
 					// (note we check both a regular zk
 					// error and the error the test
 					// produces)
-					if zookeeper.IsError(err, zookeeper.ZNONODE) {
+					if err == zookeeper.ErrNoNode {
 						return nil, nil
 					}
 					// otherwise we return the error
@@ -308,12 +311,12 @@ func DeleteRecursive(zconn Conn, zkPath string, version int) error {
 	if err == nil {
 		return nil
 	}
-	if !zookeeper.IsError(err, zookeeper.ZNOTEMPTY) {
+	if err != zookeeper.ErrNotEmpty {
 		return err
 	}
 	// Remove the ability for other nodes to get created while we are trying to delete.
 	// Otherwise, you can enter a race condition, or get starved out from deleting.
-	err = zconn.SetACL(zkPath, zookeeper.WorldACL(zookeeper.PERM_ADMIN|zookeeper.PERM_DELETE|zookeeper.PERM_READ), version)
+	err = zconn.SetACL(zkPath, zookeeper.WorldACL(zookeeper.PermAdmin|zookeeper.PermDelete|zookeeper.PermRead), version)
 	if err != nil {
 		return err
 	}
@@ -323,13 +326,13 @@ func DeleteRecursive(zconn Conn, zkPath string, version int) error {
 	}
 	for _, child := range children {
 		err := DeleteRecursive(zconn, path.Join(zkPath, child), -1)
-		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
+		if err != nil && err != zookeeper.ErrNoNode {
 			return fmt.Errorf("zkutil: recursive delete failed: %v", err)
 		}
 	}
 
 	err = zconn.Delete(zkPath, version)
-	if err != nil && !zookeeper.IsError(err, zookeeper.ZNOTEMPTY) {
+	if err != nil && err != zookeeper.ErrNotEmpty {
 		err = fmt.Errorf("zkutil: nodes getting recreated underneath delete (app race condition): %v", zkPath)
 	}
 	return err
@@ -455,19 +458,19 @@ func (zm *zMutex) LockWithTimeout(wait time.Duration) (err error) {
 	// Ensure the rendezvous node is here.
 	// FIXME(msolo) Assuming locks are contended, it will be cheaper to assume this just
 	// exists.
-	_, err = CreateRecursive(zm.zconn, zm.path, "", 0, zookeeper.WorldACL(PERM_DIRECTORY))
-	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+	_, err = CreateRecursive(zm.zconn, zm.path, "", 0, zookeeper.WorldACL(PermDirectory))
+	if err != nil && err != zookeeper.ErrNodeExists {
 		return err
 	}
 
 	lockPrefix := path.Join(zm.path, "lock-")
-	zflags := zookeeper.SEQUENCE
+	zflags := zookeeper.FlagSequence
 	if zm.ephemeral {
-		zflags = zflags | zookeeper.EPHEMERAL
+		zflags = zflags | zookeeper.FlagEphemeral
 	}
 
 createlock:
-	lockCreated, err := zm.zconn.Create(lockPrefix, zm.contents, zflags, zookeeper.WorldACL(PERM_FILE))
+	lockCreated, err := zm.zconn.Create(lockPrefix, zm.contents, zflags, zookeeper.WorldACL(PermFile))
 	if err != nil {
 		return err
 	}
@@ -545,7 +548,7 @@ func (zm *zMutex) deleteLock() error {
 	zm.mu.Unlock()
 
 	err := zm.zconn.Delete(zpath, -1)
-	if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
+	if err != nil && err != zookeeper.ErrNoNode {
 		return err
 	}
 	return nil
@@ -618,8 +621,8 @@ func (ze *ZElector) RunTask(task ElectorTask) error {
 	delay := newBackoffDelay(100*time.Millisecond, 1*time.Minute)
 	leaderPath := path.Join(ze.path, "leader")
 	for {
-		_, err := CreateRecursive(ze.zconn, leaderPath, "", 0, zookeeper.WorldACL(PERM_FILE))
-		if err == nil || zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+		_, err := CreateRecursive(ze.zconn, leaderPath, "", 0, zookeeper.WorldACL(PermFile))
+		if err == nil || err == zookeeper.ErrNodeExists {
 			break
 		}
 		log.Warningf("election leader create failed: %v", err)
@@ -696,7 +699,7 @@ func (ze *ZElector) RunTask(task ElectorTask) error {
 			// If we get SESSION_EXPIRED our connection loss triggered an
 			// election that we won't have won and the thus the lock was
 			// automatically freed. We have no choice but to start over.
-			if zevent.State == zookeeper.STATE_EXPIRED_SESSION {
+			if zevent.State == zookeeper.StateExpired {
 				log.Warningf("election leader watch expired")
 				task.Stop()
 				continue
