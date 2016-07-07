@@ -16,14 +16,14 @@ import (
 type Stat interface {
 	Czxid() int64
 	Mzxid() int64
-	CTime() time.Time
-	MTime() time.Time
-	Version() int
-	CVersion() int
-	AVersion() int
+	Ctime() int64
+	Mtime() int64
+	Version() int32
+	Cversion() int32
+	Aversion() int32
 	EphemeralOwner() int64
-	DataLength() int
-	NumChildren() int
+	DataLength() int32
+	NumChildren() int32
 	Pzxid() int64
 }
 
