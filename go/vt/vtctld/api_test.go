@@ -10,13 +10,15 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-func compactJSON(in []byte) string {
+func compactJSON(in []byte, t *testing.T) string {
 	buf := &bytes.Buffer{}
 	json.Compact(buf, in)
 	return buf.String()
@@ -27,7 +29,6 @@ func TestAPI(t *testing.T) {
 	cells := []string{"cell1", "cell2"}
 	ts := zktestserver.New(t, cells)
 	actionRepo := NewActionRepository(ts)
-	initAPI(ctx, ts, actionRepo)
 
 	server := httptest.NewServer(nil)
 	defer server.Close()
@@ -43,22 +44,25 @@ func TestAPI(t *testing.T) {
 		KeyRange: &topodatapb.KeyRange{Start: []byte{0x80}, End: nil},
 	})
 
-	ts.CreateTablet(ctx, &topodatapb.Tablet{
+	tablet1 := topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
 		Keyspace: "ks1",
 		Shard:    "-80",
 		Type:     topodatapb.TabletType_REPLICA,
 		KeyRange: &topodatapb.KeyRange{Start: nil, End: []byte{0x80}},
 		PortMap:  map[string]int32{"vt": 100},
-	})
-	ts.CreateTablet(ctx, &topodatapb.Tablet{
+	}
+	ts.CreateTablet(ctx, &tablet1)
+
+	tablet2 := topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: "cell2", Uid: 200},
 		Keyspace: "ks1",
 		Shard:    "-80",
 		Type:     topodatapb.TabletType_REPLICA,
 		KeyRange: &topodatapb.KeyRange{Start: nil, End: []byte{0x80}},
 		PortMap:  map[string]int32{"vt": 200},
-	})
+	}
+	ts.CreateTablet(ctx, &tablet2)
 
 	// Populate fake actions.
 	actionRepo.RegisterKeyspaceAction("TestKeyspaceAction",
@@ -73,6 +77,37 @@ func TestAPI(t *testing.T) {
 		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias, r *http.Request) (string, error) {
 			return "TestTabletAction Result", nil
 		})
+
+	setUpFlagsForTests()
+	rts := initHealthCheck(ts)
+	initAPI(ctx, ts, actionRepo, rts)
+
+	//Calling on rts
+	tar := &querypb.Target{
+		Keyspace:   "ks1",
+		Shard:      "-80",
+		TabletType: topodatapb.TabletType_REPLICA,
+	}
+
+	st := &querypb.RealtimeStats{
+		HealthError:         "",
+		SecondsBehindMaster: 2,
+		BinlogPlayersCount:  0,
+		CpuUsage:            12.1,
+		Qps:                 5.6,
+	}
+
+	tabStats := &discovery.TabletStats{
+		Tablet:  &tablet1,
+		Target:  tar,
+		Up:      true,
+		Serving: true,
+		TabletExternallyReparentedTimestamp: 5,
+		Stats:     st,
+		LastError: nil,
+	}
+
+	rts.mimicStatsUpdate(tabStats)
 
 	// Test cases.
 	table := []struct {
@@ -131,6 +166,11 @@ func TestAPI(t *testing.T) {
 				"Output": "TestTabletAction Result",
 				"Error": false
 			}`},
+
+		//Tablet Updates
+		{"GET", "target/cell1/ks1/-80/REPLICA", `{
+			"100":{"seconds_behind_master":2,"cpu_usage":12.1,"qps":5.6}
+		    }`},
 	}
 
 	for _, in := range table {
@@ -157,7 +197,9 @@ func TestAPI(t *testing.T) {
 			t.Errorf("[%v] ioutil.ReadAll(resp.Body) error: %v", in.path, err)
 			continue
 		}
-		if got, want := compactJSON(body), compactJSON([]byte(in.want)); got != want {
+
+		got, want := compactJSON(body, t), compactJSON([]byte(in.want), t)
+		if got != want {
 			t.Errorf("[%v] got %v, want %v", in.path, got, want)
 		}
 	}

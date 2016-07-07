@@ -104,7 +104,7 @@ func addSrvkeyspace(ctx context.Context, ts topo.Server, cell, keyspace string, 
 	return nil
 }
 
-func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
+func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rts realtimeStats) {
 	tabletHealthCache := newTabletHealthCache(ts)
 	tmClient := tmclient.NewTabletManagerClient()
 
@@ -275,6 +275,41 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 
 		// Get the tablet record.
 		return ts.GetTablet(ctx, tabletAlias)
+	})
+
+	//NEW NEW NEW target data NEW NEW NEW
+	handleCollection("target", func(r *http.Request) (interface{}, error) {
+
+		targetPath := getItemPath(r.URL.Path)
+		parts := strings.SplitN(targetPath, "/", 4)
+
+		if len(parts) != 4 {
+			return nil, fmt.Errorf("invalid target path: %q  expected path: <cell>/<keyspace>/<shard>/<type>", targetPath)
+		}
+
+		cell := parts[0]
+		if cell == "" {
+			return nil, fmt.Errorf("Please specify a cell")
+		}
+
+		keyspace := parts[1]
+		if keyspace == "" {
+			return nil, fmt.Errorf("Please specify a keyspace")
+		}
+
+		shard := parts[2]
+		if shard == "" {
+			return nil, fmt.Errorf("Please specify a shard")
+		}
+
+		tabType := parts[3]
+		if tabType == "" {
+			return nil, fmt.Errorf("Please specify a tablet type")
+		}
+
+		allUpdates := rts.getUpdate(cell, keyspace, shard, tabType)
+
+		return allUpdates, nil
 	})
 
 	// Schema Change
