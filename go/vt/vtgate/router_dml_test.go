@@ -299,11 +299,11 @@ func TestInsertSharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into user(id, v, name) values (:_Id, 2, :_name) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert into user(id, v, name) values (:_Id0, 2, :_name0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
-			"_Id":   int64(1),
-			"_name": []byte("myname"),
-			"__seq": int64(1),
+			"_Id0":   int64(1),
+			"_name0": []byte("myname"),
+			"__seq0": int64(1),
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -330,11 +330,11 @@ func TestInsertSharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "insert into user(id, v, name) values (:_Id, 2, :_name) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
+		Sql: "insert into user(id, v, name) values (:_Id0, 2, :_name0) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
 		BindVariables: map[string]interface{}{
-			"_Id":   int64(3),
-			"__seq": int64(3),
-			"_name": []byte("myname2"),
+			"_Id0":   int64(3),
+			"__seq0": int64(3),
+			"_name0": []byte("myname2"),
 		},
 	}}
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
@@ -363,11 +363,11 @@ func TestInsertComments(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into user(id, v, name) values (:_Id, 2, :_name) /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
+		Sql: "insert into user(id, v, name) values (:_Id0, 2, :_name0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
 		BindVariables: map[string]interface{}{
-			"_Id":   int64(1),
-			"_name": []byte("myname"),
-			"__seq": int64(1),
+			"_Id0":   int64(1),
+			"_name0": []byte("myname"),
+			"__seq0": int64(1),
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -403,11 +403,11 @@ func TestInsertGenerator(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into user(v, name, Id) values (2, :_name, :_Id) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert into user(v, name, Id) values (2, :_name0, :_Id0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
-			"_Id":   int64(1),
-			"__seq": int64(1),
-			"_name": []byte("myname"),
+			"_Id0":   int64(1),
+			"__seq0": int64(1),
+			"_name0": []byte("myname"),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
@@ -441,11 +441,11 @@ func TestInsertLookupOwned(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into music(user_id, id) values (:_user_id, :_id) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+		Sql: "insert into music(user_id, id) values (:_user_id0, :_id0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
 		BindVariables: map[string]interface{}{
-			"_user_id": int64(2),
-			"_id":      int64(3),
-			"__seq":    int64(3),
+			"_user_id0": int64(2),
+			"_id0":      int64(3),
+			"__seq0":    int64(3),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
@@ -478,11 +478,11 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into music(user_id, id) values (:_user_id, :_id) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+		Sql: "insert into music(user_id, id) values (:_user_id0, :_id0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
 		BindVariables: map[string]interface{}{
-			"_user_id": int64(2),
-			"_id":      int64(4),
-			"__seq":    int64(4),
+			"_user_id0": int64(2),
+			"_id0":      int64(4),
+			"__seq0":    int64(4),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
@@ -516,10 +516,10 @@ func TestInsertLookupUnowned(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into music_extra(user_id, music_id) values (:_user_id, :_music_id) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+		Sql: "insert into music_extra(user_id, music_id) values (:_user_id0, :_music_id0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
 		BindVariables: map[string]interface{}{
-			"_user_id":  int64(2),
-			"_music_id": int64(3),
+			"_user_id0":  int64(2),
+			"_music_id0": int64(3),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
@@ -545,10 +545,10 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into music_extra_reversed(music_id, user_id) values (:_music_id, :_user_id) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert into music_extra_reversed(music_id, user_id) values (:_music_id0, :_user_id0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
-			"_user_id":  int64(1),
-			"_music_id": int64(3),
+			"_user_id0":  int64(1),
+			"_music_id0": int64(3),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {

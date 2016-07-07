@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	//"github.com/davecgh/go-spew/spew"
 )
 
 // buildInsertPlan builds the route for an INSERT statement.
@@ -59,41 +60,45 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 		}
 	}
 	colVindexes := route.Table.ColumnVindexes
-	var routeValues []interface{}
-	for i := 0; i < len(values); i++ {
-		routeValues = append(routeValues, make([]interface{}, 0, len(colVindexes)))
-	}
-	for _, index := range colVindexes {
-		if err := buildIndexPlan(ins, index, routeValues); err != nil {
-			return nil, err
+	routeValues := make([]interface{}, 0, len(values))
+	for rowNum := 0; rowNum < len(values); rowNum++ {
+		value := make([]interface{}, 0, len(colVindexes))
+		for _, index := range colVindexes {
+			//spew.Dump(value)
+			if err := buildIndexPlan(ins, index, &value, rowNum); err != nil {
+				return nil, err
+			}
 		}
-		route.Values = routeValues
-	}
-	if route.Table.AutoIncrement != nil {
-		if err := buildAutoIncrementPlan(ins, route.Table.AutoIncrement, route); err != nil {
-			return nil, err
+		//spew.Dump(value)
+		if route.Table.AutoIncrement != nil {
+			if err := buildAutoIncrementPlan(ins, route.Table.AutoIncrement, route, &value, rowNum); err != nil {
+				return nil, err
+			}
 		}
+		//spew.Dump(value)
+		routeValues = append(routeValues, value)
 	}
+	route.Values = routeValues
 	route.Query = generateQuery(ins)
 	return route, nil
 }
 
 // buildIndexPlan adds the insert value to the Values field for the specified ColumnVindex.
 // This value will be used at the time of insert to validate the vindex value.
-func buildIndexPlan(ins *sqlparser.Insert, colVindex *vindexes.ColumnVindex, routeValues []interface{}) error {
-	rows, pos := findOrInsertPos(ins, colVindex.Column)
-	for i, row := range rows {
-		val, err := valConvert(row.(sqlparser.ValTuple)[pos])
-		if err != nil {
-			return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row.(sqlparser.ValTuple)[pos]), pos, err)
-		}
-		routeValues[i] = append(routeValues[i].([]interface{}), val)
-		row.(sqlparser.ValTuple)[pos] = sqlparser.ValArg([]byte(":_" + colVindex.Column.Original() + strconv.Itoa(i)))
+func buildIndexPlan(ins *sqlparser.Insert, colVindex *vindexes.ColumnVindex, value *[]interface{}, rowNum int) error {
+	row, pos := findOrInsertPos(ins, colVindex.Column, rowNum)
+
+	val, err := valConvert(row[pos])
+	if err != nil {
+		return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
+	*value = append(*value, val)
+	row[pos] = sqlparser.ValArg([]byte(":_" + colVindex.Column.Original() + strconv.Itoa(rowNum)))
+	//spew.Dump(row)
 	return nil
 }
 
-func buildAutoIncrementPlan(ins *sqlparser.Insert, autoinc *vindexes.AutoIncrement, route *engine.Route) error {
+func buildAutoIncrementPlan(ins *sqlparser.Insert, autoinc *vindexes.AutoIncrement, route *engine.Route, value *[]interface{}, rowNum int) error {
 	route.Generate = &engine.Generate{
 		Opcode:   engine.SelectUnsharded,
 		Keyspace: autoinc.Sequence.Keyspace,
@@ -101,24 +106,25 @@ func buildAutoIncrementPlan(ins *sqlparser.Insert, autoinc *vindexes.AutoIncreme
 	}
 	// If it's also a colvindex, we have to add a redirect from route.Values.
 	// Otherwise, we have to redirect from row[pos].
+	//spew.Printf("autoinc.ColumnVindexNum : %#v\n", autoinc.ColumnVindexNum)
+	//spew.Dump(value)
 	if autoinc.ColumnVindexNum >= 0 {
-		route.Generate.Value = route.Values.([]interface{})[autoinc.ColumnVindexNum]
-		route.Values.([]interface{})[autoinc.ColumnVindexNum] = ":" + engine.SeqVarName
+		route.Generate.Value = (*value)[autoinc.ColumnVindexNum]
+		(*value)[autoinc.ColumnVindexNum] = ":" + engine.SeqVarName + strconv.Itoa(rowNum)
 		return nil
 	}
-	rows, pos := findOrInsertPos(ins, autoinc.Column)
-	for _, row := range rows {
-		val, err := valConvert(row.(sqlparser.ValTuple)[pos])
-		if err != nil {
-			return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row.(sqlparser.ValTuple)[pos]), pos, err)
-		}
-		route.Generate.Value = val
-		row.(sqlparser.ValTuple)[pos] = sqlparser.ValArg([]byte(":" + engine.SeqVarName))
+	row, pos := findOrInsertPos(ins, autoinc.Column, rowNum)
+	val, err := valConvert(row[pos])
+	if err != nil {
+		return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
+	route.Generate.Value = val
+	row[pos] = sqlparser.ValArg([]byte(":" + engine.SeqVarName + strconv.Itoa(rowNum)))
+
 	return nil
 }
 
-func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString) (rows sqlparser.Values, pos int) {
+func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString, rowNum int) (row sqlparser.ValTuple, pos int) {
 	pos = -1
 	for i, column := range ins.Columns {
 		if col.Equal(cistring.CIString(column)) {
@@ -129,7 +135,7 @@ func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString) (rows sqlpars
 	if pos == -1 {
 		pos = len(ins.Columns)
 		ins.Columns = append(ins.Columns, sqlparser.ColIdent(col))
-		ins.Rows.(sqlparser.Values)[0] = append(ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple), &sqlparser.NullVal{})
+		ins.Rows.(sqlparser.Values)[rowNum] = append(ins.Rows.(sqlparser.Values)[rowNum].(sqlparser.ValTuple), &sqlparser.NullVal{})
 	}
-	return ins.Rows.(sqlparser.Values), pos
+	return ins.Rows.(sqlparser.Values)[rowNum].(sqlparser.ValTuple), pos
 }
