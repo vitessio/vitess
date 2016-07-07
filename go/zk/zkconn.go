@@ -22,6 +22,16 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 )
 
+// Time returns a time.Time from a ZK int64 milliseconds since Epoch time.
+func Time(i int64) time.Time {
+	return time.Unix(i/1000, i%1000*1000000)
+}
+
+// ZkTime returns a ZK time (int64) from a time.Time
+func ZkTime(t time.Time) int64 {
+	return t.Unix()*1000 + int64(t.Nanosecond()/1000000)
+}
+
 // FIXME(alainjobart) just use the original structure, not an interface
 type GoZkStat struct {
 	s *zookeeper.Stat
@@ -36,36 +46,36 @@ func (zkStat GoZkStat) Mzxid() int64 {
 	return zkStat.s.Mzxid
 }
 
-func (zkStat GoZkStat) CTime() time.Time {
-	return time.Unix(zkStat.s.Ctime/1000, zkStat.s.Ctime%1000*1000000)
+func (zkStat GoZkStat) Ctime() int64 {
+	return zkStat.s.Ctime
 }
 
-func (zkStat GoZkStat) MTime() time.Time {
-	return time.Unix(zkStat.s.Mtime/1000, zkStat.s.Mtime%1000*1000000)
+func (zkStat GoZkStat) Mtime() int64 {
+	return zkStat.s.Mtime
 }
 
-func (zkStat GoZkStat) Version() int {
-	return int(zkStat.s.Version)
+func (zkStat GoZkStat) Version() int32 {
+	return zkStat.s.Version
 }
 
-func (zkStat GoZkStat) CVersion() int {
-	return int(zkStat.s.Cversion)
+func (zkStat GoZkStat) Cversion() int32 {
+	return zkStat.s.Cversion
 }
 
-func (zkStat GoZkStat) AVersion() int {
-	return int(zkStat.s.Aversion)
+func (zkStat GoZkStat) Aversion() int32 {
+	return zkStat.s.Aversion
 }
 
 func (zkStat GoZkStat) EphemeralOwner() int64 {
 	return zkStat.s.EphemeralOwner
 }
 
-func (zkStat GoZkStat) DataLength() int {
-	return int(zkStat.s.DataLength)
+func (zkStat GoZkStat) DataLength() int32 {
+	return zkStat.s.DataLength
 }
 
-func (zkStat GoZkStat) NumChildren() int {
-	return int(zkStat.s.NumChildren)
+func (zkStat GoZkStat) NumChildren() int32 {
+	return zkStat.s.NumChildren
 }
 
 func (zkStat GoZkStat) Pzxid() int64 {

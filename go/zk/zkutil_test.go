@@ -23,14 +23,14 @@ type TestZkConn struct {
 type ZkStat struct {
 	czxid          int64
 	mzxid          int64
-	cTime          time.Time
-	mTime          time.Time
-	version        int
-	cVersion       int
-	aVersion       int
+	cTime          int64
+	mTime          int64
+	version        int32
+	cVersion       int32
+	aVersion       int32
 	ephemeralOwner int64
-	dataLength     int
-	numChildren    int
+	dataLength     int32
+	numChildren    int32
 	pzxid          int64
 }
 
@@ -43,23 +43,23 @@ func (zkStat *ZkStat) Mzxid() int64 {
 	return zkStat.mzxid
 }
 
-func (zkStat *ZkStat) CTime() time.Time {
+func (zkStat *ZkStat) Ctime() int64 {
 	return zkStat.cTime
 }
 
-func (zkStat *ZkStat) MTime() time.Time {
+func (zkStat *ZkStat) Mtime() int64 {
 	return zkStat.mTime
 }
 
-func (zkStat *ZkStat) Version() int {
+func (zkStat *ZkStat) Version() int32 {
 	return zkStat.version
 }
 
-func (zkStat *ZkStat) CVersion() int {
+func (zkStat *ZkStat) Cversion() int32 {
 	return zkStat.cVersion
 }
 
-func (zkStat *ZkStat) AVersion() int {
+func (zkStat *ZkStat) Aversion() int32 {
 	return zkStat.aVersion
 }
 
@@ -67,11 +67,11 @@ func (zkStat *ZkStat) EphemeralOwner() int64 {
 	return zkStat.ephemeralOwner
 }
 
-func (zkStat *ZkStat) DataLength() int {
+func (zkStat *ZkStat) DataLength() int32 {
 	return zkStat.dataLength
 }
 
-func (zkStat *ZkStat) NumChildren() int {
+func (zkStat *ZkStat) NumChildren() int32 {
 	return zkStat.numChildren
 }
 
