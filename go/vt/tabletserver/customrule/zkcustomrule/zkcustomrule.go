@@ -93,7 +93,7 @@ func (zkcr *ZkCustomRule) refreshData(qsc tabletserver.Controller, nodeRemoval b
 				return nil
 			}
 		}
-		zkcr.currentRuleSetVersion = stat.Mzxid()
+		zkcr.currentRuleSetVersion = stat.Mzxid
 		if !reflect.DeepEqual(zkcr.currentRuleSet, qrs) {
 			zkcr.currentRuleSet = qrs.Copy()
 			qsc.SetQueryRules(ZkCustomRuleSource, qrs.Copy())

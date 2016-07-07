@@ -60,7 +60,7 @@ func (zkts *Server) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet,
 	if err != nil {
 		return 0, convertError(err)
 	}
-	return int64(stat.Version()), nil
+	return int64(stat.Version), nil
 }
 
 // DeleteTablet is part of the topo.Server interface
@@ -84,7 +84,7 @@ func (zkts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias
 	if err := json.Unmarshal([]byte(data), tablet); err != nil {
 		return nil, 0, err
 	}
-	return tablet, int64(stat.Version()), nil
+	return tablet, int64(stat.Version), nil
 }
 
 // GetTabletsByCell is part of the topo.Server interface

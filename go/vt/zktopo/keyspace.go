@@ -77,7 +77,7 @@ func (zkts *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *
 		return -1, convertError(err)
 	}
 
-	return int64(stat.Version()), nil
+	return int64(stat.Version), nil
 }
 
 // DeleteKeyspace is part of the topo.Server interface.
@@ -103,7 +103,7 @@ func (zkts *Server) GetKeyspace(ctx context.Context, keyspace string) (*topodata
 		return nil, 0, fmt.Errorf("bad keyspace data %v", err)
 	}
 
-	return k, int64(stat.Version()), nil
+	return k, int64(stat.Version), nil
 }
 
 // GetKeyspaces is part of the topo.Server interface

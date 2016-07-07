@@ -20,97 +20,38 @@ type TestZkConn struct {
 	children map[string][]string
 }
 
-type ZkStat struct {
-	czxid          int64
-	mzxid          int64
-	cTime          int64
-	mTime          int64
-	version        int32
-	cVersion       int32
-	aVersion       int32
-	ephemeralOwner int64
-	dataLength     int32
-	numChildren    int32
-	pzxid          int64
-}
-
-// ZkStat methods to match zk.Stat interface
-func (zkStat *ZkStat) Czxid() int64 {
-	return zkStat.czxid
-}
-
-func (zkStat *ZkStat) Mzxid() int64 {
-	return zkStat.mzxid
-}
-
-func (zkStat *ZkStat) Ctime() int64 {
-	return zkStat.cTime
-}
-
-func (zkStat *ZkStat) Mtime() int64 {
-	return zkStat.mTime
-}
-
-func (zkStat *ZkStat) Version() int32 {
-	return zkStat.version
-}
-
-func (zkStat *ZkStat) Cversion() int32 {
-	return zkStat.cVersion
-}
-
-func (zkStat *ZkStat) Aversion() int32 {
-	return zkStat.aVersion
-}
-
-func (zkStat *ZkStat) EphemeralOwner() int64 {
-	return zkStat.ephemeralOwner
-}
-
-func (zkStat *ZkStat) DataLength() int32 {
-	return zkStat.dataLength
-}
-
-func (zkStat *ZkStat) NumChildren() int32 {
-	return zkStat.numChildren
-}
-
-func (zkStat *ZkStat) Pzxid() int64 {
-	return zkStat.pzxid
-}
-
-func (conn *TestZkConn) Get(path string) (data string, stat Stat, err error) {
+func (conn *TestZkConn) Get(path string) (data string, stat *zookeeper.Stat, err error) {
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) GetW(path string) (data string, stat Stat, watch <-chan zookeeper.Event, err error) {
+func (conn *TestZkConn) GetW(path string) (data string, stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error) {
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) Children(path string) (children []string, stat Stat, err error) {
+func (conn *TestZkConn) Children(path string) (children []string, stat *zookeeper.Stat, err error) {
 	result, ok := conn.children[path]
 	if !ok {
 		return nil, nil, zookeeper.ErrNoNode
 	}
-	s := &ZkStat{}
+	s := &zookeeper.Stat{}
 	return result, s, nil
 }
 
-func (conn *TestZkConn) ChildrenW(path string) (children []string, stat Stat, watch <-chan zookeeper.Event, err error) {
+func (conn *TestZkConn) ChildrenW(path string) (children []string, stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error) {
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) Exists(path string) (stat Stat, err error) {
+func (conn *TestZkConn) Exists(path string) (stat *zookeeper.Stat, err error) {
 	for _, e := range conn.exists {
 		if path == e {
-			s := &ZkStat{}
+			s := &zookeeper.Stat{}
 			return s, nil
 		}
 	}
 	return nil, nil
 }
 
-func (conn *TestZkConn) ExistsW(path string) (stat Stat, watch <-chan zookeeper.Event, err error) {
+func (conn *TestZkConn) ExistsW(path string) (stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error) {
 	panic("Should not be used")
 }
 
@@ -118,7 +59,7 @@ func (conn *TestZkConn) Create(path, value string, flags int, aclv []zookeeper.A
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) Set(path, value string, version int32) (stat Stat, err error) {
+func (conn *TestZkConn) Set(path, value string, version int32) (stat *zookeeper.Stat, err error) {
 	panic("Should not be used")
 }
 
@@ -130,7 +71,7 @@ func (conn *TestZkConn) Close() error {
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) ACL(path string) ([]zookeeper.ACL, Stat, error) {
+func (conn *TestZkConn) ACL(path string) ([]zookeeper.ACL, *zookeeper.Stat, error) {
 	panic("Should not be used")
 }
 

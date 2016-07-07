@@ -69,7 +69,7 @@ func (zkts *Server) UpdateShard(ctx context.Context, keyspace, shard string, val
 	if err != nil {
 		return -1, convertError(err)
 	}
-	return int64(stat.Version()), nil
+	return int64(stat.Version), nil
 }
 
 // ValidateShard is part of the topo.Server interface
@@ -101,7 +101,7 @@ func (zkts *Server) GetShard(ctx context.Context, keyspace, shard string) (*topo
 		return nil, 0, fmt.Errorf("bad shard data %v", err)
 	}
 
-	return s, int64(stat.Version()), nil
+	return s, int64(stat.Version), nil
 }
 
 // GetShardNames is part of the topo.Server interface
