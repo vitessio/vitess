@@ -72,7 +72,7 @@ func (zkts *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *
 	if err != nil {
 		return -1, err
 	}
-	stat, err := zkts.zconn.Set(keyspacePath, string(data), int(existingVersion))
+	stat, err := zkts.zconn.Set(keyspacePath, string(data), int32(existingVersion))
 	if err != nil {
 		return -1, convertError(err)
 	}

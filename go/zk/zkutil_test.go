@@ -118,11 +118,11 @@ func (conn *TestZkConn) Create(path, value string, flags int, aclv []zookeeper.A
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) Set(path, value string, version int) (stat Stat, err error) {
+func (conn *TestZkConn) Set(path, value string, version int32) (stat Stat, err error) {
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) Delete(path string, version int) (err error) {
+func (conn *TestZkConn) Delete(path string, version int32) (err error) {
 	panic("Should not be used")
 }
 
@@ -134,7 +134,7 @@ func (conn *TestZkConn) ACL(path string) ([]zookeeper.ACL, Stat, error) {
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) SetACL(path string, aclv []zookeeper.ACL, version int) error {
+func (conn *TestZkConn) SetACL(path string, aclv []zookeeper.ACL, version int32) error {
 	panic("Should not be used")
 }
 

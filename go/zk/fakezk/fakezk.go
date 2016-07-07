@@ -249,7 +249,7 @@ func (conn *zconn) Create(zkPath, value string, flags int, aclv []zookeeper.ACL)
 	return zkPath, nil
 }
 
-func (conn *zconn) Set(zkPath, value string, version int) (stat zk.Stat, err error) {
+func (conn *zconn) Set(zkPath, value string, version int32) (stat zk.Stat, err error) {
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
 
@@ -262,7 +262,7 @@ func (conn *zconn) Set(zkPath, value string, version int) (stat zk.Stat, err err
 		return nil, zookeeper.ErrNoNode
 	}
 
-	if version != -1 && node.version != int32(version) {
+	if version != -1 && node.version != version {
 		return nil, zookeeper.ErrBadVersion
 	}
 	node.content = value
@@ -278,7 +278,7 @@ func (conn *zconn) Set(zkPath, value string, version int) (stat zk.Stat, err err
 	return node.stat(), nil
 }
 
-func (conn *zconn) Delete(zkPath string, version int) (err error) {
+func (conn *zconn) Delete(zkPath string, version int32) (err error) {
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
 
@@ -293,7 +293,7 @@ func (conn *zconn) Delete(zkPath string, version int) (err error) {
 	if len(node.children) > 0 {
 		return zookeeper.ErrNotEmpty
 	}
-	if version != -1 && node.version != int32(version) {
+	if version != -1 && node.version != version {
 		return zookeeper.ErrBadVersion
 	}
 	delete(parent.children, node.name)
@@ -338,7 +338,7 @@ func (conn *zconn) ACL(zkPath string) (acl []zookeeper.ACL, stat zk.Stat, err er
 	panic("not implemented")
 }
 
-func (conn *zconn) SetACL(zkPath string, aclv []zookeeper.ACL, version int) (err error) {
+func (conn *zconn) SetACL(zkPath string, aclv []zookeeper.ACL, version int32) (err error) {
 	return nil
 }
 

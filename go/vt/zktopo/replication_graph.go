@@ -42,13 +42,13 @@ func (zkts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keys
 	zkPath := shardReplicationPath(cell, keyspace, shard)
 	for {
 		data, stat, err := zkts.zconn.Get(zkPath)
-		version := -1
+		var version int32 = -1
 		sr := &topodatapb.ShardReplication{}
 		switch err {
 		case zookeeper.ErrNoNode:
 			// empty node, version is 0
 		case nil:
-			version = int(stat.Version())
+			version = stat.Version()
 			if data != "" {
 				if err = json.Unmarshal([]byte(data), sr); err != nil {
 					return fmt.Errorf("bad ShardReplication data %v", err)

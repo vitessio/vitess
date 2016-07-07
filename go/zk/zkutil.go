@@ -305,7 +305,7 @@ func resolveRecursive(zconn Conn, parts []string, toplevel bool) ([]string, erro
 	return nil, nil
 }
 
-func DeleteRecursive(zconn Conn, zkPath string, version int) error {
+func DeleteRecursive(zconn Conn, zkPath string, version int32) error {
 	// version: -1 delete any version of the node at path - only applies to the top node
 	err := zconn.Delete(zkPath, version)
 	if err == nil {
