@@ -56,7 +56,7 @@ func (zkts *Server) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet,
 		return 0, err
 	}
 
-	stat, err := zkts.zconn.Set(zkTabletPath, string(data), int(existingVersion))
+	stat, err := zkts.zconn.Set(zkTabletPath, string(data), int32(existingVersion))
 	if err != nil {
 		return 0, convertError(err)
 	}

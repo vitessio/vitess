@@ -336,7 +336,7 @@ func (conn *ZkConn) Create(path, value string, flags int, aclv []zookeeper.ACL) 
 	return c.Create(path, []byte(value), int32(flags), aclv)
 }
 
-func (conn *ZkConn) Set(path, value string, version int) (Stat, error) {
+func (conn *ZkConn) Set(path, value string, version int32) (Stat, error) {
 	c := conn.getConn()
 	if c == nil {
 		return nil, ErrConnectionClosed
@@ -344,14 +344,14 @@ func (conn *ZkConn) Set(path, value string, version int) (Stat, error) {
 
 	sem.Acquire()
 	defer sem.Release()
-	stat, err := c.Set(path, []byte(value), int32(version))
+	stat, err := c.Set(path, []byte(value), version)
 	if err != nil {
 		return nil, err
 	}
 	return GoZkStat{stat}, nil
 }
 
-func (conn *ZkConn) Delete(path string, version int) (err error) {
+func (conn *ZkConn) Delete(path string, version int32) (err error) {
 	c := conn.getConn()
 	if c == nil {
 		return ErrConnectionClosed
@@ -359,7 +359,7 @@ func (conn *ZkConn) Delete(path string, version int) (err error) {
 
 	sem.Acquire()
 	defer sem.Release()
-	return c.Delete(path, int32(version))
+	return c.Delete(path, version)
 }
 
 // Close will close the connection asynchronously.  It will never
@@ -393,7 +393,7 @@ func (conn *ZkConn) ACL(path string) ([]zookeeper.ACL, Stat, error) {
 	return acls, GoZkStat{stat}, nil
 }
 
-func (conn *ZkConn) SetACL(path string, aclv []zookeeper.ACL, version int) error {
+func (conn *ZkConn) SetACL(path string, aclv []zookeeper.ACL, version int32) error {
 	c := conn.getConn()
 	if c == nil {
 		return ErrConnectionClosed
@@ -401,6 +401,6 @@ func (conn *ZkConn) SetACL(path string, aclv []zookeeper.ACL, version int) error
 
 	sem.Acquire()
 	defer sem.Release()
-	_, err := c.SetACL(path, aclv, int32(version))
+	_, err := c.SetACL(path, aclv, version)
 	return err
 }

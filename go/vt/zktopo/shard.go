@@ -65,7 +65,7 @@ func (zkts *Server) UpdateShard(ctx context.Context, keyspace, shard string, val
 	if err != nil {
 		return -1, err
 	}
-	stat, err := zkts.zconn.Set(shardPath, string(data), int(existingVersion))
+	stat, err := zkts.zconn.Set(shardPath, string(data), int32(existingVersion))
 	if err != nil {
 		return -1, convertError(err)
 	}

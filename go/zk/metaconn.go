@@ -45,14 +45,14 @@ type Conn interface {
 
 	Create(path, value string, flags int, aclv []zookeeper.ACL) (pathCreated string, err error)
 
-	Set(path, value string, version int) (stat Stat, err error)
+	Set(path, value string, version int32) (stat Stat, err error)
 
-	Delete(path string, version int) (err error)
+	Delete(path string, version int32) (err error)
 
 	Close() error
 
 	ACL(path string) ([]zookeeper.ACL, Stat, error)
-	SetACL(path string, aclv []zookeeper.ACL, version int) error
+	SetACL(path string, aclv []zookeeper.ACL, version int32) error
 }
 
 // Smooth API to talk to any zk path in the global system.  Emulates
@@ -225,7 +225,7 @@ func (conn *MetaConn) Create(path, value string, flags int, aclv []zookeeper.ACL
 }
 
 // Set implements Conn.
-func (conn *MetaConn) Set(path, value string, version int) (stat Stat, err error) {
+func (conn *MetaConn) Set(path, value string, version int32) (stat Stat, err error) {
 	var zconn Conn
 	for i := 0; i < maxAttempts; i++ {
 		zconn, err = conn.connCache.ConnForPath(path)
@@ -241,7 +241,7 @@ func (conn *MetaConn) Set(path, value string, version int) (stat Stat, err error
 }
 
 // Delete implements Conn.
-func (conn *MetaConn) Delete(path string, version int) (err error) {
+func (conn *MetaConn) Delete(path string, version int32) (err error) {
 	var zconn Conn
 	for i := 0; i < maxAttempts; i++ {
 		zconn, err = conn.connCache.ConnForPath(path)
@@ -278,7 +278,7 @@ func (conn *MetaConn) ACL(path string) (acl []zookeeper.ACL, stat Stat, err erro
 }
 
 // SetACL implements Conn.
-func (conn *MetaConn) SetACL(path string, aclv []zookeeper.ACL, version int) (err error) {
+func (conn *MetaConn) SetACL(path string, aclv []zookeeper.ACL, version int32) (err error) {
 	var zconn Conn
 	for i := 0; i < maxAttempts; i++ {
 		zconn, err = conn.connCache.ConnForPath(path)
