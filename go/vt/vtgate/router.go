@@ -20,7 +20,6 @@ import (
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
-	//"github.com/davecgh/go-spew/spew"
 )
 
 // Router is the layer to route queries to the correct shards
@@ -99,8 +98,6 @@ func (rtr *Router) ExecuteRoute(vcursor *requestContext, route *engine.Route, jo
 		return rtr.execDeleteEqual(vcursor, route)
 	case engine.InsertSharded:
 		return rtr.execInsertSharded(vcursor, route)
-	case engine.MultiInsertSharded:
-		return rtr.execMultiRowInsertSharded(vcursor, route)
 	}
 
 	var err error
@@ -319,53 +316,6 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, route *engine.Route)
 }
 
 func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
-	insertid, err := rtr.handleGenerate(vcursor, route.Generate, 0)
-	if err != nil {
-		return nil, fmt.Errorf("execInsertSharded: %v", err)
-	}
-	input := route.Values.([]interface{})
-	//spew.Dump(input)
-	keys, err := rtr.resolveKeys(input[0].([]interface{}), vcursor.bindVars)
-	if err != nil {
-		return nil, fmt.Errorf("execInsertSharded: %v", err)
-	}
-	ksid, err := rtr.handlePrimary(vcursor, keys[0], route.Table.ColumnVindexes[0], vcursor.bindVars, 0)
-	if err != nil {
-		return nil, fmt.Errorf("execInsertSharded: %v", err)
-	}
-	ks, shard, err := rtr.getRouting(vcursor.ctx, route.Keyspace.Name, vcursor.tabletType, ksid)
-	if err != nil {
-		return nil, fmt.Errorf("execInsertSharded: %v", err)
-	}
-	for i := 1; i < len(keys); i++ {
-		err := rtr.handleNonPrimary(vcursor, keys[i], route.Table.ColumnVindexes[i], vcursor.bindVars, ksid, 0)
-		if err != nil {
-			return nil, err
-		}
-	}
-	rewritten := sqlannotation.AddKeyspaceID(route.Query, ksid, vcursor.comments)
-	result, err := rtr.scatterConn.Execute(
-		vcursor.ctx,
-		rewritten,
-		vcursor.bindVars,
-		ks,
-		[]string{shard},
-		vcursor.tabletType,
-		NewSafeSession(vcursor.session),
-		vcursor.notInTransaction)
-	if err != nil {
-		return nil, fmt.Errorf("execInsertSharded: %v", err)
-	}
-	if insertid != 0 {
-		if result.InsertID != 0 {
-			return nil, fmt.Errorf("sequence and db generated a value each for insert")
-		}
-		result.InsertID = uint64(insertid)
-	}
-	return result, nil
-}
-
-func (rtr *Router) execMultiRowInsertSharded(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
 	var firstKsid []byte
 	var ks, shard string
 	inputs := route.Values.([]interface{})
@@ -374,16 +324,16 @@ func (rtr *Router) execMultiRowInsertSharded(vcursor *requestContext, route *eng
 		insertid, err := rtr.handleGenerate(vcursor, route.Generate, rowNum)
 		insertIds[rowNum] = insertid
 		if err != nil {
-			return nil, fmt.Errorf("execMultiRowInsertSharded: %v", err)
+			return nil, fmt.Errorf("execInsertSharded: %v", err)
 		}
 
 		keys, err := rtr.resolveKeys(input.([]interface{}), vcursor.bindVars)
 		if err != nil {
-			return nil, fmt.Errorf("execMultiRowInsertSharded: %v", err)
+			return nil, fmt.Errorf("execInsertSharded: %v", err)
 		}
 		ksid, err := rtr.handlePrimary(vcursor, keys[0], route.Table.ColumnVindexes[0], vcursor.bindVars, rowNum)
 		if err != nil {
-			return nil, fmt.Errorf("execMultiRowInsertSharded: %v", err)
+			return nil, fmt.Errorf("execInsertSharded: %v", err)
 		}
 		if rowNum == 0 {
 			firstKsid = ksid
@@ -393,7 +343,7 @@ func (rtr *Router) execMultiRowInsertSharded(vcursor *requestContext, route *eng
 
 		ks, shard, err = rtr.getRouting(vcursor.ctx, route.Keyspace.Name, vcursor.tabletType, ksid)
 		if err != nil {
-			return nil, fmt.Errorf("execMultiRowInsertSharded: %v", err)
+			return nil, fmt.Errorf("execInsertSharded: %v", err)
 		}
 		for i := 1; i < len(keys); i++ {
 			err := rtr.handleNonPrimary(vcursor, keys[i], route.Table.ColumnVindexes[i], vcursor.bindVars, ksid, rowNum)
@@ -414,7 +364,7 @@ func (rtr *Router) execMultiRowInsertSharded(vcursor *requestContext, route *eng
 		vcursor.notInTransaction)
 
 	if err != nil {
-		return nil, fmt.Errorf("execMultiRowInsertSharded: %v", err)
+		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
 	if insertIds[0] != 0 {
 		if result.InsertID != 0 {

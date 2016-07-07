@@ -13,7 +13,6 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
-	//"github.com/davecgh/go-spew/spew"
 )
 
 // buildInsertPlan builds the route for an INSERT statement.
@@ -44,11 +43,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 	default:
 		panic("unexpected construct in insert")
 	}
-	if len(values) != 1 {
-		route.Opcode = engine.MultiInsertSharded
-	} else {
-		route.Opcode = engine.InsertSharded
-	}
+	route.Opcode = engine.InsertSharded
 	for _, value := range values {
 		switch value.(type) {
 		case *sqlparser.Subquery:
@@ -61,21 +56,19 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 	}
 	colVindexes := route.Table.ColumnVindexes
 	routeValues := make([]interface{}, 0, len(values))
+	autoIncColInsert := false
 	for rowNum := 0; rowNum < len(values); rowNum++ {
 		value := make([]interface{}, 0, len(colVindexes))
 		for _, index := range colVindexes {
-			//spew.Dump(value)
 			if err := buildIndexPlan(ins, index, &value, rowNum); err != nil {
 				return nil, err
 			}
 		}
-		//spew.Dump(value)
 		if route.Table.AutoIncrement != nil {
-			if err := buildAutoIncrementPlan(ins, route.Table.AutoIncrement, route, &value, rowNum); err != nil {
+			if err := buildAutoIncrementPlan(ins, route.Table.AutoIncrement, route, &value, rowNum, &autoIncColInsert); err != nil {
 				return nil, err
 			}
 		}
-		//spew.Dump(value)
 		routeValues = append(routeValues, value)
 	}
 	route.Values = routeValues
@@ -86,7 +79,8 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 // buildIndexPlan adds the insert value to the Values field for the specified ColumnVindex.
 // This value will be used at the time of insert to validate the vindex value.
 func buildIndexPlan(ins *sqlparser.Insert, colVindex *vindexes.ColumnVindex, value *[]interface{}, rowNum int) error {
-	row, pos := findOrInsertPos(ins, colVindex.Column, rowNum)
+	fixedFalse := false
+	row, pos := findOrInsertPos(ins, colVindex.Column, rowNum, &fixedFalse)
 
 	val, err := valConvert(row[pos])
 	if err != nil {
@@ -94,11 +88,10 @@ func buildIndexPlan(ins *sqlparser.Insert, colVindex *vindexes.ColumnVindex, val
 	}
 	*value = append(*value, val)
 	row[pos] = sqlparser.ValArg([]byte(":_" + colVindex.Column.Original() + strconv.Itoa(rowNum)))
-	//spew.Dump(row)
 	return nil
 }
 
-func buildAutoIncrementPlan(ins *sqlparser.Insert, autoinc *vindexes.AutoIncrement, route *engine.Route, value *[]interface{}, rowNum int) error {
+func buildAutoIncrementPlan(ins *sqlparser.Insert, autoinc *vindexes.AutoIncrement, route *engine.Route, value *[]interface{}, rowNum int, autoIncColInsert *bool) error {
 	route.Generate = &engine.Generate{
 		Opcode:   engine.SelectUnsharded,
 		Keyspace: autoinc.Sequence.Keyspace,
@@ -106,14 +99,12 @@ func buildAutoIncrementPlan(ins *sqlparser.Insert, autoinc *vindexes.AutoIncreme
 	}
 	// If it's also a colvindex, we have to add a redirect from route.Values.
 	// Otherwise, we have to redirect from row[pos].
-	//spew.Printf("autoinc.ColumnVindexNum : %#v\n", autoinc.ColumnVindexNum)
-	//spew.Dump(value)
 	if autoinc.ColumnVindexNum >= 0 {
 		route.Generate.Value = (*value)[autoinc.ColumnVindexNum]
 		(*value)[autoinc.ColumnVindexNum] = ":" + engine.SeqVarName + strconv.Itoa(rowNum)
 		return nil
 	}
-	row, pos := findOrInsertPos(ins, autoinc.Column, rowNum)
+	row, pos := findOrInsertPos(ins, autoinc.Column, rowNum, autoIncColInsert)
 	val, err := valConvert(row[pos])
 	if err != nil {
 		return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
@@ -124,7 +115,7 @@ func buildAutoIncrementPlan(ins *sqlparser.Insert, autoinc *vindexes.AutoIncreme
 	return nil
 }
 
-func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString, rowNum int) (row sqlparser.ValTuple, pos int) {
+func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString, rowNum int, autoIncColInsert *bool) (row sqlparser.ValTuple, pos int) {
 	pos = -1
 	for i, column := range ins.Columns {
 		if col.Equal(cistring.CIString(column)) {
@@ -133,8 +124,11 @@ func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString, rowNum int) (
 		}
 	}
 	if pos == -1 {
+		*autoIncColInsert = true
 		pos = len(ins.Columns)
 		ins.Columns = append(ins.Columns, sqlparser.ColIdent(col))
+	}
+	if *autoIncColInsert {
 		ins.Rows.(sqlparser.Values)[rowNum] = append(ins.Rows.(sqlparser.Values)[rowNum].(sqlparser.ValTuple), &sqlparser.NullVal{})
 	}
 	return ins.Rows.(sqlparser.Values)[rowNum].(sqlparser.ValTuple), pos
