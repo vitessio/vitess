@@ -51,12 +51,13 @@ func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *
 			c = string(data)
 		}
 		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PermAll))
-		if err != nil {
-			if err == zookeeper.ErrNodeExists {
-				alreadyExists = true
-			} else {
-				return convertError(err)
-			}
+		switch err {
+		case nil:
+			// nothing here
+		case zookeeper.ErrNodeExists:
+			alreadyExists = true
+		default:
+			return convertError(err)
 		}
 	}
 	if alreadyExists {
@@ -109,16 +110,15 @@ func (zkts *Server) GetKeyspace(ctx context.Context, keyspace string) (*topodata
 // GetKeyspaces is part of the topo.Server interface
 func (zkts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 	children, _, err := zkts.zconn.Children(GlobalKeyspacesPath)
-	if err != nil {
-		err = convertError(err)
-		if err == topo.ErrNoNode {
-			return nil, nil
-		}
-		return nil, err
+	switch err {
+	case nil:
+		sort.Strings(children)
+		return children, nil
+	case zookeeper.ErrNoNode:
+		return nil, nil
+	default:
+		return nil, convertError(err)
 	}
-
-	sort.Strings(children)
-	return children, nil
 }
 
 // DeleteKeyspaceShards is part of the topo.Server interface

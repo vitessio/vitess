@@ -44,12 +44,13 @@ func (zkts *Server) CreateShard(ctx context.Context, keyspace, shard string, val
 			c = string(data)
 		}
 		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PermAll))
-		if err != nil {
-			if err == zookeeper.ErrNodeExists {
-				alreadyExists = true
-			} else {
-				return convertError(err)
-			}
+		switch err {
+		case nil:
+			// nothing to do
+		case zookeeper.ErrNodeExists:
+			alreadyExists = true
+		default:
+			return convertError(err)
 		}
 	}
 	if alreadyExists {
