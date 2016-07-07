@@ -556,7 +556,7 @@ func (rtr *Router) handleGenerate(vcursor *requestContext, gen *engine.Generate,
 		}
 	}
 	if val != nil {
-		vcursor.bindVars[engine.SeqVarName + strconv.Itoa(rowNum)] = val
+		vcursor.bindVars[engine.SeqVarName+strconv.Itoa(rowNum)] = val
 		return 0, nil
 	}
 	// TODO(sougou): This is similar to paramsUnsharded.
@@ -588,7 +588,7 @@ func (rtr *Router) handleGenerate(vcursor *requestContext, gen *engine.Generate,
 	if err != nil {
 		return 0, err
 	}
-	vcursor.bindVars[engine.SeqVarName + strconv.Itoa(rowNum)] = num
+	vcursor.bindVars[engine.SeqVarName+strconv.Itoa(rowNum)] = num
 	return num, nil
 }
 
@@ -605,7 +605,7 @@ func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{},
 	if len(ksid) == 0 {
 		return nil, fmt.Errorf("could not map %v to a keyspace id", vindexKey)
 	}
-	bv["_"+colVindex.Column.Original() + strconv.Itoa(rowNum)] = vindexKey
+	bv["_"+colVindex.Column.Original()+strconv.Itoa(rowNum)] = vindexKey
 	return ksid, nil
 }
 
@@ -642,7 +642,7 @@ func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface
 			}
 		}
 	}
-	bv["_" + colVindex.Column.Original() + strconv.Itoa(rowNum)] = vindexKey
+	bv["_"+colVindex.Column.Original()+strconv.Itoa(rowNum)] = vindexKey
 	return nil
 }
 
