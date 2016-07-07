@@ -7,6 +7,7 @@ import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
 import { MdIcon, MdIconRegistry } from '@angular2-material/icon';
 import { NewKeyspaceComponent } from './NewKeyspace/newkeyspace.component'
 import { Dialog } from 'primeng/primeng';
+import {Button} from 'primeng/primeng';
 
 
 @Component({
@@ -23,7 +24,8 @@ import { Dialog } from 'primeng/primeng';
               MD_CARD_DIRECTIVES,
               MD_BUTTON_DIRECTIVES,
               MdIcon,
-              Dialog],
+              Dialog,
+              Button],
   
 })
 export class DashboardComponent implements OnInit{
