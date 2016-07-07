@@ -9,11 +9,14 @@
 const map: any = {
   '@angular2-material': 'vendor/@angular2-material',
   'angular2-in-memory-web-api': 'vendor/angular2-in-memory-web-api',
+  '@angular':                   'vendor/@angular',
+  'primeng':                    'vendor/primeng',
 };
 
 /** User packages configuration. */
 const packages: any = {
   'angular2-in-memory-web-api': { main: 'index.js', defaultExtension: 'js' },
+  'primeng':                    { defaultExtension: 'js' },
 };
 
 // put the names of any of your Material components here
@@ -31,7 +34,7 @@ const materialPkgs: string[] = [
 
 materialPkgs.forEach((pkg) => {
   packages[`@angular2-material/${pkg}`] = { main: `${pkg}.js` };
-});
+})
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 /***********************************************************************************************
@@ -46,6 +49,7 @@ const barrels: string[] = [
   '@angular/router',
   '@angular/platform-browser',
   '@angular/platform-browser-dynamic',
+  '@angular/forms',
 
   // Thirdparty barrels.
   'rxjs',
@@ -75,4 +79,7 @@ System.config({
 });
 
 // Apply the user's configuration.
-System.config({ map, packages });
+System.config({ 
+    map:map, 
+    packages:packages, 
+  });

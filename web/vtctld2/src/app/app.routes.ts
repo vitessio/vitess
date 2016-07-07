@@ -15,8 +15,8 @@ export const routes: RouterConfig = [
 	{ path: 'schema', component: SchemaComponent},
 	{ path: 'topo', component: TopoBrowserComponent },
   { path: 'queue', component: WorkqueueComponent},
-  { path: 'keyspace/:keyspaceName', component: KeyspaceViewComponent},
-  { path: 'keyspace/:keyspaceName/cell/:shardName', component: ShardViewComponent},
+  { path: 'keyspace', component: KeyspaceViewComponent},
+  { path: 'shard', component: ShardViewComponent},
 
 ];
 

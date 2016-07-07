@@ -4,15 +4,3 @@ h1 {
 md-card-title {
   text-align: center;
 }
-.vt-tablet-container {
-  display: table;
-}
-.vt-tabletCard {
-  /*display: table-row;
-  margin-left: 2%;
-  margin-bottom: 1%;
-  margin-top: 1%;*/
-}
-.vt-tablet-stat{
-  /*display: table-cell;*/
-}
