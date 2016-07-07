@@ -147,8 +147,10 @@ func InitVtctld(ts topo.Server) {
 		http.ServeFile(w, r, filePath)
 	})
 
+	rts := initHealthCheck(ts)
+
 	// Serve the REST API for the vtctld web app.
-	initAPI(context.Background(), ts, actionRepo)
+	initAPI(context.Background(), ts, actionRepo, rts)
 
 	// Init redirects for explorers
 	initExplorer(ts)
