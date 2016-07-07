@@ -18,6 +18,11 @@ module.exports = function(defaults) {
       '@angular/**/*.+(js|js.map)',
       '@angular2-material/**/*',
       'angular2-in-memory-web-api/**/*',
+      'primeui/**/*',
+      'primeng/**/*',
+      'ng-lightning/**/*',
+      'tether/**/*',
+      'ts-helpers/**/*',
     ]
   }); 
 };

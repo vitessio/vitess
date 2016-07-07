@@ -2,19 +2,15 @@
 
 <div class="vt-tablet-container">
   <md-card class="vt-tabletCard"> 
-    <table>
-      <tr>
-        <th>Name</th>
-        <th>Status</th>
-        <th>Stat1</th>
-        <th>Stat2</th>
-      </tr>
-      <tr *ngFor="let tablet of tablets">
-        <td class="vt-tablet-stat">{{getName(tablet.type)}}</td>
-        <td class="vt-tablet-stat">{{tablet.status}}</td>
-        <td class="vt-tablet-stat">{{tablet.stat}}</td>
-        <td class="vt-tablet-stat">{{tablet.stat2}}</td>
-      </tr>
-    </table>
+    <p-dataTable [value]="tablets">
+      <p-column field="type" header="Type" sortable="true">
+        <template let-col let-tab="rowData">
+        {{getName(tab[col.field])}}
+        </template>
+      </p-column>
+      <p-column field="status" header="Status" sortable="true"></p-column>
+      <p-column field="stat" header="Stat1" sortable="true"></p-column>
+      <p-column field="stat2" header="Stat2" sortable="true"></p-column>
+    </p-dataTable>
   </md-card>
 </div>

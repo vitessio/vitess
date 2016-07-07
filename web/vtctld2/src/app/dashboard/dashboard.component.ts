@@ -6,6 +6,9 @@ import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
 import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
 import { MdIcon, MdIconRegistry } from '@angular2-material/icon';
 import { NewKeyspaceComponent } from './NewKeyspace/newkeyspace.component'
+import { Dialog } from 'primeng/primeng';
+
+
 @Component({
   moduleId: module.id,
   selector: 'vt-dashboard',
@@ -19,16 +22,18 @@ import { NewKeyspaceComponent } from './NewKeyspace/newkeyspace.component'
               ROUTER_DIRECTIVES,
               MD_CARD_DIRECTIVES,
               MD_BUTTON_DIRECTIVES,
-              MdIcon],
+              MdIcon,
+              Dialog],
   
 })
 export class DashboardComponent implements OnInit{
   title = 'Vitess Control Panel';
   keyspaces = [];
   openForm = false;
+  keyspacesReady=false;
 
   toggleForm() {
-    //console.log("Was:", this.openForm, "   Now this: ", !this.openForm);
+    console.log("Was:", this.openForm, "   Now this: ", !this.openForm);
     this.openForm = !this.openForm;
   }
   updateOpen(event) {
@@ -43,6 +48,15 @@ export class DashboardComponent implements OnInit{
   }
 
   getKeyspaces() {
-    this.keyspaceService.getKeyspaces().subscribe(keyspaces => this.keyspaces = keyspaces)
+    this.keyspaceService.getKeyspaces().subscribe(keyspaces => {
+      this.keyspaces = keyspaces;
+      this.keyspacesReady = true;
+    });
   }
+
+   display: boolean = false;
+
+    showDialog() {
+        this.display = true;
+    }
 }
