@@ -16,9 +16,6 @@ import (
 	"github.com/youtube/vitess/go/zk"
 )
 
-// Make sure Stat implements the interface.
-var _ zk.Stat = &stat{}
-
 func TestBasic(t *testing.T) {
 	conn := NewConn()
 	defer conn.Close()
