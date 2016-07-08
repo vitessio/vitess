@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
@@ -57,10 +58,11 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 	colVindexes := route.Table.ColumnVindexes
 	routeValues := make([]interface{}, 0, len(values))
 	autoIncColInsert := false
+	indexColInsert := make([]bool, len(colVindexes))
 	for rowNum := 0; rowNum < len(values); rowNum++ {
 		value := make([]interface{}, 0, len(colVindexes))
-		for _, index := range colVindexes {
-			if err := buildIndexPlan(ins, index, &value, rowNum); err != nil {
+		for colNum, index := range colVindexes {
+			if err := buildIndexPlan(ins, index, &value, rowNum, &indexColInsert[colNum]); err != nil {
 				return nil, err
 			}
 		}
@@ -78,9 +80,8 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 
 // buildIndexPlan adds the insert value to the Values field for the specified ColumnVindex.
 // This value will be used at the time of insert to validate the vindex value.
-func buildIndexPlan(ins *sqlparser.Insert, colVindex *vindexes.ColumnVindex, value *[]interface{}, rowNum int) error {
-	fixedFalse := false
-	row, pos := findOrInsertPos(ins, colVindex.Column, rowNum, &fixedFalse)
+func buildIndexPlan(ins *sqlparser.Insert, colVindex *vindexes.ColumnVindex, value *[]interface{}, rowNum int, indexColInsert *bool) error {
+	row, pos := findOrInsertPos(ins, colVindex.Column, rowNum, indexColInsert)
 
 	val, err := valConvert(row[pos])
 	if err != nil {
@@ -115,7 +116,7 @@ func buildAutoIncrementPlan(ins *sqlparser.Insert, autoinc *vindexes.AutoIncreme
 	return nil
 }
 
-func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString, rowNum int, autoIncColInsert *bool) (row sqlparser.ValTuple, pos int) {
+func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString, rowNum int, ColInsert *bool) (row sqlparser.ValTuple, pos int) {
 	pos = -1
 	for i, column := range ins.Columns {
 		if col.Equal(cistring.CIString(column)) {
@@ -124,11 +125,12 @@ func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString, rowNum int, a
 		}
 	}
 	if pos == -1 {
-		*autoIncColInsert = true
+		*ColInsert = true
 		pos = len(ins.Columns)
 		ins.Columns = append(ins.Columns, sqlparser.ColIdent(col))
 	}
-	if *autoIncColInsert {
+	if *ColInsert {
+		spew.Dump(ins.Rows)
 		ins.Rows.(sqlparser.Values)[rowNum] = append(ins.Rows.(sqlparser.Values)[rowNum].(sqlparser.ValTuple), &sqlparser.NullVal{})
 	}
 	return ins.Rows.(sqlparser.Values)[rowNum].(sqlparser.ValTuple), pos
