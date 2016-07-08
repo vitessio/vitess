@@ -77,10 +77,10 @@ type TabletManagerClient interface {
 	ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 
 	// ExecuteFetchAsDba executes a query remotely using the DBA pool
-	ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, query string, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error)
+	ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error)
 
 	// ExecuteFetchAsApp executes a query remotely using the App pool
-	ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, query string, maxRows int) (*querypb.QueryResult, error)
+	ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int) (*querypb.QueryResult, error)
 
 	//
 	// Replication related methods

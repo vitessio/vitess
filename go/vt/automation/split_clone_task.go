@@ -20,6 +20,12 @@ func (t *SplitCloneTask) Run(parameters map[string]string) ([]*automationpb.Task
 	//                        '--source_reader_count', '1',
 	//                        '--destination_writer_count', '1',
 	args := []string{"SplitClone"}
+	if online := parameters["online"]; online != "" {
+		args = append(args, "--online="+online)
+	}
+	if offline := parameters["offline"]; offline != "" {
+		args = append(args, "--offline="+offline)
+	}
 	if excludeTables := parameters["exclude_tables"]; excludeTables != "" {
 		args = append(args, "--exclude_tables="+excludeTables)
 	}
@@ -50,5 +56,5 @@ func (t *SplitCloneTask) RequiredParameters() []string {
 
 // OptionalParameters is part of the Task interface.
 func (t *SplitCloneTask) OptionalParameters() []string {
-	return []string{"exclude_tables", "write_query_max_rows", "write_query_max_size", "min_healthy_rdonly_tablets"}
+	return []string{"online", "offline", "exclude_tables", "write_query_max_rows", "write_query_max_size", "min_healthy_rdonly_tablets"}
 }

@@ -1095,6 +1095,7 @@ class Vtctld(object):
   def start(self, enable_schema_change_dir=False):
     args = environment.binary_args('vtctld') + [
         '-enable_queries',
+        '-cell', 'test_nj',
         '-web_dir', environment.vttop + '/web/vtctld',
         '--log_dir', environment.vtlogroot,
         '--port', str(self.port),

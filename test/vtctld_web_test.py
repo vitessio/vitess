@@ -9,7 +9,7 @@ import unittest
 import environment
 import tablet
 import utils
-
+from selenium.common.exceptions import NoSuchElementException
 
 # range '' - 80
 shard_0_master = tablet.Tablet()
@@ -140,8 +140,19 @@ class TestVtctldWeb(unittest.TestCase):
     return self.driver.find_element_by_id('%s-card' % keyspace_name)
 
   def _get_shards(self, keyspace_name):
-    shard_grid = self.driver.find_element_by_id('%s-shard-list' % keyspace_name)
+    shard_grid = self.driver.find_element_by_id(
+        '%s-shards-list' % keyspace_name)
     return shard_grid.text.split('\n')
+
+  def _get_serving_shards(self, keyspace_name):
+    serving_shards = self.driver.find_element_by_id(
+        '%s-serving-list' % keyspace_name)
+    return serving_shards.text.split('\n')
+
+  def _get_inactive_shards(self, keyspace_name):
+    inactive_shards = self.driver.find_element_by_id(
+        '%s-inactive-list' % keyspace_name)
+    return inactive_shards.text.split('\n')
 
   def _get_shard_element(self, keyspace_name, shard_name):
     return self._get_keyspace_element(keyspace_name).find_element_by_link_text(
@@ -191,15 +202,27 @@ class TestVtctldWeb(unittest.TestCase):
     logging.info('Keyspaces: %s', ', '.join(keyspace_names))
     self.assertListEqual(['test_keyspace', 'test_keyspace2'], keyspace_names)
 
-    test_keyspace_shards = self._get_shards('test_keyspace')
+    test_keyspace_serving_shards = self._get_serving_shards('test_keyspace')
     logging.info(
-        'Shards in test_keyspace: %s', ', '.join(test_keyspace_shards))
-    self.assertListEqual(test_keyspace_shards, ['-80', '80-'])
+        'Serving Shards in test_keyspace: %s', ', '.join(
+            test_keyspace_serving_shards))
+    self.assertListEqual(test_keyspace_serving_shards, ['-80', '80-'])
 
-    test_keyspace2_shards = self._get_shards('test_keyspace2')
+    test_keyspace2_serving_shards = self._get_serving_shards('test_keyspace2')
     logging.info(
-        'Shards in test_keyspace2: %s', ', '.join(test_keyspace2_shards))
-    self.assertListEqual(test_keyspace2_shards, ['0'])
+        'Serving Shards in test_keyspace2: %s', ', '.join(
+            test_keyspace2_serving_shards))
+    self.assertListEqual(test_keyspace2_serving_shards, ['0'])
+
+    with self.assertRaises(NoSuchElementException):
+      self._get_inactive_shards('test_keyspace')
+      logging.info(
+          'Inactive Shards in test_keyspace: %s', ', '.join([]))
+
+    with self.assertRaises(NoSuchElementException):
+      self._get_inactive_shards('test_keyspace2')
+      logging.info(
+          'Inactive Shards in test_keyspace2: %s', ', '.join([]))
 
   def test_shard_overview(self):
     logging.info('Testing shard overview')

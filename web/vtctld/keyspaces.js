@@ -28,7 +28,7 @@ app.controller('KeyspacesCtrl', function($scope, keyspaces, srv_keyspace, shards
   }
 
   $scope.refreshData = function() {
-    var SrvKeyspacePromise = getSrvKeyspaces("local", "test_keyspace");
+    var SrvKeyspacePromise = getSrvKeyspaces("local", "");
     // Get list of keyspace names.
     keyspaces.query(function(ksnames) {
       $scope.keyspaces = [];

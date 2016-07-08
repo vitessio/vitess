@@ -40,6 +40,8 @@ const (
 
 var (
 	errReadOnly = errors.New("The MariaDB server is running with the --read-only option so it cannot execute this statement (errno 1290) during query:")
+
+	errStreamingQueryTimeout = errors.New("vttablet: generic::unknown: error: the query was killed either because it timed out or was canceled: (errno 2013) (sqlstate HY000) during query: ")
 )
 
 type splitCloneTestCase struct {
@@ -283,6 +285,9 @@ type testQueryService struct {
 	tabletUID  uint32
 	fields     []*querypb.Field
 	rows       [][]sqltypes.Value
+	// forceError is set to true for a given int64 primary key value if
+	// testQueryService should return an error instead of the actual row.
+	forceError map[int64]bool
 }
 
 func newTestQueryService(t *testing.T, target querypb.Target, shqs *fakes.StreamHealthQueryService, shardIndex, shardCount int, tabletUID uint32) *testQueryService {
@@ -294,6 +299,7 @@ func newTestQueryService(t *testing.T, target querypb.Target, shqs *fakes.Stream
 		shardCount:               shardCount,
 		tabletUID:                tabletUID,
 		fields:                   v2Fields,
+		forceError:               make(map[int64]bool),
 	}
 }
 
@@ -306,11 +312,21 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 	parts := strings.Split(sql, " ")
 	for _, part := range parts {
 		if strings.HasPrefix(part, "id>=") {
+			// Chunk start.
 			min, err = strconv.Atoi(part[4:])
 			if err != nil {
 				return err
 			}
+		} else if strings.HasPrefix(part, "id>") {
+			// Chunk start after restart.
+			min, err = strconv.Atoi(part[3:])
+			if err != nil {
+				return err
+			}
+			// Increment by one to fulfill ">" instead of ">=".
+			min++
 		} else if strings.HasPrefix(part, "id<") {
+			// Chunk end.
 			max, err = strconv.Atoi(part[3:])
 			if err != nil {
 				return err
@@ -328,14 +344,22 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 	rowsAffected := 0
 	for _, row := range sq.rows {
 		primaryKey := row[0].ToNative().(int64)
+
 		if primaryKey >= int64(min) && primaryKey < int64(max) {
+			if sq.forceError[primaryKey] {
+				// Do not react on the error again.
+				delete(sq.forceError, primaryKey)
+				sq.t.Logf("testQueryService: %v,%v/%v/%v: sending error for id: %v row: %v", sq.tabletUID, sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, primaryKey, row)
+				return errStreamingQueryTimeout
+			}
+
 			if err := sendReply(&sqltypes.Result{
 				Rows: [][]sqltypes.Value{row},
 			}); err != nil {
 				return err
 			}
 			// Uncomment the next line during debugging when needed.
-			// sq.t.Logf("testQueryService: %v,%v/%v/%v: sent row for id: %v row: %v", sq.tabletUID, sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, primaryKey, row)
+			//			sq.t.Logf("testQueryService: %v,%v/%v/%v: sent row for id: %v row: %v", sq.tabletUID, sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, primaryKey, row)
 			rowsAffected++
 		}
 	}
@@ -385,6 +409,10 @@ func (sq *testQueryService) clearRows() {
 	sq.rows = nil
 }
 
+func (sq *testQueryService) errorStreamAtRow(primaryKeyValue int) {
+	sq.forceError[int64(primaryKeyValue)] = true
+}
+
 var v2Fields = []*querypb.Field{
 	{
 		Name: "id",
@@ -406,6 +434,27 @@ func TestSplitCloneV2_Offline(t *testing.T) {
 	tc := &splitCloneTestCase{t: t}
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
+
+	// Run the vtworker command.
+	if err := runCommand(t, tc.wi, tc.wi.wr, tc.defaultWorkerArgs); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestSplitCloneV2_Offline_RestartStreamingQuery is identical to
+// TestSplitCloneV2_Offline but forces SplitClone to restart the streaming
+// query on the source before reading the last row.
+func TestSplitCloneV2_Offline_RestartStreamingQuery(t *testing.T) {
+	tc := &splitCloneTestCase{t: t}
+	tc.setUp(false /* v3 */)
+	defer tc.tearDown()
+
+	// TODO(mberlin): Change this test to use a multi-column primary key because
+	// the restart generates a WHERE clause which includes all primary key
+	// columns.
+	for _, qs := range tc.sourceRdonlyQs {
+		qs.errorStreamAtRow(199)
+	}
 
 	// Run the vtworker command.
 	if err := runCommand(t, tc.wi, tc.wi.wr, tc.defaultWorkerArgs); err != nil {

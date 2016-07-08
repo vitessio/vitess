@@ -39,7 +39,7 @@ func TestEventErrors(t *testing.T) {
 			Statements: []*binlogdatapb.BinlogTransaction_Statement{
 				{
 					Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-					Sql:      sql,
+					Sql:      []byte(sql),
 				},
 			},
 		}
@@ -50,7 +50,7 @@ func TestEventErrors(t *testing.T) {
 		}
 		want := &binlogdatapb.StreamEvent{
 			Category: binlogdatapb.StreamEvent_SE_ERR,
-			Sql:      sql,
+			Sql:      []byte(sql),
 		}
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("error for SQL: '%v' got: %+v, want: %+v", sql, got, want)
@@ -68,7 +68,7 @@ func TestSetErrors(t *testing.T) {
 		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      "SET INSERT_ID=abcd",
+				Sql:      []byte("SET INSERT_ID=abcd"),
 			},
 		},
 	}
@@ -87,16 +87,16 @@ func TestDMLEvent(t *testing.T) {
 	trans := &binlogdatapb.BinlogTransaction{
 		Statements: []*binlogdatapb.BinlogTransaction_Statement{{
 			Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-			Sql:      "SET TIMESTAMP=2",
+			Sql:      []byte("SET TIMESTAMP=2"),
 		}, {
 			Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-			Sql:      "SET INSERT_ID=10",
+			Sql:      []byte("SET INSERT_ID=10"),
 		}, {
 			Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-			Sql:      "query /* _stream _table_ (eid id name)  (null 1 'bmFtZQ==' ) (null 18446744073709551615 'bmFtZQ==' ); */",
+			Sql:      []byte("query /* _stream _table_ (eid id name)  (null 1 'bmFtZQ==' ) (null 18446744073709551615 'bmFtZQ==' ); */"),
 		}, {
 			Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-			Sql:      "query",
+			Sql:      []byte("query"),
 		}},
 		Timestamp:     1,
 		TransactionId: "MariaDB/0-41983-20",
@@ -139,10 +139,10 @@ func TestDDLEvent(t *testing.T) {
 		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      "SET TIMESTAMP=2",
+				Sql:      []byte("SET TIMESTAMP=2"),
 			}, {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DDL,
-				Sql:      "DDL",
+				Sql:      []byte("DDL"),
 			},
 		},
 		Timestamp:     1,

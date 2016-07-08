@@ -8,8 +8,6 @@ import (
 	"bytes"
 	"fmt"
 	"regexp"
-	"strconv"
-	"strings"
 	"text/template"
 	"time"
 
@@ -18,11 +16,9 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -80,161 +76,6 @@ func runSQLCommands(ctx context.Context, wr *wrangler.Wrangler, healthCheck disc
 	}
 
 	return nil
-}
-
-// FindChunks returns an array of chunks to use for splitting up a table
-// into multiple data chunks. It only works for tables with a primary key
-// (and the primary key first column is an integer type).
-// The array will always look like:
-// "", "value1", "value2", ""
-// A non-split tablet will just return:
-// "", ""
-func FindChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodatapb.Tablet, td *tabletmanagerdatapb.TableDefinition, minTableSizeForSplit uint64, sourceReaderCount int) ([]string, error) {
-	result := []string{"", ""}
-
-	// eliminate a few cases we don't split tables for
-	if len(td.PrimaryKeyColumns) == 0 {
-		// no primary key, what can we do?
-		// TODO(mberlin): Return an error here.
-		return result, nil
-	}
-	if td.DataLength < minTableSizeForSplit {
-		// table is too small to split up
-		return result, nil
-	}
-
-	// get the min and max of the leading column of the primary key
-	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", td.PrimaryKeyColumns[0], td.PrimaryKeyColumns[0], topoproto.TabletDbName(tablet), td.Name)
-	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(shortCtx, tablet, query, 1)
-	cancel()
-	if err != nil {
-		return nil, fmt.Errorf("ExecuteFetchAsApp: %v", err)
-	}
-	if len(qr.Rows) != 1 {
-		wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot get min and max", td.Name)
-		// TODO(mberlin): Return an error here?
-		return result, nil
-	}
-
-	// FIXME(alainjobart) this code is a bit clunky. I'd like to
-	// convert the first row into an array of Values, and then
-	// see which type they are and go from there. Can only happen after
-	// Value has a full type.
-	l0 := qr.Rows[0].Lengths[0]
-	l1 := qr.Rows[0].Lengths[1]
-	// TODO(mberlin): Convert to sqltypes.Result here first to simplify treating
-	// NULL results.
-	if l0 < 0 || l1 < 0 {
-		wr.Logger().Infof("Not splitting table %v into multiple chunks, min or max is NULL: %v", td.Name, qr.Rows[0])
-		// TODO(mberlin): Return an error here?
-		return result, nil
-	}
-	minValue := qr.Rows[0].Values[:l0]
-	maxValue := qr.Rows[0].Values[l0 : l0+l1]
-	switch {
-	case sqltypes.IsSigned(qr.Fields[0].Type):
-		min, err := strconv.ParseInt(string(minValue), 10, 64)
-		if err != nil {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, string(minValue), err)
-			return result, nil
-		}
-		max, err := strconv.ParseInt(string(maxValue), 10, 64)
-		if err != nil {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, string(maxValue), err)
-			return result, nil
-		}
-		interval := (max - min) / int64(sourceReaderCount)
-		if interval == 0 {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", td.Name, max, min)
-			return result, nil
-		}
-
-		result = make([]string, sourceReaderCount+1)
-		result[0] = ""
-		result[sourceReaderCount] = ""
-		for i := int64(1); i < int64(sourceReaderCount); i++ {
-			result[i] = fmt.Sprintf("%v", min+interval*i)
-		}
-		return result, nil
-
-	case sqltypes.IsUnsigned(qr.Fields[0].Type):
-		min, err := strconv.ParseUint(string(minValue), 10, 64)
-		if err != nil {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, string(minValue), err)
-			return result, nil
-		}
-		max, err := strconv.ParseUint(string(maxValue), 10, 64)
-		if err != nil {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, string(maxValue), err)
-			return result, nil
-		}
-		interval := (max - min) / uint64(sourceReaderCount)
-		if interval == 0 {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", td.Name, max, min)
-			return result, nil
-		}
-
-		result = make([]string, sourceReaderCount+1)
-		result[0] = ""
-		result[sourceReaderCount] = ""
-		for i := uint64(1); i < uint64(sourceReaderCount); i++ {
-			result[i] = fmt.Sprintf("%v", min+interval*i)
-		}
-		return result, nil
-
-	case sqltypes.IsFloat(qr.Fields[0].Type):
-		min, err := strconv.ParseFloat(string(minValue), 64)
-		if err != nil {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, string(minValue), err)
-			return result, nil
-		}
-		max, err := strconv.ParseFloat(string(maxValue), 64)
-		if err != nil {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, string(maxValue), err)
-			return result, nil
-		}
-		interval := (max - min) / float64(sourceReaderCount)
-		if interval == 0 {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", td.Name, max, min)
-			return result, nil
-		}
-
-		result = make([]string, sourceReaderCount+1)
-		result[0] = ""
-		result[sourceReaderCount] = ""
-		for i := 1; i < sourceReaderCount; i++ {
-			result[i] = fmt.Sprintf("%v", min+interval*float64(i))
-		}
-		return result, nil
-	}
-
-	wr.Logger().Infof("Not splitting table %v into multiple chunks, primary key not numeric", td.Name)
-	return result, nil
-}
-
-// buildSQLFromChunks returns the SQL command to run to insert the data
-// using the chunks definitions into the provided table.
-func buildSQLFromChunks(wr *wrangler.Wrangler, td *tabletmanagerdatapb.TableDefinition, chunks []string, chunkIndex int, source string) string {
-	selectSQL := "SELECT " + strings.Join(td.Columns, ", ") + " FROM " + td.Name
-	if chunks[chunkIndex] != "" || chunks[chunkIndex+1] != "" {
-		// TODO(mberlin): Move logging out into the actual code which does the reading.
-		wr.Logger().Infof("Starting to stream all data from tablet %v table %v between '%v' and '%v'", source, td.Name, chunks[chunkIndex], chunks[chunkIndex+1])
-		clauses := make([]string, 0, 2)
-		if chunks[chunkIndex] != "" {
-			clauses = append(clauses, td.PrimaryKeyColumns[0]+">="+chunks[chunkIndex])
-		}
-		if chunks[chunkIndex+1] != "" {
-			clauses = append(clauses, td.PrimaryKeyColumns[0]+"<"+chunks[chunkIndex+1])
-		}
-		selectSQL += " WHERE " + strings.Join(clauses, " AND ")
-	} else {
-		wr.Logger().Infof("Starting to stream all data from tablet %v table %v", source, td.Name)
-	}
-	if len(td.PrimaryKeyColumns) > 0 {
-		selectSQL += " ORDER BY " + strings.Join(td.PrimaryKeyColumns, ", ")
-	}
-	return selectSQL
 }
 
 // makeValueString returns a string that contains all the passed-in rows

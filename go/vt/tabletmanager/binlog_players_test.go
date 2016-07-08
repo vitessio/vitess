@@ -445,7 +445,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-				Sql:      "INSERT INTO tablet VALUES(1)",
+				Sql:      []byte("INSERT INTO tablet VALUES(1)"),
 			},
 		},
 		Timestamp:     72,
@@ -641,7 +641,7 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 			Statements: []*binlogdatapb.BinlogTransaction_Statement{
 				{
 					Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-					Sql:      "INSERT INTO tablet VALUES(1)",
+					Sql:      []byte("INSERT INTO tablet VALUES(1)"),
 				},
 			},
 			Timestamp:     72,
@@ -826,7 +826,7 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-				Sql:      "INSERT INTO tablet VALUES(1)",
+				Sql:      []byte("INSERT INTO tablet VALUES(1)"),
 			},
 		},
 		Timestamp:     72,

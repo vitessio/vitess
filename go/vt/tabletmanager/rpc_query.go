@@ -13,7 +13,7 @@ import (
 
 // ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.
 // Should be called under RPCWrap.
-func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
 	// get a connection
 	conn, err := agent.MysqlDaemon.GetDbaConnection()
 	if err != nil {
@@ -36,7 +36,7 @@ func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query string, d
 	}
 
 	// run the query
-	result, err := conn.ExecuteFetch(query, maxrows, true /*wantFields*/)
+	result, err := conn.ExecuteFetch(string(query), maxrows, true /*wantFields*/)
 
 	// re-enable binlogs if necessary
 	if disableBinlogs && !conn.IsClosed() {
@@ -56,13 +56,13 @@ func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query string, d
 
 // ExecuteFetchAsApp will execute the given query, possibly disabling binlogs.
 // Should be called under RPCWrap.
-func (agent *ActionAgent) ExecuteFetchAsApp(ctx context.Context, query string, maxrows int) (*querypb.QueryResult, error) {
+func (agent *ActionAgent) ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error) {
 	// get a connection
 	conn, err := agent.MysqlDaemon.GetAppConnection(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
-	result, err := conn.ExecuteFetch(query, maxrows, true /*wantFields*/)
+	result, err := conn.ExecuteFetch(string(query), maxrows, true /*wantFields*/)
 	return sqltypes.ResultToProto3(result), err
 }

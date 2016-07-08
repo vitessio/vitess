@@ -29,7 +29,7 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 				log.Warningf("Not forwarding DDL: %s", statement.Sql)
 				continue
 			case binlogdatapb.BinlogTransaction_Statement_BL_DML:
-				keyspaceID, err := sqlannotation.ExtractKeySpaceID(statement.Sql)
+				keyspaceID, err := sqlannotation.ExtractKeySpaceID(string(statement.Sql))
 				if err != nil {
 					if handleExtractKeySpaceIDError(err) {
 						continue

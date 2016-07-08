@@ -446,15 +446,15 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 			continue
 		}
 
-		chunks, err := FindChunks(ctx, vscw.wr, vscw.sourceTablet, td, vscw.minTableSizeForSplit, vscw.sourceReaderCount)
+		chunks, err := generateChunks(ctx, vscw.wr, vscw.sourceTablet, td, vscw.minTableSizeForSplit, vscw.sourceReaderCount)
 		if err != nil {
 			return err
 		}
 		vscw.tableStatusList.setThreadCount(tableIndex, len(chunks)-1)
 
-		for chunkIndex := 0; chunkIndex < len(chunks)-1; chunkIndex++ {
+		for _, c := range chunks {
 			sourceWaitGroup.Add(1)
-			go func(td *tabletmanagerdatapb.TableDefinition, tableIndex, chunkIndex int) {
+			go func(td *tabletmanagerdatapb.TableDefinition, tableIndex int, chunk chunk) {
 				defer sourceWaitGroup.Done()
 
 				sema.Acquire()
@@ -462,21 +462,20 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 
 				vscw.tableStatusList.threadStarted(tableIndex)
 
-				// build the query, and start the streaming
-				selectSQL := buildSQLFromChunks(vscw.wr, td, chunks, chunkIndex, topoproto.TabletAliasString(vscw.sourceAlias))
-				qrr, err := NewQueryResultReaderForTablet(ctx, vscw.wr.TopoServer(), vscw.sourceAlias, selectSQL)
+				// Start streaming from the source tablet.
+				rr, err := NewRestartableResultReader(ctx, vscw.wr.Logger(), vscw.wr.TopoServer(), vscw.sourceAlias, td, chunk)
 				if err != nil {
-					processError("NewQueryResultReaderForTablet failed: %v", err)
+					processError("NewRestartableResultReader failed: %v", err)
 					return
 				}
-				defer qrr.Close()
+				defer rr.Close()
 
 				// process the data
-				if err := vscw.processData(ctx, dbName, td, tableIndex, qrr, insertChannel, vscw.destinationPackCount); err != nil {
-					processError("QueryResultReader failed: %v", err)
+				if err := vscw.processData(ctx, dbName, td, tableIndex, rr, insertChannel, vscw.destinationPackCount); err != nil {
+					processError("ResultReader failed: %v", err)
 				}
 				vscw.tableStatusList.threadDone(tableIndex)
-			}(td, tableIndex, chunkIndex)
+			}(td, tableIndex, c)
 		}
 	}
 	sourceWaitGroup.Wait()
@@ -556,15 +555,15 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 
 // processData pumps the data out of the provided QueryResultReader.
 // It returns any error the source encounters.
-func (vscw *VerticalSplitCloneWorker) processData(ctx context.Context, dbName string, td *tabletmanagerdatapb.TableDefinition, tableIndex int, qrr *QueryResultReader, insertChannel chan string, destinationPackCount int) error {
+func (vscw *VerticalSplitCloneWorker) processData(ctx context.Context, dbName string, td *tabletmanagerdatapb.TableDefinition, tableIndex int, rr ResultReader, insertChannel chan string, destinationPackCount int) error {
 	// process the data
 	baseCmd := "INSERT INTO `" + dbName + "`." + td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
 	var rows [][]sqltypes.Value
 	packCount := 0
 
-	fields := qrr.Fields()
+	fields := rr.Fields()
 	for {
-		r, err := qrr.Next()
+		r, err := rr.Next()
 		if err != nil {
 			// we are done, see if there was an error
 			if err != io.EOF {
