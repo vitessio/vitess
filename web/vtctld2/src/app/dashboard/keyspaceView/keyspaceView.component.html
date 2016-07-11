@@ -2,7 +2,7 @@
 <div *ngIf="keyspace.servingShards">
   <h2>Serving Shards</h2>
   <div *ngFor="let shard of keyspace.servingShards" class="vt-shardCard">
-    <a (click)="nav(keyspaceName, shard)">
+    <a (click)="navigate(keyspaceName, shard)">
       <md-card> 
         <md-card-title>{{shard}}</md-card-title>   
         <md-card-actions>
