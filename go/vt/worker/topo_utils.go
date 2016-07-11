@@ -25,7 +25,7 @@ var (
 	// have been taken out by previous *Clone or *Diff runs.
 	// Therefore, the default for this variable must be higher
 	// than vttablet's -health_check_interval.
-	waitForHealthyTabletsTimeout = flag.Duration("wait_for_healthy_rdonly_tablets_timeout", 60*time.Second, "maximum time to wait if less than --min_healthy_rdonly_tablets are available")
+	waitForHealthyTabletsTimeout = flag.Duration("wait_for_healthy_rdonly_tablets_timeout", 60*time.Second, "maximum time to wait at the start if less than --min_healthy_rdonly_tablets are available")
 )
 
 // FindHealthyRdonlyTablet returns a random healthy RDONLY tablet.
@@ -41,7 +41,7 @@ func FindHealthyRdonlyTablet(ctx context.Context, wr *wrangler.Wrangler, healthC
 		defer healthCheck.Close()
 	}
 
-	healthyTablets, err := waitForHealthyRdonlyTablets(ctx, wr, healthCheck, cell, keyspace, shard, minHealthyRdonlyTablets)
+	healthyTablets, err := waitForHealthyRdonlyTablets(ctx, wr, healthCheck, cell, keyspace, shard, minHealthyRdonlyTablets, *waitForHealthyTabletsTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -51,8 +51,8 @@ func FindHealthyRdonlyTablet(ctx context.Context, wr *wrangler.Wrangler, healthC
 	return healthyTablets[index].Tablet.Alias, nil
 }
 
-func waitForHealthyRdonlyTablets(ctx context.Context, wr *wrangler.Wrangler, healthCheck discovery.HealthCheck, cell, keyspace, shard string, minHealthyRdonlyTablets int) ([]*discovery.TabletStats, error) {
-	busywaitCtx, busywaitCancel := context.WithTimeout(ctx, *waitForHealthyTabletsTimeout)
+func waitForHealthyRdonlyTablets(ctx context.Context, wr *wrangler.Wrangler, healthCheck discovery.HealthCheck, cell, keyspace, shard string, minHealthyRdonlyTablets int, timeout time.Duration) ([]*discovery.TabletStats, error) {
+	busywaitCtx, busywaitCancel := context.WithTimeout(ctx, timeout)
 	defer busywaitCancel()
 
 	start := time.Now()
