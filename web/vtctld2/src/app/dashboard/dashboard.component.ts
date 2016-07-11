@@ -77,6 +77,6 @@ export class DashboardComponent implements OnInit{
     event.stopPropagation();
   }
   navigate(keyspaceName) {
-    this.router.navigateByUrl("/keyspace?keyspace=" + keyspaceName);
+    this.router.navigate(["/keyspace"], {queryParams: { keyspace: keyspaceName }});
   }
 }
