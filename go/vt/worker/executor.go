@@ -76,7 +76,7 @@ func (e *executor) fetchLoop(ctx context.Context, insertChannel chan string) err
 // executeFetchWithRetries will always get the current MASTER tablet from the
 // healthcheck instance. If no MASTER is available, it will keep retrying.
 func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
-	retryDuration := 2 * time.Hour
+	retryDuration := *retryDuration
 	// We should keep retrying up until the retryCtx runs out.
 	retryCtx, retryCancel := context.WithTimeout(ctx, retryDuration)
 	defer retryCancel()
