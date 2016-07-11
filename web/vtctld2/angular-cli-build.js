@@ -17,7 +17,9 @@ module.exports = function(defaults) {
       'rxjs/**/*.+(js|js.map)',
       '@angular/**/*.+(js|js.map)',
       '@angular2-material/**/*',
-      '@vaadin/**/*.+(js|js.map)'
+      'primeui/**/*',
+      'primeng/**/*',
+      '@vaadin/**/*.+(js|js.map)',
     ]
   }); 
 };

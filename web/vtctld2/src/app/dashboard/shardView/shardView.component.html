@@ -13,4 +13,45 @@
       <p-column field="stat2" header="Stat2" sortable="true"></p-column>
     </p-dataTable>
   </md-card>
+  <div *ngIf="tabletsReady" class="vt-tabletCreateCard">
+    <h2>Create a New Tablet</h2>
+    <a onclick="modal.open()" (click)="toggleForm();clearNSH()">
+      <md-card>
+        <md-card-title>New Tablet</md-card-title>   
+        <md-card-content>
+          <div class="vt-add-container">
+            <span class="vt-add-sh">+</span>
+          </div>
+        </md-card-content>
+        <md-card-actions>
+          <div class="vt-actions-container">
+            <paper-button raised >Create</paper-button>
+          </div>
+        </md-card-actions>
+      </md-card>
+    </a>
+  </div>
+  <paper-dialog id="modal" no-cancel-on-outside-click="true" no-cancel-on-esc-key="true">
+    <h2>{{dialogTitle}}</h2>
+    <div class="vt-form">
+      <div class="vt-form-member">
+        <paper-item>Type</paper-item>
+        <paper-dropdown-menu selected="{{NTB.type}}" label="Type" require="true" on-iron-select="typeSelected($event)">
+          <paper-listbox class="dropdown-content" >
+            <paper-item name="Master">Master</paper-item>
+            <paper-item>Replica</paper-item>
+            <paper-item>Read Only</paper-item>
+          </paper-listbox>
+        </paper-dropdown-menu>
+      </div>
+    </div>
+    <div class="buttons">
+      <paper-button  autofocus onClick="modal.close()" on-click="toggleForm()">Cancel</paper-button>
+      <paper-button  autofocus onClick="modal.close();toast.open()" on-click="toggleForm();actionFunction()">{{actionWord}}</paper-button>
+    </div>
+  </paper-dialog>
+  <div *ngIf="openForm" class="vt-popUpContainer" >
+  </div>
+
+  <paper-toast id="toast" text="{{actionWordPast}} a {{getName(NTB.type)}} Tablet"></paper-toast>
 </div>

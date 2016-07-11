@@ -1,14 +1,8 @@
 import { Component, OnInit} from '@angular/core';
-import { ROUTER_DIRECTIVES } from '@angular/router';
+import { ROUTER_DIRECTIVES, Router } from '@angular/router';
 import { KeyspaceService } from '../shared/keyspaceService/keyspace.service';
-import { Keyspace } from '../shared/keyspaceObject/keyspace'
 import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
-import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
-import { MdIcon, MdIconRegistry } from '@angular2-material/icon';
-import { NewKeyspaceComponent } from './NewKeyspace/newkeyspace.component'
-import { Dialog } from 'primeng/primeng';
-import {Button} from 'primeng/primeng';
-
+import { PolymerElement } from '@vaadin/angular2-polymer';
 
 @Component({
   moduleId: module.id,
@@ -16,34 +10,35 @@ import {Button} from 'primeng/primeng';
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.css'],
   providers: [
-              KeyspaceService,
-              MdIconRegistry],
+              KeyspaceService],
   directives: [
-              NewKeyspaceComponent,
               ROUTER_DIRECTIVES,
               MD_CARD_DIRECTIVES,
-              MD_BUTTON_DIRECTIVES,
-              MdIcon,
-              Dialog,
-              Button],
+              PolymerElement('paper-dialog'),
+              PolymerElement('paper-button'),
+              PolymerElement('paper-input'),
+              PolymerElement('paper-item'),
+              PolymerElement('paper-toast')],
   
 })
 export class DashboardComponent implements OnInit{
   title = 'Vitess Control Panel';
   keyspaces = [];
   openForm = false;
-  keyspacesReady=false;
-
-  toggleForm() {
-    console.log("Was:", this.openForm, "   Now this: ", !this.openForm);
-    this.openForm = !this.openForm;
-  }
-  updateOpen(event) {
-    this.toggleForm();
-  }
-  constructor(private keyspaceService: KeyspaceService) { 
-    
-  }
+  keyspacesReady = false;
+  actionWord: string;
+  actionWordPast: string;
+  actionFunction: any;
+  dialogTitle: string;
+  toastText: string;
+  //New/Edited Keyspace Information
+  NKS = {
+    name : "",
+  };
+  
+  constructor(
+              private keyspaceService: KeyspaceService, 
+              private router: Router) {}
 
   ngOnInit() {
     this.getKeyspaces();
@@ -55,10 +50,33 @@ export class DashboardComponent implements OnInit{
       this.keyspacesReady = true;
     });
   }
+  
+  submitForm(){
+    /*Temporary Function, will be replaced with CRUD interface*/
+    console.log("SUBMIT: ", this.NKS);
+  }
 
-   display: boolean = false;
-
-    showDialog() {
-        this.display = true;
-    }
+  toggleForm() {
+    this.openForm = !this.openForm;
+  }
+  populateNKS(keyspace){
+    this.actionWord = "Edit";
+    this.actionWordPast = "Edited";
+    this.actionFunction = this.submitForm;
+    this.dialogTitle = "Edit " + keyspace.name;
+    this.NKS.name = keyspace.name;
+  }
+  clearNKS(){
+    this.actionWord = "Create";
+    this.actionWordPast = "Created";
+    this.actionFunction = this.submitForm;
+    this.dialogTitle = "Create a new Keyspace";
+    this.NKS.name = "";
+  }
+  blockClicks(event){
+    event.stopPropagation();
+  }
+  navigate(keyspaceName) {
+    this.router.navigateByUrl("/keyspace?keyspace=" + keyspaceName);
+  }
 }

@@ -8,9 +8,10 @@
 /** Map relative paths to URLs. */
 const map: any = {
   '@angular2-material': 'vendor/@angular2-material',
-  '@angular':           'vendor/@angular',
-  '@vaadin':            'vendor/@vaadin'
- };
+  '@angular':                   'vendor/@angular',
+  'primeng':                    'vendor/primeng',
+  '@vaadin':                    'vendor/@vaadin',
+};
 
 /** User packages configuration. */
 const packages: any = {
