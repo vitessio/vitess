@@ -23,6 +23,7 @@ module.exports = function(defaults) {
       'ng-lightning/**/*',
       'tether/**/*',
       'ts-helpers/**/*',
+      '@vaadin/**/*.+(js|js.map)',
     ]
   }); 
 };

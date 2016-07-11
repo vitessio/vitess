@@ -1,7 +1,7 @@
 <h1>DASHBOARD</h1>
 <div class="vt-row">
   <div *ngFor="let keyspace of keyspaces" class="keyspaceCard">
-    <a [routerLink]="['/keyspace']" [queryParams]="{keyspace: keyspace.name}">
+    <a (click)="navigate(keyspace.name)"><!---->
       <md-card>
         <md-card-title>{{keyspace.name}}</md-card-title>   
         <md-card-content >
@@ -54,17 +54,17 @@
         </md-card-content>
         <md-card-actions>
           <div class="vt-actions-container">
-            <a md-button>Reshard</a>
-            <a md-button>Backup</a>
+            <paper-button raised (click)="blockClicks($event)">Reshard</paper-button>
+            <paper-button raised (click)="blockClicks($event)">Backup</paper-button>
+            <paper-button raised onclick="modal.open()" (click)="blockClicks($event);toggleForm();populateNKS(keyspace);">Edit</paper-button>
           </div>
         </md-card-actions>
       </md-card>
     </a>
   </div>
-
-
+  
   <div *ngIf="keyspacesReady" class="keyspaceCard">
-    <a (click)="toggleForm()">
+    <a onclick="modal.open()" (click)="toggleForm();clearNKS()">
       <md-card>
         <md-card-title>New Keyspace</md-card-title>   
         <md-card-content>
@@ -74,30 +74,29 @@
         </md-card-content>
         <md-card-actions>
           <div class="vt-actions-container">
-            <a md-button>Create</a>
+            <paper-button raised >Create</paper-button>
           </div>
         </md-card-actions>
       </md-card>
     </a>
   </div>
 </div>
-<div>
-<p-dialog header="Godfather I" [(visible)]="display" modal="modal" showEffect="fade">
-    <p>The story begins as Don Vito Corleone, the head of a New York Mafia family, oversees his daughter's wedding. 
-       His beloved son Michael has just come home from the war, but does not intend to become part of his father's business. 
-       Through Michael's life the nature of the family business becomes clear. The business of the family is just like the head of the family, 
-       kind and benevolent to those who give respect, 
-       but given to ruthless violence whenever anything stands against the good of the family.</p>
-        <footer>
-            <div class="ui-dialog-buttonpane ui-widget-content ui-helper-clearfix">
-                <button type="button" pButton icon="fa-close" (click)="display=false" label="No"></button>
-                <button type="button" pButton icon="fa-check" (click)="display=false" label="Yes"></button>
-            </div>
-        </footer>
-</p-dialog>
 
-<button type="text" (click)="showDialog()" pButton icon="fa-external-link-square" label="Show"></button>
+<!--Polymer implementation of modal-->
+<paper-dialog id="modal" no-cancel-on-outside-click="true" no-cancel-on-esc-key="true">
+  <h2>{{dialogTitle}}</h2>
+  <div class="vt-form">
+    <div class="vt-form-member">
+      <paper-item>Name: </paper-item>
+      <paper-input [(ngModel)]="NKS.name"  label=" name"></paper-input>
+    </div>
+  </div>
+  <div class="buttons">
+    <paper-button  autofocus onClick="modal.close()" on-click="toggleForm()">Cancel</paper-button>
+    <paper-button  autofocus onClick="modal.close();toast.open()" on-click="toggleForm();actionFunction()">{{actionWord}}</paper-button>
+  </div>
+</paper-dialog>
+<div *ngIf="openForm" class="vt-popUpContainer" >
+</div>
 
-
-<!--
-<vt-newkeyspace [(openForm)]="openForm" [toggleForm]="toggleForm" (onClose)="updateOpen($event)"></vt-newkeyspace>-->
+<paper-toast id="toast" text="{{actionWordPast}} Keyspace {{NKS.name}}"></paper-toast>

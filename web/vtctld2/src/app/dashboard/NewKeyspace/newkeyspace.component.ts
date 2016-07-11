@@ -3,6 +3,7 @@ import { ROUTER_DIRECTIVES } from '@angular/router';
 import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
 import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
 import { MdIcon, MdIconRegistry } from '@angular2-material/icon';
+import { Checkbox } from 'primeng/primeng';
 
 @Component({
   moduleId: module.id,
@@ -15,7 +16,8 @@ import { MdIcon, MdIconRegistry } from '@angular2-material/icon';
               ROUTER_DIRECTIVES,
               MD_CARD_DIRECTIVES,
               MD_BUTTON_DIRECTIVES,
-              MdIcon],
+              MdIcon,
+              Checkbox],
   
 })
 export class NewKeyspaceComponent implements OnInit{
@@ -23,19 +25,20 @@ export class NewKeyspaceComponent implements OnInit{
   keyspaces = [];
 
   //PopUp code
-  /*@Input() openForm: boolean;
-  @Input() toggleForm: any;
-  @Output() onClose = new EventEmitter();*/
+  //@Input() openForm: boolean;
+  //@Input() toggleForm: any;
+  //@Output() onClose = new EventEmitter();
   ngOnInit() {
     //console.log("NKS: ", this.openForm, this.toggleForm);
   }
   /*callToggleForm(){
-    this.onClose.emit({ value:""});
+    console.log("registered");
     this.toggleForm();
-  }*/
+    this.onClose.emit({ value:""});
+  }
   blockClicks(event){
     event.stopPropagation();
-  }
+  }*/
 
   //Form Code
   NKS = {
