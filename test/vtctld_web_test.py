@@ -28,12 +28,22 @@ tablets = [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica,
 
 def setUpModule():
   try:
+    if utils.options.xvfb:
+      try:
+        # This will be killed automatically by utils.kill_sub_processes()
+        utils.run_bg(['Xvfb', ':15', '-ac'])
+        os.environ['DISPLAY'] = ':15'
+      except OSError as err:
+        # Despite running in background, utils.run_bg() will throw immediately
+        # if the Xvfb binary is not found.
+        logging.error(
+            "Can't start Xvfb (will try local DISPLAY instead): %s", err)
+
     environment.topo_server().setup()
 
     setup_procs = [t.init_mysql() for t in tablets]
     utils.Vtctld().start()
     utils.wait_procs(setup_procs)
-
   except:
     tearDownModule()
     raise
@@ -238,5 +248,11 @@ class TestVtctldWeb(unittest.TestCase):
         'test_keyspace2', '0', {'master': 1, 'replica': 1, 'rdonly': 1})
 
 
+def add_test_options(parser):
+  parser.add_option(
+      '--no-xvfb', action='store_false', dest='xvfb', default=True,
+      help='Use local DISPLAY instead of headless Xvfb mode.')
+
+
 if __name__ == '__main__':
-  utils.main()
+  utils.main(test_options=add_test_options)
