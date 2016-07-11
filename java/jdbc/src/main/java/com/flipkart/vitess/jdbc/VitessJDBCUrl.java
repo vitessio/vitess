@@ -1,6 +1,7 @@
 package com.flipkart.vitess.jdbc;
 
 import com.flipkart.vitess.util.Constants;
+import com.flipkart.vitess.util.StringUtils;
 import com.youtube.vitess.proto.Topodata;
 
 import java.io.UnsupportedEncodingException;
@@ -63,8 +64,7 @@ public class VitessJDBCUrl {
         /* URL pattern e.g. jdbc:vitess://username:password@ip1:port1,ip2:port2/keyspace/catalog?
         property1=value1.. */
 
-        final Pattern p = Pattern
-            .compile("^jdbc:(vitess)://((\\w+)(:(\\w*))?@)?([^/]*)/([^/?]*)/?(\\w+)?(\\?(\\S+))?");
+        final Pattern p = Pattern.compile(Constants.URL_PATTERN);
         final Matcher m = p.matcher(url);
         if (!m.find()) {
             throw new SQLException(Constants.SQLExceptionMessages.MALFORMED_URL);
@@ -77,8 +77,10 @@ public class VitessJDBCUrl {
         if (null == postUrl) {
             throw new SQLException(Constants.SQLExceptionMessages.MALFORMED_URL);
         }
-        this.keyspace = m.group(7);
-        this.catalog = (m.group(8) == null ? m.group(7) : m.group(8));
+
+        this.keyspace = StringUtils.isNullOrEmptyWithoutWS(m.group(8)) ? null : m.group(8);
+        this.catalog =
+            StringUtils.isNullOrEmptyWithoutWS(m.group(10)) ? this.keyspace : m.group(10);
         this.hostInfos = getURLHostInfos(postUrl);
 
         String tabletType = info.getProperty(Constants.Property.TABLET_TYPE);
@@ -88,9 +90,7 @@ public class VitessJDBCUrl {
 
         this.tabletType = getTabletType(tabletType);
 
-        String executeType = info.getProperty(Constants.Property.EXECUTE_TYPE);
-
-        this.executeType = executeType;
+        this.executeType = info.getProperty(Constants.Property.EXECUTE_TYPE);
         this.url = url;
     }
 
@@ -173,8 +173,7 @@ public class VitessJDBCUrl {
                     }
                 }
 
-                if ((value != null && value.length() > 0) && (parameter != null
-                    && parameter.length() > 0)) {
+                if ((value != null && value.length() > 0) && (parameter.length() > 0)) {
                     try {
                         info.put(parameter, URLDecoder.decode(value, "UTF-8"));
                     } catch (UnsupportedEncodingException | NoSuchMethodError badEncoding) {

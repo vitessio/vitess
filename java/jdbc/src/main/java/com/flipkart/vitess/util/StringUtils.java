@@ -216,16 +216,16 @@ public class StringUtils {
         ArrayList<Object[]> vecRemovelist = new ArrayList<>();
         Object[] nv = new Object[3];
         Object[] v;
-        nv[0] = Character.valueOf('y');
+        nv[0] = 'y';
         nv[1] = new StringBuilder();
-        nv[2] = Integer.valueOf(0);
+        nv[2] = 0;
         vec.add(nv);
 
         if (toTime) {
             nv = new Object[3];
-            nv[0] = Character.valueOf('h');
+            nv[0] = 'h';
             nv[1] = new StringBuilder();
-            nv[2] = Integer.valueOf(0);
+            nv[2] = 0;
             vec.add(nv);
         }
 
@@ -235,17 +235,17 @@ public class StringUtils {
 
             for (count = 0; count < maxvecs; count++) {
                 v = vec.get(count);
-                n = ((Integer) v[2]).intValue();
-                c = getSuccessor(((Character) v[0]).charValue(), n);
+                n = (Integer) v[2];
+                c = getSuccessor((Character) v[0], n);
 
                 if (!Character.isLetterOrDigit(separator)) {
-                    if ((c == ((Character) v[0]).charValue()) && (c != 'S')) {
+                    if ((c == (Character) v[0]) && (c != 'S')) {
                         vecRemovelist.add(v);
                     } else {
                         ((StringBuilder) v[1]).append(separator);
 
                         if ((c == 'X') || (c == 'Y')) {
-                            v[2] = Integer.valueOf(4);
+                            v[2] = 4;
                         }
                     }
                 } else {
@@ -253,31 +253,30 @@ public class StringUtils {
                         c = 'y';
                         nv = new Object[3];
                         nv[1] = (new StringBuilder((v[1]).toString())).append('M');
-                        nv[0] = Character.valueOf('M');
-                        nv[2] = Integer.valueOf(1);
+                        nv[0] = 'M';
+                        nv[2] = 1;
                         vec.add(nv);
                     } else if (c == 'Y') {
                         c = 'M';
                         nv = new Object[3];
                         nv[1] = (new StringBuilder((v[1]).toString())).append('d');
-                        nv[0] = Character.valueOf('d');
-                        nv[2] = Integer.valueOf(1);
+                        nv[0] = 'd';
+                        nv[2] = 1;
                         vec.add(nv);
                     }
 
                     ((StringBuilder) v[1]).append(c);
-                    if (c == ((Character) v[0]).charValue()) {
-                        v[2] = Integer.valueOf(n + 1);
+                    if (c == (Character) v[0]) {
+                        v[2] = n + 1;
                     } else {
-                        v[0] = Character.valueOf(c);
-                        v[2] = Integer.valueOf(1);
+                        v[0] = c;
+                        v[2] = 1;
                     }
                 }
             }
 
-            int size = vecRemovelist.size();
-            for (int i = 0; i < size; i++) {
-                v = vecRemovelist.get(i);
+            for (Object[] aVecRemovelist : vecRemovelist) {
+                v = aVecRemovelist;
                 vec.remove(v);
             }
             vecRemovelist.clear();
@@ -286,8 +285,8 @@ public class StringUtils {
         int size = vec.size();
         for (int i = 0; i < size; i++) {
             v = vec.get(i);
-            c = ((Character) v[0]).charValue();
-            n = ((Integer) v[2]).intValue();
+            c = (Character) v[0];
+            n = (Integer) v[2];
 
             boolean bk = getSuccessor(c, n) != c;
             boolean atEnd = (((c == 's') || (c == 'm') || ((c == 'h') && toTime)) && bk);

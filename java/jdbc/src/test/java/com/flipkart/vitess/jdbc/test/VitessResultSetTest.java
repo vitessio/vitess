@@ -52,7 +52,7 @@ public class VitessResultSetTest {
         TUPLE(28, 28),
         UNRECOGNIZED(-1, -1);
         */
-        Cursor cursor = new SimpleCursor(Query.QueryResult.newBuilder()
+        return new SimpleCursor(Query.QueryResult.newBuilder()
             .addFields(Query.Field.newBuilder().setName("col1").setType(Query.Type.INT8).build())
             .addFields(Query.Field.newBuilder().setName("col2").setType(Query.Type.UINT8).build())
             .addFields(Query.Field.newBuilder().setName("col3").setType(Query.Type.INT16).build())
@@ -104,7 +104,6 @@ public class VitessResultSetTest {
                         "14:15:162016-02-0612:34:562016-02-06 14:15:1620161234.56789HELLO TDS TEAMHELLO TDS TEAMHELLO"
                         +
                         " TDS TEAMHELLO TDS TEAMNHELLO TDS TEAM1val123val123"))).build());
-        return cursor;
     }
 
     public Cursor getCursorWithRowsAsNull() {
@@ -139,7 +138,7 @@ public class VitessResultSetTest {
         TUPLE(28, 28),
         UNRECOGNIZED(-1, -1);
         */
-        Cursor cursor = new SimpleCursor(Query.QueryResult.newBuilder()
+        return new SimpleCursor(Query.QueryResult.newBuilder()
             .addFields(Query.Field.newBuilder().setName("col1").setType(Query.Type.INT8).build())
             .addFields(Query.Field.newBuilder().setName("col2").setType(Query.Type.UINT8).build())
             .addFields(Query.Field.newBuilder().setName("col3").setType(Query.Type.INT16).build())
@@ -191,7 +190,6 @@ public class VitessResultSetTest {
                             "14:15:162016-02-0612:34:562016-02-06 14:15:1620161234.56789HELLO TDS TEAMHELLO TDS "
                             +
                             "TEAMHELLO TDS TEAMHELLO TDS TEAMNHELLO TDS TEAM1val123"))).build());
-        return cursor;
     }
 
 

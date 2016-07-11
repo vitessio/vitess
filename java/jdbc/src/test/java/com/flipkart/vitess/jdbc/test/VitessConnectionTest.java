@@ -33,8 +33,7 @@ public class VitessConnectionTest {
     }
 
     private VitessConnection getVitessConnection() throws SQLException {
-        VitessConnection vitessConnection = new VitessConnection(dbURL, null);
-        return vitessConnection;
+        return new VitessConnection(dbURL, null);
     }
 
     @Test public void testVitessConnection() throws SQLException {

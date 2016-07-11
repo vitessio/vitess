@@ -228,7 +228,7 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public int getDefaultTransactionIsolation() throws SQLException {
-        return connection.TRANSACTION_REPEATABLE_READ;
+        return this.connection.TRANSACTION_REPEATABLE_READ;
     }
 
     public boolean supportsTransactions() throws SQLException {

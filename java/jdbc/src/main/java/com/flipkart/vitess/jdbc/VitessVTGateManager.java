@@ -45,7 +45,8 @@ public class VitessVTGateManager {
                 synchronized (VitessVTGateManager.class) {
                     if (!vtGateConnHashMap.containsKey(identifier)) {
                         updateVtGateConnHashMap(identifier, hostInfo.getHostname(),
-                            hostInfo.getPort(), vitessJDBCUrl.getUsername(), vitessJDBCUrl.getKeyspace());
+                            hostInfo.getPort(), vitessJDBCUrl.getUsername(),
+                            vitessJDBCUrl.getKeyspace());
                     }
                 }
                 vtGateIdentifiers.add(identifier);
@@ -95,11 +96,15 @@ public class VitessVTGateManager {
      * @param keyspace
      * @return
      */
-    private static VTGateConn getVtGateConn(String hostname, int port, String username, String keyspace) {
+    private static VTGateConn getVtGateConn(String hostname, int port, String username,
+        String keyspace) {
         Context context = CommonUtils.createContext(username, Constants.CONNECTION_TIMEOUT);
         InetSocketAddress inetSocketAddress = new InetSocketAddress(hostname, port);
         RpcClient client = new GrpcClientFactory().create(context, inetSocketAddress);
-        return (new VTGateConn(client,keyspace));
+        if (null == keyspace) {
+            return (new VTGateConn(client));
+        }
+        return (new VTGateConn(client, keyspace));
     }
 
 
