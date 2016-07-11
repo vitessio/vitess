@@ -62,3 +62,8 @@ _test/
 
 #pom generated file
 /java/jdbc/dependency-reduced-pom.xml
+
+#Angular2 Bower Libs
+web/vtctld2/.bowerrc~
+web/vtctld2/bower.json~
+web/vtctld2/public/bower_components/
