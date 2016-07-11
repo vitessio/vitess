@@ -109,8 +109,8 @@ export class KeyspaceViewComponent implements OnInit, OnDestroy{
   blockClicks(event){
     event.stopPropagation();
   }
-  nav(keyspaceName, shardName) {
-    this.router.navigateByUrl("/shard?keyspace=" + keyspaceName + "&shard="+shardName);
+  navigate(keyspaceName, shardName) {
+    this.router.navigate(["/shard"], {queryParams: { keyspace: keyspaceName, shard: shardName}});
   }
 
   getName(lowerBound, upperBound) {
