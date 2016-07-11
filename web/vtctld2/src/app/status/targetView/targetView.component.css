@@ -1,0 +1,64 @@
+.tabletCard {
+  display: inline-table;
+  width: 40%;
+}
+
+/*for each card*/
+.card-section{
+  display:inline-block;
+  width:100%
+}
+
+.card-rightAlign {
+  float:right;
+}
+
+.card-leftAlign {
+  float:left;
+}
+
+.card-table-row {
+  padding: 8px 0px 8px 0px;
+}
+
+.border {
+  padding: 5px;
+  height: 100%;
+  border: 1px solid;
+}
+
+.column {
+  padding: 1em;
+  border-bottom: 1px solid black;
+  border-left: 1px solid black;
+  width:30%;
+}
+
+.firstColumn {
+  padding: 1em;
+  border-bottom: 1px solid black;
+  width: 70%;
+}
+
+.row {
+  border-bottom:1px solid black;
+}
+
+.lastRow {
+  padding: 1em;
+  text-align: center;
+}
+
+.divider {
+  border: 1em solid black;
+}
+
+tr:nth-child(even){background-color: #f2f2f2;}
+
+
+.tableSet  {
+  width: 100%;
+  padding: 1em;
+  border-spacing: 0;
+  border-collapse: 0;
+}

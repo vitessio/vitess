@@ -11,8 +11,19 @@ html, body {
   flex-direction: column;
 }
 
+.flex-row {
+  display: flex;
+  flex-direction: row;
+}
+
 .flex-grow {
   flex-grow: 1;
+}
+
+.flex-grow-right {
+  flex-grow: 1;
+  text-align:right;
+  padding-right: 2px;
 }
 
 .content {
@@ -39,3 +50,4 @@ md-nav-list md-icon {
 md-card {
   margin-top: 14px;
 }
+
