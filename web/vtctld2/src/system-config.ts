@@ -11,12 +11,14 @@ const map: any = {
   'angular2-in-memory-web-api': 'vendor/angular2-in-memory-web-api',
   '@angular':                   'vendor/@angular',
   'primeng':                    'vendor/primeng',
+  '@vaadin':                    'vendor/@vaadin',
 };
 
 /** User packages configuration. */
 const packages: any = {
   'angular2-in-memory-web-api': { main: 'index.js', defaultExtension: 'js' },
   'primeng':                    { defaultExtension: 'js' },
+  '@vaadin/angular2-polymer':   { main: 'index.js', defaultExtension: 'js' }
 };
 
 // put the names of any of your Material components here

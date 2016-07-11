@@ -31,6 +31,7 @@
     "@angular2-material/tabs": "^2.0.0-alpha.5-2",
     "@angular2-material/toolbar": "^2.0.0-alpha.5-2",
     "@salesforce-ux/design-system": "^2.0.2",
+    "@vaadin/angular2-polymer": "^1.0.0-beta2",
     "angular2-in-memory-web-api": "0.0.14",
     "es6-shim": "0.35.1",
     "ng-lightning": "^0.13.1",

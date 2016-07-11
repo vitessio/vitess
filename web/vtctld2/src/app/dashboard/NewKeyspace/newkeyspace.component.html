@@ -4,15 +4,29 @@
   </md-card-title>
   <md-card-content>
   <!--Input fields-->
-  <span class="vt-form-member"><label>Name: </label><input [(ngModel)]="NKS.name" placeholder="name"/></span>
-  <span class="vt-form-member"><label>LowerBound: </label><input [(ngModel)]="NKS.lowerBound" placeholder="lowerBound (ex. 40)"/></span>
-  <span class="vt-form-member"><label>UpperBound: </label><input [(ngModel)]="NKS.upperBound" placeholder="upperBound (ex. 80)"/></span>
-  <span class="vt-form-member"><label>Master Eligable? </label><input [(ngModel)]="NKS.master" type="checkbox"/></span>
+  <div class="vt-form-member">
+    <label>Name: </label>
+    <input class="vt-form-input" [(ngModel)]="NKS.name" placeholder=" name"/>
+  </div>
+  <div class="vt-form-member">
+    <label>LowerBound: </label>
+    <input class="vt-form-input" [(ngModel)]="NKS.lowerBound" placeholder=" lowerBound (ex. 40)"/>
+  </div>
+  <div class="vt-form-member">
+    <label>UpperBound: </label>
+    <input class="vt-form-input" [(ngModel)]="NKS.upperBound" placeholder=" upperBound (ex. 80)"/>
+  </div>
+  <div class="vt-form-member">
+    <label>Master? </label>
+    <!--<p-checkbox [(ngModel)]="NKS.master"></p-checkbox>-->
+  </div>
 
   </md-card-content>
   <md-card-actions>
-    <a md-button (click)="submitForm()">
-      Submit
-    </a>
+    <div class="vt-actions-container">
+      <a md-button (click)="submitForm()">
+        Submit
+      </a>
+    </div>
   </md-card-actions>
 </md-card>
