@@ -1,31 +1,37 @@
-.vt-popUpContainer{
-  position: absolute;
-  padding: 0;
-  margin: 0;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  right: 0;
-  background: rgba(0,0,0,0.75);
-}
 
 .vt-popUp{
+
+ 
+}
+.vt-form-member{
+  display: table-row;
+}
+.vt-actions-container {
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+md-card{
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%,-50%);
-}
+}  
 
-.vt-form-member{
-  display: table-row;
-}
-  
 md-card-content  { 
   display: table; 
+  border-collapse:separate;
+  border-spacing:3em 2em;
+}
+md-card-title{
+  text-align: center;
+  font-size: 200%;
 }
 label { 
   display: table-cell; 
+  font-size: 200%;
 }
-input { 
+.vt-form-input { 
   display: table-cell; 
+  font-size: 200%;
 }
