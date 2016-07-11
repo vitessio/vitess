@@ -8,7 +8,7 @@ public class Constants {
     public static final boolean JDBC_COMPLIANT = false;
     public static final String URL_PREFIX = "jdbc:vitess://";
     public static final String URL_PATTERN =
-        "^jdbc:(vitess)://((\\w+)(:(\\w*))?@)?([^/]*)(/([^/?]*))?(/(\\w+))?(\\?(\\S+))?";
+        "^jdbc:(vitess)://((\\w+)(:(\\w*))?@)?([^/?]*)(/([^/?]*))?(/(\\w+))?(\\?(\\S+))?";
     public static final String VITESS_HOST = "Hostname of Vitess Server";
     public static final String VITESS_PORT = "Port number of Vitess Server";
     public static final String VITESS_DB_NAME = "Database name";

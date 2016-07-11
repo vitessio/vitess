@@ -193,15 +193,9 @@ public class VitessJDBCUrl {
      * @throws SQLException
      */
     private static List<HostInfo> getURLHostInfos(String hostURLs) throws SQLException {
-        int index = hostURLs.indexOf("?");
-        String hostsString;
         List<HostInfo> hostInfos = new ArrayList<>();
-        if (index != -1) {
-            hostsString = hostURLs.substring(0, index - 1);
-        } else {
-            hostsString = hostURLs;
-        }
-        StringTokenizer stringTokenizer = new StringTokenizer(hostsString, ",");
+
+        StringTokenizer stringTokenizer = new StringTokenizer(hostURLs, ",");
         while (stringTokenizer.hasMoreTokens()) {
             String hostString = stringTokenizer.nextToken();
             /*
