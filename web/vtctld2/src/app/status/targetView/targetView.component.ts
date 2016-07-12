@@ -66,19 +66,32 @@ export class TargetViewComponent implements OnInit{
     return true;
   }
 
- /* getShardNumber(shardName: string) {
-    if(shardName.startsWith("-")) { 
+  getShardNumber(shardName: string) {
+    if(shardName === "0") {
       return 0;
     }
-    else if(shardName.endsWith("-")) { 
-      
+    var parts = shardName.split("-");
+    var lowerBound = parts[0];
+    var upperBound = parts[1];
+    if(lowerBound === "") {
+      return 0;
     }
+    if(upperBound === "") {
+      var len = lowerBound.length;
+      if(len == 1) { upperBound = "16"; }
+      else if(len == 2) { upperBound = "256"; }
+      else if(len == 3) { upperBound = "4096"; }
+      else if(len == 4) { upperBound = "65536"; }
+    }
+    var interval = parseInt(upperBound) - parseInt(lowerBound);
+    let num = parseInt(lowerBound)/interval;
+    return num;
   }
 
   getLink (tab: Tablet) { 
     return "https://viceroy.corp.google.com/youtube_vitess/vttablet?dbtype=" +
-            tab.type + "&mob=" + tab.keyspaceName + "&shard=" +  +
-            "&zone=" + tab.cell;
-  }*/
+            tab.type + "&mob=" + tab.keyspaceName + "&shard=" +
+            this.getShardNumber(tab.shardName) + "&zone=" + tab.cell;
+  }
 }
 
