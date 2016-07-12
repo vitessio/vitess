@@ -509,9 +509,10 @@ public class VitessStatement implements Statement {
     protected Cursor executeShow(String sql) throws SQLException {
         String keyspace = this.vitessConnection.getKeyspace();
         if (null == keyspace) {
-            throw new SQLNonTransientException(Constants.SQLExceptionMessages.AMBIGUOUS_KEYSPACE);
+            throw new SQLNonTransientException(Constants.SQLExceptionMessages.NO_KEYSPACE);
         }
-        List<byte[]> keyspaceIds = Arrays.asList(new byte[] {1}); //To Hit any single shard
+        //To Hit any single shard
+        List<byte[]> keyspaceIds = Arrays.asList(new byte[] {1});
         Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
         return this.vitessConnection.getVtGateConn()
             .executeKeyspaceIds(context, sql, keyspace, keyspaceIds, null,

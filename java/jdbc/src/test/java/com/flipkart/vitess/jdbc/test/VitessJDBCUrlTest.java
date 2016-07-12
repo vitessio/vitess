@@ -133,4 +133,19 @@ public class VitessJDBCUrlTest {
         Assert.assertEquals(null, vitessJDBCUrl.getCatalog());
     }
 
+    @Test public void testCompleteURL() throws Exception {
+        Properties info = new Properties();
+        VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
+            "jdbc:vitess://user:pass@hostname1:15991,hostname2:15991/keyspace/catalog?prop1=val1&prop2=val2",
+            info);
+        Assert.assertEquals("user", vitessJDBCUrl.getUsername());
+        Assert.assertEquals("hostname1", vitessJDBCUrl.getHostInfos().get(0).getHostname());
+        Assert.assertEquals(15991, vitessJDBCUrl.getHostInfos().get(0).getPort());
+        Assert.assertEquals("hostname2", vitessJDBCUrl.getHostInfos().get(1).getHostname());
+        Assert.assertEquals(15991, vitessJDBCUrl.getHostInfos().get(1).getPort());
+        Assert.assertEquals("keyspace", vitessJDBCUrl.getKeyspace());
+        Assert.assertEquals("catalog", vitessJDBCUrl.getCatalog());
+        Assert.assertEquals("val1", info.getProperty("prop1"));
+        Assert.assertEquals("val2", info.getProperty("prop2"));
+    }
 }

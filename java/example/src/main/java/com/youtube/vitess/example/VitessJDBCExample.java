@@ -58,6 +58,9 @@ public class VitessJDBCExample {
         }
       }
 
+      //To Commit Open Transaction, as select was made on master with autocommit false a transaction was open
+      conn.commit();
+
       // Read it back from replica.
       dbURL += "/test_keyspace?TABLET_TYPE=replica";
       try (Connection connReplica = DriverManager.getConnection(dbURL, null)) {

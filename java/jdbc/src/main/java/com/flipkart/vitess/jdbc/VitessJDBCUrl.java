@@ -59,16 +59,29 @@ public class VitessJDBCUrl {
      */
     public VitessJDBCUrl(String url, Properties info) throws SQLException {
 
-        info = getURLParamProperties(url, info);
-
         /* URL pattern e.g. jdbc:vitess://username:password@ip1:port1,ip2:port2/keyspace/catalog?
-        property1=value1.. */
+        property1=value1..
+        m.group(1) = "vitess"
+        m.group(2) = "username:password@"
+        m.group(3) = "username"
+        m.group(4) = ":password"
+        m.group(5) = "password"
+        m.group(6) = "ip1:port1,ip2:port2"
+        m.group(7) = "/keyspace"
+        m.group(8) = "keyspace"
+        m.group(9) = "/catalog"
+        m.group(10) = "catalog"
+        m.group(11) = "?property1=value1.."
+        m.group(12) = "property1=value1.."
+        */
 
         final Pattern p = Pattern.compile(Constants.URL_PATTERN);
         final Matcher m = p.matcher(url);
         if (!m.find()) {
             throw new SQLException(Constants.SQLExceptionMessages.MALFORMED_URL);
         }
+        info = getURLParamProperties(m.group(12), info);
+
         this.username =
             (m.group(3) == null ? info.getProperty(Constants.Property.USERNAME) : m.group(3));
         // Will add password property once its supported from vitess
@@ -137,29 +150,21 @@ public class VitessJDBCUrl {
     /**
      * Get Properties object for params after ? in url.
      *
-     * @param url
-     * @param info
-     * @return
+     * @param paramString Parameter String in the url
+     * @param info        passed in the connection
+     * @return Properties updated with parameters
      */
 
-    private static Properties getURLParamProperties(String url, Properties info) {
-
-     /*
-      * Parse parameters after the ? in the URL
-		 */
+    private static Properties getURLParamProperties(String paramString, Properties info)
+        throws SQLException {
         if (null == info) {
             info = new Properties();
         }
-        int index = url.indexOf("?"); //$NON-NLS-1$
 
-        if (index != -1) {
-            String paramString = url.substring(index + 1, url.length());
-
+        if (!StringUtils.isNullOrEmptyWithoutWS(paramString)) {
             StringTokenizer queryParams = new StringTokenizer(paramString, "&"); //$NON-NLS-1$
-
             while (queryParams.hasMoreTokens()) {
                 String parameterValuePair = queryParams.nextToken();
-
                 int indexOfEquals = parameterValuePair.indexOf('=');
 
                 String parameter = null;
@@ -173,15 +178,16 @@ public class VitessJDBCUrl {
                     }
                 }
 
-                if ((value != null && value.length() > 0) && (parameter.length() > 0)) {
+                if ((null != value && value.length() > 0) && (parameter.length() > 0)) {
                     try {
                         info.put(parameter, URLDecoder.decode(value, "UTF-8"));
                     } catch (UnsupportedEncodingException | NoSuchMethodError badEncoding) {
-                        info.put(parameter, URLDecoder.decode(value));
+                        throw new SQLException(Constants.SQLExceptionMessages.MALFORMED_URL);
                     }
                 }
             }
         }
+
         return info;
     }
 

@@ -885,8 +885,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             }
 
             // Now pull out in column name sorted order
-            for (ArrayList<String> strings : sortMap.values()) {
-                sortedData.add(strings);
+            for (ArrayList<String> row : sortMap.values()) {
+                sortedData.add(row);
             }
         } finally {
             if (null != resultSet) {
@@ -1067,8 +1067,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 sortedRows.put(indexInfoKey, row);
             }
 
-            for (ArrayList<String> strings : sortedRows.values()) {
-                data.add(strings);
+            for (ArrayList<String> row : sortedRows.values()) {
+                data.add(row);
             }
 
         } finally {

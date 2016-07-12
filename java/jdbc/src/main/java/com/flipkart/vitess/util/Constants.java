@@ -23,7 +23,8 @@ public class Constants {
     public static final int DRIVER_MAJOR_VERSION = 1;
     public static final int DRIVER_MINOR_VERSION = 0;
     public static final int MAX_BUFFER_SIZE = 65535;
-    public static final int DEFAULT_TIMEOUT = 30000; //In miliseconds
+    //Default Timeout in miliseconds
+    public static final int DEFAULT_TIMEOUT = 30000;
     public static final String SQL_SHOW = "show";
     public static final String VITESS_KEYSPACE = "Keyspace name in Vitess Server";
     public static final Constants.QueryExecuteType DEFAULT_EXECUTE_TYPE = QueryExecuteType.SIMPLE;
@@ -84,7 +85,7 @@ public class Constants {
         public static final String GENERATED_KEYS_NOT_REQUESTED =
             "Generated keys not requested. You need to specify "
                 + "Statement.RETURN_GENERATED_KEYS to Statement.executeUpdate() or Connection.prepareStatement()";
-        public static final String AMBIGUOUS_KEYSPACE =
+        public static final String NO_KEYSPACE =
             "Querying Database Information without providing keyspace";
     }
 
