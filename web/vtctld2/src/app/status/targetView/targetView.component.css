@@ -49,12 +49,35 @@
   text-align: center;
 }
 
+.invisible {
+  color:white;
+  padding: 1em;
+}
+
+.invisibleBorder {
+  color:white;
+  padding: 1em;
+  border-bottom:1px solid black;
+}
+
+.errorSet { 
+  width: 100%;
+  padding: 1em;
+  border-bottom: 1px solid black;
+}
+
 .divider {
   border: 1em solid black;
 }
 
-tr:nth-child(even){background-color: #f2f2f2;}
+.center {
+  text-align:center;
+  padding:1em;
+}
 
+.shaded {
+  background-color: #f2f2f2
+}
 
 .tableSet  {
   width: 100%;

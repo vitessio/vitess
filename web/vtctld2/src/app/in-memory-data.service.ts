@@ -1,15 +1,11 @@
-/*export class InMemoryDataService {
-  createDb() {
-    let target = [
-      {100: {SecondsBehindMaster: 2, CpuUsage: 12, Qps: 5, HealthError:""}}
-    ];
-    return {target};
-  }
-}*/
-
 export class InMemoryDataService {
   createDb() {
-    let keyspaces = [
+    let target = [
+      {"100": {SecondsBehindMaster: 1, CpuUsage: 22, Qps: 5, HealthError:""}},
+      {"200": {SecondsBehindMaster: 1, CpuUsage: 22, Qps: 5, HealthError:"Too far behind"}}
+    ];
+
+   /* let keyspaces = [
       {
         name: 'KS1',
         servingShards: [
@@ -44,6 +40,9 @@ export class InMemoryDataService {
         healthy: false,
       },
     ];
+
+
+
     let tablets = [
       {
         KSName: "KS1",
@@ -269,7 +268,7 @@ export class InMemoryDataService {
         KSName: "KS3",
         shards: [],
       },
-    ];
-    return {keyspaces, tablets};
+    ]; */
+    return {target/*, keyspaces, tablets*/};
   }
 }

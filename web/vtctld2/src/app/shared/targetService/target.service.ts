@@ -3,23 +3,18 @@ import { Http } from '@angular/http';
 import { Tablet } from '../tabletObject/tablet';
 
 @Injectable()
-export class TargetService { 
-  private keyspacesUrl = '/app/keyspaces';
+export class TargetService {
+  private targetUrl = '/app/target';
 
   constructor(private http: Http) {}
 
   getTablets() {
-    /*return this.http.get(this.targetUrl)
-    .map( (resp) => {
-      return resp.json();
-    })*/
-
-    return this.http.get(this.keyspacesUrl)
+    return this.http.get(this.targetUrl)
     .map( (resp) => {
       return resp.json();
     })
-    .map ( (keyspaces: any) => {
-      return keyspaces.data;
+    .map( (target:any) => {
+       return target.data;
     })
   }
 }

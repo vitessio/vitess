@@ -1,16 +1,14 @@
+import { RealtimeStats } from './realtimeStats'
+
 export class Tablet {
   cell: string;
   uid: string;
   keyspaceName: string;
   shardName: string;
   type: string;
-  stats: {
-    SecondsBehindMaster: number,
-    CpuUsage: number,
-    Qps: number,
-    HealthError: string, /*"" if no error */
-  }
-  constructor(cell, id, keyspaceName, shardName, type, stats) {
+  stats: RealtimeStats;
+
+  constructor(cell:string, id:string, keyspaceName:string, shardName:string, type:string, stats:RealtimeStats) {
     this.cell = cell;
     this.uid = id;
     this.keyspaceName = keyspaceName;
