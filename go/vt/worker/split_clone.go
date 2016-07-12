@@ -551,8 +551,6 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 // waitForTablets waits for enough serving tablets in the given
 // shard (which can be used as input during the diff).
 func (scw *SplitCloneWorker) waitForTablets(ctx context.Context, shardInfos []*topo.ShardInfo, timeout time.Duration) error {
-	scw.setState(WorkerStateFindTargets)
-
 	var wg sync.WaitGroup
 	rec := concurrency.AllErrorRecorder{}
 	for _, si := range shardInfos {
