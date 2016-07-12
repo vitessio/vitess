@@ -279,3 +279,8 @@ func (e *eofEventStream) Recv() (*logutilpb.Event, error) {
 func (client *FakeTabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int) (logutil.EventStream, error) {
 	return &eofEventStream{}, nil
 }
+
+// RestoreFromBackup is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet) (logutil.EventStream, error) {
+	return &eofEventStream{}, nil
+}

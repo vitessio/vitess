@@ -1704,6 +1704,7 @@ Blocks until the specified shard has caught up with the filtered replication of 
 * [Ping](#ping)
 * [RefreshState](#refreshstate)
 * [ReparentTablet](#reparenttablet)
+* [RestoreFromBackup](#restorefrombackup)
 * [RunHealthCheck](#runhealthcheck)
 * [SetReadOnly](#setreadonly)
 * [SetReadWrite](#setreadwrite)
@@ -1993,6 +1994,19 @@ Reparent a tablet to the current master in the shard. This only works if the cur
 #### Errors
 
 * action <code>&lt;ReparentTablet&gt;</code> requires <code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly one argument.
+
+
+### RestoreFromBackup
+
+Stops mysqld and restores the data from the latest backup.
+
+#### Example
+
+<pre class="command-example">RestoreFromBackup &lt;tablet alias&gt;</pre>
+
+#### Errors
+
+* The <code>&lt;RestoreFromBackup&gt;</code> command requires the <code>&lt;tablet alias&gt;</code> argument. This error occurs if the command is not called with exactly one argument.
 
 
 ### RunHealthCheck

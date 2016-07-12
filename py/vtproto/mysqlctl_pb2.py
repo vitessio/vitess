@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='mysqlctl.proto',
   package='mysqlctl',
   syntax='proto3',
-  serialized_pb=_b('\n\x0emysqlctl.proto\x12\x08mysqlctl\"\x0e\n\x0cStartRequest\"\x0f\n\rStartResponse\"*\n\x0fShutdownRequest\x12\x17\n\x0fwait_for_mysqld\x18\x01 \x01(\x08\"\x12\n\x10ShutdownResponse\"\x18\n\x16RunMysqlUpgradeRequest\"\x19\n\x17RunMysqlUpgradeResponse2\xe5\x01\n\x08MysqlCtl\x12:\n\x05Start\x12\x16.mysqlctl.StartRequest\x1a\x17.mysqlctl.StartResponse\"\x00\x12\x43\n\x08Shutdown\x12\x19.mysqlctl.ShutdownRequest\x1a\x1a.mysqlctl.ShutdownResponse\"\x00\x12X\n\x0fRunMysqlUpgrade\x12 .mysqlctl.RunMysqlUpgradeRequest\x1a!.mysqlctl.RunMysqlUpgradeResponse\"\x00\x62\x06proto3')
+  serialized_pb=_b('\n\x0emysqlctl.proto\x12\x08mysqlctl\"\x0e\n\x0cStartRequest\"\x0f\n\rStartResponse\"*\n\x0fShutdownRequest\x12\x17\n\x0fwait_for_mysqld\x18\x01 \x01(\x08\"\x12\n\x10ShutdownResponse\"\x18\n\x16RunMysqlUpgradeRequest\"\x19\n\x17RunMysqlUpgradeResponse\"\x15\n\x13ReinitConfigRequest\"\x16\n\x14ReinitConfigResponse2\xb6\x02\n\x08MysqlCtl\x12:\n\x05Start\x12\x16.mysqlctl.StartRequest\x1a\x17.mysqlctl.StartResponse\"\x00\x12\x43\n\x08Shutdown\x12\x19.mysqlctl.ShutdownRequest\x1a\x1a.mysqlctl.ShutdownResponse\"\x00\x12X\n\x0fRunMysqlUpgrade\x12 .mysqlctl.RunMysqlUpgradeRequest\x1a!.mysqlctl.RunMysqlUpgradeResponse\"\x00\x12O\n\x0cReinitConfig\x12\x1d.mysqlctl.ReinitConfigRequest\x1a\x1e.mysqlctl.ReinitConfigResponse\"\x00\x62\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -176,12 +176,62 @@ _RUNMYSQLUPGRADERESPONSE = _descriptor.Descriptor(
   serialized_end=176,
 )
 
+
+_REINITCONFIGREQUEST = _descriptor.Descriptor(
+  name='ReinitConfigRequest',
+  full_name='mysqlctl.ReinitConfigRequest',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=178,
+  serialized_end=199,
+)
+
+
+_REINITCONFIGRESPONSE = _descriptor.Descriptor(
+  name='ReinitConfigResponse',
+  full_name='mysqlctl.ReinitConfigResponse',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=201,
+  serialized_end=223,
+)
+
 DESCRIPTOR.message_types_by_name['StartRequest'] = _STARTREQUEST
 DESCRIPTOR.message_types_by_name['StartResponse'] = _STARTRESPONSE
 DESCRIPTOR.message_types_by_name['ShutdownRequest'] = _SHUTDOWNREQUEST
 DESCRIPTOR.message_types_by_name['ShutdownResponse'] = _SHUTDOWNRESPONSE
 DESCRIPTOR.message_types_by_name['RunMysqlUpgradeRequest'] = _RUNMYSQLUPGRADEREQUEST
 DESCRIPTOR.message_types_by_name['RunMysqlUpgradeResponse'] = _RUNMYSQLUPGRADERESPONSE
+DESCRIPTOR.message_types_by_name['ReinitConfigRequest'] = _REINITCONFIGREQUEST
+DESCRIPTOR.message_types_by_name['ReinitConfigResponse'] = _REINITCONFIGRESPONSE
 
 StartRequest = _reflection.GeneratedProtocolMessageType('StartRequest', (_message.Message,), dict(
   DESCRIPTOR = _STARTREQUEST,
@@ -225,6 +275,20 @@ RunMysqlUpgradeResponse = _reflection.GeneratedProtocolMessageType('RunMysqlUpgr
   ))
 _sym_db.RegisterMessage(RunMysqlUpgradeResponse)
 
+ReinitConfigRequest = _reflection.GeneratedProtocolMessageType('ReinitConfigRequest', (_message.Message,), dict(
+  DESCRIPTOR = _REINITCONFIGREQUEST,
+  __module__ = 'mysqlctl_pb2'
+  # @@protoc_insertion_point(class_scope:mysqlctl.ReinitConfigRequest)
+  ))
+_sym_db.RegisterMessage(ReinitConfigRequest)
+
+ReinitConfigResponse = _reflection.GeneratedProtocolMessageType('ReinitConfigResponse', (_message.Message,), dict(
+  DESCRIPTOR = _REINITCONFIGRESPONSE,
+  __module__ = 'mysqlctl_pb2'
+  # @@protoc_insertion_point(class_scope:mysqlctl.ReinitConfigResponse)
+  ))
+_sym_db.RegisterMessage(ReinitConfigResponse)
+
 
 import abc
 from grpc.beta import implementations as beta_implementations
@@ -243,6 +307,9 @@ class BetaMysqlCtlServicer(object):
   @abc.abstractmethod
   def RunMysqlUpgrade(self, request, context):
     raise NotImplementedError()
+  @abc.abstractmethod
+  def ReinitConfig(self, request, context):
+    raise NotImplementedError()
 
 class BetaMysqlCtlStub(object):
   """The interface to which stubs will conform."""
@@ -259,6 +326,10 @@ class BetaMysqlCtlStub(object):
   def RunMysqlUpgrade(self, request, timeout):
     raise NotImplementedError()
   RunMysqlUpgrade.future = None
+  @abc.abstractmethod
+  def ReinitConfig(self, request, timeout):
+    raise NotImplementedError()
+  ReinitConfig.future = None
 
 def beta_create_MysqlCtl_server(servicer, pool=None, pool_size=None, default_timeout=None, maximum_timeout=None):
   import mysqlctl_pb2
@@ -267,17 +338,22 @@ def beta_create_MysqlCtl_server(servicer, pool=None, pool_size=None, default_tim
   import mysqlctl_pb2
   import mysqlctl_pb2
   import mysqlctl_pb2
+  import mysqlctl_pb2
+  import mysqlctl_pb2
   request_deserializers = {
+    ('mysqlctl.MysqlCtl', 'ReinitConfig'): mysqlctl_pb2.ReinitConfigRequest.FromString,
     ('mysqlctl.MysqlCtl', 'RunMysqlUpgrade'): mysqlctl_pb2.RunMysqlUpgradeRequest.FromString,
     ('mysqlctl.MysqlCtl', 'Shutdown'): mysqlctl_pb2.ShutdownRequest.FromString,
     ('mysqlctl.MysqlCtl', 'Start'): mysqlctl_pb2.StartRequest.FromString,
   }
   response_serializers = {
+    ('mysqlctl.MysqlCtl', 'ReinitConfig'): mysqlctl_pb2.ReinitConfigResponse.SerializeToString,
     ('mysqlctl.MysqlCtl', 'RunMysqlUpgrade'): mysqlctl_pb2.RunMysqlUpgradeResponse.SerializeToString,
     ('mysqlctl.MysqlCtl', 'Shutdown'): mysqlctl_pb2.ShutdownResponse.SerializeToString,
     ('mysqlctl.MysqlCtl', 'Start'): mysqlctl_pb2.StartResponse.SerializeToString,
   }
   method_implementations = {
+    ('mysqlctl.MysqlCtl', 'ReinitConfig'): face_utilities.unary_unary_inline(servicer.ReinitConfig),
     ('mysqlctl.MysqlCtl', 'RunMysqlUpgrade'): face_utilities.unary_unary_inline(servicer.RunMysqlUpgrade),
     ('mysqlctl.MysqlCtl', 'Shutdown'): face_utilities.unary_unary_inline(servicer.Shutdown),
     ('mysqlctl.MysqlCtl', 'Start'): face_utilities.unary_unary_inline(servicer.Start),
@@ -292,17 +368,22 @@ def beta_create_MysqlCtl_stub(channel, host=None, metadata_transformer=None, poo
   import mysqlctl_pb2
   import mysqlctl_pb2
   import mysqlctl_pb2
+  import mysqlctl_pb2
+  import mysqlctl_pb2
   request_serializers = {
+    ('mysqlctl.MysqlCtl', 'ReinitConfig'): mysqlctl_pb2.ReinitConfigRequest.SerializeToString,
     ('mysqlctl.MysqlCtl', 'RunMysqlUpgrade'): mysqlctl_pb2.RunMysqlUpgradeRequest.SerializeToString,
     ('mysqlctl.MysqlCtl', 'Shutdown'): mysqlctl_pb2.ShutdownRequest.SerializeToString,
     ('mysqlctl.MysqlCtl', 'Start'): mysqlctl_pb2.StartRequest.SerializeToString,
   }
   response_deserializers = {
+    ('mysqlctl.MysqlCtl', 'ReinitConfig'): mysqlctl_pb2.ReinitConfigResponse.FromString,
     ('mysqlctl.MysqlCtl', 'RunMysqlUpgrade'): mysqlctl_pb2.RunMysqlUpgradeResponse.FromString,
     ('mysqlctl.MysqlCtl', 'Shutdown'): mysqlctl_pb2.ShutdownResponse.FromString,
     ('mysqlctl.MysqlCtl', 'Start'): mysqlctl_pb2.StartResponse.FromString,
   }
   cardinalities = {
+    'ReinitConfig': cardinality.Cardinality.UNARY_UNARY,
     'RunMysqlUpgrade': cardinality.Cardinality.UNARY_UNARY,
     'Shutdown': cardinality.Cardinality.UNARY_UNARY,
     'Start': cardinality.Cardinality.UNARY_UNARY,
