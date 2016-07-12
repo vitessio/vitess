@@ -1,7 +1,28 @@
 <md-card class="breadcrumbs">
-  <a md-button [routerLink]="route" [queryParams]="{}"><md-icon>{{icon}}</md-icon></a>
+  <a md-button [routerLink]="route" [queryParams]="{}">
+    <md-icon>{{icon}}</md-icon>
+  </a>
+  
   <span *ngFor="let crumb of crumbs">
     <span class="breadcrumb-separator">{{separator}}</span>
-    <a md-button [routerLink]="route" [queryParams]="crumb.queryParams">{{crumb.name | uppercase}}</a>
+    <a>
+      <span *ngIf="!isSelected(crumb.name)">
+        <button md-button [routerLink]="route" [queryParams]="crumb.queryParams">
+          {{crumb.name | uppercase}}
+        </button>
+      </span>
+
+      <span *ngIf="isSelected(crumb.name)">
+        <button  md-button [routerLink]="route" [queryParams]="crumb.queryParams"
+                 class="md-button-raised highlighted">
+          {{crumb.name | uppercase}}
+        </button>
+      </span>
+    </a>
+
+    <!-- <a md-button [routerLink]="route" [queryParams]="crumb.queryParams" >
+        {{crumb.name | uppercase}}
+    </a> -->
+
   </span>
 </md-card>

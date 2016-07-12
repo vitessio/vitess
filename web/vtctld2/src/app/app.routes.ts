@@ -12,7 +12,7 @@ export const routes: RouterConfig = [
   { path: 'schema', component: SchemaComponent },
   { path: 'topo', component: TopoBrowserComponent },
 
-  { path: 'status/target', component: TargetViewComponent },
+  { path: 'target', component: TargetViewComponent },
 ];
 
 export const APP_ROUTER_PROVIDERS = [

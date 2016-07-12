@@ -27,4 +27,12 @@ export class BreadcrumbsComponent {
   @Input() route: any[];
   @Input() crumbs: Breadcrumb[];
   @Input() separator = '|';
+
+  isSelected( name: string ) {
+    var lastName = this.crumbs[this.crumbs.length-1].name;
+    if(name === lastName) {
+      return true;
+    }
+    return false;
+  }
 }
