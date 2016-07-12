@@ -12,7 +12,7 @@ spec:
     spec:
       containers:
         - name: guestbook
-          image: vitess/guestbook
+          image: vitess/guestbook:v2.0.0
           livenessProbe:
             httpGet:
               path: /env

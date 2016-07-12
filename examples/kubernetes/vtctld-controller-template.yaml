@@ -12,7 +12,7 @@ spec:
     spec:
       containers:
         - name: vtctld
-          image: vitess/lite
+          image: vitess/lite:v2.0.0
           livenessProbe:
             httpGet:
               path: /debug/vars

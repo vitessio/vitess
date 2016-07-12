@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
     - name: vtworker
-      image: vitess/lite
+      image: vitess/lite:v2.0.0
       volumeMounts:
         - name: syslog
           mountPath: /dev/log
