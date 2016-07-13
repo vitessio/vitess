@@ -181,7 +181,7 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 			advanceLeft = true
 			advanceRight = true
 			// Update the row on the destination.
-			if err := rd.reconcileRow(left, DiffNotEqual); err != nil {
+			if err := rd.updateRow(left, right, DiffNotEqual); err != nil {
 				return dr, err
 			}
 			continue
@@ -220,7 +220,7 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 		advanceLeft = true
 		advanceRight = true
 		// Update the row on the destination.
-		if err := rd.reconcileRow(right, DiffNotEqual); err != nil {
+		if err := rd.updateRow(left, right, DiffNotEqual); err != nil {
 			return dr, err
 		}
 	}
@@ -237,7 +237,11 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 	return dr, nil
 }
 
+// reconcileRow is used for the DiffType DiffMissing and DiffExtraneous.
 func (rd *RowDiffer2) reconcileRow(row []sqltypes.Value, typ DiffType) error {
+	if typ == DiffNotEqual {
+		panic(fmt.Sprintf("reconcileRow() called with wrong type: %v", typ))
+	}
 	destShardIndex, err := rd.router.Route(row)
 	if err != nil {
 		return fmt.Errorf("failed to route row (%v) to correct shard: %v", row, err)
@@ -246,6 +250,44 @@ func (rd *RowDiffer2) reconcileRow(row []sqltypes.Value, typ DiffType) error {
 	if err := rd.aggregators[destShardIndex][typ].Add(row); err != nil {
 		return fmt.Errorf("failed to add row update to RowAggregator: %v", err)
 	}
+	// TODO(mberlin): Add more fine granular stats here.
+	rd.tableStatusList.addCopiedRows(rd.tableIndex, 1)
+	return nil
+}
+
+// updateRow is used for the DiffType DiffNotEqual.
+// It needs to look at the row of the source (newRow) and destination (oldRow)
+// to detect if the keyspace_id has changed in the meantime.
+// If that's the case, we cannot UPDATE the row. Instead, we must DELETE
+// the old row and INSERT the new row to the respective destination shards.
+func (rd *RowDiffer2) updateRow(newRow, oldRow []sqltypes.Value, typ DiffType) error {
+	if typ != DiffNotEqual {
+		panic(fmt.Sprintf("updateRow() called with wrong type: %v", typ))
+	}
+	destShardIndexOld, err := rd.router.Route(oldRow)
+	if err != nil {
+		return fmt.Errorf("failed to route old row (%v) to correct shard: %v", oldRow, err)
+	}
+	destShardIndexNew, err := rd.router.Route(newRow)
+	if err != nil {
+		return fmt.Errorf("failed to route new row (%v) to correct shard: %v", newRow, err)
+	}
+
+	if destShardIndexOld == destShardIndexNew {
+		// keyspace_id has not changed. Update the row in place on the destination.
+		if err := rd.aggregators[destShardIndexNew][typ].Add(newRow); err != nil {
+			return fmt.Errorf("failed to add row update to RowAggregator (keyspace_id not changed): %v", err)
+		}
+	} else {
+		// keyspace_id has changed. Delete the old row and insert the new one.
+		if err := rd.aggregators[destShardIndexOld][DiffExtraneous].Add(oldRow); err != nil {
+			return fmt.Errorf("failed to add row update to RowAggregator (keyspace_id changed, deleting old row): %v", err)
+		}
+		if err := rd.aggregators[destShardIndexNew][DiffMissing].Add(newRow); err != nil {
+			return fmt.Errorf("failed to add row update to RowAggregator (keyspace_id changed, inserting new row): %v", err)
+		}
+	}
+
 	// TODO(mberlin): Add more fine granular stats here.
 	rd.tableStatusList.addCopiedRows(rd.tableIndex, 1)
 	return nil

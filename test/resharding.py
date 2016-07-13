@@ -488,6 +488,60 @@ primary key (name)
     workerclient_proc = utils.run_vtworker_client_bg(['Reset'], worker_rpc_port)
     utils.wait_procs([workerclient_proc])
 
+    # Test the correct handling of keyspace_id changes which happen after
+    # the first clone.
+    # Let row 2 go to shard 3 instead of shard 2.
+    shard_1_master.mquery('vt_test_keyspace',
+                          'update resharding1 set'
+                          ' custom_ksid_col=0xD000000000000000 WHERE id=2',
+                          write=True)
+    workerclient_proc = utils.run_vtworker_client_bg(
+        ['SplitClone',
+         '--offline=false',
+         '--exclude_tables', 'unrelated',
+         '--min_table_size_for_split', '1',
+         '--min_healthy_rdonly_tablets', '1',
+         '--max_tps', '9999',
+         'test_keyspace/80-'],
+        worker_rpc_port)
+    utils.wait_procs([workerclient_proc])
+    # Row 2 will be deleted from shard 2 and inserted to shard 3.
+    self.verify_reconciliation_counters(worker_port, 'Online', 'resharding1',
+                                        1, 0, 1)
+    self._check_value(shard_2_master, 'resharding1', 2, 'msg2',
+                      0xD000000000000000, should_be_here=False)
+    self._check_value(shard_3_master, 'resharding1', 2, 'msg2',
+                      0xD000000000000000)
+    # Reset vtworker such that we can run the next command.
+    workerclient_proc = utils.run_vtworker_client_bg(['Reset'], worker_rpc_port)
+    utils.wait_procs([workerclient_proc])
+
+    # Move row 2 back to shard 2 from shard 3 by changing the keyspace_id again.
+    shard_1_master.mquery('vt_test_keyspace',
+                          'update resharding1 set'
+                          ' custom_ksid_col=0x9000000000000000 WHERE id=2',
+                          write=True)
+    workerclient_proc = utils.run_vtworker_client_bg(
+        ['SplitClone',
+         '--offline=false',
+         '--exclude_tables', 'unrelated',
+         '--min_table_size_for_split', '1',
+         '--min_healthy_rdonly_tablets', '1',
+         '--max_tps', '9999',
+         'test_keyspace/80-'],
+        worker_rpc_port)
+    utils.wait_procs([workerclient_proc])
+    # Row 2 will be deleted from shard 3 and inserted to shard 2.
+    self.verify_reconciliation_counters(worker_port, 'Online', 'resharding1',
+                                        1, 0, 1)
+    self._check_value(shard_2_master, 'resharding1', 2, 'msg2',
+                      0x9000000000000000)
+    self._check_value(shard_3_master, 'resharding1', 2, 'msg2',
+                      0x9000000000000000, should_be_here=False)
+    # Reset vtworker such that we can run the next command.
+    workerclient_proc = utils.run_vtworker_client_bg(['Reset'], worker_rpc_port)
+    utils.wait_procs([workerclient_proc])
+
     # Modify the destination shard. SplitClone will revert the changes.
     # Delete row 2 (provokes an insert).
     shard_2_master.mquery('vt_test_keyspace',
