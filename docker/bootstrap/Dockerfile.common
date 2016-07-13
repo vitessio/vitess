@@ -76,9 +76,6 @@ ENV GOPATH $VTROOT
 ENV PATH $VTROOT/bin:$VTROOT/dist/maven/bin:$VTROOT/dist/chromedriver:$PATH
 ENV VT_MYSQL_ROOT /usr
 ENV PKG_CONFIG_PATH $VTROOT/lib
-ENV CGO_CFLAGS -I$VTROOT/dist/vt-zookeeper-3.4.6/include/zookeeper
-ENV CGO_LDFLAGS -L$VTROOT/dist/vt-zookeeper-3.4.6/lib
-ENV LD_LIBRARY_PATH $VTROOT/dist/vt-zookeeper-3.4.6/lib
 ENV GO15VENDOREXPERIMENT 1
 
 # Copy files needed for bootstrap
