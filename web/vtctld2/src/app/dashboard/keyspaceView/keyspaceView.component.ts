@@ -55,9 +55,10 @@ export class KeyspaceViewComponent implements OnInit, OnDestroy{
   }
 
   getKeyspace(keyspaceName) {
-    this.keyspaceService.getKeyspace(keyspaceName).subscribe((keyspace) => {
-      this.keyspace = keyspace[0];
-      this.shardsReady =true;
+    this.keyspaceService.getKeyspace(keyspaceName).subscribe((keyspaceStream) => {
+      keyspaceStream.subscribe( keyspace => {
+        this.keyspace = keyspace;
+      });
     });
   }
 
