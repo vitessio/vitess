@@ -43,13 +43,28 @@ export class DashboardComponent implements OnInit{
   ngOnInit() {
     this.getKeyspaces();
   }
-
+  ///////
   getKeyspaces() {
-    this.keyspaceService.getKeyspaces().subscribe(keyspaces => {
-      this.keyspaces = keyspaces;
-      this.keyspacesReady = true;
+    this.keyspaceService.getKeyspaces().subscribe( keyspaceStreams => {
+      keyspaceStreams.subscribe( keyspace => {
+        console.log(keyspace);
+        this.keyspaces.push(keyspace);
+      })
+    })
+  }
+
+  getShards(keyspaceName) {
+    this.keyspaceService.getShards(keyspaceName).subscribe(shards => {
+      console.log("a", shards);
+      this.getSrvKeyspaces();
     });
   }
+  getSrvKeyspaces() {
+    this.keyspaceService.getSrvKeyspaces().subscribe(srvkeyspaces => {
+      console.log("b", srvkeyspaces);
+    })
+  }
+  //////////
   
   submitForm(){
     /*Temporary Function, will be replaced with CRUD interface*/
