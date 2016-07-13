@@ -63,7 +63,7 @@
     </a>
   </div>
   
-  <div *ngIf="keyspacesReady" class="keyspaceCard">
+  <div *ngIf="keyspaces" class="keyspaceCard">
     <a onclick="modal.open()" (click)="toggleForm();clearNKS()">
       <md-card>
         <md-card-title>New Keyspace</md-card-title>   
