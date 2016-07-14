@@ -26,13 +26,13 @@ function fail() {
 
 go version 2>&1 >/dev/null || fail "Go is not installed or is not on \$PATH"
 
+# Set up the proper GOPATH for go get below.
+source ./dev.env
+
 mkdir -p $VTROOT/dist
 mkdir -p $VTROOT/bin
 mkdir -p $VTROOT/lib
 mkdir -p $VTROOT/vthook
-
-# Set up the proper GOPATH for go get below.
-source ./dev.env
 
 echo "Updating git submodules..."
 git submodule update --init
