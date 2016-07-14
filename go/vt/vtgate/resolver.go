@@ -15,6 +15,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
+	"github.com/youtube/vitess/go/vt/sqlannotation"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
@@ -32,9 +33,6 @@ var (
 	closeBracket     = []byte(")")
 	kwAnd            = []byte(" and ")
 	kwWhere          = []byte(" where ")
-	insertDML        = "insert"
-	updateDML        = "update"
-	deleteDML        = "delete"
 )
 
 // Resolver is the layer to resolve KeyspaceIds and KeyRanges
@@ -74,7 +72,7 @@ func isRetryableError(err error) bool {
 // This throws an error if a dml spans multiple keyspace_ids. Resharding depends
 // on being able to uniquely route a write.
 func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
-	if isDml(sql) && len(keyspaceIds) > 1 {
+	if sqlannotation.IsDML(sql) && len(keyspaceIds) > 1 {
 		return nil, vterrors.FromError(
 			vtrpcpb.ErrorCode_BAD_INPUT,
 			fmt.Errorf("DML should not span multiple keyspace_ids"),
@@ -444,16 +442,4 @@ func insertSQLClause(querySQL, clause string) string {
 		b.Write([]byte(querySQL[idxExtra:]))
 	}
 	return b.String()
-}
-
-func isDml(querySQL string) bool {
-	var sqlKW string
-	if i := strings.Index(querySQL, " "); i >= 0 {
-		sqlKW = querySQL[:i]
-	}
-	sqlKW = strings.ToLower(sqlKW)
-	if sqlKW == insertDML || sqlKW == updateDML || sqlKW == deleteDML {
-		return true
-	}
-	return false
 }
