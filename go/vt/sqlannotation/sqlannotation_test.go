@@ -45,6 +45,27 @@ func verifyParseError(t *testing.T, sql string) {
 	}
 }
 
+func TestIsDML(t *testing.T) {
+	tests := []struct {
+		sql   string
+		isDML bool
+	}{
+		{"   update ...", true},
+		{"UPDATE ...", true},
+		{" \n  delete ...", true},
+		{"insert ...", true},
+		{"select ...", false},
+		{"    select ...", false},
+		{"", false},
+		{" ", false},
+	}
+	for _, test := range tests {
+		if dml := IsDML(test.sql); dml != test.isDML {
+			t.Errorf("IsDML(%q) = %t, got %t", test.sql, dml, test.isDML)
+		}
+	}
+}
+
 func BenchmarkExtractKeyspaceIDKeyspaceID(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		ExtractKeySpaceID("DML /* vtgate:: keyspace_id:25AF */")

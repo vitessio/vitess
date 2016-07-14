@@ -188,7 +188,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 	statsKey := []string{"ExecuteShards", keyspace, ltt}
 	defer vtg.timings.Record(statsKey, startTime)
 
-	sql = sqlannotation.AddFilteredReplicationUnfriendlyIfDML(sql)
+	sql = sqlannotation.AnnotateIfDML(sql, nil)
 
 	qr, err := vtg.resolver.Execute(
 		ctx,
@@ -227,7 +227,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVaria
 	statsKey := []string{"ExecuteKeyspaceIds", keyspace, ltt}
 	defer vtg.timings.Record(statsKey, startTime)
 
-	sql = sqlannotation.AddIfDML(sql, keyspaceIds)
+	sql = sqlannotation.AnnotateIfDML(sql, keyspaceIds)
 
 	qr, err := vtg.resolver.ExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, session, notInTransaction)
 	if err == nil {
@@ -255,7 +255,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, sql string, bindVariabl
 	statsKey := []string{"ExecuteKeyRanges", keyspace, ltt}
 	defer vtg.timings.Record(statsKey, startTime)
 
-	sql = sqlannotation.AddFilteredReplicationUnfriendlyIfDML(sql)
+	sql = sqlannotation.AnnotateIfDML(sql, nil)
 
 	qr, err := vtg.resolver.ExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, session, notInTransaction)
 	if err == nil {
@@ -283,7 +283,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, sql string, bindVariabl
 	statsKey := []string{"ExecuteEntityIds", keyspace, ltt}
 	defer vtg.timings.Record(statsKey, startTime)
 
-	sql = sqlannotation.AddFilteredReplicationUnfriendlyIfDML(sql)
+	sql = sqlannotation.AnnotateIfDML(sql, nil)
 
 	qr, err := vtg.resolver.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction)
 	if err == nil {
@@ -810,19 +810,14 @@ func (vtg *VTGate) HandlePanic(err *error) {
 
 // Helper function used in ExecuteBatchKeyspaceIds
 func annotateBoundKeyspaceIDQueries(queries []*vtgatepb.BoundKeyspaceIdQuery) {
-	for i := range queries {
-		if len(queries[i].KeyspaceIds) == 1 {
-			queries[i].Query.Sql = sqlannotation.AddKeyspaceIDIfDML(queries[i].Query.Sql, []byte(queries[i].KeyspaceIds[0]))
-		} else {
-			queries[i].Query.Sql = sqlannotation.AddFilteredReplicationUnfriendlyIfDML(queries[i].Query.Sql)
-		}
+	for i, q := range queries {
+		queries[i].Query.Sql = sqlannotation.AnnotateIfDML(q.Query.Sql, q.KeyspaceIds)
 	}
 }
 
 // Helper function used in ExecuteBatchShards
 func annotateBoundShardQueriesAsUnfriendly(queries []*vtgatepb.BoundShardQuery) {
-	for i := range queries {
-		queries[i].Query.Sql =
-			sqlannotation.AddFilteredReplicationUnfriendlyIfDML(queries[i].Query.Sql)
+	for i, q := range queries {
+		queries[i].Query.Sql = sqlannotation.AnnotateIfDML(q.Query.Sql, nil)
 	}
 }
