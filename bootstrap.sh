@@ -170,14 +170,17 @@ cp $VTTOP/config/gomysql.pc.tmpl $VTROOT/lib/gomysql.pc
 myversion=`$VT_MYSQL_ROOT/bin/mysql_config --version`
 echo "Version:" "$myversion" >> $VTROOT/lib/gomysql.pc
 echo "Cflags:" "$($VT_MYSQL_ROOT/bin/mysql_config --cflags) -ggdb -fPIC" >> $VTROOT/lib/gomysql.pc
+# Note we add $VT_MYSQL_ROOT/lib as an extra path in the case where
+# we installed the standard MySQL packages from a distro into a sub-directory
+# and the provided mysql_config assumes the <root>/lib directory
+# is already in the library path.
 if [[ "$MYSQL_FLAVOR" == "MariaDB" || "$myversion" =~ ^5\.7\. ]]; then
   # Use static linking because the shared library doesn't export
   # some internal functions we use, like cli_safe_read.
-  echo "Libs:" "$($VT_MYSQL_ROOT/bin/mysql_config --libs_r | sed -r 's,-lmysqlclient(_r)?,-l:libmysqlclient.a -lstdc++,')" >> $VTROOT/lib/gomysql.pc
+  echo "Libs:" "-L$VT_MYSQL_ROOT/lib $($VT_MYSQL_ROOT/bin/mysql_config --libs_r | sed -r 's,-lmysqlclient(_r)?,-l:libmysqlclient.a -lstdc++,')" >> $VTROOT/lib/gomysql.pc
 else
-  echo "Libs:" "$($VT_MYSQL_ROOT/bin/mysql_config --libs_r)" >> $VTROOT/lib/gomysql.pc
+  echo "Libs:" "-L$VT_MYSQL_ROOT/lib $($VT_MYSQL_ROOT/bin/mysql_config --libs_r)" >> $VTROOT/lib/gomysql.pc
 fi
-echo PKG_CONFIG_PATH set to: $PKG_CONFIG_PATH
 
 # install mock
 mock_dist=$VTROOT/dist/py-mock-1.0.1
