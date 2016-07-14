@@ -317,7 +317,6 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, route *engine.Route)
 
 func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
 	var firstKsid []byte
-	var ks, shard string
 	inputs := route.Values.([]interface{})
 	insertIds := make([]int64, len(inputs))
 	for rowNum, input := range inputs {
@@ -341,10 +340,6 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 			return nil, errors.New("unsupported: multi-row insert replication unfriendly")
 		}
 
-		ks, shard, err = rtr.getRouting(vcursor.ctx, route.Keyspace.Name, vcursor.tabletType, ksid)
-		if err != nil {
-			return nil, fmt.Errorf("execInsertSharded: %v", err)
-		}
 		for i := 1; i < len(keys); i++ {
 			err := rtr.handleNonPrimary(vcursor, keys[i], route.Table.ColumnVindexes[i], vcursor.bindVars, ksid, rowNum)
 			if err != nil {
@@ -352,6 +347,12 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 			}
 		}
 	}
+
+	ks, shard, err := rtr.getRouting(vcursor.ctx, route.Keyspace.Name, vcursor.tabletType, firstKsid)
+	if err != nil {
+		return nil, fmt.Errorf("execInsertSharded: %v", err)
+	}
+
 	rewritten := sqlannotation.AddKeyspaceID(route.Query, firstKsid, vcursor.comments)
 	result, err := rtr.scatterConn.Execute(
 		vcursor.ctx,

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
@@ -130,7 +129,6 @@ func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString, rowNum int, C
 		ins.Columns = append(ins.Columns, sqlparser.ColIdent(col))
 	}
 	if *ColInsert {
-		spew.Dump(ins.Rows)
 		ins.Rows.(sqlparser.Values)[rowNum] = append(ins.Rows.(sqlparser.Values)[rowNum].(sqlparser.ValTuple), &sqlparser.NullVal{})
 	}
 	return ins.Rows.(sqlparser.Values)[rowNum].(sqlparser.ValTuple), pos
