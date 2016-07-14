@@ -9,18 +9,27 @@ import (
 )
 
 var lookupUnique Vindex
+var lookupNonUnique Vindex
 
 func init() {
-	h, err := CreateVindex("lookup_unique", "lookupUnique", map[string]string{"table": "t", "from": "fromc", "to": "toc"})
+	lunique, err := CreateVindex("lookup_unique", "lookupUnique", map[string]string{"table": "t", "from": "fromc", "to": "toc"})
 	if err != nil {
 		panic(err)
 	}
-	lookupUnique = h
+	lnonunique, err := CreateVindex("lookup", "lookupNonUnique", map[string]string{"table": "t", "from": "fromc", "to": "toc"})
+	lookupUnique = lunique
+	lookupNonUnique = lnonunique
 }
 
 func TestLookupUniqueCost(t *testing.T) {
 	if lookupUnique.Cost() != 10 {
 		t.Errorf("Cost(): %d, want 10", lookupUnique.Cost())
+	}
+}
+
+func TestLookupNonUniqueCost(t *testing.T) {
+	if lookupNonUnique.Cost() != 20 {
+		t.Errorf("Cost(): %d, want 20", lookupUnique.Cost())
 	}
 }
 
