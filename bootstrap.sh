@@ -26,13 +26,13 @@ function fail() {
 
 go version 2>&1 >/dev/null || fail "Go is not installed or is not on \$PATH"
 
-# Set up the proper GOPATH for go get below.
-source ./dev.env
-
 mkdir -p $VTROOT/dist
 mkdir -p $VTROOT/bin
 mkdir -p $VTROOT/lib
 mkdir -p $VTROOT/vthook
+
+# Set up the proper GOPATH for go get below.
+source ./dev.env
 
 echo "Updating git submodules..."
 git submodule update --init
@@ -177,6 +177,7 @@ if [[ "$MYSQL_FLAVOR" == "MariaDB" || "$myversion" =~ ^5\.7\. ]]; then
 else
   echo "Libs:" "$($VT_MYSQL_ROOT/bin/mysql_config --libs_r)" >> $VTROOT/lib/gomysql.pc
 fi
+echo PKG_CONFIG_PATH set to: $PKG_CONFIG_PATH
 
 # install mock
 mock_dist=$VTROOT/dist/py-mock-1.0.1
