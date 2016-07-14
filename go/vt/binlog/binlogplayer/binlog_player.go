@@ -370,6 +370,11 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 		blp.currentCharset = blp.defaultCharset
 		// Restore original charset when we're done.
 		defer func() {
+			// If the connection has been closed, there's no need to restore
+			// this connection-specific setting.
+			if dbClient.dbConn == nil {
+				return
+			}
 			log.Infof("restoring original charset %v", blp.defaultCharset)
 			if csErr := dbClient.dbConn.SetCharset(blp.defaultCharset); csErr != nil {
 				log.Errorf("can't restore original charset %v: %v", blp.defaultCharset, csErr)
