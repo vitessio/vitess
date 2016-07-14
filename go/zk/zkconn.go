@@ -108,23 +108,24 @@ func DialZk(zkAddr string, baseTimeout time.Duration) (*ZkConn, <-chan zookeeper
 	sem.Acquire()
 	defer sem.Release()
 	zconn, session, err := zookeeper.Connect(servers, baseTimeout)
-	if err == nil {
-		// Wait for connection, possibly forever
-		event := <-session
-		if event.State != zookeeper.StateConnecting {
-			err = fmt.Errorf("zk connect failed waiting for connecting state: %v", event.State)
-		} else {
-			event = <-session
-			if event.State != zookeeper.StateConnected {
-				err = fmt.Errorf("zk connect failed waiting for connected: %v", event.State)
-			}
-		}
-		if err == nil {
-			return &ZkConn{conn: zconn}, session, nil
-		}
-		zconn.Close()
+	if err != nil {
+		return nil, nil, err
 	}
-	return nil, nil, err
+
+	// Wait for connection, possibly forever, skipping transition states
+	for {
+		event := <-session
+		switch event.State {
+		case zookeeper.StateConnected:
+			// success
+			return &ZkConn{conn: zconn}, session, nil
+
+		case zookeeper.StateAuthFailed:
+			// fast fail this one
+			zconn.Close()
+			return nil, nil, fmt.Errorf("zk connect failed: StateAuthFailed")
+		}
+	}
 }
 
 // DialZkTimeout dial the server, and wait up to timeout until connection
@@ -141,7 +142,7 @@ func DialZkTimeout(zkAddr string, baseTimeout time.Duration, connectTimeout time
 		return nil, nil, err
 	}
 
-	// Wait for connection, with a timeout
+	// Wait for connection, with a timeout, skipping transition states
 	timer := time.NewTimer(connectTimeout)
 	for {
 		select {
@@ -149,8 +150,15 @@ func DialZkTimeout(zkAddr string, baseTimeout time.Duration, connectTimeout time
 			zconn.Close()
 			return nil, nil, context.DeadlineExceeded
 		case event := <-session:
-			if event.State == zookeeper.StateConnected {
+			switch event.State {
+			case zookeeper.StateConnected:
+				// success
 				return &ZkConn{conn: zconn}, session, nil
+
+			case zookeeper.StateAuthFailed:
+				// fast fail this one
+				zconn.Close()
+				return nil, nil, fmt.Errorf("zk connect failed: StateAuthFailed")
 			}
 		}
 	}
@@ -160,8 +168,8 @@ func DialZkTimeout(zkAddr string, baseTimeout time.Duration, connectTimeout time
 // and resolves the host to replace it with the IP address.
 // If a resolution fails, the host is skipped.
 // If no host can be resolved, an error is returned.
-// This is different fromt he zookeeper C library, that insists on resolving
-// *all* hosts before it starts.
+// This is different from the zookeeper library, that insists on resolving
+// *all* hosts successfully before it starts.
 func resolveZkAddr(zkAddr string) ([]string, error) {
 	parts := strings.Split(zkAddr, ",")
 	resolved := make([]string, 0, len(parts))
