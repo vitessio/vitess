@@ -12,8 +12,7 @@ func init() {
 }
 
 // LookupNonUnique defines a vindex that uses a lookup table and create a mapping between id and KeyspaceId.
-// The table is expected to define the id column as unique. It's
-// NonUnique and a Lookup.
+//It's NonUnique and a Lookup.
 type LookupNonUnique struct {
 	name string
 	lkp  lookup
