@@ -1,0 +1,65 @@
+.tabletCards {
+  display: inline-table;
+  width: 40%;
+}
+
+/*for each card*/
+.card-title{
+  display:inline-block;
+  width:100%
+}
+
+.card-textRightAlign {
+  float:right;
+}
+
+.card-textLeftAlign {
+  float:left;
+}
+
+.textCenter {
+  text-align:center;
+  padding:1em;
+}
+
+.tableSet  {
+  width: 100%;
+  padding: 1em;
+  border-spacing: 0;
+  border-collapse: 0;
+}
+
+.column {
+  padding: 1em;
+  border-bottom: 1px solid black;
+  border-left: 1px solid black;
+  width:30%;
+}
+
+.firstColumn {
+  padding: 1em;
+  border-bottom: 1px solid black;
+  width: 70%;
+}
+
+.lastRow {
+  padding: 1em;
+  text-align: center;
+}
+
+.invisible {
+  color:white;
+  padding: 1em;
+}
+
+.invisibleWithBorder {
+  color:white;
+  padding: 1em;
+  border-bottom:1px solid black;
+}
+
+.shaded {
+  background-color: #f2f2f2
+}
+
+
