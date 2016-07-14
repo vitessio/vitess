@@ -3,7 +3,7 @@ import { DashboardComponent } from './dashboard/dashboard.component';
 import { StatusComponent } from './status/status.component';
 import { SchemaComponent } from './schema/schema.component';
 import { TopoBrowserComponent } from './topo/topo-browser.component';
-import { TargetViewComponent } from './status/targetView/targetView.component';
+import { TabletViewComponent } from './status/tabletView/tabletView.component';
 
 export const routes: RouterConfig = [
   { path: '', component: DashboardComponent },
@@ -12,7 +12,7 @@ export const routes: RouterConfig = [
   { path: 'schema', component: SchemaComponent },
   { path: 'topo', component: TopoBrowserComponent },
 
-  { path: 'target', component: TargetViewComponent },
+  { path: 'tablet', component: TabletViewComponent },
 ];
 
 export const APP_ROUTER_PROVIDERS = [

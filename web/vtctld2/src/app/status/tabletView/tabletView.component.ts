@@ -4,7 +4,7 @@ import { MD_TOOLBAR_DIRECTIVES } from '@angular2-material/toolbar';
 import { MD_LIST_DIRECTIVES } from '@angular2-material/list';
 import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
 import { BreadcrumbsComponent } from '../../shared/breadcrumbs.component';
-import { TargetService } from '../../shared/targetService/target.service';
+import { TabletService } from '../../shared/tabletService/tablet.service';
 import { Tablet } from '../../shared/tabletObject/tablet';
 import { RealtimeStats } from '../../shared/tabletObject/realtimeStats';
 import { ROUTER_DIRECTIVES } from '@angular/router';
@@ -12,8 +12,8 @@ import { ROUTER_DIRECTIVES } from '@angular/router';
 @Component({
   moduleId: module.id,
   selector: 'vt-target',
-  templateUrl: './targetView.component.html',
-  styleUrls: ['./targetView.component.css'],
+  templateUrl: './tabletView.component.html',
+  styleUrls: ['./tabletView.component.css'],
   directives: [
     MD_LIST_DIRECTIVES,
     MD_TOOLBAR_DIRECTIVES,
@@ -21,18 +21,16 @@ import { ROUTER_DIRECTIVES } from '@angular/router';
     BreadcrumbsComponent,
     ROUTER_DIRECTIVES,
   ],
-  providers: [TargetService],
+  providers: [TabletService],
 })
 
-export class TargetViewComponent implements OnInit{
-  title = 'Vitess Control Panel';
+export class TabletViewComponent implements OnInit{
+  title = 'Tablets';
 
   private sub: any;
-  
+
   tablets = [];
   breadcrumbs = [];
-  
-  path = "";
 
   cellName = "";
   keyspaceName = "";
@@ -40,7 +38,7 @@ export class TargetViewComponent implements OnInit{
   type = "";
 
   constructor(
-     private targetService: TargetService,
+     private tabletService: TabletService,
      private router: Router
   ) {}
 
@@ -48,6 +46,7 @@ export class TargetViewComponent implements OnInit{
   ngOnInit() {
     this.getTablets();
     this.getBasicInfo();
+    this.setUpBreadcrumbs();
   }
 
   getBasicInfo() {
@@ -59,52 +58,47 @@ export class TargetViewComponent implements OnInit{
         this.keyspaceName = params["keyspace"];
         this.shardName = params["shard"];
         this.type = params["type"];
-        console.log( "Cell: " + this.cellName + 
-                      "keyspace: " + this.keyspaceName + 
-                      "shard: " + this.shardName +
-                      "type: " + this.type);
       });
-    this.breadcrumbs.push({ 
-      name:"cell",
+  }
+
+  setUpBreadcrumbs() {
+    this.breadcrumbs.push({
+      name:this.cellName,
       queryParams: {cell: this.cellName}
     });
     this.breadcrumbs.push( {
-      name: "keyspace",
+      name: this.keyspaceName,
       queryParams: {cell: this.cellName, keyspace: this.keyspaceName}
     });
     this.breadcrumbs.push({
-      name: "shard",
+      name: this.shardName,
       queryParams: {cell: this.cellName, keyspace: this.keyspaceName,
                     shard:this.shardName}
     });
     this.breadcrumbs.push({
-      name: "type",
+      name: this.type,
       queryParams: {cell: this.cellName, keyspace: this.keyspaceName,
                     shard:this.shardName, type:this.type}
 
     });
+
   }
 
   getTablets() {
-    this.targetService.getTablets().subscribe( target => {
-      console.log("GOT RESPONSE!!" + JSON.stringify(target));
-      for (var index in  Object.keys((target))) {
-        console.log("OBJ: " + JSON.stringify(target[index]));
-        var listOfIds =  Object.keys(target[index]);
+    this.tabletService.getTablets().subscribe( tablet_statuses => {
+      for (var index in  Object.keys((tablet_statuses))) {
+        var listOfIds =  Object.keys(tablet_statuses[index]);
         for(var id in listOfIds) {
-          console.log("id " + listOfIds[id] + " STATS" + JSON.stringify((target[index])[listOfIds[id]]));
-          var stats = new RealtimeStats(target[index][listOfIds[id]]);
-          var tempTab = new Tablet(this.cellName, listOfIds[id], this.keyspaceName, this.shardName, this.type, stats);
-          console.log(JSON.stringify(tempTab.stats));
+          var stats = new RealtimeStats(tablet_statuses[index][listOfIds[id]]);
+          var tempTab = new Tablet(this.cellName, listOfIds[id],
+            this.keyspaceName, this.shardName, this.type, stats);
           (this.tablets).push(tempTab);
         }
       }
-      console.log("AFTER: " + JSON.stringify(this.tablets));
     });
   }
 
   hasError(tab: Tablet) {
-    console.log("VALUE OF KEY: " + JSON.stringify(tab));
     var error = tab.stats.HealthError;
     if(error === "" ) {
       return false;

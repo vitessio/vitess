@@ -19,8 +19,9 @@ import { ROUTER_DIRECTIVES } from '@angular/router';
   ]
 })
 export class StatusComponent {
-  title = 'Vitess Control Panel';
+  title = 'Status';
 
+  /*Hard coded until further development of other pages*/
   cellName = "cell1"
   keyspaceName = "keyspace1";
   shardName = "0";

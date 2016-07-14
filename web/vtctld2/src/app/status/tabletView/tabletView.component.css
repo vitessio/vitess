@@ -1,30 +1,32 @@
-.tabletCard {
+.tabletCards {
   display: inline-table;
   width: 40%;
 }
 
 /*for each card*/
-.card-section{
+.card-title{
   display:inline-block;
   width:100%
 }
 
-.card-rightAlign {
+.card-textRightAlign {
   float:right;
 }
 
-.card-leftAlign {
+.card-textLeftAlign {
   float:left;
 }
 
-.card-table-row {
-  padding: 8px 0px 8px 0px;
+.textCenter {
+  text-align:center;
+  padding:1em;
 }
 
-.border {
-  padding: 5px;
-  height: 100%;
-  border: 1px solid;
+.tableSet  {
+  width: 100%;
+  padding: 1em;
+  border-spacing: 0;
+  border-collapse: 0;
 }
 
 .column {
@@ -40,10 +42,6 @@
   width: 70%;
 }
 
-.row {
-  border-bottom:1px solid black;
-}
-
 .lastRow {
   padding: 1em;
   text-align: center;
@@ -54,34 +52,14 @@
   padding: 1em;
 }
 
-.invisibleBorder {
+.invisibleWithBorder {
   color:white;
   padding: 1em;
   border-bottom:1px solid black;
-}
-
-.errorSet {
-  width: 100%;
-  padding: 1em;
-  border-bottom: 1px solid black;
-}
-
-.divider {
-  border: 1em solid black;
-}
-
-.center {
-  text-align:center;
-  padding:1em;
 }
 
 .shaded {
   background-color: #f2f2f2
 }
 
-.tableSet  {
-  width: 100%;
-  padding: 1em;
-  border-spacing: 0;
-  border-collapse: 0;
-}
+

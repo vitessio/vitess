@@ -7,16 +7,6 @@
   font-size: 24px;
 }
 
-.breadcrumb-selected {
-  background-color: #7B8180
-}
-
-button:disabled {
-  color : rgba(0, 0, 0, 0.26);
-  background-color: transparent;
-  pointer-events:none;
-}
-
 .highlighted {
   background-color: #CFCFD2;
 }

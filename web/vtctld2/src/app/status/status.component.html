@@ -1,14 +1,10 @@
-<h1>STATUS</h1>
+<h1>{{title}}</h1>
 
 <vt-breadcrumbs [route]="['/status']" [crumbs]="breadcrumbs"></vt-breadcrumbs>
 
- <a [routerLink]="['/target']" [queryParams]="{ cell: cellName,
-                                              keyspace: keyspaceName,
-                                              shard: shardName,
-                                              type: type
-                                            }">
-    <button md-button-raised> MAP </button>
- </a>
+<a [routerLink]="['/tablet']" [queryParams]="{ cell: cellName,
+  keyspace: keyspaceName, shard: shardName,type: type }">
+  <button md-button-raised> MAP </button>
+</a>
 
 <router-outlet> </router-outlet>
-
