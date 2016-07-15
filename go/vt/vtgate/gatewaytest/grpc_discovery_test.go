@@ -45,7 +45,7 @@ func TestGRPCDiscovery(t *testing.T) {
 	// Create the discovery healthcheck, and the gateway.
 	// Wait for the right tablets to be present.
 	hc := discovery.NewHealthCheck(30*time.Second, 10*time.Second, 2*time.Minute)
-	hc.AddTablet(cell, "test_tablet", &topodatapb.Tablet{
+	hc.AddTablet(&topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: cell,
 		},
@@ -56,7 +56,7 @@ func TestGRPCDiscovery(t *testing.T) {
 		PortMap: map[string]int32{
 			"grpc": int32(port),
 		},
-	})
+	}, "test_tablet")
 	dg := gateway.GetCreator()(hc, ts, ts, cell, 2, []topodatapb.TabletType{tabletconntest.TestTarget.TabletType})
 
 	// and run the test suite.

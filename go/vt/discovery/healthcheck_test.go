@@ -34,8 +34,8 @@ func TestHealthCheck(t *testing.T) {
 	l := newListener()
 	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, time.Hour).(*HealthCheckImpl)
 	hc.SetListener(l)
-	hc.AddTablet("cell", "", tablet)
-	t.Logf(`hc = HealthCheck(); hc.AddTablet("cell", "", {Host: "a", PortMap: {"vt": 1}})`)
+	hc.AddTablet(tablet, "")
+	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
 	// no tablet before getting first StreamHealthResponse
 	tsList := hc.GetTabletStatsFromTarget("k", "s", topodatapb.TabletType_MASTER)
@@ -193,8 +193,8 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	l := newListener()
 	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, time.Hour).(*HealthCheckImpl)
 	hc.SetListener(l)
-	hc.AddTablet("cell", "", tablet)
-	t.Logf(`hc = HealthCheck(); hc.AddTablet("cell", "", {Host: "a", PortMap: {"vt": 1}})`)
+	hc.AddTablet(tablet, "")
+	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
 	// Verify that the listener works in general.
 	shr := &querypb.StreamHealthResponse{
@@ -262,8 +262,8 @@ func TestHealthCheckTimeout(t *testing.T) {
 	l := newListener()
 	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, timeout).(*HealthCheckImpl)
 	hc.SetListener(l)
-	hc.AddTablet("cell", "", tablet)
-	t.Logf(`hc = HealthCheck(); hc.AddTablet("cell", "", {Host: "a", PortMap: {"vt": 1}})`)
+	hc.AddTablet(tablet, "")
+	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
