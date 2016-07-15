@@ -49,7 +49,7 @@ func TestRealtimeStats(t *testing.T) {
 	}
 	ts.CreateTablet(ctx, tablet2)
 
-	rts, err := newRealtimeStats(ts); 
+	rts, err := newRealtimeStats(ts)
 	if err != nil {
 		t.Errorf("newRealtimeStats error: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestRealtimeStats(t *testing.T) {
 	rts.mimicStatsUpdateForTesting(want3)
 	result = rts.tabletStatuses("cell1", "ks1", "-80", "REPLICA")
 	checkResult(tablet1.Alias.Uid, result, want2, t)
-	
+
 	if err := rts.Stop(); err != nil {
 		t.Errorf("realtimeStats.Stop() failed: %v", err)
 	}
@@ -139,14 +139,14 @@ func checkResult(chosenUID uint32, resultMap map[string]*discovery.TabletStats, 
 	var result *discovery.TabletStats
 	for tabID, mes := range resultMap {
 		tabID2, err := strconv.ParseUint(tabID, 10, 32)
-		if err==nil && uint32(tabID2) == chosenUID {
+		if err == nil && uint32(tabID2) == chosenUID {
 			result = mes
 			break
 		}
 	}
-    
-    if got, want := result.String(), original.String(); got != want { 
-    	t.Errorf("got: %#v, want: %#v", got, want)
-    }
+
+	if got, want := result.String(), original.String(); got != want {
+		t.Errorf("got: %#v, want: %#v", got, want)
+	}
 
 }

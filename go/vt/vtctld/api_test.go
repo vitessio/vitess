@@ -89,8 +89,8 @@ func TestAPI(t *testing.T) {
 			return "TestTabletAction Result", nil
 		})
 
-    rts, err := newRealtimeStats(ts);
-    if err != nil {
+	rts, err := newRealtimeStats(ts)
+	if err != nil {
 		t.Errorf("newRealtimeStats error: %v", err)
 	}
 	initAPI(ctx, ts, actionRepo, rts)
@@ -216,7 +216,7 @@ func TestAPI(t *testing.T) {
 
 		if strings.HasPrefix(in.want, "ERROR: ") {
 			// want string has been stripped of the "ERROR: " prefix.
-			// stripSpacesAndLines has been called to clear all trailing and 
+			// stripSpacesAndLines has been called to clear all trailing and
 			//    preceding formatting for the error message.
 			if got, want := stripSpacesAndLines(string(body)), ((in.want)[7:]); got != want {
 				t.Errorf("[%v] got %v, want %v", in.path, got, want)
@@ -229,9 +229,9 @@ func TestAPI(t *testing.T) {
 			}
 		}
 	}
-	
+
 	if err := rts.Stop(); err != nil {
 		t.Errorf("realtimeStats.Stop() failed: %v", err)
 	}
-	
+
 }
