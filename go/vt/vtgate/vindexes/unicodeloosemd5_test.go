@@ -1,6 +1,10 @@
 package vindexes
 
-import "testing"
+import (
+	"strings"
+	"testing"
+	"time"
+)
 
 var charVindex Vindex
 
@@ -8,13 +12,13 @@ func init() {
 	charVindex, _ = CreateVindex("unicode_loose_md5", "utf8ch", nil)
 }
 
-func TestUnicodeLosseMD5Cost(t *testing.T) {
+func TestUnicodeLooseMD5Cost(t *testing.T) {
 	if charVindex.Cost() != 1 {
 		t.Errorf("Cost(): %d, want 1", charVindex.Cost())
 	}
 }
 
-func TestUnicodeLosseMD5(t *testing.T) {
+func TestUnicodeLooseMD5(t *testing.T) {
 	tcases := []struct {
 		in, out string
 	}{{
@@ -102,9 +106,46 @@ func TestNormalization(t *testing.T) {
 		out: "\x18\x16",
 	}}
 	for _, tcase := range tcases {
-		out := string(normalize([]byte(tcase.in)))
+		norm, err := normalize([]byte(tcase.in))
+		if err != nil {
+			t.Errorf("normalize(%#v) error: %v", tcase.in, err)
+		}
+		out := string(norm)
 		if out != tcase.out {
 			t.Errorf("normalize(%#v): %#v, want %#v", tcase.in, out, tcase.out)
+		}
+	}
+}
+
+func TestInvalidUnicodeNormalization(t *testing.T) {
+	// These strings are known to contain invalid UTF-8.
+	inputs := []string{
+		"\x99\xeb\x9d\x18\xa4G\x84\x04]\x87\xf3\xc6|\xf2'F",
+		"D\x86\x15\xbb\xda\b1?j\x8e\xb6h\xd2\v\xf5\x05",
+		"\x8a[\xdf,\u007fĄE\x92\xd2W+\xcd\x06h\xd2",
+	}
+	wantErr := "invalid UTF-8"
+
+	for _, in := range inputs {
+		// We've observed that infinite looping is a possible failure mode for the
+		// collator when given invalid UTF-8, so we detect that with a timer.
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_, err := normalize([]byte(in))
+			if err == nil {
+				t.Errorf("normalize(%q) error = nil, expected error", in)
+			}
+			if !strings.Contains(err.Error(), wantErr) {
+				t.Errorf("normalize(%q) error = %q, want %q", in, err.Error(), wantErr)
+			}
+		}()
+		timer := time.NewTimer(100 * time.Millisecond)
+		select {
+		case <-done:
+			timer.Stop()
+		case <-timer.C:
+			t.Errorf("invalid input caused infinite loop: %q", in)
 		}
 	}
 }

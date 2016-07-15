@@ -3,6 +3,7 @@ package vindexes
 import (
 	"bytes"
 	"fmt"
+	"unicode/utf8"
 
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
@@ -17,8 +18,8 @@ type UnicodeLooseMD5 struct {
 	name string
 }
 
-// MewUnicodeLooseMD5 creates a new UnicodeLooseMD5.
-func MewUnicodeLooseMD5(name string, _ map[string]string) (Vindex, error) {
+// NewUnicodeLooseMD5 creates a new UnicodeLooseMD5.
+func NewUnicodeLooseMD5(name string, _ map[string]string) (Vindex, error) {
 	return &UnicodeLooseMD5{name: name}, nil
 }
 
@@ -59,10 +60,19 @@ func unicodeHash(key interface{}) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return binHash(normalize(source)), nil
+	norm, err := normalize(source)
+	if err != nil {
+		return nil, err
+	}
+	return binHash(norm), nil
 }
 
-func normalize(in []byte) []byte {
+func normalize(in []byte) ([]byte, error) {
+	// We cannot pass invalid UTF-8 to the collator.
+	if !utf8.Valid(in) {
+		return nil, fmt.Errorf("cannot normalize string containing invalid UTF-8: %q", string(in))
+	}
+
 	// Ref: http://dev.mysql.com/doc/refman/5.6/en/char.html.
 	// Trailing spaces are ignored by MySQL.
 	in = bytes.TrimRight(in, " ")
@@ -81,9 +91,9 @@ func normalize(in []byte) []byte {
 
 	// We use the collation key which can be used to
 	// perform lexical comparisons.
-	return normalizer.Key(new(collate.Buffer), in)
+	return normalizer.Key(new(collate.Buffer), in), nil
 }
 
 func init() {
-	Register("unicode_loose_md5", MewUnicodeLooseMD5)
+	Register("unicode_loose_md5", NewUnicodeLooseMD5)
 }
