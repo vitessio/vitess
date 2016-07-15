@@ -89,8 +89,6 @@ type HealthCheck interface {
 	AddTablet(cell, name string, tablet *topodatapb.Tablet)
 	// RemoveTablet removes the tablet, and stops the health check.
 	RemoveTablet(tablet *topodatapb.Tablet)
-	// GetTabletStatsFromKeyspaceShard returns all TabletStats for the given keyspace/shard.
-	GetTabletStatsFromKeyspaceShard(keyspace, shard string) []*TabletStats
 	// GetTabletStatsFromTarget returns all TabletStats for the given target.
 	// You can exclude unhealthy entries using the helper in utils.go.
 	GetTabletStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*TabletStats
@@ -513,45 +511,6 @@ func (hc *HealthCheckImpl) AddTablet(cell, name string, tablet *topodatapb.Table
 // It does not block.
 func (hc *HealthCheckImpl) RemoveTablet(tablet *topodatapb.Tablet) {
 	go hc.deleteConn(tablet)
-}
-
-// GetTabletStatsFromKeyspaceShard returns all TabletStats for the given keyspace/shard.
-func (hc *HealthCheckImpl) GetTabletStatsFromKeyspaceShard(keyspace, shard string) []*TabletStats {
-	hc.mu.RLock()
-	defer hc.mu.RUnlock()
-
-	shardMap, ok := hc.targetToTablets[keyspace]
-	if !ok {
-		return nil
-	}
-	ttMap, ok := shardMap[shard]
-	if !ok {
-		return nil
-	}
-	res := make([]*TabletStats, 0, 1)
-	for _, tList := range ttMap {
-		for _, t := range tList {
-			key := TabletToMapKey(t)
-			hcc, ok := hc.addrToConns[key]
-			if !ok {
-				continue
-			}
-			hcc.mu.RLock()
-			ts := &TabletStats{
-				Tablet:  t,
-				Name:    hcc.name,
-				Target:  hcc.target,
-				Up:      hcc.up,
-				Serving: hcc.serving,
-				Stats:   hcc.stats,
-				TabletExternallyReparentedTimestamp: hcc.tabletExternallyReparentedTimestamp,
-				LastError:                           hcc.lastError,
-			}
-			hcc.mu.RUnlock()
-			res = append(res, ts)
-		}
-	}
-	return res
 }
 
 // GetTabletStatsFromTarget returns all TabletStats for the given target.
