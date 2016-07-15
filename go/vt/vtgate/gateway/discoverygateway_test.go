@@ -92,7 +92,7 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 	hc.AddTestTablet("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil)
 	ep1 := hc.AddTestTablet("local", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil).Tablet()
 	tsl := dg.getTablets(keyspace, shard, topodatapb.TabletType_REPLICA)
-	if len(tsl) != 1 || !topo.TabletEquality(tsl[0], ep1) {
+	if len(tsl) != 1 || !topo.TabletEquality(tsl[0].Tablet, ep1) {
 		t.Errorf("want %+v, got %+v", ep1, tsl)
 	}
 
@@ -101,7 +101,7 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 	hc.AddTestTablet("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 5, nil)
 	ep1 = hc.AddTestTablet("remote", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 10, nil).Tablet()
 	tsl = dg.getTablets(keyspace, shard, topodatapb.TabletType_MASTER)
-	if len(tsl) != 1 || !topo.TabletEquality(tsl[0], ep1) {
+	if len(tsl) != 1 || !topo.TabletEquality(tsl[0].Tablet, ep1) {
 		t.Errorf("want %+v, got %+v", ep1, tsl)
 	}
 }

@@ -335,7 +335,7 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, stream tabletco
 
 	if hcc.tabletStats.Target.TabletType == topodatapb.TabletType_UNKNOWN {
 		// The first time we see response for the tablet.
-		hcc.update(shr, serving, healthErr, true)
+		hcc.update(shr, serving, healthErr)
 		hc.mu.Lock()
 		hc.addTabletToTargetProtected(hcc.tabletStats.Target, hcc.tabletStats.Tablet)
 		hc.mu.Unlock()
@@ -344,11 +344,11 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, stream tabletco
 		log.Infof("HealthCheckUpdate(Type Change): %v, tablet: %v/%+v, target %+v => %+v, reparent time: %v", hcc.tabletStats.Name, hcc.tabletStats.Tablet.Alias.Cell, hcc.tabletStats.Tablet, hcc.tabletStats.Target, shr.Target, shr.TabletExternallyReparentedTimestamp)
 		hc.mu.Lock()
 		hc.deleteTabletFromTargetProtected(hcc.tabletStats.Target, hcc.tabletStats.Tablet)
-		hcc.update(shr, serving, healthErr, true)
+		hcc.update(shr, serving, healthErr)
 		hc.addTabletToTargetProtected(shr.Target, hcc.tabletStats.Tablet)
 		hc.mu.Unlock()
 	} else {
-		hcc.update(shr, serving, healthErr, false)
+		hcc.update(shr, serving, healthErr)
 	}
 	// notify downstream for tablettype and realtimestats change
 	if hc.listener != nil {
@@ -360,7 +360,7 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, stream tabletco
 	return false, nil
 }
 
-func (hcc *healthCheckConn) update(shr *querypb.StreamHealthResponse, serving bool, healthErr error, setTarget bool) {
+func (hcc *healthCheckConn) update(shr *querypb.StreamHealthResponse, serving bool, healthErr error) {
 	hcc.mu.Lock()
 	hcc.lastResponseTimestamp = time.Now()
 	hcc.tabletStats.Target = shr.Target
@@ -368,9 +368,6 @@ func (hcc *healthCheckConn) update(shr *querypb.StreamHealthResponse, serving bo
 	hcc.tabletStats.TabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
 	hcc.tabletStats.Stats = shr.RealtimeStats
 	hcc.tabletStats.LastError = healthErr
-	if setTarget {
-		hcc.conn.SetTarget(hcc.tabletStats.Target.Keyspace, hcc.tabletStats.Target.Shard, hcc.tabletStats.Target.TabletType)
-	}
 	hcc.mu.Unlock()
 }
 

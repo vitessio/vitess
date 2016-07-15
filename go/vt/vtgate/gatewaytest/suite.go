@@ -30,61 +30,54 @@ import (
 // gatewayAdapter implements the TabletConn interface, but sends the
 // queries to the Gateway.
 type gatewayAdapter struct {
-	g          gateway.Gateway
-	keyspace   string
-	shard      string
-	tabletType topodatapb.TabletType
+	g gateway.Gateway
 }
 
-func (ga *gatewayAdapter) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
-	return ga.g.Execute(ctx, ga.keyspace, ga.shard, ga.tabletType, query, bindVars, transactionID)
+func (ga *gatewayAdapter) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
+	return ga.g.Execute(ctx, target.Keyspace, target.Shard, target.TabletType, query, bindVars, transactionID)
 }
 
-func (ga *gatewayAdapter) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
-	return ga.g.ExecuteBatch(ctx, ga.keyspace, ga.shard, ga.tabletType, queries, asTransaction, transactionID)
+func (ga *gatewayAdapter) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+	return ga.g.ExecuteBatch(ctx, target.Keyspace, target.Shard, target.TabletType, queries, asTransaction, transactionID)
 }
 
-func (ga *gatewayAdapter) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
-	return ga.g.StreamExecute(ctx, ga.keyspace, ga.shard, ga.tabletType, query, bindVars)
+func (ga *gatewayAdapter) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
+	return ga.g.StreamExecute(ctx, target.Keyspace, target.Shard, target.TabletType, query, bindVars)
 }
 
-func (ga *gatewayAdapter) Begin(ctx context.Context) (transactionID int64, err error) {
-	return ga.g.Begin(ctx, ga.keyspace, ga.shard, ga.tabletType)
+func (ga *gatewayAdapter) Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error) {
+	return ga.g.Begin(ctx, target.Keyspace, target.Shard, target.TabletType)
 }
 
-func (ga *gatewayAdapter) Commit(ctx context.Context, transactionID int64) error {
-	return ga.g.Commit(ctx, ga.keyspace, ga.shard, ga.tabletType, transactionID)
+func (ga *gatewayAdapter) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
+	return ga.g.Commit(ctx, target.Keyspace, target.Shard, target.TabletType, transactionID)
 }
 
-func (ga *gatewayAdapter) Rollback(ctx context.Context, transactionID int64) error {
-	return ga.g.Rollback(ctx, ga.keyspace, ga.shard, ga.tabletType, transactionID)
+func (ga *gatewayAdapter) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
+	return ga.g.Rollback(ctx, target.Keyspace, target.Shard, target.TabletType, transactionID)
 }
 
-func (ga *gatewayAdapter) BeginExecute(ctx context.Context, query string, bindVars map[string]interface{}) (result *sqltypes.Result, transactionID int64, err error) {
-	return ga.g.BeginExecute(ctx, ga.keyspace, ga.shard, ga.tabletType, query, bindVars)
+func (ga *gatewayAdapter) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (result *sqltypes.Result, transactionID int64, err error) {
+	return ga.g.BeginExecute(ctx, target.Keyspace, target.Shard, target.TabletType, query, bindVars)
 }
 
-func (ga *gatewayAdapter) BeginExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool) (results []sqltypes.Result, transactionID int64, err error) {
-	return ga.g.BeginExecuteBatch(ctx, ga.keyspace, ga.shard, ga.tabletType, queries, asTransaction)
+func (ga *gatewayAdapter) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) (results []sqltypes.Result, transactionID int64, err error) {
+	return ga.g.BeginExecuteBatch(ctx, target.Keyspace, target.Shard, target.TabletType, queries, asTransaction)
 }
 
 func (ga *gatewayAdapter) Close() {
-}
-
-func (ga *gatewayAdapter) SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error {
-	return nil
 }
 
 func (ga *gatewayAdapter) Tablet() *topodatapb.Tablet {
 	return &topodatapb.Tablet{}
 }
 
-func (ga *gatewayAdapter) SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
-	return ga.g.SplitQuery(ctx, ga.keyspace, ga.shard, ga.tabletType, query.Sql, query.BindVariables, splitColumn, splitCount)
+func (ga *gatewayAdapter) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
+	return ga.g.SplitQuery(ctx, target.Keyspace, target.Shard, target.TabletType, query.Sql, query.BindVariables, splitColumn, splitCount)
 }
 
-func (ga *gatewayAdapter) SplitQueryV2(ctx context.Context, query querytypes.BoundQuery, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm querypb.SplitQueryRequest_Algorithm) (queries []querytypes.QuerySplit, err error) {
-	return ga.g.SplitQueryV2(ctx, ga.keyspace, ga.shard, ga.tabletType, query.Sql, query.BindVariables, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
+func (ga *gatewayAdapter) SplitQueryV2(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm querypb.SplitQueryRequest_Algorithm) (queries []querytypes.QuerySplit, err error) {
+	return ga.g.SplitQueryV2(ctx, target.Keyspace, target.Shard, target.TabletType, query.Sql, query.BindVariables, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 }
 
 func (ga *gatewayAdapter) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
@@ -137,10 +130,7 @@ func TestSuite(t *testing.T, name string, g gateway.Gateway, f *tabletconntest.F
 
 	tabletconn.RegisterDialer(protocolName, func(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
 		return &gatewayAdapter{
-			g:          g,
-			keyspace:   tablet.Keyspace,
-			shard:      tablet.Shard,
-			tabletType: tablet.Type,
+			g: g,
 		}, nil
 	})
 

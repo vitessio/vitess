@@ -376,53 +376,54 @@ func (fc *fakeConn) StreamHealth(ctx context.Context) (tabletconn.StreamHealthRe
 }
 
 // Execute implements tabletconn.TabletConn.
-func (fc *fakeConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
+func (fc *fakeConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
 // ExecuteBatch implements tabletconn.TabletConn.
-func (fc *fakeConn) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+func (fc *fakeConn) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
 // StreamExecute implements tabletconn.TabletConn.
-func (fc *fakeConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
+func (fc *fakeConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
 // Begin implements tabletconn.TabletConn.
-func (fc *fakeConn) Begin(ctx context.Context) (int64, error) {
+func (fc *fakeConn) Begin(ctx context.Context, target *querypb.Target) (int64, error) {
 	return 0, fmt.Errorf("not implemented")
 }
 
 // Commit implements tabletconn.TabletConn.
-func (fc *fakeConn) Commit(ctx context.Context, transactionID int64) error {
+func (fc *fakeConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	return fmt.Errorf("not implemented")
 }
 
 // Rollback implements tabletconn.TabletConn.
-func (fc *fakeConn) Rollback(ctx context.Context, transactionID int64) error {
+func (fc *fakeConn) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	return fmt.Errorf("not implemented")
 }
 
 // BeginExecute implements tabletconn.TabletConn.
-func (fc *fakeConn) BeginExecute(ctx context.Context, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error) {
+func (fc *fakeConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error) {
 	return nil, 0, fmt.Errorf("not implemented")
 }
 
 // BeginExecuteBatch implements tabletconn.TabletConn.
-func (fc *fakeConn) BeginExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+func (fc *fakeConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
 	return nil, 0, fmt.Errorf("not implemented")
 }
 
 // SplitQuery implements tabletconn.TabletConn.
-func (fc *fakeConn) SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
+func (fc *fakeConn) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
 // SplitQueryV2 implements tabletconn.TabletConn.
 func (fc *fakeConn) SplitQueryV2(
 	ctx context.Context,
+	target *querypb.Target,
 	query querytypes.BoundQuery,
 	splitColumn []string,
 	splitCount int64,
@@ -430,11 +431,6 @@ func (fc *fakeConn) SplitQueryV2(
 	algorithm querypb.SplitQueryRequest_Algorithm,
 ) ([]querytypes.QuerySplit, error) {
 	return nil, fmt.Errorf("not implemented")
-}
-
-// SetTarget implements tabletconn.TabletConn.
-func (fc *fakeConn) SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error {
-	return fmt.Errorf("not implemented")
 }
 
 // Tablet returns the tablet associated with the connection.
