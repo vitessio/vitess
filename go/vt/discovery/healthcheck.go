@@ -94,7 +94,8 @@ type HealthCheck interface {
 	// any tablets are added to the healthcheck.
 	SetListener(listener HealthCheckStatsListener)
 	// AddTablet adds the tablet, and starts health check.
-	AddTablet(cell, name string, tablet *topodatapb.Tablet)
+	// Name is an alternate name, like an address.
+	AddTablet(tablet *topodatapb.Tablet, name string)
 	// RemoveTablet removes the tablet, and stops the health check.
 	RemoveTablet(tablet *topodatapb.Tablet)
 	// GetTabletStatsFromTarget returns all TabletStats for the given target.
@@ -113,7 +114,6 @@ type HealthCheck interface {
 // about a tablet.
 type healthCheckConn struct {
 	// set at construction time
-	cell       string
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 
@@ -213,7 +213,7 @@ func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 }
 
 // checkConn performs health checking on the given tablet.
-func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string) {
+func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 	defer hc.wg.Done()
 	defer func() {
 		hcc.mu.Lock()
@@ -341,7 +341,7 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, stream tabletco
 		hc.mu.Unlock()
 	} else if hcc.tabletStats.Target.TabletType != shr.Target.TabletType {
 		// tablet type changed for the tablet
-		log.Infof("HealthCheckUpdate(Type Change): %v, tablet: %v/%+v, target %+v => %+v, reparent time: %v", hcc.tabletStats.Name, hcc.cell, hcc.tabletStats.Tablet, hcc.tabletStats.Target, shr.Target, shr.TabletExternallyReparentedTimestamp)
+		log.Infof("HealthCheckUpdate(Type Change): %v, tablet: %v/%+v, target %+v => %+v, reparent time: %v", hcc.tabletStats.Name, hcc.tabletStats.Tablet.Alias.Cell, hcc.tabletStats.Tablet, hcc.tabletStats.Target, shr.Target, shr.TabletExternallyReparentedTimestamp)
 		hc.mu.Lock()
 		hc.deleteTabletFromTargetProtected(hcc.tabletStats.Target, hcc.tabletStats.Tablet)
 		hcc.update(shr, serving, healthErr, true)
@@ -458,10 +458,9 @@ func (hc *HealthCheckImpl) SetListener(listener HealthCheckStatsListener) {
 // AddTablet adds the tablet, and starts health check.
 // It does not block on making connection.
 // name is an optional tag for the tablet, e.g. an alternative address.
-func (hc *HealthCheckImpl) AddTablet(cell, name string, tablet *topodatapb.Tablet) {
+func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name string) {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	hcc := &healthCheckConn{
-		cell:       cell,
 		ctx:        ctx,
 		cancelFunc: cancelFunc,
 		tabletStats: TabletStats{
@@ -475,14 +474,14 @@ func (hc *HealthCheckImpl) AddTablet(cell, name string, tablet *topodatapb.Table
 	hc.mu.Lock()
 	if _, ok := hc.addrToConns[key]; ok {
 		hc.mu.Unlock()
-		log.Warningf("adding duplicate tablet %v for %v: %+v", name, cell, tablet)
+		log.Warningf("adding duplicate tablet %v for %v: %+v", name, tablet.Alias.Cell, tablet)
 		return
 	}
 	hc.addrToConns[key] = hcc
 	hc.mu.Unlock()
 
 	hc.wg.Add(1)
-	go hc.checkConn(hcc, cell, name)
+	go hc.checkConn(hcc, name)
 }
 
 // RemoveTablet removes the tablet, and stops the health check.
@@ -678,12 +677,12 @@ func (hc *HealthCheckImpl) CacheStatus() TabletsCacheStatusList {
 	hc.mu.RLock()
 	for _, hcc := range hc.addrToConns {
 		hcc.mu.RLock()
-		key := fmt.Sprintf("%v.%v.%v.%v", hcc.cell, hcc.tabletStats.Target.Keyspace, hcc.tabletStats.Target.Shard, string(hcc.tabletStats.Target.TabletType))
+		key := fmt.Sprintf("%v.%v.%v.%v", hcc.tabletStats.Tablet.Alias.Cell, hcc.tabletStats.Target.Keyspace, hcc.tabletStats.Target.Shard, string(hcc.tabletStats.Target.TabletType))
 		var tcs *TabletsCacheStatus
 		var ok bool
 		if tcs, ok = tcsMap[key]; !ok {
 			tcs = &TabletsCacheStatus{
-				Cell:   hcc.cell,
+				Cell:   hcc.tabletStats.Tablet.Alias.Cell,
 				Target: hcc.tabletStats.Target,
 			}
 			tcsMap[key] = tcs

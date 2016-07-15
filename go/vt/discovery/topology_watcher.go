@@ -148,7 +148,7 @@ func (tw *TopologyWatcher) loadTablets() {
 	tw.mu.Lock()
 	for key, tep := range newTablets {
 		if _, ok := tw.tablets[key]; !ok {
-			tw.hc.AddTablet(tw.cell, tep.alias, tep.tablet)
+			tw.hc.AddTablet(tep.tablet, tep.alias)
 		}
 	}
 	for key, tep := range tw.tablets {

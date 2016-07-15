@@ -53,7 +53,7 @@ func (fhc *FakeHealthCheck) SetListener(listener HealthCheckStatsListener) {
 }
 
 // AddTablet adds the tablet.
-func (fhc *FakeHealthCheck) AddTablet(cell, name string, tablet *topodatapb.Tablet) {
+func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet, name string) {
 	key := TabletToMapKey(tablet)
 	item := &fhcItem{
 		ts: &TabletStats{
