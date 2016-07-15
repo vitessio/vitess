@@ -61,7 +61,8 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 	for rowNum := 0; rowNum < len(values); rowNum++ {
 		value := make([]interface{}, 0, len(colVindexes))
 		for colNum, index := range colVindexes {
-			if err := buildIndexPlan(ins, index, &value, rowNum, &indexColInsert[colNum]); err != nil {
+			row, pos := findOrInsertPos(ins, index.Column, rowNum, &indexColInsert[colNum])
+			if err := buildIndexPlan(index, &value, rowNum, row, pos); err != nil {
 				return nil, err
 			}
 		}
@@ -79,9 +80,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 
 // buildIndexPlan adds the insert value to the Values field for the specified ColumnVindex.
 // This value will be used at the time of insert to validate the vindex value.
-func buildIndexPlan(ins *sqlparser.Insert, colVindex *vindexes.ColumnVindex, value *[]interface{}, rowNum int, indexColInsert *bool) error {
-	row, pos := findOrInsertPos(ins, colVindex.Column, rowNum, indexColInsert)
-
+func buildIndexPlan(colVindex *vindexes.ColumnVindex, value *[]interface{}, rowNum int, row sqlparser.ValTuple, pos int) error {
 	val, err := valConvert(row[pos])
 	if err != nil {
 		return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)

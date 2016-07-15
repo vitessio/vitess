@@ -5,9 +5,7 @@
 package vtgate
 
 import (
-	"bytes"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"strconv"
 
@@ -330,18 +328,17 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 		if err != nil {
 			return nil, fmt.Errorf("execInsertSharded: %v", err)
 		}
-		ksid, err := rtr.handlePrimary(vcursor, keys[0], route.Table.ColumnVindexes[0], vcursor.bindVars, rowNum)
-		if err != nil {
-			return nil, fmt.Errorf("execInsertSharded: %v", err)
-		}
+		colNum := 0
 		if rowNum == 0 {
+			ksid, err := rtr.handlePrimary(vcursor, keys[0], route.Table.ColumnVindexes[0], vcursor.bindVars, rowNum)
+			if err != nil {
+				return nil, fmt.Errorf("execInsertSharded: %v", err)
+			}
 			firstKsid = ksid
-		} else if bytes.Compare(firstKsid, ksid) != 0 {
-			return nil, errors.New("unsupported: multi-row insert replication unfriendly")
+			colNum = 1
 		}
-
-		for i := 1; i < len(keys); i++ {
-			err := rtr.handleNonPrimary(vcursor, keys[i], route.Table.ColumnVindexes[i], vcursor.bindVars, ksid, rowNum)
+		for i := colNum; i < len(keys); i++ {
+			err := rtr.handleNonPrimary(vcursor, keys[i], route.Table.ColumnVindexes[i], vcursor.bindVars, firstKsid, rowNum)
 			if err != nil {
 				return nil, err
 			}
