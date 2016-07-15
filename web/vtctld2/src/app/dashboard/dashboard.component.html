@@ -5,7 +5,7 @@
       <md-card>
         <md-card-title>{{keyspace.name}}</md-card-title>   
         <md-card-content >
-        	<div class="stats-container">
+          <div class="stats-container">
             <ul>
               <li>
                 <span class="vt-stat-value-container">
@@ -18,12 +18,12 @@
                 </span>
               </li>
               <li>
-            	<span class="vt-stat-value-container">
+              <span class="vt-stat-value-container">
                 <span class="vt-stat-value">
-            	    {{keyspace.nonservingShards.length}}
+                  {{keyspace.nonservingShards.length}}
                 </span>
-            	</span>
-            	<span class="vt-stat-category">
+              </span>
+              <span class="vt-stat-category">
                 Nonserving Shards
               </span>
               </li>
@@ -31,31 +31,30 @@
                 <span *ngIf="keyspace.healthy">
                   <span class="vt-stat-value-container healthy">
                     <span class="vt-stat-value">
-              	      ✓
+                      ✓
                     </span>
-              	  </span>
-              	  <span class="vt-stat-category">
+                  </span>
+                  <span class="vt-stat-category">
                     Healthy
                   </span>
-              	</span>
-              	<span *ngIf="!keyspace.healthy">
-              	  <span class="vt-stat-value-container unhealthy">
+                </span>
+                <span *ngIf="!keyspace.healthy">
+                  <span class="vt-stat-value-container unhealthy">
                     <span class="vt-stat-value">
                       !
                     </span>
                   </span>
-              	  <span class="vt-stat-category">
+                  <span class="vt-stat-category">
                     Unhealthy
                   </span>
-              	</span>
+                </span>
               </li>
             </ul>
           </div>
         </md-card-content>
         <md-card-actions>
           <div class="vt-actions-container">
-            <paper-button raised (click)="blockClicks($event)">Reshard</paper-button>
-            <paper-button raised (click)="blockClicks($event)">Backup</paper-button>
+            <paper-button raised onclick="modal.open()" (click)="blockClicks($event);toggleForm();deleteNKS(keyspace);">Delete</paper-button>
             <paper-button raised onclick="modal.open()" (click)="blockClicks($event);toggleForm();populateNKS(keyspace);">Edit</paper-button>
           </div>
         </md-card-actions>
@@ -85,18 +84,37 @@
 <!--Polymer implementation of modal-->
 <paper-dialog id="modal" no-cancel-on-outside-click="true" no-cancel-on-esc-key="true">
   <h2>{{dialogTitle}}</h2>
-  <div class="vt-form">
-    <div class="vt-form-member">
+  <p *ngIf="dialogSubtitle">{{dialogSubtitle}}</p>
+  <div class="vt-form" *ngIf="form">
+    <div *ngIf="actionWord=='Create'" class="vt-form-member">
       <paper-item>Name: </paper-item>
-      <paper-input [(ngModel)]="NKS.name"  label=" name"></paper-input>
+      <paper-input [(ngModel)]="NKS.name" autofocus on-change="test" auto-validate pattern="^(?!\s*$).+" required="true" error-message="must use at least one non-space character" label=" name"></paper-input>
+    </div>
+    <div class="vt-form-member">
+      <paper-item>Sharding Col. Name: </paper-item>
+      <paper-input [(ngModel)]="NKS.shardingColumnName" label="Column Name"></paper-input>
+    </div>
+    <div *ngIf="NKS.shardingColumnName" class="vt-form-member">
+      <paper-item>Sharding Col. Type: </paper-item>
+      <paper-dropdown-menu  label="Column Type"  on-iron-select="typeSelected($event)">
+        <paper-listbox selected="{{NKS.shardingColumnType}}"  attr-for-selected=label class="dropdown-content" >
+          <paper-item label="UINT64">unsigned bigint</paper-item>
+          <paper-item label="BYTES">varbinary</paper-item>
+        </paper-listbox> 
+      </paper-dropdown-menu>
     </div>
   </div>
   <div class="buttons">
-    <paper-button  autofocus onClick="modal.close()" on-click="toggleForm()">Cancel</paper-button>
-    <paper-button  autofocus onClick="modal.close();toast.open()" on-click="toggleForm();actionFunction()">{{actionWord}}</paper-button>
+    <paper-button   onClick="modal.close()" on-click="toggleForm()">Cancel</paper-button>
+    <span *ngIf="NKS.name">
+      <paper-button   onClick="modal.close();toast.open()" on-click="toggleForm();actionFunction()">{{actionWord}}</paper-button>
+    </span>
+    <span *ngIf="!NKS.name">
+      <paper-button  disabled="true">{{actionWord}}</paper-button>
+    </span>
   </div>
 </paper-dialog>
-<div *ngIf="openForm" class="vt-popUpContainer" >
+<div *ngIf="openModal" class="vt-popUpContainer" >
 </div>
 
 <paper-toast id="toast" text="{{actionWordPast}} Keyspace {{NKS.name}}"></paper-toast>
