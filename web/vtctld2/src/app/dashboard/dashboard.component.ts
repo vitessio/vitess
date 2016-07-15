@@ -24,18 +24,26 @@ import { PolymerElement } from '@vaadin/angular2-polymer';
 export class DashboardComponent implements OnInit{
   title = 'Vitess Control Panel';
   keyspaces = [];
-  openForm = false;
+  openModal = false;
   keyspacesReady = false;
+  form = false;
   actionWord: string;
   actionWordPast: string;
   actionFunction: any;
   dialogTitle: string;
+  dialogSubtitle: string;
   toastText: string;
   //New/Edited Keyspace Information
   NKS = {
     name : "",
+    shardingColumnName : "",
+    shardingColumnType : "",
   };
-  
+  test(event) {
+    console.log(event);
+    document.querySelector("#TEST").setAttribute("disabled", (this.NKS.name == "").toString());
+  }
+  test1 = true;
   constructor(
               private keyspaceService: KeyspaceService, 
               private router: Router) {}
@@ -43,55 +51,101 @@ export class DashboardComponent implements OnInit{
   ngOnInit() {
     this.getKeyspaces();
   }
-  ///////
   getKeyspaces() {
+    this.keyspaces = [];
     this.keyspaceService.getKeyspaces().subscribe( keyspaceStreams => {
-      keyspaceStreams.subscribe( keyspace => {
-        console.log(keyspace);
-        this.keyspaces.push(keyspace);
+      keyspaceStreams.subscribe( keyspaceStream => {
+        keyspaceStream.subscribe( keyspace => {
+          this.keyspaces.push(keyspace);
+          this.keyspaces.sort(this.cmp);
+        })
       })
     })
   }
-
-  getShards(keyspaceName) {
-    this.keyspaceService.getShards(keyspaceName).subscribe(shards => {
-      console.log("a", shards);
-      this.getSrvKeyspaces();
+  cmp(a,b) {
+    if (a.name.toLowerCase() > b.name.toLowerCase()) return 1;
+    if (b.name.toLowerCase() > a.name.toLowerCase()) return -1;
+    return 0;
+  }
+  createKeySpace() {
+    //Prevents user from circumnavigating column type and name codependence
+    if (this.NKS.shardingColumnName == "") this.NKS.shardingColumnType = "";
+    this.keyspaceService.createKeyspace(this.NKS).subscribe( resp => {
+      this.getKeyspaces();
     });
   }
-  getSrvKeyspaces() {
-    this.keyspaceService.getSrvKeyspaces().subscribe(srvkeyspaces => {
-      console.log("b", srvkeyspaces);
-    })
+  editKeyspace() {
+    //Prevents user from circumnavigating column type and name codependence
+    if (this.NKS.shardingColumnName == "") this.NKS.shardingColumnType = "";
+    this.keyspaceService.editKeyspace(this.NKS).subscribe( resp => {
+      this.getKeyspaces();
+    });
   }
-  //////////
-  
-  submitForm(){
-    /*Temporary Function, will be replaced with CRUD interface*/
-    console.log("SUBMIT: ", this.NKS);
+  deleteKeyspace() {
+    this.keyspaceService.deleteKeyspace(this.NKS).subscribe( resp => {
+      this.getKeyspaces();
+    });
   }
-
   toggleForm() {
-    this.openForm = !this.openForm;
+    this.openModal = !this.openModal;
   }
   populateNKS(keyspace){
     this.actionWord = "Edit";
     this.actionWordPast = "Edited";
-    this.actionFunction = this.submitForm;
+    this.actionFunction = this.editKeyspace;
     this.dialogTitle = "Edit " + keyspace.name;
     this.NKS.name = keyspace.name;
+    this.NKS.shardingColumnName = keyspace.shardingColumnName;
+    this.NKS.shardingColumnType = this.getName(keyspace.shardingColumnType);
+    this.form = true;
   }
   clearNKS(){
     this.actionWord = "Create";
     this.actionWordPast = "Created";
-    this.actionFunction = this.submitForm;
+    this.actionFunction = this.createKeySpace;
     this.dialogTitle = "Create a new Keyspace";
     this.NKS.name = "";
+    this.NKS.shardingColumnName = "";
+    this.NKS.shardingColumnType = "";
+    this.form = true;
+  }
+  deleteNKS(keyspace) {
+    this.actionWord = "Delete";
+    this.actionWordPast = "Deleted";
+    this.actionFunction = this.deleteKeyspace;
+    this.dialogTitle = "Delete " + keyspace.name;
+    this.dialogSubtitle = "Are you sure you want to delete " + keyspace.name + "?";
+    this.NKS.name = keyspace.name;
+    this.form = false;
   }
   blockClicks(event){
     event.stopPropagation();
   }
   navigate(keyspaceName) {
     this.router.navigate(["/keyspace"], {queryParams: { keyspace: keyspaceName }});
+  }
+  getType(type) {
+    switch (type) {
+      case "unsigned bigint":
+        return "UINT64";
+      case "varbinary":
+        return "BYTES";
+      default:
+        return ""; 
+    }
+  }
+  getName(type) {
+    switch (type) {
+      case 1:
+        return "UINT64";
+      case 2:
+        return "BYTES";
+      default:
+        return ""; 
+    }
+  }
+  typeSelected(e) {
+    //Odd Polymer event syntax
+    this.NKS.shardingColumnType = this.getType(e.detail.item.__dom.firstChild.data);
   }
 }

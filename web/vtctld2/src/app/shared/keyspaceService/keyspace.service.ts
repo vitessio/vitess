@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Http } from '@angular/http';
+import { Http, Headers, RequestOptions } from '@angular/http';
 import { Keyspace } from '../keyspaceObject/keyspace/'
 import {Observable} from 'rxjs/Observable';
 
@@ -36,26 +36,33 @@ export class KeyspaceService {
   getSeperatedShards(keyspaceName, partition) {
     return this.getShards(keyspaceName)
       .map(allShards =>{
-        let shards = {};
+        let keyspace = {};
         let shardSet = {};
-        shards["name"] = keyspaceName;
-        shards["servingShards"] = [];
-        shards["nonservingShards"] = [];
+        keyspace["name"] = keyspaceName;
+        keyspace["servingShards"] = [];
+        keyspace["nonservingShards"] = [];
         let shardReferences = partition.shard_references;
         if (shardReferences != undefined) {
           shardReferences.forEach( servingShard => {
-            shards["servingShards"].push(servingShard.name);
+            keyspace["servingShards"].push(servingShard.name);
             shardSet[servingShard.name] = true;
           });
         }
         allShards.forEach( shard => {
           if (!(shard in shardSet)) {
-            shards["nonservingShards"].push(shard);
+            keyspace["nonservingShards"].push(shard);
           }
         });
-        console.log("Shards: ", shards);
-        return shards;
+        return keyspace;
       })
+      .map( (keyspace) => {
+        return this.getKeyspaceRaw(keyspace["name"])
+          .map(keyspaceData => {
+            keyspace["shardingColumnName"] = "sharding_column_name" in keyspaceData ? keyspaceData.sharding_column_name: "";
+            keyspace["shardingColumnType"] = "sharding_column_type" in keyspaceData ? keyspaceData.sharding_column_type : "";
+            return keyspace;
+          });
+      });
   }
   SrvKeyspaceAndNamesObservable(){
     let keyspaceNamesStream = this.getKeyspaceNames();
@@ -76,7 +83,6 @@ export class KeyspaceService {
           } else {
             partitions = srvKeyspace[keyspaceName].partitions;
           }
-          console.log(keyspaceName, partitions);
           for (let p = 0; p < partitions.length; p++) {
             let partition = partitions[p];
             if (this.vtTabletTypes[partition.served_type] == 'master') {
@@ -112,5 +118,31 @@ export class KeyspaceService {
         }
       }
     );
+  }
+  getKeyspaceRaw(keyspaceName) {
+    return this.http.get(this.keyspacesUrl + keyspaceName)
+    .map( (resp) => {
+      return resp.json();
+    });
+  }
+  sendPostRequest(url, body) {
+    let headers = new Headers({ 'Content-Type': 'application/x-www-form-urlencoded' });
+    let options = new RequestOptions({ headers: headers });
+    return this.http.post(url, body, options)
+    .map( (resp) => {
+      return resp.json(); 
+    });
+  }
+  createKeyspace(keyspace) {
+    let body = "action=CreateKeyspace" + "&shardingColumnName=" + keyspace.shardingColumnName + "&shardingColumnType=" + keyspace.shardingColumnType;
+    return this.sendPostRequest(this.keyspacesUrl + keyspace.name, body);
+  }
+  deleteKeyspace(keyspace) {
+    let body = "action=DeleteKeyspace";
+    return this.sendPostRequest(this.keyspacesUrl + keyspace.name, body);
+  }
+  editKeyspace(keyspace) {
+    let body = "action=EditKeyspace" + "&shardingColumnName=" + keyspace.shardingColumnName + "&shardingColumnType=" + keyspace.shardingColumnType;
+    return this.sendPostRequest(this.keyspacesUrl + keyspace.name, body);
   }
 }

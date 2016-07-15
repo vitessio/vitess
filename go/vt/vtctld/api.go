@@ -119,26 +119,32 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 	// Keyspaces
 	handleCollection("keyspaces", func(r *http.Request) (interface{}, error) {
 		keyspace := getItemPath(r.URL.Path)
-
-		// List all keyspaces.
-		if keyspace == "" {
-			return ts.GetKeyspaces(ctx)
-		}
-
-		// Perform an action on a keyspace.
-		if r.Method == "POST" {
+		switch r.Method {
+		case "GET":
+			// List all keyspaces.
+			if keyspace == "" {
+				return ts.GetKeyspaces(ctx)
+			}
+			// Get the keyspace record.
+			return ts.GetKeyspace(ctx, keyspace)
+			// Perform an action on a keyspace.
+		case "POST":
+			if keyspace == "" {
+				return nil, errors.New("A POST request needs a keyspace in the URL")
+			}
 			if err := r.ParseForm(); err != nil {
 				return nil, err
 			}
+			//body, _ := ioutil.ReadAll(r.Body)
+
 			action := r.FormValue("action")
 			if action == "" {
-				return nil, errors.New("must specify action")
+				return nil, errors.New("A POST request must specify action" /* + string(body) + " | " + r.Form.Encode() + " |"*/)
 			}
 			return actions.ApplyKeyspaceAction(ctx, action, keyspace, r), nil
+		default:
+			return nil, errors.New("The VTCTLD API only supports the GET and POST Methods. Please use a GET request or include the specific action you desire in the body of a POST request")
 		}
-
-		// Get the keyspace record.
-		return ts.GetKeyspace(ctx, keyspace)
 	})
 
 	// Shards
