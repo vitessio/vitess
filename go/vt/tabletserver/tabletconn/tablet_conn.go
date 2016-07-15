@@ -61,12 +61,9 @@ type StreamHealthReader interface {
 // context.
 
 // TabletDialer represents a function that will return a TabletConn
-// object that can communicate with a tablet.
-//
-// The Tablet's keyspace, shard and tabletType are remembered
-// and used as Target. Use SetTarget to update them later.
-// If the TabletDialer is used for StreamHealth only, then the tablet's
-// keyspace, shard and tabletType won't be used.
+// object that can communicate with a tablet. Only the tablet's
+// HostName and PortMap should be used (and maybe the alias for debug
+// messages).
 type TabletDialer func(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (TabletConn, error)
 
 // TabletConn defines the interface for a vttablet client. It should
@@ -77,48 +74,45 @@ type TabletDialer func(ctx context.Context, tablet *topodatapb.Tablet, timeout t
 // - context.Canceled if the query was canceled by the user.
 type TabletConn interface {
 	// Execute executes a non-streaming query on vttablet.
-	Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error)
+	Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error)
 
 	// ExecuteBatch executes a group of queries.
-	ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error)
+	ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error)
 
 	// StreamExecute executes a streaming query on vttablet. It
 	// returns a sqltypes.ResultStream to get results from. If
 	// error is non-nil, it means that the StreamExecute failed to
 	// send the request. Otherwise, you can pull values from the
 	// ResultStream until io.EOF, or any other error.
-	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error)
+	StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error)
 
 	// Transaction support
-	Begin(ctx context.Context) (transactionID int64, err error)
-	Commit(ctx context.Context, transactionID int64) error
-	Rollback(ctx context.Context, transactionID int64) error
+	Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error)
+	Commit(ctx context.Context, target *querypb.Target, transactionID int64) error
+	Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error
 
 	// Combo RPC calls: they execute both a Begin and another call.
 	// Note even if error is set, transactionID may be returned
 	// and different than zero, if the Begin part worked.
-	BeginExecute(ctx context.Context, query string, bindVars map[string]interface{}) (result *sqltypes.Result, transactionID int64, err error)
-	BeginExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool) (results []sqltypes.Result, transactionID int64, err error)
+	BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (result *sqltypes.Result, transactionID int64, err error)
+	BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) (results []sqltypes.Result, transactionID int64, err error)
 
 	// Close must be called for releasing resources.
 	Close()
-
-	// SetTarget can be called to change the target used for
-	// subsequent calls.
-	SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error
 
 	// Tablet returns the tablet info.
 	Tablet() *topodatapb.Tablet
 
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query
-	SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error)
+	SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error)
 
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query
 	// TODO(erez): Remove SplitQuery and rename this to SplitQueryV2 once migration is done.
 	SplitQueryV2(
 		ctx context.Context,
+		target *querypb.Target,
 		query querytypes.BoundQuery,
 		splitColumns []string,
 		splitCount int64,

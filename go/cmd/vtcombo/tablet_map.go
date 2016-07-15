@@ -256,7 +256,7 @@ type internalTabletConn struct {
 
 // Execute is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
+func (itc *internalTabletConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	bv, err := querytypes.BindVariablesToProto3(bindVars)
 	if err != nil {
 		return nil, err
@@ -265,11 +265,7 @@ func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVa
 	if err != nil {
 		return nil, err
 	}
-	reply, err := itc.tablet.qsc.QueryService().Execute(ctx, &querypb.Target{
-		Keyspace:   itc.tablet.keyspace,
-		Shard:      itc.tablet.shard,
-		TabletType: itc.tablet.tabletType,
-	}, query, bindVars, transactionID)
+	reply, err := itc.tablet.qsc.QueryService().Execute(ctx, target, query, bindVars, transactionID)
 	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
@@ -278,7 +274,7 @@ func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVa
 
 // ExecuteBatch is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	q := make([]querytypes.BoundQuery, len(queries))
 	for i, query := range queries {
 		bv, err := querytypes.BindVariablesToProto3(query.BindVariables)
@@ -292,11 +288,7 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []query
 		q[i].Sql = query.Sql
 		q[i].BindVariables = bindVars
 	}
-	results, err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, &querypb.Target{
-		Keyspace:   itc.tablet.keyspace,
-		Shard:      itc.tablet.shard,
-		TabletType: itc.tablet.tabletType,
-	}, q, asTransaction, transactionID)
+	results, err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, target, q, asTransaction, transactionID)
 	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
@@ -321,7 +313,7 @@ func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 
 // StreamExecute is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
+func (itc *internalTabletConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
 	bv, err := querytypes.BindVariablesToProto3(bindVars)
 	if err != nil {
 		return nil, err
@@ -334,11 +326,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 	var finalErr error
 
 	go func() {
-		finalErr = itc.tablet.qsc.QueryService().StreamExecute(ctx, &querypb.Target{
-			Keyspace:   itc.tablet.keyspace,
-			Shard:      itc.tablet.shard,
-			TabletType: itc.tablet.tabletType,
-		}, query, bindVars, func(reply *sqltypes.Result) error {
+		finalErr = itc.tablet.qsc.QueryService().StreamExecute(ctx, target, query, bindVars, func(reply *sqltypes.Result) error {
 			// We need to deep-copy the reply before returning,
 			// because the underlying buffers are reused.
 			result <- reply.Copy()
@@ -354,12 +342,8 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 }
 
 // Begin is part of tabletconn.TabletConn
-func (itc *internalTabletConn) Begin(ctx context.Context) (int64, error) {
-	transactionID, err := itc.tablet.qsc.QueryService().Begin(ctx, &querypb.Target{
-		Keyspace:   itc.tablet.keyspace,
-		Shard:      itc.tablet.shard,
-		TabletType: itc.tablet.tabletType,
-	})
+func (itc *internalTabletConn) Begin(ctx context.Context, target *querypb.Target) (int64, error) {
+	transactionID, err := itc.tablet.qsc.QueryService().Begin(ctx, target)
 	if err != nil {
 		return 0, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
@@ -367,52 +351,39 @@ func (itc *internalTabletConn) Begin(ctx context.Context) (int64, error) {
 }
 
 // Commit is part of tabletconn.TabletConn
-func (itc *internalTabletConn) Commit(ctx context.Context, transactionID int64) error {
-	err := itc.tablet.qsc.QueryService().Commit(ctx, &querypb.Target{
-		Keyspace:   itc.tablet.keyspace,
-		Shard:      itc.tablet.shard,
-		TabletType: itc.tablet.tabletType,
-	}, transactionID)
+func (itc *internalTabletConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
+	err := itc.tablet.qsc.QueryService().Commit(ctx, target, transactionID)
 	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 }
 
 // Rollback is part of tabletconn.TabletConn
-func (itc *internalTabletConn) Rollback(ctx context.Context, transactionID int64) error {
-	err := itc.tablet.qsc.QueryService().Rollback(ctx, &querypb.Target{
-		Keyspace:   itc.tablet.keyspace,
-		Shard:      itc.tablet.shard,
-		TabletType: itc.tablet.tabletType,
-	}, transactionID)
+func (itc *internalTabletConn) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
+	err := itc.tablet.qsc.QueryService().Rollback(ctx, target, transactionID)
 	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 }
 
 // BeginExecute is part of tabletconn.TabletConn
-func (itc *internalTabletConn) BeginExecute(ctx context.Context, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error) {
-	transactionID, err := itc.Begin(ctx)
+func (itc *internalTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error) {
+	transactionID, err := itc.Begin(ctx, target)
 	if err != nil {
 		return nil, 0, err
 	}
-	result, err := itc.Execute(ctx, query, bindVars, transactionID)
+	result, err := itc.Execute(ctx, target, query, bindVars, transactionID)
 	return result, transactionID, err
 }
 
 // BeginExecuteBatch is part of tabletconn.TabletConn
-func (itc *internalTabletConn) BeginExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
-	transactionID, err := itc.Begin(ctx)
+func (itc *internalTabletConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+	transactionID, err := itc.Begin(ctx, target)
 	if err != nil {
 		return nil, 0, err
 	}
-	results, err := itc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
+	results, err := itc.ExecuteBatch(ctx, target, queries, asTransaction, transactionID)
 	return results, transactionID, err
 }
 
 // Close is part of tabletconn.TabletConn
 func (itc *internalTabletConn) Close() {
-}
-
-// SetTarget is part of tabletconn.TabletConn
-func (itc *internalTabletConn) SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error {
-	return nil
 }
 
 // Tablet is part of tabletconn.TabletConn
@@ -421,12 +392,8 @@ func (itc *internalTabletConn) Tablet() *topodatapb.Tablet {
 }
 
 // SplitQuery is part of tabletconn.TabletConn
-func (itc *internalTabletConn) SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
-	splits, err := itc.tablet.qsc.QueryService().SplitQuery(ctx, &querypb.Target{
-		Keyspace:   itc.tablet.keyspace,
-		Shard:      itc.tablet.shard,
-		TabletType: itc.tablet.tabletType,
-	}, query.Sql, query.BindVariables, splitColumn, splitCount)
+func (itc *internalTabletConn) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
+	splits, err := itc.tablet.qsc.QueryService().SplitQuery(ctx, target, query.Sql, query.BindVariables, splitColumn, splitCount)
 	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
@@ -437,6 +404,7 @@ func (itc *internalTabletConn) SplitQuery(ctx context.Context, query querytypes.
 // TODO(erez): Rename to SplitQuery once the migration to SplitQuery V2 is done.
 func (itc *internalTabletConn) SplitQueryV2(
 	ctx context.Context,
+	target *querypb.Target,
 	query querytypes.BoundQuery,
 	splitColumns []string,
 	splitCount int64,
@@ -445,11 +413,7 @@ func (itc *internalTabletConn) SplitQueryV2(
 
 	splits, err := itc.tablet.qsc.QueryService().SplitQueryV2(
 		ctx,
-		&querypb.Target{
-			Keyspace:   itc.tablet.keyspace,
-			Shard:      itc.tablet.shard,
-			TabletType: itc.tablet.tabletType,
-		},
+		target,
 		query.Sql,
 		query.BindVariables,
 		splitColumns,
