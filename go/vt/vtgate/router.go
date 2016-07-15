@@ -315,11 +315,13 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, route *engine.Route)
 
 func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
 	var firstKsid []byte
+	var firstAutoGenInsertID int64
 	inputs := route.Values.([]interface{})
-	insertIds := make([]int64, len(inputs))
 	for rowNum, input := range inputs {
 		insertid, err := rtr.handleGenerate(vcursor, route.Generate, rowNum)
-		insertIds[rowNum] = insertid
+		if firstAutoGenInsertID == 0 && insertid != 0 {
+			firstAutoGenInsertID = insertid
+		}
 		if err != nil {
 			return nil, fmt.Errorf("execInsertSharded: %v", err)
 		}
@@ -364,11 +366,11 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
-	if insertIds[0] != 0 {
+	if firstAutoGenInsertID != 0 {
 		if result.InsertID != 0 {
 			return nil, fmt.Errorf("sequence and db generated a value each for insert")
 		}
-		result.InsertID = uint64(insertIds[0])
+		result.InsertID = uint64(firstAutoGenInsertID)
 	}
 	return result, nil
 }
