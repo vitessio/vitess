@@ -88,26 +88,6 @@ func PrefixTabletError(errCode vtrpcpb.ErrorCode, err error, prefix string) erro
 	return NewTabletError(errCode, "%s%s", prefix, err)
 }
 
-// ToRPCError returns a vtrpcpb.RPCError (that can be packed across
-// RPC boundaries) for the TabletError.
-func ToRPCError(err error) *vtrpcpb.RPCError {
-	if err == nil {
-		return nil
-	}
-
-	result := &vtrpcpb.RPCError{
-		Code:    vtrpcpb.ErrorCode_INTERNAL_ERROR,
-		Message: err.Error(),
-	}
-
-	if tErr, ok := err.(*TabletError); ok {
-		// If we got a TabletError, use its code
-		result.Code = tErr.ErrorCode
-	}
-
-	return result
-}
-
 func printable(in string) string {
 	if len(in) > maxErrLen {
 		in = in[:maxErrLen]

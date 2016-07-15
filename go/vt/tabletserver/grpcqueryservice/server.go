@@ -154,7 +154,7 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, bv, transactionID)
 	if err != nil {
 		return &querypb.BeginExecuteResponse{
-			Error:         tabletserver.ToRPCError(err),
+			Error:         vterrors.VtRPCErrorFromVtError(err),
 			TransactionId: transactionID,
 		}, nil
 	}
@@ -186,7 +186,7 @@ func (q *query) BeginExecuteBatch(ctx context.Context, request *querypb.BeginExe
 	results, err := q.server.ExecuteBatch(ctx, request.Target, bql, request.AsTransaction, transactionID)
 	if err != nil {
 		return &querypb.BeginExecuteBatchResponse{
-			Error:         tabletserver.ToRPCError(err),
+			Error:         vterrors.VtRPCErrorFromVtError(err),
 			TransactionId: transactionID,
 		}, nil
 	}
