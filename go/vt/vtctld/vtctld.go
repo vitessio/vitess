@@ -9,8 +9,8 @@ import (
 	"path"
 	"strings"
 
-	"golang.org/x/net/context"
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -148,8 +148,8 @@ func InitVtctld(ts topo.Server) {
 		http.ServeFile(w, r, filePath)
 	})
 
-    realtimeStats, err := newRealtimeStats(ts); 
-    if err != nil {
+	realtimeStats, err := newRealtimeStats(ts)
+	if err != nil {
 		log.Errorf("newRealtimeStats error: %v", err)
 	}
 
