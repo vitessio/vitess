@@ -51,7 +51,8 @@ type tabletInfo struct {
 }
 
 // TopologyWatcher polls tablet from a configurable set of tablets
-// periodically.
+// periodically. When tablets are added / removed, it calls
+// the HealthCheck AddTablet / RemoveTablet interface appropriately.
 type TopologyWatcher struct {
 	// set at construction time
 	topoServer      topo.Server
