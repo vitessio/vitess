@@ -10,8 +10,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -252,15 +250,7 @@ func (q *query) StreamHealth(request *querypb.StreamHealthRequest, stream querys
 	return q.server.StreamHealthUnregister(id)
 }
 
-func init() {
-	tabletserver.RegisterFunctions = append(tabletserver.RegisterFunctions, func(qsc tabletserver.Controller) {
-		if servenv.GRPCCheckServiceMap("queryservice") {
-			queryservicepb.RegisterQueryServer(servenv.GRPCServer, &query{qsc.QueryService()})
-		}
-	})
-}
-
-// RegisterForTest should only be used by unit tests
-func RegisterForTest(s *grpc.Server, server queryservice.QueryService) {
+// Register registers the implementation on the provide gRPC Server.
+func Register(s *grpc.Server, server queryservice.QueryService) {
 	queryservicepb.RegisterQueryServer(s, &query{server})
 }

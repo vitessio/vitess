@@ -8,9 +8,15 @@ package main
 
 import (
 	"github.com/youtube/vitess/go/vt/servenv"
-	_ "github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
+	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 )
 
 func init() {
 	servenv.RegisterGRPCFlags()
+	tabletserver.RegisterFunctions = append(tabletserver.RegisterFunctions, func(qsc tabletserver.Controller) {
+		if servenv.GRPCCheckServiceMap("queryservice") {
+			grpcqueryservice.Register(servenv.GRPCServer, qsc.QueryService())
+		}
+	})
 }

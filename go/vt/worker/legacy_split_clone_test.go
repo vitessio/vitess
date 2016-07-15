@@ -165,7 +165,7 @@ func (tc *legacySplitCloneTestCase) setUp(v3 bool) {
 		}
 		qs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
 		qs.AddDefaultHealthResponse()
-		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &legacyTestQueryService{
+		grpcqueryservice.Register(sourceRdonly.RPCServer, &legacyTestQueryService{
 			t: tc.t,
 			StreamHealthQueryService: qs,
 		})
@@ -201,9 +201,9 @@ func (tc *legacySplitCloneTestCase) setUp(v3 bool) {
 	tc.leftReplicaQs.AddDefaultHealthResponse()
 	tc.rightMasterQs = fakes.NewStreamHealthQueryService(rightMaster.Target())
 	tc.rightMasterQs.AddDefaultHealthResponse()
-	grpcqueryservice.RegisterForTest(leftMaster.RPCServer, tc.leftMasterQs)
-	grpcqueryservice.RegisterForTest(leftReplica.RPCServer, tc.leftReplicaQs)
-	grpcqueryservice.RegisterForTest(rightMaster.RPCServer, tc.rightMasterQs)
+	grpcqueryservice.Register(leftMaster.RPCServer, tc.leftMasterQs)
+	grpcqueryservice.Register(leftReplica.RPCServer, tc.leftReplicaQs)
+	grpcqueryservice.Register(rightMaster.RPCServer, tc.rightMasterQs)
 
 	tc.defaultWorkerArgs = []string{
 		"LegacySplitClone",
