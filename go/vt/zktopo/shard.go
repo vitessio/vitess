@@ -10,10 +10,11 @@ import (
 	"path"
 	"sort"
 
+	zookeeper "github.com/samuel/go-zookeeper/zk"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
-	"golang.org/x/net/context"
-	"launchpad.net/gozk/zookeeper"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -42,13 +43,14 @@ func (zkts *Server) CreateShard(ctx context.Context, keyspace, shard string, val
 		if i == 0 {
 			c = string(data)
 		}
-		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-		if err != nil {
-			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-				alreadyExists = true
-			} else {
-				return convertError(err)
-			}
+		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PermAll))
+		switch err {
+		case nil:
+			// nothing to do
+		case zookeeper.ErrNodeExists:
+			alreadyExists = true
+		default:
+			return convertError(err)
 		}
 	}
 	if alreadyExists {
@@ -64,11 +66,11 @@ func (zkts *Server) UpdateShard(ctx context.Context, keyspace, shard string, val
 	if err != nil {
 		return -1, err
 	}
-	stat, err := zkts.zconn.Set(shardPath, string(data), int(existingVersion))
+	stat, err := zkts.zconn.Set(shardPath, string(data), int32(existingVersion))
 	if err != nil {
 		return -1, convertError(err)
 	}
-	return int64(stat.Version()), nil
+	return int64(stat.Version), nil
 }
 
 // ValidateShard is part of the topo.Server interface
@@ -100,7 +102,7 @@ func (zkts *Server) GetShard(ctx context.Context, keyspace, shard string) (*topo
 		return nil, 0, fmt.Errorf("bad shard data %v", err)
 	}
 
-	return s, int64(stat.Version()), nil
+	return s, int64(stat.Version), nil
 }
 
 // GetShardNames is part of the topo.Server interface

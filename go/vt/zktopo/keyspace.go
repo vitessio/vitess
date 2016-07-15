@@ -10,10 +10,11 @@ import (
 	"path"
 	"sort"
 
+	zookeeper "github.com/samuel/go-zookeeper/zk"
+
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/net/context"
-	"launchpad.net/gozk/zookeeper"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -49,13 +50,14 @@ func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *
 		if i == 0 {
 			c = string(data)
 		}
-		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-		if err != nil {
-			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-				alreadyExists = true
-			} else {
-				return convertError(err)
-			}
+		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PermAll))
+		switch err {
+		case nil:
+			// nothing here
+		case zookeeper.ErrNodeExists:
+			alreadyExists = true
+		default:
+			return convertError(err)
 		}
 	}
 	if alreadyExists {
@@ -71,12 +73,12 @@ func (zkts *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *
 	if err != nil {
 		return -1, err
 	}
-	stat, err := zkts.zconn.Set(keyspacePath, string(data), int(existingVersion))
+	stat, err := zkts.zconn.Set(keyspacePath, string(data), int32(existingVersion))
 	if err != nil {
 		return -1, convertError(err)
 	}
 
-	return int64(stat.Version()), nil
+	return int64(stat.Version), nil
 }
 
 // DeleteKeyspace is part of the topo.Server interface.
@@ -102,28 +104,27 @@ func (zkts *Server) GetKeyspace(ctx context.Context, keyspace string) (*topodata
 		return nil, 0, fmt.Errorf("bad keyspace data %v", err)
 	}
 
-	return k, int64(stat.Version()), nil
+	return k, int64(stat.Version), nil
 }
 
 // GetKeyspaces is part of the topo.Server interface
 func (zkts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 	children, _, err := zkts.zconn.Children(GlobalKeyspacesPath)
-	if err != nil {
-		err = convertError(err)
-		if err == topo.ErrNoNode {
-			return nil, nil
-		}
-		return nil, err
+	switch err {
+	case nil:
+		sort.Strings(children)
+		return children, nil
+	case zookeeper.ErrNoNode:
+		return nil, nil
+	default:
+		return nil, convertError(err)
 	}
-
-	sort.Strings(children)
-	return children, nil
 }
 
 // DeleteKeyspaceShards is part of the topo.Server interface
 func (zkts *Server) DeleteKeyspaceShards(ctx context.Context, keyspace string) error {
 	shardsPath := path.Join(GlobalKeyspacesPath, keyspace, "shards")
-	if err := zk.DeleteRecursive(zkts.zconn, shardsPath, -1); err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
+	if err := zk.DeleteRecursive(zkts.zconn, shardsPath, -1); err != nil && err != zookeeper.ErrNoNode {
 		return convertError(err)
 	}
 	return nil

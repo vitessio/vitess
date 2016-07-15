@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"path"
 
+	zookeeper "github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
-	"launchpad.net/gozk/zookeeper"
 
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 	"github.com/youtube/vitess/go/zk"
@@ -31,7 +31,7 @@ func (zkts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *v
 		return err
 	}
 	vschemaPath := path.Join(GlobalKeyspacesPath, keyspace, vschemaPath)
-	_, err = zk.CreateOrUpdate(zkts.zconn, vschemaPath, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
+	_, err = zk.CreateOrUpdate(zkts.zconn, vschemaPath, string(data), 0, zookeeper.WorldACL(zookeeper.PermAll), true)
 	return convertError(err)
 }
 

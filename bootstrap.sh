@@ -20,15 +20,6 @@ function fail() {
   exit 1
 }
 
-function zk_patch_mac() {
-  if [ `uname -s` == "Darwin" ]; then
-    cd zookeeper-$zk_ver && \
-    wget https://issues.apache.org/jira/secure/attachment/12673210/ZOOKEEPER-2049.noprefix.branch-3.4.patch && \
-    patch -p0 < ZOOKEEPER-2049.noprefix.branch-3.4.patch && \
-    cd ..
-  fi
-}
-
 [ -f bootstrap.sh ] || fail "bootstrap.sh must be run from its current directory"
 
 [ "$USER" != "root" ] || fail "Vitess cannot run as root. Please bootstrap with a non-root user."
@@ -56,12 +47,9 @@ else
   (cd $VTROOT/dist && \
     wget http://archive.apache.org/dist/zookeeper/zookeeper-$zk_ver/zookeeper-$zk_ver.tar.gz && \
     tar -xzf zookeeper-$zk_ver.tar.gz && \
-    zk_patch_mac && \
     mkdir -p $zk_dist/lib && \
     cp zookeeper-$zk_ver/contrib/fatjar/zookeeper-$zk_ver-fatjar.jar $zk_dist/lib && \
-    (cd zookeeper-$zk_ver/src/c && \
-    ./configure --prefix=$zk_dist && \
-    make install) && rm -rf zookeeper-$zk_ver zookeeper-$zk_ver.tar.gz)
+    rm -rf zookeeper-$zk_ver zookeeper-$zk_ver.tar.gz)
   [ $? -eq 0 ] || fail "zookeeper build failed"
   touch $zk_dist/.build_finished
 fi
@@ -182,12 +170,16 @@ cp $VTTOP/config/gomysql.pc.tmpl $VTROOT/lib/gomysql.pc
 myversion=`$VT_MYSQL_ROOT/bin/mysql_config --version`
 echo "Version:" "$myversion" >> $VTROOT/lib/gomysql.pc
 echo "Cflags:" "$($VT_MYSQL_ROOT/bin/mysql_config --cflags) -ggdb -fPIC" >> $VTROOT/lib/gomysql.pc
+# Note we add $VT_MYSQL_ROOT/lib as an extra path in the case where
+# we installed the standard MySQL packages from a distro into a sub-directory
+# and the provided mysql_config assumes the <root>/lib directory
+# is already in the library path.
 if [[ "$MYSQL_FLAVOR" == "MariaDB" || "$myversion" =~ ^5\.7\. ]]; then
   # Use static linking because the shared library doesn't export
   # some internal functions we use, like cli_safe_read.
-  echo "Libs:" "$($VT_MYSQL_ROOT/bin/mysql_config --libs_r | sed -r 's,-lmysqlclient(_r)?,-l:libmysqlclient.a -lstdc++,')" >> $VTROOT/lib/gomysql.pc
+  echo "Libs:" "-L$VT_MYSQL_ROOT/lib $($VT_MYSQL_ROOT/bin/mysql_config --libs_r | sed -r 's,-lmysqlclient(_r)?,-l:libmysqlclient.a -lstdc++,')" >> $VTROOT/lib/gomysql.pc
 else
-  echo "Libs:" "$($VT_MYSQL_ROOT/bin/mysql_config --libs_r)" >> $VTROOT/lib/gomysql.pc
+  echo "Libs:" "-L$VT_MYSQL_ROOT/lib $($VT_MYSQL_ROOT/bin/mysql_config --libs_r)" >> $VTROOT/lib/gomysql.pc
 fi
 
 # install mock

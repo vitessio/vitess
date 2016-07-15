@@ -23,7 +23,6 @@ ENV GOPATH $VTROOT
 ENV PATH $VTROOT/bin:$PATH
 ENV VT_MYSQL_ROOT /usr
 ENV PKG_CONFIG_PATH $VTROOT/lib
-ENV LD_LIBRARY_PATH $VTROOT/dist/vt-zookeeper-3.4.6/lib
 
 # Copy binaries (placed by build.sh)
 COPY lite/vt /vt

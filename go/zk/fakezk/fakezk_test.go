@@ -10,13 +10,11 @@ import (
 	"testing"
 	"time"
 
+	zookeeper "github.com/samuel/go-zookeeper/zk"
+
 	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/zk"
-	"launchpad.net/gozk/zookeeper"
 )
-
-// Make sure Stat implements the interface.
-var _ zk.Stat = &stat{}
 
 func TestBasic(t *testing.T) {
 	conn := NewConn()
@@ -24,11 +22,11 @@ func TestBasic(t *testing.T) {
 
 	// Make sure Conn implements the interface.
 	var _ zk.Conn = conn
-	if _, err := conn.Create("/zk", "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+	if _, err := conn.Create("/zk", "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 		t.Fatalf("conn.Create: %v", err)
 	}
 
-	if _, err := conn.Create("/zk/foo", "foo", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+	if _, err := conn.Create("/zk/foo", "foo", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 		t.Fatalf("conn.Create: %v", err)
 	}
 	data, _, err := conn.Get("/zk/foo")
@@ -67,11 +65,11 @@ func TestBasic(t *testing.T) {
 	}
 
 	// Try Create with a node that exists.
-	if _, err := conn.Create("/zk/foo", "foo", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err == nil {
+	if _, err := conn.Create("/zk/foo", "foo", 0, zookeeper.WorldACL(zookeeper.PermAll)); err == nil {
 		t.Errorf("conn.Create with a node that exists: expected error")
 	}
 	// Try Create with a node whose parents don't exist.
-	if _, err := conn.Create("/a/b/c", "foo", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err == nil {
+	if _, err := conn.Create("/a/b/c", "foo", 0, zookeeper.WorldACL(zookeeper.PermAll)); err == nil {
 		t.Errorf("conn.Create with a node whose parents don't exist: expected error")
 	}
 
@@ -94,7 +92,7 @@ func TestChildren(t *testing.T) {
 	nodes := []string{"/zk", "/zk/foo", "/zk/bar"}
 	wantChildren := []string{"bar", "foo"}
 	for _, path := range nodes {
-		if _, err := conn.Create(path, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+		if _, err := conn.Create(path, "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 			t.Fatalf("conn.Create: %v", err)
 		}
 	}
@@ -130,7 +128,7 @@ func TestWatches(t *testing.T) {
 		t.Errorf("stat is not nil: %v", stat)
 	}
 
-	if _, err := conn.Create("/zk", "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+	if _, err := conn.Create("/zk", "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 		t.Fatalf("conn.Create: %v", err)
 	}
 
@@ -141,7 +139,7 @@ func TestWatches(t *testing.T) {
 	if err != nil {
 		t.Errorf(`conn.ChildrenW("/zk"): %v`, err)
 	}
-	if _, err := conn.Create("/zk/foo", "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+	if _, err := conn.Create("/zk/foo", "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 		t.Fatalf("conn.Create: %v", err)
 	}
 
@@ -195,11 +193,11 @@ func fireWatch(t *testing.T, watch <-chan zookeeper.Event) zookeeper.Event {
 func TestSequence(t *testing.T) {
 	conn := NewConn()
 	defer conn.Close()
-	if _, err := conn.Create("/zk", "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+	if _, err := conn.Create("/zk", "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 		t.Fatalf("conn.Create: %v", err)
 	}
 
-	newPath, err := conn.Create("/zk/", "", zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	newPath, err := conn.Create("/zk/", "", zookeeper.FlagSequence, zookeeper.WorldACL(zookeeper.PermAll))
 	if err != nil {
 		t.Errorf("conn.Create: %v", err)
 	}
@@ -207,7 +205,7 @@ func TestSequence(t *testing.T) {
 		t.Errorf("new path: got %q, wanted %q", newPath, wanted)
 	}
 
-	newPath, err = conn.Create("/zk/", "", zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	newPath, err = conn.Create("/zk/", "", zookeeper.FlagSequence, zookeeper.WorldACL(zookeeper.PermAll))
 	if err != nil {
 		t.Errorf("conn.Create: %v", err)
 	}
@@ -220,7 +218,7 @@ func TestSequence(t *testing.T) {
 		t.Fatalf("conn.Delete: %v", err)
 	}
 
-	newPath, err = conn.Create("/zk/", "", zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	newPath, err = conn.Create("/zk/", "", zookeeper.FlagSequence, zookeeper.WorldACL(zookeeper.PermAll))
 	if err != nil {
 		t.Errorf("conn.Create: %v", err)
 	}
@@ -229,7 +227,7 @@ func TestSequence(t *testing.T) {
 		t.Errorf("new path: got %q, wanted %q", newPath, wanted)
 	}
 
-	newPath, err = conn.Create("/zk/action_", "", zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	newPath, err = conn.Create("/zk/action_", "", zookeeper.FlagSequence, zookeeper.WorldACL(zookeeper.PermAll))
 	if err != nil {
 		t.Errorf("conn.Create: %v", err)
 	}

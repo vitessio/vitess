@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"launchpad.net/gozk/zookeeper"
+	zookeeper "github.com/samuel/go-zookeeper/zk"
 )
 
 // test implementation of zk Conn
@@ -20,98 +20,38 @@ type TestZkConn struct {
 	children map[string][]string
 }
 
-type ZkStat struct {
-	czxid          int64
-	mzxid          int64
-	cTime          time.Time
-	mTime          time.Time
-	version        int
-	cVersion       int
-	aVersion       int
-	ephemeralOwner int64
-	dataLength     int
-	numChildren    int
-	pzxid          int64
-}
-
-// ZkStat methods to match zk.Stat interface
-func (zkStat *ZkStat) Czxid() int64 {
-	return zkStat.czxid
-}
-
-func (zkStat *ZkStat) Mzxid() int64 {
-	return zkStat.mzxid
-}
-
-func (zkStat *ZkStat) CTime() time.Time {
-	return zkStat.cTime
-}
-
-func (zkStat *ZkStat) MTime() time.Time {
-	return zkStat.mTime
-}
-
-func (zkStat *ZkStat) Version() int {
-	return zkStat.version
-}
-
-func (zkStat *ZkStat) CVersion() int {
-	return zkStat.cVersion
-}
-
-func (zkStat *ZkStat) AVersion() int {
-	return zkStat.aVersion
-}
-
-func (zkStat *ZkStat) EphemeralOwner() int64 {
-	return zkStat.ephemeralOwner
-}
-
-func (zkStat *ZkStat) DataLength() int {
-	return zkStat.dataLength
-}
-
-func (zkStat *ZkStat) NumChildren() int {
-	return zkStat.numChildren
-}
-
-func (zkStat *ZkStat) Pzxid() int64 {
-	return zkStat.pzxid
-}
-
-func (conn *TestZkConn) Get(path string) (data string, stat Stat, err error) {
+func (conn *TestZkConn) Get(path string) (data string, stat *zookeeper.Stat, err error) {
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) GetW(path string) (data string, stat Stat, watch <-chan zookeeper.Event, err error) {
+func (conn *TestZkConn) GetW(path string) (data string, stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error) {
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) Children(path string) (children []string, stat Stat, err error) {
+func (conn *TestZkConn) Children(path string) (children []string, stat *zookeeper.Stat, err error) {
 	result, ok := conn.children[path]
 	if !ok {
-		zkError := &zookeeper.Error{Op: "TestZkConn: node doesn't exist", Code: zookeeper.ZNONODE, Path: path}
-		return nil, nil, zkError
+		return nil, nil, zookeeper.ErrNoNode
 	}
-	s := &ZkStat{}
+	s := &zookeeper.Stat{}
 	return result, s, nil
 }
 
-func (conn *TestZkConn) ChildrenW(path string) (children []string, stat Stat, watch <-chan zookeeper.Event, err error) {
+func (conn *TestZkConn) ChildrenW(path string) (children []string, stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error) {
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) Exists(path string) (stat Stat, err error) {
+func (conn *TestZkConn) Exists(path string) (stat *zookeeper.Stat, err error) {
 	for _, e := range conn.exists {
 		if path == e {
-			s := &ZkStat{}
+			s := &zookeeper.Stat{}
 			return s, nil
 		}
 	}
 	return nil, nil
 }
 
-func (conn *TestZkConn) ExistsW(path string) (stat Stat, watch <-chan zookeeper.Event, err error) {
+func (conn *TestZkConn) ExistsW(path string) (stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error) {
 	panic("Should not be used")
 }
 
@@ -119,11 +59,11 @@ func (conn *TestZkConn) Create(path, value string, flags int, aclv []zookeeper.A
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) Set(path, value string, version int) (stat Stat, err error) {
+func (conn *TestZkConn) Set(path, value string, version int32) (stat *zookeeper.Stat, err error) {
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) Delete(path string, version int) (err error) {
+func (conn *TestZkConn) Delete(path string, version int32) (err error) {
 	panic("Should not be used")
 }
 
@@ -131,15 +71,11 @@ func (conn *TestZkConn) Close() error {
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc ChangeFunc) error {
+func (conn *TestZkConn) ACL(path string) ([]zookeeper.ACL, *zookeeper.Stat, error) {
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) ACL(path string) ([]zookeeper.ACL, Stat, error) {
-	panic("Should not be used")
-}
-
-func (conn *TestZkConn) SetACL(path string, aclv []zookeeper.ACL, version int) error {
+func (conn *TestZkConn) SetACL(path string, aclv []zookeeper.ACL, version int32) error {
 	panic("Should not be used")
 }
 

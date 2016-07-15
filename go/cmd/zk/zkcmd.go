@@ -16,12 +16,12 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	zookeeper "github.com/samuel/go-zookeeper/zk"
+
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/crypto/ssh/terminal"
-
-	"launchpad.net/gozk/zookeeper"
 )
 
 var doc = `
@@ -187,7 +187,7 @@ func cmdWait(subFlags *flag.FlagSet, args []string) error {
 		_, _, wait, err = zconn.GetW(zkPath)
 	}
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+		if err == zookeeper.ErrNoNode {
 			_, wait, err = zconn.ExistsW(zkPath)
 		} else {
 			return fmt.Errorf("wait: error %v: %v", zkPath, err)
@@ -232,7 +232,7 @@ func cmdElock(subFlags *flag.FlagSet, args []string) error {
 	signal.Notify(sigRecv, os.Interrupt)
 
 	for {
-		_, err := zconn.Create(zkPath, "", zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		_, err := zconn.Create(zkPath, "", zookeeper.FlagEphemeral, zookeeper.WorldACL(zookeeper.PermAll))
 		if err != nil {
 			return fmt.Errorf("elock: error %v: %v", zkPath, err)
 		}
@@ -249,7 +249,7 @@ func cmdElock(subFlags *flag.FlagSet, args []string) error {
 				return nil
 			case event := <-watch:
 				log.Infof("elock: event %v: %v", zkPath, event)
-				if !event.Ok() {
+				if event.Err != nil {
 					//return fmt.Errorf("elock: error %v: %v", zkPath, event)
 					break watchLoop
 				}
@@ -284,7 +284,7 @@ func cmdWatch(subFlags *flag.FlagSet, args []string) error {
 			return nil
 		case event := <-eventChan:
 			log.Infof("watch: event %v: %v", event.Path, event)
-			if event.Type == zookeeper.EVENT_CHANGED {
+			if event.Type == zookeeper.EventNodeDataChanged {
 				data, stat, watch, err := zconn.GetW(event.Path)
 				if err != nil {
 					return fmt.Errorf("ERROR: failed to watch %v", err)
@@ -294,9 +294,9 @@ func cmdWatch(subFlags *flag.FlagSet, args []string) error {
 				go func() {
 					eventChan <- <-watch
 				}()
-			} else if event.State == zookeeper.STATE_CLOSED {
+			} else if event.State == zookeeper.StateDisconnected {
 				return nil
-			} else if event.Type == zookeeper.EVENT_DELETED {
+			} else if event.Type == zookeeper.EventNodeDeleted {
 				log.Infof("watch: %v deleted\n", event.Path)
 			} else {
 				// Most likely a session event - try t
@@ -356,7 +356,7 @@ func cmdLs(subFlags *flag.FlagSet, args []string) error {
 		}
 		if err != nil {
 			hasError = true
-			if !*force || !zookeeper.IsError(err, zookeeper.ZNONODE) {
+			if !*force || err != zookeeper.ErrNoNode {
 				log.Warningf("ls: cannot access %v: %v", zkPath, err)
 			}
 		}
@@ -376,13 +376,13 @@ func cmdLs(subFlags *flag.FlagSet, args []string) error {
 				fmt.Printf("total: %v\n", len(children))
 			}
 			sort.Strings(children)
-			stats := make([]zk.Stat, len(children))
+			stats := make([]*zookeeper.Stat, len(children))
 			wg := sync.WaitGroup{}
 			f := func(i int) {
 				localPath := path.Join(zkPath, children[i])
 				stat, err := zconn.Exists(localPath)
 				if err != nil {
-					if !*force || !zookeeper.IsError(err, zookeeper.ZNONODE) {
+					if !*force || err != zookeeper.ErrNoNode {
 						log.Warningf("ls: cannot access: %v: %v", localPath, err)
 					}
 				} else {
@@ -413,7 +413,7 @@ func cmdLs(subFlags *flag.FlagSet, args []string) error {
 	return nil
 }
 
-func fmtPath(stat zk.Stat, zkPath string, showFullPath bool, longListing bool) {
+func fmtPath(stat *zookeeper.Stat, zkPath string, showFullPath bool, longListing bool) {
 	var name, perms string
 
 	if !showFullPath {
@@ -423,14 +423,14 @@ func fmtPath(stat zk.Stat, zkPath string, showFullPath bool, longListing bool) {
 	}
 
 	if longListing {
-		if stat.NumChildren() > 0 {
+		if stat.NumChildren > 0 {
 			// FIXME(msolomon) do permissions check?
 			perms = "drwxrwxrwx"
-			if stat.DataLength() > 0 {
+			if stat.DataLength > 0 {
 				// give a visual indication that this node has data as well as children
 				perms = "nrw-rw-rw-"
 			}
-		} else if stat.EphemeralOwner() != 0 {
+		} else if stat.EphemeralOwner != 0 {
 			perms = "erw-rw-rw-"
 		} else {
 			perms = "-rw-rw-rw-"
@@ -438,7 +438,7 @@ func fmtPath(stat zk.Stat, zkPath string, showFullPath bool, longListing bool) {
 		// always print the Local version of the time. zookeeper's
 		// go / C library would return a local time anyway, but
 		// might as well be sure.
-		fmt.Printf("%v %v %v % 8v % 20v %v\n", perms, "zk", "zk", stat.DataLength(), stat.MTime().Local().Format(timeFmt), name)
+		fmt.Printf("%v %v %v % 8v % 20v %v\n", perms, "zk", "zk", stat.DataLength, zk.Time(stat.Mtime).Local().Format(timeFmt), name)
 	} else {
 		fmt.Printf("%v\n", name)
 	}
@@ -461,15 +461,15 @@ func cmdTouch(subFlags *flag.FlagSet, args []string) error {
 	}
 
 	var (
-		version = -1
-		create  = false
+		version int32 = -1
+		create        = false
 	)
 
 	data, stat, err := zconn.Get(zkPath)
 	switch {
 	case err == nil:
-		version = stat.Version()
-	case zookeeper.IsError(err, zookeeper.ZNONODE):
+		version = stat.Version
+	case err == zookeeper.ErrNoNode:
 		create = true
 	default:
 		return fmt.Errorf("touch: cannot access %v: %v", zkPath, err)
@@ -481,9 +481,9 @@ func cmdTouch(subFlags *flag.FlagSet, args []string) error {
 	case *touchOnly:
 		return fmt.Errorf("touch: no such path %v", zkPath)
 	case *createParents:
-		_, err = zk.CreateRecursive(zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		_, err = zk.CreateRecursive(zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PermAll))
 	default:
-		_, err = zconn.Create(zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		_, err = zconn.Create(zkPath, data, 0, zookeeper.WorldACL(zookeeper.PermAll))
 	}
 
 	if err != nil {
@@ -533,7 +533,7 @@ func cmdRm(subFlags *flag.FlagSet, args []string) error {
 		} else {
 			err = zconn.Delete(zkPath, -1)
 		}
-		if err != nil && (!*force || !zookeeper.IsError(err, zookeeper.ZNONODE)) {
+		if err != nil && (!*force || err != zookeeper.ErrNoNode) {
 			hasError = true
 			log.Warningf("rm: cannot delete %v: %v", zkPath, err)
 		}
@@ -570,7 +570,7 @@ func cmdCat(subFlags *flag.FlagSet, args []string) error {
 		data, _, err := zconn.Get(zkPath)
 		if err != nil {
 			hasError = true
-			if !*force || !zookeeper.IsError(err, zookeeper.ZNONODE) {
+			if !*force || err != zookeeper.ErrNoNode {
 				log.Warningf("cat: cannot access %v: %v", zkPath, err)
 			}
 		} else {
@@ -601,7 +601,7 @@ func cmdEdit(subFlags *flag.FlagSet, args []string) error {
 	zkPath := fixZkPath(arg)
 	data, stat, err := zconn.Get(zkPath)
 	if err != nil {
-		if !*force || !zookeeper.IsError(err, zookeeper.ZNONODE) {
+		if !*force || err != zookeeper.ErrNoNode {
 			log.Warningf("edit: cannot access %v: %v", zkPath, err)
 		}
 		return fmt.Errorf("edit: cannot access %v: %v", zkPath, err)
@@ -636,7 +636,7 @@ func cmdEdit(subFlags *flag.FlagSet, args []string) error {
 
 	if string(fileData) != data {
 		// data changed - update if we can
-		_, err = zconn.Set(zkPath, string(fileData), stat.Version())
+		_, err = zconn.Set(zkPath, string(fileData), stat.Version)
 		if err != nil {
 			os.Remove(tmpPath)
 			return fmt.Errorf("edit: cannot write zk file %v", err)
@@ -674,21 +674,21 @@ func cmdStat(subFlags *flag.FlagSet, args []string) error {
 		}
 		if err != nil {
 			hasError = true
-			if !*force || !zookeeper.IsError(err, zookeeper.ZNONODE) {
+			if !*force || err != zookeeper.ErrNoNode {
 				log.Warningf("stat: cannot access %v: %v", zkPath, err)
 			}
 			continue
 		}
 		fmt.Printf("Path: %s\n", zkPath)
-		fmt.Printf("Created: %s\n", stat.CTime().Format(timeFmtMicro))
-		fmt.Printf("Modified: %s\n", stat.MTime().Format(timeFmtMicro))
-		fmt.Printf("Size: %v\n", stat.DataLength())
-		fmt.Printf("Children: %v\n", stat.NumChildren())
-		fmt.Printf("Version: %v\n", stat.Version())
-		fmt.Printf("Ephemeral: %v\n", stat.EphemeralOwner())
+		fmt.Printf("Created: %s\n", zk.Time(stat.Ctime).Format(timeFmtMicro))
+		fmt.Printf("Modified: %s\n", zk.Time(stat.Mtime).Format(timeFmtMicro))
+		fmt.Printf("Size: %v\n", stat.DataLength)
+		fmt.Printf("Children: %v\n", stat.NumChildren)
+		fmt.Printf("Version: %v\n", stat.Version)
+		fmt.Printf("Ephemeral: %v\n", stat.EphemeralOwner)
 		fmt.Printf("ACL:\n")
 		for _, acl := range acls {
-			fmt.Printf(" %v:%v %v\n", acl.Scheme, acl.Id, fmtAcl(acl))
+			fmt.Printf(" %v:%v %v\n", acl.Scheme, acl.ID, fmtAcl(acl))
 		}
 	}
 	if hasError {
@@ -697,18 +697,18 @@ func cmdStat(subFlags *flag.FlagSet, args []string) error {
 	return nil
 }
 
-var charPermMap map[string]uint32
-var permCharMap map[uint32]string
+var charPermMap map[string]int32
+var permCharMap map[int32]string
 
 func init() {
-	charPermMap = map[string]uint32{
-		"r": zookeeper.PERM_READ,
-		"w": zookeeper.PERM_WRITE,
-		"d": zookeeper.PERM_DELETE,
-		"c": zookeeper.PERM_CREATE,
-		"a": zookeeper.PERM_ADMIN,
+	charPermMap = map[string]int32{
+		"r": zookeeper.PermRead,
+		"w": zookeeper.PermWrite,
+		"d": zookeeper.PermDelete,
+		"c": zookeeper.PermCreate,
+		"a": zookeeper.PermAdmin,
 	}
-	permCharMap = make(map[uint32]string)
+	permCharMap = make(map[int32]string)
 	for c, p := range charPermMap {
 		permCharMap[p] = c
 	}
@@ -717,7 +717,7 @@ func init() {
 func fmtAcl(acl zookeeper.ACL) string {
 	s := ""
 
-	for _, perm := range []uint32{zookeeper.PERM_READ, zookeeper.PERM_WRITE, zookeeper.PERM_DELETE, zookeeper.PERM_CREATE, zookeeper.PERM_ADMIN} {
+	for _, perm := range []int32{zookeeper.PermRead, zookeeper.PermWrite, zookeeper.PermDelete, zookeeper.PermCreate, zookeeper.PermAdmin} {
 		if acl.Perms&perm != 0 {
 			s += permCharMap[perm]
 		} else {
@@ -744,7 +744,7 @@ func cmdChmod(subFlags *flag.FlagSet, args []string) error {
 		return fmt.Errorf("chmod: invalid mode")
 	}
 
-	var permMask uint32
+	var permMask int32
 	for _, c := range mode[2:] {
 		permMask |= charPermMap[string(c)]
 	}
@@ -816,8 +816,8 @@ func getPathData(filePath string) (string, error) {
 func setPathData(filePath, data string) error {
 	if isZkFile(filePath) {
 		_, err := zconn.Set(filePath, data, -1)
-		if err != nil && zookeeper.IsError(err, zookeeper.ZNONODE) {
-			_, err = zk.CreateRecursive(zconn, filePath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		if err == zookeeper.ErrNoNode {
+			_, err = zk.CreateRecursive(zconn, filePath, data, 0, zookeeper.WorldACL(zookeeper.PermAll))
 		}
 		return err
 	}
@@ -878,7 +878,7 @@ func multiFileCp(args []string) error {
 type zkItem struct {
 	path string
 	data string
-	stat zk.Stat
+	stat *zookeeper.Stat
 	err  error
 }
 
@@ -931,11 +931,11 @@ func cmdZip(subFlags *flag.FlagSet, args []string) error {
 			return fmt.Errorf("zip: get failed: %v", err)
 		}
 		// Skip ephemerals - not sure why you would archive them.
-		if stat.EphemeralOwner() > 0 {
+		if stat.EphemeralOwner > 0 {
 			continue
 		}
 		fi := &zip.FileHeader{Name: path, Method: zip.Deflate}
-		fi.SetModTime(stat.MTime())
+		fi.SetModTime(zk.Time(stat.Mtime))
 		f, err := zipWriter.CreateHeader(fi)
 		if err != nil {
 			return fmt.Errorf("zip: create failed: %v", err)
@@ -984,8 +984,8 @@ func cmdUnzip(subFlags *flag.FlagSet, args []string) error {
 		if dstPath != "/" {
 			zkPath = path.Join(dstPath, zkPath)
 		}
-		_, err = zk.CreateRecursive(zconn, zkPath, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-		if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+		_, err = zk.CreateRecursive(zconn, zkPath, string(data), 0, zookeeper.WorldACL(zookeeper.PermAll))
+		if err != nil && err != zookeeper.ErrNodeExists {
 			return fmt.Errorf("unzip: zk create failed: %v", err)
 		}
 		_, err = zconn.Set(zkPath, string(data), -1)

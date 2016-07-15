@@ -20,7 +20,10 @@ function goversion_min() {
 
 # prepend_path returns $2 prepended the colon separated path $1.
 # If it's already part of the path, it won't be added again.
-# If $1 is a directory, it will also be prepended to $PATH.
+#
+# Note the first time it's called, the original value is empty,
+# and the second value has the path to add. We just end up adding it regardless
+# of its existence.
 function prepend_path() {
   # $1 path variable
   # $2 path to add
@@ -28,8 +31,5 @@ function prepend_path() {
     echo "$2:$1"
   else
     echo "$1"
-  fi
-  if [ -d "$1" ] && [[ ":$PATH:" != *":$1:"* ]]; then
-    export PATH="$1:$PATH"
   fi
 }

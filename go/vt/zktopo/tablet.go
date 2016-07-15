@@ -9,10 +9,11 @@ import (
 	"fmt"
 	"sort"
 
+	zookeeper "github.com/samuel/go-zookeeper/zk"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/zk"
-	"golang.org/x/net/context"
-	"launchpad.net/gozk/zookeeper"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -40,7 +41,7 @@ func (zkts *Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet)
 	}
 
 	// Create /zk/<cell>/vt/tablets/<uid>
-	_, err = zk.CreateRecursive(zkts.zconn, zkTabletPath, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	_, err = zk.CreateRecursive(zkts.zconn, zkTabletPath, string(data), 0, zookeeper.WorldACL(zookeeper.PermAll))
 	if err != nil {
 		return convertError(err)
 	}
@@ -55,11 +56,11 @@ func (zkts *Server) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet,
 		return 0, err
 	}
 
-	stat, err := zkts.zconn.Set(zkTabletPath, string(data), int(existingVersion))
+	stat, err := zkts.zconn.Set(zkTabletPath, string(data), int32(existingVersion))
 	if err != nil {
 		return 0, convertError(err)
 	}
-	return int64(stat.Version()), nil
+	return int64(stat.Version), nil
 }
 
 // DeleteTablet is part of the topo.Server interface
@@ -83,7 +84,7 @@ func (zkts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias
 	if err := json.Unmarshal([]byte(data), tablet); err != nil {
 		return nil, 0, err
 	}
-	return tablet, int64(stat.Version()), nil
+	return tablet, int64(stat.Version), nil
 }
 
 // GetTabletsByCell is part of the topo.Server interface
