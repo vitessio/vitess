@@ -1,79 +1,68 @@
 package vtctld
 
 import (
-	"time"
+	"fmt"
 
-	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/discovery"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
-	"golang.org/x/net/context"
 )
 
+// realtimeStats holds the objects needed to obtain realtime health stats of tablets.
 type realtimeStats struct {
-	healthCheck discovery.HealthCheck
-	tabletStats tabletStatsCache
+	healthCheck  discovery.HealthCheck
+	tabletStats  tabletStatsCache
+	cellWatchers []*discovery.TopologyWatcher
 }
 
-func setUpFlagsForTests() {
-	var temphcTR = 30 * time.Second
-	vtctl.HealthCheckTopologyRefresh = &temphcTR
-	var temphcRD = (5 * time.Second)
-	vtctl.HealthcheckRetryDelay = &temphcRD
-	var temphcT = (time.Minute)
-	vtctl.HealthCheckTimeout = &temphcT
-}
-
-func initHealthCheck(ts topo.Server) realtimeStats {
-
-	var r realtimeStats
+func newRealtimeStats(ts topo.Server) (realtimeStats, error) {
 
 	hc := discovery.NewHealthCheck(*vtctl.HealthCheckTimeout, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
 
-	//Creating a watcher for tablets in each cell
-	listOfWatchers := make([]*discovery.TopologyWatcher, 0, 1)
-	knownCells, err := ts.GetKnownCells(context.Background())
-	if err != nil {
-		log.Errorf("Error when getting cells")
-		return r
-	}
-
-	var tabletTypes []topodatapb.TabletType
-	tabletTypes = append(tabletTypes, topodatapb.TabletType_MASTER)
-	tabletTypes = append(tabletTypes, topodatapb.TabletType_REPLICA)
-	tabletTypes = append(tabletTypes, topodatapb.TabletType_RDONLY)
-
-	for _, cell := range knownCells {
-		watcher := discovery.NewCellTabletsWatcher(ts, hc, cell, *vtctl.HealthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
-		err := discovery.WaitForAllServingTablets(context.Background(), hc, ts, cell, tabletTypes)
-		if err != nil {
-			log.Errorf("Error when waiting for tablets: %v", err)
-			return r
-		}
-		listOfWatchers = append(listOfWatchers, watcher)
-	}
-
 	updates := tabletStatsCache{
-		tabletUpdate: make(map[string]map[string]*querypb.RealtimeStats),
+		recentTabletStatuses: make(map[string]map[string]*discovery.TabletStats),
 	}
 	hc.SetListener(updates)
 
-	r = realtimeStats{
+	r := realtimeStats{
 		healthCheck: hc,
 		tabletStats: updates,
 	}
 
-	return r
+	// Creating a watcher for tablets in each cell.
+	cells, err := ts.GetKnownCells(context.Background())
+	if err != nil {
+		return r, fmt.Errorf("error when getting cells: %v", err)
+	}
+
+	var watchers []*discovery.TopologyWatcher
+	for _, cell := range cells {
+		watcher := discovery.NewCellTabletsWatcher(ts, hc, cell, *vtctl.HealthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
+		watchers = append(watchers, watcher)
+	}
+	r.cellWatchers = watchers
+
+	return r, nil
 }
 
-func (r realtimeStats) getUpdate(cell string, keyspace string, shard string, tabType string) map[string]*querypb.RealtimeStats {
-	tabletUpdates := r.tabletStats
-	return tabletUpdates.getTargetUpdates(cell, keyspace, shard, tabType)
+func (r realtimeStats) Stop() error {
+	for _, w := range r.cellWatchers {
+		w.Stop()
+	}
+	if r.healthCheck != nil {
+		if err := r.healthCheck.Close(); err != nil {
+			return fmt.Errorf("healthCheck.Close() failed: %v", err)
+		}
+	}
+	return nil
 }
 
-func (r realtimeStats) mimicStatsUpdate(stats *discovery.TabletStats) {
-	tabletStatsCache := r.tabletStats
-	tabletStatsCache.StatsUpdate(stats)
+func (r realtimeStats) tabletStatuses(cell string, keyspace string, shard string, tabType string) map[string]*discovery.TabletStats {
+	return r.tabletStats.tabletStatuses(cell, keyspace, shard, tabType)
+}
+
+func (r realtimeStats) mimicStatsUpdateForTesting(stats *discovery.TabletStats) {
+	r.tabletStats.StatsUpdate(stats)
 }

@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -18,10 +19,20 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-func compactJSON(in []byte, t *testing.T) string {
+func compactJSON(in []byte) string {
 	buf := &bytes.Buffer{}
 	json.Compact(buf, in)
 	return buf.String()
+}
+
+// stripSpacesAndLines is called to clear trailing and preceding formatting for
+// error messages to make it easier to check for equality.
+func stripSpacesAndLines(str string) string {
+	str = strings.TrimPrefix(str, "\n")
+	str = strings.TrimSuffix(str, "\n")
+	str = strings.TrimPrefix(str, " ")
+	str = strings.TrimSuffix(str, " ")
+	return str
 }
 
 func TestAPI(t *testing.T) {
@@ -78,8 +89,10 @@ func TestAPI(t *testing.T) {
 			return "TestTabletAction Result", nil
 		})
 
-	setUpFlagsForTests()
-	rts := initHealthCheck(ts)
+    rts, err := newRealtimeStats(ts);
+    if err != nil {
+		t.Errorf("newRealtimeStats error: %v", err)
+	}
 	initAPI(ctx, ts, actionRepo, rts)
 
 	//Calling on rts
@@ -107,7 +120,7 @@ func TestAPI(t *testing.T) {
 		LastError: nil,
 	}
 
-	rts.mimicStatsUpdate(tabStats)
+	rts.mimicStatsUpdateForTesting(tabStats)
 
 	// Test cases.
 	table := []struct {
@@ -168,9 +181,10 @@ func TestAPI(t *testing.T) {
 			}`},
 
 		//Tablet Updates
-		{"GET", "target/cell1/ks1/-80/REPLICA", `{
-			"100":{"seconds_behind_master":2,"cpu_usage":12.1,"qps":5.6}
-		    }`},
+		{"GET", "tablet_statuses/cell1/ks1/-80/REPLICA", `{"100":{"Tablet":{"alias":{"cell":"cell1","uid":100},"port_map":{"vt":100},"keyspace":"ks1","shard":"-80","key_range":{"end":"gA=="},"type":2},"Name":"","Target":{"keyspace":"ks1","shard":"-80","tablet_type":2},"Up":true,"Serving":true,"TabletExternallyReparentedTimestamp":5,"Stats":{"seconds_behind_master":2,"cpu_usage":12.1,"qps":5.6},"LastError":null}}`},
+		// Third string is prefixed with "ERROR: " to distiguish it as a test that will return an expected error.
+		{"GET", "tablet_statuses/cell1/ks1/replica", "ERROR: can't get tablet_statuses: invalid target path: \"cell1/ks1/replica\"  expected path: <cell>/<keyspace>/<shard>/<type>"},
+		{"GET", "tablet_statuses/cell1/ks1/-80/hello", "ERROR: can't get tablet_statuses: invalid tablet type: hello"},
 	}
 
 	for _, in := range table {
@@ -191,16 +205,33 @@ func TestAPI(t *testing.T) {
 			t.Errorf("[%v] http error: %v", in.path, err)
 			continue
 		}
+
 		body, err := ioutil.ReadAll(resp.Body)
 		resp.Body.Close()
+
 		if err != nil {
 			t.Errorf("[%v] ioutil.ReadAll(resp.Body) error: %v", in.path, err)
 			continue
 		}
 
-		got, want := compactJSON(body, t), compactJSON([]byte(in.want), t)
-		if got != want {
-			t.Errorf("[%v] got %v, want %v", in.path, got, want)
+		if strings.HasPrefix(in.want, "ERROR: ") {
+			// want string has been stripped of the "ERROR: " prefix.
+			// stripSpacesAndLines has been called to clear all trailing and 
+			//    preceding formatting for the error message.
+			if got, want := stripSpacesAndLines(string(body)), ((in.want)[7:]); got != want {
+				t.Errorf("[%v] got %v, want %v", in.path, got, want)
+				continue
+			}
+		} else {
+			if got, want := compactJSON(body), compactJSON([]byte(in.want)); got != want {
+				t.Errorf("[%v] got %v, want %v", in.path, got, want)
+				continue
+			}
 		}
 	}
+	
+	if err := rts.Stop(); err != nil {
+		t.Errorf("realtimeStats.Stop() failed: %v", err)
+	}
+	
 }

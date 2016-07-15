@@ -104,7 +104,7 @@ func addSrvkeyspace(ctx context.Context, ts topo.Server, cell, keyspace string, 
 	return nil
 }
 
-func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rts realtimeStats) {
+func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, realtimeStats realtimeStats) {
 	tabletHealthCache := newTabletHealthCache(ts)
 	tmClient := tmclient.NewTabletManagerClient()
 
@@ -171,6 +171,7 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rts
 		// Get the shard record.
 		return ts.GetShard(ctx, keyspace, shard)
 	})
+
 	//SrvKeyspace
 	handleCollection("srv_keyspace", func(r *http.Request) (interface{}, error) {
 		keyspacePath := getItemPath(r.URL.Path)
@@ -277,9 +278,8 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rts
 		return ts.GetTablet(ctx, tabletAlias)
 	})
 
-	//NEW NEW NEW target data NEW NEW NEW
-	handleCollection("target", func(r *http.Request) (interface{}, error) {
-
+	// tablet_statuses
+	handleCollection("tablet_statuses", func(r *http.Request) (interface{}, error) {
 		targetPath := getItemPath(r.URL.Path)
 		parts := strings.SplitN(targetPath, "/", 4)
 
@@ -288,26 +288,14 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rts
 		}
 
 		cell := parts[0]
-		if cell == "" {
-			return nil, fmt.Errorf("Please specify a cell")
-		}
-
 		keyspace := parts[1]
-		if keyspace == "" {
-			return nil, fmt.Errorf("Please specify a keyspace")
-		}
-
 		shard := parts[2]
-		if shard == "" {
-			return nil, fmt.Errorf("Please specify a shard")
+		tabletType := parts[3]
+		if _, err := topoproto.ParseTabletType(tabletType); err != nil {
+			return nil, fmt.Errorf("invalid tablet type: %v ", tabletType)
 		}
 
-		tabType := parts[3]
-		if tabType == "" {
-			return nil, fmt.Errorf("Please specify a tablet type")
-		}
-
-		allUpdates := rts.getUpdate(cell, keyspace, shard, tabType)
+		allUpdates := realtimeStats.tabletStatuses(cell, keyspace, shard, tabletType)
 
 		return allUpdates, nil
 	})
