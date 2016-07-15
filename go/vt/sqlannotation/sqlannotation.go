@@ -16,17 +16,20 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/logutil"
 )
 
 const (
-	filteredReplicationUnfriendlyComment = "/* vtgate:: filtered_replication_unfriendly */"
+	filteredReplicationUnfriendlyAnnotation = "/* vtgate:: filtered_replication_unfriendly */"
 )
 
 var (
-	filteredReplicationUnfriendlyCountStat = stats.NewInt("ReplicationUnfriendlyStatementsCount")
+	filteredReplicationUnfriendlyStatementsCount = stats.NewInt("FilteredReplicationUnfriendlyStatementsCount")
+	filteredReplicationUnfriendlyStatementLogger = logutil.NewThrottledLogger("FilteredReplicationUnfriendlyStatement", 5*time.Second)
 )
 
 // AnnotateIfDML annotates 'sql' based on 'keyspaceIDs'
@@ -42,7 +45,9 @@ func AnnotateIfDML(sql string, keyspaceIDs [][]byte) string {
 	if len(keyspaceIDs) == 1 {
 		return AddKeyspaceID(sql, keyspaceIDs[0], "")
 	}
-	return sql + filteredReplicationUnfriendlyComment
+	filteredReplicationUnfriendlyStatementsCount.Add(1)
+	filteredReplicationUnfriendlyStatementLogger.Warningf("filtered-replication-unfriendly SQL statement detected: %q", sql)
+	return sql + filteredReplicationUnfriendlyAnnotation
 }
 
 // AddKeyspaceID returns a copy of 'sql' annotated
@@ -74,7 +79,7 @@ func IsDML(sql string) bool {
 // error value.
 func ExtractKeySpaceID(sql string) (keyspaceID []byte, err error) {
 	keyspaceIDString, hasKeySpaceID := extractStringBetween(sql, "/* vtgate:: keyspace_id:", " ")
-	hasUnfriendlyAnnotation := (strings.Index(sql, filteredReplicationUnfriendlyComment) != -1)
+	hasUnfriendlyAnnotation := (strings.Index(sql, filteredReplicationUnfriendlyAnnotation) != -1)
 	err = nil
 	if hasKeySpaceID {
 		if hasUnfriendlyAnnotation {
