@@ -89,13 +89,13 @@ func TestAPI(t *testing.T) {
 			return "TestTabletAction Result", nil
 		})
 
-	rts, err := newRealtimeStats(ts)
+	realtimeStats, err := newRealtimeStats(ts)
 	if err != nil {
 		t.Errorf("newRealtimeStats error: %v", err)
 	}
-	initAPI(ctx, ts, actionRepo, rts)
+	initAPI(ctx, ts, actionRepo, realtimeStats)
 
-	//Calling on rts
+	// tar, st, tabStats all needed for realtimeStats object
 	tar := &querypb.Target{
 		Keyspace:   "ks1",
 		Shard:      "-80",
@@ -120,7 +120,7 @@ func TestAPI(t *testing.T) {
 		LastError: nil,
 	}
 
-	rts.mimicStatsUpdateForTesting(tabStats)
+	realtimeStats.mimicStatsUpdateForTesting(tabStats)
 
 	// Test cases.
 	table := []struct {
@@ -230,7 +230,7 @@ func TestAPI(t *testing.T) {
 		}
 	}
 
-	if err := rts.Stop(); err != nil {
+	if err := realtimeStats.Stop(); err != nil {
 		t.Errorf("realtimeStats.Stop() failed: %v", err)
 	}
 
