@@ -837,4 +837,16 @@ func TestMultiInsertFail(t *testing.T) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
+	_, err = routerExec(router, "insert into user(id, name) values (1, 'abc'),(2, 'xyz')", nil)
+	want = "value 2 for column Id does not map to keyspace id 166b40b44aba4bd6"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+
+	_, err = routerExec(router, "insert into music(user_id, id) values (1, 1),(2, null)", nil)
+	want = "value 2 for column user_id does not map to keyspace id 166b40b44aba4bd6"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+
 }

@@ -496,7 +496,7 @@ func (rtr *Router) handleGenerate(vcursor *requestContext, gen *engine.Generate,
 	if gen == nil {
 		return 0, nil
 	}
-	val := gen.Value
+	val := gen.Value.([]interface{})[rowNum]
 	if v, ok := val.(string); ok {
 		val, ok = vcursor.bindVars[v[1:]]
 		if !ok {

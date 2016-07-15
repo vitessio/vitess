@@ -58,6 +58,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 	routeValues := make([]interface{}, 0, len(values))
 	autoIncColInsert := false
 	indexColInsert := make([]bool, len(colVindexes))
+	autoIncValues := make([]interface{}, 0, len(values))
 	for rowNum := 0; rowNum < len(values); rowNum++ {
 		value := make([]interface{}, 0, len(colVindexes))
 		for colNum, index := range colVindexes {
@@ -67,11 +68,21 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 			}
 		}
 		if route.Table.AutoIncrement != nil {
-			if err := buildAutoIncrementPlan(ins, route.Table.AutoIncrement, route, &value, rowNum, &autoIncColInsert); err != nil {
+			autoIncVal, err := buildAutoIncrementPlan(ins, route.Table.AutoIncrement, route, &value, rowNum, &autoIncColInsert)
+			if err != nil {
 				return nil, err
 			}
+			autoIncValues = append(autoIncValues, autoIncVal)
 		}
 		routeValues = append(routeValues, value)
+	}
+	if route.Table.AutoIncrement != nil {
+		route.Generate = &engine.Generate{
+			Opcode:   engine.SelectUnsharded,
+			Keyspace: route.Table.AutoIncrement.Sequence.Keyspace,
+			Query:    fmt.Sprintf("select next value from `%s`", route.Table.AutoIncrement.Sequence.Name),
+			Value:    autoIncValues,
+		}
 	}
 	route.Values = routeValues
 	route.Query = generateQuery(ins)
@@ -90,28 +101,24 @@ func buildIndexPlan(colVindex *vindexes.ColumnVindex, value *[]interface{}, rowN
 	return nil
 }
 
-func buildAutoIncrementPlan(ins *sqlparser.Insert, autoinc *vindexes.AutoIncrement, route *engine.Route, value *[]interface{}, rowNum int, autoIncColInsert *bool) error {
-	route.Generate = &engine.Generate{
-		Opcode:   engine.SelectUnsharded,
-		Keyspace: autoinc.Sequence.Keyspace,
-		Query:    fmt.Sprintf("select next value from `%s`", autoinc.Sequence.Name),
-	}
+func buildAutoIncrementPlan(ins *sqlparser.Insert, autoinc *vindexes.AutoIncrement, route *engine.Route, value *[]interface{}, rowNum int, autoIncColInsert *bool) (interface{}, error) {
+	var autoIncVal interface{}
 	// If it's also a colvindex, we have to add a redirect from route.Values.
 	// Otherwise, we have to redirect from row[pos].
 	if autoinc.ColumnVindexNum >= 0 {
-		route.Generate.Value = (*value)[autoinc.ColumnVindexNum]
+		autoIncVal = (*value)[autoinc.ColumnVindexNum]
 		(*value)[autoinc.ColumnVindexNum] = ":" + engine.SeqVarName + strconv.Itoa(rowNum)
-		return nil
+		return autoIncVal, nil
 	}
 	row, pos := findOrInsertPos(ins, autoinc.Column, rowNum, autoIncColInsert)
 	val, err := valConvert(row[pos])
 	if err != nil {
-		return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
+		return autoIncVal, fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
-	route.Generate.Value = val
+	autoIncVal = val
 	row[pos] = sqlparser.ValArg([]byte(":" + engine.SeqVarName + strconv.Itoa(rowNum)))
 
-	return nil
+	return autoIncVal, nil
 }
 
 func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString, rowNum int, ColInsert *bool) (row sqlparser.ValTuple, pos int) {
