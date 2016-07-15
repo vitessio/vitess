@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"golang.org/x/net/context"
+	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -147,10 +148,13 @@ func InitVtctld(ts topo.Server) {
 		http.ServeFile(w, r, filePath)
 	})
 
-	rts := initHealthCheck(ts)
+    realtimeStats, err := newRealtimeStats(ts); 
+    if err != nil {
+		log.Errorf("newRealtimeStats error: %v", err)
+	}
 
 	// Serve the REST API for the vtctld web app.
-	initAPI(context.Background(), ts, actionRepo, rts)
+	initAPI(context.Background(), ts, actionRepo, realtimeStats)
 
 	// Init redirects for explorers
 	initExplorer(ts)

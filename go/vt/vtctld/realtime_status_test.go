@@ -6,7 +6,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
@@ -50,9 +49,10 @@ func TestRealtimeStats(t *testing.T) {
 	}
 	ts.CreateTablet(ctx, tablet2)
 
-	setUpFlagsForTests()
-	rts := initHealthCheck(ts)
-	//**************************************************//
+	rts, err := newRealtimeStats(ts); 
+	if err != nil {
+		t.Errorf("newRealtimeStats error: %v", err)
+	}
 
 	tar := &querypb.Target{
 		Keyspace:   "ks1",
@@ -60,7 +60,7 @@ func TestRealtimeStats(t *testing.T) {
 		TabletType: topodatapb.TabletType_REPLICA,
 	}
 
-	expectedSt1 := &querypb.RealtimeStats{
+	stats1 := &querypb.RealtimeStats{
 		HealthError:         "",
 		SecondsBehindMaster: 2,
 		BinlogPlayersCount:  0,
@@ -68,23 +68,23 @@ func TestRealtimeStats(t *testing.T) {
 		Qps:                 5.6,
 	}
 
-	//Test 1: update sent to tablet1 and tablet1 recieved it
-	tabStats := &discovery.TabletStats{
+	// Test 1: update sent to tablet1 and tablet1 should recieve it.
+	want1 := &discovery.TabletStats{
 		Tablet:  tablet1,
 		Target:  tar,
 		Up:      true,
 		Serving: true,
 		TabletExternallyReparentedTimestamp: 5,
-		Stats:     expectedSt1,
+		Stats:     stats1,
 		LastError: nil,
 	}
 
-	rts.mimicStatsUpdate(tabStats)
-	result := rts.getUpdate("cell1", "ks1", "-80", "REPLICA")
-	checkResult(tablet1.Alias.Uid, result, expectedSt1, t)
+	rts.mimicStatsUpdateForTesting(want1)
+	result := rts.tabletStatuses("cell1", "ks1", "-80", "REPLICA")
+	checkResult(tablet1.Alias.Uid, result, want1, t)
 
-	//Test 2: send another update to tablet1
-	expectedSt2 := &querypb.RealtimeStats{
+	// Test 2: send another update to tablet1 and tablet1 should recieve it.
+	stats2 := &querypb.RealtimeStats{
 		HealthError:         "Unhealthy tablet",
 		SecondsBehindMaster: 15,
 		BinlogPlayersCount:  0,
@@ -92,22 +92,22 @@ func TestRealtimeStats(t *testing.T) {
 		Qps:                 7.9,
 	}
 
-	tabStats2 := &discovery.TabletStats{
+	want2 := &discovery.TabletStats{
 		Tablet:  tablet1,
 		Target:  tar,
 		Up:      true,
 		Serving: true,
 		TabletExternallyReparentedTimestamp: 5,
-		Stats:     expectedSt2,
+		Stats:     stats2,
 		LastError: nil,
 	}
 
-	rts.mimicStatsUpdate(tabStats2)
-	result = rts.getUpdate("cell1", "ks1", "-80", "REPLICA")
-	checkResult(tablet1.Alias.Uid, result, expectedSt2, t)
+	rts.mimicStatsUpdateForTesting(want2)
+	result = rts.tabletStatuses("cell1", "ks1", "-80", "REPLICA")
+	checkResult(tablet1.Alias.Uid, result, want2, t)
 
-	//Test 3: send an update to tablet2
-	expectedSt3 := &querypb.RealtimeStats{
+	// Test 3: send an update to tablet2 and tablet1 should remain unchanged.
+	stats3 := &querypb.RealtimeStats{
 		HealthError:         "Unhealthy tablet",
 		SecondsBehindMaster: 15,
 		BinlogPlayersCount:  0,
@@ -115,32 +115,38 @@ func TestRealtimeStats(t *testing.T) {
 		Qps:                 7.9,
 	}
 
-	tabStats3 := &discovery.TabletStats{
+	want3 := &discovery.TabletStats{
 		Tablet:  tablet2,
 		Target:  tar,
 		Up:      true,
 		Serving: true,
 		TabletExternallyReparentedTimestamp: 5,
-		Stats:     expectedSt3,
+		Stats:     stats3,
 		LastError: nil,
 	}
 
-	rts.mimicStatsUpdate(tabStats3)
-	result = rts.getUpdate("cell1", "ks1", "-80", "REPLICA")
-	checkResult(tablet1.Alias.Uid, result, expectedSt2, t)
+	rts.mimicStatsUpdateForTesting(want3)
+	result = rts.tabletStatuses("cell1", "ks1", "-80", "REPLICA")
+	checkResult(tablet1.Alias.Uid, result, want2, t)
+	
+	if err := rts.Stop(); err != nil {
+		t.Errorf("realtimeStats.Stop() failed: %v", err)
+	}
 }
 
-func checkResult(chosenUID uint32, result map[string]*querypb.RealtimeStats, want *querypb.RealtimeStats, t *testing.T) {
-	var got *querypb.RealtimeStats
-	for tabID, mes := range result {
+// checkResult checks to see that the TabletStats received are as expected
+func checkResult(chosenUID uint32, resultMap map[string]*discovery.TabletStats, original *discovery.TabletStats, t *testing.T) {
+	var result *discovery.TabletStats
+	for tabID, mes := range resultMap {
 		tabID2, err := strconv.ParseUint(tabID, 10, 32)
-		if err == nil && uint32(tabID2) == chosenUID {
-			got = mes
+		if err==nil && uint32(tabID2) == chosenUID {
+			result = mes
 			break
 		}
 	}
+    
+    if got, want := result.String(), original.String(); got != want { 
+    	t.Errorf("got: %#v, want: %#v", got, want)
+    }
 
-	if !proto.Equal(got, want) {
-		t.Errorf("RealtimeStats = %#v, want %#v", got, want)
-	}
 }
