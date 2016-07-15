@@ -49,7 +49,7 @@ func TestRealtimeStats(t *testing.T) {
 	}
 	ts.CreateTablet(ctx, tablet2)
 
-	rts, err := newRealtimeStats(ts)
+	realtimeStats, err := newRealtimeStats(ts)
 	if err != nil {
 		t.Errorf("newRealtimeStats error: %v", err)
 	}
@@ -79,8 +79,8 @@ func TestRealtimeStats(t *testing.T) {
 		LastError: nil,
 	}
 
-	rts.mimicStatsUpdateForTesting(want1)
-	result := rts.tabletStatuses("cell1", "ks1", "-80", "REPLICA")
+	realtimeStats.mimicStatsUpdateForTesting(want1)
+	result := realtimeStats.tabletStatuses("cell1", "ks1", "-80", "REPLICA")
 	checkResult(tablet1.Alias.Uid, result, want1, t)
 
 	// Test 2: send another update to tablet1 and tablet1 should recieve it.
@@ -102,8 +102,8 @@ func TestRealtimeStats(t *testing.T) {
 		LastError: nil,
 	}
 
-	rts.mimicStatsUpdateForTesting(want2)
-	result = rts.tabletStatuses("cell1", "ks1", "-80", "REPLICA")
+	realtimeStats.mimicStatsUpdateForTesting(want2)
+	result = realtimeStats.tabletStatuses("cell1", "ks1", "-80", "REPLICA")
 	checkResult(tablet1.Alias.Uid, result, want2, t)
 
 	// Test 3: send an update to tablet2 and tablet1 should remain unchanged.
@@ -125,11 +125,11 @@ func TestRealtimeStats(t *testing.T) {
 		LastError: nil,
 	}
 
-	rts.mimicStatsUpdateForTesting(want3)
-	result = rts.tabletStatuses("cell1", "ks1", "-80", "REPLICA")
+	realtimeStats.mimicStatsUpdateForTesting(want3)
+	result = realtimeStats.tabletStatuses("cell1", "ks1", "-80", "REPLICA")
 	checkResult(tablet1.Alias.Uid, result, want2, t)
 
-	if err := rts.Stop(); err != nil {
+	if err := realtimeStats.Stop(); err != nil {
 		t.Errorf("realtimeStats.Stop() failed: %v", err)
 	}
 }
