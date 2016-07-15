@@ -11,15 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/grpc"
-
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/logutil"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 const (
@@ -35,7 +32,8 @@ var ErrConnPoolClosed = NewTabletError(
 
 var logTxPoolFull = logutil.NewThrottledLogger("TxPoolFull", 1*time.Minute)
 
-// TabletError is the error type we use in this library
+// TabletError is the error type we use in this library.
+// It implements vterrors.VtError interface.
 type TabletError struct {
 	Message  string
 	SQLError int
@@ -88,23 +86,6 @@ func PrefixTabletError(errCode vtrpcpb.ErrorCode, err error, prefix string) erro
 		return NewTabletError(terr.ErrorCode, "%s%s", prefix, terr.Message)
 	}
 	return NewTabletError(errCode, "%s%s", prefix, err)
-}
-
-// ToGRPCError returns a TabletError as a grpc error, with the
-// appropriate error code. This function lives here, instead of in vterrors,
-// so that the vterrors package doesn't have to import tabletserver.
-func ToGRPCError(err error) error {
-	if err == nil {
-		return nil
-	}
-
-	code := grpc.Code(err)
-	if tErr, ok := err.(*TabletError); ok {
-		// If we got a TabletError, prefer its error code
-		code = vterrors.ErrorCodeToGRPCCode(tErr.ErrorCode)
-	}
-
-	return grpc.Errorf(code, "%v %v", vterrors.GRPCServerErrPrefix, err)
 }
 
 // ToRPCError returns a vtrpcpb.RPCError (that can be packed across

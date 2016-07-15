@@ -28,6 +28,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
@@ -267,7 +268,7 @@ func (itc *internalTabletConn) Execute(ctx context.Context, target *querypb.Targ
 	}
 	reply, err := itc.tablet.qsc.QueryService().Execute(ctx, target, query, bindVars, transactionID)
 	if err != nil {
-		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
+		return nil, tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 	}
 	return reply, nil
 }
@@ -290,7 +291,7 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, target *querypb
 	}
 	results, err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, target, q, asTransaction, transactionID)
 	if err != nil {
-		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
+		return nil, tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 	}
 	return results, nil
 }
@@ -345,7 +346,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, target *queryp
 func (itc *internalTabletConn) Begin(ctx context.Context, target *querypb.Target) (int64, error) {
 	transactionID, err := itc.tablet.qsc.QueryService().Begin(ctx, target)
 	if err != nil {
-		return 0, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
+		return 0, tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 	}
 	return transactionID, nil
 }
@@ -353,13 +354,13 @@ func (itc *internalTabletConn) Begin(ctx context.Context, target *querypb.Target
 // Commit is part of tabletconn.TabletConn
 func (itc *internalTabletConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	err := itc.tablet.qsc.QueryService().Commit(ctx, target, transactionID)
-	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
+	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
 // Rollback is part of tabletconn.TabletConn
 func (itc *internalTabletConn) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	err := itc.tablet.qsc.QueryService().Rollback(ctx, target, transactionID)
-	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
+	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
 // BeginExecute is part of tabletconn.TabletConn
@@ -395,7 +396,7 @@ func (itc *internalTabletConn) Tablet() *topodatapb.Tablet {
 func (itc *internalTabletConn) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
 	splits, err := itc.tablet.qsc.QueryService().SplitQuery(ctx, target, query.Sql, query.BindVariables, splitColumn, splitCount)
 	if err != nil {
-		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
+		return nil, tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 	}
 	return splits, nil
 }
@@ -421,7 +422,7 @@ func (itc *internalTabletConn) SplitQueryV2(
 		numRowsPerQueryPart,
 		algorithm)
 	if err != nil {
-		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
+		return nil, tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 	}
 	return splits, nil
 }
@@ -460,7 +461,7 @@ func (itc *internalTabletConn) StreamHealth(ctx context.Context) (tabletconn.Str
 		// The consumer first waits on the channel closure,
 		// then read finalErr
 		finalErr = itc.tablet.qsc.QueryService().StreamHealthUnregister(id)
-		finalErr = tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
+		finalErr = tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(finalErr))
 		close(result)
 	}()
 
