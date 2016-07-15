@@ -39,7 +39,7 @@ func TestGRPCDiscovery(t *testing.T) {
 
 	// Create a gRPC server and listen on the port.
 	server := grpc.NewServer()
-	grpcqueryservice.RegisterForTest(server, service)
+	grpcqueryservice.Register(server, service)
 	go server.Serve(listener)
 
 	// Create the discovery healthcheck, and the gateway.

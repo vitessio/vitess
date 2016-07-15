@@ -258,7 +258,7 @@ func testSplitDiff(t *testing.T, v3 bool) {
 	for _, sourceRdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2} {
 		qs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
 		qs.AddDefaultHealthResponse()
-		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &sourceTabletServer{
+		grpcqueryservice.Register(sourceRdonly.RPCServer, &sourceTabletServer{
 			t: t,
 			StreamHealthQueryService: qs,
 			excludedTable:            excludedTable,
@@ -269,7 +269,7 @@ func testSplitDiff(t *testing.T, v3 bool) {
 	for _, destRdonly := range []*testlib.FakeTablet{leftRdonly1, leftRdonly2} {
 		qs := fakes.NewStreamHealthQueryService(destRdonly.Target())
 		qs.AddDefaultHealthResponse()
-		grpcqueryservice.RegisterForTest(destRdonly.RPCServer, &destinationTabletServer{
+		grpcqueryservice.Register(destRdonly.RPCServer, &destinationTabletServer{
 			t: t,
 			StreamHealthQueryService: qs,
 			excludedTable:            excludedTable,

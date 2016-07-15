@@ -199,7 +199,7 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 		shqs.AddDefaultHealthResponse()
 		qs := newTestQueryService(tc.t, sourceRdonly.Target(), shqs, 0, 1, sourceRdonly.Tablet.Alias.Uid)
 		qs.addGeneratedRows(100, 100+rowsTotal)
-		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, qs)
+		grpcqueryservice.Register(sourceRdonly.RPCServer, qs)
 		tc.sourceRdonlyQs = append(tc.sourceRdonlyQs, qs)
 	}
 	// Set up destination rdonlys which will be used as input for the diff during the clone.
@@ -207,7 +207,7 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 		shqs := fakes.NewStreamHealthQueryService(destRdonly.Target())
 		shqs.AddDefaultHealthResponse()
 		qs := newTestQueryService(tc.t, destRdonly.Target(), shqs, i%2, 2, destRdonly.Tablet.Alias.Uid)
-		grpcqueryservice.RegisterForTest(destRdonly.RPCServer, qs)
+		grpcqueryservice.Register(destRdonly.RPCServer, qs)
 		if i%2 == 0 {
 			tc.leftRdonlyQs = append(tc.leftRdonlyQs, qs)
 		} else {
@@ -246,9 +246,9 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 	tc.leftReplicaQs.AddDefaultHealthResponse()
 	tc.rightMasterQs = fakes.NewStreamHealthQueryService(rightMaster.Target())
 	tc.rightMasterQs.AddDefaultHealthResponse()
-	grpcqueryservice.RegisterForTest(leftMaster.RPCServer, tc.leftMasterQs)
-	grpcqueryservice.RegisterForTest(leftReplica.RPCServer, tc.leftReplicaQs)
-	grpcqueryservice.RegisterForTest(rightMaster.RPCServer, tc.rightMasterQs)
+	grpcqueryservice.Register(leftMaster.RPCServer, tc.leftMasterQs)
+	grpcqueryservice.Register(leftReplica.RPCServer, tc.leftReplicaQs)
+	grpcqueryservice.Register(rightMaster.RPCServer, tc.rightMasterQs)
 
 	tc.defaultWorkerArgs = []string{
 		"SplitClone",

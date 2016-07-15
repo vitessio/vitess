@@ -164,7 +164,7 @@ func TestVerticalSplitDiff(t *testing.T) {
 		}
 		qs := fakes.NewStreamHealthQueryService(rdonly.Target())
 		qs.AddDefaultHealthResponse()
-		grpcqueryservice.RegisterForTest(rdonly.RPCServer, &verticalDiffTabletServer{
+		grpcqueryservice.Register(rdonly.RPCServer, &verticalDiffTabletServer{
 			t: t,
 			StreamHealthQueryService: qs,
 		})

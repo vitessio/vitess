@@ -84,8 +84,8 @@ func testWaitForDrain(t *testing.T, desc, cells string, drain drainDirective, ex
 	}
 	fqs1 := fakes.NewStreamHealthQueryService(target)
 	fqs2 := fakes.NewStreamHealthQueryService(target)
-	grpcqueryservice.RegisterForTest(t1.RPCServer, fqs1)
-	grpcqueryservice.RegisterForTest(t2.RPCServer, fqs2)
+	grpcqueryservice.Register(t1.RPCServer, fqs1)
+	grpcqueryservice.Register(t2.RPCServer, fqs2)
 
 	// Run vtctl WaitForDrain and react depending on its output.
 	timeout := "0.5s"

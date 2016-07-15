@@ -184,7 +184,7 @@ func TestVerticalSplitClone(t *testing.T) {
 		}
 		qs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
 		qs.AddDefaultHealthResponse()
-		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &verticalTabletServer{
+		grpcqueryservice.Register(sourceRdonly.RPCServer, &verticalTabletServer{
 			t: t,
 			StreamHealthQueryService: qs,
 		})
@@ -203,7 +203,7 @@ func TestVerticalSplitClone(t *testing.T) {
 	// Fake stream health reponses because vtworker needs them to find the master.
 	qs := fakes.NewStreamHealthQueryService(destMaster.Target())
 	qs.AddDefaultHealthResponse()
-	grpcqueryservice.RegisterForTest(destMaster.RPCServer, qs)
+	grpcqueryservice.Register(destMaster.RPCServer, qs)
 	// Only wait 1 ms between retries, so that the test passes faster
 	*executeFetchRetryTime = (1 * time.Millisecond)
 
