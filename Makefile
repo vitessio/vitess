@@ -133,7 +133,7 @@ $(PROTO_GO_TEMPS): install_protoc-gen-go
 $(PROTO_GO_TEMPS): go/vt/.proto.tmp/%.pb.go: proto/%.proto
 	mkdir -p go/vt/.proto.tmp
 	$(PROTOC_DIR)/protoc -Iproto $< --go_out=plugins=grpc:go/vt/.proto.tmp
-	sed --in-place -r -e 's,import ([a-z0-9_]+) ".",import \1 "github.com/youtube/vitess/go/vt/proto/\1",g' $@
+	sed -i -e 's,import \([a-z0-9_]\+\) ".",import \1 "github.com/youtube/vitess/go/vt/proto/\1",g' $@
 
 # Generate the PHP proto files in a Docker container, and copy them back.
 php_proto:
