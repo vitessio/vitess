@@ -395,9 +395,10 @@ func execCmd(name string, args, env []string, dir string, input io.Reader) (cmd 
 	out, err := cmd.CombinedOutput()
 	output = string(out)
 	if err != nil {
-		err = errors.New(name + ": " + output)
+		log.Infof("execCmd: %v failed: %v", name, err)
+		err = fmt.Errorf("%v: %v, output: %v", name, err, output)
 	}
-	log.Infof("execCmd: command returned: %v", output)
+	log.Infof("execCmd: %v output: %v", name, output)
 	return cmd, output, err
 }
 
