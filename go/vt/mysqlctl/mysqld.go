@@ -141,8 +141,8 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		log.Warningf("VT_MYSQL_ROOT not set, skipping mysql_upgrade step: %v", err)
 		return nil
 	}
-	name := path.Join(dir, "bin/mysql_upgrade")
-	if _, err := os.Stat(name); err != nil {
+	name, err := binaryPath(dir, "mysql_upgrade")
+	if err != nil {
 		log.Warningf("mysql_upgrade binary not present, skipping it: %v", err)
 		return nil
 	}
@@ -196,7 +196,10 @@ func (mysqld *Mysqld) Start(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		name = path.Join(dir, "bin/mysqld_safe")
+		name, err = binaryPath(dir, "mysqld_safe")
+		if err != nil {
+			return err
+		}
 		arg := []string{
 			"--defaults-file=" + mysqld.config.path}
 		env := []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
@@ -339,7 +342,10 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, waitForMysqld bool) error {
 		if err != nil {
 			return err
 		}
-		name := path.Join(dir, "bin/mysqladmin")
+		name, err := binaryPath(dir, "mysqladmin")
+		if err != nil {
+			return err
+		}
 		arg := []string{
 			"-u", mysqld.dba.Uname, "-S", mysqld.config.SocketFile,
 			"shutdown"}
@@ -402,6 +408,20 @@ func execCmd(name string, args, env []string, dir string, input io.Reader) (cmd 
 	return cmd, output, err
 }
 
+// binaryPath does a limited path lookup for a command,
+// searching only within sbin and bin in the given root.
+func binaryPath(root, binary string) (string, error) {
+	subdirs := []string{"sbin", "bin"}
+	for _, subdir := range subdirs {
+		binPath := path.Join(root, subdir, binary)
+		if _, err := os.Stat(binPath); err == nil {
+			return binPath, nil
+		}
+	}
+	return "", fmt.Errorf("%s not found in any of %s/{%s}",
+		binary, root, strings.Join(subdirs, ","))
+}
+
 // Init will create the default directory structure for the mysqld process,
 // generate / configure a my.cnf file, install a skeleton database,
 // and apply the provided initial SQL file.
@@ -451,13 +471,15 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 func (mysqld *Mysqld) installDataDir() error {
 	mysqlRoot, err := vtenv.VtMysqlRoot()
 	if err != nil {
-		log.Errorf("%v", err)
+		return err
+	}
+	mysqldPath, err := binaryPath(mysqlRoot, "mysqld")
+	if err != nil {
 		return err
 	}
 
 	// Check mysqld version.
-	_, version, err := execCmd(path.Join(mysqlRoot, "sbin/mysqld"),
-		[]string{"--version"}, nil, mysqlRoot, nil)
+	_, version, err := execCmd(mysqldPath, []string{"--version"}, nil, mysqlRoot, nil)
 	if err != nil {
 		return err
 	}
@@ -472,7 +494,7 @@ func (mysqld *Mysqld) installDataDir() error {
 			"--basedir=" + mysqlRoot,
 			"--initialize-insecure", // Use empty 'root'@'localhost' password.
 		}
-		if _, _, err = execCmd(path.Join(mysqlRoot, "sbin/mysqld"), args, nil, mysqlRoot, nil); err != nil {
+		if _, _, err = execCmd(mysqldPath, args, nil, mysqlRoot, nil); err != nil {
 			log.Errorf("mysqld --initialize-insecure failed: %v", err)
 			return err
 		}
@@ -484,7 +506,11 @@ func (mysqld *Mysqld) installDataDir() error {
 		"--defaults-file=" + mysqld.config.path,
 		"--basedir=" + mysqlRoot,
 	}
-	if _, _, err = execCmd(path.Join(mysqlRoot, "bin/mysql_install_db"), args, nil, mysqlRoot, nil); err != nil {
+	cmdPath, err := binaryPath(mysqlRoot, "mysql_install_db")
+	if err != nil {
+		return err
+	}
+	if _, _, err = execCmd(cmdPath, args, nil, mysqlRoot, nil); err != nil {
 		log.Errorf("mysql_install_db failed: %v", err)
 		return err
 	}
@@ -656,7 +682,10 @@ func (mysqld *Mysqld) executeMysqlScript(user string, sql io.Reader) error {
 	if err != nil {
 		return err
 	}
-	name := path.Join(dir, "bin/mysql")
+	name, err := binaryPath(dir, "mysql")
+	if err != nil {
+		return err
+	}
 	arg := []string{"--batch", "-u", user, "-S", mysqld.config.SocketFile}
 	env := []string{
 		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),
