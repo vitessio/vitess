@@ -108,12 +108,10 @@ func (lg *l2VTGateGateway) addL2VTGateConn(addr, keyspace, shard string) error {
 		}
 	}
 
-	// FIXME(alainjobart):
-	// - connection timeout should be a flag
-	// - we should pass a blocking / non-blocking flag (regular vtgate to vttablet is blocking, this one should be non-blocking as it's talking to a VIP)
+	// Dial in the background
 	conn, err := tabletconn.GetDialer()(&topodatapb.Tablet{
 		Hostname: addr,
-	}, 30*time.Second)
+	}, 0)
 	if err != nil {
 		return err
 	}

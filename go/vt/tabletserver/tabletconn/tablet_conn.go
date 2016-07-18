@@ -68,6 +68,10 @@ type StreamHealthReader interface {
 // When using this TabletDialer to talk to a l2vtgate, only the Hostname
 // will be set to the full address to dial. Implementations should detect
 // this use case as the portmap will then be empty.
+//
+// timeout represents the connection timeout. If set to 0, this
+// connection should be established in the background and the
+// TabletDialer should return right away.
 type TabletDialer func(tablet *topodatapb.Tablet, timeout time.Duration) (TabletConn, error)
 
 // TabletConn defines the interface for a vttablet client. It should

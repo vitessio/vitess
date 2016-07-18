@@ -62,7 +62,11 @@ func DialTablet(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.Ta
 	if err != nil {
 		return nil, err
 	}
-	cc, err := grpc.Dial(addr, opt, grpc.WithBlock(), grpc.WithTimeout(timeout))
+	opts := []grpc.DialOption{opt}
+	if timeout > 0 {
+		opts = append(opts, grpc.WithBlock(), grpc.WithTimeout(timeout))
+	}
+	cc, err := grpc.Dial(addr, opts...)
 	if err != nil {
 		return nil, err
 	}
