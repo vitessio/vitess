@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/vt/discovery"
@@ -61,6 +63,8 @@ func TestGRPCDiscovery(t *testing.T) {
 		},
 	}, "test_tablet")
 	dg := gateway.GetCreator()(hc, ts, ts, cell, 2, []topodatapb.TabletType{tabletconntest.TestTarget.TabletType})
+	ctx := context.Background()
+	defer dg.Close(ctx)
 
 	// and run the test suite.
 	TestSuite(t, "discovery-grpc", dg, service)
@@ -124,6 +128,8 @@ func TestL2VTGateDiscovery(t *testing.T) {
 	flag.Set("gateway_implementation", "l2vtgategateway")
 	flag.Set("l2vtgategateway_addrs", fmt.Sprintf("%v|%v|%v", listener.Addr().String(), tabletconntest.TestTarget.Keyspace, tabletconntest.TestTarget.Shard))
 	lg := gateway.GetCreator()(nil, ts, nil, "", 2, nil)
+	ctx := context.Background()
+	defer lg.Close(ctx)
 
 	// and run the test suite.
 	TestSuite(t, "l2vtgate-grpc", lg, service)

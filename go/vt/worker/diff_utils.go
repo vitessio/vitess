@@ -49,7 +49,7 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 		return nil, err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, tablet.Tablet, *remoteActionsTimeout)
+	conn, err := tabletconn.GetDialer()(tablet.Tablet, *remoteActionsTimeout)
 	if err != nil {
 		return nil, err
 	}

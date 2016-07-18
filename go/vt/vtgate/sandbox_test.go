@@ -260,7 +260,7 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string) (notif
 	return result, nil
 }
 
-func sandboxDialer(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
+func sandboxDialer(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
 	sand := getSandbox(tablet.Keyspace)
 	sand.sandmu.Lock()
 	defer sand.sandmu.Unlock()

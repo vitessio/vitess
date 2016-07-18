@@ -128,7 +128,7 @@ func TestSuite(t *testing.T, name string, g gateway.Gateway, f *tabletconntest.F
 
 	protocolName := "gateway-test-" + name
 
-	tabletconn.RegisterDialer(protocolName, func(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
+	tabletconn.RegisterDialer(protocolName, func(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
 		return &gatewayAdapter{
 			g: g,
 		}, nil

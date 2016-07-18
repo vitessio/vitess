@@ -68,7 +68,7 @@ type StreamHealthReader interface {
 // When using this TabletDialer to talk to a l2vtgate, only the Hostname
 // will be set to the full address to dial. Implementations should detect
 // this use case as the portmap will then be empty.
-type TabletDialer func(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (TabletConn, error)
+type TabletDialer func(tablet *topodatapb.Tablet, timeout time.Duration) (TabletConn, error)
 
 // TabletConn defines the interface for a vttablet client. It should
 // be thread-safe, so it can be used concurrently used across goroutines.

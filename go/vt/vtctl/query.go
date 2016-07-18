@@ -304,7 +304,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
@@ -342,7 +342,7 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
@@ -383,7 +383,7 @@ func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
@@ -417,7 +417,7 @@ func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
@@ -448,7 +448,7 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}

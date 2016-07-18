@@ -335,7 +335,7 @@ func createFakeConn(tablet *topodatapb.Tablet, c chan *querypb.StreamHealthRespo
 	return conn
 }
 
-func discoveryDialer(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
+func discoveryDialer(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
 	key := TabletToMapKey(tablet)
 	return connMap[key], nil
 }

@@ -262,7 +262,7 @@ func createSourceTablet(t *testing.T, name string, ts topo.Server, keyspace, sha
 
 	// register a tablet conn dialer that will return the instance
 	// we want
-	tabletconn.RegisterDialer(name, func(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
+	tabletconn.RegisterDialer(name, func(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
 		return &fakeTabletConn{
 			tablet: tablet,
 		}, nil

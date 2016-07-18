@@ -56,7 +56,7 @@ func NewRestartableResultReader(ctx context.Context, logger logutil.Logger, ts t
 		return nil, fmt.Errorf("tablet=%v table=%v chunk=%v: Failed to resolve tablet alias: %v", topoproto.TabletAliasString(tabletAlias), td.Name, chunk, err)
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, tablet.Tablet, *remoteActionsTimeout)
+	conn, err := tabletconn.GetDialer()(tablet.Tablet, *remoteActionsTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("tablet=%v table=%v chunk=%v: Failed to get dialer for tablet: %v", topoproto.TabletAliasString(tabletAlias), td.Name, chunk, err)
 	}

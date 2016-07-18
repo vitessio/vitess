@@ -49,12 +49,12 @@ type l2VTGateConn struct {
 	keyspace string
 	shard    string
 	keyRange *topodatapb.KeyRange // only set if shard is also a KeyRange
-
-	conn tabletconn.TabletConn
+	conn     tabletconn.TabletConn
 }
 
 // l2VTGateGateway is the main gateway object
 type l2VTGateGateway struct {
+	// retryCount is set at construction time
 	retryCount int
 
 	// mu protects all fields below.
@@ -109,11 +109,9 @@ func (lg *l2VTGateGateway) addL2VTGateConn(addr, keyspace, shard string) error {
 	}
 
 	// FIXME(alainjobart):
-	// - use a per-l2VTGateConn context that can be closed
 	// - connection timeout should be a flag
 	// - we should pass a blocking / non-blocking flag (regular vtgate to vttablet is blocking, this one should be non-blocking as it's talking to a VIP)
-	ctx := context.Background()
-	conn, err := tabletconn.GetDialer()(ctx, &topodatapb.Tablet{
+	conn, err := tabletconn.GetDialer()(&topodatapb.Tablet{
 		Hostname: addr,
 	}, 30*time.Second)
 	if err != nil {
@@ -282,6 +280,7 @@ func (lg *l2VTGateGateway) Close(ctx context.Context) error {
 			c.conn.Close()
 		}
 	}
+	lg.connMap = make(map[string][]*l2VTGateConn)
 	return nil
 }
 

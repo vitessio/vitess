@@ -290,7 +290,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 func (hcc *healthCheckConn) connect(hc *HealthCheckImpl) (tabletconn.StreamHealthReader, error) {
 	// Keyspace, shard and tabletType are the ones from the tablet
 	// record, but they won't be used just yet.
-	conn, err := tabletconn.GetDialer()(hcc.ctx, hcc.tabletStats.Tablet, hc.connTimeout)
+	conn, err := tabletconn.GetDialer()(hcc.tabletStats.Tablet, hc.connTimeout)
 	if err != nil {
 		return nil, err
 	}

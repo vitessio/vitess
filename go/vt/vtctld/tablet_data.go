@@ -83,7 +83,7 @@ func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias 
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, ti.Tablet, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ti.Tablet, 30*time.Second)
 	if err != nil {
 		return err
 	}

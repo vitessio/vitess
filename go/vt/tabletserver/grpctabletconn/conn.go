@@ -50,7 +50,7 @@ type gRPCQueryClient struct {
 }
 
 // DialTablet creates and initializes gRPCQueryClient.
-func DialTablet(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
+func DialTablet(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
 	// create the RPC client
 	addr := ""
 	if grpcPort, ok := tablet.PortMap["grpc"]; ok {
