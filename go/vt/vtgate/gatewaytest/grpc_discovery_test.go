@@ -2,6 +2,7 @@ package gatewaytest
 
 import (
 	"flag"
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -121,8 +122,8 @@ func TestL2VTGateDiscovery(t *testing.T) {
 
 	// VTGate: create the l2vtgate gateway
 	flag.Set("gateway_implementation", "l2vtgategateway")
+	flag.Set("l2vtgategateway_addrs", fmt.Sprintf("%v|%v|%v", listener.Addr().String(), tabletconntest.TestTarget.Keyspace, tabletconntest.TestTarget.Shard))
 	lg := gateway.GetCreator()(nil, ts, nil, "", 2, nil)
-	lg.(*gateway.L2VTGateGateway).AddL2VTGateConn(listener.Addr().String(), tabletconntest.TestTarget.Keyspace, tabletconntest.TestTarget.Shard)
 
 	// and run the test suite.
 	TestSuite(t, "l2vtgate-grpc", lg, service)
