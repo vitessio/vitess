@@ -1,7 +1,7 @@
 package vindexes
 
 import (
-	"encoding/hex"
+	//"encoding/hex"
 	"reflect"
 	"testing"
 
@@ -54,7 +54,8 @@ func TestLookupUniqueCreate(t *testing.T) {
 		Sql: "insert into t(fromc, toc) values(:fromc, :toc)",
 		BindVariables: map[string]interface{}{
 			"fromc": 1,
-			"toc":   hex.EncodeToString([]byte("test")),
+			"toc":   []byte("test"),
+			//"toc":   hex.EncodeToString([]byte("test")),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
@@ -79,7 +80,8 @@ func TestLookupUniqueDelete(t *testing.T) {
 		Sql: "delete from t where fromc = :fromc and toc = :toc",
 		BindVariables: map[string]interface{}{
 			"fromc": 1,
-			"toc":   hex.EncodeToString([]byte("test")),
+			"toc":   []byte("test"),
+			//"toc":   hex.EncodeToString([]byte("test")),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {

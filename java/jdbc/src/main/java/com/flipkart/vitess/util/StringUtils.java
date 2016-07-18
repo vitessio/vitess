@@ -343,4 +343,13 @@ public class StringUtils {
                                                             's' :
                                                             'W'))))))))))));
     }
+
+    public static boolean singleShardSQL(String sql){
+        String informationSchemaSeq = "information_schema";
+        if(StringUtils.startsWithIgnoreCaseAndWs(sql, Constants.SQL_SHOW)|| sql.toLowerCase().contains(informationSchemaSeq)){
+            return true;
+        } else {
+            return false;
+        }
+    }
 }
