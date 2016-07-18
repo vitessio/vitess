@@ -52,7 +52,12 @@ type gRPCQueryClient struct {
 // DialTablet creates and initializes gRPCQueryClient.
 func DialTablet(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
 	// create the RPC client
-	addr := netutil.JoinHostPort(tablet.Hostname, tablet.PortMap["grpc"])
+	addr := ""
+	if grpcPort, ok := tablet.PortMap["grpc"]; ok {
+		addr = netutil.JoinHostPort(tablet.Hostname, grpcPort)
+	} else {
+		addr = tablet.Hostname
+	}
 	opt, err := grpcutils.ClientSecureDialOption(*cert, *key, *ca, *name)
 	if err != nil {
 		return nil, err

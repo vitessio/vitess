@@ -64,6 +64,10 @@ type StreamHealthReader interface {
 // object that can communicate with a tablet. Only the tablet's
 // HostName and PortMap should be used (and maybe the alias for debug
 // messages).
+//
+// When using this TabletDialer to talk to a l2vtgate, only the Hostname
+// will be set to the full address to dial. Implementations should detect
+// this use case as the portmap will then be empty.
 type TabletDialer func(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (TabletConn, error)
 
 // TabletConn defines the interface for a vttablet client. It should
