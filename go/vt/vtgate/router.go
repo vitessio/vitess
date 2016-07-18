@@ -330,19 +330,18 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 		if err != nil {
 			return nil, fmt.Errorf("execInsertSharded: %v", err)
 		}
-		colNum := 0
-		if rowNum == 0 {
-			ksid, err := rtr.handlePrimary(vcursor, keys[0], route.Table.ColumnVindexes[0], vcursor.bindVars, rowNum)
-			if err != nil {
-				return nil, fmt.Errorf("execInsertSharded: %v", err)
-			}
-			firstKsid = ksid
-			colNum = 1
-		}
-		for i := colNum; i < len(keys); i++ {
-			err := rtr.handleNonPrimary(vcursor, keys[i], route.Table.ColumnVindexes[i], vcursor.bindVars, firstKsid, rowNum)
-			if err != nil {
-				return nil, err
+		for colNum := 0; colNum < len(keys); colNum++ {
+			if rowNum == 0 && colNum == 0 {
+				ksid, err := rtr.handlePrimary(vcursor, keys[0], route.Table.ColumnVindexes[0], vcursor.bindVars, rowNum)
+				if err != nil {
+					return nil, fmt.Errorf("execInsertSharded: %v", err)
+				}
+				firstKsid = ksid
+			} else {
+				err := rtr.handleNonPrimary(vcursor, keys[colNum], route.Table.ColumnVindexes[colNum], vcursor.bindVars, firstKsid, rowNum)
+				if err != nil {
+					return nil, fmt.Errorf("execInsertSharded: %v", err)
+				}
 			}
 		}
 	}

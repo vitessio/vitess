@@ -56,27 +56,23 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 	}
 	colVindexes := route.Table.ColumnVindexes
 	routeValues := make([]interface{}, 0, len(values))
-	autoIncColInsert := false
-	indexColInsert := make([]bool, len(colVindexes))
 	autoIncValues := make([]interface{}, 0, len(values))
 	for rowNum := 0; rowNum < len(values); rowNum++ {
 		rowValue := make([]interface{}, 0, len(colVindexes))
-		for colNum, index := range colVindexes {
-			row, pos, colInsert := findOrInsertPos(ins, index.Column, rowNum, indexColInsert[colNum])
+		for _, index := range colVindexes {
+			row, pos := findOrInsertPos(ins, index.Column, rowNum)
 			value, err := buildIndexPlan(index, rowNum, row, pos)
 			if err != nil {
 				return nil, err
 			}
-			indexColInsert[colNum] = colInsert
 			rowValue = append(rowValue, value)
 		}
 		if route.Table.AutoIncrement != nil {
-			autoIncVal, colInsert, value, err := buildAutoIncrementPlan(ins, route.Table.AutoIncrement, route, rowValue, rowNum, autoIncColInsert)
+			autoIncVal, value, err := buildAutoIncrementPlan(ins, route.Table.AutoIncrement, route, rowValue, rowNum)
 			if err != nil {
 				return nil, err
 			}
 			rowValue = value
-			autoIncColInsert = colInsert
 			autoIncValues = append(autoIncValues, autoIncVal)
 		}
 		routeValues = append(routeValues, rowValue)
@@ -105,29 +101,28 @@ func buildIndexPlan(colVindex *vindexes.ColumnVindex, rowNum int, row sqlparser.
 	return val, nil
 }
 
-func buildAutoIncrementPlan(ins *sqlparser.Insert, autoinc *vindexes.AutoIncrement, route *engine.Route, rowValue []interface{}, rowNum int, autoIncColInsert bool) (interface{}, bool, []interface{}, error) {
+func buildAutoIncrementPlan(ins *sqlparser.Insert, autoinc *vindexes.AutoIncrement, route *engine.Route, rowValue []interface{}, rowNum int) (interface{}, []interface{}, error) {
 	var autoIncVal interface{}
 	// If it's also a colvindex, we have to add a redirect from route.Values.
 	// Otherwise, we have to redirect from row[pos].
 	if autoinc.ColumnVindexNum >= 0 {
 		autoIncVal = rowValue[autoinc.ColumnVindexNum]
 		rowValue[autoinc.ColumnVindexNum] = ":" + engine.SeqVarName + strconv.Itoa(rowNum)
-		return autoIncVal, autoIncColInsert, rowValue, nil
+		return autoIncVal, rowValue, nil
 	}
-	row, pos, colInsert := findOrInsertPos(ins, autoinc.Column, rowNum, autoIncColInsert)
-	autoIncColInsert = colInsert
+	row, pos := findOrInsertPos(ins, autoinc.Column, rowNum)
 	val, err := valConvert(row[pos])
 	if err != nil {
-		return autoIncVal, autoIncColInsert, rowValue, fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
+		return autoIncVal, rowValue, fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
 	autoIncVal = val
 	row[pos] = sqlparser.ValArg([]byte(":" + engine.SeqVarName + strconv.Itoa(rowNum)))
 
-	return autoIncVal, autoIncColInsert, rowValue, nil
+	return autoIncVal, rowValue, nil
 }
 
-func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString, rowNum int, colInsert bool) (sqlparser.ValTuple, int, bool) {
-	pos := -1
+func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString, rowNum int) (row sqlparser.ValTuple, pos int) {
+	pos = -1
 	for i, column := range ins.Columns {
 		if col.Equal(cistring.CIString(column)) {
 			pos = i
@@ -135,12 +130,11 @@ func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString, rowNum int, c
 		}
 	}
 	if pos == -1 {
-		colInsert = true
 		pos = len(ins.Columns)
 		ins.Columns = append(ins.Columns, sqlparser.ColIdent(col))
 	}
-	if colInsert {
+	if pos == -1 || pos >= len(ins.Rows.(sqlparser.Values)[rowNum].(sqlparser.ValTuple)) {
 		ins.Rows.(sqlparser.Values)[rowNum] = append(ins.Rows.(sqlparser.Values)[rowNum].(sqlparser.ValTuple), &sqlparser.NullVal{})
 	}
-	return ins.Rows.(sqlparser.Values)[rowNum].(sqlparser.ValTuple), pos, colInsert
+	return ins.Rows.(sqlparser.Values)[rowNum].(sqlparser.ValTuple), pos
 }

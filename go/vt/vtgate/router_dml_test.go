@@ -583,7 +583,7 @@ func TestInsertFail(t *testing.T) {
 
 	sbclookup.MustFailServer = 1
 	_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
-	want = "lookup.Create: "
+	want = "execInsertSharded: lookup.Create: "
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
@@ -632,25 +632,25 @@ func TestInsertFail(t *testing.T) {
 
 	sbclookup.MustFailServer = 1
 	_, err = routerExec(router, "insert into music(user_id, id) values (1, 2)", nil)
-	want = "lookup.Create: shard, host: TestUnsharded.0.master"
+	want = "execInsertSharded: lookup.Create: shard, host: TestUnsharded.0.master"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
 	_, err = routerExec(router, "insert into music_extra(user_id, music_id) values (1, null)", nil)
-	want = "value must be supplied for column music_id"
+	want = "execInsertSharded: value must be supplied for column music_id"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
 	_, err = routerExec(router, "insert into music_extra_reversed(music_id, user_id) values (1, 'aa')", nil)
-	want = `hash.Verify: getNumber: strconv.ParseUint: parsing "aa": invalid syntax`
+	want = `execInsertSharded: hash.Verify: getNumber: strconv.ParseUint: parsing "aa": invalid syntax`
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
 	_, err = routerExec(router, "insert into music_extra_reversed(music_id, user_id) values (1, 3)", nil)
-	want = "value 3 for column user_id does not map to keyspace id 166b40b44aba4bd6"
+	want = "execInsertSharded: value 3 for column user_id does not map to keyspace id 166b40b44aba4bd6"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
@@ -669,7 +669,7 @@ func TestInsertFail(t *testing.T) {
 	}
 
 	_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, null)", nil)
-	want = "value must be supplied for column name"
+	want = "execInsertSharded: value must be supplied for column name"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
@@ -832,19 +832,19 @@ func TestMultiInsertFail(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
 
 	_, err := routerExec(router, "insert into user_extra(user_id, extra) values (1, 'abc'),(2, 'xyz')", nil)
-	want := "value 2 for column user_id does not map to keyspace id 166b40b44aba4bd6"
+	want := "execInsertSharded: value 2 for column user_id does not map to keyspace id 166b40b44aba4bd6"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
 	_, err = routerExec(router, "insert into user(id, name) values (1, 'abc'),(2, 'xyz')", nil)
-	want = "value 2 for column Id does not map to keyspace id 166b40b44aba4bd6"
+	want = "execInsertSharded: value 2 for column Id does not map to keyspace id 166b40b44aba4bd6"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
 	_, err = routerExec(router, "insert into music(user_id, id) values (1, 1),(2, null)", nil)
-	want = "value 2 for column user_id does not map to keyspace id 166b40b44aba4bd6"
+	want = "execInsertSharded: value 2 for column user_id does not map to keyspace id 166b40b44aba4bd6"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
