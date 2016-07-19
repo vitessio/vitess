@@ -84,9 +84,40 @@ statements), and process it with a Map-Reduce pipeline.
 
 ## Multi-cell Deployment
 
-TODO: Elaborate
+Vitess is meant to run in multiple data centers / regions / cells. In this part,
+we'll use *cell* as a set of servers that are very close together, and share the
+same regional availability.
 
-Choosing master cell, master cells can become master. Vitess supports cross-cell failovers. Rdonlys can be in any cell, where batch jobs need to run. Replica-only cells can serve read-only traffic.
+A cell typically contains a set of tablets, a vtgate pool, and app servers that
+use the Vitess cluster. With Vitess, all components can be configured and
+brought up as needed:
+
+* The master for a shard can be in any cell. If cross-cell master access is
+  required, vtgate can be configured to do so easily (by passing the cell that
+  contains the master as a cell to watch).
+* It is not uncommon to have the cells that can contain the master be more
+  provisioned than read-only serving cells. These *master-capable* cells may
+  need one more replica to handle a possible failover, while still maintaining
+  the same replica serving capacity.
+* Failing over from one master in one cell to a master in a different cell is no
+  different than a local failover. It has an implication on traffic and latency,
+  but if the application traffic also gets re-directed to the new cell, the end
+  result is stable.
+* It is also possible to have some shards with a master in one cell, and some
+  other shards with their master in another cell. vtgate will just route the
+  traffic to the right place, incurring extra latency cost only on the remote
+  access. For instance, creating U.S. user records in a database with masters in
+  the U.S. and European user records in a database with masters in Europe is
+  easy to do. Replicas can exist in every cell anyway, and serve the replica
+  traffic quickly.
+* Replica serving cells are a good compromise to reduce user-visible latency:
+  they only contain *replica* servers, and master access is always done
+  remotely. If the application profile is mostly reads, this works really well.
+* Not all cells need *rdonly* (or batch) instances. Only the cells that run
+  batch jobs, or MapReduce jobs, really need them.
+
+Note Vitess uses local-cell data first, and is very resilient to any cell going
+down (most of our processes handle that case gracefully).
 
 ## Lock Server - Topology Service
 
