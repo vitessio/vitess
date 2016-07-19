@@ -750,6 +750,7 @@ func (client *Client) RestoreFromBackup(ctx context.Context, tablet *topodatapb.
 // Close is part of the tmclient.TabletManagerClient interface.
 func (client *Client) Close() {
 	client.mu.Lock()
+	defer client.mu.Unlock()
 	for _, c := range client.rpcClientMap {
 		close(c)
 		for ch := range c {
@@ -757,5 +758,4 @@ func (client *Client) Close() {
 		}
 	}
 	client.rpcClientMap = nil
-	client.mu.Unlock()
 }
