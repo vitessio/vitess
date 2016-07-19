@@ -4,60 +4,33 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "hash": "88f5a3385b5c974a80e68d319b785b26",
-    "content-hash": "89d1eb56e23a0dfd42ebc9de1519d1a9",
+    "hash": "ee30f9a7bdb87d0117d08f7f81a74451",
+    "content-hash": "ac27aa6775524f2c7df3c5eab6058f13",
     "packages": [
         {
             "name": "datto/protobuf-php",
             "version": "dev-master",
             "source": {
                 "type": "git",
-                "url": "https://github.com/datto/Protobuf-PHP.git",
-                "reference": "3a8578ebe7c4e44de15e4603f2f0b91aa85cc57b"
+                "url": "https://github.com/pixelfederation/datto-Protobuf-PHP-fake.git",
+                "reference": "e85085f54abad7e30f72c8086adae47c21372e7f"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/datto/Protobuf-PHP/zipball/3a8578ebe7c4e44de15e4603f2f0b91aa85cc57b",
-                "reference": "3a8578ebe7c4e44de15e4603f2f0b91aa85cc57b",
+                "url": "https://api.github.com/repos/pixelfederation/datto-Protobuf-PHP-fake/zipball/e85085f54abad7e30f72c8086adae47c21372e7f",
+                "reference": "e85085f54abad7e30f72c8086adae47c21372e7f",
                 "shasum": ""
             },
-            "require": {
-                "php": ">=5.3.0"
-            },
-            "bin": [
-                "protoc-gen-php.bat",
-                "protoc-gen-php.php"
-            ],
             "type": "library",
-            "extra": {
-                "branch-alias": {
-                    "dev-master": "1.0-dev"
-                }
-            },
-            "autoload": {
-                "psr-0": {
-                    "DrSlump": "library/"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
-            "authors": [
-                {
-                    "name": "Iván -DrSlump- Montes",
-                    "email": "drslump@pollinimini.net",
-                    "homepage": "https://github.com/drslump/Protobuf-PHP"
-                }
-            ],
-            "description": "PHP implementation of Google's Protocol Buffers",
-            "homepage": "https://github.com/datto/Protobuf-PHP",
-            "keywords": [
-                "protobuf",
-                "protocol buffer",
-                "serializing"
-            ],
-            "time": "2014-04-16 20:10:29"
+            "description": "Fake datto/protobuf-php repository for overriding in youtube/vitess",
+            "support": {
+                "source": "https://github.com/pixelfederation/datto-Protobuf-PHP-fake/tree/master",
+                "issues": "https://github.com/pixelfederation/datto-Protobuf-PHP-fake/issues"
+            },
+            "time": "2016-07-19 22:01:45"
         },
         {
             "name": "firebase/php-jwt",
@@ -437,7 +410,6 @@
                     "DrSlump": "library/"
                 }
             },
-            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
@@ -455,6 +427,9 @@
                 "protocol buffer",
                 "serializing"
             ],
+            "support": {
+                "source": "https://github.com/stanley-cheung/Protobuf-PHP/tree/v0.5"
+            },
             "time": "2016-07-13 23:17:34"
         }
     ],
