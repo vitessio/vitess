@@ -299,11 +299,11 @@ func TestInsertSharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into user(id, v, name) values (:_Id, 2, :_name) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert into user(id, v, name) values (:_Id0, 2, :_name0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
-			"_Id":   int64(1),
-			"_name": []byte("myname"),
-			"__seq": int64(1),
+			"_Id0":   int64(1),
+			"_name0": []byte("myname"),
+			"__seq0": int64(1),
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -330,11 +330,11 @@ func TestInsertSharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "insert into user(id, v, name) values (:_Id, 2, :_name) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
+		Sql: "insert into user(id, v, name) values (:_Id0, 2, :_name0) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
 		BindVariables: map[string]interface{}{
-			"_Id":   int64(3),
-			"__seq": int64(3),
-			"_name": []byte("myname2"),
+			"_Id0":   int64(3),
+			"__seq0": int64(3),
+			"_name0": []byte("myname2"),
 		},
 	}}
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
@@ -363,11 +363,11 @@ func TestInsertComments(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into user(id, v, name) values (:_Id, 2, :_name) /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
+		Sql: "insert into user(id, v, name) values (:_Id0, 2, :_name0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
 		BindVariables: map[string]interface{}{
-			"_Id":   int64(1),
-			"_name": []byte("myname"),
-			"__seq": int64(1),
+			"_Id0":   int64(1),
+			"_name0": []byte("myname"),
+			"__seq0": int64(1),
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -403,11 +403,11 @@ func TestInsertGenerator(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into user(v, name, Id) values (2, :_name, :_Id) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert into user(v, name, Id) values (2, :_name0, :_Id0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
-			"_Id":   int64(1),
-			"__seq": int64(1),
-			"_name": []byte("myname"),
+			"_Id0":   int64(1),
+			"__seq0": int64(1),
+			"_name0": []byte("myname"),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
@@ -441,11 +441,11 @@ func TestInsertLookupOwned(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into music(user_id, id) values (:_user_id, :_id) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+		Sql: "insert into music(user_id, id) values (:_user_id0, :_id0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
 		BindVariables: map[string]interface{}{
-			"_user_id": int64(2),
-			"_id":      int64(3),
-			"__seq":    int64(3),
+			"_user_id0": int64(2),
+			"_id0":      int64(3),
+			"__seq0":    int64(3),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
@@ -478,11 +478,11 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into music(user_id, id) values (:_user_id, :_id) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+		Sql: "insert into music(user_id, id) values (:_user_id0, :_id0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
 		BindVariables: map[string]interface{}{
-			"_user_id": int64(2),
-			"_id":      int64(4),
-			"__seq":    int64(4),
+			"_user_id0": int64(2),
+			"_id0":      int64(4),
+			"__seq0":    int64(4),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
@@ -516,10 +516,10 @@ func TestInsertLookupUnowned(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into music_extra(user_id, music_id) values (:_user_id, :_music_id) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+		Sql: "insert into music_extra(user_id, music_id) values (:_user_id0, :_music_id0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
 		BindVariables: map[string]interface{}{
-			"_user_id":  int64(2),
-			"_music_id": int64(3),
+			"_user_id0":  int64(2),
+			"_music_id0": int64(3),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
@@ -545,10 +545,10 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into music_extra_reversed(music_id, user_id) values (:_music_id, :_user_id) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert into music_extra_reversed(music_id, user_id) values (:_music_id0, :_user_id0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
-			"_user_id":  int64(1),
-			"_music_id": int64(3),
+			"_user_id0":  int64(1),
+			"_music_id0": int64(3),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
@@ -583,7 +583,7 @@ func TestInsertFail(t *testing.T) {
 
 	sbclookup.MustFailServer = 1
 	_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
-	want = "lookup.Create: "
+	want = "execInsertSharded: lookup.Create: "
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
@@ -632,25 +632,25 @@ func TestInsertFail(t *testing.T) {
 
 	sbclookup.MustFailServer = 1
 	_, err = routerExec(router, "insert into music(user_id, id) values (1, 2)", nil)
-	want = "lookup.Create: shard, host: TestUnsharded.0.master"
+	want = "execInsertSharded: lookup.Create: shard, host: TestUnsharded.0.master"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
 	_, err = routerExec(router, "insert into music_extra(user_id, music_id) values (1, null)", nil)
-	want = "value must be supplied for column music_id"
+	want = "execInsertSharded: value must be supplied for column music_id"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
 	_, err = routerExec(router, "insert into music_extra_reversed(music_id, user_id) values (1, 'aa')", nil)
-	want = `hash.Verify: getNumber: strconv.ParseUint: parsing "aa": invalid syntax`
+	want = `execInsertSharded: hash.Verify: getNumber: strconv.ParseUint: parsing "aa": invalid syntax`
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
 	_, err = routerExec(router, "insert into music_extra_reversed(music_id, user_id) values (1, 3)", nil)
-	want = "value 3 for column user_id does not map to keyspace id 166b40b44aba4bd6"
+	want = "execInsertSharded: value 3 for column user_id does not map to keyspace id 166b40b44aba4bd6"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
@@ -669,7 +669,7 @@ func TestInsertFail(t *testing.T) {
 	}
 
 	_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, null)", nil)
-	want = "value must be supplied for column name"
+	want = "execInsertSharded: value must be supplied for column name"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
@@ -687,4 +687,166 @@ func TestInsertFail(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
+}
+
+func TestMultiInsertSharded(t *testing.T) {
+	router, sbc1, sbc2, sbclookup := createRouterEnv()
+
+	_, err := routerExec(router, "insert into user(id, v, name) values (1, 1, 'myname1'),(1, 2, 'myname2')", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql: "insert into user(id, v, name) values (:_Id0, 1, :_name0), (:_Id1, 2, :_name1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		BindVariables: map[string]interface{}{
+			"_Id0":   int64(1),
+			"_name0": []byte("myname1"),
+			"__seq0": int64(1),
+			"_Id1":   int64(1),
+			"_name1": []byte("myname2"),
+			"__seq1": int64(1),
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
+		BindVariables: map[string]interface{}{
+			"name":    []byte("myname1"),
+			"user_id": int64(1),
+		},
+	}, {
+		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
+		BindVariables: map[string]interface{}{
+			"name":    []byte("myname2"),
+			"user_id": int64(1),
+		},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: \n%+v, want \n%+v", sbclookup.Queries, wantQueries)
+	}
+
+	sbc1.Queries = nil
+	sbclookup.Queries = nil
+	_, err = routerExec(router, "insert into user(id, v, name) values (3, 3, 'myname3'),(3, 4, 'myname4')", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql: "insert into user(id, v, name) values (:_Id0, 3, :_name0), (:_Id1, 4, :_name1) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
+		BindVariables: map[string]interface{}{
+			"_Id0":   int64(3),
+			"__seq0": int64(3),
+			"_name0": []byte("myname3"),
+			"_Id1":   int64(3),
+			"__seq1": int64(3),
+			"_name1": []byte("myname4"),
+		},
+	}}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries:\n%+v, want\n%+v\n", sbc2.Queries, wantQueries)
+	}
+	if sbc1.Queries != nil {
+		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
+		BindVariables: map[string]interface{}{
+			"name":    []byte("myname3"),
+			"user_id": int64(3),
+		},
+	}, {
+		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
+		BindVariables: map[string]interface{}{
+			"name":    []byte("myname4"),
+			"user_id": int64(3),
+		},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: \n%+v, want \n%+v\n", sbclookup.Queries, wantQueries)
+	}
+}
+
+func TestMultiInsertGenerator(t *testing.T) {
+	router, sbc, _, sbclookup := createRouterEnv()
+
+	sbclookup.SetResults([]*sqltypes.Result{{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+		}},
+		RowsAffected: 1,
+		InsertID:     1,
+	}})
+	result, err := routerExec(router, "insert into user(v, name) values (2, 'myname1'), (3, 'myname2')", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql: "insert into user(v, name, Id) values (2, :_name0, :_Id0), (3, :_name1, :_Id1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		BindVariables: map[string]interface{}{
+			"_Id0":   int64(1),
+			"__seq0": int64(1),
+			"_name0": []byte("myname1"),
+			"_Id1":   int64(1),
+			"__seq1": int64(1),
+			"_name1": []byte("myname2"),
+		},
+	}}
+	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
+		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql:           "select next value from `user_seq`",
+		BindVariables: map[string]interface{}{},
+	}, {
+		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
+		BindVariables: map[string]interface{}{
+			"name":    []byte("myname1"),
+			"user_id": int64(1),
+		},
+	}, {
+		Sql:           "select next value from `user_seq`",
+		BindVariables: map[string]interface{}{},
+	}, {
+		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
+		BindVariables: map[string]interface{}{
+			"name":    []byte("myname2"),
+			"user_id": int64(1),
+		},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: \n%#v, want \n%#v\n", sbclookup.Queries, wantQueries)
+	}
+	wantResult := *sandboxconn.SingleRowResult
+	wantResult.InsertID = 1
+	if !reflect.DeepEqual(result, &wantResult) {
+		t.Errorf("result: %+v, want %+v", result, &wantResult)
+	}
+}
+
+func TestMultiInsertFail(t *testing.T) {
+	router, _, _, _ := createRouterEnv()
+
+	_, err := routerExec(router, "insert into user_extra(user_id, extra) values (1, 'abc'),(2, 'xyz')", nil)
+	want := "execInsertSharded: value 2 for column user_id does not map to keyspace id 166b40b44aba4bd6"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+
+	_, err = routerExec(router, "insert into user(id, name) values (1, 'abc'),(2, 'xyz')", nil)
+	want = "execInsertSharded: value 2 for column Id does not map to keyspace id 166b40b44aba4bd6"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+
+	_, err = routerExec(router, "insert into music(user_id, id) values (1, 1),(2, null)", nil)
+	want = "execInsertSharded: value 2 for column user_id does not map to keyspace id 166b40b44aba4bd6"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+
 }

@@ -7,6 +7,7 @@ package vtgate
 import (
 	"encoding/hex"
 	"fmt"
+	"strconv"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
@@ -313,30 +314,44 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, route *engine.Route)
 }
 
 func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
-	insertid, err := rtr.handleGenerate(vcursor, route.Generate)
-	if err != nil {
-		return nil, fmt.Errorf("execInsertSharded: %v", err)
-	}
-	input := route.Values.([]interface{})
-	keys, err := rtr.resolveKeys(input, vcursor.bindVars)
-	if err != nil {
-		return nil, fmt.Errorf("execInsertSharded: %v", err)
-	}
-	ksid, err := rtr.handlePrimary(vcursor, keys[0], route.Table.ColumnVindexes[0], vcursor.bindVars)
-	if err != nil {
-		return nil, fmt.Errorf("execInsertSharded: %v", err)
-	}
-	ks, shard, err := rtr.getRouting(vcursor.ctx, route.Keyspace.Name, vcursor.tabletType, ksid)
-	if err != nil {
-		return nil, fmt.Errorf("execInsertSharded: %v", err)
-	}
-	for i := 1; i < len(keys); i++ {
-		err := rtr.handleNonPrimary(vcursor, keys[i], route.Table.ColumnVindexes[i], vcursor.bindVars, ksid)
+	var firstKsid []byte
+	var firstAutoGenInsertID int64
+	inputs := route.Values.([]interface{})
+	for rowNum, input := range inputs {
+		insertid, err := rtr.handleGenerate(vcursor, route.Generate, rowNum)
+		if firstAutoGenInsertID == 0 && insertid != 0 {
+			firstAutoGenInsertID = insertid
+		}
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("execInsertSharded: %v", err)
+		}
+
+		keys, err := rtr.resolveKeys(input.([]interface{}), vcursor.bindVars)
+		if err != nil {
+			return nil, fmt.Errorf("execInsertSharded: %v", err)
+		}
+		for colNum := 0; colNum < len(keys); colNum++ {
+			if rowNum == 0 && colNum == 0 {
+				ksid, err := rtr.handlePrimary(vcursor, keys[0], route.Table.ColumnVindexes[0], vcursor.bindVars, rowNum)
+				if err != nil {
+					return nil, fmt.Errorf("execInsertSharded: %v", err)
+				}
+				firstKsid = ksid
+			} else {
+				err := rtr.handleNonPrimary(vcursor, keys[colNum], route.Table.ColumnVindexes[colNum], vcursor.bindVars, firstKsid, rowNum)
+				if err != nil {
+					return nil, fmt.Errorf("execInsertSharded: %v", err)
+				}
+			}
 		}
 	}
-	rewritten := sqlannotation.AddKeyspaceID(route.Query, ksid, vcursor.comments)
+
+	ks, shard, err := rtr.getRouting(vcursor.ctx, route.Keyspace.Name, vcursor.tabletType, firstKsid)
+	if err != nil {
+		return nil, fmt.Errorf("execInsertSharded: %v", err)
+	}
+
+	rewritten := sqlannotation.AddKeyspaceID(route.Query, firstKsid, vcursor.comments)
 	result, err := rtr.scatterConn.Execute(
 		vcursor.ctx,
 		rewritten,
@@ -346,14 +361,15 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 		vcursor.tabletType,
 		NewSafeSession(vcursor.session),
 		vcursor.notInTransaction)
+
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
-	if insertid != 0 {
+	if firstAutoGenInsertID != 0 {
 		if result.InsertID != 0 {
 			return nil, fmt.Errorf("sequence and db generated a value each for insert")
 		}
-		result.InsertID = uint64(insertid)
+		result.InsertID = uint64(firstAutoGenInsertID)
 	}
 	return result, nil
 }
@@ -477,11 +493,11 @@ func (rtr *Router) deleteVindexEntries(vcursor *requestContext, route *engine.Ro
 	return nil
 }
 
-func (rtr *Router) handleGenerate(vcursor *requestContext, gen *engine.Generate) (insertid int64, err error) {
+func (rtr *Router) handleGenerate(vcursor *requestContext, gen *engine.Generate, rowNum int) (insertid int64, err error) {
 	if gen == nil {
 		return 0, nil
 	}
-	val := gen.Value
+	val := gen.Value.([]interface{})[rowNum]
 	if v, ok := val.(string); ok {
 		val, ok = vcursor.bindVars[v[1:]]
 		if !ok {
@@ -489,7 +505,7 @@ func (rtr *Router) handleGenerate(vcursor *requestContext, gen *engine.Generate)
 		}
 	}
 	if val != nil {
-		vcursor.bindVars[engine.SeqVarName] = val
+		vcursor.bindVars[engine.SeqVarName+strconv.Itoa(rowNum)] = val
 		return 0, nil
 	}
 	// TODO(sougou): This is similar to paramsUnsharded.
@@ -521,11 +537,11 @@ func (rtr *Router) handleGenerate(vcursor *requestContext, gen *engine.Generate)
 	if err != nil {
 		return 0, err
 	}
-	vcursor.bindVars[engine.SeqVarName] = num
+	vcursor.bindVars[engine.SeqVarName+strconv.Itoa(rowNum)] = num
 	return num, nil
 }
 
-func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{}, colVindex *vindexes.ColumnVindex, bv map[string]interface{}) (ksid []byte, err error) {
+func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{}, colVindex *vindexes.ColumnVindex, bv map[string]interface{}, rowNum int) (ksid []byte, err error) {
 	if vindexKey == nil {
 		return nil, fmt.Errorf("value must be supplied for column %v", colVindex.Column)
 	}
@@ -538,11 +554,11 @@ func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{},
 	if len(ksid) == 0 {
 		return nil, fmt.Errorf("could not map %v to a keyspace id", vindexKey)
 	}
-	bv["_"+colVindex.Column.Original()] = vindexKey
+	bv["_"+colVindex.Column.Original()+strconv.Itoa(rowNum)] = vindexKey
 	return ksid, nil
 }
 
-func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface{}, colVindex *vindexes.ColumnVindex, bv map[string]interface{}, ksid []byte) error {
+func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface{}, colVindex *vindexes.ColumnVindex, bv map[string]interface{}, ksid []byte, rowNum int) error {
 	if colVindex.Owned {
 		if vindexKey == nil {
 			return fmt.Errorf("value must be supplied for column %v", colVindex.Column)
@@ -575,7 +591,7 @@ func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface
 			}
 		}
 	}
-	bv["_"+colVindex.Column.Original()] = vindexKey
+	bv["_"+colVindex.Column.Original()+strconv.Itoa(rowNum)] = vindexKey
 	return nil
 }
 

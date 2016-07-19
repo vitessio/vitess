@@ -7,6 +7,7 @@ package planbuilder
 import (
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -42,71 +43,85 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 	default:
 		panic("unexpected construct in insert")
 	}
-	if len(values) != 1 {
-		return nil, errors.New("unsupported: multi-row insert")
-	}
-	switch values[0].(type) {
-	case *sqlparser.Subquery:
-		return nil, errors.New("unsupported: subqueries in insert")
-	}
-	row := values[0].(sqlparser.ValTuple)
-	if len(ins.Columns) != len(row) {
-		return nil, errors.New("column list doesn't match values")
+	route.Opcode = engine.InsertSharded
+	for _, value := range values {
+		switch value.(type) {
+		case *sqlparser.Subquery:
+			return nil, errors.New("unsupported: subqueries in insert")
+		}
+		row := value.(sqlparser.ValTuple)
+		if len(ins.Columns) != len(row) {
+			return nil, errors.New("column list doesn't match values")
+		}
 	}
 	colVindexes := route.Table.ColumnVindexes
-	route.Opcode = engine.InsertSharded
-	route.Values = make([]interface{}, 0, len(colVindexes))
-	for _, index := range colVindexes {
-		if err := buildIndexPlan(ins, index, route); err != nil {
-			return nil, err
+	routeValues := make([]interface{}, 0, len(values))
+	autoIncValues := make([]interface{}, 0, len(values))
+	for rowNum := 0; rowNum < len(values); rowNum++ {
+		rowValue := make([]interface{}, 0, len(colVindexes))
+		for _, index := range colVindexes {
+			row, pos := findOrInsertPos(ins, index.Column, rowNum)
+			value, err := buildIndexPlan(index, rowNum, row, pos)
+			if err != nil {
+				return nil, err
+			}
+			rowValue = append(rowValue, value)
 		}
+		if route.Table.AutoIncrement != nil {
+			autoIncVal, value, err := buildAutoIncrementPlan(ins, route.Table.AutoIncrement, route, rowValue, rowNum)
+			if err != nil {
+				return nil, err
+			}
+			rowValue = value
+			autoIncValues = append(autoIncValues, autoIncVal)
+		}
+		routeValues = append(routeValues, rowValue)
 	}
 	if route.Table.AutoIncrement != nil {
-		if err := buildAutoIncrementPlan(ins, route.Table.AutoIncrement, route); err != nil {
-			return nil, err
+		route.Generate = &engine.Generate{
+			Opcode:   engine.SelectUnsharded,
+			Keyspace: route.Table.AutoIncrement.Sequence.Keyspace,
+			Query:    fmt.Sprintf("select next value from `%s`", route.Table.AutoIncrement.Sequence.Name),
+			Value:    autoIncValues,
 		}
 	}
+	route.Values = routeValues
 	route.Query = generateQuery(ins)
 	return route, nil
 }
 
 // buildIndexPlan adds the insert value to the Values field for the specified ColumnVindex.
 // This value will be used at the time of insert to validate the vindex value.
-func buildIndexPlan(ins *sqlparser.Insert, colVindex *vindexes.ColumnVindex, route *engine.Route) error {
-	row, pos := findOrInsertPos(ins, colVindex.Column)
+func buildIndexPlan(colVindex *vindexes.ColumnVindex, rowNum int, row sqlparser.ValTuple, pos int) (interface{}, error) {
 	val, err := valConvert(row[pos])
 	if err != nil {
-		return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
+		return val, fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
-	route.Values = append(route.Values.([]interface{}), val)
-	row[pos] = sqlparser.ValArg([]byte(":_" + colVindex.Column.Original()))
-	return nil
+	row[pos] = sqlparser.ValArg([]byte(":_" + colVindex.Column.Original() + strconv.Itoa(rowNum)))
+	return val, nil
 }
 
-func buildAutoIncrementPlan(ins *sqlparser.Insert, autoinc *vindexes.AutoIncrement, route *engine.Route) error {
-	route.Generate = &engine.Generate{
-		Opcode:   engine.SelectUnsharded,
-		Keyspace: autoinc.Sequence.Keyspace,
-		Query:    fmt.Sprintf("select next value from `%s`", autoinc.Sequence.Name),
-	}
+func buildAutoIncrementPlan(ins *sqlparser.Insert, autoinc *vindexes.AutoIncrement, route *engine.Route, rowValue []interface{}, rowNum int) (interface{}, []interface{}, error) {
+	var autoIncVal interface{}
 	// If it's also a colvindex, we have to add a redirect from route.Values.
 	// Otherwise, we have to redirect from row[pos].
 	if autoinc.ColumnVindexNum >= 0 {
-		route.Generate.Value = route.Values.([]interface{})[autoinc.ColumnVindexNum]
-		route.Values.([]interface{})[autoinc.ColumnVindexNum] = ":" + engine.SeqVarName
-		return nil
+		autoIncVal = rowValue[autoinc.ColumnVindexNum]
+		rowValue[autoinc.ColumnVindexNum] = ":" + engine.SeqVarName + strconv.Itoa(rowNum)
+		return autoIncVal, rowValue, nil
 	}
-	row, pos := findOrInsertPos(ins, autoinc.Column)
+	row, pos := findOrInsertPos(ins, autoinc.Column, rowNum)
 	val, err := valConvert(row[pos])
 	if err != nil {
-		return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
+		return autoIncVal, rowValue, fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
-	route.Generate.Value = val
-	row[pos] = sqlparser.ValArg([]byte(":" + engine.SeqVarName))
-	return nil
+	autoIncVal = val
+	row[pos] = sqlparser.ValArg([]byte(":" + engine.SeqVarName + strconv.Itoa(rowNum)))
+
+	return autoIncVal, rowValue, nil
 }
 
-func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString) (row sqlparser.ValTuple, pos int) {
+func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString, rowNum int) (row sqlparser.ValTuple, pos int) {
 	pos = -1
 	for i, column := range ins.Columns {
 		if col.Equal(cistring.CIString(column)) {
@@ -117,7 +132,9 @@ func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString) (row sqlparse
 	if pos == -1 {
 		pos = len(ins.Columns)
 		ins.Columns = append(ins.Columns, sqlparser.ColIdent(col))
-		ins.Rows.(sqlparser.Values)[0] = append(ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple), &sqlparser.NullVal{})
 	}
-	return ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple), pos
+	if pos == -1 || pos >= len(ins.Rows.(sqlparser.Values)[rowNum].(sqlparser.ValTuple)) {
+		ins.Rows.(sqlparser.Values)[rowNum] = append(ins.Rows.(sqlparser.Values)[rowNum].(sqlparser.ValTuple), &sqlparser.NullVal{})
+	}
+	return ins.Rows.(sqlparser.Values)[rowNum].(sqlparser.ValTuple), pos
 }

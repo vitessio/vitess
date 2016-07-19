@@ -194,10 +194,6 @@
 "insert into user(id) select 1 from dual"
 "unsupported: insert into select"
 
-# insert with multiple rows
-"insert into user(id) values (1), (2)"
-"unsupported: multi-row insert"
-
 # insert with subquery as value
 "insert into user(id) values (select 1 from dual)"
 "unsupported: subqueries in insert"

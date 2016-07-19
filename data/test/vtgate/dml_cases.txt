@@ -205,12 +205,12 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "insert into user(id, Name, Costly) values (:_Id, :_Name, :_Costly)",
-    "Values": [
-      ":__seq",
+    "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
+    "Values": [[
+      ":__seq0",
       null,
       null
-    ],
+    ]],
     "Table": "user",
     "Generate": {
       "Opcode": "SelectUnsharded",
@@ -219,7 +219,7 @@
         "Sharded": false
       },
       "Query": "select next value from `seq`",
-      "Value": 1
+      "Value": [1]
     }
   }
 }
@@ -234,12 +234,12 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "insert into user(nonid, Id, Name, Costly) values (2, :_Id, :_Name, :_Costly)",
-    "Values": [
-      ":__seq",
+    "Query": "insert into user(nonid, Id, Name, Costly) values (2, :_Id0, :_Name0, :_Costly0)",
+    "Values": [[
+      ":__seq0",
       null,
       null
-    ],
+    ]],
     "Table": "user",
     "Generate": {
       "Opcode": "SelectUnsharded",
@@ -247,7 +247,8 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next value from `seq`"
+      "Query": "select next value from `seq`",
+      "Value": [null]
     }
   }
 }
@@ -262,12 +263,12 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "insert into user(nonid, name, id, Costly) values (2, :_Name, :_Id, :_Costly)",
-    "Values": [
-      ":__seq",
+    "Query": "insert into user(nonid, name, id, Costly) values (2, :_Name0, :_Id0, :_Costly0)",
+    "Values": [[
+      ":__seq0",
       "foo",
       null
-    ],
+    ]],
     "Table": "user",
     "Generate": {
       "Opcode": "SelectUnsharded",
@@ -276,7 +277,7 @@
         "Sharded": false
       },
       "Query": "select next value from `seq`",
-      "Value": 1
+      "Value": [1]
     }
   }
 }
@@ -291,10 +292,10 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "insert into user_extra(nonid, user_id, extra_id) values (2, :_user_id, :__seq)",
-    "Values": [
+    "Query": "insert into user_extra(nonid, user_id, extra_id) values (2, :_user_id0, :__seq0)",
+    "Values": [[
       null
-    ],
+    ]],
     "Table": "user_extra",
     "Generate": {
       "Opcode": "SelectUnsharded",
@@ -302,7 +303,8 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next value from `seq`"
+      "Query": "select next value from `seq`",
+      "Value": [null]
     }
   }
 }
@@ -322,3 +324,39 @@
 # insert invalid table
 "insert into noexist(music_id, user_id) values(1, 1.1)"
 "table noexist not found"
+
+# insert with multiple rows
+"insert into user(id) values (1), (2)"
+{
+  "Original": "insert into user(id) values (1), (2)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0), (:_Id1, :_Name1, :_Costly1)",
+    "Values": [
+      [
+        ":__seq0",
+        null,
+        null
+      ],
+      [
+        ":__seq1",
+        null,
+        null
+      ]
+    ],
+    "Table": "user",
+    "Generate": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next value from `seq`",
+      "Value": [1,2]
+    }
+  }
+}
