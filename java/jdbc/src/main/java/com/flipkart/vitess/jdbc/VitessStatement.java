@@ -25,7 +25,7 @@ public class VitessStatement implements Statement {
     protected VitessConnection vitessConnection;
     protected boolean closed;
     protected long resultCount;
-    protected long queryTimeoutInMillis = Constants.CONNECTION_TIMEOUT;
+    protected long queryTimeoutInMillis = Constants.DEFAULT_TIMEOUT;
     protected int maxFieldSize = Constants.MAX_BUFFER_SIZE;
     protected int maxRows = 0;
     protected int fetchSize = 0;
@@ -61,7 +61,7 @@ public class VitessStatement implements Statement {
         VTGateConn vtGateConn;
         Topodata.TabletType tabletType;
         Cursor cursor;
-        boolean passThroughSql;
+        boolean showSql;
 
         checkOpen();
         checkSQLNullOrEmpty(sql);
@@ -78,8 +78,8 @@ public class VitessStatement implements Statement {
         vtGateConn = this.vitessConnection.getVtGateConn();
         tabletType = this.vitessConnection.getTabletType();
 
-        passThroughSql = StringUtils.singleShardSQL(sql);
-        if (passThroughSql) {
+        showSql = StringUtils.startsWithIgnoreCaseAndWs(sql, Constants.SQL_SHOW);
+        if (showSql) {
             String keyspace = this.vitessConnection.getKeyspace();
             List<byte[]> keyspaceIds = Arrays.asList(new byte[] {1}); //To Hit any single shard
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
@@ -233,9 +233,6 @@ public class VitessStatement implements Statement {
         if (seconds < 0) {
             throw new SQLException(
                 Constants.SQLExceptionMessages.ILLEGAL_VALUE_FOR + "query timeout");
-        }
-        if(seconds == 0) {
-            seconds = Constants.DEFAULT_TIMEOUT / 1000;
         }
         this.queryTimeoutInMillis = (long) seconds * 1000;
     }
@@ -453,7 +450,7 @@ public class VitessStatement implements Statement {
         Topodata.TabletType tabletType;
         Cursor cursor;
         boolean selectSql;
-        boolean passThroughSql;
+        boolean showSql;
 
         checkOpen();
         checkSQLNullOrEmpty(sql);
@@ -467,9 +464,9 @@ public class VitessStatement implements Statement {
         tabletType = this.vitessConnection.getTabletType();
 
         selectSql = StringUtils.startsWithIgnoreCaseAndWs(sql, Constants.SQL_SELECT);
-        passThroughSql = StringUtils.singleShardSQL(sql);
+        showSql = StringUtils.startsWithIgnoreCaseAndWs(sql, Constants.SQL_SHOW);
 
-        if (passThroughSql) {
+        if (showSql) {
             String keyspace = this.vitessConnection.getKeyspace();
             List<byte[]> keyspaceIds = Arrays.asList(new byte[] {1}); //To Hit any single shard
 
