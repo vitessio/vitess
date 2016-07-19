@@ -1,7 +1,7 @@
 package vindexes
 
 import (
-	"encoding/hex"
+	//"encoding/hex"
 	"encoding/json"
 	"fmt"
 )
@@ -127,15 +127,13 @@ func (lkp *lookup) MapLookupUnique(vcursor VCursor, ids []interface{}) ([][]byte
 		if len(result.Rows) != 1 {
 			return nil, fmt.Errorf("lookup.Map: unexpected multiple results from vindex %s: %v", lkp.Table, id)
 		}
-		source, err := getBytes(result.Rows[0][0].ToNative())
-		if err != nil {
-			return nil, err
-		}
-		data, err := hex.DecodeString(string(source))
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, data)
+		//data, err := hex.DecodeString(string(result.Rows[0][0].Raw()))
+		//if err != nil {
+		//	return nil, err
+		//}
+		//out = append(out, data)
+		out = append(out, result.Rows[0][0].Raw())
+
 	}
 	return out, nil
 }
@@ -152,15 +150,12 @@ func (lkp *lookup) MapLookup(vcursor VCursor, ids []interface{}) ([][][]byte, er
 		}
 		var ksids [][]byte
 		for _, row := range result.Rows {
-			source, err := getBytes(row[0].ToNative())
-			if err != nil {
-				return nil, err
-			}
-			data, err := hex.DecodeString(string(source))
-			if err != nil {
-				return nil, fmt.Errorf("lookup.Map: %v", err)
-			}
-			ksids = append(ksids, data)
+			//data, err := hex.DecodeString(string(row[0].Raw()))
+			//if err != nil {
+			//	return nil, fmt.Errorf("lookup.Map: %v", err)
+			//}
+			//ksids = append(ksids, data)
+			ksids = append(ksids,row[0].Raw())
 		}
 		out = append(out, ksids)
 	}
@@ -169,10 +164,10 @@ func (lkp *lookup) MapLookup(vcursor VCursor, ids []interface{}) ([][][]byte, er
 
 // Create creates an association between id and keyspaceid by inserting a row in the vindex table.
 func (lkp *lookup) CreateLookup(vcursor VCursor, id interface{}, ksid []byte) error {
-	keyspaceID := hex.EncodeToString(ksid)
+	//keyspaceID := hex.EncodeToString(ksid)
 	if _, err := vcursor.Execute(lkp.ins, map[string]interface{}{
 		lkp.From: id,
-		lkp.To:   keyspaceID,
+		lkp.To:   ksid,
 	}); err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
@@ -181,9 +176,10 @@ func (lkp *lookup) CreateLookup(vcursor VCursor, id interface{}, ksid []byte) er
 
 // Delete deletes the association between ids and keyspaceid.
 func (lkp *lookup) DeleteLookup(vcursor VCursor, ids []interface{}, ksid []byte) error {
-	keyspaceID := hex.EncodeToString(ksid)
+	//keyspaceID := hex.EncodeToString(ksid)
+	fmt.Println("Coming in DeleteLookup Function")
 	bindvars := map[string]interface{}{
-		lkp.To: keyspaceID,
+		lkp.To: ksid,
 	}
 	for _, id := range ids {
 		bindvars[lkp.From] = id
@@ -196,10 +192,10 @@ func (lkp *lookup) DeleteLookup(vcursor VCursor, ids []interface{}, ksid []byte)
 
 // VerifyLookup returns true if id maps to ksid.
 func (lkp *lookup) VerifyLookup(vcursor VCursor, id interface{}, ksid []byte) (bool, error) {
-	keyspaceID := hex.EncodeToString(ksid)
+	//keyspaceID := hex.EncodeToString(ksid)
 	result, err := vcursor.Execute(lkp.ver, map[string]interface{}{
 		lkp.From: id,
-		lkp.To:   keyspaceID,
+		lkp.To:   ksid,
 	})
 	if err != nil {
 		return false, fmt.Errorf("lookup.Verify: %v", err)

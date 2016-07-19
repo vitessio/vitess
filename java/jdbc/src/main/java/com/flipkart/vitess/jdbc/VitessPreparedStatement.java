@@ -66,7 +66,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         VTGateConn vtGateConn;
         Topodata.TabletType tabletType;
         Cursor cursor;
-        boolean showSql;
+        boolean passThroughSql;
 
         checkOpen();
         closeOpenResultSetAndResetCount();
@@ -77,8 +77,8 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         vtGateConn = this.vitessConnection.getVtGateConn();
         tabletType = this.vitessConnection.getTabletType();
 
-        showSql = StringUtils.startsWithIgnoreCaseAndWs(sql, Constants.SQL_SHOW);
-        if (showSql) {
+        passThroughSql = StringUtils.singleShardSQL(sql);
+        if (passThroughSql) {
             String keyspace = this.vitessConnection.getKeyspace();
             List<byte[]> keyspaceIds = Arrays.asList(new byte[] {1}); //To Hit any single shard
 
@@ -181,7 +181,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         Topodata.TabletType tabletType;
         Cursor cursor;
         boolean selectSql;
-        boolean showSql;
+        boolean passThroughSql;
 
         checkOpen();
         closeOpenResultSetAndResetCount();
@@ -190,9 +190,9 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         tabletType = this.vitessConnection.getTabletType();
 
         selectSql = StringUtils.startsWithIgnoreCaseAndWs(this.sql, Constants.SQL_SELECT);
-        showSql = StringUtils.startsWithIgnoreCaseAndWs(sql, Constants.SQL_SHOW);
+        passThroughSql = StringUtils.singleShardSQL(sql);
 
-        if (showSql) {
+        if (passThroughSql) {
             String keyspace = this.vitessConnection.getKeyspace();
 
             //To Hit any single shard
