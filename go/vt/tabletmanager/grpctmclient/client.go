@@ -43,6 +43,11 @@ func init() {
 	})
 }
 
+type tmc struct {
+	cc     *grpc.ClientConn
+	client tabletmanagerservicepb.TabletManagerClient
+}
+
 // Client implements tmclient.TabletManagerClient
 type Client struct {
 	// This cache of connections is to maximize QPS for ExecuteFetch.
@@ -51,14 +56,12 @@ type Client struct {
 	// one-purpose only.
 	// The map is protected by the mutex.
 	mu           sync.Mutex
-	rpcClientMap map[string]chan tabletmanagerservicepb.TabletManagerClient
+	rpcClientMap map[string]chan *tmc
 }
 
 // NewClient returns a new gRPC client.
 func NewClient() *Client {
-	return &Client{
-		rpcClientMap: make(map[string]chan tabletmanagerservicepb.TabletManagerClient),
-	}
+	return &Client{}
 }
 
 // dial returns a client to use
@@ -83,9 +86,12 @@ func (client *Client) dialPool(tablet *topodatapb.Tablet) (tabletmanagerservicep
 	}
 
 	client.mu.Lock()
+	if client.rpcClientMap == nil {
+		client.rpcClientMap = make(map[string]chan *tmc)
+	}
 	c, ok := client.rpcClientMap[addr]
 	if !ok {
-		c = make(chan tabletmanagerservicepb.TabletManagerClient, *concurrency)
+		c = make(chan *tmc, *concurrency)
 		client.rpcClientMap[addr] = c
 		client.mu.Unlock()
 
@@ -94,7 +100,10 @@ func (client *Client) dialPool(tablet *topodatapb.Tablet) (tabletmanagerservicep
 			if err != nil {
 				return nil, err
 			}
-			c <- tabletmanagerservicepb.NewTabletManagerClient(cc)
+			c <- &tmc{
+				cc:     cc,
+				client: tabletmanagerservicepb.NewTabletManagerClient(cc),
+			}
 		}
 	} else {
 		client.mu.Unlock()
@@ -102,7 +111,7 @@ func (client *Client) dialPool(tablet *topodatapb.Tablet) (tabletmanagerservicep
 
 	result := <-c
 	c <- result
-	return result, nil
+	return result.client, nil
 }
 
 //
@@ -736,4 +745,17 @@ func (client *Client) RestoreFromBackup(ctx context.Context, tablet *topodatapb.
 		stream: stream,
 		cc:     cc,
 	}, nil
+}
+
+// Close is part of the tmclient.TabletManagerClient interface.
+func (client *Client) Close() {
+	client.mu.Lock()
+	for _, c := range client.rpcClientMap {
+		close(c)
+		for ch := range c {
+			ch.cc.Close()
+		}
+	}
+	client.rpcClientMap = nil
+	client.mu.Unlock()
 }

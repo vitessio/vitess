@@ -185,6 +185,14 @@ type TabletManagerClient interface {
 
 	// RestoreFromBackup deletes local data and restores database from backup
 	RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet) (logutil.EventStream, error)
+
+	//
+	// Management methods
+	//
+
+	// Close will be called when this TabletManagerClient won't be
+	// used any more. It can be used to free any resource.
+	Close()
 }
 
 // TabletManagerClientFactory is the factory method to create

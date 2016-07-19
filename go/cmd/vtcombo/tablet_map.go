@@ -769,3 +769,6 @@ func (itmc *internalTabletManagerClient) Backup(ctx context.Context, tablet *top
 func (itmc *internalTabletManagerClient) RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet) (logutil.EventStream, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
+
+func (itmc *internalTabletManagerClient) Close() {
+}

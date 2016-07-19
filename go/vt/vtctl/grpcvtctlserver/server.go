@@ -49,7 +49,9 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *vtctldatapb.ExecuteVtctlCommandR
 	logger := logutil.NewTeeLogger(logstream, logutil.NewConsoleLogger())
 
 	// create the wrangler
-	wr := wrangler.New(logger, s.ts, tmclient.NewTabletManagerClient())
+	tmc := tmclient.NewTabletManagerClient()
+	defer tmc.Close()
+	wr := wrangler.New(logger, s.ts, tmc)
 
 	// execute the command
 	return vtctl.RunCommand(stream.Context(), wr, args.Args)
