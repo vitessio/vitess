@@ -26,7 +26,7 @@ type LookupHash struct {
 // NewLookupHash creates a LookupHash vindex.
 func NewLookupHash(name string, m map[string]string) (Vindex, error) {
 	lhu := &LookupHash{name: name}
-	lhu.lkp.Init(m)
+	lhu.lkp.Init(m, true)
 	return lhu, nil
 }
 
@@ -42,22 +42,22 @@ func (vind *LookupHash) Cost() int {
 
 // Map returns the corresponding KeyspaceId values for the given ids.
 func (vind *LookupHash) Map(vcursor VCursor, ids []interface{}) ([][][]byte, error) {
-	return vind.lkp.MapNonUniqueLookup(vcursor, ids, true)
+	return vind.lkp.MapNonUniqueLookup(vcursor, ids)
 }
 
 // Verify returns true if id maps to ksid.
 func (vind *LookupHash) Verify(vcursor VCursor, id interface{}, ksid []byte) (bool, error) {
-	return vind.lkp.Verify(vcursor, id, ksid, true)
+	return vind.lkp.Verify(vcursor, id, ksid)
 }
 
 // Create reserves the id by inserting it into the vindex table.
 func (vind *LookupHash) Create(vcursor VCursor, id interface{}, ksid []byte) error {
-	return vind.lkp.Create(vcursor, id, ksid, true)
+	return vind.lkp.Create(vcursor, id, ksid)
 }
 
 // Delete deletes the entry from the vindex table.
 func (vind *LookupHash) Delete(vcursor VCursor, ids []interface{}, ksid []byte) error {
-	return vind.lkp.Delete(vcursor, ids, ksid, true)
+	return vind.lkp.Delete(vcursor, ids, ksid)
 }
 
 // MarshalJSON returns a JSON representation of LookupHash.
@@ -78,7 +78,7 @@ type LookupHashUnique struct {
 // NewLookupHashUnique creates a LookupHashUnique vindex.
 func NewLookupHashUnique(name string, m map[string]string) (Vindex, error) {
 	lhu := &LookupHashUnique{name: name}
-	lhu.lkp.Init(m)
+	lhu.lkp.Init(m, true)
 	return lhu, nil
 }
 
@@ -94,22 +94,22 @@ func (vind *LookupHashUnique) Cost() int {
 
 // Map returns the corresponding KeyspaceId values for the given ids.
 func (vind *LookupHashUnique) Map(vcursor VCursor, ids []interface{}) ([][]byte, error) {
-	return vind.lkp.MapUniqueLookup(vcursor, ids, true)
+	return vind.lkp.MapUniqueLookup(vcursor, ids)
 }
 
 // Verify returns true if id maps to ksid.
 func (vind *LookupHashUnique) Verify(vcursor VCursor, id interface{}, ksid []byte) (bool, error) {
-	return vind.lkp.Verify(vcursor, id, ksid, true)
+	return vind.lkp.Verify(vcursor, id, ksid)
 }
 
 // Create reserves the id by inserting it into the vindex table.
 func (vind *LookupHashUnique) Create(vcursor VCursor, id interface{}, ksid []byte) error {
-	return vind.lkp.Create(vcursor, id, ksid, true)
+	return vind.lkp.Create(vcursor, id, ksid)
 }
 
 // Delete deletes the entry from the vindex table.
 func (vind *LookupHashUnique) Delete(vcursor VCursor, ids []interface{}, ksid []byte) error {
-	return vind.lkp.Delete(vcursor, ids, ksid, true)
+	return vind.lkp.Delete(vcursor, ids, ksid)
 }
 
 // MarshalJSON returns a JSON representation of LookupHashUnique.

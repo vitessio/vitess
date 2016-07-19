@@ -1,6 +1,8 @@
 package vindexes
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // lookup implements the functions for the Lookup vindexes.
 type lookup struct {
@@ -8,9 +10,10 @@ type lookup struct {
 	From               string `json:"from"`
 	To                 string `json:"to"`
 	sel, ver, ins, del string
+	isHashedIndex      bool
 }
 
-func (lkp *lookup) Init(m map[string]string) {
+func (lkp *lookup) Init(m map[string]string, isHashed bool) {
 	t := m["table"]
 	from := m["from"]
 	to := m["to"]
@@ -22,10 +25,11 @@ func (lkp *lookup) Init(m map[string]string) {
 	lkp.ver = fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", from, t, from, from, to, to)
 	lkp.ins = fmt.Sprintf("insert into %s(%s, %s) values(:%s, :%s)", t, from, to, from, to)
 	lkp.del = fmt.Sprintf("delete from %s where %s = :%s and %s = :%s", t, from, from, to, to)
+	lkp.isHashedIndex = isHashed
 }
 
 // MapUniqueLookup is for a Unique Vindex.
-func (lkp *lookup) MapUniqueLookup(vcursor VCursor, ids []interface{}, isHashedIndex bool) ([][]byte, error) {
+func (lkp *lookup) MapUniqueLookup(vcursor VCursor, ids []interface{}) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
 		result, err := vcursor.Execute(lkp.sel, map[string]interface{}{
@@ -41,7 +45,7 @@ func (lkp *lookup) MapUniqueLookup(vcursor VCursor, ids []interface{}, isHashedI
 		if len(result.Rows) != 1 {
 			return nil, fmt.Errorf("lookup.Map: unexpected multiple results from vindex %s: %v", lkp.Table, id)
 		}
-		if isHashedIndex {
+		if lkp.isHashedIndex {
 			num, err := getNumber(result.Rows[0][0].ToNative())
 			if err != nil {
 				return nil, fmt.Errorf("lookup.Map: %v", err)
@@ -55,7 +59,7 @@ func (lkp *lookup) MapUniqueLookup(vcursor VCursor, ids []interface{}, isHashedI
 }
 
 // MapNonUniqueLookup is for a Non-Unique Vindex.
-func (lkp *lookup) MapNonUniqueLookup(vcursor VCursor, ids []interface{}, isHashedIndex bool) ([][][]byte, error) {
+func (lkp *lookup) MapNonUniqueLookup(vcursor VCursor, ids []interface{}) ([][][]byte, error) {
 	out := make([][][]byte, 0, len(ids))
 	for _, id := range ids {
 		result, err := vcursor.Execute(lkp.sel, map[string]interface{}{
@@ -65,7 +69,7 @@ func (lkp *lookup) MapNonUniqueLookup(vcursor VCursor, ids []interface{}, isHash
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
 		var ksids [][]byte
-		if isHashedIndex {
+		if lkp.isHashedIndex {
 			for _, row := range result.Rows {
 				num, err := getNumber(row[0].ToNative())
 				if err != nil {
@@ -84,10 +88,10 @@ func (lkp *lookup) MapNonUniqueLookup(vcursor VCursor, ids []interface{}, isHash
 }
 
 // Verify returns true if id maps to ksid.
-func (lkp *lookup) Verify(vcursor VCursor, id interface{}, ksid []byte, isHashedIndex bool) (bool, error) {
+func (lkp *lookup) Verify(vcursor VCursor, id interface{}, ksid []byte) (bool, error) {
 	var val interface{}
 	var err error
-	if isHashedIndex {
+	if lkp.isHashedIndex {
 		val, err = vunhash(ksid)
 		if err != nil {
 			return false, fmt.Errorf("lookup.Verify: %v", err)
@@ -109,10 +113,10 @@ func (lkp *lookup) Verify(vcursor VCursor, id interface{}, ksid []byte, isHashed
 }
 
 // Create creates an association between id and ksid by inserting a row in the vindex table.
-func (lkp *lookup) Create(vcursor VCursor, id interface{}, ksid []byte, isHashedIndex bool) error {
+func (lkp *lookup) Create(vcursor VCursor, id interface{}, ksid []byte) error {
 	var val interface{}
 	var err error
-	if isHashedIndex {
+	if lkp.isHashedIndex {
 		val, err = vunhash(ksid)
 		if err != nil {
 			return fmt.Errorf("lookup.Create: %v", err)
@@ -130,10 +134,10 @@ func (lkp *lookup) Create(vcursor VCursor, id interface{}, ksid []byte, isHashed
 }
 
 // Delete deletes the association between ids and ksid.
-func (lkp *lookup) Delete(vcursor VCursor, ids []interface{}, ksid []byte, isHashedIndex bool) error {
+func (lkp *lookup) Delete(vcursor VCursor, ids []interface{}, ksid []byte) error {
 	var val interface{}
 	var err error
-	if isHashedIndex {
+	if lkp.isHashedIndex {
 		val, err = vunhash(ksid)
 		if err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
