@@ -1,10 +1,4 @@
 {
-  "repositories": [
-    {
-      "type": "vcs",
-      "url": "https://github.com/stanley-cheung/Protobuf-PHP"
-    }
-  ],
   "name": "vitess/php-client",
   "description": "PHP client for Vitess",
   "minimum-stability": "dev",
