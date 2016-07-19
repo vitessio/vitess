@@ -128,6 +128,34 @@ func TestPoolSize(t *testing.T) {
 	}
 }
 
+func TestMaxConcurrency(t *testing.T) {
+	defer framework.Server.SetMaxConcurrentRequests(framework.Server.MaxConcurrentRequests())
+	framework.Server.SetMaxConcurrentRequests(1)
+
+	var err1, err2 error
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		_, err1 = framework.NewClient().Execute("select sleep(0.5) from dual", nil)
+		wg.Done()
+	}()
+	// The queries have to be different so consolidator doesn't kick in.
+	go func() {
+		_, err2 = framework.NewClient().Execute("select sleep(0.49) from dual", nil)
+		wg.Done()
+	}()
+	wg.Wait()
+
+	err := err1
+	if err == nil {
+		err = err2
+	}
+	want := "Concurrent requests exceeded max"
+	if err == nil || !strings.Contains(err1.Error(), want) {
+		t.Errorf("Exec: %v, at least one should contain %s", err, want)
+	}
+}
+
 func TestQueryCache(t *testing.T) {
 	defer framework.Server.SetQueryCacheCap(framework.Server.QueryCacheCap())
 	framework.Server.SetQueryCacheCap(1)

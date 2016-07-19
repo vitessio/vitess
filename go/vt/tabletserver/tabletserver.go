@@ -86,13 +86,14 @@ type TabletServer struct {
 	// for health checks. This does not affect how queries are served.
 	// target specifies the primary target type, and also allow specifies
 	// secondary types that should be additionally allowed.
-	mu        sync.Mutex
-	state     int64
-	lameduck  sync2.AtomicInt32
-	target    querypb.Target
-	alsoAllow []topodatapb.TabletType
-	requests  sync.WaitGroup
-	begins    sync.WaitGroup
+	mu           sync.Mutex
+	state        int64
+	lameduck     sync2.AtomicInt32
+	target       querypb.Target
+	alsoAllow    []topodatapb.TabletType
+	requests     sync.WaitGroup
+	begins       sync.WaitGroup
+	requestCount sync2.AtomicInt64
 
 	// The following variables should be initialized only once
 	// before starting the tabletserver. For backward compatibility,
@@ -1152,6 +1153,10 @@ verifyTarget:
 	return NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "No target")
 
 ok:
+	if tsv.requestCount.Get() >= int64(tsv.config.MaxConcurrentRequests) {
+		return NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Concurrent requests exceeded max: %d", tsv.config.MaxConcurrentRequests)
+	}
+	tsv.requestCount.Add(1)
 	tsv.requests.Add(1)
 	// If it's a begin, we should make the shutdown code
 	// wait for the call to end before it waits for tx empty.
@@ -1163,10 +1168,11 @@ ok:
 
 // endRequest unregisters the current request (a waitgroup) as done.
 func (tsv *TabletServer) endRequest(isBegin bool) {
-	tsv.requests.Done()
 	if isBegin {
 		tsv.begins.Done()
 	}
+	tsv.requests.Done()
+	tsv.requestCount.Add(-1)
 }
 
 func (tsv *TabletServer) registerDebugHealthHandler() {
@@ -1291,6 +1297,18 @@ func (tsv *TabletServer) SetMaxDMLRows(val int) {
 // MaxDMLRows returns the max result size.
 func (tsv *TabletServer) MaxDMLRows() int {
 	return int(tsv.qe.maxDMLRows.Get())
+}
+
+// SetMaxConcurrentRequests sets the max concurrent requests to the new value.
+// This function is not thread safe.
+func (tsv *TabletServer) SetMaxConcurrentRequests(val int) {
+	tsv.config.MaxConcurrentRequests = val
+}
+
+// MaxConcurrentRequests returns the max concurrent requests value.
+// This function is not thread safe.
+func (tsv *TabletServer) MaxConcurrentRequests() int {
+	return tsv.config.MaxConcurrentRequests
 }
 
 func init() {
