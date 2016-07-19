@@ -1307,4 +1307,6 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	// Backup / restore related methods
 	agentRPCTestBackupPanic(ctx, t, client, tablet)
 	agentRPCTestRestoreFromBackupPanic(ctx, t, client, tablet)
+
+	client.Close()
 }
