@@ -92,7 +92,7 @@ php_test:
 # install vendor'd programs: https://github.com/kardianos/govendor/issues/117
 install_protoc-gen-go:
 	mkdir -p $${GOPATH}/src/github.com/golang/
-	cp -au vendor/github.com/golang/protobuf $${GOPATH}/src/github.com/golang/
+	cp -a vendor/github.com/golang/protobuf $${GOPATH}/src/github.com/golang/
 	go install github.com/golang/protobuf/protoc-gen-go
 
 PROTOC_DIR := $(VTROOT)/dist/grpc/usr/local/bin
