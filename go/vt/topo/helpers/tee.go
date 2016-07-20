@@ -22,7 +22,8 @@ import (
 // when needed.  It is meant to be used during transitions from one
 // topo.Server to another.
 //
-// - primary: we read everything from it, and write to it
+// - primary: we read everything from it, and write to it. We also create
+//     MasterParticipation from it.
 // - secondary: we write to it as well, but we usually don't fail.
 // - we lock primary/secondary if reverseLockOrder is False,
 // or secondary/primary if reverseLockOrder is True.
@@ -695,6 +696,11 @@ func (tee *Tee) SaveVSchema(ctx context.Context, keyspace string, contents *vsch
 // GetVSchema is part of the topo.Server interface
 func (tee *Tee) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error) {
 	return tee.readFrom.GetVSchema(ctx, keyspace)
+}
+
+// NewMasterParticipation is part of the topo.Server interface
+func (tee *Tee) NewMasterParticipation(name, id string) (topo.MasterParticipation, error) {
+	return tee.primary.NewMasterParticipation(name, id)
 }
 
 var _ topo.Impl = (*Tee)(nil) // compile-time interface check

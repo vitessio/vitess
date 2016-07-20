@@ -13,10 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
-
 	log "github.com/golang/glog"
 	zookeeper "github.com/samuel/go-zookeeper/zk"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/sync2"
