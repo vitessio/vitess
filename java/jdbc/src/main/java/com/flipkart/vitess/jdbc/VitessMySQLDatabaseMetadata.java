@@ -464,8 +464,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
     }
 
     public ResultSet getCatalogs() throws SQLException {
-        ResultSet resultSet = null;
-        VitessStatement vitessStatement = null;
+        ResultSet resultSet;
+        VitessStatement vitessStatement;
         String getCatalogQB = "SHOW DATABASES";
 
         vitessStatement = new VitessStatement(this.connection);
@@ -477,9 +477,9 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             row.add(resultSet.getString(1));
         }
         Collections.sort(row);
-        ArrayList<String> resultAsList = null;
+
         for (String result : row) {
-            resultAsList = new ArrayList<>();
+            ArrayList<String> resultAsList = new ArrayList<>();
             resultAsList.add(result);
             data.add(resultAsList);
         }
@@ -562,7 +562,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                         int fullOrdinalPos = 1;
                         while (resultSet.next()) {
                             String fullOrdColName = resultSet.getString("Field");
-                            ordinalFixUpMap.put(fullOrdColName, Integer.valueOf(fullOrdinalPos++));
+                            ordinalFixUpMap.put(fullOrdColName, fullOrdinalPos++);
                         }
                     }
                     resultSet = vitessStatement
@@ -571,9 +571,9 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                             + " LIKE " + Constants.LITERAL_SINGLE_QUOTE + columnNamePattern
                             + Constants.LITERAL_SINGLE_QUOTE);
                     int ordPos = 1;
-                    ArrayList<String> row = null;
+
                     while (resultSet.next()) {
-                        row = new ArrayList<>();
+                        ArrayList<String> row = new ArrayList<>();
                         row.add(0, catalog);
                         row.add(1, null);
                         row.add(2, tableName);
@@ -681,9 +681,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             if (null != resultSet) {
                 resultSet.close();
             }
-            if (null != vitessStatement) {
-                vitessStatement.close();
-            }
+            vitessStatement.close();
         }
 
         String[] columnNames =
@@ -742,9 +740,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 .executeQuery("SHOW COLUMNS FROM " + this.quotedId + table + this.quotedId + "" +
                     " FROM " + this.quotedId + catalog + this.quotedId);
 
-            ArrayList<String> row = null;
             while (resultSet.next()) {
-                row = new ArrayList<>();
+                ArrayList<String> row = new ArrayList<>();
                 String keyType = resultSet.getString("Key");
                 if (keyType != null && StringUtils.startsWithIgnoreCase(keyType, "PRI")) {
                     row.add(Integer.toString(DatabaseMetaData.bestRowSession));
@@ -792,9 +789,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             if (resultSet != null) {
                 resultSet.close();
             }
-            if (vitessStatement != null) {
-                vitessStatement.close();
-            }
+            vitessStatement.close();
         }
         return new VitessResultSet(columnName, columnType, data);
     }
@@ -870,10 +865,10 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                     "FROM " + this.quotedId + catalog + this.quotedId);
 
             TreeMap<String, ArrayList<String>> sortMap = new TreeMap<>();
-            ArrayList<String> row = null;
+
             while (resultSet.next()) {
                 String keyType = resultSet.getString("Key_name");
-                row = new ArrayList<>();
+                ArrayList<String> row = new ArrayList<>();
                 if (null != keyType) {
                     if (keyType.equalsIgnoreCase("PRIMARY") || keyType.equalsIgnoreCase("PRI")) {
                         row.add(0, (catalog == null) ? "" : catalog);
@@ -890,17 +885,14 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
             }
 
             // Now pull out in column name sorted order
-            Iterator<ArrayList<String>> sortedIterator = sortMap.values().iterator();
-            while (sortedIterator.hasNext()) {
-                sortedData.add(sortedIterator.next());
+            for (ArrayList<String> row : sortMap.values()) {
+                sortedData.add(row);
             }
         } finally {
             if (null != resultSet) {
                 resultSet.close();
             }
-            if (null != vitessStatement) {
-                vitessStatement.close();
-            }
+            vitessStatement.close();
         }
 
         String[] columnNames =
@@ -1043,9 +1035,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 .executeQuery("SHOW INDEX FROM " + this.quotedId + table + this.quotedId + " " +
                     "FROM " + this.quotedId + catalog + this.quotedId);
 
-            ArrayList<String> row = null;
             while (resultSet.next()) {
-                row = new ArrayList<>();
+                ArrayList<String> row = new ArrayList<>();
                 row.add(0, catalog);
                 row.add(1, null);
                 row.add(2, resultSet.getString("Table"));
@@ -1076,18 +1067,15 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 sortedRows.put(indexInfoKey, row);
             }
 
-            Iterator<ArrayList<String>> sortedRowsIterator = sortedRows.values().iterator();
-            while (sortedRowsIterator.hasNext()) {
-                data.add(sortedRowsIterator.next());
+            for (ArrayList<String> row : sortedRows.values()) {
+                data.add(row);
             }
 
         } finally {
             if (null != resultSet) {
                 resultSet.close();
             }
-            if (null != vitessStatement) {
-                vitessStatement.close();
-            }
+            vitessStatement.close();
         }
         String[] columnName =
             new String[] {"TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "Non_unique", "INDEX_QUALIFIER",
@@ -1345,10 +1333,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 return true;
             }
 
-            if (!(obj instanceof TableMetaDataKey)) {
-                return false;
-            }
-            return compareTo((TableMetaDataKey) obj) == 0;
+            return obj instanceof TableMetaDataKey && compareTo((TableMetaDataKey) obj) == 0;
         }
     }
 
@@ -1396,10 +1381,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 return true;
             }
 
-            if (!(obj instanceof IndexMetaDataKey)) {
-                return false;
-            }
-            return compareTo((IndexMetaDataKey) obj) == 0;
+            return obj instanceof IndexMetaDataKey && compareTo((IndexMetaDataKey) obj) == 0;
         }
     }
 
@@ -1432,8 +1414,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                 throw new SQLException("NULL typeinfo not supported.");
             }
 
-            String mysqlType = "";
-            String fullMysqlType = null;
+            String mysqlType;
+            String fullMysqlType;
 
             if (typeInfo.indexOf("(") != -1) {
                 mysqlType = typeInfo.substring(0, typeInfo.indexOf("(")).trim();
@@ -1476,7 +1458,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                     maxLength = Math.max(maxLength, (tokenizer.nextToken().length() - 2));
                 }
 
-                this.columnSize = Integer.valueOf(maxLength);
+                this.columnSize = maxLength;
                 this.decimalDigits = null;
             } else if (StringUtils.startsWithIgnoreCase(typeInfo, "set")) {
                 String temp =
@@ -1501,7 +1483,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                     }
                 }
 
-                this.columnSize = Integer.valueOf(maxLength);
+                this.columnSize = maxLength;
                 this.decimalDigits = null;
             } else if (typeInfo.indexOf(",") != -1) {
                 // Numeric with decimals
@@ -1532,7 +1514,7 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                         typeInfo.substring((typeInfo.indexOf("(") + 1), endParenIndex).trim());
 
                     // Adjust for pseudo-boolean
-                    if (this.columnSize.intValue() == 1 && StringUtils
+                    if (this.columnSize == 1 && StringUtils
                         .startsWithIgnoreCase(typeInfo, "tinyint")) {
                         this.dataType = Types.BIT;
                         this.typeName = "BIT";
@@ -1543,71 +1525,71 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
                         this.typeName = "BIT";
 
                     } else {
-                        this.columnSize = Integer.valueOf(3);
-                        this.decimalDigits = Integer.valueOf(0);
+                        this.columnSize = 3;
+                        this.decimalDigits = 0;
                     }
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "smallint")) {
-                    this.columnSize = Integer.valueOf(5);
-                    this.decimalDigits = Integer.valueOf(0);
+                    this.columnSize = 5;
+                    this.decimalDigits = 0;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "mediumint")) {
-                    this.columnSize = Integer.valueOf(isUnsigned ? 8 : 7);
-                    this.decimalDigits = Integer.valueOf(0);
+                    this.columnSize = isUnsigned ? 8 : 7;
+                    this.decimalDigits = 0;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "int")) {
-                    this.columnSize = Integer.valueOf(10);
-                    this.decimalDigits = Integer.valueOf(0);
+                    this.columnSize = 10;
+                    this.decimalDigits = 0;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "integer")) {
-                    this.columnSize = Integer.valueOf(10);
-                    this.decimalDigits = Integer.valueOf(0);
+                    this.columnSize = 10;
+                    this.decimalDigits = 0;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "bigint")) {
                     this.dataType = Types.BIGINT;
-                    this.columnSize = Integer.valueOf(isUnsigned ? 20 : 19);
-                    this.decimalDigits = Integer.valueOf(0);
+                    this.columnSize = isUnsigned ? 20 : 19;
+                    this.decimalDigits = 0;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "int24")) {
-                    this.columnSize = Integer.valueOf(19);
-                    this.decimalDigits = Integer.valueOf(0);
+                    this.columnSize = 19;
+                    this.decimalDigits = 0;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "real")) {
-                    this.columnSize = Integer.valueOf(12);
+                    this.columnSize = 12;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "float")) {
-                    this.columnSize = Integer.valueOf(12);
+                    this.columnSize = 12;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "decimal")) {
-                    this.columnSize = Integer.valueOf(12);
+                    this.columnSize = 12;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "numeric")) {
-                    this.columnSize = Integer.valueOf(12);
+                    this.columnSize = 12;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "double")) {
-                    this.columnSize = Integer.valueOf(22);
+                    this.columnSize = 22;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "char")) {
-                    this.columnSize = Integer.valueOf(1);
+                    this.columnSize = 1;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "varchar")) {
-                    this.columnSize = Integer.valueOf(255);
+                    this.columnSize = 255;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "timestamp")) {
-                    this.columnSize = Integer.valueOf(19);
+                    this.columnSize = 19;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "datetime")) {
-                    this.columnSize = Integer.valueOf(19);
+                    this.columnSize = 19;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "date")) {
-                    this.columnSize = Integer.valueOf(10);
+                    this.columnSize = 10;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "time")) {
-                    this.columnSize = Integer.valueOf(8);
+                    this.columnSize = 8;
 
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "tinyblob")) {
-                    this.columnSize = Integer.valueOf(255);
+                    this.columnSize = 255;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "blob")) {
-                    this.columnSize = Integer.valueOf(65535);
+                    this.columnSize = 65535;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "mediumblob")) {
-                    this.columnSize = Integer.valueOf(16777215);
+                    this.columnSize = 16777215;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "longblob")) {
-                    this.columnSize = Integer.valueOf(Integer.MAX_VALUE);
+                    this.columnSize = Integer.MAX_VALUE;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "tinytext")) {
-                    this.columnSize = Integer.valueOf(255);
+                    this.columnSize = 255;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "text")) {
-                    this.columnSize = Integer.valueOf(65535);
+                    this.columnSize = 65535;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "mediumtext")) {
-                    this.columnSize = Integer.valueOf(16777215);
+                    this.columnSize = 16777215;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "longtext")) {
-                    this.columnSize = Integer.valueOf(Integer.MAX_VALUE);
+                    this.columnSize = Integer.MAX_VALUE;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "enum")) {
-                    this.columnSize = Integer.valueOf(255);
+                    this.columnSize = 255;
                 } else if (StringUtils.startsWithIgnoreCase(typeInfo, "set")) {
-                    this.columnSize = Integer.valueOf(255);
+                    this.columnSize = 255;
                 }
 
             }

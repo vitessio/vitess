@@ -20,8 +20,12 @@ public class VitessJDBCExample {
     }
 
     // Connect to vtgate.
-    String dbURL = "jdbc:vitess://" + args[0] + "/test_keyspace/unused";
+    String dbURL = "jdbc:vitess://" + args[0];
     try (Connection conn = DriverManager.getConnection(dbURL, null)) {
+      // Setting AutoCommit to false as VTTablet was not up with enable-autocommit
+      // Not Required if enable-autocommit flag is set in VTTablet
+      conn.setAutoCommit(false);
+
       // Insert some messages on random pages.
       System.out.println("Inserting into master...");
       Random rand = new Random();
@@ -38,8 +42,11 @@ public class VitessJDBCExample {
         stmt.execute();
       }
 
-      // Read it back from a replica.
-      System.out.println("Reading from replica...");
+      //To Commit Open Transaction
+      conn.commit();
+
+      // Read it back from master.
+      System.out.println("Reading from master...");
       String sql = "SELECT page, time_created_ns, message FROM messages";
       try (Statement stmt = conn.createStatement();
           ResultSet rs = stmt.executeQuery(sql)) {
@@ -48,6 +55,25 @@ public class VitessJDBCExample {
           long timeCreated = rs.getLong("time_created_ns");
           String message = rs.getString("message");
           System.out.format("(%s, %s, %s)\n", page, timeCreated, message);
+        }
+      }
+
+      //To Commit Open Transaction, as select was made on master with autocommit false a transaction was open
+      conn.commit();
+
+      // Read it back from replica.
+      dbURL += "/test_keyspace?TABLET_TYPE=replica";
+      try (Connection connReplica = DriverManager.getConnection(dbURL, null)) {
+        System.out.println("Reading from replica...");
+        sql = "SELECT page, time_created_ns, message FROM messages";
+        try (Statement stmt = connReplica.createStatement();
+            ResultSet rs = stmt.executeQuery(sql)) {
+          while (rs.next()) {
+            long page = rs.getLong("page");
+            long timeCreated = rs.getLong("time_created_ns");
+            String message = rs.getString("message");
+            System.out.format("(%s, %s, %s)\n", page, timeCreated, message);
+          }
         }
       }
     } catch (Exception e) {

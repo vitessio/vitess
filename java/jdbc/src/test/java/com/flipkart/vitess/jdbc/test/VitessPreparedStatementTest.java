@@ -10,7 +10,6 @@ import com.youtube.vitess.client.VTGateTx;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Topodata;
-
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -33,6 +32,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+
 
 /**
  * Created by harshit.gangal on 09/02/16.
@@ -83,6 +83,7 @@ import java.util.TimeZone;
         SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
         SQLFuture mockSqlFutureVtGateTx = PowerMockito.mock(SQLFuture.class);
 
+        PowerMockito.when(mockConn.getKeyspace()).thenReturn("test_keyspace");
         PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
         PowerMockito.when(mockVtGateConn
             .executeKeyspaceIds(Matchers.any(Context.class), Matchers.anyString(),
@@ -161,6 +162,7 @@ import java.util.TimeZone;
         SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
         SQLFuture mockSqlFutureVtGateTx = PowerMockito.mock(SQLFuture.class);
 
+        PowerMockito.when(mockConn.getKeyspace()).thenReturn("test_keyspace");
         PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
         PowerMockito.when(mockVtGateConn
             .executeKeyspaceIds(Matchers.any(Context.class), Matchers.anyString(),
@@ -327,6 +329,7 @@ import java.util.TimeZone;
         SQLFuture mockSqlFutureVtGateTx = PowerMockito.mock(SQLFuture.class);
         List<Query.Field> mockFieldList = PowerMockito.mock(ArrayList.class);
 
+        PowerMockito.when(mockConn.getKeyspace()).thenReturn("test_keyspace");
         PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
         PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.MASTER);
         PowerMockito.when(mockVtGateConn
@@ -452,7 +455,7 @@ import java.util.TimeZone;
         Date dateValue = new Date(0);
         // Use a time value that won't go negative after adjusting for time zone.
         // The java.sql.Time class does not properly format negative times.
-        Time timeValue = new Time(12*60*60*1000);
+        Time timeValue = new Time(12 * 60 * 60 * 1000);
         Timestamp timestampValue = new Timestamp(0);
 
         preparedStatement.setNull(1, Types.INTEGER);

@@ -227,7 +227,7 @@ public class VitessResultSet implements ResultSet {
         //If the return column type is of byte,
         // return byte otherwise typecast
         Object object = this.row.getObject(columnIndex);
-        if(object instanceof Byte) {
+        if (object instanceof Byte) {
             return (byte) object;
         }
 
@@ -379,7 +379,7 @@ public class VitessResultSet implements ResultSet {
         //If the return column type is of byte[],
         // return byte[] otherwise typecast
         Object object = this.row.getObject(columnIndex);
-        if(object instanceof byte[]) {
+        if (object instanceof byte[]) {
             return (byte[]) object;
         }
 

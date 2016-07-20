@@ -8,30 +8,8 @@ import com.youtube.vitess.client.VTGateConn;
 import com.youtube.vitess.client.VTGateTx;
 import com.youtube.vitess.proto.Topodata;
 
-import java.sql.Array;
-import java.sql.Blob;
-import java.sql.CallableStatement;
-import java.sql.ClientInfoStatus;
-import java.sql.Clob;
-import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.NClob;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLClientInfoException;
-import java.sql.SQLException;
-import java.sql.SQLFeatureNotSupportedException;
-import java.sql.SQLWarning;
-import java.sql.SQLXML;
-import java.sql.Savepoint;
-import java.sql.Statement;
-import java.sql.Struct;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
+import java.sql.*;
+import java.util.*;
 import java.util.concurrent.Executor;
 import java.util.logging.Logger;
 
@@ -213,20 +191,20 @@ public class VitessConnection implements Connection {
 
     public DatabaseMetaData getMetaData() throws SQLException {
         checkOpen();
-        if (null != this.databaseMetaData) {
-            return this.databaseMetaData;
+        if (null != databaseMetaData) {
+            return databaseMetaData;
         } else {
             synchronized (VitessConnection.class) {
-                if (null == this.databaseMetaData) {
+                if (null == databaseMetaData) {
                     String dbEngine = initializeDBProperties();
                     if (dbEngine.equals("mariadb")) {
-                        this.databaseMetaData = new VitessMariaDBDatabaseMetadata(this);
+                        databaseMetaData = new VitessMariaDBDatabaseMetadata(this);
                     } else {
-                        this.databaseMetaData = new VitessMySQLDatabaseMetadata(this);
+                        databaseMetaData = new VitessMySQLDatabaseMetadata(this);
                     }
                 }
             }
-            return this.databaseMetaData;
+            return databaseMetaData;
         }
     }
 
@@ -792,53 +770,51 @@ public class VitessConnection implements Connection {
         HashMap<String, String> dbVariables = new HashMap<>();
         String dbEngine = null;
 
-        if (null == this.databaseMetaData) {
+        if (null == databaseMetaData) {
             String versionValue;
-            if (null == dbEngine) {
-                ResultSet resultSet = null;
-                VitessStatement vitessStatement = new VitessStatement(this);
-                try {
-                    resultSet = vitessStatement.executeQuery(
-                        "SHOW VARIABLES WHERE VARIABLE_NAME IN (\'tx_isolation\',\'INNODB_VERSION\')");
-                    while (resultSet.next()) {
-                        dbVariables.put(resultSet.getString(1), resultSet.getString(2));
-                    }
-                    versionValue = dbVariables.get("innodb_version");
-                    String transactionIsolation = dbVariables.get("tx_isolation");
-                    String productVersion = "";
-                    String majorVersion = "";
-                    String minorVersion = "";
-                    int isolationLevel = 0;
-                    if (MysqlDefs.mysqlConnectionTransactionMapping
-                        .containsKey(transactionIsolation)) {
-                        isolationLevel =
-                            MysqlDefs.mysqlConnectionTransactionMapping.get(transactionIsolation);
-                    }
-                    if (null != versionValue) {
-                        if (versionValue.toLowerCase().contains("mariadb")) {
-                            dbEngine = "mariadb";
-                        } else {
-                            dbEngine = "mysql";
-                        }
-                        if (versionValue.contains("-")) {
-                            String[] versions = versionValue.split("-");
-                            productVersion = versions[0];
-                        } else {
-                            productVersion = versionValue;
-                        }
-                        String[] dbVersions = productVersion.split("\\.", 3);
-                        majorVersion = dbVersions[0];
-                        minorVersion = dbVersions[1];
-                    }
-                    this.dbProperties = new DBProperties(productVersion, majorVersion, minorVersion,
-                        isolationLevel);
-                } finally {
-                    if (null != resultSet) {
-                        resultSet.close();
-                    }
-                    vitessStatement.close();
+            ResultSet resultSet = null;
+            VitessStatement vitessStatement = new VitessStatement(this);
+            try {
+                resultSet = vitessStatement.executeQuery(
+                    "SHOW VARIABLES WHERE VARIABLE_NAME IN (\'tx_isolation\',\'INNODB_VERSION\')");
+                while (resultSet.next()) {
+                    dbVariables.put(resultSet.getString(1), resultSet.getString(2));
                 }
+                versionValue = dbVariables.get("innodb_version");
+                String transactionIsolation = dbVariables.get("tx_isolation");
+                String productVersion = "";
+                String majorVersion = "";
+                String minorVersion = "";
+                int isolationLevel = 0;
+                if (MysqlDefs.mysqlConnectionTransactionMapping.containsKey(transactionIsolation)) {
+                    isolationLevel =
+                        MysqlDefs.mysqlConnectionTransactionMapping.get(transactionIsolation);
+                }
+                if (null != versionValue) {
+                    if (versionValue.toLowerCase().contains("mariadb")) {
+                        dbEngine = "mariadb";
+                    } else {
+                        dbEngine = "mysql";
+                    }
+                    if (versionValue.contains("-")) {
+                        String[] versions = versionValue.split("-");
+                        productVersion = versions[0];
+                    } else {
+                        productVersion = versionValue;
+                    }
+                    String[] dbVersions = productVersion.split("\\.", 3);
+                    majorVersion = dbVersions[0];
+                    minorVersion = dbVersions[1];
+                }
+                this.dbProperties =
+                    new DBProperties(productVersion, majorVersion, minorVersion, isolationLevel);
+            } finally {
+                if (null != resultSet) {
+                    resultSet.close();
+                }
+                vitessStatement.close();
             }
+
         }
         return dbEngine;
     }

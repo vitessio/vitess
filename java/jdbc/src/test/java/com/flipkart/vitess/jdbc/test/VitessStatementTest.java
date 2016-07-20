@@ -65,6 +65,7 @@ import java.util.List;
         SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
         SQLFuture mockSqlFutureVtGateTx = PowerMockito.mock(SQLFuture.class);
 
+        PowerMockito.when(mockConn.getKeyspace()).thenReturn("test_keyspace");
         PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
         PowerMockito.when(mockConn.getVtGateTx()).thenReturn(mockVtGateTx);
         PowerMockito.when(mockVtGateTx
@@ -134,6 +135,7 @@ import java.util.List;
         SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
         SQLFuture mockSqlFutureVtGateTx = PowerMockito.mock(SQLFuture.class);
 
+        PowerMockito.when(mockConn.getKeyspace()).thenReturn("test_keyspace");
         PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
         PowerMockito.when(mockConn.getVtGateTx()).thenReturn(mockVtGateTx);
         PowerMockito.when(mockVtGateTx
@@ -283,6 +285,7 @@ import java.util.List;
         SQLFuture mockSqlFutureVtGateTx = PowerMockito.mock(SQLFuture.class);
         List<Query.Field> mockFieldList = PowerMockito.mock(ArrayList.class);
 
+        PowerMockito.when(mockConn.getKeyspace()).thenReturn("test_keyspace");
         PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
         PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.MASTER);
         PowerMockito.when(mockVtGateConn

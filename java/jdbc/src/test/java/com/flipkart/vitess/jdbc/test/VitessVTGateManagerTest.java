@@ -28,8 +28,7 @@ public class VitessVTGateManagerTest {
         Context ctx =
             Context.getDefault().withDeadlineAfter(Duration.millis(500)).withCallerId(callerId);
         RpcClient client = new GrpcClientFactory().create(ctx, new InetSocketAddress("host", 80));
-        VTGateConn conn = new VTGateConn(client);
-        return conn;
+        return new VTGateConn(client);
     }
 
     @Test public void testVtGateConnectionsConstructorMultipleVtGateConnections()
