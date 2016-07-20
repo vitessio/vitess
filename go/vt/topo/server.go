@@ -288,12 +288,71 @@ type Impl interface {
 	//
 	// Can return ErrNoNode
 	GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error)
+
+	//
+	// Master election, local to multiple cells usually.
+	// This is meant to have a small number of processes elect a master
+	// within a group.
+	//
+
+	// NewParticipation starts participating in the named group,
+	// using the provided id. Usually, pass in the hostname:port of the
+	// current process as id.
+	NewMasterParticipation(name, id string) (MasterParticipation, error)
 }
 
 // Server is a wrapper type that can have extra methods.
 // Outside modules should just use the Server object.
 type Server struct {
 	Impl
+}
+
+// MasterParticipation is the object returned by NewMasterParticipation.
+// Sample usage:
+//
+// mp := server.NewMasterParticipation("vtctld", "hostname:8080")
+// job := NewJob()
+// go func() {
+//   for {
+//     ctx, err := mp.WaitForMaster()
+//     switch err {
+//     case nil:
+//       job.RunUntilContextDone(ctx)
+//     case topo.ErrInterrupted:
+//       return
+//     default:
+//       log.Errorf("Got error while waiting for master, will retry in 5s: %v", err)
+//       time.Sleep(5 * time.Second)
+//     }
+//   }
+// }()
+//
+// http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+//   if job.Running() {
+//     job.WriteStatus(w, r)
+//   } else {
+//     http.Redirect(w, r, mp.GetCurrentMasterID(), http.StatusFound)
+//   }
+// })
+//
+// servenv.OnTerm(func() {
+//   mp.Shutdown()
+// })
+type MasterParticipation interface {
+	// WaitForMaster waits until this process is the master.
+	// After we become the master, we may loose mastership. In that case,
+	// the returned context will be cancelled. If Shutdown was called,
+	// WaitForMaster will return nil, ErrInterrupted.
+	WaitForMaster() (context.Context, error)
+
+	// Shutdown is called when we don't want to participate in the
+	// master election any more. Typically, that is when the
+	// hosting process is terminating.  We will relinquish
+	// mastership at that point, if we had it.
+	Shutdown()
+
+	// GetCurrentMasterID returns the current master id.
+	GetCurrentMasterID() (string, error)
 }
 
 // SrvTopoServer is a subset of Server that only contains the serving

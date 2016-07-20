@@ -92,4 +92,9 @@ func TopoServerTestSuite(t *testing.T, factory func() topo.Impl) {
 	ts = factory()
 	checkVSchema(t, ts)
 	ts.Close()
+
+	t.Log("=== checkElection")
+	ts = factory()
+	checkElection(t, ts)
+	ts.Close()
 }
