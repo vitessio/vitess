@@ -4,62 +4,33 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "hash": "0cd710cc0ecaf561decfc222218510ab",
-    "content-hash": "5ab396f6457dc803b81cb295390ba83f",
+    "hash": "ee30f9a7bdb87d0117d08f7f81a74451",
+    "content-hash": "ac27aa6775524f2c7df3c5eab6058f13",
     "packages": [
         {
             "name": "datto/protobuf-php",
             "version": "dev-master",
             "source": {
                 "type": "git",
-                "url": "https://github.com/stanley-cheung/Protobuf-PHP.git",
-                "reference": "dbbe0846ee99e9579a0e5b09abf03e671614f0a8"
+                "url": "https://github.com/pixelfederation/datto-Protobuf-PHP-fake.git",
+                "reference": "e85085f54abad7e30f72c8086adae47c21372e7f"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/stanley-cheung/Protobuf-PHP/zipball/dbbe0846ee99e9579a0e5b09abf03e671614f0a8",
-                "reference": "dbbe0846ee99e9579a0e5b09abf03e671614f0a8",
+                "url": "https://api.github.com/repos/pixelfederation/datto-Protobuf-PHP-fake/zipball/e85085f54abad7e30f72c8086adae47c21372e7f",
+                "reference": "e85085f54abad7e30f72c8086adae47c21372e7f",
                 "shasum": ""
             },
-            "require": {
-                "php": ">=5.3.0"
-            },
-            "bin": [
-                "protoc-gen-php.bat",
-                "protoc-gen-php.php"
-            ],
             "type": "library",
-            "extra": {
-                "branch-alias": {
-                    "dev-master": "1.0-dev"
-                }
-            },
-            "autoload": {
-                "psr-0": {
-                    "DrSlump": "library/"
-                }
-            },
             "license": [
                 "MIT"
             ],
-            "authors": [
-                {
-                    "name": "Iván -DrSlump- Montes",
-                    "email": "drslump@pollinimini.net",
-                    "homepage": "https://github.com/drslump/Protobuf-PHP"
-                }
-            ],
-            "description": "PHP implementation of Google's Protocol Buffers",
-            "homepage": "https://github.com/datto/Protobuf-PHP",
-            "keywords": [
-                "protobuf",
-                "protocol buffer",
-                "serializing"
-            ],
+            "description": "Fake datto/protobuf-php repository for overriding in youtube/vitess",
             "support": {
-                "source": "https://github.com/stanley-cheung/Protobuf-PHP/tree/master"
+                "source": "https://github.com/pixelfederation/datto-Protobuf-PHP-fake/tree/master",
+                "issues": "https://github.com/pixelfederation/datto-Protobuf-PHP-fake/issues"
             },
-            "time": "2016-05-18 22:11:39"
+            "time": "2016-07-19 22:01:45"
         },
         {
             "name": "firebase/php-jwt",
@@ -189,16 +160,16 @@
         },
         {
             "name": "guzzlehttp/guzzle",
-            "version": "dev-master",
+            "version": "6.2.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/guzzle.git",
-                "reference": "b1a96f6134f69cb41f8538d3a6491f4bb1dbab78"
+                "reference": "d094e337976dff9d8e2424e8485872194e768662"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/guzzle/zipball/b1a96f6134f69cb41f8538d3a6491f4bb1dbab78",
-                "reference": "b1a96f6134f69cb41f8538d3a6491f4bb1dbab78",
+                "url": "https://api.github.com/repos/guzzle/guzzle/zipball/d094e337976dff9d8e2424e8485872194e768662",
+                "reference": "d094e337976dff9d8e2424e8485872194e768662",
                 "shasum": ""
             },
             "require": {
@@ -247,7 +218,7 @@
                 "rest",
                 "web service"
             ],
-            "time": "2016-05-08 19:39:56"
+            "time": "2016-03-21 20:02:09"
         },
         {
             "name": "guzzlehttp/promises",
@@ -406,13 +377,67 @@
                 "response"
             ],
             "time": "2015-05-04 20:22:00"
+        },
+        {
+            "name": "stanley-cheung/protobuf-php",
+            "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/stanley-cheung/Protobuf-PHP.git",
+                "reference": "02e2c2ac00f42bc788cedbd10306d3565fec8090"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/stanley-cheung/Protobuf-PHP/zipball/02e2c2ac00f42bc788cedbd10306d3565fec8090",
+                "reference": "02e2c2ac00f42bc788cedbd10306d3565fec8090",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3.0"
+            },
+            "bin": [
+                "protoc-gen-php.bat",
+                "protoc-gen-php.php"
+            ],
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "1.0-dev"
+                }
+            },
+            "autoload": {
+                "psr-0": {
+                    "DrSlump": "library/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Iván -DrSlump- Montes",
+                    "email": "drslump@pollinimini.net",
+                    "homepage": "https://github.com/drslump/Protobuf-PHP"
+                }
+            ],
+            "description": "PHP implementation of Google's Protocol Buffers",
+            "homepage": "https://github.com/stanley-cheung/Protobuf-PHP",
+            "keywords": [
+                "protobuf",
+                "protocol buffer",
+                "serializing"
+            ],
+            "support": {
+                "source": "https://github.com/stanley-cheung/Protobuf-PHP/tree/v0.5"
+            },
+            "time": "2016-07-13 23:17:34"
         }
     ],
     "packages-dev": [],
     "aliases": [],
     "minimum-stability": "dev",
     "stability-flags": {
-        "datto/protobuf-php": 20,
+        "stanley-cheung/protobuf-php": 20,
         "grpc/grpc": 20
     },
     "prefer-stable": false,
