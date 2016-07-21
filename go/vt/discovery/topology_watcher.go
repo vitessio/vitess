@@ -51,7 +51,8 @@ type tabletInfo struct {
 }
 
 // TopologyWatcher polls tablet from a configurable set of tablets
-// periodically.
+// periodically. When tablets are added / removed, it calls
+// the HealthCheck AddTablet / RemoveTablet interface appropriately.
 type TopologyWatcher struct {
 	// set at construction time
 	topoServer      topo.Server
@@ -147,7 +148,7 @@ func (tw *TopologyWatcher) loadTablets() {
 	tw.mu.Lock()
 	for key, tep := range newTablets {
 		if _, ok := tw.tablets[key]; !ok {
-			tw.hc.AddTablet(tw.cell, tep.alias, tep.tablet)
+			tw.hc.AddTablet(tep.tablet, tep.alias)
 		}
 	}
 	for key, tep := range tw.tablets {

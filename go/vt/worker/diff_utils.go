@@ -49,12 +49,16 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 		return nil, err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, tablet.Tablet, *remoteActionsTimeout)
+	conn, err := tabletconn.GetDialer()(tablet.Tablet, *remoteActionsTimeout)
 	if err != nil {
 		return nil, err
 	}
 
-	stream, err := conn.StreamExecute(ctx, sql, make(map[string]interface{}))
+	stream, err := conn.StreamExecute(ctx, &querypb.Target{
+		Keyspace:   tablet.Tablet.Keyspace,
+		Shard:      tablet.Tablet.Shard,
+		TabletType: tablet.Tablet.Type,
+	}, sql, make(map[string]interface{}))
 	if err != nil {
 		return nil, err
 	}

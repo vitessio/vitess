@@ -24,6 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -303,13 +304,17 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
 	defer conn.Close()
 
-	qr, err := conn.Execute(ctx, subFlags.Arg(1), *bindVariables, int64(*transactionID))
+	qr, err := conn.Execute(ctx, &querypb.Target{
+		Keyspace:   tabletInfo.Tablet.Keyspace,
+		Shard:      tabletInfo.Tablet.Shard,
+		TabletType: tabletInfo.Tablet.Type,
+	}, subFlags.Arg(1), *bindVariables, int64(*transactionID))
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
@@ -337,13 +342,17 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
 	defer conn.Close()
 
-	transactionID, err := conn.Begin(ctx)
+	transactionID, err := conn.Begin(ctx, &querypb.Target{
+		Keyspace:   tabletInfo.Tablet.Keyspace,
+		Shard:      tabletInfo.Tablet.Shard,
+		TabletType: tabletInfo.Tablet.Type,
+	})
 	if err != nil {
 		return fmt.Errorf("Begin failed: %v", err)
 	}
@@ -374,13 +383,17 @@ func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
 	defer conn.Close()
 
-	return conn.Commit(ctx, transactionID)
+	return conn.Commit(ctx, &querypb.Target{
+		Keyspace:   tabletInfo.Tablet.Keyspace,
+		Shard:      tabletInfo.Tablet.Shard,
+		TabletType: tabletInfo.Tablet.Type,
+	}, transactionID)
 }
 
 func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -404,13 +417,17 @@ func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
 	defer conn.Close()
 
-	return conn.Rollback(ctx, transactionID)
+	return conn.Rollback(ctx, &querypb.Target{
+		Keyspace:   tabletInfo.Tablet.Keyspace,
+		Shard:      tabletInfo.Tablet.Shard,
+		TabletType: tabletInfo.Tablet.Type,
+	}, transactionID)
 }
 
 func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -431,7 +448,7 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}

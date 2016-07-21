@@ -118,7 +118,7 @@ func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *
 	testConfig.EnablePublishStats = false
 	testConfig.DebugURLPrefix = fmt.Sprintf("TestWaitForFilteredReplication-%d-", rand.Int63())
 	qs := tabletserver.NewTabletServer(testConfig)
-	grpcqueryservice.RegisterForTest(dest.RPCServer, qs)
+	grpcqueryservice.Register(dest.RPCServer, qs)
 
 	qs.BroadcastHealth(42, initialStats)
 

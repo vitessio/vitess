@@ -93,7 +93,7 @@ func TestTabletData(t *testing.T) {
 	tablet1.StartActionLoop(t, wr)
 	defer tablet1.StopActionLoop(t)
 	shsq := newStreamHealthTabletServer(t)
-	grpcqueryservice.RegisterForTest(tablet1.RPCServer, shsq)
+	grpcqueryservice.Register(tablet1.RPCServer, shsq)
 
 	thc := newTabletHealthCache(ts)
 

@@ -56,6 +56,8 @@ type SandboxConn struct {
 	TransactionID sync2.AtomicInt64
 }
 
+var _ tabletconn.TabletConn = (*SandboxConn)(nil) // compile-time interface check
+
 // NewSandboxConn returns a new SandboxConn targeted to the provided tablet.
 func NewSandboxConn(t *topodatapb.Tablet) *SandboxConn {
 	return &SandboxConn{
@@ -112,7 +114,7 @@ func (sbc *SandboxConn) SetResults(r []*sqltypes.Result) {
 }
 
 // Execute is part of the TabletConn interface.
-func (sbc *SandboxConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
+func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]interface{})
 	for k, v := range bindVars {
@@ -129,7 +131,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, query string, bindVars map[
 }
 
 // ExecuteBatch is part of the TabletConn interface.
-func (sbc *SandboxConn) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+func (sbc *SandboxConn) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	sbc.ExecCount.Add(1)
 	if asTransaction {
 		sbc.AsTransactionCount.Add(1)
@@ -159,7 +161,7 @@ func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 }
 
 // StreamExecute is part of the TabletConn interface.
-func (sbc *SandboxConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
+func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]interface{})
 	for k, v := range bindVars {
@@ -178,7 +180,7 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, query string, bindVar
 }
 
 // Begin is part of the TabletConn interface.
-func (sbc *SandboxConn) Begin(ctx context.Context) (int64, error) {
+func (sbc *SandboxConn) Begin(ctx context.Context, target *querypb.Target) (int64, error) {
 	sbc.BeginCount.Add(1)
 	err := sbc.getError()
 	if err != nil {
@@ -188,34 +190,34 @@ func (sbc *SandboxConn) Begin(ctx context.Context) (int64, error) {
 }
 
 // Commit is part of the TabletConn interface.
-func (sbc *SandboxConn) Commit(ctx context.Context, transactionID int64) error {
+func (sbc *SandboxConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	sbc.CommitCount.Add(1)
 	return sbc.getError()
 }
 
 // Rollback is part of the TabletConn interface.
-func (sbc *SandboxConn) Rollback(ctx context.Context, transactionID int64) error {
+func (sbc *SandboxConn) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	sbc.RollbackCount.Add(1)
 	return sbc.getError()
 }
 
 // BeginExecute is part of the TabletConn interface.
-func (sbc *SandboxConn) BeginExecute(ctx context.Context, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error) {
-	transactionID, err := sbc.Begin(ctx)
+func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error) {
+	transactionID, err := sbc.Begin(ctx, target)
 	if err != nil {
 		return nil, 0, err
 	}
-	result, err := sbc.Execute(ctx, query, bindVars, transactionID)
+	result, err := sbc.Execute(ctx, target, query, bindVars, transactionID)
 	return result, transactionID, err
 }
 
 // BeginExecuteBatch is part of the TabletConn interface.
-func (sbc *SandboxConn) BeginExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
-	transactionID, err := sbc.Begin(ctx)
+func (sbc *SandboxConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+	transactionID, err := sbc.Begin(ctx, target)
 	if err != nil {
 		return nil, 0, err
 	}
-	results, err := sbc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
+	results, err := sbc.ExecuteBatch(ctx, target, queries, asTransaction, transactionID)
 	return results, transactionID, err
 }
 
@@ -224,7 +226,7 @@ var SandboxSQRowCount = int64(10)
 
 // SplitQuery creates splits from the original query by appending the
 // split index as a comment to the SQL. RowCount is always SandboxSQRowCount
-func (sbc *SandboxConn) SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
+func (sbc *SandboxConn) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
 	splits := []querytypes.QuerySplit{}
 	for i := 0; i < int(splitCount); i++ {
 		split := querytypes.QuerySplit{
@@ -241,6 +243,7 @@ func (sbc *SandboxConn) SplitQuery(ctx context.Context, query querytypes.BoundQu
 // TODO(erez): Rename to SplitQuery after the migration to SplitQuery V2 is done.
 func (sbc *SandboxConn) SplitQueryV2(
 	ctx context.Context,
+	target *querypb.Target,
 	query querytypes.BoundQuery,
 	splitColumns []string,
 	splitCount int64,
@@ -264,11 +267,6 @@ func (sbc *SandboxConn) StreamHealth(ctx context.Context) (tabletconn.StreamHeal
 
 // Close does not change ExecCount
 func (sbc *SandboxConn) Close() {
-}
-
-// SetTarget is part of the TabletConn interface.
-func (sbc *SandboxConn) SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error {
-	return nil
 }
 
 // Tablet is part of the TabletConn interface.

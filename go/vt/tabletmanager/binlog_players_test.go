@@ -125,52 +125,47 @@ type fakeTabletConn struct {
 }
 
 // Execute is part of the TabletConn interface
-func (ftc *fakeTabletConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
+func (ftc *fakeTabletConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
 // Execute is part of the TabletConn interface
-func (ftc *fakeTabletConn) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+func (ftc *fakeTabletConn) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
 // StreamExecute is part of the TabletConn interface
-func (ftc *fakeTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
+func (ftc *fakeTabletConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
 // Begin is part of the TabletConn interface
-func (ftc *fakeTabletConn) Begin(ctx context.Context) (transactionID int64, err error) {
+func (ftc *fakeTabletConn) Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error) {
 	return 0, fmt.Errorf("not implemented in this test")
 }
 
 // Commit is part of the TabletConn interface
-func (ftc *fakeTabletConn) Commit(ctx context.Context, transactionID int64) error {
+func (ftc *fakeTabletConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	return fmt.Errorf("not implemented in this test")
 }
 
 // Rollback is part of the TabletConn interface
-func (ftc *fakeTabletConn) Rollback(ctx context.Context, transactionID int64) error {
+func (ftc *fakeTabletConn) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	return fmt.Errorf("not implemented in this test")
 }
 
 // BeginExecute is part of the TabletConn interface
-func (ftc *fakeTabletConn) BeginExecute(ctx context.Context, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error) {
+func (ftc *fakeTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error) {
 	return nil, 0, fmt.Errorf("not implemented in this test")
 }
 
 // BeginExecuteBatch is part of the TabletConn interface
-func (ftc *fakeTabletConn) BeginExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+func (ftc *fakeTabletConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
 	return nil, 0, fmt.Errorf("not implemented in this test")
 }
 
 // Close is part of the TabletConn interface
 func (ftc *fakeTabletConn) Close() {
-}
-
-// SetTarget is part of the TabletConn interface
-func (ftc *fakeTabletConn) SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error {
-	return fmt.Errorf("not implemented in this test")
 }
 
 // Tablet is part of the TabletConn interface
@@ -179,13 +174,14 @@ func (ftc *fakeTabletConn) Tablet() *topodatapb.Tablet {
 }
 
 // SplitQuery is part of the TabletConn interface
-func (ftc *fakeTabletConn) SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
+func (ftc *fakeTabletConn) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
 // SplitQuery is part of the TabletConn interface
 func (ftc *fakeTabletConn) SplitQueryV2(
 	ctx context.Context,
+	target *querypb.Target,
 	query querytypes.BoundQuery,
 	splitColumns []string,
 	splitCount int64,
@@ -266,7 +262,7 @@ func createSourceTablet(t *testing.T, name string, ts topo.Server, keyspace, sha
 
 	// register a tablet conn dialer that will return the instance
 	// we want
-	tabletconn.RegisterDialer(name, func(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
+	tabletconn.RegisterDialer(name, func(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
 		return &fakeTabletConn{
 			tablet: tablet,
 		}, nil

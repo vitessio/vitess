@@ -6,7 +6,6 @@ package grpctabletconn
 
 import (
 	"flag"
-	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -45,21 +44,29 @@ type gRPCQueryClient struct {
 	tablet *topodatapb.Tablet
 
 	// mu protects the next fields
-	mu     sync.RWMutex
-	cc     *grpc.ClientConn
-	c      queryservicepb.QueryClient
-	target *querypb.Target
+	mu sync.RWMutex
+	cc *grpc.ClientConn
+	c  queryservicepb.QueryClient
 }
 
 // DialTablet creates and initializes gRPCQueryClient.
-func DialTablet(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
+func DialTablet(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
 	// create the RPC client
-	addr := netutil.JoinHostPort(tablet.Hostname, tablet.PortMap["grpc"])
+	addr := ""
+	if grpcPort, ok := tablet.PortMap["grpc"]; ok {
+		addr = netutil.JoinHostPort(tablet.Hostname, grpcPort)
+	} else {
+		addr = tablet.Hostname
+	}
 	opt, err := grpcutils.ClientSecureDialOption(*cert, *key, *ca, *name)
 	if err != nil {
 		return nil, err
 	}
-	cc, err := grpc.Dial(addr, opt, grpc.WithBlock(), grpc.WithTimeout(timeout))
+	opts := []grpc.DialOption{opt}
+	if timeout > 0 {
+		opts = append(opts, grpc.WithBlock(), grpc.WithTimeout(timeout))
+	}
+	cc, err := grpc.Dial(addr, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -69,18 +76,13 @@ func DialTablet(ctx context.Context, tablet *topodatapb.Tablet, timeout time.Dur
 		tablet: tablet,
 		cc:     cc,
 		c:      c,
-		target: &querypb.Target{
-			Keyspace:   tablet.Keyspace,
-			Shard:      tablet.Shard,
-			TabletType: tablet.Type,
-		},
 	}
 
 	return result, nil
 }
 
 // Execute sends the query to VTTablet.
-func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
+func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -93,7 +95,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 	}
 
 	req := &querypb.ExecuteRequest{
-		Target:            conn.target,
+		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		Query:             q,
@@ -107,7 +109,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 }
 
 // ExecuteBatch sends a batch query to VTTablet.
-func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -115,7 +117,7 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []queryty
 	}
 
 	req := &querypb.ExecuteBatchRequest{
-		Target:            conn.target,
+		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		Queries:           make([]*querypb.BoundQuery, len(queries)),
@@ -157,7 +159,7 @@ func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 }
 
 // StreamExecute starts a streaming query to VTTablet.
-func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
+func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -169,7 +171,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 		return nil, err
 	}
 	req := &querypb.StreamExecuteRequest{
-		Target:            conn.target,
+		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		Query:             q,
@@ -182,7 +184,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 }
 
 // Begin starts a transaction.
-func (conn *gRPCQueryClient) Begin(ctx context.Context) (transactionID int64, err error) {
+func (conn *gRPCQueryClient) Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -190,7 +192,7 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context) (transactionID int64, er
 	}
 
 	req := &querypb.BeginRequest{
-		Target:            conn.target,
+		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 	}
@@ -202,7 +204,7 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context) (transactionID int64, er
 }
 
 // Commit commits the ongoing transaction.
-func (conn *gRPCQueryClient) Commit(ctx context.Context, transactionID int64) error {
+func (conn *gRPCQueryClient) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -210,7 +212,7 @@ func (conn *gRPCQueryClient) Commit(ctx context.Context, transactionID int64) er
 	}
 
 	req := &querypb.CommitRequest{
-		Target:            conn.target,
+		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		TransactionId:     transactionID,
@@ -223,7 +225,7 @@ func (conn *gRPCQueryClient) Commit(ctx context.Context, transactionID int64) er
 }
 
 // Rollback rolls back the ongoing transaction.
-func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) error {
+func (conn *gRPCQueryClient) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -231,7 +233,7 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) 
 	}
 
 	req := &querypb.RollbackRequest{
-		Target:            conn.target,
+		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		TransactionId:     transactionID,
@@ -244,7 +246,7 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) 
 }
 
 // BeginExecute starts a transaction and runs an Execute.
-func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, query string, bindVars map[string]interface{}) (result *sqltypes.Result, transactionID int64, err error) {
+func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (result *sqltypes.Result, transactionID int64, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -259,7 +261,7 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, query string, bin
 	if *combo {
 		// If combo is enabled, we combine both calls
 		req := &querypb.BeginExecuteRequest{
-			Target:            conn.target,
+			Target:            target,
 			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 			Query:             q,
@@ -276,7 +278,7 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, query string, bin
 
 	// Begin part.
 	breq := &querypb.BeginRequest{
-		Target:            conn.target,
+		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 	}
@@ -288,7 +290,7 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, query string, bin
 
 	// Execute part.
 	ereq := &querypb.ExecuteRequest{
-		Target:            conn.target,
+		Target:            target,
 		EffectiveCallerId: breq.EffectiveCallerId,
 		ImmediateCallerId: breq.ImmediateCallerId,
 		Query:             q,
@@ -303,7 +305,7 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, query string, bin
 }
 
 // BeginExecuteBatch starts a transaction and runs an ExecuteBatch.
-func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool) (results []sqltypes.Result, transactionID int64, err error) {
+func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) (results []sqltypes.Result, transactionID int64, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -313,7 +315,7 @@ func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, queries []qu
 	if *combo {
 		// If combo is enabled, we combine both calls
 		req := &querypb.BeginExecuteBatchRequest{
-			Target:            conn.target,
+			Target:            target,
 			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 			Queries:           make([]*querypb.BoundQuery, len(queries)),
@@ -338,7 +340,7 @@ func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, queries []qu
 	}
 
 	breq := &querypb.BeginRequest{
-		Target:            conn.target,
+		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 	}
@@ -349,7 +351,7 @@ func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, queries []qu
 	transactionID = br.TransactionId
 
 	ereq := &querypb.ExecuteBatchRequest{
-		Target:            conn.target,
+		Target:            target,
 		EffectiveCallerId: breq.EffectiveCallerId,
 		ImmediateCallerId: breq.ImmediateCallerId,
 		Queries:           make([]*querypb.BoundQuery, len(queries)),
@@ -373,7 +375,7 @@ func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, queries []qu
 // SplitQuery is the stub for TabletServer.SplitQuery RPC
 // TODO(erez): Remove this method and rename SplitQueryV2 to SplitQuery once
 // the migration to SplitQuery V2 is done.
-func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) (queries []querytypes.QuerySplit, err error) {
+func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) (queries []querytypes.QuerySplit, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -386,7 +388,7 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query querytypes.Bo
 		return nil, tabletconn.TabletErrorFromGRPC(err)
 	}
 	req := &querypb.SplitQueryRequest{
-		Target:              conn.target,
+		Target:              target,
 		EffectiveCallerId:   callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId:   callerid.ImmediateCallerIDFromContext(ctx),
 		Query:               q,
@@ -410,6 +412,7 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query querytypes.Bo
 // SplitQueryV2 is the stub for TabletServer.SplitQuery RPC
 func (conn *gRPCQueryClient) SplitQueryV2(
 	ctx context.Context,
+	target *querypb.Target,
 	query querytypes.BoundQuery,
 	splitColumns []string,
 	splitCount int64,
@@ -428,7 +431,7 @@ func (conn *gRPCQueryClient) SplitQueryV2(
 		return nil, tabletconn.TabletErrorFromGRPC(err)
 	}
 	req := &querypb.SplitQueryRequest{
-		Target:              conn.target,
+		Target:              target,
 		EffectiveCallerId:   callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId:   callerid.ImmediateCallerIDFromContext(ctx),
 		Query:               q,
@@ -471,21 +474,6 @@ func (conn *gRPCQueryClient) Close() {
 	cc := conn.cc
 	conn.cc = nil
 	cc.Close()
-}
-
-// SetTarget can be called to change the target used for subsequent calls.
-func (conn *gRPCQueryClient) SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error {
-	conn.mu.Lock()
-	defer conn.mu.Unlock()
-	if tabletType == topodatapb.TabletType_UNKNOWN {
-		return fmt.Errorf("cannot set tablet type to UNKNOWN")
-	}
-	conn.target = &querypb.Target{
-		Keyspace:   keyspace,
-		Shard:      shard,
-		TabletType: tabletType,
-	}
-	return nil
 }
 
 // Tablet returns the rpc end point.

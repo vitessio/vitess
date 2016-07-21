@@ -27,9 +27,9 @@ import (
 // If the streaming query gets interrupted, it can resume the stream after
 // the last row which was read.
 type RestartableResultReader struct {
-	ctx         context.Context
-	logger      logutil.Logger
-	tabletAlias *topodatapb.TabletAlias
+	ctx    context.Context
+	logger logutil.Logger
+	tablet *topodatapb.Tablet
 	// td is used to get the list of primary key columns at a restart.
 	td    *tabletmanagerdatapb.TableDefinition
 	chunk chunk
@@ -56,18 +56,18 @@ func NewRestartableResultReader(ctx context.Context, logger logutil.Logger, ts t
 		return nil, fmt.Errorf("tablet=%v table=%v chunk=%v: Failed to resolve tablet alias: %v", topoproto.TabletAliasString(tabletAlias), td.Name, chunk, err)
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, tablet.Tablet, *remoteActionsTimeout)
+	conn, err := tabletconn.GetDialer()(tablet.Tablet, *remoteActionsTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("tablet=%v table=%v chunk=%v: Failed to get dialer for tablet: %v", topoproto.TabletAliasString(tabletAlias), td.Name, chunk, err)
 	}
 
 	r := &RestartableResultReader{
-		ctx:         ctx,
-		logger:      logger,
-		tabletAlias: tabletAlias,
-		td:          td,
-		chunk:       chunk,
-		conn:        conn,
+		ctx:    ctx,
+		logger: logger,
+		tablet: tablet.Tablet,
+		td:     td,
+		chunk:  chunk,
+		conn:   conn,
 	}
 
 	if err := r.startStream(); err != nil {
@@ -81,7 +81,7 @@ func NewRestartableResultReader(ctx context.Context, logger logutil.Logger, ts t
 func (r *RestartableResultReader) Next() (*sqltypes.Result, error) {
 	result, err := r.output.Recv()
 	if err != nil && err != io.EOF {
-		r.logger.Infof("tablet=%v table=%v chunk=%v: Failed to read next rows from active streaming query. Trying to restart stream. Original Error: %v", topoproto.TabletAliasString(r.tabletAlias), r.td.Name, r.chunk, err)
+		r.logger.Infof("tablet=%v table=%v chunk=%v: Failed to read next rows from active streaming query. Trying to restart stream. Original Error: %v", topoproto.TabletAliasString(r.tablet.Alias), r.td.Name, r.chunk, err)
 		// Restart streaming query.
 		// Note that we intentionally don't reset "r.conn" here. This restart
 		// mechanism is only meant to fix transient problems which go away at the
@@ -92,12 +92,12 @@ func (r *RestartableResultReader) Next() (*sqltypes.Result, error) {
 		}
 		result, err = r.output.Recv()
 		if err == nil || err == io.EOF {
-			r.logger.Infof("tablet=%v table=%v chunk=%v: Successfully restarted streaming query with query '%v'.", topoproto.TabletAliasString(r.tabletAlias), r.td.Name, r.chunk, r.query)
+			r.logger.Infof("tablet=%v table=%v chunk=%v: Successfully restarted streaming query with query '%v'.", topoproto.TabletAliasString(r.tablet.Alias), r.td.Name, r.chunk, r.query)
 		} else {
 			// We won't retry a second time and fail for good.
 			// TODO(mberlin): When we have a chunk pipeline restart mechanism,
 			// mention that restart mechanism in the log here.
-			r.logger.Infof("tablet=%v table=%v chunk=%v: Failed to restart streaming query with query '%v'. Error: %v", topoproto.TabletAliasString(r.tabletAlias), r.td.Name, r.chunk, r.query, err)
+			r.logger.Infof("tablet=%v table=%v chunk=%v: Failed to restart streaming query with query '%v'. Error: %v", topoproto.TabletAliasString(r.tablet.Alias), r.td.Name, r.chunk, r.query, err)
 		}
 	}
 	if result != nil && len(result.Rows) > 0 {
@@ -118,15 +118,19 @@ func (r *RestartableResultReader) Close() {
 
 func (r *RestartableResultReader) startStream() error {
 	r.generateQuery()
-	stream, err := r.conn.StreamExecute(r.ctx, r.query, make(map[string]interface{}))
+	stream, err := r.conn.StreamExecute(r.ctx, &querypb.Target{
+		Keyspace:   r.tablet.Keyspace,
+		Shard:      r.tablet.Shard,
+		TabletType: r.tablet.Type,
+	}, r.query, make(map[string]interface{}))
 	if err != nil {
-		return fmt.Errorf("tablet=%v table=%v chunk=%v: failed to call StreamExecute() for query '%v': %v", topoproto.TabletAliasString(r.tabletAlias), r.td.Name, r.chunk, r.query, err)
+		return fmt.Errorf("tablet=%v table=%v chunk=%v: failed to call StreamExecute() for query '%v': %v", topoproto.TabletAliasString(r.tablet.Alias), r.td.Name, r.chunk, r.query, err)
 	}
 
 	// Read the fields information. Fail and do not restart if there is an error.
 	cols, err := stream.Recv()
 	if err != nil {
-		return fmt.Errorf("tablet=%v table=%v chunk=%v: cannot read Fields for query '%v': %v", topoproto.TabletAliasString(r.tabletAlias), r.td.Name, r.chunk, r.query, err)
+		return fmt.Errorf("tablet=%v table=%v chunk=%v: cannot read Fields for query '%v': %v", topoproto.TabletAliasString(r.tablet.Alias), r.td.Name, r.chunk, r.query, err)
 	}
 
 	r.fields = cols.Fields

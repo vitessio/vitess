@@ -33,8 +33,6 @@ type FakeHealthCheck struct {
 	// GetStatsFromTargetCounter counts GetTabletStatsFromTarget() being called.
 	// (it can be accessed concurrently by 'multiGo', so using atomic)
 	GetStatsFromTargetCounter sync2.AtomicInt32
-	// GetStatsFromKeyspaceShardCounter counts GetTabletStatsFromKeyspaceShard() being called.
-	GetStatsFromKeyspaceShardCounter int
 }
 
 type fhcItem struct {
@@ -55,7 +53,7 @@ func (fhc *FakeHealthCheck) SetListener(listener HealthCheckStatsListener) {
 }
 
 // AddTablet adds the tablet.
-func (fhc *FakeHealthCheck) AddTablet(cell, name string, tablet *topodatapb.Tablet) {
+func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet, name string) {
 	key := TabletToMapKey(tablet)
 	item := &fhcItem{
 		ts: &TabletStats{
@@ -75,23 +73,6 @@ func (fhc *FakeHealthCheck) RemoveTablet(tablet *topodatapb.Tablet) {
 	defer fhc.mu.Unlock()
 	key := TabletToMapKey(tablet)
 	delete(fhc.items, key)
-}
-
-// GetTabletStatsFromKeyspaceShard returns all TabletStats for the given keyspace/shard.
-func (fhc *FakeHealthCheck) GetTabletStatsFromKeyspaceShard(keyspace, shard string) []*TabletStats {
-	fhc.mu.RLock()
-	defer fhc.mu.RUnlock()
-	fhc.GetStatsFromKeyspaceShardCounter++
-	var res []*TabletStats
-	for _, item := range fhc.items {
-		if item.ts.Target == nil {
-			continue
-		}
-		if item.ts.Target.Keyspace == keyspace && item.ts.Target.Shard == shard {
-			res = append(res, item.ts)
-		}
-	}
-	return res
 }
 
 // GetTabletStatsFromTarget returns all TabletStats for the given target.
@@ -143,7 +124,6 @@ func (fhc *FakeHealthCheck) Reset() {
 	defer fhc.mu.Unlock()
 
 	fhc.GetStatsFromTargetCounter.Set(0)
-	fhc.GetStatsFromKeyspaceShardCounter = 0
 	fhc.items = make(map[string]*fhcItem)
 }
 

@@ -10,10 +10,9 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -35,11 +34,11 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 	)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
-		return nil, tabletserver.ToGRPCError(err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, bv, request.TransactionId)
 	if err != nil {
-		return nil, tabletserver.ToGRPCError(err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 	return &querypb.ExecuteResponse{
 		Result: sqltypes.ResultToProto3(result),
@@ -55,11 +54,11 @@ func (q *query) ExecuteBatch(ctx context.Context, request *querypb.ExecuteBatchR
 	)
 	bql, err := querytypes.Proto3ToBoundQueryList(request.Queries)
 	if err != nil {
-		return nil, tabletserver.ToGRPCError(err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 	results, err := q.server.ExecuteBatch(ctx, request.Target, bql, request.AsTransaction, request.TransactionId)
 	if err != nil {
-		return nil, tabletserver.ToGRPCError(err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 	return &querypb.ExecuteBatchResponse{
 		Results: sqltypes.ResultsToProto3(results),
@@ -75,14 +74,14 @@ func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream quer
 	)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
-		return tabletserver.ToGRPCError(err)
+		return vterrors.ToGRPCError(err)
 	}
 	if err := q.server.StreamExecute(ctx, request.Target, request.Query.Sql, bv, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.StreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	}); err != nil {
-		return tabletserver.ToGRPCError(err)
+		return vterrors.ToGRPCError(err)
 	}
 	return nil
 }
@@ -96,7 +95,7 @@ func (q *query) Begin(ctx context.Context, request *querypb.BeginRequest) (respo
 	)
 	transactionID, err := q.server.Begin(ctx, request.Target)
 	if err != nil {
-		return nil, tabletserver.ToGRPCError(err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 
 	return &querypb.BeginResponse{
@@ -112,7 +111,7 @@ func (q *query) Commit(ctx context.Context, request *querypb.CommitRequest) (res
 		request.ImmediateCallerId,
 	)
 	if err := q.server.Commit(ctx, request.Target, request.TransactionId); err != nil {
-		return nil, tabletserver.ToGRPCError(err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 	return &querypb.CommitResponse{}, nil
 }
@@ -125,7 +124,7 @@ func (q *query) Rollback(ctx context.Context, request *querypb.RollbackRequest) 
 		request.ImmediateCallerId,
 	)
 	if err := q.server.Rollback(ctx, request.Target, request.TransactionId); err != nil {
-		return nil, tabletserver.ToGRPCError(err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 
 	return &querypb.RollbackResponse{}, nil
@@ -140,20 +139,20 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 	)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
-		return nil, tabletserver.ToGRPCError(err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 
 	// Begin part
 	transactionID, err := q.server.Begin(ctx, request.Target)
 	if err != nil {
-		return nil, tabletserver.ToGRPCError(err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 
 	// Execute part
 	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, bv, transactionID)
 	if err != nil {
 		return &querypb.BeginExecuteResponse{
-			Error:         tabletserver.ToRPCError(err),
+			Error:         vterrors.VtRPCErrorFromVtError(err),
 			TransactionId: transactionID,
 		}, nil
 	}
@@ -172,20 +171,20 @@ func (q *query) BeginExecuteBatch(ctx context.Context, request *querypb.BeginExe
 	)
 	bql, err := querytypes.Proto3ToBoundQueryList(request.Queries)
 	if err != nil {
-		return nil, tabletserver.ToGRPCError(err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 
 	// Begin part
 	transactionID, err := q.server.Begin(ctx, request.Target)
 	if err != nil {
-		return nil, tabletserver.ToGRPCError(err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 
 	// ExecuteBatch part
 	results, err := q.server.ExecuteBatch(ctx, request.Target, bql, request.AsTransaction, transactionID)
 	if err != nil {
 		return &querypb.BeginExecuteBatchResponse{
-			Error:         tabletserver.ToRPCError(err),
+			Error:         vterrors.VtRPCErrorFromVtError(err),
 			TransactionId: transactionID,
 		}, nil
 	}
@@ -205,7 +204,7 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 
 	bq, err := querytypes.Proto3ToBoundQuery(request.Query)
 	if err != nil {
-		return nil, tabletserver.ToGRPCError(err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 	splits := []querytypes.QuerySplit{}
 	splits, err = queryservice.CallCorrectSplitQuery(
@@ -220,11 +219,11 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 		request.NumRowsPerQueryPart,
 		request.Algorithm)
 	if err != nil {
-		return nil, tabletserver.ToGRPCError(err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 	qs, err := querytypes.QuerySplitsToProto3(splits)
 	if err != nil {
-		return nil, tabletserver.ToGRPCError(err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 	return &querypb.SplitQueryResponse{Queries: qs}, nil
 }
@@ -251,15 +250,7 @@ func (q *query) StreamHealth(request *querypb.StreamHealthRequest, stream querys
 	return q.server.StreamHealthUnregister(id)
 }
 
-func init() {
-	tabletserver.RegisterFunctions = append(tabletserver.RegisterFunctions, func(qsc tabletserver.Controller) {
-		if servenv.GRPCCheckServiceMap("queryservice") {
-			queryservicepb.RegisterQueryServer(servenv.GRPCServer, &query{qsc.QueryService()})
-		}
-	})
-}
-
-// RegisterForTest should only be used by unit tests
-func RegisterForTest(s *grpc.Server, server queryservice.QueryService) {
+// Register registers the implementation on the provide gRPC Server.
+func Register(s *grpc.Server, server queryservice.QueryService) {
 	queryservicepb.RegisterQueryServer(s, &query{server})
 }

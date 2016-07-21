@@ -115,7 +115,7 @@ func TestWaitForTablets(t *testing.T) {
 	createFakeConn(tablet, input)
 
 	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, 1*time.Hour)
-	hc.AddTablet("cell", "", tablet)
+	hc.AddTablet(tablet, "")
 
 	// this should time out
 	if err := WaitForTablets(shortCtx, hc, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != ErrWaitForTabletsTimeout {

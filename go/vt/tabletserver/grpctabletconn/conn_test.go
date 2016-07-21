@@ -31,7 +31,7 @@ func TestGRPCTabletConn(t *testing.T) {
 
 	// Create a gRPC server and listen on the port
 	server := grpc.NewServer()
-	grpcqueryservice.RegisterForTest(server, service)
+	grpcqueryservice.Register(server, service)
 	go server.Serve(listener)
 
 	// run the test suite
