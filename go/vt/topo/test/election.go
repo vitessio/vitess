@@ -12,6 +12,28 @@ import (
 	"golang.org/x/net/context"
 )
 
+func waitFormasterID(t *testing.T, mp topo.MasterParticipation, expected string) {
+	c := 100
+	for {
+		master, err := mp.GetCurrentMasterID()
+		if err != nil {
+			t.Fatalf("GetCurrentMasterID failed: %v", err)
+		}
+
+		if master == expected {
+			return
+		}
+
+		c--
+		if c == 0 {
+			t.Fatalf("GetCurrentMasterID timed out with %v, expected %v", master, expected)
+		}
+
+		t.Logf("Unexpected master %v, expected %v, will retry", master, expected)
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // checkElection runs the tests on the MasterParticipation part of the API
 func checkElection(t *testing.T, ts topo.Impl) {
 	name := "testmp"
@@ -24,10 +46,7 @@ func checkElection(t *testing.T, ts topo.Impl) {
 	}
 
 	// no master yet, check name
-	master, err := mp1.GetCurrentMasterID()
-	if err != nil || master != "" {
-		t.Fatalf("GetCurrentMasterID returned: %v %v", master, err)
-	}
+	waitFormasterID(t, mp1, "")
 
 	// wait for it to be the master
 	ctx1, err := mp1.WaitForMaster()
@@ -36,10 +55,7 @@ func checkElection(t *testing.T, ts topo.Impl) {
 	}
 
 	// get the current master name, better be id1
-	master, err = mp1.GetCurrentMasterID()
-	if err != nil || master != id1 {
-		t.Fatalf("GetCurrentMasterID returned: %v %v", master, err)
-	}
+	waitFormasterID(t, mp1, id1)
 
 	// create a second MasterParticipation on same name
 	id2 := "id2"
@@ -57,6 +73,9 @@ func checkElection(t *testing.T, ts topo.Impl) {
 		mp2IsMaster <- err
 	}()
 
+	// ask mp2 for master name, should get id1
+	waitFormasterID(t, mp2, id1)
+
 	// shutdown mp1
 	mp1.Shutdown()
 
@@ -73,6 +92,9 @@ func checkElection(t *testing.T, ts topo.Impl) {
 	if err != nil {
 		t.Fatalf("mp2 awoke with error: %v", err)
 	}
+
+	// ask mp2 for master name, should get id2
+	waitFormasterID(t, mp2, id2)
 
 	// shut down mp2, we're done
 	mp2.Shutdown()
