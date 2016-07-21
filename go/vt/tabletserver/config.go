@@ -49,7 +49,6 @@ func init() {
 	flag.StringVar(&qsConfig.DebugURLPrefix, "debug-url-prefix", DefaultQsConfig.DebugURLPrefix, "debug url prefix, vttablet will report various system debug pages and this config controls the prefix of these debug urls")
 	flag.StringVar(&qsConfig.PoolNamePrefix, "pool-name-prefix", DefaultQsConfig.PoolNamePrefix, "pool name prefix, vttablet has several pools and each of them has a name. This config specifies the prefix of these pool names")
 	flag.BoolVar(&qsConfig.EnableAutoCommit, "enable-autocommit", DefaultQsConfig.EnableAutoCommit, "if the flag is on, a DML outsides a transaction will be auto committed.")
-	flag.IntVar(&qsConfig.MaxConcurrentRequests, "max_concurrent_requests", DefaultQsConfig.MaxConcurrentRequests, "Limit the number of allowed concurrent requests to this amount")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -60,29 +59,28 @@ func Init() {
 
 // Config contains all the configuration for query service
 type Config struct {
-	PoolSize              int
-	StreamPoolSize        int
-	TransactionCap        int
-	TransactionTimeout    float64
-	MaxResultSize         int
-	MaxDMLRows            int
-	StreamBufferSize      int
-	QueryCacheSize        int
-	SchemaReloadTime      float64
-	QueryTimeout          float64
-	TxPoolTimeout         float64
-	IdleTimeout           float64
-	StrictMode            bool
-	StrictTableAcl        bool
-	TerseErrors           bool
-	EnablePublishStats    bool
-	EnableAutoCommit      bool
-	EnableTableAclDryRun  bool
-	StatsPrefix           string
-	DebugURLPrefix        string
-	PoolNamePrefix        string
-	TableAclExemptACL     string
-	MaxConcurrentRequests int
+	PoolSize             int
+	StreamPoolSize       int
+	TransactionCap       int
+	TransactionTimeout   float64
+	MaxResultSize        int
+	MaxDMLRows           int
+	StreamBufferSize     int
+	QueryCacheSize       int
+	SchemaReloadTime     float64
+	QueryTimeout         float64
+	TxPoolTimeout        float64
+	IdleTimeout          float64
+	StrictMode           bool
+	StrictTableAcl       bool
+	TerseErrors          bool
+	EnablePublishStats   bool
+	EnableAutoCommit     bool
+	EnableTableAclDryRun bool
+	StatsPrefix          string
+	DebugURLPrefix       string
+	PoolNamePrefix       string
+	TableAclExemptACL    string
 }
 
 // DefaultQsConfig is the default value for the query service config.
@@ -93,29 +91,28 @@ type Config struct {
 // great (the overhead makes the final packets on the wire about twice
 // bigger than this).
 var DefaultQsConfig = Config{
-	PoolSize:              16,
-	StreamPoolSize:        750,
-	TransactionCap:        20,
-	TransactionTimeout:    30,
-	MaxResultSize:         10000,
-	MaxDMLRows:            500,
-	QueryCacheSize:        5000,
-	SchemaReloadTime:      30 * 60,
-	QueryTimeout:          0,
-	TxPoolTimeout:         1,
-	IdleTimeout:           30 * 60,
-	StreamBufferSize:      32 * 1024,
-	StrictMode:            true,
-	StrictTableAcl:        false,
-	TerseErrors:           false,
-	EnablePublishStats:    true,
-	EnableAutoCommit:      false,
-	EnableTableAclDryRun:  false,
-	StatsPrefix:           "",
-	DebugURLPrefix:        "/debug",
-	PoolNamePrefix:        "",
-	TableAclExemptACL:     "",
-	MaxConcurrentRequests: 100000,
+	PoolSize:             16,
+	StreamPoolSize:       750,
+	TransactionCap:       20,
+	TransactionTimeout:   30,
+	MaxResultSize:        10000,
+	MaxDMLRows:           500,
+	QueryCacheSize:       5000,
+	SchemaReloadTime:     30 * 60,
+	QueryTimeout:         0,
+	TxPoolTimeout:        1,
+	IdleTimeout:          30 * 60,
+	StreamBufferSize:     32 * 1024,
+	StrictMode:           true,
+	StrictTableAcl:       false,
+	TerseErrors:          false,
+	EnablePublishStats:   true,
+	EnableAutoCommit:     false,
+	EnableTableAclDryRun: false,
+	StatsPrefix:          "",
+	DebugURLPrefix:       "/debug",
+	PoolNamePrefix:       "",
+	TableAclExemptACL:    "",
 }
 
 var qsConfig Config
