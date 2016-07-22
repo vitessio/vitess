@@ -1,4 +1,4 @@
-// Copyright 2013, Google Inc. All rights reserved.
+// Copyright 2016, Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -63,8 +63,8 @@ type zkMasterParticipation struct {
 	shutdown chan struct{}
 }
 
-// WaitForMaster is part of the topo.MasterParticipation interface.
-func (mp *zkMasterParticipation) WaitForMaster() (context.Context, error) {
+// WaitForMastership is part of the topo.MasterParticipation interface.
+func (mp *zkMasterParticipation) WaitForMastership() (context.Context, error) {
 	electionPath := path.Join(GlobalElectionPath, mp.name)
 
 	// fast path if Shutdown was already called
@@ -101,17 +101,17 @@ func (mp *zkMasterParticipation) WaitForMaster() (context.Context, error) {
 
 	// we got the lock, create our background context
 	ctx, cancel := context.WithCancel(context.Background())
-	go mp.whileMaster(proposal, cancel)
+	go mp.watchMastership(proposal, cancel)
 	return ctx, nil
 }
 
-// whileMaster is the background go routine we run while we are the master.
+// watchMastership is the background go routine we run while we are the master.
 // We will do two things:
 // - watch for changes to the proposal file. If anything happens there,
 //   it most likely means we lost the ZK session, so we want to stop
 //   being the master.
 // - wait for mp.shutdown.
-func (mp *zkMasterParticipation) whileMaster(proposal string, cancel context.CancelFunc) {
+func (mp *zkMasterParticipation) watchMastership(proposal string, cancel context.CancelFunc) {
 	// any interruption of this routine means we're not master any more.
 	defer cancel()
 

@@ -43,8 +43,8 @@ type etcdMasterParticipation struct {
 	shutdown chan struct{}
 }
 
-// WaitForMaster is part of the topo.MasterParticipation interface.
-func (mp *etcdMasterParticipation) WaitForMaster() (context.Context, error) {
+// WaitForMastership is part of the topo.MasterParticipation interface.
+func (mp *etcdMasterParticipation) WaitForMastership() (context.Context, error) {
 	electionPath := path.Join(electionDirPath, mp.name)
 
 	for {

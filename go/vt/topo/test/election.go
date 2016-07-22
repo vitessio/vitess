@@ -12,8 +12,8 @@ import (
 	"golang.org/x/net/context"
 )
 
-func waitFormasterID(t *testing.T, mp topo.MasterParticipation, expected string) {
-	c := 100
+func waitForMasterID(t *testing.T, mp topo.MasterParticipation, expected string) {
+	deadline := time.Now().Add(5 * time.Second)
 	for {
 		master, err := mp.GetCurrentMasterID()
 		if err != nil {
@@ -24,17 +24,16 @@ func waitFormasterID(t *testing.T, mp topo.MasterParticipation, expected string)
 			return
 		}
 
-		c--
-		if c == 0 {
+		if time.Now().After(deadline) {
 			t.Fatalf("GetCurrentMasterID timed out with %v, expected %v", master, expected)
 		}
 
-		t.Logf("Unexpected master %v, expected %v, will retry", master, expected)
 		time.Sleep(10 * time.Millisecond)
 	}
 }
 
-// checkElection runs the tests on the MasterParticipation part of the API
+// checkElection runs the tests on the MasterParticipation part of the
+// topo.Impl API.
 func checkElection(t *testing.T, ts topo.Impl) {
 	name := "testmp"
 
@@ -46,16 +45,16 @@ func checkElection(t *testing.T, ts topo.Impl) {
 	}
 
 	// no master yet, check name
-	waitFormasterID(t, mp1, "")
+	waitForMasterID(t, mp1, "")
 
-	// wait for it to be the master
-	ctx1, err := mp1.WaitForMaster()
+	// wait for id1 to be the master
+	ctx1, err := mp1.WaitForMastership()
 	if err != nil {
 		t.Fatalf("mp1 cannot become master: %v", err)
 	}
 
 	// get the current master name, better be id1
-	waitFormasterID(t, mp1, id1)
+	waitForMasterID(t, mp1, id1)
 
 	// create a second MasterParticipation on same name
 	id2 := "id2"
@@ -69,17 +68,19 @@ func checkElection(t *testing.T, ts topo.Impl) {
 	var ctx2 context.Context
 	go func() {
 		var err error
-		ctx2, err = mp2.WaitForMaster()
+		ctx2, err = mp2.WaitForMastership()
 		mp2IsMaster <- err
 	}()
 
 	// ask mp2 for master name, should get id1
-	waitFormasterID(t, mp2, id1)
+	waitForMasterID(t, mp2, id1)
 
 	// shutdown mp1
 	mp1.Shutdown()
 
-	// this should have closed ctx1
+	// this should have closed ctx1 as soon as possible,
+	// so 5s will be enough. This will be used during lameduck
+	// when the server exits, so we can't wait too long anyway.
 	timer := time.NewTimer(5 * time.Second)
 	select {
 	case <-ctx1.Done():
@@ -94,7 +95,7 @@ func checkElection(t *testing.T, ts topo.Impl) {
 	}
 
 	// ask mp2 for master name, should get id2
-	waitFormasterID(t, mp2, id2)
+	waitForMasterID(t, mp2, id2)
 
 	// shut down mp2, we're done
 	mp2.Shutdown()

@@ -290,14 +290,15 @@ type Impl interface {
 	GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error)
 
 	//
-	// Master election, local to multiple cells usually.
-	// This is meant to have a small number of processes elect a master
-	// within a group.
+	// Master election methods. This is meant to have a small number of
+	// processes elect a master within a group. The backend storage for this
+	// can either be the global topo server, or a chorum of local cells.
 	//
 
-	// NewParticipation starts participating in the named group,
-	// using the provided id. Usually, pass in the hostname:port of the
-	// current process as id.
+	// NewMasterParticipation creates a MasterParticipation object,
+	// used to become the Master in an election for the provided group name.
+	// Id is the name of the local process, passing in the hostname:port of the
+	// current process as id is the common usage.
 	NewMasterParticipation(name, id string) (MasterParticipation, error)
 }
 
@@ -314,7 +315,7 @@ type Server struct {
 // job := NewJob()
 // go func() {
 //   for {
-//     ctx, err := mp.WaitForMaster()
+//     ctx, err := mp.WaitForMastership()
 //     switch err {
 //     case nil:
 //       job.RunUntilContextDone(ctx)
@@ -339,11 +340,11 @@ type Server struct {
 //   mp.Shutdown()
 // })
 type MasterParticipation interface {
-	// WaitForMaster waits until this process is the master.
-	// After we become the master, we may loose mastership. In that case,
+	// WaitForMastership waits until this process is the master.
+	// After we become the master, we may lose mastership. In that case,
 	// the returned context will be cancelled. If Shutdown was called,
-	// WaitForMaster will return nil, ErrInterrupted.
-	WaitForMaster() (context.Context, error)
+	// WaitForMastership will return nil, ErrInterrupted.
+	WaitForMastership() (context.Context, error)
 
 	// Shutdown is called when we don't want to participate in the
 	// master election any more. Typically, that is when the
