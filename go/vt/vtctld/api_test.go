@@ -25,22 +25,11 @@ func compactJSON(in []byte) string {
 	return buf.String()
 }
 
-// stripSpacesAndLines is called to clear trailing and preceding formatting for
-// error messages to make it easier to check for equality.
-func stripSpacesAndLines(str string) string {
-	str = strings.TrimPrefix(str, "\n")
-	str = strings.TrimSuffix(str, "\n")
-	str = strings.TrimPrefix(str, " ")
-	str = strings.TrimSuffix(str, " ")
-	return str
-}
-
 func TestAPI(t *testing.T) {
 	ctx := context.Background()
 	cells := []string{"cell1", "cell2"}
 	ts := zktestserver.New(t, cells)
 	actionRepo := NewActionRepository(ts)
-
 	server := httptest.NewServer(nil)
 	defer server.Close()
 
@@ -89,38 +78,31 @@ func TestAPI(t *testing.T) {
 			return "TestTabletAction Result", nil
 		})
 
-	realtimeStats, err := newRealtimeStats(ts)
-	if err != nil {
-		t.Errorf("newRealtimeStats error: %v", err)
-	}
+	realtimeStats := newRealtimeStatsForTesting()
 	initAPI(ctx, ts, actionRepo, realtimeStats)
 
-	// tar, st, tabStats all needed for realtimeStats object
-	tar := &querypb.Target{
+	target := &querypb.Target{
 		Keyspace:   "ks1",
 		Shard:      "-80",
 		TabletType: topodatapb.TabletType_REPLICA,
 	}
-
-	st := &querypb.RealtimeStats{
+	stats := &querypb.RealtimeStats{
 		HealthError:         "",
 		SecondsBehindMaster: 2,
 		BinlogPlayersCount:  0,
 		CpuUsage:            12.1,
 		Qps:                 5.6,
 	}
-
-	tabStats := &discovery.TabletStats{
+	tabletStats := &discovery.TabletStats{
 		Tablet:  &tablet1,
-		Target:  tar,
+		Target:  target,
 		Up:      true,
 		Serving: true,
 		TabletExternallyReparentedTimestamp: 5,
-		Stats:     st,
+		Stats:     stats,
 		LastError: nil,
 	}
-
-	realtimeStats.mimicStatsUpdateForTesting(tabStats)
+	realtimeStats.tabletStats.StatsUpdate(tabletStats)
 
 	// Test cases.
 	table := []struct {
@@ -182,9 +164,8 @@ func TestAPI(t *testing.T) {
 
 		//Tablet Updates
 		{"GET", "tablet_statuses/cell1/ks1/-80/REPLICA", `{"100":{"Tablet":{"alias":{"cell":"cell1","uid":100},"port_map":{"vt":100},"keyspace":"ks1","shard":"-80","key_range":{"end":"gA=="},"type":2},"Name":"","Target":{"keyspace":"ks1","shard":"-80","tablet_type":2},"Up":true,"Serving":true,"TabletExternallyReparentedTimestamp":5,"Stats":{"seconds_behind_master":2,"cpu_usage":12.1,"qps":5.6},"LastError":null}}`},
-		// Third string is prefixed with "ERROR: " to distiguish it as a test that will return an expected error.
-		{"GET", "tablet_statuses/cell1/ks1/replica", "ERROR: can't get tablet_statuses: invalid target path: \"cell1/ks1/replica\"  expected path: <cell>/<keyspace>/<shard>/<type>"},
-		{"GET", "tablet_statuses/cell1/ks1/-80/hello", "ERROR: can't get tablet_statuses: invalid tablet type: hello"},
+		{"GET", "tablet_statuses/cell1/ks1/replica", "can't get tablet_statuses: invalid target path: \"cell1/ks1/replica\"  expected path: <cell>/<keyspace>/<shard>/<type>"},
+		{"GET", "tablet_statuses/cell1/ks1/-80/hello", "can't get tablet_statuses: invalid tablet type: hello"},
 	}
 
 	for _, in := range table {
@@ -214,24 +195,17 @@ func TestAPI(t *testing.T) {
 			continue
 		}
 
-		if strings.HasPrefix(in.want, "ERROR: ") {
-			// want string has been stripped of the "ERROR: " prefix.
-			// stripSpacesAndLines has been called to clear all trailing and
-			//    preceding formatting for the error message.
-			if got, want := stripSpacesAndLines(string(body)), ((in.want)[7:]); got != want {
-				t.Errorf("[%v] got %v, want %v", in.path, got, want)
-				continue
-			}
-		} else {
-			if got, want := compactJSON(body), compactJSON([]byte(in.want)); got != want {
-				t.Errorf("[%v] got %v, want %v", in.path, got, want)
-				continue
-			}
+		got := compactJSON(body)
+		want := compactJSON([]byte(in.want))
+		if want == "" {
+			// want is no valid JSON. Fallback to a string comparison.
+			want = in.want
+			// For unknown reasons errors have a trailing "\n\t\t". Remove it.
+			got = strings.TrimSpace(string(body))
+		}
+		if got != want {
+			t.Errorf("[%v] got '%v', want '%v'", in.path, got, want)
+			continue
 		}
 	}
-
-	if err := realtimeStats.Stop(); err != nil {
-		t.Errorf("realtimeStats.Stop() failed: %v", err)
-	}
-
 }
