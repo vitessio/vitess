@@ -38,10 +38,11 @@ func (zkts *Server) NewMasterParticipation(name, id string) (topo.MasterParticip
 	}
 
 	return &zkMasterParticipation{
-		zkts:     zkts,
-		name:     name,
-		id:       id,
-		shutdown: make(chan struct{}),
+		zkts: zkts,
+		name: name,
+		id:   id,
+		stop: make(chan struct{}),
+		done: make(chan struct{}),
 	}, nil
 }
 
@@ -59,17 +60,21 @@ type zkMasterParticipation struct {
 	// id is the process's current id.
 	id string
 
-	// shutdown is a channel closed when Shutdown is called.
-	shutdown chan struct{}
+	// stop is a channel closed when stop is called.
+	stop chan struct{}
+
+	// done is a channel closed when the stop operation is done.
+	done chan struct{}
 }
 
 // WaitForMastership is part of the topo.MasterParticipation interface.
 func (mp *zkMasterParticipation) WaitForMastership() (context.Context, error) {
 	electionPath := path.Join(GlobalElectionPath, mp.name)
 
-	// fast path if Shutdown was already called
+	// fast path if Stop was already called
 	select {
-	case <-mp.shutdown:
+	case <-mp.stop:
+		close(mp.done)
 		return nil, topo.ErrInterrupted
 	default:
 	}
@@ -82,13 +87,14 @@ func (mp *zkMasterParticipation) WaitForMastership() (context.Context, error) {
 
 	// wait until we are it, or we are interrupted
 	for {
-		err = zk.ObtainQueueLock(mp.zkts.zconn, proposal, 24*time.Hour, mp.shutdown)
+		err = zk.ObtainQueueLock(mp.zkts.zconn, proposal, 24*time.Hour, mp.stop)
 		if err == nil {
 			// we got the lock, move on
 			break
 		}
 		if err == zk.ErrInterrupted {
-			// mp.shutdown is closed, we should return
+			// mp.stop is closed, we should return
+			close(mp.done)
 			return nil, topo.ErrInterrupted
 		}
 		if err == zk.ErrTimeout {
@@ -110,7 +116,7 @@ func (mp *zkMasterParticipation) WaitForMastership() (context.Context, error) {
 // - watch for changes to the proposal file. If anything happens there,
 //   it most likely means we lost the ZK session, so we want to stop
 //   being the master.
-// - wait for mp.shutdown.
+// - wait for mp.stop.
 func (mp *zkMasterParticipation) watchMastership(proposal string, cancel context.CancelFunc) {
 	// any interruption of this routine means we're not master any more.
 	defer cancel()
@@ -123,13 +129,14 @@ func (mp *zkMasterParticipation) watchMastership(proposal string, cancel context
 	}
 
 	select {
-	case <-mp.shutdown:
-		// we were asked to shutdown, we're done. Remove our node.
-		log.Infof("Canceling leadership '%v' upon Shutdown.", mp.name)
+	case <-mp.stop:
+		// we were asked to stop, we're done. Remove our node.
+		log.Infof("Canceling leadership '%v' upon Stop.", mp.name)
 
 		if err := mp.zkts.zconn.Delete(proposal, stats.Version); err != nil {
 			log.Warningf("Error deleting our proposal %v: %v", proposal, err)
 		}
+		close(mp.done)
 
 	case e := <-events:
 		// something happened to our proposal, that can only be bad.
@@ -137,9 +144,10 @@ func (mp *zkMasterParticipation) watchMastership(proposal string, cancel context
 	}
 }
 
-// Shutdown is part of the topo.MasterParticipation interface
-func (mp *zkMasterParticipation) Shutdown() {
-	close(mp.shutdown)
+// Stop is part of the topo.MasterParticipation interface
+func (mp *zkMasterParticipation) Stop() {
+	close(mp.stop)
+	<-mp.done
 }
 
 // GetCurrentMasterID is part of the topo.MasterParticipation interface

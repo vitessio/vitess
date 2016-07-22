@@ -19,10 +19,11 @@ import (
 // NewMasterParticipation is part of the topo.Server interface
 func (s *Server) NewMasterParticipation(name, id string) (topo.MasterParticipation, error) {
 	return &etcdMasterParticipation{
-		s:        s,
-		name:     name,
-		id:       id,
-		shutdown: make(chan struct{}),
+		s:    s,
+		name: name,
+		id:   id,
+		stop: make(chan struct{}),
+		done: make(chan struct{}),
 	}, nil
 }
 
@@ -39,8 +40,11 @@ type etcdMasterParticipation struct {
 	// id is the process's current id.
 	id string
 
-	// shutdown is a channel closed when Shutdown is called.
-	shutdown chan struct{}
+	// stop is a channel closed when Stop is called.
+	stop chan struct{}
+
+	// done is a channel closed when we're done processing the Stop
+	done chan struct{}
 }
 
 // WaitForMastership is part of the topo.MasterParticipation interface.
@@ -48,15 +52,16 @@ func (mp *etcdMasterParticipation) WaitForMastership() (context.Context, error) 
 	electionPath := path.Join(electionDirPath, mp.name)
 
 	for {
-		// fast path if Shutdown was already called
+		// fast path if Stop was already called
 		select {
-		case <-mp.shutdown:
+		case <-mp.stop:
+			close(mp.done)
 			return nil, topo.ErrInterrupted
 		default:
 		}
 
 		// We have to try to take the lock, until we either get it,
-		// or shutdown is closed.
+		// or stop is closed.
 		// Create will fail if the lock file already exists.
 		client := mp.s.getGlobal()
 		resp, err := client.Create(electionPath, mp.id, uint64(*lockTTL/time.Second))
@@ -72,9 +77,10 @@ func (mp *etcdMasterParticipation) WaitForMastership() (context.Context, error) 
 			go func() {
 				// wait until one of the two conditions
 				select {
-				case <-mp.shutdown:
+				case <-mp.stop:
 					// we're told to stop, remove our lock
 					locks.remove(lockID)
+					close(mp.done)
 				case err := <-done:
 					// we lost the lock
 					log.Warningf("Lost lock for %v: %v", mp.name, err)
@@ -100,7 +106,7 @@ func (mp *etcdMasterParticipation) WaitForMastership() (context.Context, error) 
 		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
 			select {
-			case <-mp.shutdown:
+			case <-mp.stop:
 				cancel()
 			case <-ctx.Done():
 			}
@@ -110,14 +116,18 @@ func (mp *etcdMasterParticipation) WaitForMastership() (context.Context, error) 
 		if err != nil {
 			// This can be topo.ErrInterrupted if we canceled the
 			// context.
+			if err == topo.ErrInterrupted {
+				close(mp.done)
+			}
 			return nil, err
 		}
 	}
 }
 
-// Shutdown is part of the topo.MasterParticipation interface
-func (mp *etcdMasterParticipation) Shutdown() {
-	close(mp.shutdown)
+// Stop is part of the topo.MasterParticipation interface
+func (mp *etcdMasterParticipation) Stop() {
+	close(mp.stop)
+	<-mp.done
 }
 
 // GetCurrentMasterID is part of the topo.MasterParticipation interface

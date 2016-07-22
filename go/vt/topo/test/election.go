@@ -75,11 +75,11 @@ func checkElection(t *testing.T, ts topo.Impl) {
 	// ask mp2 for master name, should get id1
 	waitForMasterID(t, mp2, id1)
 
-	// shutdown mp1
-	mp1.Shutdown()
+	// stop mp1
+	mp1.Stop()
 
 	// this should have closed ctx1 as soon as possible,
-	// so 5s will be enough. This will be used during lameduck
+	// so 5s should be enough in tests. This will be used during lameduck
 	// when the server exits, so we can't wait too long anyway.
 	timer := time.NewTimer(5 * time.Second)
 	select {
@@ -97,6 +97,6 @@ func checkElection(t *testing.T, ts topo.Impl) {
 	// ask mp2 for master name, should get id2
 	waitForMasterID(t, mp2, id2)
 
-	// shut down mp2, we're done
-	mp2.Shutdown()
+	// stop mp2, we're done
+	mp2.Stop()
 }
