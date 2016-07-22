@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/servenv"
 	_ "github.com/youtube/vitess/go/vt/status"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
@@ -172,39 +173,6 @@ google.setOnLoadCallback(function() {
 
 </script>
 `
-
-	healthCheckTemplate = `
-<style>
-  table {
-    border-collapse: collapse;
-  }
-  td, th {
-    border: 1px solid #999;
-    padding: 0.2rem;
-  }
-</style>
-<table>
-  <tr>
-    <th colspan="5">HealthCheck Tablet Cache</th>
-  </tr>
-  <tr>
-    <th>Cell</th>
-    <th>Keyspace</th>
-    <th>Shard</th>
-    <th>TabletType</th>
-    <th>TabletStats</th>
-  </tr>
-  {{range $i, $ts := .}}
-  <tr>
-    <td>{{github_com_youtube_vitess_vtctld_srv_cell $ts.Cell}}</td>
-    <td>{{github_com_youtube_vitess_vtctld_srv_keyspace $ts.Cell $ts.Target.Keyspace}}</td>
-    <td>{{$ts.Target.Shard}}</td>
-    <td>{{$ts.Target.TabletType}}</td>
-    <td>{{$ts.StatusAsHTML}}</td>
-  </tr>
-  {{end}}
-</table>
-`
 )
 
 // For use by plugins which wish to avoid racing when registering status page parts.
@@ -217,7 +185,7 @@ func addStatusParts(l2vtgate *l2vtgate.L2VTGate) {
 	servenv.AddStatusPart("Gateway Status", gateway.StatusTemplate, func() interface{} {
 		return l2vtgate.GetGatewayCacheStatus()
 	})
-	servenv.AddStatusPart("Health Check Cache", healthCheckTemplate, func() interface{} {
+	servenv.AddStatusPart("Health Check Cache", discovery.HealthCheckTemplate, func() interface{} {
 		return healthCheck.CacheStatus()
 	})
 	if onStatusRegistered != nil {
