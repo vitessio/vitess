@@ -2,6 +2,7 @@ package vtctld
 
 import (
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/youtube/vitess/go/vt/discovery"
@@ -9,39 +10,39 @@ import (
 
 // tabletStatsCache holds the most recent status update received for each tablet.
 type tabletStatsCache struct {
-	// First map key is "cellName - keyspaceName - shardName - tabType".
+	// mu guards access to the fields below.
+	mu sync.Mutex
+	// First map key is "cell- keyspace- shard- tabletType".
 	// Second map key is the string representation of tablet's uid.
 	// Both keys are strings to allow exposing this map as a JSON object in api.go.
-	recentTabletStatuses map[string]map[string]*discovery.TabletStats
+	statuses map[string]map[string]*discovery.TabletStats
 }
 
-var mu = &sync.Mutex{}
-
-func (t tabletStatsCache) StatsUpdate(stats *discovery.TabletStats) {
+func (t *tabletStatsCache) StatsUpdate(stats *discovery.TabletStats) {
 	target := stats.Target
 	tabletAlias := stats.Tablet.Alias
 	currentTarget := createTargetMapKey(stats.Tablet.Alias.Cell, target.Keyspace, target.Shard, target.TabletType.String())
 
-	// The mutex object is locked to protect the map from changing while
-	// update is in progress.
-	mu.Lock()
-	tablets, ok := t.recentTabletStatuses[currentTarget]
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	tablets, ok := t.statuses[currentTarget]
 	if !ok {
 		tablets = make(map[string]*discovery.TabletStats)
-		t.recentTabletStatuses[currentTarget] = tablets
+		t.statuses[currentTarget] = tablets
 	}
 	tablets[strconv.FormatUint(uint64(tabletAlias.Uid), 10)] = stats
-	mu.Unlock()
 }
 
-func (t *tabletStatsCache) tabletStatuses(cell, keyspace, shard, tabType string) map[string]*discovery.TabletStats {
-	// The mutex object is locked to protect the map from changing while
-	// sending the update.
-	mu.Lock()
-	defer mu.Unlock()
-	return t.recentTabletStatuses[createTargetMapKey(cell, keyspace, shard, tabType)]
+func (t *tabletStatsCache) tabletStatuses(cell, keyspace, shard, tabletType string) map[string]*discovery.TabletStats {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	statsMapCopy := make(map[string]*discovery.TabletStats)
+	for tabletUid, tabletStatus := range t.statuses[createTargetMapKey(cell, keyspace, shard, tabletType)] {
+		statsMapCopy[tabletUid] = tabletStatus
+	}
+	return statsMapCopy
 }
 
-func createTargetMapKey(cell, keyspace, shard, tabType string) string {
-	return cell + "-" + keyspace + "-" + shard + "-" + tabType
+func createTargetMapKey(cell, keyspace, shard, tabletType string) string {
+	return cell + "-" + keyspace + "-" + shard + "-" + strings.ToLower(tabletType)
 }

@@ -17,26 +17,22 @@ type realtimeStats struct {
 	cellWatchers []*discovery.TopologyWatcher
 }
 
-func newRealtimeStats(ts topo.Server) (realtimeStats, error) {
-
+func newRealtimeStats(ts topo.Server) (*realtimeStats, error) {
 	hc := discovery.NewHealthCheck(*vtctl.HealthCheckTimeout, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
-
-	updates := tabletStatsCache{
-		recentTabletStatuses: make(map[string]map[string]*discovery.TabletStats),
+	tabletStatsCache := tabletStatsCache{
+		statuses: make(map[string]map[string]*discovery.TabletStats),
 	}
-	hc.SetListener(updates)
-
+	hc.SetListener(&tabletStatsCache)
 	r := realtimeStats{
 		healthCheck: hc,
-		tabletStats: updates,
+		tabletStats: tabletStatsCache,
 	}
 
-	// Creating a watcher for tablets in each cell.
+	// Get the list of all tablets from all cells and monitor the topology for added or removed tablets with a CellTabletsWatcher.
 	cells, err := ts.GetKnownCells(context.Background())
 	if err != nil {
-		return r, fmt.Errorf("error when getting cells: %v", err)
+		return (&r), fmt.Errorf("error when getting cells: %v", err)
 	}
-
 	var watchers []*discovery.TopologyWatcher
 	for _, cell := range cells {
 		watcher := discovery.NewCellTabletsWatcher(ts, hc, cell, *vtctl.HealthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
@@ -44,10 +40,10 @@ func newRealtimeStats(ts topo.Server) (realtimeStats, error) {
 	}
 	r.cellWatchers = watchers
 
-	return r, nil
+	return (&r), nil
 }
 
-func (r realtimeStats) Stop() error {
+func (r *realtimeStats) Stop() error {
 	for _, w := range r.cellWatchers {
 		w.Stop()
 	}
@@ -59,10 +55,6 @@ func (r realtimeStats) Stop() error {
 	return nil
 }
 
-func (r realtimeStats) tabletStatuses(cell string, keyspace string, shard string, tabType string) map[string]*discovery.TabletStats {
-	return r.tabletStats.tabletStatuses(cell, keyspace, shard, tabType)
-}
-
-func (r realtimeStats) mimicStatsUpdateForTesting(stats *discovery.TabletStats) {
-	r.tabletStats.StatsUpdate(stats)
+func (r *realtimeStats) tabletStatuses(cell string, keyspace string, shard string, tabletType string) map[string]*discovery.TabletStats {
+	return r.tabletStats.tabletStatuses(cell, keyspace, shard, tabletType)
 }

@@ -114,7 +114,7 @@ var (
 	ErrUnknownCommand = errors.New("unknown command")
 )
 
-// Flags are exported for use in go/vt/vtctld
+// Flags are exported for use in go/vt/vtctld.
 var (
 	HealthCheckTopologyRefresh = flag.Duration("vtctl_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
 	HealthcheckRetryDelay      = flag.Duration("vtctl_healthcheck_retry_delay", 5*time.Second, "delay before retrying a failed healthcheck")

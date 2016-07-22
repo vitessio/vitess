@@ -22,7 +22,8 @@ import (
 var (
 	webDir = flag.String("web_dir", "", "directory from which to serve vtctld web interface resources")
 	// webDir2 is a temporary additional dir for a new, in-development UI.
-	webDir2 = flag.String("web_dir2", "", "directory from which to serve vtctld2 web interface resources")
+	webDir2             = flag.String("web_dir2", "", "directory from which to serve vtctld2 web interface resources")
+	enableRealtimeStats = flag.Bool("enable_realtime_stats", false, "boolean value indicating whether the realtime status view is wanted")
 )
 
 const (
@@ -148,9 +149,13 @@ func InitVtctld(ts topo.Server) {
 		http.ServeFile(w, r, filePath)
 	})
 
-	realtimeStats, err := newRealtimeStats(ts)
-	if err != nil {
-		log.Errorf("newRealtimeStats error: %v", err)
+	var realtimeStats *realtimeStats
+	if *enableRealtimeStats {
+		var err error
+		realtimeStats, err = newRealtimeStats(ts)
+		if err != nil {
+			log.Errorf("Failed to instantiate RealtimeStats at startup: %v", err)
+		}
 	}
 
 	// Serve the REST API for the vtctld web app.
