@@ -16,6 +16,50 @@ import (
 
 const (
 	aggrChanSize = 10000
+
+	// StatusTemplate is the display part to use to show
+	// a TabletCacheStatusList.
+	StatusTemplate = `
+<style>
+  table {
+    border-collapse: collapse;
+  }
+  td, th {
+    border: 1px solid #999;
+    padding: 0.2rem;
+  }
+  table tr:nth-child(even) {
+    background-color: #eee;
+  }
+  table tr:nth-child(odd) {
+    background-color: #fff;
+  }
+</style>
+<table>
+  <tr>
+    <th>Keyspace</th>
+    <th>Shard</th>
+    <th>TabletType</th>
+    <th>Address</th>
+    <th>Query Sent</th>
+    <th>Query Error</th>
+    <th>QPS (avg 1m)</th>
+    <th>Latency (ms) (avg 1m)</th>
+  </tr>
+  {{range $i, $status := .}}
+  <tr>
+    <td>{{$status.Keyspace}}</td>
+    <td>{{$status.Shard}}</td>
+    <td>{{$status.TabletType}}</td>
+    <td><a href="http://{{$status.Addr}}">{{$status.Name}}</a></td>
+    <td>{{$status.QueryCount}}</td>
+    <td>{{$status.QueryError}}</td>
+    <td>{{$status.QPS}}</td>
+    <td>{{$status.AvgLatency}}</td>
+  </tr>
+  {{end}}
+</table>
+`
 )
 
 var (
@@ -68,7 +112,7 @@ func processQueryInfo() {
 // TabletCacheStatus definitions
 //
 
-// TabletCacheStatus contains the status per tablet for a gateway.
+// TabletCacheStatus contains the status per destination for a gateway.
 type TabletCacheStatus struct {
 	Keyspace   string
 	Shard      string

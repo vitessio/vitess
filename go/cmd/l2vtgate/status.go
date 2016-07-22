@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	_ "github.com/youtube/vitess/go/vt/status"
+	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"github.com/youtube/vitess/go/vt/vtgate/l2vtgate"
 )
 
@@ -172,48 +173,6 @@ google.setOnLoadCallback(function() {
 </script>
 `
 
-	gatewayStatusTemplate = `
-<style>
-  table {
-    border-collapse: collapse;
-  }
-  td, th {
-    border: 1px solid #999;
-    padding: 0.2rem;
-  }
-  table tr:nth-child(even) {
-    background-color: #eee;
-  }
-  table tr:nth-child(odd) {
-    background-color: #fff;
-  }
-</style>
-<table>
-  <tr>
-    <th>Keyspace</th>
-    <th>Shard</th>
-    <th>TabletType</th>
-    <th>Address</th>
-    <th>Query Sent</th>
-    <th>Query Error</th>
-    <th>QPS (avg 1m)</th>
-    <th>Latency (ms) (avg 1m)</th>
-  </tr>
-  {{range $i, $status := .}}
-  <tr>
-    <td>{{$status.Keyspace}}</td>
-    <td>{{$status.Shard}}</td>
-    <td>{{$status.TabletType}}</td>
-    <td><a href="http://{{$status.Addr}}">{{$status.Name}}</a></td>
-    <td>{{$status.QueryCount}}</td>
-    <td>{{$status.QueryError}}</td>
-    <td>{{$status.QPS}}</td>
-    <td>{{$status.AvgLatency}}</td>
-  </tr>
-  {{end}}
-</table>
-`
-
 	healthCheckTemplate = `
 <style>
   table {
@@ -255,7 +214,7 @@ func addStatusParts(l2vtgate *l2vtgate.L2VTGate) {
 	servenv.AddStatusPart("Topology Cache", topoTemplate, func() interface{} {
 		return resilientSrvTopoServer.CacheStatus()
 	})
-	servenv.AddStatusPart("Gateway Status", gatewayStatusTemplate, func() interface{} {
+	servenv.AddStatusPart("Gateway Status", gateway.StatusTemplate, func() interface{} {
 		return l2vtgate.GetGatewayCacheStatus()
 	})
 	servenv.AddStatusPart("Health Check Cache", healthCheckTemplate, func() interface{} {
