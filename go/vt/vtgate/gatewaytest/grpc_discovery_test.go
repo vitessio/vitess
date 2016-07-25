@@ -53,6 +53,7 @@ func TestGRPCDiscovery(t *testing.T) {
 	hc.AddTablet(&topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: cell,
+			Uid:  43,
 		},
 		Keyspace: tabletconntest.TestTarget.Keyspace,
 		Shard:    tabletconntest.TestTarget.Shard,
@@ -100,6 +101,7 @@ func TestL2VTGateDiscovery(t *testing.T) {
 	hc.AddTablet(&topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: cell,
+			Uid:  44,
 		},
 		Keyspace: tabletconntest.TestTarget.Keyspace,
 		Shard:    tabletconntest.TestTarget.Shard,
