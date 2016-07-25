@@ -290,16 +290,20 @@ type Impl interface {
 	GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error)
 
 	//
-	// Master election methods. This is meant to have a small number of
-	// processes elect a master within a group. The backend storage for this
-	// can either be the global topo server, or a quorum of local cells.
+	// Master election methods. This is meant to have a small
+	// number of processes elect a master within a group. The
+	// backend storage for this can either be the global topo
+	// server, or a resilient quorum of individual cells, to
+	// reduce the load / dependency on the global topo server.
 	//
 
-	// NewMasterParticipation creates a MasterParticipation object,
-	// used to become the Master in an election for the provided group name.
-	// Id is the name of the local process, passing in the hostname:port of the
-	// current process as id is the common usage. Calling this function
-	// does not make the current process a candidate for the election.
+	// NewMasterParticipation creates a MasterParticipation
+	// object, used to become the Master in an election for the
+	// provided group name.  Id is the name of the local process,
+	// passing in the hostname:port of the current process as id
+	// is the common usage. Id must be unique for each process
+	// calling this, for a given name. Calling this function does
+	// not make the current process a candidate for the election.
 	NewMasterParticipation(name, id string) (MasterParticipation, error)
 }
 
@@ -344,7 +348,7 @@ type MasterParticipation interface {
 	// WaitForMastership makes the current process a candidate
 	// for election, and waits until this process is the master.
 	// After we become the master, we may lose mastership. In that case,
-	// the returned context will be cancelled. If Stop was called,
+	// the returned context will be canceled. If Stop was called,
 	// WaitForMastership will return nil, ErrInterrupted.
 	WaitForMastership() (context.Context, error)
 

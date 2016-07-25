@@ -50,6 +50,9 @@ func (zkts *Server) NewMasterParticipation(name, id string) (topo.MasterParticip
 //
 // We use a directory with files created as sequence and ephemeral,
 // see https://zookeeper.apache.org/doc/trunk/recipes.html#sc_leaderElection
+// From the toplevel election directory, we'll have one sub-directory
+// per name, with the sequence files in there. Each sequence file also contains
+// the id.
 type zkMasterParticipation struct {
 	// zkts is our parent zk topo Server
 	zkts *Server
@@ -85,9 +88,11 @@ func (mp *zkMasterParticipation) WaitForMastership() (context.Context, error) {
 		return nil, fmt.Errorf("cannot create proposal file in %v: %v", electionPath, err)
 	}
 
-	// wait until we are it, or we are interrupted
+	// Wait until we are it, or we are interrupted. Using a
+	// small-ish time out so it gets exercised faster (as opposed
+	// to crashing after a day of use).
 	for {
-		err = zk.ObtainQueueLock(mp.zkts.zconn, proposal, 24*time.Hour, mp.stop)
+		err = zk.ObtainQueueLock(mp.zkts.zconn, proposal, 5*time.Minute, mp.stop)
 		if err == nil {
 			// we got the lock, move on
 			break
@@ -124,7 +129,7 @@ func (mp *zkMasterParticipation) watchMastership(proposal string, cancel context
 	// get to work watching our own proposal
 	_, stats, events, err := mp.zkts.zconn.GetW(proposal)
 	if err != nil {
-		log.Warningf("Cannot watch proposal whle being master, stopping: %v", err)
+		log.Warningf("Cannot watch proposal while being master, stopping: %v", err)
 		return
 	}
 
@@ -150,7 +155,8 @@ func (mp *zkMasterParticipation) Stop() {
 	<-mp.done
 }
 
-// GetCurrentMasterID is part of the topo.MasterParticipation interface
+// GetCurrentMasterID is part of the topo.MasterParticipation interface.
+// We just read the smallest (first) node content, that is the id.
 func (mp *zkMasterParticipation) GetCurrentMasterID() (string, error) {
 	electionPath := path.Join(GlobalElectionPath, mp.name)
 

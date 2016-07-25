@@ -81,10 +81,9 @@ func checkElection(t *testing.T, ts topo.Impl) {
 	// this should have closed ctx1 as soon as possible,
 	// so 5s should be enough in tests. This will be used during lameduck
 	// when the server exits, so we can't wait too long anyway.
-	timer := time.NewTimer(5 * time.Second)
 	select {
 	case <-ctx1.Done():
-	case <-timer.C:
+	case <-time.After(5 * time.Second):
 		t.Fatalf("shutting down mp1 didn't close ctx1 in time")
 	}
 

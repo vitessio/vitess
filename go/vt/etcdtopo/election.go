@@ -30,6 +30,8 @@ func (s *Server) NewMasterParticipation(name, id string) (topo.MasterParticipati
 // etcdMasterParticipation implements topo.MasterParticipation.
 //
 // We create a single file and use etcd's compare&swap with TTLs.
+// The file is in the global election path, is named after the name,
+// and contains the id.
 type etcdMasterParticipation struct {
 	// s is our parent etcd topo Server
 	s *Server
@@ -71,8 +73,9 @@ func (mp *etcdMasterParticipation) WaitForMastership() (context.Context, error) 
 			}
 
 			// We got the lock. Start a heartbeat goroutine.
+			// Its purpose is to remove the lock when we're told
+			// to stop.
 			lockID, done := locks.add(client, resp.Node)
-
 			ctx, cancel := context.WithCancel(context.Background())
 			go func() {
 				// wait until one of the two conditions
@@ -105,6 +108,8 @@ func (mp *etcdMasterParticipation) WaitForMastership() (context.Context, error) 
 		// Wait for the lock file to be deleted, then try again.
 		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
+			// This go routine cancels out the context if Stop()
+			// it called.
 			select {
 			case <-mp.stop:
 				cancel()
