@@ -7,11 +7,17 @@
  **********************************************************************************************/
 /** Map relative paths to URLs. */
 const map: any = {
-  '@angular2-material': 'vendor/@angular2-material'
-};
+  '@angular2-material': 'vendor/@angular2-material',
+  'angular2-in-memory-web-api': 'vendor/angular2-in-memory-web-api',
+  '@angular':                   'vendor/@angular',
+  '@vaadin':                    'vendor/@vaadin'
+ };
 
 /** User packages configuration. */
 const packages: any = {
+  'rxjs':                       { defaultExtension: 'js' },
+  'angular2-in-memory-web-api': { main: 'index.js', defaultExtension: 'js' },
+  '@vaadin/angular2-polymer': { main: 'index.js', defaultExtension: 'js' }
 };
 
 // put the names of any of your Material components here

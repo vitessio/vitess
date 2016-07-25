@@ -1,0 +1,108 @@
+<h1> {{title}} </h1>
+
+<vt-breadcrumbs [route]="['/tabletStatus']" [crumbs]="breadcrumbs"></vt-breadcrumbs>
+
+<md-content>
+  <md-card *ngFor='let t of tablets' class="tabletCards">
+    <div *ngIf="!hasError(t)" >
+      <md-toolbar color="primary">
+        <div class="card-title">
+          <strong class="card-textLeftAlign"> {{t.cell}} - {{t.uid}} </strong>
+          <strong class="card-textRightAlign">  Serving </strong>
+        </div>
+      </md-toolbar>
+
+      <md-card-content>
+        <table class="tableSet">
+          <tr>
+            <td class="firstColumn">
+              <strong> Seconds Behind Master </strong>
+            </td>
+            <td class="column">
+              <strong> {{t.stats.SecondsBehindMaster}} </strong>
+            </td>
+          </tr>
+
+          <tr>
+            <td class="firstColumn">
+              <strong> Cpu Usage </strong>
+            </td>
+            <td class="column">
+              <strong> {{t.stats.CpuUsage}} </strong>
+            </td>
+          </tr>
+
+          <tr>
+            <td class="firstColumn">
+              <strong> Qps </strong>
+            </td>
+            <td class="column">
+              <strong> {{t.stats.Qps}} </strong>
+            </td>
+          </tr>
+
+          <tr>
+            <td class="lastRow shaded" colspan="2">
+                LINKS
+            </td>
+          </tr>
+         </table>
+      </md-card-content>
+    </div>
+
+    <div *ngIf="hasError(t)" >
+      <md-toolbar color="warn">
+        <div class="card-title">
+          <strong class="card-textLeftAlign"> {{t.cell}} - {{t.uid}} </strong>
+          <strong class="card-textRightAlign">
+             Not Serving
+          </strong>
+        </div>
+      </md-toolbar>
+
+      <md-card-content>
+        <table class="tableSet">
+          <tr>
+            <td class="invisible">
+               <strong> hello </strong>
+            <td>
+          </tr>
+
+          <tr>
+            <td class="lastRow" class="textCenter">
+              <strong> HEALTH ERROR: {{t.stats.HealthError}} </strong>
+            </td>
+          </tr>
+
+          <tr>
+            <td class="invisibleWithBorder">
+              <strong> hello </strong>
+            <td>
+          </tr>
+
+          <tr>
+            <td class="lastRow shaded" colspan="2">
+              <a href = {{getLink(t)}}>
+                <strong> VTTablet Link - {{getLink(t)}} </strong>
+              </a>
+            </td>
+          </tr>
+        </table>
+      </md-card-content>
+    </div>
+  </md-card>
+</md-content>
+
+  <!-- Without color code (here for developer reference)
+   <md-toolbar color="primary">
+         <div class="card-section">
+           <strong class="card-leftAlign"> {{t.cell}} - {{t.uid}} </strong>
+            <strong *ngIf="!hasError(t)" class="card-rightAlign">
+              Serving
+            </strong>
+            <strong *ngIf="hasError(t)" class="card-rightAlign">
+              Not Serving
+            </strong>
+         </div>
+      </md-toolbar>
+  -->

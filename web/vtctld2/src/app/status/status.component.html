@@ -1,1 +1,20 @@
-<h1>STATUS</h1>
+<h1>{{title}}</h1>
+
+<vt-breadcrumbs [route]="['/status']" [crumbs]="breadcrumbs"></vt-breadcrumbs>
+
+<a [routerLink]="['/tabletStatus']" [queryParams]="{ cell: cellName,
+  keyspace: keyspaceName, shard: shardName,type: type }">
+  <button md-button-raised> TabletView </button>
+</a>
+<br>
+<br>
+<a [routerLink]="['/heatmap']" [queryParams]="">
+  <button md-button-raised> Plotly heatmap </button>
+</a>
+<br>
+<br>
+<a [routerLink]="['/heatmap2']" [queryParams]="">
+  <button md-button-raised> Chart heatmap </button>
+</a>
+
+<router-outlet> </router-outlet>
