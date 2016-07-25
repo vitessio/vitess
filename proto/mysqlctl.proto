@@ -5,7 +5,9 @@ syntax = "proto3";
 
 package mysqlctl;
 
-message StartRequest{}
+message StartRequest{
+  repeated string mysqld_args = 1;
+}
 
 message StartResponse{}
 

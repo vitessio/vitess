@@ -169,7 +169,7 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 // Start will start the mysql daemon, either by running the 'mysqld_start'
 // hook, or by running mysqld_safe in the background.
 // If a mysqlctld address is provided in a flag, Start will run remotely.
-func (mysqld *Mysqld) Start(ctx context.Context) error {
+func (mysqld *Mysqld) Start(ctx context.Context, mysqldArgs ...string) error {
 	// Execute as remote action on mysqlctld if requested.
 	if *socketFile != "" {
 		log.Infof("executing Mysqld.Start() remotely via mysqlctld server: %v", *socketFile)
@@ -178,14 +178,14 @@ func (mysqld *Mysqld) Start(ctx context.Context) error {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
 		defer client.Close()
-		return client.Start(ctx)
+		return client.Start(ctx, mysqldArgs...)
 	}
 
 	var name string
 	ts := fmt.Sprintf("Mysqld.Start(%v)", time.Now().Unix())
 
 	// try the mysqld start hook, if any
-	switch hr := hook.NewSimpleHook("mysqld_start").Execute(); hr.ExitStatus {
+	switch hr := hook.NewHook("mysqld_start", mysqldArgs).Execute(); hr.ExitStatus {
 	case hook.HOOK_SUCCESS:
 		// hook exists and worked, we can keep going
 		name = "mysqld_start hook"
@@ -202,6 +202,7 @@ func (mysqld *Mysqld) Start(ctx context.Context) error {
 		}
 		arg := []string{
 			"--defaults-file=" + mysqld.config.path}
+		arg = append(arg, mysqldArgs...)
 		env := []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
 
 		cmd := exec.Command(name, arg...)

@@ -21,7 +21,7 @@ var connectionTimeout = flag.Duration("mysqlctl_client_connection_timeout", 30*t
 // MysqlctlClient defines the interface used to send remote mysqlctl commands
 type MysqlctlClient interface {
 	// Start calls Mysqld.Start remotely.
-	Start(ctx context.Context) error
+	Start(ctx context.Context, mysqldArgs ...string) error
 
 	// Shutdown calls Mysqld.Shutdown remotely.
 	Shutdown(ctx context.Context, waitForMysqld bool) error
