@@ -284,7 +284,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	}
 
 	// Try to restart mysqld
-	err = mysqld.Start(ctx)
+	err = mysqld.Start(ctx, []string{})
 	if err != nil {
 		return fmt.Errorf("can't restart mysqld: %v", err)
 	}
@@ -655,7 +655,7 @@ func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurr
 
 	// mysqld needs to be running in order for mysql_upgrade to work.
 	logger.Infof("Restore: starting mysqld for mysql_upgrade")
-	err = mysqld.Start(ctx)
+	err = mysqld.Start(ctx, []string{"--skip-grant-tables", "--skip-networking"})
 	if err != nil {
 		return replication.Position{}, err
 	}
@@ -672,7 +672,7 @@ func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurr
 	if err != nil {
 		return replication.Position{}, err
 	}
-	err = mysqld.Start(ctx)
+	err = mysqld.Start(ctx, []string{})
 	if err != nil {
 		return replication.Position{}, err
 	}
