@@ -2,19 +2,15 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletmanager
+package mysqlctl
 
 import (
 	"fmt"
-	"strings"
 
 	log "github.com/golang/glog"
-	"golang.org/x/net/context"
-
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
 
-const sqlCreateLocalMetadataTable = `CREATE TABLE _vt.local_metadata (
+const sqlCreateLocalMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.local_metadata (
   name VARCHAR(255) NOT NULL,
   value VARCHAR(255) NOT NULL,
   PRIMARY KEY (name)
@@ -25,16 +21,11 @@ const sqlCreateLocalMetadataTable = `CREATE TABLE _vt.local_metadata (
 // against local_metadata to return different values on different tablets,
 // which is used for communicating between Vitess and MySQL-level tools like
 // Orchestrator (http://github.com/outbrain/orchestrator).
-func (agent *ActionAgent) populateLocalMetadata(ctx context.Context) error {
+func populateLocalMetadata(mysqld MysqlDaemon, localMetadata map[string]string) error {
 	log.Infof("Populating _vt.local_metadata table...")
 
-	// Wait for mysqld to be ready, in case it was launched in parallel with us.
-	if err := agent.MysqlDaemon.Wait(ctx); err != nil {
-		return err
-	}
-
 	// Get a non-pooled DBA connection.
-	conn, err := agent.MysqlDaemon.GetDbaConnection()
+	conn, err := mysqld.GetDbaConnection()
 	if err != nil {
 		return err
 	}
@@ -50,35 +41,21 @@ func (agent *ActionAgent) populateLocalMetadata(ctx context.Context) error {
 	if _, err := conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS _vt", 0, false); err != nil {
 		return err
 	}
-	if _, err := conn.ExecuteFetch("DROP TABLE IF EXISTS _vt.local_metadata", 0, false); err != nil {
-		return err
-	}
 	if _, err := conn.ExecuteFetch(sqlCreateLocalMetadataTable, 0, false); err != nil {
 		return err
 	}
 
-	// Insert values.
-	tablet := agent.Tablet()
-	values := map[string]string{
-		"Alias":         topoproto.TabletAliasString(tablet.Alias),
-		"ClusterAlias":  fmt.Sprintf("%s.%s", tablet.Keyspace, tablet.Shard),
-		"DataCenter":    tablet.Alias.Cell,
-		"PromotionRule": "neutral",
+	if _, err := conn.ExecuteFetch("BEGIN", 0, false); err != nil {
+		return err
 	}
-	masterEligible, err := agent.isMasterEligible()
-	if err != nil {
-		return fmt.Errorf("can't determine PromotionRule while populating local_metadata: %v", err)
+	for k, v := range localMetadata {
+		query := fmt.Sprintf(
+			"INSERT INTO _vt.local_metadata (name,value) VALUES ('%s','%s') "+
+				"ON DUPLICATE KEY UPDATE value = '%s'", k, v, v)
+		if _, err := conn.ExecuteFetch(query, 0, false); err != nil {
+			return err
+		}
 	}
-	if !masterEligible {
-		values["PromotionRule"] = "must_not"
-	}
-	var rows []string
-	for k, v := range values {
-		rows = append(rows, fmt.Sprintf("('%s','%s')", k, v))
-	}
-	query := fmt.Sprintf(
-		"INSERT INTO _vt.local_metadata (name,value) VALUES %s",
-		strings.Join(rows, ","))
-	_, err = conn.ExecuteFetch(query, 0, false)
+	_, err = conn.ExecuteFetch("COMMIT", 0, false)
 	return err
 }

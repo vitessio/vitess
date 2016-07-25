@@ -57,29 +57,21 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	// If we're not ok, return an error and the agent will log.Fatalf,
 	// causing the process to be restarted and the restore retried.
 	dir := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
-	pos, err := mysqlctl.Restore(ctx, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv(), logger, deleteBeforeRestore)
+	localMetadata, err := agent.getLocalMetadataValues()
+	if err != nil {
+		return err
+	}
+	pos, err := mysqlctl.Restore(ctx, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv(), localMetadata, logger, deleteBeforeRestore)
 	switch err {
 	case nil:
-		// Populate local_metadata before starting replication,
-		// so it's there before we start announcing ourself.
-		if err := agent.populateLocalMetadata(ctx); err != nil {
-			return err
-		}
-
 		// Reconnect to master.
 		if err := agent.startReplication(ctx, pos); err != nil {
 			return err
 		}
 	case mysqlctl.ErrNoBackup:
-		log.Infof("Auto-restore is enabled, but no backups were found. Starting up empty.")
-		if err := agent.populateLocalMetadata(ctx); err != nil {
-			return err
-		}
+		// No-op, starting with empty database.
 	case mysqlctl.ErrExistingDB:
-		log.Infof("Auto-restore is enabled, but mysqld already contains data. Assuming vttablet was just restarted.")
-		if err := agent.populateLocalMetadata(ctx); err != nil {
-			return err
-		}
+		// No-op, assuming we've just restarted.
 	default:
 		return fmt.Errorf("Can't restore backup: %v", err)
 	}
@@ -155,4 +147,22 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos replication.
 	}
 
 	return nil
+}
+
+func (agent *ActionAgent) getLocalMetadataValues() (map[string]string, error) {
+	tablet := agent.Tablet()
+	values := map[string]string{
+		"Alias":         topoproto.TabletAliasString(tablet.Alias),
+		"ClusterAlias":  fmt.Sprintf("%s.%s", tablet.Keyspace, tablet.Shard),
+		"DataCenter":    tablet.Alias.Cell,
+		"PromotionRule": "neutral",
+	}
+	masterEligible, err := agent.isMasterEligible()
+	if err != nil {
+		return nil, fmt.Errorf("can't determine PromotionRule while populating local_metadata: %v", err)
+	}
+	if !masterEligible {
+		values["PromotionRule"] = "must_not"
+	}
+	return values, nil
 }
