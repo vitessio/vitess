@@ -42,7 +42,7 @@ type lockManager struct {
 
 var locks = &lockManager{locks: make(map[uint64]func() error)}
 
-func (lm *lockManager) add(client Client, node *etcd.Node) uint64 {
+func (lm *lockManager) add(client Client, node *etcd.Node) (uint64, chan error) {
 	stop := make(chan struct{})
 	done := make(chan error)
 
@@ -90,7 +90,7 @@ func (lm *lockManager) add(client Client, node *etcd.Node) uint64 {
 		}
 	}()
 
-	return id
+	return id, done
 }
 
 func (lm *lockManager) remove(id uint64) error {
@@ -158,7 +158,7 @@ func lock(ctx context.Context, client Client, dirPath, contents string, mustExis
 			}
 
 			// We got the lock. Start a heartbeat goroutine.
-			lockID := locks.add(client, resp.Node)
+			lockID, _ := locks.add(client, resp.Node)
 
 			// Make an actionPath by appending the lockID.
 			return fmt.Sprintf("%v/%v", dirPath, lockID), nil

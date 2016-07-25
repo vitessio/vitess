@@ -19,6 +19,7 @@ const (
 	rootPath           = "/vt"
 	cellsDirPath       = rootPath + "/cells"
 	keyspacesDirPath   = rootPath + "/keyspaces"
+	electionDirPath    = rootPath + "/election"
 	tabletsDirPath     = rootPath + "/tablets"
 	replicationDirPath = rootPath + "/replication"
 	servingDirPath     = rootPath + "/ns"
