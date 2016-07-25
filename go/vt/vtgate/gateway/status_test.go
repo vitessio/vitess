@@ -5,6 +5,8 @@
 package gateway
 
 import (
+	"bytes"
+	"html/template"
 	"reflect"
 	"testing"
 	"time"
@@ -102,5 +104,16 @@ func TestTabletStatusAggregator(t *testing.T) {
 	got = aggr.GetCacheStatus()
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("aggr.GetCacheStatus() = %+v, want %+v", got, want)
+	}
+
+	// Make sure the HTML rendering of the cache works.
+	// This will catch most typos.
+	templ, err := template.New("").Parse(StatusTemplate)
+	if err != nil {
+		t.Fatalf("error parsing template: %v", err)
+	}
+	wr := &bytes.Buffer{}
+	if err := templ.Execute(wr, []*TabletCacheStatus{got}); err != nil {
+		t.Fatalf("error executing template: %v", err)
 	}
 }

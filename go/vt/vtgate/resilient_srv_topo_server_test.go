@@ -5,12 +5,15 @@
 package vtgate
 
 import (
+	"bytes"
 	"fmt"
+	"html/template"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/youtube/vitess/go/vt/status"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
 	"golang.org/x/net/context"
@@ -114,6 +117,17 @@ func TestGetSrvKeyspace(t *testing.T) {
 			t.Fatalf("timeout waiting for new keyspace value")
 		}
 		time.Sleep(time.Millisecond)
+	}
+
+	// make sure the HTML template works
+	templ := template.New("").Funcs(status.StatusFuncs)
+	templ, err = templ.Parse(TopoTemplate)
+	if err != nil {
+		t.Fatalf("error parsing template: %v", err)
+	}
+	wr := &bytes.Buffer{}
+	if err := templ.Execute(wr, rsts.CacheStatus()); err != nil {
+		t.Fatalf("error executing template: %v", err)
 	}
 }
 

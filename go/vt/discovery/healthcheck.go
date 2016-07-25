@@ -48,6 +48,40 @@ var (
 const (
 	// DefaultTopoReadConcurrency can be used as default value for the topoReadConcurrency parameter of a TopologyWatcher.
 	DefaultTopoReadConcurrency int = 5
+
+	// HealthCheckTemplate is the HTML code to display a TabletsCacheStatusList
+	HealthCheckTemplate = `
+<style>
+  table {
+    border-collapse: collapse;
+  }
+  td, th {
+    border: 1px solid #999;
+    padding: 0.2rem;
+  }
+</style>
+<table>
+  <tr>
+    <th colspan="5">HealthCheck Tablet Cache</th>
+  </tr>
+  <tr>
+    <th>Cell</th>
+    <th>Keyspace</th>
+    <th>Shard</th>
+    <th>TabletType</th>
+    <th>TabletStats</th>
+  </tr>
+  {{range $i, $ts := .}}
+  <tr>
+    <td>{{github_com_youtube_vitess_vtctld_srv_cell $ts.Cell}}</td>
+    <td>{{github_com_youtube_vitess_vtctld_srv_keyspace $ts.Cell $ts.Target.Keyspace}}</td>
+    <td>{{$ts.Target.Shard}}</td>
+    <td>{{$ts.Target.TabletType}}</td>
+    <td>{{$ts.StatusAsHTML}}</td>
+  </tr>
+  {{end}}
+</table>
+`
 )
 
 func init() {

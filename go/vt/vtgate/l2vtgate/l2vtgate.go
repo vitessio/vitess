@@ -59,6 +59,11 @@ func Init(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoSer
 	return l2VTGate
 }
 
+// Gateway returns this l2vtgate Gateway object (for tests mainly).
+func (l *L2VTGate) Gateway() gateway.Gateway {
+	return l.gateway
+}
+
 // Begin is part of the queryservice.QueryService interface
 func (l *L2VTGate) Begin(ctx context.Context, target *querypb.Target) (int64, error) {
 	return l.gateway.Begin(ctx, target.Keyspace, target.Shard, target.TabletType)

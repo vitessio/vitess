@@ -1,13 +1,16 @@
 package discovery
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"html/template"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/status"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -314,6 +317,34 @@ func TestHealthCheckTimeout(t *testing.T) {
 	}
 	// close healthcheck
 	hc.Close()
+}
+
+func TestTemplate(t *testing.T) {
+	tablet := topo.NewTablet(0, "cell", "a")
+	ts := []*TabletStats{
+		{
+			Tablet:  tablet,
+			Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+			Up:      true,
+			Serving: false,
+			Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
+			TabletExternallyReparentedTimestamp: 0,
+		},
+	}
+	tcs := &TabletsCacheStatus{
+		Cell:         "cell",
+		Target:       &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		TabletsStats: ts,
+	}
+	templ := template.New("").Funcs(status.StatusFuncs)
+	templ, err := templ.Parse(HealthCheckTemplate)
+	if err != nil {
+		t.Fatalf("error parsing template: %v", err)
+	}
+	wr := &bytes.Buffer{}
+	if err := templ.Execute(wr, []*TabletsCacheStatus{tcs}); err != nil {
+		t.Fatalf("error executing template: %v", err)
+	}
 }
 
 type listener struct {
