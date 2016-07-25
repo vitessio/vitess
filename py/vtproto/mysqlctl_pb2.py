@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='mysqlctl.proto',
   package='mysqlctl',
   syntax='proto3',
-  serialized_pb=_b('\n\x0emysqlctl.proto\x12\x08mysqlctl\"\x0e\n\x0cStartRequest\"\x0f\n\rStartResponse\"*\n\x0fShutdownRequest\x12\x17\n\x0fwait_for_mysqld\x18\x01 \x01(\x08\"\x12\n\x10ShutdownResponse\"\x18\n\x16RunMysqlUpgradeRequest\"\x19\n\x17RunMysqlUpgradeResponse\"\x15\n\x13ReinitConfigRequest\"\x16\n\x14ReinitConfigResponse2\xb6\x02\n\x08MysqlCtl\x12:\n\x05Start\x12\x16.mysqlctl.StartRequest\x1a\x17.mysqlctl.StartResponse\"\x00\x12\x43\n\x08Shutdown\x12\x19.mysqlctl.ShutdownRequest\x1a\x1a.mysqlctl.ShutdownResponse\"\x00\x12X\n\x0fRunMysqlUpgrade\x12 .mysqlctl.RunMysqlUpgradeRequest\x1a!.mysqlctl.RunMysqlUpgradeResponse\"\x00\x12O\n\x0cReinitConfig\x12\x1d.mysqlctl.ReinitConfigRequest\x1a\x1e.mysqlctl.ReinitConfigResponse\"\x00\x62\x06proto3')
+  serialized_pb=_b('\n\x0emysqlctl.proto\x12\x08mysqlctl\"#\n\x0cStartRequest\x12\x13\n\x0bmysqld_args\x18\x01 \x03(\t\"\x0f\n\rStartResponse\"*\n\x0fShutdownRequest\x12\x17\n\x0fwait_for_mysqld\x18\x01 \x01(\x08\"\x12\n\x10ShutdownResponse\"\x18\n\x16RunMysqlUpgradeRequest\"\x19\n\x17RunMysqlUpgradeResponse\"\x15\n\x13ReinitConfigRequest\"\x16\n\x14ReinitConfigResponse2\xb6\x02\n\x08MysqlCtl\x12:\n\x05Start\x12\x16.mysqlctl.StartRequest\x1a\x17.mysqlctl.StartResponse\"\x00\x12\x43\n\x08Shutdown\x12\x19.mysqlctl.ShutdownRequest\x1a\x1a.mysqlctl.ShutdownResponse\"\x00\x12X\n\x0fRunMysqlUpgrade\x12 .mysqlctl.RunMysqlUpgradeRequest\x1a!.mysqlctl.RunMysqlUpgradeResponse\"\x00\x12O\n\x0cReinitConfig\x12\x1d.mysqlctl.ReinitConfigRequest\x1a\x1e.mysqlctl.ReinitConfigResponse\"\x00\x62\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -33,6 +33,13 @@ _STARTREQUEST = _descriptor.Descriptor(
   file=DESCRIPTOR,
   containing_type=None,
   fields=[
+    _descriptor.FieldDescriptor(
+      name='mysqld_args', full_name='mysqlctl.StartRequest.mysqld_args', index=0,
+      number=1, type=9, cpp_type=9, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
   ],
   extensions=[
   ],
@@ -46,7 +53,7 @@ _STARTREQUEST = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=28,
-  serialized_end=42,
+  serialized_end=63,
 )
 
 
@@ -69,8 +76,8 @@ _STARTRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=44,
-  serialized_end=59,
+  serialized_start=65,
+  serialized_end=80,
 )
 
 
@@ -100,8 +107,8 @@ _SHUTDOWNREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=61,
-  serialized_end=103,
+  serialized_start=82,
+  serialized_end=124,
 )
 
 
@@ -124,8 +131,8 @@ _SHUTDOWNRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=105,
-  serialized_end=123,
+  serialized_start=126,
+  serialized_end=144,
 )
 
 
@@ -148,8 +155,8 @@ _RUNMYSQLUPGRADEREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=125,
-  serialized_end=149,
+  serialized_start=146,
+  serialized_end=170,
 )
 
 
@@ -172,8 +179,8 @@ _RUNMYSQLUPGRADERESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=151,
-  serialized_end=176,
+  serialized_start=172,
+  serialized_end=197,
 )
 
 
@@ -196,8 +203,8 @@ _REINITCONFIGREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=178,
-  serialized_end=199,
+  serialized_start=199,
+  serialized_end=220,
 )
 
 
@@ -220,8 +227,8 @@ _REINITCONFIGRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=201,
-  serialized_end=223,
+  serialized_start=222,
+  serialized_end=244,
 )
 
 DESCRIPTOR.message_types_by_name['StartRequest'] = _STARTREQUEST
