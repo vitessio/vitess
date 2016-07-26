@@ -1,25 +1,23 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Inject } from '@angular/core';
 import { Http, Headers, RequestOptions } from '@angular/http';
-import { Keyspace } from '../keyspaceObject/keyspace/'
-import {Observable} from 'rxjs/Observable';
-
+import { Observable } from 'rxjs/Observable';
+import { ShardService } from './shard.service'
 
 @Injectable()
 export class KeyspaceService {
   private keyspacesUrl = '../api/keyspaces/';
-  private srv_keyspaceUrl = '../api/srv_keyspace/';
-  private keyspace_shardsUrl = '../api/shards/';
-  vtTabletTypes = [
+  private srvKeyspaceUrl = '../api/srv_keyspace/';
+  private shardsUrl = '../api/shards/';
+  private vtTabletTypes = [
     'unknown', 'master', 'replica', 'rdonly', 'spare', 'experimental',
     'backup', 'restore', 'worker'
   ];
-  constructor(private http: Http) {}
+
+  constructor(private http: Http,
+              private shardService: ShardService) {}
 
   getShards(keyspaceName) {
-    return this.http.get(this.keyspace_shardsUrl + keyspaceName + "/")
-    .map( (resp) => {
-      return resp.json(); 
-    })
+    return this.shardService.getShards(keyspaceName);
   }
   getKeyspaceNames() {
     return this.http.get(this.keyspacesUrl)
@@ -28,7 +26,7 @@ export class KeyspaceService {
     });
   }
   getSrvKeyspaces() {
-    return this.http.get(this.srv_keyspaceUrl + "local/")
+    return this.http.get(this.srvKeyspaceUrl + "local/")
     .map( (resp) => {
       return resp.json();
     });
@@ -134,15 +132,12 @@ export class KeyspaceService {
     });
   }
   createKeyspace(keyspace) {
-    let body = "action=CreateKeyspace" + "&shardingColumnName=" + keyspace.shardingColumnName + "&shardingColumnType=" + keyspace.shardingColumnType;
-    return this.sendPostRequest(this.keyspacesUrl + keyspace.name, body);
+    return this.sendPostRequest(this.keyspacesUrl + keyspace.getParam("keyspaceName"), keyspace.getBody("CreateKeyspace"));
   }
   deleteKeyspace(keyspace) {
-    let body = "action=DeleteKeyspace";
-    return this.sendPostRequest(this.keyspacesUrl + keyspace.name, body);
+    return this.sendPostRequest(this.keyspacesUrl + keyspace.name, keyspace.getBody("DeleteKeyspace"));
   }
   editKeyspace(keyspace) {
-    let body = "action=EditKeyspace" + "&shardingColumnName=" + keyspace.shardingColumnName + "&shardingColumnType=" + keyspace.shardingColumnType;
-    return this.sendPostRequest(this.keyspacesUrl + keyspace.name, body);
+    return this.sendPostRequest(this.keyspacesUrl + keyspace.name, keyspace.getBody("EditKeyspace"));
   }
 }
