@@ -14,7 +14,6 @@ import './rxjs-operators';
   templateUrl: 'app.component.html',
   styleUrls: ['app.component.css'],
   providers: [
-    HTTP_PROVIDERS,
     MdIconRegistry,
   ],
   directives: [

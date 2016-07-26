@@ -6,3 +6,8 @@
 .breadcrumb-separator {
   font-size: 24px;
 }
+
+.highlighted {
+  background-color: #CFCFD2;
+}
+
