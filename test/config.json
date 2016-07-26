@@ -375,6 +375,17 @@
 				"site_test"
 			]
 		},
+		"vtgatev2_l2vtgate": {
+			"File": "vtgatev2_l2vtgate_test.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
 		"vtgatev3": {
 			"File": "vtgatev3_test.py",
 			"Args": [],

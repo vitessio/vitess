@@ -534,7 +534,8 @@ class VtGate(object):
             topo_impl=None, cache_ttl='1s',
             healthcheck_conn_timeout='2s',
             extra_args=None, tablets=None,
-            tablet_types_to_wait='MASTER,REPLICA'):
+            tablet_types_to_wait='MASTER,REPLICA',
+            l2vtgates=None):
     """Start vtgate. Saves it into the global vtgate variable if not set yet."""
 
     args = environment.binary_args('vtgate') + [
@@ -543,14 +544,23 @@ class VtGate(object):
         '-retry-count', str(retry_count),
         '-log_dir', environment.vtlogroot,
         '-srv_topo_cache_ttl', cache_ttl,
-        '-healthcheck_conn_timeout', healthcheck_conn_timeout,
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
-        '-gateway_implementation', vtgate_gateway_flavor().flavor(),
         '-tablet_grpc_combine_begin_execute',
     ]
-    args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
-    if tablet_types_to_wait:
-      args.extend(['-tablet_types_to_wait', tablet_types_to_wait])
+    if l2vtgates:
+      args.extend([
+          '-gateway_implementation', 'l2vtgategateway',
+          '-l2vtgategateway_addrs', ','.join(l2vtgates),
+      ])
+    else:
+      args.extend([
+          '-healthcheck_conn_timeout', healthcheck_conn_timeout,
+          '-gateway_implementation', vtgate_gateway_flavor().flavor(),
+      ])
+      args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
+      if tablet_types_to_wait:
+        args.extend(['-tablet_types_to_wait', tablet_types_to_wait])
+
     if protocols_flavor().vtgate_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
     if protocols_flavor().service_map():
@@ -690,6 +700,91 @@ class VtGate(object):
                   var=vtgate_gateway_flavor().connection_count_vars(),
                   key=name, value=count, timeout=timeout)
 
+
+class L2VtGate(object):
+  """L2VtGate object represents a l2vtgate process."""
+
+  def __init__(self, port=None):
+    """Creates the L2VTGate instance and reserve the ports if necessary."""
+    self.port = port or environment.reserve_ports(1)
+    if protocols_flavor().vtgate_protocol() == 'grpc':
+      self.grpc_port = environment.reserve_ports(1)
+    self.proc = None
+
+  def start(self, cell='test_nj', retry_count=2,
+            topo_impl=None, cache_ttl='1s',
+            healthcheck_conn_timeout='2s',
+            extra_args=None, tablets=None,
+            tablet_types_to_wait='MASTER,REPLICA'):
+    """Start l2vtgate."""
+
+    args = environment.binary_args('l2vtgate') + [
+        '-port', str(self.port),
+        '-cell', cell,
+        '-retry-count', str(retry_count),
+        '-log_dir', environment.vtlogroot,
+        '-srv_topo_cache_ttl', cache_ttl,
+        '-healthcheck_conn_timeout', healthcheck_conn_timeout,
+        '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
+        '-gateway_implementation', vtgate_gateway_flavor().flavor(),
+        '-tablet_grpc_combine_begin_execute',
+    ]
+    args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
+    if tablet_types_to_wait:
+      args.extend(['-tablet_types_to_wait', tablet_types_to_wait])
+    if protocols_flavor().vtgate_protocol() == 'grpc':
+      args.extend(['-grpc_port', str(self.grpc_port)])
+    if protocols_flavor().service_map():
+      args.extend(['-service_map', ','.join(protocols_flavor().service_map())])
+    if topo_impl:
+      args.extend(['-topo_implementation', topo_impl])
+    else:
+      args.extend(environment.topo_server().flags())
+    if extra_args:
+      args.extend(extra_args)
+
+    self.proc = run_bg(args)
+    wait_for_vars('l2vtgate', self.port)
+
+  def kill(self):
+    """Terminates the l2vtgate process, and waits for it to exit.
+    """
+    if self.proc is None:
+      return
+    kill_sub_process(self.proc, soft=True)
+    self.proc.wait()
+    self.proc = None
+
+  def addr(self):
+    """Returns the address of the l2vtgate process, for web access."""
+    return 'localhost:%d' % self.port
+
+  def rpc_endpoint(self):
+    """Returns the protocol and endpoint to use for RPCs."""
+    protocol = protocols_flavor().vtgate_protocol()
+    if protocol == 'grpc':
+      return protocol, 'localhost:%d' % self.grpc_port
+    return protocol, self.addr()
+
+  def get_status(self):
+    """Returns the status page for this process."""
+    return get_status(self.port)
+
+  def get_vars(self):
+    """Returns the vars for this process."""
+    return get_vars(self.port)
+
+  def wait_for_endpoints(self, name, count, timeout=20.0):
+    """waits until l2vtgate gets endpoints.
+
+    Args:
+      name: name of the endpoint, in the form: 'keyspace.shard.type'.
+      count: how many endpoints to wait for.
+      timeout: how long to wait.
+    """
+    wait_for_vars('l2vtgate', self.port,
+                  var=vtgate_gateway_flavor().connection_count_vars(),
+                  key=name, value=count, timeout=timeout)
 
 # vtctl helpers
 # The modes are not all equivalent, and we don't really thrive for it.
@@ -1207,4 +1302,3 @@ def uint64_to_hex(integer):
   if integer > (1<<64)-1 or integer < 0:
     raise ValueError('Integer out of range: %d' % integer)
   return '%016X' % integer
-
