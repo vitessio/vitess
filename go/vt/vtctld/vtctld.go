@@ -23,7 +23,7 @@ var (
 	webDir = flag.String("web_dir", "", "directory from which to serve vtctld web interface resources")
 	// webDir2 is a temporary additional dir for a new, in-development UI.
 	webDir2             = flag.String("web_dir2", "", "directory from which to serve vtctld2 web interface resources")
-	enableRealtimeStats = flag.Bool("enable_realtime_stats", false, "boolean value indicating whether the realtime status view is wanted")
+	enableRealtimeStats = flag.Bool("enable_realtime_stats", false, "Required for the Realtime Stats view. If set, vtctld will maintain a streaming RPC to each tablet (in all cells) to gather the realtime health stats.")
 )
 
 const (

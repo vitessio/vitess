@@ -1,6 +1,7 @@
 package vtctld
 
 import (
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -22,7 +23,7 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// TestRealtimeStats tests the functionality of the realtimeStats object without using the healthcheck object.
+// TestRealtimeStats tests the functionality of the realtimeStats object without using the HealthCheck object.
 func TestRealtimeStats(t *testing.T) {
 	ctx := context.Background()
 	cells := []string{"cell1", "cell2"}
@@ -75,7 +76,7 @@ func TestRealtimeStats(t *testing.T) {
 		Qps:                 5.6,
 	}
 
-	// Test 1: update sent to tablet1 and tablet1 should receive it.
+	// Test 1: tablet1's stats should be updated with the one received by the HealthCheck object.
 	want1 := &discovery.TabletStats{
 		Tablet:  tablet1,
 		Target:  target,
@@ -85,12 +86,11 @@ func TestRealtimeStats(t *testing.T) {
 		Stats:     stats1,
 		LastError: nil,
 	}
-
 	realtimeStats.tabletStats.StatsUpdate(want1)
 	result := realtimeStats.tabletStatuses("cell1", "ks1", "-80", "REPLICA")
 	checkResult(t, tablet1.Alias.Uid, result, want1)
 
-	// Test 2: send another update to tablet1 and tablet1 should receive it.
+	// Test 2: tablet1's stats should be updated with the new one received by the HealthCheck object.
 	stats2 := &querypb.RealtimeStats{
 		HealthError:         "Unhealthy tablet",
 		SecondsBehindMaster: 15,
@@ -107,12 +107,12 @@ func TestRealtimeStats(t *testing.T) {
 		Stats:     stats2,
 		LastError: nil,
 	}
-
 	realtimeStats.tabletStats.StatsUpdate(want2)
 	result = realtimeStats.tabletStatuses("cell1", "ks1", "-80", "REPLICA")
 	checkResult(t, tablet1.Alias.Uid, result, want2)
 
-	// Test 3: send an update to tablet2 and tablet1 should remain unchanged.
+	// Test 3: tablet2's stats should be updated with the one received by the HealthCheck object,
+	// leaving tablet1's stats unchanged.
 	stats3 := &querypb.RealtimeStats{
 		HealthError:         "Unhealthy tablet",
 		SecondsBehindMaster: 15,
@@ -129,18 +129,17 @@ func TestRealtimeStats(t *testing.T) {
 		Stats:     stats3,
 		LastError: nil,
 	}
-
 	realtimeStats.tabletStats.StatsUpdate(want3)
 	result = realtimeStats.tabletStatuses("cell1", "ks1", "-80", "REPLICA")
 	checkResult(t, tablet1.Alias.Uid, result, want2)
 }
 
-// TestRealtimeStatsWithQueryService uses fakeTablets and the fakeQueryService to copy the environment
-// needed for the healthcheck object.
+// TestRealtimeStatsWithQueryService uses fakeTablets and the fakeQueryService to
+// copy the environment needed for the HealthCheck object.
 func TestRealtimeStatsWithQueryService(t *testing.T) {
 	// Set up testing keyspace with 2 tablets within 2 cells.
-	const keyspace string = "ks"
-	const shard string = "-80"
+	keyspace := "ks"
+	shard := "-80"
 	ctx := context.Background()
 	db := fakesqldb.Register()
 	ts := zktestserver.New(t, []string{"cell1", "cell2"})
@@ -162,77 +161,59 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 		defer ft.StopActionLoop(t)
 	}
 
-	target := &querypb.Target{
+	target := querypb.Target{
 		Keyspace:   keyspace,
 		Shard:      shard,
 		TabletType: topodatapb.TabletType_REPLICA,
 	}
-	fqs1 := fakes.NewStreamHealthQueryService(*target)
-	fqs2 := fakes.NewStreamHealthQueryService(*target)
-	grpcqueryservice.RegisterForTest(t1.RPCServer, fqs1)
-	grpcqueryservice.RegisterForTest(t2.RPCServer, fqs2)
+	fqs1 := fakes.NewStreamHealthQueryService(target)
+	fqs2 := fakes.NewStreamHealthQueryService(target)
+	grpcqueryservice.Register(t1.RPCServer, fqs1)
+	grpcqueryservice.Register(t2.RPCServer, fqs2)
 
 	fqs1.AddDefaultHealthResponse()
 
 	realtimeStats, err := newRealtimeStats(ts)
 	if err != nil {
-		t.Errorf("newRealtimeStats error: %v", err)
+		t.Fatalf("newRealtimeStats error: %v", err)
 	}
 
-	if err1 := discovery.WaitForTablets(ctx, realtimeStats.healthCheck, "cell1", keyspace, shard, []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != nil {
-		t.Errorf("waitForTablets failed: %v", err1)
+	if err := discovery.WaitForTablets(ctx, realtimeStats.healthCheck, "cell1", keyspace, shard, []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != nil {
+		t.Fatalf("waitForTablets failed: %v", err)
 	}
 
-	// Test 1: Tablet1 receives an update.
+	// Test 1: tablet1's stats should be updated with the one received by the HealthCheck object.
 	result := realtimeStats.tabletStatuses("cell1", keyspace, shard, "replica")
-	if result == nil {
-		t.Errorf("stats not recieved")
-	}
-
-	temp := &querypb.RealtimeStats{
+	got, want := result["0"].Stats, &querypb.RealtimeStats{
 		SecondsBehindMaster: 1,
 	}
-	checkEquality(t, result["0"].Stats, temp)
-
-	// Test 2: Tablet 1 receives a new update.
-	fqs1.AddHealthResponseWithQPS(2.0)
-
-	time.Sleep(time.Second * 5)
-
-	result = realtimeStats.tabletStatuses("cell1", keyspace, shard, "replica")
-	if result == nil {
-		t.Errorf("stats not recieved")
+	if !proto.Equal(got, want) {
+		t.Errorf("got: %v, want: %v", got, want)
 	}
 
-	temp = &querypb.RealtimeStats{
+	// Test 2: tablet1's stats should be updated with the new one received by the HealthCheck object.
+	fqs1.AddHealthResponseWithQPS(2.0)
+	want2 := &querypb.RealtimeStats{
 		SecondsBehindMaster: 1,
 		Qps:                 2.0,
 	}
-	checkEquality(t, result["0"].Stats, temp)
-
-	// Test 3: Tablet 2 receives a new update and leaves tablet 1's unchanged.
-	fqs2.AddHealthResponseWithQPS(3.0)
-
-	time.Sleep(time.Second * 5)
-
-	result = realtimeStats.tabletStatuses("cell1", keyspace, shard, "replica")
-	if result == nil {
-		t.Errorf("stats not recieved")
+	if err := waitForTest(realtimeStats, want2, "0", "cell1", keyspace, shard, "replica"); err != nil {
+		t.Errorf("%v", err)
 	}
-	checkEquality(t, result["0"].Stats, temp)
 
-	temp = &querypb.RealtimeStats{
+	// Test 3: tablet2's stats should be updated with the one received by the HealthCheck object,
+	// leaving tablet1's stats unchanged.
+	fqs2.AddHealthResponseWithQPS(3.0)
+	want3 := &querypb.RealtimeStats{
 		SecondsBehindMaster: 1,
 		Qps:                 3.0,
 	}
-	result = realtimeStats.tabletStatuses("cell2", keyspace, shard, "replica")
-	checkEquality(t, result["1"].Stats, temp)
-}
+	if err := waitForTest(realtimeStats, want3, "1", "cell2", keyspace, shard, "replica"); err != nil {
+		t.Errorf("%v", err)
+	}
 
-// checkEquality compares two RealtimeStats proto messages.
-func checkEquality(t *testing.T, got *querypb.RealtimeStats, want *querypb.RealtimeStats) {
-	if !proto.Equal(got, want) {
-		t.Errorf("got: %v, want: %v", got, want)
+	if err := waitForTest(realtimeStats, want2, "0", "cell1", keyspace, shard, "replica"); err != nil {
+		t.Errorf("%v", err)
 	}
 }
 
@@ -247,9 +228,29 @@ func checkResult(t *testing.T, wantedUID uint32, resultMap map[string]*discovery
 	}
 }
 
-// newRealtimeStatsForTesting creates a new realtimeStats object without creating a healthcheck object.
+// waitForTest ensures that the HealthCheck object received an update and passed
+// that information to the correct tablet.
+func waitForTest(realtimeStats *realtimeStats, want *querypb.RealtimeStats, tabletIndex string, cell, keyspace, shard, tabletType string) error {
+	deadline := time.Now().Add(time.Second * 5)
+	for {
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timeout error when getting tabletStatuses")
+		}
+		result, ok := (realtimeStats.tabletStatuses(cell, keyspace, shard, tabletType))[tabletIndex]
+		if !ok {
+			continue
+		}
+		got := result.Stats
+		if proto.Equal(got, want) {
+			break
+		}
+	}
+	return nil
+}
+
+// newRealtimeStatsForTesting creates a new realtimeStats object without creating a HealthCheck object.
 func newRealtimeStatsForTesting() *realtimeStats {
-	tabletStatsCache := tabletStatsCache{
+	tabletStatsCache := &tabletStatsCache{
 		statuses: make(map[string]map[string]*discovery.TabletStats),
 	}
 	return &realtimeStats{
