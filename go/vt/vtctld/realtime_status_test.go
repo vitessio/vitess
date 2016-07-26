@@ -186,12 +186,6 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 
 	// Test 1: tablet1's stats should be updated with the one received by the HealthCheck object.
 	result := realtimeStats.tabletStatuses("cell1", keyspace, shard, tabletType)
-
-	fmt.Println("PRINTING: ")
-	for a, b := range result {
-		fmt.Printf("a: %v b: %v ", a, b)
-	}
-
 	got := result["0"].Stats
 	want := &querypb.RealtimeStats{
 		SecondsBehindMaster: 1,
@@ -237,7 +231,7 @@ func checkResult(t *testing.T, wantedUID uint32, resultMap map[string]*discovery
 	}
 }
 
-// waitForTest ensures that the HealthCheck object received an update and passed
+// checkStats ensures that the HealthCheck object received an update and passed
 // that information to the correct tablet.
 func checkStats(realtimeStats *realtimeStats, tabletUid, cell, keyspace, shard, tabletType string, want *querypb.RealtimeStats) error {
 	deadline := time.Now().Add(time.Second * 5)
