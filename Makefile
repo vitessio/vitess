@@ -26,7 +26,7 @@ ifdef VT_MYSQL_ROOT
   endif
 endif
 
-build: proto
+build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
