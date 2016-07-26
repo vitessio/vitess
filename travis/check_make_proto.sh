@@ -28,6 +28,16 @@ if [ $? -ne 0 ]; then
   error "Failed to run 'make proto'. Please see the error above and fix it. This should not happen."
 fi
 
+# Check if the file only changed due to a different Go version.
+# Go 1.7 has changes to the compression library which results in different
+# output and therefore in different generated protobuf code.
+git diff -U0 --no-prefix | grep -vE "(bytes of a gzipped FileDescriptorProto|[-\+]{3} .*\.go$|diff --git .*\.go$|^index |^@@ .+ @@ var fileDescriptor0 = \[\]byte\{$|^[-\+]	(0x[0-9a-f]{2}, )*0x[0-9a-f]{2},$)"
+if [ $? -eq 1 ]; then
+  # The protobuf files changed only due to a different Go version.
+  # Revert the changes and continue with the actual check.
+  git checkout .
+fi
+
 git diff --exit-code
 if [ $? -ne 0 ]; then
   error "Generated protobuf and gRPC files are not up to date. See diff above. You have to generate them locally and include them in your pull request.\n\nTherefore run a) ./bootstrap.sh b) make proto and c) commit the changed files."
