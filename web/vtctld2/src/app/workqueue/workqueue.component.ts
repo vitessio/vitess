@@ -14,8 +14,8 @@ import {MdProgressBar} from '@angular2-material/progress-bar/progress-bar';
 export class WorkqueueComponent {
   title = 'Vitess Control Panel';
   jobs = [
-  	  {name:"Resharding", progress:60}, 
-  	  {name:"Online BackUp", progress:20}, 
-  	  {name:"Offline Backup", progress:0},
+      {name:"Resharding", progress:60}, 
+      {name:"Online BackUp", progress:20}, 
+      {name:"Offline Backup", progress:0},
   ];
 }
