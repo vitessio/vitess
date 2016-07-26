@@ -129,6 +129,7 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 			return ts.GetKeyspace(ctx, keyspace)
 			// Perform an action on a keyspace.
 		case "POST":
+			time.Sleep(4000 * time.Millisecond)
 			if keyspace == "" {
 				return nil, errors.New("A POST request needs a keyspace in the URL")
 			}

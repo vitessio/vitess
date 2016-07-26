@@ -20,9 +20,6 @@ module.exports = function(defaults) {
       'angular2-in-memory-web-api/**/*',
       'primeui/**/*',
       'primeng/**/*',
-      'ng-lightning/**/*',
-      'tether/**/*',
-      'ts-helpers/**/*',
       '@vaadin/**/*.+(js|js.map)',
     ]
   }); 

@@ -39,20 +39,3 @@ md-nav-list md-icon {
 md-card {
   margin-top: 14px;
 }
-a:link {
-    text-decoration: none;
-    color:black;
-}
-
-a:visited {
-    text-decoration: none;
-    color:black;
-}
-
-a:hover {
-    text-decoration: none;
-}
-
-a:active {
-    text-decoration: none;
-}
