@@ -10,14 +10,15 @@ declare var Plotly: any;
   moduleId: module.id,
   selector: 'plotlychart',
    template: `
-    <div #myDiv id="myPlotlyDiv"
+    <div id="myPlotlyDiv"
          name="myPlotlyDiv">
-        <!-- Plotly chart will be drawn inside this DIV -->
+        <!-- Plotly chart 1 will be drawn inside this DIV -->
     </div>
-    <div id="plotlyDiv2">
-       <!--second Plotly chart will be draw inside here -->
+     <div id="myPlotlyDiv2"
+         name="myPlotlyDiv">
+        <!-- Plotly chart 2 will be drawn inside this DIV -->
     </div>
-`,
+   `,
   styleUrls: [],
   directives: [CORE_DIRECTIVES, ROUTER_DIRECTIVES]
 })
@@ -38,9 +39,54 @@ export class PlotlyComponent implements OnInit {
   yLabels = [];
   yLabels2 = [];
 
+  ngOnInit() {
+    /* For heatmap 1 ( ks1 - cellA - all) */
+    this.getDataForKC("ks1", "cellA");
+    var chartInfo = [{
+      z: this.data,
+      colorscale: this.colorscaleValue,
+      type: 'heatmap',
+    }];
+    var axisTemplate = {
+      showgrid: false,
+      zeroline: false,
+      side: 'top',
+      ticks: ''
+    };
+    var chartLayout = {
+      xaxis: axisTemplate,
+      yaxis: axisTemplate,
+    };
+    Plotly.newPlot('myPlotlyDiv', chartInfo, chartLayout,  {displayModeBar: false});
+
+    /* For heatmap 2 (all - all - replica) */
+    this.getDataForK("ks1");
+    var chart2Info = [{
+      z: this.data2,
+      colorscale: this.colorscaleValue,
+      type: 'heatmap'
+    }];
+    Plotly.newPlot('myPlotlyDiv2', chart2Info, chartLayout);
+  }
+
+  /* Needed to establish the on-click functionality of the heatmap. */
+  ngAfterViewInit() {
+    let elem = <any>(document.getElementById('myPlotlyDiv'));
+    elem.on('plotly_click', function(data){
+      alert("clicked");
+    });
+    let elem2 = <any>(document.getElementById('myPlotlyDiv2'));
+    elem2.on('plotly_click', function(data){
+      alert("clicked");
+    });
+  }
+
+  /* Mock data for tablets */
+  /* (TODO) remove this once vtcombo is set up */
+  /* getDataForKC mimics a backend api call which returns a list of tablets
+     for a keyspace and cell. */
   getDataForKC (keyspace: string, cell:string ) {
     var stats =  this.getStatsForKC(keyspace, cell);
-    console.dir("LIST: " + stats);
     var prevType = stats[0].Tablet.type;
     var taskNum = 0;
     var maxShardNum = 0;
@@ -50,7 +96,6 @@ export class PlotlyComponent implements OnInit {
     var flag = false;
 
     for(var tabletStat in stats) {
-      console.dir(stats[tabletStat]);
       if(prevType != stats[tabletStat].Tablet.type ) {
         this.yLabels.push(prevType+ " - task " + taskNum)
         this.data.push(tempData.slice(0));
@@ -94,6 +139,8 @@ export class PlotlyComponent implements OnInit {
     }
   }
 
+  /* getDataForKC mimics a backend api call which returns a list of tablets 
+     for a keyspace. */
   getDataForK (keyspace: string) {
     var stats = this.getStatsForK(keyspace);
     var prevType = stats[0].Tablet.type;
@@ -106,7 +153,6 @@ export class PlotlyComponent implements OnInit {
     var flag = false;
 
     for(var tabletStat in stats) {
-      console.dir(stats[tabletStat]);
       if(prevType != stats[tabletStat].Tablet.type ) {
         this.yLabels2.push(prevType+ " - task " + taskNum)
         this.data2.push(tempData.slice(0));
@@ -165,73 +211,12 @@ export class PlotlyComponent implements OnInit {
     }
   }
 
-  ngOnInit() {
 
-    /* For Plot 1 ( ks1 - cellA - all) */
-    this.getDataForKC("ks1", "cellA");  
-    this.getDataForK("ks1");
-
-    var chartInfo = [{
-      z: this.data,
-      /*x: this.xLabels,
-      y: this.yLabels,
-      */
-      colorscale: this.colorscaleValue,
-      type: 'heatmap'
-   }];
-
-   var axisTemplate = {
-     showgrid: false,
-     zeroline: false,
-     side: 'top',
-     ticks: ''
-   };
-
-   var chartLayout = {
-     xaxis: axisTemplate,
-     yaxis: axisTemplate,
-     showlegend: false,
-  };
-
-   Plotly.newPlot('myPlotlyDiv', chartInfo, chartLayout);
-
-   console.dir(this.data2);
-
-   /*For plot 2 (all - all - replica) */
-   var chart2Info = [{
-      z: this.data2,
-      /*x: this.xLabels2,
-      y: this.yLabels2,
-      */
-      colorscale: this.colorscaleValue,
-      type: 'heatmap'
-    }];
-
-
-    Plotly.newPlot('plotlyDiv2', chart2Info, chartLayout);
-  }
-
-  ngAfterViewInit() {
-    console.log("After ");
-    let elem = <any>(document.getElementById('myPlotlyDiv'));
-    elem.on('plotly_click', function(data){
-    alert("clicked");
-  });
-
-}
-
-
-
-
-
-
-
-  /*************************DATA*************************/
   /*KEYSPACE 1 */
   tablet1 = {
     Tablet: {
        alias: {
-        cell: "cellA", 
+        cell: "cellA",
         uid: 1,
        },
        keypsace: "ks1",
@@ -675,11 +660,9 @@ export class PlotlyComponent implements OnInit {
       for ( var i = 0; i < this.tablet_status_map.length; i++)  {
         if ( keyspace === this.tablet_status_map[i].Tablet.keypsace && 
              cell === this.tablet_status_map[i].Tablet.alias.cell) {
-             console.dir("PUSHING: " + this.tablet_status_map[i]);
              tablet_statuses_to_return.push(this.tablet_status_map[i]);
         }
       }
-      console.dir("in other func: " +tablet_statuses_to_return);
       return tablet_statuses_to_return;
    }
 
@@ -687,13 +670,10 @@ export class PlotlyComponent implements OnInit {
       var tablet_statuses_to_return = []
       for ( var i = 0; i < this.tablet_status_map.length; i++)  {
         if ( keyspace === this.tablet_status_map[i].Tablet.keypsace) {
-             console.dir("PUSHING: " + this.tablet_status_map[i]);
              tablet_statuses_to_return.push(this.tablet_status_map[i]);
         }
       }
-      console.dir("in other func: " +tablet_statuses_to_return);
       return tablet_statuses_to_return;
-
    }
 }
 

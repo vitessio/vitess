@@ -11,46 +11,18 @@
   <link rel="stylesheet" href="main.css">
 
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-  <!--<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/1.0.2/Chart.min.js"></script>-->
-
-   <script src="bower_components/webcomponentsjs/webcomponents-lite.min.js"></script>
-  <link rel="import" href="elements.html">
   
-  <link rel="import" href="bower_components/polymer/polymer.html">
-<link rel="import" href="bower_components/paper-styles/color.html">
-<link rel="import" href="bower_components/paper-styles/typography.html">
-<link rel="import" href="bower_components/vaadin-combo-box/vaadin-combo-box.html">
-<link rel="import" href="bower_components/paper-input/paper-input.html">
-
-<link rel="import" href="bower_components/iron-flex-layout/iron-flex-layout.html">
-    <link rel="import" href="bower_components/paper-styles/default-theme.html">
-    <link rel="import" href="bower_components/paper-styles/shadow.html">
-    <link rel="import" href="bower_components/iron-icons/iron-icons.html">
-    <link rel="import" href="bower_components/app-layout/app-layout.html">
-    <link rel="import" href="bower_components/paper-icon-button/paper-icon-button.html">
-    <link rel="import" href="bower_components/paper-input/paper-input.html">
-    <link rel="import" href="bower_components/vaadin-grid/vaadin-grid.html">
-    <link rel="import" href="bower_components/vaadin-date-picker/vaadin-date-picker.html">
-    <link rel="import" href="bower_components/vaadin-charts/vaadin-heatmap-chart.html">
-
 </head>
 <body class="flex-column">
   <app-root class="flex-column flex-grow">Loading...</app-root>
 
- 
   {{#each scripts.polyfills}}
   <script src="{{.}}"></script>
   {{/each}}
   <script>
-   /* System.import('system-config.js').then(function () {
+  System.import('system-config.js').then(function () {
       System.import('main');
-  }).catch(console.error.bind(console));*/
-
-   document.addEventListener('WebComponentsReady', function() {
-       System.import('system-config.js').then(function () {
-         System.import('main');
-       }).catch(console.error.bind(console));
-     }); 
+  }).catch(console.error.bind(console));
   </script>
 </body>
 </html>
