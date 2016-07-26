@@ -6,13 +6,16 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -27,8 +30,6 @@ func TestAPI(t *testing.T) {
 	cells := []string{"cell1", "cell2"}
 	ts := zktestserver.New(t, cells)
 	actionRepo := NewActionRepository(ts)
-	initAPI(ctx, ts, actionRepo)
-
 	server := httptest.NewServer(nil)
 	defer server.Close()
 
@@ -43,22 +44,25 @@ func TestAPI(t *testing.T) {
 		KeyRange: &topodatapb.KeyRange{Start: []byte{0x80}, End: nil},
 	})
 
-	ts.CreateTablet(ctx, &topodatapb.Tablet{
+	tablet1 := topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
 		Keyspace: "ks1",
 		Shard:    "-80",
 		Type:     topodatapb.TabletType_REPLICA,
 		KeyRange: &topodatapb.KeyRange{Start: nil, End: []byte{0x80}},
 		PortMap:  map[string]int32{"vt": 100},
-	})
-	ts.CreateTablet(ctx, &topodatapb.Tablet{
+	}
+	ts.CreateTablet(ctx, &tablet1)
+
+	tablet2 := topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: "cell2", Uid: 200},
 		Keyspace: "ks1",
 		Shard:    "-80",
 		Type:     topodatapb.TabletType_REPLICA,
 		KeyRange: &topodatapb.KeyRange{Start: nil, End: []byte{0x80}},
 		PortMap:  map[string]int32{"vt": 200},
-	})
+	}
+	ts.CreateTablet(ctx, &tablet2)
 
 	// Populate fake actions.
 	actionRepo.RegisterKeyspaceAction("TestKeyspaceAction",
@@ -73,6 +77,32 @@ func TestAPI(t *testing.T) {
 		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias, r *http.Request) (string, error) {
 			return "TestTabletAction Result", nil
 		})
+
+	realtimeStats := newRealtimeStatsForTesting()
+	initAPI(ctx, ts, actionRepo, realtimeStats)
+
+	target := &querypb.Target{
+		Keyspace:   "ks1",
+		Shard:      "-80",
+		TabletType: topodatapb.TabletType_REPLICA,
+	}
+	stats := &querypb.RealtimeStats{
+		HealthError:         "",
+		SecondsBehindMaster: 2,
+		BinlogPlayersCount:  0,
+		CpuUsage:            12.1,
+		Qps:                 5.6,
+	}
+	tabletStats := &discovery.TabletStats{
+		Tablet:  &tablet1,
+		Target:  target,
+		Up:      true,
+		Serving: true,
+		TabletExternallyReparentedTimestamp: 5,
+		Stats:     stats,
+		LastError: nil,
+	}
+	realtimeStats.tabletStats.StatsUpdate(tabletStats)
 
 	// Test cases.
 	table := []struct {
@@ -131,6 +161,11 @@ func TestAPI(t *testing.T) {
 				"Output": "TestTabletAction Result",
 				"Error": false
 			}`},
+
+		//Tablet Updates
+		{"GET", "tablet_statuses/cell1/ks1/-80/REPLICA", `{"100":{"Tablet":{"alias":{"cell":"cell1","uid":100},"port_map":{"vt":100},"keyspace":"ks1","shard":"-80","key_range":{"end":"gA=="},"type":2},"Name":"","Target":{"keyspace":"ks1","shard":"-80","tablet_type":2},"Up":true,"Serving":true,"TabletExternallyReparentedTimestamp":5,"Stats":{"seconds_behind_master":2,"cpu_usage":12.1,"qps":5.6},"LastError":null}}`},
+		{"GET", "tablet_statuses/cell1/ks1/replica", "can't get tablet_statuses: invalid target path: \"cell1/ks1/replica\"  expected path: <cell>/<keyspace>/<shard>/<type>"},
+		{"GET", "tablet_statuses/cell1/ks1/-80/hello", "can't get tablet_statuses: invalid tablet type: hello"},
 	}
 
 	for _, in := range table {
@@ -151,14 +186,26 @@ func TestAPI(t *testing.T) {
 			t.Errorf("[%v] http error: %v", in.path, err)
 			continue
 		}
+
 		body, err := ioutil.ReadAll(resp.Body)
 		resp.Body.Close()
+
 		if err != nil {
 			t.Errorf("[%v] ioutil.ReadAll(resp.Body) error: %v", in.path, err)
 			continue
 		}
-		if got, want := compactJSON(body), compactJSON([]byte(in.want)); got != want {
-			t.Errorf("[%v] got %v, want %v", in.path, got, want)
+
+		got := compactJSON(body)
+		want := compactJSON([]byte(in.want))
+		if want == "" {
+			// want is no valid JSON. Fallback to a string comparison.
+			want = in.want
+			// For unknown reasons errors have a trailing "\n\t\t". Remove it.
+			got = strings.TrimSpace(string(body))
+		}
+		if got != want {
+			t.Errorf("[%v] got '%v', want '%v'", in.path, got, want)
+			continue
 		}
 	}
 }

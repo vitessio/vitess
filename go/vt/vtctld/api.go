@@ -104,7 +104,7 @@ func addSrvkeyspace(ctx context.Context, ts topo.Server, cell, keyspace string, 
 	return nil
 }
 
-func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
+func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, realtimeStats *realtimeStats) {
 	tabletHealthCache := newTabletHealthCache(ts)
 	tmClient := tmclient.NewTabletManagerClient()
 
@@ -171,12 +171,13 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 		// Get the shard record.
 		return ts.GetShard(ctx, keyspace, shard)
 	})
-	//SrvKeyspace
+
+	// SrvKeyspace
 	handleCollection("srv_keyspace", func(r *http.Request) (interface{}, error) {
 		keyspacePath := getItemPath(r.URL.Path)
 		parts := strings.SplitN(keyspacePath, "/", 2)
 
-		//request was incorrectly formatted
+		// Request was incorrectly formatted.
 		if len(parts) != 2 {
 			return nil, fmt.Errorf("invalid srvkeyspace path: %q  expected path: /srv_keyspace/<cell>/<keyspace>", keyspacePath)
 		}
@@ -191,7 +192,7 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 			cell = *localCell
 		}
 
-		//If a keyspace is provided then return the specified srvkeyspace
+		// If a keyspace is provided then return the specified srvkeyspace.
 		if keyspace != "" {
 			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
 			if err != nil {
@@ -200,7 +201,7 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 			return srvKeyspace, nil
 		}
 
-		//Else return the srvKeyspace from all keyspaces
+		// Else return the srvKeyspace from all keyspaces.
 		srvKeyspaces := make(map[string]interface{})
 		keyspaceNamesList, err := ts.GetSrvKeyspaceNames(ctx, cell)
 		if err != nil {
@@ -275,6 +276,29 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 
 		// Get the tablet record.
 		return ts.GetTablet(ctx, tabletAlias)
+	})
+
+	// Healthcheck real time status per (cell, keyspace, shard, tablet type).
+	handleCollection("tablet_statuses", func(r *http.Request) (interface{}, error) {
+		targetPath := getItemPath(r.URL.Path)
+		parts := strings.SplitN(targetPath, "/", 4)
+		if len(parts) != 4 {
+			return nil, fmt.Errorf("invalid target path: %q  expected path: <cell>/<keyspace>/<shard>/<type>", targetPath)
+		}
+
+		cell := parts[0]
+		keyspace := parts[1]
+		shard := parts[2]
+		tabletType := parts[3]
+		tabletTypeObj, err := topoproto.ParseTabletType(tabletType)
+		if err != nil {
+			return nil, fmt.Errorf("invalid tablet type: %v ", tabletType)
+		}
+		if realtimeStats == nil {
+			return nil, nil
+		}
+		allUpdates := realtimeStats.tabletStatuses(cell, keyspace, shard, tabletTypeObj.String())
+		return allUpdates, nil
 	})
 
 	// Schema Change
