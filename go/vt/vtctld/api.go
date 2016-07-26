@@ -290,10 +290,14 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 		keyspace := parts[1]
 		shard := parts[2]
 		tabletType := parts[3]
-		if _, err := topoproto.ParseTabletType(tabletType); err != nil {
+		tabletTypeObj, err := topoproto.ParseTabletType(tabletType)
+		if err != nil {
 			return nil, fmt.Errorf("invalid tablet type: %v ", tabletType)
 		}
-		allUpdates := realtimeStats.tabletStatuses(cell, keyspace, shard, tabletType)
+		if realtimeStats == nil {
+			return nil, nil
+		}
+		allUpdates := realtimeStats.tabletStatuses(cell, keyspace, shard, tabletTypeObj.String())
 		return allUpdates, nil
 	})
 

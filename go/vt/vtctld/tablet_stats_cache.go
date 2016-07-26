@@ -2,7 +2,6 @@ package vtctld
 
 import (
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/youtube/vitess/go/vt/discovery"
@@ -44,6 +43,5 @@ func (t *tabletStatsCache) tabletStatuses(cell, keyspace, shard, tabletType stri
 }
 
 func createTargetMapKey(cell, keyspace, shard, tabletType string) string {
-	// The tabletType is converted to lower case to maintain consistency.
-	return cell + "-" + keyspace + "-" + shard + "-" + strings.ToLower(tabletType)
+	return (cell + "-" + keyspace + "-" + shard + "-" + tabletType)
 }

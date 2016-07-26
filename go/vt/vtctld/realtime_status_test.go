@@ -25,6 +25,7 @@ import (
 
 // TestRealtimeStats tests the functionality of the realtimeStats object without using the HealthCheck object.
 func TestRealtimeStats(t *testing.T) {
+	tabletType := topodatapb.TabletType_REPLICA.String()
 	ctx := context.Background()
 	cells := []string{"cell1", "cell2"}
 	ts := zktestserver.New(t, cells)
@@ -87,7 +88,7 @@ func TestRealtimeStats(t *testing.T) {
 		LastError: nil,
 	}
 	realtimeStats.tabletStats.StatsUpdate(want1)
-	result := realtimeStats.tabletStatuses("cell1", "ks1", "-80", "REPLICA")
+	result := realtimeStats.tabletStatuses("cell1", "ks1", "-80", tabletType)
 	checkResult(t, tablet1.Alias.Uid, result, want1)
 
 	// Test 2: tablet1's stats should be updated with the new one received by the HealthCheck object.
@@ -108,7 +109,7 @@ func TestRealtimeStats(t *testing.T) {
 		LastError: nil,
 	}
 	realtimeStats.tabletStats.StatsUpdate(want2)
-	result = realtimeStats.tabletStatuses("cell1", "ks1", "-80", "REPLICA")
+	result = realtimeStats.tabletStatuses("cell1", "ks1", "-80", tabletType)
 	checkResult(t, tablet1.Alias.Uid, result, want2)
 
 	// Test 3: tablet2's stats should be updated with the one received by the HealthCheck object,
@@ -130,7 +131,7 @@ func TestRealtimeStats(t *testing.T) {
 		LastError: nil,
 	}
 	realtimeStats.tabletStats.StatsUpdate(want3)
-	result = realtimeStats.tabletStatuses("cell1", "ks1", "-80", "REPLICA")
+	result = realtimeStats.tabletStatuses("cell1", "ks1", "-80", tabletType)
 	checkResult(t, tablet1.Alias.Uid, result, want2)
 }
 
@@ -140,6 +141,7 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 	// Set up testing keyspace with 2 tablets within 2 cells.
 	keyspace := "ks"
 	shard := "-80"
+	tabletType := topodatapb.TabletType_REPLICA.String()
 	ctx := context.Background()
 	db := fakesqldb.Register()
 	ts := zktestserver.New(t, []string{"cell1", "cell2"})
@@ -183,8 +185,15 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 	}
 
 	// Test 1: tablet1's stats should be updated with the one received by the HealthCheck object.
-	result := realtimeStats.tabletStatuses("cell1", keyspace, shard, "replica")
-	got, want := result["0"].Stats, &querypb.RealtimeStats{
+	result := realtimeStats.tabletStatuses("cell1", keyspace, shard, tabletType)
+
+	fmt.Println("PRINTING: ")
+	for a, b := range result {
+		fmt.Printf("a: %v b: %v ", a, b)
+	}
+
+	got := result["0"].Stats
+	want := &querypb.RealtimeStats{
 		SecondsBehindMaster: 1,
 	}
 	if !proto.Equal(got, want) {
@@ -197,7 +206,7 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 		SecondsBehindMaster: 1,
 		Qps:                 2.0,
 	}
-	if err := waitForTest(realtimeStats, want2, "0", "cell1", keyspace, shard, "replica"); err != nil {
+	if err := checkStats(realtimeStats, "0", "cell1", keyspace, shard, tabletType, want2); err != nil {
 		t.Errorf("%v", err)
 	}
 
@@ -208,11 +217,11 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 		SecondsBehindMaster: 1,
 		Qps:                 3.0,
 	}
-	if err := waitForTest(realtimeStats, want3, "1", "cell2", keyspace, shard, "replica"); err != nil {
+	if err := checkStats(realtimeStats, "1", "cell2", keyspace, shard, tabletType, want3); err != nil {
 		t.Errorf("%v", err)
 	}
 
-	if err := waitForTest(realtimeStats, want2, "0", "cell1", keyspace, shard, "replica"); err != nil {
+	if err := checkStats(realtimeStats, "0", "cell1", keyspace, shard, tabletType, want2); err != nil {
 		t.Errorf("%v", err)
 	}
 }
@@ -230,22 +239,20 @@ func checkResult(t *testing.T, wantedUID uint32, resultMap map[string]*discovery
 
 // waitForTest ensures that the HealthCheck object received an update and passed
 // that information to the correct tablet.
-func waitForTest(realtimeStats *realtimeStats, want *querypb.RealtimeStats, tabletIndex string, cell, keyspace, shard, tabletType string) error {
+func checkStats(realtimeStats *realtimeStats, tabletUid, cell, keyspace, shard, tabletType string, want *querypb.RealtimeStats) error {
 	deadline := time.Now().Add(time.Second * 5)
-	for {
-		if time.Now().After(deadline) {
-			return fmt.Errorf("timeout error when getting tabletStatuses")
-		}
-		result, ok := (realtimeStats.tabletStatuses(cell, keyspace, shard, tabletType))[tabletIndex]
+	for time.Now().Before(deadline) {
+		result, ok := (realtimeStats.tabletStatuses(cell, keyspace, shard, tabletType))[tabletUid]
 		if !ok {
 			continue
 		}
 		got := result.Stats
 		if proto.Equal(got, want) {
-			break
+			return nil
 		}
+		time.Sleep(1 * time.Millisecond)
 	}
-	return nil
+	return fmt.Errorf("timeout error when getting tabletStatuses")
 }
 
 // newRealtimeStatsForTesting creates a new realtimeStats object without creating a HealthCheck object.
