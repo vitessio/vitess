@@ -310,7 +310,7 @@ func (lg *l2VTGateGateway) getConn(keyspace, shard string) (*l2VTGateConn, error
 			// Exact match (probably a non-sharded keyspace).
 			return c, nil
 		}
-		if key.KeyRangesIntersect(kr, c.keyRange) {
+		if kr != nil && c.keyRange != nil && key.KeyRangesIntersect(kr, c.keyRange) {
 			// There is overlap, we can just send to the destination.
 			// FIXME(alainjobart) if canonical is not entirely covered by l2vtgate,
 			// this is probably an error. We probably want key.KeyRangeIncludes(), NYI.
