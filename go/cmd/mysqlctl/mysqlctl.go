@@ -13,6 +13,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
+	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -93,6 +94,8 @@ func shutdownCmd(subFlags *flag.FlagSet, args []string) error {
 
 func startCmd(subFlags *flag.FlagSet, args []string) error {
 	waitTime := subFlags.Duration("wait_time", 5*time.Minute, "how long to wait for startup")
+	var mysqldArgs flagutil.StringListValue
+	subFlags.Var(&mysqldArgs, "mysqld_args", "List of comma-separated flags to pass additionally to mysqld")
 	subFlags.Parse(args)
 
 	// There ought to be an existing my.cnf, so use it to find mysqld.
@@ -104,7 +107,7 @@ func startCmd(subFlags *flag.FlagSet, args []string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
 	defer cancel()
-	if err := mysqld.Start(ctx); err != nil {
+	if err := mysqld.Start(ctx, mysqldArgs...); err != nil {
 		return fmt.Errorf("failed start mysql: %v", err)
 	}
 	return nil

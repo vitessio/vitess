@@ -654,8 +654,14 @@ func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurr
 	}
 
 	// mysqld needs to be running in order for mysql_upgrade to work.
+	// If we've just restored from a backup from previous MySQL version then mysqld
+	// may fail to start due to a different structure of mysql.* tables. The flag
+	// --skip-grant-tables ensures that these tables are not read until mysql_upgrade
+	// is executed. And since with --skip-grant-tables anyone can connect to MySQL
+	// without password, we are passing --skip-networking to greatly reduce the set
+	// of those who can connect.
 	logger.Infof("Restore: starting mysqld for mysql_upgrade")
-	err = mysqld.Start(ctx)
+	err = mysqld.Start(ctx, "--skip-grant-tables", "--skip-networking")
 	if err != nil {
 		return replication.Position{}, err
 	}

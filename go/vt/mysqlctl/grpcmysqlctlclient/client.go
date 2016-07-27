@@ -41,8 +41,10 @@ func factory(network, addr string, dialTimeout time.Duration) (mysqlctlclient.My
 }
 
 // Start is part of the MysqlctlClient interface.
-func (c *client) Start(ctx context.Context) error {
-	_, err := c.c.Start(ctx, &mysqlctlpb.StartRequest{})
+func (c *client) Start(ctx context.Context, mysqldArgs ...string) error {
+	_, err := c.c.Start(ctx, &mysqlctlpb.StartRequest{
+		MysqldArgs: mysqldArgs,
+	})
 	return err
 }
 

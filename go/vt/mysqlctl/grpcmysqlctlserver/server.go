@@ -24,7 +24,7 @@ type server struct {
 
 // Start implements the server side of the MysqlctlClient interface.
 func (s *server) Start(ctx context.Context, request *mysqlctlpb.StartRequest) (*mysqlctlpb.StartResponse, error) {
-	return &mysqlctlpb.StartResponse{}, s.mysqld.Start(ctx)
+	return &mysqlctlpb.StartResponse{}, s.mysqld.Start(ctx, request.MysqldArgs...)
 }
 
 // Shutdown implements the server side of the MysqlctlClient interface.
