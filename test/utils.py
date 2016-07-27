@@ -715,7 +715,8 @@ class L2VtGate(object):
             topo_impl=None, cache_ttl='1s',
             healthcheck_conn_timeout='2s',
             extra_args=None, tablets=None,
-            tablet_types_to_wait='MASTER,REPLICA'):
+            tablet_types_to_wait='MASTER,REPLICA',
+            tablet_filters=None):
     """Start l2vtgate."""
 
     args = environment.binary_args('l2vtgate') + [
@@ -732,6 +733,8 @@ class L2VtGate(object):
     args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
     if tablet_types_to_wait:
       args.extend(['-tablet_types_to_wait', tablet_types_to_wait])
+    if tablet_filters:
+      args.extend(['-tablet_filters', tablet_filters])
     if protocols_flavor().vtgate_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
     if protocols_flavor().service_map():
@@ -785,6 +788,20 @@ class L2VtGate(object):
     wait_for_vars('l2vtgate', self.port,
                   var=vtgate_gateway_flavor().connection_count_vars(),
                   key=name, value=count, timeout=timeout)
+
+  def verify_no_endpoint(self, name):
+    """verifies the l2vtgate doesn't have any enpoint of the given name.
+
+    Args:
+      name: name of the endpoint, in the form: 'keyspace.shard.type'.
+    """
+    poll_for_vars('l2vtgate', self.port,
+                  'no endpoint named ' + name,
+                  timeout=5.0,
+                  condition_fn=lambda v: v.get(vtgate_gateway_flavor().
+                                               connection_count_vars()).
+                  get(name, None) is None)
+
 
 # vtctl helpers
 # The modes are not all equivalent, and we don't really thrive for it.

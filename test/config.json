@@ -100,6 +100,17 @@
 				"worker_test"
 			]
 		},
+		"initial_sharding_l2vtgate": {
+			"File": "initial_sharding_l2vtgate.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 2,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
+		},
 		"legacy_resharding": {
 			"File": "legacy_resharding.py",
 			"Args": [],
