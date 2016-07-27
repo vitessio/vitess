@@ -142,19 +142,16 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 		return nil, vterrors.ToGRPCError(err)
 	}
 
-	// Begin part
-	transactionID, err := q.server.Begin(ctx, request.Target)
+	result, transactionID, err := q.server.BeginExecute(ctx, request.Target, request.Query.Sql, bv)
 	if err != nil {
+		// if we have a valid transactionID, return the error in-band
+		if transactionID != 0 {
+			return &querypb.BeginExecuteResponse{
+				Error:         vterrors.VtRPCErrorFromVtError(err),
+				TransactionId: transactionID,
+			}, nil
+		}
 		return nil, vterrors.ToGRPCError(err)
-	}
-
-	// Execute part
-	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, bv, transactionID)
-	if err != nil {
-		return &querypb.BeginExecuteResponse{
-			Error:         vterrors.VtRPCErrorFromVtError(err),
-			TransactionId: transactionID,
-		}, nil
 	}
 	return &querypb.BeginExecuteResponse{
 		Result:        sqltypes.ResultToProto3(result),
@@ -174,19 +171,16 @@ func (q *query) BeginExecuteBatch(ctx context.Context, request *querypb.BeginExe
 		return nil, vterrors.ToGRPCError(err)
 	}
 
-	// Begin part
-	transactionID, err := q.server.Begin(ctx, request.Target)
+	results, transactionID, err := q.server.BeginExecuteBatch(ctx, request.Target, bql, request.AsTransaction)
 	if err != nil {
+		// if we have a valid transactionID, return the error in-band
+		if transactionID != 0 {
+			return &querypb.BeginExecuteBatchResponse{
+				Error:         vterrors.VtRPCErrorFromVtError(err),
+				TransactionId: transactionID,
+			}, nil
+		}
 		return nil, vterrors.ToGRPCError(err)
-	}
-
-	// ExecuteBatch part
-	results, err := q.server.ExecuteBatch(ctx, request.Target, bql, request.AsTransaction, transactionID)
-	if err != nil {
-		return &querypb.BeginExecuteBatchResponse{
-			Error:         vterrors.VtRPCErrorFromVtError(err),
-			TransactionId: transactionID,
-		}, nil
 	}
 	return &querypb.BeginExecuteBatchResponse{
 		Results:       sqltypes.ResultsToProto3(results),
