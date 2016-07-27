@@ -95,10 +95,15 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 		"  PRIMARY KEY (`id`),\n" +
 		"  KEY `by_msg` (`msg`)\n" +
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8"
+	selectInformationSchema := "SELECT 1 FROM information_schema.tables WHERE table_schema = '_vt' AND table_name = 'shard_metadata'"
+	selectShardMetadata := "SELECT name, value FROM _vt.shard_metadata"
+
 	db.AddQuery(changeToDb, &sqltypes.Result{})
 	db.AddQuery(createDb, &sqltypes.Result{})
 	db.AddQuery(createTable, &sqltypes.Result{})
 	db.AddQuery(createTableView, &sqltypes.Result{})
+	db.AddQuery(selectInformationSchema, &sqltypes.Result{Rows: make([][]sqltypes.Value, 1)})
+	db.AddQuery(selectShardMetadata, &sqltypes.Result{})
 
 	destinationMaster.FakeMysqlDaemon.SchemaFunc = func() (*tabletmanagerdatapb.SchemaDefinition, error) {
 		if db.GetQueryCalledNum(createTableView) == 1 {
@@ -114,8 +119,8 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	if err := vp.Run([]string{"CopySchemaShard", "-include-views", source, "ks/-40"}); err != nil {
 		t.Fatalf("CopySchemaShard failed: %v", err)
 	}
-	if count := db.GetQueryCalledNum(changeToDb); count != 3 {
-		t.Fatalf("CopySchemaShard did not change to the db exactly once. Query count: %v", count)
+	if count := db.GetQueryCalledNum(changeToDb); count != 5 {
+		t.Fatalf("CopySchemaShard did not change to the db 5 times. Query count: %v", count)
 	}
 	if count := db.GetQueryCalledNum(createDb); count != 1 {
 		t.Fatalf("CopySchemaShard did not create the db exactly once. Query count: %v", count)
@@ -125,5 +130,11 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	}
 	if count := db.GetQueryCalledNum(createTableView); count != 1 {
 		t.Fatalf("CopySchemaShard did not create the table view exactly once. Query count: %v", count)
+	}
+	if count := db.GetQueryCalledNum(selectInformationSchema); count != 1 {
+		t.Fatalf("CopySchemaShard did not select data from information_schema.tables exactly once. Query count: %v", count)
+	}
+	if count := db.GetQueryCalledNum(selectShardMetadata); count != 1 {
+		t.Fatalf("CopySchemaShard did not select data from _vt.shard_metadata exactly once. Query count: %v", count)
 	}
 }
