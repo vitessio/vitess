@@ -269,8 +269,8 @@ func objName(parts ...string) string {
 
 // keeping in view the bucket naming conventions for ceph
 // only keyspace informations is extracted and used for bucket name
-func alterBucketName(dir string) (string){
-	bucket = strings.ToLower(dir)
+func alterBucketName(dir string) string {
+	bucket := strings.ToLower(dir)
 	bucket = strings.Split(bucket, "/")[0]
 	bucket = strings.Replace(bucket, "_", "-", -1)
 	return bucket
