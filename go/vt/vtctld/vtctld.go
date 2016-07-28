@@ -100,7 +100,7 @@ func InitVtctld(ts topo.Server) {
 		})
 
 	// shard actions
-  actionRepo.RegisterKeyspaceAction("CreateShard",
+	actionRepo.RegisterKeyspaceAction("CreateShard",
 		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
 			return "", wr.TopoServer().CreateShard(ctx, keyspace, shard)
 		})
