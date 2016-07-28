@@ -108,7 +108,9 @@ export class ShardComponent implements OnInit, OnDestroy {
                                              `Delete ${shardName}`, `Are you sure you want to delete ${shardName}?`);
     this.dialogSettings.setMessage('Deleted', '');
     let flags = {};
-    // TODO(dsslater): Add Flags
+    flags["keyspaceName"] = new KeyspaceNameFlag(0, "keyspaceName", this.keyspaceName);
+    flags["shardName"] = new ShardNameFlag(1, "shardName", shardName);
+    flags["recursive"] = new RecursiveFlag(2, "recursive");
     this.dialogContent = new DialogContent(shardName, flags);
   }
 
