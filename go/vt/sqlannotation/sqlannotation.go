@@ -16,11 +16,9 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/logutil"
 )
 
 const (
@@ -29,7 +27,6 @@ const (
 
 var (
 	filteredReplicationUnfriendlyStatementsCount = stats.NewInt("FilteredReplicationUnfriendlyStatementsCount")
-	filteredReplicationUnfriendlyStatementLogger = logutil.NewThrottledLogger("FilteredReplicationUnfriendlyStatement", 5*time.Second)
 )
 
 // AnnotateIfDML annotates 'sql' based on 'keyspaceIDs'
@@ -46,7 +43,6 @@ func AnnotateIfDML(sql string, keyspaceIDs [][]byte) string {
 		return AddKeyspaceID(sql, keyspaceIDs[0], "")
 	}
 	filteredReplicationUnfriendlyStatementsCount.Add(1)
-	filteredReplicationUnfriendlyStatementLogger.Warningf("filtered-replication-unfriendly SQL statement detected: %q", sql)
 	return sql + filteredReplicationUnfriendlyAnnotation
 }
 
