@@ -168,6 +168,29 @@ func KeyRangesOverlap(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange,
 	return &result, nil
 }
 
+// KeyRangeIncludes returns true if the first provided KeyRange, big,
+// contains the second KeyRange, small. If they intersect, but small
+// spills out, this returns false.
+func KeyRangeIncludes(big, small *topodatapb.KeyRange) bool {
+	if big == nil {
+		// The outside one covers everything, we're good.
+		return true
+	}
+	if small == nil {
+		// The smaller one covers everything, better have the
+		// bigger one also cover everything.
+		return len(big.Start) == 0 && len(big.End) == 0
+	}
+	// Now we check small.Start >= big.Start, and small.End <= big.End
+	if len(big.Start) != 0 && bytes.Compare(small.Start, big.Start) < 0 {
+		return false
+	}
+	if len(big.End) != 0 && (len(small.End) == 0 || bytes.Compare(small.End, big.End) > 0) {
+		return false
+	}
+	return true
+}
+
 // ParseShardingSpec parses a string that describes a sharding
 // specification. a-b-c-d will be parsed as a-b, b-c, c-d. The empty
 // string may serve both as the start and end of the keyspace: -a-b-

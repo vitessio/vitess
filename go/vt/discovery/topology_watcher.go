@@ -270,10 +270,8 @@ func (fbs *FilterByShard) isIncluded(tablet *topodatapb.Tablet) bool {
 			// Exact match (probably a non-sharded keyspace).
 			return true
 		}
-		if kr != nil && c.keyRange != nil && key.KeyRangesIntersect(kr, c.keyRange) {
-			// There is overlap, we can just send to the destination.
-			// FIXME(alainjobart) if canonical is not entirely covered by filter,
-			// this is probably an error. We probably want key.KeyRangeIncludes(), NYI.
+		if kr != nil && c.keyRange != nil && key.KeyRangeIncludes(c.keyRange, kr) {
+			// Our filter's KeyRange includes the provided KeyRange
 			return true
 		}
 	}

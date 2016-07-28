@@ -7,6 +7,7 @@ package key
 import (
 	"encoding/hex"
 	"reflect"
+	"strings"
 	"testing"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -174,6 +175,58 @@ func TestIntersectOverlap(t *testing.T) {
 			if err == nil {
 				t.Errorf("Unexpected result: KeyRangesOverlap for non-overlapping %v and %v should have returned an error", left, right)
 			}
+		}
+	}
+}
+
+func TestKeyRangeIncludes(t *testing.T) {
+	var table = []struct {
+		name     string
+		big      string
+		small    string
+		expected bool
+	}{
+		{"big nil, small nil", "nil", "nil", true},
+		{"big nil, small non nil, fully partial", "nil", "80-c0", true},
+		{"big nil, small non nil, full start", "nil", "-c0", true},
+		{"big nil, small non nil, full end", "nil", "80-", true},
+		{"big non-nil, fully partial, small nil", "80-c0", "nil", false},
+		{"big non-nil, full start, small nil", "-c0", "nil", false},
+		{"big non-nil, full end, small nil", "80-", "nil", false},
+		{"big full, small full", "-", "-", true},
+		{"big full, small partial", "-", "40-60", true},
+		{"big partial, small full", "40-60", "-", false},
+
+		{"big partial, small to the end", "40-60", "40-", false},
+		{"big partial, small bigger to the right", "40-60", "40-80", false},
+		{"big partial, small equal", "40-60", "40-60", true},
+		{"big partial, small smaller right", "40-60", "40-50", true},
+
+		{"big partial, small to the beginning", "40-60", "-60", false},
+		{"big partial, small smaller to the left", "40-60", "20-60", false},
+		{"big partial, small bigger left", "40-60", "50-60", true},
+	}
+
+	var err error
+	for _, tc := range table {
+		var big, small *topodatapb.KeyRange
+		if tc.big != "nil" {
+			parts := strings.Split(tc.big, "-")
+			big, err = ParseKeyRangeParts(parts[0], parts[1])
+			if err != nil {
+				t.Fatalf("test data error in %v: %v", tc.big, err)
+			}
+		}
+		if tc.small != "nil" {
+			parts := strings.Split(tc.small, "-")
+			small, err = ParseKeyRangeParts(parts[0], parts[1])
+			if err != nil {
+				t.Fatalf("test data error in %v: %v", tc.small, err)
+			}
+		}
+		got := KeyRangeIncludes(big, small)
+		if got != tc.expected {
+			t.Errorf("KeyRangeIncludes for test case '%v' returned %v but expected %v", tc.name, got, tc.expected)
 		}
 	}
 }
