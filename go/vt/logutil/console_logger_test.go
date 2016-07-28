@@ -53,8 +53,14 @@ func testConsoleLogger(t *testing.T, tee bool, entrypoint string) {
 		t.Fatalf("cmd.Wait() error: %v", err)
 	}
 
-	// Check output.
-	gotlines := strings.Split(string(out), "\n")
+	// Check output. Filter out entries that are not from console_logger_test.go
+	lines := strings.Split(string(out), "\n")
+	gotlines := []string{}
+	for _, line := range lines {
+		if strings.Contains(line, "console_logger_test.go") {
+			gotlines = append(gotlines, line)
+		}
+	}
 	wantlines := []string{
 		fmt.Sprintf("^I.*info 1 %v$", tee),
 		fmt.Sprintf("^W.*warning 2 %v$", tee),
@@ -62,9 +68,6 @@ func testConsoleLogger(t *testing.T, tee bool, entrypoint string) {
 	}
 	for i, want := range wantlines {
 		got := gotlines[i]
-		if !strings.Contains(got, "console_logger_test.go") {
-			t.Errorf("wrong file: %v", got)
-		}
 		match, err := regexp.MatchString(want, got)
 		if err != nil {
 			t.Errorf("regexp.MatchString error: %v", err)
