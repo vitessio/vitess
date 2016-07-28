@@ -111,7 +111,7 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     flags['shardName'] = new ShardNameFlag(1, 'shardName', '');
     flags['lowerBound'] = new LowerBoundFlag(2, 'lowerBound', '');
     flags['upperBound'] = new UpperBoundFlag(3, 'upperBound', '');
-    this.dialogContent = new DialogContent('', flags);
+    this.dialogContent = new DialogContent('', flags, {}, this.prepare.bind(this));
   }
 
   prepareDelete(shardName) {
@@ -134,6 +134,16 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
 
   navigate(keyspaceName, shardName) {
     this.router.navigate(['/shard'], {queryParams: { keyspace: keyspaceName, shard: shardName}});
+  }
+
+  prepare(flags) {
+    if (flags["lowerBound"] != undefined && flags["upperBound"] != undefined) {
+      flags["shardName"].setValue(this.getName(flags["lowerBound"].getStrValue(), flags["upperBound"].getStrValue()));
+    }
+    return {
+            success: true,
+            message: "",
+            flags: flags};
   }
 
   // Functions for parsing shardName

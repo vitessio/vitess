@@ -19,12 +19,11 @@ export class ShardService {
     return this.http.post(url, body, options)
       .map(resp => resp.json());
   }
-
   createShard(shard): Observable<any> {
-    return this.sendPostRequest(this.shardsUrl + shard.getParam('ShardName'), shard.getBody('CreateKeyspace'));
+    return this.sendPostRequest(this.shardsUrl + shard.getParam("keyspaceName") + "/" + shard.getParam("shardName")+ "/", shard.getBody("CreateShard"));
   }
 
   deleteShard(shard): Observable<any> {
-    return this.sendPostRequest(this.shardsUrl + shard.name, shard.getBody('DeleteKeyspace'));
+    return this.sendPostRequest(this.shardsUrl + shard.getParam("keyspaceName") + "/" + shard.name+ "/", shard.getBody("DeleteShard"));
   }
 }
