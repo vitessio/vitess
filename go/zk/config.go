@@ -15,10 +15,6 @@ import (
 	"unicode"
 )
 
-const (
-	DEFAULT_BASE_TIMEOUT = 5 * time.Second
-)
-
 var (
 	// DefaultZkConfigPaths is the default list of config files to check.
 	DefaultZkConfigPaths = []string{"/etc/zookeeper/zk_client.json"}
@@ -28,11 +24,11 @@ var (
 	localCell      = flag.String("zk.local-cell", "", "closest zk cell used for /zk/local paths")
 	localAddrs     = flag.String("zk.local-addrs", "", "list of zookeeper servers (host:port, ...)")
 	globalAddrs    = flag.String("zk.global-addrs", "", "list of global zookeeper servers (host:port, ...)")
-	baseTimeout    = flag.Duration("zk.base-timeout", DEFAULT_BASE_TIMEOUT, "zk base timeout (see zkconn.go)")
+	baseTimeout    = flag.Duration("zk.base-timeout", 30*time.Second, "zk base timeout (see zkconn.go)")
 	connectTimeout = flag.Duration("zk.connect-timeout", 30*time.Second, "zk connect timeout")
 )
 
-// Read the cell from -zk.local-cell, or the environment
+// GuessLocalCell reads the cell from -zk.local-cell, or the environment
 // ZK_CLIENT_LOCAL_CELL or guess the cell by the hostname. The
 // letter-only prefix of the string is used as the cell name. For
 // instance:
@@ -111,6 +107,8 @@ func getCellAddrMap() (map[string]string, error) {
 	return nil, fmt.Errorf("no config file paths found")
 }
 
+// ZkPathToZkAddr returns the zookeeper server address to use for the
+// given path.
 func ZkPathToZkAddr(zkPath string) (string, error) {
 	cell, err := ZkCellFromZkPath(zkPath)
 	if err != nil {
@@ -141,8 +139,8 @@ func ZkPathToZkAddr(zkPath string) (string, error) {
 	return "", fmt.Errorf("no addr found for zk cell: %#v", cell)
 }
 
-// returns all the known cells, alphabetically ordered. It will
-// include 'global' if there is a dc-specific global cell or a global cell
+// ZkKnownCells returns all the known cells, alphabetically ordered. It will
+// include 'global' if there is a dc-specific global cell or a global cell.
 func ZkKnownCells() ([]string, error) {
 	localCell := GuessLocalCell()
 	cellAddrMap, err := getCellAddrMap()
@@ -174,24 +172,4 @@ func ZkKnownCells() ([]string, error) {
 	}
 	sort.Strings(result)
 	return result, nil
-}
-
-// GetZkSubprocessFlags returns the flags necessary to run a sub-process
-// that would connect to the same zk servers as this process
-// (assuming the environment of the sub-process is the same as ours)
-func GetZkSubprocessFlags() []string {
-	result := make([]string, 0, 0)
-	if *localCell != "" {
-		result = append(result, "-zk.local-cell", *localCell)
-	}
-	if *localAddrs != "" {
-		result = append(result, "-zk.local-addrs", *localAddrs)
-	}
-	if *globalAddrs != "" {
-		result = append(result, "-zk.global-addrs", *globalAddrs)
-	}
-	if *baseTimeout != DEFAULT_BASE_TIMEOUT {
-		result = append(result, "-zk.base-timeout", baseTimeout.String())
-	}
-	return result
 }
