@@ -12,14 +12,15 @@ import (
 	"strings"
 	"sync"
 
+	"errors"
+
+	log "github.com/golang/glog"
 	minio "github.com/minio/minio-go"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
 )
 
 var (
-	// bucket is where the backups will go.
-	bucket string
 	// configFilePath is where the configs/credentials for backups will be stored.
 	configFilePath = flag.String("ceph_backup_storage_config", "ceph_backup_config.json",
 		"Path to JSON config file for ceph backup storage")
@@ -29,7 +30,6 @@ var storageConfig struct {
 	AccessKey string `json:"accessKey"`
 	SecretKey string `json:"secretKey"`
 	EndPoint  string `json:"endPoint"`
-	Bucket    string `json:"bucket"`
 }
 
 // CephBackupHandle implements BackupHandle for Ceph Cloud Storage.
@@ -62,6 +62,11 @@ func (bh *CephBackupHandle) AddFile(filename string) (io.WriteCloser, error) {
 	bh.waitGroup.Add(1)
 	go func() {
 		defer bh.waitGroup.Done()
+
+		// ceph bucket name is where the backups will go
+		//backup handle dir field contains keyspace/shard value
+		bucket := alterBucketName(bh.dir)
+
 		// Give PutObject() the read end of the pipe.
 		object := objName(bh.dir, bh.name, filename)
 		_, err := bh.client.PutObject(bucket, object, reader, "application/octet-stream")
@@ -99,6 +104,8 @@ func (bh *CephBackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
 	if !bh.readOnly {
 		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
 	}
+	// ceph bucket name
+	bucket := alterBucketName(bh.dir)
 	object := objName(bh.dir, bh.name, filename)
 	return bh.client.GetObject(bucket, object)
 }
@@ -118,6 +125,8 @@ func (bs *CephBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHand
 	if err != nil {
 		return nil, err
 	}
+	// ceph bucket name
+	bucket := alterBucketName(dir)
 
 	// List prefixes that begin with dir (i.e. list subdirs).
 	var subdirs []string
@@ -155,6 +164,18 @@ func (bs *CephBackupStorage) StartBackup(dir, name string) (backupstorage.Backup
 	if err != nil {
 		return nil, err
 	}
+	// ceph bucket name
+	bucket := alterBucketName(dir)
+
+	err = c.BucketExists(bucket)
+	if err != nil {
+		log.Info("Bucket: %v doesn't exist, creating new bucket with the required name", bucket)
+		err = c.MakeBucket(bucket, "")
+		if err != nil {
+			log.Info("Error creating Bucket: %v, quitting", bucket)
+			return nil, errors.New("Error creating new bucket: " + bucket)
+		}
+	}
 
 	return &CephBackupHandle{
 		client:   c,
@@ -171,12 +192,10 @@ func (bs *CephBackupStorage) RemoveBackup(dir, name string) error {
 	if err != nil {
 		return err
 	}
+	// ceph bucket name
+	bucket := alterBucketName(dir)
+
 	fullName := objName(dir, name, "")
-	//	err = c.RemoveObject(bucket, fullName)
-	//      if err != nil {
-	//              return err
-	//      }
-	//      return nil
 	var arr []string
 	doneCh := make(chan struct{})
 	defer close(doneCh)
@@ -224,7 +243,6 @@ func (bs *CephBackupStorage) client() (*minio.Client, error) {
 			return nil, fmt.Errorf("Error parsing the json file : %v", err)
 		}
 
-		bucket = storageConfig.Bucket
 		accessKey := storageConfig.AccessKey
 		secretKey := storageConfig.SecretKey
 		url := storageConfig.EndPoint
@@ -247,4 +265,13 @@ func init() {
 // It also adds the value of the -gcs_backup_storage_root flag if set.
 func objName(parts ...string) string {
 	return strings.Join(parts, "/")
+}
+
+// keeping in view the bucket naming conventions for ceph
+// only keyspace informations is extracted and used for bucket name
+func alterBucketName(dir string) string {
+	bucket := strings.ToLower(dir)
+	bucket = strings.Split(bucket, "/")[0]
+	bucket = strings.Replace(bucket, "_", "-", -1)
+	return bucket
 }

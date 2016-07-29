@@ -1,6 +1,5 @@
 {
   "accessKey" : "AccessKey",
   "secretKey" : "SecretKey",
-  "endPoint"  : "URL",
-  "bucket"    : "Bucket"
+  "endPoint"  : "URL"
 }
