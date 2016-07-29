@@ -32,8 +32,10 @@ type QueryService interface {
 	StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sendReply func(*sqltypes.Result) error) error
 	ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error)
 
-	// Combo methods: if err != nil, the transactionID may still
-	// be non-zero, and needs to be propagated back.
+	// Combo methods, they also return the transactionID from the
+	// Begin part. If err != nil, the transactionID may still be
+	// non-zero, and needs to be propagated back (like for a DB
+	// Integrity Error)
 	BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}) (*sqltypes.Result, int64, error)
 	BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error)
 
