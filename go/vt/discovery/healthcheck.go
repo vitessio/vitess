@@ -787,9 +787,15 @@ func TabletToMapKey(tablet *topodatapb.Tablet) string {
 // of available TabletStats, and a serving list:
 // - for master tablets, only the current master is kept.
 // - for non-master tablets, we filter the list using FilterByReplicationLag.
+// It keeps entries for all tablets in the cell it's configured to serve for,
+// and for the master independently of which cell it's in.
 // Note the healthy tablet computation is done when we receive a tablet
 // update only.
 type HealthyStatsListener struct {
+	// cell is the cell we are keeping all tablets for.
+	// Note we keep track of all master tablets.
+	cell string
+
 	// mu protects the following fields
 	mu sync.RWMutex
 
@@ -811,8 +817,9 @@ type healthyStatsListenerEntry struct {
 // it as Listener of the provided healthcheck.
 // We need to SetListener(..., true) to get the deletes from the map
 // upon type change.
-func NewHealthyStatsListener(hc HealthCheck) *HealthyStatsListener {
+func NewHealthyStatsListener(hc HealthCheck, cell string) *HealthyStatsListener {
 	hsl := &HealthyStatsListener{
+		cell:    cell,
 		entries: make(map[string]map[string]map[topodatapb.TabletType]*healthyStatsListenerEntry),
 	}
 	hc.SetListener(hsl, true)
@@ -821,6 +828,11 @@ func NewHealthyStatsListener(hc HealthCheck) *HealthyStatsListener {
 
 // StatsUpdate is part of the HealthCheckStatsListener interface.
 func (hsl *HealthyStatsListener) StatsUpdate(ts *TabletStats) {
+	if ts.Target.TabletType != topodatapb.TabletType_MASTER && ts.Tablet.Alias.Cell != hsl.cell {
+		// this is for a non-master tablet in a different cell, drop it
+		return
+	}
+
 	key := TabletToMapKey(ts.Tablet)
 
 	hsl.mu.Lock()

@@ -489,6 +489,7 @@ func (fc *fakeConn) Close() {
 func TestHealthyStatsListener(t *testing.T) {
 	// don't want to listen to anything
 	hsl := &HealthyStatsListener{
+		cell:    "cell",
 		entries: make(map[string]map[string]map[topodatapb.TabletType]*healthyStatsListenerEntry),
 	}
 
