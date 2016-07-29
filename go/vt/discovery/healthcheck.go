@@ -782,3 +782,183 @@ func TabletToMapKey(tablet *topodatapb.Tablet) string {
 	parts = append([]string{tablet.Hostname}, parts...)
 	return strings.Join(parts, ",")
 }
+
+// HealthyStatsListener is a listener that keeps both the current list
+// of available TabletStats, and a serving list:
+// - for master tablets, only the current master is kept.
+// - for non-master tablets, we filter the list using FilterByReplicationLag.
+// Note the healthy tablet computation is done when we receive a tablet
+// update only.
+type HealthyStatsListener struct {
+	// mu protects the following fields
+	mu sync.RWMutex
+
+	// entries maps from keyspace/shard/tablettype to our cache
+	entries map[string]map[string]map[topodatapb.TabletType]*healthyStatsListenerEntry
+}
+
+// healthyStatsListenerEntry is the per keyspace/shard/tabaletType
+// entry of the in-memory map for HealthyStatsListener.
+type healthyStatsListenerEntry struct {
+	// all has the valid tablets, indexed by TabletToMapKey(ts.Tablet).
+	all map[string]*TabletStats
+
+	// healthy only has the healthy ones.
+	healthy []*TabletStats
+}
+
+// NewHealthyStatsListener creates a HealthyStatsListener, and registers
+// it as Listener of the provided healthcheck.
+// We need to SetListener(..., true) to get the deletes from the map
+// upon type change.
+func NewHealthyStatsListener(hc HealthCheck) *HealthyStatsListener {
+	hsl := &HealthyStatsListener{
+		entries: make(map[string]map[string]map[topodatapb.TabletType]*healthyStatsListenerEntry),
+	}
+	hc.SetListener(hsl, true)
+	return hsl
+}
+
+// StatsUpdate is part of the HealthCheckStatsListener interface.
+func (hsl *HealthyStatsListener) StatsUpdate(ts *TabletStats) {
+	key := TabletToMapKey(ts.Tablet)
+
+	hsl.mu.Lock()
+	defer hsl.mu.Unlock()
+
+	s, ok := hsl.entries[ts.Target.Keyspace]
+	if !ok {
+		s = make(map[string]map[topodatapb.TabletType]*healthyStatsListenerEntry)
+		hsl.entries[ts.Target.Keyspace] = s
+	}
+	t, ok := s[ts.Target.Shard]
+	if !ok {
+		t = make(map[topodatapb.TabletType]*healthyStatsListenerEntry)
+		s[ts.Target.Shard] = t
+	}
+	e, ok := t[ts.Target.TabletType]
+	if !ok {
+		e = &healthyStatsListenerEntry{
+			all: make(map[string]*TabletStats),
+		}
+		t[ts.Target.TabletType] = e
+	}
+
+	// Update our full map.
+	if existing, ok := e.all[key]; ok {
+		if ts.Up {
+			// We already have the entry, update the values.
+			*existing = *ts
+		} else {
+			// We have an entry, we shouldn't, remove it.
+			delete(e.all, key)
+		}
+	} else {
+		if ts.Up {
+			// Add the entry.
+			e.all[key] = ts
+		} else {
+			// We had no entry, we're told to remove it,
+			// nothing should happen.
+			return
+		}
+	}
+
+	// The healthy list is different for Master: we only keep the
+	// most recent one.
+	if ts.Target.TabletType == topodatapb.TabletType_MASTER {
+		// We have a Up master
+		if ts.Up {
+			if len(e.healthy) == 0 {
+				// We have a new Up server, just remember it.
+				e.healthy = append(e.healthy, ts)
+				return
+			}
+
+			// We already have one up server, see if we
+			// need to replace it.
+			if e.healthy[0].TabletExternallyReparentedTimestamp > ts.TabletExternallyReparentedTimestamp {
+				// The notification we just got is older than
+				// the one we had before, discard it.
+				return
+			}
+
+			// Just replace it
+			e.healthy[0] = ts
+			return
+		}
+
+		// We have a Down master, remove it only if it's exactly
+		// the same
+		if len(e.healthy) != 0 {
+			oldKey := TabletToMapKey(e.healthy[0].Tablet)
+			if key == oldKey {
+				// same guy, remove it
+				e.healthy[0] = nil
+			}
+		}
+		return
+	}
+
+	// For non-master, we just recompute the healthy list
+	// using FilterByReplicationLag.
+	allArray := make([]*TabletStats, 0, len(e.all))
+	for _, s := range e.all {
+		allArray = append(allArray, s)
+	}
+	e.healthy = FilterByReplicationLag(allArray)
+}
+
+// GetTabletStats returns the full list of available targets.
+// The returned array is owned by the caller.
+func (hsl *HealthyStatsListener) GetTabletStats(keyspace, shard string, tabletType topodatapb.TabletType) []TabletStats {
+	hsl.mu.RLock()
+	defer hsl.mu.RUnlock()
+
+	s, ok := hsl.entries[keyspace]
+	if !ok {
+		return nil
+	}
+	t, ok := s[shard]
+	if !ok {
+		return nil
+	}
+	e, ok := t[tabletType]
+	if !ok {
+		return nil
+	}
+
+	result := make([]TabletStats, 0, len(e.all))
+	for _, s := range e.all {
+		result = append(result, *s)
+	}
+	return result
+}
+
+// GetHealthyTabletStats returns only the healthy targets.
+// The returned array is owned by the caller, who can do whatever
+// it wants with it.
+func (hsl *HealthyStatsListener) GetHealthyTabletStats(keyspace, shard string, tabletType topodatapb.TabletType) []TabletStats {
+	hsl.mu.RLock()
+	defer hsl.mu.RUnlock()
+
+	s, ok := hsl.entries[keyspace]
+	if !ok {
+		return nil
+	}
+	t, ok := s[shard]
+	if !ok {
+		return nil
+	}
+	e, ok := t[tabletType]
+	if !ok {
+		return nil
+	}
+
+	result := make([]TabletStats, len(e.healthy))
+	for i, ts := range e.healthy {
+		result[i] = *ts
+	}
+	return result
+
+}
