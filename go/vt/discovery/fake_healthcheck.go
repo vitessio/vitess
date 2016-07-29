@@ -49,7 +49,7 @@ func (fhc *FakeHealthCheck) RegisterStats() {
 }
 
 // SetListener is not implemented.
-func (fhc *FakeHealthCheck) SetListener(listener HealthCheckStatsListener) {
+func (fhc *FakeHealthCheck) SetListener(listener HealthCheckStatsListener, sendDownEvents bool) {
 }
 
 // AddTablet adds the tablet.

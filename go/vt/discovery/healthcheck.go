@@ -123,10 +123,16 @@ type HealthCheck interface {
 	// RegisterStats registers the connection counts stats.
 	// It can only be called on one Healthcheck object per process.
 	RegisterStats()
-	// SetListener sets the listener for healthcheck updates. It should not block.
-	// Note that the default implementation requires to set the listener before
-	// any tablets are added to the healthcheck.
-	SetListener(listener HealthCheckStatsListener)
+	// SetListener sets the listener for healthcheck
+	// updates. sendDownEvents is used when a tablet changes type
+	// (from replica to master for instance). If the listener
+	// wants two events (Up=false on old type, Up=True on new
+	// type), sendDownEvents should be set. Otherwise, the
+	// healthcheck will only send one event (Up=true on new type).
+	//
+	// Note that the default implementation requires to set the
+	// listener before any tablets are added to the healthcheck.
+	SetListener(listener HealthCheckStatsListener, sendDownEvents bool)
 	// AddTablet adds the tablet, and starts health check.
 	// Name is an alternate name, like an address.
 	AddTablet(tablet *topodatapb.Tablet, name string)
@@ -165,6 +171,7 @@ type healthCheckConn struct {
 type HealthCheckImpl struct {
 	// Immutable fields set at construction time.
 	listener           HealthCheckStatsListener
+	sendDownEvents     bool
 	connTimeout        time.Duration
 	retryDelay         time.Duration
 	healthCheckTimeout time.Duration
@@ -375,8 +382,18 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, stream tabletco
 		hc.addTabletToTargetProtected(hcc.tabletStats.Target, hcc.tabletStats.Tablet)
 		hc.mu.Unlock()
 	} else if hcc.tabletStats.Target.TabletType != shr.Target.TabletType {
-		// tablet type changed for the tablet
-		log.Infof("HealthCheckUpdate(Type Change): %v, tablet: %v/%+v, target %+v => %+v, reparent time: %v", hcc.tabletStats.Name, hcc.tabletStats.Tablet.Alias.Cell, hcc.tabletStats.Tablet, hcc.tabletStats.Target, shr.Target, shr.TabletExternallyReparentedTimestamp)
+		// The Tablet type changed for the tablet. Get old value.
+		hcc.mu.RLock()
+		oldTs := hcc.tabletStats
+		hcc.mu.RUnlock()
+
+		// Log and maybe notify
+		log.Infof("HealthCheckUpdate(Type Change): %v, tablet: %v/%+v, target %+v => %+v, reparent time: %v", oldTs.Name, oldTs.Tablet.Alias.Cell, oldTs.Tablet, oldTs.Target, shr.Target, shr.TabletExternallyReparentedTimestamp)
+		if hc.listener != nil && hc.sendDownEvents {
+			oldTs.Up = false
+			hc.listener.StatsUpdate(&oldTs)
+		}
+
 		hc.mu.Lock()
 		hc.deleteTabletFromTargetProtected(hcc.tabletStats.Target, hcc.tabletStats.Tablet)
 		ts = hcc.update(shr, serving, healthErr)
@@ -470,10 +487,9 @@ func (hc *HealthCheckImpl) deleteConn(tablet *topodatapb.Tablet) {
 }
 
 // SetListener sets the listener for healthcheck updates.
-// It should not block.
 // It must be called after NewHealthCheck and before any tablets are added
 // (either through AddTablet or through a Watcher).
-func (hc *HealthCheckImpl) SetListener(listener HealthCheckStatsListener) {
+func (hc *HealthCheckImpl) SetListener(listener HealthCheckStatsListener, sendDownEvents bool) {
 	if hc.listener != nil {
 		panic("must not call SetListener twice")
 	}
@@ -485,6 +501,7 @@ func (hc *HealthCheckImpl) SetListener(listener HealthCheckStatsListener) {
 	}
 
 	hc.listener = listener
+	hc.sendDownEvents = sendDownEvents
 }
 
 // AddTablet adds the tablet, and starts health check.
