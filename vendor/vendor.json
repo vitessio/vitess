@@ -449,6 +449,12 @@
 			"revisionTime": "2016-06-16T02:49:54Z"
 		},
 		{
+			"checksumSHA1": "Rn/vNP2JxfXbAbJcF78Q/WIYeGU=",
+			"path": "github.com/satori/go.uuid",
+			"revision": "0aa62d5ddceb50dbcb909d790b5345affd3669b6",
+			"revisionTime": "2016-07-13T18:03:06Z"
+		},
+		{
 			"checksumSHA1": "Gv/ks20dikzPV0cMqy8Pz9aZJGU=",
 			"path": "github.com/smartystreets/assertions",
 			"revision": "40711f7748186bbf9c99977cd89f21ce1a229447",
@@ -525,6 +531,12 @@
 			"path": "github.com/stretchr/testify/require",
 			"revision": "8d64eb7173c7753d6419fd4a9caf057398611364",
 			"revisionTime": "2016-05-24T23:42:29Z"
+		},
+		{
+			"checksumSHA1": "4lnw0u1uXTrgfVoWeNe2y8duA4E=",
+			"path": "github.com/tchap/go-patricia/patricia",
+			"revision": "dd168db6051b704a01881df7e003cb7ec9a7a440",
+			"revisionTime": "2016-07-29T07:16:56Z"
 		},
 		{
 			"checksumSHA1": "N5zDlkYc/+g7EwjB3GyHkYfOJAI=",

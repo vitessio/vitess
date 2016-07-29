@@ -107,76 +107,36 @@ func TestInitFromProto(t *testing.T) {
 }
 
 func TestTableACLValidateConfig(t *testing.T) {
-	if err := validate(nil); err != nil {
-		t.Fatalf("validate(<entries>) = %v, want: nil", err)
+	tests := []struct {
+		names []string
+		valid bool
+	}{
+		{nil, true},
+		{[]string{}, true},
+		{[]string{"b"}, true},
+		{[]string{"b", "a"}, true},
+		{[]string{"b%c"}, false},                    // invalid entry
+		{[]string{"aaa", "aaab%", "aaabb"}, false},  // overlapping
+		{[]string{"aaa", "aaab", "aaab%"}, false},   // overlapping
+		{[]string{"a", "aa%", "aaab%"}, false},      // overlapping
+		{[]string{"a", "aa%", "aaab"}, false},       // overlapping
+		{[]string{"a", "aa", "aaa%%"}, false},       // invalid entry
+		{[]string{"a", "aa", "aa", "aaaaa"}, false}, // duplicate
 	}
-	if err := validate([]aclEntry{}); err != nil {
-		t.Fatalf("validate(<entries>) = %v, want: nil", err)
-	}
-	if err := validate([]aclEntry{{tableNameOrPrefix: "b"}}); err != nil {
-		t.Fatalf("validate(<entries>) = %v, want: nil", err)
-	}
-	if err := validate([]aclEntry{{tableNameOrPrefix: "b%c"}}); err == nil {
-		t.Fatal("validate(<entries>) = nil, want: error")
-	}
-
-	entries := []aclEntry{
-		{tableNameOrPrefix: "b"},
-		{tableNameOrPrefix: "a"},
-	}
-	// error because entries are not sorted by tableNameOrPrefix
-	if err := validate(entries); err == nil {
-		t.Fatal("validate(<entries>) = nil, want: error")
-	}
-
-	entries = []aclEntry{
-		{tableNameOrPrefix: "aaa"},
-		{tableNameOrPrefix: "aaab"},
-		{tableNameOrPrefix: "aaab%"},
-		{tableNameOrPrefix: "aaabb"},
-	}
-	// error because two entries overlaps
-	if err := validate(entries); err == nil {
-		t.Fatal("validate(<entries>) = nil, want: error")
-	}
-	entries = []aclEntry{
-		{tableNameOrPrefix: "a"},
-		{tableNameOrPrefix: "aa%"},
-		{tableNameOrPrefix: "aaab%"},
-	}
-	// error because two entries overlaps
-	if err := validate(entries); err == nil {
-		t.Fatal("validate(<entries>) = nil, want: error")
-	}
-	entries = []aclEntry{
-		{tableNameOrPrefix: "a"},
-		{tableNameOrPrefix: "aa%"},
-		{tableNameOrPrefix: "aaab"},
-		{tableNameOrPrefix: "aaabb"},
-	}
-	// error because two entries overlaps
-	if err := validate(entries); err == nil {
-		t.Fatal("validate(<entries>) = nil, want: error")
-	}
-	entries = []aclEntry{
-		{tableNameOrPrefix: "a"},
-		{tableNameOrPrefix: "aa"},
-		{tableNameOrPrefix: "aaa%%"},
-		{tableNameOrPrefix: "aaaaa"},
-	}
-	// error because there is an invalid entry.
-	if err := validate(entries); err == nil {
-		t.Fatal("validate(<entries>) = nil, want: error")
-	}
-	entries = []aclEntry{
-		{tableNameOrPrefix: "a"},
-		{tableNameOrPrefix: "aa"},
-		{tableNameOrPrefix: "aa"},
-		{tableNameOrPrefix: "aaaaa"},
-	}
-	// error because there are duplicate entries.
-	if err := validate(entries); err == nil {
-		t.Fatal("validate(<entries>) = nil, want: error")
+	for _, test := range tests {
+		var groups []*tableaclpb.TableGroupSpec
+		for _, name := range test.names {
+			groups = append(groups, &tableaclpb.TableGroupSpec{
+				TableNamesOrPrefixes: []string{name},
+			})
+		}
+		config := &tableaclpb.Config{TableGroups: groups}
+		err := ValidateProto(config)
+		if test.valid && err != nil {
+			t.Fatalf("ValidateProto(%v) = %v, want nil", config, err)
+		} else if !test.valid && err == nil {
+			t.Fatalf("ValidateProto(%v) = nil, want error", config)
+		}
 	}
 }
 
