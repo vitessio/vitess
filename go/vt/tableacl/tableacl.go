@@ -5,6 +5,7 @@
 package tableacl
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -114,6 +115,9 @@ func InitFromProto(config *tableaclpb.Config) (err error) {
 
 // load loads configurations from a proto-defined Config
 func load(config *tableaclpb.Config) error {
+	if err := ValidateProto(config); err != nil {
+		return err
+	}
 	var entries aclEntries
 	for _, group := range config.TableGroups {
 		readers, err := newACL(group.Readers)
@@ -141,66 +145,41 @@ func load(config *tableaclpb.Config) error {
 		}
 	}
 	sort.Sort(entries)
-	if err := validate(entries); err != nil {
-		return err
-	}
 	currentACL.Lock()
 	currentACL.entries = entries
 	currentACL.config = *config
-	defer func() {
-		currentACL.Unlock()
-		if aclCallback != nil {
-			aclCallback()
-		}
-	}()
-
-	return nil
-}
-
-func validate(entries aclEntries) error {
-	if len(entries) == 0 {
-		return nil
-	}
-	if !sort.IsSorted(entries) {
-		return errors.New("acl entries are not sorted by table name or prefix")
-	}
-	if err := validateNameOrPrefix(entries[0].tableNameOrPrefix); err != nil {
-		return err
-	}
-	for i := 1; i < len(entries); i++ {
-		prev := entries[i-1].tableNameOrPrefix
-		cur := entries[i].tableNameOrPrefix
-		if err := validateNameOrPrefix(cur); err != nil {
-			return err
-		}
-		if prev == cur {
-			return fmt.Errorf("conflict entries, name: %s overlaps with name: %s", cur, prev)
-		} else if isPrefix(prev) && isPrefix(cur) {
-			if strings.HasPrefix(cur[:len(cur)-1], prev[:len(prev)-1]) {
-				return fmt.Errorf("conflict entries, prefix: %s overlaps with prefix: %s", cur, prev)
-			}
-		} else if isPrefix(prev) {
-			if strings.HasPrefix(cur, prev[:len(prev)-1]) {
-				return fmt.Errorf("conflict entries, name: %s overlaps with prefix: %s", cur, prev)
-			}
-		} else if isPrefix(cur) {
-			if strings.HasPrefix(prev, cur[:len(cur)-1]) {
-				return fmt.Errorf("conflict entries, prefix: %s overlaps with name: %s", cur, prev)
-			}
-		}
+	currentACL.Unlock()
+	if aclCallback != nil {
+		aclCallback()
 	}
 	return nil
 }
 
-func isPrefix(nameOrPrefix string) bool {
-	length := len(nameOrPrefix)
-	return length > 0 && nameOrPrefix[length-1] == '%'
-}
-
-func validateNameOrPrefix(nameOrPrefix string) error {
-	for i := 0; i < len(nameOrPrefix)-1; i++ {
-		if nameOrPrefix[i] == '%' {
-			return fmt.Errorf("got: %s, '%%' means this entry is a prefix and should not appear in the middle of name or prefix", nameOrPrefix)
+// ValidateProto returns an error if the given proto has problems
+// that would cause InitFromProto to fail.
+func ValidateProto(config *tableaclpb.Config) (err error) {
+	t := patricia.NewTrie()
+	for _, group := range config.TableGroups {
+		for _, name := range group.TableNamesOrPrefixes {
+			var prefix patricia.Prefix
+			if strings.HasSuffix(name, "%") {
+				prefix = []byte(strings.TrimSuffix(name, "%"))
+			} else {
+				prefix = []byte(name + "\000")
+			}
+			if bytes.Contains(prefix, []byte("%")) {
+				return fmt.Errorf("got: %s, '%%' means this entry is a prefix and should not appear in the middle of name or prefix", name)
+			}
+			overlapVisitor := func(_ patricia.Prefix, item patricia.Item) error {
+				return fmt.Errorf("conflicting entries: %q overlaps with %q", name, item)
+			}
+			if err := t.VisitSubtree(prefix, overlapVisitor); err != nil {
+				return err
+			}
+			if err := t.VisitPrefixes(prefix, overlapVisitor); err != nil {
+				return err
+			}
+			t.Insert(prefix, name)
 		}
 	}
 	return nil
