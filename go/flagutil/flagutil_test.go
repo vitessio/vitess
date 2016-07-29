@@ -29,6 +29,18 @@ func TestStringList(t *testing.T) {
 	}
 }
 
+// TestEmptyStringList verifies that an empty parameter results in an empty list
+func TestEmptyStringList(t *testing.T) {
+	var p StringListValue
+	var _ flag.Value = &p
+	if err := p.Set(""); err != nil {
+		t.Fatalf("p.Set(\"\"): %v", err)
+	}
+	if len(p) != 0 {
+		t.Fatalf("len(p) != 0: got %v", len(p))
+	}
+}
+
 type pair struct {
 	in  string
 	out map[string]string

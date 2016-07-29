@@ -156,3 +156,81 @@ func (ft *fakeTopo) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias
 	defer ft.mu.RUnlock()
 	return ft.tablets[*alias], 0, nil
 }
+
+func TestFilterByShard(t *testing.T) {
+	testcases := []struct {
+		filters  []string
+		keyspace string
+		shard    string
+		included bool
+	}{
+		// un-sharded keyspaces
+		{
+			filters:  []string{"ks1|0"},
+			keyspace: "ks1",
+			shard:    "0",
+			included: true,
+		},
+		{
+			filters:  []string{"ks1|0"},
+			keyspace: "ks2",
+			shard:    "0",
+			included: false,
+		},
+		// custom sharding, different shard
+		{
+			filters:  []string{"ks1|0"},
+			keyspace: "ks1",
+			shard:    "1",
+			included: false,
+		},
+		// keyrange based sharding
+		{
+			filters:  []string{"ks1|-80"},
+			keyspace: "ks1",
+			shard:    "0",
+			included: false,
+		},
+		{
+			filters:  []string{"ks1|-80"},
+			keyspace: "ks1",
+			shard:    "-40",
+			included: true,
+		},
+		{
+			filters:  []string{"ks1|-80"},
+			keyspace: "ks1",
+			shard:    "-80",
+			included: true,
+		},
+		{
+			filters:  []string{"ks1|-80"},
+			keyspace: "ks1",
+			shard:    "80-",
+			included: false,
+		},
+		{
+			filters:  []string{"ks1|-80"},
+			keyspace: "ks1",
+			shard:    "c0-",
+			included: false,
+		},
+	}
+
+	for _, tc := range testcases {
+		fbs, err := NewFilterByShard(nil, tc.filters)
+		if err != nil {
+			t.Errorf("cannot create FilterByShard for filters %v: %v", tc.filters, err)
+		}
+
+		tablet := &topodatapb.Tablet{
+			Keyspace: tc.keyspace,
+			Shard:    tc.shard,
+		}
+
+		got := fbs.isIncluded(tablet)
+		if got != tc.included {
+			t.Errorf("isIncluded(%v,%v) for filters %v returned %v but expected %v", tc.keyspace, tc.shard, tc.filters, got, tc.included)
+		}
+	}
+}

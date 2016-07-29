@@ -20,6 +20,15 @@ from vtdb import vtdb_logger
 from vtdb import vtgate_client
 from vtdb import vtgate_cursor
 
+# use_l2vtgate controls if we're adding a l2vtgate process in between
+# vtgate and the tablets.
+use_l2vtgate = False
+
+# l2vtgate is the L2VTGate object, if any
+l2vtgate = None
+
+# l2vtgate_param is the parameter to send to vtgate
+l2vtgate_param = None
 
 shard_0_master = tablet.Tablet()
 shard_0_replica1 = tablet.Tablet()
@@ -126,7 +135,10 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
   logging.debug('Tearing down the servers and setup')
-  utils.vtgate.kill()
+  if utils.vtgate:
+    utils.vtgate.kill()
+  if l2vtgate:
+    l2vtgate.kill()
   tablet.kill_tablets([shard_0_master,
                        shard_0_replica1, shard_0_replica2,
                        shard_1_master,
@@ -154,7 +166,9 @@ def tearDownModule():
 
 
 def setup_tablets():
-  # Start up a master mysql and vttablet
+  """Start up a master mysql and vttablet."""
+  global l2vtgate, l2vtgate_param
+
   logging.debug('Setting up tablets')
   utils.run_vtctl(['CreateKeyspace', KEYSPACE_NAME])
   utils.run_vtctl(['SetKeyspaceShardingInfo', '-force', KEYSPACE_NAME,
@@ -223,21 +237,48 @@ def setup_tablets():
       'Partitions(rdonly): -80 80-\n'
       'Partitions(replica): -80 80-\n')
 
-  utils.VtGate().start(tablets=
-                       [shard_0_master, shard_0_replica1, shard_0_replica2,
-                        shard_1_master, shard_1_replica1, shard_1_replica2])
-  utils.vtgate.wait_for_endpoints(
+  if use_l2vtgate:
+    l2vtgate = utils.L2VtGate()
+    l2vtgate.start(tablets=
+                   [shard_0_master, shard_0_replica1, shard_0_replica2,
+                    shard_1_master, shard_1_replica1, shard_1_replica2])
+    _, addr = l2vtgate.rpc_endpoint()
+    l2vtgate_param = '%s|%s|%s' % (addr, KEYSPACE_NAME, '-')
+    utils.VtGate().start(l2vtgates=[l2vtgate_param,])
+
+  else:
+    utils.VtGate().start(tablets=
+                         [shard_0_master, shard_0_replica1, shard_0_replica2,
+                          shard_1_master, shard_1_replica1, shard_1_replica2])
+
+  wait_for_endpoints(
       '%s.%s.master' % (KEYSPACE_NAME, SHARD_NAMES[0]),
       1)
-  utils.vtgate.wait_for_endpoints(
+  wait_for_endpoints(
       '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[0]),
       2)
-  utils.vtgate.wait_for_endpoints(
+  wait_for_endpoints(
       '%s.%s.master' % (KEYSPACE_NAME, SHARD_NAMES[1]),
       1)
-  utils.vtgate.wait_for_endpoints(
+  wait_for_endpoints(
       '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[1]),
       2)
+
+
+def restart_vtgate(port):
+  if use_l2vtgate:
+    utils.VtGate(port=port).start(l2vtgates=[l2vtgate_param,])
+  else:
+    utils.VtGate(port=port).start(
+        tablets=[shard_0_master, shard_0_replica1, shard_0_replica2,
+                 shard_1_master, shard_1_replica1, shard_1_replica2])
+
+
+def wait_for_endpoints(name, count):
+  if use_l2vtgate:
+    l2vtgate.wait_for_endpoints(name, count)
+  else:
+    utils.vtgate.wait_for_endpoints(name, count)
 
 
 def get_connection(timeout=10.0):
@@ -879,7 +920,7 @@ class TestFailures(BaseTestCase):
           keyranges=[self.keyrange])
     self.tablet_start(self.replica_tablet, 'replica')
     self.tablet_start(self.replica_tablet2, 'replica')
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         2)
     try:
@@ -901,11 +942,9 @@ class TestFailures(BaseTestCase):
           'select 1 from vt_insert_test', {},
           tablet_type='replica', keyspace_name=KEYSPACE_NAME,
           keyranges=[self.keyrange])
-    utils.VtGate(port=port).start(
-        tablets=[shard_0_master, shard_0_replica1, shard_0_replica2,
-                 shard_1_master, shard_1_replica1, shard_1_replica2])
+    restart_vtgate(port)
     vtgate_conn = get_connection()
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         2)
     vtgate_conn._execute(
@@ -929,7 +968,7 @@ class TestFailures(BaseTestCase):
       stream_cursor.execute('select * from vt_insert_test', {})
     self.tablet_start(self.replica_tablet, 'replica')
     self.tablet_start(self.replica_tablet2, 'replica')
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         2)
     try:
@@ -951,11 +990,9 @@ class TestFailures(BaseTestCase):
       stream_cursor.execute('select * from vt_insert_test', {})
     vtgate_conn.close()
 
-    utils.VtGate(port=port).start(
-        tablets=[shard_0_master, shard_0_replica1, shard_0_replica2,
-                 shard_1_master, shard_1_replica1, shard_1_replica2])
+    restart_vtgate(port)
     vtgate_conn = get_connection()
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         2)
     stream_cursor = vtgate_conn.cursor(
@@ -976,7 +1013,7 @@ class TestFailures(BaseTestCase):
     self.master_tablet.kill_vttablet()
     vtgate_conn.begin()
     self.tablet_start(self.master_tablet, 'replica')
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.master' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         1)
     vtgate_conn.begin()
@@ -994,11 +1031,9 @@ class TestFailures(BaseTestCase):
     utils.vtgate.kill()
     with self.assertRaises(dbexceptions.OperationalError):
       vtgate_conn.begin()
-    utils.VtGate(port=port).start(
-        tablets=[shard_0_master, shard_0_replica1, shard_0_replica2,
-                 shard_1_master, shard_1_replica1, shard_1_replica2])
+    restart_vtgate(port)
     vtgate_conn = get_connection()
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.master' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         1)
     vtgate_conn.begin()
@@ -1018,7 +1053,7 @@ class TestFailures(BaseTestCase):
           keyranges=[self.keyrange])
       vtgate_conn.commit()
     self.tablet_start(self.master_tablet, 'replica')
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.master' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         1)
     vtgate_conn.begin()
@@ -1105,11 +1140,9 @@ class TestFailures(BaseTestCase):
     # still be closed.
     vtgate_conn.close()
 
-    utils.VtGate(port=port).start(
-        tablets=[shard_0_master, shard_0_replica1, shard_0_replica2,
-                 shard_1_master, shard_1_replica1, shard_1_replica2])
+    restart_vtgate(port)
     vtgate_conn = get_connection()
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.master' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         1)
     vtgate_conn.begin()
@@ -1194,7 +1227,7 @@ class TestFailures(BaseTestCase):
       utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       t.wait_for_vttablet_state('SERVING')
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         1)
     vtgate_conn._execute(
@@ -1204,7 +1237,7 @@ class TestFailures(BaseTestCase):
     vtgate_conn.close()
 
     self.tablet_start(self.replica_tablet2, 'replica')
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         2)
 
@@ -1252,7 +1285,7 @@ class TestFailures(BaseTestCase):
     replica_tablet_proc.wait()
     self.tablet_start(self.replica_tablet, 'replica')
     self.tablet_start(self.replica_tablet2, 'replica')
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         2)
     # as the cached vtgate-tablet conn was marked down, it should succeed
@@ -1267,7 +1300,7 @@ class TestFailures(BaseTestCase):
   def test_restart_mysql_tablet_queries_multi_tablets(self):
     vtgate_conn = get_connection()
     utils.wait_procs([self.replica_tablet.shutdown_mysql(),])
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         1)
     # should retry on tablet2 and succeed
@@ -1282,7 +1315,7 @@ class TestFailures(BaseTestCase):
       utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       t.wait_for_vttablet_state('SERVING')
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         2)
     vtgate_conn._execute(
@@ -1316,7 +1349,7 @@ class TestFailures(BaseTestCase):
     self.assertEquals(t1_query_count_after-t1_query_count_before, 1)
     # start tablet2
     self.tablet_start(self.replica_tablet2, 'replica')
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         2)
     # query should succeed on either tablet
@@ -1359,7 +1392,7 @@ class TestFailures(BaseTestCase):
       utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       t.wait_for_vttablet_state('SERVING')
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         2)
     # query should succeed
@@ -1369,7 +1402,7 @@ class TestFailures(BaseTestCase):
         keyranges=[self.keyrange])
     # hard kill tablet2
     self.replica_tablet2.hard_kill_vttablet()
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         1)
     # send another query, should succeed on tablet1
@@ -1384,7 +1417,7 @@ class TestFailures(BaseTestCase):
     self.assertEquals(t1_query_count_after-t1_query_count_before, 1)
     # start tablet2
     self.tablet_start(self.replica_tablet2, 'replica')
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         2)
     # query should succeed on either tablet
@@ -1443,7 +1476,7 @@ class TestFailures(BaseTestCase):
       vtgate_conn.rollback()
     # Start master tablet again
     self.tablet_start(self.master_tablet, 'replica')
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.master' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         1)
     vtgate_conn.close()
@@ -1503,7 +1536,7 @@ class TestFailures(BaseTestCase):
       utils.run_vtctl(['RunHealthCheck', t.tablet_alias],
                       auto_log=True)
       t.wait_for_vttablet_state('SERVING')
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         2)
 
@@ -1518,7 +1551,7 @@ class TestFailures(BaseTestCase):
     utils.wait_procs([self.replica_tablet2.shutdown_mysql(),])
     utils.run_vtctl(['RunHealthCheck', self.replica_tablet2.tablet_alias],
                     auto_log=True)
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         1)
 
@@ -1527,7 +1560,7 @@ class TestFailures(BaseTestCase):
     self.tablet_start(self.replica_tablet, 'replica',
                       lameduck_period='5s',
                       grace_period='%ds'%grace_period)
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         1)
 
@@ -1584,7 +1617,7 @@ class TestFailures(BaseTestCase):
     replica_tablet_proc.wait()
     # start tablet1
     self.tablet_start(self.replica_tablet, 'replica')
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         1)
     # send another query, should succeed on tablet1
@@ -1600,7 +1633,7 @@ class TestFailures(BaseTestCase):
     utils.run_vtctl(['RunHealthCheck', self.replica_tablet2.tablet_alias],
                     auto_log=True)
     self.replica_tablet2.wait_for_vttablet_state('SERVING')
-    utils.vtgate.wait_for_endpoints(
+    wait_for_endpoints(
         '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
         2)
 

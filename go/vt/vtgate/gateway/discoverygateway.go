@@ -16,6 +16,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
@@ -31,6 +32,7 @@ import (
 
 var (
 	cellsToWatch        = flag.String("cells_to_watch", "", "comma-separated list of cells for watching tablets")
+	tabletFilters       flagutil.StringListValue
 	refreshInterval     = flag.Duration("tablet_refresh_interval", 1*time.Minute, "tablet refresh interval")
 	topoReadConcurrency = flag.Int("topo_read_concurrency", 32, "concurrent topo reads")
 )
@@ -40,6 +42,7 @@ const (
 )
 
 func init() {
+	flag.Var(&tabletFilters, "tablet_filters", "Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch")
 	RegisterCreator(gatewayImplementationDiscovery, createDiscoveryGateway)
 }
 
@@ -78,7 +81,16 @@ func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, se
 		if c == "" {
 			continue
 		}
-		ctw := discovery.NewCellTabletsWatcher(dg.topoServer, dg.hc, c, *refreshInterval, *topoReadConcurrency)
+		var tr discovery.TabletRecorder = dg.hc
+		if len(tabletFilters) > 0 {
+			fbs, err := discovery.NewFilterByShard(dg.hc, tabletFilters)
+			if err != nil {
+				log.Fatalf("Cannot parse tablet_filters parameter: %v", err)
+			}
+			tr = fbs
+		}
+
+		ctw := discovery.NewCellTabletsWatcher(dg.topoServer, tr, c, *refreshInterval, *topoReadConcurrency)
 		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
 	}
 	err := dg.waitForTablets()
