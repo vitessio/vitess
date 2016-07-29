@@ -16,6 +16,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
+	"github.com/tchap/go-patricia/patricia"
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
 
 	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
