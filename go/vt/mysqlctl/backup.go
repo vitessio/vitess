@@ -141,11 +141,6 @@ func addDirectory(fes []FileEntry, base string, baseDir string, subDir string) (
 		return nil, err
 	}
 	for _, fi := range fis {
-		// Ignore special un-replicated _vt.local_metadata table,
-		// but keep the .frm file so InnoDB doesn't get confused on restore.
-		if subDir == "_vt" && fi.Name() == "local_metadata.ibd" {
-			continue
-		}
 		fes = append(fes, FileEntry{
 			Base: base,
 			Name: path.Join(subDir, fi.Name()),
@@ -582,7 +577,16 @@ func removeExistingFiles(cnf *Mycnf) error {
 // Restore is the main entry point for backup restore.  If there is no
 // appropriate backup on the BackupStorage, Restore logs an error
 // and returns ErrNoBackup. Any other error is returned.
-func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurrency int, hookExtraEnv map[string]string, logger logutil.Logger, deleteBeforeRestore bool) (replication.Position, error) {
+func Restore(
+	ctx context.Context,
+	mysqld MysqlDaemon,
+	dir string,
+	restoreConcurrency int,
+	hookExtraEnv map[string]string,
+	localMetadata map[string]string,
+	logger logutil.Logger,
+	deleteBeforeRestore bool) (replication.Position, error) {
+
 	// find the right backup handle: most recent one, with a MANIFEST
 	logger.Infof("Restore: looking for a suitable backup to restore")
 	bs, err := backupstorage.GetBackupStorage()
@@ -616,8 +620,11 @@ func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurr
 		break
 	}
 	if toRestore < 0 {
-		logger.Errorf("No backup to restore on BackupStorage for directory %v", dir)
-		return replication.Position{}, ErrNoBackup
+		logger.Errorf("No backup to restore on BackupStorage for directory %v. Starting up empty.", dir)
+		if err = populateLocalMetadata(mysqld, localMetadata); err == nil {
+			err = ErrNoBackup
+		}
+		return replication.Position{}, err
 	}
 
 	if !deleteBeforeRestore {
@@ -627,7 +634,11 @@ func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurr
 			return replication.Position{}, err
 		}
 		if !ok {
-			return replication.Position{}, ErrExistingDB
+			logger.Infof("Auto-restore is enabled, but mysqld already contains data. Assuming vttablet was just restarted.")
+			if err = populateLocalMetadata(mysqld, localMetadata); err == nil {
+				err = ErrExistingDB
+			}
+			return replication.Position{}, err
 		}
 	}
 
@@ -669,6 +680,14 @@ func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurr
 	logger.Infof("Restore: running mysql_upgrade")
 	if err := mysqld.RunMysqlUpgrade(); err != nil {
 		return replication.Position{}, fmt.Errorf("mysql_upgrade failed: %v", err)
+	}
+
+	// Populate local_metadata before starting without --skip-networking,
+	// so it's there before we start announcing ourselves.
+	logger.Infof("Restore: populating local_metadata")
+	err = populateLocalMetadata(mysqld, localMetadata)
+	if err != nil {
+		return replication.Position{}, err
 	}
 
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
