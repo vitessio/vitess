@@ -159,5 +159,5 @@ func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias *topodata
 	if err != nil {
 		return nil, err
 	}
-	return wr.tmc.ExecuteFetchAsDba(ctx, ti.Tablet, []byte(query), maxRows, disableBinlogs, reloadSchema)
+	return wr.tmc.ExecuteFetchAsDba(ctx, ti.Tablet, false, []byte(query), maxRows, disableBinlogs, reloadSchema)
 }

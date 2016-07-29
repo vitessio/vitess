@@ -279,7 +279,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 	// If the database doesn't exist, it means the user intends for these tablets
 	// to begin serving with no data (i.e. first time initialization).
 	createDB := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", topoproto.TabletDbName(masterElectTabletInfo.Tablet))
-	if _, err := wr.tmc.ExecuteFetchAsDba(ctx, masterElectTabletInfo.Tablet, []byte(createDB), 1, false, true); err != nil {
+	if _, err := wr.tmc.ExecuteFetchAsDba(ctx, masterElectTabletInfo.Tablet, false, []byte(createDB), 1, false, true); err != nil {
 		return fmt.Errorf("failed to create database: %v", err)
 	}
 

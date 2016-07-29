@@ -602,17 +602,31 @@ func (fra *fakeRPCAgent) ExecuteFetchAsApp(ctx context.Context, query []byte, ma
 }
 
 func agentRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	qr, err := client.ExecuteFetchAsDba(ctx, tablet, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true)
+	// using pool
+	qr, err := client.ExecuteFetchAsDba(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true)
 	compareError(t, "ExecuteFetchAsDba", err, qr, testExecuteFetchResult)
-	qr, err = client.ExecuteFetchAsApp(ctx, tablet, testExecuteFetchQuery, testExecuteFetchMaxRows)
+	qr, err = client.ExecuteFetchAsApp(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows)
 	compareError(t, "ExecuteFetchAsApp", err, qr, testExecuteFetchResult)
+
+	// not using pool
+	qr, err = client.ExecuteFetchAsDba(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true)
+	compareError(t, "ExecuteFetchAsDba", err, qr, testExecuteFetchResult)
+	qr, err = client.ExecuteFetchAsApp(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows)
+	compareError(t, "ExecuteFetchAsApp", err, qr, testExecuteFetchResult)
+
 }
 
 func agentRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, err := client.ExecuteFetchAsDba(ctx, tablet, testExecuteFetchQuery, testExecuteFetchMaxRows, true, false)
+	// using pool
+	_, err := client.ExecuteFetchAsDba(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows, true, false)
+	expectRPCWrapPanic(t, err)
+	_, err = client.ExecuteFetchAsApp(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows)
 	expectRPCWrapPanic(t, err)
 
-	_, err = client.ExecuteFetchAsApp(ctx, tablet, testExecuteFetchQuery, testExecuteFetchMaxRows)
+	// not using pool
+	_, err = client.ExecuteFetchAsDba(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows, true, false)
+	expectRPCWrapPanic(t, err)
+	_, err = client.ExecuteFetchAsApp(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows)
 	expectRPCWrapPanic(t, err)
 }
 

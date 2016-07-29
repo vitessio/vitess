@@ -113,7 +113,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
 		// new variables until the label is reached.)
 		{
 			tryCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
-			_, err = e.wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, master.Tablet, []byte(command), 0)
+			_, err = e.wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, master.Tablet, true, []byte(command), 0)
 			cancel()
 
 			if err == nil {

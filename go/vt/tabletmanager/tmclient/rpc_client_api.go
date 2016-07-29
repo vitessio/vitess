@@ -76,11 +76,15 @@ type TabletManagerClient interface {
 	// ApplySchema will apply a schema change
 	ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 
-	// ExecuteFetchAsDba executes a query remotely using the DBA pool
-	ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error)
+	// ExecuteFetchAsDba executes a query remotely using the DBA pool.
+	// If usePool is set, a connection pool may be used to make the
+	// query faster. Close() should close the pool in that case.
+	ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error)
 
 	// ExecuteFetchAsApp executes a query remotely using the App pool
-	ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int) (*querypb.QueryResult, error)
+	// If usePool is set, a connection pool may be used to make the
+	// query faster. Close() should close the pool in that case.
+	ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int) (*querypb.QueryResult, error)
 
 	//
 	// Replication related methods
