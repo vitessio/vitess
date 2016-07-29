@@ -36,7 +36,7 @@ func TestHealthCheck(t *testing.T) {
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	l := newListener()
 	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, time.Hour).(*HealthCheckImpl)
-	hc.SetListener(l)
+	hc.SetListener(l, true)
 	hc.AddTablet(tablet, "")
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
@@ -88,12 +88,26 @@ func TestHealthCheck(t *testing.T) {
 		t.Errorf(`hc.CacheStatus() = %+v; want %+v`, tcsl, tcslWant)
 	}
 
-	// TabletType changed
+	// TabletType changed, should get both old and new event
 	shr = &querypb.StreamHealthResponse{
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving: true,
 		TabletExternallyReparentedTimestamp: 0,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
+	}
+	input <- shr
+	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, Serving: true, TabletExternallyReparentedTimestamp: 0, {SecondsBehindMaster: 1, CpuUsage: 0.5}}`)
+	want = &TabletStats{
+		Tablet:  tablet,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Up:      false,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		TabletExternallyReparentedTimestamp: 10,
+	}
+	res = <-l.output
+	if !reflect.DeepEqual(res, want) {
+		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
 	}
 	want = &TabletStats{
 		Tablet:  tablet,
@@ -103,8 +117,6 @@ func TestHealthCheck(t *testing.T) {
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
 		TabletExternallyReparentedTimestamp: 0,
 	}
-	input <- shr
-	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, Serving: true, TabletExternallyReparentedTimestamp: 0, {SecondsBehindMaster: 1, CpuUsage: 0.5}}`)
 	res = <-l.output
 	if !reflect.DeepEqual(res, want) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
@@ -195,7 +207,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 
 	l := newListener()
 	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, time.Hour).(*HealthCheckImpl)
-	hc.SetListener(l)
+	hc.SetListener(l, false)
 	hc.AddTablet(tablet, "")
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
@@ -264,7 +276,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	l := newListener()
 	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, timeout).(*HealthCheckImpl)
-	hc.SetListener(l)
+	hc.SetListener(l, false)
 	hc.AddTablet(tablet, "")
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
