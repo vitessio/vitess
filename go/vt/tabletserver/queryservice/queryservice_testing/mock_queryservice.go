@@ -95,6 +95,30 @@ func (_mr *_MockQueryServiceRecorder) ExecuteBatch(arg0, arg1, arg2, arg3, arg4 
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "ExecuteBatch", arg0, arg1, arg2, arg3, arg4)
 }
 
+func (_m *MockQueryService) BeginExecute(ctx context.Context, target *query.Target, sql string, bindVariables map[string]interface{}) (*sqltypes.Result, int64, error) {
+	ret := _m.ctrl.Call(_m, "BeginExecute", ctx, target, sql, bindVariables)
+	ret0, _ := ret[0].(*sqltypes.Result)
+	ret1, _ := ret[1].(int64)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+func (_mr *_MockQueryServiceRecorder) BeginExecute(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "BeginExecute", arg0, arg1, arg2, arg3)
+}
+
+func (_m *MockQueryService) BeginExecuteBatch(ctx context.Context, target *query.Target, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+	ret := _m.ctrl.Call(_m, "BeginExecuteBatch", ctx, target, queries, asTransaction)
+	ret0, _ := ret[0].([]sqltypes.Result)
+	ret1, _ := ret[1].(int64)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+func (_mr *_MockQueryServiceRecorder) BeginExecuteBatch(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "BeginExecuteBatch", arg0, arg1, arg2, arg3)
+}
+
 func (_m *MockQueryService) SplitQuery(ctx context.Context, target *query.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
 	ret := _m.ctrl.Call(_m, "SplitQuery", ctx, target, sql, bindVariables, splitColumn, splitCount)
 	ret0, _ := ret[0].([]querytypes.QuerySplit)

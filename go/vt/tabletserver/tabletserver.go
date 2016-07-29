@@ -770,6 +770,28 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	return results, nil
 }
 
+// BeginExecute combines Begin and Execute.
+func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}) (*sqltypes.Result, int64, error) {
+	transactionID, err := tsv.Begin(ctx, target)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	result, err := tsv.Execute(ctx, target, sql, bindVariables, transactionID)
+	return result, transactionID, err
+}
+
+// BeginExecuteBatch combines Begin and ExecuteBatch.
+func (tsv *TabletServer) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+	transactionID, err := tsv.Begin(ctx, target)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	results, err := tsv.ExecuteBatch(ctx, target, queries, asTransaction, transactionID)
+	return results, transactionID, err
+}
+
 // SplitQuery splits a query + bind variables into smaller queries that return a
 // subset of rows from the original query.
 // TODO(erez): Remove this method and rename SplitQueryV2 to SplitQuery once we migrate to

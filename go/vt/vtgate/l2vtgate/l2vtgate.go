@@ -109,6 +109,16 @@ func (l *L2VTGate) ExecuteBatch(ctx context.Context, target *querypb.Target, que
 	return l.gateway.ExecuteBatch(ctx, target.Keyspace, target.Shard, target.TabletType, queries, asTransaction, transactionID)
 }
 
+// BeginExecute is part of the queryservice.QueryService interface
+func (l *L2VTGate) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}) (*sqltypes.Result, int64, error) {
+	return l.gateway.BeginExecute(ctx, target.Keyspace, target.Shard, target.TabletType, sql, bindVariables)
+}
+
+// BeginExecuteBatch is part of the queryservice.QueryService interface
+func (l *L2VTGate) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+	return l.gateway.BeginExecuteBatch(ctx, target.Keyspace, target.Shard, target.TabletType, queries, asTransaction)
+}
+
 // SplitQuery is part of the queryservice.QueryService interface
 func (l *L2VTGate) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
 	return l.gateway.SplitQuery(ctx, target.Keyspace, target.Shard, target.TabletType, sql, bindVariables, splitColumn, splitCount)

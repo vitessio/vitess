@@ -49,6 +49,16 @@ func (e *ErrorQueryService) ExecuteBatch(ctx context.Context, target *querypb.Ta
 	return nil, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
+// BeginExecute is part of QueryService interface
+func (e *ErrorQueryService) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}) (*sqltypes.Result, int64, error) {
+	return nil, 0, fmt.Errorf("ErrorQueryService does not implement any method")
+}
+
+// BeginExecuteBatch is part of QueryService interface
+func (e *ErrorQueryService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+	return nil, 0, fmt.Errorf("ErrorQueryService does not implement any method")
+}
+
 // SplitQuery is part of QueryService interface
 // TODO(erez): Remove once the migration to SplitQuery V2 is done.
 func (e *ErrorQueryService) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {

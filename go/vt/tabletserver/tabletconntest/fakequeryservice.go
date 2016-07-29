@@ -384,6 +384,28 @@ var SplitQueryQueryV2SplitList = []querytypes.QuerySplit{
 	},
 }
 
+// BeginExecute combines Begin and Execute.
+func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}) (*sqltypes.Result, int64, error) {
+	transactionID, err := f.Begin(ctx, target)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	result, err := f.Execute(ctx, target, sql, bindVariables, transactionID)
+	return result, transactionID, err
+}
+
+// BeginExecuteBatch combines Begin and ExecuteBatch.
+func (f *FakeQueryService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+	transactionID, err := f.Begin(ctx, target)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	results, err := f.ExecuteBatch(ctx, target, queries, asTransaction, transactionID)
+	return results, transactionID, err
+}
+
 // SplitQuery is part of the queryservice.QueryService interface
 func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
 	if f.HasError {
