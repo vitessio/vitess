@@ -3,7 +3,6 @@ package discovery
 import (
 	"sync"
 
-	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -26,13 +25,11 @@ func NewFakeHealthCheck() *FakeHealthCheck {
 
 // FakeHealthCheck implements discovery.HealthCheck.
 type FakeHealthCheck struct {
+	listener HealthCheckStatsListener
+
 	// mu protects the items map
 	mu    sync.RWMutex
 	items map[string]*fhcItem
-
-	// GetStatsFromTargetCounter counts GetTabletStatsFromTarget() being called.
-	// (it can be accessed concurrently by 'multiGo', so using atomic)
-	GetStatsFromTargetCounter sync2.AtomicInt32
 }
 
 type fhcItem struct {
@@ -50,21 +47,35 @@ func (fhc *FakeHealthCheck) RegisterStats() {
 
 // SetListener is not implemented.
 func (fhc *FakeHealthCheck) SetListener(listener HealthCheckStatsListener, sendDownEvents bool) {
+	fhc.listener = listener
 }
 
 // AddTablet adds the tablet.
+// The Listener is called.
 func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet, name string) {
 	key := TabletToMapKey(tablet)
 	item := &fhcItem{
 		ts: &TabletStats{
 			Tablet: tablet,
-			Name:   name,
+			Target: &querypb.Target{
+				Keyspace:   tablet.Keyspace,
+				Shard:      tablet.Shard,
+				TabletType: tablet.Type,
+			},
+			Serving: true,
+			Up:      true,
+			Name:    name,
+			Stats:   &querypb.RealtimeStats{},
 		},
 	}
 
 	fhc.mu.Lock()
 	defer fhc.mu.Unlock()
 	fhc.items[key] = item
+
+	if fhc.listener != nil {
+		fhc.listener.StatsUpdate(item.ts)
+	}
 }
 
 // RemoveTablet removes the tablet.
@@ -77,8 +88,6 @@ func (fhc *FakeHealthCheck) RemoveTablet(tablet *topodatapb.Tablet) {
 
 // GetTabletStatsFromTarget returns all TabletStats for the given target.
 func (fhc *FakeHealthCheck) GetTabletStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*TabletStats {
-	fhc.GetStatsFromTargetCounter.Add(1)
-
 	fhc.mu.RLock()
 	defer fhc.mu.RUnlock()
 	var res []*TabletStats
@@ -123,12 +132,12 @@ func (fhc *FakeHealthCheck) Reset() {
 	fhc.mu.Lock()
 	defer fhc.mu.Unlock()
 
-	fhc.GetStatsFromTargetCounter.Set(0)
 	fhc.items = make(map[string]*fhcItem)
 }
 
 // AddTestTablet inserts a fake entry into FakeHealthCheck.
 // The Tablet can be talked to using the provided connection.
+// The Listener is called.
 func (fhc *FakeHealthCheck) AddTestTablet(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error) *sandboxconn.SandboxConn {
 	t := topo.NewTablet(0, cell, host)
 	t.Keyspace = keyspace
@@ -144,6 +153,7 @@ func (fhc *FakeHealthCheck) AddTestTablet(cell, host string, port int32, keyspac
 		item = &fhcItem{
 			ts: &TabletStats{
 				Tablet: t,
+				Up:     true,
 			},
 		}
 		fhc.items[key] = item
@@ -159,6 +169,10 @@ func (fhc *FakeHealthCheck) AddTestTablet(cell, host string, port int32, keyspac
 	item.ts.LastError = err
 	conn := sandboxconn.NewSandboxConn(t)
 	item.conn = conn
+
+	if fhc.listener != nil {
+		fhc.listener.StatsUpdate(item.ts)
+	}
 	return conn
 }
 

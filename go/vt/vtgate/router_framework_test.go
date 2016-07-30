@@ -161,6 +161,8 @@ func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxconn.Sandb
 	hc := discovery.NewFakeHealthCheck()
 	s := createSandbox("TestRouter")
 	s.VSchema = routerVSchema
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
 	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestRouter", "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestRouter", "40-60", topodatapb.TabletType_MASTER, true, 1, nil)
 
@@ -172,8 +174,6 @@ func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxconn.Sandb
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
 	router = NewRouter(context.Background(), serv, cell, "", scatterConn)
 	return router, sbc1, sbc2, sbclookup
 }

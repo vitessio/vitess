@@ -974,3 +974,11 @@ func (hsl *HealthyStatsListener) GetHealthyTabletStats(keyspace, shard string, t
 	return result
 
 }
+
+// Reset is for use in tests only
+func (hsl *HealthyStatsListener) Reset() {
+	hsl.mu.Lock()
+	defer hsl.mu.Unlock()
+
+	hsl.entries = make(map[string]map[string]map[topodatapb.TabletType]*healthyStatsListenerEntry)
+}
