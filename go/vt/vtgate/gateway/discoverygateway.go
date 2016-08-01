@@ -114,10 +114,10 @@ func (dg *discoveryGateway) WaitForTablets(ctx context.Context, tabletTypesToWai
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	err := discovery.WaitForAllServingTablets(ctx, dg.tsc, dg.srvTopoServer, dg.localCell, tabletTypesToWait)
-	if err == discovery.ErrWaitForTabletsTimeout {
+	if err == context.DeadlineExceeded {
 		// ignore this error, we will still start up, and may not serve
 		// all tablets.
-		log.Warningf("Timeout when waiting for tablets")
+		log.Warningf("Timeout waiting for all keyspaces / shards to have healthy tablets, may be in degraded mode")
 		err = nil
 	}
 	if err != nil {

@@ -119,14 +119,14 @@ func TestWaitForTablets(t *testing.T) {
 	hc.AddTablet(tablet, "")
 
 	// this should time out
-	if err := WaitForTablets(shortCtx, tsc, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != ErrWaitForTabletsTimeout {
+	if err := WaitForTablets(shortCtx, tsc, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != context.DeadlineExceeded {
 		t.Errorf("got wrong error: %v", err)
 	}
 
 	// this should fail, but return a non-timeout error
 	cancelledCtx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := WaitForTablets(cancelledCtx, tsc, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err == nil || err == ErrWaitForTabletsTimeout {
+	if err := WaitForTablets(cancelledCtx, tsc, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err == nil || err == context.DeadlineExceeded {
 		t.Errorf("want: non-timeout error, got: %v", err)
 	}
 

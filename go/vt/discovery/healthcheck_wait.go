@@ -1,14 +1,10 @@
 package discovery
 
 import (
-	"errors"
-	"fmt"
 	"sync"
 	"time"
 
 	"golang.org/x/net/context"
-
-	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -17,9 +13,6 @@ import (
 )
 
 var (
-	// ErrWaitForTabletsTimeout is returned if we cannot get the tablets in time
-	ErrWaitForTabletsTimeout = errors.New("timeout waiting for tablets")
-
 	// how much to sleep between each check
 	waitAvailableTabletInterval = 100 * time.Millisecond
 )
@@ -32,6 +25,7 @@ type keyspaceShard struct {
 
 // WaitForTablets waits for at least one tablet in the given cell /
 // keyspace / shard before returning. The tablets do not have to be healthy.
+// It will return ctx.Err() if the context is canceled.
 func WaitForTablets(ctx context.Context, tsc *TabletStatsCache, cell, keyspace, shard string, types []topodatapb.TabletType) error {
 	keyspaceShards := map[keyspaceShard]bool{
 		keyspaceShard{
@@ -44,6 +38,7 @@ func WaitForTablets(ctx context.Context, tsc *TabletStatsCache, cell, keyspace, 
 
 // WaitForAllServingTablets waits for at least one healthy serving tablet in
 // the given cell for all keyspaces / shards before returning.
+// It will return ctx.Err() if the context is canceled.
 func WaitForAllServingTablets(ctx context.Context, tsc *TabletStatsCache, ts topo.SrvTopoServer, cell string, types []topodatapb.TabletType) error {
 	keyspaceShards, err := findAllKeyspaceShards(ctx, ts, cell)
 	if err != nil {
@@ -99,15 +94,7 @@ func findAllKeyspaceShards(ctx context.Context, ts topo.SrvTopoServer, cell stri
 
 // waitForTablets is the internal method that polls for tablets
 func waitForTablets(ctx context.Context, tsc *TabletStatsCache, keyspaceShards map[keyspaceShard]bool, types []topodatapb.TabletType, requireServing bool) error {
-RetryLoop:
 	for {
-		select {
-		case <-ctx.Done():
-			break RetryLoop
-		default:
-			// Context is still valid. Move on.
-		}
-
 		for ks := range keyspaceShards {
 			allPresent := true
 			for _, tt := range types {
@@ -138,15 +125,8 @@ RetryLoop:
 		select {
 		case <-ctx.Done():
 			timer.Stop()
+			return ctx.Err()
 		case <-timer.C:
 		}
 	}
-
-	if ctx.Err() == context.DeadlineExceeded {
-		log.Warningf("waitForTablets timeout for %v (context error: %v)", keyspaceShards, ctx.Err())
-		return ErrWaitForTabletsTimeout
-	}
-	err := fmt.Errorf("waitForTablets failed for %v (context error: %v)", keyspaceShards, ctx.Err())
-	log.Error(err)
-	return err
 }
