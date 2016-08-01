@@ -296,7 +296,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 
 	// find an appropriate tablet in the source shard
 	var err error
-	vscw.sourceAlias, err = FindWorkerTablet(ctx, vscw.wr, vscw.cleaner, nil /* healthCheck */, vscw.cell, vscw.sourceKeyspace, "0", vscw.minHealthyRdonlyTablets)
+	vscw.sourceAlias, err = FindWorkerTablet(ctx, vscw.wr, vscw.cleaner, nil /* healthCheck */, nil /* tsc */, vscw.cell, vscw.sourceKeyspace, "0", vscw.minHealthyRdonlyTablets)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/0: %v", vscw.cell, vscw.sourceKeyspace, err)
 	}
@@ -337,8 +337,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 		vscw.cell, vscw.destinationKeyspace, vscw.destinationShard, []topodatapb.TabletType{topodatapb.TabletType_MASTER}); err != nil {
 		return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v (in cell: %v): %v", vscw.destinationKeyspace, vscw.destinationShard, vscw.cell, err)
 	}
-	masters := discovery.GetCurrentMaster(
-		vscw.healthCheck.GetTabletStatsFromTarget(vscw.destinationKeyspace, vscw.destinationShard, topodatapb.TabletType_MASTER))
+	masters := vscw.tsc.GetHealthyTabletStats(vscw.destinationKeyspace, vscw.destinationShard, topodatapb.TabletType_MASTER)
 	if len(masters) == 0 {
 		return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v (in cell: %v) in HealthCheck: empty TabletStats list", vscw.destinationKeyspace, vscw.destinationShard, vscw.cell)
 	}
