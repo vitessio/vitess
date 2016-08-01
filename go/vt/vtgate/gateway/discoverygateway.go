@@ -113,7 +113,7 @@ func (dg *discoveryGateway) WaitForTablets(ctx context.Context, tabletTypesToWai
 	log.Infof("Waiting for tablets")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	err := discovery.WaitForAllServingTablets(ctx, dg.tsc, dg.srvTopoServer, dg.localCell, tabletTypesToWait)
+	err := dg.tsc.WaitForAllServingTablets(ctx, dg.srvTopoServer, dg.localCell, tabletTypesToWait)
 	if err == context.DeadlineExceeded {
 		// ignore this error, we will still start up, and may not serve
 		// all tablets.

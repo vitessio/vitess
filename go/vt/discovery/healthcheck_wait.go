@@ -26,26 +26,26 @@ type keyspaceShard struct {
 // WaitForTablets waits for at least one tablet in the given cell /
 // keyspace / shard before returning. The tablets do not have to be healthy.
 // It will return ctx.Err() if the context is canceled.
-func WaitForTablets(ctx context.Context, tsc *TabletStatsCache, cell, keyspace, shard string, types []topodatapb.TabletType) error {
+func (tsc *TabletStatsCache) WaitForTablets(ctx context.Context, cell, keyspace, shard string, types []topodatapb.TabletType) error {
 	keyspaceShards := map[keyspaceShard]bool{
 		keyspaceShard{
 			keyspace: keyspace,
 			shard:    shard,
 		}: true,
 	}
-	return waitForTablets(ctx, tsc, keyspaceShards, types, false)
+	return tsc.waitForTablets(ctx, keyspaceShards, types, false)
 }
 
 // WaitForAllServingTablets waits for at least one healthy serving tablet in
 // the given cell for all keyspaces / shards before returning.
 // It will return ctx.Err() if the context is canceled.
-func WaitForAllServingTablets(ctx context.Context, tsc *TabletStatsCache, ts topo.SrvTopoServer, cell string, types []topodatapb.TabletType) error {
+func (tsc *TabletStatsCache) WaitForAllServingTablets(ctx context.Context, ts topo.SrvTopoServer, cell string, types []topodatapb.TabletType) error {
 	keyspaceShards, err := findAllKeyspaceShards(ctx, ts, cell)
 	if err != nil {
 		return err
 	}
 
-	return waitForTablets(ctx, tsc, keyspaceShards, types, true)
+	return tsc.waitForTablets(ctx, keyspaceShards, types, true)
 }
 
 // findAllKeyspaceShards goes through all serving shards in the topology
@@ -93,7 +93,7 @@ func findAllKeyspaceShards(ctx context.Context, ts topo.SrvTopoServer, cell stri
 }
 
 // waitForTablets is the internal method that polls for tablets
-func waitForTablets(ctx context.Context, tsc *TabletStatsCache, keyspaceShards map[keyspaceShard]bool, types []topodatapb.TabletType, requireServing bool) error {
+func (tsc *TabletStatsCache) waitForTablets(ctx context.Context, keyspaceShards map[keyspaceShard]bool, types []topodatapb.TabletType, requireServing bool) error {
 	for {
 		for ks := range keyspaceShards {
 			allPresent := true
