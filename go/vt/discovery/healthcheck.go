@@ -11,12 +11,10 @@
 // added or removed from the source.
 // For a Watcher example have a look at NewShardReplicationWatcher().
 //
-// Note that the getter functions GetTabletStatsFrom* will always return
-// an unfiltered list of all known tablets.
-// Use the helper functions in utils.go to filter them e.g.
-// RemoveUnhealthyTablets() or GetCurrentMaster().
-// replicationlag.go contains a more advanced health filter which is used by
-// vtgate.
+// Each HealthCheck has a HealthCheckStatsListener that will receive
+// notification of when tablets go up and down.
+// TabletStatsCache is one implementation, that caches the known tablets
+// and the healthy ones per keyspace/shard/tabletType.
 //
 // Internally, the HealthCheck module is connected to each tablet and has a
 // streaming RPC (StreamHealth) open to receive periodic health infos.
@@ -89,19 +87,43 @@ func init() {
 
 // HealthCheckStatsListener is the listener to receive health check stats update.
 type HealthCheckStatsListener interface {
+	// StatsUpdate is called when:
+	// - a new tablet is known to the HealthCheck, and its first
+	//   streaming healthcheck is returned. (then ts.Up is true).
+	// - a tablet is removed from the list of tablets we watch
+	//   (then ts.Up is false).
+	// - a tablet dynamically changes type. When registering the listener,
+	//   if sendDownEvents is true, two events are generated (ts.Up false
+	//   on the old type, ts.Up true on the new type). If it is false,
+	// only one event is sent (ts.Up true on the new type).
 	StatsUpdate(*TabletStats)
 }
 
 // TabletStats is returned when getting the set of tablets.
 type TabletStats struct {
-	Tablet                              *topodatapb.Tablet
-	Name                                string // name is an optional tag (e.g. alternative address)
-	Target                              *querypb.Target
-	Up                                  bool // whether the tablet is added
-	Serving                             bool // whether the server is serving
+	// Tablet is the tablet object that was sent to HealthCheck.AddTablet.
+	Tablet *topodatapb.Tablet
+	// Name is an optional tag (e.g. alternative address) for the
+	// tablet.  It is supposed to represent the tablet as a job,
+	// not as a process.  For instance, it can be a
+	// cell+keyspace+replica+task value.
+	Name string
+	// Target is the current target as returned by the streaming
+	// healthcheck.
+	Target *querypb.Target
+	// Up describes whether the tablet is added or removed.
+	Up bool //
+	// Serving describes if the tablet can be serving traffic.
+	Serving bool
+	// TabletExternallyReparentedTimestamp is the last timestamp
+	// that this tablet was the master. It is set to 0 if the
+	// tablet doesn't think it's a master.
 	TabletExternallyReparentedTimestamp int64
-	Stats                               *querypb.RealtimeStats
-	LastError                           error
+	// Stats is the current stats.
+	Stats *querypb.RealtimeStats
+	// LastError is the error we last saw when trying to get the
+	// tablet's healthcheck.
+	LastError error
 }
 
 // String is defined because we want to print a []*TabletStats array nicely.
@@ -115,9 +137,9 @@ func (e *TabletStats) String() string {
 // AddTablet / RemoveTablet methods (other discovery module objects
 // can for instance watch the topology and call these).
 //
-// There are two ways to use this object:
-// 1. register a Listener and get up / down / update notifications for tablets.
-// 2. call GetTabletStatsFromTarget / GetConnection to use the tablets directly.
+// By registering a Listener, the tablets can actually be used. The
+// data sent to the listener is enough to pick a target, then
+// GetConnection can be used to talk to it.
 type HealthCheck interface {
 	// RegisterStats registers the connection counts stats.
 	// It can only be called on one Healthcheck object per process.
@@ -132,10 +154,10 @@ type HealthCheck interface {
 	// Note that the default implementation requires to set the
 	// listener before any tablets are added to the healthcheck.
 	SetListener(listener HealthCheckStatsListener, sendDownEvents bool)
-	// AddTablet adds the tablet, and starts health check.
-	// Name is an alternate name, like an address.
+	// AddTablet adds the tablet, and starts health check on it.
+	// Name is an alternate name, like a job name/instance.
 	AddTablet(tablet *topodatapb.Tablet, name string)
-	// RemoveTablet removes the tablet, and stops the health check.
+	// RemoveTablet removes the tablet, and stops the health check on it.
 	RemoveTablet(tablet *topodatapb.Tablet)
 	// GetConnection returns the TabletConn of the given tablet.
 	GetConnection(tablet *topodatapb.Tablet) tabletconn.TabletConn
