@@ -69,6 +69,10 @@ type BinlogPlayerController struct {
 	// construction, immutable).
 	healthCheck discovery.HealthCheck
 
+	// tsc stores the values healthcheck is returning, as its listener.
+	// (set at construction, immutable).
+	tsc *discovery.TabletStatsCache
+
 	// shardReplicationWatcher watches the addresses of the sources, and
 	// feeds the HealthCheck (set at construction, immutable).
 	shardReplicationWatcher *discovery.TopologyWatcher
@@ -112,7 +116,8 @@ func newBinlogPlayerController(ts topo.Server, vtClientFactory func() binlogplay
 		// Note: healthCheck and shardReplicationWatcher remain active independent
 		// of whether the BinlogPlayerController is Start()'d or Stop()'d.
 		// Use Close() after Stop() to finally close them and free their resources.
-		healthCheck:             healthCheck,
+		healthCheck: healthCheck,
+		tsc:         discovery.NewTabletStatsCache(healthCheck, cell),
 		shardReplicationWatcher: discovery.NewShardReplicationWatcher(ts, healthCheck, cell, sourceShard.Keyspace, sourceShard.Shard, *healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency),
 	}
 }
@@ -299,8 +304,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	}
 
 	// Find the server list from the health check
-	addrs := discovery.RemoveUnhealthyTablets(
-		bpc.healthCheck.GetTabletStatsFromTarget(bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topodatapb.TabletType_REPLICA))
+	addrs := bpc.tsc.GetHealthyTabletStats(bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topodatapb.TabletType_REPLICA)
 	if len(addrs) == 0 {
 		return fmt.Errorf("can't find any healthy source tablet for %v %v %v", bpc.cell, bpc.sourceShard.String(), topodatapb.TabletType_REPLICA)
 	}
