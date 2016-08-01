@@ -71,6 +71,7 @@ type SplitCloneWorker struct {
 	// healthCheck tracks the health of all MASTER and REPLICA tablets.
 	// It must be closed at the end of the command.
 	healthCheck discovery.HealthCheck
+	tsc         *discovery.TabletStatsCache
 	// shardWatchers contains a TopologyWatcher for each source and destination
 	// shard. It updates the list of tablets in the healthcheck if replicas are
 	// added/removed.
@@ -461,6 +462,7 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 
 	// Initialize healthcheck and add destination shards to it.
 	scw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
+	scw.tsc = discovery.NewTabletStatsCache(scw.healthCheck, scw.cell)
 	allShards := append(scw.sourceShards, scw.destinationShards...)
 	for _, si := range allShards {
 		watcher := discovery.NewShardReplicationWatcher(scw.wr.TopoServer(), scw.healthCheck,
@@ -682,7 +684,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					defer destinationWaitGroup.Done()
 					defer throttler.ThreadFinished(threadID)
 
-					executor := newExecutor(scw.wr, scw.healthCheck, throttler, keyspace, shard, threadID)
+					executor := newExecutor(scw.wr, scw.tsc, throttler, keyspace, shard, threadID)
 					if err := executor.fetchLoop(ctx, insertChannel); err != nil {
 						processError("executer.FetchLoop failed: %v", err)
 					}
@@ -891,7 +893,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					defer destinationWaitGroup.Done()
 					scw.wr.Logger().Infof("Making and populating blp_checkpoint table")
 					keyspaceAndShard := topoproto.KeyspaceShardString(keyspace, shard)
-					if err := runSQLCommands(ctx, scw.wr, scw.healthCheck, keyspace, shard, scw.destinationDbNames[keyspaceAndShard], queries); err != nil {
+					if err := runSQLCommands(ctx, scw.wr, scw.tsc, keyspace, shard, scw.destinationDbNames[keyspaceAndShard], queries); err != nil {
 						processError("blp_checkpoint queries failed: %v", err)
 					}
 				}(si.Keyspace(), si.ShardName())

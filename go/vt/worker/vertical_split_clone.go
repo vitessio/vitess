@@ -59,6 +59,7 @@ type VerticalSplitCloneWorker struct {
 	// healthCheck tracks the health of all MASTER and REPLICA tablets.
 	// It must be closed at the end of the command.
 	healthCheck discovery.HealthCheck
+	tsc         *discovery.TabletStatsCache
 	// destinationShardWatchers contains a TopologyWatcher for each destination
 	// shard. It updates the list of tablets in the healthcheck if replicas are
 	// added/removed.
@@ -322,6 +323,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 
 	// Initialize healthcheck and add destination shards to it.
 	vscw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
+	vscw.tsc = discovery.NewTabletStatsCache(vscw.healthCheck, vscw.cell)
 	watcher := discovery.NewShardReplicationWatcher(vscw.wr.TopoServer(), vscw.healthCheck,
 		vscw.cell, vscw.destinationKeyspace, vscw.destinationShard,
 		*healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
@@ -430,7 +432,7 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 			defer destinationWaitGroup.Done()
 			defer destinationThrottler.ThreadFinished(threadID)
 
-			executor := newExecutor(vscw.wr, vscw.healthCheck, destinationThrottler, vscw.destinationKeyspace, vscw.destinationShard, threadID)
+			executor := newExecutor(vscw.wr, vscw.tsc, destinationThrottler, vscw.destinationKeyspace, vscw.destinationShard, threadID)
 			if err := executor.fetchLoop(ctx, insertChannel); err != nil {
 				processError("executer.FetchLoop failed: %v", err)
 			}
@@ -508,7 +510,7 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 		}
 		queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, vscw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), flags))
 		vscw.wr.Logger().Infof("Making and populating blp_checkpoint table")
-		if err := runSQLCommands(ctx, vscw.wr, vscw.healthCheck, vscw.destinationKeyspace, vscw.destinationShard, dbName, queries); err != nil {
+		if err := runSQLCommands(ctx, vscw.wr, vscw.tsc, vscw.destinationKeyspace, vscw.destinationShard, dbName, queries); err != nil {
 			processError("blp_checkpoint queries failed: %v", err)
 		}
 		if firstError != nil {

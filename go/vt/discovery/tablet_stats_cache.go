@@ -131,7 +131,7 @@ func (tsc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 				oldKey := TabletToMapKey(e.healthy[0].Tablet)
 				if key == oldKey {
 					// same guy, remove it
-					e.healthy[0] = nil
+					e.healthy = nil
 				}
 			}
 		}
