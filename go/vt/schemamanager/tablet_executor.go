@@ -279,7 +279,7 @@ func (exec *TabletExecutor) executeOneTablet(
 	sql string,
 	errChan chan ShardWithError,
 	successChan chan ShardResult) {
-	result, err := exec.wr.TabletManagerClient().ExecuteFetchAsDba(ctx, tablet, []byte(sql), 10, false, true)
+	result, err := exec.wr.TabletManagerClient().ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 10, false, true)
 	if err != nil {
 		errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}
 		return

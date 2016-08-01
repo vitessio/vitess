@@ -51,7 +51,7 @@ type tmc struct {
 // Client implements tmclient.TabletManagerClient
 type Client struct {
 	// This cache of connections is to maximize QPS for ExecuteFetch.
-	// Note we'll keep the clients open and never close them.
+	// Note we'll keep the clients open and close them upon Close() only.
 	// But that's OK because usually the tasks that use them are
 	// one-purpose only.
 	// The map is protected by the mutex.
@@ -333,11 +333,23 @@ func (client *Client) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet
 }
 
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
-	c, err := client.dialPool(tablet)
-	if err != nil {
-		return nil, err
+func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
+	var c tabletmanagerservicepb.TabletManagerClient
+	var err error
+	if usePool {
+		c, err = client.dialPool(tablet)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		var cc *grpc.ClientConn
+		cc, c, err = client.dial(tablet)
+		if err != nil {
+			return nil, err
+		}
+		defer cc.Close()
 	}
+
 	response, err := c.ExecuteFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 		Query:          query,
 		DbName:         topoproto.TabletDbName(tablet),
@@ -352,11 +364,23 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.
 }
 
 // ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int) (*querypb.QueryResult, error) {
-	c, err := client.dialPool(tablet)
-	if err != nil {
-		return nil, err
+func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int) (*querypb.QueryResult, error) {
+	var c tabletmanagerservicepb.TabletManagerClient
+	var err error
+	if usePool {
+		c, err = client.dialPool(tablet)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		var cc *grpc.ClientConn
+		cc, c, err = client.dial(tablet)
+		if err != nil {
+			return nil, err
+		}
+		defer cc.Close()
 	}
+
 	response, err := c.ExecuteFetchAsApp(ctx, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
 		Query:   query,
 		MaxRows: uint64(maxRows),

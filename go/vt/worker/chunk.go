@@ -51,7 +51,7 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 	// Get the MIN and MAX of the leading column of the primary key.
 	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", td.PrimaryKeyColumns[0], td.PrimaryKeyColumns[0], topoproto.TabletDbName(tablet), td.Name)
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(shortCtx, tablet, []byte(query), 1)
+	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(shortCtx, tablet, true, []byte(query), 1)
 	cancel()
 	if err != nil {
 		return nil, fmt.Errorf("Cannot determine MIN and MAX of the first primary key column. ExecuteFetchAsApp: %v", err)
