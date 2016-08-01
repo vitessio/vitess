@@ -48,7 +48,7 @@ func init() {
 
 type discoveryGateway struct {
 	hc                discovery.HealthCheck
-	hsl               *discovery.HealthyStatsListener
+	tsc               *discovery.TabletStatsCache
 	topoServer        topo.Server
 	srvTopoServer     topo.SrvTopoServer
 	localCell         string
@@ -69,7 +69,7 @@ type discoveryGateway struct {
 func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) Gateway {
 	dg := &discoveryGateway{
 		hc:                hc,
-		hsl:               discovery.NewHealthyStatsListener(hc, cell),
+		tsc:               discovery.NewTabletStatsCache(hc, cell),
 		topoServer:        topoServer,
 		srvTopoServer:     serv,
 		localCell:         cell,
@@ -300,7 +300,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 	invalidTablets := make(map[string]bool)
 
 	for i := 0; i < dg.retryCount+1; i++ {
-		tablets := dg.hsl.GetHealthyTabletStats(keyspace, shard, tabletType)
+		tablets := dg.tsc.GetHealthyTabletStats(keyspace, shard, tabletType)
 		if len(tablets) == 0 {
 			// fail fast if there is no tablet
 			err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no valid tablet"))

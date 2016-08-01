@@ -89,20 +89,20 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 
 	// replica should only use local ones
 	hc.Reset()
-	dg.hsl.Reset()
+	dg.tsc.Reset()
 	hc.AddTestTablet("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil)
 	ep1 := hc.AddTestTablet("local", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil).Tablet()
-	tsl := dg.hsl.GetHealthyTabletStats(keyspace, shard, topodatapb.TabletType_REPLICA)
+	tsl := dg.tsc.GetHealthyTabletStats(keyspace, shard, topodatapb.TabletType_REPLICA)
 	if len(tsl) != 1 || !topo.TabletEquality(tsl[0].Tablet, ep1) {
 		t.Errorf("want %+v, got %+v", ep1, tsl)
 	}
 
 	// master should use the one with newer timestamp regardless of cell
 	hc.Reset()
-	dg.hsl.Reset()
+	dg.tsc.Reset()
 	hc.AddTestTablet("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 5, nil)
 	ep1 = hc.AddTestTablet("remote", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 10, nil).Tablet()
-	tsl = dg.hsl.GetHealthyTabletStats(keyspace, shard, topodatapb.TabletType_MASTER)
+	tsl = dg.tsc.GetHealthyTabletStats(keyspace, shard, topodatapb.TabletType_MASTER)
 	if len(tsl) != 1 || !topo.TabletEquality(tsl[0].Tablet, ep1) {
 		t.Errorf("want %+v, got %+v", ep1, tsl)
 	}
@@ -117,14 +117,14 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 
 	// no tablet
 	hc.Reset()
-	dg.hsl.Reset()
+	dg.tsc.Reset()
 	want := "shard, host: ks.0.replica, no valid tablet"
 	err := f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 
 	// tablet with error
 	hc.Reset()
-	dg.hsl.Reset()
+	dg.tsc.Reset()
 	hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, fmt.Errorf("no connection"))
 	want = "shard, host: ks.0.replica, no valid tablet"
 	err = f(dg, keyspace, shard, tabletType)
@@ -132,7 +132,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 
 	// tablet without connection
 	hc.Reset()
-	dg.hsl.Reset()
+	dg.tsc.Reset()
 	ep1 := hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, nil).Tablet()
 	want = fmt.Sprintf(`shard, host: ks.0.replica, no valid tablet`)
 	err = f(dg, keyspace, shard, tabletType)
@@ -140,7 +140,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 
 	// retry error
 	hc.Reset()
-	dg.hsl.Reset()
+	dg.tsc.Reset()
 	sc1 := hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc2 := hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailRetry = 1
@@ -158,7 +158,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 
 	// fatal error
 	hc.Reset()
-	dg.hsl.Reset()
+	dg.tsc.Reset()
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc2 = hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailFatal = 1
@@ -176,7 +176,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 
 	// server error - no retry
 	hc.Reset()
-	dg.hsl.Reset()
+	dg.tsc.Reset()
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailServer = 1
 	ep1 = sc1.Tablet()
@@ -186,7 +186,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 
 	// conn error - no retry
 	hc.Reset()
-	dg.hsl.Reset()
+	dg.tsc.Reset()
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailConn = 1
 	ep1 = sc1.Tablet()
@@ -196,7 +196,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 
 	// no failure
 	hc.Reset()
-	dg.hsl.Reset()
+	dg.tsc.Reset()
 	hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	err = f(dg, keyspace, shard, tabletType)
 	if err != nil {
@@ -213,7 +213,7 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 
 	// retry error - no retry
 	hc.Reset()
-	dg.hsl.Reset()
+	dg.tsc.Reset()
 	sc1 := hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc2 := hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailRetry = 1
@@ -231,7 +231,7 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 
 	// conn error - no retry
 	hc.Reset()
-	dg.hsl.Reset()
+	dg.tsc.Reset()
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailConn = 1
 	ep1 = sc1.Tablet()
