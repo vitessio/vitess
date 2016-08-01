@@ -459,11 +459,17 @@ func (wr *Wrangler) WaitForDrain(ctx context.Context, cells []string, keyspace, 
 
 func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shard string, servedType topodatapb.TabletType,
 	retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout time.Duration) error {
+
+	// Create the healthheck module, with a cache.
 	hc := discovery.NewHealthCheck(healthCheckTimeout /* connectTimeout */, healthcheckRetryDelay, healthCheckTimeout)
 	defer hc.Close()
+	tsc := discovery.NewTabletStatsCache(hc, cell)
+
+	// Create a tablet watcher.
 	watcher := discovery.NewShardReplicationWatcher(wr.TopoServer(), hc, cell, keyspace, shard, healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 	defer watcher.Stop()
 
+	// Wait for at least one tablet.
 	if err := discovery.WaitForTablets(ctx, hc, cell, keyspace, shard, []topodatapb.TabletType{servedType}); err != nil {
 		return fmt.Errorf("%v: error waiting for initial %v tablets for %v/%v: %v", cell, servedType, keyspace, shard, err)
 	}
@@ -483,13 +489,12 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 		drainedHealthyTablets := make(map[uint32]*discovery.TabletStats)
 		notDrainedHealtyTablets := make(map[uint32]*discovery.TabletStats)
 
-		healthyTablets := discovery.RemoveUnhealthyTablets(
-			hc.GetTabletStatsFromTarget(keyspace, shard, servedType))
+		healthyTablets := tsc.GetHealthyTabletStats(keyspace, shard, servedType)
 		for _, ts := range healthyTablets {
 			if ts.Stats.Qps == 0.0 {
-				drainedHealthyTablets[ts.Tablet.Alias.Uid] = ts
+				drainedHealthyTablets[ts.Tablet.Alias.Uid] = &ts
 			} else {
-				notDrainedHealtyTablets[ts.Tablet.Alias.Uid] = ts
+				notDrainedHealtyTablets[ts.Tablet.Alias.Uid] = &ts
 			}
 		}
 
