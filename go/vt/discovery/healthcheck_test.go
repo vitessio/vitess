@@ -40,12 +40,6 @@ func TestHealthCheck(t *testing.T) {
 	hc.AddTablet(tablet, "")
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
-	// no tablet before getting first StreamHealthResponse
-	tsList := hc.GetTabletStatsFromTarget("k", "s", topodatapb.TabletType_MASTER)
-	if len(tsList) != 0 {
-		t.Errorf(`hc.GetTabletStatsFromTarget("k", "s", MASTER) = %+v; want empty`, tsList)
-	}
-
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
@@ -66,10 +60,6 @@ func TestHealthCheck(t *testing.T) {
 	res := <-l.output
 	if !reflect.DeepEqual(res, want) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
-	}
-	tsList = hc.GetTabletStatsFromTarget("k", "s", topodatapb.TabletType_MASTER)
-	if len(tsList) != 1 || !reflect.DeepEqual(tsList[0], want) {
-		t.Errorf(`hc.GetTabletStatsFromTarget("k", "s", MASTER) = %+v; want %+v`, tsList, want)
 	}
 	tcsl := hc.CacheStatus()
 	tcslWant := TabletsCacheStatusList{{
@@ -120,10 +110,6 @@ func TestHealthCheck(t *testing.T) {
 	res = <-l.output
 	if !reflect.DeepEqual(res, want) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
-	}
-	tsList = hc.GetTabletStatsFromTarget("k", "s", topodatapb.TabletType_REPLICA)
-	if len(tsList) != 1 || !reflect.DeepEqual(tsList[0], want) {
-		t.Errorf(`hc.GetTabletStatsFromTarget("k", "s", REPLICA) = %+v; want %+v`, tsList, want)
 	}
 
 	// Serving & RealtimeStats changed
@@ -187,10 +173,7 @@ func TestHealthCheck(t *testing.T) {
 	if !reflect.DeepEqual(res, want) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
 	}
-	tsList = hc.GetTabletStatsFromTarget("k", "s", topodatapb.TabletType_REPLICA)
-	if len(tsList) != 0 {
-		t.Errorf(`hc.GetTabletStatsFromTarget("k", "s", REPLICA) = %+v; want empty`, tsList)
-	}
+
 	// close healthcheck
 	hc.Close()
 }
@@ -301,10 +284,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 	if !reflect.DeepEqual(res, want) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
 	}
-	tsList := hc.GetTabletStatsFromTarget("k", "s", topodatapb.TabletType_MASTER)
-	if len(tsList) != 1 || !reflect.DeepEqual(tsList[0], want) {
-		t.Errorf(`hc.GetTabletStatsFromTarget("k", "s", MASTER) = %+v; want %+v`, tsList, want)
-	}
+
 	// wait for timeout period
 	time.Sleep(2 * timeout)
 	t.Logf(`Sleep(2 * timeout)`)
@@ -312,10 +292,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 	if res.Serving {
 		t.Errorf(`<-l.output: %+v; want not serving`, res)
 	}
-	tsList = hc.GetTabletStatsFromTarget("k", "s", topodatapb.TabletType_MASTER)
-	if len(tsList) != 1 || tsList[0].Serving {
-		t.Errorf(`hc.GetTabletStatsFromTarget("k", "s") = %+v; want not serving`, tsList)
-	}
+
 	// send a healthcheck response, it should be serving again
 	input <- shr
 	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, Serving: true, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
@@ -323,10 +300,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 	if !reflect.DeepEqual(res, want) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
 	}
-	tsList = hc.GetTabletStatsFromTarget("k", "s", topodatapb.TabletType_MASTER)
-	if len(tsList) != 1 || !reflect.DeepEqual(tsList[0], want) {
-		t.Errorf(`hc.GetTabletStatsFromTarget("k", "s", MASTER) = %+v; want %+v`, tsList, want)
-	}
+
 	// close healthcheck
 	hc.Close()
 }

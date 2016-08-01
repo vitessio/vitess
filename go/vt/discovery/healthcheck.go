@@ -36,7 +36,6 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 )
@@ -138,9 +137,6 @@ type HealthCheck interface {
 	AddTablet(tablet *topodatapb.Tablet, name string)
 	// RemoveTablet removes the tablet, and stops the health check.
 	RemoveTablet(tablet *topodatapb.Tablet)
-	// GetTabletStatsFromTarget returns all TabletStats for the given target.
-	// You can exclude unhealthy entries using the helper in utils.go.
-	GetTabletStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*TabletStats
 	// GetConnection returns the TabletConn of the given tablet.
 	GetConnection(tablet *topodatapb.Tablet) tabletconn.TabletConn
 	// CacheStatus returns a displayable version of the cache.
@@ -186,17 +182,12 @@ type HealthCheckImpl struct {
 
 	// addrToConns maps from address to the healthCheckConn object.
 	addrToConns map[string]*healthCheckConn
-
-	// targetToTablets maps from keyspace/shard/tabletType to a
-	// list of tablets.
-	targetToTablets map[string]map[string]map[topodatapb.TabletType][]*topodatapb.Tablet
 }
 
 // NewHealthCheck creates a new HealthCheck object.
 func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration, healthCheckTimeout time.Duration) HealthCheck {
 	hc := &HealthCheckImpl{
 		addrToConns:        make(map[string]*healthCheckConn),
-		targetToTablets:    make(map[string]map[string]map[topodatapb.TabletType][]*topodatapb.Tablet),
 		connTimeout:        connTimeout,
 		retryDelay:         retryDelay,
 		healthCheckTimeout: healthCheckTimeout,
@@ -374,14 +365,9 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, stream tabletco
 		serving = false
 	}
 
-	var ts TabletStats
-	if hcc.tabletStats.Target.TabletType == topodatapb.TabletType_UNKNOWN {
-		// The first time we see response for the tablet.
-		ts = hcc.update(shr, serving, healthErr)
-		hc.mu.Lock()
-		hc.addTabletToTargetProtected(hcc.tabletStats.Target, hcc.tabletStats.Tablet)
-		hc.mu.Unlock()
-	} else if hcc.tabletStats.Target.TabletType != shr.Target.TabletType {
+	// In the case where a tablet changes type (but not for the
+	// initial message), we want to log it, and maybe advertise it too.
+	if hcc.tabletStats.Target.TabletType != topodatapb.TabletType_UNKNOWN && hcc.tabletStats.Target.TabletType != shr.Target.TabletType {
 		// The Tablet type changed for the tablet. Get old value.
 		hcc.mu.RLock()
 		oldTs := hcc.tabletStats
@@ -393,16 +379,11 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, stream tabletco
 			oldTs.Up = false
 			hc.listener.StatsUpdate(&oldTs)
 		}
-
-		hc.mu.Lock()
-		hc.deleteTabletFromTargetProtected(hcc.tabletStats.Target, hcc.tabletStats.Tablet)
-		ts = hcc.update(shr, serving, healthErr)
-		hc.addTabletToTargetProtected(shr.Target, hcc.tabletStats.Tablet)
-		hc.mu.Unlock()
-	} else {
-		ts = hcc.update(shr, serving, healthErr)
 	}
-	// notify downstream for tabletType and realtimeStats change
+
+	// Update our record, and notify downstream for tabletType and
+	// realtimeStats change.
+	ts := hcc.update(shr, serving, healthErr)
 	if hc.listener != nil {
 		hc.listener.StatsUpdate(&ts)
 	}
@@ -483,7 +464,6 @@ func (hc *HealthCheckImpl) deleteConn(tablet *topodatapb.Tablet) {
 	hcc.mu.Unlock()
 	hcc.cancelFunc()
 	delete(hc.addrToConns, key)
-	hc.deleteTabletFromTargetProtected(hcc.tabletStats.Target, tablet)
 }
 
 // SetListener sets the listener for healthcheck updates.
@@ -539,38 +519,6 @@ func (hc *HealthCheckImpl) RemoveTablet(tablet *topodatapb.Tablet) {
 	go hc.deleteConn(tablet)
 }
 
-// GetTabletStatsFromTarget returns all TabletStats for the given target.
-func (hc *HealthCheckImpl) GetTabletStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*TabletStats {
-	hc.mu.RLock()
-	defer hc.mu.RUnlock()
-
-	shardMap, ok := hc.targetToTablets[keyspace]
-	if !ok {
-		return nil
-	}
-	ttMap, ok := shardMap[shard]
-	if !ok {
-		return nil
-	}
-	tList, ok := ttMap[tabletType]
-	if !ok {
-		return nil
-	}
-	res := make([]*TabletStats, 0, 1)
-	for _, t := range tList {
-		key := TabletToMapKey(t)
-		hcc, ok := hc.addrToConns[key]
-		if !ok {
-			continue
-		}
-		hcc.mu.RLock()
-		ts := hcc.tabletStats
-		hcc.mu.RUnlock()
-		res = append(res, &ts)
-	}
-	return res
-}
-
 // GetConnection returns the TabletConn of the given tablet.
 func (hc *HealthCheckImpl) GetConnection(tablet *topodatapb.Tablet) tabletconn.TabletConn {
 	hc.mu.RLock()
@@ -582,56 +530,6 @@ func (hc *HealthCheckImpl) GetConnection(tablet *topodatapb.Tablet) tabletconn.T
 	hcc.mu.RLock()
 	defer hcc.mu.RUnlock()
 	return hcc.conn
-}
-
-// addTabletToTargetProtected adds the tablet to the given target.
-// LOCK_REQUIRED hc.mu
-func (hc *HealthCheckImpl) addTabletToTargetProtected(target *querypb.Target, tablet *topodatapb.Tablet) {
-	shardMap, ok := hc.targetToTablets[target.Keyspace]
-	if !ok {
-		shardMap = make(map[string]map[topodatapb.TabletType][]*topodatapb.Tablet)
-		hc.targetToTablets[target.Keyspace] = shardMap
-	}
-	ttMap, ok := shardMap[target.Shard]
-	if !ok {
-		ttMap = make(map[topodatapb.TabletType][]*topodatapb.Tablet)
-		shardMap[target.Shard] = ttMap
-	}
-	tList, ok := ttMap[target.TabletType]
-	if !ok {
-		tList = make([]*topodatapb.Tablet, 0, 1)
-	}
-	for _, t := range tList {
-		if topo.TabletEquality(t, tablet) {
-			log.Warningf("tablet is already added: %+v", tablet)
-			return
-		}
-	}
-	ttMap[target.TabletType] = append(tList, tablet)
-}
-
-// deleteTabletFromTargetProtected deletes the tablet for the given target.
-// LOCK_REQUIRED hc.mu
-func (hc *HealthCheckImpl) deleteTabletFromTargetProtected(target *querypb.Target, tablet *topodatapb.Tablet) {
-	shardMap, ok := hc.targetToTablets[target.Keyspace]
-	if !ok {
-		return
-	}
-	ttMap, ok := shardMap[target.Shard]
-	if !ok {
-		return
-	}
-	tList, ok := ttMap[target.TabletType]
-	if !ok {
-		return
-	}
-	for i, t := range tList {
-		if topo.TabletEquality(t, tablet) {
-			tList = append(tList[:i], tList[i+1:]...)
-			ttMap[target.TabletType] = tList
-			return
-		}
-	}
 }
 
 // TabletsCacheStatus is the current tablets for a cell/target.
@@ -759,13 +657,12 @@ func (hc *HealthCheckImpl) Close() error {
 		hcc.cancelFunc()
 	}
 	hc.addrToConns = make(map[string]*healthCheckConn)
-	hc.targetToTablets = make(map[string]map[string]map[topodatapb.TabletType][]*topodatapb.Tablet)
-	// Release the lock early or a pending checkHealthCheckTimeout cannot get a
-	// read lock on it.
+	// Release the lock early or a pending checkHealthCheckTimeout
+	// cannot get a read lock on it.
 	hc.mu.Unlock()
 
-	// Wait for the checkHealthCheckTimeout Go routine and each Go routine per
-	// tablet.
+	// Wait for the checkHealthCheckTimeout Go routine and each Go
+	// routine per tablet.
 	hc.wg.Wait()
 
 	return nil

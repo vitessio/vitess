@@ -86,22 +86,6 @@ func (fhc *FakeHealthCheck) RemoveTablet(tablet *topodatapb.Tablet) {
 	delete(fhc.items, key)
 }
 
-// GetTabletStatsFromTarget returns all TabletStats for the given target.
-func (fhc *FakeHealthCheck) GetTabletStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*TabletStats {
-	fhc.mu.RLock()
-	defer fhc.mu.RUnlock()
-	var res []*TabletStats
-	for _, item := range fhc.items {
-		if item.ts.Target == nil {
-			continue
-		}
-		if item.ts.Target.Keyspace == keyspace && item.ts.Target.Shard == shard && item.ts.Target.TabletType == tabletType {
-			res = append(res, item.ts)
-		}
-	}
-	return res
-}
-
 // GetConnection returns the TabletConn of the given tablet.
 func (fhc *FakeHealthCheck) GetConnection(tablet *topodatapb.Tablet) tabletconn.TabletConn {
 	fhc.mu.RLock()
