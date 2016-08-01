@@ -62,7 +62,7 @@ func waitForHealthyRdonlyTablets(ctx context.Context, wr *wrangler.Wrangler, hea
 		cell, keyspace, shard, minHealthyRdonlyTablets, deadlineForLog.Sub(time.Now()).Seconds())
 
 	// Wait for at least one RDONLY tablet initially before checking the list.
-	if err := discovery.WaitForTablets(busywaitCtx, healthCheck, cell, keyspace, shard, []topodatapb.TabletType{topodatapb.TabletType_RDONLY}); err != nil {
+	if err := discovery.WaitForTablets(busywaitCtx, tsc, cell, keyspace, shard, []topodatapb.TabletType{topodatapb.TabletType_RDONLY}); err != nil {
 		return nil, fmt.Errorf("error waiting for RDONLY tablets for (%v,%v/%v): %v", cell, keyspace, shard, err)
 	}
 

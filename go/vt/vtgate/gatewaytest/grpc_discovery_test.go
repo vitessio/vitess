@@ -66,9 +66,9 @@ func TestGRPCDiscovery(t *testing.T) {
 		},
 	}, "test_tablet")
 	ctx := context.Background()
-	err = discovery.WaitForAllServingTablets(ctx, hc, ts, cell, []topodatapb.TabletType{tabletconntest.TestTarget.TabletType})
+	err = dg.WaitForTablets(ctx, []topodatapb.TabletType{tabletconntest.TestTarget.TabletType})
 	if err != nil {
-		t.Fatalf("WaitForAllServingTablets failed: %v", err)
+		t.Fatalf("WaitForTablets failed: %v", err)
 	}
 	defer dg.Close(ctx)
 
@@ -122,7 +122,7 @@ func TestL2VTGateDiscovery(t *testing.T) {
 		},
 	}, "test_tablet")
 	ctx := context.Background()
-	err = discovery.WaitForAllServingTablets(ctx, hc, ts, cell, []topodatapb.TabletType{tabletconntest.TestTarget.TabletType})
+	err = l2vtgate.Gateway().WaitForTablets(ctx, []topodatapb.TabletType{tabletconntest.TestTarget.TabletType})
 	if err != nil {
 		t.Fatalf("WaitForAllServingTablets failed: %v", err)
 	}

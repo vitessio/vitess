@@ -7,7 +7,9 @@ import (
 	"github.com/youtube/vitess/go/vt/discovery"
 )
 
-// tabletStatsCache holds the most recent status update received for each tablet.
+// tabletStatsCache holds the most recent status update received for
+// each tablet. The tablets are indexed by uid, so it is different
+// than discovery.TabletStatsCache.
 type tabletStatsCache struct {
 	// mu guards access to the fields below.
 	mu sync.Mutex
@@ -59,3 +61,6 @@ func (t *tabletStatsCache) tabletStatuses(cell, keyspace, shard, tabletType stri
 func createTargetMapKey(cell, keyspace, shard, tabletType string) string {
 	return (cell + "-" + keyspace + "-" + shard + "-" + tabletType)
 }
+
+// compile-time interface check
+var _ discovery.HealthCheckStatsListener = (*tabletStatsCache)(nil)

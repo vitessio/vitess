@@ -31,26 +31,26 @@ type keyspaceShard struct {
 }
 
 // WaitForTablets waits for at least one tablet in the given cell /
-// keyspace / shard before returning.
-func WaitForTablets(ctx context.Context, hc HealthCheck, cell, keyspace, shard string, types []topodatapb.TabletType) error {
+// keyspace / shard before returning. The tablets do not have to be healthy.
+func WaitForTablets(ctx context.Context, tsc *TabletStatsCache, cell, keyspace, shard string, types []topodatapb.TabletType) error {
 	keyspaceShards := map[keyspaceShard]bool{
 		keyspaceShard{
 			keyspace: keyspace,
 			shard:    shard,
 		}: true,
 	}
-	return waitForTablets(ctx, hc, keyspaceShards, types, false)
+	return waitForTablets(ctx, tsc, keyspaceShards, types, false)
 }
 
-// WaitForAllServingTablets waits for at least one serving tablet in the given cell
-// for all keyspaces / shards before returning.
-func WaitForAllServingTablets(ctx context.Context, hc HealthCheck, ts topo.SrvTopoServer, cell string, types []topodatapb.TabletType) error {
+// WaitForAllServingTablets waits for at least one healthy serving tablet in
+// the given cell for all keyspaces / shards before returning.
+func WaitForAllServingTablets(ctx context.Context, tsc *TabletStatsCache, ts topo.SrvTopoServer, cell string, types []topodatapb.TabletType) error {
 	keyspaceShards, err := findAllKeyspaceShards(ctx, ts, cell)
 	if err != nil {
 		return err
 	}
 
-	return waitForTablets(ctx, hc, keyspaceShards, types, true)
+	return waitForTablets(ctx, tsc, keyspaceShards, types, true)
 }
 
 // findAllKeyspaceShards goes through all serving shards in the topology
@@ -98,7 +98,7 @@ func findAllKeyspaceShards(ctx context.Context, ts topo.SrvTopoServer, cell stri
 }
 
 // waitForTablets is the internal method that polls for tablets
-func waitForTablets(ctx context.Context, hc HealthCheck, keyspaceShards map[keyspaceShard]bool, types []topodatapb.TabletType, requireServing bool) error {
+func waitForTablets(ctx context.Context, tsc *TabletStatsCache, keyspaceShards map[keyspaceShard]bool, types []topodatapb.TabletType, requireServing bool) error {
 RetryLoop:
 	for {
 		select {
@@ -111,24 +111,15 @@ RetryLoop:
 		for ks := range keyspaceShards {
 			allPresent := true
 			for _, tt := range types {
-				tl := hc.GetTabletStatsFromTarget(ks.keyspace, ks.shard, tt)
+				var tl []TabletStats
 				if requireServing {
-					hasServingEP := false
-					for _, t := range tl {
-						if t.LastError == nil && t.Serving {
-							hasServingEP = true
-							break
-						}
-					}
-					if !hasServingEP {
-						allPresent = false
-						break
-					}
+					tl = tsc.GetHealthyTabletStats(ks.keyspace, ks.shard, tt)
 				} else {
-					if len(tl) == 0 {
-						allPresent = false
-						break
-					}
+					tl = tsc.GetTabletStats(ks.keyspace, ks.shard, tt)
+				}
+				if len(tl) == 0 {
+					allPresent = false
+					break
 				}
 			}
 

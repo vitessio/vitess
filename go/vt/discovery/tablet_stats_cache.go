@@ -207,5 +207,5 @@ func (tsc *TabletStatsCache) Reset() {
 	tsc.entries = make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry)
 }
 
-// ompile-time interface check
+// compile-time interface check
 var _ HealthCheckStatsListener = (*TabletStatsCache)(nil)

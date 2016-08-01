@@ -76,6 +76,15 @@ type Gateway interface {
 		numRowsPerQueryPart int64,
 		algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error)
 
+	// WaitForTablets asks the gateway to wait for the provided
+	// tablets types to be available. It the context is canceled
+	// before the end, it should return ctx.Err().
+	// The Creator function should call this function internally,
+	// but for tests it's easier to also have it separated (then it's
+	// possible to call the creator with 'nil' as tabletTypesToWait,
+	// do some more initialization, then call this).
+	WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) error
+
 	// Close shuts down underlying connections.
 	Close(ctx context.Context) error
 

@@ -126,6 +126,12 @@ func (lg *l2VTGateGateway) addL2VTGateConn(addr, keyspace, shard string) error {
 	return nil
 }
 
+// WaitForTablets is part of the Gateway interface. We don't implement it,
+// as we don't have anything to wait for.
+func (lg *l2VTGateGateway) WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) error {
+	return nil
+}
+
 // Execute executes the non-streaming query for the specified keyspace, shard, and tablet type.
 func (lg *l2VTGateGateway) Execute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (qr *sqltypes.Result, err error) {
 	err = lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
