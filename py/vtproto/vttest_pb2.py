@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vttest.proto',
   package='vttest',
   syntax='proto3',
-  serialized_pb=_b('\n\x0cvttest.proto\x12\x06vttest\"/\n\x05Shard\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x18\n\x10\x64\x62_name_override\x18\x02 \x01(\t\"\x88\x01\n\x08Keyspace\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x1d\n\x06shards\x18\x02 \x03(\x0b\x32\r.vttest.Shard\x12\x1c\n\x14sharding_column_name\x18\x03 \x01(\t\x12\x1c\n\x14sharding_column_type\x18\x04 \x01(\t\x12\x13\n\x0bserved_from\x18\x05 \x01(\t\"5\n\x0eVTTestTopology\x12#\n\tkeyspaces\x18\x01 \x03(\x0b\x32\x10.vttest.Keyspaceb\x06proto3')
+  serialized_pb=_b('\n\x0cvttest.proto\x12\x06vttest\"/\n\x05Shard\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x18\n\x10\x64\x62_name_override\x18\x02 \x01(\t\"\xb5\x01\n\x08Keyspace\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x1d\n\x06shards\x18\x02 \x03(\x0b\x32\r.vttest.Shard\x12\x1c\n\x14sharding_column_name\x18\x03 \x01(\t\x12\x1c\n\x14sharding_column_type\x18\x04 \x01(\t\x12\x13\n\x0bserved_from\x18\x05 \x01(\t\x12\x15\n\rreplica_count\x18\x06 \x01(\x05\x12\x14\n\x0crdonly_count\x18\x07 \x01(\x05\"D\n\x0eVTTestTopology\x12#\n\tkeyspaces\x18\x01 \x03(\x0b\x32\x10.vttest.Keyspace\x12\r\n\x05\x63\x65lls\x18\x02 \x03(\tb\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -106,6 +106,20 @@ _KEYSPACE = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
+    _descriptor.FieldDescriptor(
+      name='replica_count', full_name='vttest.Keyspace.replica_count', index=5,
+      number=6, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='rdonly_count', full_name='vttest.Keyspace.rdonly_count', index=6,
+      number=7, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
   ],
   extensions=[
   ],
@@ -119,7 +133,7 @@ _KEYSPACE = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=74,
-  serialized_end=210,
+  serialized_end=255,
 )
 
 
@@ -137,6 +151,13 @@ _VTTESTTOPOLOGY = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
+    _descriptor.FieldDescriptor(
+      name='cells', full_name='vttest.VTTestTopology.cells', index=1,
+      number=2, type=9, cpp_type=9, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
   ],
   extensions=[
   ],
@@ -149,8 +170,8 @@ _VTTESTTOPOLOGY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=212,
-  serialized_end=265,
+  serialized_start=257,
+  serialized_end=325,
 )
 
 _KEYSPACE.fields_by_name['shards'].message_type = _SHARD

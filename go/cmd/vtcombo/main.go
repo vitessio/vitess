@@ -11,11 +11,13 @@ package main
 
 import (
 	"flag"
+	"strings"
 	"time"
 
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/discovery"
@@ -29,11 +31,7 @@ import (
 	"github.com/youtube/vitess/go/zk/fakezk"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-)
-
-const (
-	// cell is the cell to use for this fake cluster
-	cell = "test"
+	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
 )
 
 var (
@@ -63,8 +61,20 @@ func main() {
 		exit.Return(1)
 	}
 
+	// parse the input topology
+	tpb := &vttestpb.VTTestTopology{}
+	if err := proto.UnmarshalText(*protoTopo, tpb); err != nil {
+		log.Errorf("cannot parse topology: %v", err)
+		exit.Return(1)
+	}
+
+	// default cell to "test" if unspecified
+	if len(tpb.Cells) == 0 {
+		tpb.Cells = append(tpb.Cells, "test")
+	}
+
 	// set discoverygateway flag to default value
-	flag.Set("cells_to_watch", cell)
+	flag.Set("cells_to_watch", strings.Join(tpb.Cells, ","))
 
 	// register topo server
 	zkconn := fakezk.NewConn()
@@ -88,7 +98,7 @@ func main() {
 	servenv.OnClose(mysqld.Close)
 
 	// tablets configuration and init
-	if err := initTabletMap(ts, *protoTopo, mysqld, dbcfgs, *schemaDir, mycnf); err != nil {
+	if err := initTabletMap(ts, tpb, mysqld, dbcfgs, *schemaDir, mycnf); err != nil {
 		log.Errorf("initTabletMapProto failed: %v", err)
 		exit.Return(1)
 	}
@@ -101,7 +111,7 @@ func main() {
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
 	}
-	vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, cell, 2 /*retryCount*/, tabletTypesToWait)
+	vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, tpb.Cells[0], 2 /*retryCount*/, tabletTypesToWait)
 
 	// vtctld configuration and init
 	vtctld.InitVtctld(ts)
