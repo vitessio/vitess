@@ -59,15 +59,12 @@ type l2VTGateGateway struct {
 
 	// mu protects all fields below.
 	mu sync.RWMutex
-
 	// connMap is the main map to find the right l2 vtgate pool.
 	// It is indexed by keyspace name.
 	connMap map[string][]*l2VTGateConn
-
 	// tabletConnMap is a map of address to tabletconn.TabletConn objects.
 	// It is used so we don't open multiple connections to the same backend.
 	tabletConnMap map[string]tabletconn.TabletConn
-
 	// statusAggregators is a map indexed by the key
 	// l2vtgate address + tablet type
 	statusAggregators map[string]*TabletStatusAggregator
