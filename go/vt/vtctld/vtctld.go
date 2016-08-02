@@ -78,21 +78,15 @@ func InitVtctld(ts topo.Server) {
 		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
 			shardingColumnName := r.FormValue("shardingColumnName")
 			shardingColumnType := r.FormValue("shardingColumnType")
-			forceString := r.FormValue("force")
-			force := false
-			if forceString == "true" {
-				force = true
-			}
+			force := r.FormValue("force") == "true"
 
-			kit := topodatapb.KeyspaceIdType_UNSET
-			var err error
 			kit, err = key.ParseKeyspaceIDType(shardingColumnType)
 			if err != nil {
 				return "", err
 			}
 
-			keyspaceIDTypeSet := (kit != topodatapb.KeyspaceIdType_UNSET)
-			columnNameSet := (shardingColumnName != "")
+			keyspaceIDTypeSet := kit != topodatapb.KeyspaceIdType_UNSET
+			columnNameSet := shardingColumnName != ""
 			if (keyspaceIDTypeSet && !columnNameSet) || (!keyspaceIDTypeSet && columnNameSet) {
 				return "", fmt.Errorf("Both <column name> and <column type> must be set, or both must be unset.")
 			}
@@ -101,11 +95,7 @@ func InitVtctld(ts topo.Server) {
 
 	actionRepo.RegisterKeyspaceAction("DeleteKeyspace",
 		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
-			recursiveString := r.FormValue("recursive")
-			recursive := false
-			if recursiveString == "true" {
-				recursive = true
-			}
+			recursive := r.FormValue("recursive") == "true"
 			return "", wr.DeleteKeyspace(ctx, keyspace, recursive)
 		})
 

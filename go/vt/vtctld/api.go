@@ -129,22 +129,20 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 			return ts.GetKeyspace(ctx, keyspace)
 			// Perform an action on a keyspace.
 		case "POST":
-			time.Sleep(4000 * time.Millisecond)
 			if keyspace == "" {
 				return nil, errors.New("A POST request needs a keyspace in the URL")
 			}
 			if err := r.ParseForm(); err != nil {
 				return nil, err
 			}
-			//body, _ := ioutil.ReadAll(r.Body)
 
 			action := r.FormValue("action")
 			if action == "" {
-				return nil, errors.New("A POST request must specify action" /* + string(body) + " | " + r.Form.Encode() + " |"*/)
+				return nil, errors.New("A POST request must specify action")
 			}
 			return actions.ApplyKeyspaceAction(ctx, action, keyspace, r), nil
 		default:
-			return nil, errors.New("The VTCTLD API only supports the GET and POST Methods. Please use a GET request or include the specific action you desire in the body of a POST request")
+			return nil, fmt.Errorf("unsupported HTTP method: %v", r.Method)
 		}
 	})
 

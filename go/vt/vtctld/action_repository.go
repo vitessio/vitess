@@ -51,7 +51,8 @@ type actionTabletRecord struct {
 
 // ActionRepository is a repository of actions that can be performed
 // on a {Keyspace,Shard,Tablet}.
-// the http.request object passed to the action will have parse(d)Form.
+// Note that the registered action methods will be passed an *http.Request
+// on which ParseForm() has already succeeded.
 type ActionRepository struct {
 	keyspaceActions map[string]actionKeyspaceMethod
 	shardActions    map[string]actionShardMethod
