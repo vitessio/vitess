@@ -1,10 +1,10 @@
 import { Component } from '@angular/core';
-import { HTTP_PROVIDERS } from '@angular/http';
 import { MD_TOOLBAR_DIRECTIVES } from '@angular2-material/toolbar';
 import { MD_SIDENAV_DIRECTIVES } from '@angular2-material/sidenav';
 import { MD_LIST_DIRECTIVES } from '@angular2-material/list';
 import { MdIcon, MdIconRegistry } from '@angular2-material/icon';
 import { ROUTER_DIRECTIVES } from '@angular/router';
+import { WorkqueueComponent } from './workqueue/workqueue.component'
 
 import './rxjs-operators';
 
@@ -14,8 +14,7 @@ import './rxjs-operators';
   templateUrl: 'app.component.html',
   styleUrls: ['app.component.css'],
   providers: [
-    HTTP_PROVIDERS,
-    MdIconRegistry,
+    MdIconRegistry
   ],
   directives: [
     MD_TOOLBAR_DIRECTIVES,
@@ -23,6 +22,7 @@ import './rxjs-operators';
     MD_LIST_DIRECTIVES,
     MdIcon,
     ROUTER_DIRECTIVES,
+    WorkqueueComponent,
   ],
 })
 export class AppComponent {

@@ -1,0 +1,27 @@
+<h1>{{keyspaceName}}</h1>
+<div *ngIf="keyspace.servingShards != undefined && keyspace.servingShards.length > 0">
+  <h2>Serving Shards</h2>
+  <div *ngFor="let shard of keyspace.servingShards" class="vt-card">
+    <a class="vt-darkLink" [routerLink]="['/shard']" [queryParams]="{keyspace: keyspaceName, shard: shard}">
+      <md-card > 
+        <md-card-title>{{shard}}</md-card-title>   
+      </md-card>
+    </a>
+  </div>
+</div>
+
+<div *ngIf="keyspace.nonservingShards != undefined && keyspace.nonservingShards.length > 0">
+  <h2>Nonserving Shards</h2>
+  <div *ngFor="let shard of keyspace.nonservingShards" class="vt-card">
+    <md-card (click)="navigate(keyspaceName, shard)"> 
+      <md-card-title>{{shard}}</md-card-title>   
+    </md-card>
+  </div>
+</div>
+
+<paper-dialog #dialog  no-cancel-on-outside-click="true" no-cancel-on-esc-key="true">
+  <vt-dialog [(dialogContent)]="dialogContent" [(dialogSettings)]="dialogSettings" (close)="dialog.close();"></vt-dialog>
+</paper-dialog>
+<vt-addButton (click)="prepareNew();toggleModal();dialog.open()"></vt-addButton>
+<div *ngIf="dialogSettings.openModal" class="vt-popUpContainer" >
+</div>

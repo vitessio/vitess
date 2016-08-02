@@ -1,0 +1,37 @@
+<div *ngIf="dialogSettings.dialogForm">
+  <h2 class="vt-padding">{{dialogSettings.dialogTitle}}</h2>
+  <h4 class="vt-padding" *ngIf="dialogSettings.dialogSubtitle">{{dialogSettings.dialogSubtitle}}</h4>
+  <div class="vt-form" >
+    <div *ngFor="let flag of dialogContent.getFlags(); let i = index">
+      <div  *ngIf="dialogContent.canDisplay(flag.id)" class="vt-form-member">
+        <paper-item><strong>{{flag.name}}</strong>: {{flag.description}}</paper-item>
+        <md-input *ngIf="flag.type=='input'" [(ngModel)]="flag.value" [required]="dialogContent.isRequired(flag.id)" placeholder="{{flag.name}}"></md-input>
+        <div  *ngIf="flag.type == 'checkBox'" class="checkbox-wrapper">
+          <md-checkbox class="md-primary" [(ngModel)]="flag.value" ></md-checkbox> 
+        </div> 
+        <paper-dropdown-menu *ngIf="flag.type == 'dropDown'" label="Column Type"  on-iron-select="typeSelected(flag.id, $event)">
+          <paper-listbox selected="{{flag.getStrValue()}}"  attr-for-selected=label class="dropdown-content" >
+            <paper-item *ngFor="let option of flag.getOptions()" label="{{option.text}}">{{option.text}}</paper-item>
+          </paper-listbox> 
+        </paper-dropdown-menu>
+      </div>
+    </div>
+  </div>
+  <div class="vt-actions-container">
+    <button md-button (click)="toggleModal();closeDialog();">Cancel</button>
+    <button md-button [disabled]="!dialogContent.canSubmit()" (click)="sendAction();">{{dialogSettings.actionWord}}</button>
+  </div>
+</div>
+<div *ngIf="dialogSettings.dialogLog">
+  <h3> Log </h3>
+  <md-card>
+    <md-card-content *ngIf="!dialogSettings.pending">{{dialogSettings.beforeNameRespText}}{{dialogContent.name}}{{dialogSettings.afterNameRespText}}</md-card-content>
+    <md-card-content *ngIf="dialogSettings.pending">
+      Loading Response...
+      <md-progress-bar mode="indeterminate"></md-progress-bar>
+    </md-card-content>
+  </md-card>
+  <div class="buttons">
+    <button md-button [disabled]="dialogSettings.pending" (click)="toggleModal();closeDialog()">Dismiss</button>
+  </div>
+</div>
