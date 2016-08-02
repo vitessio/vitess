@@ -303,8 +303,11 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		return fmt.Errorf("error waiting for tablets for %v %v %v: %v", bpc.cell, bpc.sourceShard.String(), topodatapb.TabletType_REPLICA, err)
 	}
 
-	// Find the server list from the health check
-	addrs := bpc.tsc.GetHealthyTabletStats(bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topodatapb.TabletType_REPLICA)
+	// Find the server list from the health check.
+	// We have to get all servers, and manually remove the unhealthy ones,
+	// as non-serving servers will not be in the list, but we might
+	// replicate from them.
+	addrs := discovery.RemoveUnhealthyTablets(bpc.tsc.GetTabletStats(bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topodatapb.TabletType_REPLICA))
 	if len(addrs) == 0 {
 		return fmt.Errorf("can't find any healthy source tablet for %v %v %v", bpc.cell, bpc.sourceShard.String(), topodatapb.TabletType_REPLICA)
 	}

@@ -75,7 +75,7 @@ func waitForHealthyRdonlyTablets(ctx context.Context, wr *wrangler.Wrangler, hea
 		default:
 		}
 
-		healthyTablets = tsc.GetHealthyTabletStats(keyspace, shard, topodatapb.TabletType_RDONLY)
+		healthyTablets = discovery.RemoveUnhealthyTablets(tsc.GetTabletStats(keyspace, shard, topodatapb.TabletType_RDONLY))
 		if len(healthyTablets) >= minHealthyRdonlyTablets {
 			break
 		}

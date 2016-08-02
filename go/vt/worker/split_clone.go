@@ -607,7 +607,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	} else {
 		// Pick any healthy serving source tablet.
 		si := scw.sourceShards[0]
-		tablets := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY)
+		tablets := discovery.RemoveUnhealthyTablets(scw.tsc.GetTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY))
 		if len(tablets) == 0 {
 			// We fail fast on this problem and don't retry because at the start all tablets should be healthy.
 			return fmt.Errorf("no healthy RDONLY tablet in source shard (%v) available (required to find out the schema)", topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName()))
@@ -754,7 +754,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 						sourceAlias = scw.sourceAliases[shardIndex]
 					} else {
 						// Pick any healthy serving source tablet.
-						tablets := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY)
+						tablets := discovery.RemoveUnhealthyTablets(scw.tsc.GetTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY))
 						if len(tablets) == 0 {
 							processError("no healthy RDONLY tablets in source shard (%v) available", topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName()))
 							return
@@ -780,7 +780,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				}
 				for shardIndex, si := range scw.destinationShards {
 					// Pick any healthy serving destination tablet.
-					tablets := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY)
+					tablets := discovery.RemoveUnhealthyTablets(scw.tsc.GetTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY))
 					if len(tablets) == 0 {
 						processError("no healthy RDONLY tablets in destination shard (%v) available", topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName()))
 						return
