@@ -24,7 +24,7 @@ export class Flag {
   private blockOnEmptyList: string[]; // Block this flag if any flag in this list is empty/false.
   private blockOnFilledList: string[]; // Block this flag if any flag in this list is filled/true.
   public show: boolean;
-  public constructor(position: number, type: string, id: string, name: string, description: string="", value: string="", show: boolean=true) {
+  public constructor(position: number, type: string, id: string, name: string, description= '', value= '', show= true) {
     this.position = position;
     this.type = type;
     this.id = id;
@@ -48,7 +48,7 @@ export class Flag {
     return this.blockOnFilledList;
   }
   public getStrValue(): string {
-    return this.value
+    return this.value;
   }
   public getValue(): any {
     return this.value;
@@ -57,37 +57,37 @@ export class Flag {
     this.value = value;
   }
   public isEmpty(): boolean {
-    return this.value == "";
+    return this.value === '';
   }
   public isFilled(): boolean {
-    return this.value != "";
+    return this.value !== '';
   }
 }
 
 export class InputFlag extends Flag {
   public value: string;
-  public constructor(position: number, id: string, name: string, description: string="", value: string="", show: boolean=true) {
-    super(position, "input", id, name, description, value);
+  public constructor(position: number, id: string, name: string, description= '', value= '', show= true) {
+    super(position, 'input', id, name, description, value);
     this.value = value;
   }
 }
 
 export class CheckBoxFlag extends Flag {
   public value: boolean;
-  public constructor(position: number, id: string, name: string, description: string="", value: boolean=false, show: boolean=true) {
-    super(position, "checkBox", id, name, description, "", show);
+  public constructor(position: number, id: string, name: string, description= '', value= false, show= true) {
+    super(position, 'checkBox', id, name, description, '', show);
     this.value = value;
   }
   public getStrValue() {
-    return this.value ? "true" : "false";
+    return this.value ? 'true' : 'false';
   }
 }
 
 export class DropDownFlag extends Flag {
   public value: string;
   public options: string[];
-  public constructor(position: number, id: string, name: string, description: string="", value: string="", show: boolean=true) {
-    super(position, "dropDown", id, name, description, value, show);
+  public constructor(position: number, id: string, name: string, description= '', value= '', show= true) {
+    super(position, 'dropDown', id, name, description, value, show);
   }
   public setOptions(options: any[]) {
     this.options = options;

@@ -1,5 +1,6 @@
-import { Injectable, Inject } from '@angular/core';
-import { Http, Headers, RequestOptions } from '@angular/http';
+import { Headers, Http, RequestOptions } from '@angular/http';
+import { Injectable } from '@angular/core';
+
 import { Observable } from 'rxjs/Observable';
 
 @Injectable()
@@ -7,27 +8,23 @@ export class ShardService {
   private shardsUrl = '../api/shards/';
   constructor(private http: Http) {}
 
-
-
-  getShards(keyspaceName) {
-    return this.http.get(this.shardsUrl + keyspaceName + "/")
-    .map( (resp) => {
-      return resp.json(); 
-    })
+  getShards(keyspaceName: string): Observable<any> {
+    return this.http.get(this.shardsUrl + keyspaceName + '/')
+      .map(resp => resp.json());
   }
 
-  sendPostRequest(url, body) {
+  sendPostRequest(url: string, body: string): Observable<any> {
     let headers = new Headers({ 'Content-Type': 'application/x-www-form-urlencoded' });
     let options = new RequestOptions({ headers: headers });
     return this.http.post(url, body, options)
-    .map( (resp) => {
-      return resp.json(); 
-    });
+      .map(resp => resp.json());
   }
-  createShard(shard) {
-    return this.sendPostRequest(this.shardsUrl + shard.getParam("ShardName"), shard.getBody("CreateKeyspace"));
+
+  createShard(shard): Observable<any> {
+    return this.sendPostRequest(this.shardsUrl + shard.getParam('ShardName'), shard.getBody('CreateKeyspace'));
   }
-  deleteShard(shard) {
-    return this.sendPostRequest(this.shardsUrl + shard.name, shard.getBody("DeleteKeyspace"));
+
+  deleteShard(shard): Observable<any> {
+    return this.sendPostRequest(this.shardsUrl + shard.name, shard.getBody('DeleteKeyspace'));
   }
 }

@@ -38,7 +38,7 @@ const materialPkgs: string[] = [
 
 materialPkgs.forEach((pkg) => {
   packages[`@angular2-material/${pkg}`] = { main: `${pkg}.js` };
-})
+});
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 /***********************************************************************************************
@@ -83,7 +83,7 @@ System.config({
 });
 
 // Apply the user's configuration.
-System.config({ 
-    map:map, 
-    packages:packages, 
+System.config({
+    map: map,
+    packages: packages,
   });

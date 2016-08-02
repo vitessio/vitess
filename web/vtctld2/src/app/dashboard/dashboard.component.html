@@ -44,6 +44,6 @@
 <paper-dialog #dialog  no-cancel-on-outside-click="true" no-cancel-on-esc-key="true">
   <vt-dialog [(dialogContent)]="dialogContent" [(dialogSettings)]="dialogSettings" (close)="dialog.close();"></vt-dialog>
 </paper-dialog>
-<vt-addButton (click)="prepareNew();toggleModal();dialog.open()"></vt-addButton>
+<vt-add-button (click)="prepareNew();toggleModal();dialog.open()"></vt-add-button>
 <div *ngIf="dialogSettings.openModal" class="vt-popUpContainer" >
 </div>

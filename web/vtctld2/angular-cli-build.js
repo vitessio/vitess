@@ -21,6 +21,7 @@ module.exports = function(defaults) {
       'primeui/**/*',
       'primeng/**/*',
       '@vaadin/**/*.+(js|js.map)',
+      'font-awesome/**/*',
     ]
   }); 
 };
