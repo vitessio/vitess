@@ -69,9 +69,9 @@ type BinlogPlayerController struct {
 	// construction, immutable).
 	healthCheck discovery.HealthCheck
 
-	// tsc stores the values healthcheck is returning, as its listener.
+	// tabletStatsCache stores the values healthCheck is returning, as its listener.
 	// (set at construction, immutable).
-	tsc *discovery.TabletStatsCache
+	tabletStatsCache *discovery.TabletStatsCache
 
 	// shardReplicationWatcher watches the addresses of the sources, and
 	// feeds the HealthCheck (set at construction, immutable).
@@ -116,8 +116,8 @@ func newBinlogPlayerController(ts topo.Server, vtClientFactory func() binlogplay
 		// Note: healthCheck and shardReplicationWatcher remain active independent
 		// of whether the BinlogPlayerController is Start()'d or Stop()'d.
 		// Use Close() after Stop() to finally close them and free their resources.
-		healthCheck: healthCheck,
-		tsc:         discovery.NewTabletStatsCache(healthCheck, cell),
+		healthCheck:             healthCheck,
+		tabletStatsCache:        discovery.NewTabletStatsCache(healthCheck, cell),
 		shardReplicationWatcher: discovery.NewShardReplicationWatcher(ts, healthCheck, cell, sourceShard.Keyspace, sourceShard.Shard, *healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency),
 	}
 }
@@ -299,15 +299,15 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	}
 
 	// wait for the tablet set (usefull for the first run at least, fast for next runs)
-	if err := bpc.tsc.WaitForTablets(bpc.ctx, bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != nil {
+	if err := bpc.tabletStatsCache.WaitForTablets(bpc.ctx, bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != nil {
 		return fmt.Errorf("error waiting for tablets for %v %v %v: %v", bpc.cell, bpc.sourceShard.String(), topodatapb.TabletType_REPLICA, err)
 	}
 
 	// Find the server list from the health check.
-	// We have to get all servers, and manually remove the unhealthy ones,
-	// as non-serving servers will not be in the list, but we might
-	// replicate from them.
-	addrs := discovery.RemoveUnhealthyTablets(bpc.tsc.GetTabletStats(bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topodatapb.TabletType_REPLICA))
+	// Note: We cannot use tsc.GetHealthyTabletStats() here because it does
+	// not return non-serving tablets. However, we might replicate from
+	// these as well.
+	addrs := discovery.RemoveUnhealthyTablets(bpc.tabletStatsCache.GetTabletStats(bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topodatapb.TabletType_REPLICA))
 	if len(addrs) == 0 {
 		return fmt.Errorf("can't find any healthy source tablet for %v %v %v", bpc.cell, bpc.sourceShard.String(), topodatapb.TabletType_REPLICA)
 	}

@@ -32,17 +32,17 @@ var (
 // Since we don't want to use them all, we require at least
 // minHealthyRdonlyTablets servers to be healthy.
 // May block up to -wait_for_healthy_rdonly_tablets_timeout.
-func FindHealthyRdonlyTablet(ctx context.Context, wr *wrangler.Wrangler, healthCheck discovery.HealthCheck, tsc *discovery.TabletStatsCache, cell, keyspace, shard string, minHealthyRdonlyTablets int) (*topodatapb.TabletAlias, error) {
-	if healthCheck == nil {
+func FindHealthyRdonlyTablet(ctx context.Context, wr *wrangler.Wrangler, tsc *discovery.TabletStatsCache, cell, keyspace, shard string, minHealthyRdonlyTablets int) (*topodatapb.TabletAlias, error) {
+	if tsc == nil {
 		// No healthcheck instance provided. Create one.
-		healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
+		healthCheck := discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
 		tsc = discovery.NewTabletStatsCache(healthCheck, cell)
 		watcher := discovery.NewShardReplicationWatcher(wr.TopoServer(), healthCheck, cell, keyspace, shard, *healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 		defer watcher.Stop()
 		defer healthCheck.Close()
 	}
 
-	healthyTablets, err := waitForHealthyRdonlyTablets(ctx, wr, healthCheck, tsc, cell, keyspace, shard, minHealthyRdonlyTablets, *waitForHealthyTabletsTimeout)
+	healthyTablets, err := waitForHealthyRdonlyTablets(ctx, wr, tsc, cell, keyspace, shard, minHealthyRdonlyTablets, *waitForHealthyTabletsTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func FindHealthyRdonlyTablet(ctx context.Context, wr *wrangler.Wrangler, healthC
 	return healthyTablets[index].Tablet.Alias, nil
 }
 
-func waitForHealthyRdonlyTablets(ctx context.Context, wr *wrangler.Wrangler, healthCheck discovery.HealthCheck, tsc *discovery.TabletStatsCache, cell, keyspace, shard string, minHealthyRdonlyTablets int, timeout time.Duration) ([]discovery.TabletStats, error) {
+func waitForHealthyRdonlyTablets(ctx context.Context, wr *wrangler.Wrangler, tsc *discovery.TabletStatsCache, cell, keyspace, shard string, minHealthyRdonlyTablets int, timeout time.Duration) ([]discovery.TabletStats, error) {
 	busywaitCtx, busywaitCancel := context.WithTimeout(ctx, timeout)
 	defer busywaitCancel()
 
@@ -100,8 +100,8 @@ func waitForHealthyRdonlyTablets(ctx context.Context, wr *wrangler.Wrangler, hea
 // - find a rdonly instance in the keyspace / shard
 // - mark it as worker
 // - tag it with our worker process
-func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, healthCheck discovery.HealthCheck, tsc *discovery.TabletStatsCache, cell, keyspace, shard string, minHealthyRdonlyTablets int) (*topodatapb.TabletAlias, error) {
-	tabletAlias, err := FindHealthyRdonlyTablet(ctx, wr, healthCheck, tsc, cell, keyspace, shard, minHealthyRdonlyTablets)
+func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, tsc *discovery.TabletStatsCache, cell, keyspace, shard string, minHealthyRdonlyTablets int) (*topodatapb.TabletAlias, error) {
+	tabletAlias, err := FindHealthyRdonlyTablet(ctx, wr, tsc, cell, keyspace, shard, minHealthyRdonlyTablets)
 	if err != nil {
 		return nil, err
 	}

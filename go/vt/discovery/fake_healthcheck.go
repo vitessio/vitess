@@ -50,8 +50,7 @@ func (fhc *FakeHealthCheck) SetListener(listener HealthCheckStatsListener, sendD
 	fhc.listener = listener
 }
 
-// AddTablet adds the tablet.
-// The Listener is called.
+// AddTablet adds the tablet and calls the listener.
 func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet, name string) {
 	key := TabletToMapKey(tablet)
 	item := &fhcItem{
@@ -121,7 +120,7 @@ func (fhc *FakeHealthCheck) Reset() {
 
 // AddTestTablet inserts a fake entry into FakeHealthCheck.
 // The Tablet can be talked to using the provided connection.
-// The Listener is called.
+// The Listener is called, as if AddTablet had been called.
 func (fhc *FakeHealthCheck) AddTestTablet(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error) *sandboxconn.SandboxConn {
 	t := topo.NewTablet(0, cell, host)
 	t.Keyspace = keyspace

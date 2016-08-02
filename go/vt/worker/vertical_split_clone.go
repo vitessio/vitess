@@ -296,7 +296,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 
 	// find an appropriate tablet in the source shard
 	var err error
-	vscw.sourceAlias, err = FindWorkerTablet(ctx, vscw.wr, vscw.cleaner, nil /* healthCheck */, nil /* tsc */, vscw.cell, vscw.sourceKeyspace, "0", vscw.minHealthyRdonlyTablets)
+	vscw.sourceAlias, err = FindWorkerTablet(ctx, vscw.wr, vscw.cleaner, nil /* tsc */, vscw.cell, vscw.sourceKeyspace, "0", vscw.minHealthyRdonlyTablets)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/0: %v", vscw.cell, vscw.sourceKeyspace, err)
 	}

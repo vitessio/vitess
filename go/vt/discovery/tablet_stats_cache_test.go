@@ -10,9 +10,11 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// TestTabletStatsCache tests the functionnality of the TestTabletStatsCache class.
+// TestTabletStatsCache tests the functionality of the TabletStatsCache class.
 func TestTabletStatsCache(t *testing.T) {
-	// don't want to listen to anything
+	// We want to unit test TabletStatsCache without a full-blown
+	// HealthCheck object, so we can't call NewTabletStatsCache.
+	// So we just construct this object here.
 	tsc := &TabletStatsCache{
 		cell:    "cell",
 		entries: make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),

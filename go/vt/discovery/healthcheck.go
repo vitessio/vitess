@@ -92,10 +92,11 @@ type HealthCheckStatsListener interface {
 	//   streaming healthcheck is returned. (then ts.Up is true).
 	// - a tablet is removed from the list of tablets we watch
 	//   (then ts.Up is false).
-	// - a tablet dynamically changes type. When registering the listener,
-	//   if sendDownEvents is true, two events are generated (ts.Up false
-	//   on the old type, ts.Up true on the new type). If it is false,
-	// only one event is sent (ts.Up true on the new type).
+	// - a tablet dynamically changes its type. When registering the
+	//   listener, if sendDownEvents is true, two events are generated
+	//   (ts.Up false on the old type, ts.Up true on the new type).
+	//   If it is false, only one event is sent (ts.Up true on the new
+	//   type).
 	StatsUpdate(*TabletStats)
 }
 
@@ -104,22 +105,24 @@ type TabletStats struct {
 	// Tablet is the tablet object that was sent to HealthCheck.AddTablet.
 	Tablet *topodatapb.Tablet
 	// Name is an optional tag (e.g. alternative address) for the
-	// tablet.  It is supposed to represent the tablet as a job,
+	// tablet.  It is supposed to represent the tablet as a task,
 	// not as a process.  For instance, it can be a
-	// cell+keyspace+replica+task value.
+	// cell+keyspace+shard+tabletType+taskIndex value.
 	Name string
 	// Target is the current target as returned by the streaming
-	// healthcheck.
+	// StreamHealth RPC.
 	Target *querypb.Target
 	// Up describes whether the tablet is added or removed.
-	Up bool //
+	Up bool
 	// Serving describes if the tablet can be serving traffic.
 	Serving bool
 	// TabletExternallyReparentedTimestamp is the last timestamp
-	// that this tablet was the master. It is set to 0 if the
+	// that this tablet was either elected the master, or received
+	// a TabletExternallyReparented event. It is set to 0 if the
 	// tablet doesn't think it's a master.
 	TabletExternallyReparentedTimestamp int64
-	// Stats is the current stats.
+	// Stats is the current health status, as received by the
+	// StreamHealth RPC (replication lag, ...).
 	Stats *querypb.RealtimeStats
 	// LastError is the error we last saw when trying to get the
 	// tablet's healthcheck.
@@ -132,14 +135,16 @@ func (e *TabletStats) String() string {
 }
 
 // HealthCheck defines the interface of health checking module.
-// The goal of this object is to maintain a streaming HealthCheck connection
+// The goal of this object is to maintain a StreamHealth RPC
 // to a lot of tablets. Tablets are added / removed by calling the
 // AddTablet / RemoveTablet methods (other discovery module objects
 // can for instance watch the topology and call these).
 //
-// By registering a Listener, the tablets can actually be used. The
-// data sent to the listener is enough to pick a target, then
-// GetConnection can be used to talk to it.
+// Updates to the health of all registered tablet can be watched by
+// registering a listener. To get the underlying "TabletConn" object
+// which is used for each tablet, use the "GetConnection()" method
+// below and pass in the "Tablet" struct which is also sent to the
+// listener in each update.
 type HealthCheck interface {
 	// RegisterStats registers the connection counts stats.
 	// It can only be called on one Healthcheck object per process.
@@ -155,9 +160,9 @@ type HealthCheck interface {
 	// listener before any tablets are added to the healthcheck.
 	SetListener(listener HealthCheckStatsListener, sendDownEvents bool)
 	// AddTablet adds the tablet, and starts health check on it.
-	// Name is an alternate name, like a job name/instance.
+	// Name is an alternate name, like a job or instance name.
 	AddTablet(tablet *topodatapb.Tablet, name string)
-	// RemoveTablet removes the tablet, and stops the health check on it.
+	// RemoveTablet removes the tablet, and stops its StreamHealth RPC.
 	RemoveTablet(tablet *topodatapb.Tablet)
 	// GetConnection returns the TabletConn of the given tablet.
 	GetConnection(tablet *topodatapb.Tablet) tabletconn.TabletConn

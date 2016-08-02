@@ -26,26 +26,26 @@ type keyspaceShard struct {
 // WaitForTablets waits for at least one tablet in the given cell /
 // keyspace / shard before returning. The tablets do not have to be healthy.
 // It will return ctx.Err() if the context is canceled.
-func (tsc *TabletStatsCache) WaitForTablets(ctx context.Context, cell, keyspace, shard string, types []topodatapb.TabletType) error {
+func (tc *TabletStatsCache) WaitForTablets(ctx context.Context, cell, keyspace, shard string, types []topodatapb.TabletType) error {
 	keyspaceShards := map[keyspaceShard]bool{
 		keyspaceShard{
 			keyspace: keyspace,
 			shard:    shard,
 		}: true,
 	}
-	return tsc.waitForTablets(ctx, keyspaceShards, types, false)
+	return tc.waitForTablets(ctx, keyspaceShards, types, false)
 }
 
 // WaitForAllServingTablets waits for at least one healthy serving tablet in
 // the given cell for all keyspaces / shards before returning.
 // It will return ctx.Err() if the context is canceled.
-func (tsc *TabletStatsCache) WaitForAllServingTablets(ctx context.Context, ts topo.SrvTopoServer, cell string, types []topodatapb.TabletType) error {
+func (tc *TabletStatsCache) WaitForAllServingTablets(ctx context.Context, ts topo.SrvTopoServer, cell string, types []topodatapb.TabletType) error {
 	keyspaceShards, err := findAllKeyspaceShards(ctx, ts, cell)
 	if err != nil {
 		return err
 	}
 
-	return tsc.waitForTablets(ctx, keyspaceShards, types, true)
+	return tc.waitForTablets(ctx, keyspaceShards, types, true)
 }
 
 // findAllKeyspaceShards goes through all serving shards in the topology
@@ -93,18 +93,18 @@ func findAllKeyspaceShards(ctx context.Context, ts topo.SrvTopoServer, cell stri
 }
 
 // waitForTablets is the internal method that polls for tablets
-func (tsc *TabletStatsCache) waitForTablets(ctx context.Context, keyspaceShards map[keyspaceShard]bool, types []topodatapb.TabletType, requireServing bool) error {
+func (tc *TabletStatsCache) waitForTablets(ctx context.Context, keyspaceShards map[keyspaceShard]bool, types []topodatapb.TabletType, requireServing bool) error {
 	for {
 		for ks := range keyspaceShards {
 			allPresent := true
 			for _, tt := range types {
-				var tl []TabletStats
+				var stats []TabletStats
 				if requireServing {
-					tl = tsc.GetHealthyTabletStats(ks.keyspace, ks.shard, tt)
+					stats = tc.GetHealthyTabletStats(ks.keyspace, ks.shard, tt)
 				} else {
-					tl = tsc.GetTabletStats(ks.keyspace, ks.shard, tt)
+					stats = tc.GetTabletStats(ks.keyspace, ks.shard, tt)
 				}
-				if len(tl) == 0 {
+				if len(stats) == 0 {
 					allPresent = false
 					break
 				}

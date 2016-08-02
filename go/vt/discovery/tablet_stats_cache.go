@@ -19,9 +19,9 @@ type TabletStatsCache struct {
 	// Note we keep track of all master tablets in all cells.
 	cell string
 
-	// mu protects the following fields
+	// mu protects the following fields.
 	mu sync.RWMutex
-	// entries maps from keyspace/shard/tabletType to our cache
+	// entries maps from keyspace/shard/tabletType to our cache.
 	entries map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry
 }
 
@@ -42,33 +42,33 @@ type tabletStatsCacheEntry struct {
 // SetListener with sendDownEvents=true, as we need these events
 // to maintain the integrity of our cache.
 func NewTabletStatsCache(hc HealthCheck, cell string) *TabletStatsCache {
-	tsc := &TabletStatsCache{
+	tc := &TabletStatsCache{
 		cell:    cell,
 		entries: make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
 	}
 
 	// We need to set sendDownEvents=true to get the deletes from the map
 	// upon type change.
-	hc.SetListener(tsc, true /*sendDownEvents*/)
-	return tsc
+	hc.SetListener(tc, true /*sendDownEvents*/)
+	return tc
 }
 
 // StatsUpdate is part of the HealthCheckStatsListener interface.
-func (tsc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
-	if ts.Target.TabletType != topodatapb.TabletType_MASTER && ts.Tablet.Alias.Cell != tsc.cell {
+func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
+	if ts.Target.TabletType != topodatapb.TabletType_MASTER && ts.Tablet.Alias.Cell != tc.cell {
 		// this is for a non-master tablet in a different cell, drop it
 		return
 	}
 
 	key := TabletToMapKey(ts.Tablet)
 
-	tsc.mu.Lock()
-	defer tsc.mu.Unlock()
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
 
-	s, ok := tsc.entries[ts.Target.Keyspace]
+	s, ok := tc.entries[ts.Target.Keyspace]
 	if !ok {
 		s = make(map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry)
-		tsc.entries[ts.Target.Keyspace] = s
+		tc.entries[ts.Target.Keyspace] = s
 	}
 	t, ok := s[ts.Target.Shard]
 	if !ok {
@@ -149,11 +149,11 @@ func (tsc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 
 // GetTabletStats returns the full list of available targets.
 // The returned array is owned by the caller.
-func (tsc *TabletStatsCache) GetTabletStats(keyspace, shard string, tabletType topodatapb.TabletType) []TabletStats {
-	tsc.mu.RLock()
-	defer tsc.mu.RUnlock()
+func (tc *TabletStatsCache) GetTabletStats(keyspace, shard string, tabletType topodatapb.TabletType) []TabletStats {
+	tc.mu.RLock()
+	defer tc.mu.RUnlock()
 
-	s, ok := tsc.entries[keyspace]
+	s, ok := tc.entries[keyspace]
 	if !ok {
 		return nil
 	}
@@ -175,11 +175,13 @@ func (tsc *TabletStatsCache) GetTabletStats(keyspace, shard string, tabletType t
 
 // GetHealthyTabletStats returns only the healthy targets.
 // The returned array is owned by the caller.
-func (tsc *TabletStatsCache) GetHealthyTabletStats(keyspace, shard string, tabletType topodatapb.TabletType) []TabletStats {
-	tsc.mu.RLock()
-	defer tsc.mu.RUnlock()
+// For TabletType_MASTER, this will only return at most one entry,
+// the most recent tablet of type master.
+func (tc *TabletStatsCache) GetHealthyTabletStats(keyspace, shard string, tabletType topodatapb.TabletType) []TabletStats {
+	tc.mu.RLock()
+	defer tc.mu.RUnlock()
 
-	s, ok := tsc.entries[keyspace]
+	s, ok := tc.entries[keyspace]
 	if !ok {
 		return nil
 	}
@@ -199,13 +201,13 @@ func (tsc *TabletStatsCache) GetHealthyTabletStats(keyspace, shard string, table
 	return result
 }
 
-// Reset is for use in tests only
-func (tsc *TabletStatsCache) Reset() {
-	tsc.mu.Lock()
-	defer tsc.mu.Unlock()
+// ResetForTesting is for use in tests only.
+func (tc *TabletStatsCache) ResetForTesting() {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
 
-	tsc.entries = make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry)
+	tc.entries = make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry)
 }
 
-// compile-time interface check
+// Compile-time interface check.
 var _ HealthCheckStatsListener = (*TabletStatsCache)(nil)

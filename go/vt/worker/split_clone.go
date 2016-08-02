@@ -485,7 +485,7 @@ func (scw *SplitCloneWorker) findOfflineSourceTablets(ctx context.Context) error
 	scw.sourceAliases = make([]*topodatapb.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
 		var err error
-		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.healthCheck, scw.tsc, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyTablets)
+		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.tsc, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyTablets)
 		if err != nil {
 			return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
 		}
@@ -560,7 +560,7 @@ func (scw *SplitCloneWorker) waitForTablets(ctx context.Context, shardInfos []*t
 			// We wait for --min_healthy_rdonly_tablets because we will use several
 			// tablets per shard to spread reading the chunks of rows across as many
 			// tablets as possible.
-			if _, err := waitForHealthyRdonlyTablets(ctx, scw.wr, scw.healthCheck, scw.tsc, scw.cell, keyspace, shard, scw.minHealthyRdonlyTablets, timeout); err != nil {
+			if _, err := waitForHealthyRdonlyTablets(ctx, scw.wr, scw.tsc, scw.cell, keyspace, shard, scw.minHealthyRdonlyTablets, timeout); err != nil {
 				rec.RecordError(err)
 			}
 		}(si.Keyspace(), si.ShardName())
