@@ -59,6 +59,8 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
         this.getKeyspace(this.keyspaceName);
       }
     );
+      let test = '-';
+      console.log(test.split('-'));
   }
 
   ngOnDestroy() {

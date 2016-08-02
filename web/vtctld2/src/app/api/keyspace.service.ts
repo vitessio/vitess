@@ -1,116 +1,149 @@
+import { Headers, Http, RequestOptions } from '@angular/http';
 import { Injectable } from '@angular/core';
-import { Http } from '@angular/http';
-import { Keyspace } from '../keyspaceObject/keyspace/'
-import {Observable} from 'rxjs/Observable';
 
+import { Observable } from 'rxjs/Observable';
+
+import { ShardService } from './shard.service';
+import { Keyspace } from './keyspace';
+import { Proto } from '../shared/proto';
 
 @Injectable()
 export class KeyspaceService {
   private keyspacesUrl = '../api/keyspaces/';
-  private srv_keyspaceUrl = '../api/srv_keyspace/';
-  private keyspace_shardsUrl = '../api/shards/';
-  vtTabletTypes = [
-    'unknown', 'master', 'replica', 'rdonly', 'spare', 'experimental',
-    'backup', 'restore', 'worker'
-  ];
-  constructor(private http: Http) {}
+  private srvKeyspaceUrl = '../api/srv_keyspace/local/';
 
-  getShards(keyspaceName) {
-    return this.http.get(this.keyspace_shardsUrl + keyspaceName + "/")
-    .map( (resp) => {
-      return resp.json(); 
-    })
+  constructor(private http: Http,
+              private shardService: ShardService) {}
+
+  getShards(keyspaceName: string): Observable<any> {
+    return this.shardService.getShards(keyspaceName);
   }
-  getKeyspaceNames() {
+
+  getKeyspaceNames(): Observable<any> {
     return this.http.get(this.keyspacesUrl)
-    .map( (resp) => {
-      return resp.json();
-    });
+    .map(resp => resp.json());
   }
-  getSrvKeyspaces() {
-    return this.http.get(this.srv_keyspaceUrl + "local/")
-    .map( (resp) => {
-      return resp.json();
-    });
+
+  getSrvKeyspaces(): Observable<any> {
+    return this.http.get(this.srvKeyspaceUrl)
+    .map(resp => resp.json());
   }
-  getSeperatedShards(keyspaceName, partition) {
-    return this.getShards(keyspaceName)
-      .map(allShards =>{
-        let shards = {};
-        let shardSet = {};
-        shards["name"] = keyspaceName;
-        shards["servingShards"] = [];
-        shards["nonservingShards"] = [];
-        let shardReferences = partition.shard_references;
-        if (shardReferences != undefined) {
-          shardReferences.forEach( servingShard => {
-            shards["servingShards"].push(servingShard.name);
-            shardSet[servingShard.name] = true;
-          });
-        }
-        allShards.forEach( shard => {
-          if (!(shard in shardSet)) {
-            shards["nonservingShards"].push(shard);
-          }
-        });
-        console.log("Shards: ", shards);
-        return shards;
-      })
-  }
-  SrvKeyspaceAndNamesObservable(){
+
+  /*
+    Creates an Observable that fires when both the keyspaceNames and 
+    srvkeyspace have been fetched from the server.
+  */
+  SrvKeyspaceAndNamesObservable(): Observable<any> {
     let keyspaceNamesStream = this.getKeyspaceNames();
     let srvKeyspaceStream = this.getSrvKeyspaces();
     return keyspaceNamesStream.combineLatest(srvKeyspaceStream);
   }
-  getKeyspaces() {
-    return this.SrvKeyspaceAndNamesObservable()
-    .map( (streams) => {
-        let keyspaceNames = streams[0];
-        if(keyspaceNames.length < 1) return [];
-        let srvKeyspace = streams[1];
-        let allDone = null;
-        keyspaceNames.forEach( keyspaceName => {
-          let partitions = [];
-          if (srvKeyspace[keyspaceName] == undefined) {
-            partitions = [{served_type: 1}];
-          } else {
-            partitions = srvKeyspace[keyspaceName].partitions;
-          }
-          console.log(keyspaceName, partitions);
-          for (let p = 0; p < partitions.length; p++) {
-            let partition = partitions[p];
-            if (this.vtTabletTypes[partition.served_type] == 'master') {
-              let shardStream = this.getSeperatedShards(keyspaceName, partition);
-              if (allDone == null) {
-                allDone = shardStream;
-              } else {
-                allDone = allDone.merge(shardStream);
-              }
-              break;
-            }
+
+  /*
+    Fetches information about a keyspaces shardingColumnName and 
+    shardingColumnType.
+  */
+  getKeyspaceShardingData(keyspaceName: string): Observable<any> {
+    return this.http.get(this.keyspacesUrl + keyspaceName)
+      .map(resp => resp.json());
+  }
+
+  /*
+    Creates an Observable that fires when both the shards and sharding
+    information for a particular keyspace have been fetched from the server.
+  */
+  getShardsAndShardingData(keyspaceName: string): Observable<any> {
+    let shardsStream = this.getShards(keyspaceName);
+    let shardingdataStream = this.getKeyspaceShardingData(keyspaceName);
+    return shardsStream.combineLatest(shardingdataStream);
+  }
+
+  /*
+    Returns an observable that fires a fully built keyspace from the 
+    keyspace's shards, sharding info, and a list of serving shards.
+  */
+  buildKeyspace(keyspaceName: string, servingShards: string[]): Observable<any> {
+    return this.getShardsAndShardingData(keyspaceName)
+      .map(streams => {
+        let allShards = streams[0];
+        let shardingData = streams[1];
+        let keyspace = new Keyspace(keyspaceName);
+        servingShards.forEach(shard => keyspace.addServingShard(shard));
+        allShards.forEach(shard => {
+          if (!keyspace.contains(shard)) {
+            keyspace.addNonservingShard(shard);
           }
         });
-        return allDone;
+        keyspace.shardingColumnName = shardingData.sharding_column_name || '';
+        keyspace.shardingColumnType = shardingData.sharding_column_type || '';
+        return keyspace;
+      });
+  }
+
+  /*
+    Returns an array of the names of serving shards for a given keyspace. 
+    Bases the list off of the shard references in the master tablet.
+  */
+  getServingShards(keyspaceName: string, srvKeyspace: any): string[] {
+    if (srvKeyspace && srvKeyspace[keyspaceName]) {
+      let partitions = srvKeyspace[keyspaceName].partitions;
+      for (let i = 0; i < partitions.length; i++) {
+        let partition = partitions[i];
+        if (Proto.VT_TABLET_TYPES[partition.served_type] === 'master') {
+          let servingShards = partition.shard_references;
+          return servingShards ? servingShards.map(shard => { return shard.name; }) : [];
+        }
+      }
+    }
+    return [];
+  }
+
+  getKeyspaces(): Observable<Observable<any>> {
+    return this.SrvKeyspaceAndNamesObservable()
+      .map(streams => {
+        // CombineLatest creates an Observable that fires an array.
+        let keyspaceNames = streams[0];
+        // If there are no keyspaces return an Observable to match return type.
+        if (keyspaceNames.length < 1) {
+          return Observable.from([]);
+        }
+        let srvKeyspace = streams[1];
+        let allKeyspacesStream = undefined;
+        keyspaceNames.forEach(keyspaceName => {
+          let servingShards = this.getServingShards(keyspaceName, srvKeyspace);
+          let keyspaceStream = this.buildKeyspace(keyspaceName, servingShards);
+          allKeyspacesStream = allKeyspacesStream ? allKeyspacesStream.merge(keyspaceStream) : keyspaceStream;
+        });
+        return allKeyspacesStream;
       }
     );
   }
-  getKeyspace(keyspaceName) {
+
+  getKeyspace(keyspaceName: string): Observable<Observable<any>> {
     return this.getSrvKeyspaces()
-    .map( (srvKeyspace) => {
-        let allDone = null;
-        let partitions = [];
-        if (srvKeyspace[keyspaceName] == undefined) {
-          partitions = [{served_type: 1}];
-        } else {
-          partitions = srvKeyspace[keyspaceName].partitions;
-        }
-        for (let p = 0; p < partitions.length; p++) {
-          let partition = partitions[p];
-          if (this.vtTabletTypes[partition.served_type] == 'master') {
-            return this.getSeperatedShards(keyspaceName, partition);
-          }
-        }
+      .map(srvKeyspace => {
+        let servingShards = this.getServingShards(keyspaceName, srvKeyspace);
+        return this.buildKeyspace(keyspaceName, servingShards);
       }
     );
+  }
+
+  sendPostRequest(url: string, body: string): Observable<any> {
+    let headers = new Headers({ 'Content-Type': 'application/x-www-form-urlencoded' });
+    let options = new RequestOptions({ headers: headers });
+    return this.http.post(url, body, options)
+    .map(resp => resp.json());
+  }
+
+  createKeyspace(keyspace: any): Observable<any> {
+    return this.sendPostRequest(this.keyspacesUrl + keyspace.getParam('keyspaceName'), keyspace.getBody('CreateKeyspace'));
+  }
+
+  deleteKeyspace(keyspace: any): Observable<any> {
+    return this.sendPostRequest(this.keyspacesUrl + keyspace.name, keyspace.getBody('DeleteKeyspace'));
+  }
+
+  editKeyspace(keyspace: any): Observable<any> {
+    return this.sendPostRequest(this.keyspacesUrl + keyspace.name, keyspace.getBody('EditKeyspace'));
   }
 }
