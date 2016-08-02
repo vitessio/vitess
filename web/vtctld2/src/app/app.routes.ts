@@ -1,13 +1,13 @@
 import { provideRouter, RouterConfig } from '@angular/router';
 
+import { CanDeactivateGuard } from './shared/can-deactivate-guard';
 import { DashboardComponent } from './dashboard/dashboard.component';
+import { KeyspaceComponent } from './dashboard/keyspace.component';
 import { SchemaComponent } from './schema/schema.component';
+import { ShardComponent } from './dashboard/shard.component';
 import { StatusComponent } from './status/status.component';
 import { TopoBrowserComponent } from './topo/topo-browser.component';
-import { WorkqueueComponent } from './workqueue/workqueue.component';
-import { KeyspaceComponent } from './dashboard/keyspace.component';
-import { ShardComponent } from './dashboard/shard.component';
-import { CanDeactivateGuard } from './shared/canDeactivateGuard/canDeactivateGuard'
+import { TasksComponent } from './tasks/tasks.component';
 
 export const routes: RouterConfig = [
   { path: '', component: DashboardComponent},
@@ -15,7 +15,7 @@ export const routes: RouterConfig = [
   { path: 'status', component: StatusComponent},
   { path: 'schema', component: SchemaComponent},
   { path: 'topo', component: TopoBrowserComponent },
-  { path: 'queue', component: WorkqueueComponent},
+  { path: 'tasks', component: TasksComponent},
   { path: 'keyspace', component: KeyspaceComponent},
   { path: 'shard', component: ShardComponent},
 
