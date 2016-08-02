@@ -1,23 +1,15 @@
+import { Http } from '@angular/http';
 import { Injectable } from '@angular/core';
-import { Http, Headers, RequestOptions } from '@angular/http';
-import { Tablet } from './tablet';
-import {Observable} from 'rxjs/Observable';
+
+let statusUrl = './tablet_statuses/';
 
 @Injectable()
 export class TabletService {
 
- private statusUrl = './tablet_statuses/';
-
   constructor (private http: Http) {}
 
-  getTablets(cell, ks, shard, type) {
-    return this.http.get(this.statusUrl + cell + "/" + ks + "/" + shard + "/" + type)
-    .map( (resp) => {
-      console.log("RETURNED: " + resp.json());
-      return resp.json();
-    })
+  getTablets(cell, keyspace, shard, tabletType) {
+    return this.http.get(statusUrl + cell + '/' + keyspace + '/' + shard + '/' + tabletType)
+    .map( resp => resp.json());
   }
-
 }
-
-

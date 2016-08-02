@@ -1,30 +1,33 @@
-import { Component } from '@angular/core';
-import { MD_TOOLBAR_DIRECTIVES } from '@angular2-material/toolbar';
-import { MD_LIST_DIRECTIVES } from '@angular2-material/list';
-import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
-import { BreadcrumbsComponent } from '../shared/breadcrumbs.component';
-import { ROUTER_DIRECTIVES } from '@angular/router';
+import { Component, AfterViewInit, ComponentResolver, ViewContainerRef } from '@angular/core';
+import { CORE_DIRECTIVES } from '@angular/common';
+
+import { PolymerElement } from '@vaadin/angular2-polymer';
+
+import { HeatmapComponent } from './heatmap.component';
 
 @Component({
   moduleId: module.id,
-  selector: 'vt-status',
+  selector: 'status',
   templateUrl: './status.component.html',
-  styleUrls: ['./status.component.css'],
+  styleUrls: [],
   directives: [
-    MD_LIST_DIRECTIVES,
-    MD_TOOLBAR_DIRECTIVES,
-    MD_CARD_DIRECTIVES,
-    BreadcrumbsComponent,
-    ROUTER_DIRECTIVES,
+    CORE_DIRECTIVES,
+    PolymerElement('paper-dropdown-menu'),
+    PolymerElement('paper-listbox'),
+    PolymerElement('paper-item'),
+    HeatmapComponent
   ]
 })
-export class StatusComponent {
-  title = 'STATUS';
 
-  /*Hard coded until further development of other pages*/
-  cellName = "test"
-  keyspaceName = "test_keyspace";
-  shardName = "0";
-  type = "replica";
+export class StatusComponent implements AfterViewInit {
+
+  constructor(private componentResolver: ComponentResolver, private vcRef: ViewContainerRef) {}
+
+  ngAfterViewInit() {
+      // Dynamically adding a heatmap component to the current view.
+      this.componentResolver.resolveComponent(HeatmapComponent).then(factory => {
+        let map = this.vcRef.createComponent(factory);
+        //TODO(pkulshre): set input variables of the heatmap component.
+      });
+  }
 }
-

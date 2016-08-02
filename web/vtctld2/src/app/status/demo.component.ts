@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CORE_DIRECTIVES } from '@angular/common';
-import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
+
 import { PolymerElement } from '@vaadin/angular2-polymer';
 
 import { HeatmapComponent } from './heatmap.component';
@@ -12,7 +12,6 @@ import { HeatmapComponent } from './heatmap.component';
   styleUrls: [],
   directives: [
     CORE_DIRECTIVES,
-    MD_BUTTON_DIRECTIVES,
     PolymerElement('paper-dropdown-menu'),
     PolymerElement('paper-listbox'),
     PolymerElement('paper-item'),
@@ -21,19 +20,19 @@ import { HeatmapComponent } from './heatmap.component';
 })
 
 export class TemplateComponent implements OnInit {
-  /* Needed to create a heatmap */
+  // Needed to create a heatmap.
   public data: number[][];
-  public xLabels: Array<String>;
-  public yLabels: Array<String>;
-  public heatmapName: String;
+  public xLabels: Array<string>;
+  public yLabels: Array<string>;
+  public heatmapName: string;
 
-  /* Needed for the three dropdown menus */
-  public keyspaces: Array<String>;
-  public cells: Array<String>;
-  public tabletTypes: Array<String>;
+  // Needed for the three dropdown menus.
+  public keyspaces: Array<string>;
+  public cells: Array<string>;
+  public tabletTypes: Array<string>;
 
   ngOnInit() {
-    /* TODO(pkulshre) implement service to obtain data in this method */
-    /* TODO(pkulshre) implement services to obtain keyspace, cell, type information */
+    // TODO(pkulshre): implement service to obtain data in this method.
+    // TODO(pkulshre): implement services to obtain keyspace, cell, type information.
   }
 }

@@ -11,7 +11,9 @@
   <link rel="stylesheet" href="main.css">
 
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-  
+
+  <script src="bower_components/webcomponentsjs/webcomponents-lite.min.js"></script>
+  <link rel="import" href="elements.html">
 </head>
 <body class="flex-column">
   <app-root class="flex-column flex-grow">Loading...</app-root>
@@ -20,9 +22,11 @@
   <script src="{{.}}"></script>
   {{/each}}
   <script>
-  System.import('system-config.js').then(function () {
-      System.import('main');
-  }).catch(console.error.bind(console));
+    document.addEventListener('WebComponentsReady', function() {
+      System.import('system-config.js').then(function () {
+        System.import('main');
+      }).catch(console.error.bind(console));
+    });
   </script>
 </body>
 </html>

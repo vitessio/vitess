@@ -1,3 +1,21 @@
-<div id="{{heatmapName}}">
-   <!-- Plotly chart will be drawn inside this DIV -->
-</div>
+<table cellspacing="0" cellpadding="0">
+  <tr height="25">
+    <td></td>
+    <td></td>
+    <td [attr.rowspan]="getTotalRows()">
+      <div id="{{name}}" >
+      </div>
+    </td>
+  </tr>
+
+  <div *ngFor="let label of yLabels">
+    <tr [attr.height]="getRowHeight()">
+      <td [attr.rowspan]="label.tabletTypes.length" class="bordered"> {{label.cell}} </td>
+      <td class="bordered">{{label.tabletTypes[0]}}</td>
+    </tr>
+
+    <tr [attr.height]="getRowHeight()" *ngFor="let l of label.tabletTypes | slice:1">
+      <td class="bordered">{{l}}</td>
+    </tr>
+  </div>
+</table>

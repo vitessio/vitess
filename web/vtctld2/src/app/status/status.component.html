@@ -1,15 +1,22 @@
-<h1>{{title}}</h1>
+<!-- Keyspace selector --> 
+<paper-dropdown-menu label="Keyspace">
+  <paper-listbox class="dropdown-content" *ngFor="let k of keyspaces">
+    <paper-item> {{k}} </paper-item>
+    <paper-item> all </paper-item>
+  </paper-listbox>
+</paper-dropdown-menu>
 
-<vt-breadcrumbs [route]="['/status']" [crumbs]="breadcrumbs"></vt-breadcrumbs>
+<!-- Cell selector -->
+<paper-dropdown-menu label="Cell">
+  <paper-listbox class="dropdown-content" *ngFor="let c of cells" >
+    <paper-item>  {{c}} </paper-item>
+  </paper-listbox>
+</paper-dropdown-menu>
 
-<a [routerLink]="['/tabletStatus']" [queryParams]="{ cell: cellName,
-  keyspace: keyspaceName, shard: shardName,type: type }">
-  <button md-button-raised> TabletView </button>
-</a>
-<br>
-<br>
-<a [routerLink]="['/heatmap']" [queryParams]="">
-  <button md-button-raised> Plotly heatmap </button>
-</a>
+<!-- Type selector -->
+<paper-dropdown-menu label="Type">
+  <paper-listbox class="dropdown-content" *ngFor="let t of tabletType">
+    <paper-item> {{t}} </paper-item>
+  </paper-listbox>
+</paper-dropdown-menu>
 
-<router-outlet> </router-outlet>

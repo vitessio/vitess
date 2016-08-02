@@ -4,7 +4,7 @@
   </a>
 
   <span *ngFor="let crumb of crumbs; let isLast = last">
-   <a md-button [routerLink]="route" [queryParams]="crumb.queryParams" [class.highlighted]="isLast">
+   <a md-button [routerLink]="route" [queryParams]="crumb.queryParams">
       {{crumb.name | uppercase}}
    </a>
   </span>
