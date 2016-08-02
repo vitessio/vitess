@@ -64,6 +64,10 @@ type l2VTGateGateway struct {
 	// It is indexed by keyspace name.
 	connMap map[string][]*l2VTGateConn
 
+	// tabletConnMap is a map of address to tabletconn.TabletConn objects.
+	// It is used so we don't open multiple connections to the same backend.
+	tabletConnMap map[string]tabletconn.TabletConn
+
 	// statusAggregators is a map indexed by the key
 	// l2vtgate address + tablet type
 	statusAggregators map[string]*TabletStatusAggregator
@@ -73,6 +77,7 @@ func createL2VTGateGateway(hc discovery.HealthCheck, topoServer topo.Server, ser
 	lg := &l2VTGateGateway{
 		retryCount:        retryCount,
 		connMap:           make(map[string][]*l2VTGateConn),
+		tabletConnMap:     make(map[string]tabletconn.TabletConn),
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 	}
 
@@ -108,12 +113,17 @@ func (lg *l2VTGateGateway) addL2VTGateConn(addr, keyspace, shard string) error {
 		}
 	}
 
-	// Dial in the background
-	conn, err := tabletconn.GetDialer()(&topodatapb.Tablet{
-		Hostname: addr,
-	}, 0)
-	if err != nil {
-		return err
+	// See if we already have a valid connection
+	conn, ok := lg.tabletConnMap[addr]
+	if !ok {
+		// Dial in the background, as specified by timeout=0.
+		conn, err = tabletconn.GetDialer()(&topodatapb.Tablet{
+			Hostname: addr,
+		}, 0)
+		if err != nil {
+			return err
+		}
+		lg.tabletConnMap[addr] = conn
 	}
 
 	lg.connMap[keyspace] = append(lg.connMap[keyspace], &l2VTGateConn{
@@ -272,12 +282,11 @@ func (lg *l2VTGateGateway) Close(ctx context.Context) error {
 	lg.mu.Lock()
 	defer lg.mu.Unlock()
 
-	// FIXME(alainjobart) not sure about the ongoing queries
-	for _, a := range lg.connMap {
-		for _, c := range a {
-			c.conn.Close()
-		}
+	// This will wait for all on-going queries before returning.
+	for _, c := range lg.tabletConnMap {
+		c.Close()
 	}
+	lg.tabletConnMap = make(map[string]tabletconn.TabletConn)
 	lg.connMap = make(map[string][]*l2VTGateConn)
 	return nil
 }
