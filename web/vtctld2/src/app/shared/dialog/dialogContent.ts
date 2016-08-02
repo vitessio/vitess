@@ -9,12 +9,14 @@
   values for the server call. 
 */
 import { Flag } from '../flags/flag';
+import { PrepareResponse } from '../prepare-response';
+
 export class DialogContent {
   public name: string;
   public flags: {};
-  public requiredFlags : {};
+  public requiredFlags: {};
   private prepareFunction: any;
-  public constructor(name: string = "", flags: any = {}, requiredFlags: any = {}, prepareFunction: any =undefined) {
+  public constructor(name= '', flags: any = {}, requiredFlags: any = {}, prepareFunction: any= undefined) {
     this.name = name;
     this.flags = flags;
     this.requiredFlags = requiredFlags;
@@ -28,9 +30,9 @@ export class DialogContent {
     TODO(dsslater): generalize and sanatize for non url encoded transmission.
   */
   public getBody(action: string): string {
-    let body = "action=" + action;
+    let body = 'action=' + action;
     for (let flagName of Object.keys(this.flags)) {
-      let flagStr = "&" + flagName + "=" + this.flags[flagName].getValue();
+      let flagStr = '&' + flagName + '=' + this.flags[flagName].getValue();
       body += flagStr;
     }
     return body;
@@ -49,7 +51,7 @@ export class DialogContent {
 
   */
   public canDisplay(flagId: string) {
-    if (this.flags[flagId] == undefined || this.flags[flagId].show == false) {
+    if (this.flags[flagId] === undefined || this.flags[flagId].show === false) {
       return false;
     }
     for (let testEmpty of this.flags[flagId].blockOnEmptyList) {
@@ -65,15 +67,15 @@ export class DialogContent {
     return true;
   }
 
-  public getParam(paramId: string): string{
-    if ( paramId in this.flags){
+  public getParam(paramId: string): string {
+    if (paramId in this.flags) {
       return this.flags[paramId].getStrValue();
     }
-    return ""
+    return '';
   }
 
   public setParam(paramId: string, value: any) {
-    if (paramId in this.flags){
+    if (paramId in this.flags) {
       this.flags[paramId].setValue(value);
     }
   }
@@ -85,23 +87,23 @@ export class DialogContent {
   public getFlags(): Flag[] {
     let flags = [];
     for (let flagName of Object.keys(this.flags)) {
-      flags.push(this.flags[flagName])
+      flags.push(this.flags[flagName]);
     }
-    flags.sort(this.orderFlags)
+    flags.sort(this.orderFlags);
     return flags;
   }
 
-  private orderFlags(a,b): number{
+  private orderFlags(a, b): number {
     return a.position - b.position;
   }
 
   /*
     Checks that all required flags have been set to some non-empty value
-    if more granularity is re
+    if more granularity is required use a prepareFunction.
   */
-  public canSubmit(): boolean{
+  public canSubmit(): boolean {
     for (let flagId of Object.keys(this.requiredFlags)) {
-      if (this.getParam(flagId) == "") {
+      if (this.getParam(flagId) === '') {
         return false;
       }
     }
@@ -113,23 +115,19 @@ export class DialogContent {
   }
 
   /*
-    Returns true if sanitization was performed successfully and the instance 
-    flag object can be trusted to be sent to server. Returns false if the 
-    supplied prepare function does not return with an OK response.
-    prepare funtion return should take the following form:
-    return { 
-            success: true/false, 
-            flags: newFlagsObject, 
-            message:"Error message for if success is not true"};
+    If a prepareFunction has been provided it will be called. If the
+    PrepareRepsonse object returned by the prepareFunction has success set to
+    true than the instance flags will bet set to the flags in the response.
+    The PrepareResponse will also be returned to the caller.
   */
-  public prepare(): any {
-    if (this.prepareFunction == undefined) {
-      return {success:true, message:""};
+  public prepare(): PrepareResponse {
+    if (this.prepareFunction === undefined) {
+      return new PrepareResponse(true);
     }
     let resp = this.prepareFunction(this.flags);
     if (resp.success) {
       this.flags = resp.flags;
     }
-    return {success:resp.success, message:resp.message};
+    return resp;
   }
 }

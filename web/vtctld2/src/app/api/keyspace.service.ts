@@ -59,7 +59,7 @@ export class KeyspaceService {
   }
 
   /*
-    Returns an observable that fires a fulled built keyspace from the 
+    Returns an observable that fires a fully built keyspace from the 
     keyspace's shards, sharding info, and a list of serving shards.
   */
   buildKeyspace(keyspaceName: string, servingShards: string[]): Observable<any> {
