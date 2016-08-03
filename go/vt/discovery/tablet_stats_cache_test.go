@@ -49,7 +49,7 @@ func TestTabletStatsCache(t *testing.T) {
 	}
 
 	// update stats with a change that won't change health array
-	stillHhealthyTs1 := &TabletStats{
+	stillHealthyTs1 := &TabletStats{
 		Key:     "t1",
 		Tablet:  tablet1,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -57,9 +57,9 @@ func TestTabletStatsCache(t *testing.T) {
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 2, CpuUsage: 0.2},
 	}
-	tsc.StatsUpdate(stillHhealthyTs1)
+	tsc.StatsUpdate(stillHealthyTs1)
 
-	// check it's there
+	// check the previous ts1 is still there, as the new one is ignored.
 	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
 	if len(a) != 1 || !reflect.DeepEqual(*ts1, a[0]) {
 		t.Errorf("unexpected result: %v", a)
