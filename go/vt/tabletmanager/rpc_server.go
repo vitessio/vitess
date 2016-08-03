@@ -20,6 +20,22 @@ import (
 // Utility functions for RPC service
 //
 
+// lockAndCheck is used at the beginning of an RPC call, to lock the
+// action mutex. It returns ctx.Err() if <-ctx.Done() after the lock.
+func (agent *ActionAgent) lockAndCheck(ctx context.Context) error {
+	agent.actionMutex.Lock()
+
+	// After we take the lock (which could take a long time), we
+	// check the client is still here.
+	select {
+	case <-ctx.Done():
+		agent.actionMutex.Unlock()
+		return ctx.Err()
+	default:
+		return nil
+	}
+}
+
 // rpcWrapper handles all the logic for rpc calls.
 func (agent *ActionAgent) rpcWrapper(ctx context.Context, name TabletAction, args, reply interface{}, verbose bool, f func() error, lock bool) (err error) {
 	defer func() {

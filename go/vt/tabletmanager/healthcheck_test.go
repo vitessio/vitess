@@ -709,7 +709,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 
 	// Run TER to turn us into a proper master, wait for it to finish.
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 19 * time.Second
-	if err := agent.RPCWrapLock(ctx, TabletActionExternallyReparented, "", "", false, func() error {
+	if err := agent.RPCWrap(ctx, TabletActionExternallyReparented, "", "", func() error {
 		return agent.TabletExternallyReparented(ctx, "unused_id")
 	}); err != nil {
 		t.Fatal(err)

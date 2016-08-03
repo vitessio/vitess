@@ -264,7 +264,7 @@ func (s *server) StartSlave(ctx context.Context, request *tabletmanagerdatapb.St
 func (s *server) TabletExternallyReparented(ctx context.Context, request *tabletmanagerdatapb.TabletExternallyReparentedRequest) (*tabletmanagerdatapb.TabletExternallyReparentedResponse, error) {
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &tabletmanagerdatapb.TabletExternallyReparentedResponse{}
-	return response, s.agent.RPCWrapLock(ctx, tabletmanager.TabletActionExternallyReparented, request, response, false, func() error {
+	return response, s.agent.RPCWrap(ctx, tabletmanager.TabletActionExternallyReparented, request, response, func() error {
 		return s.agent.TabletExternallyReparented(ctx, request.ExternalId)
 	})
 }
