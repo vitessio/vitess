@@ -1,6 +1,6 @@
 import { Component } from '@angular/core';
 
-import { DialogContent } from '../shared/dialog/dialogContent';
+import { DialogContent } from '../shared/dialog/dialog-content';
 
 @Component({
   moduleId: module.id,

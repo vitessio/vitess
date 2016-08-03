@@ -10,12 +10,13 @@ import { PolymerElement } from '@vaadin/angular2-polymer';
 
 import { AddButtonComponent } from '../shared/add-button.component';
 import { DialogComponent } from '../shared/dialog/dialog.component';
-import { DialogContent } from '../shared/dialog/dialogContent';
-import { DialogSettings } from '../shared/dialog/dialogSettings';
+import { DialogContent } from '../shared/dialog/dialog-content';
+import { DialogSettings } from '../shared/dialog/dialog-settings';
 import { KeyspaceNameFlag, LowerBoundFlag, ShardNameFlag, UpperBoundFlag } from '../shared/flags/shard.flags';
-import { KeyspaceService } from '../api/keyspace.service';
-import { ShardService } from '../api/shard.service';
 import { KeyspaceExtraComponent } from './keyspace-extra.component';
+import { KeyspaceService } from '../api/keyspace.service';
+import { PrepareResponse } from '../shared/prepare-response';
+import { ShardService } from '../api/shard.service';
 
 @Component({
   moduleId: module.id,
@@ -58,8 +59,6 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
         this.getKeyspace(this.keyspaceName);
       }
     );
-      let test = '-';
-      console.log(test.split('-'));
   }
 
   ngOnDestroy() {

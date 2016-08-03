@@ -9,8 +9,8 @@ import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
 
 import { PolymerElement } from '@vaadin/angular2-polymer';
 
-import { DialogContent } from './dialogContent';
-import { DialogSettings } from './dialogSettings';
+import { DialogContent } from './dialog-content';
+import { DialogSettings } from './dialog-settings';
 import { KeyspaceService } from '../../api/keyspace.service';
 import { TabletService } from '../../api/tablet.service';
 
@@ -48,7 +48,6 @@ export class DialogComponent implements OnInit {
    constructor(private componentResolver: ComponentResolver, private vc: ViewContainerRef) {}
 
   ngOnInit() {
-    //console.log(dialogExtraContent, "T");
     if (this.dialogExtraContent) {
       this.componentResolver.resolveComponent(this.dialogExtraContent).then(factory => {
         this.extraContentReference = this.vc.createComponent(factory, 0);
