@@ -80,7 +80,7 @@ func InitVtctld(ts topo.Server) {
 			shardingColumnType := r.FormValue("shardingColumnType")
 			force := r.FormValue("force") == "true"
 
-			kit, err = key.ParseKeyspaceIDType(shardingColumnType)
+			kit, err := key.ParseKeyspaceIDType(shardingColumnType)
 			if err != nil {
 				return "", err
 			}
