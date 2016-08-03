@@ -122,7 +122,7 @@ func expectRPCWrapLockPanic(t *testing.T, err error) {
 	}
 }
 
-func expectHandleRPCPanicPanic(t *testing.T, name string, verbose bool, err error) {
+func expectHandleRPCPanic(t *testing.T, name string, verbose bool, err error) {
 	expected := fmt.Sprintf("HandleRPCPanic caught panic during %v with verbose %v", name, verbose)
 	if err == nil || !strings.Contains(err.Error(), expected) {
 		t.Fatalf("Expected a panic error with '%v' but got: %v", expected, err)
@@ -327,9 +327,9 @@ func agentRPCTestSetReadOnly(ctx context.Context, t *testing.T, client tmclient.
 
 func agentRPCTestSetReadOnlyPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.SetReadOnly(ctx, tablet)
-	expectRPCWrapLockPanic(t, err)
+	expectHandleRPCPanic(t, "SetReadOnly", true /*verbose*/, err)
 	err = client.SetReadWrite(ctx, tablet)
-	expectRPCWrapLockPanic(t, err)
+	expectHandleRPCPanic(t, "SetReadWrite", true /*verbose*/, err)
 }
 
 var testChangeTypeValue = topodatapb.TabletType_REPLICA
@@ -761,7 +761,7 @@ func agentRPCTestTabletExternallyReparented(ctx context.Context, t *testing.T, c
 
 func agentRPCTestTabletExternallyReparentedPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.TabletExternallyReparented(ctx, tablet, "")
-	expectHandleRPCPanicPanic(t, "TabletExternallyReparented", false /*verbose*/, err)
+	expectHandleRPCPanic(t, "TabletExternallyReparented", false /*verbose*/, err)
 }
 
 var testGetSlavesResult = []string{"slave1", "slave2"}
