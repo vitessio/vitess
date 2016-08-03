@@ -439,13 +439,14 @@ Blocks until no new queries were observed on all tablets with the given tablet t
 
 #### Example
 
-<pre class="command-example">WaitForDrain [-timeout &lt;duration&gt;] &lt;keyspace/shard&gt; &lt;served tablet type&gt;</pre>
+<pre class="command-example">WaitForDrain [-timeout &lt;duration&gt;] [-retry_delay &lt;duration&gt;] [-initial_wait &lt;duration&gt;] &lt;keyspace/shard&gt; &lt;served tablet type&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | cells | string | Specifies a comma-separated list of cells to look for tablets |
+| initial_wait | Duration | Time to wait for all tablets to check in |
 | retry_delay | Duration | Time to wait between two checks |
 | timeout | Duration | Timeout after which the command fails |
 
