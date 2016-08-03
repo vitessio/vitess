@@ -274,6 +274,9 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 		topodatapb.TabletType_MASTER,
 		session,
 		false)
+	if err != nil {
+		t.Fatalf("ExecuteKeyspaceIds failed: %v", err)
+	}
 	if qr.RowsAffected != 2 {
 		t.Errorf("want 2, got %v", qr.RowsAffected)
 	}
@@ -347,6 +350,9 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 		topodatapb.TabletType_MASTER,
 		nil,
 		false)
+	if err != nil {
+		t.Fatalf("ExecuteKeyRanges failed: %v", err)
+	}
 	if qr.RowsAffected != 2 {
 		t.Errorf("want 2, got %v", qr.RowsAffected)
 	}
@@ -444,6 +450,9 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		topodatapb.TabletType_MASTER,
 		nil,
 		false)
+	if err != nil {
+		t.Fatalf("ExecuteEntityIds failed: %v", err)
+	}
 	if qr.RowsAffected != 2 {
 		t.Errorf("want 2, got %v", qr.RowsAffected)
 	}
@@ -477,7 +486,7 @@ func TestVTGateExecuteBatchShards(t *testing.T) {
 		false,
 		nil)
 	if err != nil {
-		t.Errorf("want nil, got %v", err)
+		t.Fatalf("want nil, got %v", err)
 	}
 	if len(qrl) != 2 {
 		t.Errorf("want 2, got %v", len(qrl))
@@ -541,7 +550,7 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 		false,
 		nil)
 	if err != nil {
-		t.Errorf("want nil, got %v", err)
+		t.Fatalf("want nil, got %v", err)
 	}
 	if len(qrl) != 2 {
 		t.Errorf("want 2, got %v", len(qrl))
