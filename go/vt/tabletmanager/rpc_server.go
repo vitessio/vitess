@@ -36,6 +36,37 @@ func (agent *ActionAgent) lockAndCheck(ctx context.Context) error {
 	}
 }
 
+// HandleRPCPanic is part of the RPCAgent interface.
+func (agent *ActionAgent) HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error) {
+	// panic handling
+	if x := recover(); x != nil {
+		log.Errorf("TabletManager.%v(%v) on %v panic: %v\n%s", name, args, topoproto.TabletAliasString(agent.TabletAlias), x, tb.Stack(4))
+		*err = fmt.Errorf("caught panic during %v: %v", name, x)
+		return
+	}
+
+	// quick check for fast path
+	if !verbose && *err == nil {
+		return
+	}
+
+	// we gotta log something, get the source
+	from := ""
+	ci, ok := callinfo.FromContext(ctx)
+	if ok {
+		from = ci.Text()
+	}
+
+	if *err != nil {
+		// error case
+		log.Warningf("TabletManager.%v(%v)(on %v from %v) error: %v", name, args, topoproto.TabletAliasString(agent.TabletAlias), from, (*err).Error())
+		*err = fmt.Errorf("TabletManager.%v on %v error: %v", name, topoproto.TabletAliasString(agent.TabletAlias), *err)
+	} else {
+		// success case
+		log.Infof("TabletManager.%v(%v)(on %v from %v): %#v", name, args, topoproto.TabletAliasString(agent.TabletAlias), from, reply)
+	}
+}
+
 // rpcWrapper handles all the logic for rpc calls.
 func (agent *ActionAgent) rpcWrapper(ctx context.Context, name TabletAction, args, reply interface{}, verbose bool, f func() error, lock bool) (err error) {
 	defer func() {

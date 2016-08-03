@@ -261,12 +261,11 @@ func (s *server) StartSlave(ctx context.Context, request *tabletmanagerdatapb.St
 	})
 }
 
-func (s *server) TabletExternallyReparented(ctx context.Context, request *tabletmanagerdatapb.TabletExternallyReparentedRequest) (*tabletmanagerdatapb.TabletExternallyReparentedResponse, error) {
+func (s *server) TabletExternallyReparented(ctx context.Context, request *tabletmanagerdatapb.TabletExternallyReparentedRequest) (response *tabletmanagerdatapb.TabletExternallyReparentedResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "TabletExternallyReparented", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response := &tabletmanagerdatapb.TabletExternallyReparentedResponse{}
-	return response, s.agent.RPCWrap(ctx, tabletmanager.TabletActionExternallyReparented, request, response, func() error {
-		return s.agent.TabletExternallyReparented(ctx, request.ExternalId)
-	})
+	response = &tabletmanagerdatapb.TabletExternallyReparentedResponse{}
+	return response, s.agent.TabletExternallyReparented(ctx, request.ExternalId)
 }
 
 func (s *server) TabletExternallyElected(ctx context.Context, request *tabletmanagerdatapb.TabletExternallyElectedRequest) (*tabletmanagerdatapb.TabletExternallyElectedResponse, error) {

@@ -122,6 +122,13 @@ func expectRPCWrapLockPanic(t *testing.T, err error) {
 	}
 }
 
+func expectHandleRPCPanicPanic(t *testing.T, name string, verbose bool, err error) {
+	expected := fmt.Sprintf("HandleRPCPanic caught panic during %v with verbose %v", name, verbose)
+	if err == nil || !strings.Contains(err.Error(), expected) {
+		t.Fatalf("Expected a panic error with '%v' but got: %v", expected, err)
+	}
+}
+
 //
 // Various read-only methods
 //
@@ -754,7 +761,7 @@ func agentRPCTestTabletExternallyReparented(ctx context.Context, t *testing.T, c
 
 func agentRPCTestTabletExternallyReparentedPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.TabletExternallyReparented(ctx, tablet, "")
-	expectRPCWrapPanic(t, err)
+	expectHandleRPCPanicPanic(t, "TabletExternallyReparented", false /*verbose*/, err)
 }
 
 var testGetSlavesResult = []string{"slave1", "slave2"}
@@ -1193,6 +1200,14 @@ func (fra *fakeRPCAgent) RPCWrapLock(ctx context.Context, name tabletmanager.Tab
 		}
 	}()
 	return f()
+}
+
+// HandleRPCPanic is part of the RPCAgent interface
+func (fra *fakeRPCAgent) HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error) {
+	if x := recover(); x != nil {
+		// Use the panic case to make sure 'name' and 'verbose' are right.
+		*err = fmt.Errorf("HandleRPCPanic caught panic during %v with verbose %v", name, verbose)
+	}
 }
 
 // methods to test individual API calls
