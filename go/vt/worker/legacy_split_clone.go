@@ -64,6 +64,7 @@ type LegacySplitCloneWorker struct {
 	// healthCheck tracks the health of all MASTER and REPLICA tablets.
 	// It must be closed at the end of the command.
 	healthCheck discovery.HealthCheck
+	tsc         *discovery.TabletStatsCache
 	// destinationShardWatchers contains a TopologyWatcher for each destination
 	// shard. It updates the list of tablets in the healthcheck if replicas are
 	// added/removed.
@@ -333,7 +334,7 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 	// find an appropriate tablet in the source shards
 	scw.sourceAliases = make([]*topodatapb.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
-		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.healthCheck, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyTablets)
+		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.tsc, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyTablets)
 		if err != nil {
 			return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
 		}
@@ -363,6 +364,7 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 
 	// Initialize healthcheck and add destination shards to it.
 	scw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
+	scw.tsc = discovery.NewTabletStatsCache(scw.healthCheck, scw.cell)
 	for _, si := range scw.destinationShards {
 		watcher := discovery.NewShardReplicationWatcher(scw.wr.TopoServer(), scw.healthCheck,
 			scw.cell, si.Keyspace(), si.ShardName(),
@@ -375,12 +377,10 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 	for _, si := range scw.destinationShards {
 		waitCtx, waitCancel := context.WithTimeout(ctx, 10*time.Second)
 		defer waitCancel()
-		if err := discovery.WaitForTablets(waitCtx, scw.healthCheck,
-			scw.cell, si.Keyspace(), si.ShardName(), []topodatapb.TabletType{topodatapb.TabletType_MASTER}); err != nil {
+		if err := scw.tsc.WaitForTablets(waitCtx, scw.cell, si.Keyspace(), si.ShardName(), []topodatapb.TabletType{topodatapb.TabletType_MASTER}); err != nil {
 			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v: %v", si.Keyspace(), si.ShardName(), err)
 		}
-		masters := discovery.GetCurrentMaster(
-			scw.healthCheck.GetTabletStatsFromTarget(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER))
+		masters := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
 		if len(masters) == 0 {
 			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v in HealthCheck: empty TabletStats list", si.Keyspace(), si.ShardName())
 		}
@@ -499,7 +499,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 					throttler := scw.destinationThrottlers[keyspaceAndShard]
 					defer throttler.ThreadFinished(threadID)
 
-					executor := newExecutor(scw.wr, scw.healthCheck, throttler, keyspace, shard, threadID)
+					executor := newExecutor(scw.wr, scw.tsc, throttler, keyspace, shard, threadID)
 					if err := executor.fetchLoop(ctx, insertChannel); err != nil {
 						processError("executer.FetchLoop failed: %v", err)
 					}
@@ -626,7 +626,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Making and populating blp_checkpoint table")
 				keyspaceAndShard := topoproto.KeyspaceShardString(keyspace, shard)
-				if err := runSQLCommands(ctx, scw.wr, scw.healthCheck, keyspace, shard, scw.destinationDbNames[keyspaceAndShard], queries); err != nil {
+				if err := runSQLCommands(ctx, scw.wr, scw.tsc, keyspace, shard, scw.destinationDbNames[keyspaceAndShard], queries); err != nil {
 					processError("blp_checkpoint queries failed: %v", err)
 				}
 			}(si.Keyspace(), si.ShardName())

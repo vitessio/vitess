@@ -36,7 +36,7 @@ func NewTabletTracker() *TabletTracker {
 // Track will pick the least used tablet from "stats", increment its usage by 1
 // and return it.
 // "stats" must not be empty.
-func (t *TabletTracker) Track(stats []*discovery.TabletStats) *topodata.TabletAlias {
+func (t *TabletTracker) Track(stats []discovery.TabletStats) *topodata.TabletAlias {
 	if len(stats) == 0 {
 		panic("stats must not be empty")
 	}

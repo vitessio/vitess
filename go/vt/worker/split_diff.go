@@ -203,7 +203,7 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 
 	// find an appropriate tablet in destination shard
 	var err error
-	sdw.destinationAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, nil /* healthCheck */, sdw.cell, sdw.keyspace, sdw.shard, sdw.minHealthyRdonlyTablets)
+	sdw.destinationAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, nil /* tsc */, sdw.cell, sdw.keyspace, sdw.shard, sdw.minHealthyRdonlyTablets)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", sdw.cell, sdw.keyspace, sdw.shard, err)
 	}
@@ -211,7 +211,7 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 	// find an appropriate tablet in the source shard
 	for _, ss := range sdw.shardInfo.SourceShards {
 		if ss.Uid == sdw.sourceUID {
-			sdw.sourceAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, nil /* healthCheck */, sdw.cell, sdw.keyspace, ss.Shard, sdw.minHealthyRdonlyTablets)
+			sdw.sourceAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, nil /* tsc */, sdw.cell, sdw.keyspace, ss.Shard, sdw.minHealthyRdonlyTablets)
 			if err != nil {
 				return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", sdw.cell, sdw.keyspace, ss.Shard, err)
 			}

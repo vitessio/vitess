@@ -23,26 +23,26 @@ import (
 // The main purpose of this struct is to aggregate the objects which won't
 // change during the execution and remove them from method signatures.
 type executor struct {
-	wr          *wrangler.Wrangler
-	healthCheck discovery.HealthCheck
-	throttler   *throttler.Throttler
-	keyspace    string
-	shard       string
-	threadID    int
+	wr        *wrangler.Wrangler
+	tsc       *discovery.TabletStatsCache
+	throttler *throttler.Throttler
+	keyspace  string
+	shard     string
+	threadID  int
 	// statsKey is the cached metric key which we need when we increment the stats
 	// variable when we get throttled.
 	statsKey []string
 }
 
-func newExecutor(wr *wrangler.Wrangler, healthCheck discovery.HealthCheck, throttler *throttler.Throttler, keyspace, shard string, threadID int) *executor {
+func newExecutor(wr *wrangler.Wrangler, tsc *discovery.TabletStatsCache, throttler *throttler.Throttler, keyspace, shard string, threadID int) *executor {
 	return &executor{
-		wr:          wr,
-		healthCheck: healthCheck,
-		throttler:   throttler,
-		keyspace:    keyspace,
-		shard:       shard,
-		threadID:    threadID,
-		statsKey:    []string{keyspace, shard, fmt.Sprint(threadID)},
+		wr:        wr,
+		tsc:       tsc,
+		throttler: throttler,
+		keyspace:  keyspace,
+		shard:     shard,
+		threadID:  threadID,
+		statsKey:  []string{keyspace, shard, fmt.Sprint(threadID)},
 	}
 }
 
@@ -74,7 +74,7 @@ func (e *executor) fetchLoop(ctx context.Context, insertChannel chan string) err
 // it fails due to a timeout or a retriable application error.
 //
 // executeFetchWithRetries will always get the current MASTER tablet from the
-// healthcheck instance. If no MASTER is available, it will keep retrying.
+// TabletStatsCache instance. If no MASTER is available, it will keep retrying.
 func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
 	retryDuration := *retryDuration
 	// We should keep retrying up until the retryCtx runs out.
@@ -86,16 +86,15 @@ func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
 		var master *discovery.TabletStats
 		var err error
 
-		// Get the current master from the HealthCheck.
-		masters := discovery.GetCurrentMaster(
-			e.healthCheck.GetTabletStatsFromTarget(e.keyspace, e.shard, topodatapb.TabletType_MASTER))
+		// Get the current master from the TabletStatsCache.
+		masters := e.tsc.GetHealthyTabletStats(e.keyspace, e.shard, topodatapb.TabletType_MASTER)
 		if len(masters) == 0 {
 			e.wr.Logger().Warningf("ExecuteFetch failed for keyspace/shard %v/%v because no MASTER is available; will retry until there is MASTER again", e.keyspace, e.shard)
 			statsRetryCount.Add(1)
 			statsRetryCounters.Add(retryCategoryNoMasterAvailable, 1)
 			goto retry
 		}
-		master = masters[0]
+		master = &masters[0]
 
 		// Block if we are throttled.
 		if e.throttler != nil {

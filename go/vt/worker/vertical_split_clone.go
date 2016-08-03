@@ -59,6 +59,7 @@ type VerticalSplitCloneWorker struct {
 	// healthCheck tracks the health of all MASTER and REPLICA tablets.
 	// It must be closed at the end of the command.
 	healthCheck discovery.HealthCheck
+	tsc         *discovery.TabletStatsCache
 	// destinationShardWatchers contains a TopologyWatcher for each destination
 	// shard. It updates the list of tablets in the healthcheck if replicas are
 	// added/removed.
@@ -295,7 +296,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 
 	// find an appropriate tablet in the source shard
 	var err error
-	vscw.sourceAlias, err = FindWorkerTablet(ctx, vscw.wr, vscw.cleaner, nil /* healthCheck */, vscw.cell, vscw.sourceKeyspace, "0", vscw.minHealthyRdonlyTablets)
+	vscw.sourceAlias, err = FindWorkerTablet(ctx, vscw.wr, vscw.cleaner, nil /* tsc */, vscw.cell, vscw.sourceKeyspace, "0", vscw.minHealthyRdonlyTablets)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/0: %v", vscw.cell, vscw.sourceKeyspace, err)
 	}
@@ -322,6 +323,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 
 	// Initialize healthcheck and add destination shards to it.
 	vscw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
+	vscw.tsc = discovery.NewTabletStatsCache(vscw.healthCheck, vscw.cell)
 	watcher := discovery.NewShardReplicationWatcher(vscw.wr.TopoServer(), vscw.healthCheck,
 		vscw.cell, vscw.destinationKeyspace, vscw.destinationShard,
 		*healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
@@ -331,12 +333,10 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	vscw.wr.Logger().Infof("Finding a MASTER tablet for each destination shard...")
 	waitCtx, waitCancel := context.WithTimeout(ctx, *waitForHealthyTabletsTimeout)
 	defer waitCancel()
-	if err := discovery.WaitForTablets(waitCtx, vscw.healthCheck,
-		vscw.cell, vscw.destinationKeyspace, vscw.destinationShard, []topodatapb.TabletType{topodatapb.TabletType_MASTER}); err != nil {
+	if err := vscw.tsc.WaitForTablets(waitCtx, vscw.cell, vscw.destinationKeyspace, vscw.destinationShard, []topodatapb.TabletType{topodatapb.TabletType_MASTER}); err != nil {
 		return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v (in cell: %v): %v", vscw.destinationKeyspace, vscw.destinationShard, vscw.cell, err)
 	}
-	masters := discovery.GetCurrentMaster(
-		vscw.healthCheck.GetTabletStatsFromTarget(vscw.destinationKeyspace, vscw.destinationShard, topodatapb.TabletType_MASTER))
+	masters := vscw.tsc.GetHealthyTabletStats(vscw.destinationKeyspace, vscw.destinationShard, topodatapb.TabletType_MASTER)
 	if len(masters) == 0 {
 		return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v (in cell: %v) in HealthCheck: empty TabletStats list", vscw.destinationKeyspace, vscw.destinationShard, vscw.cell)
 	}
@@ -430,7 +430,7 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 			defer destinationWaitGroup.Done()
 			defer destinationThrottler.ThreadFinished(threadID)
 
-			executor := newExecutor(vscw.wr, vscw.healthCheck, destinationThrottler, vscw.destinationKeyspace, vscw.destinationShard, threadID)
+			executor := newExecutor(vscw.wr, vscw.tsc, destinationThrottler, vscw.destinationKeyspace, vscw.destinationShard, threadID)
 			if err := executor.fetchLoop(ctx, insertChannel); err != nil {
 				processError("executer.FetchLoop failed: %v", err)
 			}
@@ -508,7 +508,7 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 		}
 		queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, vscw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), flags))
 		vscw.wr.Logger().Infof("Making and populating blp_checkpoint table")
-		if err := runSQLCommands(ctx, vscw.wr, vscw.healthCheck, vscw.destinationKeyspace, vscw.destinationShard, dbName, queries); err != nil {
+		if err := runSQLCommands(ctx, vscw.wr, vscw.tsc, vscw.destinationKeyspace, vscw.destinationShard, dbName, queries); err != nil {
 			processError("blp_checkpoint queries failed: %v", err)
 		}
 		if firstError != nil {

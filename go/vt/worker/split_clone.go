@@ -71,6 +71,7 @@ type SplitCloneWorker struct {
 	// healthCheck tracks the health of all MASTER and REPLICA tablets.
 	// It must be closed at the end of the command.
 	healthCheck discovery.HealthCheck
+	tsc         *discovery.TabletStatsCache
 	// shardWatchers contains a TopologyWatcher for each source and destination
 	// shard. It updates the list of tablets in the healthcheck if replicas are
 	// added/removed.
@@ -461,6 +462,7 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 
 	// Initialize healthcheck and add destination shards to it.
 	scw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
+	scw.tsc = discovery.NewTabletStatsCache(scw.healthCheck, scw.cell)
 	allShards := append(scw.sourceShards, scw.destinationShards...)
 	for _, si := range allShards {
 		watcher := discovery.NewShardReplicationWatcher(scw.wr.TopoServer(), scw.healthCheck,
@@ -483,7 +485,7 @@ func (scw *SplitCloneWorker) findOfflineSourceTablets(ctx context.Context) error
 	scw.sourceAliases = make([]*topodatapb.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
 		var err error
-		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.healthCheck, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyTablets)
+		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.tsc, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyTablets)
 		if err != nil {
 			return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
 		}
@@ -523,12 +525,10 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 	for _, si := range scw.destinationShards {
 		waitCtx, waitCancel := context.WithTimeout(ctx, *waitForHealthyTabletsTimeout)
 		defer waitCancel()
-		if err := discovery.WaitForTablets(waitCtx, scw.healthCheck,
-			scw.cell, si.Keyspace(), si.ShardName(), []topodatapb.TabletType{topodatapb.TabletType_MASTER}); err != nil {
+		if err := scw.tsc.WaitForTablets(waitCtx, scw.cell, si.Keyspace(), si.ShardName(), []topodatapb.TabletType{topodatapb.TabletType_MASTER}); err != nil {
 			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v (in cell: %v): %v", si.Keyspace(), si.ShardName(), scw.cell, err)
 		}
-		masters := discovery.GetCurrentMaster(
-			scw.healthCheck.GetTabletStatsFromTarget(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER))
+		masters := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
 		if len(masters) == 0 {
 			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v (in cell: %v) in HealthCheck: empty TabletStats list", si.Keyspace(), si.ShardName(), scw.cell)
 		}
@@ -560,7 +560,7 @@ func (scw *SplitCloneWorker) waitForTablets(ctx context.Context, shardInfos []*t
 			// We wait for --min_healthy_rdonly_tablets because we will use several
 			// tablets per shard to spread reading the chunks of rows across as many
 			// tablets as possible.
-			if _, err := waitForHealthyRdonlyTablets(ctx, scw.wr, scw.healthCheck, scw.cell, keyspace, shard, scw.minHealthyRdonlyTablets, timeout); err != nil {
+			if _, err := waitForHealthyRdonlyTablets(ctx, scw.wr, scw.tsc, scw.cell, keyspace, shard, scw.minHealthyRdonlyTablets, timeout); err != nil {
 				rec.RecordError(err)
 			}
 		}(si.Keyspace(), si.ShardName())
@@ -607,8 +607,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	} else {
 		// Pick any healthy serving source tablet.
 		si := scw.sourceShards[0]
-		tablets := discovery.RemoveUnhealthyTablets(
-			scw.healthCheck.GetTabletStatsFromTarget(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY))
+		tablets := discovery.RemoveUnhealthyTablets(scw.tsc.GetTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY))
 		if len(tablets) == 0 {
 			// We fail fast on this problem and don't retry because at the start all tablets should be healthy.
 			return fmt.Errorf("no healthy RDONLY tablet in source shard (%v) available (required to find out the schema)", topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName()))
@@ -682,7 +681,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					defer destinationWaitGroup.Done()
 					defer throttler.ThreadFinished(threadID)
 
-					executor := newExecutor(scw.wr, scw.healthCheck, throttler, keyspace, shard, threadID)
+					executor := newExecutor(scw.wr, scw.tsc, throttler, keyspace, shard, threadID)
 					if err := executor.fetchLoop(ctx, insertChannel); err != nil {
 						processError("executer.FetchLoop failed: %v", err)
 					}
@@ -755,8 +754,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 						sourceAlias = scw.sourceAliases[shardIndex]
 					} else {
 						// Pick any healthy serving source tablet.
-						tablets := discovery.RemoveUnhealthyTablets(
-							scw.healthCheck.GetTabletStatsFromTarget(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY))
+						tablets := discovery.RemoveUnhealthyTablets(scw.tsc.GetTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY))
 						if len(tablets) == 0 {
 							processError("no healthy RDONLY tablets in source shard (%v) available", topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName()))
 							return
@@ -782,8 +780,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				}
 				for shardIndex, si := range scw.destinationShards {
 					// Pick any healthy serving destination tablet.
-					tablets := discovery.RemoveUnhealthyTablets(
-						scw.healthCheck.GetTabletStatsFromTarget(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY))
+					tablets := discovery.RemoveUnhealthyTablets(scw.tsc.GetTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY))
 					if len(tablets) == 0 {
 						processError("no healthy RDONLY tablets in destination shard (%v) available", topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName()))
 						return
@@ -891,7 +888,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					defer destinationWaitGroup.Done()
 					scw.wr.Logger().Infof("Making and populating blp_checkpoint table")
 					keyspaceAndShard := topoproto.KeyspaceShardString(keyspace, shard)
-					if err := runSQLCommands(ctx, scw.wr, scw.healthCheck, keyspace, shard, scw.destinationDbNames[keyspaceAndShard], queries); err != nil {
+					if err := runSQLCommands(ctx, scw.wr, scw.tsc, keyspace, shard, scw.destinationDbNames[keyspaceAndShard], queries); err != nil {
 						processError("blp_checkpoint queries failed: %v", err)
 					}
 				}(si.Keyspace(), si.ShardName())

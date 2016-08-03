@@ -602,14 +602,14 @@ func TestSelectScatter(t *testing.T) {
 	s := createSandbox("TestRouter")
 	s.VSchema = routerVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for _, shard := range shards {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		conns = append(conns, sbc)
 	}
-	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
 	router := NewRouter(context.Background(), serv, cell, "", scatterConn)
 
 	_, err := routerExec(router, "select id from user", nil)
@@ -634,14 +634,14 @@ func TestStreamSelectScatter(t *testing.T) {
 	s := createSandbox("TestRouter")
 	s.VSchema = routerVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for _, shard := range shards {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		conns = append(conns, sbc)
 	}
-	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
 	router := NewRouter(context.Background(), serv, cell, "", scatterConn)
 
 	sql := "select id from user"

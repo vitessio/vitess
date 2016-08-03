@@ -11,38 +11,38 @@ import (
 func TestRemoveUnhealthyTablets(t *testing.T) {
 	var testcases = []struct {
 		desc  string
-		input []*TabletStats
-		want  []*TabletStats
+		input []TabletStats
+		want  []TabletStats
 	}{
 		{
 			desc:  "tablets missing Stats",
-			input: []*TabletStats{replica(1), replica(2)},
-			want:  []*TabletStats{},
+			input: []TabletStats{replica(1), replica(2)},
+			want:  []TabletStats{},
 		},
 		{
 			desc:  "all tablets healthy",
-			input: []*TabletStats{healthy(replica(1)), healthy(replica(2))},
-			want:  []*TabletStats{healthy(replica(1)), healthy(replica(2))},
+			input: []TabletStats{healthy(replica(1)), healthy(replica(2))},
+			want:  []TabletStats{healthy(replica(1)), healthy(replica(2))},
 		},
 		{
 			desc:  "one unhealthy tablet (error)",
-			input: []*TabletStats{healthy(replica(1)), unhealthyError(replica(2))},
-			want:  []*TabletStats{healthy(replica(1))},
+			input: []TabletStats{healthy(replica(1)), unhealthyError(replica(2))},
+			want:  []TabletStats{healthy(replica(1))},
 		},
 		{
 			desc:  "one unhealthy tablet (lag)",
-			input: []*TabletStats{healthy(replica(1)), unhealthyLag(replica(2))},
-			want:  []*TabletStats{healthy(replica(1))},
+			input: []TabletStats{healthy(replica(1)), unhealthyLag(replica(2))},
+			want:  []TabletStats{healthy(replica(1))},
 		},
 		{
 			desc:  "no filtering by tablet type",
-			input: []*TabletStats{healthy(master(1)), healthy(replica(2)), healthy(rdonly(3))},
-			want:  []*TabletStats{healthy(master(1)), healthy(replica(2)), healthy(rdonly(3))},
+			input: []TabletStats{healthy(master(1)), healthy(replica(2)), healthy(rdonly(3))},
+			want:  []TabletStats{healthy(master(1)), healthy(replica(2)), healthy(rdonly(3))},
 		},
 		{
 			desc:  "non-serving tablets won't be removed",
-			input: []*TabletStats{notServing(healthy(replica(1)))},
-			want:  []*TabletStats{notServing(healthy(replica(1)))},
+			input: []TabletStats{notServing(healthy(replica(1)))},
+			want:  []TabletStats{notServing(healthy(replica(1)))},
 		},
 	}
 
@@ -53,50 +53,20 @@ func TestRemoveUnhealthyTablets(t *testing.T) {
 	}
 }
 
-func TestGetCurrentMaster(t *testing.T) {
-	var testcases = []struct {
-		desc  string
-		input []*TabletStats
-		want  []*TabletStats
-	}{
-		{
-			desc:  "zero masters remains zero",
-			input: []*TabletStats{replica(1), rdonly(2)},
-			want:  nil,
-		},
-		{
-			desc:  "single master",
-			input: []*TabletStats{master(1)},
-			want:  []*TabletStats{master(1)},
-		},
-		{
-			desc:  "multiple masters with different reparent times",
-			input: []*TabletStats{reparentAt(10, master(1)), reparentAt(11, master(2))},
-			want:  []*TabletStats{reparentAt(11, master(2))},
-		},
-	}
-
-	for _, tc := range testcases {
-		if got := GetCurrentMaster(tc.input); !reflect.DeepEqual(got, tc.want) {
-			t.Errorf("test case '%v' failed: GetCurrentMaster(%v) = %v, want: %v", tc.desc, tc.input, got, tc.want)
-		}
-	}
-}
-
-func master(uid uint32) *TabletStats {
+func master(uid uint32) TabletStats {
 	return minimalTabletStats(uid, topodatapb.TabletType_MASTER)
 }
 
-func replica(uid uint32) *TabletStats {
+func replica(uid uint32) TabletStats {
 	return minimalTabletStats(uid, topodatapb.TabletType_REPLICA)
 }
 
-func rdonly(uid uint32) *TabletStats {
+func rdonly(uid uint32) TabletStats {
 	return minimalTabletStats(uid, topodatapb.TabletType_RDONLY)
 }
 
-func minimalTabletStats(uid uint32, tabletType topodatapb.TabletType) *TabletStats {
-	return &TabletStats{
+func minimalTabletStats(uid uint32, tabletType topodatapb.TabletType) TabletStats {
+	return TabletStats{
 		Tablet: &topodatapb.Tablet{
 			Alias: &topodatapb.TabletAlias{
 				Uid: uid},
@@ -110,33 +80,28 @@ func minimalTabletStats(uid uint32, tabletType topodatapb.TabletType) *TabletSta
 	}
 }
 
-func reparentAt(timestamp int64, ts *TabletStats) *TabletStats {
-	ts.TabletExternallyReparentedTimestamp = timestamp
-	return ts
-}
-
-func healthy(ts *TabletStats) *TabletStats {
+func healthy(ts TabletStats) TabletStats {
 	ts.Stats = &querypb.RealtimeStats{
 		SecondsBehindMaster: uint32(1),
 	}
 	return ts
 }
 
-func unhealthyLag(ts *TabletStats) *TabletStats {
+func unhealthyLag(ts TabletStats) TabletStats {
 	ts.Stats = &querypb.RealtimeStats{
 		SecondsBehindMaster: uint32(3600),
 	}
 	return ts
 }
 
-func unhealthyError(ts *TabletStats) *TabletStats {
+func unhealthyError(ts TabletStats) TabletStats {
 	ts.Stats = &querypb.RealtimeStats{
 		HealthError: "unhealthy",
 	}
 	return ts
 }
 
-func notServing(ts *TabletStats) *TabletStats {
+func notServing(ts TabletStats) TabletStats {
 	ts.Serving = false
 	return ts
 }

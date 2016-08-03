@@ -62,14 +62,14 @@ func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 }
 
 // runSQLCommands will send the sql commands to the remote tablet.
-func runSQLCommands(ctx context.Context, wr *wrangler.Wrangler, healthCheck discovery.HealthCheck, keyspace, shard, dbName string, commands []string) error {
+func runSQLCommands(ctx context.Context, wr *wrangler.Wrangler, tsc *discovery.TabletStatsCache, keyspace, shard, dbName string, commands []string) error {
 	for _, command := range commands {
 		command, err := fillStringTemplate(command, map[string]string{"DatabaseName": dbName})
 		if err != nil {
 			return fmt.Errorf("fillStringTemplate failed: %v", err)
 		}
 
-		executor := newExecutor(wr, healthCheck, nil /* throttler */, keyspace, shard, 0 /* threadID */)
+		executor := newExecutor(wr, tsc, nil /* throttler */, keyspace, shard, 0 /* threadID */)
 		if err := executor.fetchWithRetries(ctx, command); err != nil {
 			return err
 		}

@@ -29,12 +29,12 @@ func TestDiscoveryGatewayExecute(t *testing.T) {
 
 func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
-		queries := []querytypes.BoundQuery{{"query", nil}}
+		queries := []querytypes.BoundQuery{{Sql: "query", BindVariables: nil}}
 		_, err := dg.ExecuteBatch(context.Background(), keyspace, shard, tabletType, queries, false, 0)
 		return err
 	})
 	testDiscoveryGatewayTransact(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
-		queries := []querytypes.BoundQuery{{"query", nil}}
+		queries := []querytypes.BoundQuery{{Sql: "query", BindVariables: nil}}
 		_, err := dg.ExecuteBatch(context.Background(), keyspace, shard, tabletType, queries, false, 1)
 		return err
 	})
@@ -75,7 +75,7 @@ func TestDiscoveryGatewayBeginExecute(t *testing.T) {
 
 func TestDiscoveryGatewayBeginExecuteBatch(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
-		queries := []querytypes.BoundQuery{{"query", nil}}
+		queries := []querytypes.BoundQuery{{Sql: "query", BindVariables: nil}}
 		_, _, err := dg.BeginExecuteBatch(context.Background(), keyspace, shard, tabletType, queries, false)
 		return err
 	})
@@ -89,18 +89,20 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 
 	// replica should only use local ones
 	hc.Reset()
+	dg.tsc.ResetForTesting()
 	hc.AddTestTablet("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil)
 	ep1 := hc.AddTestTablet("local", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil).Tablet()
-	tsl := dg.getTablets(keyspace, shard, topodatapb.TabletType_REPLICA)
+	tsl := dg.tsc.GetHealthyTabletStats(keyspace, shard, topodatapb.TabletType_REPLICA)
 	if len(tsl) != 1 || !topo.TabletEquality(tsl[0].Tablet, ep1) {
 		t.Errorf("want %+v, got %+v", ep1, tsl)
 	}
 
 	// master should use the one with newer timestamp regardless of cell
 	hc.Reset()
+	dg.tsc.ResetForTesting()
 	hc.AddTestTablet("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 5, nil)
 	ep1 = hc.AddTestTablet("remote", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 10, nil).Tablet()
-	tsl = dg.getTablets(keyspace, shard, topodatapb.TabletType_MASTER)
+	tsl = dg.tsc.GetHealthyTabletStats(keyspace, shard, topodatapb.TabletType_MASTER)
 	if len(tsl) != 1 || !topo.TabletEquality(tsl[0].Tablet, ep1) {
 		t.Errorf("want %+v, got %+v", ep1, tsl)
 	}
@@ -111,39 +113,34 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	shard := "0"
 	tabletType := topodatapb.TabletType_REPLICA
 	hc := discovery.NewFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", 2, nil)
+	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", 2, nil).(*discoveryGateway)
 
 	// no tablet
 	hc.Reset()
+	dg.tsc.ResetForTesting()
 	want := "shard, host: ks.0.replica, no valid tablet"
 	err := f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
-	if hc.GetStatsFromTargetCounter.Get() != 1 {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter.Get())
-	}
 
 	// tablet with error
 	hc.Reset()
+	dg.tsc.ResetForTesting()
 	hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, fmt.Errorf("no connection"))
 	want = "shard, host: ks.0.replica, no valid tablet"
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
-	if hc.GetStatsFromTargetCounter.Get() != 1 {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter.Get())
-	}
 
 	// tablet without connection
 	hc.Reset()
+	dg.tsc.ResetForTesting()
 	ep1 := hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, nil).Tablet()
 	want = fmt.Sprintf(`shard, host: ks.0.replica, no valid tablet`)
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
-	if hc.GetStatsFromTargetCounter.Get() != 1 {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter.Get())
-	}
 
 	// retry error
 	hc.Reset()
+	dg.tsc.ResetForTesting()
 	sc1 := hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc2 := hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailRetry = 1
@@ -158,12 +155,10 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
 		t.Errorf("wanted error: %+v, got error: %v", wants, err)
 	}
-	if hc.GetStatsFromTargetCounter.Get() != 3 {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 3", hc.GetStatsFromTargetCounter.Get())
-	}
 
 	// fatal error
 	hc.Reset()
+	dg.tsc.ResetForTesting()
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc2 = hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailFatal = 1
@@ -178,48 +173,34 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
 		t.Errorf("wanted error: %+v, got error: %v", wants, err)
 	}
-	var wantCounter int32 = 3
-	if streaming {
-		// streaming query does not retry on fatal
-		wantCounter = 1
-	}
-	if hc.GetStatsFromTargetCounter.Get() != wantCounter {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want %v", hc.GetStatsFromTargetCounter.Get(), wantCounter)
-	}
 
 	// server error - no retry
 	hc.Reset()
+	dg.tsc.ResetForTesting()
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailServer = 1
 	ep1 = sc1.Tablet()
 	want = fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: err`, ep1)
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_BAD_INPUT)
-	if hc.GetStatsFromTargetCounter.Get() != 1 {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter.Get())
-	}
 
 	// conn error - no retry
 	hc.Reset()
+	dg.tsc.ResetForTesting()
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailConn = 1
 	ep1 = sc1.Tablet()
 	want = fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: conn`, ep1)
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
-	if hc.GetStatsFromTargetCounter.Get() != 1 {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter.Get())
-	}
 
 	// no failure
 	hc.Reset()
+	dg.tsc.ResetForTesting()
 	hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	err = f(dg, keyspace, shard, tabletType)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
-	}
-	if hc.GetStatsFromTargetCounter.Get() != 1 {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter.Get())
 	}
 }
 
@@ -228,10 +209,11 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	shard := "0"
 	tabletType := topodatapb.TabletType_REPLICA
 	hc := discovery.NewFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", 2, nil)
+	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", 2, nil).(*discoveryGateway)
 
 	// retry error - no retry
 	hc.Reset()
+	dg.tsc.ResetForTesting()
 	sc1 := hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc2 := hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailRetry = 1
@@ -246,21 +228,16 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
 		t.Errorf("wanted error: %+v, got error: %v", wants, err)
 	}
-	if hc.GetStatsFromTargetCounter.Get() != 1 {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter.Get())
-	}
 
 	// conn error - no retry
 	hc.Reset()
+	dg.tsc.ResetForTesting()
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailConn = 1
 	ep1 = sc1.Tablet()
 	want := fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: conn`, ep1)
 	err = f(dg, keyspace, shard, tabletType)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
-	if hc.GetStatsFromTargetCounter.Get() != 1 {
-		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter.Get())
-	}
 }
 
 func verifyShardError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.ErrorCode) {

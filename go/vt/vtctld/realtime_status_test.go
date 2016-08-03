@@ -142,7 +142,6 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 	keyspace := "ks"
 	shard := "-80"
 	tabletType := topodatapb.TabletType_REPLICA.String()
-	ctx := context.Background()
 	db := fakesqldb.Register()
 	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -180,18 +179,13 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 		t.Fatalf("newRealtimeStats error: %v", err)
 	}
 
-	if err := discovery.WaitForTablets(ctx, realtimeStats.healthCheck, "cell1", keyspace, shard, []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != nil {
-		t.Fatalf("waitForTablets failed: %v", err)
-	}
-
 	// Test 1: tablet1's stats should be updated with the one received by the HealthCheck object.
-	result := realtimeStats.tabletStatuses("cell1", keyspace, shard, tabletType)
-	got := result["0"].Stats
+	// Note this also takes into account initialization of the health check module.
 	want := &querypb.RealtimeStats{
 		SecondsBehindMaster: 1,
 	}
-	if !proto.Equal(got, want) {
-		t.Errorf("got: %v, want: %v", got, want)
+	if err := checkStats(realtimeStats, "0", "cell1", keyspace, shard, tabletType, want); err != nil {
+		t.Errorf("%v", err)
 	}
 
 	// Test 2: tablet1's stats should be updated with the new one received by the HealthCheck object.

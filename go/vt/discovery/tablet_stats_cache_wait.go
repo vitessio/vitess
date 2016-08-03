@@ -1,14 +1,10 @@
 package discovery
 
 import (
-	"errors"
-	"fmt"
 	"sync"
 	"time"
 
 	"golang.org/x/net/context"
-
-	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -17,9 +13,6 @@ import (
 )
 
 var (
-	// ErrWaitForTabletsTimeout is returned if we cannot get the tablets in time
-	ErrWaitForTabletsTimeout = errors.New("timeout waiting for tablets")
-
 	// how much to sleep between each check
 	waitAvailableTabletInterval = 100 * time.Millisecond
 )
@@ -31,26 +24,28 @@ type keyspaceShard struct {
 }
 
 // WaitForTablets waits for at least one tablet in the given cell /
-// keyspace / shard before returning.
-func WaitForTablets(ctx context.Context, hc HealthCheck, cell, keyspace, shard string, types []topodatapb.TabletType) error {
+// keyspace / shard before returning. The tablets do not have to be healthy.
+// It will return ctx.Err() if the context is canceled.
+func (tc *TabletStatsCache) WaitForTablets(ctx context.Context, cell, keyspace, shard string, types []topodatapb.TabletType) error {
 	keyspaceShards := map[keyspaceShard]bool{
 		keyspaceShard{
 			keyspace: keyspace,
 			shard:    shard,
 		}: true,
 	}
-	return waitForTablets(ctx, hc, keyspaceShards, types, false)
+	return tc.waitForTablets(ctx, keyspaceShards, types, false)
 }
 
-// WaitForAllServingTablets waits for at least one serving tablet in the given cell
-// for all keyspaces / shards before returning.
-func WaitForAllServingTablets(ctx context.Context, hc HealthCheck, ts topo.SrvTopoServer, cell string, types []topodatapb.TabletType) error {
+// WaitForAllServingTablets waits for at least one healthy serving tablet in
+// the given cell for all keyspaces / shards before returning.
+// It will return ctx.Err() if the context is canceled.
+func (tc *TabletStatsCache) WaitForAllServingTablets(ctx context.Context, ts topo.SrvTopoServer, cell string, types []topodatapb.TabletType) error {
 	keyspaceShards, err := findAllKeyspaceShards(ctx, ts, cell)
 	if err != nil {
 		return err
 	}
 
-	return waitForTablets(ctx, hc, keyspaceShards, types, true)
+	return tc.waitForTablets(ctx, keyspaceShards, types, true)
 }
 
 // findAllKeyspaceShards goes through all serving shards in the topology
@@ -98,37 +93,20 @@ func findAllKeyspaceShards(ctx context.Context, ts topo.SrvTopoServer, cell stri
 }
 
 // waitForTablets is the internal method that polls for tablets
-func waitForTablets(ctx context.Context, hc HealthCheck, keyspaceShards map[keyspaceShard]bool, types []topodatapb.TabletType, requireServing bool) error {
-RetryLoop:
+func (tc *TabletStatsCache) waitForTablets(ctx context.Context, keyspaceShards map[keyspaceShard]bool, types []topodatapb.TabletType, requireServing bool) error {
 	for {
-		select {
-		case <-ctx.Done():
-			break RetryLoop
-		default:
-			// Context is still valid. Move on.
-		}
-
 		for ks := range keyspaceShards {
 			allPresent := true
 			for _, tt := range types {
-				tl := hc.GetTabletStatsFromTarget(ks.keyspace, ks.shard, tt)
+				var stats []TabletStats
 				if requireServing {
-					hasServingEP := false
-					for _, t := range tl {
-						if t.LastError == nil && t.Serving {
-							hasServingEP = true
-							break
-						}
-					}
-					if !hasServingEP {
-						allPresent = false
-						break
-					}
+					stats = tc.GetHealthyTabletStats(ks.keyspace, ks.shard, tt)
 				} else {
-					if len(tl) == 0 {
-						allPresent = false
-						break
-					}
+					stats = tc.GetTabletStats(ks.keyspace, ks.shard, tt)
+				}
+				if len(stats) == 0 {
+					allPresent = false
+					break
 				}
 			}
 
@@ -147,15 +125,8 @@ RetryLoop:
 		select {
 		case <-ctx.Done():
 			timer.Stop()
+			return ctx.Err()
 		case <-timer.C:
 		}
 	}
-
-	if ctx.Err() == context.DeadlineExceeded {
-		log.Warningf("waitForTablets timeout for %v (context error: %v)", keyspaceShards, ctx.Err())
-		return ErrWaitForTabletsTimeout
-	}
-	err := fmt.Errorf("waitForTablets failed for %v (context error: %v)", keyspaceShards, ctx.Err())
-	log.Error(err)
-	return err
 }

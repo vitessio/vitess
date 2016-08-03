@@ -22,7 +22,9 @@ func newRealtimeStats(ts topo.Server) (*realtimeStats, error) {
 	tabletStatsCache := &tabletStatsCache{
 		statuses: make(map[string]map[string]*discovery.TabletStats),
 	}
-	hc.SetListener(tabletStatsCache)
+	// sendDownEvents is set to true here, as we want to receive
+	// Up=False events for a tablet.
+	hc.SetListener(tabletStatsCache, true)
 	r := &realtimeStats{
 		healthCheck: hc,
 		tabletStats: tabletStatsCache,

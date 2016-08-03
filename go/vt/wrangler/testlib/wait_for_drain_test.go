@@ -53,10 +53,16 @@ func testWaitForDrain(t *testing.T, desc, cells string, drain drainDirective, ex
 	const keyspace = "ks"
 	const shard = "-80"
 
+	// This value needs to be higher than 0.5 seconds.  The vtctl
+	// drain command we issue needs to not time out the health on
+	// the tablet until it's done. Otherwise drain doesn't get any
+	// healthy tablets at all. The test however seems to wait
+	// until this value has expired, so it can't be too high.
+	flag.Set("vtctl_healthcheck_timeout", "1s")
+
 	db := fakesqldb.Register()
 	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	flag.Set("vtctl_healthcheck_timeout", "0.25s")
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 

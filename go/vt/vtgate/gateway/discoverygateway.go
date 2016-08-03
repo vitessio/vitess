@@ -47,12 +47,12 @@ func init() {
 }
 
 type discoveryGateway struct {
-	hc                discovery.HealthCheck
-	topoServer        topo.Server
-	srvTopoServer     topo.SrvTopoServer
-	localCell         string
-	retryCount        int
-	tabletTypesToWait []topodatapb.TabletType
+	hc            discovery.HealthCheck
+	tsc           *discovery.TabletStatsCache
+	topoServer    topo.Server
+	srvTopoServer topo.SrvTopoServer
+	localCell     string
+	retryCount    int
 
 	// tabletsWatchers contains a list of all the watchers we use.
 	// We create one per cell.
@@ -68,11 +68,11 @@ type discoveryGateway struct {
 func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) Gateway {
 	dg := &discoveryGateway{
 		hc:                hc,
+		tsc:               discovery.NewTabletStatsCache(hc, cell),
 		topoServer:        topoServer,
 		srvTopoServer:     serv,
 		localCell:         cell,
 		retryCount:        retryCount,
-		tabletTypesToWait: tabletTypesToWait,
 		tabletsWatchers:   make([]*discovery.TopologyWatcher, 0, 1),
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 	}
@@ -93,27 +93,31 @@ func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, se
 		ctw := discovery.NewCellTabletsWatcher(dg.topoServer, tr, c, *refreshInterval, *topoReadConcurrency)
 		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
 	}
-	err := dg.waitForTablets()
-	if err != nil {
-		log.Errorf("createDiscoveryGateway: %v", err)
+	if len(tabletTypesToWait) > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		err := dg.WaitForTablets(ctx, tabletTypesToWait)
+		if err != nil {
+			log.Errorf("createDiscoveryGateway: %v", err)
+		}
 	}
 	return dg
 }
 
-func (dg *discoveryGateway) waitForTablets() error {
+func (dg *discoveryGateway) WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) error {
 	// Skip waiting for tablets if we are not told to do so.
-	if len(dg.tabletTypesToWait) == 0 {
+	if len(tabletTypesToWait) == 0 {
 		return nil
 	}
 
 	log.Infof("Waiting for tablets")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	err := discovery.WaitForAllServingTablets(ctx, dg.hc, dg.srvTopoServer, dg.localCell, dg.tabletTypesToWait)
-	if err == discovery.ErrWaitForTabletsTimeout {
+	err := dg.tsc.WaitForAllServingTablets(ctx, dg.srvTopoServer, dg.localCell, tabletTypesToWait)
+	if err == context.DeadlineExceeded {
 		// ignore this error, we will still start up, and may not serve
 		// all tablets.
-		log.Warningf("Timeout when waiting for tablets")
+		log.Warningf("Timeout waiting for all keyspaces / shards to have healthy tablets, may be in degraded mode")
 		err = nil
 	}
 	if err != nil {
@@ -298,7 +302,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 	invalidTablets := make(map[string]bool)
 
 	for i := 0; i < dg.retryCount+1; i++ {
-		tablets := dg.getTablets(keyspace, shard, tabletType)
+		tablets := dg.tsc.GetHealthyTabletStats(keyspace, shard, tabletType)
 		if len(tablets) == 0 {
 			// fail fast if there is no tablet
 			err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no valid tablet"))
@@ -310,7 +314,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 		var ts *discovery.TabletStats
 		for _, t := range tablets {
 			if _, ok := invalidTablets[discovery.TabletToMapKey(t.Tablet)]; !ok {
-				ts = t
+				ts = &t
 				break
 			}
 		}
@@ -386,52 +390,13 @@ func (dg *discoveryGateway) canRetry(ctx context.Context, err error, transaction
 	return false
 }
 
-func shuffleTablets(tablets []*discovery.TabletStats) {
+func shuffleTablets(tablets []discovery.TabletStats) {
 	index := 0
 	length := len(tablets)
 	for i := length - 1; i > 0; i-- {
 		index = rand.Intn(i + 1)
 		tablets[i], tablets[index] = tablets[index], tablets[i]
 	}
-}
-
-// getTablets gets all available tablets from HealthCheck,
-// and selects the usable ones based several rules:
-// master - return one from any cells with latest reparent timestamp;
-// replica - return all from local cell.
-func (dg *discoveryGateway) getTablets(keyspace, shard string, tabletType topodatapb.TabletType) []*discovery.TabletStats {
-	tsList := dg.hc.GetTabletStatsFromTarget(keyspace, shard, tabletType)
-	// for master, use any cells and return the one with max reparent timestamp.
-	if tabletType == topodatapb.TabletType_MASTER {
-		var maxTimestamp int64
-		var t *discovery.TabletStats
-		for _, ts := range tsList {
-			if ts.LastError != nil || !ts.Serving {
-				continue
-			}
-			if ts.TabletExternallyReparentedTimestamp >= maxTimestamp {
-				maxTimestamp = ts.TabletExternallyReparentedTimestamp
-				t = ts
-			}
-		}
-		if t == nil {
-			return nil
-		}
-		return []*discovery.TabletStats{t}
-	}
-	// for non-master, use only tablets from local cell and filter by replication lag.
-	list := make([]*discovery.TabletStats, 0, len(tsList))
-	for _, ts := range tsList {
-		if ts.LastError != nil || !ts.Serving {
-			continue
-		}
-		if dg.localCell != ts.Tablet.Alias.Cell {
-			continue
-		}
-		list = append(list, ts)
-	}
-	list = discovery.FilterByReplicationLag(list)
-	return list
 }
 
 func (dg *discoveryGateway) updateStats(keyspace, shard string, tabletType topodatapb.TabletType, startTime time.Time, err error) {
