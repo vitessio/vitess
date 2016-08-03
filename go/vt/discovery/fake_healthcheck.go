@@ -55,6 +55,7 @@ func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet, name string) {
 	key := TabletToMapKey(tablet)
 	item := &fhcItem{
 		ts: &TabletStats{
+			Key:    key,
 			Tablet: tablet,
 			Target: &querypb.Target{
 				Keyspace:   tablet.Keyspace,
@@ -86,10 +87,9 @@ func (fhc *FakeHealthCheck) RemoveTablet(tablet *topodatapb.Tablet) {
 }
 
 // GetConnection returns the TabletConn of the given tablet.
-func (fhc *FakeHealthCheck) GetConnection(tablet *topodatapb.Tablet) tabletconn.TabletConn {
+func (fhc *FakeHealthCheck) GetConnection(key string) tabletconn.TabletConn {
 	fhc.mu.RLock()
 	defer fhc.mu.RUnlock()
-	key := TabletToMapKey(tablet)
 	if item := fhc.items[key]; item != nil {
 		return item.conn
 	}
@@ -135,6 +135,7 @@ func (fhc *FakeHealthCheck) AddTestTablet(cell, host string, port int32, keyspac
 	if item == nil {
 		item = &fhcItem{
 			ts: &TabletStats{
+				Key:    key,
 				Tablet: t,
 				Up:     true,
 			},

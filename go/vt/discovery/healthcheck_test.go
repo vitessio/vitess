@@ -48,6 +48,7 @@ func TestHealthCheck(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 	want := &TabletStats{
+		Key:     "a,vt:1",
 		Tablet:  tablet,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Up:      true,
@@ -66,6 +67,7 @@ func TestHealthCheck(t *testing.T) {
 		Cell:   "cell",
 		Target: &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		TabletsStats: TabletStatsList{{
+			Key:     "a,vt:1",
 			Tablet:  tablet,
 			Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 			Up:      true,
@@ -88,6 +90,7 @@ func TestHealthCheck(t *testing.T) {
 	input <- shr
 	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, Serving: true, TabletExternallyReparentedTimestamp: 0, {SecondsBehindMaster: 1, CpuUsage: 0.5}}`)
 	want = &TabletStats{
+		Key:     "a,vt:1",
 		Tablet:  tablet,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Up:      false,
@@ -100,6 +103,7 @@ func TestHealthCheck(t *testing.T) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
 	}
 	want = &TabletStats{
+		Key:     "a,vt:1",
 		Tablet:  tablet,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
@@ -120,6 +124,7 @@ func TestHealthCheck(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
 	}
 	want = &TabletStats{
+		Key:     "a,vt:1",
 		Tablet:  tablet,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
@@ -142,6 +147,7 @@ func TestHealthCheck(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
 	}
 	want = &TabletStats{
+		Key:     "a,vt:1",
 		Tablet:  tablet,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
@@ -161,6 +167,7 @@ func TestHealthCheck(t *testing.T) {
 	hc.deleteConn(tablet)
 	t.Logf(`hc.RemoveTablet({Host: "a", PortMap: {"vt": 1}})`)
 	want = &TabletStats{
+		Key:     "a,vt:1",
 		Tablet:  tablet,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      false,
@@ -202,6 +209,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 	want := &TabletStats{
+		Key:     "a,vt:1",
 		Tablet:  tablet,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Up:      true,
@@ -271,6 +279,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 	want := &TabletStats{
+		Key:     "a,vt:1",
 		Tablet:  tablet,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Up:      true,
@@ -309,6 +318,7 @@ func TestTemplate(t *testing.T) {
 	tablet := topo.NewTablet(0, "cell", "a")
 	ts := []*TabletStats{
 		{
+			Key:     "a",
 			Tablet:  tablet,
 			Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 			Up:      true,

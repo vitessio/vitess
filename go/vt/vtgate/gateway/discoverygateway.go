@@ -65,7 +65,7 @@ type discoveryGateway struct {
 	statusAggregators map[string]*TabletStatusAggregator
 }
 
-func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) Gateway {
+func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway {
 	dg := &discoveryGateway{
 		hc:                hc,
 		tsc:               discovery.NewTabletStatsCache(hc, cell),
@@ -93,39 +93,17 @@ func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, se
 		ctw := discovery.NewCellTabletsWatcher(dg.topoServer, tr, c, *refreshInterval, *topoReadConcurrency)
 		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
 	}
-	if len(tabletTypesToWait) > 0 {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		err := dg.WaitForTablets(ctx, tabletTypesToWait)
-		if err != nil {
-			log.Errorf("createDiscoveryGateway: %v", err)
-		}
-	}
 	return dg
 }
 
+// WaitForTablets is part of the gateway.Gateway interface.
 func (dg *discoveryGateway) WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) error {
 	// Skip waiting for tablets if we are not told to do so.
 	if len(tabletTypesToWait) == 0 {
 		return nil
 	}
 
-	log.Infof("Waiting for tablets")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	err := dg.tsc.WaitForAllServingTablets(ctx, dg.srvTopoServer, dg.localCell, tabletTypesToWait)
-	if err == context.DeadlineExceeded {
-		// ignore this error, we will still start up, and may not serve
-		// all tablets.
-		log.Warningf("Timeout waiting for all keyspaces / shards to have healthy tablets, may be in degraded mode")
-		err = nil
-	}
-	if err != nil {
-		log.Errorf("Error when waiting for tablets: %v", err)
-		return err
-	}
-	log.Infof("Waiting for tablets completed")
-	return nil
+	return dg.tsc.WaitForAllServingTablets(ctx, dg.srvTopoServer, dg.localCell, tabletTypesToWait)
 }
 
 // Execute executes the non-streaming query for the specified keyspace, shard, and tablet type.
@@ -313,7 +291,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 		// skip tablets we tried before
 		var ts *discovery.TabletStats
 		for _, t := range tablets {
-			if _, ok := invalidTablets[discovery.TabletToMapKey(t.Tablet)]; !ok {
+			if _, ok := invalidTablets[t.Key]; !ok {
 				ts = &t
 				break
 			}
@@ -328,10 +306,10 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 
 		// execute
 		tabletLastUsed = ts.Tablet
-		conn := dg.hc.GetConnection(ts.Tablet)
+		conn := dg.hc.GetConnection(ts.Key)
 		if conn == nil {
-			err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no connection for %+v", ts.Tablet))
-			invalidTablets[discovery.TabletToMapKey(ts.Tablet)] = true
+			err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no connection for key %v tablet %+v", ts.Key, ts.Tablet))
+			invalidTablets[ts.Key] = true
 			continue
 		}
 
@@ -342,7 +320,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 
 		err = action(conn, ts.Target)
 		if dg.canRetry(ctx, err, transactionID, isStreaming) {
-			invalidTablets[discovery.TabletToMapKey(ts.Tablet)] = true
+			invalidTablets[ts.Key] = true
 			continue
 		}
 		break

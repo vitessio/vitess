@@ -193,3 +193,46 @@ func TestFilterByReplicationLag(t *testing.T) {
 		t.Errorf("FilterByReplicationLag([1m, 3h]) = %+v, want [1m]", got)
 	}
 }
+
+func TestTrivialStatsUpdate(t *testing.T) {
+	// Note the healthy threshold is set to 30s.
+	cases := []struct {
+		o        uint32
+		n        uint32
+		expected bool
+	}{
+		// both are under 30s
+		{o: 0, n: 1, expected: true},
+		{o: 15, n: 20, expected: true},
+
+		// one is under 30s, the other isn't
+		{o: 2, n: 40, expected: false},
+		{o: 40, n: 10, expected: false},
+
+		// both are over 30s, but close enough
+		{o: 100, n: 100, expected: true},
+		{o: 100, n: 105, expected: true},
+		{o: 105, n: 100, expected: true},
+
+		// both are over 30s, but too far
+		{o: 100, n: 120, expected: false},
+		{o: 120, n: 100, expected: false},
+	}
+
+	for _, c := range cases {
+		o := &TabletStats{
+			Stats: &querypb.RealtimeStats{
+				SecondsBehindMaster: c.o,
+			},
+		}
+		n := &TabletStats{
+			Stats: &querypb.RealtimeStats{
+				SecondsBehindMaster: c.n,
+			},
+		}
+		got := TrivialStatsUpdate(o, n)
+		if got != c.expected {
+			t.Errorf("TrivialStatsUpdate(%v, %v) = %v, expected %v", c.o, c.n, got, c.expected)
+		}
+	}
+}

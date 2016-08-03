@@ -47,9 +47,10 @@ func Init(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoSer
 		log.Fatalf("L2VTGate already initialized")
 	}
 
-	gateway := gateway.GetCreator()(hc, topoServer, serv, cell, retryCount, tabletTypesToWait)
+	gw := gateway.GetCreator()(hc, topoServer, serv, cell, retryCount)
+	gateway.WaitForTablets(gw, tabletTypesToWait)
 	l2VTGate = &L2VTGate{
-		gateway: gateway,
+		gateway: gw,
 	}
 	servenv.OnRun(func() {
 		for _, f := range RegisterL2VTGates {
