@@ -109,20 +109,22 @@ func mean(tabletStatsList []*TabletStats, idxExclude int) (uint64, error) {
 
 // TrivialStatsUpdate returns true iff the old and new TabletStats
 // haven't changed enough to warrant re-calling FilterByReplicationLag.
-func TrivialStatsUpdate(old, new *TabletStats) bool {
+func TrivialStatsUpdate(o, n *TabletStats) bool {
 	// Skip replag filter when replag remains in the low rep lag range,
 	// which should be the case majority of the time.
 	lowRepLag := lowReplicationLag.Seconds()
-	oldRepLag := float64(old.Stats.SecondsBehindMaster)
-	newRepLag := float64(new.Stats.SecondsBehindMaster)
+	oldRepLag := float64(o.Stats.SecondsBehindMaster)
+	newRepLag := float64(n.Stats.SecondsBehindMaster)
 	if oldRepLag <= lowRepLag && newRepLag <= lowRepLag {
 		return true
 	}
 
-	// skip replag filter when replag remains in the high rep lag range,
+	// Skip replag filter when replag remains in the high rep lag range,
 	// and did not change beyond +/- 10%.
 	// when there is a high rep lag, it takes a long time for it to reduce,
 	// so it is not necessary to re-calculate every time.
+	// In that case, we won't save the new record, so we still
+	// remember the original replication lag.
 	if oldRepLag > lowRepLag && newRepLag > lowRepLag && newRepLag < oldRepLag*1.1 && newRepLag > oldRepLag*0.9 {
 		return true
 	}

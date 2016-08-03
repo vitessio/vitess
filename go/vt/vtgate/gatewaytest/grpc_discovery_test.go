@@ -68,8 +68,7 @@ func TestGRPCDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WaitForTablets failed: %v", err)
 	}
-	ctx := context.Background()
-	defer dg.Close(ctx)
+	defer dg.Close(context.Background())
 
 	// run the test suite.
 	TestSuite(t, "discovery-grpc", dg, service)

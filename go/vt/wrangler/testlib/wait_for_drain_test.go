@@ -53,7 +53,7 @@ func testWaitForDrain(t *testing.T, desc, cells string, drain drainDirective, ex
 	const keyspace = "ks"
 	const shard = "-80"
 
-	// This value needs to not be equal to -initial_wait value below.
+	// This value needs to be bigger than the -initial_wait value below.
 	// Otherwise in this test, we close the StreamHealth RPC because of
 	// tablet inactivity at the same time as the end of the initial wait,
 	// and the test fails.

@@ -48,6 +48,48 @@ func TestTabletStatsCache(t *testing.T) {
 		t.Errorf("unexpected result: %v", a)
 	}
 
+	// update stats with a change that won't change health array
+	stillHhealthyTs1 := &TabletStats{
+		Key:     "t1",
+		Tablet:  tablet1,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 2, CpuUsage: 0.2},
+	}
+	tsc.StatsUpdate(stillHhealthyTs1)
+
+	// check it's there
+	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
+	if len(a) != 1 || !reflect.DeepEqual(*ts1, a[0]) {
+		t.Errorf("unexpected result: %v", a)
+	}
+	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA)
+	if len(a) != 1 || !reflect.DeepEqual(*ts1, a[0]) {
+		t.Errorf("unexpected result: %v", a)
+	}
+
+	// update stats with a change that will change arrays
+	notHealthyTs1 := &TabletStats{
+		Key:     "t1",
+		Tablet:  tablet1,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 35, CpuUsage: 0.2},
+	}
+	tsc.StatsUpdate(notHealthyTs1)
+
+	// check it's there
+	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
+	if len(a) != 1 || !reflect.DeepEqual(*notHealthyTs1, a[0]) {
+		t.Errorf("unexpected result: %v", a)
+	}
+	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA)
+	if len(a) != 1 || !reflect.DeepEqual(*notHealthyTs1, a[0]) {
+		t.Errorf("unexpected result: %v", a)
+	}
+
 	// add a second tablet
 	tablet2 := topo.NewTablet(11, "cell", "host2")
 	ts2 := &TabletStats{

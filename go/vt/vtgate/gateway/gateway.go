@@ -113,6 +113,8 @@ func GetCreator() Creator {
 
 // WaitForTablets is a helper method to wait for the provided tablets,
 // up until the *initialTabletTimeout. It will log what it is doing.
+// Note it has the same name as the Gateway's interface method, as it
+// just calls it.
 func WaitForTablets(gw Gateway, tabletTypesToWait []topodatapb.TabletType) error {
 	log.Infof("Gateway waiting for serving tablets...")
 	ctx, cancel := context.WithTimeout(context.Background(), *initialTabletTimeout)

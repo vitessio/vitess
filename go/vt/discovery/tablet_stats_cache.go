@@ -15,6 +15,9 @@ import (
 // and for the master independently of which cell it's in.
 // Note the healthy tablet computation is done when we receive a tablet
 // update only, not at serving time.
+// Also note the cache may not have the last entry received by the tablet.
+// For instance, if a tablet was healthy, and is still healthy, we do not
+// keep its new update.
 type TabletStatsCache struct {
 	// cell is the cell we are keeping all tablets for.
 	// Note we keep track of all master tablets in all cells.
@@ -116,17 +119,19 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 	defer e.mu.Unlock()
 
 	// Update our full map.
-	trivialUpdate := false
+	trivialNonMasterUpdate := false
 	if existing, ok := e.all[ts.Key]; ok {
 		if ts.Up {
 			// We have an existing entry, and a new entry.
 			// Remember if they are both good (most common case).
-			trivialUpdate = existing.LastError == nil && existing.Serving && ts.LastError == nil && ts.Serving && TrivialStatsUpdate(existing, ts)
+			trivialNonMasterUpdate = existing.LastError == nil && existing.Serving && ts.LastError == nil && ts.Serving && ts.Target.TabletType != topodatapb.TabletType_MASTER && TrivialStatsUpdate(existing, ts)
 
-			// We already have the entry, update the values.
-			// (will update both 'all' and 'healthy' as they use
-			// pointers).
-			*existing = *ts
+			// We already have the entry, update the
+			// values if necessary.  (will update both
+			// 'all' and 'healthy' as they use pointers).
+			if !trivialNonMasterUpdate {
+				*existing = *ts
+			}
 		} else {
 			// We have an entry which we shouldn't. Remove it.
 			delete(e.all, ts.Key)
@@ -178,7 +183,7 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 
 	// For non-master, we just recompute the healthy list
 	// using FilterByReplicationLag, if we need to.
-	if trivialUpdate {
+	if trivialNonMasterUpdate {
 		return
 	}
 	allArray := make([]*TabletStats, 0, len(e.all))
