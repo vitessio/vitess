@@ -42,9 +42,13 @@ func (agent *ActionAgent) GetPermissions(ctx context.Context) (*tabletmanagerdat
 	return mysqlctl.GetPermissions(agent.MysqlDaemon)
 }
 
-// SetReadOnly makes the mysql instance read-only or read-write
-// Should be called under RPCWrapLock.
+// SetReadOnly makes the mysql instance read-only or read-write.
 func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return err
+	}
+	defer agent.actionMutex.Unlock()
+
 	return agent.MysqlDaemon.SetReadOnly(rdonly)
 }
 

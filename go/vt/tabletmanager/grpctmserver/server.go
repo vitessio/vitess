@@ -91,20 +91,18 @@ func (s *server) GetPermissions(ctx context.Context, request *tabletmanagerdatap
 // Various read-write methods
 //
 
-func (s *server) SetReadOnly(ctx context.Context, request *tabletmanagerdatapb.SetReadOnlyRequest) (*tabletmanagerdatapb.SetReadOnlyResponse, error) {
+func (s *server) SetReadOnly(ctx context.Context, request *tabletmanagerdatapb.SetReadOnlyRequest) (response *tabletmanagerdatapb.SetReadOnlyResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "SetReadOnly", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response := &tabletmanagerdatapb.SetReadOnlyResponse{}
-	return response, s.agent.RPCWrapLock(ctx, tabletmanager.TabletActionSetReadOnly, request, response, true, func() error {
-		return s.agent.SetReadOnly(ctx, true)
-	})
+	response = &tabletmanagerdatapb.SetReadOnlyResponse{}
+	return response, s.agent.SetReadOnly(ctx, true)
 }
 
-func (s *server) SetReadWrite(ctx context.Context, request *tabletmanagerdatapb.SetReadWriteRequest) (*tabletmanagerdatapb.SetReadWriteResponse, error) {
+func (s *server) SetReadWrite(ctx context.Context, request *tabletmanagerdatapb.SetReadWriteRequest) (response *tabletmanagerdatapb.SetReadWriteResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "SetReadWrite", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response := &tabletmanagerdatapb.SetReadWriteResponse{}
-	return response, s.agent.RPCWrapLock(ctx, tabletmanager.TabletActionSetReadWrite, request, response, true, func() error {
-		return s.agent.SetReadOnly(ctx, false)
-	})
+	response = &tabletmanagerdatapb.SetReadWriteResponse{}
+	return response, s.agent.SetReadOnly(ctx, false)
 }
 
 func (s *server) ChangeType(ctx context.Context, request *tabletmanagerdatapb.ChangeTypeRequest) (*tabletmanagerdatapb.ChangeTypeResponse, error) {
