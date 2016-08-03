@@ -9,10 +9,12 @@ import (
 	"regexp"
 	"time"
 
+	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/topotools"
-	"golang.org/x/net/context"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -41,38 +43,55 @@ func (agent *ActionAgent) GetPermissions(ctx context.Context) (*tabletmanagerdat
 }
 
 // SetReadOnly makes the mysql instance read-only or read-write
-// Should be called under RPCWrapLockAction.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
 	return agent.MysqlDaemon.SetReadOnly(rdonly)
 }
 
 // ChangeType changes the tablet type
-// Should be called under RPCWrapLockAction.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error {
+	// change our type in the topology
 	_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType)
 	if err != nil {
 		return err
 	}
+
+	// let's update our internal state (stop query service and other things)
+	if err := agent.refreshTablet(ctx, "ChangeType"); err != nil {
+		return err
+	}
+
+	// and re-run health check
 	agent.runHealthCheckProtected()
 	return nil
 }
 
 // Sleep sleeps for the duration
-// Should be called under RPCWrapLockAction.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) Sleep(ctx context.Context, duration time.Duration) {
 	time.Sleep(duration)
 }
 
 // ExecuteHook executes the provided hook locally, and returns the result.
-// Should be called under RPCWrapLockAction.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.HookResult {
+	// Execute the hooks
 	topotools.ConfigureTabletHook(hk, agent.TabletAlias)
-	return hk.Execute()
+	hr := hk.Execute()
+
+	// We never know what the hook did, so let's refresh our state.
+	if err := agent.refreshTablet(ctx, "ExecuteHook"); err != nil {
+		log.Errorf("refreshTablet after ExecuteHook failed: %v", err)
+	}
+
+	return hr
 }
 
 // RefreshState reload the tablet record from the topo server.
-// Should be called under RPCWrapLockAction, so it actually works.
-func (agent *ActionAgent) RefreshState(ctx context.Context) {
+// Should be called under RPCWrapLock.
+func (agent *ActionAgent) RefreshState(ctx context.Context) error {
+	return agent.refreshTablet(ctx, "RefreshState")
 }
 
 // RunHealthCheck will manually run the health check on the tablet.

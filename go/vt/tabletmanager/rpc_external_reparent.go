@@ -6,7 +6,6 @@ package tabletmanager
 
 import (
 	"flag"
-	"fmt"
 	"sync"
 	"time"
 
@@ -102,9 +101,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 
 	// This is where updateState will block for gracePeriod, while it gives
 	// vtgate a chance to stop sending replica queries.
-	if err := agent.updateState(ctx, oldTablet, "fastTabletExternallyReparented"); err != nil {
-		return fmt.Errorf("fastTabletExternallyReparented: failed to change tablet state to MASTER: %v", err)
-	}
+	agent.updateState(ctx, oldTablet, "fastTabletExternallyReparented")
 
 	// Start the finalize stage with a background context, but connect the trace.
 	bgCtx, cancel := context.WithTimeout(agent.batchCtx, *finalizeReparentTimeout)

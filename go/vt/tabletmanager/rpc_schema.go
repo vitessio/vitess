@@ -48,7 +48,7 @@ func (agent *ActionAgent) ReloadSchema(ctx context.Context, waitPosition string)
 }
 
 // PreflightSchema will try out the schema changes in "changes".
-// Should be called under RPCWrapLockAction.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) PreflightSchema(ctx context.Context, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	// get the db name from the tablet
 	dbName := topoproto.TabletDbName(agent.Tablet())
@@ -58,7 +58,7 @@ func (agent *ActionAgent) PreflightSchema(ctx context.Context, changes []string)
 }
 
 // ApplySchema will apply a schema change
-// Should be called under RPCWrapLockAction.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	// get the db name from the tablet
 	dbName := topoproto.TabletDbName(agent.Tablet())

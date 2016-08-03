@@ -26,7 +26,7 @@ func (agent *ActionAgent) WaitBlpPosition(ctx context.Context, blpPosition *tabl
 }
 
 // StopBlp stops the binlog players, and return their positions.
-// Should be called under RPCWrapLockAction.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) StopBlp(ctx context.Context) ([]*tabletmanagerdatapb.BlpPosition, error) {
 	if agent.BinlogPlayerMap == nil {
 		return nil, fmt.Errorf("No BinlogPlayerMap configured")
@@ -36,7 +36,7 @@ func (agent *ActionAgent) StopBlp(ctx context.Context) ([]*tabletmanagerdatapb.B
 }
 
 // StartBlp starts the binlog players
-// Should be called under RPCWrapLockAction.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) StartBlp(ctx context.Context) error {
 	if agent.BinlogPlayerMap == nil {
 		return fmt.Errorf("No BinlogPlayerMap configured")
