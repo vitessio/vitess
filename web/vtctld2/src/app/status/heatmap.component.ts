@@ -22,6 +22,7 @@ declare var Plotly: any;
 
 export class HeatmapComponent implements AfterViewInit {
   @Input() data: number[][];
+  // yLabels is an array of structs with the cell and array of tabletTypes.
   @Input() yLabels: Array<any>;
   @Input() xLabels: Array<string>;
   @Input() name: string;
@@ -33,11 +34,14 @@ export class HeatmapComponent implements AfterViewInit {
     [1.0, '#424141'],
   ];
   private getRowHeight() { return 50; }
+  private getXLabelOffset() { return 25; }
+
+  static rowHeight = 50;
 
   getTotalRows() {
     let height = 0;
-    for (let l of this.yLabels) {
-      height += l.tabletTypes.length;
+    for (let yLabel of this.yLabels) {
+      height += yLabel.tabletTypes.length;
     }
     return height;
   }
@@ -75,7 +79,7 @@ export class HeatmapComponent implements AfterViewInit {
      let chartLayout = {
        xaxis: xAxisTemplate,
        yaxis: yAxisTemplate,
-       height: (this.getTotalRows() * this.getRowHeight() + 25),
+       height: (this.getTotalRows() * this.getRowHeight() + this.getXLabelOffset()),
        margin: {
          t: 25,
          b: 0,

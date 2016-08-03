@@ -1,21 +1,25 @@
-<table cellspacing="0" cellpadding="0">
-  <tr height="25">
-    <td></td>
-    <td></td>
-    <td [attr.rowspan]="getTotalRows()">
-      <div id="{{name}}" >
+<table class="collapsed-border">
+  <!-- The first row with an offset to match the heatmap labels. -->
+  <tr class="set-height">
+    <td class="no-padding"></td>
+    <td class="no-padding"></td>
+    <td class="no-padding" [attr.rowspan]="(getTotalRows()+1)">
+      <div id="{{name}}">
+        <!-- Heatmap gets drawn in this div-->
       </div>
     </td>
   </tr>
 
   <div *ngFor="let label of yLabels">
+    <!-- The first row of the block with left label and nested left label. -->
     <tr [attr.height]="getRowHeight()">
-      <td [attr.rowspan]="label.tabletTypes.length" class="bordered"> {{label.cell}} </td>
+      <td class="bordered" [attr.rowspan]="label.tabletTypes.length">{{label.cell}}</td>
       <td class="bordered">{{label.tabletTypes[0]}}</td>
     </tr>
 
-    <tr [attr.height]="getRowHeight()" *ngFor="let l of label.tabletTypes | slice:1">
-      <td class="bordered">{{l}}</td>
+    <!-- The subsequent rows of the nested left labels. -->
+    <tr [attr.height]="getRowHeight()" *ngFor="let type of label.tabletTypes | slice:1">
+      <td  class="bordered">{{type}}</td>
     </tr>
   </div>
 </table>

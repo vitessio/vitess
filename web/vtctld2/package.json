@@ -33,8 +33,6 @@
     "@angular2-material/toolbar": "^2.0.0-alpha.5-2",
     "@vaadin/angular2-polymer": "^1.0.0-beta2",
     "bootstrap": "^3.3.6",
-    "chart.heatmap.js": "0.0.1-alpha",
-    "chart.js": "^2.2.0-rc.2",
     "core-js": "^2.4.0",
     "es6-shim": "0.35.1",
     "reflect-metadata": "^0.1.3",

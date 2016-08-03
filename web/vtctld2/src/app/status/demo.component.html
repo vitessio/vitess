@@ -1,4 +1,4 @@
-<!-- Keyspace selector --> 
+<!-- Keyspace selector -->
 <paper-dropdown-menu label="Keyspace">
   <paper-listbox class="dropdown-content" *ngFor="let k of keyspaces">
     <paper-item>{{k}}</paper-item>
@@ -30,6 +30,6 @@
     [data]="data"
     [xLabels]="xLabels"
     [yLabels]="yLabels"
-    [heatmapName]="div ">
+    [name]="div">
   </vt-heatmap>
 </div>
