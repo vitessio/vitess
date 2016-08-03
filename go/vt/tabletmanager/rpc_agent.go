@@ -261,4 +261,8 @@ type RPCAgent interface {
 	// RPC helpers
 	RPCWrap(ctx context.Context, name TabletAction, args, reply interface{}, f func() error) error
 	RPCWrapLock(ctx context.Context, name TabletAction, args, reply interface{}, verbose bool, f func() error) error
+
+	// HandleRPCPanic is to be called in a defer statement in each
+	// RPC input point.
+	HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error)
 }
