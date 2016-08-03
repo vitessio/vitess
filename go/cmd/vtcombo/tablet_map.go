@@ -542,7 +542,7 @@ func (itmc *internalTabletManagerClient) Sleep(ctx context.Context, tablet *topo
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.agent.RPCWrapLockAction(ctx, tabletmanager.TabletActionSleep, nil, nil, true, func() error {
+	return t.agent.RPCWrapLock(ctx, tabletmanager.TabletActionSleep, nil, nil, true, func() error {
 		t.agent.Sleep(ctx, duration)
 		return nil
 	})
@@ -557,9 +557,8 @@ func (itmc *internalTabletManagerClient) RefreshState(ctx context.Context, table
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.agent.RPCWrapLockAction(ctx, tabletmanager.TabletActionRefreshState, nil, nil, true, func() error {
-		t.agent.RefreshState(ctx)
-		return nil
+	return t.agent.RPCWrapLock(ctx, tabletmanager.TabletActionRefreshState, nil, nil, true, func() error {
+		return t.agent.RefreshState(ctx)
 	})
 }
 
@@ -590,7 +589,7 @@ func (itmc *internalTabletManagerClient) ReloadSchema(ctx context.Context, table
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.agent.RPCWrapLockAction(ctx, tabletmanager.TabletActionReloadSchema, nil, nil, true, func() error {
+	return t.agent.RPCWrapLock(ctx, tabletmanager.TabletActionReloadSchema, nil, nil, true, func() error {
 		return t.agent.ReloadSchema(ctx, waitPosition)
 	})
 }
@@ -601,7 +600,7 @@ func (itmc *internalTabletManagerClient) PreflightSchema(ctx context.Context, ta
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
 	var results []*tabletmanagerdatapb.SchemaChangeResult
-	if err := t.agent.RPCWrapLockAction(ctx, tabletmanager.TabletActionPreflightSchema, nil, nil, true, func() error {
+	if err := t.agent.RPCWrapLock(ctx, tabletmanager.TabletActionPreflightSchema, nil, nil, true, func() error {
 		r, err := t.agent.PreflightSchema(ctx, changes)
 		if err == nil {
 			results = r
@@ -619,7 +618,7 @@ func (itmc *internalTabletManagerClient) ApplySchema(ctx context.Context, tablet
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
 	var result *tabletmanagerdatapb.SchemaChangeResult
-	if err := t.agent.RPCWrapLockAction(ctx, tabletmanager.TabletActionApplySchema, nil, nil, true, func() error {
+	if err := t.agent.RPCWrapLock(ctx, tabletmanager.TabletActionApplySchema, nil, nil, true, func() error {
 		scr, err := t.agent.ApplySchema(ctx, change)
 		if err == nil {
 			result = scr

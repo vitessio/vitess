@@ -114,7 +114,7 @@ func (agent *ActionAgent) broadcastHealth() {
 // refreshTablet needs to be run after an action may have changed the current
 // state of the tablet.
 func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) error {
-	log.Infof("Executing post-action state refresh")
+	log.Infof("Executing post-action state refresh: %v", reason)
 
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("ActionAgent.refreshTablet")
@@ -130,35 +130,29 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 	tablet, err := agent.updateTabletFromTopo(ctx)
 	if err != nil {
 		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", reason, err)
-		return fmt.Errorf("Failed rereading tablet after %v: %v", reason, err)
+		return fmt.Errorf("refreshTablet failed rereading tablet after %v: %v", reason, err)
 	}
 
 	if updatedTablet := agent.checkTabletMysqlPort(ctx, tablet); updatedTablet != nil {
 		agent.setTablet(updatedTablet)
 	}
 
-	if err := agent.updateState(ctx, oldTablet, reason); err != nil {
-		return err
-	}
+	agent.updateState(ctx, oldTablet, reason)
 	log.Infof("Done with post-action state refresh")
 	return nil
 }
 
 // updateState will use the provided tablet record as a base, the current
 // tablet record as the new one, run changeCallback, and dispatch the event.
-func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *topodatapb.Tablet, reason string) error {
+func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *topodatapb.Tablet, reason string) {
 	newTablet := agent.Tablet()
 	log.Infof("Running tablet callback because: %v", reason)
-	if err := agent.changeCallback(ctx, oldTablet, newTablet); err != nil {
-		return err
-	}
-
+	agent.changeCallback(ctx, oldTablet, newTablet)
 	event.Dispatch(&events.StateChange{
 		OldTablet: *oldTablet,
 		NewTablet: *newTablet,
 		Reason:    reason,
 	})
-	return nil
 }
 
 // changeCallback is run after every action that might
@@ -174,7 +168,7 @@ func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *topodatapb
 // It owns starting and stopping the update stream service.
 //
 // It owns reading the TabletControl for the current tablet, and storing it.
-func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *topodatapb.Tablet) error {
+func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *topodatapb.Tablet) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("ActionAgent.changeCallback")
 	defer span.Finish()
@@ -302,5 +296,4 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	if broadcastHealth {
 		agent.broadcastHealth()
 	}
-	return nil
 }

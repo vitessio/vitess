@@ -124,6 +124,7 @@ func (agent *ActionAgent) GetSlaves(ctx context.Context) ([]string, error) {
 
 // ResetReplication completely resets the replication on the host.
 // All binary and relay logs are flushed. All replication positions are reset.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) ResetReplication(ctx context.Context) error {
 	cmds, err := agent.MysqlDaemon.ResetReplicationCommands()
 	if err != nil {
@@ -134,6 +135,7 @@ func (agent *ActionAgent) ResetReplication(ctx context.Context) error {
 }
 
 // InitMaster enables writes and returns the replication position.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 	// we need to insert something in the binlogs, so we can get the
 	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
@@ -170,11 +172,16 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 		return "", err
 	}
 
+	// and refresh our state
 	agent.initReplication = true
+	if err := agent.refreshTablet(ctx, "InitMaster"); err != nil {
+		return "", err
+	}
 	return replication.EncodePosition(pos), nil
 }
 
 // PopulateReparentJournal adds an entry into the reparent_journal table.
+// Should be called under RPCWrap.
 func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, position string) error {
 	pos, err := replication.DecodePosition(position)
 	if err != nil {
@@ -188,6 +195,7 @@ func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreat
 
 // InitSlave sets replication master and position, and waits for the
 // reparent_journal table entry up to context timeout
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
 	pos, err := replication.DecodePosition(position)
 	if err != nil {
@@ -229,7 +237,7 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 
 // DemoteMaster marks the server read-only, wait until it is done with
 // its current transactions, and returns its master position.
-// Should be called under RPCWrapLockAction.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	// Set the server read-only. Note all active connections are not
 	// affected.
@@ -268,6 +276,7 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 // PromoteSlaveWhenCaughtUp waits for this slave to be caught up on
 // replication up to the provided point, and then makes the slave the
 // shard master.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position string) (string, error) {
 	pos, err := replication.DecodePosition(position)
 	if err != nil {
@@ -298,19 +307,30 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 		return "", err
 	}
 
+	if err := agent.refreshTablet(ctx, "PromoteSlaveWhenCaughtUp"); err != nil {
+		return "", err
+	}
+
 	return replication.EncodePosition(pos), nil
 }
 
 // SlaveWasPromoted promotes a slave to master, no questions asked.
-// Should be called under RPCWrapLockAction.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
-	_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER)
-	return err
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER); err != nil {
+		return err
+	}
+
+	if err := agent.refreshTablet(ctx, "SlaveWasPromoted"); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // SetMaster sets replication master, and waits for the
 // reparent_journal table entry up to context timeout
-// Should be called under RPCWrapLockAction.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	parent, err := agent.TopoServer.GetTablet(ctx, parentAlias)
 	if err != nil {
@@ -354,11 +374,11 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 	}
 
 	// change our type to REPLICA if we used to be the master
-	runHealthCheck := false
+	typeChanged := false
 	_, err = agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
 		if tablet.Type == topodatapb.TabletType_MASTER {
 			tablet.Type = topodatapb.TabletType_REPLICA
-			runHealthCheck = true
+			typeChanged = true
 			return nil
 		}
 		return topo.ErrNoUpdateNeeded
@@ -375,22 +395,25 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 	if err := agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS); err != nil {
 		return err
 	}
-	if runHealthCheck {
+	if typeChanged {
+		if err := agent.refreshTablet(ctx, "SetMaster"); err != nil {
+			return err
+		}
 		agent.runHealthCheckProtected()
 	}
 	return nil
 }
 
 // SlaveWasRestarted updates the parent record for a tablet.
-// Should be called under RPCWrapLockAction.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
-	runHealthCheck := false
+	typeChanged := false
 
 	// Once this action completes, update authoritative tablet node first.
 	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
 		if tablet.Type == topodatapb.TabletType_MASTER {
 			tablet.Type = topodatapb.TabletType_REPLICA
-			runHealthCheck = true
+			typeChanged = true
 			return nil
 		}
 		return topo.ErrNoUpdateNeeded
@@ -398,14 +421,18 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, parent *topodat
 		return err
 	}
 
-	if runHealthCheck {
+	if typeChanged {
+		if err := agent.refreshTablet(ctx, "SlaveWasRestarted"); err != nil {
+			return err
+		}
 		agent.runHealthCheckProtected()
 	}
 	return nil
 }
 
 // StopReplicationAndGetStatus stops MySQL replication, and returns the
-// current status
+// current status.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error) {
 	// get the status before we stop replication
 	rs, err := agent.MysqlDaemon.SlaveStatus()
@@ -428,6 +455,7 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*rep
 }
 
 // PromoteSlave makes the current tablet the master
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
 	pos, err := agent.MysqlDaemon.PromoteSlave(agent.hookExtraEnv())
 	if err != nil {
@@ -447,6 +475,10 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
 	}
 
 	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER); err != nil {
+		return "", err
+	}
+
+	if err := agent.refreshTablet(ctx, "PromoteSlave"); err != nil {
 		return "", err
 	}
 

@@ -188,7 +188,7 @@ type RPCAgent interface {
 
 	ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.HookResult
 
-	RefreshState(ctx context.Context)
+	RefreshState(ctx context.Context) error
 
 	RunHealthCheck(ctx context.Context)
 
@@ -261,5 +261,4 @@ type RPCAgent interface {
 	// RPC helpers
 	RPCWrap(ctx context.Context, name TabletAction, args, reply interface{}, f func() error) error
 	RPCWrapLock(ctx context.Context, name TabletAction, args, reply interface{}, verbose bool, f func() error) error
-	RPCWrapLockAction(ctx context.Context, name TabletAction, args, reply interface{}, verbose bool, f func() error) error
 }
