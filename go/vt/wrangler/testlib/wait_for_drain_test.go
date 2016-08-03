@@ -53,11 +53,10 @@ func testWaitForDrain(t *testing.T, desc, cells string, drain drainDirective, ex
 	const keyspace = "ks"
 	const shard = "-80"
 
-	// This value needs to be higher than 0.5 seconds.  The vtctl
-	// drain command we issue needs to not time out the health on
-	// the tablet until it's done. Otherwise drain doesn't get any
-	// healthy tablets at all. The test however seems to wait
-	// until this value has expired, so it can't be too high.
+	// This value needs to not be equal to -initial_wait value below.
+	// Otherwise in this test, we close the StreamHealth RPC because of
+	// tablet inactivity at the same time as the end of the initial wait,
+	// and the test fails.
 	flag.Set("vtctl_healthcheck_timeout", "1s")
 
 	db := fakesqldb.Register()
@@ -101,8 +100,13 @@ func testWaitForDrain(t *testing.T, desc, cells string, drain drainDirective, ex
 		timeout = "30s"
 	}
 	stream, err := vp.RunAndStreamOutput(
-		[]string{"WaitForDrain", "-cells", cells, "-retry_delay", "100ms", "-timeout", timeout,
-			keyspace + "/" + shard, topodatapb.TabletType_REPLICA.String()})
+		[]string{"WaitForDrain",
+			"-cells", cells,
+			"-retry_delay", "100ms",
+			"-timeout", timeout,
+			"-initial_wait", "100ms",
+			keyspace + "/" + shard,
+			topodatapb.TabletType_REPLICA.String()})
 	if err != nil {
 		t.Fatalf("VtctlPipe.RunAndStreamOutput() failed: %v", err)
 	}

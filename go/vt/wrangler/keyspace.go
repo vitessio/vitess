@@ -431,7 +431,7 @@ func (wr *Wrangler) migrateServedTypesLocked(ctx context.Context, keyspace strin
 // the tablet was actually drained. At later times, a QPS rate > 0.0 could still
 // be observed.
 func (wr *Wrangler) WaitForDrain(ctx context.Context, cells []string, keyspace, shard string, servedType topodatapb.TabletType,
-	retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout time.Duration) error {
+	retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout, initialWait time.Duration) error {
 	if len(cells) == 0 {
 		// Retrieve list of cells for the shard from the topology.
 		shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
@@ -449,7 +449,7 @@ func (wr *Wrangler) WaitForDrain(ctx context.Context, cells []string, keyspace, 
 		go func(cell string) {
 			defer wg.Done()
 			rec.RecordError(wr.waitForDrainInCell(ctx, cell, keyspace, shard, servedType,
-				retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout))
+				retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout, initialWait))
 		}(cell)
 	}
 	wg.Wait()
@@ -458,7 +458,7 @@ func (wr *Wrangler) WaitForDrain(ctx context.Context, cells []string, keyspace, 
 }
 
 func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shard string, servedType topodatapb.TabletType,
-	retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout time.Duration) error {
+	retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout, initialWait time.Duration) error {
 
 	// Create the healthheck module, with a cache.
 	hc := discovery.NewHealthCheck(healthCheckTimeout /* connectTimeout */, healthcheckRetryDelay, healthCheckTimeout)
@@ -475,12 +475,14 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	}
 
 	wr.Logger().Infof("%v: Waiting for %.1f seconds to make sure that the discovery module retrieves healthcheck information from all tablets.",
-		cell, healthCheckTimeout.Seconds())
-	// Wait at least for -vtctl_healthcheck_timeout to elapse to make sure that we
+		cell, initialWait.Seconds())
+	// Wait at least for -initial_wait to elapse to make sure that we
 	// see all healthy tablets. Otherwise, we might miss some tablets.
-	// It's safe to wait not longer for this because we would only miss slow
-	// tablets and vtgate would not serve from such tablets anyway.
-	time.Sleep(healthCheckTimeout)
+	// Note the default value for the parameter is set to the same
+	// default as healthcheck timeout, and it's safe to wait not
+	// longer for this because we would only miss slow tablets and
+	// vtgate would not serve from such tablets anyway.
+	time.Sleep(initialWait)
 
 	// Now check the QPS rate of all tablets until the timeout expires.
 	startTime := time.Now()
