@@ -754,7 +754,7 @@ func agentRPCTestTabletExternallyReparented(ctx context.Context, t *testing.T, c
 
 func agentRPCTestTabletExternallyReparentedPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.TabletExternallyReparented(ctx, tablet, "")
-	expectRPCWrapLockPanic(t, err)
+	expectRPCWrapPanic(t, err)
 }
 
 var testGetSlavesResult = []string{"slave1", "slave2"}

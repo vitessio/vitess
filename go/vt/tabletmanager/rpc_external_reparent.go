@@ -37,8 +37,13 @@ func SetReparentFlags(timeout time.Duration) {
 
 // TabletExternallyReparented updates all topo records so the current
 // tablet is the new master for this shard.
-// Should be called under RPCWrapLock.
+// Should be called under RPCWrap.
 func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, externalID string) error {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return err
+	}
+	defer agent.actionMutex.Unlock()
+
 	startTime := time.Now()
 
 	// If there is a finalize step running, wait for it to finish or time out
