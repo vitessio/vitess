@@ -29,6 +29,7 @@ func TestTabletStatsCache(t *testing.T) {
 	// add a tablet
 	tablet1 := topo.NewTablet(10, "cell", "host1")
 	ts1 := &TabletStats{
+		Key:     "t1",
 		Tablet:  tablet1,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
@@ -50,6 +51,7 @@ func TestTabletStatsCache(t *testing.T) {
 	// add a second tablet
 	tablet2 := topo.NewTablet(11, "cell", "host2")
 	ts2 := &TabletStats{
+		Key:     "t2",
 		Tablet:  tablet2,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,

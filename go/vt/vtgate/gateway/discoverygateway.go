@@ -313,7 +313,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 		// skip tablets we tried before
 		var ts *discovery.TabletStats
 		for _, t := range tablets {
-			if _, ok := invalidTablets[discovery.TabletToMapKey(t.Tablet)]; !ok {
+			if _, ok := invalidTablets[t.Key]; !ok {
 				ts = &t
 				break
 			}
@@ -328,10 +328,10 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 
 		// execute
 		tabletLastUsed = ts.Tablet
-		conn := dg.hc.GetConnection(ts.Tablet)
+		conn := dg.hc.GetConnection(ts.Key)
 		if conn == nil {
-			err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no connection for %+v", ts.Tablet))
-			invalidTablets[discovery.TabletToMapKey(ts.Tablet)] = true
+			err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no connection for key %v tablet %+v", ts.Key, ts.Tablet))
+			invalidTablets[ts.Key] = true
 			continue
 		}
 
@@ -342,7 +342,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 
 		err = action(conn, ts.Target)
 		if dg.canRetry(ctx, err, transactionID, isStreaming) {
-			invalidTablets[discovery.TabletToMapKey(ts.Tablet)] = true
+			invalidTablets[ts.Key] = true
 			continue
 		}
 		break

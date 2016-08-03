@@ -94,6 +94,7 @@ func TestAPI(t *testing.T) {
 		Qps:                 5.6,
 	}
 	tabletStats := &discovery.TabletStats{
+		Key:     "key1",
 		Tablet:  &tablet1,
 		Target:  target,
 		Up:      true,
@@ -163,7 +164,7 @@ func TestAPI(t *testing.T) {
 			}`},
 
 		//Tablet Updates
-		{"GET", "tablet_statuses/cell1/ks1/-80/REPLICA", `{"100":{"Tablet":{"alias":{"cell":"cell1","uid":100},"port_map":{"vt":100},"keyspace":"ks1","shard":"-80","key_range":{"end":"gA=="},"type":2},"Name":"","Target":{"keyspace":"ks1","shard":"-80","tablet_type":2},"Up":true,"Serving":true,"TabletExternallyReparentedTimestamp":5,"Stats":{"seconds_behind_master":2,"cpu_usage":12.1,"qps":5.6},"LastError":null}}`},
+		{"GET", "tablet_statuses/cell1/ks1/-80/REPLICA", `{"100":{"Key":"key1","Tablet":{"alias":{"cell":"cell1","uid":100},"port_map":{"vt":100},"keyspace":"ks1","shard":"-80","key_range":{"end":"gA=="},"type":2},"Name":"","Target":{"keyspace":"ks1","shard":"-80","tablet_type":2},"Up":true,"Serving":true,"TabletExternallyReparentedTimestamp":5,"Stats":{"seconds_behind_master":2,"cpu_usage":12.1,"qps":5.6},"LastError":null}}`},
 		{"GET", "tablet_statuses/cell1/ks1/replica", "can't get tablet_statuses: invalid target path: \"cell1/ks1/replica\"  expected path: <cell>/<keyspace>/<shard>/<type>"},
 		{"GET", "tablet_statuses/cell1/ks1/-80/hello", "can't get tablet_statuses: invalid tablet type: hello"},
 	}

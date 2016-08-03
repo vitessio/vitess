@@ -102,6 +102,12 @@ type HealthCheckStatsListener interface {
 
 // TabletStats is returned when getting the set of tablets.
 type TabletStats struct {
+	// Key uniquely identifies that serving tablet. It is computed
+	// from the Tablet's record Hostname and PortMap. If a tablet
+	// is restarted on different ports, its Key will be different.
+	// Key is computed using the TabletToMapKey method below.
+	// key can be used in GetConnection().
+	Key string
 	// Tablet is the tablet object that was sent to HealthCheck.AddTablet.
 	Tablet *topodatapb.Tablet
 	// Name is an optional tag (e.g. alternative address) for the
@@ -143,8 +149,8 @@ func (e *TabletStats) String() string {
 // Updates to the health of all registered tablet can be watched by
 // registering a listener. To get the underlying "TabletConn" object
 // which is used for each tablet, use the "GetConnection()" method
-// below and pass in the "Tablet" struct which is also sent to the
-// listener in each update.
+// below and pass in the Key string which is also sent to the
+// listener in each update (as it is part of TabletStats).
 type HealthCheck interface {
 	// RegisterStats registers the connection counts stats.
 	// It can only be called on one Healthcheck object per process.
@@ -165,7 +171,7 @@ type HealthCheck interface {
 	// RemoveTablet removes the tablet, and stops its StreamHealth RPC.
 	RemoveTablet(tablet *topodatapb.Tablet)
 	// GetConnection returns the TabletConn of the given tablet.
-	GetConnection(tablet *topodatapb.Tablet) tabletconn.TabletConn
+	GetConnection(key string) tabletconn.TabletConn
 	// CacheStatus returns a displayable version of the cache.
 	CacheStatus() TabletsCacheStatusList
 	// Close stops the healthcheck.
@@ -516,17 +522,18 @@ func (hc *HealthCheckImpl) SetListener(listener HealthCheckStatsListener, sendDo
 // name is an optional tag for the tablet, e.g. an alternative address.
 func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name string) {
 	ctx, cancelFunc := context.WithCancel(context.Background())
+	key := TabletToMapKey(tablet)
 	hcc := &healthCheckConn{
 		ctx:        ctx,
 		cancelFunc: cancelFunc,
 		tabletStats: TabletStats{
+			Key:    key,
 			Tablet: tablet,
 			Name:   name,
 			Target: &querypb.Target{},
 			Up:     true,
 		},
 	}
-	key := TabletToMapKey(tablet)
 	hc.mu.Lock()
 	if _, ok := hc.addrToConns[key]; ok {
 		hc.mu.Unlock()
@@ -547,10 +554,10 @@ func (hc *HealthCheckImpl) RemoveTablet(tablet *topodatapb.Tablet) {
 }
 
 // GetConnection returns the TabletConn of the given tablet.
-func (hc *HealthCheckImpl) GetConnection(tablet *topodatapb.Tablet) tabletconn.TabletConn {
+func (hc *HealthCheckImpl) GetConnection(key string) tabletconn.TabletConn {
 	hc.mu.RLock()
 	defer hc.mu.RUnlock()
-	hcc := hc.addrToConns[TabletToMapKey(tablet)]
+	hcc := hc.addrToConns[key]
 	if hcc == nil {
 		return nil
 	}
@@ -578,11 +585,11 @@ func (tsl TabletStatsList) Len() int {
 func (tsl TabletStatsList) Less(i, j int) bool {
 	name1 := tsl[i].Name
 	if name1 == "" {
-		name1 = TabletToMapKey(tsl[i].Tablet)
+		name1 = tsl[i].Key
 	}
 	name2 := tsl[j].Name
 	if name2 == "" {
-		name2 = TabletToMapKey(tsl[j].Tablet)
+		name2 = tsl[j].Key
 	}
 	return name1 < name2
 }

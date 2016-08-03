@@ -60,8 +60,6 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 		return
 	}
 
-	key := TabletToMapKey(ts.Tablet)
-
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
 
@@ -84,18 +82,18 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 	}
 
 	// Update our full map.
-	if existing, ok := e.all[key]; ok {
+	if existing, ok := e.all[ts.Key]; ok {
 		if ts.Up {
 			// We already have the entry, update the values.
 			*existing = *ts
 		} else {
 			// We have an entry which we shouldn't. Remove it.
-			delete(e.all, key)
+			delete(e.all, ts.Key)
 		}
 	} else {
 		if ts.Up {
 			// Add the entry.
-			e.all[key] = ts
+			e.all[ts.Key] = ts
 		} else {
 			// We were told to remove an entry which we
 			// didn't have anyway, nothing should happen.
@@ -128,8 +126,7 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 			// We have a Down master, remove it only if
 			// it's exactly the same
 			if len(e.healthy) != 0 {
-				oldKey := TabletToMapKey(e.healthy[0].Tablet)
-				if key == oldKey {
+				if ts.Key == e.healthy[0].Key {
 					// same guy, remove it
 					e.healthy = nil
 				}
