@@ -12,8 +12,8 @@ import { PolymerElement } from '@vaadin/angular2-polymer';
 
 import { AddButtonComponent } from '../shared/add-button.component';
 import { DialogComponent } from '../shared/dialog/dialog.component';
-import { DialogContent } from '../shared/dialog/dialogContent';
-import { DialogSettings } from '../shared/dialog/dialogSettings';
+import { DialogContent } from '../shared/dialog/dialog-content';
+import { DialogSettings } from '../shared/dialog/dialog-settings';
 import { KeyspaceService } from '../api/keyspace.service';
 import { ShardService } from '../api/shard.service';
 import { TabletService } from '../api/tablet.service';
