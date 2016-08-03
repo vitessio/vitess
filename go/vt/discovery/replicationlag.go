@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	// LowReplicationLag defines the duration that replication lag is low enough that the VTTablet is considered healthy.
-	LowReplicationLag            = flag.Duration("discovery_low_replication_lag", 30*time.Second, "the replication lag that is considered low enough to be healthy")
+	// lowReplicationLag defines the duration that replication lag is low enough that the VTTablet is considered healthy.
+	lowReplicationLag            = flag.Duration("discovery_low_replication_lag", 30*time.Second, "the replication lag that is considered low enough to be healthy")
 	highReplicationLagMinServing = flag.Duration("discovery_high_replication_lag_minimum_serving", 2*time.Hour, "the replication lag that is considered too high when selecting miminum 2 vttablets for serving")
 )
 
@@ -46,7 +46,7 @@ func filterByLag(tabletStatsList []*TabletStats) []*TabletStats {
 	// if all have low replication lag (<=30s), return all tablets.
 	allLowLag := true
 	for _, ts := range list {
-		if float64(ts.Stats.SecondsBehindMaster) > LowReplicationLag.Seconds() {
+		if float64(ts.Stats.SecondsBehindMaster) > lowReplicationLag.Seconds() {
 			allLowLag = false
 			break
 		}
@@ -105,4 +105,27 @@ func mean(tabletStatsList []*TabletStats, idxExclude int) (uint64, error) {
 		return 0, fmt.Errorf("empty list")
 	}
 	return sum / count, nil
+}
+
+// TrivialStatsUpdate returns true iff the old and new TabletStats
+// haven't changed enough to warrant re-calling FilterByReplicationLag.
+func TrivialStatsUpdate(old, new *TabletStats) bool {
+	// Skip replag filter when replag remains in the low rep lag range,
+	// which should be the case majority of the time.
+	lowRepLag := lowReplicationLag.Seconds()
+	oldRepLag := float64(old.Stats.SecondsBehindMaster)
+	newRepLag := float64(new.Stats.SecondsBehindMaster)
+	if oldRepLag <= lowRepLag && newRepLag <= lowRepLag {
+		return true
+	}
+
+	// skip replag filter when replag remains in the high rep lag range,
+	// and did not change beyond +/- 10%.
+	// when there is a high rep lag, it takes a long time for it to reduce,
+	// so it is not necessary to re-calculate every time.
+	if oldRepLag > lowRepLag && newRepLag > lowRepLag && newRepLag < oldRepLag*1.1 && newRepLag > oldRepLag*0.9 {
+		return true
+	}
+
+	return false
 }

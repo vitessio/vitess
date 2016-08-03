@@ -116,9 +116,16 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 	defer e.mu.Unlock()
 
 	// Update our full map.
+	trivialUpdate := false
 	if existing, ok := e.all[ts.Key]; ok {
 		if ts.Up {
+			// We have an existing entry, and a new entry.
+			// Remember if they are both good (most common case).
+			trivialUpdate = existing.LastError == nil && existing.Serving && ts.LastError == nil && ts.Serving && TrivialStatsUpdate(existing, ts)
+
 			// We already have the entry, update the values.
+			// (will update both 'all' and 'healthy' as they use
+			// pointers).
 			*existing = *ts
 		} else {
 			// We have an entry which we shouldn't. Remove it.
@@ -170,7 +177,10 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 	}
 
 	// For non-master, we just recompute the healthy list
-	// using FilterByReplicationLag.
+	// using FilterByReplicationLag, if we need to.
+	if trivialUpdate {
+		return
+	}
 	allArray := make([]*TabletStats, 0, len(e.all))
 	for _, s := range e.all {
 		allArray = append(allArray, s)
