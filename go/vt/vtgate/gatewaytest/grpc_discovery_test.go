@@ -50,8 +50,7 @@ func TestGRPCDiscovery(t *testing.T) {
 	// VTGate: create the discovery healthcheck, and the gateway.
 	// Wait for the right tablets to be present.
 	hc := discovery.NewHealthCheck(30*time.Second, 10*time.Second, 2*time.Minute)
-	dg := gateway.GetCreator()(hc, ts, ts, cell, 2, nil)
-
+	dg := gateway.GetCreator()(hc, ts, ts, cell, 2)
 	hc.AddTablet(&topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: cell,
@@ -65,11 +64,11 @@ func TestGRPCDiscovery(t *testing.T) {
 			"grpc": int32(port),
 		},
 	}, "test_tablet")
-	ctx := context.Background()
-	err = dg.WaitForTablets(ctx, []topodatapb.TabletType{tabletconntest.TestTarget.TabletType})
+	err = gateway.WaitForTablets(dg, []topodatapb.TabletType{tabletconntest.TestTarget.TabletType})
 	if err != nil {
 		t.Fatalf("WaitForTablets failed: %v", err)
 	}
+	ctx := context.Background()
 	defer dg.Close(ctx)
 
 	// run the test suite.
@@ -143,7 +142,7 @@ func TestL2VTGateDiscovery(t *testing.T) {
 	// VTGate: create the l2vtgate gateway
 	flag.Set("gateway_implementation", "l2vtgategateway")
 	flag.Set("l2vtgategateway_addrs", fmt.Sprintf("%v|%v|%v", listener.Addr().String(), tabletconntest.TestTarget.Keyspace, tabletconntest.TestTarget.Shard))
-	lg := gateway.GetCreator()(nil, ts, nil, "", 2, nil)
+	lg := gateway.GetCreator()(nil, ts, nil, "", 2)
 	defer lg.Close(ctx)
 
 	// and run the test suite.

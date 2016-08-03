@@ -65,7 +65,7 @@ type discoveryGateway struct {
 	statusAggregators map[string]*TabletStatusAggregator
 }
 
-func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) Gateway {
+func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway {
 	dg := &discoveryGateway{
 		hc:                hc,
 		tsc:               discovery.NewTabletStatsCache(hc, cell),
@@ -93,39 +93,17 @@ func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, se
 		ctw := discovery.NewCellTabletsWatcher(dg.topoServer, tr, c, *refreshInterval, *topoReadConcurrency)
 		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
 	}
-	if len(tabletTypesToWait) > 0 {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		err := dg.WaitForTablets(ctx, tabletTypesToWait)
-		if err != nil {
-			log.Errorf("createDiscoveryGateway: %v", err)
-		}
-	}
 	return dg
 }
 
+// WaitForTablets is part of the gateway.Gateway interface.
 func (dg *discoveryGateway) WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) error {
 	// Skip waiting for tablets if we are not told to do so.
 	if len(tabletTypesToWait) == 0 {
 		return nil
 	}
 
-	log.Infof("Waiting for tablets")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	err := dg.tsc.WaitForAllServingTablets(ctx, dg.srvTopoServer, dg.localCell, tabletTypesToWait)
-	if err == context.DeadlineExceeded {
-		// ignore this error, we will still start up, and may not serve
-		// all tablets.
-		log.Warningf("Timeout waiting for all keyspaces / shards to have healthy tablets, may be in degraded mode")
-		err = nil
-	}
-	if err != nil {
-		log.Errorf("Error when waiting for tablets: %v", err)
-		return err
-	}
-	log.Infof("Waiting for tablets completed")
-	return nil
+	return dg.tsc.WaitForAllServingTablets(ctx, dg.srvTopoServer, dg.localCell, tabletTypesToWait)
 }
 
 // Execute executes the non-streaming query for the specified keyspace, shard, and tablet type.

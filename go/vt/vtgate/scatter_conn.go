@@ -62,12 +62,13 @@ func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv topo.
 	if statsName != "" {
 		tabletCallErrorCountStatsName = statsName + "ErrorCount"
 	}
-	gateway := gateway.GetCreator()(hc, topoServer, serv, cell, retryCount, tabletTypesToWait)
+	gw := gateway.GetCreator()(hc, topoServer, serv, cell, retryCount)
+	gateway.WaitForTablets(gw, tabletTypesToWait)
 
 	return &ScatterConn{
 		timings:              stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		tabletCallErrorCount: stats.NewMultiCounters(tabletCallErrorCountStatsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
-		gateway:              gateway,
+		gateway:              gw,
 	}
 }
 
