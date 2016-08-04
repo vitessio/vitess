@@ -52,8 +52,13 @@ _test/
 # site-local example files
 /examples/kubernetes/config.sh
 
-#pom generated file
+# pom generated file
 /java/jdbc/dependency-reduced-pom.xml
+
+# Angular2 Bower Libs
+/web/vtctld2/.bowerrc~
+/web/vtctld2/bower.json~
+/web/vtctld2/public/bower_components/
 
 # generated protobuf files
 /go/vt/.proto.tmp
