@@ -13,18 +13,23 @@
   </paper-listbox>
 </paper-dropdown-menu>
 
-<!-- TabletType selector -->
-<paper-dropdown-menu label="TabletType">
+<!-- Type selector -->
+<paper-dropdown-menu label="Type">
   <paper-listbox class="dropdown-content" *ngFor="let t of tabletType">
     <paper-item>{{t}}</paper-item>
   </paper-listbox>
 </paper-dropdown-menu>
 
-<vt-heatmap
-  [data]="data"
-  [xLabels]="xLabels"
-  [yLabels]="yLabels"
-  [name]="name"
->
-</vt-heatmap>
+<br/>
+<br/>
 
+<!-- Heatmap would be drawn in the following div -->
+<center style="font-size:18px">Shards</center>
+<div *ngIf=data>
+  <vt-heatmap
+    [data]="data"
+    [xLabels]="xLabels"
+    [yLabels]="yLabels"
+    [name]="div">
+  </vt-heatmap>
+</div>

@@ -1,7 +1,8 @@
 import { provideRouter, RouterConfig } from '@angular/router';
+
 import { DashboardComponent } from './dashboard/dashboard.component';
-import { StatusComponent } from './status/status.component';
 import { SchemaComponent } from './schema/schema.component';
+import { StatusComponent } from './status/status.component';
 import { TopoBrowserComponent } from './topo/topo-browser.component';
 
 export const routes: RouterConfig = [

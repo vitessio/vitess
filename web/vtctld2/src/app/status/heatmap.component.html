@@ -1,0 +1,20 @@
+<table class="collapsed-border">
+  <!-- The first row with an offset to match the heatmap labels. -->
+  <tr [ngStyle]="{'height': (getXLabelsRowHeight())+'px'}">
+    <td class="no-padding"></td>
+    <td class="no-padding"></td>
+    <td class="no-padding" [attr.rowspan]="(getTotalRows()+1)">
+      <div id="{{name}}">
+        <!-- Heatmap gets drawn in this div-->
+      </div>
+    </td>
+  </tr>
+
+  <!-- The labels, and nested labels, of the map are drawn -->
+  <div *ngFor="let label of yLabels">
+    <tr *ngFor="let type of label.tabletTypes; let i = index" [attr.height]="getRowHeight()">
+      <td *ngIf="i==0" class="bordered" [attr.rowspan]="label.tabletTypes.length">{{label.cell}}</td>
+      <td class="bordered">{{type}}</td>
+    </tr>
+  </div>
+</table>

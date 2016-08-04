@@ -1,0 +1,16 @@
+.bordered {
+    border: 1px solid black;
+    border-spacing: 0;
+    margin: 0;
+    padding: 0;
+    text-align: center;
+}
+
+.collapsed-border {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+.no-padding {
+  padding: 0;
+}
