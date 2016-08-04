@@ -53,8 +53,12 @@ func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
 }
 
 // ChangeType changes the tablet type
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return err
+	}
+	defer agent.actionMutex.Unlock()
+
 	// change our type in the topology
 	_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType)
 	if err != nil {
@@ -72,14 +76,24 @@ func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.
 }
 
 // Sleep sleeps for the duration
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) Sleep(ctx context.Context, duration time.Duration) {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		// client gave up
+		return
+	}
+	defer agent.actionMutex.Unlock()
+
 	time.Sleep(duration)
 }
 
 // ExecuteHook executes the provided hook locally, and returns the result.
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.HookResult {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		// client gave up
+		return &hook.HookResult{}
+	}
+	defer agent.actionMutex.Unlock()
+
 	// Execute the hooks
 	topotools.ConfigureTabletHook(hk, agent.TabletAlias)
 	hr := hk.Execute()
@@ -93,8 +107,12 @@ func (agent *ActionAgent) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.
 }
 
 // RefreshState reload the tablet record from the topo server.
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) RefreshState(ctx context.Context) error {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return err
+	}
+	defer agent.actionMutex.Unlock()
+
 	return agent.refreshTablet(ctx, "RefreshState")
 }
 

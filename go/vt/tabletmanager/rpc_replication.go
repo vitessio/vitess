@@ -48,8 +48,17 @@ func (agent *ActionAgent) MasterPosition(ctx context.Context) (string, error) {
 
 // StopSlave will stop the replication. Works both when Vitess manages
 // replication or not (using hook if not).
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) StopSlave(ctx context.Context) error {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return err
+	}
+	defer agent.actionMutex.Unlock()
+
+	return agent.stopSlaveProtected(ctx)
+}
+
+func (agent *ActionAgent) stopSlaveProtected(ctx context.Context) error {
+
 	// Remember that we were told to stop, so we don't try to
 	// restart ourselves (in replication_reporter).
 	agent.setSlaveStopped(true)
@@ -72,6 +81,11 @@ func (agent *ActionAgent) StopSlave(ctx context.Context) error {
 // provided position. Works both when Vitess manages
 // replication or not (using hook if not).
 func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return "", err
+	}
+	defer agent.actionMutex.Unlock()
+
 	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return "", err
@@ -81,7 +95,7 @@ func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position string,
 	if err := agent.MysqlDaemon.WaitMasterPos(waitCtx, pos); err != nil {
 		return "", err
 	}
-	if err := agent.StopSlave(ctx); err != nil {
+	if err := agent.stopSlaveProtected(ctx); err != nil {
 		return "", err
 	}
 	pos, err = agent.MysqlDaemon.MasterPosition()
@@ -93,8 +107,12 @@ func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position string,
 
 // StartSlave will start the replication. Works both when Vitess manages
 // replication or not (using hook if not).
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) StartSlave(ctx context.Context) error {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return err
+	}
+	defer agent.actionMutex.Unlock()
+
 	agent.setSlaveStopped(false)
 
 	// Tell Orchestrator we're no longer stopped on purpose.
@@ -124,8 +142,12 @@ func (agent *ActionAgent) GetSlaves(ctx context.Context) ([]string, error) {
 
 // ResetReplication completely resets the replication on the host.
 // All binary and relay logs are flushed. All replication positions are reset.
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) ResetReplication(ctx context.Context) error {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return err
+	}
+	defer agent.actionMutex.Unlock()
+
 	cmds, err := agent.MysqlDaemon.ResetReplicationCommands()
 	if err != nil {
 		return err
@@ -135,8 +157,12 @@ func (agent *ActionAgent) ResetReplication(ctx context.Context) error {
 }
 
 // InitMaster enables writes and returns the replication position.
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return "", err
+	}
+	defer agent.actionMutex.Unlock()
+
 	// we need to insert something in the binlogs, so we can get the
 	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
 	cmds := mysqlctl.CreateReparentJournal()
@@ -195,8 +221,12 @@ func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreat
 
 // InitSlave sets replication master and position, and waits for the
 // reparent_journal table entry up to context timeout
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return err
+	}
+	defer agent.actionMutex.Unlock()
+
 	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
@@ -237,8 +267,12 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 
 // DemoteMaster marks the server read-only, wait until it is done with
 // its current transactions, and returns its master position.
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return "", err
+	}
+	defer agent.actionMutex.Unlock()
+
 	// Set the server read-only. Note all active connections are not
 	// affected.
 	if err := agent.MysqlDaemon.SetReadOnly(true); err != nil {
@@ -276,8 +310,12 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 // PromoteSlaveWhenCaughtUp waits for this slave to be caught up on
 // replication up to the provided point, and then makes the slave the
 // shard master.
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position string) (string, error) {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return "", err
+	}
+	defer agent.actionMutex.Unlock()
+
 	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return "", err
@@ -315,8 +353,12 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 }
 
 // SlaveWasPromoted promotes a slave to master, no questions asked.
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return err
+	}
+	defer agent.actionMutex.Unlock()
+
 	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER); err != nil {
 		return err
 	}
@@ -330,8 +372,12 @@ func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
 
 // SetMaster sets replication master, and waits for the
 // reparent_journal table entry up to context timeout
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return err
+	}
+	defer agent.actionMutex.Unlock()
+
 	parent, err := agent.TopoServer.GetTablet(ctx, parentAlias)
 	if err != nil {
 		return err
@@ -405,8 +451,12 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 }
 
 // SlaveWasRestarted updates the parent record for a tablet.
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return err
+	}
+	defer agent.actionMutex.Unlock()
+
 	typeChanged := false
 
 	// Once this action completes, update authoritative tablet node first.
@@ -432,8 +482,12 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, parent *topodat
 
 // StopReplicationAndGetStatus stops MySQL replication, and returns the
 // current status.
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error) {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return nil, err
+	}
+	defer agent.actionMutex.Unlock()
+
 	// get the status before we stop replication
 	rs, err := agent.MysqlDaemon.SlaveStatus()
 	if err != nil {
@@ -443,7 +497,7 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*rep
 		// no replication is running, just return what we got
 		return replication.StatusToProto(rs), nil
 	}
-	if err := agent.StopSlave(ctx); err != nil {
+	if err := agent.stopSlaveProtected(ctx); err != nil {
 		return nil, fmt.Errorf("stop slave failed: %v", err)
 	}
 	// now patch in the current position
@@ -455,8 +509,12 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*rep
 }
 
 // PromoteSlave makes the current tablet the master
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return "", err
+	}
+	defer agent.actionMutex.Unlock()
+
 	pos, err := agent.MysqlDaemon.PromoteSlave(agent.hookExtraEnv())
 	if err != nil {
 		return "", err
