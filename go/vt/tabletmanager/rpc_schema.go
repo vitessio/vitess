@@ -17,13 +17,11 @@ import (
 )
 
 // GetSchema returns the schema.
-// Should be called under RPCWrap.
 func (agent *ActionAgent) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	return agent.MysqlDaemon.GetSchema(topoproto.TabletDbName(agent.Tablet()), tables, excludeTables, includeViews)
 }
 
 // ReloadSchema will reload the schema
-// Should be called under RPCWrap.
 // This doesn't need the action mutex because periodic schema reloads happen
 // in the background anyway.
 func (agent *ActionAgent) ReloadSchema(ctx context.Context, waitPosition string) error {

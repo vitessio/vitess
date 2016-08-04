@@ -27,7 +27,6 @@ var (
 )
 
 // SlaveStatus returns the replication status
-// Should be called under RPCWrap.
 func (agent *ActionAgent) SlaveStatus(ctx context.Context) (*replicationdatapb.Status, error) {
 	status, err := agent.MysqlDaemon.SlaveStatus()
 	if err != nil {
@@ -37,7 +36,6 @@ func (agent *ActionAgent) SlaveStatus(ctx context.Context) (*replicationdatapb.S
 }
 
 // MasterPosition returns the master position
-// Should be called under RPCWrap.
 func (agent *ActionAgent) MasterPosition(ctx context.Context) (string, error) {
 	pos, err := agent.MysqlDaemon.MasterPosition()
 	if err != nil {
@@ -135,7 +133,6 @@ func (agent *ActionAgent) StartSlave(ctx context.Context) error {
 }
 
 // GetSlaves returns the address of all the slaves
-// Should be called under RPCWrap.
 func (agent *ActionAgent) GetSlaves(ctx context.Context) ([]string, error) {
 	return mysqlctl.FindSlaves(agent.MysqlDaemon)
 }
@@ -207,7 +204,6 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 }
 
 // PopulateReparentJournal adds an entry into the reparent_journal table.
-// Should be called under RPCWrap.
 func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, position string) error {
 	pos, err := replication.DecodePosition(position)
 	if err != nil {
@@ -378,6 +374,10 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 	}
 	defer agent.actionMutex.Unlock()
 
+	return agent.setMasterProtected(ctx, parentAlias, timeCreatedNS, forceStartSlave)
+}
+
+func (agent *ActionAgent) setMasterProtected(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	parent, err := agent.TopoServer.GetTablet(ctx, parentAlias)
 	if err != nil {
 		return err
