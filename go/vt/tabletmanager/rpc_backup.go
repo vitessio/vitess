@@ -18,8 +18,12 @@ import (
 )
 
 // Backup takes a db backup and sends it to the BackupStorage
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger) error {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return err
+	}
+	defer agent.actionMutex.Unlock()
+
 	// update our type to BACKUP
 	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
@@ -69,8 +73,12 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 }
 
 // RestoreFromBackup deletes all local data and restores anew from the latest backup.
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) RestoreFromBackup(ctx context.Context, logger logutil.Logger) error {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return err
+	}
+	defer agent.actionMutex.Unlock()
+
 	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return err

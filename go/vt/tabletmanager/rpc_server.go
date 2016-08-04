@@ -111,12 +111,6 @@ func (agent *ActionAgent) RPCWrap(ctx context.Context, name TabletAction, args, 
 		false /*lock*/)
 }
 
-// RPCWrapLock is for actions that should not run concurrently with each other.
-func (agent *ActionAgent) RPCWrapLock(ctx context.Context, name TabletAction, args, reply interface{}, verbose bool, f func() error) error {
-	return agent.rpcWrapper(ctx, name, args, reply, verbose, f,
-		true /*lock*/)
-}
-
 //
 // RegisterQueryService is used to delay registration of RPC servers until we have all the objects.
 type RegisterQueryService func(*ActionAgent)

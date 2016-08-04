@@ -18,16 +18,24 @@ import (
 
 // WaitBlpPosition waits until a specific filtered replication position is
 // reached.
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) WaitBlpPosition(ctx context.Context, blpPosition *tabletmanagerdatapb.BlpPosition, waitTime time.Duration) error {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return err
+	}
+	defer agent.actionMutex.Unlock()
+
 	waitCtx, cancel := context.WithTimeout(ctx, waitTime)
 	defer cancel()
 	return mysqlctl.WaitBlpPosition(waitCtx, agent.MysqlDaemon, binlogplayer.QueryBlpCheckpoint(blpPosition.Uid), blpPosition.Position)
 }
 
 // StopBlp stops the binlog players, and return their positions.
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) StopBlp(ctx context.Context) ([]*tabletmanagerdatapb.BlpPosition, error) {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return nil, err
+	}
+	defer agent.actionMutex.Unlock()
+
 	if agent.BinlogPlayerMap == nil {
 		return nil, fmt.Errorf("No BinlogPlayerMap configured")
 	}
@@ -36,8 +44,12 @@ func (agent *ActionAgent) StopBlp(ctx context.Context) ([]*tabletmanagerdatapb.B
 }
 
 // StartBlp starts the binlog players
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) StartBlp(ctx context.Context) error {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return err
+	}
+	defer agent.actionMutex.Unlock()
+
 	if agent.BinlogPlayerMap == nil {
 		return fmt.Errorf("No BinlogPlayerMap configured")
 	}
@@ -48,6 +60,11 @@ func (agent *ActionAgent) StartBlp(ctx context.Context) error {
 // RunBlpUntil runs the binlog player server until the position is reached,
 // and returns the current mysql master replication position.
 func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl []*tabletmanagerdatapb.BlpPosition, waitTime time.Duration) (string, error) {
+	if err := agent.lockAndCheck(ctx); err != nil {
+		return "", err
+	}
+	defer agent.actionMutex.Unlock()
+
 	if agent.BinlogPlayerMap == nil {
 		return "", fmt.Errorf("No BinlogPlayerMap configured")
 	}
