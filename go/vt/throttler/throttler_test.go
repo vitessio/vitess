@@ -148,6 +148,11 @@ func sinceZero(sinceZero time.Duration) time.Time {
 	return time.Time{}.Add(sinceZero)
 }
 
+// newThrottlerWithClock should only be used for testing.
+func newThrottlerWithClock(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
+	return newThrottler(GlobalManager, name, unit, threadCount, maxRate, maxReplicationLag, nowFunc)
+}
+
 func TestThrottle(t *testing.T) {
 	fc := &fakeClock{}
 	// 1 Thread, 2 QPS.
