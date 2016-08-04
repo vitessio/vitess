@@ -1,4 +1,4 @@
-// Copy of the RealtimeStats protobuf message from proto/query.proto.
+// RealtimeStats is a copy of the RealtimeStats protobuf message from proto/query.proto.
 export class RealtimeStats {
   SecondsBehindMaster: number;
   CpuUsage: number;
