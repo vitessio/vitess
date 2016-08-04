@@ -14,10 +14,10 @@ import (
 	"strings"
 	"sync"
 
+	"cloud.google.com/go/storage"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
-	"google.golang.org/cloud"
-	"google.golang.org/cloud/storage"
+	"google.golang.org/api/option"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
 )
@@ -216,12 +216,13 @@ func (bs *GCSBackupStorage) client() (*storage.Client, error) {
 	defer bs.mu.Unlock()
 
 	if bs._client == nil {
-		authClient, err := google.DefaultClient(context.TODO())
+		// FIXME(alainjobart) add context.Context to BackupStorage API.
+		ctx := context.TODO()
+		authClient, err := google.DefaultClient(ctx)
 		if err != nil {
 			return nil, err
 		}
-		authCtx := cloud.NewContext(*project, authClient)
-		client, err := storage.NewClient(authCtx)
+		client, err := storage.NewClient(ctx, option.WithHTTPClient(authClient))
 		if err != nil {
 			return nil, err
 		}
