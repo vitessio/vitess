@@ -12,7 +12,6 @@ import (
 )
 
 // ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.
-// Should be called under RPCWrap.
 func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
 	// get a connection
 	conn, err := agent.MysqlDaemon.GetDbaConnection()
@@ -55,7 +54,6 @@ func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query []byte, d
 }
 
 // ExecuteFetchAsApp will execute the given query, possibly disabling binlogs.
-// Should be called under RPCWrap.
 func (agent *ActionAgent) ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error) {
 	// get a connection
 	conn, err := agent.MysqlDaemon.GetAppConnection(ctx)

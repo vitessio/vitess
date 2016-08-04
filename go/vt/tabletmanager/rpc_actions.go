@@ -23,21 +23,12 @@ import (
 // This file contains the implementations of RPCAgent methods.
 // Major groups of methods are broken out into files named "rpc_*.go".
 
-// TODO(alainjobart): all the calls mention something like:
-// Should be called under RPCWrap.
-// Eventually, when all calls are going through RPCs, we'll refactor
-// this so there is only one wrapper, and the extra stuff done by the
-// RPCWrapXXX methods will be done internally. Until then, it's safer
-// to have the comment.
-
 // Ping makes sure RPCs work, and refreshes the tablet record.
-// Should be called under RPCWrap.
 func (agent *ActionAgent) Ping(ctx context.Context, args string) string {
 	return args
 }
 
 // GetPermissions returns the db permissions.
-// Should be called under RPCWrap.
 func (agent *ActionAgent) GetPermissions(ctx context.Context) (*tabletmanagerdatapb.Permissions, error) {
 	return mysqlctl.GetPermissions(agent.MysqlDaemon)
 }
@@ -117,13 +108,11 @@ func (agent *ActionAgent) RefreshState(ctx context.Context) error {
 }
 
 // RunHealthCheck will manually run the health check on the tablet.
-// Should be called under RPCWrap.
 func (agent *ActionAgent) RunHealthCheck(ctx context.Context) {
 	agent.runHealthCheck()
 }
 
 // IgnoreHealthError sets the regexp for health check errors to ignore.
-// Should be called under RPCWrap.
 func (agent *ActionAgent) IgnoreHealthError(ctx context.Context, pattern string) error {
 	var expr *regexp.Regexp
 	if pattern != "" {
