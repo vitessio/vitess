@@ -108,11 +108,6 @@ func NewThrottler(name, unit string, threadCount int, maxRate int64, maxReplicat
 	return newThrottler(GlobalManager, name, unit, threadCount, maxRate, maxReplicationLag, time.Now)
 }
 
-// newThrottlerWithClock should only be used for testing.
-func newThrottlerWithClock(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
-	return newThrottler(GlobalManager, name, unit, threadCount, maxRate, maxReplicationLag, nowFunc)
-}
-
 func newThrottler(manager *managerImpl, name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
 	// Verify input parameters.
 	if maxRate < 0 {
