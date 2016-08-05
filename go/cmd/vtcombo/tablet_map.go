@@ -10,7 +10,6 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -90,13 +89,7 @@ func createTablet(ctx context.Context, ts topo.Server, cell string, uid uint32, 
 
 // initTabletMap creates the action agents and associated data structures
 // for all tablets, based on the vttest proto parameter.
-func initTabletMap(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, schemaDir string, mycnf *mysqlctl.Mycnf) error {
-	// parse the input topology
-	tpb := &vttestpb.VTTestTopology{}
-	if err := proto.UnmarshalText(topoProto, tpb); err != nil {
-		return fmt.Errorf("cannot parse topology: %v", err)
-	}
-
+func initTabletMap(ts topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, schemaDir string, mycnf *mysqlctl.Mycnf) error {
 	tabletMap = make(map[uint32]*tablet)
 
 	ctx := context.Background()
@@ -152,29 +145,50 @@ func initTabletMap(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlDaemon
 			// iterate through the shards
 			for _, spb := range kpb.Shards {
 				shard := spb.Name
-				dbname := spb.DbNameOverride
-				if dbname == "" {
-					dbname = fmt.Sprintf("vt_%v_%v", keyspace, shard)
-				}
-				dbcfgs.App.DbName = dbname
 
-				// create the master
-				if err := createTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_MASTER, mysqld, dbcfgs); err != nil {
-					return err
-				}
-				uid++
+				for _, cell := range tpb.Cells {
+					dbname := spb.DbNameOverride
+					if dbname == "" {
+						dbname = fmt.Sprintf("vt_%v_%v_%v", cell, keyspace, shard)
+					}
+					dbcfgs.App.DbName = dbname
 
-				// create a replica slave
-				if err := createTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_REPLICA, mysqld, dbcfgs); err != nil {
-					return err
-				}
-				uid++
+					replicas := int(kpb.ReplicaCount)
+					if replicas == 0 {
+						// 2 replicas in order to ensure the master cell has a master and a replica
+						replicas = 2
+					}
+					rdonlys := int(kpb.RdonlyCount)
+					if rdonlys == 0 {
+						rdonlys = 1
+					}
 
-				// create a rdonly slave
-				if err := createTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_RDONLY, mysqld, dbcfgs); err != nil {
-					return err
+					if cell == tpb.Cells[0] {
+						replicas--
+
+						// create the master
+						if err := createTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_MASTER, mysqld, dbcfgs); err != nil {
+							return err
+						}
+						uid++
+					}
+
+					for i := 0; i < replicas; i++ {
+						// create a replica slave
+						if err := createTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_REPLICA, mysqld, dbcfgs); err != nil {
+							return err
+						}
+						uid++
+					}
+
+					for i := 0; i < rdonlys; i++ {
+						// create a rdonly slave
+						if err := createTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_RDONLY, mysqld, dbcfgs); err != nil {
+							return err
+						}
+						uid++
+					}
 				}
-				uid++
 			}
 		}
 
@@ -204,7 +218,7 @@ func initTabletMap(ts topo.Server, topoProto string, mysqld mysqlctl.MysqlDaemon
 	}
 
 	// Rebuild the SrvVSchema object
-	if err := topotools.RebuildVSchema(ctx, wr.Logger(), ts, []string{cell}); err != nil {
+	if err := topotools.RebuildVSchema(ctx, wr.Logger(), ts, tpb.Cells); err != nil {
 		return fmt.Errorf("RebuildVSchemaGraph failed: %v", err)
 	}
 

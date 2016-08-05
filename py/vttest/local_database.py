@@ -18,7 +18,8 @@ class LocalDatabase(object):
                schema_dir,
                mysql_only,
                init_data_options,
-               web_dir=None):
+               web_dir=None,
+               default_schema_dir=None):
     """Initializes an object of this class.
 
     Args:
@@ -33,6 +34,8 @@ class LocalDatabase(object):
           with random data.
       web_dir: see the documentation for the corresponding command line
           flag in run_local_database.py
+      default_schema_dir: a directory to use if no keyspace is found in the
+          schema_dir directory.
     """
 
     self.topology = topology
@@ -40,6 +43,7 @@ class LocalDatabase(object):
     self.mysql_only = mysql_only
     self.init_data_options = init_data_options
     self.web_dir = web_dir
+    self.default_schema_dir = default_schema_dir
 
   def setup(self):
     """Create a MySQL instance and all Vitess processes."""
@@ -131,11 +135,12 @@ class LocalDatabase(object):
         # redirected keyspaces have no underlying database
         continue
 
-      for spb in kpb.shards:
-        db_name = spb.db_name_override
-        if not db_name:
-          db_name = 'vt_%s_%s' % (kpb.name, spb.name)
-        cmds.append('create database `%s`' % db_name)
+      for cell in self.topology.cells:
+        for spb in kpb.shards:
+          db_name = spb.db_name_override
+          if not db_name:
+            db_name = 'vt_%s_%s_%s' % (cell, kpb.name, spb.name)
+          cmds.append('create database `%s`' % db_name)
     logging.info('Creating databases')
     self.mysql_execute(cmds)
 
@@ -155,27 +160,33 @@ class LocalDatabase(object):
 
       keyspace = kpb.name
       keyspace_dir = os.path.join(self.schema_dir, keyspace)
-      if not os.path.isdir(keyspace_dir):
-        raise Exception(
-            'No subdirectory found in schema dir %s for keyspace %s. '
-            'For keyspaces without an initial schema, create the '
-            'directory %s and leave a README file to explain why the '
-            'directory exists. '
-            'Alternatively, disable loading schemas by setting --schema_dir '
-            'to "".' %
-            (self.schema_dir, keyspace, keyspace_dir))
+      schema_dir = keyspace_dir
+      if not os.path.isdir(schema_dir):
+        schema_dir = self.default_schema_dir
+        if not schema_dir or not os.path.isdir(schema_dir):
+          raise Exception(
+              'No subdirectory found in schema dir %s for keyspace %s. '
+              'No valid default_schema_dir (set to %s) was found. '
+              'For keyspaces without an initial schema, create the '
+              'directory %s and leave a README file to explain why the '
+              'directory exists. '
+              'Alternatively, disable loading schemas by setting --schema_dir '
+              'to "" or set --default_schema_dir to a valid schema.' %
+              (self.schema_dir, keyspace, self.default_schema_dir,
+               keyspace_dir))
 
-      for filepath in glob.glob(os.path.join(keyspace_dir, '*.sql')):
+      for filepath in glob.glob(os.path.join(schema_dir, '*.sql')):
         logging.info('Loading schema for keyspace %s from file %s',
                      keyspace, filepath)
-        cmds = self.get_sql_commands_from_file(filepath, keyspace_dir)
+        cmds = self.get_sql_commands_from_file(filepath, schema_dir)
 
-        # Run the cmds on each shard in the keyspace.
-        for spb in kpb.shards:
-          db_name = spb.db_name_override
-          if not db_name:
-            db_name = 'vt_%s_%s' % (kpb.name, spb.name)
-          self.mysql_execute(cmds, db_name=db_name)
+        # Run the cmds on each shard and cell in the keyspace.
+        for cell in self.topology.cells:
+          for spb in kpb.shards:
+            db_name = spb.db_name_override
+            if not db_name:
+              db_name = 'vt_%s_%s_%s' % (cell, kpb.name, spb.name)
+            self.mysql_execute(cmds, db_name=db_name)
 
   def populate_with_random_data(self):
     """Populates all shards with randomly generated data."""
@@ -185,11 +196,12 @@ class LocalDatabase(object):
         # redirected keyspaces have no underlying database
         continue
 
-      for spb in kpb.shards:
-        db_name = spb.db_name_override
-        if not db_name:
-          db_name = 'vt_%s_%s' % (kpb.name, spb.name)
-        self.populate_shard_with_random_data(db_name)
+      for cell in self.topology.cells:
+        for spb in kpb.shards:
+          db_name = spb.db_name_override
+          if not db_name:
+            db_name = 'vt_%s_%s_%s' % (cell, kpb.name, spb.name)
+          self.populate_shard_with_random_data(db_name)
 
   def populate_shard_with_random_data(self, db_name):
     """Populates the given database with randomly generated data.

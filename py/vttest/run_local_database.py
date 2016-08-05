@@ -38,6 +38,8 @@ def main(cmdline_options):
   if cmdline_options.proto_topo:
     # Text-encoded proto topology object, just parse it.
     topology = text_format.Parse(cmdline_options.proto_topo, topology)
+    if not topology.cells:
+      topology.cells.append('test')
 
   environment.base_port = cmdline_options.port
 
@@ -54,7 +56,8 @@ def main(cmdline_options):
       cmdline_options.schema_dir,
       cmdline_options.mysql_only,
       init_data_opts,
-      web_dir=cmdline_options.web_dir) as local_db:
+      web_dir=cmdline_options.web_dir,
+      default_schema_dir=cmdline_options.default_schema_dir) as local_db:
     print json.dumps(local_db.config())
     sys.stdout.flush()
     try:
@@ -86,6 +89,10 @@ if __name__ == '__main__':
       ' after the database is created on each shard.'
       ' If the directory contains a vschema.json file, it'
       ' will be used as the vschema for the V3 API.')
+  parser.add_option(
+      '-e', '--default_schema_dir',
+      help='Default directory for initial schema files. If no schema is found'
+      ' in schema_dir, default to this location.')
   parser.add_option(
       '-m', '--mysql_only', action='store_true',
       help='If this flag is set only mysql is initialized.'
