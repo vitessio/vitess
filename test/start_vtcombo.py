@@ -41,8 +41,8 @@ if __name__ == '__main__':
       '--keyspaces', type=str, nargs='*', default=['test_keyspace'])
   parser.add_argument(
       '--num_shards', type=int, nargs='*', default=[2])
-  parser.add_argument('--replica_count', type=int, default=1)
-  parser.add_argument('--rdonly_count', type=int, default=0)
+  parser.add_argument('--replica_count', type=int, default=2)
+  parser.add_argument('--rdonly_count', type=int, default=1)
   parser.add_argument('--web_dir', type=str, default='/web/vtctld')
 
   pargs = parser.parse_args()

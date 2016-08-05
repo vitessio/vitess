@@ -139,7 +139,7 @@ class LocalDatabase(object):
         for spb in kpb.shards:
           db_name = spb.db_name_override
           if not db_name:
-            db_name = 'vt_%s_%s_%s' % (kpb.name, cell, spb.name)
+            db_name = 'vt_%s_%s_%s' % (cell, kpb.name, spb.name)
           cmds.append('create database `%s`' % db_name)
     logging.info('Creating databases')
     self.mysql_execute(cmds)
@@ -166,12 +166,14 @@ class LocalDatabase(object):
         if not schema_dir or not os.path.isdir(schema_dir):
           raise Exception(
               'No subdirectory found in schema dir %s for keyspace %s. '
+              'No valid default_schema_dir (set to %s) was found. '
               'For keyspaces without an initial schema, create the '
               'directory %s and leave a README file to explain why the '
               'directory exists. '
               'Alternatively, disable loading schemas by setting --schema_dir '
-              'to "".' %
-              (self.schema_dir, keyspace, keyspace_dir))
+              'to "" or set --default_schema_dir to a valid schema.' %
+              (self.schema_dir, keyspace, self.default_schema_dir,
+               keyspace_dir))
 
       for filepath in glob.glob(os.path.join(schema_dir, '*.sql')):
         logging.info('Loading schema for keyspace %s from file %s',
@@ -183,7 +185,7 @@ class LocalDatabase(object):
           for spb in kpb.shards:
             db_name = spb.db_name_override
             if not db_name:
-              db_name = 'vt_%s_%s_%s' % (kpb.name, cell, spb.name)
+              db_name = 'vt_%s_%s_%s' % (cell, kpb.name, spb.name)
             self.mysql_execute(cmds, db_name=db_name)
 
   def populate_with_random_data(self):
@@ -198,7 +200,7 @@ class LocalDatabase(object):
         for spb in kpb.shards:
           db_name = spb.db_name_override
           if not db_name:
-            db_name = 'vt_%s_%s_%s' % (kpb.name, cell, spb.name)
+            db_name = 'vt_%s_%s_%s' % (cell, kpb.name, spb.name)
           self.populate_shard_with_random_data(db_name)
 
   def populate_shard_with_random_data(self, db_name):

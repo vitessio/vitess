@@ -58,10 +58,10 @@ message Keyspace {
   // redirects all traffic to another keyspace. If set, shards is ignored.
   string served_from = 5;
 
-  // Number of replica tablets to instantiate.
+  // number of replica tablets to instantiate. This includes the master tablet.
   int32 replica_count = 6;
 
-  // Number of rdonly tablets to instantiate.
+  // number of rdonly tablets to instantiate.
   int32 rdonly_count = 7;
 }
 
@@ -70,6 +70,6 @@ message VTTestTopology {
   // all keyspaces in the topology.
   repeated Keyspace keyspaces = 1;
 
-  // List of cells the keyspaces reside in
+  // list of cells the keyspaces reside in. Vtgate is started in only the first cell.
   repeated string cells = 2;
 }

@@ -149,12 +149,13 @@ func initTabletMap(ts topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl
 				for _, cell := range tpb.Cells {
 					dbname := spb.DbNameOverride
 					if dbname == "" {
-						dbname = fmt.Sprintf("vt_%v_%v_%v", keyspace, cell, shard)
+						dbname = fmt.Sprintf("vt_%v_%v_%v", cell, keyspace, shard)
 					}
 					dbcfgs.App.DbName = dbname
 
 					replicas := int(kpb.ReplicaCount)
 					if replicas == 0 {
+						// 2 replicas in order to ensure the master cell has a master and a replica
 						replicas = 2
 					}
 					rdonlys := int(kpb.RdonlyCount)

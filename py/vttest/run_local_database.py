@@ -92,7 +92,7 @@ if __name__ == '__main__':
   parser.add_option(
       '-e', '--default_schema_dir',
       help='Default directory for initial schema files. If no schema is found'
-      ' in schema_dir, default to this location')
+      ' in schema_dir, default to this location.')
   parser.add_option(
       '-m', '--mysql_only', action='store_true',
       help='If this flag is set only mysql is initialized.'
