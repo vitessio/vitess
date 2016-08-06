@@ -15,9 +15,10 @@ all: build test
 # Set a custom value for -p, the number of packages to be built/tested in parallel.
 # This is currently only used by our Travis CI test configuration.
 # (Also keep in mind that this value is independent of GOMAXPROCS.)
-ifdef VT_GO_PARALLEL
-VT_GO_PARALLEL := "-p" $(VT_GO_PARALLEL)
+ifdef VT_GO_PARALLEL_VALUE
+export VT_GO_PARALLEL := -p $(VT_GO_PARALLEL_VALUE)
 endif
+
 # Link against the MySQL library in $VT_MYSQL_ROOT if it's specified.
 ifdef VT_MYSQL_ROOT
 # Clutter the env var only if it's a non-standard path.
