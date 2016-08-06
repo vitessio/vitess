@@ -87,6 +87,13 @@ type SplitCloneWorker struct {
 	// Populated shortly before WorkerStateCloneOffline, read-only after that.
 	offlineSourceAliases []*topodatapb.TabletAlias
 
+	// formattedOfflineSourcesMu guards all fields in this group.
+	formattedOfflineSourcesMu sync.Mutex
+	// formattedOfflineSources is a space separated list of
+	// "offlineSourceAliases". It is used by the StatusAs* methods to output the
+	// used source tablets during the offline clone phase.
+	formattedOfflineSources string
+
 	// tableStatusList* holds the status for each table.
 	// populated during WorkerStateCloneOnline
 	tableStatusListOnline *tableStatusList
@@ -161,12 +168,27 @@ func (scw *SplitCloneWorker) setErrorState(err error) {
 	event.DispatchUpdate(scw.ev, "error: "+err.Error())
 }
 
-func (scw *SplitCloneWorker) formatSources() string {
-	result := ""
-	for _, alias := range scw.sourceAliases {
-		result += " " + topoproto.TabletAliasString(alias)
+func (scw *SplitCloneWorker) setFormattedOfflineSources(aliases []*topodatapb.TabletAlias) {
+	scw.formattedOfflineSourcesMu.Lock()
+	defer scw.formattedOfflineSourcesMu.Unlock()
+
+	var sources []string
+	for _, alias := range aliases {
+		sources = append(sources, topoproto.TabletAliasString(alias))
 	}
-	return result
+	scw.formattedOfflineSources = strings.Join(sources, " ")
+}
+
+// FormattedOfflineSources returns a space separated list of tablets which
+// are in use during the offline clone phase.
+func (scw *SplitCloneWorker) FormattedOfflineSources() string {
+	scw.formattedOfflineSourcesMu.Lock()
+	defer scw.formattedOfflineSourcesMu.Unlock()
+
+	if scw.formattedOfflineSources == "" {
+		return "no offline source tablets currently in use"
+	}
+	return scw.formattedOfflineSources
 }
 
 // StatusAsHTML implements the Worker interface
@@ -178,13 +200,13 @@ func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
 	switch state {
 	case WorkerStateCloneOnline:
 		result += "<b>Running:</b></br>\n"
-		result += "<b>Copying from:</b> " + scw.formatSources() + "</br>\n"
+		result += "<b>Copying from:</b> " + scw.FormattedOfflineSources() + "</br>\n"
 		statuses, eta := scw.tableStatusListOnline.format()
 		result += "<b>ETA:</b> " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
 	case WorkerStateCloneOffline:
 		result += "<b>Running:</b></br>\n"
-		result += "<b>Copying from:</b> " + scw.formatSources() + "</br>\n"
+		result += "<b>Copying from:</b> " + scw.FormattedOfflineSources() + "</br>\n"
 		statuses, eta := scw.tableStatusListOffline.format()
 		result += "<b>ETA</b>: " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
@@ -222,13 +244,13 @@ func (scw *SplitCloneWorker) StatusAsText() string {
 	switch state {
 	case WorkerStateCloneOnline:
 		result += "Running:\n"
-		result += "Copying from: " + scw.formatSources() + "\n"
+		result += "Copying from: " + scw.FormattedOfflineSources() + "\n"
 		statuses, eta := scw.tableStatusListOffline.format()
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
 	case WorkerStateCloneOffline:
 		result += "Running:\n"
-		result += "Copying from: " + scw.formatSources() + "\n"
+		result += "Copying from: " + scw.FormattedOfflineSources() + "\n"
 		statuses, eta := scw.tableStatusListOffline.format()
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
@@ -496,6 +518,7 @@ func (scw *SplitCloneWorker) findOfflineSourceTablets(ctx context.Context) error
 		}
 		scw.wr.Logger().Infof("Using tablet %v as source for %v/%v", topoproto.TabletAliasString(scw.offlineSourceAliases[i]), si.Keyspace(), si.ShardName())
 	}
+	scw.setFormattedOfflineSources(scw.offlineSourceAliases)
 
 	// get the tablet info for them, and stop their replication
 	scw.sourceTablets = make([]*topodatapb.Tablet, len(scw.offlineSourceAliases))
