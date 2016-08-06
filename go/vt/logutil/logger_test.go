@@ -1,6 +1,7 @@
 package logutil
 
 import (
+	"flag"
 	"testing"
 	"time"
 
@@ -59,8 +60,12 @@ func TestLogEvent(t *testing.T) {
 		if got, want := ml.Events[i].Value, testValue.expected; got != want {
 			t.Errorf("ml.Events[%v].Value = %q, want %q", i, got, want)
 		}
-		if got, want := ml.Events[i].File, "logger_test.go"; got != want && ml.Events[i].Level != logutilpb.Level_CONSOLE {
-			t.Errorf("ml.Events[%v].File = %q (line = %v), want %q", i, got, ml.Events[i].Line, want)
+		// Skip the check below if go test -race is run because then the stack
+		// is shifted by one and the test would fail.
+		if flag.Lookup("test.race") != nil {
+			if got, want := ml.Events[i].File, "logger_test.go"; got != want && ml.Events[i].Level != logutilpb.Level_CONSOLE {
+				t.Errorf("ml.Events[%v].File = %q (line = %v), want %q", i, got, ml.Events[i].Line, want)
+			}
 		}
 	}
 }
@@ -149,8 +154,12 @@ func TestTeeLogger(t *testing.T) {
 			if got.Value != want.Value {
 				t.Errorf("[%v] events[%v].Value = %q, want %q", i, j, got.Value, want.Value)
 			}
-			if got.File != wantFile && got.Level != logutilpb.Level_CONSOLE {
-				t.Errorf("[%v] events[%v].File = %q, want %q", i, j, got.File, wantFile)
+			// Skip the check below if go test -race is run because then the stack
+			// is shifted by one and the test would fail.
+			if flag.Lookup("test.race") != nil {
+				if got.File != wantFile && got.Level != logutilpb.Level_CONSOLE {
+					t.Errorf("[%v] events[%v].File = %q, want %q", i, j, got.File, wantFile)
+				}
 			}
 		}
 	}
