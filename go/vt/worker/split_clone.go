@@ -216,7 +216,7 @@ func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
 		result += "<b>Running:</b></br>\n"
 		result += "<b>Copying from:</b> " + scw.FormattedOfflineSources() + "</br>\n"
 		statuses, eta := scw.tableStatusListOffline.format()
-		result += "<b>ETA</b>: " + eta.String() + "</br>\n"
+		result += "<b>ETA:</b> " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
 		if scw.online {
 			result += "</br>\n"
