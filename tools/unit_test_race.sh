@@ -14,6 +14,9 @@ trap '[ -f "$temp_log_file" ] && rm $temp_log_file' EXIT
 # Although Go 1.5 says 'exit status 66' in case of a race, it exits with 1.
 # Therefore, we manually check the output of 'go test' for data races and
 # exit with an error if one was found.
+# TODO(mberlin): Test all packages (go/... instead of go/vt/...) once
+#                go/cgzip is moved into a separate repository. We currently
+#                skip the cgzip package because -race takes >30 sec for it.
 go test $VT_GO_PARALLEL -race ./go/vt/... 2>&1 | tee $temp_log_file
 if [ ${PIPESTATUS[0]} -ne 0 ]; then
   if grep "WARNING: DATA RACE" -q $temp_log_file; then
