@@ -710,20 +710,18 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 			}
 		}(shardIndex)
 
-		go func(keyspace, shard string, insertChannel chan string) {
-			for j := 0; j < scw.destinationWriterCount; j++ {
-				destinationWaitGroup.Add(1)
-				go func(throttler *throttler.Throttler, threadID int) {
-					defer destinationWaitGroup.Done()
-					defer throttler.ThreadFinished(threadID)
+		for j := 0; j < scw.destinationWriterCount; j++ {
+			destinationWaitGroup.Add(1)
+			go func(keyspace, shard string, insertChannel chan string, throttler *throttler.Throttler, threadID int) {
+				defer destinationWaitGroup.Done()
+				defer throttler.ThreadFinished(threadID)
 
-					executor := newExecutor(scw.wr, scw.tsc, throttler, keyspace, shard, threadID)
-					if err := executor.fetchLoop(ctx, insertChannel); err != nil {
-						processError("executer.FetchLoop failed: %v", err)
-					}
-				}(t, j)
-			}
-		}(si.Keyspace(), si.ShardName(), insertChannels[shardIndex])
+				executor := newExecutor(scw.wr, scw.tsc, throttler, keyspace, shard, threadID)
+				if err := executor.fetchLoop(ctx, insertChannel); err != nil {
+					processError("executer.FetchLoop failed: %v", err)
+				}
+			}(si.Keyspace(), si.ShardName(), insertChannels[shardIndex], t, j)
+		}
 	}
 
 	// Now for each table, read data chunks and send them to all
