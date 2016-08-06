@@ -10,6 +10,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -285,6 +286,9 @@ type testQueryService struct {
 	tabletUID  uint32
 	fields     []*querypb.Field
 	rows       [][]sqltypes.Value
+
+	// mu guards the fields in this group.
+	mu sync.Mutex
 	// forceError is set to true for a given int64 primary key value if
 	// testQueryService should return an error instead of the actual row.
 	forceError map[int64]bool
@@ -346,9 +350,7 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 		primaryKey := row[0].ToNative().(int64)
 
 		if primaryKey >= int64(min) && primaryKey < int64(max) {
-			if sq.forceError[primaryKey] {
-				// Do not react on the error again.
-				delete(sq.forceError, primaryKey)
+			if sq.forceErrorOnce(primaryKey) {
 				sq.t.Logf("testQueryService: %v,%v/%v/%v: sending error for id: %v row: %v", sq.tabletUID, sq.target.Keyspace, sq.target.Shard, sq.target.TabletType, primaryKey, row)
 				return errStreamingQueryTimeout
 			}
@@ -409,8 +411,23 @@ func (sq *testQueryService) clearRows() {
 	sq.rows = nil
 }
 
-func (sq *testQueryService) errorStreamAtRow(primaryKeyValue int) {
-	sq.forceError[int64(primaryKeyValue)] = true
+func (sq *testQueryService) errorStreamAtRow(primaryKey int) {
+	sq.mu.Lock()
+	defer sq.mu.Unlock()
+
+	sq.forceError[int64(primaryKey)] = true
+}
+
+func (sq *testQueryService) forceErrorOnce(primaryKey int64) bool {
+	sq.mu.Lock()
+	defer sq.mu.Unlock()
+
+	force := sq.forceError[primaryKey]
+	if force {
+		// Do not react on the error again.
+		delete(sq.forceError, primaryKey)
+	}
+	return force
 }
 
 var v2Fields = []*querypb.Field{
