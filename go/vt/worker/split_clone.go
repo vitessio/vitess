@@ -168,6 +168,14 @@ func (scw *SplitCloneWorker) setErrorState(err error) {
 	event.DispatchUpdate(scw.ev, "error: "+err.Error())
 }
 
+func (scw *SplitCloneWorker) formatOnlineSources() string {
+	aliases := scw.tabletTracker.TabletsInUse()
+	if aliases == "" {
+		return "no online source tablets currently in use"
+	}
+	return aliases
+}
+
 func (scw *SplitCloneWorker) setFormattedOfflineSources(aliases []*topodatapb.TabletAlias) {
 	scw.formattedOfflineSourcesMu.Lock()
 	defer scw.formattedOfflineSourcesMu.Unlock()
@@ -200,7 +208,7 @@ func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
 	switch state {
 	case WorkerStateCloneOnline:
 		result += "<b>Running:</b></br>\n"
-		result += "<b>Copying from:</b> " + scw.FormattedOfflineSources() + "</br>\n"
+		result += "<b>Copying from:</b> " + scw.formatOnlineSources() + "</br>\n"
 		statuses, eta := scw.tableStatusListOnline.format()
 		result += "<b>ETA:</b> " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
@@ -244,7 +252,7 @@ func (scw *SplitCloneWorker) StatusAsText() string {
 	switch state {
 	case WorkerStateCloneOnline:
 		result += "Running:\n"
-		result += "Copying from: " + scw.FormattedOfflineSources() + "\n"
+		result += "Copying from: " + scw.formatOnlineSources() + "\n"
 		statuses, eta := scw.tableStatusListOffline.format()
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
