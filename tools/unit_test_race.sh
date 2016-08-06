@@ -21,6 +21,9 @@ if [ ${PIPESTATUS[0]} -ne 0 ]; then
     echo "ERROR: go test -race found a data race. See log above."
     exit 2
   fi
+
+  echo "ERROR: go test -race found NO data race, but failed. See log above."
+  exit 1
 fi
 
 echo
