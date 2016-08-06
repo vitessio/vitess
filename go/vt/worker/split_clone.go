@@ -82,6 +82,11 @@ type SplitCloneWorker struct {
 	// Example Map Entry: test_keyspace/-80 => vt_test_keyspace
 	destinationDbNames map[string]string
 
+	// offlineSourceAliases has the list of tablets (per source shard) we took
+	// offline for the WorkerStateCloneOffline phase.
+	// Populated shortly before WorkerStateCloneOffline, read-only after that.
+	offlineSourceAliases []*topodatapb.TabletAlias
+
 	// tableStatusList* holds the status for each table.
 	// populated during WorkerStateCloneOnline
 	tableStatusListOnline *tableStatusList
@@ -482,19 +487,19 @@ func (scw *SplitCloneWorker) findOfflineSourceTablets(ctx context.Context) error
 	scw.setState(WorkerStateFindTargets)
 
 	// find an appropriate tablet in the source shards
-	scw.sourceAliases = make([]*topodatapb.TabletAlias, len(scw.sourceShards))
+	scw.offlineSourceAliases = make([]*topodatapb.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
 		var err error
-		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.tsc, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyTablets)
+		scw.offlineSourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.tsc, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyTablets)
 		if err != nil {
 			return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
 		}
-		scw.wr.Logger().Infof("Using tablet %v as source for %v/%v", topoproto.TabletAliasString(scw.sourceAliases[i]), si.Keyspace(), si.ShardName())
+		scw.wr.Logger().Infof("Using tablet %v as source for %v/%v", topoproto.TabletAliasString(scw.offlineSourceAliases[i]), si.Keyspace(), si.ShardName())
 	}
 
 	// get the tablet info for them, and stop their replication
-	scw.sourceTablets = make([]*topodatapb.Tablet, len(scw.sourceAliases))
-	for i, alias := range scw.sourceAliases {
+	scw.sourceTablets = make([]*topodatapb.Tablet, len(scw.offlineSourceAliases))
+	for i, alias := range scw.offlineSourceAliases {
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		ti, err := scw.wr.TopoServer().GetTablet(shortCtx, alias)
 		cancel()
@@ -751,7 +756,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					var sourceAlias *topodatapb.TabletAlias
 					if state == WorkerStateCloneOffline {
 						// Use the source tablet which we took offline for this phase.
-						sourceAlias = scw.sourceAliases[shardIndex]
+						sourceAlias = scw.offlineSourceAliases[shardIndex]
 					} else {
 						// Pick any healthy serving source tablet.
 						tablets := discovery.RemoveUnhealthyTablets(scw.tsc.GetTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY))
@@ -911,7 +916,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 			for _, si := range scw.destinationShards {
 				scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", si.Keyspace(), si.ShardName())
 				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-				err := scw.wr.SetSourceShards(shortCtx, si.Keyspace(), si.ShardName(), scw.sourceAliases, nil)
+				err := scw.wr.SetSourceShards(shortCtx, si.Keyspace(), si.ShardName(), scw.offlineSourceAliases, nil)
 				cancel()
 				if err != nil {
 					return fmt.Errorf("failed to set source shards: %v", err)
