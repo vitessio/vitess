@@ -16,7 +16,7 @@ all: build test
 # This is currently only used by our Travis CI test configuration.
 # (Also keep in mind that this value is independent of GOMAXPROCS.)
 ifdef VT_GO_PARALLEL
-VT_GO_PARALLEL := "-p" $(VT_GO_PARALLEL)
+VT_GO_PARALLEL := -p $(VT_GO_PARALLEL)
 endif
 # Link against the MySQL library in $VT_MYSQL_ROOT if it's specified.
 ifdef VT_MYSQL_ROOT

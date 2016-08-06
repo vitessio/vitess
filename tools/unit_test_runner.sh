@@ -16,10 +16,6 @@
 # In particular, this happens when the system is under load and threads do not
 # get scheduled as fast as usual. Then, the expected timings do not match.
 
-if [ -n "$VT_GO_PARALLEL" ]; then
-  GO_PARALLEL="-p $VT_GO_PARALLEL"
-fi
-
 # All Go packages with test files.
 # Output per line: <full Go package name> <all _test.go files in the package>*
 packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/... | sort)
@@ -29,7 +25,7 @@ all_except_flaky_tests=$(echo "$packages_with_tests" | grep -vE ".+ .+_flaky_tes
 flaky_tests=$(echo "$packages_with_tests" | grep -E ".+ .+_flaky_test\.go" | cut -d" " -f1)
 
 # Run non-flaky tests.
-echo "$all_except_flaky_tests" | xargs go test $GO_PARALLEL
+echo "$all_except_flaky_tests" | xargs go test $VT_GO_PARALLEL
 if [ $? -ne 0 ]; then
   echo "ERROR: Go unit tests failed. See above for errors."
   echo
