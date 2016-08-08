@@ -156,7 +156,6 @@ func TestAPI(t *testing.T) {
 		{"GET", "tablet_statuses/cell1/REPLICA/lag", "can't get tablet_statuses: invalid target path: \"cell1/REPLICA/lag\"  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>"},
 		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "can't get tablet_statuses: invalid tablet type: hello"},
 	}
-
 	for _, in := range table {
 		var resp *http.Response
 		var err error
@@ -187,7 +186,7 @@ func TestAPI(t *testing.T) {
 		got := compactJSON(body)
 		want := compactJSON([]byte(in.want))
 		if want == "" {
-			// want is no valid JSON. Fallback to a string comparison.
+			// want is not valid JSON. Fallback to a string comparison.
 			want = in.want
 			// For unknown reasons errors have a trailing "\n\t\t". Remove it.
 			got = strings.TrimSpace(string(body))

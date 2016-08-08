@@ -16,6 +16,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/schemamanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -26,6 +27,13 @@ import (
 var (
 	localCell = flag.String("cell", "", "cell to use")
 )
+
+// HeatmapInfo stores all the needed info to construct the heatmap including data, labels, and tabletAliases
+type heatmapInfo struct {
+	HeatmapLabels  []yLabel
+	HeatmapData    [][]float64
+	HeatmapAliases [][]*topodata.TabletAlias
+}
 
 // This file implements a REST-style API for the vtctld web interface.
 
@@ -283,7 +291,7 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 		return ts.GetTablet(ctx, tabletAlias)
 	})
 
-	// Healthcheck real time status per (cell, keyspace, shard, tablet type).
+	// Healthcheck real time status per (cell, keyspace, tablet type).
 	handleCollection("tablet_statuses", func(r *http.Request) (interface{}, error) {
 		targetPath := getItemPath(r.URL.Path)
 
@@ -311,7 +319,6 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 			}
 
 			return heatmap, nil
-		}
 
 		return nil, fmt.Errorf("invalid target path: %q  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>", targetPath)
 	})
