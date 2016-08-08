@@ -20,11 +20,11 @@
   </paper-listbox>
 </paper-dropdown-menu>
 
-<vt-heatmap
+<!-- Wait until the heatmap data has been obtained from the service -->
+<vt-heatmap *ngIf="heatmapDataReady"
   [data]="data"
   [xLabels]="xLabels"
   [yLabels]="yLabels"
   [name]="name"
 >
 </vt-heatmap>
-
