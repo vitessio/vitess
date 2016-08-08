@@ -398,7 +398,11 @@ func TestQueryStats(t *testing.T) {
 	if stat.Time <= 0 || stat.Time > duration {
 		t.Errorf("stat.Time: %d, must be between 0 and %d", stat.Time, duration)
 	}
+	if stat.MysqlTime <= 0 || stat.MysqlTime > duration {
+		t.Errorf("stat.MysqlTime: %d, must be between 0 and %d", stat.MysqlTime, duration)
+	}
 	stat.Time = 0
+	stat.MysqlTime = 0
 	want := framework.QueryStat{
 		Query:      query,
 		Table:      "vitess_a",
@@ -415,6 +419,7 @@ func TestQueryStats(t *testing.T) {
 	_, _ = client.Execute(query, bv)
 	stat = framework.QueryStats()[query]
 	stat.Time = 0
+	stat.MysqlTime = 0
 	want = framework.QueryStat{
 		Query:      query,
 		Table:      "vitess_a",
