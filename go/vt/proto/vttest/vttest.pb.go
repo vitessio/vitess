@@ -59,9 +59,9 @@ type Keyspace struct {
 	ShardingColumnType string `protobuf:"bytes,4,opt,name=sharding_column_type,json=shardingColumnType" json:"sharding_column_type,omitempty"`
 	// redirects all traffic to another keyspace. If set, shards is ignored.
 	ServedFrom string `protobuf:"bytes,5,opt,name=served_from,json=servedFrom" json:"served_from,omitempty"`
-	// Number of replica tablets to instantiate.
+	// number of replica tablets to instantiate. This includes the master tablet.
 	ReplicaCount int32 `protobuf:"varint,6,opt,name=replica_count,json=replicaCount" json:"replica_count,omitempty"`
-	// Number of rdonly tablets to instantiate.
+	// number of rdonly tablets to instantiate.
 	RdonlyCount int32 `protobuf:"varint,7,opt,name=rdonly_count,json=rdonlyCount" json:"rdonly_count,omitempty"`
 }
 
@@ -81,7 +81,7 @@ func (m *Keyspace) GetShards() []*Shard {
 type VTTestTopology struct {
 	// all keyspaces in the topology.
 	Keyspaces []*Keyspace `protobuf:"bytes,1,rep,name=keyspaces" json:"keyspaces,omitempty"`
-	// List of cells the keyspaces reside in
+	// list of cells the keyspaces reside in. Vtgate is started in only the first cell.
 	Cells []string `protobuf:"bytes,2,rep,name=cells" json:"cells,omitempty"`
 }
 
