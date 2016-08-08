@@ -1,4 +1,4 @@
-import { Component, Input, AfterViewInit} from '@angular/core';
+import { Component, Input, AfterViewInit } from '@angular/core';
 import { CORE_DIRECTIVES } from '@angular/common';
 
 import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
@@ -29,19 +29,17 @@ export class HeatmapComponent implements AfterViewInit {
 
   // colorscaleValue defines the gradient for the heatmap.
   private colorscaleValue = [
-    [0.0, '#17A234'],
-    [0.5, '#A22417'],
-    [1.0, '#424141'],
+    [0.0, '#424141'],
+    [0.5, '#17A234'],
+    [1.0, '#A22417'],
   ];
   private getRowHeight() { return 50; }
   private getXLabelsRowHeight() { return 25; }
 
-  static rowHeight = 50;
-
   getTotalRows() {
     let height = 0;
     for (let yLabel of this.yLabels) {
-      height += yLabel.tabletTypes.length;
+      height += yLabel.NestedLabels.length;
     }
     return height;
   }
@@ -55,8 +53,11 @@ export class HeatmapComponent implements AfterViewInit {
   }
 
   drawHeatmap() {
+     // Settings for the Plotly heatmap.
      let chartInfo = [{
        z: this.data,
+       zmin: -10,
+       zmax: 10,
        x: this.xLabels,
        colorscale: this.colorscaleValue,
        type: 'heatmap',
