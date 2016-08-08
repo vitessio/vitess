@@ -176,6 +176,11 @@ func normalizeIP(ip string) string {
 }
 
 func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.ShardInfo, tabletMap map[topodatapb.TabletAlias]*topo.TabletInfo, results chan<- error) {
+	if shardInfo.MasterAlias == nil {
+		results <- fmt.Errorf("no master in shard record %v/%v", shardInfo.Keyspace(), shardInfo.ShardName())
+		return
+	}
+
 	masterTabletInfo, ok := tabletMap[*shardInfo.MasterAlias]
 	if !ok {
 		results <- fmt.Errorf("master %v not in tablet map", topoproto.TabletAliasString(shardInfo.MasterAlias))
