@@ -152,6 +152,11 @@ func (e *TabletStats) String() string {
 // below and pass in the Key string which is also sent to the
 // listener in each update (as it is part of TabletStats).
 type HealthCheck interface {
+	// TabletRecorder interface adds AddTablet and RemoveTablet methods.
+	// AddTablet adds the tablet, and starts health check on it.
+	// RemoveTablet removes the tablet, and stops its StreamHealth RPC.
+	TabletRecorder
+
 	// RegisterStats registers the connection counts stats.
 	// It can only be called on one Healthcheck object per process.
 	RegisterStats()
@@ -165,11 +170,6 @@ type HealthCheck interface {
 	// Note that the default implementation requires to set the
 	// listener before any tablets are added to the healthcheck.
 	SetListener(listener HealthCheckStatsListener, sendDownEvents bool)
-	// AddTablet adds the tablet, and starts health check on it.
-	// Name is an alternate name, like a job or instance name.
-	AddTablet(tablet *topodatapb.Tablet, name string)
-	// RemoveTablet removes the tablet, and stops its StreamHealth RPC.
-	RemoveTablet(tablet *topodatapb.Tablet)
 	// GetConnection returns the TabletConn of the given tablet.
 	GetConnection(key string) tabletconn.TabletConn
 	// CacheStatus returns a displayable version of the cache.
