@@ -95,7 +95,7 @@ func repairReplication(ctx context.Context, agent *ActionAgent) error {
 	if !si.HasMaster() {
 		return fmt.Errorf("no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
-	return agent.SetMaster(ctx, si.MasterAlias, 0, true)
+	return agent.setMasterLocked(ctx, si.MasterAlias, 0, true)
 }
 
 func registerReplicationReporter(agent *ActionAgent) {

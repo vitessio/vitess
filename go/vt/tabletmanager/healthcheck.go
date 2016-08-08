@@ -161,10 +161,10 @@ func (agent *ActionAgent) runHealthCheck() {
 	agent.actionMutex.Lock()
 	defer agent.actionMutex.Unlock()
 
-	agent.runHealthCheckProtected()
+	agent.runHealthCheckLocked()
 }
 
-func (agent *ActionAgent) runHealthCheckProtected() {
+func (agent *ActionAgent) runHealthCheckLocked() {
 	// read the current tablet record and tablet control
 	agent.mutex.Lock()
 	tablet := proto.Clone(agent._tablet).(*topodatapb.Tablet)

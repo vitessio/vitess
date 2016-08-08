@@ -17,13 +17,11 @@ import (
 )
 
 // GetSchema returns the schema.
-// Should be called under RPCWrap.
 func (agent *ActionAgent) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	return agent.MysqlDaemon.GetSchema(topoproto.TabletDbName(agent.Tablet()), tables, excludeTables, includeViews)
 }
 
 // ReloadSchema will reload the schema
-// Should be called under RPCWrap.
 // This doesn't need the action mutex because periodic schema reloads happen
 // in the background anyway.
 func (agent *ActionAgent) ReloadSchema(ctx context.Context, waitPosition string) error {
@@ -48,8 +46,12 @@ func (agent *ActionAgent) ReloadSchema(ctx context.Context, waitPosition string)
 }
 
 // PreflightSchema will try out the schema changes in "changes".
-// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) PreflightSchema(ctx context.Context, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
+	if err := agent.lock(ctx); err != nil {
+		return nil, err
+	}
+	defer agent.unlock()
+
 	// get the db name from the tablet
 	dbName := topoproto.TabletDbName(agent.Tablet())
 
@@ -58,8 +60,12 @@ func (agent *ActionAgent) PreflightSchema(ctx context.Context, changes []string)
 }
 
 // ApplySchema will apply a schema change
-// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
+	if err := agent.lock(ctx); err != nil {
+		return nil, err
+	}
+	defer agent.unlock()
+
 	// get the db name from the tablet
 	dbName := topoproto.TabletDbName(agent.Tablet())
 

@@ -18,8 +18,12 @@ import (
 )
 
 // Backup takes a db backup and sends it to the BackupStorage
-// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger) error {
+	if err := agent.lock(ctx); err != nil {
+		return err
+	}
+	defer agent.unlock()
+
 	// update our type to BACKUP
 	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
@@ -34,8 +38,8 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	}
 
 	// let's update our internal state (stop query service and other things)
-	if err := agent.refreshTablet(ctx, "backup"); err != nil {
-		return fmt.Errorf("failed to update state before backup: %v", err)
+	if err := agent.refreshTablet(ctx, "before backup"); err != nil {
+		return err
 	}
 
 	// create the loggers: tee to console and source
@@ -59,18 +63,22 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 
 	// let's update our internal state (start query service and other things)
 	if err := agent.refreshTablet(ctx, "after backup"); err != nil {
-		return fmt.Errorf("failed to update state after backup: %v", err)
+		return err
 	}
 
 	// and re-run health check to be sure to capture any replication delay
-	agent.runHealthCheckProtected()
+	agent.runHealthCheckLocked()
 
 	return returnErr
 }
 
 // RestoreFromBackup deletes all local data and restores anew from the latest backup.
-// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) RestoreFromBackup(ctx context.Context, logger logutil.Logger) error {
+	if err := agent.lock(ctx); err != nil {
+		return err
+	}
+	defer agent.unlock()
+
 	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return err
@@ -86,7 +94,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context, logger logutil.
 	err = agent.restoreDataLocked(ctx, l, true /* deleteBeforeRestore */)
 
 	// re-run health check to be sure to capture any replication delay
-	agent.runHealthCheckProtected()
+	agent.runHealthCheckLocked()
 
 	return err
 }

@@ -6,7 +6,6 @@ package tabletmanager
 
 import (
 	"fmt"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/tb"
@@ -17,73 +16,60 @@ import (
 
 // This file contains the RPC method helpers for the tablet manager.
 
-// rpcTimeout is used for timing out the queries on the server in a
-// reasonable amount of time. In the RPC case, if the
-// client goes away (while waiting on the action mutex), the server
-// won't know, and may still execute the RPC call at a later time.
-// To prevent that, if it takes more than rpcTimeout to take the action mutex,
-// we return an error to the caller.
-const rpcTimeout = time.Second * 30
-
 //
 // Utility functions for RPC service
 //
 
-// rpcWrapper handles all the logic for rpc calls.
-func (agent *ActionAgent) rpcWrapper(ctx context.Context, name TabletAction, args, reply interface{}, verbose bool, f func() error, lock, runAfterAction bool) (err error) {
-	defer func() {
-		if x := recover(); x != nil {
-			log.Errorf("TabletManager.%v(%v) on %v panic: %v\n%s", name, args, topoproto.TabletAliasString(agent.TabletAlias), x, tb.Stack(4))
-			err = fmt.Errorf("caught panic during %v: %v", name, x)
-		}
-	}()
+// lock is used at the beginning of an RPC call, to lock the
+// action mutex. It returns ctx.Err() if <-ctx.Done() after the lock.
+func (agent *ActionAgent) lock(ctx context.Context) error {
+	agent.actionMutex.Lock()
 
+	// After we take the lock (which could take a long time), we
+	// check the client is still here.
+	select {
+	case <-ctx.Done():
+		agent.actionMutex.Unlock()
+		return ctx.Err()
+	default:
+		return nil
+	}
+}
+
+// unlock is the symetrical action to lock.
+func (agent *ActionAgent) unlock() {
+	agent.actionMutex.Unlock()
+}
+
+// HandleRPCPanic is part of the RPCAgent interface.
+func (agent *ActionAgent) HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error) {
+	// panic handling
+	if x := recover(); x != nil {
+		log.Errorf("TabletManager.%v(%v) on %v panic: %v\n%s", name, args, topoproto.TabletAliasString(agent.TabletAlias), x, tb.Stack(4))
+		*err = fmt.Errorf("caught panic during %v: %v", name, x)
+		return
+	}
+
+	// quick check for fast path
+	if !verbose && *err == nil {
+		return
+	}
+
+	// we gotta log something, get the source
 	from := ""
 	ci, ok := callinfo.FromContext(ctx)
 	if ok {
 		from = ci.Text()
 	}
 
-	if lock {
-		beforeLock := time.Now()
-		agent.actionMutex.Lock()
-		defer agent.actionMutex.Unlock()
-		if time.Now().Sub(beforeLock) > rpcTimeout {
-			return fmt.Errorf("server timeout for %v", name)
-		}
-	}
-
-	if err = f(); err != nil {
-		log.Warningf("TabletManager.%v(%v)(on %v from %v) error: %v", name, args, topoproto.TabletAliasString(agent.TabletAlias), from, err.Error())
-		return fmt.Errorf("TabletManager.%v on %v error: %v", name, topoproto.TabletAliasString(agent.TabletAlias), err)
-	}
-	if verbose {
+	if *err != nil {
+		// error case
+		log.Warningf("TabletManager.%v(%v)(on %v from %v) error: %v", name, args, topoproto.TabletAliasString(agent.TabletAlias), from, (*err).Error())
+		*err = fmt.Errorf("TabletManager.%v on %v error: %v", name, topoproto.TabletAliasString(agent.TabletAlias), *err)
+	} else {
+		// success case
 		log.Infof("TabletManager.%v(%v)(on %v from %v): %#v", name, args, topoproto.TabletAliasString(agent.TabletAlias), from, reply)
 	}
-	if runAfterAction {
-		err = agent.refreshTablet(ctx, "RPC("+string(name)+")")
-	}
-	return
-}
-
-// RPCWrap is for read-only actions that can be executed concurrently.
-// verbose is forced to false.
-func (agent *ActionAgent) RPCWrap(ctx context.Context, name TabletAction, args, reply interface{}, f func() error) error {
-	return agent.rpcWrapper(ctx, name, args, reply, false /*verbose*/, f,
-		false /*lock*/, false /*runAfterAction*/)
-}
-
-// RPCWrapLock is for actions that should not run concurrently with each other.
-func (agent *ActionAgent) RPCWrapLock(ctx context.Context, name TabletAction, args, reply interface{}, verbose bool, f func() error) error {
-	return agent.rpcWrapper(ctx, name, args, reply, verbose, f,
-		true /*lock*/, false /*runAfterAction*/)
-}
-
-// RPCWrapLockAction is the same as RPCWrapLock, plus it will call refreshTablet
-// after the action returns.
-func (agent *ActionAgent) RPCWrapLockAction(ctx context.Context, name TabletAction, args, reply interface{}, verbose bool, f func() error) error {
-	return agent.rpcWrapper(ctx, name, args, reply, verbose, f,
-		true /*lock*/, true /*runAfterAction*/)
 }
 
 //

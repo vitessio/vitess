@@ -6,7 +6,6 @@ package tabletmanager
 
 import (
 	"flag"
-	"fmt"
 	"sync"
 	"time"
 
@@ -38,8 +37,12 @@ func SetReparentFlags(timeout time.Duration) {
 
 // TabletExternallyReparented updates all topo records so the current
 // tablet is the new master for this shard.
-// Should be called under RPCWrapLock.
 func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, externalID string) error {
+	if err := agent.lock(ctx); err != nil {
+		return err
+	}
+	defer agent.unlock()
+
 	startTime := time.Now()
 
 	// If there is a finalize step running, wait for it to finish or time out
@@ -102,9 +105,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 
 	// This is where updateState will block for gracePeriod, while it gives
 	// vtgate a chance to stop sending replica queries.
-	if err := agent.updateState(ctx, oldTablet, "fastTabletExternallyReparented"); err != nil {
-		return fmt.Errorf("fastTabletExternallyReparented: failed to change tablet state to MASTER: %v", err)
-	}
+	agent.updateState(ctx, oldTablet, "fastTabletExternallyReparented")
 
 	// Start the finalize stage with a background context, but connect the trace.
 	bgCtx, cancel := context.WithTimeout(agent.batchCtx, *finalizeReparentTimeout)

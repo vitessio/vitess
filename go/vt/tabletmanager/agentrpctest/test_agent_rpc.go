@@ -108,22 +108,8 @@ func compareLoggedStuff(t *testing.T, name string, stream logutil.EventStream, c
 	return err
 }
 
-func expectRPCWrapPanic(t *testing.T, err error) {
-	expected := "RPCWrap caught panic"
-	if err == nil || !strings.Contains(err.Error(), expected) {
-		t.Fatalf("Expected a panic error with '%v' but got: %v", expected, err)
-	}
-}
-
-func expectRPCWrapLockPanic(t *testing.T, err error) {
-	expected := "RPCWrapLock caught panic"
-	if err == nil || !strings.Contains(err.Error(), expected) {
-		t.Fatalf("Expected a panic error with '%v' but got: %v", expected, err)
-	}
-}
-
-func expectRPCWrapLockActionPanic(t *testing.T, err error) {
-	expected := "RPCWrapLockAction caught panic"
+func expectHandleRPCPanic(t *testing.T, name string, verbose bool, err error) {
+	expected := fmt.Sprintf("HandleRPCPanic caught panic during %v with verbose %v", name, verbose)
 	if err == nil || !strings.Contains(err.Error(), expected) {
 		t.Fatalf("Expected a panic error with '%v' but got: %v", expected, err)
 	}
@@ -155,7 +141,7 @@ func agentRPCTestPing(ctx context.Context, t *testing.T, client tmclient.TabletM
 
 func agentRPCTestPingPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.Ping(ctx, tablet)
-	expectRPCWrapPanic(t, err)
+	expectHandleRPCPanic(t, "Ping", false /*verbose*/, err)
 }
 
 // agentRPCTestDialExpiredContext verifies that
@@ -251,7 +237,7 @@ func agentRPCTestGetSchema(ctx context.Context, t *testing.T, client tmclient.Ta
 
 func agentRPCTestGetSchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.GetSchema(ctx, tablet, testGetSchemaTables, testGetSchemaExcludeTables, true)
-	expectRPCWrapPanic(t, err)
+	expectHandleRPCPanic(t, "GetSchema", false /*verbose*/, err)
 }
 
 var testGetPermissionsReply = &tabletmanagerdatapb.Permissions{
@@ -293,7 +279,7 @@ func agentRPCTestGetPermissions(ctx context.Context, t *testing.T, client tmclie
 
 func agentRPCTestGetPermissionsPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.GetPermissions(ctx, tablet)
-	expectRPCWrapPanic(t, err)
+	expectHandleRPCPanic(t, "GetPermissions", false /*verbose*/, err)
 }
 
 //
@@ -327,7 +313,9 @@ func agentRPCTestSetReadOnly(ctx context.Context, t *testing.T, client tmclient.
 
 func agentRPCTestSetReadOnlyPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.SetReadOnly(ctx, tablet)
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "SetReadOnly", true /*verbose*/, err)
+	err = client.SetReadWrite(ctx, tablet)
+	expectHandleRPCPanic(t, "SetReadWrite", true /*verbose*/, err)
 }
 
 var testChangeTypeValue = topodatapb.TabletType_REPLICA
@@ -349,7 +337,7 @@ func agentRPCTestChangeType(ctx context.Context, t *testing.T, client tmclient.T
 
 func agentRPCTestChangeTypePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.ChangeType(ctx, tablet, testChangeTypeValue)
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "ChangeType", true /*verbose*/, err)
 }
 
 var testSleepDuration = time.Minute
@@ -370,7 +358,7 @@ func agentRPCTestSleep(ctx context.Context, t *testing.T, client tmclient.Tablet
 
 func agentRPCTestSleepPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.Sleep(ctx, tablet, testSleepDuration)
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "Sleep", true /*verbose*/, err)
 }
 
 var testExecuteHookHook = &hook.Hook{
@@ -402,12 +390,12 @@ func agentRPCTestExecuteHook(ctx context.Context, t *testing.T, client tmclient.
 
 func agentRPCTestExecuteHookPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.ExecuteHook(ctx, tablet, testExecuteHookHook)
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "ExecuteHook", true /*verbose*/, err)
 }
 
 var testRefreshStateCalled = false
 
-func (fra *fakeRPCAgent) RefreshState(ctx context.Context) {
+func (fra *fakeRPCAgent) RefreshState(ctx context.Context) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -415,6 +403,7 @@ func (fra *fakeRPCAgent) RefreshState(ctx context.Context) {
 		fra.t.Errorf("RefreshState called multiple times?")
 	}
 	testRefreshStateCalled = true
+	return nil
 }
 
 func agentRPCTestRefreshState(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
@@ -429,7 +418,7 @@ func agentRPCTestRefreshState(ctx context.Context, t *testing.T, client tmclient
 
 func agentRPCTestRefreshStatePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.RefreshState(ctx, tablet)
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "RefreshState", true /*verbose*/, err)
 }
 
 func (fra *fakeRPCAgent) RunHealthCheck(ctx context.Context) {
@@ -457,7 +446,7 @@ func agentRPCTestRunHealthCheck(ctx context.Context, t *testing.T, client tmclie
 
 func agentRPCTestRunHealthCheckPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.RunHealthCheck(ctx, tablet)
-	expectRPCWrapPanic(t, err)
+	expectHandleRPCPanic(t, "RunHealthCheck", false /*verbose*/, err)
 }
 
 func agentRPCTestIgnoreHealthError(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
@@ -469,7 +458,7 @@ func agentRPCTestIgnoreHealthError(ctx context.Context, t *testing.T, client tmc
 
 func agentRPCTestIgnoreHealthErrorPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.IgnoreHealthError(ctx, tablet, testIgnoreHealthErrorValue)
-	expectRPCWrapPanic(t, err)
+	expectHandleRPCPanic(t, "IgnoreHealthError", false /*verbose*/, err)
 }
 
 var testReloadSchemaCalled = false
@@ -497,7 +486,7 @@ func agentRPCTestReloadSchema(ctx context.Context, t *testing.T, client tmclient
 
 func agentRPCTestReloadSchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.ReloadSchema(ctx, tablet, "")
-	expectRPCWrapPanic(t, err)
+	expectHandleRPCPanic(t, "ReloadSchema", false /*verbose*/, err)
 }
 
 var testPreflightSchema = []string{"change table add table cloth"}
@@ -523,7 +512,7 @@ func agentRPCTestPreflightSchema(ctx context.Context, t *testing.T, client tmcli
 
 func agentRPCTestPreflightSchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.PreflightSchema(ctx, tablet, testPreflightSchema)
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "PreflightSchema", true /*verbose*/, err)
 }
 
 var testSchemaChange = &tmutils.SchemaChange{
@@ -549,7 +538,7 @@ func agentRPCTestApplySchema(ctx context.Context, t *testing.T, client tmclient.
 
 func agentRPCTestApplySchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.ApplySchema(ctx, tablet, testSchemaChange)
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "ApplySchema", true /*verbose*/, err)
 }
 
 var testExecuteFetchQuery = []byte("fetch this invalid utf8 character \x80")
@@ -619,15 +608,15 @@ func agentRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient
 func agentRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	// using pool
 	_, err := client.ExecuteFetchAsDba(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows, true, false)
-	expectRPCWrapPanic(t, err)
+	expectHandleRPCPanic(t, "ExecuteFetchAsDba", false /*verbose*/, err)
 	_, err = client.ExecuteFetchAsApp(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows)
-	expectRPCWrapPanic(t, err)
+	expectHandleRPCPanic(t, "ExecuteFetchAsApp", false /*verbose*/, err)
 
 	// not using pool
 	_, err = client.ExecuteFetchAsDba(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows, true, false)
-	expectRPCWrapPanic(t, err)
+	expectHandleRPCPanic(t, "ExecuteFetchAsDba", false /*verbose*/, err)
 	_, err = client.ExecuteFetchAsApp(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows)
-	expectRPCWrapPanic(t, err)
+	expectHandleRPCPanic(t, "ExecuteFetchAsApp", false /*verbose*/, err)
 }
 
 //
@@ -658,7 +647,7 @@ func agentRPCTestSlaveStatus(ctx context.Context, t *testing.T, client tmclient.
 
 func agentRPCTestSlaveStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.SlaveStatus(ctx, tablet)
-	expectRPCWrapPanic(t, err)
+	expectHandleRPCPanic(t, "SlaveStatus", false /*verbose*/, err)
 }
 
 var testReplicationPosition = "MariaDB/5-456-890"
@@ -677,7 +666,7 @@ func agentRPCTestMasterPosition(ctx context.Context, t *testing.T, client tmclie
 
 func agentRPCTestMasterPositionPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.MasterPosition(ctx, tablet)
-	expectRPCWrapPanic(t, err)
+	expectHandleRPCPanic(t, "MasterPosition", false /*verbose*/, err)
 }
 
 var testStopSlaveCalled = false
@@ -697,7 +686,7 @@ func agentRPCTestStopSlave(ctx context.Context, t *testing.T, client tmclient.Ta
 
 func agentRPCTestStopSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.StopSlave(ctx, tablet)
-	expectRPCWrapLockPanic(t, err)
+	expectHandleRPCPanic(t, "StopSlave", true /*verbose*/, err)
 }
 
 var testStopSlaveMinimumWaitTime = time.Hour
@@ -718,7 +707,7 @@ func agentRPCTestStopSlaveMinimum(ctx context.Context, t *testing.T, client tmcl
 
 func agentRPCTestStopSlaveMinimumPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.StopSlaveMinimum(ctx, tablet, testReplicationPosition, testStopSlaveMinimumWaitTime)
-	expectRPCWrapLockPanic(t, err)
+	expectHandleRPCPanic(t, "StopSlaveMinimum", true /*verbose*/, err)
 }
 
 var testStartSlaveCalled = false
@@ -738,7 +727,7 @@ func agentRPCTestStartSlave(ctx context.Context, t *testing.T, client tmclient.T
 
 func agentRPCTestStartSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.StartSlave(ctx, tablet)
-	expectRPCWrapLockPanic(t, err)
+	expectHandleRPCPanic(t, "StartSlave", true /*verbose*/, err)
 }
 
 var testTabletExternallyReparentedCalled = false
@@ -758,7 +747,7 @@ func agentRPCTestTabletExternallyReparented(ctx context.Context, t *testing.T, c
 
 func agentRPCTestTabletExternallyReparentedPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.TabletExternallyReparented(ctx, tablet, "")
-	expectRPCWrapLockPanic(t, err)
+	expectHandleRPCPanic(t, "TabletExternallyReparented", false /*verbose*/, err)
 }
 
 var testGetSlavesResult = []string{"slave1", "slave2"}
@@ -777,7 +766,7 @@ func agentRPCTestGetSlaves(ctx context.Context, t *testing.T, client tmclient.Ta
 
 func agentRPCTestGetSlavesPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.GetSlaves(ctx, tablet)
-	expectRPCWrapPanic(t, err)
+	expectHandleRPCPanic(t, "GetSlaves", false /*verbose*/, err)
 }
 
 var testBlpPosition = &tabletmanagerdatapb.BlpPosition{
@@ -804,7 +793,7 @@ func agentRPCTestWaitBlpPosition(ctx context.Context, t *testing.T, client tmcli
 
 func agentRPCTestWaitBlpPositionPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.WaitBlpPosition(ctx, tablet, testBlpPosition, testWaitBlpPositionWaitTime)
-	expectRPCWrapLockPanic(t, err)
+	expectHandleRPCPanic(t, "WaitBlpPosition", true /*verbose*/, err)
 }
 
 var testBlpPositionList = []*tabletmanagerdatapb.BlpPosition{
@@ -828,7 +817,7 @@ func agentRPCTestStopBlp(ctx context.Context, t *testing.T, client tmclient.Tabl
 
 func agentRPCTestStopBlpPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.StopBlp(ctx, tablet)
-	expectRPCWrapLockPanic(t, err)
+	expectHandleRPCPanic(t, "StopBlp", true /*verbose*/, err)
 }
 
 var testStartBlpCalled = false
@@ -848,7 +837,7 @@ func agentRPCTestStartBlp(ctx context.Context, t *testing.T, client tmclient.Tab
 
 func agentRPCTestStartBlpPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.StartBlp(ctx, tablet)
-	expectRPCWrapLockPanic(t, err)
+	expectHandleRPCPanic(t, "StartBlp", true /*verbose*/, err)
 }
 
 var testRunBlpUntilWaitTime = 3 * time.Minute
@@ -869,7 +858,7 @@ func agentRPCTestRunBlpUntil(ctx context.Context, t *testing.T, client tmclient.
 
 func agentRPCTestRunBlpUntilPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.RunBlpUntil(ctx, tablet, testBlpPositionList, testRunBlpUntilWaitTime)
-	expectRPCWrapLockPanic(t, err)
+	expectHandleRPCPanic(t, "RunBlpUntil", true /*verbose*/, err)
 }
 
 //
@@ -893,7 +882,7 @@ func agentRPCTestResetReplication(ctx context.Context, t *testing.T, client tmcl
 
 func agentRPCTestResetReplicationPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.ResetReplication(ctx, tablet)
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "ResetReplication", true /*verbose*/, err)
 }
 
 func (fra *fakeRPCAgent) InitMaster(ctx context.Context) (string, error) {
@@ -910,7 +899,7 @@ func agentRPCTestInitMaster(ctx context.Context, t *testing.T, client tmclient.T
 
 func agentRPCTestInitMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.InitMaster(ctx, tablet)
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "InitMaster", true /*verbose*/, err)
 }
 
 var testPopulateReparentJournalCalled = false
@@ -940,7 +929,7 @@ func agentRPCTestPopulateReparentJournal(ctx context.Context, t *testing.T, clie
 
 func agentRPCTestPopulateReparentJournalPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.PopulateReparentJournal(ctx, tablet, testTimeCreatedNS, testActionName, testMasterAlias, testReplicationPosition)
-	expectRPCWrapPanic(t, err)
+	expectHandleRPCPanic(t, "PopulateReparentJournal", false /*verbose*/, err)
 }
 
 var testInitSlaveCalled = false
@@ -963,7 +952,7 @@ func agentRPCTestInitSlave(ctx context.Context, t *testing.T, client tmclient.Ta
 
 func agentRPCTestInitSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.InitSlave(ctx, tablet, testMasterAlias, testReplicationPosition, testTimeCreatedNS)
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "InitSlave", true /*verbose*/, err)
 }
 
 func (fra *fakeRPCAgent) DemoteMaster(ctx context.Context) (string, error) {
@@ -980,7 +969,7 @@ func agentRPCTestDemoteMaster(ctx context.Context, t *testing.T, client tmclient
 
 func agentRPCTestDemoteMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.DemoteMaster(ctx, tablet)
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "DemoteMaster", true /*verbose*/, err)
 }
 
 var testReplicationPositionReturned = "MariaDB/5-567-3456"
@@ -1000,7 +989,7 @@ func agentRPCTestPromoteSlaveWhenCaughtUp(ctx context.Context, t *testing.T, cli
 
 func agentRPCTestPromoteSlaveWhenCaughtUpPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.PromoteSlaveWhenCaughtUp(ctx, tablet, testReplicationPosition)
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "PromoteSlaveWhenCaughtUp", true /*verbose*/, err)
 }
 
 var testSlaveWasPromotedCalled = false
@@ -1020,7 +1009,7 @@ func agentRPCTestSlaveWasPromoted(ctx context.Context, t *testing.T, client tmcl
 
 func agentRPCTestSlaveWasPromotedPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.SlaveWasPromoted(ctx, tablet)
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "SlaveWasPromoted", true /*verbose*/, err)
 }
 
 var testSetMasterCalled = false
@@ -1044,7 +1033,7 @@ func agentRPCTestSetMaster(ctx context.Context, t *testing.T, client tmclient.Ta
 
 func agentRPCTestSetMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.SetMaster(ctx, tablet, testMasterAlias, testTimeCreatedNS, testForceStartSlave)
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "SetMaster", true /*verbose*/, err)
 }
 
 var testSlaveWasRestartedParent = &topodatapb.TabletAlias{
@@ -1069,7 +1058,7 @@ func agentRPCTestSlaveWasRestarted(ctx context.Context, t *testing.T, client tmc
 
 func agentRPCTestSlaveWasRestartedPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.SlaveWasRestarted(ctx, tablet, testSlaveWasRestartedParent)
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "SlaveWasRestarted", true /*verbose*/, err)
 }
 
 func (fra *fakeRPCAgent) StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error) {
@@ -1086,7 +1075,7 @@ func agentRPCTestStopReplicationAndGetStatus(ctx context.Context, t *testing.T, 
 
 func agentRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.StopReplicationAndGetStatus(ctx, tablet)
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "StopReplicationAndGetStatus", true /*verbose*/, err)
 }
 
 func (fra *fakeRPCAgent) PromoteSlave(ctx context.Context) (string, error) {
@@ -1103,7 +1092,7 @@ func agentRPCTestPromoteSlave(ctx context.Context, t *testing.T, client tmclient
 
 func agentRPCTestPromoteSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.PromoteSlave(ctx, tablet)
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "PromoteSlave", true /*verbose*/, err)
 }
 
 //
@@ -1142,7 +1131,7 @@ func agentRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.
 	if err == nil {
 		t.Fatalf("Unexpected Backup logs: %v", e)
 	}
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "Backup", true /*verbose*/, err)
 }
 
 func (fra *fakeRPCAgent) RestoreFromBackup(ctx context.Context, logger logutil.Logger) error {
@@ -1172,41 +1161,19 @@ func agentRPCTestRestoreFromBackupPanic(ctx context.Context, t *testing.T, clien
 	if err == nil {
 		t.Fatalf("Unexpected RestoreFromBackup logs: %v", e)
 	}
-	expectRPCWrapLockActionPanic(t, err)
+	expectHandleRPCPanic(t, "RestoreFromBackup", true /*verbose*/, err)
 }
 
 //
 // RPC helpers
 //
 
-// RPCWrap is part of the RPCAgent interface
-func (fra *fakeRPCAgent) RPCWrap(ctx context.Context, name tabletmanager.TabletAction, args, reply interface{}, f func() error) (err error) {
-	defer func() {
-		if x := recover(); x != nil {
-			err = fmt.Errorf("RPCWrap caught panic during %v", name)
-		}
-	}()
-	return f()
-}
-
-// RPCWrapLock is part of the RPCAgent interface
-func (fra *fakeRPCAgent) RPCWrapLock(ctx context.Context, name tabletmanager.TabletAction, args, reply interface{}, verbose bool, f func() error) (err error) {
-	defer func() {
-		if x := recover(); x != nil {
-			err = fmt.Errorf("RPCWrapLock caught panic during %v", name)
-		}
-	}()
-	return f()
-}
-
-// RPCWrapLockAction is part of the RPCAgent interface
-func (fra *fakeRPCAgent) RPCWrapLockAction(ctx context.Context, name tabletmanager.TabletAction, args, reply interface{}, verbose bool, f func() error) (err error) {
-	defer func() {
-		if x := recover(); x != nil {
-			err = fmt.Errorf("RPCWrapLockAction caught panic during %v", name)
-		}
-	}()
-	return f()
+// HandleRPCPanic is part of the RPCAgent interface
+func (fra *fakeRPCAgent) HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error) {
+	if x := recover(); x != nil {
+		// Use the panic case to make sure 'name' and 'verbose' are right.
+		*err = fmt.Errorf("HandleRPCPanic caught panic during %v with verbose %v", name, verbose)
+	}
 }
 
 // methods to test individual API calls
