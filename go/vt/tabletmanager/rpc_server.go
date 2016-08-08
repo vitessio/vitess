@@ -20,9 +20,9 @@ import (
 // Utility functions for RPC service
 //
 
-// lockAndCheck is used at the beginning of an RPC call, to lock the
+// lock is used at the beginning of an RPC call, to lock the
 // action mutex. It returns ctx.Err() if <-ctx.Done() after the lock.
-func (agent *ActionAgent) lockAndCheck(ctx context.Context) error {
+func (agent *ActionAgent) lock(ctx context.Context) error {
 	agent.actionMutex.Lock()
 
 	// After we take the lock (which could take a long time), we
@@ -34,6 +34,11 @@ func (agent *ActionAgent) lockAndCheck(ctx context.Context) error {
 	default:
 		return nil
 	}
+}
+
+// unlock is the symetrical action to lock.
+func (agent *ActionAgent) unlock() {
+	agent.actionMutex.Unlock()
 }
 
 // HandleRPCPanic is part of the RPCAgent interface.

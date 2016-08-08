@@ -19,10 +19,10 @@ import (
 // WaitBlpPosition waits until a specific filtered replication position is
 // reached.
 func (agent *ActionAgent) WaitBlpPosition(ctx context.Context, blpPosition *tabletmanagerdatapb.BlpPosition, waitTime time.Duration) error {
-	if err := agent.lockAndCheck(ctx); err != nil {
+	if err := agent.lock(ctx); err != nil {
 		return err
 	}
-	defer agent.actionMutex.Unlock()
+	defer agent.unlock()
 
 	waitCtx, cancel := context.WithTimeout(ctx, waitTime)
 	defer cancel()
@@ -31,10 +31,10 @@ func (agent *ActionAgent) WaitBlpPosition(ctx context.Context, blpPosition *tabl
 
 // StopBlp stops the binlog players, and return their positions.
 func (agent *ActionAgent) StopBlp(ctx context.Context) ([]*tabletmanagerdatapb.BlpPosition, error) {
-	if err := agent.lockAndCheck(ctx); err != nil {
+	if err := agent.lock(ctx); err != nil {
 		return nil, err
 	}
-	defer agent.actionMutex.Unlock()
+	defer agent.unlock()
 
 	if agent.BinlogPlayerMap == nil {
 		return nil, fmt.Errorf("No BinlogPlayerMap configured")
@@ -45,10 +45,10 @@ func (agent *ActionAgent) StopBlp(ctx context.Context) ([]*tabletmanagerdatapb.B
 
 // StartBlp starts the binlog players
 func (agent *ActionAgent) StartBlp(ctx context.Context) error {
-	if err := agent.lockAndCheck(ctx); err != nil {
+	if err := agent.lock(ctx); err != nil {
 		return err
 	}
-	defer agent.actionMutex.Unlock()
+	defer agent.unlock()
 
 	if agent.BinlogPlayerMap == nil {
 		return fmt.Errorf("No BinlogPlayerMap configured")
@@ -60,10 +60,10 @@ func (agent *ActionAgent) StartBlp(ctx context.Context) error {
 // RunBlpUntil runs the binlog player server until the position is reached,
 // and returns the current mysql master replication position.
 func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl []*tabletmanagerdatapb.BlpPosition, waitTime time.Duration) (string, error) {
-	if err := agent.lockAndCheck(ctx); err != nil {
+	if err := agent.lock(ctx); err != nil {
 		return "", err
 	}
-	defer agent.actionMutex.Unlock()
+	defer agent.unlock()
 
 	if agent.BinlogPlayerMap == nil {
 		return "", fmt.Errorf("No BinlogPlayerMap configured")

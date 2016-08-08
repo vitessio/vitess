@@ -38,10 +38,10 @@ func SetReparentFlags(timeout time.Duration) {
 // TabletExternallyReparented updates all topo records so the current
 // tablet is the new master for this shard.
 func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, externalID string) error {
-	if err := agent.lockAndCheck(ctx); err != nil {
+	if err := agent.lock(ctx); err != nil {
 		return err
 	}
-	defer agent.actionMutex.Unlock()
+	defer agent.unlock()
 
 	startTime := time.Now()
 

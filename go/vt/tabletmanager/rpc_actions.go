@@ -35,20 +35,20 @@ func (agent *ActionAgent) GetPermissions(ctx context.Context) (*tabletmanagerdat
 
 // SetReadOnly makes the mysql instance read-only or read-write.
 func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
-	if err := agent.lockAndCheck(ctx); err != nil {
+	if err := agent.lock(ctx); err != nil {
 		return err
 	}
-	defer agent.actionMutex.Unlock()
+	defer agent.unlock()
 
 	return agent.MysqlDaemon.SetReadOnly(rdonly)
 }
 
 // ChangeType changes the tablet type
 func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error {
-	if err := agent.lockAndCheck(ctx); err != nil {
+	if err := agent.lock(ctx); err != nil {
 		return err
 	}
-	defer agent.actionMutex.Unlock()
+	defer agent.unlock()
 
 	// change our type in the topology
 	_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType)
@@ -62,28 +62,28 @@ func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.
 	}
 
 	// and re-run health check
-	agent.runHealthCheckProtected()
+	agent.runHealthCheckLocked()
 	return nil
 }
 
 // Sleep sleeps for the duration
 func (agent *ActionAgent) Sleep(ctx context.Context, duration time.Duration) {
-	if err := agent.lockAndCheck(ctx); err != nil {
+	if err := agent.lock(ctx); err != nil {
 		// client gave up
 		return
 	}
-	defer agent.actionMutex.Unlock()
+	defer agent.unlock()
 
 	time.Sleep(duration)
 }
 
 // ExecuteHook executes the provided hook locally, and returns the result.
 func (agent *ActionAgent) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.HookResult {
-	if err := agent.lockAndCheck(ctx); err != nil {
+	if err := agent.lock(ctx); err != nil {
 		// client gave up
 		return &hook.HookResult{}
 	}
-	defer agent.actionMutex.Unlock()
+	defer agent.unlock()
 
 	// Execute the hooks
 	topotools.ConfigureTabletHook(hk, agent.TabletAlias)
@@ -99,10 +99,10 @@ func (agent *ActionAgent) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.
 
 // RefreshState reload the tablet record from the topo server.
 func (agent *ActionAgent) RefreshState(ctx context.Context) error {
-	if err := agent.lockAndCheck(ctx); err != nil {
+	if err := agent.lock(ctx); err != nil {
 		return err
 	}
-	defer agent.actionMutex.Unlock()
+	defer agent.unlock()
 
 	return agent.refreshTablet(ctx, "RefreshState")
 }

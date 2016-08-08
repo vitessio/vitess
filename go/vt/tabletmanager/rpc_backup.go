@@ -19,10 +19,10 @@ import (
 
 // Backup takes a db backup and sends it to the BackupStorage
 func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger) error {
-	if err := agent.lockAndCheck(ctx); err != nil {
+	if err := agent.lock(ctx); err != nil {
 		return err
 	}
-	defer agent.actionMutex.Unlock()
+	defer agent.unlock()
 
 	// update our type to BACKUP
 	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
@@ -67,17 +67,17 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	}
 
 	// and re-run health check to be sure to capture any replication delay
-	agent.runHealthCheckProtected()
+	agent.runHealthCheckLocked()
 
 	return returnErr
 }
 
 // RestoreFromBackup deletes all local data and restores anew from the latest backup.
 func (agent *ActionAgent) RestoreFromBackup(ctx context.Context, logger logutil.Logger) error {
-	if err := agent.lockAndCheck(ctx); err != nil {
+	if err := agent.lock(ctx); err != nil {
 		return err
 	}
-	defer agent.actionMutex.Unlock()
+	defer agent.unlock()
 
 	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
@@ -94,7 +94,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context, logger logutil.
 	err = agent.restoreDataLocked(ctx, l, true /* deleteBeforeRestore */)
 
 	// re-run health check to be sure to capture any replication delay
-	agent.runHealthCheckProtected()
+	agent.runHealthCheckLocked()
 
 	return err
 }

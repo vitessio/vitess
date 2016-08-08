@@ -47,10 +47,10 @@ func (agent *ActionAgent) ReloadSchema(ctx context.Context, waitPosition string)
 
 // PreflightSchema will try out the schema changes in "changes".
 func (agent *ActionAgent) PreflightSchema(ctx context.Context, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
-	if err := agent.lockAndCheck(ctx); err != nil {
+	if err := agent.lock(ctx); err != nil {
 		return nil, err
 	}
-	defer agent.actionMutex.Unlock()
+	defer agent.unlock()
 
 	// get the db name from the tablet
 	dbName := topoproto.TabletDbName(agent.Tablet())
@@ -61,10 +61,10 @@ func (agent *ActionAgent) PreflightSchema(ctx context.Context, changes []string)
 
 // ApplySchema will apply a schema change
 func (agent *ActionAgent) ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
-	if err := agent.lockAndCheck(ctx); err != nil {
+	if err := agent.lock(ctx); err != nil {
 		return nil, err
 	}
-	defer agent.actionMutex.Unlock()
+	defer agent.unlock()
 
 	// get the db name from the tablet
 	dbName := topoproto.TabletDbName(agent.Tablet())
