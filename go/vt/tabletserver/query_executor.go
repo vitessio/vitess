@@ -62,10 +62,10 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		addUserTableQueryStats(qre.qe.queryServiceStats, qre.ctx, qre.plan.TableName, "Execute", int64(duration))
 
 		if reply == nil {
-			qre.plan.AddStats(1, duration, 0, 1)
+			qre.plan.AddStats(1, duration, qre.logStats.MysqlResponseTime, 0, 1)
 			return
 		}
-		qre.plan.AddStats(1, duration, int64(reply.RowsAffected), 0)
+		qre.plan.AddStats(1, duration, qre.logStats.MysqlResponseTime, int64(reply.RowsAffected), 0)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
 		qre.qe.queryServiceStats.ResultStats.Add(int64(len(reply.Rows)))

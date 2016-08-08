@@ -53,6 +53,7 @@ type ExecPlan struct {
 	mu         sync.Mutex
 	QueryCount int64
 	Time       time.Duration
+	MysqlTime  time.Duration
 	RowCount   int64
 	ErrorCount int64
 }
@@ -63,20 +64,22 @@ func (*ExecPlan) Size() int {
 }
 
 // AddStats updates the stats for the current ExecPlan.
-func (ep *ExecPlan) AddStats(queryCount int64, duration time.Duration, rowCount, errorCount int64) {
+func (ep *ExecPlan) AddStats(queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
 	ep.mu.Lock()
 	ep.QueryCount += queryCount
 	ep.Time += duration
+	ep.MysqlTime += mysqlTime
 	ep.RowCount += rowCount
 	ep.ErrorCount += errorCount
 	ep.mu.Unlock()
 }
 
 // Stats returns the current stats of ExecPlan.
-func (ep *ExecPlan) Stats() (queryCount int64, duration time.Duration, rowCount, errorCount int64) {
+func (ep *ExecPlan) Stats() (queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
 	ep.mu.Lock()
 	queryCount = ep.QueryCount
 	duration = ep.Time
+	mysqlTime = ep.MysqlTime
 	rowCount = ep.RowCount
 	errorCount = ep.ErrorCount
 	ep.mu.Unlock()
@@ -584,7 +587,7 @@ func (si *SchemaInfo) getDataFree() map[string]int64 {
 
 func (si *SchemaInfo) getQueryCount() map[string]int64 {
 	f := func(plan *ExecPlan) int64 {
-		queryCount, _, _, _ := plan.Stats()
+		queryCount, _, _, _, _ := plan.Stats()
 		return queryCount
 	}
 	return si.getQueryStats(f)
@@ -592,7 +595,7 @@ func (si *SchemaInfo) getQueryCount() map[string]int64 {
 
 func (si *SchemaInfo) getQueryTime() map[string]int64 {
 	f := func(plan *ExecPlan) int64 {
-		_, time, _, _ := plan.Stats()
+		_, time, _, _, _ := plan.Stats()
 		return int64(time)
 	}
 	return si.getQueryStats(f)
@@ -600,7 +603,7 @@ func (si *SchemaInfo) getQueryTime() map[string]int64 {
 
 func (si *SchemaInfo) getQueryRowCount() map[string]int64 {
 	f := func(plan *ExecPlan) int64 {
-		_, _, rowCount, _ := plan.Stats()
+		_, _, _, rowCount, _ := plan.Stats()
 		return rowCount
 	}
 	return si.getQueryStats(f)
@@ -608,7 +611,7 @@ func (si *SchemaInfo) getQueryRowCount() map[string]int64 {
 
 func (si *SchemaInfo) getQueryErrorCount() map[string]int64 {
 	f := func(plan *ExecPlan) int64 {
-		_, _, _, errorCount := plan.Stats()
+		_, _, _, _, errorCount := plan.Stats()
 		return errorCount
 	}
 	return si.getQueryStats(f)
@@ -639,6 +642,7 @@ type perQueryStats struct {
 	Plan       planbuilder.PlanType
 	QueryCount int64
 	Time       time.Duration
+	MysqlTime  time.Duration
 	RowCount   int64
 	ErrorCount int64
 }
@@ -688,7 +692,7 @@ func (si *SchemaInfo) handleHTTPQueryStats(response http.ResponseWriter, request
 			pqstats.Query = unicoded(v)
 			pqstats.Table = plan.TableName
 			pqstats.Plan = plan.PlanID
-			pqstats.QueryCount, pqstats.Time, pqstats.RowCount, pqstats.ErrorCount = plan.Stats()
+			pqstats.QueryCount, pqstats.Time, pqstats.MysqlTime, pqstats.RowCount, pqstats.ErrorCount = plan.Stats()
 			qstats = append(qstats, pqstats)
 		}
 	}

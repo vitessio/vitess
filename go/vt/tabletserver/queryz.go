@@ -25,9 +25,11 @@ var (
 			<th>Reason</th>
 			<th>Count</th>
 			<th>Time</th>
+			<th>MySQL Time</th>
 			<th>Rows</th>
 			<th>Errors</th>
 			<th>Time per query</th>
+			<th>MySQL Time per query</th>
 			<th>Rows per query</th>
 			<th>Errors per query</th>
 		</tr>
@@ -41,9 +43,11 @@ var (
 			<td>{{.Reason}}</td>
 			<td>{{.Count}}</td>
 			<td>{{.Time}}</td>
+			<td>{{.MysqlTime}}</td>
 			<td>{{.Rows}}</td>
 			<td>{{.Errors}}</td>
 			<td>{{.TimePQ}}</td>
+			<td>{{.MysqlTimePQ}}</td>
 			<td>{{.RowsPQ}}</td>
 			<td>{{.ErrorsPQ}}</td>
 		</tr>
@@ -53,15 +57,16 @@ var (
 // queryzRow is used for rendering query stats
 // using go's template.
 type queryzRow struct {
-	Query  string
-	Table  string
-	Plan   planbuilder.PlanType
-	Reason planbuilder.ReasonType
-	Count  int64
-	tm     time.Duration
-	Rows   int64
-	Errors int64
-	Color  string
+	Query     string
+	Table     string
+	Plan      planbuilder.PlanType
+	Reason    planbuilder.ReasonType
+	Count     int64
+	tm        time.Duration
+	mysqlTime time.Duration
+	Rows      int64
+	Errors    int64
+	Color     string
 }
 
 // Time returns the total time as a string.
@@ -78,13 +83,21 @@ func (qzs *queryzRow) TimePQ() string {
 	return fmt.Sprintf("%.6f", qzs.timePQ())
 }
 
-func (qzs *queryzRow) rowsPQ() float64 {
-	return float64(qzs.Rows) / float64(qzs.Count)
+// MysqlTime returns the MySQL time as a string.
+func (qzs *queryzRow) MysqlTime() string {
+	return fmt.Sprintf("%.6f", float64(qzs.mysqlTime)/1e9)
+}
+
+// MysqlTimePQ returns the time per query as a string.
+func (qzs *queryzRow) MysqlTimePQ() string {
+	val := float64(qzs.mysqlTime) / (1e9 * float64(qzs.Count))
+	return fmt.Sprintf("%.6f", val)
 }
 
 // RowsPQ returns the row count per query as a string.
 func (qzs *queryzRow) RowsPQ() string {
-	return fmt.Sprintf("%.6f", qzs.rowsPQ())
+	val := float64(qzs.Rows) / float64(qzs.Count)
+	return fmt.Sprintf("%.6f", val)
 }
 
 // ErrorsPQ returns the error count per query as a string.
@@ -136,7 +149,7 @@ func queryzHandler(si *SchemaInfo, w http.ResponseWriter, r *http.Request) {
 			Plan:   plan.PlanID,
 			Reason: plan.Reason,
 		}
-		Value.Count, Value.tm, Value.Rows, Value.Errors = plan.Stats()
+		Value.Count, Value.tm, Value.mysqlTime, Value.Rows, Value.Errors = plan.Stats()
 		var timepq time.Duration
 		if Value.Count != 0 {
 			timepq = time.Duration(int64(Value.tm) / Value.Count)

@@ -28,7 +28,7 @@ func TestQueryzHandler(t *testing.T) {
 			Reason:    planbuilder.ReasonTable,
 		},
 	}
-	plan1.AddStats(10, 1*time.Second, 2, 0)
+	plan1.AddStats(10, 2*time.Second, 1*time.Second, 2, 0)
 	schemaInfo.queries.Set("select name from test_table", plan1)
 
 	plan2 := &ExecPlan{
@@ -38,7 +38,7 @@ func TestQueryzHandler(t *testing.T) {
 			Reason:    planbuilder.ReasonDefault,
 		},
 	}
-	plan2.AddStats(1, 1*time.Millisecond, 1, 0)
+	plan2.AddStats(1, 2*time.Millisecond, 1*time.Millisecond, 1, 0)
 	schemaInfo.queries.Set("insert into test_table values 1", plan2)
 
 	plan3 := &ExecPlan{
@@ -48,7 +48,7 @@ func TestQueryzHandler(t *testing.T) {
 			Reason:    planbuilder.ReasonDefault,
 		},
 	}
-	plan3.AddStats(1, 50*time.Millisecond, 1, 0)
+	plan3.AddStats(1, 75*time.Millisecond, 50*time.Millisecond, 1, 0)
 	schemaInfo.queries.Set("show tables", plan3)
 	schemaInfo.queries.Set("", (*ExecPlan)(nil))
 
@@ -61,9 +61,11 @@ func TestQueryzHandler(t *testing.T) {
 		`<td>PASS_SELECT</td>`,
 		`<td>TABLE</td>`,
 		`<td>10</td>`,
+		`<td>2.000000</td>`,
 		`<td>1.000000</td>`,
 		`<td>2</td>`,
 		`<td>0</td>`,
+		`<td>0.200000</td>`,
 		`<td>0.100000</td>`,
 		`<td>0.200000</td>`,
 		`<td>0.000000</td>`,
@@ -76,9 +78,11 @@ func TestQueryzHandler(t *testing.T) {
 		`<td>DDL</td>`,
 		`<td>DEFAULT</td>`,
 		`<td>1</td>`,
+		`<td>0.002000</td>`,
 		`<td>0.001000</td>`,
 		`<td>1</td>`,
 		`<td>0</td>`,
+		`<td>0.002000</td>`,
 		`<td>0.001000</td>`,
 		`<td>1.000000</td>`,
 		`<td>0.000000</td>`,
@@ -91,9 +95,11 @@ func TestQueryzHandler(t *testing.T) {
 		`<td>OTHER</td>`,
 		`<td>DEFAULT</td>`,
 		`<td>1</td>`,
+		`<td>0.075000</td>`,
 		`<td>0.050000</td>`,
 		`<td>1</td>`,
 		`<td>0</td>`,
+		`<td>0.075000</td>`,
 		`<td>0.050000</td>`,
 		`<td>1.000000</td>`,
 		`<td>0.000000</td>`,
