@@ -1,4 +1,4 @@
-import { Headers, Http, RequestOptions } from '@angular/http';
+import { Http } from '@angular/http';
 import { Injectable } from '@angular/core';
 
 import { Observable } from 'rxjs/Observable';
@@ -59,7 +59,7 @@ export class KeyspaceService {
   }
 
   /*
-    Returns an observable that fires a fully built keyspace from the 
+    Returns an observable that fires a fulled built keyspace from the 
     keyspace's shards, sharding info, and a list of serving shards.
   */
   buildKeyspace(keyspaceName: string, servingShards: string[]): Observable<any> {
@@ -126,24 +126,5 @@ export class KeyspaceService {
         return this.buildKeyspace(keyspaceName, servingShards);
       }
     );
-  }
-
-  sendPostRequest(url: string, body: string): Observable<any> {
-    let headers = new Headers({ 'Content-Type': 'application/x-www-form-urlencoded' });
-    let options = new RequestOptions({ headers: headers });
-    return this.http.post(url, body, options)
-    .map(resp => resp.json());
-  }
-
-  createKeyspace(keyspace: any): Observable<any> {
-    return this.sendPostRequest(this.keyspacesUrl + keyspace.getParam('keyspaceName'), keyspace.getBody('CreateKeyspace'));
-  }
-
-  deleteKeyspace(keyspace: any): Observable<any> {
-    return this.sendPostRequest(this.keyspacesUrl + keyspace.name, keyspace.getBody('DeleteKeyspace'));
-  }
-
-  editKeyspace(keyspace: any): Observable<any> {
-    return this.sendPostRequest(this.keyspacesUrl + keyspace.name, keyspace.getBody('EditKeyspace'));
   }
 }

@@ -21,77 +21,122 @@ export class Flag {
   public name: string;
   public description: string;
   public value: any;
-  private blockOnEmptyList: string[]; // Block this flag if any flag in this list is empty/false.
-  private blockOnFilledList: string[]; // Block this flag if any flag in this list is filled/true.
+  private blockOnEmptyList= []; // Block this flag if any flag in this list is empty/false.
+  private blockOnFilledList= []; // Block this flag if any flag in this list is filled/true.
   public show: boolean;
-  public constructor(position: number, type: string, id: string, name: string, description= '', value= '', show= true) {
+  public positional = false;
+
+  constructor(position: number, type: string, id: string, name: string, description= '', value= '', show= true) {
     this.position = position;
     this.type = type;
     this.id = id;
     this.name = name;
     this.description = description;
     this.value = value;
-    this.blockOnEmptyList = [];
-    this.blockOnFilledList = [];
     this.show = show;
   }
+
   public setBlockOnEmptyList(blockOnEmptyList: string[]) {
     this.blockOnEmptyList = blockOnEmptyList;
   }
+
   public getBlockOnEmptyList(): any[] {
     return this.blockOnEmptyList;
   }
+
   public setBlockOnFilledList(blockOnFilledList: string[]) {
     this.blockOnFilledList = blockOnFilledList;
   }
+
   public getBlockOnFilledList(): any[] {
     return this.blockOnFilledList;
   }
+
   public getStrValue(): string {
     return this.value;
   }
+
   public getValue(): any {
     return this.value;
   }
+
   public setValue(value: string) {
     this.value = value;
   }
+
   public isEmpty(): boolean {
     return this.value === '';
   }
+
   public isFilled(): boolean {
     return this.value !== '';
+  }
+
+  // Used for construction of JSON encoded post requests
+  public getPostBodyContent(positional: boolean): string[] {
+    if (this.getValue() === false || this.getStrValue() === '') {
+      return [];
+    }
+    // Positional arguments only need a value not a key.
+    if (positional && this.positional) {
+      return [this.getStrValue()];
+    }
+    // Non-positional arguments need a key value pair.
+    if (!positional && !this.positional) {
+      return [`-${this.id}`, this.getStrValue()];
+    }
+    return [];
   }
 }
 
 export class InputFlag extends Flag {
   public value: string;
-  public constructor(position: number, id: string, name: string, description= '', value= '', show= true) {
-    super(position, 'input', id, name, description, value);
+
+  constructor(position: number, id: string, name: string, description= '', value= '', show= true) {
+    super(position, 'input', id, name, description, value, show);
     this.value = value;
   }
 }
 
 export class CheckBoxFlag extends Flag {
   public value: boolean;
-  public constructor(position: number, id: string, name: string, description= '', value= false, show= true) {
+
+  constructor(position: number, id: string, name: string, description= '', value= false, show= true) {
     super(position, 'checkBox', id, name, description, '', show);
     this.value = value;
   }
+
   public getStrValue() {
     return this.value ? 'true' : 'false';
+  }
+
+  // Overload parent since Boolean arguments just need a key.
+  public getBodyContent(positional: boolean): string[] {
+    if (this.getValue() === false || this.getStrValue() === '') {
+      return [];
+    }
+    if (positional && this.positional) {
+      return [this.getStrValue()];
+    }
+    if (!positional && !this.positional) {
+      return [`-${this.id}=${this.getStrValue()}`];
+    }
+    return [];
   }
 }
 
 export class DropDownFlag extends Flag {
   public value: string;
   public options: string[];
-  public constructor(position: number, id: string, name: string, description= '', value= '', show= true) {
+
+  constructor(position: number, id: string, name: string, description= '', value= '', show= true) {
     super(position, 'dropDown', id, name, description, value, show);
   }
+
   public setOptions(options: any[]) {
     this.options = options;
   }
+
   public getOptions(): any[] {
     return this.options;
   }

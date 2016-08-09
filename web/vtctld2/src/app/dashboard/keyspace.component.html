@@ -1,4 +1,11 @@
 <h1>{{keyspaceName}}</h1>
+<div class="vt-action-center">
+  <button md-raised-button (click)="prepareValidateKeyspace();dialog.open();">Validate</button>
+  <button md-raised-button (click)="prepareRebuildKeyspaceGraph();dialog.open();">Rebuild Keyspace Graph</button>
+  <button md-raised-button (click)="prepareRemoveKeyspaceCell();dialog.open();">Remove Keyspace Cell</button>
+  
+</div>
+
 <div *ngIf="keyspace.servingShards != undefined && keyspace.servingShards.length > 0">
   <h2>Serving Shards</h2>
   <div *ngFor="let shard of keyspace.servingShards" class="vt-card">
@@ -13,15 +20,17 @@
 <div *ngIf="keyspace.nonservingShards != undefined && keyspace.nonservingShards.length > 0">
   <h2>Nonserving Shards</h2>
   <div *ngFor="let shard of keyspace.nonservingShards" class="vt-card">
-    <md-card (click)="navigate(keyspaceName, shard)"> 
-      <md-card-title>{{shard}}</md-card-title>   
-    </md-card>
+    <a class="vt-darkLink" [routerLink]="['/shard']" [queryParams]="{keyspace: keyspaceName, shard: shard}">
+      <md-card > 
+        <md-card-title>{{shard}}</md-card-title>   
+      </md-card>
+    </a>
   </div>
 </div>
-
+<h2 *ngIf="noShards()">There are no shards in this keyspace</h2>
 <paper-dialog #dialog  no-cancel-on-outside-click="true" no-cancel-on-esc-key="true">
   <vt-dialog #vtDialog [(dialogContent)]="dialogContent" [(dialogSettings)]="dialogSettings" [(dialogExtraContent)]="keyspaceExtraComponent" (close)="dialog.close();"></vt-dialog>
 </paper-dialog>
-<vt-add-button (click)="prepareNew();toggleModal();dialog.open();vtDialog.open(dialogContent);"></vt-add-button>
+<vt-add-button (click)="prepareNewShard();dialog.open();vtDialog.loadExtraContent(dialogContent);"></vt-add-button>
 <div *ngIf="dialogSettings.openModal" class="vt-popUpContainer" >
 </div>

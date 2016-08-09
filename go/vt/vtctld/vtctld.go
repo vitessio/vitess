@@ -4,7 +4,6 @@ package vtctld
 
 import (
 	"flag"
-	"fmt"
 	"net/http"
 	"os"
 	"path"
@@ -14,7 +13,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/acl"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
@@ -59,62 +57,7 @@ func InitVtctld(ts topo.Server) {
 			return "", wr.ValidatePermissionsKeyspace(ctx, keyspace)
 		})
 
-	actionRepo.RegisterKeyspaceAction("CreateKeyspace",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
-			shardingColumnName := r.FormValue("shardingColumnName")
-			shardingColumnType := r.FormValue("shardingColumnType")
-			kit, err := key.ParseKeyspaceIDType(shardingColumnType)
-			if err != nil {
-				return "", err
-			}
-			ki := &topodatapb.Keyspace{
-				ShardingColumnName: shardingColumnName,
-				ShardingColumnType: kit,
-			}
-			return "", wr.TopoServer().CreateKeyspace(ctx, keyspace, ki)
-		})
-
-	actionRepo.RegisterKeyspaceAction("EditKeyspace",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
-			shardingColumnName := r.FormValue("shardingColumnName")
-			shardingColumnType := r.FormValue("shardingColumnType")
-			force := r.FormValue("force") == "true"
-
-			kit, err := key.ParseKeyspaceIDType(shardingColumnType)
-			if err != nil {
-				return "", err
-			}
-
-			keyspaceIDTypeSet := kit != topodatapb.KeyspaceIdType_UNSET
-			columnNameSet := shardingColumnName != ""
-			if (keyspaceIDTypeSet && !columnNameSet) || (!keyspaceIDTypeSet && columnNameSet) {
-				return "", fmt.Errorf("Both <column name> and <column type> must be set, or both must be unset.")
-			}
-			return "", wr.SetKeyspaceShardingInfo(ctx, keyspace, shardingColumnName, kit, force)
-		})
-
-	actionRepo.RegisterKeyspaceAction("DeleteKeyspace",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
-			recursive := r.FormValue("recursive") == "true"
-			return "", wr.DeleteKeyspace(ctx, keyspace, recursive)
-		})
-
 	// shard actions
-	actionRepo.RegisterShardAction("CreateShard",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
-			return "", wr.TopoServer().CreateShard(ctx, keyspace, shard)
-		})
-
-	actionRepo.RegisterShardAction("DeleteShard",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
-			recursiveString := r.FormValue("recursive")
-			recursive := false
-			if recursiveString == "true" {
-				recursive = true
-			}
-			return "", wr.DeleteShard(ctx, keyspace, shard, recursive)
-		})
-
 	actionRepo.RegisterShardAction("ValidateShard",
 		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
 			return "", wr.ValidateShard(ctx, keyspace, shard, false)

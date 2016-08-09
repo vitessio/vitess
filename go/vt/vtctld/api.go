@@ -1,6 +1,7 @@
 package vtctld
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -20,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
@@ -127,7 +129,11 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 			}
 			// Get the keyspace record.
 			return ts.GetKeyspace(ctx, keyspace)
-			// Perform an action on a keyspace.
+
+		/*
+		  Perform an action on a keyspace.
+		  TODO(dsslater): Once we have switched to the new UI close this endpoint.
+		*/
 		case "POST":
 			time.Sleep(4000 * time.Millisecond)
 			if keyspace == "" {
@@ -162,7 +168,10 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 			return ts.GetShardNames(ctx, keyspace)
 		}
 
-		// Perform an action on a shard.
+		/*
+		  Perform an action on a shard.
+		  TODO(dsslater): Once we have switched to the new UI close this endpoint.
+		*/
 		if r.Method == "POST" {
 			if err := r.ParseForm(); err != nil {
 				return nil, err
@@ -305,6 +314,39 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 		}
 		allUpdates := realtimeStats.tabletStatuses(cell, keyspace, shard, tabletTypeObj.String())
 		return allUpdates, nil
+	})
+
+	// Vtctl Command
+	http.HandleFunc(apiPrefix+"vtctl/", func(w http.ResponseWriter, r *http.Request) {
+		var args []string
+		var logOutput bytes.Buffer
+		resp := struct {
+			Error  string
+			Output string
+		}{}
+		if err := unmarshalRequest(r, &args); err != nil {
+			httpErrorf(w, r, "can't unmarshal request: %v", err)
+		}
+
+		logstream := logutil.NewCallbackLogger(func(ev *logutilpb.Event) {
+			logutil.EventToBuffer(ev, &logOutput)
+			logOutput.WriteRune('\n')
+		})
+
+		wr := wrangler.New(logstream, ts, tmClient)
+		err := vtctl.RunCommand(ctx, wr, args)
+
+		if err != nil {
+			resp.Error = err.Error()
+		}
+		resp.Output = logOutput.String()
+		data, err := json.MarshalIndent(resp, "", "  ")
+		if err != nil {
+			httpErrorf(w, r, "json error: %v", err)
+			return
+		}
+		w.Header().Set("Content-Type", jsonContentType)
+		w.Write(data)
 	})
 
 	// Schema Change
