@@ -1,4 +1,4 @@
-import { Component, ComponentResolver, EventEmitter, Input, OnInit, Output, ViewContainerRef} from '@angular/core';
+import { Component, ComponentResolver, EventEmitter, Input, AfterViewInit, Output, ViewChild, ViewContainerRef} from '@angular/core';
 import { ROUTER_DIRECTIVES } from '@angular/router';
 
 import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
@@ -30,7 +30,7 @@ import { TabletService } from '../../api/tablet.service';
     MD_BUTTON_DIRECTIVES,
   ],
 })
-export class DialogComponent implements OnInit {
+export class DialogComponent implements AfterViewInit {
   title = 'Vitess Control Panel';
   keyspaces = [];
   extraContentReference: any;
@@ -39,25 +39,22 @@ export class DialogComponent implements OnInit {
   @Input() dialogSettings: DialogSettings;
   @Input() dialogExtraContent: any;
   @Output() close = new EventEmitter();
+  @ViewChild('vtFormWrapper', {read: ViewContainerRef}) vtFormWrapper: any;
 
-   constructor(private componentResolver: ComponentResolver, private vc: ViewContainerRef) {}
+  constructor(private componentResolver: ComponentResolver) {}
 
-  ngOnInit() {
+  ngAfterViewInit() {
     if (this.dialogExtraContent) {
       this.componentResolver.resolveComponent(this.dialogExtraContent).then(factory => {
-        this.extraContentReference = this.vc.createComponent(factory, 0);
+        this.extraContentReference = this.vtFormWrapper.createComponent(factory, 0);
       });
     }
   }
 
-  open(dialogContent) {
-    if (this.dialogExtraContent) {
-      this.loadExtraContent(dialogContent);
-    }
-  }
-
   loadExtraContent(dialogContent) {
-    this.extraContentReference.instance.dialogContent = dialogContent;
+    if (this.dialogExtraContent) {
+      this.extraContentReference.instance.dialogContent = dialogContent;
+    }
   }
 
   typeSelected(paramName, e) {
@@ -65,11 +62,11 @@ export class DialogComponent implements OnInit {
     this.dialogContent.setParam(paramName, e.detail.item.__dom.firstChild.data);
   }
 
-  toggleModal() {
-    this.dialogSettings.openModal = !this.dialogSettings.openModal;
-  }
-
   closeDialog() {
+    if (this.dialogSettings.onCloseFunction) {
+      this.dialogSettings.onCloseFunction(this.dialogContent);
+    }
+    this.dialogSettings.toggleModal();
     this.close.emit({});
   }
 
@@ -78,7 +75,7 @@ export class DialogComponent implements OnInit {
     if (resp.success) {
       this.dialogSettings.actionFunction();
     } else {
-      this.dialogSettings.setMessage('There was a problem preparing ', ': ' + resp.message);
+      this.dialogSettings.setMessage(`There was a problem preparing ${this.dialogContent.getName()}: ${resp.message}`);
     }
     this.dialogSettings.dialogForm = false;
     this.dialogSettings.dialogLog = true;

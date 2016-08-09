@@ -6,6 +6,7 @@ import { KeyspaceComponent } from './dashboard/keyspace.component';
 import { SchemaComponent } from './schema/schema.component';
 import { ShardComponent } from './dashboard/shard.component';
 import { StatusComponent } from './status/status.component';
+import { TabletComponent } from './dashboard/tablet.component';
 import { TasksComponent } from './tasks/tasks.component';
 import { TopoBrowserComponent } from './topo/topo-browser.component';
 
@@ -19,7 +20,7 @@ const routes: Routes = [
   { path: 'topo', component: TopoBrowserComponent },
   { path: 'keyspace', component: KeyspaceComponent},
   { path: 'shard', component: ShardComponent},
-
+  { path: 'tablet', component: TabletComponent}
 ];
 
 export const routing = RouterModule.forRoot(routes);

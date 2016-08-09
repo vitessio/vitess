@@ -1,0 +1,15 @@
+<h3 *ngIf="!tabletReady">Loading...</h3>
+<div *ngIf="tabletReady">
+  <h1>{{tablet.label}}</h1>
+  <div class="vt-action-center">
+    <button md-raised-button (click)="prepareDeleteTablet();dialog.open();">Delete</button>
+    <button md-raised-button (click)="preparePingTablet();dialog.open();">Ping</button>
+    <button md-raised-button (click)="prepareRefreshTablet();dialog.open();">Refresh State</button>
+  </div>
+  <iframe [src]='tabletUrl'></iframe>
+  <paper-dialog #dialog no-cancel-on-outside-click="true" no-cancel-on-esc-key="true">
+    <vt-dialog [(dialogContent)]="dialogContent" [(dialogSettings)]="dialogSettings" (close)="dialog.close();"></vt-dialog>
+  </paper-dialog>
+  <div *ngIf="dialogSettings.openModal" class="vt-popUpContainer" >
+  </div>
+<div>

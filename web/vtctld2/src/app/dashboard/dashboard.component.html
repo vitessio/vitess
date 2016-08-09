@@ -1,3 +1,8 @@
+<h1>Dashboard</h1>
+<div class="vt-action-center">
+  <button md-raised-button (click)="prepareValidate();dialog.open();">Validate</button>
+</div>
+
 <div class="vt-row">
   <div *ngFor="let keyspace of keyspaces" class="vt-card">
     <md-card>
@@ -34,8 +39,8 @@
       </a>
       <md-card-actions>
         <div class="vt-actions-container">
-          <button md-button (click)="blockClicks($event);prepareDelete(keyspace);dialog.open();toggleModal();">Delete</button>
-          <button md-button (click)="blockClicks($event);prepareEdit(keyspace);dialog.open();toggleModal();">Edit</button>
+          <button md-button (click)="prepareDelete(keyspace);dialog.open();">Delete</button>
+          <button md-button (click)="prepareEdit(keyspace);dialog.open();">Edit</button>
         </div>
       </md-card-actions>
     </md-card>
@@ -44,6 +49,6 @@
 <paper-dialog #dialog  no-cancel-on-outside-click="true" no-cancel-on-esc-key="true">
   <vt-dialog [(dialogContent)]="dialogContent" [(dialogSettings)]="dialogSettings" (close)="dialog.close();"></vt-dialog>
 </paper-dialog>
-<vt-add-button (click)="prepareNew();toggleModal();dialog.open()"></vt-add-button>
+<vt-add-button (click)="prepareNew();dialog.open()"></vt-add-button>
 <div *ngIf="dialogSettings.openModal" class="vt-popUpContainer" >
 </div>
