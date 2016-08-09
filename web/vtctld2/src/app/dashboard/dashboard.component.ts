@@ -123,7 +123,7 @@ export class DashboardComponent implements OnInit {
 
   prepareDelete(keyspace: Keyspace) {
     this.dialogSettings = new DialogSettings('Delete', this.deleteKeyspace.bind(this),
-                                             `Delete ${keyspace.name}`, `Are you sure you want to delete ${keyspace.name} ?`);
+                                             `Delete ${keyspace.name}`, `Are you sure you want to delete ${keyspace.name}?`);
     this.dialogSettings.setMessage('Deleted {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.refreshDashboardView.bind(this);
     let flags = new DeleteKeyspaceFlags(keyspace).flags;
