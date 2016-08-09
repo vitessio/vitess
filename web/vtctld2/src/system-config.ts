@@ -8,12 +8,14 @@
 /** Map relative paths to URLs. */
 const map: any = {
   '@angular2-material': 'vendor/@angular2-material',
-  '@angular':           'vendor/@angular',
-  '@vaadin':            'vendor/@vaadin'
- };
+  '@angular':                   'vendor/@angular',
+  'primeng':                    'vendor/primeng',
+  '@vaadin':                    'vendor/@vaadin',
+};
 
 /** User packages configuration. */
 const packages: any = {
+  'primeng':                    { defaultExtension: 'js' },
   'rxjs':                       { defaultExtension: 'js' },
   '@vaadin/angular2-polymer':   { main: 'index.js', defaultExtension: 'js' },
 };
@@ -28,6 +30,9 @@ const materialPkgs: string[] = [
   'tabs',
   'icon',
   'list',
+  'progress-bar',
+  'input',
+  'checkbox',
 ];
 
 materialPkgs.forEach((pkg) => {
@@ -47,6 +52,7 @@ const barrels: string[] = [
   '@angular/router',
   '@angular/platform-browser',
   '@angular/platform-browser-dynamic',
+  '@angular/forms',
 
   // Thirdparty barrels.
   'rxjs',
@@ -76,4 +82,7 @@ System.config({
 });
 
 // Apply the user's configuration.
-System.config({ map, packages });
+System.config({
+    map: map,
+    packages: packages,
+  });

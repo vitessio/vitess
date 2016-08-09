@@ -1,0 +1,28 @@
+.fill-lower-space {
+
+}
+
+.wq-title {
+  text-align: center;
+}
+
+.wq-container {
+  
+}
+
+md-card {
+  margin: 3%;
+}
+
+.progress-bar-container {
+  width: 100%;
+}
+
+.progress-bar-margins {
+  margin: 20px 0;
+}
+
+.progress-bar-spacer {
+  display: inline-block;
+  width: 50px;
+}

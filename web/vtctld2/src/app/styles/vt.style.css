@@ -1,0 +1,62 @@
+.vt-row {
+  display: flex;
+  flex-wrap: wrap;
+  height: 100%;
+}
+.vt-card {
+  display: inline-table;
+  margin-left: 25px;
+  margin-bottom: 10px;
+  margin-top: 10px;
+}
+.stats-container {
+  width: 100%;
+}
+.vt-actions-container{
+  padding-left: 32px;
+  padding-right: 32px;
+}
+.vt-padding{
+  padding-left: 32px;
+  padding-right: 32px;
+}
+paper-dialog{
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -25%);
+  margin: 0;
+}
+.vt-popUpContainer{
+  position: fixed;
+  padding: 0;
+  margin: 0;
+  z-index: 0;
+  bottom: 0;
+  right: 0;
+  min-height: 100vh;
+  min-width: 100vw;
+  top: 0;
+  left: 0;
+  background: rgba(0,0,0,0.6);
+}
+
+.vt-darkLink:link {
+    text-decoration: none;
+    color: black;
+}
+
+.vt-darkLink:visited {
+    text-decoration: none;
+    color: black;
+}
+
+.vt-darkLink:hover {
+    text-decoration: none;
+    color: black;
+}
+
+.vt-darkLink:active {
+    text-decoration: none;
+    color: black;
+}
