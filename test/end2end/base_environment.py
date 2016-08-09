@@ -5,7 +5,7 @@ common to all environments.
 """
 
 import json
-import sharding_utils
+from vttest import sharding_utils
 
 
 class VitessEnvironmentError(Exception):

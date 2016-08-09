@@ -40,10 +40,9 @@ from vttest import environment
 from vttest import local_database
 from vttest import mysql_flavor
 from vttest import init_data_options
+from vttest import sharding_utils
 
 from vtproto import vttest_pb2
-
-import sharding_utils
 
 
 def main(cmdline_options):
@@ -169,9 +168,9 @@ if __name__ == '__main__':
                     help='Comma separated list of keyspaces')
   parser.add_option('--num_shards', default='2',
                     help='Comma separated shard count (one per keyspace)')
-  parser.add_option('--replica_count', default=2,
+  parser.add_option('--replica_count', type='int', default=2,
                     help='Replica tablets per shard (includes master)')
-  parser.add_option('--rdonly_count', default=1,
+  parser.add_option('--rdonly_count', type='int', default=1,
                     help='Rdonly tablets per shard')
   (options, args) = parser.parse_args()
   if options.verbose:
