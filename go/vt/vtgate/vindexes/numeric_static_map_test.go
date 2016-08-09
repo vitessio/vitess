@@ -6,6 +6,7 @@ package vindexes
 
 import (
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/testfiles"
 	"reflect"
 	"testing"
 )
@@ -14,7 +15,7 @@ var numericStaticMap Vindex
 
 func init() {
 	m := make(map[string]string)
-	m["json_path"] = "numeric_static_map_test.json"
+	m["json_path"] = testfiles.Locate("vtgate/numeric_static_map_test.json")
 	numericStaticMap, _ = CreateVindex("numeric_static_map", "numericStaticMap", m)
 }
 

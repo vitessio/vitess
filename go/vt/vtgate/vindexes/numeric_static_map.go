@@ -8,13 +8,14 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"strconv"
 )
 
 // Stores the mapping of keys
-type NumericLookupTable map[int64]int64
+type NumericLookupTable map[uint64]uint64
 
 // Similar to vindex Numeric but first attempts a lookup via a json file
 type NumericStaticMap struct {
@@ -26,12 +27,12 @@ type NumericStaticMap struct {
 func NewNumericStaticMap(name string, params map[string]string) (Vindex, error) {
 	jsonPath, ok := params["json_path"]
 	if !ok {
-		panic("NumericStaticMap: Could not find `json_path` param in vschema")
+		return nil, errors.New("NumericStaticMap: Could not find `json_path` param in vschema")
 	}
 
-	lt, error := loadNumericLookupTable(jsonPath)
-	if error != nil {
-		return nil, error
+	lt, err := loadNumericLookupTable(jsonPath)
+	if err != nil {
+		return nil, err
 	}
 	return &NumericStaticMap{
 		name:   name,
@@ -53,9 +54,9 @@ func (*NumericStaticMap) Cost() int {
 func (vind *NumericStaticMap) Verify(_ VCursor, id interface{}, ksid []byte) (bool, error) {
 	var keybytes [8]byte
 	num, err := getNumber(id)
-	lookupNum, ok := vind.lookup[num]
+	lookupNum, ok := vind.lookup[uint64(num)]
 	if ok {
-		num = lookupNum
+		num = int64(lookupNum)
 	}
 	if err != nil {
 		return false, fmt.Errorf("NumericStaticMap.Verify: %v", err)
@@ -69,16 +70,16 @@ func (vind *NumericStaticMap) Map(_ VCursor, ids []interface{}) ([][]byte, error
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
 		num, err := getNumber(id)
-		lookupNum, ok := vind.lookup[num]
+		lookupNum, ok := vind.lookup[uint64(num)]
 		if ok {
-			num = lookupNum
+			num = int64(lookupNum)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("NumericStaticMap.Map: %v", err)
 		}
 		var keybytes [8]byte
 		binary.BigEndian.PutUint64(keybytes[:], uint64(num))
-		out = append(out, []byte(keybytes[:]))
+		out = append(out, keybytes[:])
 	}
 	return out, nil
 }
@@ -90,8 +91,8 @@ func (vind *NumericStaticMap) ReverseMap(_ VCursor, ksid []byte) (interface{}, e
 	}
 	id := binary.BigEndian.Uint64([]byte(ksid))
 	for k, v := range vind.lookup {
-		if int64(id) == v {
-			id = uint64(vind.lookup[k])
+		if int64(id) == int64(v) {
+			id = vind.lookup[k]
 		}
 	}
 	return id, nil
@@ -102,15 +103,21 @@ func init() {
 }
 
 func loadNumericLookupTable(path string) (NumericLookupTable, error) {
-	var m map[string]int64
-	lt := make(map[int64]int64)
-	data, error := ioutil.ReadFile(path)
-	if error != nil {
-		return lt, error
+	var m map[string]uint64
+	lt := make(map[uint64]uint64)
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return lt, err
 	}
-	error = json.Unmarshal(data, &m)
+	err = json.Unmarshal(data, &m)
+	if err != nil {
+		return lt, err
+	}
 	for k, v := range m {
-		newK, _ := strconv.ParseInt(k, 10, 64)
+		newK, err := strconv.ParseUint(k, 10, 64)
+		if err != nil {
+			return lt, err
+		}
 		lt[newK] = v
 	}
 
