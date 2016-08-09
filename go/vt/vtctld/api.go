@@ -16,6 +16,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/schemamanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -34,6 +35,13 @@ const (
 
 	jsonContentType = "application/json; charset=utf-8"
 )
+
+// HeatmapInfo stores all the needed info to construct the heatmap including data, labels, and tabletAliases
+type heatmapInfo struct {
+	HeatmapLabels  []yLabel
+	HeatmapData    [][]float64
+	HeatmapAliases [][]*topodata.TabletAlias
+}
 
 func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...interface{}) {
 	errMsg := fmt.Sprintf(format, args...)
@@ -281,24 +289,32 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 	// Healthcheck real time status per (cell, keyspace, shard, tablet type).
 	handleCollection("tablet_statuses", func(r *http.Request) (interface{}, error) {
 		targetPath := getItemPath(r.URL.Path)
-		parts := strings.SplitN(targetPath, "/", 4)
-		if len(parts) != 4 {
-			return nil, fmt.Errorf("invalid target path: %q  expected path: <cell>/<keyspace>/<shard>/<type>", targetPath)
+		if targetPath == "" {
+			if err := r.ParseForm(); err != nil {
+				return nil, err
+			}
+			metric := r.FormValue("metric")
+			cell := r.FormValue("cell")
+			keyspace := r.FormValue("keyspace")
+			tabletType := r.FormValue("type")
+			_, err := topoproto.ParseTabletType(tabletType)
+			if err != nil {
+				return nil, fmt.Errorf("invalid tablet type: %v ", tabletType)
+			}
+			if realtimeStats == nil {
+				return nil, fmt.Errorf("realtimeStats not initialized")
+			}
+
+			data, aliases, labels := realtimeStats.tabletStats.heatmapData(keyspace, cell, tabletType, metric)
+			heatmap := heatmapInfo{
+				HeatmapData:    data,
+				HeatmapLabels:  labels,
+				HeatmapAliases: aliases,
+			}
+			return heatmap, nil
 		}
 
-		cell := parts[0]
-		keyspace := parts[1]
-		shard := parts[2]
-		tabletType := parts[3]
-		tabletTypeObj, err := topoproto.ParseTabletType(tabletType)
-		if err != nil {
-			return nil, fmt.Errorf("invalid tablet type: %v ", tabletType)
-		}
-		if realtimeStats == nil {
-			return nil, nil
-		}
-		allUpdates := realtimeStats.tabletStatuses(cell, keyspace, shard, tabletTypeObj.String())
-		return allUpdates, nil
+		return nil, fmt.Errorf("invalid target path: %q  expected path: ?metric=<metric>&keyspace=<keyspace>&cell=<cell>&type=<type>", targetPath)
 	})
 
 	// Schema Change

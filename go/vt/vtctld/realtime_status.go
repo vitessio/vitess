@@ -8,6 +8,8 @@ import (
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // realtimeStats holds the objects needed to obtain realtime health stats of tablets.
@@ -20,7 +22,9 @@ type realtimeStats struct {
 func newRealtimeStats(ts topo.Server) (*realtimeStats, error) {
 	hc := discovery.NewHealthCheck(*vtctl.HealthCheckTimeout, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
 	tabletStatsCache := &tabletStatsCache{
-		statuses: make(map[string]map[string]*discovery.TabletStats),
+		statuses:        make(map[string]map[string]map[string]map[topodatapb.TabletType][]*discovery.TabletStats),
+		statusesByAlias: make(map[string]*discovery.TabletStats),
+		cells:           make(map[string]bool),
 	}
 	// sendDownEvents is set to true here, as we want to receive
 	// Up=False events for a tablet.
@@ -55,8 +59,4 @@ func (r *realtimeStats) Stop() error {
 		}
 	}
 	return nil
-}
-
-func (r *realtimeStats) tabletStatuses(cell string, keyspace string, shard string, tabletType string) map[string]*discovery.TabletStats {
-	return r.tabletStats.tabletStatuses(cell, keyspace, shard, tabletType)
 }
