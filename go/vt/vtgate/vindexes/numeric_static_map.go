@@ -19,8 +19,9 @@ type NumericLookupTable map[uint64]uint64
 
 // Similar to vindex Numeric but first attempts a lookup via a json file
 type NumericStaticMap struct {
-	name   string
-	lookup NumericLookupTable
+	name          string
+	lookup        NumericLookupTable
+	reverseLookup NumericLookupTable
 }
 
 // NewNumericStaticMap creates a NumericStaticMap vindex.
@@ -34,9 +35,16 @@ func NewNumericStaticMap(name string, params map[string]string) (Vindex, error) 
 	if err != nil {
 		return nil, err
 	}
+
+	reverseLt := make(map[uint64]uint64)
+	for k, v := range lt {
+		reverseLt[v] = k
+	}
+
 	return &NumericStaticMap{
-		name:   name,
-		lookup: lt,
+		name:          name,
+		lookup:        lt,
+		reverseLookup: reverseLt,
 	}, nil
 }
 
@@ -57,12 +65,12 @@ func (vind *NumericStaticMap) Verify(_ VCursor, id interface{}, ksid []byte) (bo
 	if err != nil {
 		return false, fmt.Errorf("NumericStaticMap.Verify: %v", err)
 	}
-	
+
 	lookupNum, ok := vind.lookup[uint64(num)]
 	if ok {
 		num = int64(lookupNum)
 	}
-	
+
 	binary.BigEndian.PutUint64(keybytes[:], uint64(num))
 	return bytes.Compare(keybytes[:], ksid) == 0, nil
 }
@@ -92,10 +100,9 @@ func (vind *NumericStaticMap) ReverseMap(_ VCursor, ksid []byte) (interface{}, e
 		return nil, fmt.Errorf("NumericStaticMap.ReverseMap: length of keyspace is not 8: %d", len(ksid))
 	}
 	id := binary.BigEndian.Uint64([]byte(ksid))
-	for k, v := range vind.lookup {
-		if int64(id) == int64(v) {
-			id = vind.lookup[k]
-		}
+	id, ok := vind.reverseLookup[id]
+	if !ok {
+		return nil, fmt.Errorf("NumericStaticMap.ReverseMap: could not find key")
 	}
 	return id, nil
 }
