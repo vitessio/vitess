@@ -54,13 +54,15 @@ func (*NumericStaticMap) Cost() int {
 func (vind *NumericStaticMap) Verify(_ VCursor, id interface{}, ksid []byte) (bool, error) {
 	var keybytes [8]byte
 	num, err := getNumber(id)
+	if err != nil {
+		return false, fmt.Errorf("NumericStaticMap.Verify: %v", err)
+	}
+	
 	lookupNum, ok := vind.lookup[uint64(num)]
 	if ok {
 		num = int64(lookupNum)
 	}
-	if err != nil {
-		return false, fmt.Errorf("NumericStaticMap.Verify: %v", err)
-	}
+	
 	binary.BigEndian.PutUint64(keybytes[:], uint64(num))
 	return bytes.Compare(keybytes[:], ksid) == 0, nil
 }
