@@ -24,6 +24,10 @@ type NumericStaticMap struct {
 	reverseLookup NumericLookupTable
 }
 
+func init() {
+	Register("numeric_static_map", NewNumericStaticMap)
+}
+
 // NewNumericStaticMap creates a NumericStaticMap vindex.
 func NewNumericStaticMap(name string, params map[string]string) (Vindex, error) {
 	jsonPath, ok := params["json_path"]
@@ -92,23 +96,6 @@ func (vind *NumericStaticMap) Map(_ VCursor, ids []interface{}) ([][]byte, error
 		out = append(out, keybytes[:])
 	}
 	return out, nil
-}
-
-// ReverseMap returns the associated id for the ksid.
-func (vind *NumericStaticMap) ReverseMap(_ VCursor, ksid []byte) (interface{}, error) {
-	if len(ksid) != 8 {
-		return nil, fmt.Errorf("NumericStaticMap.ReverseMap: length of keyspace is not 8: %d", len(ksid))
-	}
-	id := binary.BigEndian.Uint64([]byte(ksid))
-	lookupNum, ok := vind.reverseLookup[id]
-	if ok {
-		id = lookupNum
-	}
-	return id, nil
-}
-
-func init() {
-	Register("numeric_static_map", NewNumericStaticMap)
 }
 
 func loadNumericLookupTable(path string) (NumericLookupTable, error) {

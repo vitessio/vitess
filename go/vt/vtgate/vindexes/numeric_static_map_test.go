@@ -83,21 +83,3 @@ func TestNumericStaticMapVerifyBadData(t *testing.T) {
 		t.Errorf("numericStaticMap.Map: %v, want %v", err, want)
 	}
 }
-
-func TestNumericStaticMapReverseMap(t *testing.T) {
-	got, err := numericStaticMap.(Reversible).ReverseMap(nil, []byte("\x00\x00\x00\x00\x00\x00\x00\x01"))
-	if err != nil {
-		t.Error(err)
-	}
-	if got.(uint64) != 1 {
-		t.Errorf("ReverseMap(): %+v, want 1", got)
-	}
-}
-
-func TestNumericStaticMapReverseMapBadData(t *testing.T) {
-	_, err := numericStaticMap.(Reversible).ReverseMap(nil, []byte("aa"))
-	want := `NumericStaticMap.ReverseMap: length of keyspace is not 8: 2`
-	if err == nil || err.Error() != want {
-		t.Errorf("numericStaticMap.Map: %v, want %v", err, want)
-	}
-}
