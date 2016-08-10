@@ -16,7 +16,6 @@ import (
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/schemamanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -35,13 +34,6 @@ const (
 
 	jsonContentType = "application/json; charset=utf-8"
 )
-
-// HeatmapInfo stores all the needed info to construct the heatmap including data, labels, and tabletAliases
-type heatmapInfo struct {
-	HeatmapLabels  []yLabel
-	HeatmapData    [][]float64
-	HeatmapAliases [][]*topodata.TabletAlias
-}
 
 func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...interface{}) {
 	errMsg := fmt.Sprintf(format, args...)
@@ -293,24 +285,21 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 			if err := r.ParseForm(); err != nil {
 				return nil, err
 			}
-			metric := r.FormValue("metric")
-			cell := r.FormValue("cell")
+
 			keyspace := r.FormValue("keyspace")
+			cell := r.FormValue("cell")
 			tabletType := r.FormValue("type")
 			_, err := topoproto.ParseTabletType(tabletType)
 			if err != nil {
 				return nil, fmt.Errorf("invalid tablet type: %v ", tabletType)
 			}
+			metric := r.FormValue("metric")
+
 			if realtimeStats == nil {
 				return nil, fmt.Errorf("realtimeStats not initialized")
 			}
 
-			data, aliases, labels := realtimeStats.tabletStats.heatmapData(keyspace, cell, tabletType, metric)
-			heatmap := heatmapInfo{
-				HeatmapData:    data,
-				HeatmapLabels:  labels,
-				HeatmapAliases: aliases,
-			}
+			heatmap := realtimeStats.heatmapData(keyspace, cell, tabletType, metric)
 			return heatmap, nil
 		}
 

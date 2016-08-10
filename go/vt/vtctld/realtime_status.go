@@ -8,30 +8,23 @@ import (
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
-
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // realtimeStats holds the objects needed to obtain realtime health stats of tablets.
 type realtimeStats struct {
-	healthCheck  discovery.HealthCheck
-	tabletStats  *tabletStatsCache
+	healthCheck discovery.HealthCheck
+	*tabletStatsCache
 	cellWatchers []*discovery.TopologyWatcher
 }
 
 func newRealtimeStats(ts topo.Server) (*realtimeStats, error) {
 	hc := discovery.NewHealthCheck(*vtctl.HealthCheckTimeout, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
-	tabletStatsCache := &tabletStatsCache{
-		statuses:        make(map[string]map[string]map[string]map[topodatapb.TabletType][]*discovery.TabletStats),
-		statusesByAlias: make(map[string]*discovery.TabletStats),
-		cells:           make(map[string]bool),
-	}
+	tabletStatsCache := newTabletStatsCache()
 	// sendDownEvents is set to true here, as we want to receive
 	// Up=False events for a tablet.
 	hc.SetListener(tabletStatsCache, true)
 	r := &realtimeStats{
 		healthCheck: hc,
-		tabletStats: tabletStatsCache,
 	}
 
 	// Get the list of all tablets from all cells and monitor the topology for added or removed tablets with a CellTabletsWatcher.

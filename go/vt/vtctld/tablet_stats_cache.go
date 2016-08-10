@@ -1,9 +1,7 @@
 package vtctld
 
 import (
-	"reflect"
 	"sort"
-	"strconv"
 	"sync"
 
 	"github.com/youtube/vitess/go/vt/discovery"
@@ -14,12 +12,25 @@ import (
 )
 
 // yLabel is used to keep track of the outer and inner labels of the heatmap.
-// For example: { label: 'cell1', nestedLabels: ['2', 'master', '1', 'replica', '1'] } means that
-// the heatmap would have an outer label of cell1 with rowspan of 2 and two inner labels of
-// master and replica both with rowspan of 1.
 type yLabel struct {
-	Label        string
-	NestedLabels []string
+	Label        label
+	NestedLabels []label
+}
+
+// label is used to keep track of one label of a heatmap and how many rows it should span.
+type label struct {
+	Name    string
+	Rowspan int
+}
+
+// heatmap stores all the needed info to construct the heatmap.
+type heatmap struct {
+	// Labels has the outer and inner labels for each row.
+	Labels []yLabel
+	// Data is a 2D array of values of the specified metric.
+	Data [][]float64
+	// Aliases is a 2D array holding references to the tablet aliases.
+	Aliases [][]*topodata.TabletAlias
 }
 
 type byTabletUid []*discovery.TabletStats
@@ -28,7 +39,7 @@ func (a byTabletUid) Len() int           { return len(a) }
 func (a byTabletUid) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byTabletUid) Less(i, j int) bool { return a[i].Tablet.Alias.Uid < a[j].Tablet.Alias.Uid }
 
-const tabletMissing int = -1
+const tabletMissing = -1
 
 // tabletStatsCache holds the most recent status update received for
 // each tablet. The tablets are indexed by uid, so it is different
@@ -44,8 +55,16 @@ type tabletStatsCache struct {
 	// statusesByAlias is a copy of statuses and will be updated simultaneously.
 	// The first key is the string representation of the tablet alias.
 	statusesByAlias map[string]*discovery.TabletStats
-	// Cells keeps track of the cells found so far.
-	cells map[string]bool
+	// cells keeps track of the cells found so far.
+	cells map[string]int
+}
+
+func newTabletStatsCache() *tabletStatsCache {
+	return &tabletStatsCache{
+		statuses:        make(map[string]map[string]map[string]map[topodatapb.TabletType][]*discovery.TabletStats),
+		statusesByAlias: make(map[string]*discovery.TabletStats),
+		cells:           make(map[string]int),
+	}
 }
 
 // StatsUpdate is part of the discovery.HealthCheckStatsListener interface.
@@ -57,83 +76,100 @@ func (c *tabletStatsCache) StatsUpdate(stats *discovery.TabletStats) {
 	keyspace := stats.Target.Keyspace
 	shard := stats.Target.Shard
 	cell := stats.Tablet.Alias.Cell
-	c.cells[cell] = true
 	tabletType := stats.Target.TabletType
 
-	if stats.Up {
-		_, ok := c.statusesByAlias[stats.Tablet.Alias.String()]
-		if ok {
-			// If the tablet already exists, then just update the stats of that tablet.
-			for index, tabletStat := range c.statuses[keyspace][shard][cell][tabletType] {
-				if reflect.DeepEqual(stats.Tablet.Alias, tabletStat.Tablet.Alias) {
-					c.statuses[keyspace][shard][cell][tabletType][index] = stats
-				}
-			}
-			c.statusesByAlias[stats.Tablet.Alias.String()] = stats
-		} else {
-			// If the tablet isn't already there, add it to the map.
-			shards, ok := c.statuses[keyspace]
-			if !ok {
-				shards = make(map[string]map[string]map[topodatapb.TabletType][]*discovery.TabletStats)
-				c.statuses[keyspace] = shards
-			}
-
-			cells, ok := c.statuses[keyspace][shard]
-			if !ok {
-				cells = make(map[string]map[topodatapb.TabletType][]*discovery.TabletStats)
-				c.statuses[keyspace][shard] = cells
-			}
-
-			types, ok := c.statuses[keyspace][shard][cell]
-			if !ok {
-				types = make(map[topodatapb.TabletType][]*discovery.TabletStats)
-				c.statuses[keyspace][shard][cell] = types
-			}
-
-			tablets, ok := c.statuses[keyspace][shard][cell][tabletType]
-			if !ok {
-				if !stats.Up {
-					// We're told a tablet is gone, and we don't have
-					// a map for it anyway, nothing to do.
-					return
-				}
-				tablets = make([]*discovery.TabletStats, 0)
-				c.statuses[keyspace][shard][cell][tabletType] = tablets
-			}
-			c.statuses[keyspace][shard][cell][tabletType] = append(c.statuses[keyspace][shard][cell][tabletType], stats)
-			sort.Sort(byTabletUid(c.statuses[keyspace][shard][cell][tabletType]))
-
-			c.statusesByAlias[stats.Tablet.Alias.String()] = stats
+	aliasKey := tabletToMapKey(stats)
+	ts, ok := c.statusesByAlias[aliasKey]
+	if !stats.Up {
+		if !ok {
+			// Tablet doesn't exist and isn't tracked so just return.
+			return
 		}
-	} else {
-		// If !Stats.Up then remove the stats from the cache.
+		// The tablet exists but shouldn't be tracked so just delete it.
 		c.statuses[keyspace][shard][cell][tabletType] = remove(c.statuses[keyspace][shard][cell][tabletType], stats.Tablet.Alias)
-		delete(c.statusesByAlias, stats.Tablet.Alias.String())
+		delete(c.statusesByAlias, aliasKey)
+		c.cells[cell] = c.cells[cell] - 1
+		if c.cells[cell] == 0 {
+			delete(c.cells, cell)
+		}
+		return
 	}
+
+	if !ok {
+		// Tablet isn't tracked yet so just add it.
+		shards, ok := c.statuses[keyspace]
+		if !ok {
+			shards = make(map[string]map[string]map[topodatapb.TabletType][]*discovery.TabletStats)
+			c.statuses[keyspace] = shards
+		}
+
+		cells, ok := c.statuses[keyspace][shard]
+		if !ok {
+			cells = make(map[string]map[topodatapb.TabletType][]*discovery.TabletStats)
+			c.statuses[keyspace][shard] = cells
+		}
+
+		types, ok := c.statuses[keyspace][shard][cell]
+		if !ok {
+			types = make(map[topodatapb.TabletType][]*discovery.TabletStats)
+			c.statuses[keyspace][shard][cell] = types
+		}
+
+		tablets, ok := c.statuses[keyspace][shard][cell][tabletType]
+		if !ok {
+			tablets = make([]*discovery.TabletStats, 0)
+			c.statuses[keyspace][shard][cell][tabletType] = tablets
+		}
+
+		c.statuses[keyspace][shard][cell][tabletType] = append(c.statuses[keyspace][shard][cell][tabletType], stats)
+		sort.Sort(byTabletUid(c.statuses[keyspace][shard][cell][tabletType]))
+		c.statusesByAlias[aliasKey] = stats
+		_, ok = cells[cell]
+		if !ok {
+			c.cells[cell] = 0
+		} else {
+			c.cells[cell] = c.cells[cell] + 1
+		}
+		return
+	}
+
+	// Tablet already exists so just update it in the cache.
+	*ts = *stats
+}
+
+func tabletToMapKey(stats *discovery.TabletStats) string {
+	return stats.Tablet.Alias.String()
 }
 
 // remove takes in an array and returns it with the specified element removed
 // (leaves the array unchanged if element isn't in the array).
 func remove(tablets []*discovery.TabletStats, tabletAlias *topodata.TabletAlias) []*discovery.TabletStats {
-	for index, tablet := range tablets {
-		if topoproto.TabletAliasEqual(tablet.Tablet.Alias, tabletAlias) {
-			if len(tablets) == index+1 {
-				// The element to be removed is the last element in the slice so just remove it.
-				tablets = append(tablets[0:index])
-			} else {
-				// There are more elements after the element to be removed so copy all elements before and after.
-				tablets = append(tablets[0:index], tablets[(index+1):]...)
-			}
-			return tablets
+	newTablets := tablets[:0]
+	for _, tablet := range tablets {
+		if !topoproto.TabletAliasEqual(tablet.Tablet.Alias, tabletAlias) {
+			newTablets = append(newTablets, tablet)
 		}
 	}
-	return tablets
+	return newTablets
 }
 
 // heatmapData returns a 2D array of data (based on the specified metric) as well as the labels for the heatmap.
-func (c *tabletStatsCache) heatmapData(keyspace, cell, tabletType, metric string) ([][]float64, [][]*topodata.TabletAlias, []yLabel) {
+func (c *tabletStatsCache) heatmapData(keyspace, cell, tabletType, metric string) heatmap {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	//Get the metric data
+	var metricFunc func(stats *discovery.TabletStats) float64
+	switch metric {
+	case "lag":
+		metricFunc = replicationLag
+	case "cpu":
+		metricFunc = cpu
+	case "qps":
+		metricFunc = qps
+	default:
+		return heatmap{}
+	}
 
 	var cells []string
 	for cell := range c.cells {
@@ -155,9 +191,7 @@ func (c *tabletStatsCache) heatmapData(keyspace, cell, tabletType, metric string
 	var yLabels []yLabel
 	// The loop goes through every outer label (in this case, cell).
 	for _, cell := range cells {
-		perCellYLabel := yLabel{
-			Label: cell,
-		}
+		perCellYLabel := yLabel{}
 		labelSpan := 0
 
 		// This loop goes through every nested label (in this case, tablet type).
@@ -186,24 +220,21 @@ func (c *tabletStatsCache) heatmapData(keyspace, cell, tabletType, metric string
 				for tabletIndex := 0; tabletIndex < maxRowLength; tabletIndex++ {
 					// If the key doesn't exist then the tablet must not exist so that data is set to -1 (tabletMissing).
 					if tabletIndex < len(c.statuses[keyspace][shard][cell][tabletType]) {
-						dataRowsPerType[tabletIndex][shardIndex] = metricValue(c.statuses[keyspace][shard][cell][tabletType][tabletIndex], metric)
+						dataRowsPerType[tabletIndex][shardIndex] = metricFunc(c.statuses[keyspace][shard][cell][tabletType][tabletIndex])
 						aliasRowsPerType[tabletIndex][shardIndex] = c.statuses[keyspace][shard][cell][tabletType][tabletIndex].Tablet.Alias
 					} else {
-						dataRowsPerType[tabletIndex][shardIndex] = float64(tabletMissing)
+						dataRowsPerType[tabletIndex][shardIndex] = tabletMissing
 						aliasRowsPerType[tabletIndex][shardIndex] = nil
 					}
 
 					// Adding the labels for the yaxis only if it is the first column.
-					if shardIndex == 0 {
-						// Adding the label to the array.
-						if tabletIndex == 0 {
-							perCellYLabel.NestedLabels = append(perCellYLabel.NestedLabels, tabletType.String())
+					if shardIndex == 0 && tabletIndex == (maxRowLength-1) {
+						tempLabel := label{
+							Name:    tabletType.String(),
+							Rowspan: maxRowLength,
 						}
-						// Adding the number of rows needed for the previously added label.
-						if tabletIndex == (maxRowLength - 1) {
-							perCellYLabel.NestedLabels = append(perCellYLabel.NestedLabels, strconv.FormatInt(int64(maxRowLength), 10))
-							labelSpan += maxRowLength
-						}
+						perCellYLabel.NestedLabels = append(perCellYLabel.NestedLabels, tempLabel)
+						labelSpan += maxRowLength
 					}
 				}
 			}
@@ -213,23 +244,32 @@ func (c *tabletStatsCache) heatmapData(keyspace, cell, tabletType, metric string
 				heatmapTabletAliases = append(heatmapTabletAliases, aliasRowsPerType[i])
 			}
 		}
-		perCellYLabel.NestedLabels = append([]string{strconv.FormatInt(int64(labelSpan), 10)}, perCellYLabel.NestedLabels...)
+		perCellYLabel.Label = label{
+			Name:    cell,
+			Rowspan: labelSpan,
+		}
 		yLabels = append(yLabels, perCellYLabel)
 	}
 
-	return heatmapData, heatmapTabletAliases, yLabels
+	newHeatmap := heatmap{
+		Data:    heatmapData,
+		Labels:  yLabels,
+		Aliases: heatmapTabletAliases,
+	}
+
+	return newHeatmap
 }
 
-func metricValue(stat *discovery.TabletStats, metric string) float64 {
-	switch metric {
-	case "lag":
-		return float64(stat.Stats.SecondsBehindMaster)
-	case "cpu":
-		return stat.Stats.CpuUsage
-	case "qps":
-		return stat.Stats.Qps
-	}
-	return -1
+func replicationLag(stat *discovery.TabletStats) float64 {
+	return float64(stat.Stats.SecondsBehindMaster)
+}
+
+func cpu(stat *discovery.TabletStats) float64 {
+	return stat.Stats.CpuUsage
+}
+
+func qps(stat *discovery.TabletStats) float64 {
+	return stat.Stats.Qps
 }
 
 // compile-time interface check

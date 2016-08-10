@@ -12,18 +12,14 @@ import (
 )
 
 func TestStatsUpdate(t *testing.T) {
-	tabletStatsCache := tabletStatsCache{
-		statuses:        make(map[string]map[string]map[string]map[topodatapb.TabletType][]*discovery.TabletStats),
-		statusesByAlias: make(map[string]*discovery.TabletStats),
-		cells:           make(map[string]bool),
-	}
+	tabletStatsCache := newTabletStatsCache()
 
-	// Creating some tablets with their latest health information
+	// Creating some tablets with their latest health information.
 	tablet1Stats1 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 200)
 	tablet1Stats2 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 200)
 	tablet2Stats1 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 100)
 
-	// Test 1: tablet1's stats should be updated with the one received by the HealthCheck object
+	// Test 1: tablet1's stats should be updated with the one received by the HealthCheck object.
 	tabletStatsCache.StatsUpdate(tablet1Stats1)
 	results1 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
 	got1 := results1[0]
@@ -41,7 +37,7 @@ func TestStatsUpdate(t *testing.T) {
 		t.Errorf("got: %v, want: %v", got2, want2)
 	}
 
-	// Test 3: tablet2's stats should be updated with the one received by the HealthCheck object,
+	// Test 3: tablet2's stats should be updated with the one received by the HealthCheck object
 	// leaving tablet1's stats unchanged.
 	tabletStatsCache.StatsUpdate(tablet2Stats1)
 	results3 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
@@ -54,11 +50,18 @@ func TestStatsUpdate(t *testing.T) {
 	results4 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
 	got4 := results4[1]
 	want4 := tablet1Stats2
-	if got4 != want4 {
+	if !reflect.DeepEqual(got1, want1) {
 		t.Errorf("got: %v, want: %v", got4, want4)
 	}
 
-	// Test 4: tablet2 should be removed from all lists upon receiving an update that
+	// Test 5: Check the list of cells to ensure it has the right count.
+	got5 := tabletStatsCache.cells["cell1"]
+	want5 := 2
+	if got5 != want5 {
+		t.Errorf("got: %v, want: %v", got5, want5)
+	}
+
+	// Test 5: tablet2 should be removed from all lists upon receiving an update that
 	// serving status has changed.
 	tablet2Stats1.Up = false
 	tabletStatsCache.StatsUpdate(tablet2Stats1)
@@ -71,7 +74,22 @@ func TestStatsUpdate(t *testing.T) {
 
 	_, ok := tabletStatsCache.statusesByAlias[tablet2Stats1.Tablet.Alias.String()]
 	if ok {
-		t.Errorf("Tablet not deleted from statusesByAliases")
+		t.Errorf("got: %v, want: %v", got5, want5)
+	}
+
+	// Test 6: Check to see that the tablet was removed from cell count.
+	got6 := tabletStatsCache.cells["cell1"]
+	want6 := 1
+	if got6 != want6 {
+		t.Errorf("got: %v, want: %v", got5, want5)
+	}
+
+	// Test 7: The cell entry was deleted when there are no more entries.
+	tablet1Stats2.Up = false
+	tabletStatsCache.StatsUpdate(tablet1Stats2)
+	_, ok = tabletStatsCache.cells["cell1"]
+	if ok {
+		t.Errorf("not deleted from cells")
 	}
 }
 
@@ -90,11 +108,8 @@ func TestHeatmapData(t *testing.T) {
 	ts11 := tabletStats("cell2", "ks1", "80-", topodatapb.TabletType_MASTER, 1100)
 	ts12 := tabletStats("cell2", "ks1", "80-", topodatapb.TabletType_RDONLY, 1200)
 
-	tabletStatsCache := tabletStatsCache{
-		statuses:        make(map[string]map[string]map[string]map[topodatapb.TabletType][]*discovery.TabletStats),
-		statusesByAlias: make(map[string]*discovery.TabletStats),
-		cells:           make(map[string]bool),
-	}
+	tabletStatsCache := newTabletStatsCache()
+
 	tabletStatsCache.StatsUpdate(ts1)
 	tabletStatsCache.StatsUpdate(ts2)
 	tabletStatsCache.StatsUpdate(ts3)
@@ -109,7 +124,8 @@ func TestHeatmapData(t *testing.T) {
 	tabletStatsCache.StatsUpdate(ts12)
 
 	// Checking that the heatmap data is returned correctly for the following view: (keyspace="ks1", cell=all, type=all).
-	gotData, gotTabletAliases, gotLabels := tabletStatsCache.heatmapData("ks1", "all", "all", "lag")
+	heatmap := tabletStatsCache.heatmapData("ks1", "all", "all", "lag")
+	gotData, gotTabletAliases, gotLabels := heatmap.Data, heatmap.Aliases, heatmap.Labels
 	wantData := [][]float64{
 		{float64(ts1.Stats.SecondsBehindMaster), float64(ts7.Stats.SecondsBehindMaster)},
 		{float64(ts2.Stats.SecondsBehindMaster), float64(ts8.Stats.SecondsBehindMaster)},
@@ -132,13 +148,20 @@ func TestHeatmapData(t *testing.T) {
 	}
 	wantLabels := []yLabel{
 		{
-			Label: "cell1",
-			NestedLabels: []string{"5", topodatapb.TabletType_MASTER.String(), "1", topodatapb.TabletType_REPLICA.String(),
-				"2", topodatapb.TabletType_RDONLY.String(), "2"},
+			Label: label{Name: "cell1", Rowspan: 5},
+			NestedLabels: []label{
+				{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
+				{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 2},
+				{Name: topodatapb.TabletType_RDONLY.String(), Rowspan: 2},
+			},
 		},
 		{
-			Label:        "cell2",
-			NestedLabels: []string{"3", topodatapb.TabletType_MASTER.String(), "1", topodatapb.TabletType_REPLICA.String(), "1", topodatapb.TabletType_RDONLY.String(), "1"},
+			Label: label{Name: "cell2", Rowspan: 3},
+			NestedLabels: []label{
+				{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
+				{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 1},
+				{Name: topodatapb.TabletType_RDONLY.String(), Rowspan: 1},
+			},
 		},
 	}
 
@@ -155,7 +178,7 @@ func TestHeatmapData(t *testing.T) {
 	}
 }
 
-// tabletStats will constscovery.TabletStats object.
+// tabletStats will create a discovery.TabletStats object.
 func tabletStats(cell, keyspace, shard string, tabletType topodatapb.TabletType, uid uint32) *discovery.TabletStats {
 	target := &querypb.Target{
 		Keyspace:   keyspace,
