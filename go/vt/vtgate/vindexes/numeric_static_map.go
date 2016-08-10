@@ -19,9 +19,8 @@ type NumericLookupTable map[uint64]uint64
 
 // Similar to vindex Numeric but first attempts a lookup via a json file
 type NumericStaticMap struct {
-	name          string
-	lookup        NumericLookupTable
-	reverseLookup NumericLookupTable
+	name   string
+	lookup NumericLookupTable
 }
 
 func init() {
@@ -40,15 +39,9 @@ func NewNumericStaticMap(name string, params map[string]string) (Vindex, error) 
 		return nil, err
 	}
 
-	reverseLt := make(map[uint64]uint64)
-	for k, v := range lt {
-		reverseLt[v] = k
-	}
-
 	return &NumericStaticMap{
-		name:          name,
-		lookup:        lt,
-		reverseLookup: reverseLt,
+		name:   name,
+		lookup: lt,
 	}, nil
 }
 
