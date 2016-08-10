@@ -24,7 +24,8 @@ func newRealtimeStats(ts topo.Server) (*realtimeStats, error) {
 	// Up=False events for a tablet.
 	hc.SetListener(tabletStatsCache, true)
 	r := &realtimeStats{
-		healthCheck: hc,
+		healthCheck:      hc,
+		tabletStatsCache: tabletStatsCache,
 	}
 
 	// Get the list of all tablets from all cells and monitor the topology for added or removed tablets with a CellTabletsWatcher.

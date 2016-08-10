@@ -19,22 +19,21 @@ func TestStatsUpdate(t *testing.T) {
 	tablet1Stats2 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 200)
 	tablet2Stats1 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 100)
 
-	// Test 1: tablet1's stats should be updated with the one received by the HealthCheck object.
+	// Insert tablet1.
 	tabletStatsCache.StatsUpdate(tablet1Stats1)
 	results1 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
 	if got, want := results1[0], tablet1Stats1; !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %v, want: %v", got, want)
 	}
 
-	// Test 2: tablet1's stats should be updated with the new one received by the HealthCheck object.
+	// Update tablet1.
 	tabletStatsCache.StatsUpdate(tablet1Stats2)
 	results2 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
 	if got, want := results2[0], tablet1Stats2; !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %v, want: %v", got, want)
 	}
 
-	// Test 3: tablet2's stats should be updated with the one received by the HealthCheck object
-	// leaving tablet1's stats unchanged.
+	// Insert tablet. List of tablets will be resorted.
 	tabletStatsCache.StatsUpdate(tablet2Stats1)
 	results3 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
 	if got, want := results3[0], tablet2Stats1; !reflect.DeepEqual(got, want) {
@@ -46,33 +45,32 @@ func TestStatsUpdate(t *testing.T) {
 		t.Errorf("got: %v, want: %v", got, want)
 	}
 
-	// Test 5: Check the list of cells to ensure it has the right count.
+	// Check tablet count in cell1.
 	if got, want := tabletStatsCache.tabletCountsByCell["cell1"], 2; got != want {
 		t.Errorf("got: %v, want: %v", got, want)
 	}
 
-	// Test 5: tablet2 should be removed from all lists upon receiving an update that
-	// serving status has changed.
+	// Delete tablet2.
 	tablet2Stats1.Up = false
 	tabletStatsCache.StatsUpdate(tablet2Stats1)
 	results5 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
 	for _, stat := range results5 {
 		if reflect.DeepEqual(stat, tablet2Stats1) {
-			t.Errorf("not deleleted from statuses")
+			t.Errorf("not deleleted from statusesByAliases")
 		}
 	}
 
 	_, ok := tabletStatsCache.statusesByAlias[tablet2Stats1.Tablet.Alias.String()]
 	if ok {
-		t.Errorf("not deleted from statuses")
+		t.Errorf("not deleted from statusesByAliases")
 	}
 
-	// Test 6: Check to see that the tablet was removed from cell count.
+	// Check tablet count in cell1.
 	if got, want := tabletStatsCache.tabletCountsByCell["cell1"], 1; got != want {
 		t.Errorf("got: %v, want: %v", got, want)
 	}
 
-	// Test 7: The cell entry was deleted when there are no more entries.
+	// Delete tablet1. List of known cells should be empty now.
 	tablet1Stats2.Up = false
 	tabletStatsCache.StatsUpdate(tablet1Stats2)
 	_, ok = tabletStatsCache.tabletCountsByCell["cell1"]

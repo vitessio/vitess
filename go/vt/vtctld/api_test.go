@@ -11,11 +11,9 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -81,29 +79,14 @@ func TestAPI(t *testing.T) {
 	realtimeStats := newRealtimeStatsForTesting()
 	initAPI(ctx, ts, actionRepo, realtimeStats)
 
-	target := &querypb.Target{
-		Keyspace:   "ks1",
-		Shard:      "-80",
-		TabletType: topodatapb.TabletType_REPLICA,
-	}
-	stats := &querypb.RealtimeStats{
-		HealthError:         "",
-		SecondsBehindMaster: 2,
-		BinlogPlayersCount:  0,
-		CpuUsage:            12.1,
-		Qps:                 5.6,
-	}
-	tabletStats := &discovery.TabletStats{
-		Key:     "key1",
-		Tablet:  &tablet1,
-		Target:  target,
-		Up:      true,
-		Serving: true,
-		TabletExternallyReparentedTimestamp: 5,
-		Stats:     stats,
-		LastError: nil,
-	}
-	realtimeStats.tabletStats.StatsUpdate(tabletStats)
+	ts1 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 100)
+	ts2 := tabletStats("cell1", "ks1", "80-", topodatapb.TabletType_RDONLY, 200)
+	ts3 := tabletStats("cell2", "ks1", "80-", topodatapb.TabletType_REPLICA, 300)
+	ts4 := tabletStats("cell2", "ks1", "-80", topodatapb.TabletType_RDONLY, 400)
+	realtimeStats.StatsUpdate(ts1)
+	realtimeStats.StatsUpdate(ts2)
+	realtimeStats.StatsUpdate(ts3)
+	realtimeStats.StatsUpdate(ts4)
 
 	// Test cases.
 	table := []struct {
@@ -164,9 +147,14 @@ func TestAPI(t *testing.T) {
 			}`},
 
 		//Tablet Updates
-		{"GET", "tablet_statuses/cell1/ks1/-80/REPLICA", `{"100":{"Key":"key1","Tablet":{"alias":{"cell":"cell1","uid":100},"port_map":{"vt":100},"keyspace":"ks1","shard":"-80","key_range":{"end":"gA=="},"type":2},"Name":"","Target":{"keyspace":"ks1","shard":"-80","tablet_type":2},"Up":true,"Serving":true,"TabletExternallyReparentedTimestamp":5,"Stats":{"seconds_behind_master":2,"cpu_usage":12.1,"qps":5.6},"LastError":null}}`},
-		{"GET", "tablet_statuses/cell1/ks1/replica", "can't get tablet_statuses: invalid target path: \"cell1/ks1/replica\"  expected path: <cell>/<keyspace>/<shard>/<type>"},
-		{"GET", "tablet_statuses/cell1/ks1/-80/hello", "can't get tablet_statuses: invalid tablet type: hello"},
+		{"GET", "tablet_statuses/?metric=lag&keyspace=ks1&cell=cell1&type=REPLICA", `{
+			"Labels":[{"Label":{"Name":"cell1","Rowspan":2},"NestedLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]},
+			          {"Label":{"Name":"cell2","Rowspan":2},"NestedLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]}],
+			"Data":[[100,-1],[-1,200],[-1,300],[400,-1]],
+			"Aliases":[[{"cell":"cell1","uid":100},null],[null,{"cell":"cell1","uid":200}],[null,{"cell":"cell2","uid":300}],[{"cell":"cell2","uid":400},null]]}`,
+		},
+		{"GET", "tablet_statuses/lag/cell1/REPLICA", "can't get tablet_statuses: invalid target path: \"lag/cell1/REPLICA\"  expected path: ?metric=<metric>&keyspace=<keyspace>&cell=<cell>&type=<type>"},
+		{"GET", "tablet_statuses/?metric=lag&keyspace=ks1&cell=cell1&type=hello", "can't get tablet_statuses: invalid tablet type: hello"},
 	}
 
 	for _, in := range table {

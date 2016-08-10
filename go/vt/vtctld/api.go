@@ -281,11 +281,12 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 	// Healthcheck real time status per (cell, keyspace, shard, tablet type).
 	handleCollection("tablet_statuses", func(r *http.Request) (interface{}, error) {
 		targetPath := getItemPath(r.URL.Path)
+
+		// Get the heatmap data based on query parameters.
 		if targetPath == "" {
 			if err := r.ParseForm(); err != nil {
 				return nil, err
 			}
-
 			keyspace := r.FormValue("keyspace")
 			cell := r.FormValue("cell")
 			tabletType := r.FormValue("type")
