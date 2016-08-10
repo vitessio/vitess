@@ -80,12 +80,12 @@ func (vind *NumericStaticMap) Map(_ VCursor, ids []interface{}) ([][]byte, error
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
 		num, err := getNumber(id)
+		if err != nil {
+			return nil, fmt.Errorf("NumericStaticMap.Map: %v", err)
+		}
 		lookupNum, ok := vind.lookup[uint64(num)]
 		if ok {
 			num = int64(lookupNum)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("NumericStaticMap.Map: %v", err)
 		}
 		var keybytes [8]byte
 		binary.BigEndian.PutUint64(keybytes[:], uint64(num))
@@ -100,9 +100,9 @@ func (vind *NumericStaticMap) ReverseMap(_ VCursor, ksid []byte) (interface{}, e
 		return nil, fmt.Errorf("NumericStaticMap.ReverseMap: length of keyspace is not 8: %d", len(ksid))
 	}
 	id := binary.BigEndian.Uint64([]byte(ksid))
-	id, ok := vind.reverseLookup[id]
-	if !ok {
-		return nil, fmt.Errorf("NumericStaticMap.ReverseMap: could not find key")
+	lookupNum, ok := vind.reverseLookup[id]
+	if ok {
+		id = lookupNum
 	}
 	return id, nil
 }
