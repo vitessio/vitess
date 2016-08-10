@@ -22,43 +22,33 @@ func TestStatsUpdate(t *testing.T) {
 	// Test 1: tablet1's stats should be updated with the one received by the HealthCheck object.
 	tabletStatsCache.StatsUpdate(tablet1Stats1)
 	results1 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
-	got1 := results1[0]
-	want1 := tablet1Stats1
-	if !reflect.DeepEqual(got1, want1) {
-		t.Errorf("got: %v, want: %v", got1, want1)
+	if got, want := results1[0], tablet1Stats1; !reflect.DeepEqual(got, want) {
+		t.Errorf("got: %v, want: %v", got, want)
 	}
 
 	// Test 2: tablet1's stats should be updated with the new one received by the HealthCheck object.
 	tabletStatsCache.StatsUpdate(tablet1Stats2)
 	results2 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
-	got2 := results2[0]
-	want2 := tablet1Stats2
-	if !reflect.DeepEqual(got1, want1) {
-		t.Errorf("got: %v, want: %v", got2, want2)
+	if got, want := results2[0], tablet1Stats2; !reflect.DeepEqual(got, want) {
+		t.Errorf("got: %v, want: %v", got, want)
 	}
 
 	// Test 3: tablet2's stats should be updated with the one received by the HealthCheck object
 	// leaving tablet1's stats unchanged.
 	tabletStatsCache.StatsUpdate(tablet2Stats1)
 	results3 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
-	got3 := results3[0]
-	want3 := tablet2Stats1
-	if !reflect.DeepEqual(got1, want1) {
-		t.Errorf("got: %v, want: %v", got3, want3)
+	if got, want := results3[0], tablet2Stats1; !reflect.DeepEqual(got, want) {
+		t.Errorf("got: %v, want: %v", got, want)
 	}
 
 	results4 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
-	got4 := results4[1]
-	want4 := tablet1Stats2
-	if !reflect.DeepEqual(got1, want1) {
-		t.Errorf("got: %v, want: %v", got4, want4)
+	if got, want := results4[1], tablet1Stats2; !reflect.DeepEqual(got, want) {
+		t.Errorf("got: %v, want: %v", got, want)
 	}
 
 	// Test 5: Check the list of cells to ensure it has the right count.
-	got5 := tabletStatsCache.cells["cell1"]
-	want5 := 2
-	if got5 != want5 {
-		t.Errorf("got: %v, want: %v", got5, want5)
+	if got, want := tabletStatsCache.tabletCountsByCell["cell1"], 2; got != want {
+		t.Errorf("got: %v, want: %v", got, want)
 	}
 
 	// Test 5: tablet2 should be removed from all lists upon receiving an update that
@@ -74,20 +64,18 @@ func TestStatsUpdate(t *testing.T) {
 
 	_, ok := tabletStatsCache.statusesByAlias[tablet2Stats1.Tablet.Alias.String()]
 	if ok {
-		t.Errorf("got: %v, want: %v", got5, want5)
+		t.Errorf("not deleted from statuses")
 	}
 
 	// Test 6: Check to see that the tablet was removed from cell count.
-	got6 := tabletStatsCache.cells["cell1"]
-	want6 := 1
-	if got6 != want6 {
-		t.Errorf("got: %v, want: %v", got5, want5)
+	if got, want := tabletStatsCache.tabletCountsByCell["cell1"], 1; got != want {
+		t.Errorf("got: %v, want: %v", got, want)
 	}
 
 	// Test 7: The cell entry was deleted when there are no more entries.
 	tablet1Stats2.Up = false
 	tabletStatsCache.StatsUpdate(tablet1Stats2)
-	_, ok = tabletStatsCache.cells["cell1"]
+	_, ok = tabletStatsCache.tabletCountsByCell["cell1"]
 	if ok {
 		t.Errorf("not deleted from cells")
 	}
@@ -124,7 +112,7 @@ func TestHeatmapData(t *testing.T) {
 	tabletStatsCache.StatsUpdate(ts12)
 
 	// Checking that the heatmap data is returned correctly for the following view: (keyspace="ks1", cell=all, type=all).
-	heatmap := tabletStatsCache.heatmapData("ks1", "all", "all", "lag")
+	heatmap, err := tabletStatsCache.heatmapData("ks1", "all", "all", "lag")
 	gotData, gotTabletAliases, gotLabels := heatmap.Data, heatmap.Aliases, heatmap.Labels
 	wantData := [][]float64{
 		{float64(ts1.Stats.SecondsBehindMaster), float64(ts7.Stats.SecondsBehindMaster)},
@@ -163,6 +151,10 @@ func TestHeatmapData(t *testing.T) {
 				{Name: topodatapb.TabletType_RDONLY.String(), Rowspan: 1},
 			},
 		},
+	}
+
+	if err != nil {
+		t.Errorf("couldn't get heatmap data: %v", err)
 	}
 
 	if !reflect.DeepEqual(gotData, wantData) {

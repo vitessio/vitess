@@ -299,7 +299,11 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 				return nil, fmt.Errorf("realtimeStats not initialized")
 			}
 
-			heatmap := realtimeStats.heatmapData(keyspace, cell, tabletType, metric)
+			heatmap, err := realtimeStats.heatmapData(keyspace, cell, tabletType, metric)
+			if err != nil {
+				return nil, fmt.Errorf("couldn't get heatmap data: %v", err)
+			}
+
 			return heatmap, nil
 		}
 

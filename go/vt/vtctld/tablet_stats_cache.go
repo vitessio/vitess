@@ -1,6 +1,7 @@
 package vtctld
 
 import (
+	"fmt"
 	"sort"
 	"sync"
 
@@ -55,15 +56,15 @@ type tabletStatsCache struct {
 	// statusesByAlias is a copy of statuses and will be updated simultaneously.
 	// The first key is the string representation of the tablet alias.
 	statusesByAlias map[string]*discovery.TabletStats
-	// cells keeps track of the cells found so far.
-	cells map[string]int
+	// cells counts the number of tablets per cell.
+	tabletCountsByCell map[string]int
 }
 
 func newTabletStatsCache() *tabletStatsCache {
 	return &tabletStatsCache{
-		statuses:        make(map[string]map[string]map[string]map[topodatapb.TabletType][]*discovery.TabletStats),
-		statusesByAlias: make(map[string]*discovery.TabletStats),
-		cells:           make(map[string]int),
+		statuses:           make(map[string]map[string]map[string]map[topodatapb.TabletType][]*discovery.TabletStats),
+		statusesByAlias:    make(map[string]*discovery.TabletStats),
+		tabletCountsByCell: make(map[string]int),
 	}
 }
 
@@ -82,15 +83,15 @@ func (c *tabletStatsCache) StatsUpdate(stats *discovery.TabletStats) {
 	ts, ok := c.statusesByAlias[aliasKey]
 	if !stats.Up {
 		if !ok {
-			// Tablet doesn't exist and isn't tracked so just return.
-			return
+			// Tablet doesn't exist and was recently deleted or changed its type. Panic as this is unexpected behavior.
+			panic(fmt.Sprintf("BUG: tablet (%v) doesn't exist", aliasKey))
 		}
-		// The tablet exists but shouldn't be tracked so just delete it.
+		// The tablet still exists in our cache but was recently deleted or changed its type. Delete it now.
 		c.statuses[keyspace][shard][cell][tabletType] = remove(c.statuses[keyspace][shard][cell][tabletType], stats.Tablet.Alias)
 		delete(c.statusesByAlias, aliasKey)
-		c.cells[cell] = c.cells[cell] - 1
-		if c.cells[cell] == 0 {
-			delete(c.cells, cell)
+		c.tabletCountsByCell[cell]--
+		if c.tabletCountsByCell[cell] == 0 {
+			delete(c.tabletCountsByCell, cell)
 		}
 		return
 	}
@@ -124,12 +125,7 @@ func (c *tabletStatsCache) StatsUpdate(stats *discovery.TabletStats) {
 		c.statuses[keyspace][shard][cell][tabletType] = append(c.statuses[keyspace][shard][cell][tabletType], stats)
 		sort.Sort(byTabletUid(c.statuses[keyspace][shard][cell][tabletType]))
 		c.statusesByAlias[aliasKey] = stats
-		_, ok = cells[cell]
-		if !ok {
-			c.cells[cell] = 0
-		} else {
-			c.cells[cell] = c.cells[cell] + 1
-		}
+		c.tabletCountsByCell[cell]++
 		return
 	}
 
@@ -144,21 +140,21 @@ func tabletToMapKey(stats *discovery.TabletStats) string {
 // remove takes in an array and returns it with the specified element removed
 // (leaves the array unchanged if element isn't in the array).
 func remove(tablets []*discovery.TabletStats, tabletAlias *topodata.TabletAlias) []*discovery.TabletStats {
-	newTablets := tablets[:0]
+	filteredTablets := tablets[:0]
 	for _, tablet := range tablets {
 		if !topoproto.TabletAliasEqual(tablet.Tablet.Alias, tabletAlias) {
-			newTablets = append(newTablets, tablet)
+			filteredTablets = append(filteredTablets, tablet)
 		}
 	}
-	return newTablets
+	return filteredTablets
 }
 
 // heatmapData returns a 2D array of data (based on the specified metric) as well as the labels for the heatmap.
-func (c *tabletStatsCache) heatmapData(keyspace, cell, tabletType, metric string) heatmap {
+func (c *tabletStatsCache) heatmapData(keyspace, cell, tabletType, metric string) (heatmap, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	//Get the metric data
+	// Get the metric data.
 	var metricFunc func(stats *discovery.TabletStats) float64
 	switch metric {
 	case "lag":
@@ -168,11 +164,11 @@ func (c *tabletStatsCache) heatmapData(keyspace, cell, tabletType, metric string
 	case "qps":
 		metricFunc = qps
 	default:
-		return heatmap{}
+		return heatmap{}, fmt.Errorf("invalid metric: %v Select 'lag', 'cpu', or 'qps'", metric)
 	}
 
 	var cells []string
-	for cell := range c.cells {
+	for cell := range c.tabletCountsByCell {
 		cells = append(cells, cell)
 	}
 	sort.Strings(cells)
@@ -251,13 +247,11 @@ func (c *tabletStatsCache) heatmapData(keyspace, cell, tabletType, metric string
 		yLabels = append(yLabels, perCellYLabel)
 	}
 
-	newHeatmap := heatmap{
+	return heatmap{
 		Data:    heatmapData,
 		Labels:  yLabels,
 		Aliases: heatmapTabletAliases,
-	}
-
-	return newHeatmap
+	}, nil
 }
 
 func replicationLag(stat *discovery.TabletStats) float64 {
