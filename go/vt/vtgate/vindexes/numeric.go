@@ -52,7 +52,7 @@ func (*Numeric) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
 		}
 		var keybytes [8]byte
 		binary.BigEndian.PutUint64(keybytes[:], uint64(num))
-		out = append(out, []byte(keybytes[:]))
+		out = append(out, keybytes[:])
 	}
 	return out, nil
 }
