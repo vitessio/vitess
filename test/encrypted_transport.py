@@ -347,7 +347,7 @@ class TestSecure(unittest.TestCase):
                          shards=['0'])
 
     # not passing any immediate caller id should fail as using
-    # the unsecure user "unsecure grpc client"
+    # the unsecure user "unsecure_grpc_client"
     cursor.set_effective_caller_id(None)
     try:
       cursor.execute('select * from vt_insert_test', {})
@@ -356,7 +356,7 @@ class TestSecure(unittest.TestCase):
       s = str(e)
       self.assertIn('table acl error', s)
       self.assertIn('cannot run PASS_SELECT on table', s)
-      self.assertIn('unsecure grpc client', s)
+      self.assertIn('unsecure_grpc_client', s)
 
     # 'vtgate client 1' is authorized to access vt_insert_test
     cursor.set_effective_caller_id(vtgate_client.CallerID(

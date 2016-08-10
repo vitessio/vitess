@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	unsecureClient = "unsecure grpc client"
+	unsecureClient = "unsecure_grpc_client"
 )
 
 var (
