@@ -10,11 +10,11 @@ import numpy
 import logging
 
 import base_end2end_test
-import sharding_utils
 import utils
 import vtctl_helper
 
 from vtproto import topodata_pb2
+from vttest import sharding_utils
 
 
 def setUpModule():

@@ -23,10 +23,14 @@ process makes it clean up.
 """
 
 import json
+import os
 import struct
+import subprocess
 import urllib
 
 import unittest
+
+from google.protobuf import text_format
 
 from vtproto import vttest_pb2
 
@@ -36,7 +40,6 @@ from vtdb import dbexceptions
 
 import utils
 import environment
-import start_vtcombo
 from protocols_flavor import protocols_flavor
 
 
@@ -57,9 +60,19 @@ class TestMysqlctl(unittest.TestCase):
     keyspace.shards.add(name='-80')
     keyspace.shards.add(name='80-')
     topology.keyspaces.add(name='redirect', served_from='test_keyspace')
-    topology.cells.append('test')
 
-    sp, config = start_vtcombo.start(topology)
+    # launch a backend database based on the provided topology and schema
+    port = environment.reserve_ports(1)
+    args = [environment.run_local_database,
+            '--port', str(port),
+            '--proto_topo', text_format.MessageToString(topology,
+                                                        as_one_line=True),
+            '--schema_dir', os.path.join(environment.vttop, 'test',
+                                         'vttest_schema'),
+            '--web_dir', environment.vttop + '/web/vtctld',
+           ]
+    sp = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    config = json.loads(sp.stdout.readline())
 
     # gather the vars for the vtgate process
     url = 'http://localhost:%d/debug/vars' % config['port']
