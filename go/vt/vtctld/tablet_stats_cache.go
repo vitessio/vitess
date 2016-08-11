@@ -258,11 +258,11 @@ func (c *tabletStatsCache) tabletStatsByAlias(tabletAlias *topodatapb.TabletAlia
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	got, ok := c.statusesByAlias[tabletAlias.String()]
+	ts, ok := c.statusesByAlias[tabletAlias.String()]
 	if !ok {
 		return nil
 	}
-	return got
+	return ts
 }
 
 func replicationLag(stat *discovery.TabletStats) float64 {
