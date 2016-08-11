@@ -8,12 +8,10 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
@@ -70,7 +68,7 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 	want := &querypb.RealtimeStats{
 		SecondsBehindMaster: 1,
 	}
-	if err := checkStats(realtimeStats, t1, want, 1); err != nil {
+	if err := checkStats(realtimeStats, t1, want); err != nil {
 		t.Errorf("%v", err)
 	}
 
@@ -80,7 +78,7 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 		SecondsBehindMaster: 1,
 		Qps:                 2.0,
 	}
-	if err := checkStats(realtimeStats, t1, want2, 1); err != nil {
+	if err := checkStats(realtimeStats, t1, want2); err != nil {
 		t.Errorf("%v", err)
 	}
 
@@ -90,43 +88,26 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 		SecondsBehindMaster: 1,
 		Qps:                 3.0,
 	}
-	if err := checkStats(realtimeStats, t2, want3, 1); err != nil {
+	if err := checkStats(realtimeStats, t2, want3); err != nil {
 		t.Errorf("%v", err)
 	}
 
-	if err := checkStats(realtimeStats, t1, want2, 1); err != nil {
+	if err := checkStats(realtimeStats, t1, want2); err != nil {
 		t.Errorf("%v", err)
 	}
 }
 
 // checkStats ensures that the HealthCheck object received an update and passed
 // that information to the correct tablet.
-func checkStats(realtimeStats *realtimeStats, tablet *testlib.FakeTablet, want *querypb.RealtimeStats, wantCellCount int) error {
-	keyspace := tablet.Tablet.Keyspace
-	shard := tablet.Tablet.Shard
-	cell := tablet.Tablet.Alias.Cell
-	tabletType := tablet.Tablet.Type
-	tabletAlias := tablet.Tablet.Alias
-
+func checkStats(realtimeStats *realtimeStats, tablet *testlib.FakeTablet, want *querypb.RealtimeStats) error {
 	deadline := time.Now().Add(time.Second * 5)
 	for time.Now().Before(deadline) {
-		realtimeStats.mu.Lock()
-		result, ok := realtimeStats.statuses[keyspace][shard][cell][tabletType]
-		if !ok {
-			realtimeStats.mu.Unlock()
+		result := realtimeStats.tabletStatsByAlias(tablet.Tablet.Alias)
+		if result == nil {
 			continue
 		}
-		var got *querypb.RealtimeStats
-		var gotCellCount int
-		for _, tabletStat := range result {
-			if topoproto.TabletAliasEqual(tabletAlias, tabletStat.Tablet.Alias) {
-				got = tabletStat.Stats
-				gotCellCount = realtimeStats.tabletCountsByCell[cell]
-			}
-		}
-		realtimeStats.mu.Unlock()
-
-		if proto.Equal(got, want) && gotCellCount == wantCellCount {
+		got := result.Stats
+		if proto.Equal(got, want) {
 			return nil
 		}
 		time.Sleep(1 * time.Millisecond)
@@ -136,11 +117,7 @@ func checkStats(realtimeStats *realtimeStats, tablet *testlib.FakeTablet, want *
 
 // newRealtimeStatsForTesting creates a new realtimeStats object without creating a HealthCheck object.
 func newRealtimeStatsForTesting() *realtimeStats {
-	tabletStatsCache := &tabletStatsCache{
-		statuses:           make(map[string]map[string]map[string]map[topodatapb.TabletType][]*discovery.TabletStats),
-		statusesByAlias:    make(map[string]*discovery.TabletStats),
-		tabletCountsByCell: make(map[string]int),
-	}
+	tabletStatsCache := newTabletStatsCache()
 	return &realtimeStats{
 		tabletStatsCache: tabletStatsCache,
 	}

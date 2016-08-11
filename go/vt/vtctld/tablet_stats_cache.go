@@ -254,6 +254,17 @@ func (c *tabletStatsCache) heatmapData(keyspace, cell, tabletType, metric string
 	}, nil
 }
 
+func (c *tabletStatsCache) tabletStatsByAlias(tabletAlias *topodatapb.TabletAlias) *discovery.TabletStats {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	got, ok := c.statusesByAlias[tabletAlias.String()]
+	if !ok {
+		return nil
+	}
+	return got
+}
+
 func replicationLag(stat *discovery.TabletStats) float64 {
 	return float64(stat.Stats.SecondsBehindMaster)
 }

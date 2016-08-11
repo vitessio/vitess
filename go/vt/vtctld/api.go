@@ -308,7 +308,7 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 			return heatmap, nil
 		}
 
-		return nil, fmt.Errorf("invalid target path: %q  expected path: ?metric=<metric>&keyspace=<keyspace>&cell=<cell>&type=<type>", targetPath)
+		return nil, fmt.Errorf("invalid target path: %q  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>", targetPath)
 	})
 
 	// Schema Change

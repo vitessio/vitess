@@ -80,9 +80,9 @@ func TestAPI(t *testing.T) {
 	initAPI(ctx, ts, actionRepo, realtimeStats)
 
 	ts1 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 100)
-	ts2 := tabletStats("cell1", "ks1", "80-", topodatapb.TabletType_RDONLY, 200)
+	ts2 := tabletStats("cell1", "ks1", "-80-", topodatapb.TabletType_RDONLY, 200)
 	ts3 := tabletStats("cell2", "ks1", "80-", topodatapb.TabletType_REPLICA, 300)
-	ts4 := tabletStats("cell2", "ks1", "-80", topodatapb.TabletType_RDONLY, 400)
+	ts4 := tabletStats("cell2", "ks1", "80-", topodatapb.TabletType_RDONLY, 400)
 	realtimeStats.StatsUpdate(ts1)
 	realtimeStats.StatsUpdate(ts2)
 	realtimeStats.StatsUpdate(ts3)
@@ -147,14 +147,14 @@ func TestAPI(t *testing.T) {
 			}`},
 
 		//Tablet Updates
-		{"GET", "tablet_statuses/?metric=lag&keyspace=ks1&cell=cell1&type=REPLICA", `{
-			"Labels":[{"Label":{"Name":"cell1","Rowspan":2},"NestedLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]},
-			          {"Label":{"Name":"cell2","Rowspan":2},"NestedLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]}],
-			"Data":[[100,-1],[-1,200],[-1,300],[400,-1]],
-			"Aliases":[[{"cell":"cell1","uid":100},null],[null,{"cell":"cell1","uid":200}],[null,{"cell":"cell2","uid":300}],[{"cell":"cell2","uid":400},null]]}`,
-		},
-		{"GET", "tablet_statuses/lag/cell1/REPLICA", "can't get tablet_statuses: invalid target path: \"lag/cell1/REPLICA\"  expected path: ?metric=<metric>&keyspace=<keyspace>&cell=<cell>&type=<type>"},
-		{"GET", "tablet_statuses/?metric=lag&keyspace=ks1&cell=cell1&type=hello", "can't get tablet_statuses: invalid tablet type: hello"},
+		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=REPLICA&metric=lag", `
+		   {"Labels":[{"Label":{"Name":"cell1","Rowspan":2},"NestedLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]},
+		           {"Label":{"Name":"cell2","Rowspan":2},"NestedLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]}],
+		           "Data":[[100,-1,-1],[-1,200,-1],[-1,-1,300],[-1,-1,400]],
+		           "Aliases":[[{"cell":"cell1","uid":100},null,null],[null,{"cell":"cell1","uid":200},null],[null,null,{"cell":"cell2","uid":300}],[null,null,{"cell":"cell2","uid":400}]]}
+		`},
+		{"GET", "tablet_statuses/cell1/REPLICA/lag", "can't get tablet_statuses: invalid target path: \"cell1/REPLICA/lag\"  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>"},
+		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "can't get tablet_statuses: invalid tablet type: hello"},
 	}
 
 	for _, in := range table {
