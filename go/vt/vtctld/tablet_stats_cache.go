@@ -34,7 +34,7 @@ type heatmap struct {
 	Aliases [][]*topodata.TabletAlias
 }
 
-type byTabletUid []*discovery.TabletStats
+type byTabletUID []*discovery.TabletStats
 
 func (a byTabletUid) Len() int           { return len(a) }
 func (a byTabletUid) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
