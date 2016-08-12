@@ -82,6 +82,18 @@ type SplitCloneWorker struct {
 	// Example Map Entry: test_keyspace/-80 => vt_test_keyspace
 	destinationDbNames map[string]string
 
+	// offlineSourceAliases has the list of tablets (per source shard) we took
+	// offline for the WorkerStateCloneOffline phase.
+	// Populated shortly before WorkerStateCloneOffline, read-only after that.
+	offlineSourceAliases []*topodatapb.TabletAlias
+
+	// formattedOfflineSourcesMu guards all fields in this group.
+	formattedOfflineSourcesMu sync.Mutex
+	// formattedOfflineSources is a space separated list of
+	// "offlineSourceAliases". It is used by the StatusAs* methods to output the
+	// used source tablets during the offline clone phase.
+	formattedOfflineSources string
+
 	// tableStatusList* holds the status for each table.
 	// populated during WorkerStateCloneOnline
 	tableStatusListOnline *tableStatusList
@@ -156,12 +168,35 @@ func (scw *SplitCloneWorker) setErrorState(err error) {
 	event.DispatchUpdate(scw.ev, "error: "+err.Error())
 }
 
-func (scw *SplitCloneWorker) formatSources() string {
-	result := ""
-	for _, alias := range scw.sourceAliases {
-		result += " " + topoproto.TabletAliasString(alias)
+func (scw *SplitCloneWorker) formatOnlineSources() string {
+	aliases := scw.tabletTracker.TabletsInUse()
+	if aliases == "" {
+		return "no online source tablets currently in use"
 	}
-	return result
+	return aliases
+}
+
+func (scw *SplitCloneWorker) setFormattedOfflineSources(aliases []*topodatapb.TabletAlias) {
+	scw.formattedOfflineSourcesMu.Lock()
+	defer scw.formattedOfflineSourcesMu.Unlock()
+
+	var sources []string
+	for _, alias := range aliases {
+		sources = append(sources, topoproto.TabletAliasString(alias))
+	}
+	scw.formattedOfflineSources = strings.Join(sources, " ")
+}
+
+// FormattedOfflineSources returns a space separated list of tablets which
+// are in use during the offline clone phase.
+func (scw *SplitCloneWorker) FormattedOfflineSources() string {
+	scw.formattedOfflineSourcesMu.Lock()
+	defer scw.formattedOfflineSourcesMu.Unlock()
+
+	if scw.formattedOfflineSources == "" {
+		return "no offline source tablets currently in use"
+	}
+	return scw.formattedOfflineSources
 }
 
 // StatusAsHTML implements the Worker interface
@@ -173,15 +208,15 @@ func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
 	switch state {
 	case WorkerStateCloneOnline:
 		result += "<b>Running:</b></br>\n"
-		result += "<b>Copying from:</b> " + scw.formatSources() + "</br>\n"
+		result += "<b>Copying from:</b> " + scw.formatOnlineSources() + "</br>\n"
 		statuses, eta := scw.tableStatusListOnline.format()
 		result += "<b>ETA:</b> " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
 	case WorkerStateCloneOffline:
 		result += "<b>Running:</b></br>\n"
-		result += "<b>Copying from:</b> " + scw.formatSources() + "</br>\n"
+		result += "<b>Copying from:</b> " + scw.FormattedOfflineSources() + "</br>\n"
 		statuses, eta := scw.tableStatusListOffline.format()
-		result += "<b>ETA</b>: " + eta.String() + "</br>\n"
+		result += "<b>ETA:</b> " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
 		if scw.online {
 			result += "</br>\n"
@@ -217,13 +252,13 @@ func (scw *SplitCloneWorker) StatusAsText() string {
 	switch state {
 	case WorkerStateCloneOnline:
 		result += "Running:\n"
-		result += "Copying from: " + scw.formatSources() + "\n"
-		statuses, eta := scw.tableStatusListOffline.format()
+		result += "Copying from: " + scw.formatOnlineSources() + "\n"
+		statuses, eta := scw.tableStatusListOnline.format()
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
 	case WorkerStateCloneOffline:
 		result += "Running:\n"
-		result += "Copying from: " + scw.formatSources() + "\n"
+		result += "Copying from: " + scw.FormattedOfflineSources() + "\n"
 		statuses, eta := scw.tableStatusListOffline.format()
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
@@ -482,19 +517,20 @@ func (scw *SplitCloneWorker) findOfflineSourceTablets(ctx context.Context) error
 	scw.setState(WorkerStateFindTargets)
 
 	// find an appropriate tablet in the source shards
-	scw.sourceAliases = make([]*topodatapb.TabletAlias, len(scw.sourceShards))
+	scw.offlineSourceAliases = make([]*topodatapb.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
 		var err error
-		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.tsc, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyTablets)
+		scw.offlineSourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.tsc, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyTablets)
 		if err != nil {
 			return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
 		}
-		scw.wr.Logger().Infof("Using tablet %v as source for %v/%v", topoproto.TabletAliasString(scw.sourceAliases[i]), si.Keyspace(), si.ShardName())
+		scw.wr.Logger().Infof("Using tablet %v as source for %v/%v", topoproto.TabletAliasString(scw.offlineSourceAliases[i]), si.Keyspace(), si.ShardName())
 	}
+	scw.setFormattedOfflineSources(scw.offlineSourceAliases)
 
 	// get the tablet info for them, and stop their replication
-	scw.sourceTablets = make([]*topodatapb.Tablet, len(scw.sourceAliases))
-	for i, alias := range scw.sourceAliases {
+	scw.sourceTablets = make([]*topodatapb.Tablet, len(scw.offlineSourceAliases))
+	for i, alias := range scw.offlineSourceAliases {
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		ti, err := scw.wr.TopoServer().GetTablet(shortCtx, alias)
 		cancel()
@@ -674,20 +710,18 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 			}
 		}(shardIndex)
 
-		go func(keyspace, shard string, insertChannel chan string) {
-			for j := 0; j < scw.destinationWriterCount; j++ {
-				destinationWaitGroup.Add(1)
-				go func(throttler *throttler.Throttler, threadID int) {
-					defer destinationWaitGroup.Done()
-					defer throttler.ThreadFinished(threadID)
+		for j := 0; j < scw.destinationWriterCount; j++ {
+			destinationWaitGroup.Add(1)
+			go func(keyspace, shard string, insertChannel chan string, throttler *throttler.Throttler, threadID int) {
+				defer destinationWaitGroup.Done()
+				defer throttler.ThreadFinished(threadID)
 
-					executor := newExecutor(scw.wr, scw.tsc, throttler, keyspace, shard, threadID)
-					if err := executor.fetchLoop(ctx, insertChannel); err != nil {
-						processError("executer.FetchLoop failed: %v", err)
-					}
-				}(t, j)
-			}
-		}(si.Keyspace(), si.ShardName(), insertChannels[shardIndex])
+				executor := newExecutor(scw.wr, scw.tsc, throttler, keyspace, shard, threadID)
+				if err := executor.fetchLoop(ctx, insertChannel); err != nil {
+					processError("executer.FetchLoop failed: %v", err)
+				}
+			}(si.Keyspace(), si.ShardName(), insertChannels[shardIndex], t, j)
+		}
 	}
 
 	// Now for each table, read data chunks and send them to all
@@ -751,7 +785,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					var sourceAlias *topodatapb.TabletAlias
 					if state == WorkerStateCloneOffline {
 						// Use the source tablet which we took offline for this phase.
-						sourceAlias = scw.sourceAliases[shardIndex]
+						sourceAlias = scw.offlineSourceAliases[shardIndex]
 					} else {
 						// Pick any healthy serving source tablet.
 						tablets := discovery.RemoveUnhealthyTablets(scw.tsc.GetTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY))
@@ -911,7 +945,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 			for _, si := range scw.destinationShards {
 				scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", si.Keyspace(), si.ShardName())
 				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-				err := scw.wr.SetSourceShards(shortCtx, si.Keyspace(), si.ShardName(), scw.sourceAliases, nil)
+				err := scw.wr.SetSourceShards(shortCtx, si.Keyspace(), si.ShardName(), scw.offlineSourceAliases, nil)
 				cancel()
 				if err != nil {
 					return fmt.Errorf("failed to set source shards: %v", err)

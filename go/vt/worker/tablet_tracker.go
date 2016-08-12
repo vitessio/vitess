@@ -7,6 +7,7 @@ package worker
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/youtube/vitess/go/vt/discovery"
@@ -82,6 +83,20 @@ func (t *TabletTracker) Untrack(alias *topodata.TabletAlias) {
 	} else {
 		t.usedTablets[key] = count
 	}
+}
+
+// TabletsInUse returns a string of all tablet aliases currently in use.
+// The tablets are separated by a space.
+func (t *TabletTracker) TabletsInUse() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	var aliases []string
+	for alias := range t.usedTablets {
+		aliases = append(aliases, alias)
+	}
+	sort.Strings(aliases)
+	return strings.Join(aliases, " ")
 }
 
 func (t *TabletTracker) tabletsByUsage() []string {

@@ -71,7 +71,7 @@ env:
     - MAKEFLAGS=-j4
     # Run go build and test with -p 4 (i.e. up to 4 packages are compiled/tested in parallel).
     # As of 07/2015 this value works best in a Travis CI container.
-    - VT_GO_PARALLEL=4
+    - VT_GO_PARALLEL_VALUE=4
     - PATH="$HOME/.phpenv/bin:$PATH"
     # Add -follow to TEST_FLAGS below to print as the test runs, to diagnose stuck tests.
     - TEST_FLAGS="-docker=false -timeout=5m -print-log -remote-stats=http://enisoc.com:15123/travis/stats"
