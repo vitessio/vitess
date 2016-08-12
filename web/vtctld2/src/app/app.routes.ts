@@ -1,4 +1,4 @@
-import { provideRouter, RouterConfig } from '@angular/router';
+import { Routes } from '@angular/router';
 
 import { CanDeactivateGuard } from './shared/can-deactivate-guard';
 import { DashboardComponent } from './dashboard/dashboard.component';
@@ -9,7 +9,7 @@ import { StatusComponent } from './status/status.component';
 import { TopoBrowserComponent } from './topo/topo-browser.component';
 import { TasksComponent } from './tasks/tasks.component';
 
-export const routes: RouterConfig = [
+export const routes: Routes = [
   { path: '', component: DashboardComponent},
   { path: 'dashboard', component: DashboardComponent, canDeactivate: [CanDeactivateGuard]},
   { path: 'status', component: StatusComponent},
@@ -22,6 +22,5 @@ export const routes: RouterConfig = [
 ];
 
 export const APP_ROUTER_PROVIDERS = [
-  provideRouter(routes),
   CanDeactivateGuard
 ];
