@@ -688,7 +688,7 @@ func (scw *LegacySplitCloneWorker) processData(ctx context.Context, dbNames []st
 	// different dbName.
 	baseCmds := make([]string, len(dbNames))
 	for i, dbName := range dbNames {
-		baseCmds[i] = "INSERT INTO `" + dbName + "`." + td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
+		baseCmds[i] = "INSERT INTO " + escape(dbName) + "." + escape(td.Name) + " (" + strings.Join(escapeAll(td.Columns), ", ") + ") VALUES "
 	}
 	sr := rowSplitter.StartSplit()
 	packCount := 0

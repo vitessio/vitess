@@ -59,10 +59,10 @@ func expectBlpCheckpointCreationQueries(f *FakePoolConnection) {
 // sourceRdonlyFactory fakes out the MIN, MAX query on the primary key.
 // (This query is used to calculate the split points for reading a table
 // using multiple threads.)
-func sourceRdonlyFactory(t *testing.T, dbAndTableName string, min, max int) func() (dbconnpool.PoolConnection, error) {
+func sourceRdonlyFactory(t *testing.T, dbName, tableName string, min, max int) func() (dbconnpool.PoolConnection, error) {
 	f := NewFakePoolConnectionQuery(t, "sourceRdonly")
 	f.addExpectedExecuteFetch(ExpectedExecuteFetch{
-		Query: fmt.Sprintf("SELECT MIN(id), MAX(id) FROM %s", dbAndTableName),
+		Query: fmt.Sprintf("SELECT MIN(`id`), MAX(`id`) FROM `%s`.`%s`", dbName, tableName),
 		QueryResult: &sqltypes.Result{
 			Fields: []*querypb.Field{
 				{

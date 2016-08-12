@@ -139,7 +139,7 @@ func (r *RestartableResultReader) startStream() error {
 }
 
 func (r *RestartableResultReader) generateQuery() {
-	query := "SELECT " + strings.Join(r.td.Columns, ",") + " FROM " + r.td.Name
+	query := "SELECT " + strings.Join(escapeAll(r.td.Columns), ",") + " FROM " + escape(r.td.Name)
 
 	// Build WHERE clauses.
 	var clauses []string
@@ -149,7 +149,7 @@ func (r *RestartableResultReader) generateQuery() {
 		// Initial query.
 		if !r.chunk.start.IsNull() {
 			var b bytes.Buffer
-			b.WriteString(r.td.PrimaryKeyColumns[0])
+			writeEscaped(&b, r.td.PrimaryKeyColumns[0])
 			b.WriteString(">=")
 			r.chunk.start.EncodeSQL(&b)
 			clauses = append(clauses, b.String())
@@ -167,7 +167,7 @@ func (r *RestartableResultReader) generateQuery() {
 	// end value.
 	if !r.chunk.end.IsNull() {
 		var b bytes.Buffer
-		b.WriteString(r.td.PrimaryKeyColumns[0])
+		writeEscaped(&b, r.td.PrimaryKeyColumns[0])
 		b.WriteString("<")
 		r.chunk.end.EncodeSQL(&b)
 		clauses = append(clauses, b.String())
@@ -177,7 +177,7 @@ func (r *RestartableResultReader) generateQuery() {
 		query += " WHERE " + strings.Join(clauses, " AND ")
 	}
 	if len(r.td.PrimaryKeyColumns) > 0 {
-		query += " ORDER BY " + strings.Join(r.td.PrimaryKeyColumns, ",")
+		query += " ORDER BY " + strings.Join(escapeAll(r.td.PrimaryKeyColumns), ",")
 	}
 	r.query = query
 }
@@ -208,7 +208,7 @@ func greaterThanTupleWhereClause(columns []string, row []sqltypes.Value) []strin
 	// Additional clause on the first column for multi-columns.
 	if len(columns) > 1 {
 		var b bytes.Buffer
-		b.WriteString(columns[0])
+		writeEscaped(&b, columns[0])
 		b.WriteString(">=")
 		row[0].EncodeSQL(&b)
 		clauses = append(clauses, b.String())
@@ -219,7 +219,7 @@ func greaterThanTupleWhereClause(columns []string, row []sqltypes.Value) []strin
 	if len(columns) > 1 {
 		b.WriteByte('(')
 	}
-	b.WriteString(strings.Join(columns, ","))
+	b.WriteString(strings.Join(escapeAll(columns), ","))
 	if len(columns) > 1 {
 		b.WriteByte(')')
 	}

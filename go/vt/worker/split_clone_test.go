@@ -188,7 +188,7 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 			},
 		}
 		sourceRdonly.FakeMysqlDaemon.DbAppConnectionFactory = sourceRdonlyFactory(
-			tc.t, "vt_ks.table1", splitCloneTestMin, splitCloneTestMax)
+			tc.t, "vt_ks", "table1", splitCloneTestMin, splitCloneTestMax)
 		sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
 			GTIDSet: replication.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
 		}
@@ -229,9 +229,9 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 	insertsPerThread := math.Ceil(float64(rowsPerThread) / float64(writeQueryMaxRows))
 	insertsTotal := int(insertsPerThread) * concurrency
 	for i := 1; i <= insertsTotal; i++ {
-		tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", nil)
+		tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
 		// leftReplica is unused by default.
-		tc.rightMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", nil)
+		tc.rightMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
 	}
 	expectBlpCheckpointCreationQueries(tc.leftMasterFakeDb)
 	expectBlpCheckpointCreationQueries(tc.rightMasterFakeDb)
@@ -309,29 +309,29 @@ func newTestQueryService(t *testing.T, target querypb.Target, shqs *fakes.Stream
 
 func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sendReply func(reply *sqltypes.Result) error) error {
 	// Custom parsing of the query we expect.
-	// Example: SELECT id, msg, keyspace_id FROM table1 WHERE id>=180 AND id<190 ORDER BY id
+	// Example: SELECT `id`, `msg`, `keyspace_id` FROM table1 WHERE id>=180 AND id<190 ORDER BY id
 	min := math.MinInt32
 	max := math.MaxInt32
 	var err error
 	parts := strings.Split(sql, " ")
 	for _, part := range parts {
-		if strings.HasPrefix(part, "id>=") {
+		if strings.HasPrefix(part, "`id`>=") {
 			// Chunk start.
-			min, err = strconv.Atoi(part[4:])
+			min, err = strconv.Atoi(part[6:])
 			if err != nil {
 				return err
 			}
-		} else if strings.HasPrefix(part, "id>") {
+		} else if strings.HasPrefix(part, "`id`>") {
 			// Chunk start after restart.
-			min, err = strconv.Atoi(part[3:])
+			min, err = strconv.Atoi(part[5:])
 			if err != nil {
 				return err
 			}
 			// Increment by one to fulfill ">" instead of ">=".
 			min++
-		} else if strings.HasPrefix(part, "id<") {
+		} else if strings.HasPrefix(part, "`id`<") {
 			// Chunk end.
-			max, err = strconv.Atoi(part[3:])
+			max, err = strconv.Atoi(part[5:])
 			if err != nil {
 				return err
 			}
@@ -599,19 +599,19 @@ func TestSplitCloneV2_Reconciliation(t *testing.T) {
 	tc.leftMasterFakeDb.deleteAllEntries()
 	tc.rightMasterFakeDb.deleteAllEntries()
 	// Update statements. (One query will update one row.)
-	tc.leftMasterFakeDb.addExpectedQuery("UPDATE `vt_ks`.table1 SET msg='Text for 100',keyspace_id=2305843009213693952 WHERE id=100", nil)
-	tc.leftMasterFakeDb.addExpectedQuery("UPDATE `vt_ks`.table1 SET msg='Text for 102',keyspace_id=2305843009213693952 WHERE id=102", nil)
-	tc.rightMasterFakeDb.addExpectedQuery("UPDATE `vt_ks`.table1 SET msg='Text for 101',keyspace_id=6917529027641081856 WHERE id=101", nil)
-	tc.rightMasterFakeDb.addExpectedQuery("UPDATE `vt_ks`.table1 SET msg='Text for 103',keyspace_id=6917529027641081856 WHERE id=103", nil)
+	tc.leftMasterFakeDb.addExpectedQuery("UPDATE `vt_ks`.`table1` SET `msg`='Text for 100',`keyspace_id`=2305843009213693952 WHERE `id`=100", nil)
+	tc.leftMasterFakeDb.addExpectedQuery("UPDATE `vt_ks`.`table1` SET `msg`='Text for 102',`keyspace_id`=2305843009213693952 WHERE `id`=102", nil)
+	tc.rightMasterFakeDb.addExpectedQuery("UPDATE `vt_ks`.`table1` SET `msg`='Text for 101',`keyspace_id`=6917529027641081856 WHERE `id`=101", nil)
+	tc.rightMasterFakeDb.addExpectedQuery("UPDATE `vt_ks`.`table1` SET `msg`='Text for 103',`keyspace_id`=6917529027641081856 WHERE `id`=103", nil)
 	// Delete statements. (First 3 rows on each shard.)
-	tc.leftMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id=190) OR (id=192) OR (id=194)", nil)
-	tc.rightMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id=191) OR (id=193) OR (id=195)", nil)
+	tc.leftMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.`table1` WHERE (`id`=190) OR (`id`=192) OR (`id`=194)", nil)
+	tc.rightMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.`table1` WHERE (`id`=191) OR (`id`=193) OR (`id`=195)", nil)
 	// Insert statements. (All are combined in one.)
-	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (96,'Text for 96',2305843009213693952),(98,'Text for 98',2305843009213693952)", nil)
-	tc.rightMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (97,'Text for 97',6917529027641081856),(99,'Text for 99',6917529027641081856)", nil)
+	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (96,'Text for 96',2305843009213693952),(98,'Text for 98',2305843009213693952)", nil)
+	tc.rightMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (97,'Text for 97',6917529027641081856),(99,'Text for 99',6917529027641081856)", nil)
 	// Delete statements (after flush).
-	tc.leftMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id=196) OR (id=198)", nil)
-	tc.rightMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.table1 WHERE (id=197) OR (id=199)", nil)
+	tc.leftMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.`table1` WHERE (`id`=196) OR (`id`=198)", nil)
+	tc.rightMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.`table1` WHERE (`id`=197) OR (`id`=199)", nil)
 	expectBlpCheckpointCreationQueries(tc.leftMasterFakeDb)
 	expectBlpCheckpointCreationQueries(tc.rightMasterFakeDb)
 
@@ -688,8 +688,8 @@ func TestSplitCloneV2_RetryDueToReadonly(t *testing.T) {
 	defer tc.tearDown()
 
 	// Provoke a retry to test the error handling.
-	tc.leftMasterFakeDb.addExpectedQueryAtIndex(0, "INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", errReadOnly)
-	tc.rightMasterFakeDb.addExpectedQueryAtIndex(0, "INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", errReadOnly)
+	tc.leftMasterFakeDb.addExpectedQueryAtIndex(0, "INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", errReadOnly)
+	tc.rightMasterFakeDb.addExpectedQueryAtIndex(0, "INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", errReadOnly)
 	// Only wait 1 ms between retries, so that the test passes faster.
 	*executeFetchRetryTime = 1 * time.Millisecond
 
@@ -718,12 +718,12 @@ func TestSplitCloneV2_RetryDueToReparent(t *testing.T) {
 
 	// Provoke a reparent just before the copy finishes.
 	// leftReplica will take over for the last, 30th, insert and the BLP checkpoint.
-	tc.leftReplicaFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", nil)
+	tc.leftReplicaFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
 	expectBlpCheckpointCreationQueries(tc.leftReplicaFakeDb)
 
 	// Do not let leftMaster succeed the 30th write.
 	tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(28)
-	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", errReadOnly)
+	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", errReadOnly)
 	tc.leftMasterFakeDb.enableInfinite()
 	// When vtworker encounters the readonly error on leftMaster, do the reparent.
 	tc.leftMasterFakeDb.getEntry(29).AfterFunc = func() {
@@ -778,7 +778,7 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 	defer tc.tearDown()
 
 	// leftReplica will take over for the last, 30th, insert and the BLP checkpoint.
-	tc.leftReplicaFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", nil)
+	tc.leftReplicaFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
 	expectBlpCheckpointCreationQueries(tc.leftReplicaFakeDb)
 
 	// During the 29th write, let the MASTER disappear.
@@ -790,7 +790,7 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 	// If the HealthCheck didn't pick up the change yet, the 30th write would
 	// succeed. To prevent this from happening, replace it with an error.
 	tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(28)
-	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1 (id, msg, keyspace_id) VALUES (*", errReadOnly)
+	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", errReadOnly)
 	tc.leftMasterFakeDb.enableInfinite()
 	// vtworker may not retry on leftMaster again if HealthCheck picks up the
 	// change very fast. In that case, the error was never encountered.

@@ -557,7 +557,7 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 // It returns any error the source encounters.
 func (vscw *VerticalSplitCloneWorker) processData(ctx context.Context, dbName string, td *tabletmanagerdatapb.TableDefinition, tableIndex int, rr ResultReader, insertChannel chan string, destinationPackCount int) error {
 	// process the data
-	baseCmd := "INSERT INTO `" + dbName + "`." + td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
+	baseCmd := "INSERT INTO " + escape(dbName) + "." + escape(td.Name) + "(" + strings.Join(escapeAll(td.Columns), ", ") + ") VALUES "
 	var rows [][]sqltypes.Value
 	packCount := 0
 

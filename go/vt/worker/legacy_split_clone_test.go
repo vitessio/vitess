@@ -155,7 +155,7 @@ func (tc *legacySplitCloneTestCase) setUp(v3 bool) {
 			},
 		}
 		sourceRdonly.FakeMysqlDaemon.DbAppConnectionFactory = sourceRdonlyFactory(
-			tc.t, "vt_ks.table1", legacySplitCloneTestMin, legacySplitCloneTestMax)
+			tc.t, "vt_ks", "table1", legacySplitCloneTestMin, legacySplitCloneTestMax)
 		sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
 			GTIDSet: replication.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
 		}
@@ -183,9 +183,9 @@ func (tc *legacySplitCloneTestCase) setUp(v3 bool) {
 	tc.rightMasterFakeDb = NewFakePoolConnectionQuery(tc.t, "rightMaster")
 
 	for i := 1; i <= 30; i++ {
-		tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", nil)
+		tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
 		// leftReplica is unused by default.
-		tc.rightMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", nil)
+		tc.rightMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
 	}
 	expectBlpCheckpointCreationQueries(tc.leftMasterFakeDb)
 	expectBlpCheckpointCreationQueries(tc.rightMasterFakeDb)
@@ -237,13 +237,13 @@ func (sq *legacyTestQueryService) StreamExecute(ctx context.Context, target *que
 	var err error
 	parts := strings.Split(sql, " ")
 	for _, part := range parts {
-		if strings.HasPrefix(part, "id>=") {
-			min, err = strconv.Atoi(part[4:])
+		if strings.HasPrefix(part, "`id`>=") {
+			min, err = strconv.Atoi(part[6:])
 			if err != nil {
 				return err
 			}
-		} else if strings.HasPrefix(part, "id<") {
-			max, err = strconv.Atoi(part[3:])
+		} else if strings.HasPrefix(part, "`id`<") {
+			max, err = strconv.Atoi(part[5:])
 		}
 	}
 	sq.t.Logf("legacyTestQueryService: got query: %v with min %v max %v", sql, min, max)
@@ -343,8 +343,8 @@ func TestLegacySplitCloneV2_RetryDueToReadonly(t *testing.T) {
 	defer tc.tearDown()
 
 	// Provoke a retry to test the error handling.
-	tc.leftMasterFakeDb.addExpectedQueryAtIndex(0, "INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", errReadOnly)
-	tc.rightMasterFakeDb.addExpectedQueryAtIndex(0, "INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", errReadOnly)
+	tc.leftMasterFakeDb.addExpectedQueryAtIndex(0, "INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", errReadOnly)
+	tc.rightMasterFakeDb.addExpectedQueryAtIndex(0, "INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", errReadOnly)
 	// Only wait 1 ms between retries, so that the test passes faster.
 	*executeFetchRetryTime = 1 * time.Millisecond
 
@@ -373,12 +373,12 @@ func TestLegacySplitCloneV2_RetryDueToReparent(t *testing.T) {
 
 	// Provoke a reparent just before the copy finishes.
 	// leftReplica will take over for the last, 30th, insert and the BLP checkpoint.
-	tc.leftReplicaFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", nil)
+	tc.leftReplicaFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
 	expectBlpCheckpointCreationQueries(tc.leftReplicaFakeDb)
 
 	// Do not let leftMaster succeed the 30th write.
 	tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(28)
-	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", errReadOnly)
+	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", errReadOnly)
 	tc.leftMasterFakeDb.enableInfinite()
 	// When vtworker encounters the readonly error on leftMaster, do the reparent.
 	tc.leftMasterFakeDb.getEntry(29).AfterFunc = func() {
@@ -433,7 +433,7 @@ func TestLegacySplitCloneV2_NoMasterAvailable(t *testing.T) {
 	defer tc.tearDown()
 
 	// leftReplica will take over for the last, 30th, insert and the BLP checkpoint.
-	tc.leftReplicaFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", nil)
+	tc.leftReplicaFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
 	expectBlpCheckpointCreationQueries(tc.leftReplicaFakeDb)
 
 	// During the 29th write, let the MASTER disappear.
@@ -445,7 +445,7 @@ func TestLegacySplitCloneV2_NoMasterAvailable(t *testing.T) {
 	// If the HealthCheck didn't pick up the change yet, the 30th write would
 	// succeed. To prevent this from happening, replace it with an error.
 	tc.leftMasterFakeDb.deleteAllEntriesAfterIndex(28)
-	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", errReadOnly)
+	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", errReadOnly)
 	tc.leftMasterFakeDb.enableInfinite()
 	// vtworker may not retry on leftMaster again if HealthCheck picks up the
 	// change very fast. In that case, the error was never encountered.
