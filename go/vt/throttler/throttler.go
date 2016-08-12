@@ -84,14 +84,18 @@ type Throttler struct {
 	threadThrottlers []*threadThrottler
 	threadFinished   []bool
 
-	nowFunc func() time.Time
-
 	mu sync.Mutex
 	// runningThreads tracks which threads have not finished yet.
 	runningThreads map[int]bool
 	// threadRunningsLastUpdate caches for updateMaxRate() how many threads were
 	// running at the previous run.
 	threadRunningsLastUpdate int
+
+	nowFunc func() time.Time
+
+	// actualRateHistory tracks for past seconds the total actual rate (based on
+	// the number of unthrottled Throttle() calls).
+	actualRateHistory *aggregatedIntervalHistory
 }
 
 // NewThrottler creates a new Throttler instance.
@@ -104,11 +108,11 @@ type Throttler struct {
 // unit refers to the type of entity you want to throttle e.g. "queries" or
 // "transactions".
 // name describes the Throttler instance and will be used by the webinterface.
-func NewThrottler(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64) (*Throttler, error) {
+func NewThrottler(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (*Throttler, error) {
 	return newThrottler(GlobalManager, name, unit, threadCount, maxRate, maxReplicationLag, time.Now)
 }
 
-func newThrottler(manager *managerImpl, name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
+func newThrottler(manager *managerImpl, name, unit string, threadCount int, maxRate, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
 	// Verify input parameters.
 	if maxRate < 0 {
 		return nil, fmt.Errorf("maxRate must be >= 0: %v", maxRate)
@@ -118,8 +122,10 @@ func newThrottler(manager *managerImpl, name, unit string, threadCount int, maxR
 	}
 
 	// Enable the configured modules.
-	var modules []Module
 	maxRateModule := NewMaxRateModule(maxRate)
+	actualRateHistory := newAggregatedIntervalHistory(1024, 1*time.Second, threadCount)
+
+	var modules []Module
 	modules = append(modules, maxRateModule)
 	// TODO(mberlin): Append ReplicationLagModule once it's implemented.
 
@@ -132,20 +138,21 @@ func newThrottler(manager *managerImpl, name, unit string, threadCount int, maxR
 	runningThreads := make(map[int]bool, threadCount)
 	threadThrottlers := make([]*threadThrottler, threadCount, threadCount)
 	for i := 0; i < threadCount; i++ {
-		threadThrottlers[i] = newThreadThrottler(i)
+		threadThrottlers[i] = newThreadThrottler(i, actualRateHistory)
 		runningThreads[i] = true
 	}
 	t := &Throttler{
-		name:             name,
-		unit:             unit,
-		manager:          manager,
-		modules:          modules,
-		maxRateModule:    maxRateModule,
-		rateUpdateChan:   rateUpdateChan,
-		threadThrottlers: threadThrottlers,
-		threadFinished:   make([]bool, threadCount, threadCount),
-		runningThreads:   runningThreads,
-		nowFunc:          nowFunc,
+		name:              name,
+		unit:              unit,
+		manager:           manager,
+		modules:           modules,
+		maxRateModule:     maxRateModule,
+		rateUpdateChan:    rateUpdateChan,
+		threadThrottlers:  threadThrottlers,
+		threadFinished:    make([]bool, threadCount, threadCount),
+		runningThreads:    runningThreads,
+		nowFunc:           nowFunc,
+		actualRateHistory: actualRateHistory,
 	}
 
 	// Initialize maxRate.

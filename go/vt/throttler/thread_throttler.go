@@ -43,10 +43,15 @@ type threadThrottler struct {
 	// nextRequestInterval is the time when the next request will be allowed.
 	// Tracking this ensures there won't be more than one request per interval.
 	nextRequestInterval time.Time
+
+	actualRateHistory *aggregatedIntervalHistory
 }
 
-func newThreadThrottler(threadID int) *threadThrottler {
-	return &threadThrottler{threadID: threadID}
+func newThreadThrottler(threadID int, actualRateHistory *aggregatedIntervalHistory) *threadThrottler {
+	return &threadThrottler{
+		threadID:          threadID,
+		actualRateHistory: actualRateHistory,
+	}
 }
 
 func (t *threadThrottler) throttle(now time.Time) time.Duration {
@@ -110,6 +115,10 @@ func (t *threadThrottler) throttle(now time.Time) time.Duration {
 func (t *threadThrottler) resetSecond(nowSecond time.Time) {
 	if nowSecond.Before(t.currentSecond) {
 		log.Warningf("Time did not increase monotonously. Make sure your system operates properly. time observed before: %v now: %v", t.currentSecond, nowSecond)
+	}
+	// Track rate from the past second.
+	if !t.currentSecond.IsZero() {
+		t.actualRateHistory.addPerThread(t.threadID, record{t.currentSecond, t.currentRate})
 	}
 	t.currentSecond = nowSecond
 	t.maxRateSecond = t.maxRate.Get()
