@@ -145,7 +145,7 @@ php_proto:
 	docker rm vitess_php-proto
 
 # This rule builds the bootstrap images for all flavors.
-DOCKER_IMAGES_FOR_TEST = mariadb mysql56 mysql57 percona
+DOCKER_IMAGES_FOR_TEST = mariadb mysql56 mysql57 percona percona57
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
 docker_bootstrap:
 	for i in $(DOCKER_IMAGES); do echo "image: $$i"; docker/bootstrap/build.sh $$i || exit 1; done
@@ -169,6 +169,10 @@ docker_base_percona:
 	chmod -R o=g *
 	docker build -f Dockerfile.percona -t vitess/base:percona .
 
+docker_base_percona57:
+	chmod -R o=g *
+	docker build -f Dockerfile.percona57 -t vitess/base:percona57 .
+
 docker_base_mariadb:
 	chmod -R o=g *
 	docker build -f Dockerfile.mariadb -t vitess/base:mariadb .
@@ -184,6 +188,9 @@ docker_lite_mariadb: docker_base_mariadb
 
 docker_lite_percona: docker_base_percona
 	cd docker/lite && ./build.sh percona
+
+docker_lite_percona57: docker_base_percona57
+	cd docker/lite && ./build.sh percona57
 
 docker_guestbook:
 	cd examples/kubernetes/guestbook && ./build.sh
