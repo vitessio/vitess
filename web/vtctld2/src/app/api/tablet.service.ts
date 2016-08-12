@@ -1,28 +1,21 @@
+import { Http, URLSearchParams } from '@angular/http';
 import { Injectable } from '@angular/core';
-import { Http } from '@angular/http';
 
 import { Observable } from 'rxjs/Observable';
 
 @Injectable()
 export class TabletService {
-  private tabletsUrl = '/app/tablets/';
+  constructor (private http: Http) {}
 
-  constructor(private http: Http) {}
+  getTabletStats(metric, cell, keyspace, tabletType) {
+    // params stores the key-value pairs to build the query parameter URL.
+    let params: URLSearchParams = new URLSearchParams();
+    params.set(metricKey, metric);
+    params.set(keyspaceKey, keyspace);
+    params.set(cellKey, cell);
+    params.set(typeKey, tabletType);
 
-  getTablets(keyspaceName, shardName): Observable<any> {
-    return this.http.get(this.tabletsUrl + '?KSName=' + keyspaceName)
-      .map(resp => resp.json())
-      .map(keyspace => {
-        if (keyspace.length < 1) {
-          return [];
-        }
-        let shards = keyspace[0].shards;
-        for (let i = 0; i < shards.length; i++) {
-          if (shards[i].name === shardName) {
-            return shards[i].tablets;
-          }
-        }
-        return [];
-      });
+    return this.http.get(statusUrl, { search: params })
+      .map( resp => resp.json());
   }
 }

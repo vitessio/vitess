@@ -12,9 +12,9 @@
 
   <!-- The labels, and nested labels, of the map are drawn -->
   <div *ngFor="let label of yLabels">
-    <tr *ngFor="let type of label.tabletTypes; let i = index" [attr.height]="getRowHeight()">
-      <td *ngIf="i==0" class="bordered" [attr.rowspan]="label.tabletTypes.length">{{label.cell}}</td>
-      <td class="bordered">{{type}}</td>
+    <tr *ngFor="let nestedLabel of label.NestedLabels; let i = index" [attr.height]="getRowHeight()">
+      <td *ngIf="i==0" class="bordered" [attr.rowspan]="label.NestedLabels.length">{{label.Label}}</td>
+      <td class="bordered">{{nestedLabel}}</td>
     </tr>
   </div>
 </table>
