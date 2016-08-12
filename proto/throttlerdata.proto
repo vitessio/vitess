@@ -25,3 +25,54 @@ message SetMaxRateResponse {
   // names is the list of throttler names which were updated.
   repeated string names = 1;
 }
+
+// MaxReplicationLagModuleConfig holds the configuration parameters
+// for the MaxReplicationLagModule which allows to adaptively
+// adjust the throttling rate based on the observed replication lag
+// across all replicas.
+message MaxReplicationLagModuleConfig {
+	// target_replication_lag_sec is the replication lag (in seconds) the
+	// MaxReplicationLagModule tries to aim for.
+	// If it is within the target, it tries to increase the throttler
+	// rate, otherwise it will lower it based on an educated guess of the
+	// slave throughput.
+	int64 target_replication_lag_sec = 1;
+
+	// max_replication_lag_sec is meant as a last resort.
+	// By default, the module tries to find out the system maximum capacity while
+	// trying to keep the replication lag around "target_replication_lag_sec".
+	// Usually, we'll wait min_duration_between_changes_sec to see the effect of a
+	// throttler rate change on the replication lag.
+	// But if the lag goes above this field's value we will go into an "emergency"
+	// state and throttle more aggressively (see "emergency_decrease" below).
+	// This is the only way to ensure that the system will recover.
+	int64 max_replication_lag_sec = 2;
+	
+	// initial_rate is the rate at which the module will start.
+	// Up to this rate, rate increases are always a doubling. Beyond this rate,
+	// rate increases happen in steps of "max_increase" instead.
+	int64 initial_rate = 3;
+
+	// max_increase defines by how much we will increase the rate
+	// e.g. 0.05 increases the rate by 5%.
+	// Note that any increase will let the system wait for at least
+	// (1 / MaxIncrease) seconds. If we wait for shorter periods of time, we
+	// won't notice if the rate increase also increases the replication lag.
+	// (If the system was already at its maximum capacity (e.g. 1k QPS) and we
+	// increase the rate by e.g. 5% to 1050 QPS, it will take 20 seconds until
+	// 1000 extra queries are buffered and the lag increases by 1 second.)
+	double max_increase = 4;
+	
+	// emergency_decrease defines by how much we will decrease the current rate
+	// if the observed replication lag is above "max_replication_lag_sec".
+	// E.g. 0.50 decreases the current rate by 50%.
+	double emergency_decrease = 5;
+
+	// min_duration_between_changes_sec specifies how long we'll wait for the last
+	// rate increase or decrease to have an effect on the system.
+	int64 min_duration_between_changes_sec = 6;
+
+	// max_duration_between_increases_sec specifies how long we'll wait at most
+	// for the last rate increase to have an effect on the system.
+	int64 max_duration_between_increases_sec = 7;
+}
