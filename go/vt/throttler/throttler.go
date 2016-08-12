@@ -13,7 +13,6 @@
 // To support b), the throttler constantly monitors the health of all replicas
 // and reduces the allowed rate if the replication lag is above a certain
 // threshold.
-// TODO(mberlin): Implement b).
 package throttler
 
 import (
@@ -78,6 +77,9 @@ type Throttler struct {
 	// rateUpdateChan is used to notify the throttler that the current max rate
 	// must be recalculated and updated.
 	rateUpdateChan chan struct{}
+	// maxReplicationLagModule is stored in its own field because we need it to
+	// record the replication lag. It's also included in the "modules" list.
+	maxReplicationLagModule *MaxReplicationLagModule
 
 	// The group below is unguarded because the fields are immutable and each
 	// thread accesses an element at a different index.
@@ -124,10 +126,14 @@ func newThrottler(manager *managerImpl, name, unit string, threadCount int, maxR
 	// Enable the configured modules.
 	maxRateModule := NewMaxRateModule(maxRate)
 	actualRateHistory := newAggregatedIntervalHistory(1024, 1*time.Second, threadCount)
+	maxReplicationLagModule, err := NewMaxReplicationLagModule(NewMaxReplicationLagModuleConfig(maxReplicationLag), actualRateHistory, nowFunc)
+	if err != nil {
+		return nil, err
+	}
 
 	var modules []Module
 	modules = append(modules, maxRateModule)
-	// TODO(mberlin): Append ReplicationLagModule once it's implemented.
+	modules = append(modules, maxReplicationLagModule)
 
 	// Start each module (which might start own Go routines).
 	rateUpdateChan := make(chan struct{}, 10)
@@ -142,17 +148,18 @@ func newThrottler(manager *managerImpl, name, unit string, threadCount int, maxR
 		runningThreads[i] = true
 	}
 	t := &Throttler{
-		name:              name,
-		unit:              unit,
-		manager:           manager,
-		modules:           modules,
-		maxRateModule:     maxRateModule,
-		rateUpdateChan:    rateUpdateChan,
-		threadThrottlers:  threadThrottlers,
-		threadFinished:    make([]bool, threadCount, threadCount),
-		runningThreads:    runningThreads,
-		nowFunc:           nowFunc,
-		actualRateHistory: actualRateHistory,
+		name:                    name,
+		unit:                    unit,
+		manager:                 manager,
+		modules:                 modules,
+		maxRateModule:           maxRateModule,
+		maxReplicationLagModule: maxReplicationLagModule,
+		rateUpdateChan:          rateUpdateChan,
+		threadThrottlers:        threadThrottlers,
+		threadFinished:          make([]bool, threadCount, threadCount),
+		runningThreads:          runningThreads,
+		nowFunc:                 nowFunc,
+		actualRateHistory:       actualRateHistory,
 	}
 
 	// Initialize maxRate.
@@ -224,7 +231,7 @@ func (t *Throttler) updateMaxRate() {
 	// Set it to infinite initially.
 	maxRate := int64(math.MaxInt64)
 
-	// Find out the new max rate.
+	// Find out the new max rate (minimum among all modules).
 	for _, m := range t.modules {
 		if moduleMaxRate := m.MaxRate(); moduleMaxRate < maxRate {
 			maxRate = moduleMaxRate
@@ -269,4 +276,10 @@ func (t *Throttler) MaxRate() int64 {
 // SetMaxRate updates the rate of the MaxRateModule.
 func (t *Throttler) SetMaxRate(rate int64) {
 	t.maxRateModule.SetMaxRate(rate)
+}
+
+// RecordReplicationLag must be called by users to report the "lag" observed at "time".
+// Note: After Close() is called, this method must not be called anymore.
+func (t *Throttler) RecordReplicationLag(lag int64, time time.Time) {
+	t.maxReplicationLagModule.RecordReplicationLag(lag, time)
 }
