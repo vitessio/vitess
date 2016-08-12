@@ -993,5 +993,10 @@ func (scw *SplitCloneWorker) getSourceSchema(ctx context.Context, tablet *topoda
 	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
 		return nil, fmt.Errorf("no tables matching the table filter in tablet %v", topoproto.TabletAliasString(tablet.Alias))
 	}
+	for _, td := range sourceSchemaDefinition.TableDefinitions {
+		if len(td.Columns) == 0 {
+			return nil, fmt.Errorf("schema for table %v has no columns", td.Name)
+		}
+	}
 	return sourceSchemaDefinition, nil
 }

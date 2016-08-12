@@ -387,6 +387,11 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
 		return fmt.Errorf("no tables matching the table filter")
 	}
+	for _, td := range sourceSchemaDefinition.TableDefinitions {
+		if len(td.Columns) == 0 {
+			return fmt.Errorf("schema for table %v has no columns", td.Name)
+		}
+	}
 	vscw.wr.Logger().Infof("Source tablet has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
 	vscw.tableStatusList.initialize(sourceSchemaDefinition)
 

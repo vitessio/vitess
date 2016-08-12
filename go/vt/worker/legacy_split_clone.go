@@ -458,6 +458,11 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
 		return fmt.Errorf("no tables matching the table filter in tablet %v", topoproto.TabletAliasString(scw.sourceAliases[0]))
 	}
+	for _, td := range sourceSchemaDefinition.TableDefinitions {
+		if len(td.Columns) == 0 {
+			return fmt.Errorf("schema for table %v has no columns", td.Name)
+		}
+	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
 	scw.tableStatusList.initialize(sourceSchemaDefinition)
 
