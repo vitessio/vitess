@@ -29,7 +29,7 @@ type StreamHealthQueryService struct {
 // NewStreamHealthQueryService creates a new fake query service for the target.
 func NewStreamHealthQueryService(target querypb.Target) *StreamHealthQueryService {
 	return &StreamHealthQueryService{
-		healthResponses: make(chan *querypb.StreamHealthResponse, 10),
+		healthResponses: make(chan *querypb.StreamHealthResponse, 1000),
 		target:          target,
 	}
 }
@@ -67,6 +67,18 @@ func (q *StreamHealthQueryService) AddHealthResponseWithQPS(qps float64) {
 		RealtimeStats: &querypb.RealtimeStats{
 			Qps:                 qps,
 			SecondsBehindMaster: DefaultSecondsBehindMaster,
+		},
+	}
+}
+
+// AddHealthResponseWithSecondsBehindMaster adds a faked health response to the
+// buffer channel. Only "seconds_behind_master" is different in this message.
+func (q *StreamHealthQueryService) AddHealthResponseWithSecondsBehindMaster(replicationLag uint32) {
+	q.healthResponses <- &querypb.StreamHealthResponse{
+		Target:  proto.Clone(&q.target).(*querypb.Target),
+		Serving: true,
+		RealtimeStats: &querypb.RealtimeStats{
+			SecondsBehindMaster: replicationLag,
 		},
 	}
 }
