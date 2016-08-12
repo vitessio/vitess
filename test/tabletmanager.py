@@ -546,7 +546,9 @@ class TestTabletManager(unittest.TestCase):
     tablet_62044.init_tablet('replica', 'test_keyspace', '0',
                              include_mysql_port=False)
     for t in tablet_62344, tablet_62044:
-      t.start_vttablet(wait_for_state=None,
+      # Since MySQL is down at this point and we want the tablet to start up
+      # successfully, we have to use supports_backups=False.
+      t.start_vttablet(wait_for_state=None, supports_backups=False,
                        full_mycnf_args=True, include_mysql_port=False)
     for t in tablet_62344, tablet_62044:
       t.wait_for_vttablet_state('NOT_SERVING')
@@ -560,7 +562,8 @@ class TestTabletManager(unittest.TestCase):
     # The above notice to not fix replication should survive tablet restart.
     tablet_62044.kill_vttablet()
     tablet_62044.start_vttablet(wait_for_state='NOT_SERVING',
-                                full_mycnf_args=True, include_mysql_port=False)
+                                full_mycnf_args=True, include_mysql_port=False,
+                                supports_backups=False)
 
     # restart mysqld
     start_procs = [
