@@ -64,14 +64,16 @@ type SplitCloneWorker struct {
 	sourceShards      []*topo.ShardInfo
 	destinationShards []*topo.ShardInfo
 	keyspaceSchema    *vindexes.KeyspaceSchema
+	// healthCheck is used for the destination shards to a) find out the current
+	// MASTER tablet, b) get the list of healthy RDONLY tablets and c) track the
+	// replication lag of all MASTER and REPLICA tablets.
+	// It must be closed at the end of the command.
+	healthCheck discovery.HealthCheck
+	tsc         *discovery.TabletStatsCache
 
 	// populated during WorkerStateFindTargets, read-only after that
 	sourceAliases []*topodatapb.TabletAlias
 	sourceTablets []*topodatapb.Tablet
-	// healthCheck tracks the health of all MASTER and REPLICA tablets.
-	// It must be closed at the end of the command.
-	healthCheck discovery.HealthCheck
-	tsc         *discovery.TabletStatsCache
 	// shardWatchers contains a TopologyWatcher for each source and destination
 	// shard. It updates the list of tablets in the healthcheck if replicas are
 	// added/removed.
@@ -81,6 +83,13 @@ type SplitCloneWorker struct {
 	// database name.
 	// Example Map Entry: test_keyspace/-80 => vt_test_keyspace
 	destinationDbNames map[string]string
+
+	// throttlersMu guards the fields within this group.
+	throttlersMu sync.Mutex
+	// throttlers has a throttler for each destination shard.
+	// Map key format: "keyspace/shard" e.g. "test_keyspace/-80"
+	// Throttlers will be added/removed during WorkerStateClone(Online|Offline).
+	throttlers map[string]*throttler.Throttler
 
 	// offlineSourceAliases has the list of tablets (per source shard) we took
 	// offline for the WorkerStateCloneOffline phase.
@@ -142,6 +151,7 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, on
 		maxTPS:                  maxTPS,
 		cleaner:                 &wrangler.Cleaner{},
 		tabletTracker:           NewTabletTracker(),
+		throttlers:              make(map[string]*throttler.Throttler),
 
 		destinationDbNames: make(map[string]string),
 
@@ -308,11 +318,14 @@ func (scw *SplitCloneWorker) Run(ctx context.Context) error {
 		}
 	}
 
-	// Stop healthcheck.
+	// Stop watchers to prevent new tablets from getting added to the healthCheck.
 	for _, watcher := range scw.shardWatchers {
 		watcher.Stop()
 	}
+	// Stop healthCheck to make sure it stops calling our listener implementation.
 	if scw.healthCheck != nil {
+		// After Close returned, we can be sure that it won't call our listener
+		// implementation (method StatsUpdate) anymore.
 		if err := scw.healthCheck.Close(); err != nil {
 			scw.wr.Logger().Errorf("HealthCheck.Close() failed: %v", err)
 		}
@@ -497,7 +510,11 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 
 	// Initialize healthcheck and add destination shards to it.
 	scw.healthCheck = discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
-	scw.tsc = discovery.NewTabletStatsCache(scw.healthCheck, scw.cell)
+	scw.tsc = discovery.NewTabletStatsCacheDoNotSetListener(scw.cell)
+	// We set sendDownEvents=true because it's required by TabletStatsCache.
+	scw.healthCheck.SetListener(scw, true /* sendDownEvents */)
+
+	// Start watchers to get tablets added automatically to healthCheck.
 	allShards := append(scw.sourceShards, scw.destinationShards...)
 	for _, si := range allShards {
 		watcher := discovery.NewShardReplicationWatcher(scw.wr.TopoServer(), scw.healthCheck,
@@ -661,6 +678,14 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 		tableStatusList = scw.tableStatusListOffline
 	}
 
+	// The throttlers exist only for the duration of this clone() call.
+	// That means a SplitClone invocation with both online and offline phases
+	// will create throttlers for each phase.
+	if err := scw.createThrottlers(); err != nil {
+		return err
+	}
+	defer scw.closeThrottlers()
+
 	sourceSchemaDefinition, err := scw.getSourceSchema(ctx, firstSourceTablet)
 	if err != nil {
 		return err
@@ -686,29 +711,13 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	}
 
 	insertChannels := make([]chan string, len(scw.destinationShards))
-	destinationThrottlers := make([]*throttler.Throttler, len(scw.destinationShards))
 	destinationWaitGroup := sync.WaitGroup{}
 	for shardIndex, si := range scw.destinationShards {
-		// we create one channel per destination tablet.  It
-		// is sized to have a buffer of a maximum of
-		// destinationWriterCount * 2 items, to hopefully
-		// always have data. We then have
-		// destinationWriterCount go routines reading from it.
+		// We create one channel per destination tablet. It is sized to have a
+		// buffer of a maximum of destinationWriterCount * 2 items, to hopefully
+		// always have data. We then have destinationWriterCount go routines reading
+		// from it.
 		insertChannels[shardIndex] = make(chan string, scw.destinationWriterCount*2)
-
-		// Set up the throttler for each destination shard.
-		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
-		t, err := throttler.NewThrottler(
-			keyspaceAndShard, "transactions", scw.destinationWriterCount, scw.maxTPS, throttler.ReplicationLagModuleDisabled)
-		if err != nil {
-			return fmt.Errorf("cannot instantiate throttler: %v", err)
-		}
-		destinationThrottlers[shardIndex] = t
-		defer func(i int) {
-			if t := destinationThrottlers[shardIndex]; t != nil {
-				t.Close()
-			}
-		}(shardIndex)
 
 		for j := 0; j < scw.destinationWriterCount; j++ {
 			destinationWaitGroup.Add(1)
@@ -720,7 +729,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				if err := executor.fetchLoop(ctx, insertChannel); err != nil {
 					processError("executer.FetchLoop failed: %v", err)
 				}
-			}(si.Keyspace(), si.ShardName(), insertChannels[shardIndex], t, j)
+			}(si.Keyspace(), si.ShardName(), insertChannels[shardIndex], scw.getThrottler(si.Keyspace(), si.ShardName()), j)
 		}
 	}
 
@@ -882,11 +891,6 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 		close(insertChannels[shardIndex])
 	}
 	destinationWaitGroup.Wait()
-	// Stop Throttlers.
-	for i, t := range destinationThrottlers {
-		t.Close()
-		destinationThrottlers[i] = nil
-	}
 	if firstError != nil {
 		return firstError
 	}
@@ -998,4 +1002,68 @@ func (scw *SplitCloneWorker) getSourceSchema(ctx context.Context, tablet *topoda
 		return nil, fmt.Errorf("no tables matching the table filter in tablet %v", topoproto.TabletAliasString(tablet.Alias))
 	}
 	return sourceSchemaDefinition, nil
+}
+
+// StatsUpdate receives replication lag updates for each destination master
+// and forwards them to the respective throttler instance.
+// It is part of the discovery.HealthCheckStatsListener interface.
+func (scw *SplitCloneWorker) StatsUpdate(ts *discovery.TabletStats) {
+	scw.tsc.StatsUpdate(ts)
+
+	// Ignore if not MASTER or REPLICA.
+	if ts.Target.TabletType != topodatapb.TabletType_MASTER &&
+		ts.Target.TabletType != topodatapb.TabletType_REPLICA {
+		return
+	}
+
+	// Lock throttlers mutex to avoid that this method (and the called method
+	// Throttler.RecordReplicationLag()) races with closeThrottlers() (which calls
+	// Throttler.Close()).
+	scw.throttlersMu.Lock()
+	defer scw.throttlersMu.Unlock()
+
+	t := scw.getThrottlerLocked(ts.Target.Keyspace, ts.Target.Shard)
+	// TODO(mberlin): Track from which replica the lag came as well. Necessary to ignore the N slowest replicas.
+	if t != nil {
+		t.RecordReplicationLag(int64(ts.Stats.SecondsBehindMaster), time.Now())
+	}
+}
+
+func (scw *SplitCloneWorker) createThrottlers() error {
+	scw.throttlersMu.Lock()
+	defer scw.throttlersMu.Unlock()
+
+	for _, si := range scw.destinationShards {
+		// Set up the throttler for each destination shard.
+		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
+		t, err := throttler.NewThrottler(
+			keyspaceAndShard, "transactions", scw.destinationWriterCount, scw.maxTPS, throttler.ReplicationLagModuleDisabled)
+		if err != nil {
+			return fmt.Errorf("cannot instantiate throttler: %v", err)
+		}
+		scw.throttlers[keyspaceAndShard] = t
+	}
+	return nil
+}
+
+func (scw *SplitCloneWorker) getThrottler(keyspace, shard string) *throttler.Throttler {
+	scw.throttlersMu.Lock()
+	defer scw.throttlersMu.Unlock()
+
+	return scw.getThrottlerLocked(keyspace, shard)
+}
+
+func (scw *SplitCloneWorker) getThrottlerLocked(keyspace, shard string) *throttler.Throttler {
+	keyspaceAndShard := topoproto.KeyspaceShardString(keyspace, shard)
+	return scw.throttlers[keyspaceAndShard]
+}
+
+func (scw *SplitCloneWorker) closeThrottlers() {
+	scw.throttlersMu.Lock()
+	defer scw.throttlersMu.Unlock()
+
+	for keyspaceAndShard, t := range scw.throttlers {
+		t.Close()
+		delete(scw.throttlers, keyspaceAndShard)
+	}
 }
