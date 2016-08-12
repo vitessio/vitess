@@ -66,7 +66,7 @@ type SplitCloneWorker struct {
 	keyspaceSchema    *vindexes.KeyspaceSchema
 	// healthCheck is used for the destination shards to a) find out the current
 	// MASTER tablet, b) get the list of healthy RDONLY tablets and c) track the
-	// replication lag of all MASTER and REPLICA tablets.
+	// replication lag of all REPLICA tablets.
 	// It must be closed at the end of the command.
 	healthCheck discovery.HealthCheck
 	tsc         *discovery.TabletStatsCache
@@ -1010,9 +1010,8 @@ func (scw *SplitCloneWorker) getSourceSchema(ctx context.Context, tablet *topoda
 func (scw *SplitCloneWorker) StatsUpdate(ts *discovery.TabletStats) {
 	scw.tsc.StatsUpdate(ts)
 
-	// Ignore if not MASTER or REPLICA.
-	if ts.Target.TabletType != topodatapb.TabletType_MASTER &&
-		ts.Target.TabletType != topodatapb.TabletType_REPLICA {
+	// Ignore if not REPLICA.
+	if ts.Target.TabletType != topodatapb.TabletType_REPLICA {
 		return
 	}
 
