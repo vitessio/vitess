@@ -265,6 +265,18 @@ func (c *tabletStatsCache) tabletStatsByAlias(tabletAlias *topodatapb.TabletAlia
 	return *ts
 }
 
+func (c *tabletStatsCache) tabletHealth(cell string, uid uint32) (*discovery.TabletStats, error) {
+	tabletAlias := topodatapb.TabletAlias{
+		Cell: cell,
+		Uid:  uid,
+	}
+	stat, ok := c.statusesByAlias[tabletAlias.String()]
+	if !ok {
+		return nil, fmt.Errorf("tablet %v doesn't exist in cell %v", uid, cell)
+	}
+	return stat, nil
+}
+
 func replicationLag(stat *discovery.TabletStats) float64 {
 	return float64(stat.Stats.SecondsBehindMaster)
 }

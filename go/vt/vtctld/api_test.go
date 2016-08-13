@@ -155,8 +155,14 @@ func TestAPI(t *testing.T) {
 		`},
 		{"GET", "tablet_statuses/cell1/REPLICA/lag", "can't get tablet_statuses: invalid target path: \"cell1/REPLICA/lag\"  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>"},
 		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "can't get tablet_statuses: invalid tablet type: hello"},
-	}
 
+		//Tablet Health
+		{"GET", "tablet_health/cell1/100", `{ "Key": "", "Tablet": { "alias": { "cell": "cell1", "uid": 100 },"port_map": { "vt": 100 }, "keyspace": "ks1", "shard": "-80", "type": 2},
+		  "Name": "", "Target": { "keyspace": "ks1", "shard": "-80", "tablet_type": 2 }, "Up": true, "Serving": true, "TabletExternallyReparentedTimestamp": 0,
+		  "Stats": { "seconds_behind_master": 100 }, "LastError": null }`},
+		{"GET", "tablet_health/cell1", "can't get tablet_health: invalid tablet_health path: \"cell1\"  expected path: /tablet_health/<cell>/<uid>"},
+		{"GET", "tablet_health/cell1/gh", "can't get tablet_health: incorrect uid gh: strconv.ParseUint: parsing \"gh\": invalid syntax"},
+	}
 	for _, in := range table {
 		var resp *http.Response
 		var err error
@@ -187,7 +193,7 @@ func TestAPI(t *testing.T) {
 		got := compactJSON(body)
 		want := compactJSON([]byte(in.want))
 		if want == "" {
-			// want is no valid JSON. Fallback to a string comparison.
+			// want is not valid JSON. Fallback to a string comparison.
 			want = in.want
 			// For unknown reasons errors have a trailing "\n\t\t". Remove it.
 			got = strings.TrimSpace(string(body))
