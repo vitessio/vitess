@@ -1,7 +1,5 @@
-import { Component, Input, AfterViewInit} from '@angular/core';
+import { Component, Input, AfterViewInit, OnInit } from '@angular/core';
 import { CORE_DIRECTIVES } from '@angular/common';
-
-import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
 
 declare var Plotly: any;
 
@@ -12,47 +10,58 @@ declare var Plotly: any;
     styleUrls: ['./heatmap.component.css'],
     directives: [
       CORE_DIRECTIVES,
-      MD_BUTTON_DIRECTIVES,
     ]
 })
 
-export class HeatmapComponent implements AfterViewInit {
+export class HeatmapComponent implements AfterViewInit, OnInit {
   @Input() data: number[][];
+  @Input() aliases: any[][];
   // yLabels is an array of objects with 2 properties: the cell and array of tabletTypes.
   @Input() yLabels: Array<any>;
   @Input() xLabels: Array<string>;
-  @Input() name: string;
+  name: string;
+
+  plotlyMap: any;
 
   // colorscaleValue defines the gradient for the heatmap.
   private colorscaleValue = [
-    [0.0, '#17A234'],
-    [0.5, '#A22417'],
-    [1.0, '#424141'],
+    [0.0, '#424141'],
+    [0.5, '#17A234'],
+    [1.0, '#A22417'],
   ];
   private getRowHeight() { return 50; }
   private getXLabelsRowHeight() { return 25; }
 
-  static rowHeight = 50;
+  constructor(  ) { }
 
+  // getTotalRows returns the size of the entire heatmap.
   getTotalRows() {
     let height = 0;
     for (let yLabel of this.yLabels) {
-      height += yLabel.tabletTypes.length;
+      height += yLabel.Label.Rowspan;
     }
     return height;
   }
 
-  ngAfterViewInit() {
-    this.drawHeatmap();
-    let elem = <any>(document.getElementById(this.name));
-    elem.on('plotly_click', function(data){
-      alert('clicked');
-    });
+  ngOnInit() {
+    this.name = 'heatmap';
   }
 
+  ngAfterViewInit() {
+    this.drawHeatmap();
+
+    let elem = <any>(document.getElementById(this.name));
+    elem.on('plotly_click', function(data){
+      // TODO(pkulshre): get tabletInfo from service.
+     }.bind(this));
+   }
+
   drawHeatmap() {
+     // Settings for the Plotly heatmap.
      let chartInfo = [{
        z: this.data,
+       zmin: -10,
+       zmax: 10,
        x: this.xLabels,
        colorscale: this.colorscaleValue,
        type: 'heatmap',
@@ -85,6 +94,6 @@ export class HeatmapComponent implements AfterViewInit {
        showlegend: false,
     };
 
-    Plotly.newPlot(this.name, chartInfo, chartLayout, {scrollZoom: true, displayModeBar: false});
+    this.plotlyMap = Plotly.newPlot(this.name, chartInfo, chartLayout, {scrollZoom: true, displayModeBar: false});
   }
 }
