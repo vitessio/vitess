@@ -1,4 +1,4 @@
-import { NgModule }      from '@angular/core';
+import { NgModule, CUSTOM_ELEMENTS_SCHEMA }      from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { HTTP_PROVIDERS } from '@angular/http';
 
@@ -16,12 +16,22 @@ import { FormsModule } from '@angular/forms';
 import { MdButtonModule } from '@angular2-material/button';
 import { MdRippleModule } from '@angular2-material/core/ripple/ripple';
 
+import { PolymerElement } from '@vaadin/angular2-polymer';
+
+const PolymerComponents = [
+  PolymerElement('paper-dialog'),
+  PolymerElement('paper-dropdown-menu'),
+  PolymerElement('paper-item'),
+  PolymerElement('paper-listbox'),
+];
+
 @NgModule({
   imports:      [ BrowserModule, routing, FormsModule, MdButtonModule, MdRippleModule],
   declarations: [
     AppComponent,
     DashboardComponent,
     KeyspaceComponent,
+    PolymerComponents,
     SchemaComponent,
     ShardComponent,
     StatusComponent,
@@ -29,6 +39,7 @@ import { MdRippleModule } from '@angular2-material/core/ripple/ripple';
     TasksComponent,
   ],
   providers:    [ APP_ROUTER_PROVIDERS, HTTP_PROVIDERS ],
-  bootstrap:    [ AppComponent ]
+  bootstrap:    [ AppComponent ],
+  schemas:      [ CUSTOM_ELEMENTS_SCHEMA ],
 })
 export class AppModule { }
