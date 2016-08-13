@@ -6,8 +6,6 @@ import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
 
 import { Observable } from 'rxjs/Observable';
 
-import { PolymerElement } from '@vaadin/angular2-polymer';
-
 import { AddButtonComponent } from '../shared/add-button.component';
 import { DialogComponent } from '../shared/dialog/dialog.component';
 import { DialogContent } from '../shared/dialog/dialog-content';
@@ -31,9 +29,8 @@ import { ShardService } from '../api/shard.service';
     ROUTER_DIRECTIVES,
     MD_CARD_DIRECTIVES,
     MD_BUTTON_DIRECTIVES,
-    PolymerElement('paper-dialog'),
     DialogComponent,
-    AddButtonComponent
+    AddButtonComponent,
   ],
 })
 export class KeyspaceComponent implements OnInit, OnDestroy {
