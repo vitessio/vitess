@@ -1,7 +1,7 @@
 import { Headers, Http, RequestOptions } from '@angular/http';
 import { Injectable } from '@angular/core';
 
-import { Observable } from 'rxjs/Observable';
+import { Observable } from 'rxjs/Rx';
 
 import { ShardService } from './shard.service';
 import { Keyspace } from './keyspace';
