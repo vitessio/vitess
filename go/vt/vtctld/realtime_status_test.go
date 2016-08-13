@@ -2,12 +2,14 @@ package vtctld
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
@@ -103,7 +105,7 @@ func checkStats(realtimeStats *realtimeStats, tablet *testlib.FakeTablet, want *
 	deadline := time.Now().Add(time.Second * 5)
 	for time.Now().Before(deadline) {
 		result := realtimeStats.tabletStatsByAlias(tablet.Tablet.Alias)
-		if result == nil {
+		if reflect.DeepEqual(result, discovery.TabletStats{}) {
 			continue
 		}
 		got := result.Stats
