@@ -260,8 +260,8 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 				result, err := ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
 				if err != nil && err != topo.ErrPartialResult {
 					return result, err
-			  }
-			  return result, nil
+				}
+				return result, nil
 			}
 
 			// Get all tablets in a cell.
