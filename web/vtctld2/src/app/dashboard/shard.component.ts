@@ -12,7 +12,7 @@ import { AddButtonComponent } from '../shared/add-button.component';
 import { DialogComponent } from '../shared/dialog/dialog.component';
 import { DialogContent } from '../shared/dialog/dialog-content';
 import { DialogSettings } from '../shared/dialog/dialog-settings';
-import { DeleteShardFlags, InitShardMasterFlags, ValidateShardFlags } from '../shared/flags/shard.flags';
+import { DeleteShardFlags, InitShardMasterFlags, ValidateShardFlags, TabExtRepFlags, PlanRepShardFlags, EmergencyRepShardFlags, ShardReplicationPosFlags, ValidateVerShardFlags } from '../shared/flags/shard.flags';
 import { KeyspaceService } from '../api/keyspace.service';
 import { ShardService } from '../api/shard.service';
 import { TabletService } from '../api/tablet.service';
@@ -128,6 +128,26 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.serverCall('InitShardMaster', 'There was a problem initializing a shard master for {{shard_ref}}:');
   }
 
+  TabletExternallyReparented() {
+    this.serverCall('TabletExternallyReparented', `There was a problem there was a problem updating {{tablet_alias}}'s metatdata:`);
+  }
+
+  PlanRepShard() {
+    this.serverCall('PlannedReparentShard', 'There was a problem initializing a shard master for {{shard_ref}}:');
+  }
+
+  EmergencyRepShard() {
+    this.serverCall('EmergencyReparentShard', 'There was a problem initializing a shard master for {{shard_ref}}:');
+  }
+
+  ShardReplicationPos() {
+    this.serverCall('ShardReplicationPositions', 'There was a problem initializing a shard master for {{shard_ref}}:');
+  }
+
+  ValidateVerShard() {
+    this.serverCall('ValidateVersionShard', 'There was a problem initializing a shard master for {{shard_ref}}:');
+  }
+
   serverCall(action: string, errorMessage: string) {
     this.vtctlService.serverCall(action, this.dialogContent, this.dialogSettings, errorMessage);
   }
@@ -143,7 +163,7 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   prepareValidateShard() {
-    this.dialogSettings = new DialogSettings('Validate', this.validateShard.bind(this), `Validate ${this.shardName}`, '');
+    this.dialogSettings = new DialogSettings('Validate', this.validateShard.bind(this), `Validate ${this.shardName}`);
     this.dialogSettings.setMessage('Validated {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
     let flags = new ValidateShardFlags(this.keyspaceName, this.shardName).flags;
@@ -152,10 +172,55 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   prepareInitShardMaster() {
-    this.dialogSettings = new DialogSettings('Initialize', this.initShardMaster.bind(this), `Initialize ${this.shardName} Master`, '');
+    this.dialogSettings = new DialogSettings('Initialize', this.initShardMaster.bind(this), `Initialize ${this.shardName} Master`);
     this.dialogSettings.setMessage('Initialized shard master for {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
     let flags = new InitShardMasterFlags(this.keyspaceName, this.shardName, this.tablets).flags;
+    this.dialogContent = new DialogContent(this.shardName, flags);
+    this.dialogSettings.toggleModal();
+  }
+
+  prepareTabExtRep() {
+    this.dialogSettings = new DialogSettings('Update', this.TabletExternallyReparented.bind(this), `Externally Reparent a Tablet`);
+    this.dialogSettings.setMessage('Changed metadata in the topology server for {{tablet_alias}}');
+    this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
+    let flags = new TabExtRepFlags(this.tablets).flags;
+    this.dialogContent = new DialogContent(this.shardName, flags);
+    this.dialogSettings.toggleModal();
+  }
+
+  preparePlanRepShard() {
+    this.dialogSettings = new DialogSettings('Reparent', this.PlanRepShard.bind(this), `Plan to reparent a shard`, '');
+    this.dialogSettings.setMessage('Reparented {{shard_ref}}');
+    this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
+    let flags = new PlanRepShardFlags(this.keyspaceName, this.shardName, this.tablets).flags;
+    this.dialogContent = new DialogContent(this.shardName, flags);
+    this.dialogSettings.toggleModal();
+  }
+
+  prepareEmergencyRepShard() {
+    this.dialogSettings = new DialogSettings('Reparent', this.EmergencyRepShard.bind(this), `Emergency Reparent Shard`);
+    this.dialogSettings.setMessage('Initialized shard master for {{shard_ref}}');
+    this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
+    let flags = new EmergencyRepShardFlags(this.keyspaceName, this.shardName, this.tablets).flags;
+    this.dialogContent = new DialogContent(this.shardName, flags);
+    this.dialogSettings.toggleModal();
+  }
+
+  prepareShardReplicationPos() {
+    this.dialogSettings = new DialogSettings('Get', this.ShardReplicationPos.bind(this), `Get ${this.shardName} Replication Positions`);
+    this.dialogSettings.setMessage('Fetched Replication Positions for {{shard_ref}}');
+    this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
+    let flags = new ShardReplicationPosFlags(this.keyspaceName, this.shardName).flags;
+    this.dialogContent = new DialogContent(this.shardName, flags);
+    this.dialogSettings.toggleModal();
+  }
+
+  prepareValidateVerShard() {
+    this.dialogSettings = new DialogSettings('Validate', this.ValidateVerShard.bind(this), `Validate ${this.shardName}'s Version`);
+    this.dialogSettings.setMessage(`Validated {{shard_ref}}'s Version`);
+    this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
+    let flags = new ValidateVerShardFlags(this.keyspaceName, this.shardName).flags;
     this.dialogContent = new DialogContent(this.shardName, flags);
     this.dialogSettings.toggleModal();
   }

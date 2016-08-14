@@ -158,16 +158,20 @@ export class DialogContent {
     let indexOfOpenDoubleBracket = fmtString.indexOf('{{');
     while (indexOfOpenDoubleBracket !== -1) {
       let indexOfCloseDoubleBracket = fmtString.indexOf('}}', indexOfOpenDoubleBracket);
-      let lookUpId = fmtString.substring(indexOfOpenDoubleBracket + 2, indexOfCloseDoubleBracket);
-      if (this.flags[lookUpId] && this.flags[lookUpId].getStrValue()) {
-        fmtString = fmtString.substring(0, indexOfOpenDoubleBracket)
-                    + this.flags[lookUpId].getStrValue()
-                    + fmtString.substring(indexOfCloseDoubleBracket + 2);
+      if (indexOfCloseDoubleBracket !== -1) {
+        let lookUpId = fmtString.substring(indexOfOpenDoubleBracket + 2, indexOfCloseDoubleBracket);
+        if (this.flags[lookUpId] && this.flags[lookUpId].getStrValue()) {
+          fmtString = fmtString.substring(0, indexOfOpenDoubleBracket)
+                      + this.flags[lookUpId].getStrValue()
+                      + fmtString.substring(indexOfCloseDoubleBracket + 2);
+        } else {
+          fmtString = fmtString.substring(0, indexOfOpenDoubleBracket)
+                      + fmtString.substring(indexOfCloseDoubleBracket + 2);
+        }
+        indexOfOpenDoubleBracket = fmtString.indexOf('{{');
       } else {
-        fmtString = fmtString.substring(0, indexOfOpenDoubleBracket)
-                    + fmtString.substring(indexOfCloseDoubleBracket + 2);
+        break;
       }
-      indexOfOpenDoubleBracket = fmtString.indexOf('{{');
     }
     return fmtString;
   }

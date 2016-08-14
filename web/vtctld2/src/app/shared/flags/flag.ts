@@ -60,7 +60,7 @@ export class Flag {
     return this.value;
   }
 
-  public setValue(value: string) {
+  public setValue(value) {
     this.value = value;
   }
 
@@ -111,7 +111,7 @@ export class CheckBoxFlag extends Flag {
   }
 
   // Overload parent since Boolean arguments just need a key.
-  public getBodyContent(positional: boolean): string[] {
+  public getPostBodyContent(positional: boolean): string[] {
     if (this.getValue() === false || this.getStrValue() === '') {
       return [];
     }

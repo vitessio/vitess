@@ -14,7 +14,7 @@ import { NewShardFlags } from '../shared/flags/shard.flags';
 import { KeyspaceExtraComponent } from './keyspace-extra.component';
 import { KeyspaceService } from '../api/keyspace.service';
 import { PrepareResponse } from '../shared/prepare-response';
-import { RebuildKeyspaceGraphFlags, RemoveKeyspaceCellFlags, ValidateKeyspaceFlags } from '../shared/flags/keyspace.flags';
+import { RebuildKeyspaceGraphFlags, RemoveKeyspaceCellFlags, ValidateKeyspaceFlags, ValidateSchemaFlags, ValidateVersionFlags } from '../shared/flags/keyspace.flags';
 import { ShardService } from '../api/shard.service';
 import { VtctlService } from '../api/vtctl.service';
 
@@ -88,6 +88,14 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     this.serverCall('ValidateKeyspace', 'There was a problem validating {{keyspace_name}}:');
   }
 
+  validateSchema() {
+    this.serverCall('ValidateSchemaKeyspace', `There was a problem validating {{keyspace_name}}'s Schema:`);
+  }
+
+  validateVersion() {
+    this.serverCall('ValidateVersionKeyspace', `There was a problem validating {{keyspace_name}}'s Version:`);
+  }
+
   rebuildKeyspace() {
     this.serverCall('RebuildKeyspaceGraph', 'There was a problem rebuilding {{keyspace_name}}:');
   }
@@ -114,6 +122,24 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     this.dialogSettings.setMessage('Validated {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.refreshKeyspaceView.bind(this);
     let flags = new ValidateKeyspaceFlags(this.keyspaceName).flags;
+    this.dialogContent = new DialogContent('keyspace_name', flags, {});
+    this.dialogSettings.toggleModal();
+  }
+
+  prepareValidateSchema() {
+    this.dialogSettings = new DialogSettings('Validate', this.validateSchema.bind(this), `Validate ${this.keyspaceName}'s Schema`, '');
+    this.dialogSettings.setMessage(`Validated {{keyspace_name}}'s Schema`);
+    this.dialogSettings.onCloseFunction = this.refreshKeyspaceView.bind(this);
+    let flags = new ValidateSchemaFlags(this.keyspaceName).flags;
+    this.dialogContent = new DialogContent('keyspace_name', flags, {});
+    this.dialogSettings.toggleModal();
+  }
+
+  prepareValidateVersion() {
+    this.dialogSettings = new DialogSettings('Validate', this.validateVersion.bind(this), `Validate ${this.keyspaceName}'s Version`, '');
+    this.dialogSettings.setMessage(`Validated {{keyspace_name}}'s Version`);
+    this.dialogSettings.onCloseFunction = this.refreshKeyspaceView.bind(this);
+    let flags = new ValidateVersionFlags(this.keyspaceName).flags;
     this.dialogContent = new DialogContent('keyspace_name', flags, {});
     this.dialogSettings.toggleModal();
   }

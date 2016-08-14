@@ -4,8 +4,8 @@ import { Proto } from '../proto';
 // Groups of flags for vtctl actions.
 export class DeleteKeyspaceFlags {
   flags= {};
-  constructor(keyspace) {
-    this.flags['keyspace_name'] = new KeyspaceNameFlag(0, 'keyspace_name', keyspace.name, false);
+  constructor(keyspaceName: string) {
+    this.flags['keyspace_name'] = new KeyspaceNameFlag(0, 'keyspace_name', keyspaceName, false);
     this.flags['keyspace_name']['positional'] = true;
     this.flags['recursive'] = new RecursiveFlag(1, 'recursive');
   }
@@ -70,6 +70,22 @@ export class ValidateKeyspaceFlags {
     this.flags['keyspace_name'] = new KeyspaceNameFlag(0, 'keyspace_name', keyspaceName, false);
     this.flags['keyspace_name']['positional'] = true;
     this.flags['ping-tablet'] = new PingTabletsFlag(1, 'ping-tablet');
+  }
+}
+
+export class ValidateSchemaFlags {
+  flags= {};
+  constructor(keyspaceName) {
+    this.flags['keyspace_name'] = new KeyspaceNameFlag(0, 'keyspace_name', keyspaceName, false);
+    this.flags['keyspace_name']['positional'] = true;
+  }
+}
+
+export class ValidateVersionFlags {
+  flags= {};
+  constructor(keyspaceName) {
+    this.flags['keyspace_name'] = new KeyspaceNameFlag(0, 'keyspace_name', keyspaceName, false);
+    this.flags['keyspace_name']['positional'] = true;
   }
 }
 

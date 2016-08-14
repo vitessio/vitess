@@ -4,6 +4,11 @@
     <button md-raised-button (click)="prepareDeleteShard();dialog.open();">Delete</button>
     <button md-raised-button (click)="prepareValidateShard();dialog.open();">Validate</button>
     <button md-raised-button (click)="prepareInitShardMaster();dialog.open();">Initialize Shard Master</button>
+    <button md-raised-button (click)="prepareTabExtRep();dialog.open();">Externally Reparent Tablet</button>
+    <button md-raised-button (click)="preparePlanRepShard();dialog.open();">Planned Reparent</button>
+    <button md-raised-button (click)="prepareEmergencyRepShard();dialog.open();">Emergency Reparent</button>
+    <button md-raised-button (click)="prepareShardReplicationPos();dialog.open();">Shard Replication Positions</button>
+    <button md-raised-button (click)="prepareValidateVerShard();dialog.open();">Validate Version</button>
   </div>
   <!-- Table from ng prime that will be attached to Vitess next.-->
   <div class="vt-tablet-container">

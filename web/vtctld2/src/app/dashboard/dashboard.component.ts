@@ -20,6 +20,7 @@ import { KeyspaceService } from '../api/keyspace.service';
 import { PrepareResponse } from '../shared/prepare-response';
 import { Proto } from '../shared/proto';
 import { ShardService } from '../api/shard.service';
+import { TestMaster } from '../test/test.master';
 import { VtctlService } from '../api/vtctl.service';
 
 @Component({
@@ -49,6 +50,8 @@ export class DashboardComponent implements OnInit {
   keyspacesReady = false;
   dialogSettings: DialogSettings;
   dialogContent: DialogContent;
+  runTest = false;
+  tearDownTest = false;
 
   constructor(
               private keyspaceService: KeyspaceService,
@@ -59,6 +62,22 @@ export class DashboardComponent implements OnInit {
     this.getKeyspaces();
     this.dialogContent = new DialogContent();
     this.dialogSettings = new DialogSettings();
+    if (this.runTest) {
+      this.runTests();
+    }
+    if (this.tearDownTest) {
+      this.cleanTests();
+    }
+  }
+
+  runTests() {
+    let tester = new TestMaster(this.vtctlService);
+    tester.runAllTests();
+  }
+
+  cleanTests() {
+    let tester = new TestMaster(this.vtctlService);
+    tester.tearDownAllTests();
   }
 
   getKeyspaces() {
@@ -126,7 +145,7 @@ export class DashboardComponent implements OnInit {
                                              `Delete ${keyspace.name}`, `Are you sure you want to delete ${keyspace.name}?`);
     this.dialogSettings.setMessage('Deleted {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.refreshDashboardView.bind(this);
-    let flags = new DeleteKeyspaceFlags(keyspace).flags;
+    let flags = new DeleteKeyspaceFlags(keyspace.name).flags;
     this.dialogContent = new DialogContent('keyspace_name', flags);
     this.dialogSettings.toggleModal();
   }
