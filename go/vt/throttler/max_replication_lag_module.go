@@ -162,12 +162,22 @@ func (m *MaxReplicationLagModule) ProcessRecords() {
 	defer m.wg.Done()
 
 	for lagRecord := range m.lagRecords {
-		m.applyLatestConfig()
-
-		m.lagCache.add(lagRecord)
-
-		m.recalculateRate(lagRecord)
+		m.processRecord(lagRecord)
 	}
+}
+
+func (m *MaxReplicationLagModule) processRecord(lagRecord replicationLagRecord) {
+	m.applyLatestConfig()
+
+	m.lagCache.add(lagRecord)
+
+	m.lagCache.sortByLag(int(m.config.IgnoreNSlowestReplicas), m.config.MaxReplicationLagSec+1)
+
+	if m.lagCache.ignoreSlowReplica(lagRecord.Key) {
+		return
+	}
+
+	m.recalculateRate(lagRecord)
 }
 
 // applyLatestConfig checks if "mutableConfig" should be applied as the new
@@ -224,10 +234,13 @@ func (m *MaxReplicationLagModule) increaseRate(now time.Time, lagRecordNow repli
 	// We wait for a lag record for the same replica and ignore other replica
 	// updates in the meantime.
 	if m.replicaUnderIncreaseTest != "" && m.replicaUnderIncreaseTest != lagRecordNow.Key {
+		// This is not the replica we're waiting for. Therefore we'll skip this
+		// replica if the replica under test has no issues i.e.
+		// a) it's still tracked
+		// b) its LastError is not set
+		// c) it has not become a slow, ignored replica
 		r := m.lagCache.latest(m.replicaUnderIncreaseTest)
-		// But only if the wanted replica currently has no issues i.e. it's still
-		// tracked and its LastError is not set.
-		if !r.isZero() && r.LastError == nil {
+		if !r.isZero() && r.LastError == nil && !m.lagCache.isIgnored(m.replicaUnderIncreaseTest) {
 			return
 		}
 	}

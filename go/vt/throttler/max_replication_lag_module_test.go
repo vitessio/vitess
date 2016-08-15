@@ -60,11 +60,7 @@ func (tf *testFixture) process(lagRecord replicationLagRecord) {
 	// Advance the fake clock. This way the test writer does not have to do it.
 	tf.fc.setNow(lagRecord.time.Sub(time.Time{}))
 
-	tf.m.applyLatestConfig()
-
-	tf.m.lagCache.add(lagRecord)
-
-	tf.m.recalculateRate(lagRecord)
+	tf.m.processRecord(lagRecord)
 }
 
 func (tf *testFixture) checkState(state state, rate int64, lastRateChange time.Time) error {
@@ -295,6 +291,106 @@ func TestMaxReplicationLagModule_Decrease_NoReplicaHistory(t *testing.T) {
 	// the guessed rate gets further reduced by 120 QPS (1200 queries / 10s).
 	// Hence, the rate is set to 20 QPS.
 	if err := tf.checkState(decreaseAndGuessRate, 20, sinceZero(90*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMaxReplicationLagModule_IgnoreNSlowestReplicas(t *testing.T) {
+	config := NewMaxReplicationLagModuleConfig(5)
+	config.IgnoreNSlowestReplicas = 1
+	tf, err := newTestFixture(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// r1 @   0s, 0s lag
+	tf.process(lagRecord(sinceZero(0*time.Second), r1, 0))
+	if err := tf.checkState(increaseRate, 100, sinceZero(0*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// r2 @  10s, 10s lag
+	tf.ratesHistory.add(sinceZero(9*time.Second), 100)
+	tf.process(lagRecord(sinceZero(10*time.Second), r2, 10))
+	// Although r2's lag is high, it's ignored because it's the 1 slowest replica.
+	if err := tf.checkState(increaseRate, 100, sinceZero(0*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// r1 @  20s, 20s lag
+	tf.ratesHistory.add(sinceZero(19*time.Second), 100)
+	tf.process(lagRecord(sinceZero(20*time.Second), r1, 20))
+	// r1 would become the new 1 slowest replica. However, we do not ignore it
+	// because then we would ignore all known replicas in a row.
+	if err := tf.checkState(emergency, 50, sinceZero(20*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMaxReplicationLagModule_IgnoreNSlowestReplicas_NotEnoughReplicas(t *testing.T) {
+	config := NewMaxReplicationLagModuleConfig(5)
+	config.IgnoreNSlowestReplicas = 1
+	tf, err := newTestFixture(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// r2 @  10s, 10s lag
+	tf.ratesHistory.add(sinceZero(9*time.Second), 100)
+	tf.process(lagRecord(sinceZero(10*time.Second), r2, 10))
+	// r2 is the 1 slowest replica. However, it's not ignored because then we
+	// would ignore all replicas. Therefore, we react to its lag increase.
+	if err := tf.checkState(emergency, 50, sinceZero(10*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestMaxReplicationLagModule_IgnoreNSlowestReplicas_IsIgnoredDuringIncrease
+// is almost identical to TestMaxReplicationLagModule_Increase_LastErrorOrNotUp.
+// r2 triggers an increase and we wait for its next update after the increase
+// waiting period. However, it becomes the slowest replica in the meantime and
+// will be completely ignored. In consequence, we no longer wait for r2 and r1
+// can trigger another increase instead.
+func TestMaxReplicationLagModule_IgnoreNSlowestReplicas_IsIgnoredDuringIncrease(t *testing.T) {
+	config := NewMaxReplicationLagModuleConfig(5)
+	config.IgnoreNSlowestReplicas = 1
+	tf, err := newTestFixture(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// r2 @  70s, 0s lag
+	tf.ratesHistory.add(sinceZero(69*time.Second), 100)
+	tf.process(lagRecord(sinceZero(70*time.Second), r2, 0))
+	// Rate was increased to 200 based on actual rate of 100 within [0s, 69s].
+	if err := tf.checkState(increaseRate, 200, sinceZero(70*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// r1 @  80s, 0s lag
+	tf.ratesHistory.add(sinceZero(70*time.Second), 100)
+	tf.ratesHistory.add(sinceZero(79*time.Second), 200)
+	tf.process(lagRecord(sinceZero(80*time.Second), r1, 0))
+	// Lag record was ignored because it's within the wait period.
+	if err := tf.checkState(increaseRate, 200, sinceZero(70*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// r2 becomes slow and will be ignored now.
+	// r2 @  90s, 10s lag
+	tf.ratesHistory.add(sinceZero(89*time.Second), 200)
+	tf.m.lagCache.add(lagRecord(sinceZero(90*time.Second), r2, 10))
+	// We ignore the 1 slowest replica and do not decrease despite r2's high lag.
+	if err := tf.checkState(increaseRate, 200, sinceZero(70*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// r1 @ 100s, 0s lag
+	tf.ratesHistory.add(sinceZero(99*time.Second), 200)
+	tf.process(lagRecord(sinceZero(100*time.Second), r1, 0))
+	// Meanwhile, r1 is doing fine and will trigger the next increase because
+	// we're no longer waiting for the ignored r2.
+	if err := tf.checkState(increaseRate, 400, sinceZero(100*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 }

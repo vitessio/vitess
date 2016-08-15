@@ -73,4 +73,11 @@ message MaxReplicationLagModuleConfig {
 	// max_duration_between_increases_sec specifies how long we'll wait at most
 	// for the last rate increase to have an effect on the system.
 	int64 max_duration_between_increases_sec = 7;
+	
+	// ignore_n_slowest_replicas will ignore replication lag updates from the
+	// N slowest replicas. Under certain circumstances, replicas are still
+	// considered e.g. a) if the lag is at most max_replication_lag_sec, b) there
+	// are less than N+1 replicas or c) the lag increased on each replica such
+	// that all replicas were ignored in a row.
+	int32 ignore_n_slowest_replicas = 8;
 }
