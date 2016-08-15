@@ -49,12 +49,10 @@ message MaxReplicationLagModuleConfig {
 	int64 max_replication_lag_sec = 2;
 	
 	// initial_rate is the rate at which the module will start.
-	// Up to this rate, rate increases are always a doubling. Beyond this rate,
-	// rate increases happen in steps of "max_increase" instead.
 	int64 initial_rate = 3;
 
 	// max_increase defines by how much we will increase the rate
-	// e.g. 0.05 increases the rate by 5%.
+	// e.g. 0.05 increases the rate by 5% while 1.0 by 100%.
 	// Note that any increase will let the system wait for at least
 	// (1 / MaxIncrease) seconds. If we wait for shorter periods of time, we
 	// won't notice if the rate increase also increases the replication lag.

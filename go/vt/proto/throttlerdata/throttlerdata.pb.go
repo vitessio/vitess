@@ -102,11 +102,9 @@ type MaxReplicationLagModuleConfig struct {
 	// This is the only way to ensure that the system will recover.
 	MaxReplicationLagSec int64 `protobuf:"varint,2,opt,name=max_replication_lag_sec,json=maxReplicationLagSec" json:"max_replication_lag_sec,omitempty"`
 	// initial_rate is the rate at which the module will start.
-	// Up to this rate, rate increases are always a doubling. Beyond this rate,
-	// rate increases happen in steps of "max_increase" instead.
 	InitialRate int64 `protobuf:"varint,3,opt,name=initial_rate,json=initialRate" json:"initial_rate,omitempty"`
 	// max_increase defines by how much we will increase the rate
-	// e.g. 0.05 increases the rate by 5%.
+	// e.g. 0.05 increases the rate by 5% while 1.0 by 100%.
 	// Note that any increase will let the system wait for at least
 	// (1 / MaxIncrease) seconds. If we wait for shorter periods of time, we
 	// won't notice if the rate increase also increases the replication lag.
