@@ -36,8 +36,8 @@ export class StatusComponent implements OnInit {
   }
 
   getHeatmapData() {
-    // Subscribe to get a one time result for initial data.
-    this.tabletService.getInitialTabletStats('lag', 'test', 'test_keyspace', 'REPLICA').subscribe( stats => {
+    // Subscribe to get updates every second.
+    this.tabletService.getTabletStats('lag', 'test', 'test_keyspace', 'REPLICA').subscribe(stats => {
       this.data = stats.Data;
       this.aliases = stats.Aliases;
       this.yLabels = stats.Labels;
@@ -46,22 +46,15 @@ export class StatusComponent implements OnInit {
         this.xLabels.push('' + i);
       }
       this.heatmapDataReady = true;
-    });
 
-    // Subscribe to get updates every second.
-    this.tabletService.getTabletStats('lag', 'test', 'test_keyspace', 'REPLICA').subscribe(stats => {
-      this.heatmap.data = stats.Data;
-      this.data = stats.Data;
-      this.heatmap.aliases = stats.Aliases;
-      this.aliases = stats.Aliases;
-      this.heatmap.yLabels = stats.Labels;
-      this.yLabels = stats.Labels;
-      this.xLabels = [];
-      for (let i = 0; i < stats.Data[0].length; i++) {
-        this.xLabels.push('' + i);
+      // The heatmap has already been instantiated so it needs to be redrawn.
+      if (this.heatmap != null) {
+        this.heatmap.data = this.data;
+        this.heatmap.aliases = this.aliases;
+        this.heatmap.yLabels = this.yLabels;
+        this.heatmap.xLabels = this.xLabels;
+        this.heatmap.drawHeatmap();
       }
-      this.heatmap.xLabels = this.xLabels;
-      this.heatmap.drawHeatmap();
     });
   }
 }

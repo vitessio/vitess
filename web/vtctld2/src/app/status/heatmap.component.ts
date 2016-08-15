@@ -32,15 +32,15 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
   private getRowHeight() { return 50; }
   private getXLabelsRowHeight() { return 25; }
 
-  constructor(  ) { }
+  constructor() {}
 
   // getTotalRows returns the size of the entire heatmap.
-  getTotalRows() {
-    let height = 0;
-    for (let yLabel of this.yLabels) {
-      height += yLabel.Label.Rowspan;
+  getHeatmapHeight() {
+    if (this.yLabels == null) {
+      // TODO(pkulshre): fix this when backend is generalized.
+      return 1;
     }
-    return height;
+    return this.yLabels.reduce((a,b)=>a.Label.Rowspan+b.Label.Rowspan);
   }
 
   ngOnInit() {
@@ -53,8 +53,8 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
     let elem = <any>(document.getElementById(this.name));
     elem.on('plotly_click', function(data){
       // TODO(pkulshre): get tabletInfo from service.
-     }.bind(this));
-   }
+    }.bind(this));
+  }
 
   drawHeatmap() {
      // Settings for the Plotly heatmap.
@@ -84,7 +84,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
      let chartLayout = {
        xaxis: xAxisTemplate,
        yaxis: yAxisTemplate,
-       height: (this.getTotalRows() * this.getRowHeight() + this.getXLabelsRowHeight()),
+       height: (this.getHeatmapHeight() * this.getRowHeight() + this.getXLabelsRowHeight()),
        margin: {
          t: 25,
          b: 0,
