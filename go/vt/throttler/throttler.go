@@ -22,6 +22,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/discovery"
 )
 
 const (
@@ -278,8 +279,9 @@ func (t *Throttler) SetMaxRate(rate int64) {
 	t.maxRateModule.SetMaxRate(rate)
 }
 
-// RecordReplicationLag must be called by users to report the "lag" observed at "time".
+// RecordReplicationLag must be called by users to report the "ts" tablet health
+// data observed at "time".
 // Note: After Close() is called, this method must not be called anymore.
-func (t *Throttler) RecordReplicationLag(lag int64, time time.Time) {
-	t.maxReplicationLagModule.RecordReplicationLag(lag, time)
+func (t *Throttler) RecordReplicationLag(time time.Time, ts *discovery.TabletStats) {
+	t.maxReplicationLagModule.RecordReplicationLag(time, ts)
 }

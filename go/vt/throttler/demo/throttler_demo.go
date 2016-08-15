@@ -265,7 +265,7 @@ func (c *client) stop() {
 // It gets called by the healthCheck instance every time a tablet broadcasts
 // a health update.
 func (c *client) StatsUpdate(ts *discovery.TabletStats) {
-	c.throttler.RecordReplicationLag(int64(ts.Stats.SecondsBehindMaster), time.Now())
+	c.throttler.RecordReplicationLag(time.Now(), ts)
 }
 
 func main() {

@@ -16,15 +16,19 @@ type MaxReplicationLagModuleConfig struct {
 
 var defaultMaxReplicationLagModuleConfig = MaxReplicationLagModuleConfig{
 	throttlerdata.MaxReplicationLagModuleConfig{
-		TargetReplicationLagSec: 1,
+		TargetReplicationLagSec: 2,
 		MaxReplicationLagSec:    ReplicationLagModuleDisabled,
 
-		InitialRate:       100,
-		MaxIncrease:       0.05,
+		InitialRate: 100,
+		// 1 means 100% i.e. double rates by default.
+		MaxIncrease:       1,
 		EmergencyDecrease: 0.5,
 
-		MinDurationBetweenChangesSec:   10,
-		MaxDurationBetweenIncreasesSec: 61,
+		MinDurationBetweenChangesSec: 10,
+		// MaxDurationBetweenIncreasesSec defaults to 60+2 seconds because this
+		// corresponds to three 3 broadcasts (assuming --health_check_interval=20s).
+		// The 2 extra seconds give us headroom to account for delay in the process.
+		MaxDurationBetweenIncreasesSec: 60 + 2,
 	},
 }
 
