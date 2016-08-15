@@ -14,7 +14,8 @@ import { NewShardFlags } from '../shared/flags/shard.flags';
 import { KeyspaceExtraComponent } from './keyspace-extra.component';
 import { KeyspaceService } from '../api/keyspace.service';
 import { PrepareResponse } from '../shared/prepare-response';
-import { RebuildKeyspaceGraphFlags, RemoveKeyspaceCellFlags, ValidateKeyspaceFlags, ValidateSchemaFlags, ValidateVersionFlags } from '../shared/flags/keyspace.flags';
+import { RebuildKeyspaceGraphFlags, RemoveKeyspaceCellFlags, ValidateKeyspaceFlags,
+         ValidateSchemaFlags, ValidateVersionFlags } from '../shared/flags/keyspace.flags';
 import { ShardService } from '../api/shard.service';
 import { VtctlService } from '../api/vtctl.service';
 

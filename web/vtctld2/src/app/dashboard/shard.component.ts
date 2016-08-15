@@ -12,7 +12,8 @@ import { AddButtonComponent } from '../shared/add-button.component';
 import { DialogComponent } from '../shared/dialog/dialog.component';
 import { DialogContent } from '../shared/dialog/dialog-content';
 import { DialogSettings } from '../shared/dialog/dialog-settings';
-import { DeleteShardFlags, InitShardMasterFlags, ValidateShardFlags, TabExtRepFlags, PlanRepShardFlags, EmergencyRepShardFlags, ShardReplicationPosFlags, ValidateVerShardFlags } from '../shared/flags/shard.flags';
+import { DeleteShardFlags, InitShardMasterFlags, ValidateShardFlags, TabExtRepFlags,
+         PlanRepShardFlags, EmergencyRepShardFlags, ShardReplicationPosFlags, ValidateVerShardFlags } from '../shared/flags/shard.flags';
 import { KeyspaceService } from '../api/keyspace.service';
 import { ShardService } from '../api/shard.service';
 import { TabletService } from '../api/tablet.service';
