@@ -19,8 +19,9 @@ var defaultMaxReplicationLagModuleConfig = MaxReplicationLagModuleConfig{
 		TargetReplicationLagSec: 1,
 		MaxReplicationLagSec:    ReplicationLagModuleDisabled,
 
-		InitialRate:       100,
-		MaxIncrease:       0.05,
+		InitialRate: 100,
+		// 1 means 100% i.e. double rates by default.
+		MaxIncrease:       1,
 		EmergencyDecrease: 0.5,
 
 		MinDurationBetweenChangesSec:   10,

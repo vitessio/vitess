@@ -236,46 +236,32 @@ func (m *MaxReplicationLagModule) increaseRate(now time.Time, lagRecordNow recor
 		previousRate = float64(oldRate)
 	}
 
-	// Lag is within bounds. Keep increasing the rate
-	// a) by doubling it if we're below config.InitialRate
-	// b) by MaxIncrease at most otherwise,
-	var increaseReason string
-	var rate float64
-	initialRate := float64(m.config.InitialRate)
-	if previousRate < initialRate {
-		increaseReason = fmt.Sprintf("doubling the current rate (of %.f) (but always capping it at %.f%% of the initial rate of %.f)", previousRate, (1+m.config.MaxIncrease)*100, initialRate)
-		doubleRate := previousRate * 2
-		initialRatePlusMaxIncrease := initialRate * (1 + m.config.MaxIncrease)
-		if doubleRate <= initialRatePlusMaxIncrease {
-			rate = doubleRate
-		} else {
-			rate = initialRatePlusMaxIncrease
-		}
-	} else {
-		increaseReason = fmt.Sprintf("a max increase of %.1f%%", m.config.MaxIncrease*100)
-		rate = previousRate * (1 + m.config.MaxIncrease)
-	}
-	// c) always make minimum progress compared to oldRate
+	// a) Increase rate by MaxIncrease.
+	increaseReason := fmt.Sprintf("a max increase of %.1f%%", m.config.MaxIncrease*100)
+	rate := previousRate * (1 + m.config.MaxIncrease)
+
+	// b) Always make minimum progress compared to oldRate.
 	// (Necessary for cases where MaxIncrease is too low and the rate might not increase.)
 	if rate <= float64(oldRate) {
 		rate = float64(oldRate) + memoryGranularity
 		increaseReason += fmt.Sprintf(" (minimum progress by %v)", memoryGranularity)
+		previousRateSource = "previous set rate"
 		previousRate = float64(oldRate)
-		previousRateSource = "previous rate limit"
 	}
-	// d) but always cap it at the lowest known bad value
+	// c) Make the increase less aggressive if it goes above the bad rate.
 	lowestBad := float64(m.memory.lowestBad())
 	if lowestBad != 0 {
 		if rate > lowestBad {
-			rate = lowestBad
-			increaseReason += fmt.Sprintf(" (but limited up to the first known bad rate (%.0f))", lowestBad)
+			// New rate will be the middle value of [previous rate, lowest bad rate].
+			rate -= (lowestBad - previousRate) / 2
+			increaseReason += fmt.Sprintf(" (but limited to the middle value in the range [previous rate, lowest bad rate]: [%.0f, %.0f]", previousRate, lowestBad)
 		}
 	}
 
 	increase := (rate - previousRate) / previousRate
 	m.updateNextAllowedIncrease(now, increase)
-	reason := fmt.Sprintf("periodic increase of the %v from %.0f to %.0f (by %.1f%%) based on %v to find out the maximum - next allowed increase in %.0f seconds",
-		previousRateSource, previousRate, rate, increase*100, increaseReason, m.nextAllowedIncrease.Sub(now).Seconds())
+	reason := fmt.Sprintf("periodic increase of the %v from %d to %d (by %.1f%%) based on %v to find out the maximum - next allowed increase in %.0f seconds",
+		previousRateSource, oldRate, int64(rate), increase*100, increaseReason, m.nextAllowedIncrease.Sub(now).Seconds())
 	m.updateRate(increaseRate, int64(rate), reason, now, lagRecordNow)
 }
 
