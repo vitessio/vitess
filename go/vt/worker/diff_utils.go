@@ -176,7 +176,7 @@ func uint64FromKeyspaceID(keyspaceID []byte) string {
 // table, ordered by Primary Key. The returned columns are ordered
 // with the Primary Key columns in front.
 func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *topodatapb.TabletAlias, tableDefinition *tabletmanagerdatapb.TableDefinition) (*QueryResultReader, error) {
-	sql := fmt.Sprintf("SELECT %v FROM %v ORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
+	sql := fmt.Sprintf("SELECT %v FROM %v ORDER BY %v", strings.Join(escapeAll(orderedColumns(tableDefinition)), ", "), escape(tableDefinition.Name), strings.Join(escapeAll(tableDefinition.PrimaryKeyColumns), ", "))
 	log.Infof("SQL query for %v/%v: %v", topoproto.TabletAliasString(tabletAlias), tableDefinition.Name, sql)
 	return NewQueryResultReaderForTablet(ctx, ts, tabletAlias, sql)
 }
@@ -218,37 +218,37 @@ func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server
 		if len(keyRange.Start) > 0 {
 			if len(keyRange.End) > 0 {
 				// have start & end
-				where = fmt.Sprintf("WHERE %v >= %v AND %v < %v ", shardingColumnName, uint64FromKeyspaceID(keyRange.Start), shardingColumnName, uint64FromKeyspaceID(keyRange.End))
+				where = fmt.Sprintf("WHERE %v >= %v AND %v < %v ", escape(shardingColumnName), uint64FromKeyspaceID(keyRange.Start), escape(shardingColumnName), uint64FromKeyspaceID(keyRange.End))
 			} else {
 				// have start only
-				where = fmt.Sprintf("WHERE %v >= %v ", shardingColumnName, uint64FromKeyspaceID(keyRange.Start))
+				where = fmt.Sprintf("WHERE %v >= %v ", escape(shardingColumnName), uint64FromKeyspaceID(keyRange.Start))
 			}
 		} else {
 			if len(keyRange.End) > 0 {
 				// have end only
-				where = fmt.Sprintf("WHERE %v < %v ", shardingColumnName, uint64FromKeyspaceID(keyRange.End))
+				where = fmt.Sprintf("WHERE %v < %v ", escape(shardingColumnName), uint64FromKeyspaceID(keyRange.End))
 			}
 		}
 	case topodatapb.KeyspaceIdType_BYTES:
 		if len(keyRange.Start) > 0 {
 			if len(keyRange.End) > 0 {
 				// have start & end
-				where = fmt.Sprintf("WHERE HEX(%v) >= '%v' AND HEX(%v) < '%v' ", shardingColumnName, hex.EncodeToString(keyRange.Start), shardingColumnName, hex.EncodeToString(keyRange.End))
+				where = fmt.Sprintf("WHERE HEX(%v) >= '%v' AND HEX(%v) < '%v' ", escape(shardingColumnName), hex.EncodeToString(keyRange.Start), escape(shardingColumnName), hex.EncodeToString(keyRange.End))
 			} else {
 				// have start only
-				where = fmt.Sprintf("WHERE HEX(%v) >= '%v' ", shardingColumnName, hex.EncodeToString(keyRange.Start))
+				where = fmt.Sprintf("WHERE HEX(%v) >= '%v' ", escape(shardingColumnName), hex.EncodeToString(keyRange.Start))
 			}
 		} else {
 			if len(keyRange.End) > 0 {
 				// have end only
-				where = fmt.Sprintf("WHERE HEX(%v) < '%v' ", shardingColumnName, hex.EncodeToString(keyRange.End))
+				where = fmt.Sprintf("WHERE HEX(%v) < '%v' ", escape(shardingColumnName), hex.EncodeToString(keyRange.End))
 			}
 		}
 	default:
 		return nil, fmt.Errorf("Unsupported ShardingColumnType: %v", shardingColumnType)
 	}
 
-	sql := fmt.Sprintf("SELECT %v FROM %v %vORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, where, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
+	sql := fmt.Sprintf("SELECT %v FROM %v %vORDER BY %v", strings.Join(escapeAll(orderedColumns(tableDefinition)), ", "), escape(tableDefinition.Name), where, strings.Join(escapeAll(tableDefinition.PrimaryKeyColumns), ", "))
 	log.Infof("SQL query for %v/%v: %v", topoproto.TabletAliasString(tabletAlias), tableDefinition.Name, sql)
 	return NewQueryResultReaderForTablet(ctx, ts, tabletAlias, sql)
 }

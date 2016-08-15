@@ -22,7 +22,7 @@ func TestGreaterThanTupleWhereClause(t *testing.T) {
 		{
 			columns: []string{"a"},
 			row:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))},
-			want:    []string{"a>1"},
+			want:    []string{"`a`>1"},
 		},
 		{
 			columns: []string{"a", "b"},
@@ -30,7 +30,7 @@ func TestGreaterThanTupleWhereClause(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 				sqltypes.MakeTrusted(sqltypes.Float32, []byte("2.1")),
 			},
-			want: []string{"a>=1", "(a,b)>(1,2.1)"},
+			want: []string{"`a`>=1", "(`a`,`b`)>(1,2.1)"},
 		},
 		{
 			columns: []string{"a", "b", "c"},
@@ -39,7 +39,7 @@ func TestGreaterThanTupleWhereClause(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.Float32, []byte("2.1")),
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("Bär")),
 			},
-			want: []string{"a>=1", "(a,b,c)>(1,2.1,'Bär')"},
+			want: []string{"`a`>=1", "(`a`,`b`,`c`)>(1,2.1,'Bär')"},
 		},
 	}
 
@@ -69,7 +69,7 @@ func TestGenerateQuery(t *testing.T) {
 			table:             "t1",
 			columns:           []string{"a", "msg1", "msg2"},
 			primaryKeyColumns: []string{"a"},
-			want:              "SELECT a,msg1,msg2 FROM t1 WHERE a>=11 AND a<26 ORDER BY a",
+			want:              "SELECT `a`,`msg1`,`msg2` FROM `t1` WHERE `a`>=11 AND `a`<26 ORDER BY `a`",
 		},
 		{
 			desc:              "only end defined",
@@ -77,7 +77,7 @@ func TestGenerateQuery(t *testing.T) {
 			table:             "t1",
 			columns:           []string{"a", "msg1", "msg2"},
 			primaryKeyColumns: []string{"a"},
-			want:              "SELECT a,msg1,msg2 FROM t1 WHERE a<26 ORDER BY a",
+			want:              "SELECT `a`,`msg1`,`msg2` FROM `t1` WHERE `a`<26 ORDER BY `a`",
 		},
 		{
 			desc:              "only start defined",
@@ -85,21 +85,21 @@ func TestGenerateQuery(t *testing.T) {
 			table:             "t1",
 			columns:           []string{"a", "msg1", "msg2"},
 			primaryKeyColumns: []string{"a"},
-			want:              "SELECT a,msg1,msg2 FROM t1 WHERE a>=11 ORDER BY a",
+			want:              "SELECT `a`,`msg1`,`msg2` FROM `t1` WHERE `a`>=11 ORDER BY `a`",
 		},
 		{
 			desc:              "neither start nor end defined",
 			table:             "t1",
 			columns:           []string{"a", "msg1", "msg2"},
 			primaryKeyColumns: []string{"a"},
-			want:              "SELECT a,msg1,msg2 FROM t1 ORDER BY a",
+			want:              "SELECT `a`,`msg1`,`msg2` FROM `t1` ORDER BY `a`",
 		},
 		{
 			desc:              "neither start nor end defined and no primary key",
 			table:             "t1",
 			columns:           []string{"a", "msg1", "msg2"},
 			primaryKeyColumns: []string{},
-			want:              "SELECT a,msg1,msg2 FROM t1",
+			want:              "SELECT `a`,`msg1`,`msg2` FROM `t1`",
 		},
 		{
 			desc:              "start and end defined (multi-column primary key)",
@@ -108,7 +108,7 @@ func TestGenerateQuery(t *testing.T) {
 			table:             "t1",
 			columns:           []string{"a", "b", "msg1", "msg2"},
 			primaryKeyColumns: []string{"a", "b"},
-			want:              "SELECT a,b,msg1,msg2 FROM t1 WHERE a>=11 AND a<26 ORDER BY a,b",
+			want:              "SELECT `a`,`b`,`msg1`,`msg2` FROM `t1` WHERE `a`>=11 AND `a`<26 ORDER BY `a`,`b`",
 		},
 		{
 			desc:              "start overriden by last row (multi-column primary key)",
@@ -121,7 +121,7 @@ func TestGenerateQuery(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
 			},
-			want: "SELECT a,b,msg1,msg2 FROM t1 WHERE a>=1 AND (a,b)>(1,2) AND a<26 ORDER BY a,b",
+			want: "SELECT `a`,`b`,`msg1`,`msg2` FROM `t1` WHERE `a`>=1 AND (`a`,`b`)>(1,2) AND `a`<26 ORDER BY `a`,`b`",
 		},
 		{
 			desc:              "no start or end defined but last row (multi-column primary key)",
@@ -132,7 +132,7 @@ func TestGenerateQuery(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
 			},
-			want: "SELECT a,b,msg1,msg2 FROM t1 WHERE a>=1 AND (a,b)>(1,2) ORDER BY a,b",
+			want: "SELECT `a`,`b`,`msg1`,`msg2` FROM `t1` WHERE `a`>=1 AND (`a`,`b`)>(1,2) ORDER BY `a`,`b`",
 		},
 	}
 

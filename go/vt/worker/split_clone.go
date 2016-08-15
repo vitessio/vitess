@@ -20,7 +20,6 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/throttler"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -738,9 +737,6 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	sourceWaitGroup := sync.WaitGroup{}
 	sema := sync2.NewSemaphore(scw.sourceReaderCount, 0)
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
-		if td.Type == tmutils.TableView {
-			continue
-		}
 		td = reorderColumnsPrimaryKeyFirst(td)
 
 		var keyResolver keyspaceIDResolver
@@ -993,13 +989,18 @@ func (scw *SplitCloneWorker) getSourceSchema(ctx context.Context, tablet *topoda
 	// in each source shard for each table to be about the same
 	// (rowCount is used to estimate an ETA)
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, tablet.Alias, nil, scw.excludeTables, true)
+	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, tablet.Alias, nil, scw.excludeTables, false /* includeViews */)
 	cancel()
 	if err != nil {
 		return nil, fmt.Errorf("cannot get schema from source %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
 	}
 	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
 		return nil, fmt.Errorf("no tables matching the table filter in tablet %v", topoproto.TabletAliasString(tablet.Alias))
+	}
+	for _, td := range sourceSchemaDefinition.TableDefinitions {
+		if len(td.Columns) == 0 {
+			return nil, fmt.Errorf("schema for table %v has no columns", td.Name)
+		}
 	}
 	return sourceSchemaDefinition, nil
 }
