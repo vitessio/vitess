@@ -425,6 +425,7 @@ func (m *MaxReplicationLagModule) emergency(now time.Time, lagRecordNow record) 
 func (m *MaxReplicationLagModule) updateRate(newState state, rate int64, reason string, now time.Time, lagRecordNow record) {
 	oldRate := m.rate.Get()
 
+	m.currentState = newState
 	m.lastRateChange = now
 	m.lastRateChangeReason = reason
 	m.lagAtLastRateChange = lagRecordNow
