@@ -95,6 +95,7 @@ func NewMaxReplicationLagModule(config MaxReplicationLagModuleConfig, actualRate
 	}
 
 	m := &MaxReplicationLagModule{
+		// Register "config" for a future config update.
 		mutableConfig:      config,
 		applyMutableConfig: true,
 		// Always start off with a non-zero rate because zero means all requests
@@ -107,6 +108,10 @@ func NewMaxReplicationLagModule(config MaxReplicationLagModuleConfig, actualRate
 		nextAllowedIncrease: nowFunc().Add(config.MaxDurationBetweenIncreases()),
 		actualRatesHistory:  actualRatesHistory,
 	}
+
+	// Enforce a config update.
+	m.applyLatestConfig()
+
 	return m, nil
 }
 
