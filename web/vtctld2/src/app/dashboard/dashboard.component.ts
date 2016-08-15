@@ -1,13 +1,6 @@
 import { Component, OnInit} from '@angular/core';
 import { Router, ROUTER_DIRECTIVES } from '@angular/router';
 
-import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
-import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
-import { MD_CHECKBOX_DIRECTIVES } from '@angular2-material/checkbox';
-import { MD_INPUT_DIRECTIVES } from '@angular2-material/input';
-import { MD_LIST_DIRECTIVES } from '@angular2-material/list/list';
-import { MD_PROGRESS_BAR_DIRECTIVES } from '@angular2-material/progress-bar';
-
 import { Observable } from 'rxjs/Observable';
 
 import { AddButtonComponent } from '../shared/add-button.component';
@@ -20,7 +13,6 @@ import { KeyspaceService } from '../api/keyspace.service';
 import { PrepareResponse } from '../shared/prepare-response';
 import { Proto } from '../shared/proto';
 import { ShardService } from '../api/shard.service';
-import { TestMaster } from '../test/test.master';
 import { VtctlService } from '../api/vtctl.service';
 
 @Component({
@@ -35,23 +27,16 @@ import { VtctlService } from '../api/vtctl.service';
   ],
   directives: [
     ROUTER_DIRECTIVES,
-    MD_CARD_DIRECTIVES,
-    MD_PROGRESS_BAR_DIRECTIVES,
-    MD_CHECKBOX_DIRECTIVES,
-    MD_INPUT_DIRECTIVES,
-    MD_BUTTON_DIRECTIVES,
-    MD_LIST_DIRECTIVES,
     DialogComponent,
     AddButtonComponent],
 })
+
 export class DashboardComponent implements OnInit {
   title = 'Vitess Control Panel';
   keyspaces = [];
   keyspacesReady = false;
   dialogSettings: DialogSettings;
   dialogContent: DialogContent;
-  runTest = false;
-  tearDownTest = false;
 
   constructor(
               private keyspaceService: KeyspaceService,
@@ -62,22 +47,6 @@ export class DashboardComponent implements OnInit {
     this.getKeyspaces();
     this.dialogContent = new DialogContent();
     this.dialogSettings = new DialogSettings();
-    if (this.runTest) {
-      this.runTests();
-    }
-    if (this.tearDownTest) {
-      this.cleanTests();
-    }
-  }
-
-  runTests() {
-    let tester = new TestMaster(this.vtctlService);
-    tester.runAllTests();
-  }
-
-  cleanTests() {
-    let tester = new TestMaster(this.vtctlService);
-    tester.tearDownAllTests();
   }
 
   getKeyspaces() {

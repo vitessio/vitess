@@ -12,6 +12,8 @@ import { DialogSettings } from './dialog-settings';
 import { KeyspaceService } from '../../api/keyspace.service';
 import { TabletService } from '../../api/tablet.service';
 
+import {Dropdown} from 'primeng/primeng';
+
 @Component({
   moduleId: module.id,
   selector: 'vt-dialog',
@@ -22,6 +24,7 @@ import { TabletService } from '../../api/tablet.service';
     TabletService
   ],
   directives: [
+    Dropdown,
     ROUTER_DIRECTIVES,
     MD_CARD_DIRECTIVES,
     MD_PROGRESS_BAR_DIRECTIVES,
