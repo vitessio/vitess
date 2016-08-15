@@ -24,8 +24,11 @@ var defaultMaxReplicationLagModuleConfig = MaxReplicationLagModuleConfig{
 		MaxIncrease:       1,
 		EmergencyDecrease: 0.5,
 
-		MinDurationBetweenChangesSec:   10,
-		MaxDurationBetweenIncreasesSec: 61,
+		MinDurationBetweenChangesSec: 10,
+		// MaxDurationBetweenIncreasesSec defaults to 60+2 seconds because this
+		// corresponds to three 3 broadcasts (assuming --health_check_interval=20s).
+		// The 2 extra seconds give us headroom to account for delay in the process.
+		MaxDurationBetweenIncreasesSec: 60 + 2,
 	},
 }
 
