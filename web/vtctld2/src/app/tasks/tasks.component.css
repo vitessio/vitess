@@ -1,28 +1,11 @@
 .fill-lower-space {
-
+height: 100%;
 }
 
-.wq-title {
-  text-align: center;
-}
-
-.wq-container {
-  
+.vt-root-workflow {
+  margin-bottom: 25px;
 }
 
 md-card {
   margin: 3%;
-}
-
-.progress-bar-container {
-  width: 100%;
-}
-
-.progress-bar-margins {
-  margin: 20px 0;
-}
-
-.progress-bar-spacer {
-  display: inline-block;
-  width: 50px;
 }

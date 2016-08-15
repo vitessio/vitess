@@ -1,4 +1,4 @@
-<div class="fill-lower-space">
+<!--<div class="fill-lower-space">
   <div class="wq-title">
   <h1>WORKQUEUE</h1>
   </div>
@@ -20,4 +20,33 @@
 
   </md-card>
   </div>
+</div>
+-->
+<!--<div class="fill-lower-space">
+  <div class="wq-title">
+    <h1>Tasks</h1>
+  </div>
+  <span class="vt-root-workflow" *ngFor="let workflowId of getWorkflowIds()">
+    <vt-workflow  [(workflow)]="this.workflows[workflowId]"></vt-workflow>
+  </span>
+</div>-->
+
+
+<div class="fill-lower-space">
+  <div class="wq-title">
+    <h1>Tasks</h1>
+  </div>
+  <p-accordion *ngFor="let workflowId of getWorkflowIds()">
+    <span >
+      <p-accordionTab header="" class="{{getHeaderClass(workflows[workflowId].state)}}">
+        <header>
+          {{workflows[workflowId].name}}
+          <span class="vt-accordion-header vt-progress-msg" *ngIf="workflows[workflowId].isDeterminate() || workflows[workflowId].isIndeterminate()" >{{workflows[workflowId].progressMsg}}</span>
+          <md-progress-bar class="vt-accordion-header vt-progress-bar" *ngIf="workflows[workflowId].isDeterminate()" mode="determinate" [value]="workflows[workflowId].progress" color="primary"></md-progress-bar>
+          <md-progress-bar class="vt-accordion-header vt-progress-bar" *ngIf="workflows[workflowId].isIndeterminate()" mode="indeterminate" color="primary"></md-progress-bar>
+        </header>
+        <vt-workflow [(workflow)]="workflows[workflowId]"></vt-workflow>
+      </p-accordionTab>
+    </span>
+  </p-accordion>
 </div>

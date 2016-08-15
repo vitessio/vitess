@@ -1,0 +1,77 @@
+.vt-workflow-not-started {
+  background-color: #FFF9C4;
+  padding: 5px;
+  margin: 0;
+  margin-bottom: 25px;
+}
+
+.vt-workflow-running {
+  background-color: #C8E6C9;
+  padding: 5px;
+  padding-left: 15px;
+  margin: 0;
+  margin-bottom: 25px;
+}
+
+.vt-workflow-done {
+  background-color: #BDBDBD;
+  padding: 5px;
+  margin: 0;
+}
+
+.vt-progress-msg {
+  width: 15%;
+  float: right;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.vt-workflow-content {
+}
+
+.vt-workflow-time {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  color: grey;
+}
+
+.vt-action-enabled {
+}
+.vt-action-disabled {
+  background-color: grey;
+}
+.vt-action-warning {
+  background-color: #f44336;
+}
+.vt-action-waiting {
+  background-color: #3F51B5;
+}
+
+md-card h1 {
+  margin: 2px;
+}
+
+.vt-workflow-not-started-dark {
+  background-color: #FFD54F;
+}
+
+.vt-workflow-running-dark {
+  background-color: #4CAF50;
+}
+
+.vt-workflow-done-dark {
+  background-color: #808080;
+}
+
+.vt-accordion-header {
+  display: inline-block;
+  padding-left: 10px;
+}
+
+.vt-progress-bar {
+  width: 50%;
+  float: right;
+  padding-top: 5px;
+  padding-bottom: 3px;
+}
