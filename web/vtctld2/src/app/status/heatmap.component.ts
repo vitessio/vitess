@@ -40,7 +40,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
       // TODO(pkulshre): fix this when backend is generalized.
       return 1;
     }
-    return this.yLabels.reduce((a,b)=>a.Label.Rowspan+b.Label.Rowspan);
+    return this.yLabels.reduce( (a, b) => a.Label.Rowspan + b.Label.Rowspan);
   }
 
   ngOnInit() {
