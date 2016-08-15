@@ -16,7 +16,7 @@ type MaxReplicationLagModuleConfig struct {
 
 var defaultMaxReplicationLagModuleConfig = MaxReplicationLagModuleConfig{
 	throttlerdata.MaxReplicationLagModuleConfig{
-		TargetReplicationLagSec: 1,
+		TargetReplicationLagSec: 2,
 		MaxReplicationLagSec:    ReplicationLagModuleDisabled,
 
 		InitialRate: 100,
