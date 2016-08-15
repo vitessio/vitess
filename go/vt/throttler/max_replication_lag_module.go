@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/discovery"
 
 	log "github.com/golang/glog"
 )
@@ -65,10 +66,14 @@ type MaxReplicationLagModule struct {
 	lastRateChange       time.Time
 	lastRateChangeReason string
 	nextAllowedIncrease  time.Time
-	nextAllowedDecrease  time.Time
+	// replicaUnderIncreaseTest holds the discovery.TabletStats.Key value for the
+	// replica for which we started the last increase test. After
+	// nextAllowedIncrease is up, we wait for a lag update from this replica.
+	replicaUnderIncreaseTest string
+	nextAllowedDecrease      time.Time
 
-	actualRatesHistory  *aggregatedIntervalHistory
-	lagAtLastRateChange record
+	actualRatesHistory *aggregatedIntervalHistory
+	lagCache           *replicationLagCache
 	// memory tracks known good and bad throttler rates.
 	memory *memory
 
@@ -77,10 +82,10 @@ type MaxReplicationLagModule struct {
 	rateUpdateChan chan<- struct{}
 	nowFunc        func() time.Time
 
-	// records buffers the replication lag records received by the HealthCheck
+	// lagRecords buffers the replication lag records received by the HealthCheck
 	// listener. ProcessRecords() will process them.
-	records chan record
-	wg      sync.WaitGroup
+	lagRecords chan replicationLagRecord
+	wg         sync.WaitGroup
 }
 
 // NewMaxReplicationLagModule will create a new module instance and set the
@@ -100,13 +105,14 @@ func NewMaxReplicationLagModule(config MaxReplicationLagModuleConfig, actualRate
 		applyMutableConfig: true,
 		// Always start off with a non-zero rate because zero means all requests
 		// get throttled.
-		rate:    sync2.NewAtomicInt64(rate),
-		memory:  newMemory(memoryGranularity),
-		nowFunc: nowFunc,
-		records: make(chan record, 10),
+		rate:       sync2.NewAtomicInt64(rate),
+		memory:     newMemory(memoryGranularity),
+		nowFunc:    nowFunc,
+		lagRecords: make(chan replicationLagRecord, 10),
 		// Prevent an immediately increase of the initial rate.
 		nextAllowedIncrease: nowFunc().Add(config.MaxDurationBetweenIncreases()),
 		actualRatesHistory:  actualRatesHistory,
+		lagCache:            newReplicationLagCache(1000),
 	}
 
 	// Enforce a config update.
@@ -126,7 +132,7 @@ func (m *MaxReplicationLagModule) Start(rateUpdateChan chan<- struct{}) {
 // Stop blocks until the module's Go routine is stopped.
 // It implements the Module interface.
 func (m *MaxReplicationLagModule) Stop() {
-	close(m.records)
+	close(m.lagRecords)
 	m.wg.Wait()
 }
 
@@ -137,7 +143,7 @@ func (m *MaxReplicationLagModule) MaxRate() int64 {
 }
 
 // RecordReplicationLag records the current replication lag for processing.
-func (m *MaxReplicationLagModule) RecordReplicationLag(lag int64, time time.Time) {
+func (m *MaxReplicationLagModule) RecordReplicationLag(t time.Time, ts *discovery.TabletStats) {
 	m.mutableConfigMu.Lock()
 	if m.mutableConfig.MaxReplicationLagSec == ReplicationLagModuleDisabled {
 		m.mutableConfigMu.Unlock()
@@ -147,7 +153,7 @@ func (m *MaxReplicationLagModule) RecordReplicationLag(lag int64, time time.Time
 
 	// Buffer data point for now to unblock the HealthCheck listener and process
 	// it asynchronously in ProcessRecords().
-	m.records <- record{time, lag}
+	m.lagRecords <- replicationLagRecord{t, *ts}
 }
 
 // ProcessRecords is the main loop, run in a separate Go routine, which
@@ -155,10 +161,12 @@ func (m *MaxReplicationLagModule) RecordReplicationLag(lag int64, time time.Time
 func (m *MaxReplicationLagModule) ProcessRecords() {
 	defer m.wg.Done()
 
-	for record := range m.records {
+	for lagRecord := range m.lagRecords {
 		m.applyLatestConfig()
 
-		m.recalculateRate(record)
+		m.lagCache.add(lagRecord)
+
+		m.recalculateRate(lagRecord)
 	}
 }
 
@@ -177,19 +185,19 @@ func (m *MaxReplicationLagModule) applyLatestConfig() {
 	m.mutableConfigMu.Unlock()
 
 	// No locking required here because this method is only called from the same
-	// Go routine has ProcessRecords().
+	// Go routine has ProcessRecords() or the constructor.
 	if applyConfig {
 		m.config = config
 	}
 }
 
-func (m *MaxReplicationLagModule) recalculateRate(lagRecordNow record) {
+func (m *MaxReplicationLagModule) recalculateRate(lagRecordNow replicationLagRecord) {
 	now := m.nowFunc()
 
 	if lagRecordNow.isZero() {
 		panic("rate recalculation was triggered with a zero replication lag record")
 	}
-	lagNow := lagRecordNow.value
+	lagNow := lagRecordNow.lag()
 
 	if lagNow <= m.config.TargetReplicationLagSec {
 		// Lag in range: [0, target]
@@ -203,7 +211,7 @@ func (m *MaxReplicationLagModule) recalculateRate(lagRecordNow record) {
 	}
 }
 
-func (m *MaxReplicationLagModule) increaseRate(now time.Time, lagRecordNow record) {
+func (m *MaxReplicationLagModule) increaseRate(now time.Time, lagRecordNow replicationLagRecord) {
 	// Any increase has to wait for a previous decrease first.
 	if !m.nextAllowedDecrease.IsZero() && now.Before(m.nextAllowedDecrease) {
 		return
@@ -211,6 +219,17 @@ func (m *MaxReplicationLagModule) increaseRate(now time.Time, lagRecordNow recor
 	// Increase rate again only if the last increase was in effect long enough.
 	if !m.nextAllowedIncrease.IsZero() && now.Before(m.nextAllowedIncrease) {
 		return
+	}
+
+	// We wait for a lag record for the same replica and ignore other replica
+	// updates in the meantime.
+	if m.replicaUnderIncreaseTest != "" && m.replicaUnderIncreaseTest != lagRecordNow.Key {
+		r := m.lagCache.latest(m.replicaUnderIncreaseTest)
+		// But only if the wanted replica currently has no issues i.e. it's still
+		// tracked and its LastError is not set.
+		if !r.isZero() && r.LastError == nil {
+			return
+		}
 	}
 
 	oldRate := m.rate.Get()
@@ -259,13 +278,13 @@ func (m *MaxReplicationLagModule) increaseRate(now time.Time, lagRecordNow recor
 	}
 
 	increase := (rate - previousRate) / previousRate
-	m.updateNextAllowedIncrease(now, increase)
+	m.updateNextAllowedIncrease(now, increase, lagRecordNow.Key)
 	reason := fmt.Sprintf("periodic increase of the %v from %d to %d (by %.1f%%) based on %v to find out the maximum - next allowed increase in %.0f seconds",
 		previousRateSource, oldRate, int64(rate), increase*100, increaseReason, m.nextAllowedIncrease.Sub(now).Seconds())
 	m.updateRate(increaseRate, int64(rate), reason, now, lagRecordNow)
 }
 
-func (m *MaxReplicationLagModule) updateNextAllowedIncrease(now time.Time, increase float64) {
+func (m *MaxReplicationLagModule) updateNextAllowedIncrease(now time.Time, increase float64, key string) {
 	minDuration := m.config.MinDurationBetweenChanges()
 	// We may have to wait longer than the configured minimum duration
 	// until we see an effect of the increase.
@@ -290,24 +309,25 @@ func (m *MaxReplicationLagModule) updateNextAllowedIncrease(now time.Time, incre
 		minDuration = m.config.MaxDurationBetweenIncreases()
 	}
 	m.nextAllowedIncrease = now.Add(minDuration)
+	m.replicaUnderIncreaseTest = key
 }
 
-func (m *MaxReplicationLagModule) decreaseAndGuessRate(now time.Time, lagRecordNow record) {
+func (m *MaxReplicationLagModule) decreaseAndGuessRate(now time.Time, lagRecordNow replicationLagRecord) {
 	// Decrease the rate only if the last decrease was in effect long enough.
 	if !m.nextAllowedDecrease.IsZero() && now.Before(m.nextAllowedDecrease) {
 		return
 	}
 
-	if m.lagAtLastRateChange.isZero() {
-		// We don't know the previous replication lag and won't be able to
-		// guess the slave rate. Record the current lag as latest rate and return
-		// early.
-		m.lagAtLastRateChange = lagRecordNow
+	// Guess slave rate based on the difference in the replication lag of this
+	// particular replica.
+	lagRecordBefore := m.lagCache.atOrAfter(lagRecordNow.Key, m.lastRateChange)
+	if lagRecordBefore.isZero() {
+		// We don't know the replication lag of this replica since the last rate
+		// change. Without it we won't be able to guess the slave rate.
+		// Therefore, we'll stay in the current state and wait for more records.
 		return
 	}
 
-	// Guess slave rate based on the difference in the replication lag.
-	lagRecordBefore := m.lagAtLastRateChange
 	if lagRecordBefore.time == lagRecordNow.time {
 		// First record is the same as the last record. Not possible to calculate a
 		// diff. Wait for the next health stats update.
@@ -315,8 +335,8 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(now time.Time, lagRecordN
 	}
 
 	// Analyze if the past rate was good or bad.
-	lagBefore := lagRecordBefore.value
-	lagNow := lagRecordNow.value
+	lagBefore := lagRecordBefore.lag()
+	lagNow := lagRecordNow.lag()
 	replicationLagChange := less
 	// Note that we consider lag changes of 1 second as equal as well because
 	// they might be a rounding error in MySQL due to using timestamps at
@@ -347,7 +367,7 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(now time.Time, lagRecordN
 
 	// Sanity check and correct the data points if necessary.
 	d := lagRecordNow.time.Sub(lagRecordBefore.time)
-	lagDifference := time.Duration(lagRecordNow.value-lagRecordBefore.value) * time.Second
+	lagDifference := time.Duration(lagRecordNow.lag()-lagRecordBefore.lag()) * time.Second
 	if lagDifference > d {
 		log.Errorf("Replication lag increase is higher than the elapsed time: %v > %v. This should not happen. Replication Lag Data points: Before: %+v Now: %+v", lagDifference, d, lagRecordBefore, lagRecordNow)
 		d = lagDifference
@@ -397,24 +417,23 @@ func (m *MaxReplicationLagModule) guessSlaveRate(avgMasterRate float64, lagBefor
 	return int64(avgSlaveRate)
 }
 
-func (m *MaxReplicationLagModule) emergency(now time.Time, lagRecordNow record) {
+func (m *MaxReplicationLagModule) emergency(now time.Time, lagRecordNow replicationLagRecord) {
 	m.markCurrentRateAsBadOrGood(now, emergency, unknown)
 	m.resetCurrentState(now)
 
 	oldRate := m.rate.Get()
 	rate := int64(float64(oldRate) * m.config.EmergencyDecrease)
 
-	reason := fmt.Sprintf("replication lag went beyond max: %v > %v reducing previous rate by %.f%% to: %v", lagRecordNow.value, m.config.MaxReplicationLagSec, m.config.EmergencyDecrease*100, rate)
+	reason := fmt.Sprintf("replication lag went beyond max: %d > %d reducing previous rate by %.f%% to: %v", lagRecordNow.lag(), m.config.MaxReplicationLagSec, m.config.EmergencyDecrease*100, rate)
 	m.updateRate(emergency, rate, reason, now, lagRecordNow)
 }
 
-func (m *MaxReplicationLagModule) updateRate(newState state, rate int64, reason string, now time.Time, lagRecordNow record) {
+func (m *MaxReplicationLagModule) updateRate(newState state, rate int64, reason string, now time.Time, lagRecordNow replicationLagRecord) {
 	oldRate := m.rate.Get()
 
 	m.currentState = newState
 	m.lastRateChange = now
 	m.lastRateChangeReason = reason
-	m.lagAtLastRateChange = lagRecordNow
 
 	if rate == oldRate {
 		return

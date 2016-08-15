@@ -1022,9 +1022,8 @@ func (scw *SplitCloneWorker) StatsUpdate(ts *discovery.TabletStats) {
 	defer scw.throttlersMu.Unlock()
 
 	t := scw.getThrottlerLocked(ts.Target.Keyspace, ts.Target.Shard)
-	// TODO(mberlin): Track from which replica the lag came as well. Necessary to ignore the N slowest replicas.
 	if t != nil {
-		t.RecordReplicationLag(int64(ts.Stats.SecondsBehindMaster), time.Now())
+		t.RecordReplicationLag(time.Now(), ts)
 	}
 }
 

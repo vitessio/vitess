@@ -10,11 +10,11 @@ import "time"
 type record struct {
 	// time is the time at which "value" was observed.
 	time time.Time
-	// value is the value of interest at the given time e.g. the replication lag
-	// in seconds or the number of transactions per seconds.
+	// value is the value of interest at the given time e.g. the number of
+	// transactions per seconds.
 	value int64
 }
 
-func (r *record) isZero() bool {
+func (r record) isZero() bool {
 	return r.value == 0 && r.time.IsZero()
 }
