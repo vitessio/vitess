@@ -187,7 +187,7 @@ func (m *MaxReplicationLagModule) recalculateRate(lagRecordNow record) {
 	now := m.nowFunc()
 
 	if lagRecordNow.isZero() {
-		panic("rate recalculation was triggered but no replication lag observation is available in the history")
+		panic("rate recalculation was triggered with a zero replication lag record")
 	}
 	lagNow := lagRecordNow.value
 
