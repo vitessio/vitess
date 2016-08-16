@@ -37,13 +37,16 @@ import (
 type SplitCloneWorker struct {
 	StatusWorker
 
-	wr                *wrangler.Wrangler
-	cloneType         cloneType
-	cell              string
-	keyspace          string
-	shard             string
-	online            bool
-	offline           bool
+	wr        *wrangler.Wrangler
+	cloneType cloneType
+	cell      string
+	keyspace  string
+	shard     string
+	online    bool
+	offline   bool
+	// verticalSplit only: List of tables which should be split out.
+	tables []string
+	// horizontalResharding only: List of tables which will be skipped.
 	excludeTables     []string
 	strategy          *splitStrategy
 	sourceReaderCount int
@@ -118,6 +121,9 @@ type SplitCloneWorker struct {
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
 func NewSplitCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, shard string, online, offline bool, tables, excludeTables []string, strategyStr string, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
+	if tables != nil && len(tables) == 0 {
+		return nil, errors.New("list of tablets to be split out must not be empty")
+	}
 	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
@@ -140,6 +146,7 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keysp
 		shard:                   shard,
 		online:                  online,
 		offline:                 offline,
+		tables:                  tables,
 		excludeTables:           excludeTables,
 		strategy:                strategy,
 		sourceReaderCount:       sourceReaderCount,
@@ -945,9 +952,9 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 			scw.wr.Logger().Infof("Skipping setting SourceShard on destination shards.")
 		} else {
 			for _, si := range scw.destinationShards {
-				scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", si.Keyspace(), si.ShardName())
+				scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v (tables: %v)", si.Keyspace(), si.ShardName(), scw.tables)
 				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-				err := scw.wr.SetSourceShards(shortCtx, si.Keyspace(), si.ShardName(), scw.offlineSourceAliases, nil)
+				err := scw.wr.SetSourceShards(shortCtx, si.Keyspace(), si.ShardName(), scw.offlineSourceAliases, scw.tables)
 				cancel()
 				if err != nil {
 					return fmt.Errorf("failed to set source shards: %v", err)
@@ -991,7 +998,7 @@ func (scw *SplitCloneWorker) getSourceSchema(ctx context.Context, tablet *topoda
 	// in each source shard for each table to be about the same
 	// (rowCount is used to estimate an ETA)
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, tablet.Alias, nil, scw.excludeTables, false /* includeViews */)
+	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, tablet.Alias, scw.tables, scw.excludeTables, false /* includeViews */)
 	cancel()
 	if err != nil {
 		return nil, fmt.Errorf("cannot get schema from source %v: %v", topoproto.TabletAliasString(tablet.Alias), err)

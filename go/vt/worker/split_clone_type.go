@@ -8,8 +8,3 @@ const (
 	horizontalResharding cloneType = iota
 	verticalSplit
 )
-
-// splitCloneInitializer is an interface which must be implemented for each
-// "cloneType".
-type splitCloneInitializer interface {
-}
