@@ -8,9 +8,9 @@ MAKEFLAGS = -s
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test php_test reshard_tests
+.PHONY: all build build_web test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test php_test reshard_tests
 
-all: build test
+all: build build_web test
 
 # Set a custom value for -p, the number of packages to be built/tested in parallel.
 # This is currently only used by our Travis CI test configuration.
@@ -26,6 +26,10 @@ ifdef VT_MYSQL_ROOT
     CGO_LDFLAGS += -L$(VT_MYSQL_ROOT)/lib
   endif
 endif
+
+build_web:
+	echo $$(date): Building web artifacts
+	cd web/vtctld2 && ./build.sh
 
 build:
 ifndef NOBANNER

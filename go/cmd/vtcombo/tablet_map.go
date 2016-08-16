@@ -158,10 +158,6 @@ func initTabletMap(ts topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl
 						// 2 replicas in order to ensure the master cell has a master and a replica
 						replicas = 2
 					}
-					rdonlys := int(kpb.RdonlyCount)
-					if rdonlys == 0 {
-						rdonlys = 1
-					}
 
 					if cell == tpb.Cells[0] {
 						replicas--
@@ -181,7 +177,7 @@ func initTabletMap(ts topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl
 						uid++
 					}
 
-					for i := 0; i < rdonlys; i++ {
+					for i := 0; i < int(kpb.RdonlyCount); i++ {
 						// create a rdonly slave
 						if err := createTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_RDONLY, mysqld, dbcfgs); err != nil {
 							return err

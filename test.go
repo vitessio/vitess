@@ -357,7 +357,7 @@ func main() {
 	} else {
 		// Since we're sharing the working dir, do the build once for all tests.
 		log.Printf("Running make build...")
-		if out, err := exec.Command("make", "build").CombinedOutput(); err != nil {
+		if out, err := exec.Command("make", "build", "build_web").CombinedOutput(); err != nil {
 			log.Fatalf("make build failed: %v\n%s", err, out)
 		}
 	}

@@ -207,6 +207,12 @@ echo "creating git pre-commit hooks"
 mkdir -p $VTTOP/.git/hooks
 ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
 
+# Download node
+curl -sL https://nodejs.org/dist/v6.3.1/node-v6.3.1-linux-x64.tar.xz > node_linux64.xz
+tar xf node_linux64.xz -C $VTROOT/dist
+mv $VTROOT/dist/node-v6.3.1-linux-x64 $VTROOT/dist/node
+rm node_linux64.xz
+
 # Download chromedriver
 echo "Installing selenium and chromedriver"
 selenium_dist=$VTROOT/dist/selenium
