@@ -116,11 +116,14 @@ type SplitCloneWorker struct {
 	refreshAliases [][]*topodatapb.TabletAlias
 	refreshTablets []map[topodatapb.TabletAlias]*topo.TabletInfo
 
-	ev *events.SplitClone
+	ev event.Updater
 }
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
 func NewSplitCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, shard string, online, offline bool, tables, excludeTables []string, strategyStr string, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
+	if cloneType != horizontalResharding && cloneType != verticalSplit {
+		return nil, fmt.Errorf("unknown cloneType: %v This is a bug. Please report", cloneType)
+	}
 	if tables != nil && len(tables) == 0 {
 		return nil, errors.New("list of tablets to be split out must not be empty")
 	}
@@ -137,7 +140,7 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keysp
 	if !online && !offline {
 		return nil, errors.New("at least one clone phase (-online, -offline) must be enabled (and not set to false)")
 	}
-	return &SplitCloneWorker{
+	scw := &SplitCloneWorker{
 		StatusWorker:            NewStatusWorker(),
 		wr:                      wr,
 		cloneType:               cloneType,
@@ -165,15 +168,30 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keysp
 
 		tableStatusListOnline:  &tableStatusList{},
 		tableStatusListOffline: &tableStatusList{},
+	}
+	scw.initializeEventDescriptor()
+	return scw, nil
+}
 
-		ev: &events.SplitClone{
-			Cell:          cell,
-			Keyspace:      keyspace,
-			Shard:         shard,
-			ExcludeTables: excludeTables,
-			Strategy:      strategy.String(),
-		},
-	}, nil
+func (scw *SplitCloneWorker) initializeEventDescriptor() {
+	switch scw.cloneType {
+	case horizontalResharding:
+		scw.ev = &events.SplitClone{
+			Cell:          scw.cell,
+			Keyspace:      scw.destinationKeyspace,
+			Shard:         scw.shard,
+			ExcludeTables: scw.excludeTables,
+			Strategy:      scw.strategy.String(),
+		}
+	case verticalSplit:
+		scw.ev = &events.VerticalSplitClone{
+			Cell:     scw.cell,
+			Keyspace: scw.destinationKeyspace,
+			Shard:    scw.shard,
+			Tables:   scw.tables,
+			Strategy: scw.strategy.String(),
+		}
+	}
 }
 
 func (scw *SplitCloneWorker) setState(state StatusWorkerState) {
