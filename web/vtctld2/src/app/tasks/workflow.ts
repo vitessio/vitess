@@ -1,8 +1,13 @@
-const enum ActionState {
+export const enum ActionState {
   ENABLED,
-  DISABLED,
+  DISABLED
+}
+
+export const enum ActionStyle {
+  NORMAL,
   WARNING, // Display warning dialog to confirm action with message
-  WAITING // Highlight to user that the process is waiting on action.
+  WAITING, // Highlight to user that the process is waiting on action.
+  TRIGGERED,
 }
 
 /* 
@@ -12,11 +17,13 @@ const enum ActionState {
 export class Action {
   public name: string;
   public state: ActionState;
+  public style: ActionStyle;
   public message: string; // Message to be displayed with action.
 
-  constructor(name: string, state: ActionState, message= '') {
+  constructor(name: string, state: ActionState, style: ActionStyle, message= '') {
     this.name = name;
     this.state = state;
+    this.style = style;
     this.message = message;
   }
 
@@ -25,19 +32,27 @@ export class Action {
   }
 
   isDisabled() {
-    return this.state === ActionState.DISABLED;
+    return this.state === ActionState.DISABLED || this.style === ActionStyle.TRIGGERED;
   }
 
   isWarning() {
-    return this.state === ActionState.WARNING;
+    return this.style === ActionStyle.WARNING;
   }
 
   isWaiting() {
-    return this.state === ActionState.WAITING;
+    return this.style === ActionStyle.WAITING;
+  }
+
+  isNormal() {
+    return this.style === ActionStyle.NORMAL;
+  }
+
+  isTriggered() {
+    return this.style === ActionStyle.TRIGGERED;
   }
 }
 
-const enum State {
+export const enum State {
   NOT_STARTED,
   RUNNING,
   DONE
@@ -51,7 +66,6 @@ export const enum Display { // Only relevant if State is RUNNING.
 
 export class Workflow {
   public name: string;
-  public id: string;  // Id of element, may not be UU.
   public path: string; // Path to element Ex, “GrandparentID/ParentId/ID”.
   public children: any[];
   public lastChanged: number; // Time last changed in seconds.
@@ -63,11 +77,10 @@ export class Workflow {
   public disabled: boolean; // Use for blocking further actions
   public actions: Action[];
 
-  constructor(name: string, id: string, path: string, children: any,
-              message= '', state= State.NOT_STARTED, lastChanged= 0, progress= 0, progressMsg= '',
-              display= Display.NONE, disabled= false, actions= []) {
+  constructor(name: string, path: string, children: any, message= '',
+              state= State.NOT_STARTED, lastChanged= 0, display= Display.NONE,
+              progress= 0, progressMsg= '', disabled= false, actions= []) {
     this.name = name;
-    this.id = id;
     this.path = path;
     this.children = children;
     this.lastChanged = lastChanged;
@@ -85,7 +98,7 @@ export class Workflow {
   }
 
   public isRoot(): boolean {
-    return this.id === this.path;
+    return this.path.split('/').length === 1;
   }
 
   public isDeterminate() {

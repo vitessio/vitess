@@ -1,12 +1,11 @@
 <md-card class="{{getWorkflowClass()}}" *ngIf="workflow">
   <div class="vt-workflow-content">
-    <h1>{{workflow.name}}</h1>
     <h3>{{workflow.message}}</h3>
     <span *ngIf="getTime()" class="vt-workflow-time">Last Change: {{getTime()}}</span>
   </div>
   <div class="vt-actions">
     <span *ngFor="let action of workflow.actions">
-      <button md-raised-button (click)="blockClick($event)" class="{{getActionClass(action.state)}}">{{action.name}}</button>
+      <button md-raised-button disableRipple=true [disabled]="action.isDisabled()" class="{{getActionClass(action.style)}}">{{action.name}}</button>
     </span>
   </div>
   <div class="vt-drawer">
@@ -14,10 +13,20 @@
       <span>
         <p-accordionTab header="" class="{{getHeaderClass(workflow.children[childId].state)}}">
           <header>
-            {{workflow.children[childId].name}}
-            <span class="vt-accordion-header vt-progress-msg" *ngIf="workflow.children[childId].isDeterminate() || workflow.children[childId].isIndeterminate()" >{{workflow.children[childId].progressMsg}}</span>
-            <md-progress-bar class="vt-accordion-header vt-progress-bar" *ngIf="workflow.children[childId].isDeterminate()" mode="determinate" [value]="workflow.children[childId].progress" color="primary"></md-progress-bar>
-            <md-progress-bar class="vt-accordion-header vt-progress-bar" *ngIf="workflow.children[childId].isIndeterminate()" mode="indeterminate" color="primary"></md-progress-bar>
+            <div class="vt-accordion-header vt-accordian-name-wrapper">
+              <span class="vt-accordian-name">
+                {{workflow.children[childId].name}}
+              </span>
+            </div>
+            <div class="vt-accordion-header vt-progress-bar-wrapper">
+              <md-progress-bar class="vt-progress-bar" *ngIf="workflow.children[childId].isDeterminate()" mode="determinate" [value]="workflow.children[childId].progress" color="primary"></md-progress-bar>
+              <md-progress-bar class="vt-accordion-header vt-progress-bar" *ngIf="workflow.children[childId].isIndeterminate()" mode="indeterminate" color="primary"></md-progress-bar>
+            </div>
+            <div class="vt-accordion-header vt-progress-msg-wrapper" *ngIf="workflow.children[childId].isDeterminate() || workflow.children[childId].isIndeterminate()" >
+              <span class="vt-progress-msg">
+                {{workflow.children[childId].progressMsg}}
+              </span>
+            </div>
           </header>
           <vt-workflow [(workflow)]="workflow.children[childId]"></vt-workflow>
         </p-accordionTab>

@@ -40,10 +40,20 @@
     <span >
       <p-accordionTab header="" class="{{getHeaderClass(workflows[workflowId].state)}}">
         <header>
-          {{workflows[workflowId].name}}
-          <span class="vt-accordion-header vt-progress-msg" *ngIf="workflows[workflowId].isDeterminate() || workflows[workflowId].isIndeterminate()" >{{workflows[workflowId].progressMsg}}</span>
-          <md-progress-bar class="vt-accordion-header vt-progress-bar" *ngIf="workflows[workflowId].isDeterminate()" mode="determinate" [value]="workflows[workflowId].progress" color="primary"></md-progress-bar>
-          <md-progress-bar class="vt-accordion-header vt-progress-bar" *ngIf="workflows[workflowId].isIndeterminate()" mode="indeterminate" color="primary"></md-progress-bar>
+          <div class="vt-accordion-header vt-accordian-name-wrapper">
+              <span class="vt-accordian-name">
+                {{workflows[workflowId].name}}
+              </span>
+            </div>
+            <div class="vt-accordion-header vt-progress-bar-wrapper">
+              <md-progress-bar class="vt-progress-bar" *ngIf="workflows[workflowId].isDeterminate()" mode="determinate" [value]="workflows[workflowId].progress" color="primary"></md-progress-bar>
+              <md-progress-bar class="vt-accordion-header vt-progress-bar" *ngIf="workflows[workflowId].isIndeterminate()" mode="indeterminate" color="primary"></md-progress-bar>
+            </div>
+            <div class="vt-accordion-header vt-progress-msg-wrapper" *ngIf="workflows[workflowId].isDeterminate() || workflows[workflowId].isIndeterminate()" >
+              <span class="vt-progress-msg">
+                {{workflows[workflowId].progressMsg}}
+              </span>
+            </div>
         </header>
         <vt-workflow [(workflow)]="workflows[workflowId]"></vt-workflow>
       </p-accordionTab>

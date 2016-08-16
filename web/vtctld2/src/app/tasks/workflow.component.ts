@@ -1,5 +1,5 @@
 import { Component, Input } from '@angular/core';
-import { Workflow } from './workflow';
+import { Workflow, ActionStyle } from './workflow';
 
 import {Accordion, AccordionTab, Header} from 'primeng/primeng';
 
@@ -57,14 +57,14 @@ export class WorkflowComponent {
 
   getActionClass(state) {
     switch (state) {
-      case 0:
-        return 'vt-action-enabled';
-      case 1:
-        return 'vt-action-disabled';
-      case 2:
-        return 'vt-action-warning';
-      case 3:
+      case ActionStyle.NORMAL:
+        return 'vt-action-normal';
+      case ActionStyle.TRIGGERED:
+        return 'vt-action-triggered';
+      case ActionStyle.WAITING:
         return 'vt-action-waiting';
+      case ActionStyle.WARNING:
+        return 'vt-action-warning';
      default:
         return '';
     }
@@ -72,5 +72,6 @@ export class WorkflowComponent {
 
   blockClick(e) {
     e.stopPropagation();
+    e.preventDefault();
   }
 }

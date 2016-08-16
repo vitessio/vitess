@@ -1,8 +1,8 @@
 .vt-workflow-not-started {
   background-color: #FFF9C4;
   padding: 5px;
+  padding-left: 15px;
   margin: 0;
-  margin-bottom: 25px;
 }
 
 .vt-workflow-running {
@@ -10,20 +10,13 @@
   padding: 5px;
   padding-left: 15px;
   margin: 0;
-  margin-bottom: 25px;
 }
 
 .vt-workflow-done {
   background-color: #BDBDBD;
   padding: 5px;
+  padding-left: 15px;
   margin: 0;
-}
-
-.vt-progress-msg {
-  width: 15%;
-  float: right;
-  text-align: right;
-  white-space: nowrap;
 }
 
 .vt-workflow-content {
@@ -64,14 +57,40 @@ md-card h1 {
   background-color: #808080;
 }
 
+
+
+
+
 .vt-accordion-header {
   display: inline-block;
-  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.vt-accordian-name-wrapper {
+  width: 20%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vt-accordian-name {
+  
+}
+
+.vt-progress-bar-wrapper {
+  width: 60%;
 }
 
 .vt-progress-bar {
-  width: 50%;
-  float: right;
-  padding-top: 5px;
   padding-bottom: 3px;
+}
+
+.vt-progress-msg-wrapper {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vt-progress-msg {
+  padding-top: 1px;
 }
