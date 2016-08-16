@@ -32,18 +32,21 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
+// servingTypes is the list of tabletTypes which the source keyspace must be serving.
+var servingTypes = []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
+
 // SplitCloneWorker will clone the data within a keyspace from a
 // source set of shards to a destination set of shards.
 type SplitCloneWorker struct {
 	StatusWorker
 
-	wr        *wrangler.Wrangler
-	cloneType cloneType
-	cell      string
-	keyspace  string
-	shard     string
-	online    bool
-	offline   bool
+	wr                  *wrangler.Wrangler
+	cloneType           cloneType
+	cell                string
+	destinationKeyspace string
+	shard               string
+	online              bool
+	offline             bool
 	// verticalSplit only: List of tables which should be split out.
 	tables []string
 	// horizontalResharding only: List of tables which will be skipped.
@@ -145,7 +148,7 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keysp
 		wr:                      wr,
 		cloneType:               cloneType,
 		cell:                    cell,
-		keyspace:                keyspace,
+		destinationKeyspace:     keyspace,
 		shard:                   shard,
 		online:                  online,
 		offline:                 offline,
@@ -467,53 +470,15 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 		return fmt.Errorf("cannot read keyspace %v: %v", scw.keyspace, err)
 	}
 
-	// find the OverlappingShards in the keyspace
-	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	osList, err := topotools.FindOverlappingShards(shortCtx, scw.wr.TopoServer(), scw.keyspace)
-	cancel()
-	if err != nil {
-		return fmt.Errorf("cannot FindOverlappingShards in %v: %v", scw.keyspace, err)
-	}
-
-	// find the shard we mentioned in there, if any
-	os := topotools.OverlappingShardsForShard(osList, scw.shard)
-	if os == nil {
-		return fmt.Errorf("the specified shard %v/%v is not in any overlapping shard", scw.keyspace, scw.shard)
-	}
-	scw.wr.Logger().Infof("Found overlapping shards: %+v\n", os)
-
-	// one side should have served types, the other one none,
-	// figure out wich is which, then double check them all
-	if len(os.Left[0].ServedTypes) > 0 {
-		scw.sourceShards = os.Left
-		scw.destinationShards = os.Right
-	} else {
-		scw.sourceShards = os.Right
-		scw.destinationShards = os.Left
-	}
-
-	// Verify that filtered replication is not already enabled.
-	for _, si := range scw.destinationShards {
-		if len(si.SourceShards) > 0 {
-			return fmt.Errorf("destination shard %v/%v has filtered replication already enabled from a previous resharding (ShardInfo is set)."+
-				" This requires manual intervention e.g. use vtctl SourceShardDelete to remove it",
-				si.Keyspace(), si.ShardName())
+	// Set source and destination shard infos.
+	switch scw.cloneType {
+	case horizontalResharding:
+		if err := scw.initShardsForHorizontalResharding(ctx); err != nil {
+			return err
 		}
-	}
 
-	// validate all serving types
-	servingTypes := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
-	for _, st := range servingTypes {
-		for _, si := range scw.sourceShards {
-			if si.GetServedType(st) == nil {
-				return fmt.Errorf("source shard %v/%v is not serving type %v", si.Keyspace(), si.ShardName(), st)
-			}
-		}
-	}
-	for _, si := range scw.destinationShards {
-		if len(si.ServedTypes) > 0 {
-			return fmt.Errorf("destination shard %v/%v is serving some types", si.Keyspace(), si.ShardName())
-		}
+	if err := scw.sanityCheckShardInfos(); err != nil {
+		return err
 	}
 
 	if scw.cloneType == horizontalResharding {
@@ -535,6 +500,66 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 			scw.cell, si.Keyspace(), si.ShardName(),
 			*healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 		scw.shardWatchers = append(scw.shardWatchers, watcher)
+	}
+
+	return nil
+}
+
+func (scw *SplitCloneWorker) initShardsForHorizontalResharding(ctx context.Context) error {
+	// find the OverlappingShards in the keyspace
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	osList, err := topotools.FindOverlappingShards(shortCtx, scw.wr.TopoServer(), scw.destinationKeyspace)
+	cancel()
+	if err != nil {
+		return fmt.Errorf("cannot FindOverlappingShards in %v: %v", scw.destinationKeyspace, err)
+	}
+
+	// find the shard we mentioned in there, if any
+	os := topotools.OverlappingShardsForShard(osList, scw.shard)
+	if os == nil {
+		return fmt.Errorf("the specified shard %v/%v is not in any overlapping shard", scw.destinationKeyspace, scw.shard)
+	}
+	scw.wr.Logger().Infof("Found overlapping shards: %+v\n", os)
+
+	// one side should have served types, the other one none,
+	// figure out wich is which, then double check them all
+	if len(os.Left[0].ServedTypes) > 0 {
+		scw.sourceShards = os.Left
+		scw.destinationShards = os.Right
+	} else {
+		scw.sourceShards = os.Right
+		scw.destinationShards = os.Left
+	}
+
+	return nil
+}
+
+func (scw *SplitCloneWorker) sanityCheckShardInfos() error {
+	// Verify that filtered replication is not already enabled.
+	for _, si := range scw.destinationShards {
+		if len(si.SourceShards) > 0 {
+			return fmt.Errorf("destination shard %v/%v has filtered replication already enabled from a previous resharding (ShardInfo is set)."+
+				" This requires manual intervention e.g. use vtctl SourceShardDelete to remove it",
+				si.Keyspace(), si.ShardName())
+		}
+	}
+	// Verify that the source is serving all serving types.
+	for _, st := range servingTypes {
+		for _, si := range scw.sourceShards {
+			if si.GetServedType(st) == nil {
+				return fmt.Errorf("source shard %v/%v is not serving type %v", si.Keyspace(), si.ShardName(), st)
+			}
+		}
+	}
+
+	switch scw.cloneType {
+	case horizontalResharding:
+		// Verify that the destination is not serving yet.
+		for _, si := range scw.destinationShards {
+			if len(si.ServedTypes) > 0 {
+				return fmt.Errorf("destination shard %v/%v is serving some types", si.Keyspace(), si.ShardName())
+			}
+		}
 	}
 
 	return nil
