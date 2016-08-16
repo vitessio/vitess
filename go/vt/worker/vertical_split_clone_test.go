@@ -5,13 +5,9 @@
 package worker
 
 import (
-	"fmt"
-	"strconv"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
@@ -21,7 +17,6 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -33,71 +28,14 @@ const (
 	verticalSplitCloneTestMax int = 200
 )
 
-// verticalTabletServer is a local QueryService implementation to support the tests.
-type verticalTabletServer struct {
-	t *testing.T
-
-	*fakes.StreamHealthQueryService
-}
-
-func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sendReply func(reply *sqltypes.Result) error) error {
-	// Custom parsing of the query we expect
-	min := verticalSplitCloneTestMin
-	max := verticalSplitCloneTestMax
-	var err error
-	parts := strings.Split(sql, " ")
-	for _, part := range parts {
-		if strings.HasPrefix(part, "`id`>=") {
-			min, err = strconv.Atoi(part[6:])
-			if err != nil {
-				return err
-			}
-		} else if strings.HasPrefix(part, "`id`<") {
-			max, err = strconv.Atoi(part[5:])
-		}
-	}
-	sq.t.Logf("verticalTabletServer: got query: %v with min %v max %v", sql, min, max)
-
-	// Send the headers
-	if err := sendReply(&sqltypes.Result{
-		Fields: []*querypb.Field{
-			{
-				Name: "id",
-				Type: sqltypes.Int64,
-			},
-			{
-				Name: "msg",
-				Type: sqltypes.VarChar,
-			},
-		},
-	}); err != nil {
-		return err
-	}
-
-	// Send the values
-	for i := min; i < max; i++ {
-		if err := sendReply(&sqltypes.Result{
-			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
-					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
-				},
-			},
-		}); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func createVerticalSplitCloneDestinationFakeDb(t *testing.T, name string, insertCount int) *FakePoolConnection {
 	f := NewFakePoolConnectionQuery(t, name)
 
 	// Provoke a retry to test the error handling. (Let the first write fail.)
-	f.addExpectedQuery("INSERT INTO `vt_destination_ks`.`moving1`(`id`, `msg`) VALUES (*", errReadOnly)
+	f.addExpectedQuery("INSERT INTO `vt_destination_ks`.`moving1` (`id`, `msg`) VALUES (*", errReadOnly)
 
 	for i := 1; i <= insertCount; i++ {
-		f.addExpectedQuery("INSERT INTO `vt_destination_ks`.`moving1`(`id`, `msg`) VALUES (*", nil)
+		f.addExpectedQuery("INSERT INTO `vt_destination_ks`.`moving1` (`id`, `msg`) VALUES (*", nil)
 	}
 
 	expectBlpCheckpointCreationQueries(f)
@@ -105,6 +43,10 @@ func createVerticalSplitCloneDestinationFakeDb(t *testing.T, name string, insert
 	return f
 }
 
+// TestVerticalSplitClone will run VerticalSplitClone in the combined
+// online and offline mode. The online phase will copy 100 rows from the source
+// to the destination and the offline phase won't copy any rows as the source
+// has not changed in the meantime.
 func TestVerticalSplitClone(t *testing.T) {
 	db := fakesqldb.Register()
 	ts := zktestserver.New(t, []string{"cell1", "cell2"})
@@ -113,9 +55,7 @@ func TestVerticalSplitClone(t *testing.T) {
 
 	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
 		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
-	sourceRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 1,
-		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
-	sourceRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 2,
+	sourceRdonly := testlib.NewFakeTablet(t, wi.wr, "cell1", 1,
 		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 
 	// Create the destination keyspace with the appropriate ServedFromMap
@@ -142,7 +82,7 @@ func TestVerticalSplitClone(t *testing.T) {
 	destRdonly := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
 		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 
-	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, destMaster, destRdonly} {
+	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly, destMaster, destRdonly} {
 		ft.StartActionLoop(t, wi.wr)
 		defer ft.StopActionLoop(t)
 	}
@@ -155,40 +95,45 @@ func TestVerticalSplitClone(t *testing.T) {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
-	for _, sourceRdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2} {
-		sourceRdonly.FakeMysqlDaemon.Schema = &tabletmanagerdatapb.SchemaDefinition{
-			DatabaseSchema: "",
-			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
-				{
-					Name:              "moving1",
-					Columns:           []string{"id", "msg"},
-					PrimaryKeyColumns: []string{"id"},
-					Type:              tmutils.TableBaseTable,
-					// Set the table size to a value higher than --min_table_size_for_split.
-					DataLength: 2048,
-				},
-				{
-					Name: "view1",
-					Type: tmutils.TableView,
-				},
+	// Set up source rdonly which will be used as input for the diff during the clone.
+	sourceRdonly.FakeMysqlDaemon.Schema = &tabletmanagerdatapb.SchemaDefinition{
+		DatabaseSchema: "",
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
+				Name:              "moving1",
+				Columns:           []string{"id", "msg"},
+				PrimaryKeyColumns: []string{"id"},
+				Type:              tmutils.TableBaseTable,
+				// Set the table size to a value higher than --min_table_size_for_split.
+				DataLength: 2048,
 			},
-		}
-		sourceRdonly.FakeMysqlDaemon.DbAppConnectionFactory = sourceRdonlyFactory(
-			t, "vt_source_ks", "moving1", verticalSplitCloneTestMin, verticalSplitCloneTestMax)
-		sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
-			GTIDSet: replication.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
-		}
-		sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-			"STOP SLAVE",
-			"START SLAVE",
-		}
-		qs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
-		qs.AddDefaultHealthResponse()
-		grpcqueryservice.Register(sourceRdonly.RPCServer, &verticalTabletServer{
-			t: t,
-			StreamHealthQueryService: qs,
-		})
+			{
+				Name: "view1",
+				Type: tmutils.TableView,
+			},
+		},
 	}
+	sourceRdonly.FakeMysqlDaemon.DbAppConnectionFactory = sourceRdonlyFactory(
+		t, "vt_source_ks", "moving1", verticalSplitCloneTestMin, verticalSplitCloneTestMax)
+	sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
+		GTIDSet: replication.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
+	}
+	sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
+		"START SLAVE",
+	}
+	sourceRdonlyShqs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
+	sourceRdonlyShqs.AddDefaultHealthResponse()
+	sourceRdonlyQs := newTestQueryService(t, sourceRdonly.Target(), sourceRdonlyShqs, 0, 1, sourceRdonly.Tablet.Alias.Uid, true /* omitKeyspaceID */)
+	sourceRdonlyQs.addGeneratedRows(verticalSplitCloneTestMin, verticalSplitCloneTestMax)
+	grpcqueryservice.Register(sourceRdonly.RPCServer, sourceRdonlyQs)
+
+	// Set up destination rdonly which will be used as input for the diff during the clone.
+	destRdonlyShqs := fakes.NewStreamHealthQueryService(destRdonly.Target())
+	destRdonlyShqs.AddDefaultHealthResponse()
+	destRdonlyQs := newTestQueryService(t, destRdonly.Target(), destRdonlyShqs, 0, 1, destRdonly.Tablet.Alias.Uid, true /* omitKeyspaceID */)
+	// This tablet is empty and does not return any rows.
+	grpcqueryservice.Register(destRdonly.RPCServer, destRdonlyQs)
 
 	// We read 100 source rows. sourceReaderCount is set to 10, so
 	// we'll have 100/10=10 rows per table chunk.
@@ -207,6 +152,12 @@ func TestVerticalSplitClone(t *testing.T) {
 	// Only wait 1 ms between retries, so that the test passes faster
 	*executeFetchRetryTime = (1 * time.Millisecond)
 
+	// When the online clone inserted the last rows, modify the destination test
+	// query service such that it will return them as well.
+	destMasterFakeDb.getEntry(29).AfterFunc = func() {
+		destRdonlyQs.addGeneratedRows(verticalSplitCloneTestMin, verticalSplitCloneTestMax)
+	}
+
 	// Run the vtworker command.
 	args := []string{
 		"VerticalSplitClone",
@@ -216,13 +167,35 @@ func TestVerticalSplitClone(t *testing.T) {
 		"-max_tps", "9999",
 		"-tables", "moving.*,view1",
 		"-source_reader_count", "10",
-		"-destination_pack_count", "4",
+		// Each chunk pipeline will process 10 rows. To spread them out across 3
+		// write queries, set the max row count per query to 4. (10 = 4+4+2)
+		"-write_query_max_rows", "4",
 		"-min_table_size_for_split", "1",
 		"-destination_writer_count", "10",
+		// This test uses only one healthy RDONLY tablet.
+		"-min_healthy_rdonly_tablets", "1",
 		"destination_ks/0",
 	}
 	if err := runCommand(t, wi, wi.wr, args); err != nil {
 		t.Fatal(err)
+	}
+	if inserts := statsOnlineInsertsCounters.Counts()["moving1"]; inserts != 100 {
+		t.Errorf("wrong number of rows inserted: got = %v, want = %v", inserts, 100)
+	}
+	if updates := statsOnlineUpdatesCounters.Counts()["moving1"]; updates != 0 {
+		t.Errorf("wrong number of rows updated: got = %v, want = %v", updates, 0)
+	}
+	if deletes := statsOnlineDeletesCounters.Counts()["moving1"]; deletes != 0 {
+		t.Errorf("wrong number of rows deleted: got = %v, want = %v", deletes, 0)
+	}
+	if inserts := statsOfflineInsertsCounters.Counts()["moving1"]; inserts != 0 {
+		t.Errorf("no stats for the offline clone phase should have been modified. got inserts = %v", inserts)
+	}
+	if updates := statsOfflineUpdatesCounters.Counts()["moving1"]; updates != 0 {
+		t.Errorf("no stats for the offline clone phase should have been modified. got updates = %v", updates)
+	}
+	if deletes := statsOfflineDeletesCounters.Counts()["moving1"]; deletes != 0 {
+		t.Errorf("no stats for the offline clone phase should have been modified. got deletes = %v", deletes)
 	}
 
 	wantRetryCount := int64(1)

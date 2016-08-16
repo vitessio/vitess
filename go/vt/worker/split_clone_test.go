@@ -198,7 +198,7 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 		}
 		shqs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
 		shqs.AddDefaultHealthResponse()
-		qs := newTestQueryService(tc.t, sourceRdonly.Target(), shqs, 0, 1, sourceRdonly.Tablet.Alias.Uid)
+		qs := newTestQueryService(tc.t, sourceRdonly.Target(), shqs, 0, 1, sourceRdonly.Tablet.Alias.Uid, false /* omitKeyspaceID */)
 		qs.addGeneratedRows(100, 100+rowsTotal)
 		grpcqueryservice.Register(sourceRdonly.RPCServer, qs)
 		tc.sourceRdonlyQs = append(tc.sourceRdonlyQs, qs)
@@ -207,7 +207,7 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 	for i, destRdonly := range []*testlib.FakeTablet{leftRdonly1, rightRdonly1, leftRdonly2, rightRdonly2} {
 		shqs := fakes.NewStreamHealthQueryService(destRdonly.Target())
 		shqs.AddDefaultHealthResponse()
-		qs := newTestQueryService(tc.t, destRdonly.Target(), shqs, i%2, 2, destRdonly.Tablet.Alias.Uid)
+		qs := newTestQueryService(tc.t, destRdonly.Target(), shqs, i%2, 2, destRdonly.Tablet.Alias.Uid, false /* omitKeyspaceID */)
 		grpcqueryservice.Register(destRdonly.RPCServer, qs)
 		if i%2 == 0 {
 			tc.leftRdonlyQs = append(tc.leftRdonlyQs, qs)
@@ -284,8 +284,11 @@ type testQueryService struct {
 	shardIndex int
 	shardCount int
 	tabletUID  uint32
-	fields     []*querypb.Field
-	rows       [][]sqltypes.Value
+	// omitKeyspaceID is true when the returned rows should not contain the
+	// "keyspace_id" column.
+	omitKeyspaceID bool
+	fields         []*querypb.Field
+	rows           [][]sqltypes.Value
 
 	// mu guards the fields in this group.
 	mu sync.Mutex
@@ -294,7 +297,11 @@ type testQueryService struct {
 	forceError map[int64]bool
 }
 
-func newTestQueryService(t *testing.T, target querypb.Target, shqs *fakes.StreamHealthQueryService, shardIndex, shardCount int, tabletUID uint32) *testQueryService {
+func newTestQueryService(t *testing.T, target querypb.Target, shqs *fakes.StreamHealthQueryService, shardIndex, shardCount int, tabletUID uint32, omitKeyspaceID bool) *testQueryService {
+	fields := v2Fields
+	if omitKeyspaceID {
+		fields = v3Fields
+	}
 	return &testQueryService{
 		t:      t,
 		target: target,
@@ -302,7 +309,8 @@ func newTestQueryService(t *testing.T, target querypb.Target, shqs *fakes.Stream
 		shardIndex:               shardIndex,
 		shardCount:               shardCount,
 		tabletUID:                tabletUID,
-		fields:                   v2Fields,
+		omitKeyspaceID:           omitKeyspaceID,
+		fields:                   fields,
 		forceError:               make(map[int64]bool),
 	}
 }
@@ -384,11 +392,15 @@ func (sq *testQueryService) addGeneratedRows(from, to int) {
 		shardIndex := id % 2
 		if sq.shardCount == 1 || shardIndex == sq.shardIndex {
 			idValue, _ := sqltypes.BuildValue(int64(id))
-			rows = append(rows, []sqltypes.Value{
+
+			row := []sqltypes.Value{
 				idValue,
 				sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", id))),
-				sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[shardIndex]))),
-			})
+			}
+			if !sq.omitKeyspaceID {
+				row = append(row, sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[shardIndex]))))
+			}
+			rows = append(rows, row)
 		}
 	}
 
@@ -439,10 +451,21 @@ var v2Fields = []*querypb.Field{
 		Name: "msg",
 		Type: sqltypes.VarChar,
 	},
-	// TODO(mberlin): Omit keyspace_id in the v3 test.
 	{
 		Name: "keyspace_id",
 		Type: sqltypes.Int64,
+	},
+}
+
+// v3Fields is identical to v2Fields but lacks the "keyspace_id" column.
+var v3Fields = []*querypb.Field{
+	{
+		Name: "id",
+		Type: sqltypes.Int64,
+	},
+	{
+		Name: "msg",
+		Type: sqltypes.VarChar,
 	},
 }
 
