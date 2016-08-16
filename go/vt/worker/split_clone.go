@@ -516,22 +516,10 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 		}
 	}
 
-	// read the vschema if needed
-	var keyspaceSchema *vindexes.KeyspaceSchema
-	if *useV3ReshardingMode {
-		kschema, err := scw.wr.TopoServer().GetVSchema(ctx, scw.keyspace)
-		if err != nil {
-			return fmt.Errorf("cannot load VSchema for keyspace %v: %v", scw.keyspace, err)
+	if scw.cloneType == horizontalResharding {
+		if err := scw.loadVSchema(ctx); err != nil {
+			return err
 		}
-		if kschema == nil {
-			return fmt.Errorf("no VSchema for keyspace %v", scw.keyspace)
-		}
-
-		keyspaceSchema, err = vindexes.BuildKeyspaceSchema(kschema, scw.keyspace)
-		if err != nil {
-			return fmt.Errorf("cannot build vschema for keyspace %v: %v", scw.keyspace, err)
-		}
-		scw.keyspaceSchema = keyspaceSchema
 	}
 
 	// Initialize healthcheck and add destination shards to it.
@@ -549,6 +537,26 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 		scw.shardWatchers = append(scw.shardWatchers, watcher)
 	}
 
+	return nil
+}
+
+func (scw *SplitCloneWorker) loadVSchema(ctx context.Context) error {
+	var keyspaceSchema *vindexes.KeyspaceSchema
+	if *useV3ReshardingMode {
+		kschema, err := scw.wr.TopoServer().GetVSchema(ctx, scw.destinationKeyspace)
+		if err != nil {
+			return fmt.Errorf("cannot load VSchema for keyspace %v: %v", scw.destinationKeyspace, err)
+		}
+		if kschema == nil {
+			return fmt.Errorf("no VSchema for keyspace %v", scw.destinationKeyspace)
+		}
+
+		keyspaceSchema, err = vindexes.BuildKeyspaceSchema(kschema, scw.destinationKeyspace)
+		if err != nil {
+			return fmt.Errorf("cannot build vschema for keyspace %v: %v", scw.destinationKeyspace, err)
+		}
+		scw.keyspaceSchema = keyspaceSchema
+	}
 	return nil
 }
 
