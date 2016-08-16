@@ -38,6 +38,7 @@ type SplitCloneWorker struct {
 	StatusWorker
 
 	wr                *wrangler.Wrangler
+	cloneType         cloneType
 	cell              string
 	keyspace          string
 	shard             string
@@ -116,7 +117,7 @@ type SplitCloneWorker struct {
 }
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
-func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, excludeTables []string, strategyStr string, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
+func NewSplitCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, shard string, online, offline bool, tables, excludeTables []string, strategyStr string, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
 	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
@@ -133,6 +134,7 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, on
 	return &SplitCloneWorker{
 		StatusWorker:            NewStatusWorker(),
 		wr:                      wr,
+		cloneType:               cloneType,
 		cell:                    cell,
 		keyspace:                keyspace,
 		shard:                   shard,
