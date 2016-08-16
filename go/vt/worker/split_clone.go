@@ -66,10 +66,10 @@ type SplitCloneWorker struct {
 	tabletTracker           *TabletTracker
 
 	// populated during WorkerStateInit, read-only after that
-	keyspaceInfo      *topo.KeyspaceInfo
-	sourceShards      []*topo.ShardInfo
-	destinationShards []*topo.ShardInfo
-	keyspaceSchema    *vindexes.KeyspaceSchema
+	destinationKeyspaceInfo *topo.KeyspaceInfo
+	sourceShards            []*topo.ShardInfo
+	destinationShards       []*topo.ShardInfo
+	keyspaceSchema          *vindexes.KeyspaceSchema
 	// healthCheck is used for the destination shards to a) find out the current
 	// MASTER tablet, b) get the list of healthy RDONLY tablets and c) track the
 	// replication lag of all REPLICA tablets.
@@ -242,7 +242,7 @@ func (scw *SplitCloneWorker) FormattedOfflineSources() string {
 func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
 	state := scw.State()
 
-	result := "<b>Working on:</b> " + scw.keyspace + "/" + scw.shard + "</br>\n"
+	result := "<b>Working on:</b> " + scw.destinationKeyspace + "/" + scw.shard + "</br>\n"
 	result += "<b>State:</b> " + state.String() + "</br>\n"
 	switch state {
 	case WorkerStateCloneOnline:
@@ -286,7 +286,7 @@ func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
 func (scw *SplitCloneWorker) StatusAsText() string {
 	state := scw.State()
 
-	result := "Working on: " + scw.keyspace + "/" + scw.shard + "\n"
+	result := "Working on: " + scw.destinationKeyspace + "/" + scw.shard + "\n"
 	result += "State: " + state.String() + "\n"
 	switch state {
 	case WorkerStateCloneOnline:
@@ -460,14 +460,14 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 // - read the destination keyspace, make sure it has 'servedFrom' values
 func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	scw.setState(WorkerStateInit)
-	var err error
 
 	// read the keyspace and validate it
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	scw.keyspaceInfo, err = scw.wr.TopoServer().GetKeyspace(shortCtx, scw.keyspace)
+	var err error
+	scw.destinationKeyspaceInfo, err = scw.wr.TopoServer().GetKeyspace(shortCtx, scw.destinationKeyspace)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot read keyspace %v: %v", scw.keyspace, err)
+		return fmt.Errorf("cannot read (destination) keyspace %v: %v", scw.destinationKeyspace, err)
 	}
 
 	// Set source and destination shard infos.
@@ -476,6 +476,11 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 		if err := scw.initShardsForHorizontalResharding(ctx); err != nil {
 			return err
 		}
+	case verticalSplit:
+		if err := scw.initShardsForVerticalSplit(ctx); err != nil {
+			return err
+		}
+	}
 
 	if err := scw.sanityCheckShardInfos(); err != nil {
 		return err
@@ -534,6 +539,43 @@ func (scw *SplitCloneWorker) initShardsForHorizontalResharding(ctx context.Conte
 	return nil
 }
 
+func (scw *SplitCloneWorker) initShardsForVerticalSplit(ctx context.Context) error {
+	if len(scw.destinationKeyspaceInfo.ServedFroms) == 0 {
+		return fmt.Errorf("destination keyspace %v has no KeyspaceServedFrom", scw.destinationKeyspace)
+	}
+
+	// Determine the source keyspace.
+	servedFrom := ""
+	for _, st := range servingTypes {
+		sf := scw.destinationKeyspaceInfo.GetServedFrom(st)
+		if sf == nil {
+			return fmt.Errorf("destination keyspace %v is serving type %v", scw.destinationKeyspace, st)
+		}
+		if servedFrom == "" {
+			servedFrom = sf.Keyspace
+		} else {
+			if servedFrom != sf.Keyspace {
+				return fmt.Errorf("destination keyspace %v is serving from multiple source keyspaces %v and %v", scw.destinationKeyspace, servedFrom, sf.Keyspace)
+			}
+		}
+	}
+	sourceKeyspace := servedFrom
+
+	// Init the source and destination shard info.
+	sourceShardInfo, err := scw.wr.TopoServer().GetShard(ctx, sourceKeyspace, scw.shard)
+	if err != nil {
+		return err
+	}
+	scw.sourceShards = []*topo.ShardInfo{sourceShardInfo}
+	destShardInfo, err := scw.wr.TopoServer().GetShard(ctx, scw.destinationKeyspace, scw.shard)
+	if err != nil {
+		return err
+	}
+	scw.destinationShards = []*topo.ShardInfo{destShardInfo}
+
+	return nil
+}
+
 func (scw *SplitCloneWorker) sanityCheckShardInfos() error {
 	// Verify that filtered replication is not already enabled.
 	for _, si := range scw.destinationShards {
@@ -558,6 +600,15 @@ func (scw *SplitCloneWorker) sanityCheckShardInfos() error {
 		for _, si := range scw.destinationShards {
 			if len(si.ServedTypes) > 0 {
 				return fmt.Errorf("destination shard %v/%v is serving some types", si.Keyspace(), si.ShardName())
+			}
+		}
+	case verticalSplit:
+		// Verify that the destination is serving all types.
+		for _, st := range servingTypes {
+			for _, si := range scw.destinationShards {
+				if si.GetServedType(st) == nil {
+					return fmt.Errorf("source shard %v/%v is not serving type %v", si.Keyspace(), si.ShardName(), st)
+				}
 			}
 		}
 	}
