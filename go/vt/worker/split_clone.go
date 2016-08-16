@@ -850,17 +850,9 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
 		td = reorderColumnsPrimaryKeyFirst(td)
 
-		var keyResolver keyspaceIDResolver
-		if *useV3ReshardingMode {
-			keyResolver, err = newV3ResolverFromTableDefinition(scw.keyspaceSchema, td)
-			if err != nil {
-				return fmt.Errorf("cannot resolve v3 sharding keys for keyspace %v: %v", scw.keyspace, err)
-			}
-		} else {
-			keyResolver, err = newV2Resolver(scw.keyspaceInfo, td)
-			if err != nil {
-				return fmt.Errorf("cannot resolve sharding keys for keyspace %v: %v", scw.keyspace, err)
-			}
+		keyResolver, err := scw.createKeyResolver(td)
+		if err != nil {
+			return fmt.Errorf("cannot resolve sharding keys for keyspace %v: %v", scw.destinationKeyspace, err)
 		}
 
 		// TODO(mberlin): We're going to chunk *all* source shards based on the MIN
@@ -1114,6 +1106,23 @@ func (scw *SplitCloneWorker) getSourceSchema(ctx context.Context, tablet *topoda
 		}
 	}
 	return sourceSchemaDefinition, nil
+}
+
+// createKeyResolver is called at the start of each chunk pipeline.
+// It creates a keyspaceIDResolver which translates a given row to a
+// keyspace ID. This is necessary to route the to be copied rows to the
+// different destination shards.
+func (scw *SplitCloneWorker) createKeyResolver(td *tabletmanagerdatapb.TableDefinition) (keyspaceIDResolver, error) {
+	if scw.cloneType == verticalSplit {
+		// VerticalSplitClone currently always has exactly one destination shard
+		// and therefore does not require routing between multiple shards.
+		return nil, nil
+	}
+
+	if *useV3ReshardingMode {
+		return newV3ResolverFromTableDefinition(scw.keyspaceSchema, td)
+	}
+	return newV2Resolver(scw.destinationKeyspaceInfo, td)
 }
 
 // StatsUpdate receives replication lag updates for each destination master
