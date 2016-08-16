@@ -48,11 +48,11 @@ export class TasksComponent implements OnInit {
         '12': new Workflow('Redirect RDONLY', 'UU130429/4/12', {
           '16': new Workflow('Redirect -80', 'UU130429/4/12/16', {}, 'Migrating -80', State.DONE, 1471234750, Display.DETERMINATE, 100, '', false),
           '17': new Workflow('Redirect 80-', 'UU130429/4/12/17', {}, 'Migrating 80-', State.RUNNING, 0, Display.DETERMINATE, 0, '', false),
-        }, 'Migrating Serve Type: RDONLY', State.DONE, 1471234800, Display.DETERMINATE, 50, '1/2', false),
+        }, 'Migrating Serve Type: RDONLY', State.RUNNING, 1471234800, Display.DETERMINATE, 50, '1/2', false),
         '13': new Workflow('Redirect Master', 'UU130429/4/13', {
           '16': new Workflow('Redirect -80', 'UU130429/4/12/16', {}, 'Migrating -80', State.NOT_STARTED, 0, Display.DETERMINATE, 0, '', false),
           '17': new Workflow('Redirect 80-', 'UU130429/4/12/17', {}, 'Migrating 80-', State.NOT_STARTED, 0, Display.DETERMINATE, 0, '', false),
-        }, 'Migrating Serve Type: MASTER', State.DONE, 0, Display.DETERMINATE, 0, '0/2', false),
+        }, 'Migrating Serve Type: MASTER', State.NOT_STARTED, 0, Display.DETERMINATE, 0, '0/2', false),
       }, '', State.RUNNING, 1471235000, Display.DETERMINATE, 50, '3/6', false, [new Action('Canary 1st Tablet Type', ActionState.ENABLED, ActionStyle.TRIGGERED), new Action('Remaining Tablet Types', ActionState.ENABLED, ActionStyle.NORMAL)]),
       '5': new Workflow('Cleanup', 'UU130429/5', {}, '', State.NOT_STARTED, 0, Display.NONE, 0, '', false, []),
     }, '', State.RUNNING, 1471235000, Display.DETERMINATE, 63, '63%')

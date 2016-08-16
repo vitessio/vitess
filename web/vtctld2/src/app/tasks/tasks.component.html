@@ -38,8 +38,8 @@
   </div>
   <p-accordion *ngFor="let workflowId of getWorkflowIds()">
     <span >
-      <p-accordionTab header="" class="{{getHeaderClass(workflows[workflowId].state)}}">
-        <header>
+      <p-accordionTab header="">
+        <header class="{{getHeaderClass(workflows[workflowId].state)}}">
           <div class="vt-accordion-header vt-accordian-name-wrapper">
               <span class="vt-accordian-name">
                 {{workflows[workflowId].name}}

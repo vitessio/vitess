@@ -1,22 +1,29 @@
 .vt-workflow-not-started {
-  background-color: #FFF9C4;
+  background-color: #ffffff;
   padding: 5px;
   padding-left: 15px;
   margin: 0;
 }
 
 .vt-workflow-running {
-  background-color: #C8E6C9;
+  background-color: #ffffff;
   padding: 5px;
   padding-left: 15px;
   margin: 0;
 }
 
 .vt-workflow-done {
-  background-color: #BDBDBD;
+  background-color: #ffffff;
   padding: 5px;
   padding-left: 15px;
   margin: 0;
+}
+
+.vt-workflow {
+  border-left: 2px solid #009688;
+  border-right: 2px solid #009688;
+  border-bottom: 2px solid #009688;
+  border-radius: 5px;
 }
 
 .vt-workflow-content {
@@ -46,15 +53,15 @@ md-card h1 {
 }
 
 .vt-workflow-not-started-dark {
-  background-color: #FFD54F;
+  background: #FFFFFF;
 }
 
 .vt-workflow-running-dark {
-  background-color: #4CAF50;
+  background-color: #26A69A;
 }
 
 .vt-workflow-done-dark {
-  background-color: #808080;
+  background-color: #E0F2F1;
 }
 
 
@@ -63,7 +70,6 @@ md-card h1 {
 
 .vt-accordion-header {
   display: inline-block;
-  padding-right: 10px;
 }
 
 .vt-accordian-name-wrapper {
@@ -74,7 +80,7 @@ md-card h1 {
 }
 
 .vt-accordian-name {
-  
+  padding-left: 20px
 }
 
 .vt-progress-bar-wrapper {
@@ -86,11 +92,31 @@ md-card h1 {
 }
 
 .vt-progress-msg-wrapper {
+  width: 18%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .vt-progress-msg {
+  padding-left: 10px;
   padding-top: 1px;
+}
+
+
+>>> .ui-accordion-content {
+  padding: 0 !important;
+}
+
+>>> a {
+  padding: 0;
+}
+
+>>>.ui-accordion .ui-accordion-header {
+  background: transparent;
+}
+
+>>> header {
+  white-space: nowrap;
+  overflow: hidden;
 }

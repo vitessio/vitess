@@ -1,4 +1,4 @@
-<md-card class="{{getWorkflowClass()}}" *ngIf="workflow">
+<div class="vt-workflow {{getWorkflowClass()}}" *ngIf="workflow">
   <div class="vt-workflow-content">
     <h3>{{workflow.message}}</h3>
     <span *ngIf="getTime()" class="vt-workflow-time">Last Change: {{getTime()}}</span>
@@ -11,8 +11,8 @@
   <div class="vt-drawer">
     <p-accordion *ngFor="let childId of getChildrenIds()">
       <span>
-        <p-accordionTab header="" class="{{getHeaderClass(workflow.children[childId].state)}}">
-          <header>
+        <p-accordionTab header="">
+          <header class="{{getHeaderClass(workflow.children[childId].state)}}">
             <div class="vt-accordion-header vt-accordian-name-wrapper">
               <span class="vt-accordian-name">
                 {{workflow.children[childId].name}}
@@ -33,4 +33,4 @@
       </span>
     </p-accordion>
   </div>
-</md-card>
+</div>
