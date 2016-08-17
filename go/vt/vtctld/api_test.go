@@ -80,9 +80,9 @@ func TestAPI(t *testing.T) {
 	initAPI(ctx, ts, actionRepo, realtimeStats)
 
 	ts1 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 100)
-	ts2 := tabletStats("cell1", "ks1", "-80-", topodatapb.TabletType_RDONLY, 200)
-	ts3 := tabletStats("cell2", "ks1", "80-", topodatapb.TabletType_REPLICA, 300)
-	ts4 := tabletStats("cell2", "ks1", "80-", topodatapb.TabletType_RDONLY, 400)
+	ts2 := tabletStats("cell1", "ks1", "80-", topodatapb.TabletType_RDONLY, 200)
+	ts3 := tabletStats("cell2", "ks1", "-80", topodatapb.TabletType_RDONLY, 300)
+	ts4 := tabletStats("cell2", "ks1", "80-", topodatapb.TabletType_REPLICA, 400)
 	realtimeStats.StatsUpdate(ts1)
 	realtimeStats.StatsUpdate(ts2)
 	realtimeStats.StatsUpdate(ts3)
@@ -146,17 +146,29 @@ func TestAPI(t *testing.T) {
 				"Error": false
 			}`},
 
-		//Tablet Updates
-		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=REPLICA&metric=lag", `
-		   {"Labels":[{"Label":{"Name":"cell1","Rowspan":2},"NestedLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]},
+		// Tablet Updates
+		{"GET", "tablet_statuses/?keyspace=ks1&cell=all&type=all&metric=lag", `
+		{"Labels":[{"Label":{"Name":"cell1","Rowspan":2},"NestedLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]},
 		           {"Label":{"Name":"cell2","Rowspan":2},"NestedLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]}],
-		           "Data":[[100,-1,-1],[-1,200,-1],[-1,-1,300],[-1,-1,400]],
-		           "Aliases":[[{"cell":"cell1","uid":100},null,null],[null,{"cell":"cell1","uid":200},null],[null,null,{"cell":"cell2","uid":300}],[null,null,{"cell":"cell2","uid":400}]]}
+		 "Data":[[300,-1],[-1,400],[-1,200],[100,-1]],
+         "Aliases":[[{"cell":"cell2","uid":300},null],[null,{"cell":"cell2","uid":400}],[null,{"cell":"cell1","uid":200}],[{"cell":"cell1","uid":100},null]]}
+		`},
+		{"GET", "tablet_statuses/?keyspace=all&cell=all&type=all&metric=lag", `
+			{ "Labels": [ { "Label": { "Name": "ks1", "Rowspan": 2  }, "NestedLabels": null }],
+			  "Data": [[300,400],[100,200]],
+			  "Aliases": null
+			}
 		`},
 		{"GET", "tablet_statuses/cell1/REPLICA/lag", "can't get tablet_statuses: invalid target path: \"cell1/REPLICA/lag\"  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>"},
-		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "can't get tablet_statuses: invalid tablet type: hello"},
-	}
+		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "can't get tablet_statuses: invalid tablet type: unknown TabletType hello"},
 
+		// Tablet Health
+		{"GET", "tablet_health/cell1/100", `{ "Key": "", "Tablet": { "alias": { "cell": "cell1", "uid": 100 },"port_map": { "vt": 100 }, "keyspace": "ks1", "shard": "-80", "type": 2},
+		  "Name": "", "Target": { "keyspace": "ks1", "shard": "-80", "tablet_type": 2 }, "Up": true, "Serving": true, "TabletExternallyReparentedTimestamp": 0,
+		  "Stats": { "seconds_behind_master": 100 }, "LastError": null }`},
+		{"GET", "tablet_health/cell1", "can't get tablet_health: invalid tablet_info path: \"cell1\"  expected path: /tablet_info/<cell>/<uid>"},
+		{"GET", "tablet_health/cell1/gh", "can't get tablet_health: incorrect uid: bad tablet uid strconv.ParseUint: parsing \"gh\": invalid syntax"},
+	}
 	for _, in := range table {
 		var resp *http.Response
 		var err error
@@ -187,7 +199,7 @@ func TestAPI(t *testing.T) {
 		got := compactJSON(body)
 		want := compactJSON([]byte(in.want))
 		if want == "" {
-			// want is no valid JSON. Fallback to a string comparison.
+			// want is not valid JSON. Fallback to a string comparison.
 			want = in.want
 			// For unknown reasons errors have a trailing "\n\t\t". Remove it.
 			got = strings.TrimSpace(string(body))
