@@ -152,14 +152,11 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 func add(start, interval interface{}) interface{} {
 	switch start := start.(type) {
 	case int64:
-		interval := interval.(int64)
-		return start + interval
+		return start + interval.(int64)
 	case uint64:
-		interval := interval.(uint64)
-		return start + interval
+		return start + interval.(uint64)
 	case float64:
-		interval := interval.(float64)
-		return start + interval
+		return start + interval.(float64)
 	default:
 		panic(fmt.Sprintf("unsupported type %T for interval start: %v", start, start))
 	}
