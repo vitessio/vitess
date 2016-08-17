@@ -181,8 +181,9 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 					Columns:           []string{"msg", "keyspace_id", "id"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              tmutils.TableBaseTable,
-					// Set the table size to a value higher than --min_table_size_for_split.
-					DataLength: 2048,
+					// Set the row count to avoid that --min_rows_per_chunk reduces the
+					// number of chunks.
+					RowCount: uint64(rowsCount),
 				},
 			},
 		}
@@ -259,8 +260,8 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 		"-max_tps", "9999",
 		"-write_query_max_rows", strconv.Itoa(writeQueryMaxRows),
 		"-chunk_count", strconv.Itoa(concurrency),
+		"-min_rows_per_chunk", strconv.Itoa(rowsPerThread),
 		"-source_reader_count", strconv.Itoa(concurrency),
-		"-min_table_size_for_split", "1",
 		"-destination_writer_count", strconv.Itoa(concurrency),
 		"ks/-80"}
 }
@@ -492,10 +493,12 @@ func TestSplitCloneV2_Offline_HighChunkCount(t *testing.T) {
 
 	args := make([]string, len(tc.defaultWorkerArgs))
 	copy(args, tc.defaultWorkerArgs)
-	// Modify args to set -write_query_max_rows to 5.
+	// Set -write_query_max_rows to 5.
 	args[5] = "5"
-	// Modify args to set -chunk_count to 1000.
+	// Set -chunk_count to 1000.
 	args[7] = "1000"
+	// Set -min_rows_per_chunk to 5.
+	args[9] = "5"
 
 	// Run the vtworker command.
 	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {

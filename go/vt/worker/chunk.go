@@ -54,14 +54,15 @@ func digits(i int) int {
 // generateChunks returns an array of chunks to use for splitting up a table
 // into multiple data chunks. It only works for tables with a primary key
 // whose first column is a numeric type.
-func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodatapb.Tablet, td *tabletmanagerdatapb.TableDefinition, minTableSizeForSplit uint64, chunkCount int) ([]chunk, error) {
+func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodatapb.Tablet, td *tabletmanagerdatapb.TableDefinition, chunkCount, minRowsPerChunk int) ([]chunk, error) {
 	if len(td.PrimaryKeyColumns) == 0 {
 		// No explicit primary key. Cannot chunk the rows then.
 		wr.Logger().Infof("Not splitting table %v into multiple chunks because it has no primary key columns. This will reduce the performance of the clone.", td.Name)
 		return singleCompleteChunk, nil
 	}
-	if td.DataLength < minTableSizeForSplit {
+	if td.RowCount < 2*uint64(minRowsPerChunk) {
 		// Table is too small to split up.
+		wr.Logger().Infof("Not splitting table %v into multiple chunks because it has only %d rows.", td.Name, td.RowCount)
 		return singleCompleteChunk, nil
 	}
 	if chunkCount == 1 {
@@ -87,6 +88,15 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 	if min == nil || max == nil {
 		wr.Logger().Infof("Not splitting table %v into multiple chunks, min or max is NULL: %v", td.Name, qr.Rows[0])
 		return singleCompleteChunk, nil
+	}
+
+	// Determine the average number of rows per chunk for the given chunkCount.
+	avgRowsPerChunk := td.RowCount / uint64(chunkCount)
+	if avgRowsPerChunk < uint64(minRowsPerChunk) {
+		// Reduce the chunkCount to fulfill minRowsPerChunk.
+		newChunkCount := td.RowCount / uint64(minRowsPerChunk)
+		wr.Logger().Infof("Reducing the number of chunks for table %v from the default %d to %d to make sure that each chunk has at least %d rows.", td.Name, chunkCount, newChunkCount, minRowsPerChunk)
+		chunkCount = int(newChunkCount)
 	}
 
 	// TODO(mberlin): Write a unit test for this part of the function.
