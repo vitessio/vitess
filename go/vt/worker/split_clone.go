@@ -956,7 +956,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 
 					destResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), scw.wr.TopoServer(), destAlias, td, chunk)
 					if err != nil {
-						processError("NewQueryResultReaderForTablet for dest tablet: %v failed: %v", destAlias, err)
+						processError("NewQueryResultReaderForTablet for destination tablet: %v failed: %v", destAlias, err)
 						return
 					}
 					defer destResultReader.Close()
@@ -968,7 +968,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				if len(sourceReaders) >= 2 {
 					sourceReader, err = NewResultMerger(sourceReaders, len(td.PrimaryKeyColumns))
 					if err != nil {
-						processError("NewResultMerger for source tablets failed: %v", err)
+						processError("NewResultMerger for table: %v for source tablets failed: %v", td.Name, err)
 						return
 					}
 				} else {
@@ -977,7 +977,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				if len(destReaders) >= 2 {
 					destReader, err = NewResultMerger(destReaders, len(td.PrimaryKeyColumns))
 					if err != nil {
-						processError("NewResultMerger for dest tablets failed: %v", err)
+						processError("NewResultMerger for table: %v for destination tablets failed: %v", td.Name, err)
 						return
 					}
 				} else {
