@@ -61,7 +61,10 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 		return singleCompleteChunk, nil
 	}
 	if td.RowCount < 2*uint64(minRowsPerChunk) {
-		// Table is too small to split up.
+		// The automatic adjustment of "chunkCount" based on "minRowsPerChunk"
+		// below would set "chunkCount" to less than 2 i.e. 1 or 0 chunks.
+		// In practice in this case there should be exactly one chunk.
+		// Return early in this case and notice the user about this.
 		wr.Logger().Infof("Not splitting table %v into multiple chunks because it has only %d rows.", td.Name, td.RowCount)
 		return singleCompleteChunk, nil
 	}
