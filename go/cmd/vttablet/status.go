@@ -61,6 +61,7 @@ var (
     </td>
     <td width="25%" border="">
       <a href="/queryz">Query&nbsp;Stats</a></br>
+      <a href="/streamqueryz">Streaming&nbsp;Query&nbsp;Stats</a></br>
       <a href="/debug/consolidations">Consolidations</a></br>
       <a href="/querylogz">Current&nbsp;Query&nbsp;Log</a></br>
       <a href="/txlogz">Current&nbsp;Transaction&nbsp;Log</a></br>
