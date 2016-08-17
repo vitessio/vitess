@@ -34,9 +34,21 @@ type chunk struct {
 
 // String returns a human-readable presentation of the chunk range.
 func (c chunk) String() string {
-	// By default there should be 1000 chunks at most.
-	// Pad smaller values with a space such that all log messages align nicely.
-	return fmt.Sprintf("%4d/%4d", c.number, c.total)
+	// Pad the chunk number such that all log messages align nicely.
+	digits := digits(c.total)
+	return fmt.Sprintf("%*d/%d", digits, c.number, c.total)
+}
+
+func digits(i int) int {
+	digits := 1
+	for {
+		i /= 10
+		if i == 0 {
+			break
+		}
+		digits++
+	}
+	return digits
 }
 
 // generateChunks returns an array of chunks to use for splitting up a table
