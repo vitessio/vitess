@@ -49,9 +49,7 @@ const tabletMissingOther = -1
 // This value is needed to indicate when there's data but no labels are needed.
 const empty = "EMPTY"
 
-// These values represent the two thresholds for qps and replication lag.
-const qpsThresholdDegraded = 1000
-const qpsThresholdUnhealthy = 2000
+// These values represent the threshold for replication lag.
 const lagThresholdDegraded = 60
 const lagThresholdUnhealthy = 120
 
