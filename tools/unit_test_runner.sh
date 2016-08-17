@@ -16,8 +16,11 @@
 # In particular, this happens when the system is under load and threads do not
 # get scheduled as fast as usual. Then, the expected timings do not match.
 
-if [ -n "$VT_GO_PARALLEL" ]; then
-  GO_PARALLEL="-p $VT_GO_PARALLEL"
+# Set VT_GO_PARALLEL variable in the same way as the Makefile does.
+# We repeat this here because this script is called directly by test.go
+# and not via the Makefile.
+if [[ -z $VT_GO_PARALLEL && -n $VT_GO_PARALLEL_VALUE ]]; then
+  VT_GO_PARALLEL="-p $VT_GO_PARALLEL_VALUE"
 fi
 
 # All Go packages with test files.
@@ -29,7 +32,7 @@ all_except_flaky_tests=$(echo "$packages_with_tests" | grep -vE ".+ .+_flaky_tes
 flaky_tests=$(echo "$packages_with_tests" | grep -E ".+ .+_flaky_test\.go" | cut -d" " -f1)
 
 # Run non-flaky tests.
-echo "$all_except_flaky_tests" | xargs go test $GO_PARALLEL
+echo "$all_except_flaky_tests" | xargs go test $VT_GO_PARALLEL
 if [ $? -ne 0 ]; then
   echo "ERROR: Go unit tests failed. See above for errors."
   echo
@@ -43,7 +46,7 @@ for pkg in $flaky_tests; do
   max_attempts=3
   attempt=1
   # Set a timeout because some tests may deadlock when they flake.
-  until go test -timeout 30s $GO_PARALLEL $pkg; do
+  until go test -timeout 30s $VT_GO_PARALLEL $pkg; do
     echo "FAILED (try $attempt/$max_attempts) in $pkg (return code $?). See above for errors."
     if [ $((++attempt)) -gt $max_attempts ]; then
       echo "ERROR: Flaky Go unit tests in package $pkg failed too often (after $max_attempts retries). Please reduce the flakiness."

@@ -41,6 +41,7 @@ func TestBackupRestore(t *testing.T) {
 	db.AddQuery("BEGIN", &sqltypes.Result{})
 	db.AddQuery("COMMIT", &sqltypes.Result{})
 	db.AddQueryPattern(`SET @@session\.sql_log_bin = .*`, &sqltypes.Result{})
+	db.AddQueryPattern(`CREATE TABLE IF NOT EXISTS _vt\.shard_metadata .*`, &sqltypes.Result{})
 	db.AddQueryPattern(`CREATE TABLE IF NOT EXISTS _vt\.local_metadata .*`, &sqltypes.Result{})
 	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 

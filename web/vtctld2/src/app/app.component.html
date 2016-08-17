@@ -2,7 +2,7 @@
   <span>{{title}}</span>
 </md-toolbar>
 
-<md-sidenav-layout class="flex-grow">
+<md-sidenav-layout class="flex-column flex-grow">
   <md-sidenav #sidenav mode="side" opened="true">
     <md-nav-list>
       <a md-list-item [routerLink]="['/dashboard']"><md-icon>dashboard</md-icon> Dashboard</a>
@@ -22,5 +22,5 @@
       </a>
     </md-nav-list>
   </md-sidenav>
-  <div class="content"><router-outlet></router-outlet></div>
+  <router-outlet></router-outlet>
 </md-sidenav-layout>

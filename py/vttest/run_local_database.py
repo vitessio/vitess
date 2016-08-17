@@ -12,6 +12,17 @@ It will run the tool, logging to stderr. On stdout, a small json structure
 can be waited on and then parsed by the caller to figure out how to reach
 the vtgate process.
 
+As an alternative to using proto_topo, a local instance can be started by using
+additional flags, such as:
+
+  $ run_local_database --port 12345 \
+    --schema_dir /path/to/schema/dir \
+    --cells cell1,cell2 --keyspaces ks1,ks2 \
+    --num_shards 1,2
+
+This will create an instance with two keyspaces in two cells, one with a single
+shard and another with two shards.
+
 Once done with the test, send an empty line to this process for it to clean-up,
 and then just wait for it to exit.
 
@@ -29,6 +40,7 @@ from vttest import environment
 from vttest import local_database
 from vttest import mysql_flavor
 from vttest import init_data_options
+from vttest import sharding_utils
 
 from vtproto import vttest_pb2
 
@@ -40,6 +52,25 @@ def main(cmdline_options):
     topology = text_format.Parse(cmdline_options.proto_topo, topology)
     if not topology.cells:
       topology.cells.append('test')
+  else:
+    cells = []
+    keyspaces = []
+    shard_counts = []
+    if cmdline_options.cells:
+      cells = cmdline_options.cells.split(',')
+    if cmdline_options.keyspaces:
+      keyspaces = cmdline_options.keyspaces.split(',')
+    if cmdline_options.num_shards:
+      shard_counts = [int(x) for x in cmdline_options.num_shards.split(',')]
+
+    for cell in cells:
+      topology.cells.append(cell)
+    for keyspace, num_shards in zip(keyspaces, shard_counts):
+      ks = topology.keyspaces.add(name=keyspace)
+      for shard in sharding_utils.get_shard_names(num_shards):
+        ks.shards.add(name=shard)
+      ks.replica_count = cmdline_options.replica_count
+      ks.rdonly_count = cmdline_options.rdonly_count
 
   environment.base_port = cmdline_options.port
 
@@ -131,6 +162,16 @@ if __name__ == '__main__':
   parser.add_option(
       '-v', '--verbose', action='store_true',
       help='Display extra error messages.')
+  parser.add_option('-c', '--cells', default='test',
+                    help='Comma separated list of cells')
+  parser.add_option('-k', '--keyspaces', default='test_keyspace',
+                    help='Comma separated list of keyspaces')
+  parser.add_option('--num_shards', default='2',
+                    help='Comma separated shard count (one per keyspace)')
+  parser.add_option('--replica_count', type='int', default=2,
+                    help='Replica tablets per shard (includes master)')
+  parser.add_option('--rdonly_count', type='int', default=1,
+                    help='Rdonly tablets per shard')
   (options, args) = parser.parse_args()
   if options.verbose:
     logging.getLogger().setLevel(logging.DEBUG)

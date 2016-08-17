@@ -8,8 +8,6 @@ import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
 
 import { Observable } from 'rxjs/Observable';
 
-import { PolymerElement } from '@vaadin/angular2-polymer';
-
 import { AddButtonComponent } from '../shared/add-button.component';
 import { DialogComponent } from '../shared/dialog/dialog.component';
 import { DialogContent } from '../shared/dialog/dialog-content';
@@ -34,7 +32,6 @@ import { VtctlService } from '../api/vtctl.service';
     MD_BUTTON_DIRECTIVES,
     DataTable,
     Column,
-    PolymerElement('paper-dialog'),
     AddButtonComponent,
     DialogComponent,
     Header,

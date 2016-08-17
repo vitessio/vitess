@@ -20,7 +20,6 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/throttler"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -380,13 +379,18 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 
 	// get source schema
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	sourceSchemaDefinition, err := vscw.wr.GetSchema(shortCtx, vscw.sourceAlias, vscw.tables, nil, true)
+	sourceSchemaDefinition, err := vscw.wr.GetSchema(shortCtx, vscw.sourceAlias, vscw.tables, nil, false /* includeViews */)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot get schema from source %v: %v", topoproto.TabletAliasString(vscw.sourceAlias), err)
 	}
 	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
 		return fmt.Errorf("no tables matching the table filter")
+	}
+	for _, td := range sourceSchemaDefinition.TableDefinitions {
+		if len(td.Columns) == 0 {
+			return fmt.Errorf("schema for table %v has no columns", td.Name)
+		}
 	}
 	vscw.wr.Logger().Infof("Source tablet has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
 	vscw.tableStatusList.initialize(sourceSchemaDefinition)
@@ -442,10 +446,6 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 	sema := sync2.NewSemaphore(vscw.sourceReaderCount, 0)
 	dbName := vscw.destinationDbNames[topoproto.KeyspaceShardString(vscw.destinationKeyspace, vscw.destinationShard)]
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
-		if td.Type == tmutils.TableView {
-			continue
-		}
-
 		chunks, err := generateChunks(ctx, vscw.wr, vscw.sourceTablet, td, vscw.minTableSizeForSplit, vscw.sourceReaderCount)
 		if err != nil {
 			return err
@@ -557,7 +557,7 @@ func (vscw *VerticalSplitCloneWorker) clone(ctx context.Context) error {
 // It returns any error the source encounters.
 func (vscw *VerticalSplitCloneWorker) processData(ctx context.Context, dbName string, td *tabletmanagerdatapb.TableDefinition, tableIndex int, rr ResultReader, insertChannel chan string, destinationPackCount int) error {
 	// process the data
-	baseCmd := "INSERT INTO `" + dbName + "`." + td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
+	baseCmd := "INSERT INTO " + escape(dbName) + "." + escape(td.Name) + "(" + strings.Join(escapeAll(td.Columns), ", ") + ") VALUES "
 	var rows [][]sqltypes.Value
 	packCount := 0
 

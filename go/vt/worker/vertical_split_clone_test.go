@@ -47,13 +47,13 @@ func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *query
 	var err error
 	parts := strings.Split(sql, " ")
 	for _, part := range parts {
-		if strings.HasPrefix(part, "id>=") {
-			min, err = strconv.Atoi(part[4:])
+		if strings.HasPrefix(part, "`id`>=") {
+			min, err = strconv.Atoi(part[6:])
 			if err != nil {
 				return err
 			}
-		} else if strings.HasPrefix(part, "id<") {
-			max, err = strconv.Atoi(part[3:])
+		} else if strings.HasPrefix(part, "`id`<") {
+			max, err = strconv.Atoi(part[5:])
 		}
 	}
 	sq.t.Logf("verticalTabletServer: got query: %v with min %v max %v", sql, min, max)
@@ -94,10 +94,10 @@ func createVerticalSplitCloneDestinationFakeDb(t *testing.T, name string, insert
 	f := NewFakePoolConnectionQuery(t, name)
 
 	// Provoke a retry to test the error handling. (Let the first write fail.)
-	f.addExpectedQuery("INSERT INTO `vt_destination_ks`.moving1(id, msg) VALUES (*", errReadOnly)
+	f.addExpectedQuery("INSERT INTO `vt_destination_ks`.`moving1`(`id`, `msg`) VALUES (*", errReadOnly)
 
 	for i := 1; i <= insertCount; i++ {
-		f.addExpectedQuery("INSERT INTO `vt_destination_ks`.moving1(id, msg) VALUES (*", nil)
+		f.addExpectedQuery("INSERT INTO `vt_destination_ks`.`moving1`(`id`, `msg`) VALUES (*", nil)
 	}
 
 	expectBlpCheckpointCreationQueries(f)
@@ -174,7 +174,7 @@ func TestVerticalSplitClone(t *testing.T) {
 			},
 		}
 		sourceRdonly.FakeMysqlDaemon.DbAppConnectionFactory = sourceRdonlyFactory(
-			t, "vt_source_ks.moving1", verticalSplitCloneTestMin, verticalSplitCloneTestMax)
+			t, "vt_source_ks", "moving1", verticalSplitCloneTestMin, verticalSplitCloneTestMax)
 		sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
 			GTIDSet: replication.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
 		}

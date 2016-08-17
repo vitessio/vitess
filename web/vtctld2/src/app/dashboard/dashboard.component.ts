@@ -10,8 +10,6 @@ import { MD_PROGRESS_BAR_DIRECTIVES } from '@angular2-material/progress-bar';
 
 import { Observable } from 'rxjs/Observable';
 
-import { PolymerElement } from '@vaadin/angular2-polymer';
-
 import { AddButtonComponent } from '../shared/add-button.component';
 import { DeleteKeyspaceFlags, EditKeyspaceFlags, NewKeyspaceFlags, ValidateAllFlags } from '../shared/flags/keyspace.flags';
 import { DialogComponent } from '../shared/dialog/dialog.component';
@@ -42,7 +40,6 @@ import { VtctlService } from '../api/vtctl.service';
     MD_INPUT_DIRECTIVES,
     MD_BUTTON_DIRECTIVES,
     MD_LIST_DIRECTIVES,
-    PolymerElement('paper-dialog'),
     DialogComponent,
     AddButtonComponent],
 })

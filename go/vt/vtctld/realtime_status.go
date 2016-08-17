@@ -12,22 +12,20 @@ import (
 
 // realtimeStats holds the objects needed to obtain realtime health stats of tablets.
 type realtimeStats struct {
-	healthCheck  discovery.HealthCheck
-	tabletStats  *tabletStatsCache
+	healthCheck discovery.HealthCheck
+	*tabletStatsCache
 	cellWatchers []*discovery.TopologyWatcher
 }
 
 func newRealtimeStats(ts topo.Server) (*realtimeStats, error) {
 	hc := discovery.NewHealthCheck(*vtctl.HealthCheckTimeout, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
-	tabletStatsCache := &tabletStatsCache{
-		statuses: make(map[string]map[string]*discovery.TabletStats),
-	}
+	tabletStatsCache := newTabletStatsCache()
 	// sendDownEvents is set to true here, as we want to receive
 	// Up=False events for a tablet.
 	hc.SetListener(tabletStatsCache, true)
 	r := &realtimeStats{
-		healthCheck: hc,
-		tabletStats: tabletStatsCache,
+		healthCheck:      hc,
+		tabletStatsCache: tabletStatsCache,
 	}
 
 	// Get the list of all tablets from all cells and monitor the topology for added or removed tablets with a CellTabletsWatcher.
@@ -55,8 +53,4 @@ func (r *realtimeStats) Stop() error {
 		}
 	}
 	return nil
-}
-
-func (r *realtimeStats) tabletStatuses(cell string, keyspace string, shard string, tabletType string) map[string]*discovery.TabletStats {
-	return r.tabletStats.tabletStatuses(cell, keyspace, shard, tabletType)
 }

@@ -39,7 +39,7 @@ func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *q
 		sq.t.Errorf("Vertical Split Diff operation should only operate on the 'moving1' table. query: %v", sql)
 	}
 
-	if hasKeyspace := strings.Contains(sql, "WHERE keyspace_id"); hasKeyspace == true {
+	if strings.Contains(sql, "WHERE `keyspace_id`") {
 		sq.t.Errorf("Sql query for VerticalSplitDiff should never contain a keyspace_id WHERE clause; query received: %v", sql)
 	}
 

@@ -2,7 +2,6 @@ import { Component, Input, AfterViewInit} from '@angular/core';
 import { CORE_DIRECTIVES } from '@angular/common';
 
 import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
-import { PolymerElement } from '@vaadin/angular2-polymer';
 
 declare var Plotly: any;
 
@@ -14,9 +13,6 @@ declare var Plotly: any;
     directives: [
       CORE_DIRECTIVES,
       MD_BUTTON_DIRECTIVES,
-      PolymerElement('paper-dropdown-menu'),
-      PolymerElement('paper-listbox'),
-      PolymerElement('paper-item')
     ]
 })
 

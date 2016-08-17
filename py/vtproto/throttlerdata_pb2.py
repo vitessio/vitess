@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='throttlerdata.proto',
   package='throttlerdata',
   syntax='proto3',
-  serialized_pb=_b('\n\x13throttlerdata.proto\x12\rthrottlerdata\"\x11\n\x0fMaxRatesRequest\"{\n\x10MaxRatesResponse\x12\x39\n\x05rates\x18\x01 \x03(\x0b\x32*.throttlerdata.MaxRatesResponse.RatesEntry\x1a,\n\nRatesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x03:\x02\x38\x01\"!\n\x11SetMaxRateRequest\x12\x0c\n\x04rate\x18\x01 \x01(\x03\"#\n\x12SetMaxRateResponse\x12\r\n\x05names\x18\x01 \x03(\tb\x06proto3')
+  serialized_pb=_b('\n\x13throttlerdata.proto\x12\rthrottlerdata\"\x11\n\x0fMaxRatesRequest\"{\n\x10MaxRatesResponse\x12\x39\n\x05rates\x18\x01 \x03(\x0b\x32*.throttlerdata.MaxRatesResponse.RatesEntry\x1a,\n\nRatesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x03:\x02\x38\x01\"!\n\x11SetMaxRateRequest\x12\x0c\n\x04rate\x18\x01 \x01(\x03\"#\n\x12SetMaxRateResponse\x12\r\n\x05names\x18\x01 \x03(\t\"\xa5\x02\n\x1dMaxReplicationLagModuleConfig\x12\"\n\x1atarget_replication_lag_sec\x18\x01 \x01(\x03\x12\x1f\n\x17max_replication_lag_sec\x18\x02 \x01(\x03\x12\x14\n\x0cinitial_rate\x18\x03 \x01(\x03\x12\x14\n\x0cmax_increase\x18\x04 \x01(\x01\x12\x1a\n\x12\x65mergency_decrease\x18\x05 \x01(\x01\x12(\n min_duration_between_changes_sec\x18\x06 \x01(\x03\x12*\n\"max_duration_between_increases_sec\x18\x07 \x01(\x03\x12!\n\x19ignore_n_slowest_replicas\x18\x08 \x01(\x05\x62\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -179,12 +179,93 @@ _SETMAXRATERESPONSE = _descriptor.Descriptor(
   serialized_end=252,
 )
 
+
+_MAXREPLICATIONLAGMODULECONFIG = _descriptor.Descriptor(
+  name='MaxReplicationLagModuleConfig',
+  full_name='throttlerdata.MaxReplicationLagModuleConfig',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='target_replication_lag_sec', full_name='throttlerdata.MaxReplicationLagModuleConfig.target_replication_lag_sec', index=0,
+      number=1, type=3, cpp_type=2, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='max_replication_lag_sec', full_name='throttlerdata.MaxReplicationLagModuleConfig.max_replication_lag_sec', index=1,
+      number=2, type=3, cpp_type=2, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='initial_rate', full_name='throttlerdata.MaxReplicationLagModuleConfig.initial_rate', index=2,
+      number=3, type=3, cpp_type=2, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='max_increase', full_name='throttlerdata.MaxReplicationLagModuleConfig.max_increase', index=3,
+      number=4, type=1, cpp_type=5, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='emergency_decrease', full_name='throttlerdata.MaxReplicationLagModuleConfig.emergency_decrease', index=4,
+      number=5, type=1, cpp_type=5, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='min_duration_between_changes_sec', full_name='throttlerdata.MaxReplicationLagModuleConfig.min_duration_between_changes_sec', index=5,
+      number=6, type=3, cpp_type=2, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='max_duration_between_increases_sec', full_name='throttlerdata.MaxReplicationLagModuleConfig.max_duration_between_increases_sec', index=6,
+      number=7, type=3, cpp_type=2, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='ignore_n_slowest_replicas', full_name='throttlerdata.MaxReplicationLagModuleConfig.ignore_n_slowest_replicas', index=7,
+      number=8, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=255,
+  serialized_end=548,
+)
+
 _MAXRATESRESPONSE_RATESENTRY.containing_type = _MAXRATESRESPONSE
 _MAXRATESRESPONSE.fields_by_name['rates'].message_type = _MAXRATESRESPONSE_RATESENTRY
 DESCRIPTOR.message_types_by_name['MaxRatesRequest'] = _MAXRATESREQUEST
 DESCRIPTOR.message_types_by_name['MaxRatesResponse'] = _MAXRATESRESPONSE
 DESCRIPTOR.message_types_by_name['SetMaxRateRequest'] = _SETMAXRATEREQUEST
 DESCRIPTOR.message_types_by_name['SetMaxRateResponse'] = _SETMAXRATERESPONSE
+DESCRIPTOR.message_types_by_name['MaxReplicationLagModuleConfig'] = _MAXREPLICATIONLAGMODULECONFIG
 
 MaxRatesRequest = _reflection.GeneratedProtocolMessageType('MaxRatesRequest', (_message.Message,), dict(
   DESCRIPTOR = _MAXRATESREQUEST,
@@ -221,6 +302,13 @@ SetMaxRateResponse = _reflection.GeneratedProtocolMessageType('SetMaxRateRespons
   # @@protoc_insertion_point(class_scope:throttlerdata.SetMaxRateResponse)
   ))
 _sym_db.RegisterMessage(SetMaxRateResponse)
+
+MaxReplicationLagModuleConfig = _reflection.GeneratedProtocolMessageType('MaxReplicationLagModuleConfig', (_message.Message,), dict(
+  DESCRIPTOR = _MAXREPLICATIONLAGMODULECONFIG,
+  __module__ = 'throttlerdata_pb2'
+  # @@protoc_insertion_point(class_scope:throttlerdata.MaxReplicationLagModuleConfig)
+  ))
+_sym_db.RegisterMessage(MaxReplicationLagModuleConfig)
 
 
 _MAXRATESRESPONSE_RATESENTRY.has_options = True

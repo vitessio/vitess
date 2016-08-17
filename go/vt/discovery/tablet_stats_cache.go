@@ -48,14 +48,31 @@ type tabletStatsCacheEntry struct {
 // SetListener with sendDownEvents=true, as we need these events
 // to maintain the integrity of our cache.
 func NewTabletStatsCache(hc HealthCheck, cell string) *TabletStatsCache {
+	return newTabletStatsCache(hc, cell, true /* setListener */)
+}
+
+// NewTabletStatsCacheDoNotSetListener is identical to NewTabletStatsCache
+// but does not automatically set the returned object as listener for "hc".
+// Instead, it's up to the caller to ensure that TabletStatsCache.StatsUpdate()
+// gets called properly. This is useful for chaining multiple listeners.
+// When the caller sets its own listener on "hc", they must make sure that they
+// set the parameter  "sendDownEvents" to "true" or this cache won't properly
+// remove tablets whose tablet type changes.
+func NewTabletStatsCacheDoNotSetListener(cell string) *TabletStatsCache {
+	return newTabletStatsCache(nil, cell, false /* setListener */)
+}
+
+func newTabletStatsCache(hc HealthCheck, cell string, setListener bool) *TabletStatsCache {
 	tc := &TabletStatsCache{
 		cell:    cell,
 		entries: make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
 	}
 
-	// We need to set sendDownEvents=true to get the deletes from the map
-	// upon type change.
-	hc.SetListener(tc, true /*sendDownEvents*/)
+	if setListener {
+		// We need to set sendDownEvents=true to get the deletes from the map
+		// upon type change.
+		hc.SetListener(tc, true /*sendDownEvents*/)
+	}
 	return tc
 }
 
