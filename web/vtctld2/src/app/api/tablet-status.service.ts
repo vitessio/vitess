@@ -5,13 +5,6 @@ import { Observable } from 'rxjs/Observable';
 import 'rxjs/add/observable/interval';
 import 'rxjs/add/operator/switchMap';
 
-const statusUrl = '../api/tablet_statuses/';
-const tabletUrl = '../api/tablet_info/';
-const metricKey = 'metric';
-const keyspaceKey = 'keyspace';
-const cellKey = 'cell';
-const typeKey = 'type';
-
 @Injectable()
 export class TabletStatusService {
   constructor (private http: Http) {}
@@ -19,17 +12,17 @@ export class TabletStatusService {
   getTabletStats(metric, cell, keyspace, tabletType) {
     // params stores the key-value pairs to build the query parameter URL.
     let params: URLSearchParams = new URLSearchParams();
-    params.set(metricKey, metric);
-    params.set(keyspaceKey, keyspace);
-    params.set(cellKey, cell);
-    params.set(typeKey, tabletType);
+    params.set('metric', metric);
+    params.set('keyspace', keyspace);
+    params.set('cell', cell);
+    params.set('type', tabletType);
     return Observable.interval(1000).startWith(0)
-      .switchMap(() => this.http.get(statusUrl, { search: params })
+      .switchMap(() => this.http.get('../api/tablet_statuses/', { search: params })
       .map(resp => resp.json()));
   }
 
   getTabletHealth(cell: string, uid: number) {
-    return this.http.get(tabletUrl + cell + '/' + uid)
+    return this.http.get('../api/tablet_info/' + cell + '/' + uid)
       .map(resp => resp.json());
   }
 }

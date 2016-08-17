@@ -34,13 +34,13 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
 
   constructor() {}
 
-  // getTotalRows returns the size of the entire heatmap.
-  getHeatmapHeight() {
+  // getTotalRows returns the number of rows the entire heatmap should span.
+  getTotalRows() {
     if (this.yLabels == null) {
       // TODO(pkulshre): fix this when backend is generalized.
       return 1;
     }
-    return this.yLabels.reduce( (a, b) => a.Label.Rowspan + b.Label.Rowspan);
+    return this.yLabels.reduce((a, b) => a.Label.Rowspan + b.Label.Rowspan);
   }
 
   ngOnInit() {
@@ -84,7 +84,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
      let chartLayout = {
        xaxis: xAxisTemplate,
        yaxis: yAxisTemplate,
-       height: (this.getHeatmapHeight() * this.getRowHeight() + this.getXLabelsRowHeight()),
+       height: (this.getTotalRows() * this.getRowHeight() + this.getXLabelsRowHeight()),
        margin: {
          t: 25,
          b: 0,
