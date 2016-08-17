@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	completeChunk       = chunk{sqltypes.NULL, sqltypes.NULL}
+	completeChunk       = chunk{sqltypes.NULL, sqltypes.NULL, 1, 1}
 	singleCompleteChunk = []chunk{completeChunk}
 )
 
@@ -25,11 +25,18 @@ var (
 type chunk struct {
 	start sqltypes.Value
 	end   sqltypes.Value
+	// number records the position of this chunk among all "total" chunks.
+	// The lowest value is 1.
+	number int
+	// total is the total number of chunks this chunk belongs to.
+	total int
 }
 
 // String returns a human-readable presentation of the chunk range.
 func (c chunk) String() string {
-	return fmt.Sprintf("[%v,%v)", c.start, c.end)
+	// By default there should be 1000 chunks at most.
+	// Pad smaller values with a space such that all log messages align nicely.
+	return fmt.Sprintf("%4d/%4d", c.number, c.total)
 }
 
 // generateChunks returns an array of chunks to use for splitting up a table
@@ -83,7 +90,7 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 		start := min
 		for i := 0; i < chunkCount; i++ {
 			end := start + interval
-			chunk, err := toChunk(start, end)
+			chunk, err := toChunk(start, end, i+1, chunkCount)
 			if err != nil {
 				return nil, err
 			}
@@ -101,7 +108,7 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 		start := min
 		for i := 0; i < chunkCount; i++ {
 			end := start + interval
-			chunk, err := toChunk(start, end)
+			chunk, err := toChunk(start, end, i+1, chunkCount)
 			if err != nil {
 				return nil, err
 			}
@@ -119,7 +126,7 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 		start := min
 		for i := 0; i < chunkCount; i++ {
 			end := start + interval
-			chunk, err := toChunk(start, end)
+			chunk, err := toChunk(start, end, i+1, chunkCount)
 			if err != nil {
 				return nil, err
 			}
@@ -139,7 +146,7 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 	return chunks, nil
 }
 
-func toChunk(start, end interface{}) (chunk, error) {
+func toChunk(start, end interface{}, number, total int) (chunk, error) {
 	startValue, err := sqltypes.BuildValue(start)
 	if err != nil {
 		return chunk{}, fmt.Errorf("Failed to convert calculated start value (%v) into internal sqltypes.Value: %v", start, err)
@@ -148,5 +155,5 @@ func toChunk(start, end interface{}) (chunk, error) {
 	if err != nil {
 		return chunk{}, fmt.Errorf("Failed to convert calculated end value (%v) into internal sqltypes.Value: %v", end, err)
 	}
-	return chunk{startValue, endValue}, nil
+	return chunk{startValue, endValue, number, total}, nil
 }
