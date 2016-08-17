@@ -1,20 +1,20 @@
 .vt-workflow-not-started {
   background-color: #ffffff;
-  padding: 5px;
+  padding-bottom: 5px;
   padding-left: 15px;
   margin: 0;
 }
 
 .vt-workflow-running {
   background-color: #ffffff;
-  padding: 5px;
+  padding-bottom: 5px;
   padding-left: 15px;
   margin: 0;
 }
 
 .vt-workflow-done {
   background-color: #ffffff;
-  padding: 5px;
+  padding-bottom: 5px;
   padding-left: 15px;
   margin: 0;
 }
@@ -94,8 +94,11 @@ md-card h1 {
 >>> .ui-accordion-content {
   padding: 0 !important;
   border-left: 2px solid #009688;
-  border-right: 2px solid #009688;
   border-bottom: 2px solid #009688;
+  background-color: #ffffff;
+  padding-bottom: 5px;
+  padding-left: 15px;
+  margin: 0;
 }
 
 >>> a {

@@ -17,19 +17,19 @@ import {Accordion, AccordionTab, Header} from 'primeng/primeng';
 export class TasksComponent implements OnInit {
   title = 'Vitess Control Panel';
   workflows = {
-    /*'UU948312': new Workflow('A', 'UU948312', 'UU948312', {
-      '1': new Workflow('B', '1', 'UU948312/1', {
-        '4': new Workflow('Get Doc Plutonium', '3', 'UU948312/1/3', {
-          '7': new Workflow('Steal Plutonium from the Libyans', '7', 'UU948312/1/3/7', {}),
-          '8': new Workflow('Escape from Libyans', '8', 'UU948312/1/3/8', {}),
+    'UU948312': new Workflow('A', 'UU948312', {
+      '1': new Workflow('B', 'UU948312/1', {
+        '4': new Workflow('Get Doc Plutonium', 'UU948312/1/3', {
+          '7': new Workflow('Steal Plutonium from the Libyans', 'UU948312/1/3/7', {}),
+          '8': new Workflow('Escape from Libyans', 'UU948312/1/3/8', {}),
         })
       }),
-      '2': new Workflow('C', '2', 'UU948312/2', {
-        '5': new Workflow('Waiting on Lightning', '5', 'UU948312/2/5', {}),
-        '6': new Workflow('Transfer Power', '6', 'UU948312/2/6', {}),
+      '2': new Workflow('C', 'UU948312/2', {
+        '5': new Workflow('Waiting on Lightning', 'UU948312/2/5', {}),
+        '6': new Workflow('Transfer Power', 'UU948312/2/6', {}),
       }),
-      '3': new Workflow('C', '2', 'UU948312/2', {}),
-    }),*/
+      '3': new Workflow('C', 'UU948312/3', {}),
+    }),
     'UU130429': new Workflow('Horizontal Resharding Workflow', 'UU130429', {
       '1': new Workflow('Approval', 'UU130429/1', {}, `Workflow was not started automatically. Click 'Start'.`, State.DONE, 1471234131, Display.NONE, 0, '', false, [new Action('Start', ActionState.ENABLED, ActionStyle.TRIGGERED)], 'Started'),
       '2': new Workflow('Bootstrap', 'UU130429/2', {
@@ -73,15 +73,15 @@ export class TasksComponent implements OnInit {
   */
 
   ngOnInit() {
-    /*this.updateWorkFlow('UU948312', {name: 'Going Back to the Future', state: 1, display: 1, progress: 33, progressMsg: 'Working'});
-    this.updateWorkFlow('UU948312/1', {name: 'Acquiring Delorean', display: 1, progress: 100, progressMsg: '1/1', lastChanged: 1471234131, state: 2, message: 'Leased from Doc', disabled: false, actions: [new Action('Return', 0)]});
+    this.updateWorkFlow('UU948312', {name: 'Going Back to the Future', state: 1, display: 1, progress: 33, progressMsg: 'Working'});
+    this.updateWorkFlow('UU948312/1', {name: 'Acquiring Delorean', display: 1, progress: 100, progressMsg: '1/1', lastChanged: 1471234131, state: 2, message: 'Leased from Doc', disabled: false, actions: [new Action('Return', ActionState.ENABLED, ActionStyle.NORMAL)]});
     this.updateWorkFlow('UU948312/1/4', {state: 2});
     this.updateWorkFlow('UU948312/1/4/7', {state: 2});
     this.updateWorkFlow('UU948312/1/4/8', {state: 2});
     this.updateWorkFlow('UU948312/2/5', {state: 1, display: 0, progressMsg: 'Waiting for a storm'});
     this.updateWorkFlow('UU948312/2/6', {state: 0});
-    this.updateWorkFlow('UU948312/2', {name: 'Charge the Flux Capacitor', display: 0, progressMsg: 'Charging', lastChanged: 1471234200, state: 1, message: '', disabled: false, actions: [new Action('Accelerate', 2)]});
-    this.updateWorkFlow('UU948312/3', {name: 'Hit 88MPH', message: 'Great Scott!', display: 2, progressMsg: 'Beaming Up'});*/
+    this.updateWorkFlow('UU948312/2', {name: 'Charge the Flux Capacitor', display: 0, progressMsg: 'Charging', lastChanged: 1471234200, state: 1, message: '', disabled: false, actions: [new Action('Accelerate', ActionState.ENABLED, ActionStyle.WARNING)]});
+    this.updateWorkFlow('UU948312/3', {name: 'Hit 88MPH', message: 'Great Scott!', display: 2, progressMsg: 'Beaming Up'});
 
     //this.updateWorkFlow();
   }

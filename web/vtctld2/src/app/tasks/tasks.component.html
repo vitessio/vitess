@@ -1,40 +1,6 @@
-<!--<div class="fill-lower-space">
-  <div class="wq-title">
-  <h1>WORKQUEUE</h1>
-  </div>
-  <div class="wq-container">
-  <md-card *ngFor="let job of jobs"> 
-    <md-card-title>{{job.name}}</md-card-title>   
-    <md-card-content>
-        <div class="progress-bar-container">
-        <md-progress-bar mode="determinate"
-          [value]="job.progress"
-          color="primary"
-          class="progress-bar-margins">
-        </md-progress-bar>
-      </div>
-    </md-card-content>
-    <md-card-actions>
-        <button md-button>Cancel</button>
-    </md-card-actions>
-
-  </md-card>
-  </div>
-</div>
--->
-<!--<div class="fill-lower-space">
-  <div class="wq-title">
-    <h1>Tasks</h1>
-  </div>
-  <span class="vt-root-workflow" *ngFor="let workflowId of getWorkflowIds()">
-    <vt-workflow  [(workflow)]="this.workflows[workflowId]"></vt-workflow>
-  </span>
-</div>-->
-
-
 <div class="fill-lower-space">
   <div class="wq-title">
-    <h1 md-tooltip="some message" tooltip-position="above">Tasks</h1>
+    <h1>Workflows</h1>
   </div>
   <p-accordion *ngFor="let workflowId of getWorkflowIds()">
     <span >
