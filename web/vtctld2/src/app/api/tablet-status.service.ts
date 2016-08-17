@@ -9,7 +9,7 @@ import 'rxjs/add/operator/switchMap';
 export class TabletStatusService {
   constructor (private http: Http) {}
 
-  getTabletStats(metric, cell, keyspace, tabletType) {
+  getTabletStats(keyspace, cell, tabletType, metric) {
     // params stores the key-value pairs to build the query parameter URL.
     let params: URLSearchParams = new URLSearchParams();
     params.set('metric', metric);
@@ -22,7 +22,7 @@ export class TabletStatusService {
   }
 
   getTabletHealth(cell: string, uid: number) {
-    return this.http.get('../api/tablet_info/' + cell + '/' + uid)
+    return this.http.get('../api/tablet_health/' + cell + '/' + uid)
       .map(resp => resp.json());
   }
 }
