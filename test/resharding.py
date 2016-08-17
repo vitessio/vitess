@@ -464,8 +464,6 @@ primary key (name)
         auto_log=True)
 
     # Copy the data from the source to the destination shards.
-    # min_table_size_for_split is set to 1 as to force a split even on the
-    # small table we have.
     # --max_tps is only specified to enable the throttler and ensure that the
     # code is executed. But the intent here is not to throttle the test, hence
     # the rate limit is set very high.
@@ -475,7 +473,8 @@ primary key (name)
         ['SplitClone',
          '--offline=false',
          '--exclude_tables', 'unrelated',
-         '--min_table_size_for_split', '1',
+         '--chunk_count', '10',
+         '--min_rows_per_chunk', '1',
          '--min_healthy_rdonly_tablets', '1',
          '--max_tps', '9999',
          'test_keyspace/80-'],
@@ -499,7 +498,8 @@ primary key (name)
         ['SplitClone',
          '--offline=false',
          '--exclude_tables', 'unrelated',
-         '--min_table_size_for_split', '1',
+         '--chunk_count', '10',
+         '--min_rows_per_chunk', '1',
          '--min_healthy_rdonly_tablets', '1',
          '--max_tps', '9999',
          'test_keyspace/80-'],
@@ -525,7 +525,8 @@ primary key (name)
         ['SplitClone',
          '--offline=false',
          '--exclude_tables', 'unrelated',
-         '--min_table_size_for_split', '1',
+         '--chunk_count', '10',
+         '--min_rows_per_chunk', '1',
          '--min_healthy_rdonly_tablets', '1',
          '--max_tps', '9999',
          'test_keyspace/80-'],
@@ -559,7 +560,8 @@ primary key (name)
     workerclient_proc = utils.run_vtworker_client_bg(
         ['SplitClone',
          '--exclude_tables', 'unrelated',
-         '--min_table_size_for_split', '1',
+         '--chunk_count', '10',
+         '--min_rows_per_chunk', '1',
          '--min_healthy_rdonly_tablets', '1',
          '--max_tps', '9999',
          'test_keyspace/80-'],

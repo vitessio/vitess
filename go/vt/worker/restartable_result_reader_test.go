@@ -138,7 +138,7 @@ func TestGenerateQuery(t *testing.T) {
 
 	for _, tc := range testcases {
 		r := RestartableResultReader{
-			chunk: chunk{tc.start, tc.end},
+			chunk: chunk{tc.start, tc.end, 1, 1},
 			td: &tabletmanagerdatapb.TableDefinition{
 				Name:              tc.table,
 				Columns:           tc.columns,

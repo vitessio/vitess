@@ -149,8 +149,10 @@ func (tc *legacySplitCloneTestCase) setUp(v3 bool) {
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              tmutils.TableBaseTable,
-					// This informs how many rows we can pack into a single insert
-					DataLength: 2048,
+					// Note that LegacySplitClone does not support the flag --min_rows_per_chunk.
+					// Therefore, we use the default value in our calculation.
+					// * 10 because --source_reader_count is set to 10 i.e. there are 10 chunks.
+					RowCount: defaultMinRowsPerChunk * 10,
 				},
 			},
 		}
@@ -209,7 +211,6 @@ func (tc *legacySplitCloneTestCase) setUp(v3 bool) {
 		"LegacySplitClone",
 		"-source_reader_count", "10",
 		"-destination_pack_count", "4",
-		"-min_table_size_for_split", "1",
 		"-destination_writer_count", "10",
 		"ks/-80"}
 }

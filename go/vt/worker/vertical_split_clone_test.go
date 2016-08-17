@@ -104,8 +104,9 @@ func TestVerticalSplitClone(t *testing.T) {
 				Columns:           []string{"id", "msg"},
 				PrimaryKeyColumns: []string{"id"},
 				Type:              tmutils.TableBaseTable,
-				// Set the table size to a value higher than --min_table_size_for_split.
-				DataLength: 2048,
+				// Set the row count to avoid that --min_rows_per_chunk reduces the
+				// number of chunks.
+				RowCount: 100,
 			},
 			{
 				Name: "view1",
@@ -170,7 +171,7 @@ func TestVerticalSplitClone(t *testing.T) {
 		// Each chunk pipeline will process 10 rows. To spread them out across 3
 		// write queries, set the max row count per query to 4. (10 = 4+4+2)
 		"-write_query_max_rows", "4",
-		"-min_table_size_for_split", "1",
+		"-min_rows_per_chunk", "10",
 		"-destination_writer_count", "10",
 		// This test uses only one healthy RDONLY tablet.
 		"-min_healthy_rdonly_tablets", "1",
