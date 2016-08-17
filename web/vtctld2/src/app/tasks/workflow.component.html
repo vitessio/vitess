@@ -1,6 +1,20 @@
 <div class="vt-workflow {{getWorkflowClass()}}" *ngIf="workflow">
   <div class="vt-workflow-content">
-    <h3>{{workflow.message}}</h3>
+    <table>
+      <td class="vt-msg">
+        {{workflow.message}}
+      </td>
+      <td class="vt-log">
+        <p-accordion>
+          <p-accordionTab [disabled]="workflow.log.length === 0">
+          <header class="vt-accordion-name">
+            Log
+          </header>
+          {{workflow.log}}
+          </p-accordionTab>
+        </p-accordion>
+      </td>
+    </table>
     <span *ngIf="getTime()" class="vt-workflow-time">Last Change: {{getTime()}}</span>
   </div>
   <div class="vt-actions">
@@ -11,10 +25,10 @@
   <div class="vt-drawer">
     <p-accordion *ngFor="let childId of getChildrenIds()">
       <span>
-        <p-accordionTab header="">
-          <header class="{{getHeaderClass(workflow.children[childId].state)}}">
-            <div class="vt-accordion-header vt-accordian-name-wrapper">
-              <span class="vt-accordian-name">
+        <p-accordionTab>
+          <header class="vt-pad-header {{getHeaderClass(workflow.children[childId].state)}}">
+            <div class="vt-accordion-header vt-accordion-name-wrapper">
+              <span class="vt-accordion-name">
                 {{workflow.children[childId].name}}
               </span>
             </div>

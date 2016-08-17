@@ -10,7 +10,7 @@ import {Accordion, AccordionTab, Header} from 'primeng/primeng';
   styleUrls: ['./tasks.component.css', './workflow.component.css'],
   directives: [
     WorkflowComponent,
-    Accordion, AccordionTab, Header
+    Accordion, AccordionTab, Header,
   ],
 })
 
@@ -31,31 +31,33 @@ export class TasksComponent implements OnInit {
       '3': new Workflow('C', '2', 'UU948312/2', {}),
     }),*/
     'UU130429': new Workflow('Horizontal Resharding Workflow', 'UU130429', {
-      '1': new Workflow('Approval', 'UU130429/1', {}, `Workflow was not started automatically. Click 'Start'.`, State.DONE, 1471234131, Display.NONE, 0, '', false, [new Action('Start', ActionState.ENABLED, ActionStyle.TRIGGERED)]),
+      '1': new Workflow('Approval', 'UU130429/1', {}, `Workflow was not started automatically. Click 'Start'.`, State.DONE, 1471234131, Display.NONE, 0, '', false, [new Action('Start', ActionState.ENABLED, ActionStyle.TRIGGERED)], 'Success'),
       '2': new Workflow('Bootstrap', 'UU130429/2', {
-        '6': new Workflow('Copy to -80', 'UU130429/2/6', {}, 'Copying data from 0', State.DONE, 1471234150, Display.DETERMINATE, 100, '56372/56372 rows', false),
-        '7': new Workflow('Copy to 80-', 'UU130429/2/7', {}, 'Copying data from 0', State.DONE, 1471234225, Display.DETERMINATE, 100, '56373/56373 rows', false)
-      }, '', State.DONE, 1471234300, Display.DETERMINATE, 100, '2/2', false, [new Action('Canary 1st Shard', ActionState.ENABLED, ActionStyle.TRIGGERED), new Action('Remaining Shards', ActionState.ENABLED, ActionStyle.TRIGGERED)]),
+        '6': new Workflow('Copy to -80', 'UU130429/2/6', {}, 'Copying data from 0', State.DONE, 1471234150, Display.DETERMINATE, 100, '56372/56372 rows', false, [], 'Success'),
+        '7': new Workflow('Copy to 80-', 'UU130429/2/7', {}, 'Copying data from 0', State.DONE, 1471234225, Display.DETERMINATE, 100, '56373/56373 rows', false, [], 'Success')
+      }, '', State.DONE, 1471234300, Display.DETERMINATE, 100, '2/2', false, [new Action('Canary 1st Shard', ActionState.ENABLED, ActionStyle.TRIGGERED), new Action('Remaining Shards', ActionState.ENABLED, ActionStyle.TRIGGERED)], 'Success'),
       '3': new Workflow('Diff', 'UU130429/3', {
-        '9': new Workflow('Copy to -80', 'UU130429/3/9', {}, 'Comparing -80 and 0', State.DONE, 1471234350, Display.DETERMINATE, 100, '56372/56372 rows', false),
-        '10': new Workflow('Copy to 80-', 'UU130429/3/10', {}, 'Comparing 80- and 0', State.DONE, 1471234425, Display.DETERMINATE, 100, '56373/56373 rows', false)
-      }, '', State.DONE, 1471234500, Display.DETERMINATE, 100, '2/2', false, [new Action('Canary 1st Shard', ActionState.ENABLED, ActionStyle.TRIGGERED), new Action('Remaining Shards', ActionState.ENABLED, ActionStyle.TRIGGERED)]),
+        '9': new Workflow('Copy to -80', 'UU130429/3/9', {}, 'Comparing -80 and 0', State.DONE, 1471234350, Display.DETERMINATE, 100, '56372/56372 rows', false, [], 'Success'),
+        '10': new Workflow('Copy to 80-', 'UU130429/3/10', {}, 'Comparing 80- and 0', State.DONE, 1471234425, Display.DETERMINATE, 100, '56373/56373 rows', false, [], 'Success')
+      }, '', State.DONE, 1471234500, Display.DETERMINATE, 100, '2/2', false, [new Action('Canary 1st Shard', ActionState.ENABLED, ActionStyle.TRIGGERED), new Action('Remaining Shards', ActionState.ENABLED, ActionStyle.TRIGGERED)], 'Success'),
       '4': new Workflow('Redirect', 'UU130429/4', {
         '11': new Workflow('Redirect REPLICA', 'UU130429/4/11', {
-          '14': new Workflow('Redirect -80', 'UU130429/4/11/14', {}, 'Migrating -80', State.DONE, 1471234650, Display.DETERMINATE, 100, '', false),
-          '15': new Workflow('Redirect 80-', 'UU130429/4/11/15', {}, 'Migrating -80', State.DONE, 1471234700, Display.DETERMINATE, 100, '', false),
-        }, 'Migrating Serve Type: REPLICA', State.DONE, 1471234700, Display.DETERMINATE, 100, '2/2', false),
+          '14': new Workflow('Redirect -80', 'UU130429/4/11/14', {}, 'Migrating -80', State.DONE, 1471234650, Display.DETERMINATE, 100, '', false, [], 'Success on tablet 1 \nSuccess on tablet 2 \nSuccess on tablet 3 \nSuccess on tablet 4 \n'),
+          '15': new Workflow('Redirect 80-', 'UU130429/4/11/15', {}, 'Migrating -80', State.DONE, 1471234700, Display.DETERMINATE, 100, '', false, [], 'Success on tablet 1 \nSuccess on tablet 2 \nSuccess on tablet 3 \nSuccess on tablet 4 \n'),
+        }, 'Migrating Serve Type: REPLICA', State.DONE, 1471234700, Display.DETERMINATE, 100, '2/2', false, [], ''),
         '12': new Workflow('Redirect RDONLY', 'UU130429/4/12', {
-          '16': new Workflow('Redirect -80', 'UU130429/4/12/16', {}, 'Migrating -80', State.DONE, 1471234750, Display.DETERMINATE, 100, '', false),
-          '17': new Workflow('Redirect 80-', 'UU130429/4/12/17', {}, 'Migrating 80-', State.RUNNING, 0, Display.DETERMINATE, 0, '', false),
-        }, 'Migrating Serve Type: RDONLY', State.RUNNING, 1471234800, Display.DETERMINATE, 50, '1/2', false),
+          '16': new Workflow('Redirect -80', 'UU130429/4/12/16', {}, 'Migrating -80', State.DONE, 1471234750, Display.DETERMINATE, 100, '', false, [], 'Success on tablet 1 \nSuccess on tablet 2 \nSuccess on tablet 3 \nSuccess on tablet 4 \n'),
+          '17': new Workflow('Redirect 80-', 'UU130429/4/12/17', {}, 'Migrating 80-', State.RUNNING, 0, Display.DETERMINATE, 0, '', false, [], ''),
+        }, 'Migrating Serve Type: RDONLY', State.RUNNING, 1471234800, Display.DETERMINATE, 50, '1/2', false, [], ''),
         '13': new Workflow('Redirect Master', 'UU130429/4/13', {
-          '16': new Workflow('Redirect -80', 'UU130429/4/12/16', {}, 'Migrating -80', State.NOT_STARTED, 0, Display.DETERMINATE, 0, '', false),
-          '17': new Workflow('Redirect 80-', 'UU130429/4/12/17', {}, 'Migrating 80-', State.NOT_STARTED, 0, Display.DETERMINATE, 0, '', false),
-        }, 'Migrating Serve Type: MASTER', State.NOT_STARTED, 0, Display.DETERMINATE, 0, '0/2', false),
-      }, '', State.RUNNING, 1471235000, Display.DETERMINATE, 50, '3/6', false, [new Action('Canary 1st Tablet Type', ActionState.ENABLED, ActionStyle.TRIGGERED), new Action('Remaining Tablet Types', ActionState.ENABLED, ActionStyle.NORMAL)]),
-      '5': new Workflow('Cleanup', 'UU130429/5', {}, '', State.NOT_STARTED, 0, Display.NONE, 0, '', false, []),
-    }, '', State.RUNNING, 1471235000, Display.DETERMINATE, 63, '63%')
+          '16': new Workflow('Redirect -80', 'UU130429/4/12/16', {}, 'Migrating -80', State.NOT_STARTED, 0, Display.DETERMINATE, 0, '', false, [], ''),
+          '17': new Workflow('Redirect 80-', 'UU130429/4/12/17', {}, 'Migrating 80-', State.NOT_STARTED, 0, Display.DETERMINATE, 0, '', false, [], ''),
+        }, 'Migrating Serve Type: MASTER', State.NOT_STARTED, 0, Display.DETERMINATE, 0, '0/2', false, [], ''),
+      }, '', State.RUNNING, 1471235000, Display.DETERMINATE, 50, '3/6', false, [new Action('Canary 1st Tablet Type', ActionState.ENABLED, ActionStyle.TRIGGERED), new Action('Remaining Tablet Types', ActionState.ENABLED, ActionStyle.NORMAL)], ''),
+      '5': new Workflow('Cleanup', 'UU130429/5', {
+        '18': new Workflow('Redirect 80-', 'UU130429/5/18', {}, 'Recursively removing old shards', State.NOT_STARTED, 0, Display.DETERMINATE, 0, '', false, [], ''),
+      }, '', State.NOT_STARTED, 0, Display.NONE, 0, '', false, [], ''),
+    }, 'PRIYANKA', State.RUNNING, 1471235000, Display.DETERMINATE, 63, '63%', false, [], 'DINOSAURS')
   };
 
   /*

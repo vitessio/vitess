@@ -20,10 +20,7 @@
 }
 
 .vt-workflow {
-  border-left: 2px solid #009688;
-  border-right: 2px solid #009688;
-  border-bottom: 2px solid #009688;
-  border-radius: 5px;
+  
 }
 
 .vt-workflow-content {
@@ -57,11 +54,11 @@ md-card h1 {
 }
 
 .vt-workflow-running-dark {
-  background-color: #26A69A;
+  background-color: #009688;
 }
 
 .vt-workflow-done-dark {
-  background-color: #E0F2F1;
+  background-color: #B2DFDB;
 }
 
 
@@ -72,15 +69,15 @@ md-card h1 {
   display: inline-block;
 }
 
-.vt-accordian-name-wrapper {
+.vt-accordion-name-wrapper {
   width: 20%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.vt-accordian-name {
-  padding-left: 20px
+.vt-accordion-name {
+  padding-left: 28px
 }
 
 .vt-progress-bar-wrapper {
@@ -106,6 +103,9 @@ md-card h1 {
 
 >>> .ui-accordion-content {
   padding: 0 !important;
+  border-left: 2px solid #009688;
+  border-right: 2px solid #009688;
+  border-bottom: 2px solid #009688;
 }
 
 >>> a {
@@ -114,9 +114,30 @@ md-card h1 {
 
 >>>.ui-accordion .ui-accordion-header {
   background: transparent;
+  border: none;
 }
 
 >>> header {
   white-space: nowrap;
   overflow: hidden;
+}
+
+.vt-pad-header {
+  padding-bottom: 8px;
+  padding-top: 8px;
+
+}
+
+table {
+  margin-top: 15px;
+  margin-bottom: 10px;
+  width: 100%;
+}
+
+.vt-msg {
+  width: 50%;
+}
+
+.vt-fill-button {
+  width: 100%;
 }

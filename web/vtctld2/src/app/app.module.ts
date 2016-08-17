@@ -16,6 +16,7 @@ import { FormsModule } from '@angular/forms';
 import { MdButtonModule } from '@angular2-material/button';
 import { MdRippleModule } from '@angular2-material/core/ripple/ripple';
 
+
 import { PolymerElement } from '@vaadin/angular2-polymer';
 
 const PolymerComponents = [

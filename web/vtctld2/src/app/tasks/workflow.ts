@@ -73,13 +73,14 @@ export class Workflow {
   public progressMsg: string; // Ex. “34/256” “25%” “calculating”  
   public state: State;
   public display: Display;
-  public message: String; // Instructions for user
+  public message: string; // Instructions for user
+  public log: string; // Log from command
   public disabled: boolean; // Use for blocking further actions
   public actions: Action[];
 
   constructor(name: string, path: string, children: any, message= '',
               state= State.NOT_STARTED, lastChanged= 0, display= Display.NONE,
-              progress= 0, progressMsg= '', disabled= false, actions= []) {
+              progress= 0, progressMsg= '', disabled= false, actions= [], log= '') {
     this.name = name;
     this.path = path;
     this.children = children;
@@ -88,6 +89,7 @@ export class Workflow {
     this.progressMsg = progressMsg;
     this.state = state;
     this.display = display;
+    this.log = log;
     this.message = message;
     this.disabled = disabled;
     this.actions = actions;
