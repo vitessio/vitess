@@ -46,10 +46,11 @@ type Table struct {
 	Type      int
 
 	// These vars can be accessed concurrently.
-	TableRows   sync2.AtomicInt64
-	DataLength  sync2.AtomicInt64
-	IndexLength sync2.AtomicInt64
-	DataFree    sync2.AtomicInt64
+	TableRows     sync2.AtomicInt64
+	DataLength    sync2.AtomicInt64
+	IndexLength   sync2.AtomicInt64
+	DataFree      sync2.AtomicInt64
+	MaxDataLength sync2.AtomicInt64
 }
 
 // NewTable creates a new Table.
@@ -101,7 +102,7 @@ func (ta *Table) AddIndex(name string) (index *Index) {
 }
 
 // SetMysqlStats receives the values found in the mysql information_schema.tables table
-func (ta *Table) SetMysqlStats(tr, dl, il, df sqltypes.Value) {
+func (ta *Table) SetMysqlStats(tr, dl, il, df, mdl sqltypes.Value) {
 	v, _ := tr.ParseInt64()
 	ta.TableRows.Set(v)
 	v, _ = dl.ParseInt64()
@@ -110,6 +111,8 @@ func (ta *Table) SetMysqlStats(tr, dl, il, df sqltypes.Value) {
 	ta.IndexLength.Set(v)
 	v, _ = df.ParseInt64()
 	ta.DataFree.Set(v)
+	v, _ = mdl.ParseInt64()
+	ta.MaxDataLength.Set(v)
 }
 
 // Index contains info about a table index.
