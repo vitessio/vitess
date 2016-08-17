@@ -15,13 +15,15 @@ export class DialogContent {
   public nameId: string; // Id for the flag whose value should be used for name properties
   public flags: {};
   public requiredFlags: {};
+  public action: string;
   private prepareFunction: any;
 
-  constructor(nameId= '', flags: any = {}, requiredFlags: any = {}, prepareFunction: any= undefined) {
+  constructor(nameId= '', flags= {}, requiredFlags= {}, prepareFunction= undefined, action= '') {
     this.nameId = nameId;
     this.flags = flags;
     this.requiredFlags = requiredFlags;
     this.prepareFunction = prepareFunction;
+    this.action = action;
   }
 
   getName(): string {
@@ -42,7 +44,7 @@ export class DialogContent {
   */
   public getPostBody(action: string): string[] {
     let args = [];
-    args.push(action);
+    args.push(this.action);
     for (let flag of this.getFlags()) {
       args = args.concat(flag.getPostBodyContent(false));
     }

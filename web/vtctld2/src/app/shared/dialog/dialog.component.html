@@ -10,16 +10,22 @@
           <div  *ngIf="flag.type == 'checkBox'" class="checkbox-wrapper">
             <md-checkbox class="md-primary" [(ngModel)]="flag.value" ></md-checkbox> 
           </div> 
-          <paper-dropdown-menu *ngIf="flag.type == 'dropDown'" label="Column Type"  on-iron-select="typeSelected(flag.id, $event)">
+          <!--<paper-dropdown-menu *ngIf="flag.type == 'dropDown'" label="Column Type"  on-iron-select="typeSelected(flag.id, $event)">
             <paper-listbox selected="{{flag.getStrValue()}}"  attr-for-selected=label class="dropdown-content" >
               <paper-item *ngFor="let option of flag.getOptions()" label="{{option.text}}">{{option.text}}</paper-item>
             </paper-listbox> 
-          </paper-dropdown-menu>
+          </paper-dropdown-menu>-->
           <p-dropdown *ngIf="flag.type == 'dropDown'" [options]="flag.getOptions()" [(ngModel)]="flag.value"></p-dropdown>
         </div>
       </div>
     </div>
   </span>
+  <div class="vt-padding">
+    <h3>Command:</h3>
+    <div class="vt-sheet" *ngFor="let cmd of dialogContent.getPostBody()">
+      {{cmd}}
+    </div>
+  </div>
   <ng-content select="extra-content"></ng-content>
   <div class="vt-actions-container">
     <button md-button (click)="closeDialog();">Cancel</button>

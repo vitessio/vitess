@@ -83,7 +83,7 @@ export class Flag {
     }
     // Non-positional arguments need a key value pair.
     if (!positional && !this.positional) {
-      return [`-${this.id}`, this.getStrValue()];
+      return [`-${this.id}=${this.getStrValue()}`];
     }
     return [];
   }
@@ -108,20 +108,6 @@ export class CheckBoxFlag extends Flag {
 
   public getStrValue() {
     return this.value ? 'true' : 'false';
-  }
-
-  // Overload parent since Boolean arguments just need a key.
-  public getPostBodyContent(positional: boolean): string[] {
-    if (this.getValue() === false || this.getStrValue() === '') {
-      return [];
-    }
-    if (positional && this.positional) {
-      return [this.getStrValue()];
-    }
-    if (!positional && !this.positional) {
-      return [`-${this.id}=${this.getStrValue()}`];
-    }
-    return [];
   }
 }
 

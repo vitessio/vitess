@@ -105,7 +105,7 @@ export class DashboardComponent implements OnInit {
     this.dialogSettings.setMessage('Created {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.refreshDashboardView.bind(this);
     let flags = new NewKeyspaceFlags().flags;
-    this.dialogContent = new DialogContent('keyspace_name', flags, {'keyspace_name': true}, this.prepare.bind(this));
+    this.dialogContent = new DialogContent('keyspace_name', flags, {'keyspace_name': true}, this.prepare.bind(this), 'CreateKeyspace');
     this.dialogSettings.toggleModal();
   }
 
