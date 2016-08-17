@@ -5,6 +5,9 @@ import { HeatmapComponent } from './heatmap.component.ts';
 import { TabletStatusService } from '../api/tablet-status.service';
 import { TopologyInfoService } from '../api/topology-info.service';
 
+import { Router } from '@angular/router';
+
+import { Dropdown } from 'primeng/primeng';
 import { SelectItem } from 'primeng/primeng';
 
 @Component({
@@ -18,6 +21,10 @@ export class StatusComponent implements OnInit {
 
   // Needed for the router.
   private sub: any;
+  metricKey = 'metric';
+  keyspaceKey = 'keyspace';
+  cellKey = 'cell';
+  typeKey = 'type';
 
   // Needed for the construction of the heatmap.
   // heatmaps is an array of heatmap structs.

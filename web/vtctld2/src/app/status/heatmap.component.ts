@@ -91,8 +91,6 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
 
   closePopup() {
     this.zone.run(() => { this.showPopup = false; });
-    this.popupReady = false;
-  }
 
   // setupColorscale sets the right scale based on what metric the heatmap is displaying.
   setupColorscale(metric) {

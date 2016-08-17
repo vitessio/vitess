@@ -12,8 +12,7 @@
 
   <!-- The labels, and nested labels, of the map are drawn -->
   <div *ngFor="let label of yLabels">
-    <tr *ngIf="label.NestedLabels==null" [attr.height]="getRowHeight()">
-      <td  [attr.rowspan]="label.Label.Rowspan" class="bordered"> {{label.Label.Rowspan}} {{label.Label.Name}} </td>
+      <td  [attr.rowspan]="label.Label.Rowspan" class="bordered"> {{label.Label.Name}} </td>
     </tr>
 
     <tr *ngFor="let nestedLabel of label.NestedLabels; let isFirst=first" [attr.height]="getRowHeight()">
