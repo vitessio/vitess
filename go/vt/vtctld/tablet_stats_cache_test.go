@@ -79,7 +79,84 @@ func TestStatsUpdate(t *testing.T) {
 	}
 }
 
-func TestHeatmapData(t *testing.T) {
+func TestAllKeyspaceView(t *testing.T) {
+	// Creating and Sending updates to 12 tablets.
+	ts1 := tabletStats("cell1", "ks1", "0", topodatapb.TabletType_MASTER, 100)
+	ts2 := tabletStats("cell1", "ks1", "0", topodatapb.TabletType_REPLICA, 200)
+	ts3 := tabletStats("cell1", "ks1", "0", topodatapb.TabletType_REPLICA, 300)
+	ts4 := tabletStats("cell2", "ks1", "0", topodatapb.TabletType_RDONLY, 400)
+	ts5 := tabletStats("cell2", "ks1", "0", topodatapb.TabletType_RDONLY, 500)
+	ts6 := tabletStats("cell1", "ks2", "0", topodatapb.TabletType_MASTER, 600)
+	ts7 := tabletStats("cell1", "ks2", "0", topodatapb.TabletType_REPLICA, 700)
+	ts8 := tabletStats("cell1", "ks2", "0", topodatapb.TabletType_RDONLY, 800)
+	ts9 := tabletStats("cell2", "ks2", "0", topodatapb.TabletType_RDONLY, 900)
+	ts10 := tabletStats("cell2", "ks2", "0", topodatapb.TabletType_REPLICA, 1000)
+
+	tabletStatsCache := newTabletStatsCache()
+
+	tabletStatsCache.StatsUpdate(ts1)
+	tabletStatsCache.StatsUpdate(ts2)
+	tabletStatsCache.StatsUpdate(ts3)
+	tabletStatsCache.StatsUpdate(ts4)
+	tabletStatsCache.StatsUpdate(ts5)
+	tabletStatsCache.StatsUpdate(ts6)
+	tabletStatsCache.StatsUpdate(ts7)
+	tabletStatsCache.StatsUpdate(ts8)
+	tabletStatsCache.StatsUpdate(ts9)
+	tabletStatsCache.StatsUpdate(ts10)
+
+	got, err := tabletStatsCache.heatmapData("all", "cell1", "all", "lag")
+	if err != nil {
+		t.Errorf("couldn't get heatmap data: %v", err)
+	}
+	want := []heatmap{
+		{
+			Keyspace: "ks1",
+			Data:     [][]float64{{300}, {200}, {100}},
+			Aliases: [][]*topodatapb.TabletAlias{
+				{{Cell: "cell1", Uid: 300}},
+				{{Cell: "cell1", Uid: 200}},
+				{{Cell: "cell1", Uid: 100}},
+			},
+			YLabels: []yLabel{
+				{
+					Label: label{Name: "ks1", Rowspan: 3},
+					NestedLabels: []label{
+						{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
+						{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 2},
+					},
+				},
+			},
+			XLabels: []string{"0"},
+		},
+		{
+			Keyspace: "ks2",
+			Data:     [][]float64{{800}, {700}, {600}},
+			Aliases: [][]*topodatapb.TabletAlias{
+				{{Cell: "cell1", Uid: 800}},
+				{{Cell: "cell1", Uid: 700}},
+				{{Cell: "cell1", Uid: 600}},
+			},
+			YLabels: []yLabel{
+				{
+					Label: label{Name: "ks2", Rowspan: 3},
+					NestedLabels: []label{
+						{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
+						{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 1},
+						{Name: topodatapb.TabletType_RDONLY.String(), Rowspan: 1},
+					},
+				},
+			},
+			XLabels: []string{"0"},
+		},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got: %v, want: %v", got, want)
+	}
+}
+
+func TestPerKeyspaceView(t *testing.T) {
 	// Creating and Sending updates to 12 tablets.
 	ts1 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_MASTER, 100)
 	ts2 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 200)
@@ -110,179 +187,117 @@ func TestHeatmapData(t *testing.T) {
 	tabletStatsCache.StatsUpdate(ts12)
 
 	// Checking that the heatmap data is returned correctly for the following view: (keyspace="ks1", cell=all, type=all).
-	heatmap, err := tabletStatsCache.heatmapData("ks1", "all", "all", "lag")
-	gotData, gotTabletAliases, gotLabels := heatmap.Data, heatmap.Aliases, heatmap.Labels
-	wantData := [][]float64{
-		{float64(-1), float64(ts12.Stats.SecondsBehindMaster)},
-		{float64(ts6.Stats.SecondsBehindMaster), float64(-1)},
-		{float64(ts5.Stats.SecondsBehindMaster), float64(ts11.Stats.SecondsBehindMaster)},
-		{float64(-1), float64(ts10.Stats.SecondsBehindMaster)},
-		{float64(ts4.Stats.SecondsBehindMaster), float64(ts9.Stats.SecondsBehindMaster)},
-		{float64(ts3.Stats.SecondsBehindMaster), float64(-1)},
-		{float64(ts2.Stats.SecondsBehindMaster), float64(ts8.Stats.SecondsBehindMaster)},
-		{float64(ts1.Stats.SecondsBehindMaster), float64(ts7.Stats.SecondsBehindMaster)},
-	}
-	wantTabletAliases := [][]*topodata.TabletAlias{
-		{nil, ts12.Tablet.Alias},
-		{ts6.Tablet.Alias, nil},
-		{ts5.Tablet.Alias, ts11.Tablet.Alias},
-		{nil, ts10.Tablet.Alias},
-		{ts4.Tablet.Alias, ts9.Tablet.Alias},
-		{ts3.Tablet.Alias, nil},
-		{ts2.Tablet.Alias, ts8.Tablet.Alias},
-		{ts1.Tablet.Alias, ts7.Tablet.Alias},
-	}
-	wantLabels := []yLabel{
-		{
-			Label: label{Name: "cell1", Rowspan: 5},
-			NestedLabels: []label{
-				{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
-				{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 2},
-				{Name: topodatapb.TabletType_RDONLY.String(), Rowspan: 2},
-			},
-		},
-		{
-			Label: label{Name: "cell2", Rowspan: 3},
-			NestedLabels: []label{
-				{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
-				{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 1},
-				{Name: topodatapb.TabletType_RDONLY.String(), Rowspan: 1},
-			},
-		},
-	}
-
+	got, err := tabletStatsCache.heatmapData("ks1", "all", "all", "lag")
 	if err != nil {
-		t.Errorf("couldn't get heatmap data: %v", err)
+		t.Errorf("could not get heatmap data: %v", err)
 	}
-
-	if !reflect.DeepEqual(gotData, wantData) {
-		t.Errorf("got: %v, want: %v", gotData, wantData)
+	want := []heatmap{
+		{
+			Keyspace: "ks1",
+			Data: [][]float64{
+				{float64(-1), float64(ts12.Stats.SecondsBehindMaster)},
+				{float64(ts6.Stats.SecondsBehindMaster), float64(-1)},
+				{float64(ts5.Stats.SecondsBehindMaster), float64(ts11.Stats.SecondsBehindMaster)},
+				{float64(-1), float64(ts10.Stats.SecondsBehindMaster)},
+				{float64(ts4.Stats.SecondsBehindMaster), float64(ts9.Stats.SecondsBehindMaster)},
+				{float64(ts3.Stats.SecondsBehindMaster), float64(-1)},
+				{float64(ts2.Stats.SecondsBehindMaster), float64(ts8.Stats.SecondsBehindMaster)},
+				{float64(ts1.Stats.SecondsBehindMaster), float64(ts7.Stats.SecondsBehindMaster)},
+			},
+			Aliases: [][]*topodata.TabletAlias{
+				{nil, ts12.Tablet.Alias},
+				{ts6.Tablet.Alias, nil},
+				{ts5.Tablet.Alias, ts11.Tablet.Alias},
+				{nil, ts10.Tablet.Alias},
+				{ts4.Tablet.Alias, ts9.Tablet.Alias},
+				{ts3.Tablet.Alias, nil},
+				{ts2.Tablet.Alias, ts8.Tablet.Alias},
+				{ts1.Tablet.Alias, ts7.Tablet.Alias},
+			},
+			YLabels: []yLabel{
+				{
+					Label: label{Name: "cell1", Rowspan: 5},
+					NestedLabels: []label{
+						{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
+						{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 2},
+						{Name: topodatapb.TabletType_RDONLY.String(), Rowspan: 2},
+					},
+				},
+				{
+					Label: label{Name: "cell2", Rowspan: 3},
+					NestedLabels: []label{
+						{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
+						{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 1},
+						{Name: topodatapb.TabletType_RDONLY.String(), Rowspan: 1},
+					},
+				},
+			},
+			XLabels: []string{"-80", "80-"},
+		},
 	}
-
-	if !reflect.DeepEqual(gotTabletAliases, wantTabletAliases) {
-		t.Errorf("got: %v, want: %v", gotTabletAliases, wantTabletAliases)
-	}
-
-	if !reflect.DeepEqual(gotLabels, wantLabels) {
-		t.Errorf("got: %v, want: %v", gotLabels, wantLabels)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got: %v, want: %v", got, want)
 	}
 
 	// Checking that the heatmap data is returned correctly for the following view: (keyspace="ks1", cell="cell1", type="all").
-	heatmap2, err := tabletStatsCache.heatmapData("ks1", "cell1", "all", "lag")
-	gotData2, gotTabletAliases2, gotLabels2 := heatmap2.Data, heatmap2.Aliases, heatmap2.Labels
-	wantData2 := [][]float64{
-		{float64(-1), float64(ts10.Stats.SecondsBehindMaster)},
-		{float64(ts4.Stats.SecondsBehindMaster), float64(ts9.Stats.SecondsBehindMaster)},
-		{float64(ts3.Stats.SecondsBehindMaster), float64(-1)},
-		{float64(ts2.Stats.SecondsBehindMaster), float64(ts8.Stats.SecondsBehindMaster)},
-		{float64(ts1.Stats.SecondsBehindMaster), float64(ts7.Stats.SecondsBehindMaster)},
-	}
-	wantTabletAliases2 := [][]*topodata.TabletAlias{
-		{nil, ts10.Tablet.Alias},
-		{ts4.Tablet.Alias, ts9.Tablet.Alias},
-		{ts3.Tablet.Alias, nil},
-		{ts2.Tablet.Alias, ts8.Tablet.Alias},
-		{ts1.Tablet.Alias, ts7.Tablet.Alias},
-	}
-	wantLabels2 := []yLabel{
-		{
-			Label: label{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
-		},
-		{
-			Label: label{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 2},
-		},
-		{
-			Label: label{Name: topodatapb.TabletType_RDONLY.String(), Rowspan: 2},
-		},
-	}
-
+	got2, err := tabletStatsCache.heatmapData("ks1", "cell1", "all", "lag")
 	if err != nil {
-		t.Errorf("couldn't get heatmap data: %v", err)
+		t.Errorf("could not get heatmap data: %v", err)
 	}
-
-	if !reflect.DeepEqual(gotData2, wantData2) {
-		t.Errorf("got: %v, want: %v", gotData2, wantData2)
+	want2 := []heatmap{
+		{
+			Keyspace: "ks1",
+			Data: [][]float64{
+				{float64(-1), float64(ts10.Stats.SecondsBehindMaster)},
+				{float64(ts4.Stats.SecondsBehindMaster), float64(ts9.Stats.SecondsBehindMaster)},
+				{float64(ts3.Stats.SecondsBehindMaster), float64(-1)},
+				{float64(ts2.Stats.SecondsBehindMaster), float64(ts8.Stats.SecondsBehindMaster)},
+				{float64(ts1.Stats.SecondsBehindMaster), float64(ts7.Stats.SecondsBehindMaster)},
+			},
+			Aliases: [][]*topodata.TabletAlias{
+				{nil, ts10.Tablet.Alias},
+				{ts4.Tablet.Alias, ts9.Tablet.Alias},
+				{ts3.Tablet.Alias, nil},
+				{ts2.Tablet.Alias, ts8.Tablet.Alias},
+				{ts1.Tablet.Alias, ts7.Tablet.Alias},
+			},
+			YLabels: []yLabel{
+				{
+					Label: label{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
+				},
+				{
+					Label: label{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 2},
+				},
+				{
+					Label: label{Name: topodatapb.TabletType_RDONLY.String(), Rowspan: 2},
+				},
+			},
+			XLabels: []string{"-80", "80-"},
+		},
 	}
-
-	if !reflect.DeepEqual(gotTabletAliases2, wantTabletAliases2) {
-		t.Errorf("got: %v, want: %v", gotTabletAliases2, wantTabletAliases2)
-	}
-
-	if !reflect.DeepEqual(gotLabels2, wantLabels2) {
-		t.Errorf("got: %v, want: %v", gotLabels2, wantLabels2)
+	if !reflect.DeepEqual(got2, want2) {
+		t.Errorf("got: %v, want: %v", got2, want2)
 	}
 
 	// Checking that the heatmap data is returned correctly for the following view: (keyspace="ks1", cell="cell1", type="REPLICA").
-	heatmap3, err := tabletStatsCache.heatmapData("ks1", "cell1", topodata.TabletType_REPLICA.String(), "lag")
-	gotData3, gotTabletAliases3, gotLabels3 := heatmap3.Data, heatmap3.Aliases, heatmap3.Labels
-	wantData3 := [][]float64{
-		{float64(ts3.Stats.SecondsBehindMaster), float64(-1)},
-		{float64(ts2.Stats.SecondsBehindMaster), float64(ts8.Stats.SecondsBehindMaster)},
-	}
-	wantTabletAliases3 := [][]*topodata.TabletAlias{
-		{ts3.Tablet.Alias, nil},
-		{ts2.Tablet.Alias, ts8.Tablet.Alias},
-	}
-	var wantLabels3 []yLabel
-
-	if err != nil {
-		t.Errorf("couldn't get heatmap data: %v", err)
-	}
-
-	if !reflect.DeepEqual(gotData3, wantData3) {
-		t.Errorf("got: %v, want: %v", gotData3, wantData3)
-	}
-
-	if !reflect.DeepEqual(gotTabletAliases3, wantTabletAliases3) {
-		t.Errorf("got: %v, want: %v", gotTabletAliases3, wantTabletAliases3)
-	}
-
-	if !reflect.DeepEqual(gotLabels3, wantLabels3) {
-		t.Errorf("got: %v, want: %v", gotLabels3, wantLabels3)
-	}
-
-	// Checking that the heatmap data is returned correctly for the following view: (keyspace="all", cell="cell1", type="all").
-	heatmap4, err := tabletStatsCache.heatmapData("all", "cell1", "all", "lag")
-	gotData4, gotTabletAliases4, gotLabels4 := heatmap4.Data, heatmap4.Aliases, heatmap4.Labels
-	wantData4 := [][]float64{
-		{float64(-1), float64(ts10.Stats.SecondsBehindMaster)},
-		{float64(ts4.Stats.SecondsBehindMaster), float64(ts9.Stats.SecondsBehindMaster)},
-		{float64(ts3.Stats.SecondsBehindMaster), float64(-1)},
-		{float64(ts2.Stats.SecondsBehindMaster), float64(ts8.Stats.SecondsBehindMaster)},
-		{float64(ts1.Stats.SecondsBehindMaster), float64(ts7.Stats.SecondsBehindMaster)},
-	}
-	wantTabletAliases4 := [][]*topodata.TabletAlias{
-		{nil, ts10.Tablet.Alias},
-		{ts4.Tablet.Alias, ts9.Tablet.Alias},
-		{ts3.Tablet.Alias, nil},
-		{ts2.Tablet.Alias, ts8.Tablet.Alias},
-		{ts1.Tablet.Alias, ts7.Tablet.Alias},
-	}
-	wantLabels4 := []yLabel{
+	got3, err := tabletStatsCache.heatmapData("ks1", "cell1", topodata.TabletType_REPLICA.String(), "lag")
+	want3 := []heatmap{
 		{
-			Label: label{Name: "ks1", Rowspan: 5},
-			NestedLabels: []label{
-				{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
-				{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 2},
-				{Name: topodatapb.TabletType_RDONLY.String(), Rowspan: 2},
+			Keyspace: "ks1",
+			Data: [][]float64{
+				{float64(ts3.Stats.SecondsBehindMaster), float64(-1)},
+				{float64(ts2.Stats.SecondsBehindMaster), float64(ts8.Stats.SecondsBehindMaster)},
 			},
+			Aliases: [][]*topodata.TabletAlias{
+				{ts3.Tablet.Alias, nil},
+				{ts2.Tablet.Alias, ts8.Tablet.Alias},
+			},
+			YLabels: nil,
+			XLabels: []string{"-80", "80-"},
 		},
 	}
-
-	if err != nil {
-		t.Errorf("couldn't get heatmap data: %v", err)
-	}
-
-	if !reflect.DeepEqual(gotData4, wantData4) {
-		t.Errorf("got: %v, want: %v", gotData4, wantData4)
-	}
-
-	if !reflect.DeepEqual(gotTabletAliases4, wantTabletAliases4) {
-		t.Errorf("got: %v, want: %v", gotTabletAliases4, wantTabletAliases4)
-	}
-
-	if !reflect.DeepEqual(gotLabels4, wantLabels4) {
-		t.Errorf("got: %v, want: %v", gotLabels4, wantLabels4)
+	if !reflect.DeepEqual(got3, want3) {
+		t.Errorf("got: %v, want: %v", got3, want3)
 	}
 }
 
@@ -311,21 +326,28 @@ func TestAggregatedHeatmapData(t *testing.T) {
 	if err != nil {
 		t.Errorf("could not get aggregated heatmap data: %v", err)
 	}
-	want := heatmap{
-		Data: [][]float64{
-			{-1, 650},
-			{500, -1},
-			{-1, 500},
-			{150, -1},
+	want := []heatmap{
+		{
+			Keyspace: "ks1",
+			Data:     [][]float64{{-1, 500}, {150, -1}},
+			Aliases:  nil,
+			YLabels: []yLabel{
+				{
+					Label: label{Name: "ks1", Rowspan: 2},
+				},
+			},
+			XLabels: []string{"-80", "80-"},
 		},
-		Aliases: nil,
-		Labels: []yLabel{
-			{
-				Label: label{Name: "ks1", Rowspan: 2},
+		{
+			Keyspace: "ks2",
+			Data:     [][]float64{{-1, 650}, {500, -1}},
+			Aliases:  nil,
+			YLabels: []yLabel{
+				{
+					Label: label{Name: "ks2", Rowspan: 2},
+				},
 			},
-			{
-				Label: label{Name: "ks2", Rowspan: 2},
-			},
+			XLabels: []string{"-80", "80-"},
 		},
 	}
 
@@ -347,21 +369,28 @@ func TestAggregatedHeatmapData(t *testing.T) {
 	if err != nil {
 		t.Errorf("could not get aggregated heatmap data: %v", err)
 	}
-	want2 := heatmap{
-		Data: [][]float64{
-			{0, 3},
-			{3, 0},
-			{0, 1.5},
-			{3, 0},
+	want2 := []heatmap{
+		{
+			Keyspace: "ks1",
+			Data:     [][]float64{{0, 1.5}, {3, 0}},
+			Aliases:  nil,
+			YLabels: []yLabel{
+				{
+					Label: label{Name: "ks1", Rowspan: 2},
+				},
+			},
+			XLabels: []string{"-80", "80-"},
 		},
-		Aliases: nil,
-		Labels: []yLabel{
-			{
-				Label: label{Name: "ks1", Rowspan: 2},
+		{
+			Keyspace: "ks2",
+			Data:     [][]float64{{0, 3}, {3, 0}},
+			Aliases:  nil,
+			YLabels: []yLabel{
+				{
+					Label: label{Name: "ks2", Rowspan: 2},
+				},
 			},
-			{
-				Label: label{Name: "ks2", Rowspan: 2},
-			},
+			XLabels: []string{"-80", "80-"},
 		},
 	}
 

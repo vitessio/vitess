@@ -148,16 +148,39 @@ func TestAPI(t *testing.T) {
 
 		// Tablet Updates
 		{"GET", "tablet_statuses/?keyspace=ks1&cell=all&type=all&metric=lag", `
-		{"Labels":[{"Label":{"Name":"cell1","Rowspan":2},"NestedLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]},
-		           {"Label":{"Name":"cell2","Rowspan":2},"NestedLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]}],
-		 "Data":[[300,-1],[-1,400],[-1,200],[100,-1]],
-         "Aliases":[[{"cell":"cell2","uid":300},null],[null,{"cell":"cell2","uid":400}],[null,{"cell":"cell1","uid":200}],[{"cell":"cell1","uid":100},null]]}
+		[
+		  {
+		    "Keyspace": "ks1",
+		    "YLabels": [
+		      { "Label": { "Name": "cell1", "Rowspan": 2 }, "NestedLabels": [ {"Name": "REPLICA", "Rowspan": 1 }, { "Name": "RDONLY", "Rowspan": 1} ] },
+		      { "Label": { "Name": "cell2", "Rowspan": 2 }, "NestedLabels": [ {"Name": "REPLICA", "Rowspan": 1 }, { "Name": "RDONLY", "Rowspan": 1} ] }
+		    ],
+		    "XLabels": [ "-80", "80-" ],
+		    "Data": [ [300, -1], [-1, 400], [-1, 200], [100, -1] ],
+		    "Aliases": [
+		      [ { "cell": "cell2", "uid": 300 }, null ],
+		      [ null, { "cell": "cell2", "uid": 400 } ],
+		      [ null, { "cell": "cell1", "uid": 200 } ],
+		      [ { "cell": "cell1", "uid": 100 }, null ]
+		    ]
+		  }
+		]
 		`},
 		{"GET", "tablet_statuses/?keyspace=all&cell=all&type=all&metric=lag", `
-			{ "Labels": [ { "Label": { "Name": "ks1", "Rowspan": 2  }, "NestedLabels": null }],
-			  "Data": [[300,400],[100,200]],
-			  "Aliases": null
-			}
+		[
+		  {
+		    "Keyspace": "ks1",
+		    "YLabels": [ 
+			    { "Label": { "Name": "ks1", "Rowspan": 2 }, "NestedLabels": null }
+		    ],
+		    "XLabels": [ "-80", "80-" ],
+		    "Data": [
+		      [ 300, 400 ],
+		      [ 100, 200 ]
+		    ],
+		    "Aliases": null
+		  }
+		]
 		`},
 		{"GET", "tablet_statuses/cell1/REPLICA/lag", "can't get tablet_statuses: invalid target path: \"cell1/REPLICA/lag\"  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>"},
 		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "can't get tablet_statuses: invalid tablet type: unknown TabletType hello"},

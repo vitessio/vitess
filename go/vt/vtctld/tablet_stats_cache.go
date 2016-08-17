@@ -26,8 +26,13 @@ type label struct {
 
 // heatmap stores all the needed info to construct the heatmap.
 type heatmap struct {
-	// Labels has the outer and inner labels for each row.
-	Labels []yLabel
+	// Keyspace refers to the keyspace the struct belongs to
+	// (needed to create a unique heatmap per keyspace on frontend side)
+	Keyspace string
+	// YLabels has the outer and inner labels for each row.
+	YLabels []yLabel
+	// XLabels has the shard names as labels for each column.
+	XLabels []string
 	// Data is a 2D array of values of the specified metric.
 	Data [][]float64
 	// Aliases is a 2D array holding references to the tablet aliases.
@@ -49,9 +54,7 @@ const tabletMissingOther = -1
 // This value is needed to indicate when there's data but no labels are needed.
 const empty = "EMPTY"
 
-// These values represent the two thresholds for qps and replication lag.
-const qpsThresholdDegraded = 1000
-const qpsThresholdUnhealthy = 2000
+// These values represent the threshold for replication lag.
 const lagThresholdDegraded = 60
 const lagThresholdUnhealthy = 120
 
@@ -189,12 +192,7 @@ func tabletTypes() []string {
 	return []string{topodatapb.TabletType_MASTER.String(), topodatapb.TabletType_REPLICA.String(), topodatapb.TabletType_RDONLY.String()}
 }
 
-func (c *tabletStatsCache) shards() []string {
-	var keyspace string
-	for ks := range c.statuses {
-		keyspace = ks
-		break
-	}
+func (c *tabletStatsCache) shards(keyspace string) []string {
 	var shards []string
 	for s := range c.statuses[keyspace] {
 		shards = append(shards, s)
@@ -235,7 +233,7 @@ func (c *tabletStatsCache) tablets(outerType, innerType, outer, inner, keyspace,
 }
 
 // heatmapData returns a 2D array of data (based on the specified metric) as well as the labels for the heatmap.
-func (c *tabletStatsCache) heatmapData(keyspace, cell, tabletType, metric string) (heatmap, error) {
+func (c *tabletStatsCache) heatmapData(keyspace, cell, tabletType, metric string) ([]heatmap, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -249,7 +247,7 @@ func (c *tabletStatsCache) heatmapData(keyspace, cell, tabletType, metric string
 	case "healthy":
 		metricFunc = healthy
 	default:
-		return heatmap{}, fmt.Errorf("invalid metric: %v Select 'lag', 'cpu', or 'qps'", metric)
+		return nil, fmt.Errorf("invalid metric: %v Select 'lag', 'cpu', or 'qps'", metric)
 	}
 
 	var outerType string
@@ -296,17 +294,22 @@ func (c *tabletStatsCache) heatmapData(keyspace, cell, tabletType, metric string
 		innerLabels = []string{empty}
 	}
 
-	shards = c.shards()
-
 	var heatmapData [][]float64
 	var heatmapTabletAliases [][]*topodata.TabletAlias
 	var heatmapLabels []yLabel
+	var listOfHeatmaps []heatmap
 
 	for _, outer := range outerLabels {
 		labelsPerGroup := yLabel{}
 		labelSpan := 0
 		for _, inner := range innerLabels {
 			maxRowLength := 0
+
+			currentKeyspace := keyspace
+			if keyspace == "all" {
+				currentKeyspace = outer
+			}
+			shards = c.shards(currentKeyspace)
 
 			for _, shard := range shards {
 				// tabletCount is the length of the tablets in this group.
@@ -350,7 +353,6 @@ func (c *tabletStatsCache) heatmapData(keyspace, cell, tabletType, metric string
 					}
 				}
 			}
-
 			// The loop adds each group to heatmapData in reverse order following the format of the heatmap.
 			for i := 0; i < len(dataPerGroup); i++ {
 				heatmapData = append([][]float64{dataPerGroup[i]}, heatmapData...)
@@ -363,17 +365,38 @@ func (c *tabletStatsCache) heatmapData(keyspace, cell, tabletType, metric string
 				Rowspan: labelSpan,
 			}
 			heatmapLabels = append(heatmapLabels, labelsPerGroup)
+
+			if keyspace == "all" {
+				currHeatmap := heatmap{
+					Keyspace: outer,
+					Data:     heatmapData,
+					YLabels:  heatmapLabels,
+					XLabels:  shards,
+					Aliases:  heatmapTabletAliases,
+				}
+				listOfHeatmaps = append(listOfHeatmaps, currHeatmap)
+				heatmapData = nil
+				heatmapLabels = nil
+				heatmapTabletAliases = nil
+			}
 		}
 	}
 
-	return heatmap{
-		Data:    heatmapData,
-		Labels:  heatmapLabels,
-		Aliases: heatmapTabletAliases,
-	}, nil
+	if len(listOfHeatmaps) == 0 {
+		currHeatmap := heatmap{
+			Keyspace: keyspace,
+			Data:     heatmapData,
+			YLabels:  heatmapLabels,
+			XLabels:  shards,
+			Aliases:  heatmapTabletAliases,
+		}
+		listOfHeatmaps = append(listOfHeatmaps, currHeatmap)
+	}
+
+	return listOfHeatmaps, nil
 }
 
-func (c *tabletStatsCache) aggregatedHeatmapData(metric string) (heatmap, error) {
+func (c *tabletStatsCache) aggregatedHeatmapData(metric string) ([]heatmap, error) {
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -387,7 +410,7 @@ func (c *tabletStatsCache) aggregatedHeatmapData(metric string) (heatmap, error)
 	case "healthy":
 		metricFunc = healthy
 	default:
-		return heatmap{}, fmt.Errorf("invalid metric: %v Select 'lag', 'cpu', or 'qps'", metric)
+		return nil, fmt.Errorf("invalid metric: %v Select 'lag', 'cpu', or 'qps'", metric)
 	}
 
 	var tabletMissing float64 = tabletMissingOther
@@ -397,14 +420,16 @@ func (c *tabletStatsCache) aggregatedHeatmapData(metric string) (heatmap, error)
 
 	keyspaces := c.keyspaces()
 	cells := c.cells()
-	shards := c.shards()
 	tabletTypes := tabletTypes()
 
 	var heatmapData [][]float64
 	var heatmapLabels []yLabel
+	var listOfHeatmaps []heatmap
+
 	for _, keyspace := range keyspaces {
 		labelPerGroup := yLabel{}
 		labelSpan := 0
+		shards := c.shards(keyspace)
 		for _, cell := range cells {
 			dataRow := make([]float64, len(shards))
 			for shardIndex, shard := range shards {
@@ -448,13 +473,20 @@ func (c *tabletStatsCache) aggregatedHeatmapData(metric string) (heatmap, error)
 		}
 		labelPerGroup.Label = tempLabel
 		heatmapLabels = append(heatmapLabels, labelPerGroup)
+
+		currHeatmap := heatmap{
+			Keyspace: keyspace,
+			Data:     heatmapData,
+			YLabels:  heatmapLabels,
+			XLabels:  shards,
+			Aliases:  nil,
+		}
+		listOfHeatmaps = append(listOfHeatmaps, currHeatmap)
+		heatmapData = nil
+		heatmapLabels = nil
 	}
 
-	return heatmap{
-		Data:    heatmapData,
-		Labels:  heatmapLabels,
-		Aliases: nil,
-	}, nil
+	return listOfHeatmaps, nil
 }
 
 func (c *tabletStatsCache) tabletStats(tabletAlias *topodatapb.TabletAlias) (discovery.TabletStats, error) {
