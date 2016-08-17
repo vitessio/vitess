@@ -57,6 +57,7 @@ func digits(i int) int {
 func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodatapb.Tablet, td *tabletmanagerdatapb.TableDefinition, minTableSizeForSplit uint64, chunkCount int) ([]chunk, error) {
 	if len(td.PrimaryKeyColumns) == 0 {
 		// No explicit primary key. Cannot chunk the rows then.
+		wr.Logger().Infof("Not splitting table %v into multiple chunks because it has no primary key columns. This will reduce the performance of the clone.", td.Name)
 		return singleCompleteChunk, nil
 	}
 	if td.DataLength < minTableSizeForSplit {
