@@ -72,23 +72,23 @@ export class DashboardComponent implements OnInit {
   }
 
   createKeyspace() {
-    this.serverCall('CreateKeyspace', 'There was a problem creating {{keyspace_name}}:');
+    this.serverCall('There was a problem creating {{keyspace_name}}:');
   }
 
   editKeyspace() {
-    this.serverCall('SetKeyspaceShardingInfo', 'There was a problem editing {{keyspace_name}}:');
+    this.serverCall('There was a problem editing {{keyspace_name}}:');
   }
 
   deleteKeyspace() {
-    this.serverCall('DeleteKeyspace', 'There was a problem deleting {{keyspace_name}}:');
+    this.serverCall('There was a problem deleting {{keyspace_name}}:');
   }
 
   validateAll() {
-    this.serverCall('Validate', 'There was a problem validating all nodes:');
+    this.serverCall('There was a problem validating all nodes:');
   }
 
-  serverCall(action: string, errorMessage: string) {
-    this.vtctlService.serverCall(action, this.dialogContent, this.dialogSettings, errorMessage);
+  serverCall(errorMessage: string) {
+    this.vtctlService.serverCall('', this.dialogContent, this.dialogSettings, errorMessage);
   }
 
   prepareEdit(keyspace: Keyspace) {
@@ -96,7 +96,7 @@ export class DashboardComponent implements OnInit {
     this.dialogSettings.setMessage('Edited {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.refreshDashboardView.bind(this);
     let flags = new EditKeyspaceFlags(keyspace).flags;
-    this.dialogContent = new DialogContent('keyspace_name', flags, {}, this.prepare.bind(this));
+    this.dialogContent = new DialogContent('keyspace_name', flags, {}, this.prepare.bind(this), 'SetKeyspaceShardingInfo');
     this.dialogSettings.toggleModal();
   }
 
@@ -115,7 +115,7 @@ export class DashboardComponent implements OnInit {
     this.dialogSettings.setMessage('Deleted {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.refreshDashboardView.bind(this);
     let flags = new DeleteKeyspaceFlags(keyspace.name).flags;
-    this.dialogContent = new DialogContent('keyspace_name', flags);
+    this.dialogContent = new DialogContent('keyspace_name', flags, {}, undefined, 'DeleteKeyspace');
     this.dialogSettings.toggleModal();
   }
 
@@ -124,7 +124,7 @@ export class DashboardComponent implements OnInit {
     this.dialogSettings.setMessage('Deleted {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.refreshDashboardView.bind(this);
     let flags = new ValidateAllFlags().flags;
-    this.dialogContent = new DialogContent('keyspace_name', flags);
+    this.dialogContent = new DialogContent('keyspace_name', flags, {}, undefined, 'Validate');
     this.dialogSettings.toggleModal();
   }
 

@@ -149,9 +149,9 @@ export class ShardingColumnTypeFlag extends DropDownFlag {
     super(position, id, 'Sharding Column Type', 'Specifies the type of the column to use for sharding operations.', value);
     let options = [];
     Proto.SHARDING_COLUMN_NAMES.forEach(name => {
-      if (name !== '') {
-        options.push({label: name, text: name});
-      }
+
+        options.push({label: name, value: Proto.SHARDING_COLUMN_NAME_TO_TYPE[name]});
+
     });
     this.setOptions(options);
     this.setBlockOnEmptyList(['sharding_column_name']);

@@ -37,7 +37,6 @@ export class DialogComponent implements AfterViewInit {
   title = 'Vitess Control Panel';
   keyspaces = [];
   extraContentReference: any;
-  @Input() test: string;
   @Input() dialogContent: DialogContent;
   @Input() dialogSettings: DialogSettings;
   @Input() dialogExtraContent: any;

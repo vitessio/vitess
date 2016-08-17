@@ -38,3 +38,16 @@ paper-input {
   border-radius: 5px;
   background-color: #EEEEEE;
 }
+
+p-dropdown {
+  display: table-cell; 
+  position: relative;
+  padding-bottom: 1%;
+  vertical-align:bottom;
+  width: 60%;
+}
+
+>>> .ui-dropdown {
+  width: 80% !important;
+  display: inline-block !important;
+}
