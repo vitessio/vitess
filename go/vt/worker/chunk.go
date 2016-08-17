@@ -90,65 +90,45 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 	}
 
 	// TODO(mberlin): Write a unit test for this part of the function.
+	var interval interface{}
 	chunks := make([]chunk, chunkCount)
 	switch min := min.(type) {
 	case int64:
 		max := max.(int64)
-		interval := (max - min) / int64(chunkCount)
+		interval = (max - min) / int64(chunkCount)
 		if interval == 0 {
 			wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v to %v", td.Name, min, max)
 			return singleCompleteChunk, nil
-		}
-
-		start := min
-		for i := 0; i < chunkCount; i++ {
-			end := start + interval
-			chunk, err := toChunk(start, end, i+1, chunkCount)
-			if err != nil {
-				return nil, err
-			}
-			chunks[i] = chunk
-			start = end
 		}
 	case uint64:
 		max := max.(uint64)
-		interval := (max - min) / uint64(chunkCount)
+		interval = (max - min) / uint64(chunkCount)
 		if interval == 0 {
 			wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v to %v", td.Name, min, max)
 			return singleCompleteChunk, nil
-		}
-
-		start := min
-		for i := 0; i < chunkCount; i++ {
-			end := start + interval
-			chunk, err := toChunk(start, end, i+1, chunkCount)
-			if err != nil {
-				return nil, err
-			}
-			chunks[i] = chunk
-			start = end
 		}
 	case float64:
 		max := max.(float64)
-		interval := (max - min) / float64(chunkCount)
+		interval = (max - min) / float64(chunkCount)
 		if interval == 0 {
 			wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v to %v", td.Name, min, max)
 			return singleCompleteChunk, nil
-		}
-
-		start := min
-		for i := 0; i < chunkCount; i++ {
-			end := start + interval
-			chunk, err := toChunk(start, end, i+1, chunkCount)
-			if err != nil {
-				return nil, err
-			}
-			chunks[i] = chunk
-			start = end
 		}
 	default:
 		wr.Logger().Infof("Not splitting table %v into multiple chunks, primary key not numeric.", td.Name)
 		return singleCompleteChunk, nil
+	}
+
+	// Create chunks.
+	start := min
+	for i := 0; i < chunkCount; i++ {
+		end := add(start, interval)
+		chunk, err := toChunk(start, end, i+1, chunkCount)
+		if err != nil {
+			return nil, err
+		}
+		chunks[i] = chunk
+		start = end
 	}
 
 	// Clear out the MIN and MAX on the first and last chunk respectively
@@ -157,6 +137,22 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 	chunks[0].start = sqltypes.NULL
 	chunks[chunkCount-1].end = sqltypes.NULL
 	return chunks, nil
+}
+
+func add(start, interval interface{}) interface{} {
+	switch start := start.(type) {
+	case int64:
+		interval := interval.(int64)
+		return start + interval
+	case uint64:
+		interval := interval.(uint64)
+		return start + interval
+	case float64:
+		interval := interval.(float64)
+		return start + interval
+	default:
+		panic(fmt.Sprintf("unsupported type %T for interval start: %v", start, start))
+	}
 }
 
 func toChunk(start, end interface{}, number, total int) (chunk, error) {
