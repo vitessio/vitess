@@ -106,7 +106,7 @@ func checkStats(realtimeStats *realtimeStats, tablet *testlib.FakeTablet, want *
 	for time.Now().Before(deadline) {
 		result, err := realtimeStats.tabletStats(tablet.Tablet.Alias)
 		if err != nil {
-			return nil
+			continue
 		}
 		if reflect.DeepEqual(result, discovery.TabletStats{}) {
 			continue

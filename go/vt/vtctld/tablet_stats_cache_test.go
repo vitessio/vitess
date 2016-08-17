@@ -193,10 +193,9 @@ func TestTabletStats(t *testing.T) {
 
 	// Test 2: tablet3 isn't found in the map since no update was received for it.
 	stats, got3 := tabletStatsCache.tabletStats(ts3.Tablet.Alias)
-	want3 := "could not find tablet: cell:\"cell1\" uid:300 "
-	emptyStat := discovery.TabletStats{}
-	if !reflect.DeepEqual(stats, emptyStat) || got3.Error() != want3 {
-		t.Errorf("got: %v, want: %v", got3.Error(), want3)
+	wantErr := "could not find tablet: cell:\"cell1\" uid:300 "
+	if got3.Error() != wantErr {
+		t.Errorf("got: %v, want: %v", got3.Error(), wantErr)
 	}
 }
 
