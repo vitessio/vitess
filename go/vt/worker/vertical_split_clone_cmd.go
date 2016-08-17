@@ -57,6 +57,8 @@ const verticalSplitCloneHTML2 = `
         <INPUT type="checkbox" id="offline" name="offline" value="true"{{if .DefaultOnline}} checked{{end}}></BR>
       <LABEL for="strategy">Strategy: </LABEL>
         <INPUT type="text" id="strategy" name="strategy" value=""></BR>
+      <LABEL for="chunkCount">Chunk Count: </LABEL>
+        <INPUT type="text" id="chunkCount" name="chunkCount" value="{{.DefaultChunkCount}}"></BR>
       <LABEL for="sourceReaderCount">Source Reader Count: </LABEL>
         <INPUT type="text" id="sourceReaderCount" name="sourceReaderCount" value="{{.DefaultSourceReaderCount}}"></BR>
       <LABEL for="writeQueryMaxRows">Maximum Number of Rows per Write Query: </LABEL>
@@ -95,6 +97,7 @@ func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *fl
 	offline := subFlags.Bool("offline", defaultOffline, "do offline copy (exact copy at a specific GTID, required before shard migration, source and destination tablets will be put out of serving during copy)")
 	tables := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split)")
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'vtworker VerticalSplitClone --strategy=-help k/s' for more info")
+	chunkCount := subFlags.Int("chunk_count", defaultChunkCount, "number of chunks per table")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
 	writeQueryMaxRows := subFlags.Int("write_query_max_rows", defaultWriteQueryMaxRows, "maximum number of rows per write query")
 	writeQueryMaxSize := subFlags.Int("write_query_max_size", defaultWriteQueryMaxSize, "maximum size (in bytes) per write query")
@@ -119,7 +122,7 @@ func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *fl
 	if *tables != "" {
 		tableArray = strings.Split(*tables, ",")
 	}
-	worker, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, shard, *online, *offline, tableArray, *strategy, *sourceReaderCount, *writeQueryMaxRows, *writeQueryMaxSize, *writeQueryMaxRowsDelete, uint64(*minTableSizeForSplit), *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS)
+	worker, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, shard, *online, *offline, tableArray, *strategy, *chunkCount, *sourceReaderCount, *writeQueryMaxRows, *writeQueryMaxSize, *writeQueryMaxRowsDelete, uint64(*minTableSizeForSplit), *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create worker: %v", err)
 	}
@@ -194,6 +197,7 @@ func interactiveVerticalSplitClone(ctx context.Context, wi *Instance, wr *wrangl
 		result["Keyspace"] = keyspace
 		result["DefaultOnline"] = defaultOnline
 		result["DefaultOffline"] = defaultOffline
+		result["DefaultChunkCount"] = fmt.Sprintf("%v", defaultChunkCount)
 		result["DefaultSourceReaderCount"] = fmt.Sprintf("%v", defaultSourceReaderCount)
 		result["DefaultWriteQueryMaxRows"] = fmt.Sprintf("%v", defaultWriteQueryMaxRows)
 		result["DefaultWriteQueryMaxSize"] = fmt.Sprintf("%v", defaultWriteQueryMaxSize)
@@ -212,6 +216,11 @@ func interactiveVerticalSplitClone(ctx context.Context, wi *Instance, wr *wrangl
 	offlineStr := r.FormValue("offline")
 	offline := offlineStr == "true"
 	strategy := r.FormValue("strategy")
+	chunkCountStr := r.FormValue("chunkCount")
+	chunkCount, err := strconv.ParseInt(chunkCountStr, 0, 64)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("cannot parse chunkCount: %s", err)
+	}
 	sourceReaderCountStr := r.FormValue("sourceReaderCount")
 	sourceReaderCount, err := strconv.ParseInt(sourceReaderCountStr, 0, 64)
 	if err != nil {
@@ -254,7 +263,7 @@ func interactiveVerticalSplitClone(ctx context.Context, wi *Instance, wr *wrangl
 	}
 
 	// start the clone job
-	wrk, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, "0", online, offline, tableArray, strategy, int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize), int(writeQueryMaxRowsDelete), uint64(minTableSizeForSplit), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS)
+	wrk, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, "0", online, offline, tableArray, strategy, int(chunkCount), int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize), int(writeQueryMaxRowsDelete), uint64(minTableSizeForSplit), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot create worker: %v", err)
 	}

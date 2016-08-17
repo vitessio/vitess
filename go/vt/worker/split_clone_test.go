@@ -37,6 +37,8 @@ const (
 	splitCloneTestMin int = 100
 	// splitCloneTestMax is the maximum value of the primary key.
 	splitCloneTestMax int = 200
+	// In the default test case there are 100 rows on the source.
+	splitCloneTestRowsCount = splitCloneTestMax - splitCloneTestMin
 )
 
 var (
@@ -78,13 +80,10 @@ type splitCloneTestCase struct {
 }
 
 func (tc *splitCloneTestCase) setUp(v3 bool) {
-	tc.setUpWithConcurreny(v3, 10, 2)
+	tc.setUpWithConcurreny(v3, 10, 2, splitCloneTestRowsCount)
 }
 
-func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQueryMaxRows int) {
-	// In the default test case there are 100 rows on the source.
-	rowsTotal := 100
-
+func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQueryMaxRows, rowsCount int) {
 	*useV3ReshardingMode = v3
 	db := fakesqldb.Register()
 	tc.ts = zktestserver.New(tc.t, []string{"cell1", "cell2"})
@@ -199,7 +198,7 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 		shqs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
 		shqs.AddDefaultHealthResponse()
 		qs := newTestQueryService(tc.t, sourceRdonly.Target(), shqs, 0, 1, sourceRdonly.Tablet.Alias.Uid, false /* omitKeyspaceID */)
-		qs.addGeneratedRows(100, 100+rowsTotal)
+		qs.addGeneratedRows(100, 100+rowsCount)
 		grpcqueryservice.Register(sourceRdonly.RPCServer, qs)
 		tc.sourceRdonlyQs = append(tc.sourceRdonlyQs, qs)
 	}
@@ -222,9 +221,9 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 
 	// In the default test case there will be 30 inserts per destination shard
 	// because 10 writer threads will insert 5 rows on each destination shard.
-	// (100 source rows / 10 writers / 2 shards = 5 rows.)
+	// (100 rowsCount / 10 writers / 2 shards = 5 rows.)
 	// Due to --write_query_max_rows=2 there will be 3 inserts for 5 rows.
-	rowsPerDestinationShard := rowsTotal / 2
+	rowsPerDestinationShard := rowsCount / 2
 	rowsPerThread := rowsPerDestinationShard / concurrency
 	insertsPerThread := math.Ceil(float64(rowsPerThread) / float64(writeQueryMaxRows))
 	insertsTotal := int(insertsPerThread) * concurrency
@@ -259,6 +258,7 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 		// the rate limit is set very high.
 		"-max_tps", "9999",
 		"-write_query_max_rows", strconv.Itoa(writeQueryMaxRows),
+		"-chunk_count", strconv.Itoa(concurrency),
 		"-source_reader_count", strconv.Itoa(concurrency),
 		"-min_table_size_for_split", "1",
 		"-destination_writer_count", strconv.Itoa(concurrency),
@@ -481,6 +481,28 @@ func TestSplitCloneV2_Offline(t *testing.T) {
 	}
 }
 
+// TestSplitCloneV2_Offline_HighChunkCount is identical to
+// TestSplitCloneV2_Offline but sets the --chunk_count to 1000. Given
+// --source_reader_count=10, at most 10 out of the 1000 chunk pipeplines will
+// get processed concurrently while the other pending ones are blocked.
+func TestSplitCloneV2_Offline_HighChunkCount(t *testing.T) {
+	tc := &splitCloneTestCase{t: t}
+	tc.setUpWithConcurreny(false /* v3 */, 10, 5 /* writeQueryMaxRows */, 1000 /* rowsCount */)
+	defer tc.tearDown()
+
+	args := make([]string, len(tc.defaultWorkerArgs))
+	copy(args, tc.defaultWorkerArgs)
+	// Modify args to set -write_query_max_rows to 5.
+	args[5] = "5"
+	// Modify args to set -chunk_count to 1000.
+	args[7] = "1000"
+
+	// Run the vtworker command.
+	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestSplitCloneV2_Offline_RestartStreamingQuery is identical to
 // TestSplitCloneV2_Offline but forces SplitClone to restart the streaming
 // query on the source before reading the last row.
@@ -589,7 +611,7 @@ func TestSplitCloneV2_Reconciliation(t *testing.T) {
 	tc := &splitCloneTestCase{t: t}
 	// We reduce the parallelism to 1 to test the order of expected
 	// insert/update/delete statements on the destination master.
-	tc.setUpWithConcurreny(false /* v3 */, 1, 10)
+	tc.setUpWithConcurreny(false /* v3 */, 1, 10, splitCloneTestRowsCount)
 	defer tc.tearDown()
 
 	// We assume that an Online Clone ran before which copied the rows 100-199

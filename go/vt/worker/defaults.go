@@ -7,8 +7,12 @@ package worker
 import "github.com/youtube/vitess/go/vt/throttler"
 
 const (
-	defaultOnline            = true
-	defaultOffline           = true
+	defaultOnline  = true
+	defaultOffline = true
+	// defaultChunkCount is the number of chunks in which each table should be
+	// divided. One chunk is processed by one chunk pipeline at a time.
+	// -source_reader_count defines the number of concurrent chunk pipelines.
+	defaultChunkCount        = 10
 	defaultSourceReaderCount = 10
 	// defaultWriteQueryMaxRows aggregates up to 100 rows per INSERT or DELETE
 	// query. Higher values are not recommended to avoid overloading MySQL.
