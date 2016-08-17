@@ -4,6 +4,7 @@
     margin: 0;
     padding: 0;
     text-align: center;
+    vertical-align: middle;
 }
 
 .collapsed-border {
@@ -13,4 +14,12 @@
 
 .no-padding {
   padding: 0;
+}
+.left {
+  float: left;
+}
+.popop {
+  position: absolute;
+  right: 100px;
+  top: 1000;
 }
