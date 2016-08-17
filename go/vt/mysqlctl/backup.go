@@ -621,7 +621,7 @@ func Restore(
 	}
 	if toRestore < 0 {
 		logger.Errorf("No backup to restore on BackupStorage for directory %v. Starting up empty.", dir)
-		if err = populateLocalMetadata(mysqld, localMetadata); err == nil {
+		if err = populateMetadataTables(mysqld, localMetadata); err == nil {
 			err = ErrNoBackup
 		}
 		return replication.Position{}, err
@@ -635,7 +635,7 @@ func Restore(
 		}
 		if !ok {
 			logger.Infof("Auto-restore is enabled, but mysqld already contains data. Assuming vttablet was just restarted.")
-			if err = populateLocalMetadata(mysqld, localMetadata); err == nil {
+			if err = populateMetadataTables(mysqld, localMetadata); err == nil {
 				err = ErrExistingDB
 			}
 			return replication.Position{}, err
@@ -685,7 +685,7 @@ func Restore(
 	// Populate local_metadata before starting without --skip-networking,
 	// so it's there before we start announcing ourselves.
 	logger.Infof("Restore: populating local_metadata")
-	err = populateLocalMetadata(mysqld, localMetadata)
+	err = populateMetadataTables(mysqld, localMetadata)
 	if err != nil {
 		return replication.Position{}, err
 	}

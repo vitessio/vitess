@@ -15,12 +15,14 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 	"github.com/youtube/vitess/go/vt/schemamanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
+
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -283,7 +285,7 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 		return ts.GetTablet(ctx, tabletAlias)
 	})
 
-	// Healthcheck real time status per (cell, keyspace, shard, tablet type).
+	// Healthcheck real time status per (cell, keyspace, tablet type, metric).
 	handleCollection("tablet_statuses", func(r *http.Request) (interface{}, error) {
 		targetPath := getItemPath(r.URL.Path)
 
@@ -309,11 +311,41 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 			if err != nil {
 				return nil, fmt.Errorf("couldn't get heatmap data: %v", err)
 			}
-
 			return heatmap, nil
 		}
 
 		return nil, fmt.Errorf("invalid target path: %q  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>", targetPath)
+	})
+
+	handleCollection("tablet_health", func(r *http.Request) (interface{}, error) {
+		tabletPath := getItemPath(r.URL.Path)
+		parts := strings.SplitN(tabletPath, "/", 2)
+
+		// Request was incorrectly formatted.
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid tablet_health path: %q  expected path: /tablet_health/<cell>/<uid>", tabletPath)
+		}
+
+		if realtimeStats == nil {
+			return nil, fmt.Errorf("realtimeStats not initialized")
+		}
+
+		cell := parts[0]
+		uidStr := parts[1]
+		uid, err := topoproto.ParseUID(uidStr)
+		if err != nil {
+			return nil, fmt.Errorf("incorrect uid: %v", err)
+		}
+
+		tabletAlias := topodatapb.TabletAlias{
+			Cell: cell,
+			Uid:  uid,
+		}
+		tabletStat, err := realtimeStats.tabletStats(&tabletAlias)
+		if err != nil {
+			return nil, fmt.Errorf("could not get tabletStats: %v", err)
+		}
+		return tabletStat, nil
 	})
 
 	// Schema Change
