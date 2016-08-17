@@ -32,17 +32,33 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
+// cloneType specifies whether it is a horizontal resharding or a vertical split.
+// TODO(mberlin): Remove this once we merged both into one command.
+type cloneType int
+
+const (
+	horizontalResharding cloneType = iota
+	verticalSplit
+)
+
+// servingTypes is the list of tabletTypes which the source keyspace must be serving.
+var servingTypes = []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
+
 // SplitCloneWorker will clone the data within a keyspace from a
 // source set of shards to a destination set of shards.
 type SplitCloneWorker struct {
 	StatusWorker
 
-	wr                *wrangler.Wrangler
-	cell              string
-	keyspace          string
-	shard             string
-	online            bool
-	offline           bool
+	wr                  *wrangler.Wrangler
+	cloneType           cloneType
+	cell                string
+	destinationKeyspace string
+	shard               string
+	online              bool
+	offline             bool
+	// verticalSplit only: List of tables which should be split out.
+	tables []string
+	// horizontalResharding only: List of tables which will be skipped.
 	excludeTables     []string
 	strategy          *splitStrategy
 	sourceReaderCount int
@@ -59,10 +75,10 @@ type SplitCloneWorker struct {
 	tabletTracker           *TabletTracker
 
 	// populated during WorkerStateInit, read-only after that
-	keyspaceInfo      *topo.KeyspaceInfo
-	sourceShards      []*topo.ShardInfo
-	destinationShards []*topo.ShardInfo
-	keyspaceSchema    *vindexes.KeyspaceSchema
+	destinationKeyspaceInfo *topo.KeyspaceInfo
+	sourceShards            []*topo.ShardInfo
+	destinationShards       []*topo.ShardInfo
+	keyspaceSchema          *vindexes.KeyspaceSchema
 	// healthCheck is used for the destination shards to a) find out the current
 	// MASTER tablet, b) get the list of healthy RDONLY tablets and c) track the
 	// replication lag of all REPLICA tablets.
@@ -112,11 +128,30 @@ type SplitCloneWorker struct {
 	refreshAliases [][]*topodatapb.TabletAlias
 	refreshTablets []map[topodatapb.TabletAlias]*topo.TabletInfo
 
-	ev *events.SplitClone
+	ev event.Updater
 }
 
-// NewSplitCloneWorker returns a new SplitCloneWorker object.
-func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, excludeTables []string, strategyStr string, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
+// newSplitCloneWorker returns a new worker object for the SplitClone command.
+func newSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, excludeTables []string, strategyStr string, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
+	return newCloneWorker(wr, horizontalResharding, cell, keyspace, shard, online, offline, nil /* tables */, excludeTables, strategyStr, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, minTableSizeForSplit, destinationWriterCount, minHealthyRdonlyTablets, maxTPS)
+}
+
+// newVerticalSplitCloneWorker returns a new worker object for the
+// VerticalSplitClone command.
+func newVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, tables []string, strategyStr string, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
+	return newCloneWorker(wr, verticalSplit, cell, keyspace, shard, online, offline, tables, nil /* excludeTables */, strategyStr, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, minTableSizeForSplit, destinationWriterCount, minHealthyRdonlyTablets, maxTPS)
+}
+
+// newCloneWorker returns a new SplitCloneWorker object which is used both by
+// the SplitClone and VerticalSplitClone command.
+// TODO(mberlin): Rename SplitCloneWorker to cloneWorker.
+func newCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, shard string, online, offline bool, tables, excludeTables []string, strategyStr string, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
+	if cloneType != horizontalResharding && cloneType != verticalSplit {
+		return nil, fmt.Errorf("unknown cloneType: %v This is a bug. Please report", cloneType)
+	}
+	if tables != nil && len(tables) == 0 {
+		return nil, errors.New("list of tablets to be split out must not be empty")
+	}
 	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
@@ -130,14 +165,16 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, on
 	if !online && !offline {
 		return nil, errors.New("at least one clone phase (-online, -offline) must be enabled (and not set to false)")
 	}
-	return &SplitCloneWorker{
+	scw := &SplitCloneWorker{
 		StatusWorker:            NewStatusWorker(),
 		wr:                      wr,
+		cloneType:               cloneType,
 		cell:                    cell,
-		keyspace:                keyspace,
+		destinationKeyspace:     keyspace,
 		shard:                   shard,
 		online:                  online,
 		offline:                 offline,
+		tables:                  tables,
 		excludeTables:           excludeTables,
 		strategy:                strategy,
 		sourceReaderCount:       sourceReaderCount,
@@ -156,15 +193,30 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, on
 
 		tableStatusListOnline:  &tableStatusList{},
 		tableStatusListOffline: &tableStatusList{},
+	}
+	scw.initializeEventDescriptor()
+	return scw, nil
+}
 
-		ev: &events.SplitClone{
-			Cell:          cell,
-			Keyspace:      keyspace,
-			Shard:         shard,
-			ExcludeTables: excludeTables,
-			Strategy:      strategy.String(),
-		},
-	}, nil
+func (scw *SplitCloneWorker) initializeEventDescriptor() {
+	switch scw.cloneType {
+	case horizontalResharding:
+		scw.ev = &events.SplitClone{
+			Cell:          scw.cell,
+			Keyspace:      scw.destinationKeyspace,
+			Shard:         scw.shard,
+			ExcludeTables: scw.excludeTables,
+			Strategy:      scw.strategy.String(),
+		}
+	case verticalSplit:
+		scw.ev = &events.VerticalSplitClone{
+			Cell:     scw.cell,
+			Keyspace: scw.destinationKeyspace,
+			Shard:    scw.shard,
+			Tables:   scw.tables,
+			Strategy: scw.strategy.String(),
+		}
+	}
 }
 
 func (scw *SplitCloneWorker) setState(state StatusWorkerState) {
@@ -212,7 +264,7 @@ func (scw *SplitCloneWorker) FormattedOfflineSources() string {
 func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
 	state := scw.State()
 
-	result := "<b>Working on:</b> " + scw.keyspace + "/" + scw.shard + "</br>\n"
+	result := "<b>Working on:</b> " + scw.destinationKeyspace + "/" + scw.shard + "</br>\n"
 	result += "<b>State:</b> " + state.String() + "</br>\n"
 	switch state {
 	case WorkerStateCloneOnline:
@@ -256,7 +308,7 @@ func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
 func (scw *SplitCloneWorker) StatusAsText() string {
 	state := scw.State()
 
-	result := "Working on: " + scw.keyspace + "/" + scw.shard + "\n"
+	result := "Working on: " + scw.destinationKeyspace + "/" + scw.shard + "\n"
 	result += "State: " + state.String() + "\n"
 	switch state {
 	case WorkerStateCloneOnline:
@@ -430,81 +482,36 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 // - read the destination keyspace, make sure it has 'servedFrom' values
 func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	scw.setState(WorkerStateInit)
-	var err error
 
 	// read the keyspace and validate it
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	scw.keyspaceInfo, err = scw.wr.TopoServer().GetKeyspace(shortCtx, scw.keyspace)
+	var err error
+	scw.destinationKeyspaceInfo, err = scw.wr.TopoServer().GetKeyspace(shortCtx, scw.destinationKeyspace)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot read keyspace %v: %v", scw.keyspace, err)
+		return fmt.Errorf("cannot read (destination) keyspace %v: %v", scw.destinationKeyspace, err)
 	}
 
-	// find the OverlappingShards in the keyspace
-	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	osList, err := topotools.FindOverlappingShards(shortCtx, scw.wr.TopoServer(), scw.keyspace)
-	cancel()
-	if err != nil {
-		return fmt.Errorf("cannot FindOverlappingShards in %v: %v", scw.keyspace, err)
-	}
-
-	// find the shard we mentioned in there, if any
-	os := topotools.OverlappingShardsForShard(osList, scw.shard)
-	if os == nil {
-		return fmt.Errorf("the specified shard %v/%v is not in any overlapping shard", scw.keyspace, scw.shard)
-	}
-	scw.wr.Logger().Infof("Found overlapping shards: %+v\n", os)
-
-	// one side should have served types, the other one none,
-	// figure out wich is which, then double check them all
-	if len(os.Left[0].ServedTypes) > 0 {
-		scw.sourceShards = os.Left
-		scw.destinationShards = os.Right
-	} else {
-		scw.sourceShards = os.Right
-		scw.destinationShards = os.Left
-	}
-
-	// Verify that filtered replication is not already enabled.
-	for _, si := range scw.destinationShards {
-		if len(si.SourceShards) > 0 {
-			return fmt.Errorf("destination shard %v/%v has filtered replication already enabled from a previous resharding (ShardInfo is set)."+
-				" This requires manual intervention e.g. use vtctl SourceShardDelete to remove it",
-				si.Keyspace(), si.ShardName())
+	// Set source and destination shard infos.
+	switch scw.cloneType {
+	case horizontalResharding:
+		if err := scw.initShardsForHorizontalResharding(ctx); err != nil {
+			return err
+		}
+	case verticalSplit:
+		if err := scw.initShardsForVerticalSplit(ctx); err != nil {
+			return err
 		}
 	}
 
-	// validate all serving types
-	servingTypes := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
-	for _, st := range servingTypes {
-		for _, si := range scw.sourceShards {
-			if si.GetServedType(st) == nil {
-				return fmt.Errorf("source shard %v/%v is not serving type %v", si.Keyspace(), si.ShardName(), st)
-			}
-		}
-	}
-	for _, si := range scw.destinationShards {
-		if len(si.ServedTypes) > 0 {
-			return fmt.Errorf("destination shard %v/%v is serving some types", si.Keyspace(), si.ShardName())
-		}
+	if err := scw.sanityCheckShardInfos(); err != nil {
+		return err
 	}
 
-	// read the vschema if needed
-	var keyspaceSchema *vindexes.KeyspaceSchema
-	if *useV3ReshardingMode {
-		kschema, err := scw.wr.TopoServer().GetVSchema(ctx, scw.keyspace)
-		if err != nil {
-			return fmt.Errorf("cannot load VSchema for keyspace %v: %v", scw.keyspace, err)
+	if scw.cloneType == horizontalResharding {
+		if err := scw.loadVSchema(ctx); err != nil {
+			return err
 		}
-		if kschema == nil {
-			return fmt.Errorf("no VSchema for keyspace %v", scw.keyspace)
-		}
-
-		keyspaceSchema, err = vindexes.BuildKeyspaceSchema(kschema, scw.keyspace)
-		if err != nil {
-			return fmt.Errorf("cannot build vschema for keyspace %v: %v", scw.keyspace, err)
-		}
-		scw.keyspaceSchema = keyspaceSchema
 	}
 
 	// Initialize healthcheck and add destination shards to it.
@@ -522,6 +529,132 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 		scw.shardWatchers = append(scw.shardWatchers, watcher)
 	}
 
+	return nil
+}
+
+func (scw *SplitCloneWorker) initShardsForHorizontalResharding(ctx context.Context) error {
+	// find the OverlappingShards in the keyspace
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	osList, err := topotools.FindOverlappingShards(shortCtx, scw.wr.TopoServer(), scw.destinationKeyspace)
+	cancel()
+	if err != nil {
+		return fmt.Errorf("cannot FindOverlappingShards in %v: %v", scw.destinationKeyspace, err)
+	}
+
+	// find the shard we mentioned in there, if any
+	os := topotools.OverlappingShardsForShard(osList, scw.shard)
+	if os == nil {
+		return fmt.Errorf("the specified shard %v/%v is not in any overlapping shard", scw.destinationKeyspace, scw.shard)
+	}
+	scw.wr.Logger().Infof("Found overlapping shards: %+v\n", os)
+
+	// one side should have served types, the other one none,
+	// figure out wich is which, then double check them all
+	if len(os.Left[0].ServedTypes) > 0 {
+		scw.sourceShards = os.Left
+		scw.destinationShards = os.Right
+	} else {
+		scw.sourceShards = os.Right
+		scw.destinationShards = os.Left
+	}
+
+	return nil
+}
+
+func (scw *SplitCloneWorker) initShardsForVerticalSplit(ctx context.Context) error {
+	if len(scw.destinationKeyspaceInfo.ServedFroms) == 0 {
+		return fmt.Errorf("destination keyspace %v has no KeyspaceServedFrom", scw.destinationKeyspace)
+	}
+
+	// Determine the source keyspace.
+	servedFrom := ""
+	for _, st := range servingTypes {
+		sf := scw.destinationKeyspaceInfo.GetServedFrom(st)
+		if sf == nil {
+			return fmt.Errorf("destination keyspace %v is serving type %v", scw.destinationKeyspace, st)
+		}
+		if servedFrom == "" {
+			servedFrom = sf.Keyspace
+		} else {
+			if servedFrom != sf.Keyspace {
+				return fmt.Errorf("destination keyspace %v is serving from multiple source keyspaces %v and %v", scw.destinationKeyspace, servedFrom, sf.Keyspace)
+			}
+		}
+	}
+	sourceKeyspace := servedFrom
+
+	// Init the source and destination shard info.
+	sourceShardInfo, err := scw.wr.TopoServer().GetShard(ctx, sourceKeyspace, scw.shard)
+	if err != nil {
+		return err
+	}
+	scw.sourceShards = []*topo.ShardInfo{sourceShardInfo}
+	destShardInfo, err := scw.wr.TopoServer().GetShard(ctx, scw.destinationKeyspace, scw.shard)
+	if err != nil {
+		return err
+	}
+	scw.destinationShards = []*topo.ShardInfo{destShardInfo}
+
+	return nil
+}
+
+func (scw *SplitCloneWorker) sanityCheckShardInfos() error {
+	// Verify that filtered replication is not already enabled.
+	for _, si := range scw.destinationShards {
+		if len(si.SourceShards) > 0 {
+			return fmt.Errorf("destination shard %v/%v has filtered replication already enabled from a previous resharding (ShardInfo is set)."+
+				" This requires manual intervention e.g. use vtctl SourceShardDelete to remove it",
+				si.Keyspace(), si.ShardName())
+		}
+	}
+	// Verify that the source is serving all serving types.
+	for _, st := range servingTypes {
+		for _, si := range scw.sourceShards {
+			if si.GetServedType(st) == nil {
+				return fmt.Errorf("source shard %v/%v is not serving type %v", si.Keyspace(), si.ShardName(), st)
+			}
+		}
+	}
+
+	switch scw.cloneType {
+	case horizontalResharding:
+		// Verify that the destination is not serving yet.
+		for _, si := range scw.destinationShards {
+			if len(si.ServedTypes) > 0 {
+				return fmt.Errorf("destination shard %v/%v is serving some types", si.Keyspace(), si.ShardName())
+			}
+		}
+	case verticalSplit:
+		// Verify that the destination is serving all types.
+		for _, st := range servingTypes {
+			for _, si := range scw.destinationShards {
+				if si.GetServedType(st) == nil {
+					return fmt.Errorf("source shard %v/%v is not serving type %v", si.Keyspace(), si.ShardName(), st)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (scw *SplitCloneWorker) loadVSchema(ctx context.Context) error {
+	var keyspaceSchema *vindexes.KeyspaceSchema
+	if *useV3ReshardingMode {
+		kschema, err := scw.wr.TopoServer().GetVSchema(ctx, scw.destinationKeyspace)
+		if err != nil {
+			return fmt.Errorf("cannot load VSchema for keyspace %v: %v", scw.destinationKeyspace, err)
+		}
+		if kschema == nil {
+			return fmt.Errorf("no VSchema for keyspace %v", scw.destinationKeyspace)
+		}
+
+		keyspaceSchema, err = vindexes.BuildKeyspaceSchema(kschema, scw.destinationKeyspace)
+		if err != nil {
+			return fmt.Errorf("cannot build vschema for keyspace %v: %v", scw.destinationKeyspace, err)
+		}
+		scw.keyspaceSchema = keyspaceSchema
+	}
 	return nil
 }
 
@@ -739,17 +872,9 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
 		td = reorderColumnsPrimaryKeyFirst(td)
 
-		var keyResolver keyspaceIDResolver
-		if *useV3ReshardingMode {
-			keyResolver, err = newV3ResolverFromTableDefinition(scw.keyspaceSchema, td)
-			if err != nil {
-				return fmt.Errorf("cannot resolve v3 sharding keys for keyspace %v: %v", scw.keyspace, err)
-			}
-		} else {
-			keyResolver, err = newV2Resolver(scw.keyspaceInfo, td)
-			if err != nil {
-				return fmt.Errorf("cannot resolve sharding keys for keyspace %v: %v", scw.keyspace, err)
-			}
+		keyResolver, err := scw.createKeyResolver(td)
+		if err != nil {
+			return fmt.Errorf("cannot resolve sharding keys for keyspace %v: %v", scw.destinationKeyspace, err)
 		}
 
 		// TODO(mberlin): We're going to chunk *all* source shards based on the MIN
@@ -943,9 +1068,9 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 			scw.wr.Logger().Infof("Skipping setting SourceShard on destination shards.")
 		} else {
 			for _, si := range scw.destinationShards {
-				scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", si.Keyspace(), si.ShardName())
+				scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v (tables: %v)", si.Keyspace(), si.ShardName(), scw.tables)
 				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-				err := scw.wr.SetSourceShards(shortCtx, si.Keyspace(), si.ShardName(), scw.offlineSourceAliases, nil)
+				err := scw.wr.SetSourceShards(shortCtx, si.Keyspace(), si.ShardName(), scw.offlineSourceAliases, scw.tables)
 				cancel()
 				if err != nil {
 					return fmt.Errorf("failed to set source shards: %v", err)
@@ -989,7 +1114,7 @@ func (scw *SplitCloneWorker) getSourceSchema(ctx context.Context, tablet *topoda
 	// in each source shard for each table to be about the same
 	// (rowCount is used to estimate an ETA)
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, tablet.Alias, nil, scw.excludeTables, false /* includeViews */)
+	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, tablet.Alias, scw.tables, scw.excludeTables, false /* includeViews */)
 	cancel()
 	if err != nil {
 		return nil, fmt.Errorf("cannot get schema from source %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
@@ -1003,6 +1128,23 @@ func (scw *SplitCloneWorker) getSourceSchema(ctx context.Context, tablet *topoda
 		}
 	}
 	return sourceSchemaDefinition, nil
+}
+
+// createKeyResolver is called at the start of each chunk pipeline.
+// It creates a keyspaceIDResolver which translates a given row to a
+// keyspace ID. This is necessary to route the to be copied rows to the
+// different destination shards.
+func (scw *SplitCloneWorker) createKeyResolver(td *tabletmanagerdatapb.TableDefinition) (keyspaceIDResolver, error) {
+	if scw.cloneType == verticalSplit {
+		// VerticalSplitClone currently always has exactly one destination shard
+		// and therefore does not require routing between multiple shards.
+		return nil, nil
+	}
+
+	if *useV3ReshardingMode {
+		return newV3ResolverFromTableDefinition(scw.keyspaceSchema, td)
+	}
+	return newV2Resolver(scw.destinationKeyspaceInfo, td)
 }
 
 // StatsUpdate receives replication lag updates for each destination master
