@@ -1,30 +1,40 @@
 <!-- Keyspace selector -->
 <paper-dropdown-menu label="Keyspace">
-  <paper-listbox class="dropdown-content" *ngFor="let k of keyspaces">
+  <paper-listbox class="dropdown-content" *ngFor="let k of keyspaces; let isLast = last">
     <paper-item>{{k}}</paper-item>
-    <paper-item>all</paper-item>
+    <paper-item *ngIf="isLast">all</paper-item>
   </paper-listbox>
 </paper-dropdown-menu>
 
 <!-- Cell selector -->
 <paper-dropdown-menu label="Cell">
-  <paper-listbox class="dropdown-content" *ngFor="let c of cells" >
+  <paper-listbox class="dropdown-content" *ngFor="let c of cells; let isLast = last" >
     <paper-item>{{c}}</paper-item>
+    <paper-item *ngIf="isLast">all</paper-item>
   </paper-listbox>
 </paper-dropdown-menu>
 
 <!-- TabletType selector -->
 <paper-dropdown-menu label="TabletType">
-  <paper-listbox class="dropdown-content" *ngFor="let t of tabletType">
+  <paper-listbox class="dropdown-content" *ngFor="let t of tabletTypes; let isLast = last">
     <paper-item>{{t}}</paper-item>
+    <paper-item *ngIf="isLast">all</paper-item>
   </paper-listbox>
 </paper-dropdown-menu>
 
-<vt-heatmap
+<!-- Metric selector -->
+<paper-dropdown-menu label="Metric">
+  <paper-listbox class="dropdown-content" *ngFor="let m of metrics; let isLast = last">
+    <paper-item>{{m}}</paper-item>
+    <paper-item *ngIf="isLast">all</paper-item>
+  </paper-listbox>
+</paper-dropdown-menu>
+
+<!-- Wait until the heatmap data has been obtained from the service -->
+<vt-heatmap *ngIf="heatmapDataReady"
   [data]="data"
+  [aliases]="aliases"
   [xLabels]="xLabels"
   [yLabels]="yLabels"
-  [name]="name"
 >
 </vt-heatmap>
-
