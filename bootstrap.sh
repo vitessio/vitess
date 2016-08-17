@@ -208,10 +208,18 @@ mkdir -p $VTTOP/.git/hooks
 ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
 
 # Download node
-curl -sL https://nodejs.org/dist/v6.3.1/node-v6.3.1-linux-x64.tar.xz > node_linux64.xz
-tar xf node_linux64.xz -C $VTROOT/dist
-mv $VTROOT/dist/node-v6.3.1-linux-x64 $VTROOT/dist/node
-rm node_linux64.xz
+node_ver=v6.3.1
+node_dist=$VTROOT/dist/node
+if [[ -x $node_dist/bin/node && `$node_dist/bin/node -v` == "$node_ver" ]]; then
+  echo "skipping nodejs download. remove $node_dist to force redownload."
+else
+  echo "Downloading nodejs"
+  rm -rf $node_dist
+  curl -sL https://nodejs.org/dist/$node_ver/node-$node_ver-linux-x64.tar.xz > node_linux64.xz
+  tar xf node_linux64.xz -C $VTROOT/dist
+  mv $VTROOT/dist/node-$node_ver-linux-x64 $node_dist
+  rm node_linux64.xz
+fi
 
 # Download chromedriver
 echo "Installing selenium and chromedriver"
