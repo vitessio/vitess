@@ -254,27 +254,15 @@ func (c *tabletStatsCache) heatmapData(keyspace, cell, tabletType, metric string
 	}, nil
 }
 
-func (c *tabletStatsCache) tabletStatsByAlias(tabletAlias *topodatapb.TabletAlias) discovery.TabletStats {
+func (c *tabletStatsCache) tabletStats(tabletAlias *topodatapb.TabletAlias) (discovery.TabletStats, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	ts, ok := c.statusesByAlias[tabletAlias.String()]
 	if !ok {
-		return discovery.TabletStats{}
+		return discovery.TabletStats{}, fmt.Errorf("could not find tablet: %v", tabletAlias)
 	}
-	return *ts
-}
-
-func (c *tabletStatsCache) tabletHealth(cell string, uid uint32) (*discovery.TabletStats, error) {
-	tabletAlias := topodatapb.TabletAlias{
-		Cell: cell,
-		Uid:  uid,
-	}
-	stat, ok := c.statusesByAlias[tabletAlias.String()]
-	if !ok {
-		return nil, fmt.Errorf("tablet %v doesn't exist in cell %v", uid, cell)
-	}
-	return stat, nil
+	return *ts, nil
 }
 
 func replicationLag(stat *discovery.TabletStats) float64 {
