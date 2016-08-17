@@ -220,6 +220,10 @@ else
   mv $VTROOT/dist/node-$node_ver-linux-x64 $node_dist
   rm node_linux64.xz
 fi
+$node_dist/bin/npm install -g angular-cli
+$node_dist/bin/npm install -g bower
+cd $VTTOP/web/vtctld2 && $node_dist/bin/npm install
+cd $VTTOP/web/vtctld2 && $node_dist/bin/bower install
 
 # Download chromedriver
 echo "Installing selenium and chromedriver"
