@@ -42,19 +42,6 @@ export class WorkflowComponent {
     }
   }
 
-  getHeaderClass(state) {
-    switch (state) {
-      case 0:
-        return 'vt-workflow-not-started-dark';
-      case 1:
-        return 'vt-workflow-running-dark';
-      case 2:
-        return 'vt-workflow-done-dark';
-      default:
-        return '';
-    }
-  }
-
   getActionClass(state) {
     switch (state) {
       case ActionStyle.NORMAL:

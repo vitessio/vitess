@@ -15,7 +15,12 @@ import { APP_ROUTER_PROVIDERS, routing } from './app.routes';
 import { FormsModule } from '@angular/forms';
 import { MdButtonModule } from '@angular2-material/button';
 import { MdRippleModule } from '@angular2-material/core/ripple/ripple';
-
+import { MdCardModule } from '@angular2-material/card';
+import { MdCheckboxModule } from '@angular2-material/checkbox';
+import { MdInputModule } from '@angular2-material/input';
+import { MdListModule } from '@angular2-material/list/list';
+import { MdProgressBarModule } from '@angular2-material/progress-bar';
+import { MdIconModule } from '@angular2-material/icon/icon';
 
 import { PolymerElement } from '@vaadin/angular2-polymer';
 
@@ -27,7 +32,19 @@ const PolymerComponents = [
 ];
 
 @NgModule({
-  imports:      [ BrowserModule, routing, FormsModule, MdButtonModule, MdRippleModule],
+  imports:      [
+    BrowserModule,
+    routing,
+    FormsModule,
+    MdButtonModule,
+    MdRippleModule,
+    MdCardModule,
+    MdCheckboxModule,
+    MdInputModule,
+    MdListModule,
+    MdProgressBarModule,
+    MdIconModule,
+  ],
   declarations: [
     AppComponent,
     DashboardComponent,

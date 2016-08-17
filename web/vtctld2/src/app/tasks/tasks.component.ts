@@ -31,7 +31,7 @@ export class TasksComponent implements OnInit {
       '3': new Workflow('C', '2', 'UU948312/2', {}),
     }),*/
     'UU130429': new Workflow('Horizontal Resharding Workflow', 'UU130429', {
-      '1': new Workflow('Approval', 'UU130429/1', {}, `Workflow was not started automatically. Click 'Start'.`, State.DONE, 1471234131, Display.NONE, 0, '', false, [new Action('Start', ActionState.ENABLED, ActionStyle.TRIGGERED)], 'Success'),
+      '1': new Workflow('Approval', 'UU130429/1', {}, `Workflow was not started automatically. Click 'Start'.`, State.DONE, 1471234131, Display.NONE, 0, '', false, [new Action('Start', ActionState.ENABLED, ActionStyle.TRIGGERED)], 'Started'),
       '2': new Workflow('Bootstrap', 'UU130429/2', {
         '6': new Workflow('Copy to -80', 'UU130429/2/6', {}, 'Copying data from 0', State.DONE, 1471234150, Display.DETERMINATE, 100, '56372/56372 rows', false, [], 'Success'),
         '7': new Workflow('Copy to 80-', 'UU130429/2/7', {}, 'Copying data from 0', State.DONE, 1471234225, Display.DETERMINATE, 100, '56373/56373 rows', false, [], 'Success')
@@ -57,7 +57,7 @@ export class TasksComponent implements OnInit {
       '5': new Workflow('Cleanup', 'UU130429/5', {
         '18': new Workflow('Redirect 80-', 'UU130429/5/18', {}, 'Recursively removing old shards', State.NOT_STARTED, 0, Display.DETERMINATE, 0, '', false, [], ''),
       }, '', State.NOT_STARTED, 0, Display.NONE, 0, '', false, [], ''),
-    }, 'PRIYANKA', State.RUNNING, 1471235000, Display.DETERMINATE, 63, '63%', false, [], 'DINOSAURS')
+    }, 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.', State.RUNNING, 1471235000, Display.DETERMINATE, 63, '63%', false, [], 'Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem.')
   };
 
   /*

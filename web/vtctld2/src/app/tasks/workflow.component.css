@@ -49,17 +49,6 @@ md-card h1 {
   margin: 2px;
 }
 
-.vt-workflow-not-started-dark {
-  background: #FFFFFF;
-}
-
-.vt-workflow-running-dark {
-  background-color: #009688;
-}
-
-.vt-workflow-done-dark {
-  background-color: #B2DFDB;
-}
 
 
 
@@ -86,6 +75,7 @@ md-card h1 {
 
 .vt-progress-bar {
   padding-bottom: 3px;
+  transform: translate(0px,-4px);
 }
 
 .vt-progress-msg-wrapper {
@@ -125,7 +115,7 @@ md-card h1 {
 .vt-pad-header {
   padding-bottom: 8px;
   padding-top: 8px;
-
+  background-color: #EEEEEE;
 }
 
 table {
@@ -140,4 +130,8 @@ table {
 
 .vt-fill-button {
   width: 100%;
+}
+
+md-icon {
+  transform: translate(0px, 6px);
 }

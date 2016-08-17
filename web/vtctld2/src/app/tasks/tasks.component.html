@@ -42,6 +42,9 @@
         <header class="vt-pad-header  {{getHeaderClass(workflows[workflowId].state)}}">
           <div class="vt-accordion-header vt-accordion-name-wrapper">
               <span class="vt-accordion-name">
+                <md-icon *ngIf="workflows[workflowId].isDone()">check</md-icon>
+                <md-icon *ngIf="workflows[workflowId].isRunning()">forward</md-icon>
+                <md-icon *ngIf="workflows[workflowId].isNotStarted()">remove</md-icon>
                 {{workflows[workflowId].name}}
               </span>
             </div>
