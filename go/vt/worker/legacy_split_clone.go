@@ -46,7 +46,6 @@ type LegacySplitCloneWorker struct {
 	strategy                *splitStrategy
 	sourceReaderCount       int
 	destinationPackCount    int
-	minTableSizeForSplit    uint64
 	destinationWriterCount  int
 	minHealthyRdonlyTablets int
 	maxTPS                  int64
@@ -89,7 +88,7 @@ type LegacySplitCloneWorker struct {
 }
 
 // NewLegacySplitCloneWorker returns a new LegacySplitCloneWorker object.
-func NewLegacySplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
+func NewLegacySplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
 	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
@@ -110,7 +109,6 @@ func NewLegacySplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard stri
 		strategy:                strategy,
 		sourceReaderCount:       sourceReaderCount,
 		destinationPackCount:    destinationPackCount,
-		minTableSizeForSplit:    minTableSizeForSplit,
 		destinationWriterCount:  destinationWriterCount,
 		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
 		maxTPS:                  maxTPS,
@@ -549,7 +547,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 			}
 			rowSplitter := NewRowSplitter(scw.destinationShards, keyResolver)
 
-			chunks, err := generateChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
+			chunks, err := generateChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.sourceReaderCount, defaultMinRowsPerChunk)
 			if err != nil {
 				return err
 			}

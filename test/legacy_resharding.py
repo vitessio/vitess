@@ -385,10 +385,6 @@ primary key (name)
                        shard_1_rdonly1.tablet_alias, keyspace_shard],
                       auto_log=True)
 
-    # the worker will do everything. We test with source_reader_count=10
-    # (down from default=20) as connection pool is not big enough for 20.
-    # min_table_size_for_split is set to 1 as to force a split even on the
-    # small table we have.
     # --max_tps is only specified to enable the throttler and ensure that the
     # code is executed. But the intent here is not to throttle the test, hence
     # the rate limit is set very high.
@@ -396,8 +392,6 @@ primary key (name)
                         '--command_display_interval', '10ms',
                         'LegacySplitClone',
                         '--exclude_tables', 'unrelated',
-                        '--source_reader_count', '10',
-                        '--min_table_size_for_split', '1',
                         '--min_healthy_rdonly_tablets', '1',
                         '--max_tps', '9999',
                         'test_keyspace/80-'],

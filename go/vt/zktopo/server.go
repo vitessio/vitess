@@ -115,3 +115,5 @@ func (zkts *Server) PruneActionLogs(zkActionLogPath string, keepCount int) (prun
 	}
 	return prunedCount, nil
 }
+
+var _ topo.Impl = (*Server)(nil) // compile-time interface check

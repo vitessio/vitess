@@ -314,6 +314,11 @@ func NewRowRouter(shardInfos []*topo.ShardInfo, keyResolver keyspaceIDResolver) 
 // Route returns which shard (specified by the index of the list of shards
 // passed in NewRowRouter) contains the given row.
 func (rr *RowRouter) Route(row []sqltypes.Value) (int, error) {
+	if len(rr.keyRanges) == 1 {
+		// Fast path when there is only one destination shard.
+		return 0, nil
+	}
+
 	k, err := rr.keyResolver.keyspaceID(row)
 	if err != nil {
 		return -1, err

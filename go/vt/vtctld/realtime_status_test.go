@@ -104,7 +104,10 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 func checkStats(realtimeStats *realtimeStats, tablet *testlib.FakeTablet, want *querypb.RealtimeStats) error {
 	deadline := time.Now().Add(time.Second * 5)
 	for time.Now().Before(deadline) {
-		result := realtimeStats.tabletStatsByAlias(tablet.Tablet.Alias)
+		result, err := realtimeStats.tabletStats(tablet.Tablet.Alias)
+		if err != nil {
+			continue
+		}
 		if reflect.DeepEqual(result, discovery.TabletStats{}) {
 			continue
 		}

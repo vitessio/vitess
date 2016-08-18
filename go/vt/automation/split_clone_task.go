@@ -29,6 +29,12 @@ func (t *SplitCloneTask) Run(parameters map[string]string) ([]*automationpb.Task
 	if excludeTables := parameters["exclude_tables"]; excludeTables != "" {
 		args = append(args, "--exclude_tables="+excludeTables)
 	}
+	if chunkCount := parameters["chunk_count"]; chunkCount != "" {
+		args = append(args, "--chunk_count="+chunkCount)
+	}
+	if minRowsPerChunk := parameters["min_rows_per_chunk"]; minRowsPerChunk != "" {
+		args = append(args, "--min_rows_per_chunk="+minRowsPerChunk)
+	}
 	if writeQueryMaxRows := parameters["write_query_max_rows"]; writeQueryMaxRows != "" {
 		args = append(args, "--write_query_max_rows="+writeQueryMaxRows)
 	}
@@ -56,5 +62,5 @@ func (t *SplitCloneTask) RequiredParameters() []string {
 
 // OptionalParameters is part of the Task interface.
 func (t *SplitCloneTask) OptionalParameters() []string {
-	return []string{"online", "offline", "exclude_tables", "write_query_max_rows", "write_query_max_size", "min_healthy_rdonly_tablets"}
+	return []string{"online", "offline", "exclude_tables", "chunk_count", "min_rows_per_chunk", "write_query_max_rows", "write_query_max_size", "min_healthy_rdonly_tablets"}
 }
