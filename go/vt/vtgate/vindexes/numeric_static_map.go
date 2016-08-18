@@ -14,10 +14,11 @@ import (
 	"strconv"
 )
 
-// Stores the mapping of keys
+// NumericLookupTable stores the mapping of keys.
 type NumericLookupTable map[uint64]uint64
 
-// Similar to vindex Numeric but first attempts a lookup via a json file
+// NumericStaticMap is similar to vindex Numeric but first attempts a lookup via
+// a JSON file.
 type NumericStaticMap struct {
 	name   string
 	lookup NumericLookupTable
