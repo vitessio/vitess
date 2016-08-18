@@ -17,7 +17,6 @@ import { ShardService } from '../api/shard.service';
 import { TabletService } from '../api/tablet.service';
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-shard-view',
   templateUrl: './shard.component.html',
   styleUrls: ['../styles/vt.style.css'],

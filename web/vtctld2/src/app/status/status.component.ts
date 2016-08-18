@@ -5,7 +5,6 @@ import { HeatmapComponent } from './heatmap.component';
 import { TabletStatusService } from '../api/tablet-status.service';
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-status',
   templateUrl: './status.component.html',
   styleUrls: [],

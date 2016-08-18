@@ -21,7 +21,6 @@ import { Proto } from '../shared/proto';
 import { ShardService } from '../api/shard.service';
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-dashboard',
   templateUrl: './dashboard.component.html',
   styleUrls: ['../styles/vt.style.css'],

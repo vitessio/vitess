@@ -4,7 +4,6 @@ import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
 import { MD_PROGRESS_BAR_DIRECTIVES } from '@angular2-material/progress-bar';
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-tasks',
   templateUrl: './tasks.component.html',
   styleUrls: ['./tasks.component.css'],
