@@ -41,6 +41,7 @@ func getTestSchema() map[string]*schema.Table {
 		int64Value(100),  /* DataLength */
 		int64Value(123),  /* IndexLength */
 		int64Value(456),  /* DataFree */
+		int64Value(457),  /* MaxDataLength */
 	)
 
 	result := make(map[string]*schema.Table)
