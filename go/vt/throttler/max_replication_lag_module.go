@@ -12,8 +12,10 @@ import (
 
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/discovery"
+	"github.com/youtube/vitess/go/vt/proto/throttlerdata"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 )
 
 type state int
@@ -47,6 +49,11 @@ type MaxReplicationLagModule struct {
 	// It is only accessed by the Go routine which runs ProcessRecords() and does
 	// not require locking.
 	config MaxReplicationLagModuleConfig
+
+	// initialMaxReplicationLagSec is the initial value of
+	// config.MaxReplicationLagSec with which the module was started. We remember
+	// it in case we need to reset the configuration.
+	initialMaxReplicationLagSec int64
 
 	// mutableConfigMu guards all fields in the group below.
 	mutableConfigMu sync.Mutex
@@ -100,6 +107,7 @@ func NewMaxReplicationLagModule(config MaxReplicationLagModuleConfig, actualRate
 	}
 
 	m := &MaxReplicationLagModule{
+		initialMaxReplicationLagSec: config.MaxReplicationLagSec,
 		// Register "config" for a future config update.
 		mutableConfig:      config,
 		applyMutableConfig: true,
@@ -142,6 +150,61 @@ func (m *MaxReplicationLagModule) MaxRate() int64 {
 	return m.rate.Get()
 }
 
+// applyLatestConfig checks if "mutableConfig" should be applied as the new
+// "config" and does so when necessary.
+func (m *MaxReplicationLagModule) applyLatestConfig() {
+	var config MaxReplicationLagModuleConfig
+	applyConfig := false
+
+	m.mutableConfigMu.Lock()
+	if m.applyMutableConfig {
+		config = m.mutableConfig
+		applyConfig = true
+		m.applyMutableConfig = false
+	}
+	m.mutableConfigMu.Unlock()
+
+	// No locking required here because this method is only called from the same
+	// Go routine as ProcessRecords() or the constructor.
+	if applyConfig {
+		m.config = config
+	}
+}
+
+func (m *MaxReplicationLagModule) getConfiguration() *throttlerdata.Configuration {
+	m.mutableConfigMu.Lock()
+	defer m.mutableConfigMu.Unlock()
+
+	configCopy := m.mutableConfig.Configuration
+	return &configCopy
+}
+
+func (m *MaxReplicationLagModule) updateConfiguration(configuration *throttlerdata.Configuration, copyZeroValues bool) error {
+	m.mutableConfigMu.Lock()
+	defer m.mutableConfigMu.Unlock()
+
+	newConfig := m.mutableConfig
+
+	if copyZeroValues {
+		newConfig.Configuration = *proto.Clone(configuration).(*throttlerdata.Configuration)
+	} else {
+		proto.Merge(&newConfig.Configuration, configuration)
+	}
+
+	if err := newConfig.Verify(); err != nil {
+		return err
+	}
+	m.mutableConfig = newConfig
+	return nil
+}
+
+func (m *MaxReplicationLagModule) resetConfiguration() {
+	m.mutableConfigMu.Lock()
+	defer m.mutableConfigMu.Unlock()
+
+	m.mutableConfig = NewMaxReplicationLagModuleConfig(m.initialMaxReplicationLagSec)
+}
+
 // RecordReplicationLag records the current replication lag for processing.
 func (m *MaxReplicationLagModule) RecordReplicationLag(t time.Time, ts *discovery.TabletStats) {
 	m.mutableConfigMu.Lock()
@@ -178,27 +241,6 @@ func (m *MaxReplicationLagModule) processRecord(lagRecord replicationLagRecord) 
 	}
 
 	m.recalculateRate(lagRecord)
-}
-
-// applyLatestConfig checks if "mutableConfig" should be applied as the new
-// "config" and does so when necessary.
-func (m *MaxReplicationLagModule) applyLatestConfig() {
-	var config MaxReplicationLagModuleConfig
-	applyConfig := false
-
-	m.mutableConfigMu.Lock()
-	if m.applyMutableConfig {
-		config = m.mutableConfig
-		applyConfig = true
-		m.applyMutableConfig = false
-	}
-	m.mutableConfigMu.Unlock()
-
-	// No locking required here because this method is only called from the same
-	// Go routine has ProcessRecords() or the constructor.
-	if applyConfig {
-		m.config = config
-	}
 }
 
 func (m *MaxReplicationLagModule) recalculateRate(lagRecordNow replicationLagRecord) {
