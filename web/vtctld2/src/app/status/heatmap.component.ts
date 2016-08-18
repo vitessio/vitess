@@ -1,3 +1,4 @@
+import { Component, Input, OnChanges, AfterViewInit, NgZone, OnInit  } from '@angular/core';
 import { Component, Input, AfterViewInit, NgZone, OnInit  } from '@angular/core';
 
 import { TabletStatusService } from '../api/tablet-status.service';
@@ -70,13 +71,8 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
   }
 
   ngAfterViewInit() {
-    this.drawHeatmap(this.metric);
-
-    let elem = <any>(document.getElementById(this.name));
-    elem.on('plotly_click', function(data){
       let x: number = data.points[0].x;
       let y: number = data.points[0].y;
-      let alias = this.aliases[y][x];
       // TODO (pkulshre): Revise this to display the popup such that it doesn't disappear
       // when heatmap is refreshed during polling.
       this.tabletService.getTabletHealth(alias.cell, alias.uid).subscribe( health => {

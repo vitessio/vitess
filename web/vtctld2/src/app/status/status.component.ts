@@ -21,10 +21,6 @@ export class StatusComponent implements OnInit {
 
   // Needed for the router.
   private sub: any;
-  metricKey = 'metric';
-  keyspaceKey = 'keyspace';
-  cellKey = 'cell';
-  typeKey = 'type';
 
   // Needed for the construction of the heatmap.
   // heatmaps is an array of heatmap structs.

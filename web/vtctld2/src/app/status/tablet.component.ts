@@ -23,12 +23,8 @@ export class TabletComponent implements OnInit {
   // parseData goes through the input TabletStats object and stores it to display.
   parseData() {
     // TODO(pkulshre): test/update this when backend JSON encoder changed.
-    let temp = { name: 'replication lag: ', value: this.data.Stats.secondsBehindMaster };
-    this.dataToDisplay.push(temp);
-    temp = { name: 'qps: ', value: this.data.Stats.qps };
-    this.dataToDisplay.push(temp);
-    temp = { name: 'Heath Error: ', value: this.data.Stats.healthError };
-    this.dataToDisplay.push(temp);
+    this.dataToDisplay.push({ name: 'replication lag: ', value: this.data.Stats.secondsBehindMaster });
+    this.dataToDisplay.push({ name: 'qps: ', value: this.data.Stats.qps });
+    this.dataToDisplay.push({ name: 'Health Error: ', value: this.data.Stats.healthError });
   }
 }
-
