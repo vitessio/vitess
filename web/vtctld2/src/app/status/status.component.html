@@ -10,13 +10,11 @@
 <!-- Metric selector -->
 <p-dropdown #metric (onChange)="handleMetricChange($event)" [options]="metrics" [(ngModel)]="selectedMetric"></p-dropdown>
 
-
 <!-- Wait until the heatmap data has been obtained from the service -->
-<vt-heatmap *ngIf="heatmapDataReady"
-  [data]="data"
-  [aliases]="aliases"
-  [xLabels]="xLabels"
-  [yLabels]="yLabels"
-  [metric]="metric"
->
-</vt-heatmap>
+<div *ngFor="let h of heatmaps">
+  <vt-heatmap *ngIf="heatmapDataReady"
+    [heatmap]="h"
+    [metric]="metric"
+  >
+  </vt-heatmap>
+</div>

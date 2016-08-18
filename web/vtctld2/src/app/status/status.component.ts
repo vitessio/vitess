@@ -24,17 +24,10 @@ export class StatusComponent implements OnInit {
 
   // Needed for the router.
   private sub: any;
-  metricKey = 'metric';
-  keyspaceKey = 'keyspace';
-  cellKey = 'cell';
-  typeKey = 'type';
 
   // Needed for the construction of the heatmap.
-  private data: number[][];
-  private aliases: any[][];
-  // yLabels is an array of structs with the cell and array of tabletTypes.
-  private yLabels: Array<any>;
-  private xLabels: Array<string>;
+  // heatmaps is an array of heatmap structs.
+  private heatmaps: any;
   private metric: string;
   private heatmapDataReady: boolean = false;
 
@@ -47,6 +40,10 @@ export class StatusComponent implements OnInit {
   selectedCell: string;
   selectedType: string;
   selectedMetric: string;
+  previousKeyspace: string;
+  previousCell: string;
+  previousType: string;
+  previousMetric: string;
 
   // Needed to keep track of which data is being polled.
   statusService: any;
@@ -103,21 +100,30 @@ export class StatusComponent implements OnInit {
         this.getTopologyInfo();
 
         // Setting the beginning values of each category. 
-        this.selectedKeyspace = params[this.keyspaceKey];
-        this.selectedCell = params[this.cellKey];
-        this.selectedType = params[this.typeKey];
-        this.selectedMetric = params[this.metricKey];
+        this.selectedKeyspace = params['keyspace'];
+        this.selectedCell = params['cell'];
+        this.selectedType = params['type'];
+        this.selectedMetric = params['metric'];
+        this.previousKeyspace = params['keyspace'];
+        this.previousCell = params['cell'];
+        this.previousType = params['type'];
+        this.previousMetric = params['metric'];
 
-        // Show deafult view if path was 'status/'
+
+        // Show default view if path was 'status/'
         if (this.selectedKeyspace == null && this.selectedCell == null && this.selectedType == null) {
           this.selectedKeyspace = 'all';
           this.selectedCell = 'all';
           this.selectedType = 'all';
           this.selectedMetric = 'healthy';
+          this.previousKeyspace = 'all';
+          this.previousCell = 'all';
+          this.previousType = 'all';
+          this.previousMetric = 'healthy';
           this.router.navigate(['/status'], this.getExtras());
         }
 
-        this.zone.run( () => {
+        this.zone.run(() => {
           this.getHeatmapData();
         });
     });
@@ -134,29 +140,37 @@ export class StatusComponent implements OnInit {
 
   // The next four functions route to a new page once the dropdown is changed.
   handleKeyspaceChange(e) {
-   this.zone.run( () => {
-     this.statusService.unsubscribe();
-     this.router.navigate(['/status'], this.getExtras());
-   });
+    if (this.previousKeyspace !== this.selectedKeyspace) {
+      this.reroute();
+    }
+    this.previousKeyspace = this.selectedKeyspace;
   }
 
   handleCellChange(e) {
-   this.zone.run( () => {
-     this.statusService.unsubscribe();
-     this.router.navigate(['/status'], this.getExtras());
-   });
+    if (this.previousCell !== this.selectedCell) {
+      this.reroute();
+    }
+    this.previousCell = this.selectedCell;
   }
 
   handleTypeChange(e) {
-   this.zone.run( () => {
-     this.statusService.unsubscribe();
-     this.router.navigate(['/status'], this.getExtras());
-   });
+    if (this.previousType !== this.selectedType) {
+      this.reroute();
+    }
+    this.previousType = this.selectedType;
   }
 
   handleMetricChange(e) {
-   this.zone.run( () => {
+    if (this.previousMetric !== this.selectedMetric) {
+      this.reroute();
+    }
+    this.previousMetric = this.selectedMetric;
+  }
+
+  reroute() {
+    this.zone.run(() => {
      this.statusService.unsubscribe();
+     this.heatmapDataReady = false;
      this.router.navigate(['/status'], this.getExtras());
    });
   }
@@ -164,21 +178,12 @@ export class StatusComponent implements OnInit {
   // Resets the heatmap data to new values when polling or when dropdown changes
   getHeatmapData() {
      // Subscribe to get updates every second.
-     if  (this.statusService !=  null) {
-      this.statusService.unsubscribe();
-     }
      this.statusService = this.tabletService.getTabletStats(this.selectedKeyspace,
-       this.selectedCell, this.selectedType, this.selectedMetric)
+     this.selectedCell, this.selectedType, this.selectedMetric)
        .subscribe(stats => {
-       this.data = stats.Data;
-       this.aliases = stats.Aliases;
-       this.yLabels = stats.Labels;
-       this.xLabels = [];
-       this.metric = this.selectedMetric;
-       for (let i = 0; i < stats.Data[0].length; i++) {
-         this.xLabels.push('' + i);
-       }
-       this.heatmapDataReady = true;
+         this.heatmaps = stats;
+         this.metric = this.selectedMetric;
+         this.heatmapDataReady = true;
      });
   }
 }

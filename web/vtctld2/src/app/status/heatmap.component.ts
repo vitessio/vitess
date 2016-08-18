@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, AfterViewInit, NgZone, OnInit  } from '@angular/core';
+import { Component, Input, AfterViewInit, NgZone, OnInit  } from '@angular/core';
 import { CORE_DIRECTIVES } from '@angular/common';
 
 import { TabletStatusService } from '../api/tablet-status.service';
@@ -19,18 +19,26 @@ declare var Plotly: any;
     ]
 })
 
-export class HeatmapComponent implements AfterViewInit, OnInit, OnChanges {
-  // Needed for the heatmap.
-  @Input() data: number[][];
-  @Input() aliases: any[][];
-  // yLabels is an array of objects each with label and nestedLabels
-  // each of which have a name and rowspan.
-  @Input() yLabels: Array<any>;
-  @Input() xLabels: Array<string>;
+export class HeatmapComponent implements AfterViewInit, OnInit {
+  // heatmap is a heatmap struct equivalent (defined in go/vt/vtctld/tablet_stats_cache.go)
+  @Input() heatmap: any;
   // metric needed to set the proper colorscale.
   @Input() metric: string;
-  plotlyMap: any;
+
+  // data holds the values for the heatmap to display.
+  data: number[][];
+  // aliases holds the alias references for each datapoint in the heatmap.
+  aliases: any[][];
+  // yLabels is an array of objects each with label and nestedLabels
+  // each of which have a name and a rowspan
+  yLabels: Array<any>;
+  // xLabels is an array with shard names as column labels.
+  xLabels: Array<string>;
+  // name is the keyspace name used as a unique ID for this heatmap.
   name: string;
+
+  // Other variables needed to draw the heatmap.
+  plotlyMap: any;
   first = true;
   heatmapHeight = 0;
   dataMin = 0;
@@ -54,50 +62,32 @@ export class HeatmapComponent implements AfterViewInit, OnInit, OnChanges {
   // getTotalRows returns the number of rows the heatmap should span.
   // getTotalRows returns the number of rows the entire heatmap should span.
   getTotalRows() {
-    if (this.yLabels == null) {
-    for (let yLabel of this.yLabels) {
-      height += yLabel.tabletTypes.length;
-      return this.data.length;
+    if (this.heatmap.YLabels == null) {
+      return this.heatmap.Data.length;
     }
-    return this.yLabels.reduce((a, b) => (a + b.Label.Rowspan), 0);
+    return this.heatmap.YLabels.reduce((a, b) => (a + b.Label.Rowspan), 0);
   }
 
-  // ngOnChanges is triggered when any input values are changed in status.component
-  // forcing the heatmap to be redrawn.
-  ngOnChanges(changes) {
-    // If this is the first time it's being rendered then no need to redraw.
-    if (this.first === true) {
-      return;
       // TODO(pkulshre): fix this when backend is generalized.
       return 1;
-    }
-  }
-
   ngOnInit() {
-    this.name = 'heatmap';
+    this.name = this.heatmap.Keyspace;
+    this.data = this.heatmap.Data;
+    this.aliases = this.heatmap.Aliases;
+    this.yLabels = this.heatmap.YLabels;
+    this.xLabels = this.heatmap.XLabels;
   }
 
   ngAfterViewInit() {
-    this.drawHeatmap(this.metric);
-
-    let elem = <any>(document.getElementById(this.name));
-    elem.on('plotly_click', function(data){
-      let y: number = data.points[0].x;
-      let x: number = data.points[0].y;
-      let alias = this.aliases[y][x];
+      // TODO (pkulshre): Revise this to display the popup such that it doesn't disappear
+      // when heatmap is refreshed during polling.
       this.tabletService.getTabletHealth(alias.cell, alias.uid).subscribe( health => {
-        this.popupTitle = '' + alias.Cell + '-' + alias.Uid;
-        this.popupData = health;
-        this.popupReady = true;
-        this.zone.run( () => { this.showPopup = true; } );
-      });
-    }.bind(this));
     this.first = false;
   }
 
   drawHeatmap() {
   closePopup() {
-    this.zone.run( () => { this.showPopup = false; } );
+    this.zone.run(() => { this.showPopup = false; });
     this.popupReady = false;
   }
   drawHeatmap() {
@@ -117,17 +107,9 @@ export class HeatmapComponent implements AfterViewInit, OnInit, OnChanges {
       this.dataMin = 0;
       this.dataMax = 3;
     } else {
-      let max = this.data.reduce(function(a, b) { return a.concat(b); })
-                     .reduce(function(a, b) {
-                        if (a > b) { return a; }
-                        return b;
-                      });
-      let percent = 0;
-      if (max === 0) {
-        percent = 1.0;
-      } else {
-        percent = 1 / max;
-      }
+      let max = this.data.reduce((a, b) => a.concat(b))
+                         .reduce((a, b) => (a > b) ? a : b);
+      let percent = (max === 0) ? 1.0 : 1 / max;
       this.colorscaleValue = [
         [0.0, '#000000'],
         [percent, '#F7EEDE'],
