@@ -142,6 +142,27 @@ func (m *MaxReplicationLagModule) MaxRate() int64 {
 	return m.rate.Get()
 }
 
+// applyLatestConfig checks if "mutableConfig" should be applied as the new
+// "config" and does so when necessary.
+func (m *MaxReplicationLagModule) applyLatestConfig() {
+	var config MaxReplicationLagModuleConfig
+	applyConfig := false
+
+	m.mutableConfigMu.Lock()
+	if m.applyMutableConfig {
+		config = m.mutableConfig
+		applyConfig = true
+		m.applyMutableConfig = false
+	}
+	m.mutableConfigMu.Unlock()
+
+	// No locking required here because this method is only called from the same
+	// Go routine as ProcessRecords() or the constructor.
+	if applyConfig {
+		m.config = config
+	}
+}
+
 // RecordReplicationLag records the current replication lag for processing.
 func (m *MaxReplicationLagModule) RecordReplicationLag(t time.Time, ts *discovery.TabletStats) {
 	m.mutableConfigMu.Lock()
@@ -178,27 +199,6 @@ func (m *MaxReplicationLagModule) processRecord(lagRecord replicationLagRecord) 
 	}
 
 	m.recalculateRate(lagRecord)
-}
-
-// applyLatestConfig checks if "mutableConfig" should be applied as the new
-// "config" and does so when necessary.
-func (m *MaxReplicationLagModule) applyLatestConfig() {
-	var config MaxReplicationLagModuleConfig
-	applyConfig := false
-
-	m.mutableConfigMu.Lock()
-	if m.applyMutableConfig {
-		config = m.mutableConfig
-		applyConfig = true
-		m.applyMutableConfig = false
-	}
-	m.mutableConfigMu.Unlock()
-
-	// No locking required here because this method is only called from the same
-	// Go routine has ProcessRecords() or the constructor.
-	if applyConfig {
-		m.config = config
-	}
 }
 
 func (m *MaxReplicationLagModule) recalculateRate(lagRecordNow replicationLagRecord) {
