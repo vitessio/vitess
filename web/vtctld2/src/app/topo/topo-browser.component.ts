@@ -9,7 +9,6 @@ import { TopoDataService } from '../api/topo-data.service';
 import { BreadcrumbsComponent } from '../shared/breadcrumbs.component';
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-topo',
   templateUrl: './topo-browser.component.html',
   styleUrls: ['./topo-browser.component.css'],

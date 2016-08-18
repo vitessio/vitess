@@ -4,7 +4,6 @@ import { CORE_DIRECTIVES } from '@angular/common';
 import { HeatmapComponent } from './heatmap.component';
 
 @Component({
-  moduleId: module.id,
   selector: 'status',
   templateUrl: './status.component.html',
   styleUrls: [],
