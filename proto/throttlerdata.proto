@@ -80,3 +80,48 @@ message Configuration {
 	// that all replicas were ignored in a row.
 	int32 ignore_n_slowest_replicas = 8;
 }
+
+// GetConfigurationRequest is the payload for the GetConfiguration RPC.
+message GetConfigurationRequest {
+  // throttler_name specifies which throttler to select. If empty, all active
+  // throttlers will be selected.
+  string throttler_name = 1;
+}
+
+// GetConfigurationResponse is returned by the GetConfiguration RPC.
+message GetConfigurationResponse {
+  // max_rates returns the configurations for each throttler.
+  // It's keyed by the throttler name.
+  map<string, Configuration> configurations = 1;
+}
+
+// UpdateConfigurationRequest is the payload for the UpdateConfiguration RPC.
+message UpdateConfigurationRequest {
+  // throttler_name specifies which throttler to update. If empty, all active
+  // throttlers will be updated.
+  string throttler_name = 1;
+  // configuration is the new (partial) configuration.
+  Configuration configuration = 2;
+  // copy_zero_values specifies whether fields with zero values should be copied
+  // as well.
+  bool copy_zero_values = 3;
+}
+
+// UpdateConfigurationResponse is returned by the UpdateConfiguration RPC.
+message UpdateConfigurationResponse {
+  // names is the list of throttler names which were updated.
+  repeated string names = 1;
+}
+
+// ResetConfigurationRequest is the payload for the ResetConfiguration RPC.
+message ResetConfigurationRequest {
+  // throttler_name specifies which throttler to reset. If empty, all active
+  // throttlers will be reset.
+  string throttler_name = 1;
+}
+
+// ResetConfigurationResponse is returned by the ResetConfiguration RPC.
+message ResetConfigurationResponse {
+  // names is the list of throttler names which were updated.
+  repeated string names = 1;
+}
