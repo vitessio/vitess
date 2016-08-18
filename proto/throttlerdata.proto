@@ -26,11 +26,10 @@ message SetMaxRateResponse {
   repeated string names = 1;
 }
 
-// MaxReplicationLagModuleConfig holds the configuration parameters
-// for the MaxReplicationLagModule which allows to adaptively
-// adjust the throttling rate based on the observed replication lag
-// across all replicas.
-message MaxReplicationLagModuleConfig {
+// Configuration holds the configuration parameters for the
+// MaxReplicationLagModule which adaptively adjusts the throttling rate based on
+// the observed replication lag across all replicas.
+message Configuration {
 	// target_replication_lag_sec is the replication lag (in seconds) the
 	// MaxReplicationLagModule tries to aim for.
 	// If it is within the target, it tries to increase the throttler
