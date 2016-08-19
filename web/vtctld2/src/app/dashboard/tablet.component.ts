@@ -20,7 +20,6 @@ import { TabletService } from '../api/tablet.service';
 import { VtctlService } from '../api/vtctl.service';
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-tablet-view',
   templateUrl: './tablet.component.html',
   styleUrls: [

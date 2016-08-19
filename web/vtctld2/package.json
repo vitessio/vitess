@@ -44,7 +44,7 @@
   "devDependencies": {
     "@types/jasmine": "^2.2.30",
     "@types/protractor": "^1.5.16",
-    "angular-cli": "1.0.0-beta.11-webpack.2",
+    "angular-cli": "^1.0.0-beta.11-webpack.2",
     "codelyzer": "0.0.26",
     "jasmine-core": "2.4.1",
     "jasmine-spec-reporter": "2.5.0",
