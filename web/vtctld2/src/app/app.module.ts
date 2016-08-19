@@ -9,7 +9,7 @@ import { SchemaComponent } from './schema/schema.component';
 import { ShardComponent } from './dashboard/shard.component';
 import { StatusComponent } from './status/status.component';
 import { TopoBrowserComponent } from './topo/topo-browser.component';
-import { TasksComponent } from './tasks/tasks.component';
+import { TasksComponent } from './workflows/tasks.component';
 import { APP_ROUTER_PROVIDERS, routing } from './app.routes';
 
 import { FormsModule } from '@angular/forms';

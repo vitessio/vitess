@@ -8,15 +8,8 @@
       <a md-list-item [routerLink]="['/dashboard']"><md-icon>dashboard</md-icon> Dashboard</a>
       <a md-list-item [routerLink]="['/status']"><md-icon>timeline</md-icon> Real-time Status</a>
       <a md-list-item [routerLink]="['/schema']"><md-icon>storage</md-icon> Schema Manager</a>
-      <a md-list-item [routerLink]="['/topo']">
-        <md-icon>folder</md-icon> Topology Browser
-      </a>
-      <a md-list-item [routerLink]="['/tasks']">
-        <span style="color:#888;font-size:150%;width:20%">
-          <strong>3</strong>
-        </span> 
-        Tasks
-      </a>
+      <a md-list-item [routerLink]="['/topo']"><md-icon>folder</md-icon> Topology Browser</a>
+      <a md-list-item [routerLink]="['/tasks']"><md-icon>list</md-icon> Workflows</a>
     </md-nav-list>
   </md-sidenav>
   <router-outlet></router-outlet>

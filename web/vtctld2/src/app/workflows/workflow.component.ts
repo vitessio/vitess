@@ -1,5 +1,5 @@
 import { Component, Input } from '@angular/core';
-import { Workflow, ActionStyle } from './workflow';
+import { Node, ActionStyle } from './node';
 
 import {Accordion, AccordionTab, Header} from 'primeng/primeng';
 
@@ -12,7 +12,7 @@ import {Accordion, AccordionTab, Header} from 'primeng/primeng';
 })
 
 export class WorkflowComponent {
-  @Input() workflow: Workflow;
+  @Input() workflow: Node;
 
   console() {
     console.log(Object.keys(this.workflow));

@@ -1,6 +1,6 @@
 export const enum ActionState {
   ENABLED,
-  DISABLED
+  DISABLED,
 }
 
 export const enum ActionStyle {
@@ -64,7 +64,7 @@ export const enum Display { // Only relevant if State is RUNNING.
   NONE          // Even if Display is NONE progressMsg will still be shown.
 }
 
-export class Workflow {
+export class Node {
   public name: string;
   public path: string; // Path to element Ex, “GrandparentID/ParentId/ID”.
   public children: any[];
@@ -93,10 +93,6 @@ export class Workflow {
     this.message = message;
     this.disabled = disabled;
     this.actions = actions;
-  }
-
-  public isWorkFlow(): boolean {
-    return this.children.length > 0;
   }
 
   public isRoot(): boolean {
