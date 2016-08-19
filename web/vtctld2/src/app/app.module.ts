@@ -1,7 +1,7 @@
 import { BrowserModule } from '@angular/platform-browser';
 import { NgModule, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
-import { FormsModule } from '@angular/forms'
-import { HttpModule } from '@angular/http'
+import { FormsModule } from '@angular/forms';
+import { HttpModule } from '@angular/http';
 
 import { AppComponent } from './app.component';
 import { DashboardComponent } from './dashboard/dashboard.component';
@@ -17,6 +17,9 @@ import { MdButtonModule } from '@angular2-material/button';
 import { MdRippleModule } from '@angular2-material/core/ripple/ripple';
 
 import { PolymerElement } from '@vaadin/angular2-polymer';
+
+import { KeyspaceService } from './api/keyspace.service'
+
 
 const PolymerComponents = [
   PolymerElement('paper-dialog'),
@@ -45,7 +48,7 @@ const PolymerComponents = [
     MdRippleModule,
     routing,
   ],
-  providers: [APP_ROUTER_PROVIDERS],
+  providers: [APP_ROUTER_PROVIDERS, KeyspaceService],
   entryComponents: [AppComponent],
   bootstrap: [AppComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],

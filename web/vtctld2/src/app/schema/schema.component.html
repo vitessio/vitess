@@ -1,1 +1,8 @@
-<h1>SCHEMA</h1>
+<h1>Schema Manager</h1>
+
+<p-dropdown [options]="keyspaces" [(ngModel)]="selectedKeyspace" (onChange)="getShards(selectedKeyspace)"></p-dropdown>
+<p-dropdown [options]="shards" [(ngModel)]="selectedShard"></p-dropdown>
+<p-dropdown [options]="tabletTypes" [(ngModel)]="selectedTabletType"></p-dropdown>
+
+<h2> Command: </h2>
+{{selectedKeyspace}}/{{selectedShard}}/{{selectedTabletType}}
