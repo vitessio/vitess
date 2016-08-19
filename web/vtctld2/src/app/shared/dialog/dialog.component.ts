@@ -7,15 +7,12 @@ import { MD_INPUT_DIRECTIVES } from '@angular2-material/input';
 import { MD_PROGRESS_BAR_DIRECTIVES } from '@angular2-material/progress-bar';
 import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
 
-import { PolymerElement } from '@vaadin/angular2-polymer';
-
 import { DialogContent } from './dialog-content';
 import { DialogSettings } from './dialog-settings';
 import { KeyspaceService } from '../../api/keyspace.service';
 import { TabletService } from '../../api/tablet.service';
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-dialog',
   templateUrl: './dialog.component.html',
   styleUrls: ['./dialog.component.css', '../../styles/vt.style.css'],
@@ -30,9 +27,6 @@ import { TabletService } from '../../api/tablet.service';
     MD_CHECKBOX_DIRECTIVES,
     MD_INPUT_DIRECTIVES,
     MD_BUTTON_DIRECTIVES,
-    PolymerElement('paper-item'),
-    PolymerElement('paper-listbox'),
-    PolymerElement('paper-dropdown-menu')
   ],
 })
 export class DialogComponent implements OnInit {

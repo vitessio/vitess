@@ -22,11 +22,29 @@ func (t *VerticalSplitCloneTask) Run(parameters map[string]string) ([]*automatio
 	//                        '--destination_writer_count', '1',
 	args := []string{"VerticalSplitClone"}
 	args = append(args, "--tables="+parameters["tables"])
-	if destinationPackCount := parameters["destination_pack_count"]; destinationPackCount != "" {
-		args = append(args, "--destination_pack_count="+destinationPackCount)
+	if online := parameters["online"]; online != "" {
+		args = append(args, "--online="+online)
+	}
+	if offline := parameters["offline"]; offline != "" {
+		args = append(args, "--offline="+offline)
+	}
+	if chunkCount := parameters["chunk_count"]; chunkCount != "" {
+		args = append(args, "--chunk_count="+chunkCount)
+	}
+	if minRowsPerChunk := parameters["min_rows_per_chunk"]; minRowsPerChunk != "" {
+		args = append(args, "--min_rows_per_chunk="+minRowsPerChunk)
+	}
+	if writeQueryMaxRows := parameters["write_query_max_rows"]; writeQueryMaxRows != "" {
+		args = append(args, "--write_query_max_rows="+writeQueryMaxRows)
+	}
+	if writeQueryMaxSize := parameters["write_query_max_size"]; writeQueryMaxSize != "" {
+		args = append(args, "--write_query_max_size="+writeQueryMaxSize)
 	}
 	if minHealthyRdonlyTablets := parameters["min_healthy_rdonly_tablets"]; minHealthyRdonlyTablets != "" {
 		args = append(args, "--min_healthy_rdonly_tablets="+minHealthyRdonlyTablets)
+	}
+	if maxTPS := parameters["max_tps"]; maxTPS != "" {
+		args = append(args, "--max_tps="+maxTPS)
 	}
 	args = append(args, topoproto.KeyspaceShardString(parameters["dest_keyspace"], parameters["shard"]))
 	output, err := ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], args)
@@ -46,5 +64,5 @@ func (t *VerticalSplitCloneTask) RequiredParameters() []string {
 
 // OptionalParameters is part of the Task interface.
 func (t *VerticalSplitCloneTask) OptionalParameters() []string {
-	return []string{"destination_pack_count", "min_healthy_rdonly_tablets"}
+	return []string{"online", "offline", "chunk_count", "min_rows_per_chunk", "write_query_max_rows", "write_query_max_size", "min_healthy_rdonly_tablets", "max_tps"}
 }

@@ -12,7 +12,7 @@ import (
 func TestThrottle_NoBurstDueToLateStart(t *testing.T) {
 	// Within a request interval, there must be one request at most.
 	// Unused request intervals e.g. due to a late start, cannot be used.
-	tt := newThreadThrottler(0)
+	tt := newThreadThrottler(0, newAggregatedIntervalHistory(1, 1*time.Second, 1))
 	// Two request intervals (chunks) in this second: [0, 500 ms), [500 ms, 1 s)
 	tt.setMaxRate(2)
 	// First request interval is unused. 1 query out of 2 QPS is wasted.
@@ -35,7 +35,7 @@ func TestThrottle_BurstsForHighQPSAllowed(t *testing.T) {
 	// the user might miss many of their request intervals and won't be able
 	// to achieve the configured QPS rate. For example, at 10k QPS, the user
 	// must not miss any of the 100 us request intervals to not waste capacity.
-	tt := newThreadThrottler(0)
+	tt := newThreadThrottler(0, newAggregatedIntervalHistory(1, 1*time.Second, 1))
 	qps := 10 * 1000
 	tt.setMaxRate(int64(qps))
 	requestInterval := 100 * time.Microsecond
@@ -55,7 +55,7 @@ func TestThrottle_BurstsForHighQPSAllowed(t *testing.T) {
 func TestThrottle_RateIncreaseDoesNotBurst(t *testing.T) {
 	// If we're within a second, a rate increase won't apply retroactively.
 	// This way we prevent a burst of requests at the end of the second.
-	tt := newThreadThrottler(0)
+	tt := newThreadThrottler(0, newAggregatedIntervalHistory(1, 1*time.Second, 1))
 	tt.setMaxRate(2)
 	// 1st request.
 	if gotBackoff := tt.throttle(sinceZero(0 * time.Millisecond)); gotBackoff != NotThrottled {

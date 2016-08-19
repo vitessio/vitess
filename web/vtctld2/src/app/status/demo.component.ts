@@ -1,21 +1,15 @@
 import { Component, OnInit } from '@angular/core';
 import { CORE_DIRECTIVES } from '@angular/common';
 
-import { PolymerElement } from '@vaadin/angular2-polymer';
-
 import { HeatmapComponent } from './heatmap.component';
 
 @Component({
-  moduleId: module.id,
   selector: 'template-view',
   templateUrl: './templateView.component.html',
   styleUrls: [],
   directives: [
     CORE_DIRECTIVES,
-    PolymerElement('paper-dropdown-menu'),
-    PolymerElement('paper-listbox'),
-    PolymerElement('paper-item'),
-    HeatmapComponent
+    HeatmapComponent,
   ]
 })
 

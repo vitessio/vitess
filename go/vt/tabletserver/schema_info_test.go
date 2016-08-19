@@ -436,6 +436,7 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	dl1 := tableInfo.DataLength
 	il1 := tableInfo.IndexLength
 	df1 := tableInfo.DataFree
+	mdl1 := tableInfo.MaxDataLength
 	// Update existing table with new stats.
 	db.AddQuery(baseShowTables, &sqltypes.Result{
 		RowsAffected: 1,
@@ -451,7 +452,8 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	dl2 := tableInfo.DataLength
 	il2 := tableInfo.IndexLength
 	df2 := tableInfo.DataFree
-	if tr1 == tr2 || dl1 == dl2 || il1 == il2 || df1 == df2 {
+	mdl2 := tableInfo.MaxDataLength
+	if tr1 == tr2 || dl1 == dl2 || il1 == il2 || df1 == df2 || mdl1 == mdl2 {
 		t.Fatalf("MysqlStats() results failed to change between queries. ")
 	}
 }
@@ -511,6 +513,7 @@ func createTestTableBaseShowTable(tableName string) []sqltypes.Value {
 		sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
 		sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
 		sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
 	}
 }
 
@@ -524,6 +527,7 @@ func createTestTableUpdatedStats(tableName string) []sqltypes.Value {
 		sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
 		sqltypes.MakeTrusted(sqltypes.Int32, []byte("6")),
 		sqltypes.MakeTrusted(sqltypes.Int32, []byte("7")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("8")),
 	}
 }
 
@@ -583,6 +587,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
 				},
 				{
 					sqltypes.MakeString([]byte("test_table_02")),
@@ -593,6 +598,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
 				},
 				{
 					sqltypes.MakeString([]byte("test_table_03")),
@@ -603,6 +609,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
 				},
 			},
 		},

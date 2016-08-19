@@ -12,18 +12,30 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
+// Note that definitions of local_metadata and shard_metadata should be the same
+// as in testing which is defined in config/init_db.sql.
 const sqlCreateLocalMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.local_metadata (
   name VARCHAR(255) NOT NULL,
   value VARCHAR(255) NOT NULL,
   PRIMARY KEY (name)
   ) ENGINE=InnoDB`
+const sqlCreateShardMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.shard_metadata (
+  name VARCHAR(255) NOT NULL,
+  value MEDIUMBLOB NOT NULL,
+  PRIMARY KEY (name)
+  ) ENGINE=InnoDB`
 
-// populateLocalMetadata creates and fills the _vt.local_metadata table,
-// which is a per-tablet table that is never replicated. This allows queries
+// populateMetadataTables creates and fills the _vt.local_metadata table and
+// creates _vt.shard_metadata table. _vt.local_metadata table is
+// a per-tablet table that is never replicated. This allows queries
 // against local_metadata to return different values on different tablets,
 // which is used for communicating between Vitess and MySQL-level tools like
 // Orchestrator (http://github.com/outbrain/orchestrator).
-func populateLocalMetadata(mysqld MysqlDaemon, localMetadata map[string]string) error {
+// _vt.shard_metadata is a replicated table with per-shard information, but it's
+// created here to make it easier to create it on databases that were running
+// old version of Vitess, or databases that are getting converted to run under
+// Vitess.
+func populateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string) error {
 	log.Infof("Populating _vt.local_metadata table...")
 
 	// Get a non-pooled DBA connection.
@@ -46,7 +58,11 @@ func populateLocalMetadata(mysqld MysqlDaemon, localMetadata map[string]string) 
 	if _, err := conn.ExecuteFetch(sqlCreateLocalMetadataTable, 0, false); err != nil {
 		return err
 	}
+	if _, err := conn.ExecuteFetch(sqlCreateShardMetadataTable, 0, false); err != nil {
+		return err
+	}
 
+	// Populate local_metadata from the passed list of values.
 	if _, err := conn.ExecuteFetch("BEGIN", 0, false); err != nil {
 		return err
 	}

@@ -21,7 +21,6 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/throttler"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -47,7 +46,6 @@ type LegacySplitCloneWorker struct {
 	strategy                *splitStrategy
 	sourceReaderCount       int
 	destinationPackCount    int
-	minTableSizeForSplit    uint64
 	destinationWriterCount  int
 	minHealthyRdonlyTablets int
 	maxTPS                  int64
@@ -90,7 +88,7 @@ type LegacySplitCloneWorker struct {
 }
 
 // NewLegacySplitCloneWorker returns a new LegacySplitCloneWorker object.
-func NewLegacySplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
+func NewLegacySplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
 	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
@@ -111,7 +109,6 @@ func NewLegacySplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard stri
 		strategy:                strategy,
 		sourceReaderCount:       sourceReaderCount,
 		destinationPackCount:    destinationPackCount,
-		minTableSizeForSplit:    minTableSizeForSplit,
 		destinationWriterCount:  destinationWriterCount,
 		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
 		maxTPS:                  maxTPS,
@@ -451,13 +448,18 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 	// in each source shard for each table to be about the same
 	// (rowCount is used to estimate an ETA)
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, scw.sourceAliases[0], nil, scw.excludeTables, true)
+	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, scw.sourceAliases[0], nil, scw.excludeTables, false /* includeViews */)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot get schema from source %v: %v", topoproto.TabletAliasString(scw.sourceAliases[0]), err)
 	}
 	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
 		return fmt.Errorf("no tables matching the table filter in tablet %v", topoproto.TabletAliasString(scw.sourceAliases[0]))
+	}
+	for _, td := range sourceSchemaDefinition.TableDefinitions {
+		if len(td.Columns) == 0 {
+			return fmt.Errorf("schema for table %v has no columns", td.Name)
+		}
 	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
 	scw.tableStatusList.initialize(sourceSchemaDefinition)
@@ -531,10 +533,6 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 	for shardIndex := range scw.sourceShards {
 		sema := sync2.NewSemaphore(scw.sourceReaderCount, 0)
 		for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
-			if td.Type == tmutils.TableView {
-				continue
-			}
-
 			var keyResolver keyspaceIDResolver
 			if *useV3ReshardingMode {
 				keyResolver, err = newV3ResolverFromTableDefinition(keyspaceSchema, td)
@@ -549,7 +547,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 			}
 			rowSplitter := NewRowSplitter(scw.destinationShards, keyResolver)
 
-			chunks, err := generateChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
+			chunks, err := generateChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.sourceReaderCount, defaultMinRowsPerChunk)
 			if err != nil {
 				return err
 			}
@@ -688,7 +686,7 @@ func (scw *LegacySplitCloneWorker) processData(ctx context.Context, dbNames []st
 	// different dbName.
 	baseCmds := make([]string, len(dbNames))
 	for i, dbName := range dbNames {
-		baseCmds[i] = "INSERT INTO `" + dbName + "`." + td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
+		baseCmds[i] = "INSERT INTO " + escape(dbName) + "." + escape(td.Name) + " (" + strings.Join(escapeAll(td.Columns), ", ") + ") VALUES "
 	}
 	sr := rowSplitter.StartSplit()
 	packCount := 0

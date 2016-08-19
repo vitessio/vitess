@@ -25,6 +25,7 @@ var (
 			<th>DataLength</th>
 			<th>IndexLength</th>
 			<th>DataFree</th>
+			<th>MaxDataLength</th>
 		</tr>
 	`)
 	schemazTmpl = template.Must(template.New("example").Parse(`
@@ -37,6 +38,7 @@ var (
 			<td>{{.DataLength.Get}}</td>
 			<td>{{.IndexLength.Get}}</td>
 			<td>{{.DataFree.Get}}</td>
+			<td>{{.MaxDataLength.Get}}</td>
 		</tr>{{end}}
 	`))
 )

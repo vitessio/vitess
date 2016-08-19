@@ -10,8 +10,6 @@ import { MD_PROGRESS_BAR_DIRECTIVES } from '@angular2-material/progress-bar';
 
 import { Observable } from 'rxjs/Observable';
 
-import { PolymerElement } from '@vaadin/angular2-polymer';
-
 import { AddButtonComponent } from '../shared/add-button.component';
 import { DialogComponent } from '../shared/dialog/dialog.component';
 import { DialogContent } from '../shared/dialog/dialog-content';
@@ -23,7 +21,6 @@ import { Proto } from '../shared/proto';
 import { ShardService } from '../api/shard.service';
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-dashboard',
   templateUrl: './dashboard.component.html',
   styleUrls: ['../styles/vt.style.css'],
@@ -39,7 +36,6 @@ import { ShardService } from '../api/shard.service';
     MD_INPUT_DIRECTIVES,
     MD_BUTTON_DIRECTIVES,
     MD_LIST_DIRECTIVES,
-    PolymerElement('paper-dialog'),
     DialogComponent,
     AddButtonComponent],
 })

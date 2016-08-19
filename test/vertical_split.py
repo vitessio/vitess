@@ -390,8 +390,6 @@ index by_msg (msg)
         'unexpected errors for VtgateApiErrorCounts inside %s' % str(v))
 
   def test_vertical_split(self):
-    # min_table_size_for_split is set to 1 as to force a split even on the
-    # small table we have.
     utils.run_vtctl(['CopySchemaShard', '--tables', 'moving.*,view1',
                      source_rdonly1.tablet_alias, 'destination_keyspace/0'],
                     auto_log=True)
@@ -400,7 +398,8 @@ index by_msg (msg)
                         '--command_display_interval', '10ms',
                         'VerticalSplitClone',
                         '--tables', 'moving.*,view1',
-                        '--min_table_size_for_split', '1',
+                        '--chunk_count', '10',
+                        '--min_rows_per_chunk', '1',
                         '--min_healthy_rdonly_tablets', '1',
                         'destination_keyspace/0'],
                        auto_log=True)

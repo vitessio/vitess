@@ -97,4 +97,10 @@ func TopoServerTestSuite(t *testing.T, factory func() topo.Impl) {
 	ts = factory()
 	checkElection(t, ts)
 	ts.Close()
+
+	t.Log("=== checkWatch")
+	ts = factory()
+	checkWatch(t, ts)
+	checkWatchInterrupt(t, ts)
+	ts.Close()
 }

@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/youtube/vitess/go/vt/proto/throttlerdata"
+
 	"golang.org/x/net/context"
 )
 
@@ -25,7 +27,26 @@ type Client interface {
 
 	// SetMaxRate allows to change the current max rate for all throttlers
 	// of the process.
+	// It returns the names of the updated throttlers.
 	SetMaxRate(ctx context.Context, rate int64) ([]string, error)
+
+	// GetConfiguration returns the configuration of the MaxReplicationlag module
+	// for the given throttler or all throttlers if "throttlerName" is empty.
+	GetConfiguration(ctx context.Context, throttlerName string) (map[string]*throttlerdata.Configuration, error)
+
+	// UpdateConfiguration (partially) updates the configuration of the
+	// MaxReplicationlag module for the given throttler or all throttlers if
+	// "throttlerName" is empty.
+	// If "copyZeroValues" is true, fields with zero values will be copied
+	// as well.
+	// The function returns the names of the updated throttlers.
+	UpdateConfiguration(ctx context.Context, throttlerName string, configuration *throttlerdata.Configuration, copyZeroValues bool) ([]string, error)
+
+	// ResetConfiguration resets the configuration of the MaxReplicationlag module
+	// to the initial configuration for the given throttler or all throttlers if
+	// "throttlerName" is empty.
+	// The function returns the names of the updated throttlers.
+	ResetConfiguration(ctx context.Context, throttlerName string) ([]string, error)
 
 	// Close will terminate the connection and free resources.
 	Close()
