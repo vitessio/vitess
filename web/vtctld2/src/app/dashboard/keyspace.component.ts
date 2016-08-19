@@ -22,7 +22,6 @@ import { ShardService } from '../api/shard.service';
 import { VtctlService } from '../api/vtctl.service';
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-keyspace-view',
   templateUrl: './keyspace.component.html',
   styleUrls: ['../styles/vt.style.css'],

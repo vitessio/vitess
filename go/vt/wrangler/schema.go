@@ -15,6 +15,7 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -254,6 +255,11 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 		return err
 	}
 
+	err = wr.copyShardMetadata(ctx, sourceTabletAlias, destShardInfo.MasterAlias)
+	if err != nil {
+		return err
+	}
+
 	diffs, err := wr.compareSchemas(ctx, sourceTabletAlias, destShardInfo.MasterAlias, tables, excludeTables, includeViews)
 	if err != nil {
 		return fmt.Errorf("CopySchemaShard failed because schemas could not be compared initially: %v", err)
@@ -275,7 +281,10 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	for i, sqlLine := range createSQL {
 		err = wr.applySQLShard(ctx, destTabletInfo, sqlLine, i == len(createSQL)-1)
 		if err != nil {
-			return err
+			return fmt.Errorf("creating a table failed."+
+				" Most likely some tables already exist on the destination and differ from the source."+
+				" Please remove all to be copied tables from the destination manually and run this command again."+
+				" Full error: %v", err)
 		}
 	}
 
@@ -303,6 +312,43 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	reloadCtx, cancel := context.WithTimeout(ctx, waitSlaveTimeout)
 	defer cancel()
 	wr.ReloadSchemaShard(reloadCtx, destKeyspace, destShard, destMasterPos)
+	return nil
+}
+
+// copyShardMetadata copies contents of _vt.shard_metadata table from the source
+// tablet to the destination tablet. It's assumed that destination tablet is a
+// master and binlogging is not turned off when INSERT statements are executed.
+func (wr *Wrangler) copyShardMetadata(ctx context.Context, srcTabletAlias *topodatapb.TabletAlias, destTabletAlias *topodatapb.TabletAlias) error {
+	presenceResult, err := wr.ExecuteFetchAsDba(ctx, srcTabletAlias, "SELECT 1 FROM information_schema.tables WHERE table_schema = '_vt' AND table_name = 'shard_metadata'", 1, false, false)
+	if err != nil {
+		return err
+	}
+	if len(presenceResult.Rows) == 0 {
+		log.Infof("_vt.shard_metadata doesn't exist on the source tablet %v, skipping its copy.", topoproto.TabletAliasString(srcTabletAlias))
+		return nil
+	}
+
+	dataProto, err := wr.ExecuteFetchAsDba(ctx, srcTabletAlias, "SELECT name, value FROM _vt.shard_metadata", 100, false, false)
+	if err != nil {
+		return err
+	}
+	data := sqltypes.Proto3ToResult(dataProto)
+	for _, row := range data.Rows {
+		name := row[0]
+		value := row[1]
+		queryBuf := bytes.Buffer{}
+		queryBuf.WriteString("INSERT INTO _vt.shard_metadata (name, value) VALUES (")
+		name.EncodeSQL(&queryBuf)
+		queryBuf.WriteByte(',')
+		value.EncodeSQL(&queryBuf)
+		queryBuf.WriteString(") ON DUPLICATE KEY UPDATE value = ")
+		value.EncodeSQL(&queryBuf)
+
+		_, err := wr.ExecuteFetchAsDba(ctx, destTabletAlias, queryBuf.String(), 0, false, false)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

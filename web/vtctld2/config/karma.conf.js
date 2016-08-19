@@ -4,10 +4,12 @@
 module.exports = function (config) {
   config.set({
     basePath: '..',
-    frameworks: ['jasmine'],
+    frameworks: ['jasmine', 'angular-cli'],
     plugins: [
       require('karma-jasmine'),
-      require('karma-chrome-launcher')
+      require('karma-chrome-launcher'),
+      require('karma-remap-istanbul'),
+      require('angular-cli/plugins/karma')
     ],
     customLaunchers: {
       // chrome setup for travis CI using chromium
@@ -17,25 +19,18 @@ module.exports = function (config) {
       }
     },
     files: [
-      { pattern: 'dist/vendor/es6-shim/es6-shim.js', included: true, watched: false },
-      { pattern: 'dist/vendor/zone.js/dist/zone.js', included: true, watched: false },
-      { pattern: 'dist/vendor/reflect-metadata/Reflect.js', included: true, watched: false },
-      { pattern: 'dist/vendor/systemjs/dist/system-polyfills.js', included: true, watched: false },
-      { pattern: 'dist/vendor/systemjs/dist/system.src.js', included: true, watched: false },
-      { pattern: 'dist/vendor/zone.js/dist/async-test.js', included: true, watched: false },
-      { pattern: 'dist/vendor/zone.js/dist/fake-async-test.js', included: true, watched: false },
-
-      { pattern: 'config/karma-test-shim.js', included: true, watched: true },
-
-      // Distribution folder.
-      { pattern: 'dist/**/*', included: false, watched: true }
+      { pattern: './src/test.ts', watched: false }
     ],
-    exclude: [
-      // Vendor packages might include spec files. We don't want to use those.
-      'dist/vendor/**/*.spec.js'
-    ],
-    preprocessors: {},
-    reporters: ['progress'],
+    preprocessors: {
+      './src/test.ts': ['angular-cli']
+    },
+    remapIstanbulReporter: {
+      reports: {
+        html: 'coverage'
+      }
+    },
+    angularCliConfig: './angular-cli.json',
+    reporters: ['progress', 'karma-remap-istanbul'],
     port: 9876,
     colors: true,
     logLevel: config.LOG_INFO,

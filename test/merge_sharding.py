@@ -269,7 +269,8 @@ index by_msg (msg)
     workerclient_proc = utils.run_vtworker_client_bg(
         ['SplitClone',
          '--offline=false',
-         '--min_table_size_for_split', '1',
+         '--chunk_count', '10',
+         '--min_rows_per_chunk', '1',
          '--min_healthy_rdonly_tablets', '1',
          'test_keyspace/-80'],
         worker_rpc_port)
@@ -295,7 +296,8 @@ index by_msg (msg)
 
     workerclient_proc = utils.run_vtworker_client_bg(
         ['SplitClone',
-         '--min_table_size_for_split', '1',
+         '--chunk_count', '10',
+         '--min_rows_per_chunk', '1',
          '--min_healthy_rdonly_tablets', '1',
          'test_keyspace/-80'],
         worker_rpc_port)

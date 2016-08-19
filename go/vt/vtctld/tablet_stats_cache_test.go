@@ -168,6 +168,37 @@ func TestHeatmapData(t *testing.T) {
 	}
 }
 
+func TestTabletStats(t *testing.T) {
+	// Creating tabletStats.
+	ts1 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_MASTER, 200)
+	ts2 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 100)
+	ts3 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 300)
+
+	tabletStatsCache := newTabletStatsCache()
+	tabletStatsCache.StatsUpdate(ts1)
+	tabletStatsCache.StatsUpdate(ts2)
+
+	// Test 1: tablet1 and tablet2 are updated with the stats received by the HealthCheck module.
+	got1, err := tabletStatsCache.tabletStats(ts1.Tablet.Alias)
+	want1 := *ts1
+	if err != nil || !reflect.DeepEqual(got1, want1) {
+		t.Errorf("got: %v, want: %v", got1, want1)
+	}
+
+	got2, err := tabletStatsCache.tabletStats(ts2.Tablet.Alias)
+	want2 := *ts2
+	if err != nil || !reflect.DeepEqual(got2, want2) {
+		t.Errorf("got: %v, want: %v", got2, want2)
+	}
+
+	// Test 2: tablet3 isn't found in the map since no update was received for it.
+	_, gotErr := tabletStatsCache.tabletStats(ts3.Tablet.Alias)
+	wantErr := "could not find tablet: cell:\"cell1\" uid:300 "
+	if gotErr.Error() != wantErr {
+		t.Errorf("got: %v, want: %v", gotErr.Error(), wantErr)
+	}
+}
+
 // tabletStats will create a discovery.TabletStats object.
 func tabletStats(cell, keyspace, shard string, tabletType topodatapb.TabletType, uid uint32) *discovery.TabletStats {
 	target := &querypb.Target{

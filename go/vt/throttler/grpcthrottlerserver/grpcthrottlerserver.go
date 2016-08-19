@@ -49,6 +49,45 @@ func (s *Server) SetMaxRate(_ context.Context, request *throttlerdata.SetMaxRate
 	}, nil
 }
 
+// GetConfiguration implements the gRPC server interface.
+func (s *Server) GetConfiguration(_ context.Context, request *throttlerdata.GetConfigurationRequest) (_ *throttlerdata.GetConfigurationResponse, err error) {
+	defer servenv.HandlePanic("throttler", &err)
+
+	configurations, err := s.manager.GetConfiguration(request.ThrottlerName)
+	if err != nil {
+		return nil, err
+	}
+	return &throttlerdata.GetConfigurationResponse{
+		Configurations: configurations,
+	}, nil
+}
+
+// UpdateConfiguration implements the gRPC server interface.
+func (s *Server) UpdateConfiguration(_ context.Context, request *throttlerdata.UpdateConfigurationRequest) (_ *throttlerdata.UpdateConfigurationResponse, err error) {
+	defer servenv.HandlePanic("throttler", &err)
+
+	names, err := s.manager.UpdateConfiguration(request.ThrottlerName, request.Configuration, request.CopyZeroValues)
+	if err != nil {
+		return nil, err
+	}
+	return &throttlerdata.UpdateConfigurationResponse{
+		Names: names,
+	}, nil
+}
+
+// ResetConfiguration implements the gRPC server interface.
+func (s *Server) ResetConfiguration(_ context.Context, request *throttlerdata.ResetConfigurationRequest) (_ *throttlerdata.ResetConfigurationResponse, err error) {
+	defer servenv.HandlePanic("throttler", &err)
+
+	names, err := s.manager.ResetConfiguration(request.ThrottlerName)
+	if err != nil {
+		return nil, err
+	}
+	return &throttlerdata.ResetConfigurationResponse{
+		Names: names,
+	}, nil
+}
+
 // StartServer registers the Server instance with the gRPC server.
 func StartServer(s *grpc.Server, m throttler.Manager) {
 	throttlerservice.RegisterThrottlerServer(s, NewServer(m))

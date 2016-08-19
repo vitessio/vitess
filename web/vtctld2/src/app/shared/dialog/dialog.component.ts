@@ -15,7 +15,6 @@ import { TabletService } from '../../api/tablet.service';
 import {Dropdown} from 'primeng/primeng';
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-dialog',
   templateUrl: './dialog.component.html',
   styleUrls: ['./dialog.component.css', '../../styles/vt.style.css'],

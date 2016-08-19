@@ -57,7 +57,14 @@ var (
 // implementation for this using zookeeper.
 //
 // Inside Google, we use Chubby.
+//
+// FIXME(alainjobart) we are deprecating this interface, to be
+// replaced with a lower level interface defined by Backend.
 type Impl interface {
+	// Impl will eventually be entirely replaced with Backend, and
+	// just disappear.
+	Backend
+
 	// topo.Server management interface.
 	Close()
 
