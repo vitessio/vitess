@@ -82,7 +82,7 @@ export class ValidateShardFlags {
   constructor(keyspaceName, shardName) {
     this.flags['shard_ref'] = new ShardRefFlag(0, 'shard_ref', keyspaceName + '/' + shardName);
     this.flags['shard_ref']['positional'] = true;
-    this.flags['ping-tablet'] = new PingTabletsFlag(1, 'ping-tablet');
+    this.flags['ping-tablets'] = new PingTabletsFlag(1, 'ping-tablets');
   }
 }
 
@@ -132,9 +132,9 @@ export class ShardRefFlag extends InputFlag {
 export class TabletSelectFlag extends DropDownFlag {
   constructor(position: number, id: string, value= '', tablets: any[]) {
     super(position, id, 'Select a tablet', ' Required. A Tablet Alias to make the master.', value);
-    let options = [];
+    let options = [{label: '', value: ''}];
     tablets.forEach(tablet => {
-      options.push({label: tablet.ref, text: tablet.ref});
+      options.push({label: tablet.ref, value: tablet.ref});
     });
     this.setOptions(options);
   }

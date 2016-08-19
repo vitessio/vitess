@@ -18,7 +18,7 @@ export class EditKeyspaceFlags {
     this.flags['keyspace_name']['positional'] = true;
     this.flags['sharding_column_name'] = new ShardingColumnNameFlag(1, 'sharding_column_name', keyspace.shardingColumnName);
     this.flags['sharding_column_name']['positional'] = true;
-    let shardingColumnType = Proto.SHARDING_COLUMN_NAMES[keyspace.shardingColumnType];
+    let shardingColumnType = Proto.SHARDING_COLUMN_TYPES[keyspace.shardingColumnType];
     this.flags['sharding_column_type'] = new ShardingColumnTypeFlag(2, 'sharding_column_type', shardingColumnType);
     this.flags['sharding_column_type']['positional'] = true;
     this.flags['force'] = new ForceFlag(3, 'force');
@@ -60,7 +60,7 @@ export class RemoveKeyspaceCellFlags {
 export class ValidateAllFlags {
   flags= {};
   constructor() {
-    this.flags['ping-tablet'] = new PingTabletsFlag(0, 'ping-tablet');
+    this.flags['ping-tablets'] = new PingTabletsFlag(0, 'ping-tablets');
   }
 }
 
@@ -69,7 +69,7 @@ export class ValidateKeyspaceFlags {
   constructor(keyspaceName) {
     this.flags['keyspace_name'] = new KeyspaceNameFlag(0, 'keyspace_name', keyspaceName, false);
     this.flags['keyspace_name']['positional'] = true;
-    this.flags['ping-tablet'] = new PingTabletsFlag(1, 'ping-tablet');
+    this.flags['ping-tablets'] = new PingTabletsFlag(1, 'ping-tablets');
   }
 }
 

@@ -20,35 +20,33 @@
       </div>
     </div>
   </span>
-  <div class="vt-padding">
+  <div *ngIf="dialogContent.canSubmit()" class="vt-padding">
     <h3>Command:</h3>
-    <div class="vt-sheet" *ngFor="let cmd of dialogContent.getPostBody()">
+    <div class="vt-sheet" *ngFor="let cmd of getCmd()">
       {{cmd}}
     </div>
   </div>
   <ng-content select="extra-content"></ng-content>
   <div class="vt-actions-container">
-    <button md-button (click)="closeDialog();">Cancel</button>
+    <button md-button (click)="cancelDialog();">Cancel</button>
     <button md-button [disabled]="!dialogContent.canSubmit()" (click)="sendAction();">{{dialogSettings.actionWord}}</button>
   </div>
 </div>
 <div class="vt-padding" *ngIf="dialogSettings.dialogLog">
-  <h3 > Log </h3>
-  <md-card >
-    <md-card-content *ngIf="!dialogSettings.pending">
-      <div>
-        {{dialogContent.interpolateMessage(dialogSettings.respText)}}
-      </div>
-      <h4>Log:</h4>
-      <div>
-        {{dialogSettings.logText}}
-      </div>
-    </md-card-content>
-    <md-card-content *ngIf="dialogSettings.pending">
-      Loading Response...
-      <md-progress-bar mode="indeterminate"></md-progress-bar>
-    </md-card-content>
-  </md-card>
+  <div *ngIf="!dialogSettings.pending">
+    <h4>Response:</h4>
+    <div class="vt-sheet">
+      {{dialogContent.interpolateMessage(dialogSettings.respText)}}
+    </div>
+    <h4>Log:</h4>
+    <div class="vt-sheet vt-log-frame" *ngIf="dialogSettings.logText">
+      <p *ngFor="let log of logToArray(dialogSettings.logText)">{{log}}</p>
+    </div>
+  </div>
+  <div *ngIf="dialogSettings.pending">
+    Loading Response...
+    <md-progress-bar mode="indeterminate"></md-progress-bar>
+  </div>
   <div class="buttons">
     <button md-button [disabled]="dialogSettings.pending" (click)="closeDialog()">Dismiss</button>
   </div>

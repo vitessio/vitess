@@ -6,6 +6,8 @@ import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
 
 import { Observable } from 'rxjs/Observable';
 
+import { Accordion, AccordionTab } from 'primeng/primeng';
+
 import { AddButtonComponent } from '../shared/add-button.component';
 import { DialogComponent } from '../shared/dialog/dialog.component';
 import { DialogContent } from '../shared/dialog/dialog-content';
@@ -35,6 +37,8 @@ import { VtctlService } from '../api/vtctl.service';
     MD_BUTTON_DIRECTIVES,
     DialogComponent,
     AddButtonComponent,
+    Accordion,
+    AccordionTab
   ],
 })
 
@@ -82,31 +86,31 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
   }
 
   createShard() {
-    this.serverCall('CreateShard', 'There was a problem creating {{shard_ref}}:');
+    this.serverCall('There was a problem creating {{shard_ref}}:');
   }
 
   validateKeyspace() {
-    this.serverCall('ValidateKeyspace', 'There was a problem validating {{keyspace_name}}:');
+    this.serverCall('There was a problem validating {{keyspace_name}}:');
   }
 
   validateSchema() {
-    this.serverCall('ValidateSchemaKeyspace', `There was a problem validating {{keyspace_name}}'s Schema:`);
+    this.serverCall(`There was a problem validating {{keyspace_name}}'s Schema:`);
   }
 
   validateVersion() {
-    this.serverCall('ValidateVersionKeyspace', `There was a problem validating {{keyspace_name}}'s Version:`);
+    this.serverCall(`There was a problem validating {{keyspace_name}}'s Version:`);
   }
 
   rebuildKeyspace() {
-    this.serverCall('RebuildKeyspaceGraph', 'There was a problem rebuilding {{keyspace_name}}:');
+    this.serverCall('There was a problem rebuilding {{keyspace_name}}:');
   }
 
   removeKeyspaceCell() {
-    this.serverCall('RemoveKeyspaceCell', 'There was a problem removing {{cell_name}}:');
+    this.serverCall('There was a problem removing {{cell_name}}:');
   }
 
-  serverCall(action: string, errorMessage: string) {
-    this.vtctlService.serverCall(action, this.dialogContent, this.dialogSettings, errorMessage);
+  serverCall(errorMessage: string) {
+    this.vtctlService.serverCall('', this.dialogContent, this.dialogSettings, errorMessage);
   }
 
   prepareNewShard() {
@@ -114,7 +118,7 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     this.dialogSettings.setMessage('Created {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshKeyspaceView.bind(this);
     let flags = new NewShardFlags(this.keyspaceName).flags;
-    this.dialogContent = new DialogContent('shard_ref', flags, {}, this.prepareShard.bind(this));
+    this.dialogContent = new DialogContent('shard_ref', flags, {}, this.prepareShard.bind(this), 'CreateShard');
     this.dialogSettings.toggleModal();
   }
 
@@ -123,7 +127,7 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     this.dialogSettings.setMessage('Validated {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.refreshKeyspaceView.bind(this);
     let flags = new ValidateKeyspaceFlags(this.keyspaceName).flags;
-    this.dialogContent = new DialogContent('keyspace_name', flags, {});
+    this.dialogContent = new DialogContent('keyspace_name', flags, {}, undefined, 'ValidateKeyspace');
     this.dialogSettings.toggleModal();
   }
 
@@ -132,7 +136,7 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     this.dialogSettings.setMessage(`Validated {{keyspace_name}}'s Schema`);
     this.dialogSettings.onCloseFunction = this.refreshKeyspaceView.bind(this);
     let flags = new ValidateSchemaFlags(this.keyspaceName).flags;
-    this.dialogContent = new DialogContent('keyspace_name', flags, {});
+    this.dialogContent = new DialogContent('keyspace_name', flags, {}, undefined, 'ValidateSchemaKeyspace');
     this.dialogSettings.toggleModal();
   }
 
@@ -141,7 +145,7 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     this.dialogSettings.setMessage(`Validated {{keyspace_name}}'s Version`);
     this.dialogSettings.onCloseFunction = this.refreshKeyspaceView.bind(this);
     let flags = new ValidateVersionFlags(this.keyspaceName).flags;
-    this.dialogContent = new DialogContent('keyspace_name', flags, {});
+    this.dialogContent = new DialogContent('keyspace_name', flags, {}, undefined, 'ValidateVersionKeyspace');
     this.dialogSettings.toggleModal();
   }
 
@@ -150,7 +154,7 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     this.dialogSettings.setMessage('Rebuilt {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.refreshKeyspaceView.bind(this);
     let flags = new RebuildKeyspaceGraphFlags(this.keyspaceName).flags;
-    this.dialogContent = new DialogContent('keyspace_name', flags, {});
+    this.dialogContent = new DialogContent('keyspace_name', flags, {}, undefined, 'RebuildKeyspaceGraph');
     this.dialogSettings.toggleModal();
   }
 
@@ -159,7 +163,7 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     this.dialogSettings.setMessage('Removed {{cell_name}}');
     this.dialogSettings.onCloseFunction = this.refreshKeyspaceView.bind(this);
     let flags = new RemoveKeyspaceCellFlags(this.keyspaceName).flags;
-    this.dialogContent = new DialogContent('cell_name', flags, {});
+    this.dialogContent = new DialogContent('cell_name', flags, {}, undefined, 'RemoveKeyspaceCell');
     this.dialogSettings.toggleModal();
   }
 
@@ -173,12 +177,11 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     end up in the request.
   */
   prepareShard(flags) {
+    let newFlags = {};
+    newFlags['shard_ref'] = flags['shard_ref'];
     let shardName = this.getName(flags['lower_bound'].getStrValue(), flags['upper_bound'].getStrValue());
-    flags['shard_ref'].setValue(flags['keyspace_name'].getStrValue() + '/' + shardName);
-    flags['keyspace_name'].setValue('');
-    flags['lower_bound'].setValue('');
-    flags['upper_bound'].setValue('');
-    return new PrepareResponse(true, flags);
+    newFlags['shard_ref'].setValue(flags['keyspace_name'].getStrValue() + '/' + shardName);
+    return new PrepareResponse(true, newFlags);
   }
 
   // Functions for parsing shardName

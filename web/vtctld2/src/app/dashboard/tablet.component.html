@@ -2,9 +2,21 @@
 <div *ngIf="tabletReady">
   <h1>{{tablet.label}}</h1>
   <div class="vt-action-center">
-    <button md-raised-button (click)="prepareDeleteTablet();dialog.open();">Delete</button>
-    <button md-raised-button (click)="preparePingTablet();dialog.open();">Ping</button>
-    <button md-raised-button (click)="prepareRefreshTablet();dialog.open();">Refresh State</button>
+    <p-accordion>
+      <p-accordionTab header="Actions">
+        <button md-raised-button (click)="prepareDeleteTablet();dialog.open();">Delete</button>
+        <button md-raised-button (click)="preparePingTablet();dialog.open();">Ping</button>
+        <button md-raised-button (click)="prepareRefreshTablet();dialog.open();">Refresh State</button>
+        <button md-raised-button (click)="prepareSetReadOnly();dialog.open();">SetReadOnly</button>
+        <button md-raised-button (click)="prepareSetReadWrite();dialog.open();">SetReadWrite</button>
+        <button md-raised-button (click)="prepareStartSlave();dialog.open();">StartSlave</button>
+        <button md-raised-button (click)="prepareStopSlave();dialog.open();">StopSlave</button>
+        <button md-raised-button (click)="prepareRunHealthCheck();dialog.open();">RunHealthCheck</button>
+        <button md-raised-button (click)="prepareIgnoreHealthError();dialog.open();">IgnoreHealthError</button>
+        <button md-raised-button (click)="prepareDemoteMaster();dialog.open();">DemoteMaster</button>
+        <button md-raised-button (click)="prepareReparentTablet();dialog.open();">ReparentTablet</button>
+      </p-accordionTab>
+    </p-accordion>
   </div>
   <iframe [src]='tabletUrl'></iframe>
   <paper-dialog #dialog no-cancel-on-outside-click="true" no-cancel-on-esc-key="true">

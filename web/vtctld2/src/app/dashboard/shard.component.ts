@@ -8,6 +8,8 @@ import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
 
 import { Observable } from 'rxjs/Observable';
 
+import { Accordion, AccordionTab } from 'primeng/primeng';
+
 import { AddButtonComponent } from '../shared/add-button.component';
 import { DialogComponent } from '../shared/dialog/dialog.component';
 import { DialogContent } from '../shared/dialog/dialog-content';
@@ -36,6 +38,8 @@ import { VtctlService } from '../api/vtctl.service';
     AddButtonComponent,
     DialogComponent,
     Header,
+    Accordion,
+    AccordionTab,
   ],
   providers: [
     KeyspaceService,
@@ -118,39 +122,39 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   deleteShard() {
-    this.serverCall('DeleteShard', 'There was a problem deleting {{shard_ref}}:');
+    this.serverCall('There was a problem deleting {{shard_ref}}:');
   }
 
   validateShard() {
-    this.serverCall('ValidateShard', 'There was a problem validating {{shard_ref}}:');
+    this.serverCall('There was a problem validating {{shard_ref}}:');
   }
 
   initShardMaster() {
-    this.serverCall('InitShardMaster', 'There was a problem initializing a shard master for {{shard_ref}}:');
+    this.serverCall('There was a problem initializing a shard master for {{shard_ref}}:');
   }
 
   TabletExternallyReparented() {
-    this.serverCall('TabletExternallyReparented', `There was a problem there was a problem updating {{tablet_alias}}'s metatdata:`);
+    this.serverCall(`There was a problem there was a problem updating {{tablet_alias}}'s metatdata:`);
   }
 
   PlanRepShard() {
-    this.serverCall('PlannedReparentShard', 'There was a problem initializing a shard master for {{shard_ref}}:');
+    this.serverCall('There was a problem initializing a shard master for {{shard_ref}}:');
   }
 
   EmergencyRepShard() {
-    this.serverCall('EmergencyReparentShard', 'There was a problem initializing a shard master for {{shard_ref}}:');
+    this.serverCall('There was a problem initializing a shard master for {{shard_ref}}:');
   }
 
   ShardReplicationPos() {
-    this.serverCall('ShardReplicationPositions', 'There was a problem initializing a shard master for {{shard_ref}}:');
+    this.serverCall('There was a problem initializing a shard master for {{shard_ref}}:');
   }
 
   ValidateVerShard() {
-    this.serverCall('ValidateVersionShard', 'There was a problem initializing a shard master for {{shard_ref}}:');
+    this.serverCall('There was a problem initializing a shard master for {{shard_ref}}:');
   }
 
-  serverCall(action: string, errorMessage: string) {
-    this.vtctlService.serverCall(action, this.dialogContent, this.dialogSettings, errorMessage);
+  serverCall(errorMessage: string) {
+    this.vtctlService.serverCall('', this.dialogContent, this.dialogSettings, errorMessage);
   }
 
   prepareDeleteShard() {
@@ -159,7 +163,7 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.setMessage('Deleted {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.navigateToKeyspace.bind(this);
     let flags = new DeleteShardFlags(this.keyspaceName, this.shardName).flags;
-    this.dialogContent = new DialogContent(this.shardName, flags);
+    this.dialogContent = new DialogContent(this.shardName, flags, {}, undefined, 'DeleteShard');
     this.dialogSettings.toggleModal();
   }
 
@@ -168,7 +172,7 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.setMessage('Validated {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
     let flags = new ValidateShardFlags(this.keyspaceName, this.shardName).flags;
-    this.dialogContent = new DialogContent(this.shardName, flags);
+    this.dialogContent = new DialogContent(this.shardName, flags, {}, undefined, 'ValidateShard');
     this.dialogSettings.toggleModal();
   }
 
@@ -177,7 +181,7 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.setMessage('Initialized shard master for {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
     let flags = new InitShardMasterFlags(this.keyspaceName, this.shardName, this.tablets).flags;
-    this.dialogContent = new DialogContent(this.shardName, flags);
+    this.dialogContent = new DialogContent(this.shardName, flags, {tablet_alias: true}, undefined, 'InitShardMaster');
     this.dialogSettings.toggleModal();
   }
 
@@ -186,7 +190,7 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.setMessage('Changed metadata in the topology server for {{tablet_alias}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
     let flags = new TabExtRepFlags(this.tablets).flags;
-    this.dialogContent = new DialogContent(this.shardName, flags);
+    this.dialogContent = new DialogContent(this.shardName, flags, {tablet_alias: true}, undefined, 'TabletExternallyReparented');
     this.dialogSettings.toggleModal();
   }
 
@@ -195,7 +199,7 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.setMessage('Reparented {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
     let flags = new PlanRepShardFlags(this.keyspaceName, this.shardName, this.tablets).flags;
-    this.dialogContent = new DialogContent(this.shardName, flags);
+    this.dialogContent = new DialogContent(this.shardName, flags, {tablet_alias: true}, undefined, 'PlannedReparentShard');
     this.dialogSettings.toggleModal();
   }
 
@@ -204,7 +208,7 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.setMessage('Initialized shard master for {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
     let flags = new EmergencyRepShardFlags(this.keyspaceName, this.shardName, this.tablets).flags;
-    this.dialogContent = new DialogContent(this.shardName, flags);
+    this.dialogContent = new DialogContent(this.shardName, flags, {tablet_alias: true}, undefined, 'EmergencyReparentShard');
     this.dialogSettings.toggleModal();
   }
 
@@ -213,7 +217,7 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.setMessage('Fetched Replication Positions for {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
     let flags = new ShardReplicationPosFlags(this.keyspaceName, this.shardName).flags;
-    this.dialogContent = new DialogContent(this.shardName, flags);
+    this.dialogContent = new DialogContent(this.shardName, flags, {}, undefined, 'ShardReplicationPositions');
     this.dialogSettings.toggleModal();
   }
 
@@ -222,7 +226,7 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.setMessage(`Validated {{shard_ref}}'s Version`);
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
     let flags = new ValidateVerShardFlags(this.keyspaceName, this.shardName).flags;
-    this.dialogContent = new DialogContent(this.shardName, flags);
+    this.dialogContent = new DialogContent(this.shardName, flags, {}, undefined, 'ValidateVersionShard');
     this.dialogSettings.toggleModal();
   }
 

@@ -64,6 +64,11 @@ export class DialogComponent implements AfterViewInit {
     this.dialogContent.setParam(paramName, e.detail.item.__dom.firstChild.data);
   }
 
+  cancelDialog() {
+    this.dialogSettings.toggleModal();
+    this.close.emit({});
+  }
+
   closeDialog() {
     if (this.dialogSettings.onCloseFunction) {
       this.dialogSettings.onCloseFunction(this.dialogContent);
@@ -81,5 +86,14 @@ export class DialogComponent implements AfterViewInit {
     }
     this.dialogSettings.dialogForm = false;
     this.dialogSettings.dialogLog = true;
+  }
+
+  getCmd() {
+    let preppedFlags = this.dialogContent.prepare(false).flags;
+    let sortedFlags = this.dialogContent.getFlags(preppedFlags);
+    return this.dialogContent.getPostBody(sortedFlags);
+  }
+  logToArray(logText) {
+    return logText.split('\n');
   }
 }

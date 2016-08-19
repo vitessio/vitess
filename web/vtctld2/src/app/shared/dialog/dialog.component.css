@@ -51,3 +51,8 @@ p-dropdown {
   width: 80% !important;
   display: inline-block !important;
 }
+
+.vt-log-frame {
+  max-height: 200px;
+  overflow:auto
+}

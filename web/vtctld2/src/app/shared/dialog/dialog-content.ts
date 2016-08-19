@@ -42,13 +42,16 @@ export class DialogContent {
 
     TODO(dsslater): sanatize user input before it hits the server.
   */
-  public getPostBody(action: string): string[] {
+  public getPostBody(flags= undefined): string[] {
+    if (!flags) {
+      flags = this.getFlags();
+    }
     let args = [];
     args.push(this.action);
-    for (let flag of this.getFlags()) {
+    for (let flag of flags) {
       args = args.concat(flag.getPostBodyContent(false));
     }
-    for (let flag of this.getFlags()) {
+    for (let flag of flags) {
       args = args.concat(flag.getPostBodyContent(true));
     }
     return args;
@@ -109,10 +112,13 @@ export class DialogContent {
     Returns a sorted list of the flags in the flag object based on their 
     position parameter.
   */
-  public getFlags(): Flag[] {
+  public getFlags(flagsMap= undefined): Flag[] {
+    if (!flagsMap) {
+      flagsMap = this.flags;
+    }
     let flags = [];
-    for (let flagName of Object.keys(this.flags)) {
-      flags.push(this.flags[flagName]);
+    for (let flagName of Object.keys(flagsMap)) {
+      flags.push(flagsMap[flagName]);
     }
     flags.sort(this.orderFlags);
     return flags;
@@ -145,12 +151,12 @@ export class DialogContent {
     true than the instance flags will bet set to the flags in the response.
     The PrepareResponse will also be returned to the caller.
   */
-  public prepare(): PrepareResponse {
+  public prepare(setFlags= true): PrepareResponse {
     if (this.prepareFunction === undefined) {
-      return new PrepareResponse(true);
+      return new PrepareResponse(true, this.flags);
     }
     let resp = this.prepareFunction(this.flags);
-    if (resp.success) {
+    if (resp.success && setFlags) {
       this.flags = resp.flags;
     }
     return resp;

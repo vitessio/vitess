@@ -1,11 +1,14 @@
 <h1>{{keyspaceName}}</h1>
 <div class="vt-action-center">
-  <button md-raised-button (click)="prepareValidateKeyspace();dialog.open();">Validate</button>
-  <button md-raised-button (click)="prepareValidateSchema();dialog.open();">Validate Schema</button>
-  <button md-raised-button (click)="prepareValidateVersion();dialog.open();">Validate Version</button>
-  <button md-raised-button (click)="prepareRebuildKeyspaceGraph();dialog.open();">Rebuild Keyspace Graph</button>
-  <button md-raised-button (click)="prepareRemoveKeyspaceCell();dialog.open();">Remove Keyspace Cell</button>
-  
+  <p-accordion>
+    <p-accordionTab header="Actions">
+      <button md-raised-button (click)="prepareValidateKeyspace();dialog.open();">Validate</button>
+      <button md-raised-button (click)="prepareValidateSchema();dialog.open();">Validate Schema</button>
+      <button md-raised-button (click)="prepareValidateVersion();dialog.open();">Validate Version</button>
+      <button md-raised-button (click)="prepareRebuildKeyspaceGraph();dialog.open();">Rebuild Keyspace Graph</button>
+      <button md-raised-button (click)="prepareRemoveKeyspaceCell();dialog.open();">Remove Keyspace Cell</button>
+    </p-accordionTab>
+  </p-accordion>
 </div>
 
 <div *ngIf="keyspace.servingShards != undefined && keyspace.servingShards.length > 0">

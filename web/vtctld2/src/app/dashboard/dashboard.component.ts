@@ -96,7 +96,7 @@ export class DashboardComponent implements OnInit {
     this.dialogSettings.setMessage('Edited {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.refreshDashboardView.bind(this);
     let flags = new EditKeyspaceFlags(keyspace).flags;
-    this.dialogContent = new DialogContent('keyspace_name', flags, {}, this.prepare.bind(this), 'SetKeyspaceShardingInfo');
+    this.dialogContent = new DialogContent('keyspace_name', flags, {}, undefined, 'SetKeyspaceShardingInfo');
     this.dialogSettings.toggleModal();
   }
 
@@ -134,13 +134,6 @@ export class DashboardComponent implements OnInit {
 
   navigate(keyspaceName: string) {
     this.router.navigate(['/keyspace'], {queryParams: { keyspace: keyspaceName }});
-  }
-
-  prepare(flags) {
-    if (flags['sharding_column_type'].getStrValue() !== '') {
-      flags['sharding_column_type'].setValue(Proto.SHARDING_COLUMN_NAME_TO_TYPE[flags['sharding_column_type'].getStrValue()]);
-    }
-    return new PrepareResponse(true, flags);
   }
 
   logView() {
