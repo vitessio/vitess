@@ -2,26 +2,25 @@ import { Component, OnInit } from '@angular/core';
 import { Dropdown } from 'primeng/primeng';
 import { KeyspaceService } from '../api/keyspace.service';
 import { ShardService } from '../api/shard.service';
+import { TabletService } from '../api/tablet.service';
 @Component({
   selector: 'vt-schema',
   templateUrl: './schema.component.html',
   styleUrls: ['./schema.component.css'],
   directives: [Dropdown],
-  providers: [KeyspaceService, ShardService],
+  providers: [KeyspaceService, ShardService, TabletService],
 })
 export class SchemaComponent implements OnInit {
   keyspaces= [];
   selectedKeyspace= undefined;
   shards= [];
   selectedShard= undefined;
-  tabletTypes= [];
-  selectedTabletType= undefined;
-  keyspaceService: KeyspaceService;
-  shardService: ShardService;
+  tablets= [];
+  selectedTablet= undefined;
 
-  constructor(keyspaceService: KeyspaceService, shardService: ShardService) {
-    this.keyspaceService = keyspaceService;
-    this.shardService = shardService;
+
+  constructor(private keyspaceService: KeyspaceService, private shardService: ShardService, private tabletService: TabletService) {
+
   }
 
   ngOnInit() {
@@ -59,11 +58,20 @@ export class SchemaComponent implements OnInit {
         this.shards = shards.map(shard => {
           return {label: shard, value: shard};
         });
+        if (this.shards.length > 0) {
+          this.selectedShard = this.shards[0].value;
+          this.getTablets(this.selectedKeyspace, this.selectedShard);
+        }
       });
-      if (this.shards.length > 0) {
-        this.selectedShard = this.shards[0].value;
-      }
     }
     return [];
+  }
+
+  getTablets(keyspaceName, shardName) {
+    this.tabletService.getTablets(keyspaceName, shardName).subscribe(tablets => {
+      console.log(tablets);
+      this.tablets = tablets;
+      // TODO(dsslater): map tablets to dropdown features and select the first one
+    });
   }
 }
