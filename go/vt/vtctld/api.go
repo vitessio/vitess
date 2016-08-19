@@ -349,8 +349,9 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 			cell := r.FormValue("cell")
 			tabletType := r.FormValue("type")
 			_, err := topoproto.ParseTabletType(tabletType)
-			if err != nil {
-				return nil, fmt.Errorf("invalid tablet type: %v ", tabletType)
+			// Excluding the case where parse fails because all tabletTypes was chosen.
+			if err != nil && tabletType != "all" {
+				return nil, fmt.Errorf("invalid tablet type: %v ", err)
 			}
 			metric := r.FormValue("metric")
 

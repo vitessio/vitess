@@ -1,7 +1,7 @@
-import { Component, Input, OnChanges, AfterViewInit, NgZone, OnInit  } from '@angular/core';
 import { Component, Input, AfterViewInit, NgZone, OnInit  } from '@angular/core';
 
 import { TabletStatusService } from '../api/tablet-status.service';
+import { TabletComponent } from './tablet.component';
 
 declare var Plotly: any;
 
@@ -9,6 +9,13 @@ declare var Plotly: any;
   selector: 'vt-heatmap',
   templateUrl: './heatmap.component.html',
   styleUrls: ['./heatmap.component.css'],
+  directives: [
+    CORE_DIRECTIVES,
+    TabletComponent,
+  ],
+  providers: [
+    TabletStatusService
+  ]
 })
 
 export class HeatmapComponent implements AfterViewInit, OnInit {
@@ -54,7 +61,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
 
   // getTotalRows returns the number of rows the heatmap should span.
   getTotalRows() {
-    if (this.heatmap.YLabels == null) {
+    /*if (this.heatmap.YLabels == null) {
       return this.heatmap.Data.length;
     }
     return this.heatmap.YLabels.reduce((prev, cur) => (prev + cur.Label.Rowspan), 0);
@@ -63,11 +70,12 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
   ngOnInit() {
     this.heatmapHeight = (this.getTotalRows() * this.getRowHeight() +
                           this.getXLabelsRowHeight());
-    this.name = this.heatmap.Keyspace;
+    this.name = this.heatmap.KeyspaceLabel.Name;
+    this.keyspace = this.heatmap.KeyspaceLabel;
     this.data = this.heatmap.Data;
     this.aliases = this.heatmap.Aliases;
-    this.yLabels = this.heatmap.YLabels;
-    this.xLabels = this.heatmap.XLabels;
+    this.yLabels = this.heatmap.CellAndTypeLabels;
+    this.xLabels = this.heatmap.ShardLabels;
   }
 
   ngAfterViewInit() {

@@ -96,7 +96,7 @@ export class StatusComponent implements OnInit {
       .subscribe(params => {
         this.getTopologyInfo();
 
-        // Setting the beginning values of each category. 
+        // Setting the beginning values of each category.
         this.selectedKeyspace = params['keyspace'];
         this.selectedCell = params['cell'];
         this.selectedType = params['type'];

@@ -79,10 +79,10 @@ func TestAPI(t *testing.T) {
 	realtimeStats := newRealtimeStatsForTesting()
 	initAPI(ctx, ts, actionRepo, realtimeStats)
 
-	ts1 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 100)
-	ts2 := tabletStats("cell1", "ks1", "-80-", topodatapb.TabletType_RDONLY, 200)
-	ts3 := tabletStats("cell2", "ks1", "80-", topodatapb.TabletType_REPLICA, 300)
-	ts4 := tabletStats("cell2", "ks1", "80-", topodatapb.TabletType_RDONLY, 400)
+	ts1 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 100)
+	ts2 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_RDONLY, 200)
+	ts3 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_REPLICA, 300)
+	ts4 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_RDONLY, 400)
 	realtimeStats.StatsUpdate(ts1)
 	realtimeStats.StatsUpdate(ts2)
 	realtimeStats.StatsUpdate(ts3)
@@ -151,14 +151,39 @@ func TestAPI(t *testing.T) {
 			}`},
 
 		// Tablet Updates
-		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=REPLICA&metric=lag", `
-		   {"Labels":[{"Label":{"Name":"cell1","Rowspan":2},"NestedLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]},
-		           {"Label":{"Name":"cell2","Rowspan":2},"NestedLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]}],
-		           "Data":[[100,-1,-1],[-1,200,-1],[-1,-1,300],[-1,-1,400]],
-		           "Aliases":[[{"cell":"cell1","uid":100},null,null],[null,{"cell":"cell1","uid":200},null],[null,null,{"cell":"cell2","uid":300}],[null,null,{"cell":"cell2","uid":400}]]}
-		`},
+		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=REPLICA&metric=lag", `[
+		{
+		    "Data": [ [100, -1] ],
+		    "Aliases": [[ { "cell": "cell1", "uid": 100 }, null ]],
+		    "KeyspaceLabel": { "Name": "ks1", "Rowspan": 1 },
+		    "CellAndTypeLabels": [{ "CellLabel": { "Name": "cell1",  "Rowspan": 1 }, "TypeLabels": [{"Name": "REPLICA", "Rowspan": 1}] }] ,
+		    "ShardLabels": ["-80", "80-"]
+		  }
+		]`},
+		{"GET", "tablet_statuses/?keyspace=ks1&cell=all&type=all&metric=lag", `[
+		{
+		  "Data":[[-1,400],[-1,300],[200,-1],[100,-1]],  
+		  "Aliases":[[null,{"cell":"cell2","uid":400}],[null,{"cell":"cell2","uid":300}],[{"cell":"cell1","uid":200},null],[{"cell":"cell1","uid":100},null]],
+		  "KeyspaceLabel":{"Name":"ks1","Rowspan":4},
+		  "CellAndTypeLabels":[
+		     {"CellLabel":{"Name":"cell1","Rowspan":2},"TypeLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]},
+		     {"CellLabel":{"Name":"cell2","Rowspan":2},"TypeLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]}],
+		  "ShardLabels":["-80","80-"]
+		}
+		]`},
+		{"GET", "tablet_statuses/?keyspace=all&cell=all&type=all&metric=lag", `[
+		  {
+		   "Data":[[-1,300],[200,-1]],
+		   "Aliases":null,
+		   "KeyspaceLabel":{"Name":"ks1","Rowspan":2},
+		  "CellAndTypeLabels":[
+		    {"CellLabel":{"Name":"cell1","Rowspan":1},"TypeLabels":null},
+		    {"CellLabel":{"Name":"cell2","Rowspan":1},"TypeLabels":null}],
+		  "ShardLabels":["-80","80-"]
+		  }
+		]`},
 		{"GET", "tablet_statuses/cell1/REPLICA/lag", "can't get tablet_statuses: invalid target path: \"cell1/REPLICA/lag\"  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>"},
-		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "can't get tablet_statuses: invalid tablet type: hello"},
+		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "can't get tablet_statuses: invalid tablet type: unknown TabletType hello"},
 
 		// Tablet Health
 		{"GET", "tablet_health/cell1/100", `{ "Key": "", "Tablet": { "alias": { "cell": "cell1", "uid": 100 },"port_map": { "vt": 100 }, "keyspace": "ks1", "shard": "-80", "type": 2},

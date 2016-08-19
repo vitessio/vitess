@@ -14,8 +14,8 @@ import (
 
 // yLabel is used to keep track of the outer and inner labels of the heatmap.
 type yLabel struct {
-	Label        label
-	NestedLabels []label
+	CellLabel  label
+	TypeLabels []label
 }
 
 // label is used to keep track of one label of a heatmap and how many rows it should span.
@@ -26,12 +26,15 @@ type label struct {
 
 // heatmap stores all the needed info to construct the heatmap.
 type heatmap struct {
-	// Labels has the outer and inner labels for each row.
-	Labels []yLabel
+
 	// Data is a 2D array of values of the specified metric.
 	Data [][]float64
 	// Aliases is a 2D array holding references to the tablet aliases.
 	Aliases [][]*topodata.TabletAlias
+
+	KeyspaceLabel     label
+	CellAndTypeLabels []yLabel
+	ShardLabels       []string
 }
 
 type byTabletUID []*discovery.TabletStats
@@ -40,7 +43,20 @@ func (a byTabletUID) Len() int           { return len(a) }
 func (a byTabletUID) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byTabletUID) Less(i, j int) bool { return a[i].Tablet.Alias.Uid < a[j].Tablet.Alias.Uid }
 
+// This value represents a missing/non-existent tablet for any metric.
 const tabletMissing = -1
+
+// This value is needed to indicate when there's data but no labels are needed.
+const empty = "EMPTY"
+
+// These values represent the threshold for replication lag.
+const lagThresholdDegraded = 60
+const lagThresholdUnhealthy = 120
+
+// These values represent the health of the tablet - 1 is healthy, 2 is degraded, 3 is unhealthy
+const tabletHealthy = 0
+const tabletDegraded = 1
+const tabletUnhealthy = 2
 
 // tabletStatsCache holds the most recent status update received for
 // each tablet. The tablets are indexed by uid, so it is different
@@ -149,109 +165,223 @@ func remove(tablets []*discovery.TabletStats, tabletAlias *topodata.TabletAlias)
 	return filteredTablets
 }
 
-// heatmapData returns a 2D array of data (based on the specified metric) as well as the labels for the heatmap.
-func (c *tabletStatsCache) heatmapData(keyspace, cell, tabletType, metric string) (heatmap, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Get the metric data.
-	var metricFunc func(stats *discovery.TabletStats) float64
-	switch metric {
-	case "lag":
-		metricFunc = replicationLag
-	case "cpu":
-		metricFunc = cpu
-	case "qps":
-		metricFunc = qps
-	default:
-		return heatmap{}, fmt.Errorf("invalid metric: %v Select 'lag', 'cpu', or 'qps'", metric)
+func (c *tabletStatsCache) keyspaces(keyspace string) []string {
+	if keyspace != "all" {
+		return []string{keyspace}
 	}
+	var keyspaces []string
+	for ks := range c.statuses {
+		keyspaces = append(keyspaces, ks)
+	}
+	sort.Strings(keyspaces)
+	return keyspaces
+}
 
+func (c *tabletStatsCache) cells(cell string) []string {
+	if cell != "all" {
+		return []string{cell}
+	}
 	var cells []string
-	for cell := range c.tabletCountsByCell {
-		cells = append(cells, cell)
+	for cl := range c.tabletCountsByCell {
+		cells = append(cells, cl)
 	}
 	sort.Strings(cells)
+	return cells
+}
 
+func tabletTypes(tabletType string) []topodata.TabletType {
+	if tabletType != "all" {
+		tabletTypeObj, _ := topoproto.ParseTabletType(tabletType)
+		return []topodata.TabletType{tabletTypeObj}
+	}
+	return []topodata.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
+}
+
+func (c *tabletStatsCache) shards(keyspace string) []string {
 	var shards []string
 	for s := range c.statuses[keyspace] {
 		shards = append(shards, s)
 	}
 	sort.Strings(shards)
+	return shards
+}
 
-	types := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
+// heatmapData returns a 2D array of data (based on the specified metric) as well as the labels for the heatmap.
+func (c *tabletStatsCache) heatmapData(selectedKeyspace, selectedCell, selectedTabletType, selectedMetric string) ([]heatmap, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	// TODO(pkulshre): Generalize the following algorithm to support any combination of keyspace-cell-type.
-	var heatmapData [][]float64
-	var heatmapTabletAliases [][]*topodata.TabletAlias
-	var yLabels []yLabel
-	// The loop goes through every outer label (in this case, cell).
-	for _, cell := range cells {
-		perCellYLabel := yLabel{}
-		labelSpan := 0
-
-		// This loop goes through every nested label (in this case, tablet type).
-		for _, tabletType := range types {
-			maxRowLength := 0
-
-			// The loop calculates the maximum number of rows needed.
-			for _, shard := range shards {
-				tabletsCount := len(c.statuses[keyspace][shard][cell][tabletType])
-				if maxRowLength < tabletsCount {
-					maxRowLength = tabletsCount
-				}
-			}
-
-			// dataRowsPerType is a 2D array that will hold the data of the tablets of one (cell, type) combination.
-			dataRowsPerType := make([][]float64, maxRowLength)
-			// aliasRowsPerType is a 2D array that will hold the aliases of the tablets of one (cell, type) combination.
-			aliasRowsPerType := make([][]*topodata.TabletAlias, maxRowLength)
-			for i := range dataRowsPerType {
-				dataRowsPerType[i] = make([]float64, len(shards))
-				aliasRowsPerType[i] = make([]*topodata.TabletAlias, len(shards))
-			}
-
-			// Filling in the 2D array with tablet data by columns.
-			for shardIndex, shard := range shards {
-				for tabletIndex := 0; tabletIndex < maxRowLength; tabletIndex++ {
-					// If the key doesn't exist then the tablet must not exist so that data is set to -1 (tabletMissing).
-					if tabletIndex < len(c.statuses[keyspace][shard][cell][tabletType]) {
-						dataRowsPerType[tabletIndex][shardIndex] = metricFunc(c.statuses[keyspace][shard][cell][tabletType][tabletIndex])
-						aliasRowsPerType[tabletIndex][shardIndex] = c.statuses[keyspace][shard][cell][tabletType][tabletIndex].Tablet.Alias
-					} else {
-						dataRowsPerType[tabletIndex][shardIndex] = tabletMissing
-						aliasRowsPerType[tabletIndex][shardIndex] = nil
-					}
-
-					// Adding the labels for the yaxis only if it is the first column.
-					if shardIndex == 0 && tabletIndex == (maxRowLength-1) {
-						tempLabel := label{
-							Name:    tabletType.String(),
-							Rowspan: maxRowLength,
-						}
-						perCellYLabel.NestedLabels = append(perCellYLabel.NestedLabels, tempLabel)
-						labelSpan += maxRowLength
-					}
-				}
-			}
-
-			for i := 0; i < len(dataRowsPerType); i++ {
-				heatmapData = append(heatmapData, dataRowsPerType[i])
-				heatmapTabletAliases = append(heatmapTabletAliases, aliasRowsPerType[i])
-			}
-		}
-		perCellYLabel.Label = label{
-			Name:    cell,
-			Rowspan: labelSpan,
-		}
-		yLabels = append(yLabels, perCellYLabel)
+	// Get the metric data.
+	var metricFunc func(stats *discovery.TabletStats) float64
+	switch selectedMetric {
+	case "lag":
+		metricFunc = replicationLag
+	case "qps":
+		metricFunc = qps
+	case "healthy":
+		metricFunc = healthy
+	default:
+		return nil, fmt.Errorf("invalid metric: %v Select 'lag', 'cpu', or 'qps'", selectedMetric)
 	}
 
-	return heatmap{
-		Data:    heatmapData,
-		Labels:  yLabels,
-		Aliases: heatmapTabletAliases,
-	}, nil
+	// Get the proper data (unaggregated tablets or aggregated tablets by types)
+	aggregated := false
+	if selectedKeyspace == "all" && selectedTabletType == "all" {
+		aggregated = true
+	}
+
+	keyspaces := c.keyspaces(selectedKeyspace)
+	cells := c.cells(selectedCell)
+	var listOfHeatmaps []heatmap
+	for _, keyspace := range keyspaces {
+		var heatmapData [][]float64
+		var heatmapTabletAliases [][]*topodata.TabletAlias
+		var heatmapCellAndTypeLabels []yLabel
+		shards := c.shards(keyspace)
+		keyspaceLabelSpan := 0
+		// The loop goes through every outer label (in this case, cell).
+		for _, cell := range cells {
+			var cellData [][]float64
+			var cellAliases [][]*topodata.TabletAlias
+			var cellLabel yLabel
+
+			if aggregated {
+				cellData, cellAliases, cellLabel = c.aggregatedData(keyspace, cell, selectedTabletType, selectedMetric, metricFunc)
+			} else {
+				cellData, cellAliases, cellLabel = c.unaggregatedData(keyspace, cell, selectedTabletType, metricFunc)
+			}
+
+			if cellLabel.CellLabel.Rowspan > 0 {
+				// Adding the data in reverse to match the format that the plotly map takes in.
+				for i := 0; i < len(cellData); i++ {
+					heatmapData = append([][]float64{cellData[i]}, heatmapData...)
+					if cellAliases == nil {
+						continue
+					}
+					heatmapTabletAliases = append([][]*topodata.TabletAlias{cellAliases[i]}, heatmapTabletAliases...)
+				}
+				heatmapCellAndTypeLabels = append(heatmapCellAndTypeLabels, cellLabel)
+			}
+			keyspaceLabelSpan += cellLabel.CellLabel.Rowspan
+		}
+
+		heatmapKeyspaceLabel := label{Name: keyspace, Rowspan: keyspaceLabelSpan}
+		currHeatmap := heatmap{
+			Data:              heatmapData,
+			Aliases:           heatmapTabletAliases,
+			KeyspaceLabel:     heatmapKeyspaceLabel,
+			CellAndTypeLabels: heatmapCellAndTypeLabels,
+			ShardLabels:       shards,
+		}
+		listOfHeatmaps = append(listOfHeatmaps, currHeatmap)
+	}
+
+	return listOfHeatmaps, nil
+}
+
+func (c *tabletStatsCache) unaggregatedData(keyspace, cell, selectedType string, metricFunc func(stats *discovery.TabletStats) float64) ([][]float64, [][]*topodata.TabletAlias, yLabel) {
+	// This loop goes through every nested label (in this case, tablet type).
+	var heatmapData [][]float64
+	var heatmapTabletAliases [][]*topodata.TabletAlias
+	var cellLabel yLabel
+	cellLabelSpan := 0
+	tabletTypes := tabletTypes(selectedType)
+	shards := c.shards(keyspace)
+	for _, tabletType := range tabletTypes {
+		maxRowLength := 0
+
+		// The loop calculates the maximum number of rows needed.
+		for _, shard := range shards {
+			tabletsCount := len(c.statuses[keyspace][shard][cell][tabletType])
+			if maxRowLength < tabletsCount {
+				maxRowLength = tabletsCount
+			}
+		}
+
+		// dataRowsPerType is a 2D array that will hold the data of the tablets of one (cell, type) combination.
+		dataRowsPerType := make([][]float64, maxRowLength)
+		// aliasRowsPerType is a 2D array that will hold the aliases of the tablets of one (cell, type) combination.
+		aliasRowsPerType := make([][]*topodata.TabletAlias, maxRowLength)
+		for i := range dataRowsPerType {
+			dataRowsPerType[i] = make([]float64, len(shards))
+			aliasRowsPerType[i] = make([]*topodata.TabletAlias, len(shards))
+		}
+
+		// Filling in the 2D array with tablet data by columns.
+		for shardIndex, shard := range shards {
+			for tabletIndex := 0; tabletIndex < maxRowLength; tabletIndex++ {
+				// If the key doesn't exist then the tablet must not exist so that data is set to -1 (tabletMissing).
+				if tabletIndex < len(c.statuses[keyspace][shard][cell][tabletType]) {
+					dataRowsPerType[tabletIndex][shardIndex] = metricFunc(c.statuses[keyspace][shard][cell][tabletType][tabletIndex])
+					aliasRowsPerType[tabletIndex][shardIndex] = c.statuses[keyspace][shard][cell][tabletType][tabletIndex].Tablet.Alias
+				} else {
+					dataRowsPerType[tabletIndex][shardIndex] = tabletMissing
+					aliasRowsPerType[tabletIndex][shardIndex] = nil
+				}
+			}
+		}
+
+		if maxRowLength > 0 {
+			cellLabel.TypeLabels = append(cellLabel.TypeLabels, label{Name: tabletType.String(), Rowspan: maxRowLength})
+		}
+		cellLabelSpan += maxRowLength
+
+		for i := 0; i < len(dataRowsPerType); i++ {
+			heatmapData = append(heatmapData, dataRowsPerType[i])
+			heatmapTabletAliases = append(heatmapTabletAliases, aliasRowsPerType[i])
+		}
+	}
+
+	cellLabel.CellLabel = label{Name: cell, Rowspan: cellLabelSpan}
+
+	return heatmapData, heatmapTabletAliases, cellLabel
+}
+
+func (c *tabletStatsCache) aggregatedData(keyspace, cell, selectedType, selectedMetric string, metricFunc func(stats *discovery.TabletStats) float64) ([][]float64, [][]*topodata.TabletAlias, yLabel) {
+	shards := c.shards(keyspace)
+	tabletTypes := tabletTypes(selectedType)
+
+	var heatmapData [][]float64
+	dataRow := make([]float64, len(shards))
+	// This loop goes through each shard in the (keyspace-cell) combination.
+	for shardIndex, shard := range shards {
+		var sum, count float64 = 0, 0
+		hasTablets := false
+		unhealthyFound := false
+		// Going through all the types of tablets and aggregating their information
+		for _, tabletType := range tabletTypes {
+			tablets, ok := c.statuses[keyspace][shard][cell][tabletType]
+			if !ok {
+				continue
+			}
+			for _, tablet := range tablets {
+				hasTablets = true
+				// If even one tablet is unhealthy then the entire groups becomes unhealthy.
+				if (selectedMetric == "healthy" && metricFunc(tablet) == tabletUnhealthy) ||
+					(selectedMetric == "lag" && metricFunc(tablet) > lagThresholdUnhealthy) {
+					sum = metricFunc(tablet)
+					count = 1
+					unhealthyFound = true
+					break
+				}
+				sum += metricFunc(tablet)
+				count++
+			}
+			if unhealthyFound == true {
+				break
+			}
+		}
+		if hasTablets == true {
+			dataRow[shardIndex] = (sum / count)
+		} else {
+			dataRow[shardIndex] = tabletMissing
+		}
+	}
+	heatmapData = append(heatmapData, dataRow)
+	var heatmapCellLabel yLabel
+	heatmapCellLabel.CellLabel = label{Name: cell, Rowspan: 1}
+
+	return heatmapData, nil, heatmapCellLabel
 }
 
 func (c *tabletStatsCache) tabletStats(tabletAlias *topodatapb.TabletAlias) (discovery.TabletStats, error) {
@@ -265,12 +395,49 @@ func (c *tabletStatsCache) tabletStats(tabletAlias *topodatapb.TabletAlias) (dis
 	return *ts, nil
 }
 
-func replicationLag(stat *discovery.TabletStats) float64 {
-	return float64(stat.Stats.SecondsBehindMaster)
+func healthy(stat *discovery.TabletStats) float64 {
+	health := tabletHealthy
+	// The tablet is unhealthy if there is a health error.
+	if stat.Stats.HealthError != "" {
+		return tabletUnhealthy
+	}
+
+	// The tablet is degraded if there was an error previously.
+	if stat.LastError != nil {
+		if health < tabletDegraded {
+			health = tabletDegraded
+		}
+	}
+
+	// The tablet is healthy/degraded/unheathy depending on the lag.
+	lag := stat.Stats.SecondsBehindMaster
+	if lag < lagThresholdDegraded {
+		if health < tabletHealthy {
+			health = tabletHealthy
+		}
+	} else if lag < lagThresholdUnhealthy {
+		if health < tabletDegraded {
+			health = tabletDegraded
+		}
+	} else {
+		return tabletUnhealthy
+	}
+
+	// The tablet is healthy or degraded based on serving status
+	if stat.Serving == true {
+		if health < tabletHealthy {
+			health = tabletHealthy
+		}
+	} else {
+		if health < tabletDegraded {
+			health = tabletDegraded
+		}
+	}
+	return float64(health)
 }
 
-func cpu(stat *discovery.TabletStats) float64 {
-	return stat.Stats.CpuUsage
+func replicationLag(stat *discovery.TabletStats) float64 {
+	return float64(stat.Stats.SecondsBehindMaster)
 }
 
 func qps(stat *discovery.TabletStats) float64 {

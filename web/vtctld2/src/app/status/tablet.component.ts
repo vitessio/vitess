@@ -2,7 +2,6 @@ import { Component, Input, OnInit } from '@angular/core';
 import { CORE_DIRECTIVES } from '@angular/common';
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-tablet',
     templateUrl: './tablet.component.html',
     styleUrls: ['./tablet.component.css'],

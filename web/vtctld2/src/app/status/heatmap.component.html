@@ -1,6 +1,7 @@
-<table class="collapsed-border">
+<table class="collapsed-border" width="100%">
   <!-- The first row with an offset to match the heatmap labels. -->
   <tr [ngStyle]="{'height': (getXLabelsRowHeight())+'px'}">
+    <td class="no-padding"></td>
     <td class="no-padding"></td>
     <td class="no-padding"></td>
     <td class="no-padding" [attr.rowspan]="(getTotalRows()+1)" (onresize)="changeMap()">
@@ -12,14 +13,22 @@
 
   <!-- The labels, and nested labels, of the map are drawn -->
   <div *ngFor="let label of yLabels">
-      <td  [attr.rowspan]="label.Label.Rowspan" class="bordered"> {{label.Label.Rowspan}} {{label.Label.Name}} </td>
-    </tr>
 
-    <tr *ngFor="let nestedLabel of label.NestedLabels; let isFirst=first" [attr.height]="getRowHeight()">
-      <td *ngIf="isFirst" [attr.rowspan]="label.Label.Rowspan" class="bordered"> {{label.Label.Rowspan}} {{label.Label.Name}}</td>
-      <td class="bordered" [attr.rowspan]="nestedLabel.Rowspan">{{nestedLabel.Rowspan}} {{nestedLabel.Name}}</td>
-    </tr>
- </div>
+       <tr *ngFor="let num of getRemainingRows(label.CellLabel.Rowspan)"></tr>
+     </template>
+
+    <template [ngIf]="label.TypeLabels != null">
+      <template ngFor let-nestedLabel [ngForOf]="label.TypeLabels" let-firstCell="first">
+        <tr [ngStyle]="{'height': getRowHeight()+'px'}">
+          <td *ngIf="firstKeyspace&&firstCell" [attr.rowspan]="keyspace.Rowspan" class="bordered"> {{keyspace.Name}} </td>
+          <td *ngIf="firstCell" [attr.rowspan]="label.CellLabel.Rowspan" class="bordered"> {{label.CellLabel.Name}}</td>
+          <td class="bordered" [attr.rowspan]="nestedLabel.Rowspan"> {{nestedLabel.Name}}</td>
+        </tr>
+
+         <tr *ngFor="let num of getRemainingRows(nestedLabel.Rowspan)"></tr>
+      </template>
+    </template>
+</template>
 </table>
 
 <div *ngIf="popupReady==true" [hidden]="!showPopup" class="popup">

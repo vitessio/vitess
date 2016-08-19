@@ -6,6 +6,8 @@
 
 <!-- Type selector -->
 <p-dropdown #tabletType (onChange)="handleTypeChange($event)" [options]="tabletTypes" [(ngModel)]="selectedType"></p-dropdown>
+
+<!-- Metric selector -->
 <p-dropdown #metric (onChange)="handleMetricChange($event)" [options]="metrics" [(ngModel)]="selectedMetric"></p-dropdown>
 
 <!-- Wait until the heatmap data has been obtained from the service -->
