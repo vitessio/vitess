@@ -69,12 +69,6 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.routeSub.unsubscribe();
   }
 
-  getTablets(keyspaceName, shardName) {
-    this.tabletService.getTablets(keyspaceName, shardName).subscribe(tablets => {
-      this.tablets = tablets;
-      this.tabletsReady = true;
-    });
-  }
 
   getKeyspace(keyspaceName) {
     this.keyspaceService.getKeyspace(keyspaceName).subscribe(keyspaceStreamStream => {

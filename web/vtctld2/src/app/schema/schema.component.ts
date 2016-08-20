@@ -68,10 +68,19 @@ export class SchemaComponent implements OnInit {
   }
 
   getTablets(keyspaceName, shardName) {
-    this.tabletService.getTablets(keyspaceName, shardName).subscribe(tablets => {
+    this.tabletService.getTabletList(keyspaceName + '/' + shardName).subscribe(tablets => {
       console.log(tablets);
-      this.tablets = tablets;
-      // TODO(dsslater): map tablets to dropdown features and select the first one
+      this.tablets = tablets.map(tablet => {
+        return {label: `${tablet.cell}-${tablet.uid}`, value: `${tablet.cell}-${tablet.uid}`};
+      });
+      if (this.tablets.length > 0) {
+        this.selectedTablet = this.tablets[0].value;
+        this.fetchSchema(this.selectedKeyspace, this.selectedShard, this.selectedTablet);
+      }
     });
+  }
+
+  fetchSchema(keyspaceName, shardName, tabletName) {
+    console.log('Fetching:', keyspaceName, shardName, tabletName);
   }
 }
