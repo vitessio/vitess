@@ -9,13 +9,11 @@
   <link rel="icon" type="image/x-icon" href="favicon.ico">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:400,500,700,400italic">
   <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-  <link rel="stylesheet" href="main.css">
 
   <!-- Polyfills -->
-  <script src="bower_components/webcomponentsjs/webcomponents-lite.min.js"></script>
+  <script src="assets/bower_components/webcomponentsjs/webcomponents-lite.min.js"></script>
 
   <!-- Styles for Polymer Elements-->
-  <link rel="import" href="elements.html">
   <style is="custom-style">
     body {
       @apply(--layout-fullbleed);
@@ -25,22 +23,30 @@
     }
   </style>
 
-   <!-- Polymer Elements -->
-  <link rel="import" href="bower_components/iron-icons/iron-icons.html">
-  <link rel="import" href="bower_components/app-layout/app-layout.html">
-  <link rel="import" href="bower_components/paper-icon-button/paper-icon-button.html">
-  <link rel="import" href="bower_components/paper-input/paper-input.html">
-  <link rel="import" href="bower_components/vaadin-grid/vaadin-grid.html">
-  <link rel="import" href="bower_components/vaadin-date-picker/vaadin-date-picker.html">
+  <!-- Polymer Elements -->
+  <link rel="import" href="assets/bower_components/app-layout/app-layout.html">
+  <link rel="import" href="assets/bower_components/iron-flex-layout/iron-flex-layout.html">
+  <link rel="import" href="assets/bower_components/iron-icons/iron-icons.html">
+  <link rel="import" href="assets/bower_components/paper-dialog/paper-dialog.html">
+  <link rel="import" href="assets/bower_components/paper-dropdown-menu/paper-dropdown-menu.html">
+  <link rel="import" href="assets/bower_components/paper-icon-button/paper-icon-button.html">
+  <link rel="import" href="assets/bower_components/paper-input/paper-input.html">
+  <link rel="import" href="assets/bower_components/paper-item/paper-item.html">
+  <link rel="import" href="assets/bower_components/paper-listbox/paper-listbox.html">
+  <link rel="import" href="assets/bower_components/paper-styles/color.html">
+  <link rel="import" href="assets/bower_components/paper-styles/default-theme.html">
+  <link rel="import" href="assets/bower_components/paper-styles/shadow.html">
+  <link rel="import" href="assets/bower_components/paper-styles/typography.html">
 
-  <!--ng-Prime
-  <link rel="stylesheet" type="text/css" href="vendor/primeui/themes/omega/theme.css"/>-->
+  <!-- Other Web Components -->
+  <link rel="import" href="assets/bower_components/vaadin-grid/vaadin-grid.html">
+  <link rel="import" href="assets/bower_components/vaadin-date-picker/vaadin-date-picker.html">
+
+  <!-- PrimeNG -->
   <link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css"/>
-  <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/primeui/4.1.14/primeui-all.min.css"/>
+  <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/primeui/4.1.14/primeui-ng-all.min.css"/>
 
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-  <script src="bower_components/webcomponentsjs/webcomponents-lite.min.js"></script>
-  <link rel="import" href="elements.html">
 </head>
 <body class="flex-column">
   <app-root class="flex-column flex-grow">Loading...</app-root>

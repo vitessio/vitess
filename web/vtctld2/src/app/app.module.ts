@@ -53,6 +53,4 @@ const PolymerComponents = [
   bootstrap: [AppComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
-export class AppModule {
-
-}
+export class AppModule { }
