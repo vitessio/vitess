@@ -10,11 +10,17 @@ import { SchemaComponent } from './schema/schema.component';
 import { ShardComponent } from './dashboard/shard.component';
 import { StatusComponent } from './status/status.component';
 import { TopoBrowserComponent } from './topo/topo-browser.component';
+import { TabletComponent } from './dashboard/tablet.component';
 import { TasksComponent } from './tasks/tasks.component';
 import { APP_ROUTER_PROVIDERS, routing } from './app.routes';
 
 import { MdButtonModule } from '@angular2-material/button';
 import { MdRippleModule } from '@angular2-material/core/ripple/ripple';
+import { MdCardModule } from '@angular2-material/card';
+import { MdCheckboxModule } from '@angular2-material/checkbox';
+import { MdInputModule } from '@angular2-material/input';
+import { MdListModule } from '@angular2-material/list/list';
+import { MdProgressBarModule } from '@angular2-material/progress-bar';
 
 import { PolymerElement } from '@vaadin/angular2-polymer';
 
@@ -29,6 +35,19 @@ const PolymerComponents = [
 ];
 
 @NgModule({
+  imports:      [
+    BrowserModule,
+    routing,
+    FormsModule,
+    MdButtonModule,
+    MdRippleModule,
+    MdCardModule,
+    MdCheckboxModule,
+    MdInputModule,
+    MdListModule,
+    MdProgressBarModule,
+    HttpModule,
+  ],
   declarations: [
     AppComponent,
     DashboardComponent,
@@ -37,16 +56,9 @@ const PolymerComponents = [
     SchemaComponent,
     ShardComponent,
     StatusComponent,
-    TopoBrowserComponent,
+    TabletComponent,
     TasksComponent,
-  ],
-  imports: [
-    BrowserModule,
-    FormsModule,
-    HttpModule,
-    MdButtonModule,
-    MdRippleModule,
-    routing,
+    TopoBrowserComponent,
   ],
   providers: [APP_ROUTER_PROVIDERS, KeyspaceService],
   entryComponents: [AppComponent],
