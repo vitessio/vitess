@@ -220,10 +220,18 @@ else
   mv $VTROOT/dist/node-$node_ver-linux-x64 $node_dist
   rm node_linux64.xz
 fi
-$node_dist/bin/npm install -g angular-cli@webpack
-$node_dist/bin/npm install -g bower
-cd $VTTOP/web/vtctld2 && $node_dist/bin/npm install
-cd $VTTOP/web/vtctld2 && $node_dist/bin/bower install
+
+echo "Installing dependencies for building web UI"
+angular_cli_dir=$VTROOT/dist/angular-cli
+web_dir2=$VTTOP/web/vtctld2
+rm -rf $angular_cli_dir
+cd $VTROOT/dist && git clone git@github.com:angular/angular-cli.git --quiet
+cd $angular_cli_dir && git checkout 3dcd49bc625db36dd9f539cf9ce2492107e0258c --quiet
+cd $angular_cli_dir && $node_dist/bin/npm link --silent
+$node_dist/bin/npm install -g bower --silent
+cd $web_dir2 && $node_dist/bin/npm install --silent
+cd $web_dir2 && $node_dist/bin/npm link angular-cli --silent
+cd $web_dir2 && $node_dist/bin/bower install --silent
 
 # Download chromedriver
 echo "Installing selenium and chromedriver"
