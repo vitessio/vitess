@@ -429,18 +429,21 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(now time.Time, lagRecordN
 	}
 
 	// Guess the slave capacity based on the replication lag change.
-	rate := m.guessSlaveRate(avgMasterRate, lagBefore, lagNow, lagDifference, d)
+	rate, reason := m.guessSlaveRate(avgMasterRate, lagBefore, lagNow, lagDifference, d)
 
 	m.nextAllowedDecrease = now.Add(m.config.MinDurationBetweenChanges() + 2*time.Second)
-	reason := "reaction to replication lag change"
 	m.updateRate(stateDecreaseAndGuessRate, rate, reason, now, lagRecordNow)
 }
 
-func (m *MaxReplicationLagModule) guessSlaveRate(avgMasterRate float64, lagBefore, lagNow int64, lagDifference, d time.Duration) int64 {
+func (m *MaxReplicationLagModule) guessSlaveRate(avgMasterRate float64, lagBefore, lagNow int64, lagDifference, d time.Duration) (int64, string) {
 	// avgSlaveRate is the average rate (per second) at which the slave
 	// applied transactions from the replication stream. We infer the value
 	// from the relative change in the replication lag.
 	avgSlaveRate := avgMasterRate * (d - lagDifference).Seconds() / d.Seconds()
+	if avgSlaveRate <= 0 {
+		log.Warningf("guessed slave rate was <= 0 (%v). master rate: %v d: %.1f lag difference: %.1f", avgSlaveRate, avgMasterRate, d.Seconds(), lagDifference.Seconds())
+		avgSlaveRate = 1
+	}
 	log.Infof("d : %v lag diff: %v master: %v slave: %v", d, lagDifference, avgMasterRate, avgSlaveRate)
 
 	oldRequestsBehind := 0.0
@@ -455,21 +458,24 @@ func (m *MaxReplicationLagModule) guessSlaveRate(avgMasterRate float64, lagBefor
 		newRequestsBehind = (avgMasterRate - avgSlaveRate) * d.Seconds()
 	}
 	requestsBehind := oldRequestsBehind + newRequestsBehind
-	log.Infof("old reqs: %v new reqs: %v total: %v", oldRequestsBehind, newRequestsBehind, requestsBehind)
+	log.Infof("estimated previous backlog: %v new estimated backlog due to lag increase: %v total: %v", oldRequestsBehind, newRequestsBehind, requestsBehind)
 
+	newRate := avgSlaveRate
 	// Reduce the new rate such that it has time to catch up the requests it's
 	// behind within the next interval.
-	futureRequests := avgSlaveRate * m.config.MinDurationBetweenChanges().Seconds()
-	if futureRequests > 0 {
-		avgSlaveRate *= (futureRequests - requestsBehind) / futureRequests
-		if avgSlaveRate < 1 {
-			// Backlog is too high. Reduce rate to 1 request/second.
-			avgSlaveRate = 1.0
-		}
-		log.Infof("slave after future reqs adj: %v", avgSlaveRate)
+	futureRequests := newRate * m.config.MinDurationBetweenChanges().Seconds()
+	newRate *= (futureRequests - requestsBehind) / futureRequests
+	var reason string
+	if newRate < 1 {
+		// Backlog is too high. Reduce rate to 1 request/second.
+		// TODO(mberlin): Make this a constant.
+		newRate = 1
+		reason = fmt.Sprintf("based on the guessed slave rate of: %v the slave won't be able to process the guessed backlog of %d requests within the next %.f seconds", avgSlaveRate, int64(requestsBehind), m.config.MinDurationBetweenChanges().Seconds())
+	} else {
+		reason = fmt.Sprintf("new rate is %d lower than the guessed slave rate to account for a guessed backlog of %d requests over %.f seconds", int64(avgSlaveRate-newRate), int64(requestsBehind), m.config.MinDurationBetweenChanges().Seconds())
 	}
 
-	return int64(avgSlaveRate)
+	return int64(newRate), reason
 }
 
 func (m *MaxReplicationLagModule) emergency(now time.Time, lagRecordNow replicationLagRecord) {
