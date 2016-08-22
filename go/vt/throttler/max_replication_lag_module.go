@@ -18,12 +18,12 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
-type state int
+type state string
 
 const (
-	increaseRate state = iota
-	decreaseAndGuessRate
-	emergency
+	stateIncreaseRate         state = "I"
+	stateDecreaseAndGuessRate       = "D"
+	stateEmergency                  = "E"
 )
 
 type replicationLagChange int
@@ -289,7 +289,7 @@ func (m *MaxReplicationLagModule) increaseRate(now time.Time, lagRecordNow repli
 
 	oldRate := m.rate.Get()
 
-	m.markCurrentRateAsBadOrGood(now, increaseRate, unknown)
+	m.markCurrentRateAsBadOrGood(now, stateIncreaseRate, unknown)
 	m.resetCurrentState(now)
 
 	// Calculate new rate based on the previous (preferrably actual) rate.
@@ -336,7 +336,7 @@ func (m *MaxReplicationLagModule) increaseRate(now time.Time, lagRecordNow repli
 	m.updateNextAllowedIncrease(now, increase, lagRecordNow.Key)
 	reason := fmt.Sprintf("periodic increase of the %v from %d to %d (by %.1f%%) based on %v to find out the maximum - next allowed increase in %.0f seconds",
 		previousRateSource, oldRate, int64(rate), increase*100, increaseReason, m.nextAllowedIncrease.Sub(now).Seconds())
-	m.updateRate(increaseRate, int64(rate), reason, now, lagRecordNow)
+	m.updateRate(stateIncreaseRate, int64(rate), reason, now, lagRecordNow)
 }
 
 func (m *MaxReplicationLagModule) updateNextAllowedIncrease(now time.Time, increase float64, key string) {
@@ -401,7 +401,7 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(now time.Time, lagRecordN
 	} else if lagNow > lagBefore {
 		replicationLagChange = greater
 	}
-	m.markCurrentRateAsBadOrGood(now, decreaseAndGuessRate, replicationLagChange)
+	m.markCurrentRateAsBadOrGood(now, stateDecreaseAndGuessRate, replicationLagChange)
 	m.resetCurrentState(now)
 
 	if replicationLagChange == equal {
@@ -433,7 +433,7 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(now time.Time, lagRecordN
 
 	m.nextAllowedDecrease = now.Add(m.config.MinDurationBetweenChanges() + 2*time.Second)
 	reason := "reaction to replication lag change"
-	m.updateRate(decreaseAndGuessRate, rate, reason, now, lagRecordNow)
+	m.updateRate(stateDecreaseAndGuessRate, rate, reason, now, lagRecordNow)
 }
 
 func (m *MaxReplicationLagModule) guessSlaveRate(avgMasterRate float64, lagBefore, lagNow int64, lagDifference, d time.Duration) int64 {
@@ -473,14 +473,14 @@ func (m *MaxReplicationLagModule) guessSlaveRate(avgMasterRate float64, lagBefor
 }
 
 func (m *MaxReplicationLagModule) emergency(now time.Time, lagRecordNow replicationLagRecord) {
-	m.markCurrentRateAsBadOrGood(now, emergency, unknown)
+	m.markCurrentRateAsBadOrGood(now, stateEmergency, unknown)
 	m.resetCurrentState(now)
 
 	oldRate := m.rate.Get()
 	rate := int64(float64(oldRate) * m.config.EmergencyDecrease)
 
 	reason := fmt.Sprintf("replication lag went beyond max: %d > %d reducing previous rate by %.f%% to: %v", lagRecordNow.lag(), m.config.MaxReplicationLagSec, m.config.EmergencyDecrease*100, rate)
-	m.updateRate(emergency, rate, reason, now, lagRecordNow)
+	m.updateRate(stateEmergency, rate, reason, now, lagRecordNow)
 }
 
 func (m *MaxReplicationLagModule) updateRate(newState state, rate int64, reason string, now time.Time, lagRecordNow replicationLagRecord) {
@@ -521,20 +521,20 @@ func (m *MaxReplicationLagModule) markCurrentRateAsBadOrGood(now time.Time, newS
 	rateIsGood := false
 
 	switch m.currentState {
-	case increaseRate:
+	case stateIncreaseRate:
 		switch newState {
-		case increaseRate:
+		case stateIncreaseRate:
 			rateIsGood = true
-		case decreaseAndGuessRate:
+		case stateDecreaseAndGuessRate:
 			rateIsGood = false
-		case emergency:
+		case stateEmergency:
 			rateIsGood = false
 		}
-	case decreaseAndGuessRate:
+	case stateDecreaseAndGuessRate:
 		switch newState {
-		case increaseRate:
+		case stateIncreaseRate:
 			rateIsGood = true
-		case decreaseAndGuessRate:
+		case stateDecreaseAndGuessRate:
 			switch replicationLagChange {
 			case unknown:
 				return
@@ -546,10 +546,10 @@ func (m *MaxReplicationLagModule) markCurrentRateAsBadOrGood(now time.Time, newS
 			case greater:
 				rateIsGood = false
 			}
-		case emergency:
+		case stateEmergency:
 			rateIsGood = false
 		}
-	case emergency:
+	case stateEmergency:
 		// Rate changes initiated during an "emergency" phase provide no meaningful data point.
 		return
 	}
@@ -567,9 +567,9 @@ func (m *MaxReplicationLagModule) markCurrentRateAsBadOrGood(now time.Time, newS
 // reset.
 func (m *MaxReplicationLagModule) resetCurrentState(now time.Time) {
 	switch m.currentState {
-	case increaseRate:
+	case stateIncreaseRate:
 		m.nextAllowedIncrease = now
-	case decreaseAndGuessRate:
+	case stateDecreaseAndGuessRate:
 		m.nextAllowedDecrease = now
 	}
 }
