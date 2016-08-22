@@ -2,16 +2,21 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+// Package logz provides an infrastructure to expose a list of entries as
+// a sortable table on a webpage.
+//
+// It is used by many internal vttablet pages e.g. /queryz, /querylogz, /schemaz
+// /streamqueryz or /txlogz.
+//
+// See tabletserver/querylogz.go for an example how to use it.
+package logz
 
 import (
 	"bytes"
 	"net/http"
-	"strconv"
-	"time"
 )
 
-func startHTMLTable(w http.ResponseWriter) {
+func StartHTMLTable(w http.ResponseWriter) {
 	w.Write([]byte(`
 		<!DOCTYPE html>
 		<html>
@@ -69,7 +74,7 @@ func startHTMLTable(w http.ResponseWriter) {
 	`))
 }
 
-func endHTMLTable(w http.ResponseWriter) {
+func EndHTMLTable(w http.ResponseWriter) {
 	defer w.Write([]byte(`
 </table>
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/2.1.0/jquery.min.js"></script>
@@ -117,9 +122,9 @@ $(function() {
 </html>`))
 }
 
-// wrappable inserts zero-width whitespaces to make
+// Wrappable inserts zero-width whitespaces to make
 // the string wrappable.
-func wrappable(in string) string {
+func Wrappable(in string) string {
 	buf := bytes.NewBuffer(nil)
 	for _, ch := range in {
 		buf.WriteRune(ch)
@@ -129,29 +134,4 @@ func wrappable(in string) string {
 		}
 	}
 	return buf.String()
-}
-
-func adjustValue(val int, lower int, upper int) int {
-	if val < lower {
-		return lower
-	} else if val > upper {
-		return upper
-	}
-	return val
-}
-
-func parseTimeoutLimitParams(req *http.Request) (time.Duration, int) {
-	timeout := 10
-	limit := 300
-	if ts, ok := req.URL.Query()["timeout"]; ok {
-		if t, err := strconv.Atoi(ts[0]); err == nil {
-			timeout = adjustValue(t, 0, 60)
-		}
-	}
-	if l, ok := req.URL.Query()["limit"]; ok {
-		if lim, err := strconv.Atoi(l[0]); err == nil {
-			limit = adjustValue(lim, 1, 200000)
-		}
-	}
-	return time.Duration(timeout) * time.Second, limit
 }

@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
+	"github.com/youtube/vitess/go/vt/logz"
 )
 
 var (
@@ -42,11 +44,11 @@ var (
 	`)
 	querylogzFuncMap = template.FuncMap{
 		"stampMicro":   func(t time.Time) string { return t.Format(time.StampMicro) },
-		"cssWrappable": wrappable,
+		"cssWrappable": logz.Wrappable,
 		"unquote":      func(s string) string { return strings.Trim(s, "\"") },
 	}
 	querylogzTmpl = template.Must(template.New("example").Funcs(querylogzFuncMap).Parse(`
-		<tr class=".ColorLevel">
+		<tr class="{{.ColorLevel}}">
 			<td>{{.Method}}</td>
 			<td>{{.ContextHTML}}</td>
 			<td>{{.EffectiveCaller}}</td>
@@ -84,8 +86,8 @@ func querylogzHandler(ch chan interface{}, w http.ResponseWriter, r *http.Reques
 		return
 	}
 	timeout, limit := parseTimeoutLimitParams(r)
-	startHTMLTable(w)
-	defer endHTMLTable(w)
+	logz.StartHTMLTable(w)
+	defer logz.EndHTMLTable(w)
 	w.Write(querylogzHeader)
 
 	tmr := time.NewTimer(timeout)
@@ -126,4 +128,29 @@ func querylogzHandler(ch chan interface{}, w http.ResponseWriter, r *http.Reques
 			return
 		}
 	}
+}
+
+func parseTimeoutLimitParams(req *http.Request) (time.Duration, int) {
+	timeout := 10
+	limit := 300
+	if ts, ok := req.URL.Query()["timeout"]; ok {
+		if t, err := strconv.Atoi(ts[0]); err == nil {
+			timeout = adjustValue(t, 0, 60)
+		}
+	}
+	if l, ok := req.URL.Query()["limit"]; ok {
+		if lim, err := strconv.Atoi(l[0]); err == nil {
+			limit = adjustValue(lim, 1, 200000)
+		}
+	}
+	return time.Duration(timeout) * time.Second, limit
+}
+
+func adjustValue(val int, lower int, upper int) int {
+	if val < lower {
+		return lower
+	} else if val > upper {
+		return upper
+	}
+	return val
 }

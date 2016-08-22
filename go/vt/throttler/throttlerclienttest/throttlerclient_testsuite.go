@@ -117,14 +117,14 @@ func (tf *testFixture) configuration(t *testing.T, client throttlerclient.Client
 
 	// Test UpdateConfiguration.
 	config := &throttlerdata.Configuration{
-		TargetReplicationLagSec:        0,
-		MaxReplicationLagSec:           1,
-		InitialRate:                    2,
-		MaxIncrease:                    0.3,
-		EmergencyDecrease:              0.4,
-		MinDurationBetweenChangesSec:   5,
-		MaxDurationBetweenIncreasesSec: 6,
-		IgnoreNSlowestReplicas:         7,
+		TargetReplicationLagSec:        1,
+		MaxReplicationLagSec:           2,
+		InitialRate:                    3,
+		MaxIncrease:                    0.4,
+		EmergencyDecrease:              0.5,
+		MinDurationBetweenChangesSec:   6,
+		MaxDurationBetweenIncreasesSec: 7,
+		IgnoreNSlowestReplicas:         8,
 	}
 	names, err := client.UpdateConfiguration(context.Background(), "t2", config /* false */, true /* copyZeroValues */)
 	if err != nil {
