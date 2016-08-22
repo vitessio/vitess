@@ -275,7 +275,7 @@ func (m *MaxReplicationLagModule) recalculateRate(lagRecordNow replicationLagRec
 		r.TestedState = stateEmergency
 		m.emergency(&r, now, lagRecordNow)
 	}
-	
+
 	r.HighestGood = m.memory.highestGood()
 	r.LowestBad = m.memory.lowestBad()
 	log.Infof("%v", r)
@@ -610,12 +610,19 @@ func (m *MaxReplicationLagModule) markCurrentRateAsBadOrGood(r *result, now time
 		return
 	}
 
+	r.CurrentRate = int64(rate)
 	if rateIsGood {
-		log.Infof("marking rate %.f as good state: %v", rate, m.currentState)
-		m.memory.markGood(int64(rate))
+		if err := m.memory.markGood(int64(rate)); err == nil {
+			r.GoodOrBad = goodRate
+		} else {
+			r.MemorySkipReason = err.Error()
+		}
 	} else {
-		log.Infof("marking rate %.f as bad state: %v", rate, m.currentState)
-		m.memory.markBad(int64(rate))
+		if err := m.memory.markBad(int64(rate)); err == nil {
+			r.GoodOrBad = badRate
+		} else {
+			r.MemorySkipReason = err.Error()
+		}
 	}
 }
 

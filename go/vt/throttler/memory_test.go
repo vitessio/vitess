@@ -47,7 +47,9 @@ func TestMemory(t *testing.T) {
 	}
 
 	// a good 601 will be ignored because the first bad is at 300.
-	m.markGood(601)
+	if err := m.markGood(601); err == nil {
+		t.Fatal("good rates cannot go beyond the lowest bad rate: should have returned an error")
+	}
 	if got := m.lowestBad(); got != want300 {
 		t.Fatalf("good rates cannot go beyond the lowest bad rate: got = %v, want = %v", got, want300)
 	}
@@ -78,7 +80,9 @@ func TestMemory_markDownIgnoresDrasticBadValues(t *testing.T) {
 		t.Fatalf("bad rate was not correctly inserted: got = %v, want = %v", got, bad)
 	}
 
-	m.markBad(500)
+	if err := m.markBad(500); err == nil {
+		t.Fatal("bad rate should have been ignored and an error should have been returned")
+	}
 	if got := m.highestGood(); got != good {
 		t.Fatalf("bad rate should have been ignored: got = %v, want = %v", got, good)
 	}
