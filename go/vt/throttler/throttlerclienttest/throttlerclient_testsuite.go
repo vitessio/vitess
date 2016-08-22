@@ -20,6 +20,8 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/youtube/vitess/go/vt/proto/throttlerdata"
 	"github.com/youtube/vitess/go/vt/throttler"
 	"github.com/youtube/vitess/go/vt/throttler/throttlerclient"
 )
@@ -35,6 +37,8 @@ func TestSuite(t *testing.T, c throttlerclient.Client) {
 	tf.maxRates(t, c)
 
 	tf.setMaxRate(t, c)
+
+	tf.configuration(t, c)
 }
 
 // TestSuitePanics tests the panic handling of each RPC method. Unlike TestSuite
@@ -44,6 +48,12 @@ func TestSuitePanics(t *testing.T, c throttlerclient.Client) {
 	maxRatesPanics(t, c)
 
 	setMaxRatePanics(t, c)
+
+	getConfigurationPanics(t, c)
+
+	updateConfigurationPanics(t, c)
+
+	resetConfigurationPanics(t, c)
 }
 
 var throttlerNames = []string{"t1", "t2"}
@@ -99,6 +109,62 @@ func (tf *testFixture) setMaxRate(t *testing.T, client throttlerclient.Client) {
 	}
 }
 
+func (tf *testFixture) configuration(t *testing.T, client throttlerclient.Client) {
+	initialConfigs, err := client.GetConfiguration(context.Background(), "" /* all */)
+	if err != nil {
+		t.Fatalf("Cannot execute remote command: %v", err)
+	}
+
+	// Test UpdateConfiguration.
+	config := &throttlerdata.Configuration{
+		TargetReplicationLagSec:        1,
+		MaxReplicationLagSec:           2,
+		InitialRate:                    3,
+		MaxIncrease:                    0.4,
+		EmergencyDecrease:              0.5,
+		MinDurationBetweenChangesSec:   6,
+		MaxDurationBetweenIncreasesSec: 7,
+		IgnoreNSlowestReplicas:         8,
+	}
+	names, err := client.UpdateConfiguration(context.Background(), "t2", config /* false */, true /* copyZeroValues */)
+	if err != nil {
+		t.Fatalf("Cannot execute remote command: %v", err)
+	}
+	if got, want := names, []string{"t2"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("returned names of updated throttlers is wrong. got = %v, want = %v", got, want)
+	}
+
+	// Test GetConfiguration.
+	configs, err := client.GetConfiguration(context.Background(), "t2")
+	if err != nil {
+		t.Fatalf("Cannot execute remote command: %v", err)
+	}
+	if len(configs) != 1 || configs["t2"] == nil {
+		t.Fatalf("wrong named configuration returned. got = %v, want configuration for t2", configs)
+	}
+	if got, want := configs["t2"], config; !proto.Equal(got, want) {
+		t.Fatalf("did not read updated config. got = %v, want = %v", got, want)
+	}
+
+	// Reset should return the initial configs.
+	namesForReset, err := client.ResetConfiguration(context.Background(), "" /* all */)
+	if err != nil {
+		t.Fatalf("Cannot execute remote command: %v", err)
+	}
+	if got, want := namesForReset, throttlerNames; !reflect.DeepEqual(got, want) {
+		t.Fatalf("returned names of reset throttlers is wrong. got = %v, want = %v", got, want)
+	}
+
+	// Verify that it was correctly set.
+	configsAfterReset, err := client.GetConfiguration(context.Background(), "" /* all */)
+	if err != nil {
+		t.Fatalf("Cannot execute remote command: %v", err)
+	}
+	if got, want := configsAfterReset, initialConfigs; !reflect.DeepEqual(got, want) {
+		t.Fatalf("wrong configurations after reset. got = %v, want = %v", got, want)
+	}
+}
+
 // FakeManager implements the throttler.Manager interface and panics on all
 // methods defined in the interface.
 type FakeManager struct {
@@ -116,6 +182,21 @@ func (fm *FakeManager) SetMaxRate(int64) []string {
 	panic(panicMsg)
 }
 
+// GetConfiguration implements the throttler.Manager interface. It always panics.
+func (fm *FakeManager) GetConfiguration(throttlerName string) (map[string]*throttlerdata.Configuration, error) {
+	panic(panicMsg)
+}
+
+// UpdateConfiguration implements the throttler.Manager interface. It always panics.
+func (fm *FakeManager) UpdateConfiguration(throttlerName string, configuration *throttlerdata.Configuration, copyZeroValues bool) ([]string, error) {
+	panic(panicMsg)
+}
+
+// ResetConfiguration implements the throttler.Manager interface. It always panics.
+func (fm *FakeManager) ResetConfiguration(throttlerName string) ([]string, error) {
+	panic(panicMsg)
+}
+
 // Test methods which test for each RPC that panics are caught.
 
 func maxRatesPanics(t *testing.T, client throttlerclient.Client) {
@@ -129,6 +210,27 @@ func setMaxRatePanics(t *testing.T, client throttlerclient.Client) {
 	_, err := client.SetMaxRate(context.Background(), 23)
 	if !errorFromPanicHandler(err) {
 		t.Fatalf("SetMaxRate RPC implementation does not catch panics properly: %v", err)
+	}
+}
+
+func getConfigurationPanics(t *testing.T, client throttlerclient.Client) {
+	_, err := client.GetConfiguration(context.Background(), "")
+	if !errorFromPanicHandler(err) {
+		t.Fatalf("GetConfiguration RPC implementation does not catch panics properly: %v", err)
+	}
+}
+
+func updateConfigurationPanics(t *testing.T, client throttlerclient.Client) {
+	_, err := client.UpdateConfiguration(context.Background(), "", nil, false)
+	if !errorFromPanicHandler(err) {
+		t.Fatalf("UpdateConfiguration RPC implementation does not catch panics properly: %v", err)
+	}
+}
+
+func resetConfigurationPanics(t *testing.T, client throttlerclient.Client) {
+	_, err := client.ResetConfiguration(context.Background(), "")
+	if !errorFromPanicHandler(err) {
+		t.Fatalf("ResetConfiguration RPC implementation does not catch panics properly: %v", err)
 	}
 }
 

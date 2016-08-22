@@ -259,22 +259,28 @@ class BaseShardingTest(object):
     self.assertIn('No binlog player is running', status)
     self.assertIn('</html>', status)
 
-  def check_binlog_throttler(self, dest_master_addr, names, rate):
+  def check_throttler_service(self, throttler_server, names, rate):
     """Checks that the throttler responds to RPC requests.
 
     We assume it was enabled by SplitClone with the flag --max_tps 9999.
 
     Args:
-      dest_master_addr: vttablet endpoint. Format: host:port
+      throttler_server: vtworker or vttablet RPC endpoint. Format: host:port
       names: Names of the throttlers e.g. BinlogPlayer/0 or <keyspace>/<shard>.
       rate: Expected initial rate the throttler was started with.
     """
+    self.check_throttler_service_maxrates(throttler_server, names, rate)
+
+    self.check_throttler_service_configuration(throttler_server, names)
+
+  def check_throttler_service_maxrates(self, throttler_server, names, rate):
+    """Checks the vtctl ThrottlerMaxRates and ThrottlerSetRate commands."""
     # Avoid flakes by waiting for all throttlers. (Necessary because filtered
     # replication on vttablet will register the throttler asynchronously.)
     timeout_s = 10
     while True:
       stdout, _ = utils.run_vtctl(['ThrottlerMaxRates', '--server',
-                                   dest_master_addr], auto_log=True,
+                                   throttler_server], auto_log=True,
                                   trap_output=True)
       if '%d active throttler(s)' % len(names) in stdout:
         break
@@ -286,14 +292,56 @@ class BaseShardingTest(object):
     # Check that it's possible to change the max rate on the throttler.
     new_rate = 'unlimited'
     stdout, _ = utils.run_vtctl(['ThrottlerSetMaxRate', '--server',
-                                 dest_master_addr, new_rate],
+                                 throttler_server, new_rate],
                                 auto_log=True, trap_output=True)
     self.assertIn('%d active throttler(s)' % len(names), stdout)
     stdout, _ = utils.run_vtctl(['ThrottlerMaxRates', '--server',
-                                 dest_master_addr], auto_log=True,
+                                 throttler_server], auto_log=True,
                                 trap_output=True)
     for name in names:
       self.assertIn('| %s | %s |' % (name, new_rate), stdout)
+    self.assertIn('%d active throttler(s)' % len(names), stdout)
+
+  def check_throttler_service_configuration(self, throttler_server, names):
+    """Checks the vtctl (Get|Update|Reset)ThrottlerConfiguration commands."""
+    # Verify updating the throttler configuration.
+    stdout, _ = utils.run_vtctl(['UpdateThrottlerConfiguration',
+                                 '--server', throttler_server,
+                                 '--copy_zero_values',
+                                 'target_replication_lag_sec:12345 '
+                                 'max_replication_lag_sec:65789 '
+                                 'initial_rate:3 '
+                                 'max_increase:0.4 '
+                                 'emergency_decrease:0.5 '
+                                 'min_duration_between_changes_sec:6 '
+                                 'max_duration_between_increases_sec:7 '
+                                 'ignore_n_slowest_replicas:0 '],
+                                auto_log=True, trap_output=True)
+    self.assertIn('%d active throttler(s)' % len(names), stdout)
+    # Check the updated configuration.
+    stdout, _ = utils.run_vtctl(['GetThrottlerConfiguration',
+                                 '--server', throttler_server],
+                                auto_log=True, trap_output=True)
+    for name in names:
+      # The max should be set and have a non-zero value.
+      # We test only the the first field 'target_replication_lag_sec'.
+      self.assertIn('| %s | target_replication_lag_sec:12345 ' % (name), stdout)
+      # protobuf omits fields with a zero value in the text output.
+      self.assertNotIn('ignore_n_slowest_replicas', stdout)
+    self.assertIn('%d active throttler(s)' % len(names), stdout)
+
+    # Reset clears our configuration values.
+    stdout, _ = utils.run_vtctl(['ResetThrottlerConfiguration',
+                                 '--server', throttler_server],
+                                auto_log=True, trap_output=True)
+    self.assertIn('%d active throttler(s)' % len(names), stdout)
+    # Check that the reset configuration no longer has our values.
+    stdout, _ = utils.run_vtctl(['GetThrottlerConfiguration',
+                                 '--server', throttler_server],
+                                auto_log=True, trap_output=True)
+    for name in names:
+      # Target lag value should no longer be 12345 and be back to the default.
+      self.assertNotIn('target_replication_lag_sec:12345', stdout)
     self.assertIn('%d active throttler(s)' % len(names), stdout)
 
   def verify_reconciliation_counters(self, worker_port, online_or_offline,

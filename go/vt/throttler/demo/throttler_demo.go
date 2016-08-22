@@ -7,12 +7,14 @@ package main
 import (
 	"flag"
 	"math/rand"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
@@ -49,7 +51,7 @@ import (
 var (
 	rate                     = flag.Int64("rate", 1000, "maximum rate of the throttled demo server at the start")
 	duration                 = flag.Duration("duration", 600*time.Second, "total duration the demo runs")
-	lagUpdateInterval        = flag.Duration("lag_update_interval", 1*time.Second, "interval at which the current replication lag will be broadcasted to the throttler")
+	lagUpdateInterval        = flag.Duration("lag_update_interval", 5*time.Second, "interval at which the current replication lag will be broadcasted to the throttler")
 	replicaDegrationInterval = flag.Duration("replica_degration_interval", 0*time.Second, "simulate a throughput degration of the replica every X interval (i.e. the replica applies transactions at a slower rate for -reparent_duration and the replication lag might go up)")
 	replicaDegrationDuration = flag.Duration("replica_degration_duration", 10*time.Second, "duration a simulated degration should take")
 )
@@ -271,6 +273,11 @@ func (c *client) StatsUpdate(ts *discovery.TabletStats) {
 func main() {
 	flag.Parse()
 
+	go servenv.RunDefault()
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/throttlerz", http.StatusTemporaryRedirect)
+	})
+
 	log.Infof("start rate set to: %v", *rate)
 	replica := newReplica(*lagUpdateInterval, *replicaDegrationInterval, *replicaDegrationDuration)
 	master := &master{replica: replica}
@@ -280,4 +287,8 @@ func main() {
 	time.Sleep(*duration)
 	client.stop()
 	replica.stop()
+}
+
+func init() {
+	servenv.RegisterDefaultFlags()
 }

@@ -281,7 +281,10 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	for i, sqlLine := range createSQL {
 		err = wr.applySQLShard(ctx, destTabletInfo, sqlLine, i == len(createSQL)-1)
 		if err != nil {
-			return err
+			return fmt.Errorf("creating a table failed."+
+				" Most likely some tables already exist on the destination and differ from the source."+
+				" Please remove all to be copied tables from the destination manually and run this command again."+
+				" Full error: %v", err)
 		}
 	}
 

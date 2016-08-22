@@ -416,10 +416,10 @@ primary key (name)
     self.check_binlog_server_vars(shard_1_slave1, horizontal=True)
 
     # Check that the throttler was enabled.
-    self.check_binlog_throttler(shard_2_master.rpc_endpoint(),
-                                ['BinlogPlayer/0'], 9999)
-    self.check_binlog_throttler(shard_3_master.rpc_endpoint(),
-                                ['BinlogPlayer/0'], 9999)
+    self.check_throttler_service(shard_2_master.rpc_endpoint(),
+                                 ['BinlogPlayer/0'], 9999)
+    self.check_throttler_service(shard_3_master.rpc_endpoint(),
+                                 ['BinlogPlayer/0'], 9999)
 
     # testing filtered replication: insert a bunch of data on shard 1,
     # check we get most of it after a few seconds, wait for binlog server

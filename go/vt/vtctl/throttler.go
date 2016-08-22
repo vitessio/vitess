@@ -11,7 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/olekukonko/tablewriter"
+	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/proto/throttlerdata"
 	"github.com/youtube/vitess/go/vt/throttler"
 	"github.com/youtube/vitess/go/vt/throttler/throttlerclient"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -37,6 +40,24 @@ func init() {
 		commandThrottlerSetMaxRate,
 		"-server <vtworker or vttablet> <rate>",
 		"Sets the max rate for all active resharding throttlers on the server."})
+
+	addCommand(throttlerGroupName, command{
+		"GetThrottlerConfiguration",
+		commandGetThrottlerConfiguration,
+		"-server <vtworker or vttablet> [<throttler name>]",
+		"Returns the current configuration of the MaxReplicationLag module. If no throttler name is specified, the configuration of all throttlers will be returned."})
+	addCommand(throttlerGroupName, command{
+		"UpdateThrottlerConfiguration",
+		commandUpdateThrottlerConfiguration,
+		// Note: <configuration protobuf text> is put in quotes to tell the user
+		// that the value must be quoted such that it's one argument only.
+		`-server <vtworker or vttablet> [-copy_zero_values] "<configuration protobuf text>" [<throttler name>]`,
+		"Updates the configuration of the MaxReplicationLag module. The configuration must be specified as protobuf text. If a field is omitted or has a zero value, it will be ignored unless -copy_zero_values is specified. If no throttler name is specified, all throttlers will be updated."})
+	addCommand(throttlerGroupName, command{
+		"ResetThrottlerConfiguration",
+		commandResetThrottlerConfiguration,
+		"-server <vtworker or vttablet> [<throttler name>]",
+		"Resets the current configuration of the MaxReplicationLag module. If no throttler name is specified, the configuration of all throttlers will be reset."})
 }
 
 func commandThrottlerMaxRates(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -120,13 +141,147 @@ func commandThrottlerSetMaxRate(ctx context.Context, wr *wrangler.Wrangler, subF
 		return nil
 	}
 
+	printUpdatedThrottlers(wr.Logger(), *server, names)
+	return nil
+}
+
+func commandGetThrottlerConfiguration(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	server := subFlags.String("server", "", "vtworker or vttablet to connect to")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() > 1 {
+		return fmt.Errorf("the GetThrottlerConfiguration command accepts only <throttler name> as optional positional parameter")
+	}
+
+	var throttlerName string
+	if subFlags.NArg() == 1 {
+		throttlerName = subFlags.Arg(0)
+	}
+
+	// Connect to the server.
+	ctx, cancel := context.WithTimeout(ctx, shortTimeout)
+	defer cancel()
+	client, err := throttlerclient.New(*server)
+	if err != nil {
+		return fmt.Errorf("error creating a throttler client for server '%v': %v", *server, err)
+	}
+	defer client.Close()
+
+	configurations, err := client.GetConfiguration(ctx, throttlerName)
+	if err != nil {
+		return fmt.Errorf("failed to get the throttler configuration from server '%v': %v", *server, err)
+	}
+
+	if len(configurations) == 0 {
+		wr.Logger().Printf("There are no active throttlers on server '%v'.\n", *server)
+		return nil
+	}
+
 	table := tablewriter.NewWriter(loggerWriter{wr.Logger()})
+	table.SetAutoFormatHeaders(false)
+	// The full protobuf text will span more than one terminal line. Do not wrap
+	// it to make it easy to copy and paste it.
+	table.SetAutoWrapText(false)
+	table.SetHeader([]string{"Name", "Configuration (protobuf text, fields with a zero value are omitted)"})
+	for name, c := range configurations {
+		table.Append([]string{name, proto.CompactTextString(c)})
+	}
+	table.Render()
+	wr.Logger().Printf("%d active throttler(s) on server '%v'.\n", len(configurations), *server)
+	return nil
+}
+
+func commandUpdateThrottlerConfiguration(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	server := subFlags.String("server", "", "vtworker or vttablet to connect to")
+	copyZeroValues := subFlags.Bool("copy_zero_values", false, "If true, fields with zero values will be copied as well")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() > 2 {
+		return fmt.Errorf(`the "<configuration protobuf text>" argument is required for the UpdateThrottlerConfiguration command. The <throttler name> is an optional positional parameter`)
+	}
+
+	var throttlerName string
+	if subFlags.NArg() == 2 {
+		throttlerName = subFlags.Arg(1)
+	}
+
+	protoText := subFlags.Arg(0)
+	configuration := &throttlerdata.Configuration{}
+	if err := proto.UnmarshalText(protoText, configuration); err != nil {
+		return fmt.Errorf("Failed to unmarshal the configuration protobuf text (%v) into a protobuf instance: %v", protoText, err)
+	}
+
+	// Connect to the server.
+	ctx, cancel := context.WithTimeout(ctx, shortTimeout)
+	defer cancel()
+	client, err := throttlerclient.New(*server)
+	if err != nil {
+		return fmt.Errorf("error creating a throttler client for server '%v': %v", *server, err)
+	}
+	defer client.Close()
+
+	names, err := client.UpdateConfiguration(ctx, throttlerName, configuration, *copyZeroValues)
+	if err != nil {
+		return fmt.Errorf("failed to update the throttler configuration on server '%v': %v", *server, err)
+	}
+
+	if len(names) == 0 {
+		wr.Logger().Printf("UpdateThrottlerConfiguration did nothing because server '%v' has no active throttlers.\n", *server)
+		return nil
+	}
+
+	printUpdatedThrottlers(wr.Logger(), *server, names)
+	wr.Logger().Printf("The new configuration will become effective with the next recalculation event.\n")
+	return nil
+}
+
+func commandResetThrottlerConfiguration(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	server := subFlags.String("server", "", "vtworker or vttablet to connect to")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() > 1 {
+		return fmt.Errorf("the ResetThrottlerConfiguration command accepts only <throttler name> as optional positional parameter")
+	}
+
+	var throttlerName string
+	if subFlags.NArg() == 1 {
+		throttlerName = subFlags.Arg(0)
+	}
+
+	// Connect to the server.
+	ctx, cancel := context.WithTimeout(ctx, shortTimeout)
+	defer cancel()
+	client, err := throttlerclient.New(*server)
+	if err != nil {
+		return fmt.Errorf("error creating a throttler client for server '%v': %v", *server, err)
+	}
+	defer client.Close()
+
+	names, err := client.ResetConfiguration(ctx, throttlerName)
+	if err != nil {
+		return fmt.Errorf("failed to get the throttler configuration from server '%v': %v", *server, err)
+	}
+
+	if len(names) == 0 {
+		wr.Logger().Printf("ResetThrottlerConfiguration did nothing because server '%v' has no active throttlers.\n", *server)
+		return nil
+	}
+
+	printUpdatedThrottlers(wr.Logger(), *server, names)
+	wr.Logger().Printf("The reset initial configuration will become effective with the next recalculation event.\n")
+	return nil
+}
+
+func printUpdatedThrottlers(logger logutil.Logger, server string, names []string) {
+	table := tablewriter.NewWriter(loggerWriter{logger})
 	table.SetAutoFormatHeaders(false)
 	table.SetHeader([]string{"Name"})
 	for _, name := range names {
 		table.Append([]string{name})
 	}
 	table.Render()
-	wr.Logger().Printf("%d active throttler(s) on server '%v' were updated.\n", len(names), *server)
-	return nil
+	logger.Printf("%d active throttler(s) on server '%v' were updated.\n", len(names), server)
 }

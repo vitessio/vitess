@@ -5,9 +5,8 @@
 package throttler
 
 import (
+	"fmt"
 	"sort"
-
-	log "github.com/golang/glog"
 )
 
 // memory tracks "good" and "bad" throttler rates where good rates are below
@@ -48,30 +47,30 @@ func searchInt64s(a []int64, x int64) int {
 	return sort.Search(len(a), func(i int) bool { return a[i] >= x })
 }
 
-func (m *memory) markGood(rate int64) {
+func (m *memory) markGood(rate int64) error {
 	rate = m.roundDown(rate)
 
 	if lowestBad := m.lowestBad(); lowestBad != 0 && rate > lowestBad {
-		log.Warningf("markGood(): ignoring higher good rate of %v because we assume that the known maximum capacity (currently at %v) can only degrade.", rate, lowestBad)
-		return
+		return fmt.Errorf("ignoring higher good rate of %v because we assume that the known maximum capacity (currently at %v) can only degrade", rate, lowestBad)
 	}
 
 	// Skip rates which already exist.
 	i := searchInt64s(m.good, rate)
 	if i < len(m.good) && m.good[i] == rate {
-		return
+		return nil
 	}
 
 	m.good = append(m.good, rate)
 	sort.Sort(int64Slice(m.good))
+	return nil
 }
 
-func (m *memory) markBad(rate int64) {
+func (m *memory) markBad(rate int64) error {
 	rate = m.roundDown(rate)
 
 	// Ignore higher bad rates than the current one.
 	if m.bad != 0 && rate >= m.bad {
-		return
+		return nil
 	}
 
 	// Ignore bad rates which are too drastic. This prevents that temporary
@@ -82,8 +81,7 @@ func (m *memory) markBad(rate int64) {
 		decrease := float64(highestGood) - float64(rate)
 		degradation := decrease / float64(highestGood)
 		if degradation > 0.1 {
-			log.Warningf("markBad(): ignoring lower bad rate of %v because such a high degradation (%.1f%%) is unlikely (current highest good: %v)", rate, degradation*100, highestGood)
-			return
+			return fmt.Errorf("ignoring lower bad rate of %v because such a high degradation (%.1f%%) is unlikely (current highest good: %v)", rate, degradation*100, highestGood)
 		}
 	}
 
@@ -100,6 +98,7 @@ func (m *memory) markBad(rate int64) {
 	m.good = m.good[:goodLength]
 
 	m.bad = rate
+	return nil
 }
 
 func (m *memory) highestGood() int64 {

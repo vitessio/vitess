@@ -68,6 +68,41 @@ func (c *client) SetMaxRate(ctx context.Context, rate int64) ([]string, error) {
 	return response.Names, nil
 }
 
+// GetConfiguration is part of the throttlerclient.Client interface.
+func (c *client) GetConfiguration(ctx context.Context, throttlerName string) (map[string]*throttlerdata.Configuration, error) {
+	response, err := c.gRPCClient.GetConfiguration(ctx, &throttlerdata.GetConfigurationRequest{
+		ThrottlerName: throttlerName,
+	})
+	if err != nil {
+		return nil, vterrors.FromGRPCError(err)
+	}
+	return response.Configurations, nil
+}
+
+// UpdateConfiguration is part of the throttlerclient.Client interface.
+func (c *client) UpdateConfiguration(ctx context.Context, throttlerName string, configuration *throttlerdata.Configuration, copyZeroValues bool) ([]string, error) {
+	response, err := c.gRPCClient.UpdateConfiguration(ctx, &throttlerdata.UpdateConfigurationRequest{
+		ThrottlerName:  throttlerName,
+		Configuration:  configuration,
+		CopyZeroValues: copyZeroValues,
+	})
+	if err != nil {
+		return nil, vterrors.FromGRPCError(err)
+	}
+	return response.Names, nil
+}
+
+// ResetConfiguration is part of the throttlerclient.Client interface.
+func (c *client) ResetConfiguration(ctx context.Context, throttlerName string) ([]string, error) {
+	response, err := c.gRPCClient.ResetConfiguration(ctx, &throttlerdata.ResetConfigurationRequest{
+		ThrottlerName: throttlerName,
+	})
+	if err != nil {
+		return nil, vterrors.FromGRPCError(err)
+	}
+	return response.Names, nil
+}
+
 // Close is part of the throttlerclient.Client interface.
 func (c *client) Close() {
 	c.conn.Close()

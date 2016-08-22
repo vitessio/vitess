@@ -23,6 +23,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/discovery"
+	"github.com/youtube/vitess/go/vt/proto/throttlerdata"
 )
 
 const (
@@ -284,4 +285,25 @@ func (t *Throttler) SetMaxRate(rate int64) {
 // Note: After Close() is called, this method must not be called anymore.
 func (t *Throttler) RecordReplicationLag(time time.Time, ts *discovery.TabletStats) {
 	t.maxReplicationLagModule.RecordReplicationLag(time, ts)
+}
+
+// GetConfiguration returns the configuration of the MaxReplicationLag module.
+func (t *Throttler) GetConfiguration() *throttlerdata.Configuration {
+	return t.maxReplicationLagModule.getConfiguration()
+}
+
+// UpdateConfiguration updates the configuration of the MaxReplicationLag module.
+func (t *Throttler) UpdateConfiguration(configuration *throttlerdata.Configuration, copyZeroValues bool) error {
+	return t.maxReplicationLagModule.updateConfiguration(configuration, copyZeroValues)
+}
+
+// ResetConfiguration resets the configuration of the MaxReplicationLag module
+// to its initial settings.
+func (t *Throttler) ResetConfiguration() {
+	t.maxReplicationLagModule.resetConfiguration()
+}
+
+// Log returns the most recent changes of the MaxReplicationLag module.
+func (t *Throttler) Log() []result {
+	return t.maxReplicationLagModule.log()
 }
