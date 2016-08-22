@@ -13,6 +13,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
+	"github.com/youtube/vitess/go/vt/logz"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
 
@@ -119,8 +120,8 @@ func queryzHandler(si *SchemaInfo, w http.ResponseWriter, r *http.Request) {
 		acl.SendError(w, err)
 		return
 	}
-	startHTMLTable(w)
-	defer endHTMLTable(w)
+	logz.StartHTMLTable(w)
+	defer logz.EndHTMLTable(w)
 	w.Write(queryzHeader)
 
 	keys := si.queries.Keys()
@@ -136,7 +137,7 @@ func queryzHandler(si *SchemaInfo, w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		Value := &queryzRow{
-			Query:  wrappable(v),
+			Query:  logz.Wrappable(v),
 			Table:  plan.TableName,
 			Plan:   plan.PlanID,
 			Reason: plan.Reason,
