@@ -96,3 +96,65 @@ func (r result) AgeOfBeforeLag() string {
 	}
 	return fmt.Sprintf("%.1fs", r.LagRecordNow.time.Sub(r.LagRecordBefore.time).Seconds())
 }
+
+// resultRing implements a ring buffer for "result" instances.
+type resultRing struct {
+	// mu guards the fields below.
+	mu sync.Mutex
+	// position holds the index of the *next* result in the ring.
+	position int
+	// wrapped becomes true when the ring buffer "wrapped" at least once and we
+	// started reusing entries.
+	wrapped bool
+	// values is the underlying ring buffer.
+	values []result
+}
+
+// newResultRing creates a new resultRing.
+func newResultRing(capacity int) *resultRing {
+	return &resultRing{
+		values: make([]result, capacity),
+	}
+}
+
+// add inserts a new result into the ring buffer.
+func (rr *resultRing) add(r result) {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+
+	rr.values[rr.position] = r
+	rr.position++
+	if rr.position == len(rr.values) {
+		rr.position = 0
+		rr.wrapped = true
+	}
+}
+
+// latestValues returns all values of the buffer. Entries are sorted in reverse
+// chronological order i.e. newer items come first.
+func (rr *resultRing) latestValues() []result {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+
+	start := rr.position - 1
+	if start == -1 {
+		// Current position is at the end.
+		start = len(rr.values) - 1
+	}
+	count := len(rr.values)
+	if !rr.wrapped {
+		count = rr.position
+	}
+
+	results := make([]result, count)
+	for i := 0; i < count; i++ {
+		pos := start - i
+		if pos < 0 {
+			// We started in the middle of the array and need to wrap around at the
+			// beginning of it.
+			pos += count
+		}
+		results[i] = rr.values[pos%count]
+	}
+	return results
+}

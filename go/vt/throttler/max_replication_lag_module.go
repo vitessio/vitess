@@ -93,6 +93,9 @@ type MaxReplicationLagModule struct {
 	// listener. ProcessRecords() will process them.
 	lagRecords chan replicationLagRecord
 	wg         sync.WaitGroup
+
+	// results caches the results of the latest processed replication lag records.
+	results *resultRing
 }
 
 // NewMaxReplicationLagModule will create a new module instance and set the
@@ -122,6 +125,7 @@ func NewMaxReplicationLagModule(config MaxReplicationLagModuleConfig, actualRate
 		nextAllowedIncrease: nowFunc().Add(config.MaxDurationBetweenIncreases()),
 		actualRatesHistory:  actualRatesHistory,
 		lagCache:            newReplicationLagCache(1000),
+		results:             newResultRing(1000),
 	}
 
 	// Enforce a config update.
@@ -279,6 +283,7 @@ func (m *MaxReplicationLagModule) recalculateRate(lagRecordNow replicationLagRec
 	r.HighestGood = m.memory.highestGood()
 	r.LowestBad = m.memory.lowestBad()
 	log.Infof("%v", r)
+	m.results.add(r)
 }
 
 func (m *MaxReplicationLagModule) increaseRate(r *result, now time.Time, lagRecordNow replicationLagRecord) {
@@ -635,4 +640,8 @@ func (m *MaxReplicationLagModule) resetCurrentState(now time.Time) {
 	case stateDecreaseAndGuessRate:
 		m.nextAllowedDecrease = now
 	}
+}
+
+func (m *MaxReplicationLagModule) log() []result {
+	return m.results.latestValues()
 }

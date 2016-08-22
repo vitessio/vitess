@@ -1,6 +1,7 @@
 package throttler
 
 import (
+	"reflect"
 	"testing"
 	"time"
 )
@@ -113,5 +114,32 @@ reason: emergency state decreased the rate`,
 		if got != tc.want {
 			t.Fatalf("record.String() = %v, want = %v for full record: %#v", got, tc.want, tc.r)
 		}
+	}
+}
+
+func TestResultRing(t *testing.T) {
+	// Test data.
+	r1 := result{Reason: "r1"}
+	r2 := result{Reason: "r2"}
+	r3 := result{Reason: "r3"}
+
+	rr := newResultRing(2)
+
+	// Use the ring partially.
+	rr.add(r1)
+	if got, want := rr.latestValues(), []result{r1}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("items not correctly added to resultRing. got = %v, want = %v", got, want)
+	}
+
+	// Use it fully.
+	rr.add(r2)
+	if got, want := rr.latestValues(), []result{r2, r1}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("items not correctly added to resultRing. got = %v, want = %v", got, want)
+	}
+
+	// Let it wrap.
+	rr.add(r3)
+	if got, want := rr.latestValues(), []result{r3, r2}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("resultRing did not wrap correctly. got = %v, want = %v", got, want)
 	}
 }
