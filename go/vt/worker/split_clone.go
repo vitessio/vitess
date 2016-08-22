@@ -61,13 +61,14 @@ type SplitCloneWorker struct {
 	// horizontalResharding only: List of tables which will be skipped.
 	excludeTables     []string
 	strategy          *splitStrategy
+	chunkCount        int
+	minRowsPerChunk   int
 	sourceReaderCount int
 	writeQueryMaxRows int
 	writeQueryMaxSize int
 	// TODO(mberlin): Delete this when our testing found out that an extra flag
 	// for this is not necessary.
 	writeQueryMaxRowsDelete int
-	minTableSizeForSplit    uint64
 	destinationWriterCount  int
 	minHealthyRdonlyTablets int
 	maxTPS                  int64
@@ -132,20 +133,20 @@ type SplitCloneWorker struct {
 }
 
 // newSplitCloneWorker returns a new worker object for the SplitClone command.
-func newSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, excludeTables []string, strategyStr string, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
-	return newCloneWorker(wr, horizontalResharding, cell, keyspace, shard, online, offline, nil /* tables */, excludeTables, strategyStr, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, minTableSizeForSplit, destinationWriterCount, minHealthyRdonlyTablets, maxTPS)
+func newSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, excludeTables []string, strategyStr string, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
+	return newCloneWorker(wr, horizontalResharding, cell, keyspace, shard, online, offline, nil /* tables */, excludeTables, strategyStr, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets, maxTPS)
 }
 
 // newVerticalSplitCloneWorker returns a new worker object for the
 // VerticalSplitClone command.
-func newVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, tables []string, strategyStr string, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
-	return newCloneWorker(wr, verticalSplit, cell, keyspace, shard, online, offline, tables, nil /* excludeTables */, strategyStr, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, minTableSizeForSplit, destinationWriterCount, minHealthyRdonlyTablets, maxTPS)
+func newVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, tables []string, strategyStr string, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
+	return newCloneWorker(wr, verticalSplit, cell, keyspace, shard, online, offline, tables, nil /* excludeTables */, strategyStr, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets, maxTPS)
 }
 
 // newCloneWorker returns a new SplitCloneWorker object which is used both by
 // the SplitClone and VerticalSplitClone command.
 // TODO(mberlin): Rename SplitCloneWorker to cloneWorker.
-func newCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, shard string, online, offline bool, tables, excludeTables []string, strategyStr string, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete int, minTableSizeForSplit uint64, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
+func newCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, shard string, online, offline bool, tables, excludeTables []string, strategyStr string, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
 	if cloneType != horizontalResharding && cloneType != verticalSplit {
 		return nil, fmt.Errorf("unknown cloneType: %v This is a bug. Please report", cloneType)
 	}
@@ -177,11 +178,12 @@ func newCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, 
 		tables:                  tables,
 		excludeTables:           excludeTables,
 		strategy:                strategy,
+		chunkCount:              chunkCount,
+		minRowsPerChunk:         minRowsPerChunk,
 		sourceReaderCount:       sourceReaderCount,
 		writeQueryMaxRows:       writeQueryMaxRows,
 		writeQueryMaxSize:       writeQueryMaxSize,
 		writeQueryMaxRowsDelete: writeQueryMaxRowsDelete,
-		minTableSizeForSplit:    minTableSizeForSplit,
 		destinationWriterCount:  destinationWriterCount,
 		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
 		maxTPS:                  maxTPS,
@@ -879,7 +881,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 
 		// TODO(mberlin): We're going to chunk *all* source shards based on the MIN
 		// and MAX values of the *first* source shard. Is this going to be a problem?
-		chunks, err := generateChunks(ctx, scw.wr, firstSourceTablet, td, scw.minTableSizeForSplit, scw.sourceReaderCount)
+		chunks, err := generateChunks(ctx, scw.wr, firstSourceTablet, td, scw.chunkCount, scw.minRowsPerChunk)
 		if err != nil {
 			return err
 		}
@@ -954,7 +956,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 
 					destResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), scw.wr.TopoServer(), destAlias, td, chunk)
 					if err != nil {
-						processError("NewQueryResultReaderForTablet for dest tablet: %v failed: %v", destAlias, err)
+						processError("NewQueryResultReaderForTablet for destination tablet: %v failed: %v", destAlias, err)
 						return
 					}
 					defer destResultReader.Close()
@@ -966,7 +968,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				if len(sourceReaders) >= 2 {
 					sourceReader, err = NewResultMerger(sourceReaders, len(td.PrimaryKeyColumns))
 					if err != nil {
-						processError("NewResultMerger for source tablets failed: %v", err)
+						processError("NewResultMerger for table: %v for source tablets failed: %v", td.Name, err)
 						return
 					}
 				} else {
@@ -975,7 +977,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				if len(destReaders) >= 2 {
 					destReader, err = NewResultMerger(destReaders, len(td.PrimaryKeyColumns))
 					if err != nil {
-						processError("NewResultMerger for dest tablets failed: %v", err)
+						processError("NewResultMerger for table: %v for destination tablets failed: %v", td.Name, err)
 						return
 					}
 				} else {
@@ -998,7 +1000,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				// Ignore the diff report because all diffs should get reconciled.
 				_ /* DiffReport */, err = differ.Diff()
 				if err != nil {
-					processError("RowDiffer2 failed: %v", err)
+					processError("RowDiffer2 failed for table: %v, Error: %v", td.Name, err)
 					return
 				}
 

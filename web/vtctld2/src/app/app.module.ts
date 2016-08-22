@@ -1,8 +1,9 @@
-import { NgModule, CUSTOM_ELEMENTS_SCHEMA }      from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
-import { HTTP_PROVIDERS } from '@angular/http';
+import { NgModule, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+import { FormsModule } from '@angular/forms'
+import { HttpModule } from '@angular/http'
 
-import { AppComponent }  from './app.component';
+import { AppComponent } from './app.component';
 import { DashboardComponent } from './dashboard/dashboard.component';
 import { KeyspaceComponent } from './dashboard/keyspace.component';
 import { SchemaComponent } from './schema/schema.component';
@@ -12,7 +13,6 @@ import { TopoBrowserComponent } from './topo/topo-browser.component';
 import { TasksComponent } from './workflows/tasks.component';
 import { APP_ROUTER_PROVIDERS, routing } from './app.routes';
 
-import { FormsModule } from '@angular/forms';
 import { MdButtonModule } from '@angular2-material/button';
 import { MdRippleModule } from '@angular2-material/core/ripple/ripple';
 import { MdCardModule } from '@angular2-material/card';
@@ -56,7 +56,7 @@ const PolymerComponents = [
     TopoBrowserComponent,
     TasksComponent,
   ],
-  providers:    [ APP_ROUTER_PROVIDERS, HTTP_PROVIDERS ],
+  providers:    [ APP_ROUTER_PROVIDERS ],
   bootstrap:    [ AppComponent ],
   schemas:      [ CUSTOM_ELEMENTS_SCHEMA ],
 })

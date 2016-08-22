@@ -90,6 +90,15 @@ func (tee *Tee) Close() {
 }
 
 //
+// Backend API
+//
+
+// Watch is part of the topo.Backend interface
+func (tee *Tee) Watch(ctx context.Context, cell string, path string) (current *topo.WatchData, changes <-chan *topo.WatchData) {
+	return tee.primary.Watch(ctx, cell, path)
+}
+
+//
 // Cell management, global
 //
 

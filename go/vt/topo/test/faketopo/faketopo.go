@@ -20,6 +20,13 @@ type FakeTopo struct{}
 // Close is part of the topo.Server interface.
 func (ft FakeTopo) Close() {}
 
+// Watch is part of the topo.Backend interface.
+func (ft FakeTopo) Watch(ctx context.Context, cell string, path string) (current *topo.WatchData, changes <-chan *topo.WatchData) {
+	return &topo.WatchData{
+		Err: errNotImplemented,
+	}, nil
+}
+
 // GetKnownCells is part of the topo.Server interface.
 func (ft FakeTopo) GetKnownCells(ctx context.Context) ([]string, error) {
 	return nil, errNotImplemented

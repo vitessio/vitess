@@ -3,7 +3,6 @@ import { Component } from '@angular/core';
 import { DialogContent } from '../shared/dialog/dialog-content';
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-keyspace-extra',
   template:
     `

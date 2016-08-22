@@ -18,7 +18,6 @@ const routes: Routes = [
   { path: 'tasks', component: TasksComponent},
   { path: 'keyspace', component: KeyspaceComponent},
   { path: 'shard', component: ShardComponent},
-
 ];
 
 export const routing = RouterModule.forRoot(routes);

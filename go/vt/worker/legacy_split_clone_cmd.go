@@ -59,8 +59,6 @@ const legacySplitCloneHTML2 = `
         <INPUT type="text" id="sourceReaderCount" name="sourceReaderCount" value="{{.DefaultSourceReaderCount}}"></BR>
       <LABEL for="destinationPackCount">Destination Pack Count: </LABEL>
         <INPUT type="text" id="destinationPackCount" name="destinationPackCount" value="{{.DefaultDestinationPackCount}}"></BR>
-      <LABEL for="minTableSizeForSplit">Minimun Table Size For Split: </LABEL>
-        <INPUT type="text" id="minTableSizeForSplit" name="minTableSizeForSplit" value="{{.DefaultMinTableSizeForSplit}}"></BR>
       <LABEL for="destinationWriterCount">Destination Writer Count: </LABEL>
         <INPUT type="text" id="destinationWriterCount" name="destinationWriterCount" value="{{.DefaultDestinationWriterCount}}"></BR>
       <LABEL for="minHealthyRdonlyTablets">Minimum Number of required healthy RDONLY tablets: </LABEL>
@@ -90,7 +88,6 @@ func commandLegacySplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'vtworker LegacySplitClone --strategy=-help k/s' for more info")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
 	destinationPackCount := subFlags.Int("destination_pack_count", defaultDestinationPackCount, "number of packets to pack in one destination insert")
-	minTableSizeForSplit := subFlags.Int("min_table_size_for_split", defaultMinTableSizeForSplit, "tables bigger than this size on disk in bytes will be split into source_reader_count chunks if possible")
 	destinationWriterCount := subFlags.Int("destination_writer_count", defaultDestinationWriterCount, "number of concurrent RPCs to execute on the destination")
 	minHealthyRdonlyTablets := subFlags.Int("min_healthy_rdonly_tablets", defaultMinHealthyRdonlyTablets, "minimum number of healthy RDONLY tablets before taking out one")
 	maxTPS := subFlags.Int64("max_tps", defaultMaxTPS, "if non-zero, limit copy to maximum number of (write) transactions/second on the destination (unlimited by default)")
@@ -110,7 +107,7 @@ func commandLegacySplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	worker, err := NewLegacySplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, *strategy, *sourceReaderCount, *destinationPackCount, uint64(*minTableSizeForSplit), *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS)
+	worker, err := NewLegacySplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, *strategy, *sourceReaderCount, *destinationPackCount, *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create split clone worker: %v", err)
 	}
@@ -145,7 +142,6 @@ func interactiveLegacySplitClone(ctx context.Context, wi *Instance, wr *wrangler
 		result["Shard"] = shard
 		result["DefaultSourceReaderCount"] = fmt.Sprintf("%v", defaultSourceReaderCount)
 		result["DefaultDestinationPackCount"] = fmt.Sprintf("%v", defaultDestinationPackCount)
-		result["DefaultMinTableSizeForSplit"] = fmt.Sprintf("%v", defaultMinTableSizeForSplit)
 		result["DefaultDestinationWriterCount"] = fmt.Sprintf("%v", defaultDestinationWriterCount)
 		result["DefaultMinHealthyRdonlyTablets"] = fmt.Sprintf("%v", defaultMinHealthyRdonlyTablets)
 		result["DefaultMaxTPS"] = fmt.Sprintf("%v", defaultMaxTPS)
@@ -168,11 +164,6 @@ func interactiveLegacySplitClone(ctx context.Context, wi *Instance, wr *wrangler
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot parse destinationPackCount: %s", err)
 	}
-	minTableSizeForSplitStr := r.FormValue("minTableSizeForSplit")
-	minTableSizeForSplit, err := strconv.ParseInt(minTableSizeForSplitStr, 0, 64)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse minTableSizeForSplit: %s", err)
-	}
 	destinationWriterCountStr := r.FormValue("destinationWriterCount")
 	destinationWriterCount, err := strconv.ParseInt(destinationWriterCountStr, 0, 64)
 	if err != nil {
@@ -190,7 +181,7 @@ func interactiveLegacySplitClone(ctx context.Context, wi *Instance, wr *wrangler
 	}
 
 	// start the clone job
-	wrk, err := NewLegacySplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, strategy, int(sourceReaderCount), int(destinationPackCount), uint64(minTableSizeForSplit), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS)
+	wrk, err := NewLegacySplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, strategy, int(sourceReaderCount), int(destinationPackCount), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot create worker: %v", err)
 	}

@@ -30,7 +30,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-const baseShowTables = "SELECT table_name, table_type, unix_timestamp(create_time), table_comment, table_rows, data_length, index_length, data_free FROM information_schema.tables WHERE table_schema = database()"
+const baseShowTables = "SELECT table_name, table_type, unix_timestamp(create_time), table_comment, table_rows, data_length, index_length, data_free, max_data_length FROM information_schema.tables WHERE table_schema = database()"
 
 const maxTableCount = 10000
 
@@ -143,6 +143,7 @@ func NewSchemaInfo(
 		_ = stats.NewMultiCountersFunc(statsPrefix+"DataLength", []string{"Table"}, si.getDataLength)
 		_ = stats.NewMultiCountersFunc(statsPrefix+"IndexLength", []string{"Table"}, si.getIndexLength)
 		_ = stats.NewMultiCountersFunc(statsPrefix+"DataFree", []string{"Table"}, si.getDataFree)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"MaxDataLength", []string{"Table"}, si.getMaxDataLength)
 	}
 	for _, ep := range endpoints {
 		http.Handle(ep, si)
@@ -199,7 +200,7 @@ func (si *SchemaInfo) Open(dbaParams *sqldb.ConnParams, strictMode bool) {
 				// Skip over the table that had an error and move on to the next one
 				return
 			}
-			tableInfo.SetMysqlStats(row[4], row[5], row[6], row[7])
+			tableInfo.SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
 			mu.Lock()
 			tables[tableName] = tableInfo
 			mu.Unlock()
@@ -298,8 +299,8 @@ func (si *SchemaInfo) Reload(ctx context.Context) error {
 			}()
 			continue
 		}
-		// Only update table_rows, data_length, index_length
-		si.tables[tableName].SetMysqlStats(row[4], row[5], row[6], row[7])
+		// Only update table_rows, data_length, index_length, max_data_length
+		si.tables[tableName].SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
 	}
 	si.lastChange = curTime
 	return errs.Error()
@@ -360,8 +361,8 @@ func (si *SchemaInfo) createOrUpdateTableLocked(ctx context.Context, tableName s
 		return PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
 			fmt.Sprintf("CreateOrUpdateTable: failed to create TableInfo for table %s: ", tableName))
 	}
-	// table_rows, data_length, index_length
-	tableInfo.SetMysqlStats(row[4], row[5], row[6], row[7])
+	// table_rows, data_length, index_length, max_data_length
+	tableInfo.SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
 
 	// Need to acquire lock now.
 	si.mu.Lock()
@@ -581,6 +582,16 @@ func (si *SchemaInfo) getDataFree() map[string]int64 {
 	tstats := make(map[string]int64)
 	for k, v := range si.tables {
 		tstats[k] = v.DataFree.Get()
+	}
+	return tstats
+}
+
+func (si *SchemaInfo) getMaxDataLength() map[string]int64 {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	tstats := make(map[string]int64)
+	for k, v := range si.tables {
+		tstats[k] = v.MaxDataLength.Get()
 	}
 	return tstats
 }

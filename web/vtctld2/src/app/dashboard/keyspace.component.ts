@@ -17,7 +17,6 @@ import { PrepareResponse } from '../shared/prepare-response';
 import { ShardService } from '../api/shard.service';
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-keyspace-view',
   templateUrl: './keyspace.component.html',
   styleUrls: ['../styles/vt.style.css'],
