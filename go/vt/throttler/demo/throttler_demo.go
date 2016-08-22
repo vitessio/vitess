@@ -50,7 +50,7 @@ import (
 var (
 	rate                     = flag.Int64("rate", 1000, "maximum rate of the throttled demo server at the start")
 	duration                 = flag.Duration("duration", 600*time.Second, "total duration the demo runs")
-	lagUpdateInterval        = flag.Duration("lag_update_interval", 1*time.Second, "interval at which the current replication lag will be broadcasted to the throttler")
+	lagUpdateInterval        = flag.Duration("lag_update_interval", 5*time.Second, "interval at which the current replication lag will be broadcasted to the throttler")
 	replicaDegrationInterval = flag.Duration("replica_degration_interval", 0*time.Second, "simulate a throughput degration of the replica every X interval (i.e. the replica applies transactions at a slower rate for -reparent_duration and the replication lag might go up)")
 	replicaDegrationDuration = flag.Duration("replica_degration_duration", 10*time.Second, "duration a simulated degration should take")
 )
