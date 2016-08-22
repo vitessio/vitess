@@ -29,7 +29,7 @@ endif
 
 build_web:
 	echo $$(date): Building web artifacts
-	cd web/vtctld2 && ./build.sh
+	cd web/vtctld2 && ng build -prod
 
 build:
 ifndef NOBANNER
