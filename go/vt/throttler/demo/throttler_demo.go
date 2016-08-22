@@ -13,6 +13,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
@@ -271,6 +272,8 @@ func (c *client) StatsUpdate(ts *discovery.TabletStats) {
 func main() {
 	flag.Parse()
 
+	go servenv.RunDefault()
+
 	log.Infof("start rate set to: %v", *rate)
 	replica := newReplica(*lagUpdateInterval, *replicaDegrationInterval, *replicaDegrationDuration)
 	master := &master{replica: replica}
@@ -280,4 +283,8 @@ func main() {
 	time.Sleep(*duration)
 	client.stop()
 	replica.stop()
+}
+
+func init() {
+	servenv.RegisterDefaultFlags()
 }
