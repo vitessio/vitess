@@ -5,7 +5,7 @@ import { Observable } from 'rxjs/Observable';
 
 @Injectable()
 export class VtctlService {
-  private vtctlUrl = '../api/vtctl/';
+  public vtctlUrl = '../api/vtctl/';
   constructor(private http: Http) {}
 
   sendPostRequest(url: string, body: string[]): Observable<any> {

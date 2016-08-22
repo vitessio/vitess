@@ -1,8 +1,38 @@
 <h1>Schema Manager</h1>
 
-<p-dropdown [options]="keyspaces" [(ngModel)]="selectedKeyspace" (onChange)="getShards(selectedKeyspace)"></p-dropdown>
-<p-dropdown [options]="shards" [(ngModel)]="selectedShard" (onChange)="getTablets(selectedKeyspace, selectedShard)"></p-dropdown>
-<p-dropdown [options]="tablets" [(ngModel)]="selectedTablet" (onChange)="fetchSchema(selectedKeyspace, selectedShard, selectedTablet)"></p-dropdown>
+  <p-dropdown [options]="keyspaces" [(ngModel)]="selectedKeyspace" (onChange)="getShards(selectedKeyspace)"></p-dropdown>
+  <p-dropdown [options]="shards" [(ngModel)]="selectedShard" (onChange)="getTablets(selectedKeyspace, selectedShard)"></p-dropdown>
+  <p-dropdown [options]="tablets" [(ngModel)]="selectedTablet" (onChange)="fetchSchema(selectedKeyspace, selectedShard, selectedTablet)"></p-dropdown>
 
-<h2> Command: </h2>
-{{selectedKeyspace}}/{{selectedShard}}/{{selectedTablet}}
+  <h2> Command: </h2>
+  {{selectedKeyspace}}/{{selectedShard}}/{{selectedTablet}}
+<div class="vt-schema-row">
+  <div class="vt-schema-left-container">
+    <p-dataTable [value]="schemas" selectionMode="single" emptyMessage="No Schemas for this tablet" [(selection)]="selectedSchema">
+      <header>{{selectedTablet}}'s Schemas</header>
+      <p-column field="name" header="Name" sortable="true"></p-column>
+      <p-column field="primary_key_columns" header="PKs" sortable="true"></p-column>
+    </p-dataTable>
+
+    <p-dataTable [value]="vSchemas" selectionMode="single" emptyMessage="No VSchemas for this tablet" [(selection)]="selectedVSchema">
+      <header>{{selectedTablet}}'s VSchemas</header>
+      <p-column field="name" header="Name" sortable="true"></p-column>
+    </p-dataTable>
+  </div>
+  <div *ngIf="selectedSchema" class="vt-schema-right-container">
+    <h2>{{selectedSchema.name}}</h2>
+    Data Length: {{selectedSchema.data_length}}
+    <p-dataTable [value]="parseColumns(selectedSchema)" emptyMessage="No Columns for this schema">
+      <header>{{selectedSchema.name}}'s Columns</header>
+      <p-column field="index" sortable="true" header="#"></p-column>
+      <p-column field="name" header="Name"></p-column>
+      <p-column field="pk" sortable="true" header="PK"></p-column>
+      <p-column field="vindex" header="V-Index"></p-column>
+      <p-column field="sequence" header="Sequence"></p-column>
+    </p-dataTable>
+    <md-card>
+      <h3>Schema:</h3>
+      {{selectedSchema.schema}}
+    </md-card>
+  </div>
+</div>

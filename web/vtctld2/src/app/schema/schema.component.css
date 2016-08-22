@@ -1,0 +1,45 @@
+.vt-schema-row {
+  display: table-row;
+}
+
+.vt-schema-left-container {
+  display: table-cell;
+  width: 49%;
+  padding-right: 20px;
+  border-right: 2px solid gray;
+}
+
+>>> .vt-schema-left-container .ui-datatable{
+  padding-bottom: 20px;
+}
+
+.vt-schema-right-container {
+  display: table-cell;
+  width: 49%;
+  padding-left: 20px;
+}
+
+>>> .vt-schema-right-container th {
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+>>> .vt-schema-right-container th:nth-child(1) {
+    width: 43px;
+    text-align: center;
+}
+
+>>> .vt-schema-right-container td:nth-child(1) {
+    width: 43px;
+    text-align: center;
+}
+
+>>> .vt-schema-right-container th:nth-child(3) {
+    width: 52px;
+    text-align: center;
+}
+
+>>> .vt-schema-right-container td:nth-child(3) {
+    width: 52px;
+    text-align: center;
+}
