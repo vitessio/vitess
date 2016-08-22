@@ -30,6 +30,7 @@ var (
 		"integrity error":   vtrpcpb.ErrorCode_INTEGRITY_ERROR,
 		"transient error":   vtrpcpb.ErrorCode_TRANSIENT_ERROR,
 		"unauthenticated":   vtrpcpb.ErrorCode_UNAUTHENTICATED,
+		"aborted":           vtrpcpb.ErrorCode_NOT_IN_TX,
 		"unknown error":     vtrpcpb.ErrorCode_UNKNOWN_ERROR,
 	}
 )
