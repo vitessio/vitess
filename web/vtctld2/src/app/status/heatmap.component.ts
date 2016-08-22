@@ -29,8 +29,11 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
   data: number[][];
   // aliases holds the alias references for each datapoint in the heatmap.
   aliases: any[][];
-  // yLabels is an array of objects each with label and nestedLabels
+  // yLabels is an array of objects each with one cell label and multiple type labels
   // each of which have a name and a rowspan
+  // For example if there was 2 types within 1 cell yLabels would be like the following:
+  // {CellName: {Name: 'Cell1', Rowspan: 2},
+  //  TypeLabels: { {Name: 'REPLICA', Rowspan: 1}, {Name: 'RDONLY', Rowspan: 1}} }
   yLabels: Array<any>;
   // xLabels is an array with shard names as column labels.
   xLabels: Array<string>;

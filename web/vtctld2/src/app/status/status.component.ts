@@ -57,7 +57,7 @@ export class StatusComponent implements OnInit {
 
   // getTopologyInfo gets the keyspace, cell, tabletType, and metric information from the service. 
   getTopologyInfo() {
-    this.topoInfoService.getKeyspacesAndCell().subscribe( stream => {
+    this.topoInfoService.getCombinedTopologyInfo().subscribe( stream => {
        let keyspacesReturned = stream[0];
        this.keyspaces = [];
        for (let i = 0; i < keyspacesReturned.length; i++) {
@@ -178,12 +178,12 @@ export class StatusComponent implements OnInit {
   // Resets the heatmap data to new values when polling or when dropdown changes
   getHeatmapData() {
      // Subscribe to get updates every second.
-     this.statusService = this.tabletService.getTabletStats(this.selectedKeyspace,
-     this.selectedCell, this.selectedType, this.selectedMetric)
-       .subscribe(stats => {
-         this.heatmaps = stats;
-         this.metric = this.selectedMetric;
-         this.heatmapDataReady = true;
-     });
+     this.statusService = this.tabletService.getTabletStats(
+     this.selectedKeyspace, this.selectedCell, this.selectedType, this.selectedMetric)
+         .subscribe(stats => {
+           this.heatmaps = stats;
+           this.metric = this.selectedMetric;
+           this.heatmapDataReady = true;
+         });
   }
 }
