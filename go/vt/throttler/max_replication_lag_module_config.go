@@ -11,11 +11,11 @@ import (
 // MaxReplicationLagModule. Internally, the parameters are represented by a
 // protobuf message. This message is also used to update the parameters.
 type MaxReplicationLagModuleConfig struct {
-	throttlerdata.MaxReplicationLagModuleConfig
+	throttlerdata.Configuration
 }
 
 var defaultMaxReplicationLagModuleConfig = MaxReplicationLagModuleConfig{
-	throttlerdata.MaxReplicationLagModuleConfig{
+	throttlerdata.Configuration{
 		TargetReplicationLagSec: 2,
 		MaxReplicationLagSec:    ReplicationLagModuleDisabled,
 

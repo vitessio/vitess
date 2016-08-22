@@ -11,7 +11,6 @@ class Breadcrumb {
 }
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-breadcrumbs',
   templateUrl: './breadcrumbs.component.html',
   styleUrls: ['./breadcrumbs.component.css'],

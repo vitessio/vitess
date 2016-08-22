@@ -15,11 +15,11 @@ const routes: Routes = [
   { path: 'dashboard', component: DashboardComponent, canDeactivate: [CanDeactivateGuard]},
   { path: 'status', component: StatusComponent},
   { path: 'schema', component: SchemaComponent},
+  { path: 'tablet', component: TabletComponent},
   { path: 'tasks', component: TasksComponent},
   { path: 'topo', component: TopoBrowserComponent },
   { path: 'keyspace', component: KeyspaceComponent},
   { path: 'shard', component: ShardComponent},
-  { path: 'tablet', component: TabletComponent}
 ];
 
 export const routing = RouterModule.forRoot(routes);

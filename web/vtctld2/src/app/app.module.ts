@@ -1,8 +1,9 @@
-import { NgModule, CUSTOM_ELEMENTS_SCHEMA }      from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
-import { HTTP_PROVIDERS } from '@angular/http';
+import { NgModule, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+import { FormsModule } from '@angular/forms'
+import { HttpModule } from '@angular/http'
 
-import { AppComponent }  from './app.component';
+import { AppComponent } from './app.component';
 import { DashboardComponent } from './dashboard/dashboard.component';
 import { KeyspaceComponent } from './dashboard/keyspace.component';
 import { SchemaComponent } from './schema/schema.component';
@@ -12,7 +13,6 @@ import { TopoBrowserComponent } from './topo/topo-browser.component';
 import { TasksComponent } from './tasks/tasks.component';
 import { APP_ROUTER_PROVIDERS, routing } from './app.routes';
 
-import { FormsModule } from '@angular/forms';
 import { MdButtonModule } from '@angular2-material/button';
 import { MdRippleModule } from '@angular2-material/core/ripple/ripple';
 
@@ -26,7 +26,6 @@ const PolymerComponents = [
 ];
 
 @NgModule({
-  imports:      [ BrowserModule, routing, FormsModule, MdButtonModule, MdRippleModule],
   declarations: [
     AppComponent,
     DashboardComponent,
@@ -38,8 +37,17 @@ const PolymerComponents = [
     TopoBrowserComponent,
     TasksComponent,
   ],
-  providers:    [ APP_ROUTER_PROVIDERS, HTTP_PROVIDERS ],
-  bootstrap:    [ AppComponent ],
-  schemas:      [ CUSTOM_ELEMENTS_SCHEMA ],
+  imports: [
+    BrowserModule,
+    FormsModule,
+    HttpModule,
+    MdButtonModule,
+    MdRippleModule,
+    routing,
+  ],
+  providers: [APP_ROUTER_PROVIDERS],
+  entryComponents: [AppComponent],
+  bootstrap: [AppComponent],
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 export class AppModule { }

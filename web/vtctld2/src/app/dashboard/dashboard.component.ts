@@ -23,7 +23,6 @@ import { ShardService } from '../api/shard.service';
 import { VtctlService } from '../api/vtctl.service';
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-dashboard',
   templateUrl: './dashboard.component.html',
   styleUrls: ['../styles/vt.style.css'],

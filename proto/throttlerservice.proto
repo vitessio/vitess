@@ -16,4 +16,20 @@ service Throttler {
   // SetMaxRate allows to change the current max rate for all throttlers
   // of the process.
   rpc SetMaxRate (throttlerdata.SetMaxRateRequest) returns (throttlerdata.SetMaxRateResponse) {};
+
+  // GetConfiguration returns the configuration of the MaxReplicationlag module
+  // for the given throttler or all throttlers if "throttler_name" is empty.
+  rpc GetConfiguration (throttlerdata.GetConfigurationRequest) returns (throttlerdata.GetConfigurationResponse) {};
+
+  // UpdateConfiguration (partially) updates the configuration of the
+  // MaxReplicationlag module for the given throttler or all throttlers if
+  // "throttler_name" is empty.
+  // If "copy_zero_values" is true, fields with zero values will be copied
+  // as well.
+  rpc UpdateConfiguration (throttlerdata.UpdateConfigurationRequest) returns (throttlerdata.UpdateConfigurationResponse) {};
+
+  // ResetConfiguration resets the configuration of the MaxReplicationlag module
+  // to the initial configuration for the given throttler or all throttlers if
+  // "throttler_name" is empty.
+  rpc ResetConfiguration (throttlerdata.ResetConfigurationRequest) returns (throttlerdata.ResetConfigurationResponse) {};
 }

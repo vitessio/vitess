@@ -303,6 +303,7 @@ func TestTabletServerSingleSchemaFailure(t *testing.T) {
 				sqltypes.MakeString([]byte("2")),
 				sqltypes.MakeString([]byte("3")),
 				sqltypes.MakeString([]byte("4")),
+				sqltypes.MakeString([]byte("5")),
 			},
 			// Return a table that tabletserver can't access (the mock will reject all queries to it).
 			{
@@ -314,6 +315,7 @@ func TestTabletServerSingleSchemaFailure(t *testing.T) {
 				sqltypes.MakeString([]byte("2")),
 				sqltypes.MakeString([]byte("3")),
 				sqltypes.MakeString([]byte("4")),
+				sqltypes.MakeString([]byte("5")),
 			},
 		},
 	}
@@ -352,6 +354,7 @@ func TestTabletServerAllSchemaFailure(t *testing.T) {
 				sqltypes.MakeString([]byte("2")),
 				sqltypes.MakeString([]byte("3")),
 				sqltypes.MakeString([]byte("4")),
+				sqltypes.MakeString([]byte("5")),
 			},
 			{
 				sqltypes.MakeString([]byte("rejected_table_2")),
@@ -362,6 +365,7 @@ func TestTabletServerAllSchemaFailure(t *testing.T) {
 				sqltypes.MakeString([]byte("2")),
 				sqltypes.MakeString([]byte("3")),
 				sqltypes.MakeString([]byte("4")),
+				sqltypes.MakeString([]byte("5")),
 			},
 		},
 	}
@@ -1401,6 +1405,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte("2")),
 					sqltypes.MakeString([]byte("3")),
 					sqltypes.MakeString([]byte("4")),
+					sqltypes.MakeString([]byte("5")),
 				},
 			},
 		},
@@ -1472,6 +1477,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte("2")),
 					sqltypes.MakeString([]byte("3")),
 					sqltypes.MakeString([]byte("4")),
+					sqltypes.MakeString([]byte("5")),
 				},
 			},
 		},

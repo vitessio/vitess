@@ -37,6 +37,8 @@ const (
 	splitCloneTestMin int = 100
 	// splitCloneTestMax is the maximum value of the primary key.
 	splitCloneTestMax int = 200
+	// In the default test case there are 100 rows on the source.
+	splitCloneTestRowsCount = splitCloneTestMax - splitCloneTestMin
 )
 
 var (
@@ -78,13 +80,10 @@ type splitCloneTestCase struct {
 }
 
 func (tc *splitCloneTestCase) setUp(v3 bool) {
-	tc.setUpWithConcurreny(v3, 10, 2)
+	tc.setUpWithConcurreny(v3, 10, 2, splitCloneTestRowsCount)
 }
 
-func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQueryMaxRows int) {
-	// In the default test case there are 100 rows on the source.
-	rowsTotal := 100
-
+func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQueryMaxRows, rowsCount int) {
 	*useV3ReshardingMode = v3
 	db := fakesqldb.Register()
 	tc.ts = zktestserver.New(tc.t, []string{"cell1", "cell2"})
@@ -182,8 +181,9 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 					Columns:           []string{"msg", "keyspace_id", "id"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              tmutils.TableBaseTable,
-					// Set the table size to a value higher than --min_table_size_for_split.
-					DataLength: 2048,
+					// Set the row count to avoid that --min_rows_per_chunk reduces the
+					// number of chunks.
+					RowCount: uint64(rowsCount),
 				},
 			},
 		}
@@ -198,8 +198,8 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 		}
 		shqs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
 		shqs.AddDefaultHealthResponse()
-		qs := newTestQueryService(tc.t, sourceRdonly.Target(), shqs, 0, 1, sourceRdonly.Tablet.Alias.Uid)
-		qs.addGeneratedRows(100, 100+rowsTotal)
+		qs := newTestQueryService(tc.t, sourceRdonly.Target(), shqs, 0, 1, sourceRdonly.Tablet.Alias.Uid, false /* omitKeyspaceID */)
+		qs.addGeneratedRows(100, 100+rowsCount)
 		grpcqueryservice.Register(sourceRdonly.RPCServer, qs)
 		tc.sourceRdonlyQs = append(tc.sourceRdonlyQs, qs)
 	}
@@ -207,7 +207,7 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 	for i, destRdonly := range []*testlib.FakeTablet{leftRdonly1, rightRdonly1, leftRdonly2, rightRdonly2} {
 		shqs := fakes.NewStreamHealthQueryService(destRdonly.Target())
 		shqs.AddDefaultHealthResponse()
-		qs := newTestQueryService(tc.t, destRdonly.Target(), shqs, i%2, 2, destRdonly.Tablet.Alias.Uid)
+		qs := newTestQueryService(tc.t, destRdonly.Target(), shqs, i%2, 2, destRdonly.Tablet.Alias.Uid, false /* omitKeyspaceID */)
 		grpcqueryservice.Register(destRdonly.RPCServer, qs)
 		if i%2 == 0 {
 			tc.leftRdonlyQs = append(tc.leftRdonlyQs, qs)
@@ -222,9 +222,9 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 
 	// In the default test case there will be 30 inserts per destination shard
 	// because 10 writer threads will insert 5 rows on each destination shard.
-	// (100 source rows / 10 writers / 2 shards = 5 rows.)
+	// (100 rowsCount / 10 writers / 2 shards = 5 rows.)
 	// Due to --write_query_max_rows=2 there will be 3 inserts for 5 rows.
-	rowsPerDestinationShard := rowsTotal / 2
+	rowsPerDestinationShard := rowsCount / 2
 	rowsPerThread := rowsPerDestinationShard / concurrency
 	insertsPerThread := math.Ceil(float64(rowsPerThread) / float64(writeQueryMaxRows))
 	insertsTotal := int(insertsPerThread) * concurrency
@@ -259,8 +259,9 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 		// the rate limit is set very high.
 		"-max_tps", "9999",
 		"-write_query_max_rows", strconv.Itoa(writeQueryMaxRows),
+		"-chunk_count", strconv.Itoa(concurrency),
+		"-min_rows_per_chunk", strconv.Itoa(rowsPerThread),
 		"-source_reader_count", strconv.Itoa(concurrency),
-		"-min_table_size_for_split", "1",
 		"-destination_writer_count", strconv.Itoa(concurrency),
 		"ks/-80"}
 }
@@ -284,8 +285,11 @@ type testQueryService struct {
 	shardIndex int
 	shardCount int
 	tabletUID  uint32
-	fields     []*querypb.Field
-	rows       [][]sqltypes.Value
+	// omitKeyspaceID is true when the returned rows should not contain the
+	// "keyspace_id" column.
+	omitKeyspaceID bool
+	fields         []*querypb.Field
+	rows           [][]sqltypes.Value
 
 	// mu guards the fields in this group.
 	mu sync.Mutex
@@ -294,7 +298,11 @@ type testQueryService struct {
 	forceError map[int64]bool
 }
 
-func newTestQueryService(t *testing.T, target querypb.Target, shqs *fakes.StreamHealthQueryService, shardIndex, shardCount int, tabletUID uint32) *testQueryService {
+func newTestQueryService(t *testing.T, target querypb.Target, shqs *fakes.StreamHealthQueryService, shardIndex, shardCount int, tabletUID uint32, omitKeyspaceID bool) *testQueryService {
+	fields := v2Fields
+	if omitKeyspaceID {
+		fields = v3Fields
+	}
 	return &testQueryService{
 		t:      t,
 		target: target,
@@ -302,7 +310,8 @@ func newTestQueryService(t *testing.T, target querypb.Target, shqs *fakes.Stream
 		shardIndex:               shardIndex,
 		shardCount:               shardCount,
 		tabletUID:                tabletUID,
-		fields:                   v2Fields,
+		omitKeyspaceID:           omitKeyspaceID,
+		fields:                   fields,
 		forceError:               make(map[int64]bool),
 	}
 }
@@ -384,11 +393,15 @@ func (sq *testQueryService) addGeneratedRows(from, to int) {
 		shardIndex := id % 2
 		if sq.shardCount == 1 || shardIndex == sq.shardIndex {
 			idValue, _ := sqltypes.BuildValue(int64(id))
-			rows = append(rows, []sqltypes.Value{
+
+			row := []sqltypes.Value{
 				idValue,
 				sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", id))),
-				sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[shardIndex]))),
-			})
+			}
+			if !sq.omitKeyspaceID {
+				row = append(row, sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[shardIndex]))))
+			}
+			rows = append(rows, row)
 		}
 	}
 
@@ -439,10 +452,21 @@ var v2Fields = []*querypb.Field{
 		Name: "msg",
 		Type: sqltypes.VarChar,
 	},
-	// TODO(mberlin): Omit keyspace_id in the v3 test.
 	{
 		Name: "keyspace_id",
 		Type: sqltypes.Int64,
+	},
+}
+
+// v3Fields is identical to v2Fields but lacks the "keyspace_id" column.
+var v3Fields = []*querypb.Field{
+	{
+		Name: "id",
+		Type: sqltypes.Int64,
+	},
+	{
+		Name: "msg",
+		Type: sqltypes.VarChar,
 	},
 }
 
@@ -454,6 +478,30 @@ func TestSplitCloneV2_Offline(t *testing.T) {
 
 	// Run the vtworker command.
 	if err := runCommand(t, tc.wi, tc.wi.wr, tc.defaultWorkerArgs); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestSplitCloneV2_Offline_HighChunkCount is identical to
+// TestSplitCloneV2_Offline but sets the --chunk_count to 1000. Given
+// --source_reader_count=10, at most 10 out of the 1000 chunk pipeplines will
+// get processed concurrently while the other pending ones are blocked.
+func TestSplitCloneV2_Offline_HighChunkCount(t *testing.T) {
+	tc := &splitCloneTestCase{t: t}
+	tc.setUpWithConcurreny(false /* v3 */, 10, 5 /* writeQueryMaxRows */, 1000 /* rowsCount */)
+	defer tc.tearDown()
+
+	args := make([]string, len(tc.defaultWorkerArgs))
+	copy(args, tc.defaultWorkerArgs)
+	// Set -write_query_max_rows to 5.
+	args[5] = "5"
+	// Set -chunk_count to 1000.
+	args[7] = "1000"
+	// Set -min_rows_per_chunk to 5.
+	args[9] = "5"
+
+	// Run the vtworker command.
+	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -566,7 +614,7 @@ func TestSplitCloneV2_Reconciliation(t *testing.T) {
 	tc := &splitCloneTestCase{t: t}
 	// We reduce the parallelism to 1 to test the order of expected
 	// insert/update/delete statements on the destination master.
-	tc.setUpWithConcurreny(false /* v3 */, 1, 10)
+	tc.setUpWithConcurreny(false /* v3 */, 1, 10, splitCloneTestRowsCount)
 	defer tc.tearDown()
 
 	// We assume that an Online Clone ran before which copied the rows 100-199

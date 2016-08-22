@@ -463,9 +463,9 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
 
       # vtworker is blocked at this point. This is a good time to test that its
       # throttler server is reacting to RPCs.
-      self.check_binlog_throttler('localhost:%d' % worker_rpc_port,
-                                  ['test_keyspace/-80', 'test_keyspace/80-'],
-                                  9999)
+      self.check_throttler_service('localhost:%d' % worker_rpc_port,
+                                   ['test_keyspace/-80', 'test_keyspace/80-'],
+                                   9999)
 
       # Bring back masters. Since we test with semi-sync now, we need at least
       # one replica for the new master. This test is already quite expensive,

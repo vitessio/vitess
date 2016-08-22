@@ -19,7 +19,6 @@ import { TabletService } from '../api/tablet.service';
 import { VtctlService } from '../api/vtctl.service';
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-shard-view',
   templateUrl: './shard.component.html',
   styleUrls: [

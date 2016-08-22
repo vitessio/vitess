@@ -142,8 +142,15 @@ func InitVtctld(ts topo.Server) {
 			rest = "index.html"
 		}
 		filePath := path.Join(*webDir2, rest)
-		// If the requested file doesn't exist, serve index.html.
 		if _, err := os.Stat(filePath); err != nil {
+			// The requested file doesn't exist.
+			if strings.ContainsAny(rest, "/.") {
+				// This looks like a real file path, so return Not Found.
+				http.NotFound(w, r)
+				return
+			}
+			// It looks like a virtual route path (for pages within the app).
+			// For these, we must serve index.html to initialize the app.
 			filePath = path.Join(*webDir2, "index.html")
 		}
 		http.ServeFile(w, r, filePath)

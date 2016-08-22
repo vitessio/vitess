@@ -13,7 +13,6 @@ import { KeyspaceService } from '../../api/keyspace.service';
 import { TabletService } from '../../api/tablet.service';
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-dialog',
   templateUrl: './dialog.component.html',
   styleUrls: ['./dialog.component.css', '../../styles/vt.style.css'],
