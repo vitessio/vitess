@@ -113,10 +113,11 @@ func NewMaxReplicationLagModule(config MaxReplicationLagModuleConfig, actualRate
 		applyMutableConfig: true,
 		// Always start off with a non-zero rate because zero means all requests
 		// get throttled.
-		rate:       sync2.NewAtomicInt64(rate),
-		memory:     newMemory(memoryGranularity),
-		nowFunc:    nowFunc,
-		lagRecords: make(chan replicationLagRecord, 10),
+		rate:         sync2.NewAtomicInt64(rate),
+		currentState: stateIncreaseRate,
+		memory:       newMemory(memoryGranularity),
+		nowFunc:      nowFunc,
+		lagRecords:   make(chan replicationLagRecord, 10),
 		// Prevent an immediately increase of the initial rate.
 		nextAllowedIncrease: nowFunc().Add(config.MaxDurationBetweenIncreases()),
 		actualRatesHistory:  actualRatesHistory,
