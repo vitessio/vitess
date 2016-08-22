@@ -7,6 +7,7 @@ package main
 import (
 	"flag"
 	"math/rand"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -273,6 +274,9 @@ func main() {
 	flag.Parse()
 
 	go servenv.RunDefault()
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/throttlerz", http.StatusTemporaryRedirect)
+	})
 
 	log.Infof("start rate set to: %v", *rate)
 	replica := newReplica(*lagUpdateInterval, *replicaDegrationInterval, *replicaDegrationDuration)
