@@ -478,8 +478,12 @@ func (m *MaxReplicationLagModule) emergency(now time.Time, lagRecordNow replicat
 
 	oldRate := m.rate.Get()
 	rate := int64(float64(oldRate) * m.config.EmergencyDecrease)
+	if rate == 0 {
+		// Never fully stop throttling.
+		rate = 1
+	}
 
-	reason := fmt.Sprintf("replication lag went beyond max: %d > %d reducing previous rate by %.f%% to: %v", lagRecordNow.lag(), m.config.MaxReplicationLagSec, m.config.EmergencyDecrease*100, rate)
+	reason := fmt.Sprintf("replication lag went beyond max: %d > %d reducing previous rate of %d by %.f%% to: %v", lagRecordNow.lag(), m.config.MaxReplicationLagSec, oldRate, m.config.EmergencyDecrease*100, rate)
 	m.updateRate(stateEmergency, rate, reason, now, lagRecordNow)
 }
 
