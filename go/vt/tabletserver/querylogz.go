@@ -46,7 +46,7 @@ var (
 		"unquote":      func(s string) string { return strings.Trim(s, "\"") },
 	}
 	querylogzTmpl = template.Must(template.New("example").Funcs(querylogzFuncMap).Parse(`
-		<tr class=".ColorLevel">
+		<tr class="{{.ColorLevel}}">
 			<td>{{.Method}}</td>
 			<td>{{.ContextHTML}}</td>
 			<td>{{.EffectiveCaller}}</td>
