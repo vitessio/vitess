@@ -110,17 +110,9 @@ type queryzSorter struct {
 	less func(row1, row2 *queryzRow) bool
 }
 
-func (sorter *queryzSorter) Len() int {
-	return len(sorter.rows)
-}
-
-func (sorter *queryzSorter) Swap(i, j int) {
-	sorter.rows[i], sorter.rows[j] = sorter.rows[j], sorter.rows[i]
-}
-
-func (sorter *queryzSorter) Less(i, j int) bool {
-	return sorter.less(sorter.rows[i], sorter.rows[j])
-}
+func (s *queryzSorter) Len() int           { return len(s.rows) }
+func (s *queryzSorter) Swap(i, j int)      { s.rows[i], s.rows[j] = s.rows[j], s.rows[i] }
+func (s *queryzSorter) Less(i, j int) bool { return s.less(s.rows[i], s.rows[j]) }
 
 func queryzHandler(si *SchemaInfo, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
