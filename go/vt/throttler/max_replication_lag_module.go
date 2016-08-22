@@ -327,7 +327,7 @@ func (m *MaxReplicationLagModule) increaseRate(now time.Time, lagRecordNow repli
 	if lowestBad != 0 {
 		if rate > lowestBad {
 			// New rate will be the middle value of [previous rate, lowest bad rate].
-			rate -= (lowestBad - previousRate) / 2
+			rate = previousRate + (lowestBad-previousRate)/2
 			increaseReason += fmt.Sprintf(" (but limited to the middle value in the range [previous rate, lowest bad rate]: [%.0f, %.0f]", previousRate, lowestBad)
 		}
 	}
@@ -335,7 +335,7 @@ func (m *MaxReplicationLagModule) increaseRate(now time.Time, lagRecordNow repli
 	increase := (rate - previousRate) / previousRate
 	m.updateNextAllowedIncrease(now, increase, lagRecordNow.Key)
 	reason := fmt.Sprintf("periodic increase of the %v from %d to %d (by %.1f%%) based on %v to find out the maximum - next allowed increase in %.0f seconds",
-		previousRateSource, oldRate, int64(rate), increase*100, increaseReason, m.nextAllowedIncrease.Sub(now).Seconds())
+		previousRateSource, int64(previousRate), int64(rate), increase*100, increaseReason, m.nextAllowedIncrease.Sub(now).Seconds())
 	m.updateRate(stateIncreaseRate, int64(rate), reason, now, lagRecordNow)
 }
 
