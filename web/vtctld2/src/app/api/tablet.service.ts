@@ -16,8 +16,8 @@ export class TabletService {
 
   getTablet(tabletRef: string): Observable<any> {
     return this.http.get(this.tabletsUrl + tabletRef)
-      .map(resp => resp.json())
-      .map(tablet => {
+      .map(tabletJson => {
+        let tablet = tabletJson.json();
         tablet['type'] = Proto.VT_TABLET_TYPES[tablet['type']];
         tablet['label'] = `${tablet['type']}(${tablet['alias']['uid']})`;
         tablet['ref'] = `${tablet['alias']['cell']}-${tablet['alias']['uid']}`;

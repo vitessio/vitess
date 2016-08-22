@@ -80,23 +80,30 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
   }
 
   createShard() {
-    this.serverCall('CreateShard', 'There was a problem creating {{shard_ref}}:');
+    this.runCommand('CreateShard', 'There was a problem creating {{shard_ref}}:');
   }
 
   validateKeyspace() {
-    this.serverCall('ValidateKeyspace', 'There was a problem validating {{keyspace_name}}:');
+    this.runCommand('ValidateKeyspace', 'There was a problem validating {{keyspace_name}}:');
   }
 
   rebuildKeyspace() {
-    this.serverCall('RebuildKeyspaceGraph', 'There was a problem rebuilding {{keyspace_name}}:');
+    this.runCommand('RebuildKeyspaceGraph', 'There was a problem rebuilding {{keyspace_name}}:');
   }
 
   removeKeyspaceCell() {
-    this.serverCall('RemoveKeyspaceCell', 'There was a problem removing {{cell_name}}:');
+    this.runCommand('RemoveKeyspaceCell', 'There was a problem removing {{cell_name}}:');
   }
 
-  serverCall(action: string, errorMessage: string) {
-    this.vtctlService.serverCall(action, this.dialogContent, this.dialogSettings, errorMessage);
+  runCommand(action: string, errorMessage: string) {
+    this.dialogSettings.startPending();
+    this.vtctlService.runCommand(this.dialogContent.getPostBody(action)).subscribe(resp => {
+      if (resp.Error) {
+        this.dialogSettings.setMessage(`${errorMessage} ${resp.Error}`);
+      }
+      this.dialogSettings.setLog(resp.Output);
+      this.dialogSettings.endPending();
+    });
   }
 
   prepareNewShard() {

@@ -18,7 +18,6 @@ import { TabletService } from '../api/tablet.service';
 import { VtctlService } from '../api/vtctl.service';
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-tablet-view',
   templateUrl: './tablet.component.html',
   styleUrls: [
@@ -89,19 +88,26 @@ export class TabletComponent implements OnInit, OnDestroy {
   }
 
   deleteTablet() {
-    this.serverCall('DeleteTablet', 'There was a problem deleting {{tablet_alias}}:');
+    this.runCommand('DeleteTablet', 'There was a problem deleting {{tablet_alias}}:');
   }
 
   refreshTablet() {
-    this.serverCall('RefreshState', 'There was a problem refreshing {{tablet_alias}}:');
+    this.runCommand('RefreshState', 'There was a problem refreshing {{tablet_alias}}:');
   }
 
   pingTablet() {
-    this.serverCall('Ping', 'There was a problem pinging {{tablet_alias}}:');
+    this.runCommand('Ping', 'There was a problem pinging {{tablet_alias}}:');
   }
 
-  serverCall(action: string, errorMessage: string) {
-    this.vtctlService.serverCall(action, this.dialogContent, this.dialogSettings, errorMessage);
+  runCommand(action: string, errorMessage: string) {
+    this.dialogSettings.startPending();
+    this.vtctlService.runCommand(this.dialogContent.getPostBody(action)).subscribe(resp => {
+      if (resp.Error) {
+        this.dialogSettings.setMessage(`${errorMessage} ${resp.Error}`);
+      }
+      this.dialogSettings.setLog(resp.Output);
+      this.dialogSettings.endPending();
+    });
   }
 
   prepareDeleteTablet() {

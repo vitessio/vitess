@@ -1,4 +1,4 @@
-import { Component, OnInit} from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { Router, ROUTER_DIRECTIVES } from '@angular/router';
 
 import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
@@ -43,7 +43,7 @@ import { VtctlService } from '../api/vtctl.service';
     AddButtonComponent],
 })
 export class DashboardComponent implements OnInit {
-  title = 'Vitess Control Panel';
+  @ViewChild('dialog') dialog: any;
   keyspaces = [];
   keyspacesReady = false;
   dialogSettings: DialogSettings;
@@ -83,44 +83,53 @@ export class DashboardComponent implements OnInit {
   }
 
   createKeyspace() {
-    this.serverCall('CreateKeyspace', 'There was a problem creating {{keyspace_name}}:');
+    this.runCommand('CreateKeyspace', 'There was a problem creating {{keyspace_name}}:');
   }
 
   editKeyspace() {
-    this.serverCall('SetKeyspaceShardingInfo', 'There was a problem editing {{keyspace_name}}:');
+    this.runCommand('SetKeyspaceShardingInfo', 'There was a problem editing {{keyspace_name}}:');
   }
 
   deleteKeyspace() {
-    this.serverCall('DeleteKeyspace', 'There was a problem deleting {{keyspace_name}}:');
+    this.runCommand('DeleteKeyspace', 'There was a problem deleting {{keyspace_name}}:');
   }
 
   validateAll() {
-    this.serverCall('Validate', 'There was a problem validating all nodes:');
+    this.runCommand('Validate', 'There was a problem validating all nodes:');
   }
 
-  serverCall(action: string, errorMessage: string) {
-    this.vtctlService.serverCall(action, this.dialogContent, this.dialogSettings, errorMessage);
+  runCommand(action: string, errorMessage: string) {
+    this.dialogSettings.startPending();
+    this.vtctlService.runCommand(this.dialogContent.getPostBody(action)).subscribe(resp => {
+      if (resp.Error) {
+        this.dialogSettings.setMessage(`${errorMessage} ${resp.Error}`);
+      }
+      this.dialogSettings.setLog(resp.Output);
+      this.dialogSettings.endPending();
+    });
   }
 
-  prepareEdit(keyspace: Keyspace) {
+  openEditDialog(keyspace: Keyspace) {
     this.dialogSettings = new DialogSettings('Edit', this.editKeyspace.bind(this), `Edit ${keyspace.name}`);
     this.dialogSettings.setMessage('Edited {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.refreshDashboardView.bind(this);
     let flags = new EditKeyspaceFlags(keyspace).flags;
     this.dialogContent = new DialogContent('keyspace_name', flags, {}, this.prepare.bind(this));
     this.dialogSettings.toggleModal();
+    this.dialog.nativeElement.opened = true;
   }
 
-  prepareNew() {
+  openNewDialog() {
     this.dialogSettings = new DialogSettings('Create', this.createKeyspace.bind(this), 'Create a new Keyspace');
     this.dialogSettings.setMessage('Created {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.refreshDashboardView.bind(this);
     let flags = new NewKeyspaceFlags().flags;
     this.dialogContent = new DialogContent('keyspace_name', flags, {'keyspace_name': true}, this.prepare.bind(this));
     this.dialogSettings.toggleModal();
+    this.dialog.nativeElement.opened = true;
   }
 
-  prepareDelete(keyspace: Keyspace) {
+  openDeleteDialog(keyspace: Keyspace) {
     this.dialogSettings = new DialogSettings('Delete', this.deleteKeyspace.bind(this),
                                              `Delete ${keyspace.name}`, `Are you sure you want to delete ${keyspace.name}?`);
     this.dialogSettings.setMessage('Deleted {{keyspace_name}}');
@@ -128,15 +137,17 @@ export class DashboardComponent implements OnInit {
     let flags = new DeleteKeyspaceFlags(keyspace).flags;
     this.dialogContent = new DialogContent('keyspace_name', flags);
     this.dialogSettings.toggleModal();
+    this.dialog.nativeElement.opened = true;
   }
 
-  prepareValidate() {
+  openValidateDialog() {
     this.dialogSettings = new DialogSettings('Validate', this.validateAll.bind(this), `Validate all nodes`, '');
     this.dialogSettings.setMessage('Deleted {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.refreshDashboardView.bind(this);
     let flags = new ValidateAllFlags().flags;
     this.dialogContent = new DialogContent('keyspace_name', flags);
     this.dialogSettings.toggleModal();
+    this.dialog.nativeElement.opened = true;
   }
 
   refreshDashboardView() {

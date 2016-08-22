@@ -116,19 +116,26 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   deleteShard() {
-    this.serverCall('DeleteShard', 'There was a problem deleting {{shard_ref}}:');
+    this.runCommand('DeleteShard', 'There was a problem deleting {{shard_ref}}:');
   }
 
   validateShard() {
-    this.serverCall('ValidateShard', 'There was a problem validating {{shard_ref}}:');
+    this.runCommand('ValidateShard', 'There was a problem validating {{shard_ref}}:');
   }
 
   initShardMaster() {
-    this.serverCall('InitShardMaster', 'There was a problem initializing a shard master for {{shard_ref}}:');
+    this.runCommand('InitShardMaster', 'There was a problem initializing a shard master for {{shard_ref}}:');
   }
 
-  serverCall(action: string, errorMessage: string) {
-    this.vtctlService.serverCall(action, this.dialogContent, this.dialogSettings, errorMessage);
+  runCommand(action: string, errorMessage: string) {
+    this.dialogSettings.startPending();
+    this.vtctlService.runCommand(this.dialogContent.getPostBody(action)).subscribe(resp => {
+      if (resp.Error) {
+        this.dialogSettings.setMessage(`${errorMessage} ${resp.Error}`);
+      }
+      this.dialogSettings.setLog(resp.Output);
+      this.dialogSettings.endPending();
+    });
   }
 
   prepareDeleteShard() {

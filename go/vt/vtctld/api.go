@@ -360,6 +360,7 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 		}{}
 		if err := unmarshalRequest(r, &args); err != nil {
 			httpErrorf(w, r, "can't unmarshal request: %v", err)
+			return
 		}
 
 		logstream := logutil.NewCallbackLogger(func(ev *logutilpb.Event) {
@@ -369,7 +370,6 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 
 		wr := wrangler.New(logstream, ts, tmClient)
 		err := vtctl.RunCommand(ctx, wr, args)
-
 		if err != nil {
 			resp.Error = err.Error()
 		}

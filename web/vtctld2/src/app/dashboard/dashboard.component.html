@@ -1,6 +1,6 @@
 <h1>Dashboard</h1>
 <div class="vt-action-center">
-  <button md-raised-button (click)="prepareValidate();dialog.open();">Validate</button>
+  <button md-raised-button (click)="openValidateDialog();">Validate</button>
 </div>
 
 <div>
@@ -39,8 +39,8 @@
       </a>
       <md-card-actions>
         <div class="vt-actions-container">
-          <button md-button (click)="prepareDelete(keyspace);dialog.open();">Delete</button>
-          <button md-button (click)="prepareEdit(keyspace);dialog.open();">Edit</button>
+          <button md-button (click)="openDeleteDialog(keyspace);">Delete</button>
+          <button md-button (click)="openEditDialog(keyspace);">Edit</button>
         </div>
       </md-card-actions>
     </md-card>
@@ -49,6 +49,6 @@
 <paper-dialog #dialog  no-cancel-on-outside-click="true" no-cancel-on-esc-key="true">
   <vt-dialog [(dialogContent)]="dialogContent" [(dialogSettings)]="dialogSettings" (close)="dialog.close();"></vt-dialog>
 </paper-dialog>
-<vt-add-button (click)="prepareNew();dialog.open()"></vt-add-button>
+<vt-add-button (click)="openNewDialog();"></vt-add-button>
 <div *ngIf="dialogSettings.openModal" class="vt-popUpContainer" >
 </div>
