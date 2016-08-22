@@ -4,7 +4,6 @@ import { Node, ActionStyle } from './node';
 import {Accordion, AccordionTab, Header} from 'primeng/primeng';
 
 @Component({
-  moduleId: module.id,
   selector: 'vt-workflow',
   templateUrl: './workflow.component.html',
   styleUrls: ['./workflow.component.css'],
@@ -24,7 +23,7 @@ export class WorkflowComponent {
 
   getTime() {
     if (this.workflow.lastChanged) {
-      let d = new Date(this.workflow.lastChanged * 1000);
+      let d = new Date(this.workflow.lastChanged);
       return d.toString();
     }
   }

@@ -67,32 +67,28 @@ export const enum Display { // Only relevant if State is RUNNING.
 export class Node {
   public name: string;
   public path: string; // Path to element Ex, “GrandparentID/ParentId/ID”.
-  public children: any[];
-  public lastChanged: number; // Time last changed in seconds.
-  public progress: number; // Should be an int from 0-100 for percentage
-  public progressMsg: string; // Ex. “34/256” “25%” “calculating”  
-  public state: State;
-  public display: Display;
-  public message: string; // Instructions for user
-  public log: string; // Log from command
-  public disabled: boolean; // Use for blocking further actions
+  public children: Node[];
+  public lastChanged= 0; // Time last changed in seconds.
+  public progress= 0; // Should be an int from 0-100 for percentage
+  public progressMsg= ''; // Ex. “34/256” “25%” “calculating”  
+  public state= State.NOT_STARTED;
+  public display= Display.NONE;
+  public message= ''; // Instructions for user
+  public log= ''; // Log from command
+  public disabled= false; // Use for blocking further actions
   public actions: Action[];
 
-  constructor(name: string, path: string, children: any, message= '',
-              state= State.NOT_STARTED, lastChanged= 0, display= Display.NONE,
-              progress= 0, progressMsg= '', disabled= false, actions= [], log= '') {
+  constructor(name: string, path: string, children: any) {
     this.name = name;
     this.path = path;
     this.children = children;
-    this.lastChanged = lastChanged;
-    this.progress = progress;
-    this.progressMsg = progressMsg;
-    this.state = state;
-    this.display = display;
-    this.log = log;
-    this.message = message;
-    this.disabled = disabled;
-    this.actions = actions;
+  }
+
+  public update(changes: any) {
+    let properties = Object.keys(changes);
+      for (let property of properties) {
+        this[property] = changes[property];
+      }
   }
 
   public isRoot(): boolean {
