@@ -118,7 +118,7 @@ func NewMaxReplicationLagModule(config MaxReplicationLagModuleConfig, actualRate
 		// get throttled.
 		rate:         sync2.NewAtomicInt64(rate),
 		currentState: stateIncreaseRate,
-		memory:       newMemory(memoryGranularity),
+		memory:       newMemory(memoryGranularity, config.AgeBadRateAfter(), config.BadRateIncrease),
 		nowFunc:      nowFunc,
 		lagRecords:   make(chan replicationLagRecord, 10),
 		// Prevent an immediately increase of the initial rate.
@@ -173,6 +173,7 @@ func (m *MaxReplicationLagModule) applyLatestConfig() {
 	// Go routine as ProcessRecords() or the constructor.
 	if applyConfig {
 		m.config = config
+		m.memory.updateAgingConfiguration(config.AgeBadRateAfter(), config.BadRateIncrease)
 	}
 }
 
@@ -255,6 +256,8 @@ func (m *MaxReplicationLagModule) recalculateRate(lagRecordNow replicationLagRec
 		panic("rate recalculation was triggered with a zero replication lag record")
 	}
 	lagNow := lagRecordNow.lag()
+
+	m.memory.ageBadRate(now)
 
 	r := result{
 		Now:            now,
@@ -623,7 +626,7 @@ func (m *MaxReplicationLagModule) markCurrentRateAsBadOrGood(r *result, now time
 			r.MemorySkipReason = err.Error()
 		}
 	} else {
-		if err := m.memory.markBad(int64(rate)); err == nil {
+		if err := m.memory.markBad(int64(rate), now); err == nil {
 			r.GoodOrBad = badRate
 		} else {
 			r.MemorySkipReason = err.Error()
