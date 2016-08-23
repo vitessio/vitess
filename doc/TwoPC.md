@@ -132,6 +132,8 @@ In order to make 2PC work, the following pieces of functionality have to be buil
 
 The diagram below show how the various components interact.
 
+![](https://raw.githubusercontent.com/youtube/vitess/master/doc/TxInteractions.png)
+
 The detailed design explains all the functionalities and interactions.
 
 # Detailed Design
