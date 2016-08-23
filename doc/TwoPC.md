@@ -106,6 +106,8 @@ For #1 and #2, the Rollback workflow is initiated. For #3, the commit is resumed
 
 The following diagram illustrates the life-cycle of a Vitess transaction.
 
+![](https://raw.githubusercontent.com/youtube/vitess/master/doc/TxLifecycle.png)
+
 A transaction generally starts off as a single DB transaction. It becomes a distributed transaction as soon as more than one VTTablet is affected. If the app issues a rollback, then all participants are simply rolled back. If a BEC is issued, then all transactions are individually committed. These actions are the same irrespective of single or distributed transactions.
 
 In the case of a single DB transactions, a 2PC is also a BEC.
