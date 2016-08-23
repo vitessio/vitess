@@ -27,6 +27,15 @@ paper-dialog{
   transform: translate(-50%, -50%);
   margin: 0;
 }
+
+>>> p-dialog .ui-dialog{
+  position: absolute !important;
+  top: 50%  !important;
+  left: 50%  !important;
+  transform: translate(-50%, -50%);
+  margin: 0;
+}
+
 .vt-popUpContainer{
   position: fixed;
   padding: 0;

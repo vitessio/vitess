@@ -24,8 +24,9 @@ import { MdProgressBarModule } from '@angular2-material/progress-bar';
 
 import { PolymerElement } from '@vaadin/angular2-polymer';
 
-import { KeyspaceService } from './api/keyspace.service'
+import { KeyspaceService } from './api/keyspace.service';
 
+import {DataTableModule, SharedModule, DialogModule} from 'primeng/primeng';
 
 const PolymerComponents = [
   PolymerElement('paper-dialog'),
@@ -47,6 +48,9 @@ const PolymerComponents = [
     MdListModule,
     MdProgressBarModule,
     HttpModule,
+    DataTableModule,
+    SharedModule,
+    DialogModule,
   ],
   declarations: [
     AppComponent,

@@ -9,11 +9,12 @@ import { VtctlService } from '../api/vtctl.service';
 @Component({
   selector: 'vt-schema',
   templateUrl: './schema.component.html',
-  styleUrls: ['./schema.component.css'],
+  styleUrls: ['./schema.component.css', '../styles/vt.style.css'],
   directives: [Dropdown, Column, DataTable, Header],
   providers: [KeyspaceService, ShardService, TabletService, VtctlService],
 })
 export class SchemaComponent implements OnInit {
+  dialog= false;
   keyspaces= [];
   selectedKeyspace= undefined;
   shards= [];
@@ -94,46 +95,90 @@ export class SchemaComponent implements OnInit {
     this.selectedSchema = undefined;
     this.vSchemas = [];
     this.selectedVSchema = undefined;
-    this.vtctlService.sendPostRequest(this.vtctlService.vtctlUrl, ['GetSchema', tabletName]).subscribe(resp => {
-      if (!resp.Error) {
-        let schemaResp = JSON.parse(resp.Output);
-        this.schemas = schemaResp.table_definitions;
+    let schemaStream = this.vtctlService.sendPostRequest(this.vtctlService.vtctlUrl, ['GetSchema', tabletName]);
+    let vScemaStream = this.vtctlService.sendPostRequest(this.vtctlService.vtctlUrl, ['GetVSchema', keyspaceName]);
+    let allSchemaStream = schemaStream.combineLatest(vScemaStream);
+    allSchemaStream.subscribe(streams => {
+      let schemaResp = streams[0];
+      let vSchemaResp = streams[1];
+
+      if (!vSchemaResp.Error) {
+        vSchemaResp = JSON.parse(vSchemaResp.Output);
+        let vSchemas = Object.keys(vSchemaResp.vindexes).map(vname => {
+          let vtype = vSchemaResp.vindexes[vname].type;
+          let vparams = vSchemaResp.vindexes[vname].params ? vSchemaResp.vindexes[vname].params : '';
+          let vowner = vSchemaResp.vindexes[vname].owner ? vSchemaResp.vindexes[vname].owner : '';
+          return {name: vname, type: vtype, params: vparams, owner: vowner};
+        });
+        this.vSchemas = vSchemas;
+      }
+
+      if (!schemaResp.Error) {
+        schemaResp = JSON.parse(schemaResp.Output);
+        if (!vSchemaResp.Error) {
+          let vindexes = this.createVindexMap(vSchemaResp.tables);
+          this.schemas = schemaResp.table_definitions.map(table => {
+            return this.parseColumns(table, vindexes);
+          });
+          console.log('$$$', this.schemas[0]);
+        } else {
+          this.schemas = schemaResp.table_definitions.map(table => {
+            return this.parseColumns(table);
+          });
+        }
       }
     });
+  }
 
-    /*
-    this.vtctlService.sendPostRequest(this.vtctlService.vtctlUrl, ['GetVSchema', tabletName]).subscribe(resp => {
-      if (!resp.Error) {
-        let vSchemaResp = JSON.parse(resp.Output);
-        this.vSchemas = vSchemaResp.table_definitions;
+  createVindexMap(tables) {
+    let vindexes = {};
+    for (let tableName of Object.keys(tables)) {
+      vindexes[tableName] = {};
+      if (tables[tableName]['column_vindexes']) {
+        for (let vindex of tables[tableName]['column_vindexes']) {
+          vindexes[tableName][vindex.column] = { vindex: vindex.name};
+        }
       }
-    });
 
-    this.vtctlService.sendPostRequest(this.vtctlService.vtctlUrl, ['GetSrvVSchema', tabletName]).subscribe(resp => {
-      console.log('SrvVSchema:', resp);
-    });
-    */
+      if (tables[tableName]['auto_increment']) {
+        let sequence = tables[tableName]['auto_increment'];
+        if (vindexes[tableName][sequence.column]) {
+          vindexes[tableName][sequence.column]['sequence'] = sequence.sequence;
+        } else {
+          vindexes[tableName][sequence.column] = {sequence: sequence.sequence};
+        }
+      }
+    }
+    return vindexes;
   }
 
-  print(obj) {
-     console.log(obj);
-     return 'ABC';
-  }
-
-  parseColumns(schema) {
+  parseColumns(table, vindexes= undefined) {
     let pks = {};
     let i = 1;
-    for (let pk of schema.primary_key_columns) {
+    for (let pk of table.primary_key_columns) {
       pks[pk] = i;
       i++;
     }
-    i = 0;
-    return schema.columns.map(column => {
-      i++;
+    let columnIndex = 1;
+    table['columns'] = table.columns.map(column => {
       let pk_index = column in pks ?  pks[column].toString() : '~';
-      let obj = {name: column, pk: pk_index, index: i};
-      console.log('***', obj);
-      return obj;
+      let newColumn = {name: column, pk: pk_index, index: columnIndex};
+      columnIndex++;
+      if (vindexes) {
+        if (vindexes[table.name]) {
+          if (vindexes[table.name][column]) {
+            if (vindexes[table.name][column]['vindex']) {
+              newColumn['vindex'] = vindexes[table.name][column]['vindex'];
+            }
+
+            if (vindexes[table.name][column]['sequence']) {
+              newColumn['sequence'] = vindexes[table.name][column]['sequence'];
+            }
+          }
+        }
+      }
+      return newColumn;
     });
+    return table;
   }
 }
