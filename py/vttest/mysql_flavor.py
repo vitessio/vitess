@@ -1,12 +1,13 @@
 """Define abstractions for various mysql flavors.
 
-This moduleis used by mysql_db_mysqlctl.py to handle differences
-between various flavors of mysql"""
+This module is used by mysql_db_mysqlctl.py to handle differences
+between various flavors of mysql.
+"""
 
 import environment
 import logging
 import os
-import subprocess
+import sys
 
 
 # For now, vttop is only used in this module. If other people
@@ -41,7 +42,7 @@ class MariaDB(MysqlFlavor):
 
 
 class MySQL56(MysqlFlavor):
-  """Overrides specific to MySQL 5.6"""
+  """Overrides specific to MySQL 5.6."""
 
   def my_cnf(self):
     files = [
@@ -66,11 +67,8 @@ def mysql_flavor():
 def set_mysql_flavor(flavor):
   global __mysql_flavor
 
-  if not flavor:
-    flavor = os.environ.get("MYSQL_FLAVOR", "MariaDB")
-    # The environment variable might be set, but equal to "".
-    if flavor == "":
-      flavor = "MariaDB"
+  # Last default is there because the environment variable might be set to "".
+  flavor = flavor or os.environ.get("MYSQL_FLAVOR", "MariaDB") or "MariaDB"
 
   # Set the environment variable explicitly in case we're overriding it via
   # command-line flag.

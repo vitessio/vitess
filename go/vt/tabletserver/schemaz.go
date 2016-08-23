@@ -11,6 +11,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
+	"github.com/youtube/vitess/go/vt/logz"
 	"github.com/youtube/vitess/go/vt/schema"
 )
 
@@ -65,8 +66,8 @@ func schemazHandler(tables []*schema.Table, w http.ResponseWriter, r *http.Reque
 		acl.SendError(w, err)
 		return
 	}
-	startHTMLTable(w)
-	defer endHTMLTable(w)
+	logz.StartHTMLTable(w)
+	defer logz.EndHTMLTable(w)
 	w.Write(schemazHeader)
 
 	sorter := schemazSorter{

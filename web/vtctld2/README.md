@@ -3,7 +3,13 @@
 This project was generated with [angular-cli](https://github.com/angular/angular-cli) version 1.0.0-beta.11-webpack.2.
 
 ## Installation
-Once downloaded run npm install and bower install to retrieve dependencies. The angular-cli-build.js file controls what node_modules are copied into the dist/vendor folder and all bower components in the public/bower_components folder get copied into the dist folder at build time. To add more Polymer elements install them with bower and import them in elements.html.
+Once downloaded, run `npm install` and `bower install` to retrieve dependencies.
+
+Webpack handles bundling of dependencies from the `node_modules` directory,
+but bower dependencies in the `src/assets` folder simply get copied
+into the `dist` folder at build time.
+
+To add more Polymer elements, install them with bower and import them in `src/index.html`.
 
 ## Development server
 Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The app will automatically reload if you change any of the source files.

@@ -49,6 +49,7 @@ func TestQuerylogzHandler(t *testing.T) {
 
 	// fast query
 	fastQueryPattern := []string{
+		`<tr class="low">`,
 		`<td>Execute</td>`,
 		`<td></td>`,
 		`<td>effective-caller</td>`,
@@ -78,6 +79,7 @@ func TestQuerylogzHandler(t *testing.T) {
 
 	// medium query
 	mediumQueryPattern := []string{
+		`<tr class="medium">`,
 		`<td>Execute</td>`,
 		`<td></td>`,
 		`<td>effective-caller</td>`,
@@ -107,6 +109,7 @@ func TestQuerylogzHandler(t *testing.T) {
 
 	// slow query
 	slowQueryPattern := []string{
+		`<tr class="high">`,
 		`<td>Execute</td>`,
 		`<td></td>`,
 		`<td>effective-caller</td>`,

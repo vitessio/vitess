@@ -308,8 +308,14 @@ class BaseShardingTest(object):
     stdout, _ = utils.run_vtctl(['UpdateThrottlerConfiguration',
                                  '--server', throttler_server,
                                  '--copy_zero_values',
-                                 'target_replication_lag_sec:0 '
-                                 'max_replication_lag_sec:12345'],
+                                 'target_replication_lag_sec:12345 '
+                                 'max_replication_lag_sec:65789 '
+                                 'initial_rate:3 '
+                                 'max_increase:0.4 '
+                                 'emergency_decrease:0.5 '
+                                 'min_duration_between_changes_sec:6 '
+                                 'max_duration_between_increases_sec:7 '
+                                 'ignore_n_slowest_replicas:0 '],
                                 auto_log=True, trap_output=True)
     self.assertIn('%d active throttler(s)' % len(names), stdout)
     # Check the updated configuration.
@@ -318,10 +324,10 @@ class BaseShardingTest(object):
                                 auto_log=True, trap_output=True)
     for name in names:
       # The max should be set and have a non-zero value.
-      # Note that all other fields will be zero because we did not define them.
-      self.assertIn('| %s | max_replication_lag_sec:12345 ' % (name), stdout)
+      # We test only the the first field 'target_replication_lag_sec'.
+      self.assertIn('| %s | target_replication_lag_sec:12345 ' % (name), stdout)
       # protobuf omits fields with a zero value in the text output.
-      self.assertNotIn('target_replication_lag_sec', stdout)
+      self.assertNotIn('ignore_n_slowest_replicas', stdout)
     self.assertIn('%d active throttler(s)' % len(names), stdout)
 
     # Reset clears our configuration values.
@@ -334,8 +340,8 @@ class BaseShardingTest(object):
                                  '--server', throttler_server],
                                 auto_log=True, trap_output=True)
     for name in names:
-      # Target lag value should no longer be zero and therefore included.
-      self.assertIn('| %s | target_replication_lag_sec:' % (name), stdout)
+      # Target lag value should no longer be 12345 and be back to the default.
+      self.assertNotIn('target_replication_lag_sec:12345', stdout)
     self.assertIn('%d active throttler(s)' % len(names), stdout)
 
   def verify_reconciliation_counters(self, worker_port, online_or_offline,
