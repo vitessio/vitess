@@ -165,7 +165,7 @@ public class VitessConnection implements Connection {
     public void close() throws SQLException {
         if (!this.closed) { //no-op when Connection already closed
             try {
-                if (null != this.vtGateTx) { //Rolling back active transaction on close
+                if (isInTransaction()) { //Rolling back active transaction on close
                     this.rollback();
                 }
                 closeAllOpenStatements();
@@ -219,7 +219,7 @@ public class VitessConnection implements Connection {
     public void setReadOnly(boolean readOnly) throws SQLException {
         checkOpen();
 
-        if (null != this.vtGateTx) {
+        if (isInTransaction()) {
             throw new SQLException(
                 Constants.SQLExceptionMessages.METHOD_CALLED_ON_OPEN_TRANSACTION);
         }
