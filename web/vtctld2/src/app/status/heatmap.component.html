@@ -14,7 +14,7 @@
   <!-- The labels, and nested labels, of the map are drawn -->
   <div *ngFor="let label of yLabels">
 
-       <tr *ngFor="let num of getRemainingRows(label.CellLabel.Rowspan)"></tr>
+       <tr *ngFor="let num of getRemainingRows(label.CellLabel.Rowspan)" [ngStyle]="{'height': getRowHeight()+'px'}"></tr>
      </template>
 
     <template [ngIf]="label.TypeLabels != null">
@@ -25,7 +25,7 @@
           <td class="bordered" [attr.rowspan]="nestedLabel.Rowspan"> {{nestedLabel.Name}}</td>
         </tr>
 
-         <tr *ngFor="let num of getRemainingRows(nestedLabel.Rowspan)"></tr>
+         <tr *ngFor="let num of getRemainingRows(nestedLabel.Rowspan)" [ngStyle]="{'height': getRowHeight()+'px'}"></tr>
       </template>
     </template>
 </template>

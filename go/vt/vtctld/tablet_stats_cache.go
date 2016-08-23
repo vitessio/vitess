@@ -280,7 +280,6 @@ func (c *tabletStatsCache) heatmapData(selectedKeyspace, selectedCell, selectedT
 				sum += heatmapCellAndTypeLabels[c].TypeLabels[t].Rowspan
 				yGridLines = append(yGridLines, (float64(sum) - 0.5))
 			}
-
 		}
 
 		heatmapKeyspaceLabel := label{Name: keyspace, Rowspan: keyspaceLabelSpan}

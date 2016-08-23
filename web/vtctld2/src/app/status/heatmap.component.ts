@@ -120,7 +120,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
     let chartLayout = {
       yaxis: { tickvals: [this.yGrid] },
     }
-    Plotly.restyle(this.name, chartInfo, chartLayout, [0]);
+    Plotly.restyle(this.name, chartInfo, [0]);
   }
 
   // setupColorscale sets the right scale based on what metric the heatmap is displaying.
@@ -184,6 +184,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
       xaxis: xAxisTemplate,
       yaxis: yAxisTemplate,
       width: this.heatmapWidth,
+      height: this.heatmapHeight,
       margin: {
         t: this.getXLabelsRowHeight(),
         b: 0,
