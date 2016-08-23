@@ -227,11 +227,16 @@ web_dir2=$VTTOP/web/vtctld2
 rm -rf $angular_cli_dir
 cd $VTROOT/dist && git clone https://github.com/angular/angular-cli.git --quiet
 cd $angular_cli_dir && git checkout 3dcd49bc625db36dd9f539cf9ce2492107e0258c --quiet
-cd $angular_cli_dir && $node_dist/bin/npm link --silent
+echo "Installing bower"
 $node_dist/bin/npm install -g bower --silent
+echo "Contents of node dir $node_dist"
+ls $node_dist/bin
+cd $angular_cli_dir && $node_dist/bin/npm link --silent
 cd $web_dir2 && $node_dist/bin/npm install --silent
-cd $web_dir2 && $node_dist/bin/npm link angular-cli --silent
+echo "Contents of node dir"
+ls $node_dist/bin
 cd $web_dir2 && $node_dist/bin/bower install --silent
+cd $web_dir2 && $node_dist/bin/npm link angular-cli --silent
 
 # Download chromedriver
 echo "Installing selenium and chromedriver"
