@@ -1,34 +1,22 @@
 import { Component, OnInit} from '@angular/core';
 import { Node, Action, Display, State, ActionState, ActionStyle } from './node';
 import { WorkflowComponent } from './workflow.component';
-import {Accordion, AccordionTab, Header} from 'primeng/primeng';
-
+import { Accordion, AccordionTab, Header } from 'primeng/primeng';
+import { WorkflowService } from '../api/workflow.service';
 @Component({
   selector: 'vt-tasks',
-  templateUrl: './tasks.component.html',
-  styleUrls: ['./tasks.component.css', './workflow.component.css'],
+  templateUrl: './workflow-list.component.html',
+  styleUrls: ['./workflow-list.component.css', './workflow.component.css'],
   directives: [
     WorkflowComponent,
     Accordion, AccordionTab, Header,
   ],
+  providers: [WorkflowService],
 })
 
 export class TasksComponent implements OnInit {
   title = 'Vitess Control Panel';
   workflows = {
-    'UU948312': new Node('A', '/UU948312', {
-      '1': new Node('B', '/UU948312/1', {
-        '4': new Node('Get Doc Plutonium', '/UU948312/1/3', {
-          '7': new Node('Steal Plutonium from the Libyans', '/UU948312/1/3/7', {}),
-          '8': new Node('Escape from Libyans', '/UU948312/1/3/8', {}),
-        })
-      }),
-      '2': new Node('C', '/UU948312/2', {
-        '5': new Node('Waiting on Lightning', '/UU948312/2/5', {}),
-        '6': new Node('Transfer Power', '/UU948312/2/6', {}),
-      }),
-      '3': new Node('C', '/UU948312/3', {}),
-    }),
     'UU130429': new Node('Horizontal Resharding Workflow', '/UU130429', {
       '1': new Node('Approval', '/UU130429/1', {}),
       '2': new Node('Bootstrap', '/UU130429/2', {
@@ -59,44 +47,12 @@ export class TasksComponent implements OnInit {
     })
   };
 
-  ngOnInit() {
-    // Back to the Future Example
-    this.updateWorkFlow('/UU948312', {
-                                      name: 'Going Back to the Future',
-                                      state: 1,
-                                      display: 1,
-                                      progress: 33,
-                                      progressMsg: 'Working'});
-    this.updateWorkFlow('/UU948312/1', {
-                                      name: 'Acquiring Delorean',
-                                      display: 1,
-                                      progress: 100,
-                                      progressMsg: '1/1',
-                                      lastChanged: 1471234131000,
-                                      state: 2,
-                                      message: 'Leased from Doc',
-                                      disabled: false,
-                                      actions: [new Action('Return', ActionState.ENABLED, ActionStyle.NORMAL)]});
-    this.updateWorkFlow('/UU948312/1/4', {state: 2});
-    this.updateWorkFlow('/UU948312/1/4/7', {state: 2});
-    this.updateWorkFlow('/UU948312/1/4/8', {state: 2});
-    this.updateWorkFlow('/UU948312/2/5', {state: 1, display: 0, progressMsg: 'Waiting for a storm'});
-    this.updateWorkFlow('/UU948312/2/6', {state: 0});
-    this.updateWorkFlow('/UU948312/2', {
-                                      name: 'Charge the Flux Capacitor',
-                                      display: 0,
-                                      progressMsg: 'Charging',
-                                      lastChanged: 147123420000,
-                                      state: 1,
-                                      message: '',
-                                      disabled: false,
-                                      actions: [new Action('Accelerate', ActionState.ENABLED, ActionStyle.WARNING)]});
-    this.updateWorkFlow('/UU948312/3', {
-                                      name: 'Hit 88MPH',
-                                      message: 'Great Scott!',
-                                      display: 2,
-                                      progressMsg: 'Beaming Up'});
+  constructor(private workflowService: WorkflowService) {}
 
+  ngOnInit() {
+    this.workflowService.getWorkflows().subscribe(workflows => {
+      this.processWorkflowJson(workflows);
+    });
     // Resharding Workflow Example
     this.updateWorkFlow('/UU130429', {
                                       message: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt\
@@ -234,6 +190,73 @@ export class TasksComponent implements OnInit {
     this.updateWorkFlow('/UU130429/5/18', {
                                       message: 'Recursively removing old shards',
                                       display: Display.DETERMINATE});
+  }
+
+  processWorkflowJson(workflows: any) {
+    console.log(workflows);
+    let workflowList = Object.keys(workflows);
+    // Iterate over all workflows
+    for (let workflowName of workflowList) {
+      let workflowData = workflows[workflowName];
+      if (workflowData.path.charAt(0) === '/' && workflowData.path.split('/').length === 2) {
+        this.workflows[workflowData.path.split('/')[2]] = this.recursiveWorkflowBuilder(workflowData);
+      } else {
+        // Even if the workflow is not a root workflow it's path must be absolute
+        if (workflowData.path.charAt(0) === '/') {
+          let target = this.getWorkflow(workflowData.path);
+          // This node already exists, so we simply need to update its data.
+          if (target) {
+            // Now we update all fields, but children is filled with a JS object not a Node
+            target.update(workflowData);
+            target.children = {};
+            for (let childName of Object.keys(workflowData.children)) {
+              let child = this.recursiveWorkflowBuilder(workflowData.children[childName]);
+              if (child) {
+                target.children[childName] = child;
+              }
+            }
+          } else {
+            console.error('Could not find node to update');
+          }
+        } else {
+          console.error('The path provided was not absolute.');
+        }
+      }
+      /*if (root) {
+        // create new node on root and pass this new node as parent for recursive step
+      } else {
+        target = getWorkflow(path);
+        if (target) {
+          target.update(data.minus(children));
+          // loop through children and assign the recursivbe workflow
+          for (let child of workflow.children) {
+            target.children[child.id] = recursiveWorkflowBuilder(child);
+          }
+        } else {
+          parent = getWorkflow(path.parent);
+          if(parent) {
+            parent.children[workflow.id] = new Node(getParams(workflow));
+            target = parent.children[workflow.id];
+            target.update(Data.minus(children));
+          } else {
+            continue;
+          }
+        }
+      }*/
+    }
+  }
+
+  recursiveWorkflowBuilder(workflowData): Node | boolean {
+    if (workflowData.name && workflowData.path) {
+      let workflow = new Node(workflowData.name, workflowData.path, {});
+      workflow.update(workflowData);
+      workflow.children = {};
+      for (let childName of Object.keys(workflowData.children)) {
+        workflow.children[childName] = this.recursiveWorkflowBuilder(workflowData.children[childName]);
+      }
+      return workflow;
+    }
+    return false;
   }
 
   getRootWorkflowIds() {

@@ -10,7 +10,7 @@ import { SchemaComponent } from './schema/schema.component';
 import { ShardComponent } from './dashboard/shard.component';
 import { StatusComponent } from './status/status.component';
 import { TopoBrowserComponent } from './topo/topo-browser.component';
-import { TasksComponent } from './workflows/tasks.component';
+import { TasksComponent } from './workflows/workflow-list.component';
 import { APP_ROUTER_PROVIDERS, routing } from './app.routes';
 
 import { MdButtonModule } from '@angular2-material/button';
