@@ -79,18 +79,18 @@ export class SchemaComponent implements OnInit {
 
   getTablets(keyspaceName, shardName) {
     this.tabletService.getTabletList(keyspaceName + '/' + shardName).subscribe(tablets => {
-      console.log(tablets);
       this.tablets = tablets.map(tablet => {
-        return {label: `${tablet.cell}-${tablet.uid}`, value: `${tablet.cell}-${tablet.uid}`};
+        let alias = `${tablet.cell}-${tablet.uid}`;
+        return {label: alias, value: alias};
       });
       if (this.tablets.length > 0) {
         this.selectedTablet = this.tablets[0].value;
-        this.fetchSchema(this.selectedKeyspace, this.selectedShard, this.selectedTablet);
+        this.fetchSchema(this.selectedKeyspace, this.selectedTablet);
       }
     });
   }
 
-  fetchSchema(keyspaceName, shardName, tabletName) {
+  fetchSchema(keyspaceName, tabletName) {
     this.schemas = [];
     this.selectedSchema = undefined;
     this.vSchemas = [];
@@ -120,7 +120,6 @@ export class SchemaComponent implements OnInit {
           this.schemas = schemaResp.table_definitions.map(table => {
             return this.parseColumns(table, vindexes);
           });
-          console.log('$$$', this.schemas[0]);
         } else {
           this.schemas = schemaResp.table_definitions.map(table => {
             return this.parseColumns(table);
@@ -170,7 +169,6 @@ export class SchemaComponent implements OnInit {
             if (vindexes[table.name][column]['vindex']) {
               newColumn['vindex'] = vindexes[table.name][column]['vindex'];
             }
-
             if (vindexes[table.name][column]['sequence']) {
               newColumn['sequence'] = vindexes[table.name][column]['sequence'];
             }

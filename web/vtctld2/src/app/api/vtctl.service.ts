@@ -11,13 +11,8 @@ export class VtctlService {
   sendPostRequest(url: string, body: string[]): Observable<any> {
     let headers = new Headers({ 'Content-Type': 'application/json' });
     let options = new RequestOptions({ headers: headers });
-    console.log(body);
     return this.http.post(url, JSON.stringify(body), options)
-      .map(resp => resp.json())// ;
-      .map(resp => {
-        console.log(resp);
-        return resp;
-      });
+      .map(resp => resp.json());
   }
 
   vtctlRunCommand(dialogContent: any, action: string): Observable<any> {

@@ -2,10 +2,8 @@
 
   <p-dropdown [options]="keyspaces" [(ngModel)]="selectedKeyspace" (onChange)="getShards(selectedKeyspace)"></p-dropdown>
   <p-dropdown [options]="shards" [(ngModel)]="selectedShard" (onChange)="getTablets(selectedKeyspace, selectedShard)"></p-dropdown>
-  <p-dropdown [options]="tablets" [(ngModel)]="selectedTablet" (onChange)="fetchSchema(selectedKeyspace, selectedShard, selectedTablet)"></p-dropdown>
+  <p-dropdown [options]="tablets" [(ngModel)]="selectedTablet" (onChange)="fetchSchema(selectedKeyspace, selectedTablet)"></p-dropdown>
 
-  <h2> Command: </h2>
-  {{selectedKeyspace}}/{{selectedShard}}/{{selectedTablet}}
   <div class="vt-schema-left-container">
     <p-dataTable [value]="schemas" selectionMode="single" emptyMessage="No Schemas for this tablet" [(selection)]="selectedSchema" (onRowSelect)="dialog=true;">
       <header>{{selectedTablet}}'s Schemas</header>
@@ -15,8 +13,8 @@
       <p-column field="row_count" header="# Rows" sortable="true"></p-column>
     </p-dataTable>
 
-    <p-dataTable [value]="vSchemas" emptyMessage="No VSchemas for this tablet" [(selection)]="selectedVSchema">
-      <header>{{selectedTablet}}'s VSchemas</header>
+    <p-dataTable [value]="vSchemas" emptyMessage="No VSchemas for this keyspace" [(selection)]="selectedVSchema">
+      <header>{{selectedKeyspace}}'s VSchemas</header>
       <p-column field="name" header="Name" sortable="true"></p-column>
       <p-column field="type" header="Type" sortable="true"></p-column>
       <p-column field="params" header="Params" sortable="true"></p-column>

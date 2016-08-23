@@ -11,12 +11,12 @@
 }
 
 >>> .vt-schema-popup-container th:nth-child(1) {
-    width: 43px;
+    width: 44px;
     text-align: center;
 }
 
 >>> .vt-schema-popup-container td:nth-child(1) {
-    width: 43px;
+    width: 44px;
     text-align: center;
 }
 
