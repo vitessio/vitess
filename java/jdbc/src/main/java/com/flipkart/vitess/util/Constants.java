@@ -102,7 +102,6 @@ public class Constants {
 
 
     public enum QueryExecuteType {
-        SIMPLE,
-        STREAM
+        SIMPLE, STREAM
     }
 }
