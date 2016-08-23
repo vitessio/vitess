@@ -116,12 +116,13 @@ func NewMaxReplicationLagModule(config MaxReplicationLagModuleConfig, actualRate
 		applyMutableConfig: true,
 		// Always start off with a non-zero rate because zero means all requests
 		// get throttled.
-		rate:         sync2.NewAtomicInt64(rate),
-		currentState: stateIncreaseRate,
-		memory:       newMemory(memoryGranularity, config.AgeBadRateAfter(), config.BadRateIncrease),
-		nowFunc:      nowFunc,
-		lagRecords:   make(chan replicationLagRecord, 10),
-		// Prevent an immediately increase of the initial rate.
+		rate:           sync2.NewAtomicInt64(rate),
+		currentState:   stateIncreaseRate,
+		lastRateChange: nowFunc(),
+		memory:         newMemory(memoryGranularity, config.AgeBadRateAfter(), config.BadRateIncrease),
+		nowFunc:        nowFunc,
+		lagRecords:     make(chan replicationLagRecord, 10),
+		// Prevent an immediate increase of the initial rate.
 		nextAllowedIncrease: nowFunc().Add(config.MaxDurationBetweenIncreases()),
 		actualRatesHistory:  actualRatesHistory,
 		lagCache:            newReplicationLagCache(1000),
@@ -345,15 +346,7 @@ func (m *MaxReplicationLagModule) increaseRate(r *result, now time.Time, lagReco
 	increaseReason := fmt.Sprintf("a max increase of %.1f%%", m.config.MaxIncrease*100)
 	rate := previousRate * (1 + m.config.MaxIncrease)
 
-	// b) Always make minimum progress compared to oldRate.
-	// (Necessary for cases where MaxIncrease is too low and the rate might not increase.)
-	if rate <= float64(oldRate) {
-		rate = float64(oldRate) + memoryGranularity
-		increaseReason += fmt.Sprintf(" (minimum progress by %v)", memoryGranularity)
-		previousRateSource = "previous set rate"
-		previousRate = float64(oldRate)
-	}
-	// c) Make the increase less aggressive if it goes above the bad rate.
+	// b) Make the increase less aggressive if it goes above the bad rate.
 	lowestBad := float64(m.memory.lowestBad())
 	if lowestBad != 0 {
 		if rate > lowestBad {
@@ -361,6 +354,17 @@ func (m *MaxReplicationLagModule) increaseRate(r *result, now time.Time, lagReco
 			rate = previousRate + (lowestBad-previousRate)/2
 			increaseReason += fmt.Sprintf(" (but limited to the middle value in the range [previous rate, lowest bad rate]: [%.0f, %.0f]", previousRate, lowestBad)
 		}
+	}
+	// c) Always make minimum progress compared to oldRate.
+	// Necessary for the following cases:
+	// - MaxIncrease is too low and the rate might not increase
+	// - after the new rate was limited by the bad rate, we got the old rate
+	//   (In this case we might slightly go above the bad rate which we accept.)
+	if rate <= float64(oldRate) {
+		rate = float64(oldRate) + memoryGranularity
+		increaseReason += fmt.Sprintf(" (minimum progress by %v)", memoryGranularity)
+		previousRateSource = "previous set rate"
+		previousRate = float64(oldRate)
 	}
 
 	increase := (rate - previousRate) / previousRate
