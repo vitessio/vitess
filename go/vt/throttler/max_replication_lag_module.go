@@ -201,6 +201,7 @@ func (m *MaxReplicationLagModule) updateConfiguration(configuration *throttlerda
 		return err
 	}
 	m.mutableConfig = newConfig
+	m.applyMutableConfig = true
 	return nil
 }
 
@@ -209,6 +210,7 @@ func (m *MaxReplicationLagModule) resetConfiguration() {
 	defer m.mutableConfigMu.Unlock()
 
 	m.mutableConfig = NewMaxReplicationLagModuleConfig(m.initialMaxReplicationLagSec)
+	m.applyMutableConfig = true
 }
 
 // RecordReplicationLag records the current replication lag for processing.
