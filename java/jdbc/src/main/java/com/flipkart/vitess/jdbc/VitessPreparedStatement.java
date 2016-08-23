@@ -113,8 +113,8 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             }
 
             this.vitessResultSet = new VitessResultSet(cursor, this);
-        } catch (SQLNonTransientException ex) {
-            checkNotInTxError(ex);
+        } catch (SQLRecoverableException ex) {
+            this.vitessConnection.setVtGateTx(null);
             throw ex;
         }
         return (this.vitessResultSet);
@@ -174,8 +174,8 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             } else {
                 truncatedUpdateCount = (int) this.resultCount;
             }
-        } catch (SQLNonTransientException ex) {
-            checkNotInTxError(ex);
+        } catch (SQLRecoverableException ex) {
+            this.vitessConnection.setVtGateTx(null);
             throw ex;
         }
         return truncatedUpdateCount;

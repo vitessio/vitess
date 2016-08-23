@@ -87,7 +87,6 @@ public class Constants {
                 + "Statement.RETURN_GENERATED_KEYS to Statement.executeUpdate() or Connection.prepareStatement()";
         public static final String NO_KEYSPACE =
             "Querying Database Information without providing keyspace";
-        public static final String TX_TIMEOUT = "gRPCServerError: not_in_tx:";
     }
 
 

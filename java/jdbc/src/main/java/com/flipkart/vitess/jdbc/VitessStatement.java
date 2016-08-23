@@ -112,8 +112,8 @@ public class VitessStatement implements Statement {
                 throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
             }
             this.vitessResultSet = new VitessResultSet(cursor, this);
-        } catch (SQLNonTransientException ex) {
-            checkNotInTxError(ex);
+        } catch (SQLRecoverableException ex) {
+            this.vitessConnection.setVtGateTx(null);
             throw ex;
         }
         return (this.vitessResultSet);
@@ -435,8 +435,8 @@ public class VitessStatement implements Statement {
             } else {
                 truncatedUpdateCount = (int) this.resultCount;
             }
-        } catch (SQLNonTransientException ex) {
-            checkNotInTxError(ex);
+        } catch (SQLRecoverableException ex) {
+            this.vitessConnection.setVtGateTx(null);
             throw ex;
         }
         return truncatedUpdateCount;
@@ -530,19 +530,6 @@ public class VitessStatement implements Statement {
         return this.vitessConnection.getVtGateConn()
             .executeKeyspaceIds(context, sql, keyspace, keyspaceIds, null,
                 this.vitessConnection.getTabletType()).checkedGet();
-    }
-
-    /**
-     * If SQLException occurs due to DML not in transaction,
-     * vtGateTx will be set to null to avoid further error on Transaction not found
-     *
-     * @param ex - NonTransient Exception
-     * @throws SQLException
-     */
-    protected void checkNotInTxError(SQLNonTransientException ex) {
-        if (ex.getMessage().contains(Constants.SQLExceptionMessages.TX_TIMEOUT)) {
-            this.vitessConnection.setVtGateTx(null);
-        }
     }
 
     //Unsupported Methods
