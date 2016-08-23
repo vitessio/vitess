@@ -224,14 +224,30 @@ fi
 echo "Installing dependencies for building web UI"
 angular_cli_dir=$VTROOT/dist/angular-cli
 web_dir2=$VTTOP/web/vtctld2
-rm -rf $angular_cli_dir
-cd $VTROOT/dist && git clone https://github.com/angular/angular-cli.git --quiet
-cd $angular_cli_dir && git checkout 3dcd49bc625db36dd9f539cf9ce2492107e0258c --quiet
+
+if [[ -d $angular_cli_dir ]]; then
+  echo "skipping angular cli download. remove $angular_cli_dir to force download."
+else
+  cd $VTROOT/dist && git clone https://github.com/angular/angular-cli.git --quiet
+  cd $angular_cli_dir && git checkout 3dcd49bc625db36dd9f539cf9ce2492107e0258c --quiet
+fi
 cd $angular_cli_dir && $node_dist/bin/npm link --silent
-$node_dist/bin/npm install -g bower --silent
-cd $web_dir2 && $node_dist/bin/npm install --silent
+if [[ -f $node_dist/bin/bower ]]; then
+  echo "skipping npm install of bower. Remove $node_dist/bin/bower to force install."
+else
+  $node_dist/bin/npm install -g --prefix $node_dist bower --silent
+fi
+if [[ -d $web_dir2/node_modules ]]; then
+  echo "skipping npm install. Remove $web_dir2/node_modules to force install."
+else
+  cd $web_dir2 && $node_dist/bin/npm install --silent
+fi
 cd $web_dir2 && $node_dist/bin/npm link angular-cli --silent
-cd $web_dir2 && $node_dist/bin/bower install --silent
+if [[ -d $web_dir2/src/assets/bower_components ]]; then
+  echo "skipping bower install. Remove $web_dir2/src/assets/bower_components to force install."
+else
+  cd $web_dir2 && $node_dist/bin/bower install --silent
+fi
 
 # Download chromedriver
 echo "Installing selenium and chromedriver"
