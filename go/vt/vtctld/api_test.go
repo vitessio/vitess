@@ -157,7 +157,8 @@ func TestAPI(t *testing.T) {
 		    "Aliases": [[ { "cell": "cell1", "uid": 100 }, null ]],
 		    "KeyspaceLabel": { "Name": "ks1", "Rowspan": 1 },
 		    "CellAndTypeLabels": [{ "CellLabel": { "Name": "cell1",  "Rowspan": 1 }, "TypeLabels": [{"Name": "REPLICA", "Rowspan": 1}] }] ,
-		    "ShardLabels": ["-80", "80-"]
+		    "ShardLabels": ["-80", "80-"],
+		    "YGridLines": [0.5]
 		  }
 		]`},
 		{"GET", "tablet_statuses/?keyspace=ks1&cell=all&type=all&metric=lag", `[
@@ -168,7 +169,8 @@ func TestAPI(t *testing.T) {
 		  "CellAndTypeLabels":[
 		     {"CellLabel":{"Name":"cell1","Rowspan":2},"TypeLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]},
 		     {"CellLabel":{"Name":"cell2","Rowspan":2},"TypeLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]}],
-		  "ShardLabels":["-80","80-"]
+		  "ShardLabels":["-80","80-"],
+		  "YGridLines":[0.5,1.5,2.5,3.5]
 		}
 		]`},
 		{"GET", "tablet_statuses/?keyspace=all&cell=all&type=all&metric=lag", `[
@@ -179,7 +181,8 @@ func TestAPI(t *testing.T) {
 		  "CellAndTypeLabels":[
 		    {"CellLabel":{"Name":"cell1","Rowspan":1},"TypeLabels":null},
 		    {"CellLabel":{"Name":"cell2","Rowspan":1},"TypeLabels":null}],
-		  "ShardLabels":["-80","80-"]
+		  "ShardLabels":["-80","80-"],
+		  "YGridLines":[0.5,1.5]
 		  }
 		]`},
 		{"GET", "tablet_statuses/cell1/REPLICA/lag", "can't get tablet_statuses: invalid target path: \"cell1/REPLICA/lag\"  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>"},

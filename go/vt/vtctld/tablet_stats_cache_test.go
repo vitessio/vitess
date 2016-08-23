@@ -168,6 +168,7 @@ func TestHeatmapData(t *testing.T) {
 				},
 			},
 			ShardLabels: []string{"-80", "80-"},
+			YGridLines:  []float64{1.5, 2.5, 3.5, 5.5, 6.5},
 		},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -207,13 +208,14 @@ func TestHeatmapData(t *testing.T) {
 				},
 			},
 			ShardLabels: []string{"-80", "80-"},
+			YGridLines:  []float64{0.5, 2.5},
 		},
 	}
 	if !reflect.DeepEqual(got2, want2) {
 		t.Errorf("got: %v, want: %v", got2, want2)
 	}
 
-	// Checking that the heatmap data is returned correctly for the following view: (keyspace="ks2", cell="cell2", type="all").
+	// Checking that the heatmap data is returned correctly for the following view: (keyspace="ks2", cell="cell1", type="all").
 	got3, err := tabletStatsCache.heatmapData("ks2", "cell1", "all", "lag")
 	if err != nil {
 		t.Errorf("could not get heatmap data: %v", err)
@@ -241,6 +243,7 @@ func TestHeatmapData(t *testing.T) {
 				},
 			},
 			ShardLabels: []string{"-80", "80-"},
+			YGridLines:  []float64{1.5, 2.5},
 		},
 	}
 	if !reflect.DeepEqual(got3, want3) {
@@ -269,6 +272,7 @@ func TestHeatmapData(t *testing.T) {
 				},
 			},
 			ShardLabels: []string{"-80", "80-"},
+			YGridLines:  []float64{0.5, 1.5},
 		},
 		{
 			KeyspaceLabel: label{Name: "ks2", Rowspan: 2},
@@ -286,13 +290,14 @@ func TestHeatmapData(t *testing.T) {
 				},
 			},
 			ShardLabels: []string{"-80", "80-"},
+			YGridLines:  []float64{0.5, 1.5},
 		},
 	}
 	if !reflect.DeepEqual(got4, want4) {
 		t.Errorf("got: %v, want: %v", got4, want4)
 	}
 
-	// Checking that the heatmap data is returned correctly for the following view: (keyspace="all", cell="all", type="all").
+	// Checking that the heatmap data is returned correctly for the following view: (keyspace="ks1", cell="cell2", type="MASTER").
 	got5, err := tabletStatsCache.heatmapData("ks1", "cell2", "MASTER", "lag")
 	if err != nil {
 		t.Errorf("could not get heatmap data: %v", err)
@@ -315,6 +320,7 @@ func TestHeatmapData(t *testing.T) {
 				},
 			},
 			ShardLabels: []string{"-80", "80-"},
+			YGridLines:  []float64{0.5},
 		},
 	}
 	if !reflect.DeepEqual(got5, want5) {

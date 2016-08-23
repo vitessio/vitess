@@ -30,11 +30,13 @@ type heatmap struct {
 	// Data is a 2D array of values of the specified metric.
 	Data [][]float64
 	// Aliases is a 2D array holding references to the tablet aliases.
-	Aliases [][]*topodata.TabletAlias
-
+	Aliases           [][]*topodata.TabletAlias
 	KeyspaceLabel     label
 	CellAndTypeLabels []yLabel
 	ShardLabels       []string
+
+	// The following array is used to draw gridLines on the map in the right places.
+	YGridLines []float64
 }
 
 type byTabletUID []*discovery.TabletStats
@@ -265,6 +267,22 @@ func (c *tabletStatsCache) heatmapData(selectedKeyspace, selectedCell, selectedT
 			keyspaceLabelSpan += cellLabel.CellLabel.Rowspan
 		}
 
+		// Setting the values for the yGridLines by going in reverse and subtracting 0.5 as an offset
+		var yGridLines []float64
+		sum := 0
+		for c := len(heatmapCellAndTypeLabels) - 1; c >= 0; c-- {
+			if heatmapCellAndTypeLabels[c].TypeLabels == nil {
+				sum += heatmapCellAndTypeLabels[c].CellLabel.Rowspan
+				yGridLines = append(yGridLines, (float64(sum) - 0.5))
+				continue
+			}
+			for t := len(heatmapCellAndTypeLabels[c].TypeLabels) - 1; t >= 0; t-- {
+				sum += heatmapCellAndTypeLabels[c].TypeLabels[t].Rowspan
+				yGridLines = append(yGridLines, (float64(sum) - 0.5))
+			}
+
+		}
+
 		heatmapKeyspaceLabel := label{Name: keyspace, Rowspan: keyspaceLabelSpan}
 		currHeatmap := heatmap{
 			Data:              heatmapData,
@@ -272,6 +290,7 @@ func (c *tabletStatsCache) heatmapData(selectedKeyspace, selectedCell, selectedT
 			KeyspaceLabel:     heatmapKeyspaceLabel,
 			CellAndTypeLabels: heatmapCellAndTypeLabels,
 			ShardLabels:       shards,
+			YGridLines:        yGridLines,
 		}
 		listOfHeatmaps = append(listOfHeatmaps, currHeatmap)
 	}

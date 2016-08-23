@@ -38,6 +38,8 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
   yLabels: Array<any>;
   // xLabels is an array with shard names as column labels.
   xLabels: Array<string>;
+  // yGrid stores the info for the horizontal grid lines.
+  yGrid: Array<number>;
 
   // Other variables needed to draw the heatmap.
   plotlyMap: any;
@@ -76,6 +78,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
     this.yLabels = this.heatmap.CellAndTypeLabels;
     this.xLabels = this.heatmap.ShardLabels;
     this.keyspace = this.heatmap.KeyspaceLabel;
+    this.yGrid = this.heatmap.YGridLines;
 
     let body = document.body;
     this.heatmapWidth = (body.clientWidth - 400);
@@ -108,13 +111,16 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
     this.yLabels = stats.CellAndTypeLabels;
     this.xLabels = stats.ShardLabels;
     this.name = stats.KeyspaceLabel.Name;
-
+    this.yGrid = stats.YGridLines;
     // Settings for the Plotly heatmap.
     let chartInfo = {
       z: [this.data],
       x: [this.xLabels],
     };
-    Plotly.restyle(this.name, chartInfo, [0]);
+    let chartLayout = {
+      yaxis: { tickvals: [this.yGrid] },
+    }
+    Plotly.restyle(this.name, chartInfo, chartLayout, [0]);
   }
 
   // setupColorscale sets the right scale based on what metric the heatmap is displaying.
@@ -144,7 +150,6 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
 
   drawHeatmap(metric) {
     this.setupColorscale(metric);
-
     // Settings for the Plotly heatmap.
     let chartInfo = [{
       z: this.data,
@@ -161,11 +166,18 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
       zeroline: false,
       rangemode: 'nonnegative',
       side: 'top',
-      ticks: ''
+      tickmode: 'array',
+      ticks: 'inside',
+      ticklen: this.heatmapHeight,
+      tickcolor: '#000',
     };
     let yAxisTemplate = {
       showticklabels: false,
-      ticks: '',
+      tickmode: 'array',
+      ticks: 'inside',
+      ticklen: this.heatmapWidth,
+      tickcolor: '#000',
+      tickvals: this.yGrid,
       fixedrange: true
     };
     let chartLayout = {
