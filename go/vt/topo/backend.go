@@ -8,27 +8,67 @@ import "golang.org/x/net/context"
 // Zookeeper is a good example of an implementation, as defined in
 // go/vt/zktopo.
 //
-// This API is very generic, and file oriented.
+// This API is very generic, and key/value store oriented.
+// We use regular paths for object names, and we can list all
+// immediate children of a path.
 //
 // FIXME(alainjobart) add all parts of the API, implement them all for
 // all our current systems, and convert the higher levels to talk to
 // this API. This is a long-term project.
 type Backend interface {
-	// Directory support: NYI
-	//	MkDir(ctx context.Context, cell, dirPath string) error
-	//	RmDir(ctx context.Context, cell, dirPath string) error
-	//	ListDir(ctx context.Context, cell, dirPath string) ([]string, error)
+	//
+	// Directory support
+	//
 
-	// File support: NYI
+	// ListDir returns the entries in a directory.  The returned
+	// list should be sorted (by sort.Strings for instance).
+	// If there are no files under the provided path, returns ErrNoNode.
+	ListDir(ctx context.Context, cell, dirPath string) ([]string, error)
+
+	//
+	// File support
 	// if version == nil, then it’s an unconditional update / delete.
-	//	Create(ctx context.Context, cell, filePath string, contents []byte) error
-	//	Update(ctx context.Context, cell, filePath string, contents []byte, version Version) (Version, error)
-	//	Get(ctx context.Context, cell, filePath string) ([]byte, Version, error)
-	//	Delete(ctx context.Context, cell, filePath string, version Version) error
+	//
 
-	// Locks: NYI
-	//	Lock(ctx context.Context, cell string, dirPath string) (LockDescriptor, error)
-	//	Unlock(ctx context.Context, descriptor LockDescriptor) error
+	// Create creates the initial version of a file.
+	// Returns ErrNodeExists if the file exists.
+	Create(ctx context.Context, cell, filePath string, contents []byte) (Version, error)
+
+	// Update updates the file with the provided filename with the
+	// new content.
+	// If version is nil, it is an unconditional update
+	// (which is then the same as a Create is the file doesn't exist).
+	// It returns the new Version of the file after update.
+	// Returns ErrBadVersion if the provided version is not current.
+	Update(ctx context.Context, cell, filePath string, contents []byte, version Version) (Version, error)
+
+	// Get returns the content and version of a file.
+	// Can return ErrNoNode if the file doesn't exist.
+	Get(ctx context.Context, cell, filePath string) ([]byte, Version, error)
+
+	// Delete deletes the provided file.
+	// If version is nil, it is an unconditional delete.
+	// If the last entry of a directory is deleted, using ListDir
+	// on its parent directory should not return the directory.
+	// For instance, when deleting /keyspaces/aaa/Keyspace, and if
+	// there is no other file in /keyspaces/aaa, then aaa should not
+	// appear any more when listing /keyspaces.
+	//
+	// Delete will never be called on a directory.
+	// Returns ErrNodeExists if the file doesn't exist.
+	// Returns ErrBadVersion if the provided version is not current.
+	Delete(ctx context.Context, cell, filePath string, version Version) error
+
+	//
+	// Locks
+	//
+
+	//	NYI: Lock(ctx context.Context, cell string, dirPath string) (LockDescriptor, error)
+	//	NYI: Unlock(ctx context.Context, descriptor LockDescriptor) error
+
+	//
+	// Watches
+	//
 
 	// Watch starts watching a file in the provided cell.  It
 	// returns the current value, a 'changes' channel to read the

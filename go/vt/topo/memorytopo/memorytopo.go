@@ -10,6 +10,7 @@ package memorytopo
 import (
 	"fmt"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 
@@ -24,12 +25,22 @@ var (
 )
 
 // MemoryTopo is a memory-based implementation of topo.Backend.
+// It takes a file-system like approach, with directories at each level
+// being an actual directory node. This is meant to be closer to
+// file-system like servers, like ZooKeeper or Chubby. The fake etcd
+// version is closer to a node-based fake.
 type MemoryTopo struct {
 	faketopo.FakeTopo
 
-	// mu protects the entire map. One root node per cell.
-	mu    sync.Mutex
+	// mu protects the following fields.
+	mu sync.Mutex
+	// cells is the toplevel node that has one child per cell.
 	cells *node
+	// generation is used to generate unique incrementing version
+	// numbers.  We want a global counter so when creating a file,
+	// then deleting it, then re-creating it, we don't restart the
+	// version at 1.
+	generation uint64
 }
 
 // node contains a directory or a file entry.
@@ -39,25 +50,11 @@ type node struct {
 	version  uint64
 	contents []byte
 	children map[string]*node
+	// parent is a pointer to the parent node.
+	// It is set to nil in toplevel and cell node.
+	parent *node
 
 	watches map[int]chan *topo.WatchData
-}
-
-func newFile(name string, contents []byte) *node {
-	return &node{
-		name:     name,
-		version:  1,
-		contents: contents,
-		watches:  make(map[int]chan *topo.WatchData),
-	}
-}
-
-func newDirectory(name string) *node {
-	return &node{
-		name:     name,
-		version:  1,
-		children: make(map[string]*node),
-	}
 }
 
 func (n *node) isFile() bool {
@@ -77,13 +74,36 @@ func (v NodeVersion) String() string {
 
 // NewMemoryTopo returns a new MemoryTopo for all the cells.
 func NewMemoryTopo(cells []string) *MemoryTopo {
-	result := &MemoryTopo{
-		cells: newDirectory(""),
-	}
+	result := &MemoryTopo{}
+	result.cells = result.newDirectory("", nil)
 	for _, cell := range cells {
-		result.cells.children[cell] = newDirectory(cell)
+		result.cells.children[cell] = result.newDirectory(cell, nil)
 	}
 	return result
+}
+
+func (mt *MemoryTopo) getNextVersion() uint64 {
+	mt.generation++
+	return mt.generation
+}
+
+func (mt *MemoryTopo) newFile(name string, contents []byte, parent *node) *node {
+	return &node{
+		name:     name,
+		version:  mt.getNextVersion(),
+		contents: contents,
+		parent:   parent,
+		watches:  make(map[int]chan *topo.WatchData),
+	}
+}
+
+func (mt *MemoryTopo) newDirectory(name string, parent *node) *node {
+	return &node{
+		name:     name,
+		version:  mt.getNextVersion(),
+		children: make(map[string]*node),
+		parent:   parent,
+	}
 }
 
 func (mt *MemoryTopo) nodeByPath(cell, filePath string) *node {
@@ -109,28 +129,94 @@ func (mt *MemoryTopo) nodeByPath(cell, filePath string) *node {
 	return n
 }
 
-// MkDir will eventually be part of topo.Backend interface.
-func (mt *MemoryTopo) MkDir(ctx context.Context, cell string, dirPath string) error {
+func (mt *MemoryTopo) getOrCreatePath(cell, filePath string) *node {
+	parts := strings.Split(filePath, "/")
+	parts[0] = cell
+	n := mt.cells
+	for _, part := range parts {
+		if part == "" {
+			// Skip empty parts, usually happens at the end.
+			continue
+		}
+		if n.children == nil {
+			// This is a file.
+			return nil
+		}
+		child, ok := n.children[part]
+		if !ok {
+			// Path doesn't exist, create it.
+			child = mt.newDirectory(part, n)
+			n.children[part] = child
+		}
+		n = child
+	}
+	return n
+}
+
+// recursiveDelete deletes a node and its parent directory if empty.
+func (mt *MemoryTopo) recursiveDelete(n *node) {
+	parent := n.parent
+	if parent == nil {
+		return
+	}
+	delete(parent.children, n.name)
+	if len(parent.children) == 0 {
+		mt.recursiveDelete(parent)
+	}
+}
+
+// ListDir is part of the topo.Backend interface.
+func (mt *MemoryTopo) ListDir(ctx context.Context, cell, dirPath string) ([]string, error) {
+	mt.mu.Lock()
+	defer mt.mu.Unlock()
+
+	// Get the node to list.
+	n := mt.nodeByPath(cell, dirPath)
+	if n == nil {
+		return nil, topo.ErrNoNode
+	}
+
+	// Check it's a directory.
+	if !n.isDirectory() {
+		return nil, fmt.Errorf("node %v in cell %v is not a directory", dirPath, cell)
+	}
+
+	var result []string
+	for n := range n.children {
+		result = append(result, n)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
+// Create is part of topo.Backend interface.
+func (mt *MemoryTopo) Create(ctx context.Context, cell, filePath string, contents []byte) (topo.Version, error) {
+	if contents == nil {
+		contents = []byte{}
+	}
+
 	mt.mu.Lock()
 	defer mt.mu.Unlock()
 
 	// Get the parent dir.
-	dir, file := path.Split(dirPath)
-	n := mt.nodeByPath(cell, dir)
-	if n == nil {
-		return topo.ErrNoNode
+	dir, file := path.Split(filePath)
+	p := mt.getOrCreatePath(cell, dir)
+	if p == nil {
+		return nil, fmt.Errorf("trying to create file %v in cell %v in a path that contains files", filePath, cell)
 	}
 
-	// Check node doesn't exist.
-	if _, ok := n.children[file]; ok {
-		return topo.ErrNodeExists
+	// Check the file doesn't already exist.
+	if _, ok := p.children[file]; ok {
+		return nil, topo.ErrNodeExists
 	}
 
-	n.children[file] = newDirectory(file)
-	return nil
+	// Create the file.
+	n := mt.newFile(file, contents, p)
+	p.children[file] = n
+	return NodeVersion(n.version), nil
 }
 
-// Update will eventually be part of topo.Backend interface.
+// Update is part of topo.Backend interface.
 func (mt *MemoryTopo) Update(ctx context.Context, cell, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
 	if contents == nil {
 		contents = []byte{}
@@ -153,7 +239,7 @@ func (mt *MemoryTopo) Update(ctx context.Context, cell, filePath string, content
 		if version != nil {
 			return nil, topo.ErrNoNode
 		}
-		n = newFile(file, contents)
+		n = mt.newFile(file, contents, p)
 		p.children[file] = n
 		return NodeVersion(n.version), nil
 	}
@@ -169,7 +255,7 @@ func (mt *MemoryTopo) Update(ctx context.Context, cell, filePath string, content
 	}
 
 	// Now we can update.
-	n.version++
+	n.version = mt.getNextVersion()
 	n.contents = contents
 
 	// Call the watches
@@ -183,7 +269,24 @@ func (mt *MemoryTopo) Update(ctx context.Context, cell, filePath string, content
 	return NodeVersion(n.version), nil
 }
 
-// Delete will eventually be part of topo.Backend interface.
+// Get is part of topo.Backend interface.
+func (mt *MemoryTopo) Get(ctx context.Context, cell, filePath string) ([]byte, topo.Version, error) {
+	mt.mu.Lock()
+	defer mt.mu.Unlock()
+
+	// Get the node.
+	n := mt.nodeByPath(cell, filePath)
+	if n == nil {
+		return nil, nil, topo.ErrNoNode
+	}
+	if n.contents == nil {
+		// it's a directory
+		return nil, nil, fmt.Errorf("cannot Get() directory %v in cell %v", filePath, cell)
+	}
+	return n.contents, NodeVersion(n.version), nil
+}
+
+// Delete is part of topo.Backend interface.
 func (mt *MemoryTopo) Delete(ctx context.Context, cell, filePath string, version topo.Version) error {
 	mt.mu.Lock()
 	defer mt.mu.Unlock()
@@ -212,7 +315,7 @@ func (mt *MemoryTopo) Delete(ctx context.Context, cell, filePath string, version
 	}
 
 	// Now we can delete.
-	delete(p.children, file)
+	mt.recursiveDelete(n)
 
 	// Call the watches
 	for _, w := range n.watches {
@@ -266,6 +369,20 @@ func (mt *MemoryTopo) Watch(ctx context.Context, cell string, filePath string) (
 		}
 	}
 	return current, notifications, cancel
+}
+
+// GetKnownCells is part of the topo.Server interface.
+func (mt *MemoryTopo) GetKnownCells(ctx context.Context) ([]string, error) {
+	mt.mu.Lock()
+	defer mt.mu.Unlock()
+
+	var result []string
+	for c := range mt.cells.children {
+		if c != "global" {
+			result = append(result, c)
+		}
+	}
+	return result, nil
 }
 
 var _ topo.Impl = (*MemoryTopo)(nil) // compile-time interface check

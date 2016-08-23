@@ -202,7 +202,6 @@ func (c *fakeClient) Delete(key string, recursive bool) (*etcd.Response, error) 
 	}
 
 	c.index++
-	n.node = nil
 	notifyList := []*fakeNode{n}
 
 	if recursive {
@@ -212,7 +211,17 @@ func (c *fakeClient) Delete(key string, recursive bool) (*etcd.Response, error) 
 				notifyList = append(notifyList, n)
 			}
 		}
+	} else {
+		if n.node.Dir {
+			// If it's a dir, it must be empty.
+			for k, c := range c.nodes {
+				if strings.HasPrefix(k, key+"/") && c.node != nil {
+					return nil, &etcd.EtcdError{ErrorCode: EcodeDirNotEmpty}
+				}
+			}
+		}
 	}
+	n.node = nil
 	for _, n = range notifyList {
 		n.notify(c.index, "delete")
 	}
@@ -231,8 +240,8 @@ func (c *fakeClient) DeleteDir(key string) (*etcd.Response, error) {
 
 	if n.node.Dir {
 		// If it's a dir, it must be empty.
-		for k := range c.nodes {
-			if strings.HasPrefix(k, key+"/") {
+		for k, c := range c.nodes {
+			if strings.HasPrefix(k, key+"/") && c.node != nil {
 				return nil, &etcd.EtcdError{ErrorCode: EcodeDirNotEmpty}
 			}
 		}
@@ -265,13 +274,16 @@ func (c *fakeClient) Get(key string, sortFiles, recursive bool) (*etcd.Response,
 	}
 
 	// List the directory.
-	targetDir := key + "/"
+	targetDir := key
+	if targetDir != "/" {
+		targetDir += "/"
+	}
 	for k, n := range c.nodes {
 		if n.node == nil {
 			continue
 		}
 		dir, file := path.Split(k)
-		if dir == targetDir && !strings.HasPrefix(file, "_") {
+		if dir == targetDir && file != "" && !strings.HasPrefix(file, "_") {
 			node := *n.node
 			resp.Node.Nodes = append(resp.Node.Nodes, &node)
 		}
