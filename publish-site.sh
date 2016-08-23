@@ -67,7 +67,7 @@ rm -rf vitess.io
 
 # pre-commit checks
 set +e
-list=$(find . -name '*.html' ! -path '*/vendor/*' | xargs grep -lE '^\s*([\-\*]|\d\.) ')
+list=$(find . -name '*.html' ! -path '*/vendor/*' ! -path '*/web/*' | xargs grep -lE '^\s*([\-\*]|\d\.) ')
 if [ -n "$list" ]; then
   echo
   echo "ERROR: The following pages appear to contain bulleted lists that weren't properly converted."
