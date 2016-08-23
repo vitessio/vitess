@@ -539,6 +539,10 @@ func (m *MaxReplicationLagModule) updateRate(r *result, newState state, rate int
 	m.currentState = newState
 	m.lastRateChange = now
 	m.lastRateChangeReason = reason
+	if newState != stateIncreaseRate {
+		// Clear the replica under test from a previous increase.
+		m.replicaUnderIncreaseTest = ""
+	}
 
 	// Update result with the new state.
 	r.NewState = newState

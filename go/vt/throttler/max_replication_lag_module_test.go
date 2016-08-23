@@ -215,6 +215,44 @@ func TestMaxReplicationLagModule_Increase_LastErrorOrNotUp(t *testing.T) {
 	}
 }
 
+// TestMaxReplicationLagModule_Reset_ReplicaUnderIncreaseTest verifies that
+// the field "replicaUnderIncreaseTest" is correctly reset if we're leaving
+// the increase state.
+func TestMaxReplicationLagModule_Reset_ReplicaUnderIncreaseTest(t *testing.T) {
+	tf, err := newTestFixtureWithMaxReplicationLag(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// r2 @  70s, 0s lag (triggers the increase state)
+	tf.ratesHistory.add(sinceZero(69*time.Second), 100)
+	tf.process(lagRecord(sinceZero(70*time.Second), r2, 0))
+	// Rate was increased to 200 based on actual rate of 100 within [0s, 69s].
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// r1 @  75s, 10s lag (triggers the emergency state)
+	tf.ratesHistory.add(sinceZero(70*time.Second), 100)
+	tf.ratesHistory.add(sinceZero(74*time.Second), 200)
+	tf.process(lagRecord(sinceZero(75*time.Second), r1, 10))
+	// The r1 lag update triggered the emergency state and did not wait for the
+	// pending increase of r2.
+	if err := tf.checkState(stateEmergency, 100, sinceZero(75*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// Now everything goes back to normal and the minimum time between increases
+	// (10s) has passed as well. r2 or r1 can start an increase now.
+	// r1 @  80s, 0s lag (triggers the increase state)
+	tf.ratesHistory.add(sinceZero(75*time.Second), 200)
+	tf.ratesHistory.add(sinceZero(79*time.Second), 100)
+	tf.process(lagRecord(sinceZero(79*time.Second), r1, 0))
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(79*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestMaxReplicationLagModule_Decrease verifies that we correctly calculate the
 // replica (slave) rate in the decreaseAndGuessRate state.
 func TestMaxReplicationLagModule_Decrease(t *testing.T) {
