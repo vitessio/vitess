@@ -1,4 +1,4 @@
-import { Component, OnInit, ComponentResolver, ViewChild, NgZone } from '@angular/core';
+import { Component, OnInit, ComponentResolver, ViewChildren, NgZone, QueryList } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { HeatmapComponent } from './heatmap.component.ts';
@@ -17,16 +17,18 @@ import { SelectItem } from 'primeng/primeng';
 })
 
 export class StatusComponent implements OnInit {
-  @ViewChild(HeatmapComponent) heatmap: HeatmapComponent;
+  @ViewChildren(HeatmapComponent) heatmaps: QueryList<HeatmapComponent>;
 
   // Needed for the router.
   private sub: any;
 
   // Needed for the construction of the heatmap.
-  // heatmaps is an array of heatmap structs.
-  private heatmaps: any;
-  private metric: string;
   private heatmapDataReady: boolean = false;
+  // listOfKeyspaces is an array of strings representing keyspace names.
+  listOfKeyspaces: Array<string> = [];
+  // mapOfKeyspaces is a mapping between a keyspace and it's heatmap struct, which has
+  // all the information to construct a heatmap such as data, aliases, and labels.
+  mapOfKeyspaces: { [key: string]: any; } = {};
 
   // Needed for the dropdowns.
   keyspaces: SelectItem[] = [];
@@ -42,6 +44,7 @@ export class StatusComponent implements OnInit {
   previousType: string;
   previousMetric: string;
 
+
   // Needed to keep track of which data is being polled.
   statusService: any;
 
@@ -52,7 +55,7 @@ export class StatusComponent implements OnInit {
     this.getBasicInfo();
   }
 
-  // getTopologyInfo gets the keyspace, cell, tabletType, and metric information from the service. 
+  // getTopologyInfo gets the keyspace, cell, tabletType, and metric information from the service.
   getTopologyInfo() {
     this.topoInfoService.getCombinedTopologyInfo().subscribe( stream => {
        let keyspacesReturned = stream[0];
@@ -95,7 +98,6 @@ export class StatusComponent implements OnInit {
       .queryParams
       .subscribe(params => {
         this.getTopologyInfo();
-
         // Setting the beginning values of each category.
         this.selectedKeyspace = params['keyspace'];
         this.selectedCell = params['cell'];
@@ -105,7 +107,6 @@ export class StatusComponent implements OnInit {
         this.previousCell = params['cell'];
         this.previousType = params['type'];
         this.previousMetric = params['metric'];
-
 
         // Show default view if path was 'status/'
         if (this.selectedKeyspace == null && this.selectedCell == null && this.selectedType == null) {
@@ -166,14 +167,46 @@ export class StatusComponent implements OnInit {
 
   reroute() {
     this.zone.run(() => {
-     this.statusService.unsubscribe();
      this.heatmapDataReady = false;
+     this.listOfKeyspaces = [];
+     this.mapOfKeyspaces = {};
      this.router.navigate(['/status'], this.getExtras());
    });
   }
 
+  // equals checks the equality of 2 arrays.
+  equals(arr1, arr2) {
+    if (arr1.length !== arr2.length) {
+      return false;
+    }
+    for (let i = 0; i < arr1.length && i < arr2.length; i++) {
+      if (arr1[i] !== arr2[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  updateKeyspaces(stats) {
+    let newKeyspaces = [];
+    for (let i = 0; i < stats.length; i++) {
+      let keyspaceName = stats[i].KeyspaceLabel.Name;
+      newKeyspaces.push(keyspaceName);
+      this.mapOfKeyspaces[keyspaceName] = Object.assign({}, stats[i]);
+    }
+    if (!this.equals(newKeyspaces, this.listOfKeyspaces)) {
+      this.listOfKeyspaces = newKeyspaces;
+      return true;
+    }
+    return false;
+  }
+
   // Resets the heatmap data to new values when polling or when dropdown changes
   getHeatmapData() {
+     // Unsubscribe to the previous observable since it was probably from a different view.
+     if (this.statusService != null) {
+       this.statusService.unsubscribe();
+     }
      // Subscribe to get updates every second.
      this.statusService = this.tabletService.getTabletStats(
          this.selectedKeyspace, this.selectedCell, this.selectedType,

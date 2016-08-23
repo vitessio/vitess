@@ -1,7 +1,7 @@
 import { Component, Input, AfterViewInit, NgZone, OnInit  } from '@angular/core';
 
-import { TabletStatusService } from '../api/tablet-status.service';
 import { TabletComponent } from './tablet.component';
+import { TabletStatusService } from '../api/tablet-status.service';
 
 declare var Plotly: any;
 
@@ -19,10 +19,12 @@ declare var Plotly: any;
 })
 
 export class HeatmapComponent implements AfterViewInit, OnInit {
-  // heatmap is a heatmap struct equivalent (defined in go/vt/vtctld/tablet_stats_cache.go)
+  // heatmap is a heatmap struct equivalent (defined in go/vt/vtctld/tablet_stats_cache.go).
   @Input() heatmap: any;
   // metric needed to set the proper colorscale.
   @Input() metric: string;
+  // name is the keyspace name as well as the name for this plotly div.
+  @Input() name: string;
 
   // data holds the values for the heatmap to display.
   data: number[][];
@@ -36,13 +38,11 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
   yLabels: Array<any>;
   // xLabels is an array with shard names as column labels.
   xLabels: Array<string>;
-  // name is the keyspace name used as a unique ID for this heatmap.
-  name: string;
 
   // Other variables needed to draw the heatmap.
   plotlyMap: any;
-  first = true;
   heatmapHeight = 0;
+  heatmapWidth = 0;
   dataMin = 0;
   dataMax = 0;
 
@@ -54,8 +54,9 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
   popupReady = false;
   popupTitle: string;
   popupData: Array<any>;
+
   private getRowHeight() { return 50; }
-  private getXLabelsRowHeight() { return 25; }
+  private getXLabelsRowHeight() { return 50; }
 
   constructor(private zone: NgZone, private tabletService: TabletStatusService) { }
 
@@ -70,12 +71,17 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
   ngOnInit() {
     this.heatmapHeight = (this.getTotalRows() * this.getRowHeight() +
                           this.getXLabelsRowHeight());
-    this.name = this.heatmap.KeyspaceLabel.Name;
-    this.keyspace = this.heatmap.KeyspaceLabel;
     this.data = this.heatmap.Data;
     this.aliases = this.heatmap.Aliases;
     this.yLabels = this.heatmap.CellAndTypeLabels;
     this.xLabels = this.heatmap.ShardLabels;
+    this.keyspace = this.heatmap.KeyspaceLabel;
+
+    let body = document.body;
+    this.heatmapWidth = (body.clientWidth - 400);
+    if (this.heatmapWidth < 10) {
+      this.heatmapWidth = 10;
+    }
   }
 
   ngAfterViewInit() {
@@ -90,11 +96,26 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
         this.zone.run(() => { this.showPopup = true; });
       });
     }.bind(this));
-    this.first = false;
   }
 
   closePopup() {
     this.zone.run(() => { this.showPopup = false; });
+
+  // redraw updates the existing map with new data.
+  redraw(stats, metric) {
+    this.data = stats.Data;
+    this.aliases = stats.Aliases;
+    this.yLabels = stats.CellAndTypeLabels;
+    this.xLabels = stats.ShardLabels;
+    this.name = stats.KeyspaceLabel.Name;
+
+    // Settings for the Plotly heatmap.
+    let chartInfo = {
+      z: [this.data],
+      x: [this.xLabels],
+    };
+    Plotly.restyle(this.name, chartInfo, [0]);
+  }
 
   // setupColorscale sets the right scale based on what metric the heatmap is displaying.
   setupColorscale(metric) {
@@ -105,7 +126,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
         [0.66, '#EA109A'],
         [1.0, '#A22417'],
       ];
-      this.dataMin = 0;
+      this.dataMin = -1;
       this.dataMax = 3;
     } else {
       let max = this.data.reduce((a, b) => a.concat(b))
@@ -116,7 +137,6 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
         [percent, '#F7EEDE'],
         [1.0, '#A22417'],
       ];
-
       this.dataMin = -1;
       this.dataMax = max;
     }
@@ -135,14 +155,13 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
       type: 'heatmap',
       showscale: false
     }];
-
     let xAxisTemplate = {
       type: 'category',
       showgrid: false,
       zeroline: false,
       rangemode: 'nonnegative',
       side: 'top',
-      ticks: '',
+      ticks: ''
     };
     let yAxisTemplate = {
       showticklabels: false,
@@ -152,15 +171,15 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
     let chartLayout = {
       xaxis: xAxisTemplate,
       yaxis: yAxisTemplate,
+      width: this.heatmapWidth,
       margin: {
-        t: 25,
+        t: this.getXLabelsRowHeight(),
         b: 0,
         r: 0,
         l: 0
       },
       showlegend: false,
     };
-
     Plotly.newPlot(this.name, chartInfo, chartLayout, {scrollZoom: true, displayModeBar: false});
   }
 }
