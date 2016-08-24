@@ -17,16 +17,25 @@
   padding-right: 32px;
 }
 .vt-padding{
-  padding-left: 32px;
-  padding-right: 32px;
+  padding-left: 43px;
+  padding-right: 43px;
 }
 paper-dialog{
   position: fixed;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -25%);
+  transform: translate(-50%, -50%);
   margin: 0;
 }
+
+>>> p-dialog .ui-dialog{
+  position: absolute !important;
+  top: 50%  !important;
+  left: 50%  !important;
+  transform: translate(-50%, -50%);
+  margin: 0;
+}
+
 .vt-popUpContainer{
   position: fixed;
   padding: 0;
