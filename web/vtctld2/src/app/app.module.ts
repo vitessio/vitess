@@ -1,7 +1,7 @@
 import { BrowserModule } from '@angular/platform-browser';
 import { NgModule, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
-import { FormsModule } from '@angular/forms'
-import { HttpModule } from '@angular/http'
+import { FormsModule } from '@angular/forms';
+import { HttpModule } from '@angular/http';
 
 import { AppComponent } from './app.component';
 import { DashboardComponent } from './dashboard/dashboard.component';
@@ -17,6 +17,8 @@ import { MdButtonModule } from '@angular2-material/button';
 import { MdRippleModule } from '@angular2-material/core/ripple/ripple';
 
 import { PolymerElement } from '@vaadin/angular2-polymer';
+
+import { DataTableModule, SharedModule, DialogModule } from 'primeng/primeng';
 
 const PolymerComponents = [
   PolymerElement('paper-dialog'),
@@ -44,6 +46,9 @@ const PolymerComponents = [
     MdButtonModule,
     MdRippleModule,
     routing,
+    DataTableModule,
+    SharedModule,
+    DialogModule
   ],
   providers: [APP_ROUTER_PROVIDERS],
   entryComponents: [AppComponent],

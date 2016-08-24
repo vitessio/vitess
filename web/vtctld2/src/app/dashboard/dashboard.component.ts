@@ -112,46 +112,38 @@ export class DashboardComponent implements OnInit {
   openEditDialog(keyspace: Keyspace) {
     this.dialogSettings = new DialogSettings('Edit', this.editKeyspace.bind(this), `Edit ${keyspace.name}`);
     this.dialogSettings.setMessage('Edited {{keyspace_name}}');
-    this.dialogSettings.onCloseFunction = this.refreshDashboardView.bind(this);
+    this.dialogSettings.onCloseFunction = this.getKeyspaces.bind(this);
     let flags = new EditKeyspaceFlags(keyspace).flags;
     this.dialogContent = new DialogContent('keyspace_name', flags, {}, this.prepare.bind(this));
     this.dialogSettings.toggleModal();
-    this.dialog.nativeElement.opened = true;
   }
 
   openNewDialog() {
     this.dialogSettings = new DialogSettings('Create', this.createKeyspace.bind(this), 'Create a new Keyspace');
     this.dialogSettings.setMessage('Created {{keyspace_name}}');
-    this.dialogSettings.onCloseFunction = this.refreshDashboardView.bind(this);
+    this.dialogSettings.onCloseFunction = this.getKeyspaces.bind(this);
     let flags = new NewKeyspaceFlags().flags;
     this.dialogContent = new DialogContent('keyspace_name', flags, {'keyspace_name': true}, this.prepare.bind(this));
     this.dialogSettings.toggleModal();
-    this.dialog.nativeElement.opened = true;
   }
 
   openDeleteDialog(keyspace: Keyspace) {
     this.dialogSettings = new DialogSettings('Delete', this.deleteKeyspace.bind(this),
                                              `Delete ${keyspace.name}`, `Are you sure you want to delete ${keyspace.name}?`);
     this.dialogSettings.setMessage('Deleted {{keyspace_name}}');
-    this.dialogSettings.onCloseFunction = this.refreshDashboardView.bind(this);
+    this.dialogSettings.onCloseFunction = this.getKeyspaces.bind(this);
     let flags = new DeleteKeyspaceFlags(keyspace).flags;
     this.dialogContent = new DialogContent('keyspace_name', flags);
     this.dialogSettings.toggleModal();
-    this.dialog.nativeElement.opened = true;
   }
 
   openValidateDialog() {
     this.dialogSettings = new DialogSettings('Validate', this.validateAll.bind(this), `Validate all nodes`, '');
     this.dialogSettings.setMessage('Deleted {{keyspace_name}}');
-    this.dialogSettings.onCloseFunction = this.refreshDashboardView.bind(this);
+    this.dialogSettings.onCloseFunction = this.getKeyspaces.bind(this);
     let flags = new ValidateAllFlags().flags;
     this.dialogContent = new DialogContent('keyspace_name', flags);
     this.dialogSettings.toggleModal();
-    this.dialog.nativeElement.opened = true;
-  }
-
-  refreshDashboardView() {
-    this.getKeyspaces();
   }
 
   navigate(keyspaceName: string) {

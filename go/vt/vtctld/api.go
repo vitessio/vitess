@@ -1,7 +1,6 @@
 package vtctld
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -15,6 +14,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/schemamanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
@@ -352,8 +352,11 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 
 	// Vtctl Command
 	http.HandleFunc(apiPrefix+"vtctl/", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+			httpErrorf(w, r, "Access denied")
+			return
+		}
 		var args []string
-		var logOutput bytes.Buffer
 		resp := struct {
 			Error  string
 			Output string
@@ -363,17 +366,15 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 			return
 		}
 
-		logstream := logutil.NewCallbackLogger(func(ev *logutilpb.Event) {
-			logutil.EventToBuffer(ev, &logOutput)
-			logOutput.WriteRune('\n')
-		})
+		logstream := logutil.NewMemoryLogger()
 
 		wr := wrangler.New(logstream, ts, tmClient)
+		// TODO(enisoc): Context for run command should be request-scoped.
 		err := vtctl.RunCommand(ctx, wr, args)
 		if err != nil {
 			resp.Error = err.Error()
 		}
-		resp.Output = logOutput.String()
+		resp.Output = logstream.String()
 		data, err := json.MarshalIndent(resp, "", "  ")
 		if err != nil {
 			httpErrorf(w, r, "json error: %v", err)
@@ -385,6 +386,10 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 
 	// Schema Change
 	http.HandleFunc(apiPrefix+"schema/apply", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+			httpErrorf(w, r, "Access denied")
+			return
+		}
 		req := struct {
 			Keyspace, SQL       string
 			SlaveTimeoutSeconds int

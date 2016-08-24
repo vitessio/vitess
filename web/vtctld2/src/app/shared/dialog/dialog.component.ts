@@ -1,4 +1,4 @@
-import { Component, ComponentResolver, EventEmitter, Input, AfterViewInit, Output, ViewChild, ViewContainerRef} from '@angular/core';
+import { Component, ComponentResolver, EventEmitter, Input, Output } from '@angular/core';
 import { ROUTER_DIRECTIVES } from '@angular/router';
 
 import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
@@ -29,36 +29,23 @@ import { TabletService } from '../../api/tablet.service';
     MD_BUTTON_DIRECTIVES,
   ],
 })
-export class DialogComponent implements AfterViewInit {
-  title = 'Vitess Control Panel';
+export class DialogComponent {
   keyspaces = [];
   extraContentReference: any;
-  @Input() test: string;
   @Input() dialogContent: DialogContent;
   @Input() dialogSettings: DialogSettings;
-  @Input() dialogExtraContent: any;
   @Output() close = new EventEmitter();
-  @ViewChild('vtFormWrapper', {read: ViewContainerRef}) vtFormWrapper: any;
 
   constructor(private componentResolver: ComponentResolver) {}
-
-  ngAfterViewInit() {
-    if (this.dialogExtraContent) {
-      this.componentResolver.resolveComponent(this.dialogExtraContent).then(factory => {
-        this.extraContentReference = this.vtFormWrapper.createComponent(factory, 0);
-      });
-    }
-  }
-
-  loadExtraContent(dialogContent) {
-    if (this.dialogExtraContent) {
-      this.extraContentReference.instance.dialogContent = dialogContent;
-    }
-  }
 
   typeSelected(paramName, e) {
     // Polymer event syntax, waiting on Material2 implementation of dropdown.
     this.dialogContent.setParam(paramName, e.detail.item.__dom.firstChild.data);
+  }
+
+  cancelDialog() {
+    this.dialogSettings.toggleModal();
+    this.close.emit({});
   }
 
   closeDialog() {

@@ -7,5 +7,4 @@ import { Component } from '@angular/core';
   styleUrls: ['./schema.component.css'],
 })
 export class SchemaComponent {
-  title = 'Vitess Control Panel';
 }

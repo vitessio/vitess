@@ -46,7 +46,6 @@ export class TabletComponent implements OnInit, OnDestroy {
   tabletReady = false;
   dialogSettings: DialogSettings;
   dialogContent: DialogContent;
-  refresh = true;
 
   constructor(
     private route: ActivatedRoute,
@@ -58,15 +57,12 @@ export class TabletComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.dialogContent = new DialogContent();
     this.dialogSettings = new DialogSettings();
-    let paramStream = this.router.routerState.queryParams;
-    let routeStream = this.route.url;
-    this.routeSub = paramStream.combineLatest(routeStream).subscribe( routeData => {
-      let params = routeData[0];
-      let path = routeData[1][0].path;
+
+    this.routeSub = this.route.queryParams.subscribe(params => {
       let keyspaceName = params['keyspace'];
       let shardName = params['shard'];
       let tabletRef = params['tablet'];
-      if (path === 'tablet' && keyspaceName && shardName && tabletRef) {
+      if (keyspaceName && shardName && tabletRef) {
         this.keyspaceName = keyspaceName;
         this.shardName = shardName;
         this.tabletRef = tabletRef;
@@ -110,7 +106,7 @@ export class TabletComponent implements OnInit, OnDestroy {
     });
   }
 
-  prepareDeleteTablet() {
+  openDeleteTabletDialog() {
     this.dialogSettings = new DialogSettings('Delete', this.deleteTablet.bind(this),
                                              `Delete ${this.tablet.label}`, `Are you sure you want to delete ${this.tablet.label}?`);
     this.dialogSettings.setMessage('Deleted {{tablet_alias}}');
@@ -120,7 +116,7 @@ export class TabletComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareRefreshTablet() {
+  openRefreshTabletDialog() {
     this.dialogSettings = new DialogSettings('Refresh', this.refreshTablet.bind(this), `Refresh ${this.tablet.label}`);
     this.dialogSettings.setMessage('Refreshed {{tablet_alias}}');
     this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
@@ -129,7 +125,7 @@ export class TabletComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  preparePingTablet() {
+  openPingTabletDialog() {
     this.dialogSettings = new DialogSettings('Ping', this.pingTablet.bind(this), `Ping ${this.tablet.label}`);
     this.dialogSettings.setMessage('Pinged {{tablet_alias}}');
     this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
@@ -140,6 +136,7 @@ export class TabletComponent implements OnInit, OnDestroy {
 
   refreshTabletView() {
     this.getTablet(this.tabletRef);
+    // Force tablet url to refresh
     this.tabletUrl = this.tabletUrl;
   }
 

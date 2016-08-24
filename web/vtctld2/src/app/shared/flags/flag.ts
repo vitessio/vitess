@@ -72,20 +72,20 @@ export class Flag {
     return this.value !== '';
   }
 
-  // Used for construction of JSON encoded post requests
-  public getPostBodyContent(positional: boolean): string[] {
-    if (this.getValue() === false || this.getStrValue() === '') {
+  public getArgs() {
+    if (this.getValue() === false || this.getStrValue() === '' || !this.positional) {
       return [];
     }
     // Positional arguments only need a value not a key.
-    if (positional && this.positional) {
-      return [this.getStrValue()];
+    return [this.getStrValue()];
+  }
+
+  public getFlags() {
+    if (this.getValue() === false || this.getStrValue() === '' || this.positional) {
+      return [];
     }
     // Non-positional arguments need a key value pair.
-    if (!positional && !this.positional) {
-      return [`-${this.id}`, this.getStrValue()];
-    }
-    return [];
+    return [`-${this.id}=${this.getStrValue()}`];
   }
 }
 
@@ -108,20 +108,6 @@ export class CheckBoxFlag extends Flag {
 
   public getStrValue() {
     return this.value ? 'true' : 'false';
-  }
-
-  // Overload parent since Boolean arguments just need a key.
-  public getBodyContent(positional: boolean): string[] {
-    if (this.getValue() === false || this.getStrValue() === '') {
-      return [];
-    }
-    if (positional && this.positional) {
-      return [this.getStrValue()];
-    }
-    if (!positional && !this.positional) {
-      return [`-${this.id}=${this.getStrValue()}`];
-    }
-    return [];
   }
 }
 

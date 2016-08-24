@@ -41,15 +41,14 @@ export class DialogContent {
     TODO(dsslater): sanitize user input before it hits the server.
   */
   public getPostBody(action: string): string[] {
+    let flags = [];
     let args = [];
-    args.push(action);
+    flags.push(action);
     for (let flag of this.getFlags()) {
-      args = args.concat(flag.getPostBodyContent(false));
+      flags = flags.concat(flag.getFlags());
+      args = args.concat(flag.getArgs());
     }
-    for (let flag of this.getFlags()) {
-      args = args.concat(flag.getPostBodyContent(true));
-    }
-    return args;
+    return flags.concat(args);
   }
 
   public getBody(action: string): string {

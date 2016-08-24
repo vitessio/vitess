@@ -1,9 +1,9 @@
 <div *ngIf="tabletsReady">
   <h1>{{shardName}}</h1>
   <div class="vt-action-center">
-    <button md-raised-button (click)="prepareDeleteShard();dialog.open();">Delete</button>
-    <button md-raised-button (click)="prepareValidateShard();dialog.open();">Validate</button>
-    <button md-raised-button (click)="prepareInitShardMaster();dialog.open();">Initialize Shard Master</button>
+    <button md-raised-button (click)="openDeleteShardDialog();">Delete</button>
+    <button md-raised-button (click)="openValidateShardDialog();">Validate</button>
+    <button md-raised-button (click)="openInitShardMasterDialog();">Initialize Shard Master</button>
   </div>
   <!-- Table from ng prime that will be attached to Vitess next.-->
   <div class="vt-tablet-container">
@@ -17,9 +17,9 @@
     <h2 *ngIf="tablets.length == 0">There are no tablets in this shard</h2>
   </div>
   
-  <paper-dialog #dialog no-cancel-on-outside-click="true" no-cancel-on-esc-key="true">
-    <vt-dialog [(dialogContent)]="dialogContent" [(dialogSettings)]="dialogSettings" (close)="dialog.close();"></vt-dialog>
-  </paper-dialog>
-  <div *ngIf="dialogSettings.openModal" class="vt-popUpContainer" >
+  <p-dialog [(header)]="dialogSettings.dialogTitle" [(visible)]="dialogSettings.open" draggable="" resizable="" width="800">
+    <vt-dialog [(dialogContent)]="dialogContent" [(dialogSettings)]="dialogSettings"></vt-dialog>
+  </p-dialog>
+  <div *ngIf="dialogSettings.open" class="vt-popUpContainer" >
   </div>
 </div>

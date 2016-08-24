@@ -64,14 +64,11 @@ export class ShardComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.dialogContent = new DialogContent();
     this.dialogSettings = new DialogSettings();
-    let paramStream = this.router.routerState.queryParams;
-    let routeStream = this.route.url;
-    this.routeSub =  paramStream.combineLatest(routeStream).subscribe( routeData => {
-      let params = routeData[0];
-      let path = routeData[1][0].path;
+
+    this.routeSub = this.route.queryParams.subscribe(params => {
       let keyspaceName = params['keyspace'];
       let shardName = params['shard'];
-      if (path === 'shard' && keyspaceName && shardName) {
+      if (keyspaceName && shardName) {
         this.keyspaceName = keyspaceName;
         this.shardName = shardName;
         this.getKeyspace(this.keyspaceName);
@@ -86,10 +83,10 @@ export class ShardComponent implements OnInit, OnDestroy {
   getTabletList(keyspaceName: string, shardName: string) {
     this.tablets = [];
     this.tabletsReady = true;
-    let shardRef = keyspaceName + '/' + shardName;
+    let shardRef = `${keyspaceName}/${shardName}`;
     this.tabletService.getTabletList(shardRef).subscribe((tabletList) => {
       for (let tablet of tabletList){
-        this.getTablet(tablet.cell + '-' + tablet.uid);
+        this.getTablet(`${tablet.cell}-${tablet.uid}`);
       }
     });
   }
@@ -138,7 +135,7 @@ export class ShardComponent implements OnInit, OnDestroy {
     });
   }
 
-  prepareDeleteShard() {
+  openDeleteShardDialog() {
     this.dialogSettings = new DialogSettings('Delete', this.deleteShard.bind(this),
                                              `Delete ${this.shardName}`, `Are you sure you want to delete ${this.shardName}?`);
     this.dialogSettings.setMessage('Deleted {{shard_ref}}');
@@ -148,7 +145,7 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareValidateShard() {
+  openValidateShardDialog() {
     this.dialogSettings = new DialogSettings('Validate', this.validateShard.bind(this), `Validate ${this.shardName}`, '');
     this.dialogSettings.setMessage('Validated {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
@@ -157,7 +154,7 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareInitShardMaster() {
+  openInitShardMasterDialog() {
     this.dialogSettings = new DialogSettings('Initialize', this.initShardMaster.bind(this), `Initialize ${this.shardName} Master`, '');
     this.dialogSettings.setMessage('Initialized shard master for {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);

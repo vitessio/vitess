@@ -14,7 +14,6 @@ import { MD_PROGRESS_BAR_DIRECTIVES } from '@angular2-material/progress-bar';
 })
 
 export class TasksComponent {
-  title = 'Vitess Control Panel';
   jobs = [
     {name: 'Resharding', progress: 60},
     {name: 'Online BackUp', progress: 20},
