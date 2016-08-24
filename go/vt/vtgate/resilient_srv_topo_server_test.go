@@ -22,59 +22,140 @@ import (
 )
 
 // fakeTopo is used in testing ResilientSrvTopoServer logic.
-// returns errors for everything, except the one keyspace.
+// It returns errors for everything, except for SrvKeyspace methods.
 type fakeTopo struct {
 	faketopo.FakeTopo
-	keyspace      string
-	callCount     int
-	notifications chan *topodatapb.SrvKeyspace
+	watchCount int
+	keyspaces  map[string]*fakeKeyspace
+}
+
+type fakeKeyspace struct {
+	current *topodatapb.SrvKeyspace
+	watch   chan *topo.WatchData
+}
+
+func newFakeTopo() *fakeTopo {
+	return &fakeTopo{
+		keyspaces: make(map[string]*fakeKeyspace),
+	}
 }
 
 func (ft *fakeTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
-	return []string{ft.keyspace}, nil
+	if cell != "test_cell" {
+		return nil, fmt.Errorf("wrong cell: %v", cell)
+	}
+	result := make([]string, 0, len(ft.keyspaces))
+	for k := range ft.keyspaces {
+		result = append(result, k)
+	}
+	return result, nil
 }
 
 func (ft *fakeTopo) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error {
-	if keyspace != ft.keyspace {
-		return fmt.Errorf("Unknown keyspace")
+	if cell != "test_cell" {
+		return fmt.Errorf("wrong cell: %v", cell)
 	}
-	ft.notifications <- srvKeyspace
+
+	fk, ok := ft.keyspaces[keyspace]
+	if !ok {
+		ft.keyspaces[keyspace] = &fakeKeyspace{
+			current: srvKeyspace,
+		}
+		return nil
+	}
+	fk.current = srvKeyspace
+	if fk.watch != nil {
+		contents, err := proto.Marshal(srvKeyspace)
+		if err != nil {
+			return err
+		}
+		fk.watch <- &topo.WatchData{
+			Contents: contents,
+			Version:  nil,
+			Err:      nil,
+		}
+	}
 	return nil
 }
 
-func (ft *fakeTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, error) {
-	ft.callCount++
-	if keyspace == ft.keyspace {
-		ft.notifications = make(chan *topodatapb.SrvKeyspace, 10)
-		ft.notifications <- &topodatapb.SrvKeyspace{}
-		return ft.notifications, nil
+func (ft *fakeTopo) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) error {
+	if cell != "test_cell" {
+		return fmt.Errorf("wrong cell: %v", cell)
 	}
-	return nil, fmt.Errorf("Unknown keyspace")
+
+	fk, ok := ft.keyspaces[keyspace]
+	if !ok {
+		return topo.ErrNoNode
+	}
+	if fk.watch != nil {
+		fk.watch <- &topo.WatchData{
+			Contents: nil,
+			Version:  nil,
+			Err:      topo.ErrNoNode,
+		}
+		close(fk.watch)
+		fk.watch = nil
+	}
+	delete(ft.keyspaces, keyspace)
+	return nil
+}
+
+func (ft *fakeTopo) Watch(ctx context.Context, cell, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
+	if cell != "test_cell" {
+		return &topo.WatchData{Err: fmt.Errorf("wrong cell: %v", cell)}, nil, nil
+	}
+
+	// We only handle SrvKeyspace: /keyspaces/<keyspace>/SrvKeyspace
+	parts := strings.Split(filePath, "/")
+	if len(parts) != 4 || parts[0] != "" || parts[1] != "keyspaces" || parts[3] != "SrvKeyspace" {
+		return &topo.WatchData{Err: fmt.Errorf("unknown path: %v", filePath)}, nil, nil
+	}
+	keyspace := parts[2]
+
+	ft.watchCount++
+
+	fk, ok := ft.keyspaces[keyspace]
+	if !ok {
+		return &topo.WatchData{Err: topo.ErrNoNode}, nil, nil
+	}
+	contents, err := proto.Marshal(fk.current)
+	if err != nil {
+		return &topo.WatchData{Err: err}, nil, nil
+	}
+	if fk.watch != nil {
+		return &topo.WatchData{Err: fmt.Errorf("only supports one concurrent watch")}, nil, nil
+	}
+	fk.watch = make(chan *topo.WatchData, 10)
+	return &topo.WatchData{
+		Contents: contents,
+		Version:  nil,
+		Err:      nil,
+	}, fk.watch, func() {}
 }
 
 // TestGetSrvKeyspace will test we properly return updated SrvKeyspace.
 func TestGetSrvKeyspace(t *testing.T) {
-	ft := &fakeTopo{keyspace: "test_ks"}
+	ft := newFakeTopo()
 	rsts := NewResilientSrvTopoServer(topo.Server{Impl: ft}, "TestGetSrvKeyspace")
 
-	// ask for the known keyspace, that populates the cache
-	_, err := rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
-	if err != nil {
-		t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
+	// Ask for a not-yet-created keyspace
+	_, err := rsts.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+	if err != topo.ErrNoNode {
+		t.Fatalf("GetSrvKeyspace(not created) got unexpected error: %v", err)
 	}
 
-	// update srvkeyspace with new value
+	// Set SrvKeyspace with value
 	want := &topodatapb.SrvKeyspace{
 		ShardingColumnName: "id",
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}
-	ft.UpdateSrvKeyspace(context.Background(), "", "test_ks", want)
+	ft.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
 
-	// wait untl we get the right value
+	// wait until we get the right value
 	var got *topodatapb.SrvKeyspace
 	expiry := time.Now().Add(5 * time.Second)
 	for {
-		got, err = rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
+		got, err = rsts.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 		if err != nil {
 			t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
 		}
@@ -84,15 +165,17 @@ func TestGetSrvKeyspace(t *testing.T) {
 		if time.Now().After(expiry) {
 			t.Fatalf("GetSrvKeyspace() timeout = %+v, want %+v", got, want)
 		}
-		time.Sleep(time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 
-	// now send an updated empty value, wait until we get the error
-	ft.notifications <- nil
+	// Now delete the SrvKeyspace, wait until we get the error.
+	if err := ft.DeleteSrvKeyspace(context.Background(), "test_cell", "test_ks"); err != nil {
+		t.Fatalf("DeleteSrvKeyspace() failed: %v", err)
+	}
 	expiry = time.Now().Add(5 * time.Second)
 	for {
-		got, err = rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
-		if err != nil && strings.Contains(err.Error(), "no SrvKeyspace") {
+		got, err = rsts.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+		if err == topo.ErrNoNode {
 			break
 		}
 		if time.Now().After(expiry) {
@@ -101,15 +184,15 @@ func TestGetSrvKeyspace(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
-	// now send an updated real value, see it come through
+	// Now send an updated real value, see it come through.
 	want = &topodatapb.SrvKeyspace{
 		ShardingColumnName: "id2",
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}
-	ft.notifications <- want
+	ft.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
 	expiry = time.Now().Add(5 * time.Second)
 	for {
-		got, err = rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
+		got, err = rsts.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 		if err == nil && proto.Equal(want, got) {
 			break
 		}
@@ -131,46 +214,62 @@ func TestGetSrvKeyspace(t *testing.T) {
 	}
 }
 
-// TestSrvKeyspaceCacheWithErrors will test we properly return cached errors for GetSrvKeyspace.
-func TestSrvKeyspaceCacheWithErrors(t *testing.T) {
-	ft := &fakeTopo{keyspace: "test_ks"}
-	rsts := NewResilientSrvTopoServer(topo.Server{Impl: ft}, "TestSrvKeyspaceCacheWithErrors")
-
-	// ask for the known keyspace, that populates the cache
-	_, err := rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
-	if err != nil {
-		t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
-	}
-
-	// now make the topo server fail, and ask again, should get cached
-	// value, not even ask underlying guy
-	close(ft.notifications)
-	_, err = rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
-	if err != nil {
-		t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
-	}
-}
-
-// TestSrvKeyspaceCachedErrors will test we properly return cached errors for SrvKeyspace.
-func TestSrvKeyspaceCachedErrors(t *testing.T) {
-	ft := &fakeTopo{keyspace: "test_ks"}
+// TestSrvKeyspaceCachedError will test we properly re-try to query
+// the topo server upon failure.
+func TestSrvKeyspaceCachedError(t *testing.T) {
+	ft := newFakeTopo()
 	rsts := NewResilientSrvTopoServer(topo.Server{Impl: ft}, "TestSrvKeyspaceCachedErrors")
 
 	// ask for an unknown keyspace, should get an error
-	_, err := rsts.GetSrvKeyspace(context.Background(), "", "unknown_ks")
+	_, err := rsts.GetSrvKeyspace(context.Background(), "test_cell", "unknown_ks")
 	if err == nil {
 		t.Fatalf("First GetSrvKeyspace didn't return an error")
 	}
-	if ft.callCount != 1 {
-		t.Fatalf("GetSrvKeyspace didn't get called 1 but %v times", ft.callCount)
+	if ft.watchCount != 1 {
+		t.Fatalf("GetSrvKeyspace didn't get called 1 but %v times", ft.watchCount)
 	}
 
 	// ask again, should get an error and use cache
-	_, err = rsts.GetSrvKeyspace(context.Background(), "", "unknown_ks")
+	_, err = rsts.GetSrvKeyspace(context.Background(), "test_cell", "unknown_ks")
 	if err == nil {
 		t.Fatalf("Second GetSrvKeyspace didn't return an error")
 	}
-	if ft.callCount != 2 {
-		t.Fatalf("GetSrvKeyspace was not called again: %v times", ft.callCount)
+	if ft.watchCount != 2 {
+		t.Fatalf("GetSrvKeyspace was not called again: %v times", ft.watchCount)
+	}
+}
+
+// TestGetSrvKeyspaceCreated will test we properly get the initial
+// value if the SrvKeyspace already exists.
+func TestGetSrvKeyspaceCreated(t *testing.T) {
+	ft := newFakeTopo()
+	rsts := NewResilientSrvTopoServer(topo.Server{Impl: ft}, "TestGetSrvKeyspaceCreated")
+
+	// Set SrvKeyspace with value
+	want := &topodatapb.SrvKeyspace{
+		ShardingColumnName: "id",
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+	}
+	ft.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+
+	// wait until we get the right value
+	expiry := time.Now().Add(5 * time.Second)
+	for {
+		got, err := rsts.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+		switch err {
+		case topo.ErrNoNode:
+			// keep trying
+		case nil:
+			// we got a value, see if it's good
+			if proto.Equal(want, got) {
+				return
+			}
+		default:
+			t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
+		}
+		if time.Now().After(expiry) {
+			t.Fatalf("GetSrvKeyspace() timeout = %+v, want %+v", got, want)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

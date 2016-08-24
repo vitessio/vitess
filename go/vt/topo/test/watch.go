@@ -15,12 +15,12 @@ import (
 // waitForInitialValue waits for the initial value of
 // /keyspaces/test_keyspace/SrvKeyspace to appear, and match the
 // provided srvKeyspace.
-func waitForInitialValue(ctx context.Context, t *testing.T, ts topo.Impl, cell string, srvKeyspace *topodatapb.SrvKeyspace) <-chan *topo.WatchData {
+func waitForInitialValue(t *testing.T, ts topo.Impl, cell string, srvKeyspace *topodatapb.SrvKeyspace) (changes <-chan *topo.WatchData, cancel func()) {
 	var current *topo.WatchData
-	var changes <-chan *topo.WatchData
+	ctx := context.Background()
 	start := time.Now()
 	for {
-		current, changes = ts.Watch(ctx, cell, "/keyspaces/test_keyspace/SrvKeyspace")
+		current, changes, cancel = ts.Watch(ctx, cell, "/keyspaces/test_keyspace/SrvKeyspace")
 		if current.Err == topo.ErrNoNode {
 			// hasn't appeared yet
 			if time.Now().Sub(start) > 10*time.Second {
@@ -43,7 +43,7 @@ func waitForInitialValue(ctx context.Context, t *testing.T, ts topo.Impl, cell s
 		t.Fatalf("got bad data: %v expected: %v", got, srvKeyspace)
 	}
 
-	return changes
+	return changes, cancel
 }
 
 // checkWatch runs the tests on the Watch part of the Backend API.
@@ -53,7 +53,7 @@ func checkWatch(t *testing.T, ts topo.Impl) {
 	cell := getLocalCell(ctx, t, ts)
 
 	// start watching something that doesn't exist -> error
-	current, changes := ts.Watch(ctx, cell, "/keyspaces/test_keyspace/SrvKeyspace")
+	current, changes, cancel := ts.Watch(ctx, cell, "/keyspaces/test_keyspace/SrvKeyspace")
 	if current.Err != topo.ErrNoNode {
 		t.Errorf("watch on missing node didn't return ErrNoNode: %v %v", current, changes)
 	}
@@ -67,7 +67,8 @@ func checkWatch(t *testing.T, ts topo.Impl) {
 	}
 
 	// start watching again, it should work
-	changes = waitForInitialValue(ctx, t, ts, cell, srvKeyspace)
+	changes, cancel = waitForInitialValue(t, ts, cell, srvKeyspace)
+	defer cancel()
 
 	// change the data
 	srvKeyspace.ShardingColumnName = "new_user_id"
@@ -142,7 +143,7 @@ func checkWatch(t *testing.T, ts topo.Impl) {
 
 // checkWatchInterrupt tests we can interrupt a watch.
 func checkWatchInterrupt(t *testing.T, ts topo.Impl) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := context.Background()
 	cell := getLocalCell(ctx, t, ts)
 
 	// create some data
@@ -153,19 +154,19 @@ func checkWatchInterrupt(t *testing.T, ts topo.Impl) {
 		t.Fatalf("UpdateSrvKeyspace(1): %v", err)
 	}
 
-	// start watching, it should work
-	changes := waitForInitialValue(ctx, t, ts, cell, srvKeyspace)
+	// Start watching, it should work.
+	changes, cancel := waitForInitialValue(t, ts, cell, srvKeyspace)
 
-	// Now close the context, it should close the watch.
+	// Now cancel the watch.
 	cancel()
 
-	// Make sure we get the context.Canceled notification eventually.
+	// Make sure we get the topo.ErrInterrupted notification eventually.
 	for {
 		wd, ok := <-changes
 		if !ok {
 			t.Fatalf("watch channel unexpectedly closed")
 		}
-		if wd.Err == context.Canceled {
+		if wd.Err == topo.ErrInterrupted {
 			// good
 			break
 		}
@@ -184,8 +185,11 @@ func checkWatchInterrupt(t *testing.T, ts topo.Impl) {
 		t.Fatalf("got unknown SrvKeyspace waiting for deletion: %v", got)
 	}
 
-	// now the channel should be closed
+	// Now the channel should be closed.
 	if wd, ok := <-changes; ok {
 		t.Fatalf("got unexpected event after error: %v", wd)
 	}
+
+	// And calling cancel() again should just work.
+	cancel()
 }

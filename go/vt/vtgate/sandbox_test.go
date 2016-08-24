@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -253,11 +254,10 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 }
 
 // WatchSrvVSchema is part of SrvTopoServer.
-func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string) (notifications <-chan *vschemapb.SrvVSchema, err error) {
-	result := make(chan *vschemapb.SrvVSchema, 1)
-	value := getSandboxSrvVSchema()
-	result <- value
-	return result, nil
+func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string) (*topo.WatchSrvVSchemaData, <-chan *topo.WatchSrvVSchemaData, func()) {
+	return &topo.WatchSrvVSchemaData{
+		Value: getSandboxSrvVSchema(),
+	}, make(chan *topo.WatchSrvVSchemaData), func() {}
 }
 
 func sandboxDialer(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
