@@ -4,16 +4,14 @@
     <div class="vt-form" >
       <div *ngFor="let flag of dialogContent.getFlags()">
         <div  *ngIf="dialogContent.canDisplay(flag.id)" class="vt-form-member">
-          <paper-item><strong>{{flag.name}}</strong>: {{flag.description}}</paper-item>
-          <md-input *ngIf="flag.type=='input'" [(ngModel)]="flag.value" [required]="dialogContent.isRequired(flag.id)" placeholder="{{flag.name}}"></md-input>
-          <div  *ngIf="flag.type == 'checkBox'" class="checkbox-wrapper">
-            <md-checkbox class="md-primary" [(ngModel)]="flag.value" ></md-checkbox> 
-          </div> 
-          <paper-dropdown-menu *ngIf="flag.type == 'dropDown'" label="Column Type"  on-iron-select="typeSelected(flag.id, $event)">
-            <paper-listbox selected="{{flag.getStrValue()}}"  attr-for-selected=label class="dropdown-content" >
-              <paper-item *ngFor="let option of flag.getOptions()" label="{{option.text}}">{{option.text}}</paper-item>
-            </paper-listbox> 
-          </paper-dropdown-menu>
+          <div class="vt-cell"><strong>{{flag.name}}</strong>: {{flag.description}}</div>
+          <div class="vt-cell">
+            <md-input *ngIf="flag.type=='input'" [(ngModel)]="flag.value" [required]="dialogContent.isRequired(flag.id)" placeholder="{{flag.name}}"></md-input>
+            <div  *ngIf="flag.type == 'checkBox'" class="checkbox-wrapper">
+              <md-checkbox class="md-primary" [(ngModel)]="flag.value" ></md-checkbox> 
+            </div> 
+            <p-dropdown *ngIf="flag.type == 'dropDown'" [options]="flag.getOptions()" [(ngModel)]="flag.value"></p-dropdown>
+          </div>
         </div>
       </div>
     </div>

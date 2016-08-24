@@ -17,8 +17,6 @@ import { DialogContent } from '../shared/dialog/dialog-content';
 import { DialogSettings } from '../shared/dialog/dialog-settings';
 import { Keyspace } from '../api/keyspace';
 import { KeyspaceService } from '../api/keyspace.service';
-import { PrepareResponse } from '../shared/prepare-response';
-import { Proto } from '../shared/proto';
 import { ShardService } from '../api/shard.service';
 import { VtctlService } from '../api/vtctl.service';
 
@@ -114,7 +112,7 @@ export class DashboardComponent implements OnInit {
     this.dialogSettings.setMessage('Edited {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.getKeyspaces.bind(this);
     let flags = new EditKeyspaceFlags(keyspace).flags;
-    this.dialogContent = new DialogContent('keyspace_name', flags, {}, this.prepare.bind(this));
+    this.dialogContent = new DialogContent('keyspace_name', flags, {}, undefined);
     this.dialogSettings.toggleModal();
   }
 
@@ -123,7 +121,7 @@ export class DashboardComponent implements OnInit {
     this.dialogSettings.setMessage('Created {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.getKeyspaces.bind(this);
     let flags = new NewKeyspaceFlags().flags;
-    this.dialogContent = new DialogContent('keyspace_name', flags, {'keyspace_name': true}, this.prepare.bind(this));
+    this.dialogContent = new DialogContent('keyspace_name', flags, {'keyspace_name': true}, undefined);
     this.dialogSettings.toggleModal();
   }
 
@@ -148,13 +146,6 @@ export class DashboardComponent implements OnInit {
 
   navigate(keyspaceName: string) {
     this.router.navigate(['/keyspace'], {queryParams: { keyspace: keyspaceName }});
-  }
-
-  prepare(flags) {
-    if (flags['sharding_column_type'].getStrValue() !== '') {
-      flags['sharding_column_type'].setValue(Proto.SHARDING_COLUMN_NAME_TO_TYPE[flags['sharding_column_type'].getStrValue()]);
-    }
-    return new PrepareResponse(true, flags);
   }
 
   logView() {

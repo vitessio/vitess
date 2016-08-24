@@ -9,9 +9,8 @@
                   is a material2 checkbox.
     DropDownFlag: Given a set of options the dropdown menu allows you to offer
                   the user specified choices for actions. The value is stored
-                  as a string and the UI component leverages a 
-                  paper-dropdown-menu, paper-listbox, and paper-item as 
-                  material2 components aren't ready yet.
+                  as a string and the UI component leverages a PrimeNG 
+                  dropdown because material2 components are not ready yet.
 */
 
 export class Flag {
