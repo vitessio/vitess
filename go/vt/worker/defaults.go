@@ -39,4 +39,5 @@ const (
 	defaultDestinationWriterCount  = 20
 	defaultMinHealthyRdonlyTablets = 2
 	defaultMaxTPS                  = throttler.MaxRateModuleDisabled
+	defaultMaxReplicationLag       = throttler.ReplicationLagModuleDisabled
 )
