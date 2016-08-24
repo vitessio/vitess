@@ -14,11 +14,13 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/schemamanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
@@ -348,8 +350,46 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 		return tabletStat, nil
 	})
 
+	// Vtctl Command
+	http.HandleFunc(apiPrefix+"vtctl/", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+			httpErrorf(w, r, "Access denied")
+			return
+		}
+		var args []string
+		resp := struct {
+			Error  string
+			Output string
+		}{}
+		if err := unmarshalRequest(r, &args); err != nil {
+			httpErrorf(w, r, "can't unmarshal request: %v", err)
+			return
+		}
+
+		logstream := logutil.NewMemoryLogger()
+
+		wr := wrangler.New(logstream, ts, tmClient)
+		// TODO(enisoc): Context for run command should be request-scoped.
+		err := vtctl.RunCommand(ctx, wr, args)
+		if err != nil {
+			resp.Error = err.Error()
+		}
+		resp.Output = logstream.String()
+		data, err := json.MarshalIndent(resp, "", "  ")
+		if err != nil {
+			httpErrorf(w, r, "json error: %v", err)
+			return
+		}
+		w.Header().Set("Content-Type", jsonContentType)
+		w.Write(data)
+	})
+
 	// Schema Change
 	http.HandleFunc(apiPrefix+"schema/apply", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+			httpErrorf(w, r, "Access denied")
+			return
+		}
 		req := struct {
 			Keyspace, SQL       string
 			SlaveTimeoutSeconds int

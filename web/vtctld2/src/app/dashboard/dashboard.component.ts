@@ -1,4 +1,4 @@
-import { Component, OnInit} from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { Router, ROUTER_DIRECTIVES } from '@angular/router';
 
 import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
@@ -11,14 +11,14 @@ import { MD_PROGRESS_BAR_DIRECTIVES } from '@angular2-material/progress-bar';
 import { Observable } from 'rxjs/Observable';
 
 import { AddButtonComponent } from '../shared/add-button.component';
+import { DeleteKeyspaceFlags, EditKeyspaceFlags, NewKeyspaceFlags, ValidateAllFlags } from '../shared/flags/keyspace.flags';
 import { DialogComponent } from '../shared/dialog/dialog.component';
 import { DialogContent } from '../shared/dialog/dialog-content';
 import { DialogSettings } from '../shared/dialog/dialog-settings';
-import { ForceFlag, KeyspaceNameFlag, RecursiveFlag, ShardingColumnNameFlag, ShardingColumnTypeFlag } from '../shared/flags/keyspace.flags';
+import { Keyspace } from '../api/keyspace';
 import { KeyspaceService } from '../api/keyspace.service';
-import { PrepareResponse } from '../shared/prepare-response';
-import { Proto } from '../shared/proto';
 import { ShardService } from '../api/shard.service';
+import { VtctlService } from '../api/vtctl.service';
 
 @Component({
   selector: 'vt-dashboard',
@@ -26,7 +26,8 @@ import { ShardService } from '../api/shard.service';
   styleUrls: ['../styles/vt.style.css'],
   providers: [
     KeyspaceService,
-    ShardService
+    ShardService,
+    VtctlService
   ],
   directives: [
     ROUTER_DIRECTIVES,
@@ -40,7 +41,7 @@ import { ShardService } from '../api/shard.service';
     AddButtonComponent],
 })
 export class DashboardComponent implements OnInit {
-  title = 'Vitess Control Panel';
+  @ViewChild('dialog') dialog: any;
   keyspaces = [];
   keyspacesReady = false;
   dialogSettings: DialogSettings;
@@ -48,7 +49,8 @@ export class DashboardComponent implements OnInit {
 
   constructor(
               private keyspaceService: KeyspaceService,
-              private router: Router) {}
+              private router: Router,
+              private vtctlService: VtctlService) {}
 
   ngOnInit() {
     this.getKeyspaces();
@@ -66,7 +68,7 @@ export class DashboardComponent implements OnInit {
     });
   }
 
-  cmp(a: DialogContent, b: DialogContent): number {
+  cmp(a: Keyspace, b: Keyspace): number {
     let aLowercase = a.name.toLowerCase();
     let bLowercase = b.name.toLowerCase();
     if (aLowercase > bLowercase) {
@@ -79,92 +81,71 @@ export class DashboardComponent implements OnInit {
   }
 
   createKeyspace() {
-    this.dialogSettings.startPending();
-    this.keyspaceService.createKeyspace(this.dialogContent).subscribe(resp => {
-      if (resp.Error) {
-        this.dialogSettings.setMessage('There was a problem creating ', ': ' + resp.Output);
-      } else {
-        this.getKeyspaces();
-      }
-      this.dialogSettings.endPending();
-    });
+    this.runCommand('CreateKeyspace', 'There was a problem creating {{keyspace_name}}:');
   }
 
   editKeyspace() {
-    this.dialogSettings.startPending();
-    this.keyspaceService.editKeyspace(this.dialogContent).subscribe(resp => {
-      if (resp.Error) {
-        this.dialogSettings.setMessage('There was a problem editing ', ': ' + resp.Output);
-      } else {
-        this.getKeyspaces();
-      }
-      this.dialogSettings.endPending();
-    });
+    this.runCommand('SetKeyspaceShardingInfo', 'There was a problem editing {{keyspace_name}}:');
   }
 
   deleteKeyspace() {
+    this.runCommand('DeleteKeyspace', 'There was a problem deleting {{keyspace_name}}:');
+  }
+
+  validateAll() {
+    this.runCommand('Validate', 'There was a problem validating all nodes:');
+  }
+
+  runCommand(action: string, errorMessage: string) {
     this.dialogSettings.startPending();
-    this.keyspaceService.deleteKeyspace(this.dialogContent).subscribe(resp => {
+    this.vtctlService.runCommand(this.dialogContent.getPostBody(action)).subscribe(resp => {
       if (resp.Error) {
-        this.dialogSettings.setMessage('There was a problem deleting ', ': ' + resp.Output);
-      } else {
-        this.getKeyspaces();
+        this.dialogSettings.setMessage(`${errorMessage} ${resp.Error}`);
       }
+      this.dialogSettings.setLog(resp.Output);
       this.dialogSettings.endPending();
     });
   }
 
-  /*
-    Opens/closes the gray modal behind a dialog box.
-  */
-  toggleModal() {
-    this.dialogSettings.openModal = !this.dialogSettings.openModal;
-  }
-
-  prepareEdit(keyspace: any) {
+  openEditDialog(keyspace: Keyspace) {
     this.dialogSettings = new DialogSettings('Edit', this.editKeyspace.bind(this), `Edit ${keyspace.name}`);
-    this.dialogSettings.setMessage('Edited', '');
-    let flags = [];
-    flags['shardingColumnName'] = new ShardingColumnNameFlag(0, 'shardingColumnName', keyspace.shardingColumnName);
-    let shardingColumnType = Proto.SHARDING_COLUMN_NAMES[keyspace.shardingColumnType];
-    flags['shardingColumnType'] = new ShardingColumnTypeFlag(1, 'shardingColumnType', shardingColumnType);
-    flags['force'] = new ForceFlag(2, 'force');
-    this.dialogContent = new DialogContent(keyspace.name, flags, {}, this.prepare.bind(this));
+    this.dialogSettings.setMessage('Edited {{keyspace_name}}');
+    this.dialogSettings.onCloseFunction = this.getKeyspaces.bind(this);
+    let flags = new EditKeyspaceFlags(keyspace).flags;
+    this.dialogContent = new DialogContent('keyspace_name', flags, {}, undefined);
+    this.dialogSettings.toggleModal();
   }
 
-  prepareNew() {
+  openNewDialog() {
     this.dialogSettings = new DialogSettings('Create', this.createKeyspace.bind(this), 'Create a new Keyspace');
-    this.dialogSettings.setMessage('Created', '');
-    let flags = {};
-    flags['keyspaceName'] = new KeyspaceNameFlag(0, 'keyspaceName');
-    flags['shardingColumnName'] = new ShardingColumnNameFlag(1, 'shardingColumnName');
-    flags['shardingColumnType'] = new ShardingColumnTypeFlag(2, 'shardingColumnType');
-    flags['force'] = new ForceFlag(3, 'force');
-    this.dialogContent = new DialogContent('', flags, {'keyspaceName': true}, this.prepare.bind(this));
+    this.dialogSettings.setMessage('Created {{keyspace_name}}');
+    this.dialogSettings.onCloseFunction = this.getKeyspaces.bind(this);
+    let flags = new NewKeyspaceFlags().flags;
+    this.dialogContent = new DialogContent('keyspace_name', flags, {'keyspace_name': true}, undefined);
+    this.dialogSettings.toggleModal();
   }
 
-  prepareDelete(keyspace: any) {
+  openDeleteDialog(keyspace: Keyspace) {
     this.dialogSettings = new DialogSettings('Delete', this.deleteKeyspace.bind(this),
-                                             `Delete ${keyspace.name}`, `Are you sure you want to delete ${keyspace.name} ?`);
-    this.dialogSettings.setMessage('Deleted', '');
-    let flags = {};
-    flags['recursive'] = new RecursiveFlag(0, 'recursive');
-    this.dialogContent = new DialogContent(keyspace.name, flags);
+                                             `Delete ${keyspace.name}`, `Are you sure you want to delete ${keyspace.name}?`);
+    this.dialogSettings.setMessage('Deleted {{keyspace_name}}');
+    this.dialogSettings.onCloseFunction = this.getKeyspaces.bind(this);
+    let flags = new DeleteKeyspaceFlags(keyspace).flags;
+    this.dialogContent = new DialogContent('keyspace_name', flags);
+    this.dialogSettings.toggleModal();
   }
 
-  blockClicks(event: any) {
-    event.stopPropagation();
+  openValidateDialog() {
+    this.dialogSettings = new DialogSettings('Validate', this.validateAll.bind(this), `Validate all nodes`, '');
+    this.dialogSettings.setMessage('Deleted {{keyspace_name}}');
+    this.dialogSettings.onCloseFunction = this.getKeyspaces.bind(this);
+    let flags = new ValidateAllFlags().flags;
+    this.dialogContent = new DialogContent('keyspace_name', flags);
+    this.dialogSettings.toggleModal();
   }
 
   navigate(keyspaceName: string) {
     this.router.navigate(['/keyspace'], {queryParams: { keyspace: keyspaceName }});
-  }
-
-  prepare(flags) {
-    if (flags['shardingColumnType'].getStrValue() !== '') {
-      flags['shardingColumnType'].setValue(Proto.SHARDING_COLUMN_NAME_TO_TYPE[flags['shardingColumnType'].getStrValue()]);
-    }
-    return new PrepareResponse(true, flags);
   }
 
   logView() {

@@ -1,4 +1,4 @@
-import { Component, ComponentResolver, EventEmitter, Input, OnInit, Output, ViewContainerRef} from '@angular/core';
+import { Component, ComponentResolver, EventEmitter, Input, Output } from '@angular/core';
 import { ROUTER_DIRECTIVES } from '@angular/router';
 
 import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
@@ -29,46 +29,30 @@ import { TabletService } from '../../api/tablet.service';
     MD_BUTTON_DIRECTIVES,
   ],
 })
-export class DialogComponent implements OnInit {
-  title = 'Vitess Control Panel';
+export class DialogComponent {
   keyspaces = [];
   extraContentReference: any;
-  @Input() test: string;
   @Input() dialogContent: DialogContent;
   @Input() dialogSettings: DialogSettings;
-  @Input() dialogExtraContent: any;
   @Output() close = new EventEmitter();
 
-   constructor(private componentResolver: ComponentResolver, private vc: ViewContainerRef) {}
-
-  ngOnInit() {
-    if (this.dialogExtraContent) {
-      this.componentResolver.resolveComponent(this.dialogExtraContent).then(factory => {
-        this.extraContentReference = this.vc.createComponent(factory, 0);
-      });
-    }
-  }
-
-  open(dialogContent) {
-    if (this.dialogExtraContent) {
-      this.loadExtraContent(dialogContent);
-    }
-  }
-
-  loadExtraContent(dialogContent) {
-    this.extraContentReference.instance.dialogContent = dialogContent;
-  }
+  constructor(private componentResolver: ComponentResolver) {}
 
   typeSelected(paramName, e) {
     // Polymer event syntax, waiting on Material2 implementation of dropdown.
     this.dialogContent.setParam(paramName, e.detail.item.__dom.firstChild.data);
   }
 
-  toggleModal() {
-    this.dialogSettings.openModal = !this.dialogSettings.openModal;
+  cancelDialog() {
+    this.dialogSettings.toggleModal();
+    this.close.emit({});
   }
 
   closeDialog() {
+    if (this.dialogSettings.onCloseFunction) {
+      this.dialogSettings.onCloseFunction(this.dialogContent);
+    }
+    this.dialogSettings.toggleModal();
     this.close.emit({});
   }
 
@@ -77,7 +61,7 @@ export class DialogComponent implements OnInit {
     if (resp.success) {
       this.dialogSettings.actionFunction();
     } else {
-      this.dialogSettings.setMessage('There was a problem preparing ', ': ' + resp.message);
+      this.dialogSettings.setMessage(`There was a problem preparing ${this.dialogContent.getName()}: ${resp.message}`);
     }
     this.dialogSettings.dialogForm = false;
     this.dialogSettings.dialogLog = true;

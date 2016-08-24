@@ -1,24 +1,25 @@
-<h1>{{shardName}}</h1>
-<button md-raised-button (click)="blockClicks($event);prepareDelete(shardName);dialog.open();toggleModal();">Delete</button>
-<!-- Table from ng prime that will be attached to Vitess next.
-
-<div class="vt-tablet-container">
-  <md-card class="vt-card"> 
-    <p-dataTable [value]="tablets">
-      <p-column field="type" header="Type" sortable="true">
-        <template let-col let-tab="rowData">
-        {{getName(tab[col.field])}}
-        </template>
-      </p-column>
-      <p-column field="status" header="Status" sortable="true"></p-column>
-      <p-column field="stat" header="Stat1" sortable="true"></p-column>
-      <p-column field="stat2" header="Stat2" sortable="true"></p-column>
-    </p-dataTable>
-  </md-card>
-</div>
--->
-<paper-dialog #dialog  no-cancel-on-outside-click="true" no-cancel-on-esc-key="true">
-  <vt-dialog [(dialogContent)]="dialogContent" [(dialogSettings)]="dialogSettings" (close)="dialog.close();"></vt-dialog>
-</paper-dialog>
-<div *ngIf="dialogSettings.openModal" class="vt-popUpContainer" >
+<div *ngIf="tabletsReady">
+  <h1>{{shardName}}</h1>
+  <div class="vt-action-center">
+    <button md-raised-button (click)="openDeleteShardDialog();">Delete</button>
+    <button md-raised-button (click)="openValidateShardDialog();">Validate</button>
+    <button md-raised-button (click)="openInitShardMasterDialog();">Initialize Shard Master</button>
+  </div>
+  <!-- Table from ng prime that will be attached to Vitess next.-->
+  <div class="vt-tablet-container">
+    <md-card class="vt-card" *ngIf="tablets.length > 0"> 
+      <p-dataTable [value]="tablets" selectionMode="single" [(selection)]="selectedTablet" (onRowSelect)="navigate(selectedTablet)">
+        <header>{{shardName}}'s Tablets</header>
+        <p-column field="type" header="Type" sortable="true"></p-column>
+        <p-column field="ref" header="Ref" sortable="true"></p-column>
+      </p-dataTable>
+    </md-card>
+    <h2 *ngIf="tablets.length == 0">There are no tablets in this shard</h2>
+  </div>
+  
+  <p-dialog [(header)]="dialogSettings.dialogTitle" [(visible)]="dialogSettings.open" draggable="" resizable="" width="800">
+    <vt-dialog [(dialogContent)]="dialogContent" [(dialogSettings)]="dialogSettings"></vt-dialog>
+  </p-dialog>
+  <div *ngIf="dialogSettings.open" class="vt-popUpContainer" >
+  </div>
 </div>

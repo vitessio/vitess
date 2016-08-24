@@ -12,27 +12,49 @@ import { Flag } from '../flags/flag';
 import { PrepareResponse } from '../prepare-response';
 
 export class DialogContent {
-  public name: string;
+  public nameId: string; // Id for the flag whose value should be used for name properties
   public flags: {};
   public requiredFlags: {};
   private prepareFunction: any;
-  public constructor(name= '', flags: any = {}, requiredFlags: any = {}, prepareFunction: any= undefined) {
-    this.name = name;
+
+  constructor(nameId= '', flags: any = {}, requiredFlags: any = {}, prepareFunction: any= undefined) {
+    this.nameId = nameId;
     this.flags = flags;
     this.requiredFlags = requiredFlags;
     this.prepareFunction = prepareFunction;
+  }
+
+  getName(): string {
+    return this.flags[this.nameId] ? this.flags[this.nameId].getStrValue() : '';
+  }
+
+  setName(name: string) {
+    if (this.flags[this.nameId]) {
+      this.flags[this.nameId].setValue(name);
+    }
   }
 
   /*
     Currently turns the flagIds and their values into a url encoded string for
     submission to the server.
 
-    TODO(dsslater): generalize and sanatize for non url encoded transmission.
+    TODO(dsslater): sanitize user input before it hits the server.
   */
+  public getPostBody(action: string): string[] {
+    let flags = [];
+    let args = [];
+    flags.push(action);
+    for (let flag of this.getFlags()) {
+      flags = flags.concat(flag.getFlags());
+      args = args.concat(flag.getArgs());
+    }
+    return flags.concat(args);
+  }
+
   public getBody(action: string): string {
     let body = 'action=' + action;
     for (let flagName of Object.keys(this.flags)) {
-      let flagStr = '&' + flagName + '=' + this.flags[flagName].getValue();
+      let flagStr = `&${flagName}=${this.flags[flagName].getValue()}`;
       body += flagStr;
     }
     return body;
@@ -129,5 +151,23 @@ export class DialogContent {
       this.flags = resp.flags;
     }
     return resp;
+  }
+
+  public interpolateMessage(fmtString: string): string {
+    let indexOfOpenDoubleBracket = fmtString.indexOf('{{');
+    while (indexOfOpenDoubleBracket !== -1) {
+      let indexOfCloseDoubleBracket = fmtString.indexOf('}}', indexOfOpenDoubleBracket);
+      let lookUpId = fmtString.substring(indexOfOpenDoubleBracket + 2, indexOfCloseDoubleBracket);
+      if (this.flags[lookUpId] && this.flags[lookUpId].getStrValue()) {
+        fmtString = fmtString.substring(0, indexOfOpenDoubleBracket)
+                    + this.flags[lookUpId].getStrValue()
+                    + fmtString.substring(indexOfCloseDoubleBracket + 2);
+      } else {
+        fmtString = fmtString.substring(0, indexOfOpenDoubleBracket)
+                    + fmtString.substring(indexOfCloseDoubleBracket + 2);
+      }
+      indexOfOpenDoubleBracket = fmtString.indexOf('{{');
+    }
+    return fmtString;
   }
 }
