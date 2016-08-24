@@ -34,7 +34,7 @@ import javax.annotation.Nullable;
  */
 public class Proto {
 
-  private static int MAX_DECIMAL_UNIT = 30;
+  private static final int MAX_DECIMAL_UNIT = 30;
 
   /**
    * Throws the proper SQLException for an error returned by VTGate.

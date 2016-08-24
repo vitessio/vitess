@@ -362,7 +362,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(expected, actual);
   }
 
-  abstract class Executable {
+  abstract static class Executable {
     abstract void execute(String query) throws Exception;
   }
 
@@ -399,7 +399,7 @@ public abstract class RpcClientTest {
     checkExecuteErrors(exe, false);
   }
 
-  abstract class TransactionExecutable {
+  abstract static class TransactionExecutable {
     abstract void execute(VTGateBlockingTx tx, String query) throws Exception;
   }
 
