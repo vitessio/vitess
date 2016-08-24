@@ -70,6 +70,13 @@ var (
 	statsOfflineUpdatesCounters = stats.NewCounters("WorkerOfflineUpdatesCounters")
 	// statsOfflineUpdatesCounters tracks for every table how many rows were deleted.
 	statsOfflineDeletesCounters = stats.NewCounters("WorkerOfflineDeletesCounters")
+
+	// statsStreamingQueryRestartsCounters tracks for every tablet alias how often
+	// a streaming query was succesfully established there.
+	statsStreamingQueryCounters = stats.NewCounters("StreamingQueryCounters")
+	// statsStreamingQueryErrorsCounters tracks for every tablet alias how often
+	// a (previously successfully established) streaming query did error.
+	statsStreamingQueryErrorsCounters = stats.NewCounters("StreamingQueryErrorsCounters")
 )
 
 const (
@@ -91,6 +98,8 @@ func resetVars() {
 	statsOfflineInsertsCounters.Reset()
 	statsOfflineUpdatesCounters.Reset()
 	statsOfflineDeletesCounters.Reset()
+	statsStreamingQueryCounters.Reset()
+	statsStreamingQueryErrorsCounters.Reset()
 }
 
 // checkDone returns ctx.Err() iff ctx.Done().

@@ -42,19 +42,19 @@ func TestTabletsInUse(t *testing.T) {
 func TestTrackUntrack(t *testing.T) {
 	tt := NewTabletTracker()
 	// ts1 will be used because no tablet is in use yet and ts1 is the first.
-	if got, want := tt.Track(allTs), ts1.Tablet.Alias; !proto.Equal(got, want) {
+	if got, want := tt.Track(allTs), ts1.Tablet; !proto.Equal(got, want) {
 		t.Fatalf("Track(%v) = %v, want = %v", allTs, got, want)
 	}
 
 	// ts1 is already in use once, use ts2 now.
-	if got, want := tt.Track(allTs), ts2.Tablet.Alias; !proto.Equal(got, want) {
+	if got, want := tt.Track(allTs), ts2.Tablet; !proto.Equal(got, want) {
 		t.Fatalf("Track(%v) = %v, want = %v", allTs, got, want)
 	}
 
 	// ts2 is no longer in use after Untrack().
 	tt.Untrack(ts2.Tablet.Alias)
 	// ts2 instead of ts1 will be used because ts1 has a higher use count.
-	if got, want := tt.Track(allTs), ts2.Tablet.Alias; !proto.Equal(got, want) {
+	if got, want := tt.Track(allTs), ts2.Tablet; !proto.Equal(got, want) {
 		t.Fatalf("Track(%v) = %v, want = %v", allTs, got, want)
 	}
 }

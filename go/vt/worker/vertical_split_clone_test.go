@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
@@ -125,14 +126,14 @@ func TestVerticalSplitClone(t *testing.T) {
 	}
 	sourceRdonlyShqs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
 	sourceRdonlyShqs.AddDefaultHealthResponse()
-	sourceRdonlyQs := newTestQueryService(t, sourceRdonly.Target(), sourceRdonlyShqs, 0, 1, sourceRdonly.Tablet.Alias.Uid, true /* omitKeyspaceID */)
+	sourceRdonlyQs := newTestQueryService(t, sourceRdonly.Target(), sourceRdonlyShqs, 0, 1, topoproto.TabletAliasString(sourceRdonly.Tablet.Alias), true /* omitKeyspaceID */)
 	sourceRdonlyQs.addGeneratedRows(verticalSplitCloneTestMin, verticalSplitCloneTestMax)
 	grpcqueryservice.Register(sourceRdonly.RPCServer, sourceRdonlyQs)
 
 	// Set up destination rdonly which will be used as input for the diff during the clone.
 	destRdonlyShqs := fakes.NewStreamHealthQueryService(destRdonly.Target())
 	destRdonlyShqs.AddDefaultHealthResponse()
-	destRdonlyQs := newTestQueryService(t, destRdonly.Target(), destRdonlyShqs, 0, 1, destRdonly.Tablet.Alias.Uid, true /* omitKeyspaceID */)
+	destRdonlyQs := newTestQueryService(t, destRdonly.Target(), destRdonlyShqs, 0, 1, topoproto.TabletAliasString(destRdonly.Tablet.Alias), true /* omitKeyspaceID */)
 	// This tablet is empty and does not return any rows.
 	grpcqueryservice.Register(destRdonly.RPCServer, destRdonlyQs)
 
