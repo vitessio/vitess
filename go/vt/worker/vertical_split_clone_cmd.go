@@ -98,7 +98,7 @@ func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *fl
 	tables := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split)")
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'vtworker VerticalSplitClone --strategy=-help k/s' for more info")
 	chunkCount := subFlags.Int("chunk_count", defaultChunkCount, "number of chunks per table")
-	minRowsPerChunk := subFlags.Int("min_rows_per_chunk", defaultChunkCount, "minimum number of rows per chunk (may reduce --chunk_count)")
+	minRowsPerChunk := subFlags.Int("min_rows_per_chunk", defaultMinRowsPerChunk, "minimum number of rows per chunk (may reduce --chunk_count)")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
 	writeQueryMaxRows := subFlags.Int("write_query_max_rows", defaultWriteQueryMaxRows, "maximum number of rows per write query")
 	writeQueryMaxSize := subFlags.Int("write_query_max_size", defaultWriteQueryMaxSize, "maximum size (in bytes) per write query")
