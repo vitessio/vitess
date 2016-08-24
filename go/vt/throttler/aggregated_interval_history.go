@@ -35,5 +35,5 @@ func (h *aggregatedIntervalHistory) average(from, to time.Time) float64 {
 	for i := 0; i < h.threadCount; i++ {
 		sum += h.historyPerThread[i].average(from, to)
 	}
-	return sum / float64(h.threadCount)
+	return sum
 }
