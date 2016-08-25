@@ -46,15 +46,14 @@ export class DialogContent {
     if (!flags) {
       flags = this.getFlags();
     }
-    let args = [];
-    args.push(this.action);
-    for (let flag of flags) {
-      args = args.concat(flag.getPostBodyContent(false));
+    let flagArgs = [];
+    let posArgs = [];
+    flagArgs.push(this.action);
+    for (let flag of this.getFlags()) {
+      flagArgs = flagArgs.concat(flag.getFlags());
+      posArgs = posArgs.concat(flag.getArgs());
     }
-    for (let flag of flags) {
-      args = args.concat(flag.getPostBodyContent(true));
-    }
-    return args;
+    return flagArgs.concat(posArgs);
   }
 
   public getBody(action: string): string {

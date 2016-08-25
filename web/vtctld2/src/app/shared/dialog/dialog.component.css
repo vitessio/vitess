@@ -2,8 +2,7 @@
   display: table-row;
   width: 100%;
 }
-
-paper-item { 
+.vt-cell { 
   display: table-cell; 
   position: relative;
   padding-bottom: 1%;
@@ -11,15 +10,15 @@ paper-item {
   width: 60%;
 }
 
-paper-input { 
-  display: table-cell;
-  width: 40%;
+
+
+>>> .ui-dropdown {
+  width: 100% !important;
+  display: inline-block !important;
 }
 
 .checkbox-wrapper {
-  display: table-cell;
-  width: 40%;
-  position: relative;
+  width: 100%;
   text-align: center;
   vertical-align: middle;
 }
@@ -37,19 +36,6 @@ paper-input {
   padding: 5px 15px 5px 15px;
   border-radius: 5px;
   background-color: #EEEEEE;
-}
-
-p-dropdown {
-  display: table-cell; 
-  position: relative;
-  padding-bottom: 1%;
-  vertical-align:bottom;
-  width: 60%;
-}
-
->>> .ui-dropdown {
-  width: 80% !important;
-  display: inline-block !important;
 }
 
 .vt-log-frame {

@@ -1,4 +1,4 @@
-import { ActivatedRoute, Router, ROUTER_DIRECTIVES } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { Component, OnInit, OnDestroy } from '@angular/core';
 
 import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
@@ -13,7 +13,6 @@ import { DialogComponent } from '../shared/dialog/dialog.component';
 import { DialogContent } from '../shared/dialog/dialog-content';
 import { DialogSettings } from '../shared/dialog/dialog-settings';
 import { NewShardFlags } from '../shared/flags/shard.flags';
-import { KeyspaceExtraComponent } from './keyspace-extra.component';
 import { KeyspaceService } from '../api/keyspace.service';
 import { PrepareResponse } from '../shared/prepare-response';
 import { RebuildKeyspaceGraphFlags, RemoveKeyspaceCellFlags, ValidateKeyspaceFlags,
@@ -31,7 +30,6 @@ import { VtctlService } from '../api/vtctl.service';
     VtctlService
   ],
   directives: [
-    ROUTER_DIRECTIVES,
     MD_CARD_DIRECTIVES,
     MD_BUTTON_DIRECTIVES,
     DialogComponent,
@@ -49,23 +47,18 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
   keyspace = {};
   dialogSettings: DialogSettings;
   dialogContent: DialogContent;
-  keyspaceExtraComponent = KeyspaceExtraComponent;
   constructor(
     private route: ActivatedRoute,
-    private router: Router,
     private keyspaceService: KeyspaceService,
     private vtctlService: VtctlService) {}
 
   ngOnInit() {
     this.dialogContent = new DialogContent();
     this.dialogSettings = new DialogSettings();
-    let paramStream = this.router.routerState.queryParams;
-    let routeStream = this.route.url;
-    this.routeSub = paramStream.combineLatest(routeStream).subscribe( routeData => {
-      let params = routeData[0];
-      let path = routeData[1][0].path;
+
+    this.routeSub = this.route.queryParams.subscribe(params => {
       let keyspaceName = params['keyspace'];
-      if (path === 'keyspace' && keyspaceName) {
+      if (keyspaceName) {
         this.keyspaceName = keyspaceName;
         this.getKeyspace(this.keyspaceName);
       }
@@ -85,34 +78,40 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
   }
 
   createShard() {
-    this.serverCall('There was a problem creating {{shard_ref}}:');
+    this.runCommand('There was a problem creating {{shard_ref}}:');
   }
 
   validateKeyspace() {
-    this.serverCall('There was a problem validating {{keyspace_name}}:');
+    this.runCommand('There was a problem validating {{keyspace_name}}:');
   }
 
   validateSchema() {
-    this.serverCall(`There was a problem validating {{keyspace_name}}'s Schema:`);
+    this.runCommand(`There was a problem validating {{keyspace_name}}'s Schema:`);
   }
 
   validateVersion() {
-    this.serverCall(`There was a problem validating {{keyspace_name}}'s Version:`);
+    this.runCommand(`There was a problem validating {{keyspace_name}}'s Version:`);
   }
 
   rebuildKeyspace() {
-    this.serverCall('There was a problem rebuilding {{keyspace_name}}:');
+    this.runCommand('There was a problem rebuilding {{keyspace_name}}:');
   }
 
   removeKeyspaceCell() {
-    this.serverCall('There was a problem removing {{cell_name}}:');
+    this.runCommand('There was a problem removing {{cell_name}}:');
   }
 
-  serverCall(errorMessage: string) {
-    this.vtctlService.serverCall('', this.dialogContent, this.dialogSettings, errorMessage);
-  }
-
-  prepareNewShard() {
+  runCommand(errorMessage: string) {
+    this.dialogSettings.startPending();
+    this.vtctlService.runCommand(this.dialogContent.getPostBody()).subscribe(resp => {
+      if (resp.Error) {
+        this.dialogSettings.setMessage(`${errorMessage} ${resp.Error}`);
+      }
+      this.dialogSettings.setLog(resp.Output);
+      this.dialogSettings.endPending();
+    });
+  
+  openNewShardDialog() {
     this.dialogSettings = new DialogSettings('Create', this.createShard.bind(this), 'Create a new Shard', '');
     this.dialogSettings.setMessage('Created {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshKeyspaceView.bind(this);
@@ -121,7 +120,7 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareValidateKeyspace() {
+  openValidateKeyspaceDialog() {
     this.dialogSettings = new DialogSettings('Validate', this.validateKeyspace.bind(this), `Validate ${this.keyspaceName}`, '');
     this.dialogSettings.setMessage('Validated {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.refreshKeyspaceView.bind(this);
@@ -148,7 +147,7 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareRebuildKeyspaceGraph() {
+  openRebuildKeyspaceGraphDialog() {
     this.dialogSettings = new DialogSettings('Rebuild', this.rebuildKeyspace.bind(this), `Rebuild ${this.keyspaceName}`, '');
     this.dialogSettings.setMessage('Rebuilt {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.refreshKeyspaceView.bind(this);
@@ -157,7 +156,7 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareRemoveKeyspaceCell() {
+  openRemoveKeyspaceCellDialog() {
     this.dialogSettings = new DialogSettings('Remove', this.removeKeyspaceCell.bind(this), `Remove a cell from ${this.keyspaceName}`, '');
     this.dialogSettings.setMessage('Removed {{cell_name}}');
     this.dialogSettings.onCloseFunction = this.refreshKeyspaceView.bind(this);

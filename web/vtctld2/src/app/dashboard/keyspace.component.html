@@ -2,19 +2,21 @@
 <div class="vt-action-center">
   <p-accordion>
     <p-accordionTab header="Actions">
-      <button md-raised-button (click)="prepareValidateKeyspace();dialog.open();">Validate</button>
+      <button md-raised-button (click)="openValidateKeyspaceDialog();">Validate</button>
       <button md-raised-button (click)="prepareValidateSchema();dialog.open();">Validate Schema</button>
       <button md-raised-button (click)="prepareValidateVersion();dialog.open();">Validate Version</button>
-      <button md-raised-button (click)="prepareRebuildKeyspaceGraph();dialog.open();">Rebuild Keyspace Graph</button>
-      <button md-raised-button (click)="prepareRemoveKeyspaceCell();dialog.open();">Remove Keyspace Cell</button>
+      <button md-raised-button (click)="openRebuildKeyspaceGraphDialog();">Rebuild Keyspace Graph</button>
+      <button md-raised-button (click)="openRemoveKeyspaceCellDialog();">Remove Keyspace Cell</button>
     </p-accordionTab>
   </p-accordion>
 </div>
 
+<h2 *ngIf="noShards()">There are no shards in this keyspace</h2>
+
 <div *ngIf="keyspace.servingShards != undefined && keyspace.servingShards.length > 0">
   <h2>Serving Shards</h2>
   <div *ngFor="let shard of keyspace.servingShards" class="vt-card">
-    <a class="vt-darkLink" [routerLink]="['/shard']" [queryParams]="{keyspace: keyspaceName, shard: shard}">
+    <a class="vt-dark-link" [routerLink]="['/shard']" [queryParams]="{keyspace: keyspaceName, shard: shard}">
       <md-card > 
         <md-card-title>{{shard}}</md-card-title>   
       </md-card>
@@ -25,17 +27,17 @@
 <div *ngIf="keyspace.nonservingShards != undefined && keyspace.nonservingShards.length > 0">
   <h2>Nonserving Shards</h2>
   <div *ngFor="let shard of keyspace.nonservingShards" class="vt-card">
-    <a class="vt-darkLink" [routerLink]="['/shard']" [queryParams]="{keyspace: keyspaceName, shard: shard}">
+    <a class="vt-dark-link" [routerLink]="['/shard']" [queryParams]="{keyspace: keyspaceName, shard: shard}">
       <md-card > 
         <md-card-title>{{shard}}</md-card-title>   
       </md-card>
     </a>
   </div>
 </div>
-<h2 *ngIf="noShards()">There are no shards in this keyspace</h2>
-<paper-dialog #dialog  no-cancel-on-outside-click="true" no-cancel-on-esc-key="true">
-  <vt-dialog #vtDialog [(dialogContent)]="dialogContent" [(dialogSettings)]="dialogSettings" [(dialogExtraContent)]="keyspaceExtraComponent" (close)="dialog.close();"></vt-dialog>
-</paper-dialog>
-<vt-add-button (click)="prepareNewShard();dialog.open();vtDialog.loadExtraContent(dialogContent);"></vt-add-button>
-<div *ngIf="dialogSettings.openModal" class="vt-popUpContainer" >
+
+<p-dialog [(header)]="dialogSettings.dialogTitle" [(visible)]="dialogSettings.open" draggable="" resizable="" width="800">
+  <vt-dialog [(dialogContent)]="dialogContent" [(dialogSettings)]="dialogSettings" ></vt-dialog>
+</p-dialog>
+<vt-add-button (click)="openNewShardDialog();"></vt-add-button>
+<div *ngIf="dialogSettings.open" class="vt-popUpContainer" >
 </div>

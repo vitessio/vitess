@@ -69,14 +69,11 @@ export class ShardComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.dialogContent = new DialogContent();
     this.dialogSettings = new DialogSettings();
-    let paramStream = this.router.routerState.queryParams;
-    let routeStream = this.route.url;
-    this.routeSub =  paramStream.combineLatest(routeStream).subscribe( routeData => {
-      let params = routeData[0];
-      let path = routeData[1][0].path;
+
+    this.routeSub = this.route.queryParams.subscribe(params => {
       let keyspaceName = params['keyspace'];
       let shardName = params['shard'];
-      if (path === 'shard' && keyspaceName && shardName) {
+      if (keyspaceName && shardName) {
         this.keyspaceName = keyspaceName;
         this.shardName = shardName;
         this.getKeyspace(this.keyspaceName);
@@ -91,10 +88,10 @@ export class ShardComponent implements OnInit, OnDestroy {
   getTabletList(keyspaceName: string, shardName: string) {
     this.tablets = [];
     this.tabletsReady = true;
-    let shardRef = keyspaceName + '/' + shardName;
+    let shardRef = `${keyspaceName}/${shardName}`;
     this.tabletService.getTabletList(shardRef).subscribe((tabletList) => {
       for (let tablet of tabletList){
-        this.getTablet(tablet.cell + '-' + tablet.uid);
+        this.getTablet(`${tablet.cell}-${tablet.uid}`);
       }
     });
   }
@@ -121,42 +118,49 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   deleteShard() {
-    this.serverCall('There was a problem deleting {{shard_ref}}:');
+    this.runCommand('There was a problem deleting {{shard_ref}}:');
   }
 
   validateShard() {
-    this.serverCall('There was a problem validating {{shard_ref}}:');
+    this.runCommand('There was a problem validating {{shard_ref}}:');
   }
 
   initShardMaster() {
-    this.serverCall('There was a problem initializing a shard master for {{shard_ref}}:');
+    this.runCommand('There was a problem initializing a shard master for {{shard_ref}}:');
   }
 
   TabletExternallyReparented() {
-    this.serverCall(`There was a problem there was a problem updating {{tablet_alias}}'s metatdata:`);
+    this.runCommand(`There was a problem there was a problem updating {{tablet_alias}}'s metatdata:`);
   }
 
   PlanRepShard() {
-    this.serverCall('There was a problem initializing a shard master for {{shard_ref}}:');
+    this.runCommand('There was a problem initializing a shard master for {{shard_ref}}:');
   }
 
   EmergencyRepShard() {
-    this.serverCall('There was a problem initializing a shard master for {{shard_ref}}:');
+    this.runCommand('There was a problem initializing a shard master for {{shard_ref}}:');
   }
 
   ShardReplicationPos() {
-    this.serverCall('There was a problem initializing a shard master for {{shard_ref}}:');
+    this.runCommand('There was a problem initializing a shard master for {{shard_ref}}:');
   }
 
   ValidateVerShard() {
-    this.serverCall('There was a problem initializing a shard master for {{shard_ref}}:');
+    this.runCommand('There was a problem initializing a shard master for {{shard_ref}}:');
   }
 
-  serverCall(errorMessage: string) {
-    this.vtctlService.serverCall('', this.dialogContent, this.dialogSettings, errorMessage);
+  runCommand(errorMessage: string) {
+    this.dialogSettings.startPending();
+    this.vtctlService.runCommand(this.dialogContent.getPostBody()).subscribe(resp => {
+      if (resp.Error) {
+        this.dialogSettings.setMessage(`${errorMessage} ${resp.Error}`);
+      }
+      this.dialogSettings.setLog(resp.Output);
+      this.dialogSettings.endPending();
+    });
   }
 
-  prepareDeleteShard() {
+  openDeleteShardDialog() {
     this.dialogSettings = new DialogSettings('Delete', this.deleteShard.bind(this),
                                              `Delete ${this.shardName}`, `Are you sure you want to delete ${this.shardName}?`);
     this.dialogSettings.setMessage('Deleted {{shard_ref}}');
@@ -166,8 +170,8 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareValidateShard() {
-    this.dialogSettings = new DialogSettings('Validate', this.validateShard.bind(this), `Validate ${this.shardName}`);
+  openValidateShardDialog() {
+    this.dialogSettings = new DialogSettings('Validate', this.validateShard.bind(this), `Validate ${this.shardName}`, '');
     this.dialogSettings.setMessage('Validated {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
     let flags = new ValidateShardFlags(this.keyspaceName, this.shardName).flags;
@@ -175,13 +179,17 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareInitShardMaster() {
-    this.dialogSettings = new DialogSettings('Initialize', this.initShardMaster.bind(this), `Initialize ${this.shardName} Master`);
+  openInitShardMasterDialog() {
+    this.dialogSettings = new DialogSettings('Initialize', this.initShardMaster.bind(this), `Initialize ${this.shardName} Master`, '');
     this.dialogSettings.setMessage('Initialized shard master for {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
     let flags = new InitShardMasterFlags(this.keyspaceName, this.shardName, this.tablets).flags;
     this.dialogContent = new DialogContent(this.shardName, flags, {tablet_alias: true}, undefined, 'InitShardMaster');
     this.dialogSettings.toggleModal();
+  }
+
+  refreshShardView() {
+    this.getKeyspace(this.keyspaceName);
   }
 
   prepareTabExtRep() {

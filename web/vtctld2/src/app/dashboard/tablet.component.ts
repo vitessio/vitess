@@ -50,7 +50,6 @@ export class TabletComponent implements OnInit, OnDestroy {
   tabletReady = false;
   dialogSettings: DialogSettings;
   dialogContent: DialogContent;
-  refresh = true;
 
   constructor(
     private route: ActivatedRoute,
@@ -62,15 +61,12 @@ export class TabletComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.dialogContent = new DialogContent();
     this.dialogSettings = new DialogSettings();
-    let paramStream = this.router.routerState.queryParams;
-    let routeStream = this.route.url;
-    this.routeSub = paramStream.combineLatest(routeStream).subscribe( routeData => {
-      let params = routeData[0];
-      let path = routeData[1][0].path;
+
+    this.routeSub = this.route.queryParams.subscribe(params => {
       let keyspaceName = params['keyspace'];
       let shardName = params['shard'];
       let tabletRef = params['tablet'];
-      if (path === 'tablet' && keyspaceName && shardName && tabletRef) {
+      if (keyspaceName && shardName && tabletRef) {
         this.keyspaceName = keyspaceName;
         this.shardName = shardName;
         this.tabletRef = tabletRef;
@@ -92,54 +88,54 @@ export class TabletComponent implements OnInit, OnDestroy {
   }
 
   deleteTablet() {
-    this.serverCall(`There was a problem deleting ${this.tablet.label}:`);
+    this.runCommand(`There was a problem deleting ${this.tablet.label}:`);
   }
 
   refreshTablet() {
-    this.serverCall(`There was a problem refreshing ${this.tablet.label}:`);
+    this.runCommand(`There was a problem refreshing ${this.tablet.label}:`);
   }
 
   pingTablet() {
-    this.serverCall(`There was a problem pinging ${this.tablet.label}:`);
+    this.runCommand(`There was a problem pinging ${this.tablet.label}:`);
   }
 
   SetReadOnly() {
-    this.serverCall(`There was a problem setting ${this.tablet.label} to Read Only:`);
+    this.runCommand(`There was a problem setting ${this.tablet.label} to Read Only:`);
   }
 
   SetReadWrite() {
-    this.serverCall(`There was a problem setting ${this.tablet.label} to Read/Write:`);
+    this.runCommand(`There was a problem setting ${this.tablet.label} to Read/Write:`);
   }
 
   StartSlave() {
-    this.serverCall(`There was a problem starting slave, ${this.tablet.label}:`);
+    this.runCommand(`There was a problem starting slave, ${this.tablet.label}:`);
   }
 
   StopSlave() {
-    this.serverCall(`There was a problem stopping slave, ${this.tablet.label}:`);
+    this.runCommand(`There was a problem stopping slave, ${this.tablet.label}:`);
   }
 
   RunHealthCheck() {
-    this.serverCall(`There was a problem running Health Check on ${this.tablet.label}:`);
+    this.runCommand(`There was a problem running Health Check on ${this.tablet.label}:`);
   }
 
   IgnoreHealthError() {
-    this.serverCall(`There was a problem ignoring the Health Check for ${this.tablet.label}:`);
+    this.runCommand(`There was a problem ignoring the Health Check for ${this.tablet.label}:`);
   }
 
   DemoteMaster() {
-    this.serverCall(`There was a problem demoting ${this.tablet.label}:`);
+    this.runCommand(`There was a problem demoting ${this.tablet.label}:`);
   }
 
   ReparentTablet() {
-    this.serverCall(`There was a problem reparenting ${this.tablet.label}:`);
+    this.runCommand(`There was a problem reparenting ${this.tablet.label}:`);
   }
 
   serverCall(errorMessage: string) {
     this.vtctlService.serverCall('', this.dialogContent, this.dialogSettings, errorMessage);
   }
 
-  prepareDeleteTablet() {
+  openDeleteTabletDialog() {
     this.dialogSettings = new DialogSettings('Delete', this.deleteTablet.bind(this),
                                              `Delete ${this.tablet.label}`, `Are you sure you want to delete ${this.tablet.label}?`);
     this.dialogSettings.setMessage(`Deleted ${this.tablet.label}`);
@@ -149,7 +145,7 @@ export class TabletComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareRefreshTablet() {
+  openRefreshTabletDialog() {
     this.dialogSettings = new DialogSettings('Refresh', this.refreshTablet.bind(this), `Refresh ${this.tablet.label}`);
     this.dialogSettings.setMessage(`Refreshed ${this.tablet.label}`);
     this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
@@ -158,7 +154,7 @@ export class TabletComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  preparePingTablet() {
+  openPingTabletDialog() {
     this.dialogSettings = new DialogSettings('Ping', this.pingTablet.bind(this), `Ping ${this.tablet.label}`);
     this.dialogSettings.setMessage(`Pinged ${this.tablet.label}`);
     this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
@@ -242,6 +238,7 @@ export class TabletComponent implements OnInit, OnDestroy {
 
   refreshTabletView() {
     this.getTablet(this.tabletRef);
+    // Force tablet url to refresh
     this.tabletUrl = this.tabletUrl;
   }
 
