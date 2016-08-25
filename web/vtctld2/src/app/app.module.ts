@@ -6,12 +6,13 @@ import { NgModule, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { MdButtonModule } from '@angular2-material/button';
 import { MdCardModule } from '@angular2-material/card';
 import { MdCheckboxModule } from '@angular2-material/checkbox';
+import { MdIconModule } from '@angular2-material/icon';
 import { MdInputModule } from '@angular2-material/input';
 import { MdListModule } from '@angular2-material/list/list';
 import { MdProgressBarModule } from '@angular2-material/progress-bar';
 import { MdRippleModule } from '@angular2-material/core/ripple/ripple';
 
-import { DataTableModule, DialogModule, DropdownModule, SharedModule } from 'primeng/primeng';
+import { AccordionModule, DataTableModule, DialogModule, DropdownModule, SharedModule } from 'primeng/primeng';
 
 import { AppComponent } from './app.component';
 import { APP_ROUTER_PROVIDERS, routing } from './app.routes';
@@ -26,6 +27,7 @@ import { TasksComponent } from './tasks/tasks.component';
 
 @NgModule({
   imports: [
+    AccordionModule,
     BrowserModule,
     DataTableModule,
     DialogModule,
@@ -35,6 +37,7 @@ import { TasksComponent } from './tasks/tasks.component';
     MdButtonModule,
     MdCardModule,
     MdCheckboxModule,
+    MdIconModule,
     MdInputModule,
     MdListModule,
     MdProgressBarModule,

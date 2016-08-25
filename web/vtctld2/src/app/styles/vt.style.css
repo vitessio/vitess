@@ -2,6 +2,7 @@
   display: flex;
   flex-wrap: wrap;
   height: 100%;
+  width: 100%;
 }
 .vt-card {
   display: inline-table;
@@ -26,6 +27,7 @@
   left: 50%  !important;
   transform: translate(-50%, -50%);
   margin: 0;
+  width: 70% !important;
 }
 .vt-popUpContainer{
   position: fixed;
@@ -61,4 +63,12 @@
 .vt-dark-link:active {
     text-decoration: none;
     color: black;
+}
+
+>>> p-accordiontab a {
+  padding-left: 25px! important;
+}
+
+>>> .ui-accordion-content button {
+  margin-top: 2px;
 }

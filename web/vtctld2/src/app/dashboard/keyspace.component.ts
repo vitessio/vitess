@@ -1,12 +1,7 @@
 import { ActivatedRoute } from '@angular/router';
 import { Component, OnInit, OnDestroy } from '@angular/core';
 
-import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
-import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
-
 import { Observable } from 'rxjs/Observable';
-
-import { Accordion, AccordionTab } from 'primeng/primeng';
 
 import { AddButtonComponent } from '../shared/add-button.component';
 import { DialogComponent } from '../shared/dialog/dialog.component';
@@ -30,12 +25,8 @@ import { VtctlService } from '../api/vtctl.service';
     VtctlService
   ],
   directives: [
-    MD_CARD_DIRECTIVES,
-    MD_BUTTON_DIRECTIVES,
     DialogComponent,
     AddButtonComponent,
-    Accordion,
-    AccordionTab
   ],
 })
 

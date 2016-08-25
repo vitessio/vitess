@@ -1,16 +1,17 @@
 .vt-form-member{
-  display: table-row;
   width: 100%;
 }
-.vt-cell { 
-  display: table-cell; 
-  position: relative;
-  padding-bottom: 1%;
-  vertical-align:bottom;
-  width: 60%;
+.vt-cell-left { 
+  display: inline-block;
+  vertical-align: top;
+  width: 59% !important;
 }
 
-
+.vt-cell-right { 
+  display: inline-block;
+  padding-bottom: 1%;
+  width: 39% !important;
+}
 
 >>> .ui-dropdown {
   width: 100% !important;
@@ -40,5 +41,10 @@
 
 .vt-log-frame {
   max-height: 200px;
-  overflow:auto
+  overflow:auto;
+  width: 100%;
+}
+
+>>> md-input {
+  width: 100%;
 }

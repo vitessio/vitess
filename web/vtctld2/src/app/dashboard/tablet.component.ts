@@ -6,11 +6,6 @@ import {DomSanitizationService, SafeResourceUrl} from '@angular/platform-browser
 
 import { Observable } from 'rxjs/Observable';
 
-import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
-import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
-
-import { Accordion, AccordionTab } from 'primeng/primeng';
-
 import { DialogComponent } from '../shared/dialog/dialog.component';
 import { DialogContent } from '../shared/dialog/dialog-content';
 import { DialogSettings } from '../shared/dialog/dialog-settings';
@@ -28,11 +23,7 @@ import { VtctlService } from '../api/vtctl.service';
   ],
   directives: [
     ROUTER_DIRECTIVES,
-    MD_CARD_DIRECTIVES,
-    MD_BUTTON_DIRECTIVES,
     DialogComponent,
-    Accordion,
-    AccordionTab
   ],
   providers: [
     ShardService,

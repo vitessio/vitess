@@ -1,10 +1,6 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Router, ROUTER_DIRECTIVES } from '@angular/router';
 
-import { MD_LIST_DIRECTIVES } from '@angular2-material/list';
-import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
-import { MdIcon } from '@angular2-material/icon';
-
 import { TopoDataService } from '../api/topo-data.service';
 import { BreadcrumbsComponent } from '../shared/breadcrumbs.component';
 
@@ -17,9 +13,6 @@ import { BreadcrumbsComponent } from '../shared/breadcrumbs.component';
   ],
   directives: [
     ROUTER_DIRECTIVES,
-    MD_LIST_DIRECTIVES,
-    MD_CARD_DIRECTIVES,
-    MdIcon,
     BreadcrumbsComponent,
   ],
 })

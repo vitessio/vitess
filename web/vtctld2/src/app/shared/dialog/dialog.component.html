@@ -4,8 +4,8 @@
     <div class="vt-form" >
       <div *ngFor="let flag of dialogContent.getFlags()">
         <div  *ngIf="dialogContent.canDisplay(flag.id)" class="vt-form-member">
-          <div class="vt-cell"><strong>{{flag.name}}</strong>: {{flag.description}}</div>
-          <div class="vt-cell">
+          <div class="vt-cell-left"><strong>{{flag.name}}</strong>: {{flag.description}}</div>
+          <div class="vt-cell-right">
             <md-input *ngIf="flag.type=='input'" [(ngModel)]="flag.value" [required]="dialogContent.isRequired(flag.id)" placeholder="{{flag.name}}"></md-input>
             <div  *ngIf="flag.type == 'checkBox'" class="checkbox-wrapper">
               <md-checkbox class="md-primary" [(ngModel)]="flag.value" ></md-checkbox> 
@@ -35,7 +35,7 @@
     </div>
     <h4>Log:</h4>
     <div class="vt-sheet vt-log-frame" *ngIf="dialogSettings.logText">
-      <p *ngFor="let log of logToArray(dialogSettings.logText)">{{log}}</p>
+      <pre>{{dialogSettings.logText}}</pre>
     </div>
   </div>
   <div *ngIf="dialogSettings.pending">

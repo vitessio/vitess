@@ -14,7 +14,6 @@
       </p-accordionTab>
     </p-accordion>
   </div>
-  <!-- Table from ng prime that will be attached to Vitess next.-->
   <div class="vt-tablet-container">
     <md-card class="vt-card" *ngIf="tablets.length > 0"> 
       <p-dataTable [value]="tablets" selectionMode="single" [(selection)]="selectedTablet" (onRowSelect)="navigate(selectedTablet)">

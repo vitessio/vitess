@@ -39,8 +39,6 @@ export class DialogContent {
   /*
     Currently turns the flagIds and their values into a url encoded string for
     submission to the server.
-
-    TODO(dsslater): sanatize user input before it hits the server.
   */
   public getPostBody(flags= undefined): string[] {
     if (!flags) {
