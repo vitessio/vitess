@@ -87,7 +87,9 @@ func (m *memory) markGood(rate int64) error {
 }
 
 func (m *memory) markBad(rate int64, now time.Time) error {
-	rate = m.roundDown(rate)
+	// Bad rates are rounded up instead of down to not be too extreme on the
+	// reduction and account for some margin of error.
+	rate = m.roundUp(rate)
 
 	// Ignore higher bad rates than the current one.
 	if m.bad != 0 && rate >= m.bad {
@@ -160,4 +162,12 @@ func (m *memory) lowestBad() int64 {
 
 func (m *memory) roundDown(rate int64) int64 {
 	return rate / int64(m.bucketSize) * int64(m.bucketSize)
+}
+
+func (m *memory) roundUp(rate int64) int64 {
+	ceil := rate / int64(m.bucketSize) * int64(m.bucketSize)
+	if rate%int64(m.bucketSize) != 0 {
+		ceil += int64(m.bucketSize)
+	}
+	return ceil
 }

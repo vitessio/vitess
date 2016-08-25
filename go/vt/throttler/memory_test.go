@@ -36,9 +36,9 @@ func TestMemory(t *testing.T) {
 	if got := m.lowestBad(); got != 0 {
 		t.Fatalf("lowestBad should return zero value when no bad rate is recorded yet: got = %v", got)
 	}
-	m.markBad(301, sinceZero(0))
-	if got := m.lowestBad(); got != want300 {
-		t.Fatalf("bad rate was not recorded: got = %v, want = %v", got, want300)
+	m.markBad(300, sinceZero(0))
+	if got, want := m.lowestBad(), want300; got != want {
+		t.Fatalf("bad rate was not recorded: got = %v, want = %v", got, want)
 	}
 	if got := m.highestGood(); got != want200 {
 		t.Fatalf("new lower bad rate did not invalidate previous good rates: got = %v, want = %v", got, want200)
@@ -60,7 +60,8 @@ func TestMemory(t *testing.T) {
 		t.Fatalf("good rates beyond the lowest bad rate must be ignored: got = %v, want = %v", got, want200)
 	}
 
-	m.markBad(201, sinceZero(0))
+	// 199 will be rounded up to 200.
+	m.markBad(199, sinceZero(0))
 	if got := m.lowestBad(); got != want200 {
 		t.Fatalf("bad rate was not updated: got = %v, want = %v", got, want200)
 	}
