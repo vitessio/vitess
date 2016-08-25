@@ -566,6 +566,42 @@ func TestSplitCloneV2_Offline_RestartStreamingQuery(t *testing.T) {
 	}
 }
 
+// TestSplitCloneV2_Offline_FailOverStreamingQuery_NotAllowed is similar to
+// TestSplitCloneV2_Offline_RestartStreamingQuery. However, the first restart
+// of the streaming query does not succeed here and instead vtworker will fail.
+func TestSplitCloneV2_Offline_FailOverStreamingQuery_NotAllowed(t *testing.T) {
+	tc := &splitCloneTestCase{t: t}
+	tc.setUpWithConcurreny(false /* v3 */, 1, 10, splitCloneTestRowsCount)
+	defer tc.tearDown()
+
+	// Ensure that this test uses only the first tablet.
+	tc.sourceRdonlyQs[1].AddHealthResponseWithSecondsBehindMaster(3600)
+
+	// We fail when returning the last row to ensure that vtworker is forced to
+	// give up after the one allowed restart.
+	tc.sourceRdonlyQs[0].errorStreamAtRow(199, 1234567890 /* infinite */)
+
+	// vtworker fails due to the read error and may write less than all but the
+	// last errored error. We cannot reliably expect any number of written rows.
+	defer tc.leftMasterFakeDb.deleteAllEntries()
+	defer tc.rightMasterFakeDb.deleteAllEntries()
+
+	// Run the vtworker command.
+	args := []string{"SplitClone", "--min_healthy_rdonly_tablets", "1"}
+	args = append(args, tc.defaultWorkerArgs[1:]...)
+	if err := runCommand(t, tc.wi, tc.wi.wr, args); err == nil || !strings.Contains(err.Error(), "first retry to restart the streaming query on the same tablet failed. We're failing at this point") {
+		t.Fatalf("worker should have failed because all tablets became unavailable and it gave up retrying. err: %v", err)
+	}
+
+	alias := tc.sourceRdonlyQs[0].alias
+	if got, want := statsStreamingQueryErrorsCounters.Counts()[alias], int64(1); got != want {
+		t.Errorf("wrong number of errored streaming query for tablet: %v: got = %v, want = %v", alias, got, want)
+	}
+	if got, want := statsStreamingQueryCounters.Counts()[alias], int64(1); got != want {
+		t.Errorf("wrong number of streaming query starts for tablet: %v: got = %v, want = %v", alias, got, want)
+	}
+}
+
 // TestSplitCloneV2_Online_FailOverStreamingQuery is identical to
 // TestSplitCloneV2_Online but forces SplitClone to restart the streaming
 // query on the source *and* failover to a different source tablet before

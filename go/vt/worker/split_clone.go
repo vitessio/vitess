@@ -918,12 +918,19 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				destReaders := make([]ResultReader, len(scw.destinationShards))
 				for shardIndex, si := range scw.sourceShards {
 					var tp tabletProvider
+					allowMultipleRetries := true
 					if state == WorkerStateCloneOffline {
 						tp = newSingleTabletProvider(ctx, scw.wr.TopoServer(), scw.offlineSourceAliases[shardIndex])
+						// allowMultipleRetries is false to avoid that we'll keep retrying
+						// on the same tablet alias for hours. This guards us against the
+						// situation that an offline tablet gets restarted and serves again.
+						// In that case we cannot use it because its replication is no
+						// longer stopped at the same point as we took it offline initially.
+						allowMultipleRetries = false
 					} else {
 						tp = newShardTabletProvider(scw.tsc, scw.tabletTracker, si.Keyspace(), si.ShardName())
 					}
-					sourceResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk)
+					sourceResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, allowMultipleRetries)
 					if err != nil {
 						processError("%v: NewRestartableResultReader for source: %v failed", errPrefix, tp.description())
 						return
@@ -942,7 +949,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 
 				for shardIndex, si := range scw.destinationShards {
 					tp := newShardTabletProvider(scw.tsc, scw.tabletTracker, si.Keyspace(), si.ShardName())
-					destResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk)
+					destResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, true /* allowMultipleRetries */)
 					if err != nil {
 						processError("%v: NewRestartableResultReader for destination: %v failed: %v", errPrefix, tp.description(), err)
 						return
