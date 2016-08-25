@@ -370,7 +370,7 @@
 			"File": "vtctld2_web_test.py",
 			"Args": [],
 			"Command": [],
-			"Manual": false,
+			"Manual": true,
 			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": [
