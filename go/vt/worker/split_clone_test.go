@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
@@ -731,23 +732,12 @@ func TestSplitCloneV2_Online(t *testing.T) {
 	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
 		t.Fatal(err)
 	}
-	if inserts := statsOnlineInsertsCounters.Counts()["table1"]; inserts != 100 {
-		t.Errorf("wrong number of rows inserted: got = %v, want = %v", inserts, 100)
+
+	if err := verifyOnlineCounters(100, 0, 0, 0); err != nil {
+		t.Fatalf("wrong Online counters: %v", err)
 	}
-	if updates := statsOnlineUpdatesCounters.Counts()["table1"]; updates != 0 {
-		t.Errorf("wrong number of rows updated: got = %v, want = %v", updates, 0)
-	}
-	if deletes := statsOnlineDeletesCounters.Counts()["table1"]; deletes != 0 {
-		t.Errorf("wrong number of rows deleted: got = %v, want = %v", deletes, 0)
-	}
-	if inserts := statsOfflineInsertsCounters.Counts()["table1"]; inserts != 0 {
-		t.Errorf("no stats for the offline clone phase should have been modified. got inserts = %v", inserts)
-	}
-	if updates := statsOfflineUpdatesCounters.Counts()["table1"]; updates != 0 {
-		t.Errorf("no stats for the offline clone phase should have been modified. got updates = %v", updates)
-	}
-	if deletes := statsOfflineDeletesCounters.Counts()["table1"]; deletes != 0 {
-		t.Errorf("no stats for the offline clone phase should have been modified. got deletes = %v", deletes)
+	if err := verifyOfflineCounters(0, 0, 0, 0); err != nil {
+		t.Fatalf("wrong Offline counters: %v", err)
 	}
 }
 
@@ -775,29 +765,19 @@ func TestSplitCloneV2_Online_Offline(t *testing.T) {
 	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
 		t.Fatal(err)
 	}
-	if inserts := statsOnlineInsertsCounters.Counts()["table1"]; inserts != 100 {
-		t.Errorf("wrong number of rows inserted: got = %v, want = %v", inserts, 100)
+
+	if err := verifyOnlineCounters(100, 0, 0, 0); err != nil {
+		t.Fatalf("wrong Online counters: %v", err)
 	}
-	if updates := statsOnlineUpdatesCounters.Counts()["table1"]; updates != 0 {
-		t.Errorf("wrong number of rows updated: got = %v, want = %v", updates, 0)
-	}
-	if deletes := statsOnlineDeletesCounters.Counts()["table1"]; deletes != 0 {
-		t.Errorf("wrong number of rows deleted: got = %v, want = %v", deletes, 0)
-	}
-	if inserts := statsOfflineInsertsCounters.Counts()["table1"]; inserts != 0 {
-		t.Errorf("no stats for the offline clone phase should have been modified. got inserts = %v", inserts)
-	}
-	if updates := statsOfflineUpdatesCounters.Counts()["table1"]; updates != 0 {
-		t.Errorf("no stats for the offline clone phase should have been modified. got updates = %v", updates)
-	}
-	if deletes := statsOfflineDeletesCounters.Counts()["table1"]; deletes != 0 {
-		t.Errorf("no stats for the offline clone phase should have been modified. got deletes = %v", deletes)
+	if err := verifyOfflineCounters(0, 0, 0, 100); err != nil {
+		t.Fatalf("wrong Offline counters: %v", err)
 	}
 }
 
-// TestSplitCloneV2_Reconciliation is identical to TestSplitCloneV2_Offline,
-// but the destination has existing data which must be reconciled.
-func TestSplitCloneV2_Reconciliation(t *testing.T) {
+// TestSplitCloneV2_Offline_Reconciliation is identical to
+// TestSplitCloneV2_Offline, but the destination has existing data which must be
+// reconciled.
+func TestSplitCloneV2_Offline_Reconciliation(t *testing.T) {
 	tc := &splitCloneTestCase{t: t}
 	// We reduce the parallelism to 1 to test the order of expected
 	// insert/update/delete statements on the destination master.
@@ -820,7 +800,8 @@ func TestSplitCloneV2_Reconciliation(t *testing.T) {
 	}
 
 	for i := range []int{0, 1} {
-		// Both destination shards have the rows 100-200.
+		// The destination has rows 100-190 with the source in common.
+		// Rows 191-200 are extraenous on the destination.
 		tc.leftRdonlyQs[i].addGeneratedRows(100, 200)
 		tc.rightRdonlyQs[i].addGeneratedRows(100, 200)
 		// But some data is outdated data and must be updated.
@@ -856,23 +837,12 @@ func TestSplitCloneV2_Reconciliation(t *testing.T) {
 	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
 		t.Fatal(err)
 	}
-	if inserts := statsOnlineInsertsCounters.Counts()["table1"]; inserts != 0 {
-		t.Errorf("no stats for the online clone phase should have been modified. got inserts = %v", inserts)
+
+	if err := verifyOnlineCounters(0, 0, 0, 0); err != nil {
+		t.Fatalf("wrong Online counters: %v", err)
 	}
-	if updates := statsOnlineUpdatesCounters.Counts()["table1"]; updates != 0 {
-		t.Errorf("no stats for the online clone phase should have been modified. got updates = %v", updates)
-	}
-	if deletes := statsOnlineDeletesCounters.Counts()["table1"]; deletes != 0 {
-		t.Errorf("no stats for the online clone phase should have been modified. got deletes = %v", deletes)
-	}
-	if inserts := statsOfflineInsertsCounters.Counts()["table1"]; inserts != 4 {
-		t.Errorf("wrong number of rows inserted: got = %v, want = %v", inserts, 4)
-	}
-	if updates := statsOfflineUpdatesCounters.Counts()["table1"]; updates != 4 {
-		t.Errorf("wrong number of rows updated: got = %v, want = %v", updates, 4)
-	}
-	if deletes := statsOfflineDeletesCounters.Counts()["table1"]; deletes != 10 {
-		t.Errorf("wrong number of rows deleted: got = %v, want = %v", deletes, 10)
+	if err := verifyOfflineCounters(4, 4, 10, 86); err != nil {
+		t.Fatalf("wrong Offline counters: %v", err)
 	}
 }
 
@@ -1075,4 +1045,38 @@ func TestSplitCloneV3(t *testing.T) {
 	if err := runCommand(t, tc.wi, tc.wi.wr, tc.defaultWorkerArgs); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func verifyOnlineCounters(inserts, updates, deletes, equal int64) error {
+	rec := concurrency.AllErrorRecorder{}
+	if got, want := statsOnlineInsertsCounters.Counts()["table1"], inserts; got != want {
+		rec.RecordError(fmt.Errorf("wrong online INSERTs count: got = %v, want = %v", got, want))
+	}
+	if got, want := statsOnlineUpdatesCounters.Counts()["table1"], updates; got != want {
+		rec.RecordError(fmt.Errorf("wrong online UPDATEs count: got = %v, want = %v", got, want))
+	}
+	if got, want := statsOnlineDeletesCounters.Counts()["table1"], deletes; got != want {
+		rec.RecordError(fmt.Errorf("wrong online DELETEs count: got = %v, want = %v", got, want))
+	}
+	if got, want := statsOnlineEqualRowsCounters.Counts()["table1"], equal; got != want {
+		rec.RecordError(fmt.Errorf("wrong online equal rows count: got = %v, want = %v", got, want))
+	}
+	return rec.Error()
+}
+
+func verifyOfflineCounters(inserts, updates, deletes, equal int64) error {
+	rec := concurrency.AllErrorRecorder{}
+	if got, want := statsOfflineInsertsCounters.Counts()["table1"], inserts; got != want {
+		rec.RecordError(fmt.Errorf("wrong offline INSERTs count: got = %v, want = %v", got, want))
+	}
+	if got, want := statsOfflineUpdatesCounters.Counts()["table1"], updates; got != want {
+		rec.RecordError(fmt.Errorf("wrong offline UPDATEs count: got = %v, want = %v", got, want))
+	}
+	if got, want := statsOfflineDeletesCounters.Counts()["table1"], deletes; got != want {
+		rec.RecordError(fmt.Errorf("wrong offline DELETEs count: got = %v, want = %v", got, want))
+	}
+	if got, want := statsOfflineEqualRowsCounters.Counts()["table1"], equal; got != want {
+		rec.RecordError(fmt.Errorf("wrong offline equal rows count: got = %v, want = %v", got, want))
+	}
+	return rec.Error()
 }
