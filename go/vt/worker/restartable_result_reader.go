@@ -9,13 +9,13 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -29,16 +29,20 @@ import (
 type RestartableResultReader struct {
 	ctx    context.Context
 	logger logutil.Logger
-	tablet *topodatapb.Tablet
+	tp     tabletProvider
 	// td is used to get the list of primary key columns at a restart.
 	td    *tabletmanagerdatapb.TableDefinition
 	chunk chunk
 
 	query string
 
-	conn    tabletconn.TabletConn
-	fields  []*querypb.Field
-	output  sqltypes.ResultStream
+	tablet *topodatapb.Tablet
+	conn   tabletconn.TabletConn
+	fields []*querypb.Field
+	output sqltypes.ResultStream
+
+	// lastRow is used during a restart to determine after which row the restart
+	// should start.
 	lastRow []sqltypes.Value
 }
 
@@ -48,62 +52,176 @@ type RestartableResultReader struct {
 // the chunk.
 // NOTE: We assume that the Columns field in "td" was ordered by a preceding
 // call to reorderColumnsPrimaryKeyFirst().
-func NewRestartableResultReader(ctx context.Context, logger logutil.Logger, ts topo.Server, tabletAlias *topodatapb.TabletAlias, td *tabletmanagerdatapb.TableDefinition, chunk chunk) (*RestartableResultReader, error) {
-	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	tablet, err := ts.GetTablet(shortCtx, tabletAlias)
-	cancel()
-	if err != nil {
-		return nil, fmt.Errorf("tablet=%v table=%v chunk=%v: Failed to resolve tablet alias: %v", topoproto.TabletAliasString(tabletAlias), td.Name, chunk, err)
-	}
-
-	conn, err := tabletconn.GetDialer()(tablet.Tablet, *remoteActionsTimeout)
-	if err != nil {
-		return nil, fmt.Errorf("tablet=%v table=%v chunk=%v: Failed to get dialer for tablet: %v", topoproto.TabletAliasString(tabletAlias), td.Name, chunk, err)
-	}
-
+func NewRestartableResultReader(ctx context.Context, logger logutil.Logger, tp tabletProvider, td *tabletmanagerdatapb.TableDefinition, chunk chunk) (*RestartableResultReader, error) {
 	r := &RestartableResultReader{
 		ctx:    ctx,
 		logger: logger,
-		tablet: tablet.Tablet,
+		tp:     tp,
 		td:     td,
 		chunk:  chunk,
-		conn:   conn,
 	}
 
-	if err := r.startStream(); err != nil {
-		return nil, err
+	// If the initial connection fails, we do not restart.
+	if _ /* retryable */, err := r.getTablet(); err != nil {
+		return nil, fmt.Errorf("tablet=%v: %v", topoproto.TabletAliasString(r.tablet.Alias), err)
 	}
-	logger.Infof("tablet=%v table=%v chunk=%v: Starting to stream rows using query '%v'.", topoproto.TabletAliasString(tabletAlias), td.Name, chunk, r.query)
+	if _ /* retryable */, err := r.startStream(); err != nil {
+		return nil, fmt.Errorf("tablet=%v: %v", topoproto.TabletAliasString(r.tablet.Alias), err)
+	}
 	return r, nil
+}
+
+// getTablet (re)sets the tablet which is used for the streaming query.
+// If the method returns an error, the first return value specifies if it is
+// okay to retry.
+func (r *RestartableResultReader) getTablet() (bool, error) {
+	if r.tablet != nil {
+		// If there was a tablet before, return it to the tabletProvider.
+		r.Close()
+
+		r.tablet = nil
+		r.conn = nil
+		r.fields = nil
+		r.output = nil
+	}
+
+	// Get a tablet from the tablet provider.
+	tablet, err := r.tp.getTablet()
+	if err != nil {
+		return true /* retryable */, fmt.Errorf("failed get tablet for streaming query: %v", err)
+	}
+
+	// Get the dialer for it.
+	conn, err := tabletconn.GetDialer()(tablet, *remoteActionsTimeout)
+	if err != nil {
+		return false /* retryable */, fmt.Errorf("failed to get dialer for tablet: %v", err)
+	}
+	r.tablet = tablet
+	r.conn = conn
+	return false /* retryable */, nil
+}
+
+// startStream assumes that getTablet() was succesfully called before and now
+// tries to connect to the set tablet and start the streaming query.
+// If the method returns an error, the first return value specifies if it is
+// okay to retry.
+func (r *RestartableResultReader) startStream() (bool, error) {
+	// Start the streaming query.
+	r.generateQuery()
+	stream, err := r.conn.StreamExecute(r.ctx, &querypb.Target{
+		Keyspace:   r.tablet.Keyspace,
+		Shard:      r.tablet.Shard,
+		TabletType: r.tablet.Type,
+	}, r.query, make(map[string]interface{}))
+	if err != nil {
+		return true /* retryable */, fmt.Errorf("failed to call StreamExecute() for query '%v': %v", r.query, err)
+	}
+
+	// Read the fields information.
+	cols, err := stream.Recv()
+	if err != nil {
+		return true /* retryable */, fmt.Errorf("cannot read Fields for query '%v': %v", r.query, err)
+	}
+	r.fields = cols.Fields
+	r.output = stream
+
+	alias := topoproto.TabletAliasString(r.tablet.Alias)
+	statsStreamingQueryCounters.Add(alias, 1)
+	r.logger.Infof("tablet=%v table=%v chunk=%v: Starting to stream rows using query '%v'.", alias, r.td.Name, r.chunk, r.query)
+	return false, nil
 }
 
 // Next returns the next result on the stream. It implements ResultReader.
 func (r *RestartableResultReader) Next() (*sqltypes.Result, error) {
 	result, err := r.output.Recv()
 	if err != nil && err != io.EOF {
-		r.logger.Infof("tablet=%v table=%v chunk=%v: Failed to read next rows from active streaming query. Trying to restart stream. Original Error: %v", topoproto.TabletAliasString(r.tablet.Alias), r.td.Name, r.chunk, err)
-		// Restart streaming query.
-		// Note that we intentionally don't reset "r.conn" here. This restart
-		// mechanism is only meant to fix transient problems which go away at the
-		// next retry. For example, when MySQL killed the vttablet connection due
-		// to net_write_timeout being reached.
-		if err := r.startStream(); err != nil {
-			return nil, err
-		}
-		result, err = r.output.Recv()
-		if err == nil || err == io.EOF {
-			r.logger.Infof("tablet=%v table=%v chunk=%v: Successfully restarted streaming query with query '%v'.", topoproto.TabletAliasString(r.tablet.Alias), r.td.Name, r.chunk, r.query)
-		} else {
-			// We won't retry a second time and fail for good.
-			// TODO(mberlin): When we have a chunk pipeline restart mechanism,
-			// mention that restart mechanism in the log here.
-			r.logger.Infof("tablet=%v table=%v chunk=%v: Failed to restart streaming query with query '%v'. Error: %v", topoproto.TabletAliasString(r.tablet.Alias), r.td.Name, r.chunk, r.query, err)
-		}
+		// We start the retries only on the second attempt to avoid the cost
+		// of starting a timer (for the retry timeout) for every Next() call
+		// when no error occurs.
+		alias := topoproto.TabletAliasString(r.tablet.Alias)
+		statsStreamingQueryErrorsCounters.Add(alias, 1)
+		r.logger.Infof("tablet=%v table=%v chunk=%v: Failed to read next rows from active streaming query. Trying to restart stream on the same tablet. Original Error: %v", alias, r.td.Name, r.chunk, err)
+		result, err = r.nextWithRetries()
 	}
 	if result != nil && len(result.Rows) > 0 {
 		r.lastRow = result.Rows[len(result.Rows)-1]
 	}
 	return result, err
+}
+
+func (r *RestartableResultReader) nextWithRetries() (*sqltypes.Result, error) {
+	// In case of errors we will keep retrying until retryCtx is done.
+	retryCtx, retryCancel := context.WithTimeout(r.ctx, *retryDuration)
+	defer retryCancel()
+
+	// Note: The first retry will be the second attempt.
+	attempt := 1
+	start := time.Now()
+	for {
+		attempt++
+
+		var result *sqltypes.Result
+		var retryable bool
+		var err error
+
+		if attempt > 2 {
+			// Do not failover to a different tablet at the 2nd attempt, but always
+			// after that.
+			// That's because the first restart is meant to fix transient problems
+			// which go away at the next retry. For example, when MySQL killed the
+			// vttablet connection due to net_write_timeout being reached.
+			retryable, err = r.getTablet()
+			if err != nil {
+				if !retryable {
+					r.logger.Infof("table=%v chunk=%v: Failed to restart streaming query (attempt %d) and failover to a different tablet (%v) due to a non-retryable error: %v", r.td.Name, r.chunk, attempt, r.tablet, err)
+					return nil, err
+				}
+				goto retry
+			}
+		}
+
+		if attempt > 1 {
+			// Restart streaming query.
+			retryable, err = r.startStream()
+			if err != nil {
+				if !retryable {
+					r.logger.Infof("tablet=%v table=%v chunk=%v: Failed to restart streaming query (attempt %d) with query '%v' and stopped due to a non-retryable error: %v", topoproto.TabletAliasString(r.tablet.Alias), r.td.Name, r.chunk, attempt, r.query, err)
+					return nil, err
+				}
+				goto retry
+			}
+		}
+
+		result, err = r.output.Recv()
+		if err == nil || err == io.EOF {
+			r.logger.Infof("tablet=%v table=%v chunk=%v: Successfully restarted streaming query with query '%v' after %.1f seconds.", topoproto.TabletAliasString(r.tablet.Alias), r.td.Name, r.chunk, r.query, time.Now().Sub(start).Seconds())
+
+			// Recv() was successful.
+			return result, err
+		}
+
+	retry:
+		alias := "unknown"
+		if r.tablet != nil {
+			alias = topoproto.TabletAliasString(r.tablet.Alias)
+			// tablet may be nil if e.g. the HealthCheck module currently does not
+			// return a tablet.
+			statsStreamingQueryErrorsCounters.Add(alias, 1)
+		}
+
+		deadline, _ := retryCtx.Deadline()
+		r.logger.Infof("tablet=%v table=%v chunk=%v: Failed to restart streaming query (attempt %d) with query '%v'. Retrying to restart stream on a different tablet (for up to %.1f minutes). Next retry is in %.1f seconds. Error: %v", alias, r.td.Name, r.chunk, attempt, r.query, deadline.Sub(time.Now()).Minutes(), executeFetchRetryTime.Seconds(), err)
+
+		select {
+		case <-retryCtx.Done():
+			if retryCtx.Err() == context.DeadlineExceeded {
+				return nil, fmt.Errorf("%v: failed to restart the streaming connection after retrying for %v", r.tp.description(), *retryDuration)
+			}
+			return nil, fmt.Errorf("%v: interrupted while trying to restart the streaming connection (%.1f minutes elapsed so far)", r.tp.description(), time.Now().Sub(start).Minutes())
+		case <-time.After(*executeFetchRetryTime):
+			// Make a pause between the retries to avoid hammering the servers.
+		}
+	}
 }
 
 // Fields returns the field data. It implements ResultReader.
@@ -113,29 +231,10 @@ func (r *RestartableResultReader) Fields() []*querypb.Field {
 
 // Close closes the connection to the tablet.
 func (r *RestartableResultReader) Close() {
-	r.conn.Close()
-}
-
-func (r *RestartableResultReader) startStream() error {
-	r.generateQuery()
-	stream, err := r.conn.StreamExecute(r.ctx, &querypb.Target{
-		Keyspace:   r.tablet.Keyspace,
-		Shard:      r.tablet.Shard,
-		TabletType: r.tablet.Type,
-	}, r.query, make(map[string]interface{}))
-	if err != nil {
-		return fmt.Errorf("tablet=%v table=%v chunk=%v: failed to call StreamExecute() for query '%v': %v", topoproto.TabletAliasString(r.tablet.Alias), r.td.Name, r.chunk, r.query, err)
+	if r.conn != nil {
+		r.conn.Close()
+		r.tp.returnTablet(r.tablet)
 	}
-
-	// Read the fields information. Fail and do not restart if there is an error.
-	cols, err := stream.Recv()
-	if err != nil {
-		return fmt.Errorf("tablet=%v table=%v chunk=%v: cannot read Fields for query '%v': %v", topoproto.TabletAliasString(r.tablet.Alias), r.td.Name, r.chunk, r.query, err)
-	}
-
-	r.fields = cols.Fields
-	r.output = stream
-	return nil
 }
 
 func (r *RestartableResultReader) generateQuery() {
