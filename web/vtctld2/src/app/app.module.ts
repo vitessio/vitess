@@ -3,16 +3,16 @@ import { FormsModule } from '@angular/forms';
 import { HttpModule } from '@angular/http';
 import { NgModule, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 
-import { MdButtonModule } from '@angular2-material/button';
-import { MdCardModule } from '@angular2-material/card';
-import { MdCheckboxModule } from '@angular2-material/checkbox';
-import { MdIconModule } from '@angular2-material/icon';
-import { MdInputModule } from '@angular2-material/input';
+import { MdButtonModule } from '@angular2-material/button/button';
+import { MdCardModule } from '@angular2-material/card/card';
+import { MdCheckboxModule } from '@angular2-material/checkbox/checkbox';
+import { MdIconModule } from '@angular2-material/icon/icon';
+import { MdInputModule } from '@angular2-material/input/input';
 import { MdListModule } from '@angular2-material/list/list';
-import { MdProgressBarModule } from '@angular2-material/progress-bar';
+import { MdProgressBarModule } from '@angular2-material/progress-bar/progress-bar';
 import { MdRippleModule } from '@angular2-material/core/ripple/ripple';
-import { MdSidenavModule } from '@angular2-material/sidenav';
-import { MdToolbarModule } from '@angular2-material/toolbar';
+import { MdSidenavModule } from '@angular2-material/sidenav/sidenav';
+import { MdToolbarModule } from '@angular2-material/toolbar/toolbar';
 
 import { DataTableModule, DialogModule, DropdownModule, SharedModule } from 'primeng/primeng';
 
