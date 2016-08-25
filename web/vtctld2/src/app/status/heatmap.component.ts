@@ -57,8 +57,8 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
   popupTitle: string;
   popupData: Array<any>;
 
-  private getRowHeight() { return 50; }
-  private getXLabelsRowHeight() { return 50; }
+  private getRowHeight() { return 20; }
+  private getXLabelsRowHeight() { return 40; }
 
   constructor(private zone: NgZone, private tabletService: TabletStatusService) { }
 
@@ -166,10 +166,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
       zeroline: false,
       rangemode: 'nonnegative',
       side: 'top',
-      tickmode: 'array',
-      ticks: 'inside',
-      ticklen: this.heatmapHeight,
-      tickcolor: '#000',
+      ticks: '',
     };
     let yAxisTemplate = {
       showticklabels: false,

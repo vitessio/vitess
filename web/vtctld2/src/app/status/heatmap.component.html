@@ -1,7 +1,8 @@
+<h2> {{keyspace.Name}} </h2>
+
 <table class="collapsed-border" width="100%">
   <!-- The first row with an offset to match the heatmap labels. -->
   <tr [ngStyle]="{'height': (getXLabelsRowHeight())+'px'}">
-    <td class="no-padding"></td>
     <td class="no-padding"></td>
     <td class="no-padding"></td>
     <td class="no-padding" [attr.rowspan]="(getTotalRows()+1)">
@@ -20,7 +21,6 @@
     <template [ngIf]="label.TypeLabels != null">
       <template ngFor let-nestedLabel [ngForOf]="label.TypeLabels" let-firstCell="first">
         <tr [ngStyle]="{'height': getRowHeight()+'px'}">
-          <td *ngIf="firstKeyspace&&firstCell" [attr.rowspan]="keyspace.Rowspan" class="bordered"> {{keyspace.Name}} </td>
           <td *ngIf="firstCell" [attr.rowspan]="label.CellLabel.Rowspan" class="bordered"> {{label.CellLabel.Name}}</td>
           <td class="bordered" [attr.rowspan]="nestedLabel.Rowspan"> {{nestedLabel.Name}}</td>
         </tr>
