@@ -68,7 +68,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
     if (this.heatmap.YLabels == null) {
       return this.heatmap.Data.length;
     }
-    return this.heatmap.YLabels.reduce((a, b) => (a + b.Label.Rowspan), 0);
+    return this.heatmap.YLabels.reduce((prev, cur) => (prev + cur.Label.Rowspan), 0);
   }
 
       // TODO(pkulshre): fix this when backend is generalized.

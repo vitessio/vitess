@@ -14,7 +14,16 @@ import { CORE_DIRECTIVES } from '@angular/common';
 export class TabletComponent implements OnInit {
   @Input() title: string;
   @Input() data;
-  dataToDisplay: Array<any> = [];
+
+  keyspace: string;
+  shard: string;
+  tabletType: string;
+  hostname: string;
+  lag: number;
+  qps: number
+  serving: boolean;
+  error: string;
+  lastError: string;
 
   ngOnInit() {
     this.parseData();
@@ -23,8 +32,12 @@ export class TabletComponent implements OnInit {
   // parseData goes through the input TabletStats object and stores it to display.
   parseData() {
     // TODO(pkulshre): test/update this when backend JSON encoder changed.
-    this.dataToDisplay.push({ name: 'replication lag: ', value: this.data.Stats.secondsBehindMaster });
-    this.dataToDisplay.push({ name: 'qps: ', value: this.data.Stats.qps });
-    this.dataToDisplay.push({ name: 'Health Error: ', value: this.data.Stats.healthError });
+    this.hostname = this.data.Tablet.hostname;
+    this.lag = (typeof this.data.Stats.secondsBehindMaster === 'undefined') ? 0 : this.data.Stats.secondsBehindMaster;
+    this.qps = (typeof this.data.Stats.qps === 'undefined') ? 0 : this.data.Stats.qps;
+    this.serving = (typeof this.data.Serving === 'undefined') ? true : this.data.Serving;
+    this.error = (typeof this.data.Stats.healthError === 'undefined') ? 'None' : this.data.Stats.healthError;
+    this.lastError = (this.data.LastError == null) ? 'None' : this.data.LastError;
+    // TODO(pkulshre): link this popup to tablet view on dashboard.
   }
 }
