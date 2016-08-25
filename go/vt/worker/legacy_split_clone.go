@@ -565,7 +565,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 
 					// Start streaming from the source tablets.
 					tp := newSingleTabletProvider(ctx, scw.wr.TopoServer(), scw.sourceAliases[shardIndex])
-					rr, err := NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk)
+					rr, err := NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, false /* allowMultipleRetries */)
 					if err != nil {
 						processError("NewRestartableResultReader failed: %v", err)
 						return

@@ -33,6 +33,8 @@ type RestartableResultReader struct {
 	// td is used to get the list of primary key columns at a restart.
 	td    *tabletmanagerdatapb.TableDefinition
 	chunk chunk
+	// allowMultipleRetries is true if we are allowed to retry more than once.
+	allowMultipleRetries bool
 
 	query string
 
@@ -52,13 +54,14 @@ type RestartableResultReader struct {
 // the chunk.
 // NOTE: We assume that the Columns field in "td" was ordered by a preceding
 // call to reorderColumnsPrimaryKeyFirst().
-func NewRestartableResultReader(ctx context.Context, logger logutil.Logger, tp tabletProvider, td *tabletmanagerdatapb.TableDefinition, chunk chunk) (*RestartableResultReader, error) {
+func NewRestartableResultReader(ctx context.Context, logger logutil.Logger, tp tabletProvider, td *tabletmanagerdatapb.TableDefinition, chunk chunk, allowMultipleRetries bool) (*RestartableResultReader, error) {
 	r := &RestartableResultReader{
-		ctx:    ctx,
-		logger: logger,
-		tp:     tp,
-		td:     td,
-		chunk:  chunk,
+		ctx:                  ctx,
+		logger:               logger,
+		tp:                   tp,
+		td:                   td,
+		chunk:                chunk,
+		allowMultipleRetries: allowMultipleRetries,
 	}
 
 	// If the initial connection fails, we do not restart.
@@ -201,6 +204,11 @@ func (r *RestartableResultReader) nextWithRetries() (*sqltypes.Result, error) {
 		}
 
 	retry:
+		if attempt == 2 && !r.allowMultipleRetries {
+			// Offline source tablets must not be retried forever. Fail early.
+			return nil, fmt.Errorf("%v: first retry to restart the streaming query on the same tablet failed. We're failing at this point because we're not allowed to keep retrying. err: %v", r.tp.description(), err)
+		}
+
 		alias := "unknown"
 		if r.tablet != nil {
 			alias = topoproto.TabletAliasString(r.tablet.Alias)
