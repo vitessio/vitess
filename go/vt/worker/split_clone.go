@@ -807,10 +807,10 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	var tableStatusList *tableStatusList
 	switch state {
 	case WorkerStateCloneOnline:
-		statsCounters = []*stats.Counters{statsOnlineInsertsCounters, statsOnlineUpdatesCounters, statsOnlineDeletesCounters}
+		statsCounters = []*stats.Counters{statsOnlineInsertsCounters, statsOnlineUpdatesCounters, statsOnlineDeletesCounters, statsOnlineEqualRowsCounters}
 		tableStatusList = scw.tableStatusListOnline
 	case WorkerStateCloneOffline:
-		statsCounters = []*stats.Counters{statsOfflineInsertsCounters, statsOfflineUpdatesCounters, statsOfflineDeletesCounters}
+		statsCounters = []*stats.Counters{statsOfflineInsertsCounters, statsOfflineUpdatesCounters, statsOfflineDeletesCounters, statsOfflineEqualRowsCounters}
 		tableStatusList = scw.tableStatusListOffline
 	}
 

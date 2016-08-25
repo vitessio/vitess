@@ -33,10 +33,16 @@ const (
 	// DiffExtraneous is returned when the row exists on the right side, but not
 	// on the left side.
 	DiffExtraneous
+	// DiffEqual is returned when the rows left and right are equal.
+	DiffEqual
 )
 
 // DiffTypes has the list of available DiffType values, ordered by their value.
-var DiffTypes = []DiffType{DiffMissing, DiffNotEqual, DiffExtraneous}
+var DiffTypes = []DiffType{DiffMissing, DiffNotEqual, DiffExtraneous, DiffEqual}
+
+// DiffFoundTypes has the list of DiffType values which represent that a
+// difference was found. The list is ordered by the values of the types.
+var DiffFoundTypes = []DiffType{DiffMissing, DiffNotEqual, DiffExtraneous}
 
 // RowDiffer2 will compare and reconcile two sides. It assumes that the left
 // side is the source of truth and necessary reconciliations have to be applied
@@ -55,6 +61,10 @@ type RowDiffer2 struct {
 	router RowRouter
 	// aggregators are keyed by destination shard and DiffType.
 	aggregators [][]*RowAggregator
+	// equalRowsStatsCounters tracks per table how many rows are equal.
+	equalRowsStatsCounters *stats.Counters
+	// tableName is required to update "equalRowsStatsCounters".
+	tableName string
 }
 
 // NewRowDiffer2 returns a new RowDiffer2.
@@ -67,7 +77,11 @@ func NewRowDiffer2(ctx context.Context, left, right ResultReader, td *tabletmana
 	// Parameters required by RowRouter.
 	destinationShards []*topo.ShardInfo, keyResolver keyspaceIDResolver,
 	// Parameters required by RowAggregator.
-	insertChannels []chan string, abort <-chan struct{}, dbNames []string, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete int, statCounters []*stats.Counters) (*RowDiffer2, error) {
+	insertChannels []chan string, abort <-chan struct{}, dbNames []string, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete int, statsCounters []*stats.Counters) (*RowDiffer2, error) {
+
+	if len(statsCounters) != len(DiffTypes) {
+		panic(fmt.Sprintf("statsCounter has the wrong number of elements. got = %v, want = %v", len(statsCounters), len(DiffTypes)))
+	}
 
 	if err := compareFields(left.Fields(), right.Fields()); err != nil {
 		return nil, err
@@ -76,25 +90,27 @@ func NewRowDiffer2(ctx context.Context, left, right ResultReader, td *tabletmana
 	// Create a RowAggregator for each destination shard and DiffType.
 	aggregators := make([][]*RowAggregator, len(destinationShards))
 	for i := range destinationShards {
-		aggregators[i] = make([]*RowAggregator, len(DiffTypes))
-		for _, typ := range DiffTypes {
+		aggregators[i] = make([]*RowAggregator, len(DiffFoundTypes))
+		for _, typ := range DiffFoundTypes {
 			maxRows := writeQueryMaxRows
 			if typ == DiffExtraneous {
 				maxRows = writeQueryMaxRowsDelete
 			}
 			aggregators[i][typ] = NewRowAggregator(ctx, maxRows, writeQueryMaxSize,
-				insertChannels[i], dbNames[i], td, typ, statCounters)
+				insertChannels[i], dbNames[i], td, typ, statsCounters[typ])
 		}
 	}
 
 	return &RowDiffer2{
-		left:            NewRowReader(left),
-		right:           NewRowReader(right),
-		pkFieldCount:    len(td.PrimaryKeyColumns),
-		tableStatusList: tableStatusList,
-		tableIndex:      tableIndex,
-		router:          NewRowRouter(destinationShards, keyResolver),
-		aggregators:     aggregators,
+		left:                   NewRowReader(left),
+		right:                  NewRowReader(right),
+		pkFieldCount:           len(td.PrimaryKeyColumns),
+		tableStatusList:        tableStatusList,
+		tableIndex:             tableIndex,
+		router:                 NewRowRouter(destinationShards, keyResolver),
+		aggregators:            aggregators,
+		equalRowsStatsCounters: statsCounters[DiffEqual],
+		tableName:              td.Name,
 	}, nil
 }
 
@@ -172,6 +188,7 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 			dr.matchingRows++
 			advanceLeft = true
 			advanceRight = true
+			rd.skipRow()
 			continue
 		}
 
@@ -235,6 +252,14 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 	}
 
 	return dr, nil
+}
+
+// skipRow is used for the DiffType DiffEqual.
+// Currently, it only updates the statistics and therefore does not require the
+// row as input.
+func (rd *RowDiffer2) skipRow() {
+	rd.equalRowsStatsCounters.Add(rd.tableName, 1)
+	rd.tableStatusList.addCopiedRows(rd.tableIndex, 1)
 }
 
 // reconcileRow is used for the DiffType DiffMissing and DiffExtraneous.
