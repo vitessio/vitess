@@ -1,41 +1,23 @@
 import { ActivatedRoute } from '@angular/router';
 import { Component, OnInit, OnDestroy } from '@angular/core';
 
-import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
-import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
-
 import { Observable } from 'rxjs/Observable';
 
-import { AddButtonComponent } from '../shared/add-button.component';
-import { DialogComponent } from '../shared/dialog/dialog.component';
 import { DialogContent } from '../shared/dialog/dialog-content';
 import { DialogSettings } from '../shared/dialog/dialog-settings';
 import { NewShardFlags } from '../shared/flags/shard.flags';
 import { KeyspaceService } from '../api/keyspace.service';
 import { PrepareResponse } from '../shared/prepare-response';
 import { RebuildKeyspaceGraphFlags, RemoveKeyspaceCellFlags, ValidateKeyspaceFlags } from '../shared/flags/keyspace.flags';
-import { ShardService } from '../api/shard.service';
 import { VtctlService } from '../api/vtctl.service';
 
 @Component({
   selector: 'vt-keyspace-view',
   templateUrl: './keyspace.component.html',
   styleUrls: ['../styles/vt.style.css'],
-  providers: [
-    KeyspaceService,
-    ShardService,
-    VtctlService
-  ],
-  directives: [
-    MD_CARD_DIRECTIVES,
-    MD_BUTTON_DIRECTIVES,
-    DialogComponent,
-    AddButtonComponent,
-  ],
 })
 
 export class KeyspaceComponent implements OnInit, OnDestroy {
-
   private routeSub: any;
   keyspaceName: string;
   shardsReady = false;
