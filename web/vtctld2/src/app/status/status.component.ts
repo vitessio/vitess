@@ -179,8 +179,8 @@ export class StatusComponent implements OnInit {
   getHeatmapData() {
      // Subscribe to get updates every second.
      this.statusService = this.tabletService.getTabletStats(
-     this.selectedKeyspace, this.selectedCell, this.selectedType, this.selectedMetric)
-         .subscribe(stats => {
+         this.selectedKeyspace, this.selectedCell, this.selectedType,
+         this.selectedMetric).subscribe(stats => {
            this.heatmaps = stats;
            this.metric = this.selectedMetric;
            this.heatmapDataReady = true;
