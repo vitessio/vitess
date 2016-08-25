@@ -1,12 +1,11 @@
-import { Component, OnInit, ComponentResolver, ViewChildren, NgZone, QueryList } from '@angular/core';
+import { Component, OnInit, ComponentResolver, ViewChildren, NgZone, QueryList, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { HeatmapComponent } from './heatmap.component.ts';
 import { TabletStatusService } from '../api/tablet-status.service';
 import { TopologyInfoService } from '../api/topology-info.service';
 
-import { Router } from '@angular/router';
-
+import { Router, ActivatedRoute } from '@angular/router';
 import { Dropdown } from 'primeng/primeng';
 import { SelectItem } from 'primeng/primeng';
 
@@ -16,7 +15,7 @@ import { SelectItem } from 'primeng/primeng';
   styleUrls: [],
 })
 
-export class StatusComponent implements OnInit {
+export class StatusComponent implements OnInit, OnDestroy {
   @ViewChildren(HeatmapComponent) heatmaps: QueryList<HeatmapComponent>;
 
   // Needed for the router.
@@ -49,10 +48,16 @@ export class StatusComponent implements OnInit {
   statusService: any;
 
   constructor(private componentResolver: ComponentResolver, private tabletService: TabletStatusService,
-              private router: Router, private zone: NgZone, private topoInfoService: TopologyInfoService) {}
+              private router: Router, private route: ActivatedRoute, private zone: NgZone,
+              private topoInfoService: TopologyInfoService) {}
 
   ngOnInit() {
     this.getBasicInfo();
+  }
+
+  ngOnDestroy() {
+console.log("in ngOnDestroy")
+    this.sub.unsubscribe();
   }
 
   // getTopologyInfo gets the keyspace, cell, tabletType, and metric information from the service.
@@ -93,10 +98,7 @@ export class StatusComponent implements OnInit {
 
   // getBasicInfo is responsible for populating the dropdowns based on the URL.
   getBasicInfo() {
-    this.sub = this.router
-      .routerState
-      .queryParams
-      .subscribe(params => {
+    this.sub = this.route.queryParams.subscribe(params => {
         this.getTopologyInfo();
         // Setting the beginning values of each category.
         this.selectedKeyspace = params['keyspace'];
