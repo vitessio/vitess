@@ -110,7 +110,8 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
       this.dialogSettings.setLog(resp.Output);
       this.dialogSettings.endPending();
     });
-  
+  }
+
   openNewShardDialog() {
     this.dialogSettings = new DialogSettings('Create', this.createShard.bind(this), 'Create a new Shard', '');
     this.dialogSettings.setMessage('Created {{shard_ref}}');
@@ -129,7 +130,7 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareValidateSchema() {
+  openValidateSchemaDialog() {
     this.dialogSettings = new DialogSettings('Validate', this.validateSchema.bind(this), `Validate ${this.keyspaceName}'s Schema`, '');
     this.dialogSettings.setMessage(`Validated {{keyspace_name}}'s Schema`);
     this.dialogSettings.onCloseFunction = this.refreshKeyspaceView.bind(this);
@@ -138,7 +139,7 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareValidateVersion() {
+  openValidateVersionDialog() {
     this.dialogSettings = new DialogSettings('Validate', this.validateVersion.bind(this), `Validate ${this.keyspaceName}'s Version`, '');
     this.dialogSettings.setMessage(`Validated {{keyspace_name}}'s Version`);
     this.dialogSettings.onCloseFunction = this.refreshKeyspaceView.bind(this);

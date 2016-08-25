@@ -192,7 +192,7 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.getKeyspace(this.keyspaceName);
   }
 
-  prepareTabExtRep() {
+  openTabExtRepDialog() {
     this.dialogSettings = new DialogSettings('Update', this.TabletExternallyReparented.bind(this), `Externally Reparent a Tablet`);
     this.dialogSettings.setMessage('Changed metadata in the topology server for {{tablet_alias}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
@@ -201,7 +201,7 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  preparePlanRepShard() {
+  openPlanRepShardDialog() {
     this.dialogSettings = new DialogSettings('Reparent', this.PlanRepShard.bind(this), `Plan to reparent a shard`, '');
     this.dialogSettings.setMessage('Reparented {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
@@ -210,7 +210,7 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareEmergencyRepShard() {
+  openEmergencyRepShardDialog() {
     this.dialogSettings = new DialogSettings('Reparent', this.EmergencyRepShard.bind(this), `Emergency Reparent Shard`);
     this.dialogSettings.setMessage('Initialized shard master for {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
@@ -219,7 +219,7 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareShardReplicationPos() {
+  openShardReplicationPosDialog() {
     this.dialogSettings = new DialogSettings('Get', this.ShardReplicationPos.bind(this), `Get ${this.shardName} Replication Positions`);
     this.dialogSettings.setMessage('Fetched Replication Positions for {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
@@ -228,17 +228,13 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareValidateVerShard() {
+  openValidateVerShardDialog() {
     this.dialogSettings = new DialogSettings('Validate', this.ValidateVerShard.bind(this), `Validate ${this.shardName}'s Version`);
     this.dialogSettings.setMessage(`Validated {{shard_ref}}'s Version`);
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
     let flags = new ValidateVerShardFlags(this.keyspaceName, this.shardName).flags;
     this.dialogContent = new DialogContent(this.shardName, flags, {}, undefined, 'ValidateVersionShard');
     this.dialogSettings.toggleModal();
-  }
-
-  refreshShardView() {
-    this.getKeyspace(this.keyspaceName);
   }
 
   navigateToKeyspace(dialogContent: DialogContent) {

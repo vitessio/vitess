@@ -7,14 +7,14 @@
         <button md-raised-button (click)="openDeleteTabletDialog();">Delete</button>
         <button md-raised-button (click)="openPingTabletDialog();">Ping</button>
         <button md-raised-button (click)="openRefreshTabletDialog();">Refresh State</button>
-        <button md-raised-button (click)="prepareSetReadOnly();dialog.open();">SetReadOnly</button>
-        <button md-raised-button (click)="prepareSetReadWrite();dialog.open();">SetReadWrite</button>
-        <button md-raised-button (click)="prepareStartSlave();dialog.open();">StartSlave</button>
-        <button md-raised-button (click)="prepareStopSlave();dialog.open();">StopSlave</button>
-        <button md-raised-button (click)="prepareRunHealthCheck();dialog.open();">RunHealthCheck</button>
-        <button md-raised-button (click)="prepareIgnoreHealthError();dialog.open();">IgnoreHealthError</button>
-        <button md-raised-button (click)="prepareDemoteMaster();dialog.open();">DemoteMaster</button>
-        <button md-raised-button (click)="prepareReparentTablet();dialog.open();">ReparentTablet</button>
+        <button md-raised-button (click)="openSetReadOnlyDialog();">SetReadOnly</button>
+        <button md-raised-button (click)="openSetReadWriteDialog();">SetReadWrite</button>
+        <button md-raised-button (click)="openStartSlaveDialog();">StartSlave</button>
+        <button md-raised-button (click)="openStopSlaveDialog();">StopSlave</button>
+        <button md-raised-button (click)="openRunHealthCheckDialog();">RunHealthCheck</button>
+        <button md-raised-button (click)="openIgnoreHealthErrorDialog();">IgnoreHealthError</button>
+        <button md-raised-button (click)="openDemoteMasterDialog();">DemoteMaster</button>
+        <button md-raised-button (click)="openReparentTabletDialog();">ReparentTablet</button>
       </p-accordionTab>
     </p-accordion>
   </div>

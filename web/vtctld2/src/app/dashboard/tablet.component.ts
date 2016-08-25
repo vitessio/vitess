@@ -131,8 +131,15 @@ export class TabletComponent implements OnInit, OnDestroy {
     this.runCommand(`There was a problem reparenting ${this.tablet.label}:`);
   }
 
-  serverCall(errorMessage: string) {
-    this.vtctlService.serverCall('', this.dialogContent, this.dialogSettings, errorMessage);
+  runCommand(errorMessage: string) {
+    this.dialogSettings.startPending();
+    this.vtctlService.runCommand(this.dialogContent.getPostBody()).subscribe(resp => {
+      if (resp.Error) {
+        this.dialogSettings.setMessage(`${errorMessage} ${resp.Error}`);
+      }
+      this.dialogSettings.setLog(resp.Output);
+      this.dialogSettings.endPending();
+    });
   }
 
   openDeleteTabletDialog() {
@@ -163,7 +170,7 @@ export class TabletComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareSetReadOnly() {
+  openSetReadOnlyDialog() {
     this.dialogSettings = new DialogSettings('Set', this.SetReadOnly.bind(this), `Set ${this.tablet.label} to Read Only`);
     this.dialogSettings.setMessage(`Set ${this.tablet.label} to Read Only`);
     this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
@@ -172,7 +179,7 @@ export class TabletComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareSetReadWrite() {
+  openSetReadWriteDialog() {
     this.dialogSettings = new DialogSettings('Set', this.SetReadWrite.bind(this), `Set ${this.tablet.label} to Read/Write`);
     this.dialogSettings.setMessage(`Set ${this.tablet.label} to Read/Write`);
     this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
@@ -181,7 +188,7 @@ export class TabletComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareStartSlave() {
+  openStartSlaveDialog() {
     this.dialogSettings = new DialogSettings('Start', this.StartSlave.bind(this), `Start Slave, ${this.tablet.label}`);
     this.dialogSettings.setMessage(`Started Slave, ${this.tablet.label}`);
     this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
@@ -190,7 +197,7 @@ export class TabletComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareStopSlave() {
+  openStopSlaveDialog() {
     this.dialogSettings = new DialogSettings('Stop', this.StopSlave.bind(this), `Stop Slave, ${this.tablet.label}`);
     this.dialogSettings.setMessage(`Stopped Slave, ${this.tablet.label}`);
     this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
@@ -199,7 +206,7 @@ export class TabletComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareRunHealthCheck() {
+  openRunHealthCheckDialog() {
     this.dialogSettings = new DialogSettings('Run', this.RunHealthCheck.bind(this), `Run Health Check on ${this.tablet.label}`);
     this.dialogSettings.setMessage(`Ran Health Check on ${this.tablet.label}`);
     this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
@@ -208,7 +215,7 @@ export class TabletComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareIgnoreHealthError() {
+  openIgnoreHealthErrorDialog() {
     this.dialogSettings = new DialogSettings('Ignore', this.IgnoreHealthError.bind(this), `Ignore Health Check for ${this.tablet.label}`);
     this.dialogSettings.setMessage(`Ignored ${this.tablet.label}`);
     this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
@@ -217,7 +224,7 @@ export class TabletComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareDemoteMaster() {
+  openDemoteMasterDialog() {
     this.dialogSettings = new DialogSettings('Demote', this.DemoteMaster.bind(this), `Demote ${this.tablet.label}`);
     this.dialogSettings.setMessage(`Demoted ${this.tablet.label}`);
     this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
@@ -226,7 +233,7 @@ export class TabletComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  prepareReparentTablet() {
+  openReparentTabletDialog() {
     this.dialogSettings = new DialogSettings('Reparent', this.ReparentTablet.bind(this), `Reparent ${this.tablet.label}`);
     this.dialogSettings.setMessage(`Reparented ${this.tablet.label}`);
     this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
