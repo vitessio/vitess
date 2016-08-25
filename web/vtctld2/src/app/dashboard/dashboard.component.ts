@@ -1,44 +1,19 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
-import { Router, ROUTER_DIRECTIVES } from '@angular/router';
-
-import { MD_BUTTON_DIRECTIVES } from '@angular2-material/button';
-import { MD_CARD_DIRECTIVES } from '@angular2-material/card';
-import { MD_CHECKBOX_DIRECTIVES } from '@angular2-material/checkbox';
-import { MD_INPUT_DIRECTIVES } from '@angular2-material/input';
-import { MD_LIST_DIRECTIVES } from '@angular2-material/list/list';
-import { MD_PROGRESS_BAR_DIRECTIVES } from '@angular2-material/progress-bar';
+import { Router } from '@angular/router';
 
 import { Observable } from 'rxjs/Observable';
 
-import { AddButtonComponent } from '../shared/add-button.component';
 import { DeleteKeyspaceFlags, EditKeyspaceFlags, NewKeyspaceFlags, ValidateAllFlags } from '../shared/flags/keyspace.flags';
-import { DialogComponent } from '../shared/dialog/dialog.component';
 import { DialogContent } from '../shared/dialog/dialog-content';
 import { DialogSettings } from '../shared/dialog/dialog-settings';
 import { Keyspace } from '../api/keyspace';
 import { KeyspaceService } from '../api/keyspace.service';
-import { ShardService } from '../api/shard.service';
 import { VtctlService } from '../api/vtctl.service';
 
 @Component({
   selector: 'vt-dashboard',
   templateUrl: './dashboard.component.html',
   styleUrls: ['../styles/vt.style.css'],
-  providers: [
-    KeyspaceService,
-    ShardService,
-    VtctlService
-  ],
-  directives: [
-    ROUTER_DIRECTIVES,
-    MD_CARD_DIRECTIVES,
-    MD_PROGRESS_BAR_DIRECTIVES,
-    MD_CHECKBOX_DIRECTIVES,
-    MD_INPUT_DIRECTIVES,
-    MD_BUTTON_DIRECTIVES,
-    MD_LIST_DIRECTIVES,
-    DialogComponent,
-    AddButtonComponent],
 })
 export class DashboardComponent implements OnInit {
   @ViewChild('dialog') dialog: any;

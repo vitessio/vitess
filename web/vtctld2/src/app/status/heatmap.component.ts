@@ -1,5 +1,4 @@
 import { Component, Input, AfterViewInit, OnInit } from '@angular/core';
-import { CORE_DIRECTIVES } from '@angular/common';
 
 declare var Plotly: any;
 
@@ -7,9 +6,6 @@ declare var Plotly: any;
   selector: 'vt-heatmap',
     templateUrl: './heatmap.component.html',
     styleUrls: ['./heatmap.component.css'],
-    directives: [
-      CORE_DIRECTIVES,
-    ]
 })
 
 export class HeatmapComponent implements AfterViewInit, OnInit {
