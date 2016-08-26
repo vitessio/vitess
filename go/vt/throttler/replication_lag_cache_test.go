@@ -5,8 +5,10 @@ import (
 	"time"
 )
 
-// TestReplicationLagCache tests the wrapping of the ring buffer.
-// Other parts of the code are already covered by max_replication_lag_module_test.go.
+// TestReplicationLagCache tests that the ring buffer in "replicationLagHistory"
+// wraps around correctly.
+// Other parts of the code are already covered by
+// max_replication_lag_module_test.go.
 func TestReplicationLagCache(t *testing.T) {
 	c := newReplicationLagCache(2)
 	r1Key := tabletStats(r1, 1).Key
