@@ -1,4 +1,4 @@
-import { Component, ComponentResolver, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 
 import { DialogContent } from './dialog-content';
 import { DialogSettings } from './dialog-settings';
