@@ -10,7 +10,7 @@ import { TabletComponent } from './dashboard/tablet.component';
 import { TasksComponent } from './tasks/tasks.component';
 import { TopoBrowserComponent } from './topo/topo-browser.component';
 
-const routes: Routes = [
+export const routes: Routes = [
   { path: '', component: DashboardComponent},
   { path: 'dashboard', component: DashboardComponent, canDeactivate: [CanDeactivateGuard]},
   { path: 'status', component: StatusComponent},
