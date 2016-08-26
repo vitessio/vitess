@@ -5,7 +5,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
-
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.SimpleCursor;
 import com.youtube.vitess.proto.Query;
@@ -16,19 +15,18 @@ import com.youtube.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
 import com.youtube.vitess.proto.Vtgate.BoundShardQuery;
 import com.youtube.vitess.proto.Vtgate.ExecuteEntityIdsRequest.EntityId;
 import com.youtube.vitess.proto.Vtrpc.RPCError;
-
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.SQLInvalidAuthorizationSpecException;
 import java.sql.SQLNonTransientException;
+import java.sql.SQLRecoverableException;
 import java.sql.SQLSyntaxErrorException;
 import java.sql.SQLTimeoutException;
 import java.sql.SQLTransientException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-
 import javax.annotation.Nullable;
 
 /**
@@ -36,7 +34,7 @@ import javax.annotation.Nullable;
  */
 public class Proto {
 
-  private static int MAX_DECIMAL_UNIT = 30;
+  private static final int MAX_DECIMAL_UNIT = 30;
 
   /**
    * Throws the proper SQLException for an error returned by VTGate.
@@ -63,6 +61,8 @@ public class Proto {
           throw new SQLTransientException(error.toString(), sqlState, errno);
         case UNAUTHENTICATED:
           throw new SQLInvalidAuthorizationSpecException(error.toString(), sqlState, errno);
+        case NOT_IN_TX:
+          throw new SQLRecoverableException(error.toString(), sqlState, errno);
         default:
           throw new SQLNonTransientException("Vitess RPC error: " + error.toString(), sqlState,
               errno);

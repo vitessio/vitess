@@ -19,7 +19,8 @@ class LocalDatabase(object):
                mysql_only,
                init_data_options,
                web_dir=None,
-               default_schema_dir=None):
+               default_schema_dir=None,
+               extra_my_cnf=None):
     """Initializes an object of this class.
 
     Args:
@@ -36,6 +37,7 @@ class LocalDatabase(object):
           flag in run_local_database.py
       default_schema_dir: a directory to use if no keyspace is found in the
           schema_dir directory.
+      extra_my_cnf: additional cnf file to use for the EXTRA_MY_CNF var.
     """
 
     self.topology = topology
@@ -44,12 +46,14 @@ class LocalDatabase(object):
     self.init_data_options = init_data_options
     self.web_dir = web_dir
     self.default_schema_dir = default_schema_dir
+    self.extra_my_cnf = extra_my_cnf
 
   def setup(self):
     """Create a MySQL instance and all Vitess processes."""
     mysql_port = environment.get_port('mysql')
     self.directory = environment.get_test_directory()
-    self.mysql_db = environment.mysql_db_class(self.directory, mysql_port)
+    self.mysql_db = environment.mysql_db_class(
+        self.directory, mysql_port, self.extra_my_cnf)
 
     self.mysql_db.setup()
     self.create_databases()

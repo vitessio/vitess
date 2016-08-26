@@ -46,6 +46,9 @@ func (t *VerticalSplitCloneTask) Run(parameters map[string]string) ([]*automatio
 	if maxTPS := parameters["max_tps"]; maxTPS != "" {
 		args = append(args, "--max_tps="+maxTPS)
 	}
+	if maxReplicationLag := parameters["max_replication_lag"]; maxReplicationLag != "" {
+		args = append(args, "--max_replication_lag="+maxReplicationLag)
+	}
 	args = append(args, topoproto.KeyspaceShardString(parameters["dest_keyspace"], parameters["shard"]))
 	output, err := ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], args)
 
@@ -64,5 +67,5 @@ func (t *VerticalSplitCloneTask) RequiredParameters() []string {
 
 // OptionalParameters is part of the Task interface.
 func (t *VerticalSplitCloneTask) OptionalParameters() []string {
-	return []string{"online", "offline", "chunk_count", "min_rows_per_chunk", "write_query_max_rows", "write_query_max_size", "min_healthy_rdonly_tablets", "max_tps"}
+	return []string{"online", "offline", "chunk_count", "min_rows_per_chunk", "write_query_max_rows", "write_query_max_size", "min_healthy_rdonly_tablets", "max_tps", "max_replication_lag"}
 }

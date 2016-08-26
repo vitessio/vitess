@@ -88,7 +88,9 @@ def main(cmdline_options):
       cmdline_options.mysql_only,
       init_data_opts,
       web_dir=cmdline_options.web_dir,
-      default_schema_dir=cmdline_options.default_schema_dir) as local_db:
+      default_schema_dir=cmdline_options.default_schema_dir,
+      extra_my_cnf=os.path.join(
+          os.environ['VTTOP'], 'config/mycnf/vtcombo.cnf')) as local_db:
     print json.dumps(local_db.config())
     sys.stdout.flush()
     try:

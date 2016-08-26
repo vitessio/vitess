@@ -1,4 +1,4 @@
-import { Headers, Http, RequestOptions } from '@angular/http';
+import { Http } from '@angular/http';
 import { Injectable } from '@angular/core';
 
 import { Observable } from 'rxjs/Observable';
@@ -11,20 +11,5 @@ export class ShardService {
   getShards(keyspaceName: string): Observable<any> {
     return this.http.get(this.shardsUrl + keyspaceName + '/')
       .map(resp => resp.json());
-  }
-
-  sendPostRequest(url: string, body: string): Observable<any> {
-    let headers = new Headers({ 'Content-Type': 'application/x-www-form-urlencoded' });
-    let options = new RequestOptions({ headers: headers });
-    return this.http.post(url, body, options)
-      .map(resp => resp.json());
-  }
-
-  createShard(shard): Observable<any> {
-    return this.sendPostRequest(this.shardsUrl + shard.getParam('ShardName'), shard.getBody('CreateKeyspace'));
-  }
-
-  deleteShard(shard): Observable<any> {
-    return this.sendPostRequest(this.shardsUrl + shard.name, shard.getBody('DeleteKeyspace'));
   }
 }

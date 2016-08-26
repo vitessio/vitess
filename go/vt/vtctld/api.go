@@ -1,6 +1,7 @@
 package vtctld
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -12,13 +13,17 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/jsonpb"
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/schemamanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
@@ -64,10 +69,42 @@ func handleCollection(collection string, getFunc func(*http.Request) (interface{
 		}
 
 		// JSON encode response.
-		data, err := json.MarshalIndent(obj, "", "  ")
-		if err != nil {
-			httpErrorf(w, r, "json error: %v", err)
-			return
+		var data []byte
+		switch obj := obj.(type) {
+		case proto.Message:
+			// We use jsonpb for protobuf messages because it is the only supported
+			// way to marshal protobuf messages to JSON.
+			// In addition to that, it's the only way to emit zero values in the JSON
+			// output.
+			// Unfortunately, it works only for protobuf messages. Therefore, we use
+			// the default marshaler for the remaining structs (which are possibly
+			// mixed protobuf and non-protobuf).
+			// TODO(mberlin): Switch "EnumAsInts" to "false" once the frontend is
+			//                updated and mixed types will use jsonpb as well.
+
+			// jsonpb may panic if the "proto.Message" is an embedded field
+			// of "obj" and "obj" has non-exported fields. Return an error then.
+			defer func() {
+				if val := recover(); val != nil {
+					httpErrorf(w, r, "jsonpb panicked: %v", val)
+					return
+				}
+			}()
+
+			// Marshal the protobuf message.
+			var b bytes.Buffer
+			m := jsonpb.Marshaler{EnumsAsInts: true, EmitDefaults: true, Indent: "  ", OrigName: true}
+			if err := m.Marshal(&b, obj); err != nil {
+				httpErrorf(w, r, "jsonpb error: %v", err)
+				return
+			}
+			data = b.Bytes()
+		default:
+			data, err = json.MarshalIndent(obj, "", "  ")
+			if err != nil {
+				httpErrorf(w, r, "json error: %v", err)
+				return
+			}
 		}
 		w.Header().Set("Content-Type", jsonContentType)
 		w.Write(data)
@@ -128,7 +165,9 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 				return ts.GetKeyspaces(ctx)
 			}
 			// Get the keyspace record.
-			return ts.GetKeyspace(ctx, keyspace)
+			k, err := ts.GetKeyspace(ctx, keyspace)
+			// Pass the embedded proto directly or jsonpb will panic.
+			return k.Keyspace, err
 			// Perform an action on a keyspace.
 		case "POST":
 			if keyspace == "" {
@@ -176,7 +215,9 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 		}
 
 		// Get the shard record.
-		return ts.GetShard(ctx, keyspace, shard)
+		si, err := ts.GetShard(ctx, keyspace, shard)
+		// Pass the embedded proto directly or jsonpb will panic.
+		return si.Shard, err
 	})
 
 	// SrvKeyspace
@@ -282,7 +323,9 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 		}
 
 		// Get the tablet record.
-		return ts.GetTablet(ctx, tabletAlias)
+		t, err := ts.GetTablet(ctx, tabletAlias)
+		// Pass the embedded proto directly or jsonpb will panic.
+		return t.Tablet, err
 	})
 
 	// Healthcheck real time status per (cell, keyspace, tablet type, metric).
@@ -348,8 +391,46 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 		return tabletStat, nil
 	})
 
+	// Vtctl Command
+	http.HandleFunc(apiPrefix+"vtctl/", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+			httpErrorf(w, r, "Access denied")
+			return
+		}
+		var args []string
+		resp := struct {
+			Error  string
+			Output string
+		}{}
+		if err := unmarshalRequest(r, &args); err != nil {
+			httpErrorf(w, r, "can't unmarshal request: %v", err)
+			return
+		}
+
+		logstream := logutil.NewMemoryLogger()
+
+		wr := wrangler.New(logstream, ts, tmClient)
+		// TODO(enisoc): Context for run command should be request-scoped.
+		err := vtctl.RunCommand(ctx, wr, args)
+		if err != nil {
+			resp.Error = err.Error()
+		}
+		resp.Output = logstream.String()
+		data, err := json.MarshalIndent(resp, "", "  ")
+		if err != nil {
+			httpErrorf(w, r, "json error: %v", err)
+			return
+		}
+		w.Header().Set("Content-Type", jsonContentType)
+		w.Write(data)
+	})
+
 	// Schema Change
 	http.HandleFunc(apiPrefix+"schema/apply", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+			httpErrorf(w, r, "Access denied")
+			return
+		}
 		req := struct {
 			Keyspace, SQL       string
 			SlaveTimeoutSeconds int

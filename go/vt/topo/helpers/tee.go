@@ -94,8 +94,8 @@ func (tee *Tee) Close() {
 //
 
 // Watch is part of the topo.Backend interface
-func (tee *Tee) Watch(ctx context.Context, cell string, path string) (current *topo.WatchData, changes <-chan *topo.WatchData) {
-	return tee.primary.Watch(ctx, cell, path)
+func (tee *Tee) Watch(ctx context.Context, cell, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
+	return tee.primary.Watch(ctx, cell, filePath)
 }
 
 //
@@ -524,12 +524,6 @@ func (tee *Tee) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string,
 	return tee.readFrom.GetSrvKeyspaceNames(ctx, cell)
 }
 
-// WatchSrvKeyspace is part of the topo.Server interface.
-// We only watch for changes on the primary.
-func (tee *Tee) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, error) {
-	return tee.primary.WatchSrvKeyspace(ctx, cell, keyspace)
-}
-
 // UpdateSrvKeyspace is part of the topo.Server interface
 func (tee *Tee) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error {
 	if err := tee.primary.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace); err != nil {
@@ -560,12 +554,6 @@ func (tee *Tee) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) er
 // GetSrvKeyspace is part of the topo.Server interface
 func (tee *Tee) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	return tee.readFrom.GetSrvKeyspace(ctx, cell, keyspace)
-}
-
-// WatchSrvVSchema is part of the topo.Server interface.
-// We only watch for changes on the primary.
-func (tee *Tee) WatchSrvVSchema(ctx context.Context, cell string) (<-chan *vschemapb.SrvVSchema, error) {
-	return tee.primary.WatchSrvVSchema(ctx, cell)
 }
 
 // UpdateSrvVSchema is part of the topo.Server interface

@@ -105,6 +105,11 @@ func trimmedRequestToError(received string) error {
 			vtrpcpb.ErrorCode_UNAUTHENTICATED,
 			errors.New("vtgate test client forced error: unauthenticated"),
 		)
+	case "aborted":
+		return vterrors.FromError(
+			vtrpcpb.ErrorCode_NOT_IN_TX,
+			errors.New("vtgate test client forced error: aborted"),
+		)
 	case "unknown error":
 		return vterrors.FromError(
 			vtrpcpb.ErrorCode_UNKNOWN_ERROR,

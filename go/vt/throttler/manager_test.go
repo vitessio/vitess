@@ -161,13 +161,13 @@ func TestManager_UpdateConfiguration_Error(t *testing.T) {
 
 	// Check that errors from Verify() are correctly propagated.
 	invalidConfig := &throttlerdata.Configuration{
-		// max < target lag is not allowed.
-		MaxReplicationLagSec: defaultTargetLag - 1,
+		// max < 2 is not allowed.
+		MaxReplicationLagSec: 1,
 	}
 	if _, err := f.m.UpdateConfiguration("t2", invalidConfig, false /* copyZeroValues */); err == nil {
 		t.Fatal("expected error but got nil")
 	} else {
-		want := "target replication lag must not be higher than the configured max replication lag"
+		want := "max_replication_lag_sec must be >= 2"
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("received wrong error. got = %v, want contains = %v", err, want)
 		}
@@ -211,23 +211,21 @@ func TestManager_UpdateConfiguration_ZeroValues(t *testing.T) {
 	defer f.tearDown()
 
 	// Test the explicit copy of zero values.
-	zeroValueConfig := &throttlerdata.Configuration{
-		// TargetReplicationLagSec will be zero too because we omitted it here.
-		IgnoreNSlowestReplicas: 0,
-	}
-	names, err := f.m.UpdateConfiguration("t2", zeroValueConfig, true /* copyZeroValues */)
+	zeroValueConfig := defaultMaxReplicationLagModuleConfig.Configuration
+	zeroValueConfig.IgnoreNSlowestReplicas = 0
+	names, err := f.m.UpdateConfiguration("t2", &zeroValueConfig, true /* copyZeroValues */)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := checkConfig(f.m, []string{"t2"}, names, 0, 0); err != nil {
+	if err := checkConfig(f.m, []string{"t2"}, names, defaultTargetLag, 0); err != nil {
 		t.Fatal(err)
 	}
 	// Repeat test for all throttlers.
-	allNames, err := f.m.UpdateConfiguration("" /* all */, zeroValueConfig, true /* copyZeroValues */)
+	allNames, err := f.m.UpdateConfiguration("" /* all */, &zeroValueConfig, true /* copyZeroValues */)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := checkConfig(f.m, []string{"t1", "t2"}, allNames, 0, 0); err != nil {
+	if err := checkConfig(f.m, []string{"t1", "t2"}, allNames, defaultTargetLag, 0); err != nil {
 		t.Fatal(err)
 	}
 }

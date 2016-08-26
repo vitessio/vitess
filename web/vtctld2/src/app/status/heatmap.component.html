@@ -3,8 +3,8 @@
   <tr [ngStyle]="{'height': (getXLabelsRowHeight())+'px'}">
     <td class="no-padding"></td>
     <td class="no-padding"></td>
-    <td class="no-padding" [attr.rowspan]="(getTotalRows()+1)">
-      <div id="{{name}}">
+    <td class="no-padding" [attr.rowspan]="(getTotalRows()+1)" (onresize)="changeMap()">
+      <div id="{{name}}" [ngStyle]="{'height': heatmapHeight+'px'}">
         <!-- Heatmap gets drawn in this div-->
       </div>
     </td>
@@ -12,9 +12,20 @@
 
   <!-- The labels, and nested labels, of the map are drawn -->
   <div *ngFor="let label of yLabels">
+    <tr *ngIf="label.NestedLabels==null" [attr.height]="getRowHeight()">
+      <td  [attr.rowspan]="label.Label.Rowspan" class="bordered"> {{label.Label.Rowspan}} {{label.Label.Name}} </td>
+    </tr>
+
     <tr *ngFor="let nestedLabel of label.NestedLabels; let isFirst=first" [attr.height]="getRowHeight()">
-      <td *ngIf="isFirst" [attr.rowspan]="label.Label.Rowspan" class="bordered">{{label.Label.Name}}</td>
-      <td class="bordered" [attr.rowspan]="nestedLabel.Rowspan">{{nestedLabel.Name}}</td>
+      <td *ngIf="isFirst" [attr.rowspan]="label.Label.Rowspan" class="bordered"> {{label.Label.Rowspan}} {{label.Label.Name}}</td>
+      <td class="bordered" [attr.rowspan]="nestedLabel.Rowspan">{{nestedLabel.Rowspan}} {{nestedLabel.Name}}</td>
     </tr>
  </div>
 </table>
+
+<div *ngIf="popupReady==true" [hidden]="!showPopup" class="popup">
+  <vt-tablet-popup [title]="popupTitle"
+                   [data]="popupData">
+  </vt-tablet-popup>
+  <button md-button (click)="closePopup()"> Dismiss </button>
+</div>

@@ -98,7 +98,8 @@ func TestAPI(t *testing.T) {
 		// Keyspaces
 		{"GET", "keyspaces", `["ks1"]`},
 		{"GET", "keyspaces/ks1", `{
-				"sharding_column_name": "shardcol"
+				"sharding_column_name": "shardcol",
+				"sharding_column_type": 0
 			}`},
 		{"POST", "keyspaces/ks1?action=TestKeyspaceAction", `{
 				"Name": "TestKeyspaceAction",
@@ -133,11 +134,14 @@ func TestAPI(t *testing.T) {
 			]`},
 		{"GET", "tablets/cell1-100", `{
 				"alias": {"cell": "cell1", "uid": 100},
+				"hostname": "",
+				"ip": "",
 				"port_map": {"vt": 100},
 				"keyspace": "ks1",
 				"shard": "-80",
 				"key_range": {"end": "gA=="},
-				"type": 2
+				"type": 2,
+				"db_name_override": ""
 			}`},
 		{"POST", "tablets/cell1-100?action=TestTabletAction", `{
 				"Name": "TestTabletAction",

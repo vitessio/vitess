@@ -325,6 +325,10 @@ func (c *fakeClient) Watch(prefix string, waitIndex uint64, recursive bool,
 		panic("not implemented")
 	}
 
+	// We need to close the receiver, as the real client's Watch()
+	// method also does it, and we depend on it.
+	defer close(receiver)
+
 	// We need a buffered forwarder for 2 reasons:
 	// - In the select loop below, we only write to receiver if
 	//   stop has not been closed. Otherwise we introduce race
@@ -364,7 +368,7 @@ func (c *fakeClient) Watch(prefix string, waitIndex uint64, recursive bool,
 		if event.index >= waitIndex {
 			select {
 			case <-stop:
-				return &etcd.Response{}, nil
+				return nil, etcd.ErrWatchStoppedByUser
 			case receiver <- event.resp:
 			}
 		}
@@ -374,7 +378,7 @@ func (c *fakeClient) Watch(prefix string, waitIndex uint64, recursive bool,
 	for {
 		select {
 		case <-stop:
-			return &etcd.Response{}, nil
+			return nil, etcd.ErrWatchStoppedByUser
 		case r := <-forwarder:
 			receiver <- r
 		}

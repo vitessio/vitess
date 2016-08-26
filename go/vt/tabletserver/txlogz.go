@@ -14,6 +14,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/callerid"
+	"github.com/youtube/vitess/go/vt/logz"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -74,8 +75,8 @@ func txlogzHandler(w http.ResponseWriter, req *http.Request) {
 	timeout, limit := parseTimeoutLimitParams(req)
 	ch := TxLogger.Subscribe("txlogz")
 	defer TxLogger.Unsubscribe(ch)
-	startHTMLTable(w)
-	defer endHTMLTable(w)
+	logz.StartHTMLTable(w)
+	defer logz.EndHTMLTable(w)
 	w.Write(txlogzHeader)
 
 	tmr := time.NewTimer(timeout)

@@ -23,6 +23,7 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
         'integrity error' => 'Vitess\Error\Integrity',
         'transient error' => 'Vitess\Error\Transient',
         'unauthenticated' => 'Vitess\Error\Unauthenticated',
+        'aborted' => 'Vitess\Error\Aborted',
         'unknown error' => 'Vitess\Exception'
     );
 
