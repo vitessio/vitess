@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 
 import { KeyspaceService } from '../api/keyspace.service';
 import { ShardService } from '../api/shard.service';
@@ -91,8 +91,8 @@ export class SchemaComponent implements OnInit {
     this.selectedSchema = undefined;
     this.vSchemas = [];
     this.selectedVSchema = undefined;
-    let schemaStream = this.vtctlService.sendPostRequest(this.vtctlService.vtctlUrl, ['GetSchema', tabletName]);
-    let vScemaStream = this.vtctlService.sendPostRequest(this.vtctlService.vtctlUrl, ['GetVSchema', keyspaceName]);
+    let schemaStream = this.vtctlService.runCommand(['GetSchema', tabletName]);
+    let vScemaStream = this.vtctlService.runCommand(['GetVSchema', keyspaceName]);
     let allSchemaStream = schemaStream.combineLatest(vScemaStream);
     allSchemaStream.subscribe(streams => {
       let schemaResp = streams[0];
