@@ -206,23 +206,6 @@ type Impl interface {
 	// in this cell. They shall be sorted.
 	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
 
-	// WatchSrvKeyspace returns a channel that receives notifications
-	// every time the SrvKeyspace for the given keyspace / cell changes.
-	// It should receive a notification with the initial value fairly
-	// quickly after this is set. A value of nil means the SrvKeyspace
-	// object doesn't exist or is empty. To stop watching this
-	// SrvKeyspace object, cancel the context.
-	// If the underlying topo.Server encounters an error watching the node,
-	// it should retry on a regular basis until it can succeed.
-	// The initial error returned by this method is meant to catch
-	// the obvious bad cases (invalid cell, ...)
-	// that are never going to work. Mutiple notifications with the
-	// same contents may be sent (for instance, when the serving graph
-	// is rebuilt, but the content of SrvKeyspace is the same,
-	// the object version will change, most likely triggering the
-	// notification, but the content hasn't changed).
-	WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (notifications <-chan *topodatapb.SrvKeyspace, err error)
-
 	// UpdateSrvKeyspace updates the serving records for a cell, keyspace.
 	UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error
 
@@ -233,23 +216,6 @@ type Impl interface {
 	// GetSrvKeyspace reads a SrvKeyspace record.
 	// Can return ErrNoNode.
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
-
-	// WatchSrvVSchema returns a channel that receives notifications
-	// every time the SrvVSchema for the given cell changes.
-	// It should receive a notification with the initial value fairly
-	// quickly after this is set. A value of nil means the SrvVSchema
-	// object doesn't exist or is empty. To stop watching this
-	// SrvVSchema object, cancel the context.
-	// If the underlying topo.Server encounters an error watching the node,
-	// it should retry on a regular basis until it can succeed.
-	// The initial error returned by this method is meant to catch
-	// the obvious bad cases (invalid cell, ...)
-	// that are never going to work. Mutiple notifications with the
-	// same contents may be sent (for instance, when the schema graph
-	// is rebuilt, but the content of SrvVSchema is the same,
-	// the object version will change, most likely triggering the
-	// notification, but the content hasn't changed).
-	WatchSrvVSchema(ctx context.Context, cell string) (notifications <-chan *vschemapb.SrvVSchema, err error)
 
 	// UpdateSrvVSchema updates the serving records for a cell.
 	UpdateSrvVSchema(ctx context.Context, cell string, srvVSchema *vschemapb.SrvVSchema) error
@@ -376,14 +342,14 @@ type MasterParticipation interface {
 	GetCurrentMasterID() (string, error)
 }
 
-// SrvTopoServer is a subset of Server that only contains the serving
+// SrvTopoServer is a subset of the Server API that only contains the serving
 // graph read-only calls used by clients to resolve serving addresses,
 // and how to get VSchema. It is mostly used by our discovery modules,
 // and by vtgate.
 type SrvTopoServer interface {
 	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
-	WatchSrvVSchema(ctx context.Context, cell string) (notifications <-chan *vschemapb.SrvVSchema, err error)
+	WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSchemaData, <-chan *WatchSrvVSchemaData, func())
 }
 
 // Registry for Server implementations.

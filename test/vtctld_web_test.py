@@ -6,24 +6,14 @@ import os
 from selenium import webdriver
 import unittest
 
+from vtproto import vttest_pb2
+from vttest import environment as vttest_environment
+from vttest import local_database
+from vttest import mysql_flavor
+
 import environment
-import tablet
 import utils
 from selenium.common.exceptions import NoSuchElementException
-
-# range '' - 80
-shard_0_master = tablet.Tablet()
-shard_0_replica = tablet.Tablet()
-# range 80 - ''
-shard_1_master = tablet.Tablet()
-shard_1_replica = tablet.Tablet()
-# unsharded
-shard_0_master_ks2 = tablet.Tablet()
-shard_0_replica_ks2 = tablet.Tablet()
-shard_0_rdonly_ks2 = tablet.Tablet()
-# all tablets
-tablets = [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica,
-           shard_0_master_ks2, shard_0_replica_ks2, shard_0_rdonly_ks2]
 
 
 def setUpModule():
@@ -38,12 +28,6 @@ def setUpModule():
         # if the Xvfb binary is not found.
         logging.error(
             "Can't start Xvfb (will try local DISPLAY instead): %s", err)
-
-    environment.topo_server().setup()
-
-    setup_procs = [t.init_mysql() for t in tablets]
-    utils.Vtctld().start()
-    utils.wait_procs(setup_procs)
   except:
     tearDownModule()
     raise
@@ -53,16 +37,7 @@ def tearDownModule():
   utils.required_teardown()
   if utils.options.skip_teardown:
     return
-
-  teardown_procs = [t.teardown_mysql() for t in tablets]
-  utils.wait_procs(teardown_procs, raise_on_error=False)
-
-  environment.topo_server().teardown()
-  utils.kill_sub_processes()
   utils.remove_tmp_files()
-
-  for t in tablets:
-    t.remove_tree()
 
 
 class TestVtctldWeb(unittest.TestCase):
@@ -70,49 +45,17 @@ class TestVtctldWeb(unittest.TestCase):
   @classmethod
   def setUpClass(cls):
     """Set up two keyspaces: one unsharded, one with two shards."""
-    # TODO(thompsonja): Add more cells
-    utils.run_vtctl(['CreateKeyspace',
-                     '--sharding_column_name', 'keyspace_id',
-                     '--sharding_column_type', 'uint64',
-                     'test_keyspace'])
-    utils.run_vtctl(['CreateKeyspace',
-                     '--sharding_column_name', 'keyspace_id',
-                     '--sharding_column_type', 'uint64',
-                     'test_keyspace2'])
-
-    shard_0_master.init_tablet('master', 'test_keyspace', '-80')
-    shard_0_replica.init_tablet('replica', 'test_keyspace', '-80')
-    shard_1_master.init_tablet('master', 'test_keyspace', '80-')
-    shard_1_replica.init_tablet('replica', 'test_keyspace', '80-')
-    shard_0_master_ks2.init_tablet('master', 'test_keyspace2', '0')
-    shard_0_replica_ks2.init_tablet('replica', 'test_keyspace2', '0')
-    shard_0_rdonly_ks2.init_tablet('rdonly', 'test_keyspace2', '0')
-
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace2'], auto_log=True)
-
-    # start running all the tablets
-    for t in tablets:
-      t.create_db('vt_%s' % t.keyspace)
-      t.start_vttablet(wait_for_state=None,
-                       extra_args=utils.vtctld.process_args())
-
-    # wait for the right states
-    for t in tablets:
-      t.wait_for_vttablet_state(
-          'SERVING' if t.tablet_type == 'master' else 'NOT_SERVING')
-
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/-80',
-                     shard_0_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/80-',
-                     shard_1_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace2/0',
-                     shard_0_master_ks2.tablet_alias], auto_log=True)
-    shard_0_replica.wait_for_vttablet_state('SERVING')
-    shard_0_replica_ks2.wait_for_vttablet_state('SERVING')
-
-    # run checks now
-    utils.validate_topology()
+    topology = vttest_pb2.VTTestTopology()
+    topology.cells.append('test')
+    keyspace = topology.keyspaces.add(name='test_keyspace')
+    keyspace.replica_count = 2
+    keyspace.rdonly_count = 2
+    keyspace.shards.add(name='-80')
+    keyspace.shards.add(name='80-')
+    keyspace2 = topology.keyspaces.add(name='test_keyspace2')
+    keyspace2.shards.add(name='0')
+    keyspace2.replica_count = 2
+    keyspace2.rdonly_count = 1
 
     if os.environ.get('CI') == 'true' and os.environ.get('TRAVIS') == 'true':
       username = os.environ['SAUCE_USERNAME']
@@ -132,10 +75,22 @@ class TestVtctldWeb(unittest.TestCase):
       # Only testing against Chrome for now
       cls.driver = webdriver.Chrome()
 
-    cls.vtctl_addr = 'http://localhost:%d' % utils.vtctld.port
+    port = environment.reserve_ports(1)
+    vttest_environment.base_port = port
+    mysql_flavor.set_mysql_flavor(None)
+
+    cls.db = local_database.LocalDatabase(
+        topology, '', False, None,
+        os.path.join(os.environ['VTTOP'], 'web/vtctld'),
+        os.path.join(os.environ['VTTOP'], 'test/vttest_schema/default'))
+    cls.db.setup()
+    cls.vtctld_addr = 'http://localhost:%d' % cls.db.config()['port']
+    utils.pause('Paused test after vtcombo was started.\n'
+                'For manual testing, connect to vtctld: %s' % cls.vtctld_addr)
 
   @classmethod
   def tearDownClass(cls):
+    cls.db.teardown()
     cls.driver.quit()
 
   def _get_keyspaces(self):
@@ -205,8 +160,8 @@ class TestVtctldWeb(unittest.TestCase):
   def test_keyspace_overview(self):
     logging.info('Testing keyspace overview')
 
-    logging.info('Fetching main vtctl page: %s', self.vtctl_addr)
-    self.driver.get(self.vtctl_addr)
+    logging.info('Fetching main vtctld page: %s', self.vtctld_addr)
+    self.driver.get(self.vtctld_addr)
 
     keyspace_names = self._get_keyspaces()
     logging.info('Keyspaces: %s', ', '.join(keyspace_names))
@@ -237,13 +192,13 @@ class TestVtctldWeb(unittest.TestCase):
   def test_shard_overview(self):
     logging.info('Testing shard overview')
 
-    logging.info('Fetching main vtctl page: %s', self.vtctl_addr)
-    self.driver.get(self.vtctl_addr)
+    logging.info('Fetching main vtctld page: %s', self.vtctld_addr)
+    self.driver.get(self.vtctld_addr)
 
     self._check_shard_overview(
-        'test_keyspace', '-80', {'master': 1, 'replica': 1, 'rdonly': 0})
+        'test_keyspace', '-80', {'master': 1, 'replica': 1, 'rdonly': 2})
     self._check_shard_overview(
-        'test_keyspace', '80-', {'master': 1, 'replica': 1, 'rdonly': 0})
+        'test_keyspace', '80-', {'master': 1, 'replica': 1, 'rdonly': 2})
     self._check_shard_overview(
         'test_keyspace2', '0', {'master': 1, 'replica': 1, 'rdonly': 1})
 

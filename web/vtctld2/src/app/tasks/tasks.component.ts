@@ -4,8 +4,6 @@ import { Component } from '@angular/core';
   selector: 'vt-tasks',
   templateUrl: './tasks.component.html',
   styleUrls: ['./tasks.component.css'],
-  directives: [
-  ],
 })
 
 export class TasksComponent {

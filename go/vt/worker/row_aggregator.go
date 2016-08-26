@@ -35,9 +35,9 @@ type RowAggregator struct {
 	td            *tabletmanagerdatapb.TableDefinition
 	diffType      DiffType
 	builder       QueryBuilder
-	// statsCounters has Counters to track how many rows were changed per
-	// diffType.
-	statsCounters []*stats.Counters
+	// statsCounters has a "diffType" specific stats.Counters object to track how
+	// many rows were changed per table.
+	statsCounters *stats.Counters
 
 	buffer       bytes.Buffer
 	bufferedRows int
@@ -47,7 +47,7 @@ type RowAggregator struct {
 // The index of the elements in statCounters must match the elements
 // in "DiffTypes" i.e. the first counter is for inserts, second for updates
 // and the third for deletes.
-func NewRowAggregator(ctx context.Context, maxRows, maxSize int, insertChannel chan string, dbName string, td *tabletmanagerdatapb.TableDefinition, diffType DiffType, statsCounters []*stats.Counters) *RowAggregator {
+func NewRowAggregator(ctx context.Context, maxRows, maxSize int, insertChannel chan string, dbName string, td *tabletmanagerdatapb.TableDefinition, diffType DiffType, statsCounters *stats.Counters) *RowAggregator {
 	// Construct head and tail base commands for the reconciliation statement.
 	var builder QueryBuilder
 	switch diffType {
@@ -64,10 +64,6 @@ func NewRowAggregator(ctx context.Context, maxRows, maxSize int, insertChannel c
 		builder = NewDeletesQueryBuilder(dbName, td)
 	default:
 		panic(fmt.Sprintf("unknown DiffType: %v", diffType))
-	}
-
-	if len(statsCounters) != len(DiffTypes) {
-		panic(fmt.Sprintf("statsCounter has the wrong number of elements. got = %v, want = %v", len(statsCounters), len(DiffTypes)))
 	}
 
 	return &RowAggregator{
@@ -121,7 +117,7 @@ func (ra *RowAggregator) Flush() error {
 	}
 
 	// Update our statistics.
-	ra.statsCounters[ra.diffType].Add(ra.td.Name, int64(ra.bufferedRows))
+	ra.statsCounters.Add(ra.td.Name, int64(ra.bufferedRows))
 
 	ra.buffer.Reset()
 	ra.bufferedRows = 0

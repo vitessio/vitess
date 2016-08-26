@@ -2,7 +2,6 @@ package com.youtube.vitess.client;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;
-
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.Row;
 import com.youtube.vitess.proto.Query.Field;
@@ -14,18 +13,13 @@ import com.youtube.vitess.proto.Topodata.SrvKeyspace.KeyspacePartition;
 import com.youtube.vitess.proto.Topodata.TabletType;
 import com.youtube.vitess.proto.Vtgate.SplitQueryResponse;
 import com.youtube.vitess.proto.Vtrpc.CallerID;
-
-import org.joda.time.Duration;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLDataException;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.SQLInvalidAuthorizationSpecException;
 import java.sql.SQLNonTransientException;
+import java.sql.SQLRecoverableException;
 import java.sql.SQLSyntaxErrorException;
 import java.sql.SQLTimeoutException;
 import java.sql.SQLTransientException;
@@ -33,6 +27,10 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.joda.time.Duration;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
 
 /**
  * RpcClientTest tests a given implementation of RpcClient against a mock vtgate server
@@ -64,6 +62,7 @@ public abstract class RpcClientTest {
           .put("integrity error", SQLIntegrityConstraintViolationException.class)
           .put("transient error", SQLTransientException.class)
           .put("unauthenticated", SQLInvalidAuthorizationSpecException.class)
+          .put("aborted", SQLRecoverableException.class)
           .put("unknown error", SQLNonTransientException.class).build();
 
   private static final String QUERY = "test query";
@@ -348,14 +347,13 @@ public abstract class RpcClientTest {
 
   @Test
   public void testGetSrvKeyspace() throws Exception {
-    SrvKeyspace expected = SrvKeyspace.newBuilder().addPartitions(KeyspacePartition.newBuilder()
-        .setServedType(TabletType.REPLICA)
-        .addShardReferences(ShardReference.newBuilder().setName("shard0")
-            .setKeyRange(KeyRange.newBuilder()
-                .setStart(ByteString.copyFrom(new byte[] {0x40, 0, 0, 0, 0, 0, 0, 0}))
+    SrvKeyspace expected = SrvKeyspace.newBuilder()
+        .addPartitions(KeyspacePartition.newBuilder().setServedType(TabletType.REPLICA)
+            .addShardReferences(ShardReference.newBuilder().setName("shard0").setKeyRange(KeyRange
+                .newBuilder().setStart(ByteString.copyFrom(new byte[] {0x40, 0, 0, 0, 0, 0, 0, 0}))
                 .setEnd(ByteString.copyFrom(new byte[] {(byte) 0x80, 0, 0, 0, 0, 0, 0, 0})).build())
+                .build())
             .build())
-        .build())
         .setShardingColumnName("sharding_column_name")
         .setShardingColumnType(KeyspaceIdType.UINT64).addServedFrom(SrvKeyspace.ServedFrom
             .newBuilder().setTabletType(TabletType.MASTER).setKeyspace("other_keyspace").build())
@@ -364,7 +362,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(expected, actual);
   }
 
-  abstract class Executable {
+  abstract static class Executable {
     abstract void execute(String query) throws Exception;
   }
 
@@ -401,7 +399,7 @@ public abstract class RpcClientTest {
     checkExecuteErrors(exe, false);
   }
 
-  abstract class TransactionExecutable {
+  abstract static class TransactionExecutable {
     abstract void execute(VTGateBlockingTx tx, String query) throws Exception;
   }
 

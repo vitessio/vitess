@@ -1,22 +1,12 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { ROUTER_DIRECTIVES } from '@angular/router';
+import { Component, ComponentResolver, EventEmitter, Input, Output } from '@angular/core';
 
 import { DialogContent } from './dialog-content';
 import { DialogSettings } from './dialog-settings';
-import { KeyspaceService } from '../../api/keyspace.service';
-import { TabletService } from '../../api/tablet.service';
 
 @Component({
   selector: 'vt-dialog',
   templateUrl: './dialog.component.html',
   styleUrls: ['./dialog.component.css', '../../styles/vt.style.css'],
-  providers: [
-    KeyspaceService,
-    TabletService
-  ],
-  directives: [
-    ROUTER_DIRECTIVES,
-  ],
 })
 export class DialogComponent {
   keyspaces = [];

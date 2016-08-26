@@ -79,35 +79,43 @@ public class VitessStatement implements Statement {
         tabletType = this.vitessConnection.getTabletType();
 
         showSql = StringUtils.startsWithIgnoreCaseAndWs(sql, Constants.SQL_SHOW);
-        if (showSql) {
-            cursor = this.executeShow(sql);
-        } else {
-            if (tabletType != Topodata.TabletType.MASTER || this.vitessConnection.getAutoCommit()) {
-                Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                if (Constants.QueryExecuteType.SIMPLE == vitessConnection.getExecuteTypeParam()) {
-                    cursor = vtGateConn.execute(context, sql, null, tabletType).checkedGet();
-                } else {
-                    cursor = vtGateConn.streamExecute(context, sql, null, tabletType);
-                }
+        try {
+            if (showSql) {
+                cursor = this.executeShow(sql);
             } else {
-                VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
-                if (null == vtGateTx) {
+                if (tabletType != Topodata.TabletType.MASTER || this.vitessConnection
+                    .getAutoCommit()) {
                     Context context =
                         this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                    vtGateTx = vtGateConn.begin(context).checkedGet();
-                    this.vitessConnection.setVtGateTx(vtGateTx);
-                }
-                Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                    if (Constants.QueryExecuteType.SIMPLE == vitessConnection
+                        .getExecuteTypeParam()) {
+                        cursor = vtGateConn.execute(context, sql, null, tabletType).checkedGet();
+                    } else {
+                        cursor = vtGateConn.streamExecute(context, sql, null, tabletType);
+                    }
+                } else {
+                    VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
+                    if (null == vtGateTx) {
+                        Context context =
+                            this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                        vtGateTx = vtGateConn.begin(context).checkedGet();
+                        this.vitessConnection.setVtGateTx(vtGateTx);
+                    }
+                    Context context =
+                        this.vitessConnection.createContext(this.queryTimeoutInMillis);
                 /* Stream query is not suppose to run in a txn. */
-                cursor = vtGateTx.execute(context, sql, null, tabletType).checkedGet();
+                    cursor = vtGateTx.execute(context, sql, null, tabletType).checkedGet();
+                }
             }
-        }
 
-        if (null == cursor) {
-            throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
+            if (null == cursor) {
+                throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
+            }
+            this.vitessResultSet = new VitessResultSet(cursor, this);
+        } catch (SQLRecoverableException ex) {
+            this.vitessConnection.setVtGateTx(null);
+            throw ex;
         }
-
-        this.vitessResultSet = new VitessResultSet(cursor, this);
         return (this.vitessResultSet);
     }
 
@@ -387,45 +395,50 @@ public class VitessStatement implements Statement {
             throw new SQLException(Constants.SQLExceptionMessages.DML_NOT_ON_MASTER);
         }
 
-        if (this.vitessConnection.getAutoCommit()) {
-            Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-            cursor = vtGateConn.execute(context, sql, null, tabletType).checkedGet();
-        } else {
-            vtGateTx = this.vitessConnection.getVtGateTx();
-            if (null == vtGateTx) {
+        try {
+            if (this.vitessConnection.getAutoCommit()) {
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                vtGateTx = vtGateConn.begin(context).checkedGet();
-                this.vitessConnection.setVtGateTx(vtGateTx);
+                cursor = vtGateConn.execute(context, sql, null, tabletType).checkedGet();
+            } else {
+                vtGateTx = this.vitessConnection.getVtGateTx();
+                if (null == vtGateTx) {
+                    Context context =
+                        this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                    vtGateTx = vtGateConn.begin(context).checkedGet();
+                    this.vitessConnection.setVtGateTx(vtGateTx);
+                }
+
+                Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                cursor = vtGateTx.execute(context, sql, null, tabletType).checkedGet();
             }
 
-            Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-            cursor = vtGateTx.execute(context, sql, null, tabletType).checkedGet();
+            if (null == cursor) {
+                throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
+            }
+
+            if (!(null == cursor.getFields() || cursor.getFields().isEmpty())) {
+                throw new SQLException(Constants.SQLExceptionMessages.SQL_RETURNED_RESULT_SET);
+            }
+
+            if (autoGeneratedKeys == Statement.RETURN_GENERATED_KEYS) {
+                this.retrieveGeneratedKeys = true;
+                this.generatedId = cursor.getInsertId();
+            } else {
+                this.retrieveGeneratedKeys = false;
+                this.generatedId = -1;
+            }
+
+            this.resultCount = cursor.getRowsAffected();
+
+            if (this.resultCount > Integer.MAX_VALUE) {
+                truncatedUpdateCount = Integer.MAX_VALUE;
+            } else {
+                truncatedUpdateCount = (int) this.resultCount;
+            }
+        } catch (SQLRecoverableException ex) {
+            this.vitessConnection.setVtGateTx(null);
+            throw ex;
         }
-
-        if (null == cursor) {
-            throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
-        }
-
-        if (!(null == cursor.getFields() || cursor.getFields().isEmpty())) {
-            throw new SQLException(Constants.SQLExceptionMessages.SQL_RETURNED_RESULT_SET);
-        }
-
-        if (autoGeneratedKeys == Statement.RETURN_GENERATED_KEYS) {
-            this.retrieveGeneratedKeys = true;
-            this.generatedId = cursor.getInsertId();
-        } else {
-            this.retrieveGeneratedKeys = false;
-            this.generatedId = -1;
-        }
-
-        this.resultCount = cursor.getRowsAffected();
-
-        if (this.resultCount > Integer.MAX_VALUE) {
-            truncatedUpdateCount = Integer.MAX_VALUE;
-        } else {
-            truncatedUpdateCount = (int) this.resultCount;
-        }
-
         return truncatedUpdateCount;
     }
 

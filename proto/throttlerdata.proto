@@ -46,7 +46,7 @@ message Configuration {
 	// state and throttle more aggressively (see "emergency_decrease" below).
 	// This is the only way to ensure that the system will recover.
 	int64 max_replication_lag_sec = 2;
-	
+
 	// initial_rate is the rate at which the module will start.
 	int64 initial_rate = 3;
 
@@ -59,7 +59,7 @@ message Configuration {
 	// increase the rate by e.g. 5% to 1050 QPS, it will take 20 seconds until
 	// 1000 extra queries are buffered and the lag increases by 1 second.)
 	double max_increase = 4;
-	
+
 	// emergency_decrease defines by how much we will decrease the current rate
 	// if the observed replication lag is above "max_replication_lag_sec".
 	// E.g. 0.50 decreases the current rate by 50%.
@@ -72,13 +72,26 @@ message Configuration {
 	// max_duration_between_increases_sec specifies how long we'll wait at most
 	// for the last rate increase to have an effect on the system.
 	int64 max_duration_between_increases_sec = 7;
-	
+
 	// ignore_n_slowest_replicas will ignore replication lag updates from the
 	// N slowest replicas. Under certain circumstances, replicas are still
 	// considered e.g. a) if the lag is at most max_replication_lag_sec, b) there
 	// are less than N+1 replicas or c) the lag increased on each replica such
 	// that all replicas were ignored in a row.
 	int32 ignore_n_slowest_replicas = 8;
+
+  // age_bad_rate_after_sec is the duration after which an unchanged bad rate
+  // will "age out" and increase by "bad_rate_increase".
+  // Bad rates are tracked by the code in memory.go and serve as an upper bound
+  // for future rate changes. This ensures that the adaptive throttler does not
+  // try known too high (bad) rates over and over again.
+  // To avoid that temporary degradations permanently reduce the maximum rate,
+  // a stable bad rate "ages out" after "age_bad_rate_after_sec".
+	int64 age_bad_rate_after_sec = 9;
+
+  // bad_rate_increase defines the percentage by which a bad rate will be
+  // increased when it's aging out.
+	double bad_rate_increase = 10;
 }
 
 // GetConfigurationRequest is the payload for the GetConfiguration RPC.

@@ -3,8 +3,6 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 
 import { Observable } from 'rxjs/Observable';
 
-import { AddButtonComponent } from '../shared/add-button.component';
-import { DialogComponent } from '../shared/dialog/dialog.component';
 import { DialogContent } from '../shared/dialog/dialog-content';
 import { DialogSettings } from '../shared/dialog/dialog-settings';
 import { NewShardFlags } from '../shared/flags/shard.flags';
@@ -12,22 +10,12 @@ import { KeyspaceService } from '../api/keyspace.service';
 import { PrepareResponse } from '../shared/prepare-response';
 import { RebuildKeyspaceGraphFlags, RemoveKeyspaceCellFlags, ValidateKeyspaceFlags,
          ValidateSchemaFlags, ValidateVersionFlags } from '../shared/flags/keyspace.flags';
-import { ShardService } from '../api/shard.service';
 import { VtctlService } from '../api/vtctl.service';
 
 @Component({
   selector: 'vt-keyspace-view',
   templateUrl: './keyspace.component.html',
   styleUrls: ['../styles/vt.style.css'],
-  providers: [
-    KeyspaceService,
-    ShardService,
-    VtctlService
-  ],
-  directives: [
-    DialogComponent,
-    AddButtonComponent,
-  ],
 })
 
 export class KeyspaceComponent implements OnInit, OnDestroy {
@@ -93,7 +81,6 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
   }
 
   runCommand(errorMessage: string) {
-    this.dialogSettings.startPending();
     this.vtctlService.runCommand(this.dialogContent.getPostBody()).subscribe(resp => {
       if (resp.Error) {
         this.dialogSettings.setMessage(`${errorMessage} ${resp.Error}`);
@@ -108,6 +95,7 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     this.dialogSettings.setMessage('Created {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshKeyspaceView.bind(this);
     let flags = new NewShardFlags(this.keyspaceName).flags;
+    this.dialogContent = new DialogContent('shard_ref', flags, {}, this.prepareShard.bind(this));
     this.dialogContent = new DialogContent('shard_ref', flags, {}, this.prepareShard.bind(this), 'CreateShard');
     this.dialogSettings.toggleModal();
   }

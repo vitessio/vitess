@@ -1,20 +1,12 @@
+import { ActivatedRoute } from '@angular/router';
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { Router, ROUTER_DIRECTIVES } from '@angular/router';
 
 import { TopoDataService } from '../api/topo-data.service';
-import { BreadcrumbsComponent } from '../shared/breadcrumbs.component';
 
 @Component({
   selector: 'vt-topo',
   templateUrl: './topo-browser.component.html',
   styleUrls: ['./topo-browser.component.css'],
-  providers: [
-    TopoDataService,
-  ],
-  directives: [
-    ROUTER_DIRECTIVES,
-    BreadcrumbsComponent,
-  ],
 })
 export class TopoBrowserComponent implements OnInit, OnDestroy {
   title = 'Topology Browser';
@@ -27,11 +19,11 @@ export class TopoBrowserComponent implements OnInit, OnDestroy {
 
   constructor(
     private topoData: TopoDataService,
-    private router: Router) {
+    private route: ActivatedRoute) {
   }
 
   ngOnInit() {
-    this.routeSub = this.router.routerState.queryParams
+    this.routeSub = this.route.queryParams
       .subscribe(params => this.getNode(params['path']));
   }
 

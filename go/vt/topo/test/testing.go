@@ -63,19 +63,9 @@ func TopoServerTestSuite(t *testing.T, factory func() topo.Impl) {
 	checkSrvKeyspace(t, ts)
 	ts.Close()
 
-	t.Log("=== checkWatchSrvKeyspace")
-	ts = factory()
-	checkWatchSrvKeyspace(t, ts)
-	ts.Close()
-
 	t.Log("=== checkSrvVSchema")
 	ts = factory()
 	checkSrvVSchema(t, ts)
-	ts.Close()
-
-	t.Log("=== checkWatchSrvVSchema")
-	ts = factory()
-	checkWatchSrvVSchema(t, ts)
 	ts.Close()
 
 	t.Log("=== checkKeyspaceLock")

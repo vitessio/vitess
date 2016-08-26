@@ -1,5 +1,4 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
-import { CORE_DIRECTIVES } from '@angular/common';
 
 import { HeatmapComponent } from './heatmap.component';
 import { TabletStatusService } from '../api/tablet-status.service';
@@ -8,13 +7,6 @@ import { TabletStatusService } from '../api/tablet-status.service';
   selector: 'vt-status',
   templateUrl: './status.component.html',
   styleUrls: [],
-  directives: [
-    CORE_DIRECTIVES,
-    HeatmapComponent
-  ],
-  providers: [
-    TabletStatusService
-  ]
 })
 
 export class StatusComponent implements OnInit {

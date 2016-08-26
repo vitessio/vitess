@@ -1,17 +1,14 @@
-import { ActivatedRoute, Router, ROUTER_DIRECTIVES } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Component, OnDestroy, OnInit } from '@angular/core';
-
 
 import { Observable } from 'rxjs/Observable';
 
-import { AddButtonComponent } from '../shared/add-button.component';
-import { DialogComponent } from '../shared/dialog/dialog.component';
 import { DialogContent } from '../shared/dialog/dialog-content';
 import { DialogSettings } from '../shared/dialog/dialog-settings';
+import { DeleteShardFlags, InitShardMasterFlags, ValidateShardFlags } from '../shared/flags/shard.flags';
 import { DeleteShardFlags, InitShardMasterFlags, ValidateShardFlags, TabExtRepFlags,
          PlanRepShardFlags, EmergencyRepShardFlags, ShardReplicationPosFlags, ValidateVerShardFlags } from '../shared/flags/shard.flags';
 import { KeyspaceService } from '../api/keyspace.service';
-import { ShardService } from '../api/shard.service';
 import { TabletService } from '../api/tablet.service';
 import { VtctlService } from '../api/vtctl.service';
 
@@ -22,16 +19,6 @@ import { VtctlService } from '../api/vtctl.service';
     './shard.component.css',
     '../styles/vt.style.css'
   ],
-  directives: [
-    ROUTER_DIRECTIVES,
-    AddButtonComponent,
-    DialogComponent,
-  ],
-  providers: [
-    KeyspaceService,
-    ShardService,
-    TabletService,
-    VtctlService
   ],
 })
 export class ShardComponent implements OnInit, OnDestroy {

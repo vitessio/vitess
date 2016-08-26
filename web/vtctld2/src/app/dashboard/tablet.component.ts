@@ -1,16 +1,12 @@
-import { ActivatedRoute, Router, ROUTER_DIRECTIVES } from '@angular/router';
-
+import { ActivatedRoute, Router } from '@angular/router';
 import { Component, OnInit, OnDestroy } from '@angular/core';
-
-import {DomSanitizationService, SafeResourceUrl} from '@angular/platform-browser';
+import { DomSanitizationService, SafeResourceUrl } from '@angular/platform-browser';
 
 import { Observable } from 'rxjs/Observable';
 
-import { DialogComponent } from '../shared/dialog/dialog.component';
 import { DialogContent } from '../shared/dialog/dialog-content';
 import { DialogSettings } from '../shared/dialog/dialog-settings';
 import { DeleteTabletFlags, PingTabletFlags, RefreshTabletFlags } from '../shared/flags/tablet.flags';
-import { ShardService } from '../api/shard.service';
 import { TabletService } from '../api/tablet.service';
 import { VtctlService } from '../api/vtctl.service';
 
@@ -20,15 +16,6 @@ import { VtctlService } from '../api/vtctl.service';
   styleUrls: [
     './tablet.component.css',
     '../styles/vt.style.css'
-  ],
-  directives: [
-    ROUTER_DIRECTIVES,
-    DialogComponent,
-  ],
-  providers: [
-    ShardService,
-    TabletService,
-    VtctlService,
   ],
 })
 export class TabletComponent implements OnInit, OnDestroy {
@@ -232,7 +219,6 @@ export class TabletComponent implements OnInit, OnDestroy {
     this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'ReparentTablet');
     this.dialogSettings.toggleModal();
   }
-
 
   refreshTabletView() {
     this.getTablet(this.tabletRef);

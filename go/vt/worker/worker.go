@@ -56,6 +56,7 @@ var (
 	statsThrottledCounters = stats.NewMultiCounters("WorkerThrottledCounters", []string{"keyspace", "shardname", "thread_id"})
 	// statsStateDurations tracks for each state how much time was spent in it. Mainly used for testing.
 	statsStateDurationsNs = stats.NewCounters("WorkerStateDurations")
+
 	// statsOnlineInsertsCounters tracks for every table how many rows were
 	// inserted during the online clone (reconciliation) phase.
 	statsOnlineInsertsCounters = stats.NewCounters("WorkerOnlineInsertsCounters")
@@ -63,6 +64,9 @@ var (
 	statsOnlineUpdatesCounters = stats.NewCounters("WorkerOnlineUpdatesCounters")
 	// statsOnlineUpdatesCounters tracks for every table how many rows were deleted.
 	statsOnlineDeletesCounters = stats.NewCounters("WorkerOnlineDeletesCounters")
+	// statsOnlineEqualRowsCounters tracks for every table how many rows were equal.
+	statsOnlineEqualRowsCounters = stats.NewCounters("WorkerOnlineEqualRowsCounters")
+
 	// statsOfflineInsertsCounters tracks for every table how many rows were
 	// inserted during the online clone (reconciliation) phase.
 	statsOfflineInsertsCounters = stats.NewCounters("WorkerOfflineInsertsCounters")
@@ -70,6 +74,15 @@ var (
 	statsOfflineUpdatesCounters = stats.NewCounters("WorkerOfflineUpdatesCounters")
 	// statsOfflineUpdatesCounters tracks for every table how many rows were deleted.
 	statsOfflineDeletesCounters = stats.NewCounters("WorkerOfflineDeletesCounters")
+	// statsOfflineEqualRowsCounters tracks for every table how many rows were equal.
+	statsOfflineEqualRowsCounters = stats.NewCounters("WorkerOfflineEqualRowsCounters")
+
+	// statsStreamingQueryRestartsCounters tracks for every tablet alias how often
+	// a streaming query was succesfully established there.
+	statsStreamingQueryCounters = stats.NewCounters("StreamingQueryCounters")
+	// statsStreamingQueryErrorsCounters tracks for every tablet alias how often
+	// a (previously successfully established) streaming query did error.
+	statsStreamingQueryErrorsCounters = stats.NewCounters("StreamingQueryErrorsCounters")
 )
 
 const (
@@ -85,12 +98,19 @@ func resetVars() {
 	statsState.Set("")
 	statsRetryCount.Set(0)
 	statsRetryCounters.Reset()
+
 	statsOnlineInsertsCounters.Reset()
 	statsOnlineUpdatesCounters.Reset()
 	statsOnlineDeletesCounters.Reset()
+	statsOnlineEqualRowsCounters.Reset()
+
 	statsOfflineInsertsCounters.Reset()
 	statsOfflineUpdatesCounters.Reset()
 	statsOfflineDeletesCounters.Reset()
+	statsOfflineEqualRowsCounters.Reset()
+
+	statsStreamingQueryCounters.Reset()
+	statsStreamingQueryErrorsCounters.Reset()
 }
 
 // checkDone returns ctx.Err() iff ctx.Done().

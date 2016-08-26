@@ -20,7 +20,6 @@ import (
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 var (
@@ -139,20 +138,6 @@ type srvKeyspaceEntry struct {
 	lastErrorCtx context.Context
 }
 
-// setValueLocked remembers the current value (or nil if the node doesn't exist)
-// and sets lastError / lastErrorCtx if necessary. ske.mutex
-// must be held when calling this function.
-func (ske *srvKeyspaceEntry) setValueLocked(ctx context.Context, value *topodatapb.SrvKeyspace) {
-	ske.value = value
-	if value == nil {
-		ske.lastError = fmt.Errorf("no SrvKeyspace %v in cell %v", ske.keyspace, ske.cell)
-		ske.lastErrorCtx = ctx
-	} else {
-		ske.lastError = nil
-		ske.lastErrorCtx = nil
-	}
-}
-
 // NewResilientSrvTopoServer creates a new ResilientSrvTopoServer
 // based on the provided topo.Server.
 func NewResilientSrvTopoServer(base topo.Server, counterPrefix string) *ResilientSrvTopoServer {
@@ -218,7 +203,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, c
 }
 
 // WatchSrvVSchema is part of the SrvTopoServer API
-func (server *ResilientSrvTopoServer) WatchSrvVSchema(ctx context.Context, cell string) (notifications <-chan *vschemapb.SrvVSchema, err error) {
+func (server *ResilientSrvTopoServer) WatchSrvVSchema(ctx context.Context, cell string) (*topo.WatchSrvVSchemaData, <-chan *topo.WatchSrvVSchemaData, func()) {
 	return server.topoServer.WatchSrvVSchema(ctx, cell)
 }
 
@@ -271,55 +256,56 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, 
 	}
 
 	// Watch is not running, let's try to start it.
-	// We use a background context, as the watch should last
-	// forever (as opposed to the current query's ctx getting
-	// the current value).
+	// We use a background context, as starting the watch should keep going
+	// even if the current query context is short-lived.
 	newCtx := context.Background()
-	notifications, err := server.topoServer.WatchSrvKeyspace(newCtx, cell, keyspace)
-	if err != nil {
+	current, changes, _ := server.topoServer.WatchSrvKeyspace(newCtx, cell, keyspace)
+	if current.Err != nil {
 		// lastError and lastErrorCtx will be visible from the UI
 		// until the next try
 		entry.value = nil
-		entry.lastError = err
+		entry.lastError = current.Err
 		entry.lastErrorCtx = ctx
-		log.Errorf("WatchSrvKeyspace failed for %v/%v: %v", cell, keyspace, err)
-		return nil, err
-	}
-	sk, ok := <-notifications
-	if !ok {
-		// lastError and lastErrorCtx will be visible from the UI
-		// until the next try
-		entry.value = nil
-		entry.lastError = fmt.Errorf("failed to receive initial value from topology watcher")
-		entry.lastErrorCtx = ctx
-		log.Errorf("WatchSrvKeyspace first result failed for %v/%v", cell, keyspace)
-		return nil, entry.lastError
+		log.Errorf("WatchSrvKeyspace failed for %v/%v: %v", cell, keyspace, current.Err)
+		return nil, current.Err
 	}
 
 	// we are now watching, cache the first notification
 	entry.watchRunning = true
-	entry.setValueLocked(ctx, sk)
+	entry.value = current.Value
+	entry.lastError = nil
+	entry.lastErrorCtx = nil
 
 	go func() {
-		for sk := range notifications {
+		for c := range changes {
+			if c.Err != nil {
+				// Watch errored out. We log it, clear
+				// our record, and return.
+				err := fmt.Errorf("watch for SrvKeyspace %v in cell %v failed: %v", keyspace, cell, c.Err)
+				log.Errorf("%v", err)
+				entry.mutex.Lock()
+				entry.watchRunning = false
+				entry.value = nil
+				entry.lastError = err
+				entry.lastErrorCtx = nil
+				entry.mutex.Unlock()
+				return
+			}
+
+			// We got a new value, save it.
 			entry.mutex.Lock()
-			entry.setValueLocked(nil, sk)
+			entry.value = c.Value
+			entry.lastError = nil
+			entry.lastErrorCtx = nil
 			entry.mutex.Unlock()
 		}
-		log.Errorf("failed to receive from channel")
-		entry.mutex.Lock()
-		entry.watchRunning = false
-		entry.value = nil
-		entry.lastError = fmt.Errorf("watch for SrvKeyspace %v in cell %v ended", keyspace, cell)
-		entry.lastErrorCtx = nil
-		entry.mutex.Unlock()
 	}()
 
 	return entry.value, entry.lastError
 }
 
 // The next few structures and methods are used to get a displayable
-// version of the cache in a status page
+// version of the cache in a status page.
 
 // SrvKeyspaceNamesCacheStatus is the current value for SrvKeyspaceNames
 type SrvKeyspaceNamesCacheStatus struct {
