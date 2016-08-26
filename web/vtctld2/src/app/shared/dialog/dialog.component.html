@@ -1,7 +1,7 @@
 <div *ngIf="dialogSettings.dialogForm">
   <h4 class="vt-padding" *ngIf="dialogSettings.dialogSubtitle">{{dialogSettings.dialogSubtitle}}</h4>
   <span #vtFormWrapper>
-    <div class="vt-form" >
+    <div class="vt-padding" >
       <div *ngFor="let flag of dialogContent.getFlags()">
         <div  *ngIf="dialogContent.canDisplay(flag.id)" class="vt-form-member">
           <div class="vt-cell-left"><strong>{{flag.name}}</strong>: {{flag.description}}</div>

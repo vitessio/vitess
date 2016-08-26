@@ -4,23 +4,28 @@
   height: 100%;
   width: 100%;
 }
+
 .vt-card {
   display: inline-table;
   margin-left: 25px;
   margin-bottom: 10px;
   margin-top: 10px;
 }
+
 .stats-container {
   width: 100%;
 }
+
 .vt-actions-container{
   padding-left: 32px;
   padding-right: 32px;
 }
+
 .vt-padding{
   padding-left: 43px;
   padding-right: 43px;
 }
+
 >>> p-dialog .ui-dialog{
   position: fixed !important;
   top: 50%  !important;
@@ -29,6 +34,7 @@
   margin: 0;
   width: 70% !important;
 }
+
 .vt-popUpContainer{
   position: fixed;
   padding: 0;

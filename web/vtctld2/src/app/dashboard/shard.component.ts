@@ -5,7 +5,6 @@ import { Observable } from 'rxjs/Observable';
 
 import { DialogContent } from '../shared/dialog/dialog-content';
 import { DialogSettings } from '../shared/dialog/dialog-settings';
-import { DeleteShardFlags, InitShardMasterFlags, ValidateShardFlags } from '../shared/flags/shard.flags';
 import { DeleteShardFlags, InitShardMasterFlags, ValidateShardFlags, TabExtRepFlags,
          PlanRepShardFlags, EmergencyRepShardFlags, ShardReplicationPosFlags, ValidateVerShardFlags } from '../shared/flags/shard.flags';
 import { KeyspaceService } from '../api/keyspace.service';
@@ -18,7 +17,6 @@ import { VtctlService } from '../api/vtctl.service';
   styleUrls: [
     './shard.component.css',
     '../styles/vt.style.css'
-  ],
   ],
 })
 export class ShardComponent implements OnInit, OnDestroy {

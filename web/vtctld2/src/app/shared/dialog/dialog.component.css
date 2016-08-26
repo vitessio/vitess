@@ -1,5 +1,8 @@
 .vt-form-member{
   width: 100%;
+  padding-top: 12px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #d3d3d3;
 }
 .vt-cell-left { 
   display: inline-block;
@@ -26,6 +29,8 @@
 
 .vt-form{
   padding: 0;
+  margin: 0;
+  width: 100%;
   display: table; 
   border-collapse:separate;
   border-spacing:1em 0.5em;
