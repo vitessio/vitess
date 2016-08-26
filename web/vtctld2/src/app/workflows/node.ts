@@ -115,4 +115,13 @@ export class Node {
     return this.state === State.DONE;
   }
 
+  public getId() {
+    let path = this.path;
+    if (this.path.length > 0 && this.path.charAt(this.path.length - 1) === '/') {
+      path = this.path.substring(0, this.path.length - 1);
+    }
+    let toks = path.split('/');
+    return toks[toks.length - 1];
+  }
+
 }

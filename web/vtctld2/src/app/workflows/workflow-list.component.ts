@@ -16,36 +16,36 @@ import { WorkflowService } from '../api/workflow.service';
 
 export class TasksComponent implements OnInit {
   title = 'Vitess Control Panel';
-  workflows = {
-    'UU130429': new Node('Horizontal Resharding Workflow', '/UU130429', {
-      '1': new Node('Approval', '/UU130429/1', {}),
-      '2': new Node('Bootstrap', '/UU130429/2', {
-        '6': new Node('Copy to -80', '/UU130429/2/6', {}),
-        '7': new Node('Copy to 80-', '/UU130429/2/7', {})
-      }),
-      '3': new Node('Diff', '/UU130429/3', {
-        '9': new Node('Copy to -80', '/UU130429/3/9', {}),
-        '10': new Node('Copy to 80-', '/UU130429/3/10', {})
-      }),
-      '4': new Node('Redirect', '/UU130429/4', {
-        '11': new Node('Redirect REPLICA', '/UU130429/4/11', {
-          '14': new Node('Redirect -80', '/UU130429/4/11/14', {}),
-          '15': new Node('Redirect 80-', '/UU130429/4/11/15', {}),
-        }),
-        '12': new Node('Redirect RDONLY', '/UU130429/4/12', {
-          '16': new Node('Redirect -80', '/UU130429/4/12/16', {}),
-          '17': new Node('Redirect 80-', '/UU130429/4/12/17', {}),
-        }),
-        '13': new Node('Redirect Master', '/UU130429/4/13', {
-          '16': new Node('Redirect -80', '/UU130429/4/13/16', {}),
-          '17': new Node('Redirect 80-', '/UU130429/4/13/17', {}),
-        }),
-      }),
-      '5': new Node('Cleanup', '/UU130429/5', {
-        '18': new Node('Redirect 80-', '/UU130429/5/18', {}),
-      }),
-    })
-  };
+  workflows = [
+     new Node('Horizontal Resharding Workflow', '/UU130429', [
+      new Node('Approval', '/UU130429/1', []),
+      new Node('Bootstrap', '/UU130429/2', [
+        new Node('Copy to -80', '/UU130429/2/6', []),
+        new Node('Copy to 80-', '/UU130429/2/7', [])
+      ]),
+      new Node('Diff', '/UU130429/3', [
+        new Node('Copy to -80', '/UU130429/3/9', []),
+        new Node('Copy to 80-', '/UU130429/3/10', [])
+      ]),
+      new Node('Redirect', '/UU130429/4', [
+        new Node('Redirect REPLICA', '/UU130429/4/11', [
+          new Node('Redirect -80', '/UU130429/4/11/14', []),
+          new Node('Redirect 80-', '/UU130429/4/11/15', []),
+        ]),
+        new Node('Redirect RDONLY', '/UU130429/4/12', [
+          new Node('Redirect -80', '/UU130429/4/12/16', []),
+          new Node('Redirect 80-', '/UU130429/4/12/17', []),
+        ]),
+        new Node('Redirect Master', '/UU130429/4/13', [
+          new Node('Redirect -80', '/UU130429/4/13/16', []),
+          new Node('Redirect 80-', '/UU130429/4/13/17', []),
+        ]),
+      ]),
+      new Node('Cleanup', '/UU130429/5', [
+        new Node('Redirect 80-', '/UU130429/5/18', []),
+      ]),
+    ])
+  ];
 
   constructor(private workflowService: WorkflowService) {}
 
@@ -194,12 +194,11 @@ export class TasksComponent implements OnInit {
 
   processWorkflowJson(workflows: any) {
     console.log(workflows);
-    let workflowList = Object.keys(workflows);
+    // let workflowList = Object.keys(workflows);
     // Iterate over all workflows
-    for (let workflowName of workflowList) {
-      let workflowData = workflows[workflowName];
+    for (let workflowData of workflows) {
       if (workflowData.path.charAt(0) === '/' && workflowData.path.split('/').length === 2) {
-        this.workflows[workflowData.path.split('/')[2]] = this.recursiveWorkflowBuilder(workflowData);
+        this.setRootWorkflow(workflowData.path.split('/')[1], this.recursiveWorkflowBuilder(workflowData));
       } else {
         // Even if the workflow is not a root workflow it's path must be absolute
         if (workflowData.path.charAt(0) === '/') {
@@ -208,11 +207,11 @@ export class TasksComponent implements OnInit {
           if (target) {
             // Now we update all fields, but children is filled with a JS object not a Node
             target.update(workflowData);
-            target.children = {};
-            for (let childName of Object.keys(workflowData.children)) {
-              let child = this.recursiveWorkflowBuilder(workflowData.children[childName]);
+            target.children = [];
+            for (let childData of workflowData.children) {
+              let child = this.recursiveWorkflowBuilder(childData);
               if (child) {
-                target.children[childName] = child;
+                target.children.push(child);
               }
             }
           } else {
@@ -246,21 +245,28 @@ export class TasksComponent implements OnInit {
     }
   }
 
-  recursiveWorkflowBuilder(workflowData): Node | boolean {
+  setRootWorkflow(rootId, workflow) {
+    console.log('Would add', Node, 'to root');
+  }
+
+  recursiveWorkflowBuilder(workflowData): Node {
     if (workflowData.name && workflowData.path) {
-      let workflow = new Node(workflowData.name, workflowData.path, {});
+      let workflow = new Node(workflowData.name, workflowData.path, []);
       workflow.update(workflowData);
-      workflow.children = {};
-      for (let childName of Object.keys(workflowData.children)) {
-        workflow.children[childName] = this.recursiveWorkflowBuilder(workflowData.children[childName]);
+      workflow.children = [];
+      for (let childData of workflowData.children) {
+        let child = this.recursiveWorkflowBuilder(childData);
+        if (child) {
+          workflow.children.push(child);
+        }
       }
       return workflow;
     }
-    return false;
+    return undefined;
   }
 
   getRootWorkflowIds() {
-    return Object.keys(this.workflows);
+    return this.workflows;
   }
 
   getWorkflow(path, relativeWorkflow= undefined) {
@@ -279,12 +285,21 @@ export class TasksComponent implements OnInit {
     let tokens = path.split('/');
     for (let i = 0; i < tokens.length; i++) {
       if (target) {
-        target = target.children[tokens[i]];
+        target = this.getChild(tokens[i], target.children);
       } else {
         return target;
       }
     }
     return target;
+  }
+
+  getChild(id, children) {
+    for (let child of children) {
+      if (child.getId === id) {
+        return child;
+      }
+    }
+    return undefined;
   }
 
   updateWorkFlow(path: string, changes) {
