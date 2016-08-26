@@ -1,17 +1,12 @@
 import { Component, Input, OnInit } from '@angular/core';
-import { CORE_DIRECTIVES } from '@angular/common';
 
 @Component({
-  moduleId: module.id,
-  selector: 'vt-tablet',
-    templateUrl: './tablet.component.html',
-    styleUrls: ['./tablet.component.css'],
-    directives: [
-      CORE_DIRECTIVES,
-    ]
+  selector: 'vt-tablet-popup',
+  templateUrl: './tablet-popup.component.html',
+  styleUrls: ['./tablet-popup.component.css'],
 })
 
-export class TabletComponent implements OnInit {
+export class TabletPopupComponent implements OnInit {
   @Input() title: string;
   @Input() data;
 
@@ -20,7 +15,7 @@ export class TabletComponent implements OnInit {
   tabletType: string;
   hostname: string;
   lag: number;
-  qps: number
+  qps: number;
   serving: boolean;
   error: string;
   lastError: string;

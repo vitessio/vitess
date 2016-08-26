@@ -1,22 +1,13 @@
 import { Component, Input, AfterViewInit, NgZone, OnInit  } from '@angular/core';
-import { CORE_DIRECTIVES } from '@angular/common';
 
 import { TabletStatusService } from '../api/tablet-status.service';
-import { TabletComponent } from './tablet.component';
 
 declare var Plotly: any;
 
 @Component({
   selector: 'vt-heatmap',
-    templateUrl: './heatmap.component.html',
-    styleUrls: ['./heatmap.component.css'],
-    directives: [
-      CORE_DIRECTIVES,
-      TabletComponent,
-    ],
-    providers: [
-      TabletStatusService
-    ]
+  templateUrl: './heatmap.component.html',
+  styleUrls: ['./heatmap.component.css'],
 })
 
 export class HeatmapComponent implements AfterViewInit, OnInit {
@@ -58,12 +49,9 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
   private getRowHeight() { return 50; }
   private getXLabelsRowHeight() { return 25; }
 
-  static rowHeight = 50;
   constructor(private zone: NgZone, private tabletService: TabletStatusService) { }
-  constructor() {}
 
   // getTotalRows returns the number of rows the heatmap should span.
-  // getTotalRows returns the number of rows the entire heatmap should span.
   getTotalRows() {
     if (this.heatmap.YLabels == null) {
       return this.heatmap.Data.length;
@@ -71,9 +59,9 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
     return this.heatmap.YLabels.reduce((prev, cur) => (prev + cur.Label.Rowspan), 0);
   }
 
-      // TODO(pkulshre): fix this when backend is generalized.
-      return 1;
   ngOnInit() {
+    this.heatmapHeight = (this.getTotalRows() * this.getRowHeight() +
+                          this.getXLabelsRowHeight());
     this.name = this.heatmap.Keyspace;
     this.data = this.heatmap.Data;
     this.aliases = this.heatmap.Aliases;
@@ -82,21 +70,29 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
   }
 
   ngAfterViewInit() {
+    this.drawHeatmap(this.metric);
+
+    let elem = <any>(document.getElementById(this.name));
+    elem.on('plotly_click', function(data){
+      let x: number = data.points[0].x;
+      let y: number = data.points[0].y;
+      let alias = this.aliases[y][x];
       // TODO (pkulshre): Revise this to display the popup such that it doesn't disappear
       // when heatmap is refreshed during polling.
       this.tabletService.getTabletHealth(alias.cell, alias.uid).subscribe( health => {
+        this.popupTitle = '' + alias.cell + '-' + alias.uid;
+        this.popupData = health;
+        this.popupReady = true;
+        this.zone.run(() => { this.showPopup = true; });
+      });
+    }.bind(this));
     this.first = false;
   }
 
-  drawHeatmap() {
   closePopup() {
     this.zone.run(() => { this.showPopup = false; });
     this.popupReady = false;
   }
-  drawHeatmap() {
-     // Settings for the Plotly heatmap.
-       zmin: -10,
-       zmax: 10,
 
   // setupColorscale sets the right scale based on what metric the heatmap is displaying.
   setupColorscale(metric) {
@@ -163,6 +159,6 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
       showlegend: false,
     };
 
-    this.plotlyMap = Plotly.newPlot(this.name, chartInfo, chartLayout, {scrollZoom: true, displayModeBar: false});
+    Plotly.newPlot(this.name, chartInfo, chartLayout, {scrollZoom: true, displayModeBar: false});
   }
 }

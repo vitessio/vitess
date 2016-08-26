@@ -1,16 +1,10 @@
-import { Component, OnInit, ComponentResolver, ViewContainerRef } from '@angular/core';
-import { CORE_DIRECTIVES } from '@angular/common';
 import { Component, OnInit, ComponentResolver, ViewChild, NgZone } from '@angular/core';
-import { CORE_DIRECTIVES } from '@angular/common';
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Router } from '@angular/router';
 
-import { HeatmapComponent } from './heatmap.component';
+import { HeatmapComponent } from './heatmap.component.ts';
 import { TabletStatusService } from '../api/tablet-status.service';
 import { TopologyInfoService } from '../api/topology-info.service';
 
-import { Router } from '@angular/router';
-
-import { Dropdown } from 'primeng/primeng';
 import { SelectItem } from 'primeng/primeng';
 
 @Component({

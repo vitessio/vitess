@@ -24,8 +24,8 @@
 </table>
 
 <div *ngIf="popupReady==true" [hidden]="!showPopup" class="popup">
-  <vt-tablet [title]="popupTitle"
-             [data]="popupData">
-  </vt-tablet>
+  <vt-tablet-popup [title]="popupTitle"
+                   [data]="popupData">
+  </vt-tablet-popup>
   <button md-button (click)="closePopup()"> Dismiss </button>
 </div>
