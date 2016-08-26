@@ -276,7 +276,7 @@ index by_msg (msg)
         worker_rpc_port)
     utils.wait_procs([workerclient_proc])
     self.verify_reconciliation_counters(worker_port, 'Online', 'resharding1',
-                                        2, 0, 0)
+                                        2, 0, 0, 0)
 
     # Reset vtworker such that we can run the next command.
     workerclient_proc = utils.run_vtworker_client_bg(['Reset'], worker_rpc_port)
@@ -308,9 +308,9 @@ index by_msg (msg)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly.tablet_alias,
                      'rdonly'], auto_log=True)
     self.verify_reconciliation_counters(worker_port, 'Online', 'resharding1',
-                                        1, 1, 1)
+                                        1, 1, 1, 0)
     self.verify_reconciliation_counters(worker_port, 'Offline', 'resharding1',
-                                        0, 0, 0)
+                                        0, 0, 0, 2)
     # Terminate worker daemon because it is no longer needed.
     utils.kill_sub_process(worker_proc, soft=True)
 

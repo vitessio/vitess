@@ -1,6 +1,4 @@
-import { Component, OnInit } from '@angular/core';
-import { Dropdown } from 'primeng/primeng';
-import { Column, DataTable, Header } from 'primeng/primeng';
+import { Component } from '@angular/core';
 
 import { KeyspaceService } from '../api/keyspace.service';
 import { ShardService } from '../api/shard.service';
@@ -10,8 +8,6 @@ import { VtctlService } from '../api/vtctl.service';
   selector: 'vt-schema',
   templateUrl: './schema.component.html',
   styleUrls: ['./schema.component.css', '../styles/vt.style.css'],
-  directives: [Dropdown, Column, DataTable, Header],
-  providers: [KeyspaceService, ShardService, TabletService, VtctlService],
 })
 export class SchemaComponent implements OnInit {
   dialog= false;

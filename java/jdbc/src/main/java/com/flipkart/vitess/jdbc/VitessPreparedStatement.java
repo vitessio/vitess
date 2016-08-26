@@ -76,37 +76,47 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         tabletType = this.vitessConnection.getTabletType();
 
         showSql = StringUtils.startsWithIgnoreCaseAndWs(this.sql, Constants.SQL_SHOW);
-        if (showSql) {
-            cursor = this.executeShow(this.sql);
-        } else {
-            if (tabletType != Topodata.TabletType.MASTER || this.vitessConnection.getAutoCommit()) {
-                Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                if (Constants.QueryExecuteType.SIMPLE == vitessConnection.getExecuteTypeParam()) {
-                    cursor = vtGateConn.execute(context, this.sql, this.bindVariables, tabletType)
-                        .checkedGet();
-                } else {
-                    cursor =
-                        vtGateConn.streamExecute(context, this.sql, this.bindVariables, tabletType);
-                }
+        try {
+            if (showSql) {
+                cursor = this.executeShow(this.sql);
             } else {
-                VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
-                if (vtGateTx == null) {
+                if (tabletType != Topodata.TabletType.MASTER || this.vitessConnection
+                    .getAutoCommit()) {
                     Context context =
                         this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                    vtGateTx = vtGateConn.begin(context).checkedGet();
-                    this.vitessConnection.setVtGateTx(vtGateTx);
+                    if (Constants.QueryExecuteType.SIMPLE == vitessConnection
+                        .getExecuteTypeParam()) {
+                        cursor =
+                            vtGateConn.execute(context, this.sql, this.bindVariables, tabletType)
+                                .checkedGet();
+                    } else {
+                        cursor = vtGateConn
+                            .streamExecute(context, this.sql, this.bindVariables, tabletType);
+                    }
+                } else {
+                    VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
+                    if (vtGateTx == null) {
+                        Context context =
+                            this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                        vtGateTx = vtGateConn.begin(context).checkedGet();
+                        this.vitessConnection.setVtGateTx(vtGateTx);
+                    }
+                    Context context =
+                        this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                    cursor = vtGateTx.execute(context, this.sql, this.bindVariables, tabletType)
+                        .checkedGet();
                 }
-                Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                cursor = vtGateTx.execute(context, this.sql, this.bindVariables, tabletType)
-                    .checkedGet();
             }
-        }
 
-        if (null == cursor) {
-            throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
-        }
+            if (null == cursor) {
+                throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
+            }
 
-        this.vitessResultSet = new VitessResultSet(cursor, this);
+            this.vitessResultSet = new VitessResultSet(cursor, this);
+        } catch (SQLRecoverableException ex) {
+            this.vitessConnection.setVtGateTx(null);
+            throw ex;
+        }
         return (this.vitessResultSet);
     }
 
@@ -114,6 +124,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         VTGateConn vtGateConn;
         Topodata.TabletType tabletType;
         Cursor cursor;
+        int truncatedUpdateCount;
 
         checkOpen();
         closeOpenResultSetAndResetCount();
@@ -125,43 +136,47 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             throw new SQLException(Constants.SQLExceptionMessages.DML_NOT_ON_MASTER);
         }
 
-        if (this.vitessConnection.getAutoCommit()) {
-            Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-            cursor =
-                vtGateConn.execute(context, this.sql, this.bindVariables, tabletType).checkedGet();
-        } else {
-            VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
-            if (null == vtGateTx) {
+        try {
+            if (this.vitessConnection.getAutoCommit()) {
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                vtGateTx = vtGateConn.begin(context).checkedGet();
-                this.vitessConnection.setVtGateTx(vtGateTx);
+                cursor = vtGateConn.execute(context, this.sql, this.bindVariables, tabletType)
+                    .checkedGet();
+            } else {
+                VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
+                if (null == vtGateTx) {
+                    Context context =
+                        this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                    vtGateTx = vtGateConn.begin(context).checkedGet();
+                    this.vitessConnection.setVtGateTx(vtGateTx);
+                }
+
+                Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
+                cursor = vtGateTx.execute(context, this.sql, this.bindVariables, tabletType)
+                    .checkedGet();
             }
 
-            Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-            cursor =
-                vtGateTx.execute(context, this.sql, this.bindVariables, tabletType).checkedGet();
-        }
+            if (null == cursor) {
+                throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
+            }
 
-        if (null == cursor) {
-            throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
-        }
+            if (!(null == cursor.getFields() || cursor.getFields().isEmpty())) {
+                throw new SQLException(Constants.SQLExceptionMessages.SQL_RETURNED_RESULT_SET);
+            }
 
-        if (!(null == cursor.getFields() || cursor.getFields().isEmpty())) {
-            throw new SQLException(Constants.SQLExceptionMessages.SQL_RETURNED_RESULT_SET);
-        }
+            if (this.retrieveGeneratedKeys) {
+                this.generatedId = cursor.getInsertId();
+            }
 
-        if (this.retrieveGeneratedKeys) {
-            this.generatedId = cursor.getInsertId();
-        }
+            this.resultCount = cursor.getRowsAffected();
 
-        this.resultCount = cursor.getRowsAffected();
-
-        int truncatedUpdateCount;
-
-        if (this.resultCount > Integer.MAX_VALUE) {
-            truncatedUpdateCount = Integer.MAX_VALUE;
-        } else {
-            truncatedUpdateCount = (int) this.resultCount;
+            if (this.resultCount > Integer.MAX_VALUE) {
+                truncatedUpdateCount = Integer.MAX_VALUE;
+            } else {
+                truncatedUpdateCount = (int) this.resultCount;
+            }
+        } catch (SQLRecoverableException ex) {
+            this.vitessConnection.setVtGateTx(null);
+            throw ex;
         }
         return truncatedUpdateCount;
     }
@@ -379,8 +394,8 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                             break;
                         } else {
                             throw new SQLException(
-                                "Conversion from" + parameterObject.getClass().getName() +
-                                    "to Types.Boolean is not Possible");
+                                "Conversion from" + parameterObject.getClass().getName()
+                                    + "to Types.Boolean is not Possible");
                         }
                     case Types.BIT:
                     case Types.TINYINT:
@@ -692,8 +707,9 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                             scaledBigDecimal = ((java.math.BigDecimal) numberParam)
                                 .setScale(scale, BigDecimal.ROUND_HALF_UP);
                         } catch (ArithmeticException arEx) {
-                            throw new SQLException("Can't set the scale of '" + scale +
-                                "' for Decimal Argument" + numberParam);
+                            throw new SQLException(
+                                "Can't set the scale of '" + scale + "' for Decimal Argument"
+                                    + numberParam);
                         }
                     }
                     setBigDecimal(parameterIndex, scaledBigDecimal);

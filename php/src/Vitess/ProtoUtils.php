@@ -28,6 +28,7 @@ class ProtoUtils
      * @throws Error\Integrity
      * @throws Error\Transient
      * @throws Error\Unauthenticated
+     * @throws Error\Aborted
      * @throws Exception
      */
     public static function checkError($response)
@@ -47,6 +48,8 @@ class ProtoUtils
                     throw new Error\Transient($error->getMessage());
                 case ErrorCode::UNAUTHENTICATED:
                     throw new Error\Unauthenticated($error->getMessage());
+                case ErrorCode::NOT_IN_TX:
+                    throw new Error\Aborted($error->getMessage());
                 default:
                     throw new Exception($error->getCode() . ': ' . $error->getMessage());
             }

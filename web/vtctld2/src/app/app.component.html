@@ -5,18 +5,13 @@
 <md-sidenav-layout class="flex-column flex-grow">
   <md-sidenav #sidenav mode="side" opened="true">
     <md-nav-list>
-      <a md-list-item [routerLink]="['/dashboard']"><md-icon>dashboard</md-icon> Dashboard</a>
-      <a md-list-item [routerLink]="['/status']"><md-icon>timeline</md-icon> Status</a>
+      <a md-list-item [routerLink]="['/dashboard']"><md-icon>dashboard</md-icon>Dashboard</a>
+      <a md-list-item [routerLink]="['/status']"><md-icon>timeline</md-icon>Status</a>
       <a md-list-item [routerLink]="['/schema']"><md-icon>storage</md-icon>Schema</a>
       <a md-list-item [routerLink]="['/schema']"><md-icon>backup</md-icon>Backups</a>
-      <a md-list-item [routerLink]="['/schema']"><md-icon>search</md-icon> Explore</a>
-      <a md-list-item [routerLink]="['/topo']">
-        <md-icon>folder</md-icon> Topology
-      </a>
-      <a md-list-item [routerLink]="['/tasks']">
-        <md-icon>list</md-icon>
-        Tasks
-      </a>
+      <a md-list-item [routerLink]="['/schema']"><md-icon>search</md-icon>Explore</a>
+      <a md-list-item [routerLink]="['/topo']"><md-icon>folder</md-icon>Topology</a>
+      <a md-list-item [routerLink]="['/tasks']"><md-icon>list</md-icon>Workflows</a>
     </md-nav-list>
   </md-sidenav>
   <router-outlet></router-outlet>

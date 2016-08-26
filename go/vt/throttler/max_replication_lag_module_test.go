@@ -40,6 +40,9 @@ func newTestFixtureWithMaxReplicationLag(maxReplicationLag int64) (*testFixture,
 func newTestFixture(config MaxReplicationLagModuleConfig) (*testFixture, error) {
 	ratesHistory := newFakeRatesHistory()
 	fc := &fakeClock{}
+	// Do not start at 0*time.Second because than the code cannot distinguish
+	// between a legimate value and a zero time.Time value.
+	fc.setNow(1 * time.Second)
 	m, err := NewMaxReplicationLagModule(config, ratesHistory.aggregatedIntervalHistory, fc.now)
 	if err != nil {
 		return nil, err
@@ -83,7 +86,7 @@ func TestMaxReplicationLagModule_RateNotZeroWhenDisabled(t *testing.T) {
 	}
 
 	// Initial rate must not be zero. It's ReplicationLagModuleDisabled instead.
-	if err := tf.checkState(increaseRate, ReplicationLagModuleDisabled, sinceZero(0*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, ReplicationLagModuleDisabled, sinceZero(1*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -99,7 +102,7 @@ func TestMaxReplicationLagModule_InitialStateAndWait(t *testing.T) {
 	}
 
 	// Initial rate must be config.InitialRate.
-	if err := tf.checkState(increaseRate, config.InitialRate, sinceZero(0*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, config.InitialRate, sinceZero(1*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	// After startup, the next increment won't happen until
@@ -118,7 +121,7 @@ func TestMaxReplicationLagModule_Increase(t *testing.T) {
 	}
 
 	// We start at config.InitialRate.
-	if err := tf.checkState(increaseRate, 100, sinceZero(0*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, 100, sinceZero(1*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	// After the initial wait period of 62s (config.MaxDurationBetweenChangesSec),
@@ -128,7 +131,7 @@ func TestMaxReplicationLagModule_Increase(t *testing.T) {
 	tf.ratesHistory.add(sinceZero(69*time.Second), 100)
 	tf.process(lagRecord(sinceZero(70*time.Second), r2, 0))
 	// Rate was increased to 200 based on actual rate of 100 within [0s, 69s].
-	if err := tf.checkState(increaseRate, 200, sinceZero(70*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	// We have to wait at least config.MinDurationBetweenChangesSec (10s) before
@@ -141,7 +144,7 @@ func TestMaxReplicationLagModule_Increase(t *testing.T) {
 	tf.ratesHistory.add(sinceZero(74*time.Second), 200)
 	tf.process(lagRecord(sinceZero(75*time.Second), r2, 0))
 	// Lag record was ignored because it's within the wait period.
-	if err := tf.checkState(increaseRate, 200, sinceZero(70*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -150,7 +153,7 @@ func TestMaxReplicationLagModule_Increase(t *testing.T) {
 	tf.process(lagRecord(sinceZero(80*time.Second), r1, 0))
 	// The r1 lag update was ignored because an increment "under test" is always
 	// locked in with the replica which triggered the increase (r2 this time).
-	if err := tf.checkState(increaseRate, 200, sinceZero(70*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -158,7 +161,7 @@ func TestMaxReplicationLagModule_Increase(t *testing.T) {
 	tf.ratesHistory.add(sinceZero(80*time.Second), 200)
 	tf.ratesHistory.add(sinceZero(89*time.Second), 200)
 	tf.process(lagRecord(sinceZero(90*time.Second), r2, 0))
-	if err := tf.checkState(increaseRate, 400, sinceZero(90*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, 400, sinceZero(90*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -177,7 +180,7 @@ func TestMaxReplicationLagModule_Increase_LastErrorOrNotUp(t *testing.T) {
 	tf.ratesHistory.add(sinceZero(69*time.Second), 100)
 	tf.process(lagRecord(sinceZero(70*time.Second), r2, 0))
 	// Rate was increased to 200 based on actual rate of 100 within [0s, 69s].
-	if err := tf.checkState(increaseRate, 200, sinceZero(70*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -192,7 +195,7 @@ func TestMaxReplicationLagModule_Increase_LastErrorOrNotUp(t *testing.T) {
 	tf.process(lagRecord(sinceZero(80*time.Second), r1, 0))
 	// The r1 lag update triggered an increase and did not wait for r2
 	// because r2 has LastError set.
-	if err := tf.checkState(increaseRate, 400, sinceZero(80*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, 400, sinceZero(80*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -210,7 +213,106 @@ func TestMaxReplicationLagModule_Increase_LastErrorOrNotUp(t *testing.T) {
 	tf.process(lagRecord(sinceZero(90*time.Second), r2, 0))
 	// The r1 lag update triggered an increase and did not wait for r2
 	// because r2 has !Up set.
-	if err := tf.checkState(increaseRate, 800, sinceZero(90*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, 800, sinceZero(90*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestMaxReplicationLagModule_Reset_ReplicaUnderIncreaseTest verifies that
+// the field "replicaUnderIncreaseTest" is correctly reset if we're leaving
+// the increase state.
+func TestMaxReplicationLagModule_Reset_ReplicaUnderIncreaseTest(t *testing.T) {
+	tf, err := newTestFixtureWithMaxReplicationLag(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// r2 @  70s, 0s lag (triggers the increase state)
+	tf.ratesHistory.add(sinceZero(69*time.Second), 100)
+	tf.process(lagRecord(sinceZero(70*time.Second), r2, 0))
+	// Rate was increased to 200 based on actual rate of 100 within [0s, 69s].
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// r1 @  75s, 10s lag (triggers the emergency state)
+	tf.ratesHistory.add(sinceZero(70*time.Second), 100)
+	tf.ratesHistory.add(sinceZero(74*time.Second), 200)
+	tf.process(lagRecord(sinceZero(75*time.Second), r1, 10))
+	// The r1 lag update triggered the emergency state and did not wait for the
+	// pending increase of r2.
+	if err := tf.checkState(stateEmergency, 100, sinceZero(75*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// Now everything goes back to normal and the minimum time between increases
+	// (10s) has passed as well. r2 or r1 can start an increase now.
+	// r1 @  80s, 0s lag (triggers the increase state)
+	tf.ratesHistory.add(sinceZero(75*time.Second), 200)
+	tf.ratesHistory.add(sinceZero(79*time.Second), 100)
+	tf.process(lagRecord(sinceZero(79*time.Second), r1, 0))
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(79*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestMaxReplicationLagModule_Increase_BadRateUpperBound verifies that a
+// known bad rate is always the upper bound for any rate increase.
+func TestMaxReplicationLagModule_Increase_BadRateUpperBound(t *testing.T) {
+	tf, err := newTestFixtureWithMaxReplicationLag(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// We start at config.InitialRate.
+	if err := tf.checkState(stateIncreaseRate, 100, sinceZero(1*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// Assume that a bad value of 150 was set @ 30s.
+	tf.m.memory.markBad(150, sinceZero(30*time.Second))
+
+	// r2 @  70s, 0s lag
+	tf.ratesHistory.add(sinceZero(69*time.Second), 100)
+	tf.process(lagRecord(sinceZero(70*time.Second), r2, 0))
+	// Rate should get increased to 200 based on actual rate of 100 within
+	// [0s, 69s].
+	// However, this would go over the bad rate. Therefore, the new rate will be
+	// the middle of [100, 150] ([actual rate, bad rate]).
+	if err := tf.checkState(stateIncreaseRate, 125, sinceZero(70*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestMaxReplicationLagModule_Increase_MinimumProgress verifies that the
+// calculated new rate is never identical to the current rate and at least by
+// "memoryGranularity" higher.
+func TestMaxReplicationLagModule_Increase_MinimumProgress(t *testing.T) {
+	tf, err := newTestFixtureWithMaxReplicationLag(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// We start at config.InitialRate.
+	if err := tf.checkState(stateIncreaseRate, 100, sinceZero(1*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// Assume that a bad value of 105 was set @ 30s.
+	tf.m.memory.markBad(105, sinceZero(30*time.Second))
+
+	// r2 @  70s, 0s lag
+	// Assume that the actual rate was below the limit (95 instead of 100).
+	tf.ratesHistory.add(sinceZero(69*time.Second), 95)
+	tf.process(lagRecord(sinceZero(70*time.Second), r2, 0))
+	// Rate should get increased to 190 based on an actual rate of 95 within
+	// [0s, 69s].
+	// However, this would go over the bad rate. Therefore, the new rate should
+	// be the middle of [95, 105] ([actual rate, bad rate]).
+	// But then the new rate is identical to the old set rate of 100.
+	// In such a case, we always advance the new rate by "memoryGranularity"
+	// (which is currently 5).
+	if err := tf.checkState(stateIncreaseRate, 105, sinceZero(70*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -227,7 +329,7 @@ func TestMaxReplicationLagModule_Decrease(t *testing.T) {
 	tf.ratesHistory.add(sinceZero(69*time.Second), 100)
 	tf.process(lagRecord(sinceZero(70*time.Second), r2, 0))
 	// Rate was increased to 200 based on actual rate of 100 within [0s, 69s].
-	if err := tf.checkState(increaseRate, 200, sinceZero(70*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -244,7 +346,7 @@ func TestMaxReplicationLagModule_Decrease(t *testing.T) {
 	// Since this backlog is spread across MinDurationBetweenChangesSec (10s),
 	// the guessed rate gets further reduced by 60 QPS (600 queries / 10s).
 	// Hence, the rate is set to 110 QPS (170 - 60).
-	if err := tf.checkState(decreaseAndGuessRate, 110, sinceZero(90*time.Second)); err != nil {
+	if err := tf.checkState(stateDecreaseAndGuessRate, 110, sinceZero(90*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -263,7 +365,7 @@ func TestMaxReplicationLagModule_Decrease_NoReplicaHistory(t *testing.T) {
 	tf.ratesHistory.add(sinceZero(69*time.Second), 100)
 	tf.process(lagRecord(sinceZero(70*time.Second), r2, 0))
 	// Rate was increased to 200 based on actual rate of 100 within [0s, 69s].
-	if err := tf.checkState(increaseRate, 200, sinceZero(70*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -272,7 +374,7 @@ func TestMaxReplicationLagModule_Decrease_NoReplicaHistory(t *testing.T) {
 	tf.ratesHistory.add(sinceZero(79*time.Second), 200)
 	tf.process(lagRecord(sinceZero(80*time.Second), r1, uint32(tf.m.config.TargetReplicationLagSec+1)))
 	// Rate was not decreased because r1 has no lag record @ 70s or higher.
-	if err := tf.checkState(increaseRate, 200, sinceZero(70*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -290,7 +392,7 @@ func TestMaxReplicationLagModule_Decrease_NoReplicaHistory(t *testing.T) {
 	// Since this backlog is spread across MinDurationBetweenChangesSec (10s),
 	// the guessed rate gets further reduced by 120 QPS (1200 queries / 10s).
 	// Hence, the rate is set to 20 QPS.
-	if err := tf.checkState(decreaseAndGuessRate, 20, sinceZero(90*time.Second)); err != nil {
+	if err := tf.checkState(stateDecreaseAndGuessRate, 20, sinceZero(90*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -303,9 +405,9 @@ func TestMaxReplicationLagModule_IgnoreNSlowestReplicas(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// r1 @   0s, 0s lag
-	tf.process(lagRecord(sinceZero(0*time.Second), r1, 0))
-	if err := tf.checkState(increaseRate, 100, sinceZero(0*time.Second)); err != nil {
+	// r1 @   1s, 0s lag
+	tf.process(lagRecord(sinceZero(1*time.Second), r1, 0))
+	if err := tf.checkState(stateIncreaseRate, 100, sinceZero(1*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -313,7 +415,7 @@ func TestMaxReplicationLagModule_IgnoreNSlowestReplicas(t *testing.T) {
 	tf.ratesHistory.add(sinceZero(9*time.Second), 100)
 	tf.process(lagRecord(sinceZero(10*time.Second), r2, 10))
 	// Although r2's lag is high, it's ignored because it's the 1 slowest replica.
-	if err := tf.checkState(increaseRate, 100, sinceZero(0*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, 100, sinceZero(1*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -322,7 +424,7 @@ func TestMaxReplicationLagModule_IgnoreNSlowestReplicas(t *testing.T) {
 	tf.process(lagRecord(sinceZero(20*time.Second), r1, 20))
 	// r1 would become the new 1 slowest replica. However, we do not ignore it
 	// because then we would ignore all known replicas in a row.
-	if err := tf.checkState(emergency, 50, sinceZero(20*time.Second)); err != nil {
+	if err := tf.checkState(stateEmergency, 50, sinceZero(20*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -340,7 +442,7 @@ func TestMaxReplicationLagModule_IgnoreNSlowestReplicas_NotEnoughReplicas(t *tes
 	tf.process(lagRecord(sinceZero(10*time.Second), r2, 10))
 	// r2 is the 1 slowest replica. However, it's not ignored because then we
 	// would ignore all replicas. Therefore, we react to its lag increase.
-	if err := tf.checkState(emergency, 50, sinceZero(10*time.Second)); err != nil {
+	if err := tf.checkState(stateEmergency, 50, sinceZero(10*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -363,7 +465,7 @@ func TestMaxReplicationLagModule_IgnoreNSlowestReplicas_IsIgnoredDuringIncrease(
 	tf.ratesHistory.add(sinceZero(69*time.Second), 100)
 	tf.process(lagRecord(sinceZero(70*time.Second), r2, 0))
 	// Rate was increased to 200 based on actual rate of 100 within [0s, 69s].
-	if err := tf.checkState(increaseRate, 200, sinceZero(70*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -372,7 +474,7 @@ func TestMaxReplicationLagModule_IgnoreNSlowestReplicas_IsIgnoredDuringIncrease(
 	tf.ratesHistory.add(sinceZero(79*time.Second), 200)
 	tf.process(lagRecord(sinceZero(80*time.Second), r1, 0))
 	// Lag record was ignored because it's within the wait period.
-	if err := tf.checkState(increaseRate, 200, sinceZero(70*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -381,7 +483,7 @@ func TestMaxReplicationLagModule_IgnoreNSlowestReplicas_IsIgnoredDuringIncrease(
 	tf.ratesHistory.add(sinceZero(89*time.Second), 200)
 	tf.m.lagCache.add(lagRecord(sinceZero(90*time.Second), r2, 10))
 	// We ignore the 1 slowest replica and do not decrease despite r2's high lag.
-	if err := tf.checkState(increaseRate, 200, sinceZero(70*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -390,7 +492,7 @@ func TestMaxReplicationLagModule_IgnoreNSlowestReplicas_IsIgnoredDuringIncrease(
 	tf.process(lagRecord(sinceZero(100*time.Second), r1, 0))
 	// Meanwhile, r1 is doing fine and will trigger the next increase because
 	// we're no longer waiting for the ignored r2.
-	if err := tf.checkState(increaseRate, 400, sinceZero(100*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, 400, sinceZero(100*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -424,5 +526,44 @@ func tabletStats(uid, lag uint32) discovery.TabletStats {
 		},
 		TabletExternallyReparentedTimestamp: 22,
 		LastError:                           nil,
+	}
+}
+
+func TestApplyLatestConfig(t *testing.T) {
+	config := NewMaxReplicationLagModuleConfig(5)
+	tf, err := newTestFixture(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// We start at config.InitialRate.
+	if err := tf.checkState(stateIncreaseRate, 100, sinceZero(1*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	// Change the default MaxIncrease from 100% to 200% and test that it's
+	// correctly propagated.
+	config.MaxIncrease = 2
+	tf.m.updateConfiguration(&config.Configuration, true /* copyZeroValues */)
+
+	// r2 @  70s, 0s lag
+	tf.ratesHistory.add(sinceZero(69*time.Second), 100)
+	tf.process(lagRecord(sinceZero(70*time.Second), r2, 0))
+	// Rate was increased to 300 based on an actual rate of 100 within [0s, 69s].
+	// That's a 200% increase.
+	if err := tf.checkState(stateIncreaseRate, 300, sinceZero(70*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// Now reset the config to its default values.
+	tf.m.resetConfiguration()
+	// Let's assume that the current rate of 300 was actually fine.
+	// After the reset, we'll increase it only by 100% to 600.
+
+	// r2 @  90s, 0s lag
+	tf.ratesHistory.add(sinceZero(80*time.Second), 300)
+	tf.ratesHistory.add(sinceZero(89*time.Second), 300)
+	tf.process(lagRecord(sinceZero(90*time.Second), r2, 0))
+	if err := tf.checkState(stateIncreaseRate, 600, sinceZero(90*time.Second)); err != nil {
+		t.Fatal(err)
 	}
 }

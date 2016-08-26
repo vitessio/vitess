@@ -33,56 +33,12 @@ export class NewShardFlags {
   }
 }
 
-export class TabExtRepFlags {
-  flags= {};
-  constructor(tablets) {
-    this.flags['tablet_alias'] = new TabletSelectFlag(0, 'tablet_alias', '', tablets);
-    this.flags['tablet_alias']['positional'] = true;
-  }
-}
-
-export class PlanRepShardFlags {
-  flags= {};
-  constructor(keyspaceName, shardName, tablets) {
-    this.flags['shard_ref'] = new ShardRefFlag(0, 'shard_ref', keyspaceName + '/' + shardName);
-    this.flags['shard_ref']['positional'] = true;
-    this.flags['tablet_alias'] = new TabletSelectFlag(1, 'tablet_alias', '', tablets);
-    this.flags['tablet_alias']['positional'] = true;
-  }
-}
-
-export class EmergencyRepShardFlags {
-  flags= {};
-  constructor(keyspaceName, shardName, tablets) {
-    this.flags['shard_ref'] = new ShardRefFlag(0, 'shard_ref', keyspaceName + '/' + shardName);
-    this.flags['shard_ref']['positional'] = true;
-    this.flags['tablet_alias'] = new TabletSelectFlag(1, 'tablet_alias', '', tablets);
-    this.flags['tablet_alias']['positional'] = true;
-  }
-}
-
-export class ShardReplicationPosFlags {
-  flags= {};
-  constructor(keyspaceName, shardName) {
-    this.flags['shard_ref'] = new ShardRefFlag(0, 'shard_ref', keyspaceName + '/' + shardName);
-    this.flags['shard_ref']['positional'] = true;
-  }
-}
-
-export class ValidateVerShardFlags {
-  flags= {};
-  constructor(keyspaceName, shardName) {
-    this.flags['shard_ref'] = new ShardRefFlag(0, 'shard_ref', keyspaceName + '/' + shardName);
-    this.flags['shard_ref']['positional'] = true;
-  }
-}
-
 export class ValidateShardFlags {
   flags= {};
   constructor(keyspaceName, shardName) {
     this.flags['shard_ref'] = new ShardRefFlag(0, 'shard_ref', keyspaceName + '/' + shardName);
     this.flags['shard_ref']['positional'] = true;
-    this.flags['ping-tablets'] = new PingTabletsFlag(1, 'ping-tablets');
+    this.flags['ping-tablet'] = new PingTabletsFlag(1, 'ping-tablet');
   }
 }
 

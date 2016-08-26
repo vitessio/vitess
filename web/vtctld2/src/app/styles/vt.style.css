@@ -20,22 +20,13 @@
   padding-left: 43px;
   padding-right: 43px;
 }
-paper-dialog{
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  margin: 0;
-}
-
 >>> p-dialog .ui-dialog{
-  position: absolute !important;
+  position: fixed !important;
   top: 50%  !important;
   left: 50%  !important;
   transform: translate(-50%, -50%);
   margin: 0;
 }
-
 .vt-popUpContainer{
   position: fixed;
   padding: 0;
@@ -43,29 +34,31 @@ paper-dialog{
   z-index: 0;
   bottom: 0;
   right: 0;
-  min-height: 100vh;
-  min-width: 100vw;
   top: 0;
   left: 0;
+  min-height: 1000vh;
+  min-width: 1000vw;
+  height: 100%;
+  width: 100%;
   background: rgba(0,0,0,0.6);
 }
 
-.vt-darkLink:link {
+.vt-dark-link:link {
     text-decoration: none;
     color: black;
 }
 
-.vt-darkLink:visited {
+.vt-dark-link:visited {
     text-decoration: none;
     color: black;
 }
 
-.vt-darkLink:hover {
+.vt-dark-link:hover {
     text-decoration: none;
     color: black;
 }
 
-.vt-darkLink:active {
+.vt-dark-link:active {
     text-decoration: none;
     color: black;
 }

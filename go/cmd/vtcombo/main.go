@@ -10,7 +10,10 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
+	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -75,6 +78,31 @@ func main() {
 
 	// set discoverygateway flag to default value
 	flag.Set("cells_to_watch", strings.Join(tpb.Cells, ","))
+
+	// vtctld UI requires the cell flag
+	flag.Set("cell", tpb.Cells[0])
+
+	// create zk client config file
+	config := path.Join(os.Getenv("VTDATAROOT"), "vt_0000000001/tmp/test-zk-client-conf.json")
+	cellmap := make(map[string]string)
+	for _, cell := range tpb.Cells {
+		cellmap[cell] = "localhost"
+	}
+	b, err := json.Marshal(cellmap)
+	if err != nil {
+		log.Errorf("failed to marshal json: %v", err)
+	}
+
+	f, err := os.Create(config)
+	if err != nil {
+		log.Errorf("failed to create zk config file: %v", err)
+	}
+	defer f.Close()
+	_, err = f.WriteString(string(b[:]))
+	if err != nil {
+		log.Errorf("failed to write to zk config file: %v", err)
+	}
+	os.Setenv("ZK_CLIENT_CONFIG", config)
 
 	// register topo server
 	zkconn := fakezk.NewConn()

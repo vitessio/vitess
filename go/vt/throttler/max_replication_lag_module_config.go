@@ -29,6 +29,9 @@ var defaultMaxReplicationLagModuleConfig = MaxReplicationLagModuleConfig{
 		// corresponds to three 3 broadcasts (assuming --health_check_interval=20s).
 		// The 2 extra seconds give us headroom to account for delay in the process.
 		MaxDurationBetweenIncreasesSec: 60 + 2,
+
+		AgeBadRateAfterSec: 3 * 60,
+		BadRateIncrease:    0.10,
 	},
 }
 
@@ -45,9 +48,36 @@ func NewMaxReplicationLagModuleConfig(maxReplicationLag int64) MaxReplicationLag
 
 // Verify returns an error if the config is invalid.
 func (c MaxReplicationLagModuleConfig) Verify() error {
+	if c.TargetReplicationLagSec < 1 {
+		return fmt.Errorf("target_replication_lag_sec must be >= 1")
+	}
+	if c.MaxReplicationLagSec < 2 {
+		return fmt.Errorf("max_replication_lag_sec must be >= 2")
+	}
 	if c.TargetReplicationLagSec > c.MaxReplicationLagSec {
-		return fmt.Errorf("target replication lag must not be higher than the configured max replication lag: invalid: %v > %v",
+		return fmt.Errorf("target_replication_lag_sec must not be higher than max_replication_lag_sec: invalid: %v > %v",
 			c.TargetReplicationLagSec, c.MaxReplicationLagSec)
+	}
+	if c.InitialRate < 1 {
+		return fmt.Errorf("initial_rate must be >= 1")
+	}
+	if c.MaxIncrease <= 0 {
+		return fmt.Errorf("max_increase must be > 0")
+	}
+	if c.EmergencyDecrease <= 0 {
+		return fmt.Errorf("emergency_decrease must be > 0")
+	}
+	if c.MinDurationBetweenChangesSec < 1 {
+		return fmt.Errorf("min_duration_between_changes_sec must be >= 1")
+	}
+	if c.MaxDurationBetweenIncreasesSec < 1 {
+		return fmt.Errorf("max_duration_between_increases_sec must be >= 1")
+	}
+	if c.IgnoreNSlowestReplicas < 0 {
+		return fmt.Errorf("ignore_n_slowest_replicas must be >= 0")
+	}
+	if c.AgeBadRateAfterSec < 1 {
+		return fmt.Errorf("age_bad_rate_after_sec must be >= 1")
 	}
 	return nil
 }
@@ -62,4 +92,10 @@ func (c MaxReplicationLagModuleConfig) MinDurationBetweenChanges() time.Duration
 // protobuf field as native Go type.
 func (c MaxReplicationLagModuleConfig) MaxDurationBetweenIncreases() time.Duration {
 	return time.Duration(c.MaxDurationBetweenIncreasesSec) * time.Second
+}
+
+// AgeBadRateAfter is a helper function which returns the respective
+// protobuf field as native Go type.
+func (c MaxReplicationLagModuleConfig) AgeBadRateAfter() time.Duration {
+	return time.Duration(c.AgeBadRateAfterSec) * time.Second
 }

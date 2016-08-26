@@ -139,6 +139,8 @@ class Client implements \Vitess\RpcClient
                     throw new \Vitess\Error\Unauthenticated($status->details);
                 case \Grpc\STATUS_UNAVAILABLE:
                     throw new \Vitess\Error\Transient($status->details);
+                case \Grpc\STATUS_ABORTED:
+                    throw new \Vitess\Error\Aborted($status->details);
                 default:
                     throw new \Vitess\Exception("{$status->code}: {$status->details}");
             }

@@ -10,7 +10,7 @@ export class DialogSettings {
   public dialogSubtitle: string;
   public respText: string;
   public logText: string;
-  public openModal= false;
+  public open= false;
   public dialogForm= true;
   public dialogLog= false;
   public pending= false;
@@ -42,7 +42,7 @@ export class DialogSettings {
 
   // Opens/closes the gray modal behind a dialog box.
   public toggleModal() {
-    this.openModal = !this.openModal;
+    this.open = !this.open;
   }
 }
 
