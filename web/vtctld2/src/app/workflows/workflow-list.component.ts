@@ -14,10 +14,10 @@ import { WorkflowService } from '../api/workflow.service';
   providers: [WorkflowService],
 })
 
-export class TasksComponent implements OnInit {
+export class WorkflowListComponent implements OnInit {
   title = 'Vitess Control Panel';
   workflows = [
-     new Node('Horizontal Resharding Workflow', '/UU130429', [
+    new Node('Horizontal Resharding Workflow', '/UU130429', [
       new Node('Approval', '/UU130429/1', []),
       new Node('Bootstrap', '/UU130429/2', [
         new Node('Copy to -80', '/UU130429/2/6', []),
@@ -44,7 +44,8 @@ export class TasksComponent implements OnInit {
       new Node('Cleanup', '/UU130429/5', [
         new Node('Redirect 80-', '/UU130429/5/18', []),
       ]),
-    ])
+    ]),
+    new Node('TEST DUMMY', '/UU948312', [])
   ];
 
   constructor(private workflowService: WorkflowService) {}
@@ -193,12 +194,10 @@ export class TasksComponent implements OnInit {
   }
 
   processWorkflowJson(workflows: any) {
-    console.log(workflows);
-    // let workflowList = Object.keys(workflows);
     // Iterate over all workflows
     for (let workflowData of workflows) {
       if (workflowData.path.charAt(0) === '/' && workflowData.path.split('/').length === 2) {
-        this.setRootWorkflow(workflowData.path.split('/')[1], this.recursiveWorkflowBuilder(workflowData));
+        this.setRootWorkflow(workflowData.path, this.recursiveWorkflowBuilder(workflowData));
       } else {
         // Even if the workflow is not a root workflow it's path must be absolute
         if (workflowData.path.charAt(0) === '/') {
@@ -221,38 +220,25 @@ export class TasksComponent implements OnInit {
           console.error('The path provided was not absolute.');
         }
       }
-      /*if (root) {
-        // create new node on root and pass this new node as parent for recursive step
-      } else {
-        target = getWorkflow(path);
-        if (target) {
-          target.update(data.minus(children));
-          // loop through children and assign the recursivbe workflow
-          for (let child of workflow.children) {
-            target.children[child.id] = recursiveWorkflowBuilder(child);
-          }
-        } else {
-          parent = getWorkflow(path.parent);
-          if(parent) {
-            parent.children[workflow.id] = new Node(getParams(workflow));
-            target = parent.children[workflow.id];
-            target.update(Data.minus(children));
-          } else {
-            continue;
-          }
-        }
-      }*/
     }
   }
 
-  setRootWorkflow(rootId, workflow) {
-    console.log('Would add', Node, 'to root');
+  setRootWorkflow(path, workflow) {
+    for (let i = 0; i < this.workflows.length; i++) {
+      if (path === this.workflows[i].path) {
+        this.workflows.splice(i, 1);
+        break;
+      }
+    }
+    this.workflows.push(workflow);
   }
 
   recursiveWorkflowBuilder(workflowData): Node {
     if (workflowData.name && workflowData.path) {
       let workflow = new Node(workflowData.name, workflowData.path, []);
+      // Most data can be directly set using update.
       workflow.update(workflowData);
+      // Children must be set recursively
       workflow.children = [];
       for (let childData of workflowData.children) {
         let child = this.recursiveWorkflowBuilder(childData);
@@ -265,22 +251,16 @@ export class TasksComponent implements OnInit {
     return undefined;
   }
 
-  getRootWorkflowIds() {
-    return this.workflows;
-  }
-
   getWorkflow(path, relativeWorkflow= undefined) {
     let target = relativeWorkflow;
     // Check is path is relative or absolute.
-    if (path.length > 0 && path.charAt(0) === '/') {
+    if (this.pathIsAbsolute(path)) {
       target = {children: this.workflows};
       path = path.substring(1);
     }
 
     // Clean any trailing slashes.
-    if (path.length > 0 && path.charAt(path.length - 1) === '/') {
-      path = path.substring(0, path.length - 1);
-    }
+    path = this.cleanPath(path);
 
     let tokens = path.split('/');
     for (let i = 0; i < tokens.length; i++) {
@@ -293,9 +273,20 @@ export class TasksComponent implements OnInit {
     return target;
   }
 
+  pathIsAbsolute(path) {
+    return path.length > 0 && path.charAt(0) === '/';
+  }
+
+  cleanPath(path) {
+    if (path.length > 0 && path.charAt(path.length - 1) === '/') {
+      return path.substring(0, path.length - 1);
+    }
+    return path;
+  }
+
   getChild(id, children) {
     for (let child of children) {
-      if (child.getId === id) {
+      if (child.getId() === id) {
         return child;
       }
     }

@@ -2,30 +2,33 @@
   <div class="wq-title">
     <h1>Workflows</h1>
   </div>
-  <p-accordion *ngFor="let workflowId of getRootWorkflowIds()">
+  <p-accordion *ngFor="let workflow of workflows; let i = index">
     <span >
       <p-accordionTab header="">
-        <header class="vt-pad-header  {{getHeaderClass(workflows[workflowId].state)}}">
+        <header class="vt-pad-header  {{getHeaderClass(workflow.state)}}">
           <div class="vt-accordion-header vt-accordion-name-wrapper">
               <span class="vt-accordion-name">
-                <md-icon *ngIf="workflows[workflowId].isDone()">check</md-icon>
-                <md-icon *ngIf="workflows[workflowId].isRunning()">forward</md-icon>
-                <md-icon *ngIf="workflows[workflowId].isNotStarted()">remove</md-icon>
-                {{workflows[workflowId].name}}
+                <md-icon *ngIf="workflow.isDone()">check</md-icon>
+                <md-icon *ngIf="workflow.isRunning()">forward</md-icon>
+                <md-icon *ngIf="workflow.isNotStarted()">remove</md-icon>
+                {{workflow.name}}
               </span>
             </div>
             <div class="vt-accordion-header vt-progress-bar-wrapper">
-              <md-progress-bar class="vt-progress-bar" *ngIf="workflows[workflowId].isDeterminate()" mode="determinate" [value]="workflows[workflowId].progress" color="primary"></md-progress-bar>
-              <md-progress-bar class="vt-accordion-header vt-progress-bar" *ngIf="workflows[workflowId].isIndeterminate()" mode="indeterminate" color="primary"></md-progress-bar>
+              <md-progress-bar class="vt-progress-bar" *ngIf="workflow.isDeterminate()" mode="determinate" [value]="workflow.progress" color="primary"></md-progress-bar>
+              <md-progress-bar class="vt-accordion-header vt-progress-bar" *ngIf="workflow.isIndeterminate()" mode="indeterminate" color="primary"></md-progress-bar>
             </div>
-            <div class="vt-accordion-header vt-progress-msg-wrapper" *ngIf="workflows[workflowId].isDeterminate() || workflows[workflowId].isIndeterminate()" >
+            <div class="vt-accordion-header vt-progress-msg-wrapper" *ngIf="workflow.isDeterminate() || workflow.isIndeterminate()" >
               <span class="vt-progress-msg">
-                {{workflows[workflowId].progressMsg}}
+                {{workflow.progressMsg}}
               </span>
             </div>
         </header>
-        <vt-workflow [(workflow)]="workflows[workflowId]"></vt-workflow>
+        <vt-workflow [(workflow)]="workflows[i]"></vt-workflow>
       </p-accordionTab>
     </span>
   </p-accordion>
 </div>
+
+
+<h1>TEST</h1>

@@ -30,7 +30,7 @@ import { StatusComponent } from './status/status.component';
 import { TopoBrowserComponent } from './topo/topo-browser.component';
 import { TabletComponent } from './dashboard/tablet.component';
 import { TabletPopupComponent } from './status/tablet-popup.component';
-import { TasksComponent } from './tasks/tasks.component';
+import { WorkflowListComponent } from './workflows/workflow-list.component';
 
 import { KeyspaceService } from './api/keyspace.service';
 import { ShardService } from './api/shard.service';
@@ -75,7 +75,7 @@ import { VtctlService } from './api/vtctl.service';
     TopoBrowserComponent,
     TabletComponent,
     TabletPopupComponent,
-    TasksComponent,
+    WorkflowListComponent,
   ],
   providers: [
     APP_ROUTER_PROVIDERS,

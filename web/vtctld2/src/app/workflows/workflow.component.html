@@ -23,29 +23,29 @@
     </span>
   </div>
   <div class="vt-drawer">
-    <p-accordion *ngFor="let childId of getChildrenIds()">
+    <p-accordion *ngFor="let child of workflow.children; let i = index">
       <span>
         <p-accordionTab>
           <header class="vt-pad-header">
             <div class="vt-accordion-header vt-accordion-name-wrapper">
               <span class="vt-accordion-name">
-                <md-icon *ngIf="workflow.children[childId].isDone()">check</md-icon>
-                <md-icon *ngIf="workflow.children[childId].isRunning()">forward</md-icon>
-                <md-icon *ngIf="workflow.children[childId].isNotStarted()">remove</md-icon>
-                {{workflow.children[childId].name}}
+                <md-icon *ngIf="child.isDone()">check</md-icon>
+                <md-icon *ngIf="child.isRunning()">forward</md-icon>
+                <md-icon *ngIf="child.isNotStarted()">remove</md-icon>
+                {{child.name}}
               </span>
             </div>
             <div class="vt-accordion-header vt-progress-bar-wrapper">
-              <md-progress-bar class="vt-progress-bar" *ngIf="workflow.children[childId].isDeterminate()" mode="determinate" [value]="workflow.children[childId].progress" color="primary"></md-progress-bar>
-              <md-progress-bar class="vt-accordion-header vt-progress-bar" *ngIf="workflow.children[childId].isIndeterminate()" mode="indeterminate" color="primary"></md-progress-bar>
+              <md-progress-bar class="vt-progress-bar" *ngIf="child.isDeterminate()" mode="determinate" [value]="child.progress" color="primary"></md-progress-bar>
+              <md-progress-bar class="vt-accordion-header vt-progress-bar" *ngIf="child.isIndeterminate()" mode="indeterminate" color="primary"></md-progress-bar>
             </div>
-            <div class="vt-accordion-header vt-progress-msg-wrapper" *ngIf="workflow.children[childId].isDeterminate() || workflow.children[childId].isIndeterminate()" >
+            <div class="vt-accordion-header vt-progress-msg-wrapper" *ngIf="child.isDeterminate() || child.isIndeterminate()" >
               <span class="vt-progress-msg">
-                {{workflow.children[childId].progressMsg}}
+                {{child.progressMsg}}
               </span>
             </div>
           </header>
-          <vt-workflow [(workflow)]="workflow.children[childId]"></vt-workflow>
+          <vt-workflow [(workflow)]="workflow.children[i]"></vt-workflow>
         </p-accordionTab>
       </span>
     </p-accordion>

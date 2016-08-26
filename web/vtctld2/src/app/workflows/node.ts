@@ -86,9 +86,20 @@ export class Node {
 
   public update(changes: any) {
     let properties = Object.keys(changes);
-      for (let property of properties) {
+    for (let property of properties) {
+      if (property !== 'children' && property !== 'actions' ) {
         this[property] = changes[property];
       }
+    }
+    if ('actions' in changes) {
+      this.actions = [];
+      for (let actionData of changes.actions) {
+        let message = actionData.message ? actionData.message : '';
+        if ('name' in actionData && 'state' in actionData && 'style' in actionData) {
+          this.actions.push(new Action(actionData.name, actionData.state, actionData.style, message));
+        }
+      }
+    }
   }
 
   public isRoot(): boolean {

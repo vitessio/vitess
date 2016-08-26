@@ -13,10 +13,6 @@ import {Accordion, AccordionTab, Header} from 'primeng/primeng';
 export class WorkflowComponent {
   @Input() workflow: Node;
 
-  console() {
-    console.log(Object.keys(this.workflow));
-  }
-
   getChildrenIds() {
     return Object.keys(this.workflow.children);
   }
