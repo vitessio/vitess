@@ -2,7 +2,7 @@
   <div class="wq-title">
     <h1>Workflows</h1>
   </div>
-  <p-accordion *ngFor="let workflow of workflows; let i = index">
+  <!--<p-accordion *ngFor="let workflow of workflows; let i = index">
     <span >
       <p-accordionTab header="">
         <header class="vt-pad-header  {{getHeaderClass(workflow.state)}}">
@@ -27,8 +27,8 @@
         <vt-workflow [(workflow)]="workflows[i]"></vt-workflow>
       </p-accordionTab>
     </span>
-  </p-accordion>
+  </p-accordion>-->
+  <span *ngFor="let workflow of workflows; let i = index">
+    <vt-workflow [(workflow)]="workflows[i]"></vt-workflow>
+  </span>
 </div>
-
-
-<h1>TEST</h1>

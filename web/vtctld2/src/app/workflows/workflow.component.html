@@ -1,4 +1,4 @@
-<div class="vt-workflow {{getWorkflowClass()}}" *ngIf="workflow">
+<!--<div class="vt-workflow {{getWorkflowClass()}}" *ngIf="workflow">
   <div class="vt-workflow-content">
     <table>
       <td class="vt-msg">
@@ -50,4 +50,55 @@
       </span>
     </p-accordion>
   </div>
+</div>-->
+
+<div class="vt-workflow vt-workflow-padding" *ngIf="workflow">
+  <p-accordion >
+    <span >
+      <p-accordionTab header="">
+        <header class="vt-pad-header">
+          <div class="vt-accordion-header vt-accordion-name-wrapper">
+              <span class="vt-accordion-name">
+                <md-icon *ngIf="workflow.isDone()">check</md-icon>
+                <md-icon *ngIf="workflow.isRunning()">forward</md-icon>
+                <md-icon *ngIf="workflow.isNotStarted()">remove</md-icon>
+                {{workflow.name}}
+              </span>
+            </div>
+            <div class="vt-accordion-header vt-progress-bar-wrapper">
+              <md-progress-bar class="vt-progress-bar" *ngIf="workflow.isDeterminate()" mode="determinate" [value]="workflow.progress" color="primary"></md-progress-bar>
+              <md-progress-bar class="vt-accordion-header vt-progress-bar" *ngIf="workflow.isIndeterminate()" mode="indeterminate" color="primary"></md-progress-bar>
+            </div>
+            <div class="vt-accordion-header vt-progress-msg-wrapper" *ngIf="workflow.isDeterminate() || workflow.isIndeterminate()" >
+              <span class="vt-progress-msg">
+                {{workflow.progressMsg}}
+              </span>
+            </div>
+        </header>
+        <div class="vt-workflow-content">
+          <div *ngIf="getTime()" class="vt-workflow-time vt-workflow-padding">
+            Last Change: {{getTime()}}
+          </div>
+          <div class="vt-msg">
+            {{workflow.message}}
+          </div>
+          <div class="vt-log vt-workflow-padding">
+            <p-accordion>
+              <p-accordionTab [disabled]="workflow.log.length === 0">
+              <header class="vt-pad-header">
+                <span class="vt-accordion-name">
+                  Log
+                </span>
+              </header>
+              <div class="vt-workflow-padding">
+                {{workflow.log}}
+              </div>
+              </p-accordionTab>
+            </p-accordion>
+          </div>
+        </div>
+        <vt-workflow *ngFor="let child of workflow.children; let i = index" [(workflow)]="workflow.children[i]"></vt-workflow>
+      </p-accordionTab>
+    </span>
+  </p-accordion>
 </div>

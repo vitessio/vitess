@@ -14,8 +14,13 @@
 
 .vt-workflow-done {
   background-color: #ffffff;
+  
+}
+
+.vt-workflow-padding {
   padding-bottom: 5px;
   padding-left: 15px;
+  padding-right: 7px;
   margin: 0;
 }
 
@@ -27,9 +32,7 @@
 }
 
 .vt-workflow-time {
-  position: absolute;
-  top: 5px;
-  right: 5px;
+
   color: grey;
 }
 
@@ -45,8 +48,8 @@
   background-color: #3F51B5;
 }
 
-md-card h1 {
-  margin: 2px;
+.vt-accordion-header {
+  display: inline-block;
 }
 
 
@@ -54,8 +57,35 @@ md-card h1 {
 
 
 
-.vt-accordion-header {
-  display: inline-block;
+.vt-msg {
+  padding-bottom: 5px;
+  padding-left: 25px;
+}
+
+.vt-fill-button {
+  width: 100%;
+}
+
+>>> vt-workflow header md-icon {
+  transform: translate(0px, 6px);
+}
+
+/* Rules for workflow header */
+>>> vt-workflow header {
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+>>> vt-workflow .ui-accordion .ui-accordion-header {
+  background-color: #EEEEEE;
+  background: #EEEEEE !important;
+  border: none;
+}
+
+.vt-pad-header {
+  padding-bottom: 8px;
+  padding-top: 8px;
+  background-color: #EEEEEE;
 }
 
 .vt-accordion-name-wrapper {
@@ -90,7 +120,7 @@ md-card h1 {
   padding-top: 1px;
 }
 
-
+/* Rules for workflow content*/
 >>> .ui-accordion-content {
   padding: 0 !important;
   border-left: 2px solid #009688;
@@ -101,40 +131,13 @@ md-card h1 {
   margin: 0;
 }
 
->>> a {
-  padding: 0;
-}
-
->>>.ui-accordion .ui-accordion-header {
-  background: transparent;
+/* Rules for workflow log */
+>>> vt-workflow .vt-log .ui-accordion .ui-accordion-header{
+  background-color: #E0F2F1;
+  background: #E0F2F1 !important;
   border: none;
 }
 
->>> header {
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-.vt-pad-header {
-  padding-bottom: 8px;
-  padding-top: 8px;
-  background-color: #EEEEEE;
-}
-
-table {
-  margin-top: 15px;
-  margin-bottom: 10px;
-  width: 100%;
-}
-
-.vt-msg {
-  width: 50%;
-}
-
-.vt-fill-button {
-  width: 100%;
-}
-
-md-icon {
-  transform: translate(0px, 6px);
+>>> vt-workflow .vt-log .vt-pad-header{
+  background-color: #E0F2F1;
 }
