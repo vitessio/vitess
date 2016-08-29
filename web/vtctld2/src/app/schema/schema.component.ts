@@ -10,17 +10,17 @@ import { VtctlService } from '../api/vtctl.service';
   styleUrls: ['./schema.component.css', '../styles/vt.style.css'],
 })
 export class SchemaComponent implements OnInit {
-  dialog= false;
-  keyspaces= [];
-  selectedKeyspace= undefined;
-  shards= [];
-  selectedShard= undefined;
-  tablets= [];
-  selectedTablet= undefined;
+  dialog = false;
+  keyspaces = [];
+  selectedKeyspace: any;
+  shards = [];
+  selectedShard: any;
+  tablets = [];
+  selectedTablet: any;
   schemas = [];
-  selectedSchema= undefined;
+  selectedSchema: any;
   vSchemas = [];
-  selectedVSchema= undefined;
+  selectedVSchema: any;
 
   constructor(private keyspaceService: KeyspaceService,
               private shardService: ShardService,

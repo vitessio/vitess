@@ -3,13 +3,6 @@
   padding-bottom: 20px;
 }
 
-
-
->>> .vt-schema-popup-container th {
-  padding-left: 5px;
-  padding-right: 5px;
-}
-
 >>> .vt-schema-popup-container th:nth-child(1) {
     width: 44px;
     text-align: center;
