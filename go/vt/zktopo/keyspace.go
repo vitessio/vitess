@@ -11,10 +11,10 @@ import (
 	"sort"
 
 	zookeeper "github.com/samuel/go-zookeeper/zk"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
-	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )

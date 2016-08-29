@@ -203,7 +203,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, c
 }
 
 // WatchSrvVSchema is part of the SrvTopoServer API
-func (server *ResilientSrvTopoServer) WatchSrvVSchema(ctx context.Context, cell string) (*topo.WatchSrvVSchemaData, <-chan *topo.WatchSrvVSchemaData, func()) {
+func (server *ResilientSrvTopoServer) WatchSrvVSchema(ctx context.Context, cell string) (*topo.WatchSrvVSchemaData, <-chan *topo.WatchSrvVSchemaData, topo.CancelFunc) {
 	return server.topoServer.WatchSrvVSchema(ctx, cell)
 }
 

@@ -26,7 +26,7 @@ type WatchSrvKeyspaceData struct {
 // WatchSrvKeyspace will set a watch on the SrvKeyspace object.
 // It has the same contract as Backend.Watch, but it also unpacks the
 // contents into a SrvKeyspace object.
-func (ts Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (*WatchSrvKeyspaceData, <-chan *WatchSrvKeyspaceData, func()) {
+func (ts Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (*WatchSrvKeyspaceData, <-chan *WatchSrvKeyspaceData, CancelFunc) {
 	filePath := srvKeyspaceFileName(keyspace)
 
 	current, wdChannel, cancel := ts.Watch(ctx, cell, filePath)

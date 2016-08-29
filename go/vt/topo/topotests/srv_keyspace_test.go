@@ -16,7 +16,7 @@ import (
 
 // waitForInitialSrvKeyspace waits for the initial SrvKeyspace to
 // appear, and match the provided srvKeyspace.
-func waitForInitialSrvKeyspace(t *testing.T, ts topo.Server, cell, keyspace string) (current *topo.WatchSrvKeyspaceData, changes <-chan *topo.WatchSrvKeyspaceData, cancel func()) {
+func waitForInitialSrvKeyspace(t *testing.T, ts topo.Server, cell, keyspace string) (current *topo.WatchSrvKeyspaceData, changes <-chan *topo.WatchSrvKeyspaceData, cancel topo.CancelFunc) {
 	ctx := context.Background()
 	start := time.Now()
 	for {
@@ -60,13 +60,7 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	ts := topo.Server{Impl: mt}
 
 	// Create initial value
-	if err := mt.MkDir(ctx, cell, "/keyspaces"); err != nil {
-		t.Fatalf("MkDir(/keyspaces) failed: %v", err)
-	}
-	if err := mt.MkDir(ctx, cell, "/keyspaces/"+keyspace); err != nil {
-		t.Fatalf("MkDir(/keyspaces/ks1) failed: %v", err)
-	}
-	if _, err := mt.Update(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", []byte{}, nil); err != nil {
+	if _, err := mt.Create(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", []byte{}); err != nil {
 		t.Fatalf("Update(/keyspaces/ks1/SrvKeyspace) failed: %v", err)
 	}
 
@@ -194,12 +188,6 @@ func TestWatchSrvKeyspaceCancel(t *testing.T) {
 	}
 
 	// Create initial value
-	if err := mt.MkDir(ctx, cell, "/keyspaces"); err != nil {
-		t.Fatalf("MkDir(/keyspaces) failed: %v", err)
-	}
-	if err := mt.MkDir(ctx, cell, "/keyspaces/"+keyspace); err != nil {
-		t.Fatalf("MkDir(/keyspaces/ks1) failed: %v", err)
-	}
 	wanted := &topodatapb.SrvKeyspace{
 		ShardingColumnName: "scn2",
 	}
@@ -207,7 +195,7 @@ func TestWatchSrvKeyspaceCancel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("proto.Marshal(wanted) failed: %v", err)
 	}
-	if _, err := mt.Update(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", contents, nil); err != nil {
+	if _, err := mt.Create(ctx, cell, "/keyspaces/"+keyspace+"/SrvKeyspace", contents); err != nil {
 		t.Fatalf("Update(/keyspaces/ks1/SrvKeyspace) failed: %v", err)
 	}
 
