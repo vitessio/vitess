@@ -73,13 +73,6 @@ type QueryEngine struct {
 	queryServiceStats *QueryServiceStats
 }
 
-type compiledPlan struct {
-	Query string
-	*ExecPlan
-	BindVars      map[string]interface{}
-	TransactionID int64
-}
-
 // Helper method for conn pools to convert errors
 func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
 	conn, err := pool.Get(ctx)

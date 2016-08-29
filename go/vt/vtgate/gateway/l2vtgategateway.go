@@ -165,12 +165,10 @@ func (lg *l2VTGateGateway) ExecuteBatch(ctx context.Context, keyspace, shard str
 
 // StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
 func (lg *l2VTGateGateway) StreamExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
-	var usedConn *l2VTGateConn
 	var stream sqltypes.ResultStream
 	err := lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
 		var err error
 		stream, err = conn.conn.StreamExecute(ctx, target, query, bindVars)
-		usedConn = conn
 		return err
 	}, 0, true)
 	if err != nil {

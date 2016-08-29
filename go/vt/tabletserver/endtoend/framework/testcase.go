@@ -171,24 +171,6 @@ func RowsToStrings(qr *sqltypes.Result) [][]string {
 	return result
 }
 
-func checkStat(name string, want interface{}, gotStats int, gotInfo int64) error {
-	if want == nil {
-		return nil
-	}
-	var errs []string
-	iwant := want.(int)
-	if gotStats != iwant {
-		errs = append(errs, fmt.Sprintf("%s mismatch on table stats: %d, want %d", name, gotStats, iwant))
-	}
-	if int(gotInfo) != iwant {
-		errs = append(errs, fmt.Sprintf("%s mismatch on query info: %d, want %d", name, int(gotInfo), iwant))
-	}
-	if len(errs) != 0 {
-		return errors.New(strings.Join(errs, "\n"))
-	}
-	return nil
-}
-
 // MultiCase groups a number of test cases under a name.
 // A MultiCase is also Testable. So, it can be recursive.
 type MultiCase struct {

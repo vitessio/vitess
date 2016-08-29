@@ -35,7 +35,6 @@ const (
 	// Note that higher values for this flag --destination_pack_count will
 	// increase memory consumption in vtworker, vttablet and mysql.
 	defaultDestinationPackCount    = 10
-	defaultMinTableSizeForSplit    = 1024 * 1024
 	defaultDestinationWriterCount  = 20
 	defaultMinHealthyRdonlyTablets = 2
 	defaultMaxTPS                  = throttler.MaxRateModuleDisabled

@@ -132,12 +132,10 @@ func (dg *discoveryGateway) ExecuteBatch(ctx context.Context, keyspace, shard st
 
 // StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
 func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
-	var usedConn tabletconn.TabletConn
 	var stream sqltypes.ResultStream
 	err := dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn, target *querypb.Target) error {
 		var err error
 		stream, err = conn.StreamExecute(ctx, target, query, bindVars)
-		usedConn = conn
 		return err
 	}, 0, true)
 	if err != nil {

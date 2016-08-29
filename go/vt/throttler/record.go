@@ -14,7 +14,3 @@ type record struct {
 	// transactions per seconds.
 	value int64
 }
-
-func (r record) isZero() bool {
-	return r.value == 0 && r.time.IsZero()
-}

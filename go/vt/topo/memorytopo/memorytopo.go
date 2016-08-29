@@ -57,8 +57,21 @@ type node struct {
 	watches map[int]chan *topo.WatchData
 }
 
-func (n *node) isFile() bool {
-	return n.contents != nil
+func newFile(name string, contents []byte) *node {
+	return &node{
+		name:     name,
+		version:  1,
+		contents: contents,
+		watches:  make(map[int]chan *topo.WatchData),
+	}
+}
+
+func newDirectory(name string) *node {
+	return &node{
+		name:     name,
+		version:  1,
+		children: make(map[string]*node),
+	}
 }
 
 func (n *node) isDirectory() bool {

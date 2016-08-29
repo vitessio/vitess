@@ -39,12 +39,6 @@ func newStreamHealthTabletServer(t *testing.T) *streamHealthTabletServer {
 	}
 }
 
-func (s *streamHealthTabletServer) count() int {
-	s.streamHealthMutex.Lock()
-	defer s.streamHealthMutex.Unlock()
-	return len(s.streamHealthMap)
-}
-
 func (s *streamHealthTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
 	s.streamHealthMutex.Lock()
 	defer s.streamHealthMutex.Unlock()
