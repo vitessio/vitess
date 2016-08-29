@@ -32,7 +32,7 @@ func (zkts *Server) NewMasterParticipation(name, id string) (topo.MasterParticip
 	electionPath := path.Join(GlobalElectionPath, name)
 
 	// create the toplevel directory, OK if it exists already.
-	_, err := zk.CreateRecursive(zkts.zconn, electionPath, "", 0, zookeeper.WorldACL(zookeeper.PermAll))
+	_, err := zk.CreateRecursive(zkts.zconn, electionPath, nil, 0, zookeeper.WorldACL(zookeeper.PermAll))
 	if err != nil && err != zookeeper.ErrNodeExists {
 		return nil, convertError(err)
 	}
@@ -40,7 +40,7 @@ func (zkts *Server) NewMasterParticipation(name, id string) (topo.MasterParticip
 	return &zkMasterParticipation{
 		zkts: zkts,
 		name: name,
-		id:   id,
+		id:   []byte(id),
 		stop: make(chan struct{}),
 		done: make(chan struct{}),
 	}, nil
@@ -61,7 +61,7 @@ type zkMasterParticipation struct {
 	name string
 
 	// id is the process's current id.
-	id string
+	id []byte
 
 	// stop is a channel closed when stop is called.
 	stop chan struct{}
@@ -181,6 +181,6 @@ func (mp *zkMasterParticipation) GetCurrentMasterID() (string, error) {
 			return "", convertError(err)
 		}
 
-		return data, nil
+		return string(data), nil
 	}
 }

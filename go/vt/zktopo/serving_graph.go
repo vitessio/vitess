@@ -67,9 +67,9 @@ func (zkts *Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string
 	if err != nil {
 		return err
 	}
-	_, err = zkts.zconn.Set(path, string(data), -1)
+	_, err = zkts.zconn.Set(path, data, -1)
 	if err == zookeeper.ErrNoNode {
-		_, err = zk.CreateRecursive(zkts.zconn, path, string(data), 0, zookeeper.WorldACL(zookeeper.PermAll))
+		_, err = zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PermAll))
 	}
 	return convertError(err)
 }
@@ -95,7 +95,7 @@ func (zkts *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (
 		return nil, topo.ErrNoNode
 	}
 	srvKeyspace := &topodatapb.SrvKeyspace{}
-	if err := json.Unmarshal([]byte(data), srvKeyspace); err != nil {
+	if err := json.Unmarshal(data, srvKeyspace); err != nil {
 		return nil, fmt.Errorf("SrvKeyspace unmarshal failed: %v %v", data, err)
 	}
 	return srvKeyspace, nil
@@ -108,9 +108,9 @@ func (zkts *Server) UpdateSrvVSchema(ctx context.Context, cell string, srvVSchem
 	if err != nil {
 		return err
 	}
-	_, err = zkts.zconn.Set(path, string(data), -1)
+	_, err = zkts.zconn.Set(path, data, -1)
 	if err == zookeeper.ErrNoNode {
-		_, err = zk.CreateRecursive(zkts.zconn, path, string(data), 0, zookeeper.WorldACL(zookeeper.PermAll))
+		_, err = zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PermAll))
 	}
 	return convertError(err)
 }
@@ -126,7 +126,7 @@ func (zkts *Server) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.
 		return nil, topo.ErrNoNode
 	}
 	srvVSchema := &vschemapb.SrvVSchema{}
-	if err := json.Unmarshal([]byte(data), srvVSchema); err != nil {
+	if err := json.Unmarshal(data, srvVSchema); err != nil {
 		return nil, fmt.Errorf("SrvVSchema unmarshal failed: %v %v", data, err)
 	}
 	return srvVSchema, nil

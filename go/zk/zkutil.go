@@ -22,11 +22,11 @@ import (
 )
 
 var (
-	// This error is returned by functions that wait for a result
+	// ErrInterrupted is returned by functions that wait for a result
 	// when they are interrupted.
 	ErrInterrupted = errors.New("zkutil: obtaining lock was interrupted")
 
-	// This error is returned by functions that wait for a result
+	// ErrTimeout is returned by functions that wait for a result
 	// when the timeout value is reached.
 	ErrTimeout = errors.New("zkutil: obtaining lock timed out")
 )
@@ -55,7 +55,7 @@ func IsDirectory(aclv []zookeeper.ACL) bool {
 
 // CreateRecursive creates a path and any pieces required, think mkdir -p.
 // Intermediate znodes are always created empty.
-func CreateRecursive(zconn Conn, zkPath, value string, flags int, aclv []zookeeper.ACL) (pathCreated string, err error) {
+func CreateRecursive(zconn Conn, zkPath string, value []byte, flags int, aclv []zookeeper.ACL) (pathCreated string, err error) {
 	parts := strings.Split(zkPath, "/")
 	if parts[1] != MagicPrefix {
 		return "", fmt.Errorf("zkutil: non /%v path: %v", MagicPrefix, zkPath)
@@ -70,7 +70,7 @@ func CreateRecursive(zconn Conn, zkPath, value string, flags int, aclv []zookeep
 			dirAclv[i] = acl
 			dirAclv[i].Perms = PermDirectory
 		}
-		_, err = CreateRecursive(zconn, path.Dir(zkPath), "", flags, dirAclv)
+		_, err = CreateRecursive(zconn, path.Dir(zkPath), nil, flags, dirAclv)
 		if err != nil && err != zookeeper.ErrNodeExists {
 			return "", err
 		}
@@ -80,7 +80,7 @@ func CreateRecursive(zconn Conn, zkPath, value string, flags int, aclv []zookeep
 }
 
 // CreateOrUpdate creates or updates a file.
-func CreateOrUpdate(zconn Conn, zkPath, value string, flags int, aclv []zookeeper.ACL, recursive bool) (pathCreated string, err error) {
+func CreateOrUpdate(zconn Conn, zkPath string, value []byte, flags int, aclv []zookeeper.ACL, recursive bool) (pathCreated string, err error) {
 	if recursive {
 		pathCreated, err = CreateRecursive(zconn, zkPath, value, 0, zookeeper.WorldACL(zookeeper.PermAll))
 	} else {
@@ -98,6 +98,8 @@ type pathItem struct {
 	err  error
 }
 
+// ChildrenRecursive returns the relative path of all the children of
+// the provided node.
 func ChildrenRecursive(zconn Conn, zkPath string) ([]string, error) {
 	var err error
 	mutex := sync.Mutex{}
@@ -143,7 +145,7 @@ func ChildrenRecursive(zconn Conn, zkPath string) ([]string, error) {
 	return pathList, nil
 }
 
-// resolve paths like:
+// ResolveWildcards resolves paths like:
 // /zk/nyc/vt/tablets/*/action
 // /zk/global/vt/keyspaces/*/shards/*/action
 // /zk/*/vt/tablets/*/action
@@ -305,6 +307,7 @@ func resolveRecursive(zconn Conn, parts []string, toplevel bool) ([]string, erro
 	return nil, nil
 }
 
+// DeleteRecursive will delete all children of the given path.
 func DeleteRecursive(zconn Conn, zkPath string, version int32) error {
 	// version: -1 delete any version of the node at path - only applies to the top node
 	err := zconn.Delete(zkPath, version)
@@ -338,6 +341,7 @@ func DeleteRecursive(zconn Conn, zkPath string, version int32) error {
 	return err
 }
 
+// ObtainQueueLock waits until we hold the lock in the provided path.
 // The lexically lowest node is the lock holder - verify that this
 // path holds the lock.  Call this queue-lock because the semantics are
 // a hybrid.  Normal zookeeper locks make assumptions about sequential
@@ -458,7 +462,7 @@ func (zm *zMutex) LockWithTimeout(wait time.Duration) (err error) {
 	// Ensure the rendezvous node is here.
 	// FIXME(msolo) Assuming locks are contended, it will be cheaper to assume this just
 	// exists.
-	_, err = CreateRecursive(zm.zconn, zm.path, "", 0, zookeeper.WorldACL(PermDirectory))
+	_, err = CreateRecursive(zm.zconn, zm.path, nil, 0, zookeeper.WorldACL(PermDirectory))
 	if err != nil && err != zookeeper.ErrNodeExists {
 		return err
 	}
@@ -470,7 +474,7 @@ func (zm *zMutex) LockWithTimeout(wait time.Duration) (err error) {
 	}
 
 createlock:
-	lockCreated, err := zm.zconn.Create(lockPrefix, zm.contents, zflags, zookeeper.WorldACL(PermFile))
+	lockCreated, err := zm.zconn.Create(lockPrefix, []byte(zm.contents), zflags, zookeeper.WorldACL(PermFile))
 	if err != nil {
 		return err
 	}
@@ -621,7 +625,7 @@ func (ze *ZElector) RunTask(task ElectorTask) error {
 	delay := newBackoffDelay(100*time.Millisecond, 1*time.Minute)
 	leaderPath := path.Join(ze.path, "leader")
 	for {
-		_, err := CreateRecursive(ze.zconn, leaderPath, "", 0, zookeeper.WorldACL(PermFile))
+		_, err := CreateRecursive(ze.zconn, leaderPath, nil, 0, zookeeper.WorldACL(PermFile))
 		if err == nil || err == zookeeper.ErrNodeExists {
 			break
 		}
@@ -641,7 +645,7 @@ func (ze *ZElector) RunTask(task ElectorTask) error {
 		// Confirm your win and deliver acceptance speech. This notifies
 		// listeners who will have been watching the leader node for
 		// changes.
-		_, err = ze.zconn.Set(leaderPath, ze.contents, -1)
+		_, err = ze.zconn.Set(leaderPath, []byte(ze.contents), -1)
 		if err != nil {
 			log.Warningf("election promotion failed: %v", err)
 			continue
@@ -662,7 +666,7 @@ func (ze *ZElector) RunTask(task ElectorTask) error {
 			goto watchLeader
 		}
 
-		if data != ze.contents {
+		if string(data) != ze.contents {
 			log.Warningf("election unable to promote leader")
 			task.Stop()
 			// We won the election, but we didn't become the leader. How is that possible?

@@ -39,9 +39,9 @@ func (zkts *Server) CreateShard(ctx context.Context, keyspace, shard string, val
 
 	alreadyExists := false
 	for i, zkPath := range pathList {
-		c := ""
+		var c []byte
 		if i == 0 {
-			c = string(data)
+			c = data
 		}
 		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PermAll))
 		switch err {
@@ -66,7 +66,7 @@ func (zkts *Server) UpdateShard(ctx context.Context, keyspace, shard string, val
 	if err != nil {
 		return -1, err
 	}
-	stat, err := zkts.zconn.Set(shardPath, string(data), int32(existingVersion))
+	stat, err := zkts.zconn.Set(shardPath, data, int32(existingVersion))
 	if err != nil {
 		return -1, convertError(err)
 	}
@@ -98,7 +98,7 @@ func (zkts *Server) GetShard(ctx context.Context, keyspace, shard string) (*topo
 	}
 
 	s := &topodatapb.Shard{}
-	if err = json.Unmarshal([]byte(data), s); err != nil {
+	if err = json.Unmarshal(data, s); err != nil {
 		return nil, 0, fmt.Errorf("bad shard data %v", err)
 	}
 

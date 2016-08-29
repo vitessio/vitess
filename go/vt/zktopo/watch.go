@@ -10,7 +10,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-func newWatchData(valueType dataType, data string, stats *zookeeper.Stat) *topo.WatchData {
+func newWatchData(valueType dataType, data []byte, stats *zookeeper.Stat) *topo.WatchData {
 	bytes, err := rawDataFromNodeValue(valueType, data)
 	if err != nil {
 		return &topo.WatchData{Err: err}

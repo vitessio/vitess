@@ -25,11 +25,11 @@ func newTestServer(t *testing.T, cells []string) topo.Impl {
 	zconn := fakezk.NewConn()
 
 	// create the toplevel zk paths
-	if _, err := zk.CreateRecursive(zconn, "/zk/global/vt", "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
+	if _, err := zk.CreateRecursive(zconn, "/zk/global/vt", nil, 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 		t.Fatalf("cannot init ZooKeeper: %v", err)
 	}
 	for _, cell := range cells {
-		if _, err := zk.CreateRecursive(zconn, fmt.Sprintf("/zk/%v/vt", cell), "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
+		if _, err := zk.CreateRecursive(zconn, fmt.Sprintf("/zk/%v/vt", cell), nil, 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 			t.Fatalf("cannot init ZooKeeper: %v", err)
 		}
 	}
