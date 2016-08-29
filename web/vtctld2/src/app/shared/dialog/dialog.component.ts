@@ -3,6 +3,8 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { DialogContent } from './dialog-content';
 import { DialogSettings } from './dialog-settings';
 
+import { VtctlService } from '../../api/vtctl.service';
+
 @Component({
   selector: 'vt-dialog',
   templateUrl: './dialog.component.html',
@@ -15,6 +17,7 @@ export class DialogComponent {
   @Input() dialogSettings: DialogSettings;
   @Output() close = new EventEmitter();
 
+  constructor(private vtctlService: VtctlService) {}
 
   typeSelected(paramName, e) {
     // Polymer event syntax, waiting on Material2 implementation of dropdown.
@@ -37,12 +40,23 @@ export class DialogComponent {
   sendAction() {
     let resp = this.dialogContent.prepare();
     if (resp.success) {
-      this.dialogSettings.actionFunction();
+      this.runCommand();
     } else {
       this.dialogSettings.setMessage(`There was a problem preparing ${this.dialogContent.getName()}: ${resp.message}`);
     }
     this.dialogSettings.dialogForm = false;
     this.dialogSettings.dialogLog = true;
+  }
+
+  runCommand() {
+    this.dialogSettings.startPending();
+    this.vtctlService.runCommand(this.dialogContent.getPostBody()).subscribe(resp => {
+      if (resp.Error) {
+        this.dialogSettings.setMessage(`${this.dialogSettings.errMsg} ${resp.Error}`);
+      }
+      this.dialogSettings.setLog(resp.Output);
+      this.dialogSettings.endPending();
+    });
   }
 
   getCmd() {
