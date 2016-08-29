@@ -16,14 +16,9 @@
   width: 100%;
 }
 
-.vt-actions-container{
-  padding-left: 32px;
-  padding-right: 32px;
-}
-
 .vt-padding{
-  padding-left: 43px;
-  padding-right: 43px;
+  padding-left: 25px;
+  padding-right: 25px;
 }
 
 >>> p-dialog .ui-dialog{
@@ -71,10 +66,40 @@
     color: black;
 }
 
+/* Toolbar */
+.vt-toolbar {
+  width: 100%;
+  text-align: center;
+}
+
 >>> p-accordiontab a {
   padding-left: 25px! important;
 }
 
 >>> .ui-accordion-content button {
   margin-top: 2px;
+}
+
+>>> p-menu .ui-menu {
+  margin-top: 19px;
+  display: inline-block;
+  top: auto !important;
+  left: auto !important;
+  float: right;
+  
+}
+
+p-menu {
+  display: inline-block;
+  float: left;
+}
+
+.vt-menu {
+  padding-top: 19px;
+  display: inline-block;
+  float: left;
+}
+
+.vt-title {
+  display: inline-block;
 }

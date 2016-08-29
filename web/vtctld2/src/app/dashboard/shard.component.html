@@ -1,28 +1,16 @@
 <div *ngIf="tabletsReady">
-  <h1>{{shardName}}</h1>
-  <div class="vt-action-center">
-  <p-accordion>
-      <p-accordionTab header="Actions">
-        <button md-raised-button (click)="openDeleteShardDialog();">Delete</button>
-        <button md-raised-button (click)="openValidateShardDialog();">Validate</button>
-        <button md-raised-button (click)="openInitShardMasterDialog();">Initialize Shard Master</button>
-        <button md-raised-button (click)="openTabExtRepDialog();">Externally Reparent Tablet</button>
-        <button md-raised-button (click)="openPlanRepShardDialog();">Planned Reparent</button>
-        <button md-raised-button (click)="openEmergencyRepShardDialog();">Emergency Reparent</button>
-        <button md-raised-button (click)="openShardReplicationPosDialog();">Shard Replication Positions</button>
-        <button md-raised-button (click)="openValidateVerShardDialog();">Validate Version</button>
-      </p-accordionTab>
-    </p-accordion>
+  <div class="vt-toolbar vt-padding">
+    <md-icon class="vt-menu" (click)="menu.toggle($event)">menu</md-icon>
+    <p-menu #menu popup="popup" [model]="actions"></p-menu>
+    <h1 class="vt-title">{{keyspaceName}}/{{shardName}}</h1>
   </div>
   <div class="vt-tablet-container">
-    <md-card class="vt-card" *ngIf="tablets.length > 0"> 
-      <p-dataTable [value]="tablets" selectionMode="single" [(selection)]="selectedTablet" (onRowSelect)="navigate(selectedTablet)">
-        <header>{{shardName}}'s Tablets</header>
-        <p-column field="type" header="Type" sortable="true"></p-column>
-        <p-column field="ref" header="Ref" sortable="true"></p-column>
-      </p-dataTable>
-    </md-card>
-    <h2 *ngIf="tablets.length == 0">There are no tablets in this shard</h2>
+    <p-dataTable [value]="tablets" selectionMode="single" [(selection)]="selectedTablet" (onRowSelect)="navigate(selectedTablet)">
+      <header>Tablets</header>
+      <p-column field="type" header="Type" sortable="true"></p-column>
+      <p-column field="ref" header="Alias" sortable="true"></p-column>
+    </p-dataTable>
+    <h2 class="vt-padding" *ngIf="tablets.length == 0">There are no tablets in this shard</h2>
   </div>
   
   <p-dialog [(header)]="dialogSettings.dialogTitle" [(visible)]="dialogSettings.open" draggable="" resizable="" width="800">

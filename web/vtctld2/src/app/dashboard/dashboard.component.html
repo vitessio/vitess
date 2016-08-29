@@ -1,8 +1,8 @@
-<h1>Dashboard</h1>
-<div class="vt-action-center">
-  <button md-raised-button (click)="openValidateDialog();">Validate</button>
+<div class="vt-toolbar vt-padding">
+  <md-icon class="vt-menu" (click)="menu.toggle($event)">menu</md-icon>
+  <p-menu #menu popup="popup" [model]="actions"></p-menu>
+  <h1 class="vt-title">Keyspaces</h1>
 </div>
-
 <div>
   <div *ngFor="let keyspace of keyspaces" class="vt-card">
     <md-card>

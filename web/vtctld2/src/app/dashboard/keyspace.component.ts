@@ -12,6 +12,8 @@ import { RebuildKeyspaceGraphFlags, RemoveKeyspaceCellFlags, ValidateKeyspaceFla
          ValidateSchemaFlags, ValidateVersionFlags } from '../shared/flags/keyspace.flags';
 import { VtctlService } from '../api/vtctl.service';
 
+import { MenuItem } from 'primeng/primeng';
+
 @Component({
   selector: 'vt-keyspace-view',
   templateUrl: './keyspace.component.html',
@@ -26,6 +28,8 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
   keyspace = {};
   dialogSettings: DialogSettings;
   dialogContent: DialogContent;
+  private actions: MenuItem[];
+
   constructor(
     private route: ActivatedRoute,
     private keyspaceService: KeyspaceService,
@@ -34,6 +38,13 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.dialogContent = new DialogContent();
     this.dialogSettings = new DialogSettings();
+    this.actions = [
+      {label: 'Validate', command: (event) => {this.openValidateKeyspaceDialog(); }},
+      {label: 'Validate Schema', command: (event) => {this.openValidateSchemaDialog(); }},
+      {label: 'Validate Version', command: (event) => {this.openValidateVersionDialog(); }},
+      {label: 'Rebuild Keyspace Graph', command: (event) => {this.openRebuildKeyspaceGraphDialog(); }},
+      {label: 'Remove Keyspace Cell', command: (event) => {this.openRemoveKeyspaceCellDialog(); }},
+    ];
 
     this.routeSub = this.route.queryParams.subscribe(params => {
       let keyspaceName = params['keyspace'];

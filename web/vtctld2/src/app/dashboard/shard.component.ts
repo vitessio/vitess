@@ -11,6 +11,8 @@ import { KeyspaceService } from '../api/keyspace.service';
 import { TabletService } from '../api/tablet.service';
 import { VtctlService } from '../api/vtctl.service';
 
+import { MenuItem } from 'primeng/primeng';
+
 @Component({
   selector: 'vt-shard-view',
   templateUrl: './shard.component.html',
@@ -30,6 +32,7 @@ export class ShardComponent implements OnInit, OnDestroy {
   selectedTablet = { label: ''};
   dialogSettings: DialogSettings;
   dialogContent: DialogContent;
+  private actions: MenuItem[];
 
   constructor(
     private route: ActivatedRoute,
@@ -41,6 +44,16 @@ export class ShardComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.dialogContent = new DialogContent();
     this.dialogSettings = new DialogSettings();
+    this.actions = [
+      {label: 'Delete', command: (event) => {this.openDeleteShardDialog(); }},
+      {label: 'Validate', command: (event) => {this.openValidateShardDialog(); }},
+      {label: 'Initialize Shard Master', command: (event) => {this.openInitShardMasterDialog(); }},
+      {label: 'Externally Reparent Tablet', command: (event) => {this.openTabExtRepDialog(); }},
+      {label: 'Planned Reparent', command: (event) => {this.openPlanRepShardDialog(); }},
+      {label: 'Emergency Reparent', command: (event) => {this.openEmergencyRepShardDialog(); }},
+      {label: 'Shard Replication Positions', command: (event) => {this.openShardReplicationPosDialog(); }},
+      {label: 'Validate Version', command: (event) => {this.openValidateVerShardDialog(); }},
+    ];
 
     this.routeSub = this.route.queryParams.subscribe(params => {
       let keyspaceName = params['keyspace'];

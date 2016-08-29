@@ -10,10 +10,12 @@ import { Keyspace } from '../api/keyspace';
 import { KeyspaceService } from '../api/keyspace.service';
 import { VtctlService } from '../api/vtctl.service';
 
+import { MenuItem } from 'primeng/primeng';
+
 @Component({
   selector: 'vt-dashboard',
   templateUrl: './dashboard.component.html',
-  styleUrls: ['../styles/vt.style.css'],
+  styleUrls: ['../styles/vt.style.css', './dashboard.component.css'],
 })
 
 export class DashboardComponent implements OnInit {
@@ -21,6 +23,7 @@ export class DashboardComponent implements OnInit {
   keyspacesReady = false;
   dialogSettings: DialogSettings;
   dialogContent: DialogContent;
+  private actions: MenuItem[];
 
   constructor(
               private keyspaceService: KeyspaceService,
@@ -31,6 +34,7 @@ export class DashboardComponent implements OnInit {
     this.getKeyspaces();
     this.dialogContent = new DialogContent();
     this.dialogSettings = new DialogSettings();
+    this.actions = [{label: 'Validate', command: (event) => {this.openValidateDialog(); }}];
   }
 
   getKeyspaces() {

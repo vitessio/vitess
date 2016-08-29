@@ -1,7 +1,7 @@
 <div *ngIf="dialogSettings.dialogForm">
   <h4 class="vt-padding" *ngIf="dialogSettings.dialogSubtitle">{{dialogSettings.dialogSubtitle}}</h4>
   <span #vtFormWrapper>
-    <div class="vt-padding" >
+    <div class="vt-padding">
       <div *ngFor="let flag of dialogContent.getFlags()">
         <div  *ngIf="dialogContent.canDisplay(flag.id)" class="vt-form-member">
           <div class="vt-cell-left"><strong>{{flag.name}}</strong>: {{flag.description}}</div>
@@ -22,18 +22,17 @@
       {{cmd}}
     </div>
   </div>
-  <div class="vt-actions-container">
+  <div class="vt-padding">
     <button md-button disableRipple="true" (click)="cancelDialog();">Cancel</button>
     <button md-button disableRipple="true" [disabled]="!dialogContent.canSubmit()" (click)="sendAction();">{{dialogSettings.actionWord}}</button>
   </div>
 </div>
 <div class="vt-padding" *ngIf="dialogSettings.dialogLog">
   <div *ngIf="!dialogSettings.pending">
-    <h4>Response:</h4>
-    <div class="vt-sheet">
+    <div>
       {{dialogContent.interpolateMessage(dialogSettings.respText)}}
     </div>
-    <h4>Log:</h4>
+    <h4 *ngIf="dialogSettings.logText">Log:</h4>
     <div class="vt-sheet vt-log-frame" *ngIf="dialogSettings.logText">
       <pre>{{dialogSettings.logText}}</pre>
     </div>

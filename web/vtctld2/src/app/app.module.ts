@@ -14,7 +14,7 @@ import { MdRippleModule } from '@angular2-material/core/ripple/ripple';
 import { MdSidenavModule } from '@angular2-material/sidenav';
 import { MdToolbarModule } from '@angular2-material/toolbar';
 
-import { DataTableModule, DialogModule, DropdownModule, SharedModule, AccordionModule } from 'primeng/primeng';
+import { AccordionModule, DataTableModule, DialogModule, DropdownModule, MenuModule, SharedModule } from 'primeng/primeng';
 
 import { AddButtonComponent } from './shared/add-button.component';
 import { APP_ROUTER_PROVIDERS, routing } from './app.routes';
@@ -56,6 +56,7 @@ import { VtctlService } from './api/vtctl.service';
     MdRippleModule,
     MdSidenavModule,
     MdToolbarModule,
+    MenuModule,
     routing,
     SharedModule,
     AccordionModule,
