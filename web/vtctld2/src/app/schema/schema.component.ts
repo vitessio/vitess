@@ -34,6 +34,8 @@ export class SchemaComponent implements OnInit {
   }
 
   getKeyspaceNames() {
+    this.resetSchemas();
+    this.resetVSchemas();
     this.keyspaceService.getKeyspaceNames().subscribe(keyspaceNames => {
       this.keyspaces = keyspaceNames.map(keyspaceName => {
         return {label: keyspaceName, value: keyspaceName};
@@ -59,6 +61,7 @@ export class SchemaComponent implements OnInit {
   }
 
   getShards(keyspaceName) {
+    this.resetSchemas();
     if (keyspaceName) {
       this.shardService.getShards(keyspaceName).subscribe(shards => {
         this.shards = shards.map(shard => {
@@ -74,6 +77,7 @@ export class SchemaComponent implements OnInit {
   }
 
   getTablets(keyspaceName, shardName) {
+    this.resetSchemas();
     this.tabletService.getTabletList(keyspaceName + '/' + shardName).subscribe(tablets => {
       this.tablets = tablets.map(tablet => {
         let alias = `${tablet.cell}-${tablet.uid}`;
@@ -87,10 +91,8 @@ export class SchemaComponent implements OnInit {
   }
 
   fetchSchema(keyspaceName, tabletName) {
-    this.schemas = [];
-    this.selectedSchema = undefined;
-    this.vSchemas = [];
-    this.selectedVSchema = undefined;
+    this.resetSchemas();
+    this.resetVSchemas();
     let schemaStream = this.vtctlService.runCommand(['GetSchema', tabletName]);
     let vScemaStream = this.vtctlService.runCommand(['GetVSchema', keyspaceName]);
     let allSchemaStream = schemaStream.combineLatest(vScemaStream);
@@ -123,6 +125,16 @@ export class SchemaComponent implements OnInit {
         }
       }
     });
+  }
+
+  resetSchemas() {
+    this.schemas = [];
+    this.selectedSchema = undefined;
+  }
+
+  resetVSchemas() {
+    this.vSchemas = [];
+    this.selectedVSchema = undefined;
   }
 
   createVindexMap(tables) {
