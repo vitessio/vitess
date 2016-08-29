@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -232,7 +233,7 @@ func cmdElock(subFlags *flag.FlagSet, args []string) error {
 	signal.Notify(sigRecv, os.Interrupt)
 
 	for {
-		_, err := zconn.Create(zkPath, "", zookeeper.FlagEphemeral, zookeeper.WorldACL(zookeeper.PermAll))
+		_, err := zconn.Create(zkPath, nil, zookeeper.FlagEphemeral, zookeeper.WorldACL(zookeeper.PermAll))
 		if err != nil {
 			return fmt.Errorf("elock: error %v: %v", zkPath, err)
 		}
@@ -611,7 +612,7 @@ func cmdEdit(subFlags *flag.FlagSet, args []string) error {
 	tmpPath := fmt.Sprintf("/tmp/zk-edit-%v-%v", name, time.Now().UnixNano())
 	f, err := os.Create(tmpPath)
 	if err == nil {
-		_, err = f.WriteString(data)
+		_, err = f.Write(data)
 		f.Close()
 	}
 	if err != nil {
@@ -634,9 +635,9 @@ func cmdEdit(subFlags *flag.FlagSet, args []string) error {
 		return fmt.Errorf("edit: cannot read file %v", err)
 	}
 
-	if string(fileData) != data {
+	if bytes.Compare(fileData, data) != 0 {
 		// data changed - update if we can
-		_, err = zconn.Set(zkPath, string(fileData), stat.Version)
+		_, err = zconn.Set(zkPath, fileData, stat.Version)
 		if err != nil {
 			os.Remove(tmpPath)
 			return fmt.Errorf("edit: cannot write zk file %v", err)
@@ -797,7 +798,7 @@ func cmdCp(subFlags *flag.FlagSet, args []string) error {
 	}
 }
 
-func getPathData(filePath string) (string, error) {
+func getPathData(filePath string) ([]byte, error) {
 	if isZkFile(filePath) {
 		data, _, err := zconn.Get(filePath)
 		return data, err
@@ -807,13 +808,13 @@ func getPathData(filePath string) (string, error) {
 	if err == nil {
 		data, err := ioutil.ReadAll(file)
 		if err == nil {
-			return string(data), err
+			return data, err
 		}
 	}
-	return "", err
+	return nil, err
 }
 
-func setPathData(filePath, data string) error {
+func setPathData(filePath string, data []byte) error {
 	if isZkFile(filePath) {
 		_, err := zconn.Set(filePath, data, -1)
 		if err == zookeeper.ErrNoNode {
@@ -877,7 +878,7 @@ func multiFileCp(args []string) error {
 
 type zkItem struct {
 	path string
-	data string
+	data []byte
 	stat *zookeeper.Stat
 	err  error
 }
@@ -940,7 +941,7 @@ func cmdZip(subFlags *flag.FlagSet, args []string) error {
 		if err != nil {
 			return fmt.Errorf("zip: create failed: %v", err)
 		}
-		_, err = f.Write([]byte(data))
+		_, err = f.Write(data)
 		if err != nil {
 			return fmt.Errorf("zip: create failed: %v", err)
 		}
@@ -984,11 +985,11 @@ func cmdUnzip(subFlags *flag.FlagSet, args []string) error {
 		if dstPath != "/" {
 			zkPath = path.Join(dstPath, zkPath)
 		}
-		_, err = zk.CreateRecursive(zconn, zkPath, string(data), 0, zookeeper.WorldACL(zookeeper.PermAll))
+		_, err = zk.CreateRecursive(zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PermAll))
 		if err != nil && err != zookeeper.ErrNodeExists {
 			return fmt.Errorf("unzip: zk create failed: %v", err)
 		}
-		_, err = zconn.Set(zkPath, string(data), -1)
+		_, err = zconn.Set(zkPath, data, -1)
 		if err != nil {
 			return fmt.Errorf("unzip: zk set failed: %v", err)
 		}

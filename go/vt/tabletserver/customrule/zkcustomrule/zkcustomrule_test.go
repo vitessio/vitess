@@ -41,11 +41,11 @@ var conn zk.Conn
 
 func setUpFakeZk(t *testing.T) {
 	conn = fakezk.NewConn()
-	conn.Create("/zk", "", 0, zookeeper.WorldACL(zookeeper.PermAll))
-	conn.Create("/zk/fake", "", 0, zookeeper.WorldACL(zookeeper.PermAll))
-	conn.Create("/zk/fake/customrules", "", 0, zookeeper.WorldACL(zookeeper.PermAll))
-	conn.Create("/zk/fake/customrules/testrules", "customrule1", 0, zookeeper.WorldACL(zookeeper.PermAll))
-	conn.Set("/zk/fake/customrules/testrules", customRule1, -1)
+	conn.Create("/zk", nil, 0, zookeeper.WorldACL(zookeeper.PermAll))
+	conn.Create("/zk/fake", nil, 0, zookeeper.WorldACL(zookeeper.PermAll))
+	conn.Create("/zk/fake/customrules", nil, 0, zookeeper.WorldACL(zookeeper.PermAll))
+	conn.Create("/zk/fake/customrules/testrules", []byte("customrule1"), 0, zookeeper.WorldACL(zookeeper.PermAll))
+	conn.Set("/zk/fake/customrules/testrules", []byte(customRule1), -1)
 }
 
 func TestZkCustomRule(t *testing.T) {
@@ -70,7 +70,7 @@ func TestZkCustomRule(t *testing.T) {
 	}
 
 	// Test updating rules
-	conn.Set("/zk/fake/customrules/testrules", customRule2, -1)
+	conn.Set("/zk/fake/customrules/testrules", []byte(customRule2), -1)
 	<-time.After(time.Second) //Wait for the polling thread to respond
 	qrs, _, err = zkcr.GetRules()
 	if err != nil {
@@ -97,8 +97,8 @@ func TestZkCustomRule(t *testing.T) {
 	}
 
 	// Test rule path revival
-	conn.Create("/zk/fake/customrules/testrules", "customrule2", 0, zookeeper.WorldACL(zookeeper.PermAll))
-	conn.Set("/zk/fake/customrules/testrules", customRule2, -1)
+	conn.Create("/zk/fake/customrules/testrules", []byte("customrule2"), 0, zookeeper.WorldACL(zookeeper.PermAll))
+	conn.Set("/zk/fake/customrules/testrules", []byte(customRule2), -1)
 	<-time.After(time.Second) //Wait for the polling thread to respond
 	qrs, _, err = zkcr.GetRules()
 	if err != nil {

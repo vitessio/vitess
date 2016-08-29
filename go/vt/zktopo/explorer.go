@@ -46,7 +46,7 @@ func (ex ZkExplorer) HandlePath(zkPath string, r *http.Request) *explorer.Result
 		result.Error = err.Error()
 		return result
 	}
-	result.Data = data
+	result.Data = string(data)
 	children, _, err := ex.zconn.Children(zkPath)
 	if err != nil {
 		result.Error = err.Error()

@@ -1,6 +1,7 @@
 package zktopo
 
 import (
+	"bytes"
 	"fmt"
 	"path"
 
@@ -16,9 +17,8 @@ import (
 
 // Create is part of the topo.Backend interface.
 func (zkts *Server) Create(ctx context.Context, cell, filePath string, contents []byte) (topo.Version, error) {
-	stringContents := string(contents)
 	zkPath := path.Join(zkPathForCell(cell), filePath)
-	pathCreated, err := zk.CreateRecursive(zkts.zconn, zkPath, stringContents, 0, zookeeper.WorldACL(zk.PermFile))
+	pathCreated, err := zk.CreateRecursive(zkts.zconn, zkPath, contents, 0, zookeeper.WorldACL(zk.PermFile))
 	if err != nil {
 		return nil, convertError(err)
 	}
@@ -31,7 +31,7 @@ func (zkts *Server) Create(ctx context.Context, cell, filePath string, contents 
 	if err != nil {
 		return nil, convertError(err)
 	}
-	if data != stringContents {
+	if bytes.Compare(data, contents) != 0 {
 		return nil, fmt.Errorf("file contents changed between zk.Create and zk.Get")
 	}
 
@@ -50,7 +50,7 @@ func (zkts *Server) Update(ctx context.Context, cell, filePath string, contents 
 		zkVersion = -1
 	}
 
-	stat, err := zkts.zconn.Set(zkPath, string(contents), zkVersion)
+	stat, err := zkts.zconn.Set(zkPath, contents, zkVersion)
 	if zkVersion == -1 && err == zookeeper.ErrNoNode {
 		// In zookeeper, an unconditional set of a nonexisting
 		// node will return ErrNoNode. In that case, we want
@@ -70,7 +70,7 @@ func (zkts *Server) Get(ctx context.Context, cell, filePath string) ([]byte, top
 	if err != nil {
 		return nil, nil, convertError(err)
 	}
-	return []byte(contents), ZKVersion(stat.Version), nil
+	return contents, ZKVersion(stat.Version), nil
 }
 
 // Delete is part of the topo.Backend interface.

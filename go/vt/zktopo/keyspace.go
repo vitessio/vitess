@@ -46,9 +46,9 @@ func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *
 
 	alreadyExists := false
 	for i, zkPath := range pathList {
-		c := ""
+		var c []byte
 		if i == 0 {
-			c = string(data)
+			c = data
 		}
 		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PermAll))
 		switch err {
@@ -73,7 +73,7 @@ func (zkts *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *
 	if err != nil {
 		return -1, err
 	}
-	stat, err := zkts.zconn.Set(keyspacePath, string(data), int32(existingVersion))
+	stat, err := zkts.zconn.Set(keyspacePath, data, int32(existingVersion))
 	if err != nil {
 		return -1, convertError(err)
 	}
@@ -100,7 +100,7 @@ func (zkts *Server) GetKeyspace(ctx context.Context, keyspace string) (*topodata
 	}
 
 	k := &topodatapb.Keyspace{}
-	if err = json.Unmarshal([]byte(data), k); err != nil {
+	if err = json.Unmarshal(data, k); err != nil {
 		return nil, 0, fmt.Errorf("bad keyspace data %v", err)
 	}
 

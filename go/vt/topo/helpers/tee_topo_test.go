@@ -35,10 +35,10 @@ func newFakeTeeServer(t *testing.T) topo.Impl {
 	zconn2 := fakezk.NewConn()
 
 	for _, cell := range cells {
-		if _, err := zk.CreateRecursive(zconn1, fmt.Sprintf("/zk/%v/vt", cell), "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
+		if _, err := zk.CreateRecursive(zconn1, fmt.Sprintf("/zk/%v/vt", cell), nil, 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 			t.Fatalf("cannot init ZooKeeper: %v", err)
 		}
-		if _, err := zk.CreateRecursive(zconn2, fmt.Sprintf("/zk/%v/vt", cell), "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
+		if _, err := zk.CreateRecursive(zconn2, fmt.Sprintf("/zk/%v/vt", cell), nil, 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 			t.Fatalf("cannot init ZooKeeper: %v", err)
 		}
 	}

@@ -17,8 +17,8 @@ import (
 // used here (for instance, using -1 as version to specify any
 // version)
 type Conn interface {
-	Get(path string) (data string, stat *zookeeper.Stat, err error)
-	GetW(path string) (data string, stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error)
+	Get(path string) (data []byte, stat *zookeeper.Stat, err error)
+	GetW(path string) (data []byte, stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error)
 
 	Children(path string) (children []string, stat *zookeeper.Stat, err error)
 	ChildrenW(path string) (children []string, stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error)
@@ -26,9 +26,9 @@ type Conn interface {
 	Exists(path string) (stat *zookeeper.Stat, err error)
 	ExistsW(path string) (stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error)
 
-	Create(path, value string, flags int, aclv []zookeeper.ACL) (pathCreated string, err error)
+	Create(path string, value []byte, flags int, aclv []zookeeper.ACL) (pathCreated string, err error)
 
-	Set(path, value string, version int32) (stat *zookeeper.Stat, err error)
+	Set(path string, value []byte, version int32) (stat *zookeeper.Stat, err error)
 
 	Delete(path string, version int32) (err error)
 
@@ -91,7 +91,7 @@ func shouldRetry(err error) bool {
 }
 
 // Get implements Conn.
-func (conn *MetaConn) Get(path string) (data string, stat *zookeeper.Stat, err error) {
+func (conn *MetaConn) Get(path string) (data []byte, stat *zookeeper.Stat, err error) {
 	var zconn Conn
 	for i := 0; i < maxAttempts; i++ {
 		zconn, err = conn.connCache.ConnForPath(path)
@@ -107,7 +107,7 @@ func (conn *MetaConn) Get(path string) (data string, stat *zookeeper.Stat, err e
 }
 
 // GetW implements Conn.
-func (conn *MetaConn) GetW(path string) (data string, stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error) {
+func (conn *MetaConn) GetW(path string) (data []byte, stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error) {
 	zconn, err := conn.connCache.ConnForPath(path)
 	if err != nil {
 		return
@@ -172,7 +172,7 @@ func (conn *MetaConn) ExistsW(path string) (stat *zookeeper.Stat, watch <-chan z
 }
 
 // Create implements Conn.
-func (conn *MetaConn) Create(path, value string, flags int, aclv []zookeeper.ACL) (pathCreated string, err error) {
+func (conn *MetaConn) Create(path string, value []byte, flags int, aclv []zookeeper.ACL) (pathCreated string, err error) {
 	var zconn Conn
 	for i := 0; i < maxAttempts; i++ {
 		zconn, err = conn.connCache.ConnForPath(path)
@@ -187,7 +187,7 @@ func (conn *MetaConn) Create(path, value string, flags int, aclv []zookeeper.ACL
 				// We were asked to create a /zk/<cell> path, but /zk doesn't exist.
 				// We should create /zk automatically in this case, because it's
 				// impossible to create /zk via MetaConn, since there's no cell name.
-				_, err = zconn.Create("/"+MagicPrefix, "", 0, zookeeper.WorldACL(zookeeper.PermAll))
+				_, err = zconn.Create("/"+MagicPrefix, nil, 0, zookeeper.WorldACL(zookeeper.PermAll))
 				if err != nil {
 					if shouldRetry(err) {
 						continue
@@ -208,7 +208,7 @@ func (conn *MetaConn) Create(path, value string, flags int, aclv []zookeeper.ACL
 }
 
 // Set implements Conn.
-func (conn *MetaConn) Set(path, value string, version int32) (stat *zookeeper.Stat, err error) {
+func (conn *MetaConn) Set(path string, value []byte, version int32) (stat *zookeeper.Stat, err error) {
 	var zconn Conn
 	for i := 0; i < maxAttempts; i++ {
 		zconn, err = conn.connCache.ConnForPath(path)
