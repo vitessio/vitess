@@ -15,7 +15,7 @@ export class TopologyInfoService {
        .map(resp => resp.json());
    }
 
-   getKeyspacesAndCell() {
+   getCombinedTopologyInfo() {
      let keyspaceStream = this.getKeyspaces();
      let cellStream = this.getCells();
      return keyspaceStream.combineLatest(cellStream);

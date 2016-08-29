@@ -1,12 +1,10 @@
 import { Component, OnInit, ComponentResolver, ViewChildren, NgZone, QueryList, OnDestroy } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 
-import { HeatmapComponent } from './heatmap.component.ts';
+import { HeatmapComponent } from './heatmap.component';
 import { TabletStatusService } from '../api/tablet-status.service';
 import { TopologyInfoService } from '../api/topology-info.service';
 
-import { Router, ActivatedRoute } from '@angular/router';
-import { Dropdown } from 'primeng/primeng';
 import { SelectItem } from 'primeng/primeng';
 
 @Component({
@@ -210,11 +208,14 @@ console.log("in ngOnDestroy")
        this.statusService.unsubscribe();
      }
      // Subscribe to get updates every second.
-     this.statusService = this.tabletService.getTabletStats(
-         this.selectedKeyspace, this.selectedCell, this.selectedType,
+     this.statusService = this.tabletService.getTabletStats(this.selectedKeyspace,
+         this.selectedCell, this.selectedType,
          this.selectedMetric).subscribe(stats => {
-           this.heatmaps = stats;
-           this.metric = this.selectedMetric;
+           let wasChanged = this.updateKeyspaces(stats);
+           // If there is no change in the keyspaces, then we will update the map already created.
+           if (!wasChanged) {
+             this.heatmaps.toArray().forEach((map) => map.redraw(this.mapOfKeyspaces[map.name], this.selectedMetric));
+           }
            this.heatmapDataReady = true;
          });
   }

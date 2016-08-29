@@ -1,6 +1,6 @@
-import { Component, Input, AfterViewInit, NgZone, OnInit  } from '@angular/core';
+import { Component, Input, AfterViewInit, NgZone, OnInit } from '@angular/core';
 
-import { TabletComponent } from './tablet.component';
+import { TabletPopupComponent } from './tablet-popup.component';
 import { TabletStatusService } from '../api/tablet-status.service';
 
 declare var Plotly: any;
@@ -9,13 +9,6 @@ declare var Plotly: any;
   selector: 'vt-heatmap',
   templateUrl: './heatmap.component.html',
   styleUrls: ['./heatmap.component.css'],
-  directives: [
-    CORE_DIRECTIVES,
-    TabletComponent,
-  ],
-  providers: [
-    TabletStatusService
-  ]
 })
 
 export class HeatmapComponent implements AfterViewInit, OnInit {
@@ -30,6 +23,8 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
   data: number[][];
   // aliases holds the alias references for each datapoint in the heatmap.
   aliases: any[][];
+  // Keyspace is a label object with the keyspace name and it's rowspan.
+  keyspace: any;
   // yLabels is an array of objects each with one cell label and multiple type labels
   // each of which have a name and a rowspan
   // For example if there was 2 types within 1 cell yLabels would be like the following:
@@ -52,22 +47,33 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
   private colorscaleValue;
 
   // Needed for the popup.
-  showPopup = false;
-  popupReady = false;
+  showPopup = true;
   popupTitle: string;
+  popupAlias: any;
   popupData: Array<any>;
+  popupKeyspace: string;
+  popupShard: string;
+  popupCell: string;
+  popupTabletType: string;
+  popupClickState: boolean;
+  clicked = false;
 
   private getRowHeight() { return 20; }
-  private getXLabelsRowHeight() { return 40; }
+  private getXLabelsRowHeight() { return 50; }
 
   constructor(private zone: NgZone, private tabletService: TabletStatusService) { }
 
   // getTotalRows returns the number of rows the heatmap should span.
   getTotalRows() {
-    /*if (this.heatmap.YLabels == null) {
-      return this.heatmap.Data.length;
+    return this.heatmap.KeyspaceLabel.Rowspan;
+  }
+
+  getRemainingRows(upperBound) {
+    let numbers = [];
+    for (let i = 1; i < upperBound; i++) {
+      numbers.push(i);
     }
-    return this.heatmap.YLabels.reduce((prev, cur) => (prev + cur.Label.Rowspan), 0);
+    return numbers;
   }
 
   ngOnInit() {
@@ -80,29 +86,97 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
     this.keyspace = this.heatmap.KeyspaceLabel;
     this.yGrid = this.heatmap.YGridLines;
 
-    let body = document.body;
-    this.heatmapWidth = (body.clientWidth - 400);
+    let heatmapTable = document.getElementById('heatmapTable');
+    this.heatmapWidth = heatmapTable.clientWidth - 100;
     if (this.heatmapWidth < 10) {
       this.heatmapWidth = 10;
     }
   }
 
-  ngAfterViewInit() {
-      let x: number = data.points[0].x;
-      let y: number = data.points[0].y;
-      // TODO (pkulshre): Revise this to display the popup such that it doesn't disappear
-      // when heatmap is refreshed during polling.
-      this.tabletService.getTabletHealth(alias.cell, alias.uid).subscribe( health => {
-        this.popupTitle = '' + alias.cell + '-' + alias.uid;
-        this.popupData = health;
-        this.popupReady = true;
-        this.zone.run(() => { this.showPopup = true; });
-      });
-    }.bind(this));
+  getCell(rowClicked) {
+    let sum = 0;
+    for (let i = this.yLabels.length-1; i >= 0; i--) {
+      sum += this.yLabels[i].CellLabel.Rowspan;
+      if(rowClicked <= sum) {
+        return this.yLabels[i].CellLabel.Name;
+      }
+    }
+    return '';
   }
 
+  getType(rowClicked) {
+    let sum = 0;
+    for (let cellIndex = this.yLabels.length-1; cellIndex >= 0; cellIndex--) {
+      if (this.yLabels[cellIndex].TypeLabels == null) {
+        return 'all'
+      }
+      for ( let typeIndex = this.yLabels[cellIndex].TypeLabels.length - 1; typeIndex >= 0; typeIndex--) {
+        sum += this.yLabels[cellIndex].TypeLabels[typeIndex].Rowspan;
+        if(rowClicked < sum) {
+          return this.yLabels[cellIndex].TypeLabels[typeIndex].Name;
+        }
+      }
+    }
+    return '';
+  }
+
+  ngAfterViewInit() {
+    this.drawHeatmap(this.metric);
+    let elem = <any>(document.getElementById(this.name));
+
+    // onClick handler for the heatmap.
+    // Upon clicking, the popup will display all relevent data for that data point.
+    elem.on('plotly_click', function(data) {
+      this.zone.run(() => { this.showPopup = false; })
+      let x = this.xLabels.indexOf(data.points[0].x);
+      let y = data.points[0].y;
+      if (this.aliases == null) {
+        this.popupAlias = null;
+      }
+      else {
+        this.popupAlias = this.aliases[y][x];
+      }
+      this.popupData = data.points[0].z;
+      this.popupKeyspace = this.keyspace.Name;
+      this.popupShard = data.points[0].x;
+      this.popupCell = this.getCell(y);
+      this.popupType = this.getType(y);
+      this.popupClickState = true;
+      this.zone.run(() => { this.showPopup = true; })
+      this.clicked = true;
+    }.bind(this))
+
+    // onHover handler for the heatmap.
+    // Upon hover, the popup will display basic data for that data point
+    // (tablet alias - if applicable, keyspace, cell, shard, and type)
+    elem.on('plotly_hover', function(data) {
+      if (this.clicked == true) {
+        return;
+      }
+      this.zone.run(() => { this.showPopup = false; })
+      let x = this.xLabels.indexOf(data.points[0].x);
+      let y = data.points[0].y;
+      if (this.aliases == null) {
+        this.popupAlias = null;
+      }
+      else {
+        this.popupAlias = this.aliases[y][x];
+      }
+      this.popupData = data.points[0].z;
+      this.popupKeyspace = this.keyspace.Name;
+      this.popupShard = data.points[0].x;
+      this.popupCell = this.getCell(y);
+      this.popupType = this.getType(y);
+      this.popupClickState = false;
+      this.zone.run(() => { this.showPopup = true; })
+    }.bind(this))
+  }
+
+  // closePopup removes the popup from the view.
   closePopup() {
     this.zone.run(() => { this.showPopup = false; });
+    this.clicked = false;
+  }
 
   // redraw updates the existing map with new data.
   redraw(stats, metric) {
@@ -128,7 +202,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
     if (metric === 'healthy') {
       this.colorscaleValue = [
         [0.0, '#000000'],
-        [0.33, '#F7EEDE'],
+        [0.33, '#FFFFFF'],
         [0.66, '#EA109A'],
         [1.0, '#A22417'],
       ];
@@ -140,7 +214,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
       let percent = (max === 0) ? 1.0 : 1 / max;
       this.colorscaleValue = [
         [0.0, '#000000'],
-        [percent, '#F7EEDE'],
+        [percent, '#FFFFFF'],
         [1.0, '#A22417'],
       ];
       this.dataMin = -1;
@@ -158,7 +232,8 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
       x: this.xLabels,
       colorscale: this.colorscaleValue,
       type: 'heatmap',
-      showscale: false
+      showscale: false,
+      hoverinfo: 'none'
     }];
     let xAxisTemplate = {
       type: 'category',

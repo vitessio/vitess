@@ -37,7 +37,7 @@ import { ShardService } from './api/shard.service';
 import { TabletService } from './api/tablet.service';
 import { TabletStatusService } from './api/tablet-status.service';
 import { TopoDataService } from './api/topo-data.service';
-import { TopologyInfoService } from './api/topology-info.service.ts';
+import { TopologyInfoService } from './api/topology-info.service';
 import { VtctlService } from './api/vtctl.service';
 
 @NgModule({

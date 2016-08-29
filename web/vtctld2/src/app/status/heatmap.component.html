@@ -1,6 +1,6 @@
 <h2> {{keyspace.Name}} </h2>
 
-<table class="collapsed-border" width="100%">
+<table id="heatmapTable" class="collapsed-border">
   <!-- The first row with an offset to match the heatmap labels. -->
   <tr [ngStyle]="{'height': (getXLabelsRowHeight())+'px'}">
     <td class="no-padding"></td>
@@ -13,7 +13,11 @@
   </tr>
 
   <!-- The labels, and nested labels, of the map are drawn -->
-  <div *ngFor="let label of yLabels">
+<template ngFor let-label [ngForOf]="yLabels" let-firstKeyspace="first">
+     <template [ngIf]="label.TypeLabels == null">
+       <tr [ngStyle]="{'height': getRowHeight()+'px'}">
+         <td  [attr.rowspan]="label.CellLabel.Rowspan" class="bordered"> {{label.CellLabel.Name}} </td>
+       </tr>
 
        <tr *ngFor="let num of getRemainingRows(label.CellLabel.Rowspan)" [ngStyle]="{'height': getRowHeight()+'px'}"></tr>
      </template>
@@ -31,9 +35,16 @@
 </template>
 </table>
 
-<div *ngIf="popupReady==true" [hidden]="!showPopup" class="popup">
-  <vt-tablet-popup [title]="popupTitle"
-                   [data]="popupData">
+<div *ngIf="showPopup" class="popup">
+  <vt-tablet-popup
+                   [data]="popupData"
+                   [alias]="popupAlias"
+                   [keyspace]="popupKeyspace"
+                   [shard]="popupShard"
+                   [cell]="popupCell"
+                   [tabletType]="popupType"
+                   [clicked]="popupClickState"
+                   >
   </vt-tablet-popup>
-  <button md-button (click)="closePopup()"> Dismiss </button>
+ <button md-button (click)="closePopup()" class="centered"> Dismiss </button>
 </div>
