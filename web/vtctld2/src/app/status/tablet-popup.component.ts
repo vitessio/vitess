@@ -48,28 +48,27 @@ export class TabletPopupComponent implements OnInit {
     }
     // It is the unaggregated view where each tablet has it's alias as a title.
     if (this.alias != null) {
-      this.title = this.alias.cell + " - " + this.alias.uid;
+      this.title = this.alias.cell + ' - ' + this.alias.uid;
     }
     // The map has been clicked so show full detailed popup.
     if (this.clicked) {
       if (this.alias != null) {
         this.parseUnaggregatedData();
-        this.zone.run( () => {this.unaggregated = true} );
-      }
-      else {
-        this.zone.run( () => {this.aggregated = true} );
+        this.zone.run( () => { this.unaggregated = true; });
+      } else {
+        this.zone.run( () => { this.aggregated = true; });
       }
     }
   }
 
   getType(type: number) {
-    if(type === 1) {
+    if (type === 1) {
       return 'MASTER';
     }
-    if(type === 2) {
+    if (type === 2) {
       return 'REPLICA';
     }
-    if(type === 3) {
+    if (type === 3) {
       return 'RDONLY';
     }
   }

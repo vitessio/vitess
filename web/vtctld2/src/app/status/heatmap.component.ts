@@ -1,6 +1,5 @@
 import { Component, Input, AfterViewInit, NgZone, OnInit } from '@angular/core';
 
-import { TabletPopupComponent } from './tablet-popup.component';
 import { TabletStatusService } from '../api/tablet-status.service';
 
 declare var Plotly: any;
@@ -95,9 +94,9 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
 
   getCell(rowClicked) {
     let sum = 0;
-    for (let i = this.yLabels.length-1; i >= 0; i--) {
+    for (let i = this.yLabels.length - 1; i >= 0; i--) {
       sum += this.yLabels[i].CellLabel.Rowspan;
-      if(rowClicked <= sum) {
+      if (rowClicked <= sum) {
         return this.yLabels[i].CellLabel.Name;
       }
     }
@@ -106,13 +105,13 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
 
   getType(rowClicked) {
     let sum = 0;
-    for (let cellIndex = this.yLabels.length-1; cellIndex >= 0; cellIndex--) {
+    for (let cellIndex = this.yLabels.length - 1; cellIndex >= 0; cellIndex--) {
       if (this.yLabels[cellIndex].TypeLabels == null) {
-        return 'all'
+        return 'all';
       }
       for ( let typeIndex = this.yLabels[cellIndex].TypeLabels.length - 1; typeIndex >= 0; typeIndex--) {
         sum += this.yLabels[cellIndex].TypeLabels[typeIndex].Rowspan;
-        if(rowClicked < sum) {
+        if (rowClicked < sum) {
           return this.yLabels[cellIndex].TypeLabels[typeIndex].Name;
         }
       }
@@ -127,13 +126,12 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
     // onClick handler for the heatmap.
     // Upon clicking, the popup will display all relevent data for that data point.
     elem.on('plotly_click', function(data) {
-      this.zone.run(() => { this.showPopup = false; })
+      this.zone.run(() => { this.showPopup = false; });
       let x = this.xLabels.indexOf(data.points[0].x);
       let y = data.points[0].y;
       if (this.aliases == null) {
         this.popupAlias = null;
-      }
-      else {
+      } else {
         this.popupAlias = this.aliases[y][x];
       }
       this.popupData = data.points[0].z;
@@ -142,24 +140,23 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
       this.popupCell = this.getCell(y);
       this.popupType = this.getType(y);
       this.popupClickState = true;
-      this.zone.run(() => { this.showPopup = true; })
+      this.zone.run(() => { this.showPopup = true; });
       this.clicked = true;
-    }.bind(this))
+    }.bind(this));
 
     // onHover handler for the heatmap.
     // Upon hover, the popup will display basic data for that data point
     // (tablet alias - if applicable, keyspace, cell, shard, and type)
     elem.on('plotly_hover', function(data) {
-      if (this.clicked == true) {
+      if (this.clicked === true) {
         return;
       }
-      this.zone.run(() => { this.showPopup = false; })
+      this.zone.run(() => { this.showPopup = false; });
       let x = this.xLabels.indexOf(data.points[0].x);
       let y = data.points[0].y;
       if (this.aliases == null) {
         this.popupAlias = null;
-      }
-      else {
+      } else {
         this.popupAlias = this.aliases[y][x];
       }
       this.popupData = data.points[0].z;
@@ -168,8 +165,8 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
       this.popupCell = this.getCell(y);
       this.popupType = this.getType(y);
       this.popupClickState = false;
-      this.zone.run(() => { this.showPopup = true; })
-    }.bind(this))
+      this.zone.run(() => { this.showPopup = true; });
+    }.bind(this));
   }
 
   // closePopup removes the popup from the view.
@@ -193,8 +190,8 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
     };
     let chartLayout = {
       yaxis: { tickvals: [this.yGrid] },
-    }
-    Plotly.restyle(this.name, chartInfo, [0]);
+    };
+    Plotly.restyle(this.name, chartInfo, chartLayout, [0]);
   }
 
   // setupColorscale sets the right scale based on what metric the heatmap is displaying.
@@ -202,7 +199,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
     if (metric === 'healthy') {
       this.colorscaleValue = [
         [0.0, '#000000'],
-        [0.33, '#FFFFFF'],
+        [0.33, '#F7EEDE'],
         [0.66, '#EA109A'],
         [1.0, '#A22417'],
       ];
@@ -214,7 +211,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
       let percent = (max === 0) ? 1.0 : 1 / max;
       this.colorscaleValue = [
         [0.0, '#000000'],
-        [percent, '#FFFFFF'],
+        [percent, '#F7EEDE'],
         [1.0, '#A22417'],
       ];
       this.dataMin = -1;
