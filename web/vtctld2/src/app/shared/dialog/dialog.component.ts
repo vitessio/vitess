@@ -19,11 +19,6 @@ export class DialogComponent {
 
   constructor(private vtctlService: VtctlService) {}
 
-  typeSelected(paramName, e) {
-    // Polymer event syntax, waiting on Material2 implementation of dropdown.
-    this.dialogContent.setParam(paramName, e.detail.item.__dom.firstChild.data);
-  }
-
   cancelDialog() {
     this.dialogSettings.toggleModal();
     this.close.emit({});
@@ -63,8 +58,5 @@ export class DialogComponent {
     let preppedFlags = this.dialogContent.prepare(false).flags;
     let sortedFlags = this.dialogContent.getFlags(preppedFlags);
     return this.dialogContent.getPostBody(sortedFlags);
-  }
-  logToArray(logText) {
-    return logText.split('\n');
   }
 }

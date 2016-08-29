@@ -185,10 +185,6 @@ export class TabletComponent implements OnInit, OnDestroy {
     this.router.navigate(['/shard'], {queryParams: {keyspace: this.keyspaceName, shard: this.shardName}});
   }
 
-  navigate(tablet) {
-    this.router.navigate(['/tablet'], {queryParams: {keyspace: this.keyspaceName, shard: this.shardName, tablet: tablet.ref}});
-  }
-
   canDeactivate(): Observable<boolean> | boolean {
     return !this.dialogSettings.pending;
   }

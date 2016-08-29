@@ -18,7 +18,7 @@ export class DialogContent {
   public action: string;
   private prepareFunction: any;
 
-  constructor(nameId= '', flags= {}, requiredFlags= {}, prepareFunction= undefined, action= '') {
+  constructor(nameId = '', flags = {}, requiredFlags = {}, prepareFunction = undefined, action = '') {
     this.nameId = nameId;
     this.flags = flags;
     this.requiredFlags = requiredFlags;
@@ -40,7 +40,7 @@ export class DialogContent {
     Currently turns the flagIds and their values into a url encoded string for
     submission to the server.
   */
-  public getPostBody(flags= undefined): string[] {
+  public getPostBody(flags = undefined): string[] {
     if (!flags) {
       flags = this.getFlags();
     }
@@ -109,7 +109,7 @@ export class DialogContent {
     Returns a sorted list of the flags in the flag object based on their 
     position parameter.
   */
-  public getFlags(flagsMap= undefined): Flag[] {
+  public getFlags(flagsMap = undefined): Flag[] {
     if (!flagsMap) {
       flagsMap = this.flags;
     }
@@ -148,7 +148,7 @@ export class DialogContent {
     true than the instance flags will bet set to the flags in the response.
     The PrepareResponse will also be returned to the caller.
   */
-  public prepare(setFlags= true): PrepareResponse {
+  public prepare(setFlags = true): PrepareResponse {
     if (this.prepareFunction === undefined) {
       return new PrepareResponse(true, this.flags);
     }

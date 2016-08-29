@@ -48,7 +48,7 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     this.routeSub.unsubscribe();
   }
 
-  getKeyspace(keyspaceName) {
+  getKeyspace(keyspaceName: string) {
     this.keyspaceService.getKeyspace(keyspaceName).subscribe(keyspaceStream => {
       keyspaceStream.subscribe(keyspace => {
           this.keyspace = keyspace;
@@ -126,7 +126,7 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     upper bounds. Sets all other flag values to the empty string so they don't
     end up in the request.
   */
-  prepareShard(flags) {
+  prepareShard(flags: any) {
     let newFlags = {};
     newFlags['shard_ref'] = flags['shard_ref'];
     let shardName = this.getName(flags['lower_bound'].getStrValue(), flags['upper_bound'].getStrValue());
@@ -135,7 +135,7 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
   }
 
   // Functions for parsing shardName
-  getName(lowerBound, upperBound) {
+  getName(lowerBound: string, upperBound: string) {
     this.dialogContent.setName(lowerBound + '-' + upperBound);
     return this.dialogContent.getName();
   }

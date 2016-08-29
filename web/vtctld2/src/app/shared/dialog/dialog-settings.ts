@@ -17,7 +17,7 @@ export class DialogSettings {
   public pending= false;
   public onCloseFunction= undefined;
 
-  constructor(actionWord= '', dialogTitle= '', dialogSubtitle= '', errMsg= '') {
+  constructor(actionWord = '', dialogTitle = '', dialogSubtitle = '', errMsg = '') {
     this.actionWord = actionWord;
     this.dialogTitle = dialogTitle;
     this.dialogSubtitle = dialogSubtitle;

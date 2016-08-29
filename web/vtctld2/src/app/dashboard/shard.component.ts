@@ -178,7 +178,7 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.router.navigate(['/keyspace'], {queryParams: {keyspace: this.keyspaceName}});
   }
 
-  navigate(tablet) {
+  navigate(tablet: any) {
     this.router.navigate(['/tablet'], {queryParams: {keyspace: this.keyspaceName, shard: this.shardName, tablet: tablet.ref}});
   }
 
