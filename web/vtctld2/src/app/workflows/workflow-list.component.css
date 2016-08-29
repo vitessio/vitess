@@ -1,11 +1,4 @@
-.fill-lower-space {
-height: 100%;
-}
-
-.vt-root-workflow {
-  margin-bottom: 25px;
-}
-
-md-card {
-  margin: 3%;
+.vt-workflow-title {
+  padding-left: 25px;
+  padding-bottom: 0px;
 }

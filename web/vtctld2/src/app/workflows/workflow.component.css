@@ -1,94 +1,27 @@
-.vt-workflow-not-started {
-  background-color: #ffffff;
-  padding-bottom: 5px;
-  padding-left: 15px;
-  margin: 0;
-}
-
-.vt-workflow-running {
-  background-color: #ffffff;
-  padding-bottom: 5px;
-  padding-left: 15px;
-  margin: 0;
-}
-
-.vt-workflow-done {
-  background-color: #ffffff;
-  
-}
-
-.vt-workflow-padding {
-  padding-bottom: 5px;
-  padding-left: 15px;
-  padding-right: 7px;
-  margin: 0;
-}
-
-.vt-workflow {
-  
-}
-
-.vt-workflow-content {
-}
-
-.vt-workflow-time {
-
-  color: grey;
-}
-
-.vt-action-enabled {
-}
-.vt-action-disabled {
-  background-color: grey;
-}
-.vt-action-warning {
-  background-color: #f44336;
-}
-.vt-action-waiting {
-  background-color: #3F51B5;
-}
-
-.vt-accordion-header {
-  display: inline-block;
-}
-
-
-
-
-
-
-.vt-msg {
-  padding-bottom: 5px;
-  padding-left: 25px;
-}
-
-.vt-fill-button {
-  width: 100%;
-}
-
->>> vt-workflow header md-icon {
-  transform: translate(0px, 6px);
-}
-
 /* Rules for workflow header */
 >>> vt-workflow header {
   white-space: nowrap;
   overflow: hidden;
 }
 
->>> vt-workflow .ui-accordion .ui-accordion-header {
-  background-color: #EEEEEE;
-  background: #EEEEEE !important;
-  border: none;
+>>> vt-workflow header md-icon {
+  transform: translate(0px, 6px);
 }
 
-.vt-pad-header {
-  padding-bottom: 8px;
-  padding-top: 8px;
-  background-color: #EEEEEE;
+>>> vt-workflow .vt-workflow-running > .ui-accordion-header{
+  background: #D8D8D8 !important;
+}
+
+>>> vt-workflow .vt-workflow-not-started > .ui-accordion-header{
+  background: #EEEEEE !important;
+}
+
+>>> vt-workflow .vt-workflow-done > .ui-accordion-header{
+  background: #EEEEEE !important;
 }
 
 .vt-accordion-name-wrapper {
+  display: inline-block;
   width: 20%;
   white-space: nowrap;
   overflow: hidden;
@@ -100,6 +33,7 @@
 }
 
 .vt-progress-bar-wrapper {
+  display: inline-block;
   width: 60%;
 }
 
@@ -109,6 +43,7 @@
 }
 
 .vt-progress-msg-wrapper {
+  display: inline-block;
   width: 18%;
   white-space: nowrap;
   overflow: hidden;
@@ -120,19 +55,38 @@
   padding-top: 1px;
 }
 
-/* Rules for workflow content*/
+/* Rules for workflow content */
 >>> .ui-accordion-content {
   padding: 0 !important;
-  border-left: 2px solid #009688;
-  border-bottom: 2px solid #009688;
+  border: none;
   background-color: #ffffff;
-  padding-bottom: 5px;
-  padding-left: 15px;
   margin: 0;
 }
 
+/* Rules for workflow buttons */
+.vt-actions {
+  padding-bottom: 5px;
+  padding-left: 30px;
+}
+.vt-action-enabled {}
+
+.vt-action-disabled {
+  background-color: grey;
+}
+
+.vt-action-warning {
+  background-color: #f44336;
+}
+
+.vt-action-waiting {
+  background-color: #3F51B5;
+}
+
 /* Rules for workflow log */
->>> vt-workflow .vt-log .ui-accordion .ui-accordion-header{
+.vt-log-text {
+  max-height: 100px;
+}
+>>> vt-workflow .vt-log .ui-accordion-header{
   background-color: #E0F2F1;
   background: #E0F2F1 !important;
   border: none;
@@ -140,4 +94,27 @@
 
 >>> vt-workflow .vt-log .vt-pad-header{
   background-color: #E0F2F1;
+  padding: 0;
+}
+
+/* Rules for Time */
+.vt-workflow-time {
+  padding-bottom: 5px;
+  padding-left: 30px;
+  color: grey;
+}
+
+/* Rules for Message */
+.vt-msg {
+  padding-bottom: 5px;
+  padding-left: 30px;
+}
+
+/* Padding for child workflows*/
+.vt-workflow-padding {
+  padding-bottom: 5px;
+  padding-left: 25px;
+  padding-right: 7px;
+  min-width: 500px;
+  margin: 0;
 }

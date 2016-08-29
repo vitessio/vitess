@@ -24,7 +24,7 @@ export class WorkflowComponent {
     }
   }
 
-  getWorkflowClass() {
+  getState() {
     switch (this.workflow.state) {
       case 0:
         return 'vt-workflow-not-started';
