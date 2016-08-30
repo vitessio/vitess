@@ -107,19 +107,6 @@ export class StatusComponent implements OnInit, OnDestroy {
         this.previousType = params['type'];
         this.previousMetric = params['metric'];
 
-        // Show default view if path was 'status/'
-        if (this.selectedKeyspace == null && this.selectedCell == null && this.selectedType == null) {
-          this.selectedKeyspace = 'all';
-          this.selectedCell = 'all';
-          this.selectedType = 'all';
-          this.selectedMetric = 'healthy';
-          this.previousKeyspace = 'all';
-          this.previousCell = 'all';
-          this.previousType = 'all';
-          this.previousMetric = 'healthy';
-          this.router.navigate(['/status'], this.getExtras());
-        }
-
         this.zone.run(() => {
           this.getHeatmapData();
         });
