@@ -1,0 +1,8 @@
+<div class="fill-lower-space">
+  <div class="vt-workflow-title">
+    <h1>Workflows</h1>
+  </div>
+  <span *ngFor="let workflow of workflows; let i = index">
+    <vt-workflow [(workflow)]="workflows[i]"></vt-workflow>
+  </span>
+</div>
