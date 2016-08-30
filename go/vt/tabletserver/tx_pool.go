@@ -235,7 +235,6 @@ type TxConnection struct {
 	*DBConn
 	TransactionID     int64
 	pool              *TxPool
-	inUse             bool
 	StartTime         time.Time
 	EndTime           time.Time
 	Queries           []string

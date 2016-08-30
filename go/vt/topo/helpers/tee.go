@@ -48,9 +48,10 @@ type Tee struct {
 	shardLockPaths    map[string]string
 }
 
-// when reading a version from 'readFrom', we also read another version
+// When reading a version from 'readFrom', we also read another version
 // from 'readFromSecond', and save the mapping to this map. We only keep one
-// mapping for a given object, no need to overdo it
+// mapping for a given object, no need to overdo it.
+// FIXME(alainjobart) remove this when topo API is all converted to Backend.
 type versionMapping struct {
 	readFromVersion       int64
 	readFromSecondVersion int64
@@ -92,6 +93,67 @@ func (tee *Tee) Close() {
 //
 // Backend API
 //
+
+// ListDir is part of the topo.Backend interface.
+func (tee *Tee) ListDir(ctx context.Context, cell, dirPath string) ([]string, error) {
+	return tee.primary.ListDir(ctx, cell, dirPath)
+}
+
+// Create is part of the topo.Backend interface.
+func (tee *Tee) Create(ctx context.Context, cell, filePath string, contents []byte) (topo.Version, error) {
+	primaryVersion, err := tee.primary.Create(ctx, cell, filePath, contents)
+	if err != nil {
+		return nil, err
+	}
+
+	// This is critical enough that we want to fail. However, we support
+	// an unconditional update if the file already exists.
+	_, err = tee.secondary.Create(ctx, cell, filePath, contents)
+	if err == topo.ErrNodeExists {
+		_, err = tee.secondary.Update(ctx, cell, filePath, contents, nil)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return primaryVersion, nil
+}
+
+// Update is part of the topo.Backend interface.
+func (tee *Tee) Update(ctx context.Context, cell, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
+	primaryVersion, err := tee.primary.Update(ctx, cell, filePath, contents, version)
+	if err != nil {
+		// failed on primary, not updating secondary
+		return nil, err
+	}
+
+	// Always do an unconditional update on secondary.
+	if _, err = tee.secondary.Update(ctx, cell, filePath, contents, nil); err != nil {
+		log.Warningf("secondary.Update(%v,%v,unconditonal) failed: %v", cell, filePath, err)
+	}
+	return primaryVersion, nil
+}
+
+// Get is part of the topo.Backend interface.
+func (tee *Tee) Get(ctx context.Context, cell, filePath string) ([]byte, topo.Version, error) {
+	return tee.primary.Get(ctx, cell, filePath)
+}
+
+// Delete is part of the topo.Backend interface.
+func (tee *Tee) Delete(ctx context.Context, cell, filePath string, version topo.Version) error {
+	// If primary fails, no need to go further.
+	if err := tee.primary.Delete(ctx, cell, filePath, version); err != nil {
+		return err
+	}
+
+	// Always do an unconditonal delete on secondary.
+	if err := tee.secondary.Delete(ctx, cell, filePath, nil); err != nil && err != topo.ErrNoNode {
+		// Secondary didn't work, and the node wasn't gone already.
+		log.Warningf("secondary.Delete(%v,%v) failed: %v", cell, filePath, err)
+	}
+
+	return nil
+}
 
 // Watch is part of the topo.Backend interface
 func (tee *Tee) Watch(ctx context.Context, cell, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {

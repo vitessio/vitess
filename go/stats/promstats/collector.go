@@ -115,25 +115,6 @@ func (c countersCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-func newHistogram(opts prometheus.Opts, cutoffs []int64) (prometheus.Histogram, func(int64)) {
-	buckets := make([]float64, len(cutoffs))
-	for i := range cutoffs {
-		buckets[i] = float64(cutoffs[i])
-	}
-	hOpts := prometheus.HistogramOpts{
-		Namespace:   opts.Namespace,
-		Subsystem:   opts.Subsystem,
-		Name:        opts.Name,
-		Help:        opts.Help,
-		ConstLabels: opts.ConstLabels,
-		Buckets:     buckets,
-	}
-	m := prometheus.NewHistogram(hOpts)
-	return m, func(n int64) {
-		m.Observe(float64(n))
-	}
-}
-
 type histogramCollector struct {
 	desc *prometheus.Desc
 	h    *stats.Histogram

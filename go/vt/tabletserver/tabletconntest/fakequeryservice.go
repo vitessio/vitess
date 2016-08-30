@@ -461,11 +461,11 @@ func (f *FakeQueryService) SplitQueryV2(
 		f.t.Errorf("invalid SplitQuery.SplitColumn: got %v expected %v",
 			splitColumns, SplitQueryV2SplitColumns)
 	}
-	if !reflect.DeepEqual(splitCount, SplitQueryV2SplitCount) {
+	if splitCount != SplitQueryV2SplitCount {
 		f.t.Errorf("invalid SplitQuery.SplitCount: got %v expected %v",
 			splitCount, SplitQueryV2SplitCount)
 	}
-	if !reflect.DeepEqual(numRowsPerQueryPart, SplitQueryV2NumRowsPerQueryPart) {
+	if numRowsPerQueryPart != SplitQueryV2NumRowsPerQueryPart {
 		f.t.Errorf("invalid SplitQuery.numRowsPerQueryPart: got %v expected %v",
 			numRowsPerQueryPart, SplitQueryV2NumRowsPerQueryPart)
 	}

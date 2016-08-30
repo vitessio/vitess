@@ -562,6 +562,7 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testExecuteBatch,
 		testBeginExecuteBatch,
 		testSplitQuery,
+		testSplitQueryV2,
 
 		// error test cases
 		testBeginError,

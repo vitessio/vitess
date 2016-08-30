@@ -43,10 +43,6 @@ type fakeVTGateService struct {
 const expectedErrMatch string = "test vtgate error"
 const expectedCode vtrpcpb.ErrorCode = vtrpcpb.ErrorCode_BAD_INPUT
 
-// the error string that is returned for partial execute errors (i.e., the Execute* rpc call
-// succeeds, but returns an error as part of the response).
-const executePartialErrString string = "execute partial error"
-
 var errTestVtGateError = vterrors.FromError(expectedCode, errors.New(expectedErrMatch))
 
 func newContext() context.Context {

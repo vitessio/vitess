@@ -22,7 +22,6 @@ var (
 	MagicPrefix = "zk"
 
 	localCell      = flag.String("zk.local-cell", "", "closest zk cell used for /zk/local paths")
-	localAddrs     = flag.String("zk.local-addrs", "", "list of zookeeper servers (host:port, ...)")
 	globalAddrs    = flag.String("zk.global-addrs", "", "list of global zookeeper servers (host:port, ...)")
 	baseTimeout    = flag.Duration("zk.base-timeout", 30*time.Second, "zk base timeout (see zkconn.go)")
 	connectTimeout = flag.Duration("zk.connect-timeout", 30*time.Second, "zk connect timeout")

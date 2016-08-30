@@ -63,14 +63,6 @@ func (util *testUtils) checkEqual(t *testing.T, expected interface{}, result int
 	}
 }
 
-func (util *testUtils) checkTabletErrorWithRecover(t *testing.T, tabletErrCode vtrpcpb.ErrorCode, tabletErrStr string) {
-	err := recover()
-	if err == nil {
-		t.Fatalf("should get error")
-	}
-	util.checkTabletError(t, err, tabletErrCode, tabletErrStr)
-}
-
 func (util *testUtils) checkTabletError(t *testing.T, err interface{}, tabletErrCode vtrpcpb.ErrorCode, tabletErrStr string) {
 	tabletError, ok := err.(*TabletError)
 	if !ok {

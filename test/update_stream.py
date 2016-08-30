@@ -394,8 +394,7 @@ class TestUpdateStream(unittest.TestCase):
     for stream_event in master_conn.stream_update(start_position):
       if stream_event.category == update_stream.StreamEvent.POS:
         master_txn_count += 1
-        position = mysql_flavor(
-        ).position_append(position, stream_event.transaction_id)
+        position = stream_event.position
         if mysql_flavor().position_after(position, start_position):
           logs_correct = True
           logging.debug('Log rotation correctly interpreted')

@@ -88,6 +88,16 @@ func TopoServerTestSuite(t *testing.T, factory func() topo.Impl) {
 	checkElection(t, ts)
 	ts.Close()
 
+	t.Log("=== checkDirectory")
+	ts = factory()
+	checkDirectory(t, ts)
+	ts.Close()
+
+	t.Log("=== checkFile")
+	ts = factory()
+	checkFile(t, ts)
+	ts.Close()
+
 	t.Log("=== checkWatch")
 	ts = factory()
 	checkWatch(t, ts)

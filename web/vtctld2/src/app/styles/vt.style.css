@@ -2,31 +2,34 @@
   display: flex;
   flex-wrap: wrap;
   height: 100%;
+  width: 100%;
 }
+
 .vt-card {
   display: inline-table;
   margin-left: 25px;
   margin-bottom: 10px;
   margin-top: 10px;
 }
+
 .stats-container {
   width: 100%;
 }
-.vt-actions-container{
-  padding-left: 32px;
-  padding-right: 32px;
-}
+
 .vt-padding{
-  padding-left: 43px;
-  padding-right: 43px;
+  padding-left: 25px;
+  padding-right: 25px;
 }
+
 >>> p-dialog .ui-dialog{
   position: fixed !important;
   top: 50%  !important;
   left: 50%  !important;
   transform: translate(-50%, -50%);
   margin: 0;
+  width: auto !important;
 }
+
 .vt-popUpContainer{
   position: fixed;
   padding: 0;
@@ -61,4 +64,55 @@
 .vt-dark-link:active {
     text-decoration: none;
     color: black;
+}
+
+/* Toolbar */
+.vt-toolbar {
+  width: 100%;
+  text-align: center;
+}
+
+>>> p-accordiontab a {
+  padding-left: 25px! important;
+}
+
+>>> .ui-accordion-content button {
+  margin-top: 2px;
+}
+
+>>> p-menu .ui-menu {
+  margin-top: 19px;
+  display: inline-block;
+  top: auto !important;
+  left: auto !important;
+  float: right;
+  
+}
+
+p-menu {
+  display: inline-block;
+  float: left;
+}
+
+.vt-toolbar .vt-menu {
+  padding-top: 19px;
+  float: left;
+}
+
+.vt-card-toolbar {
+  display: inline-block;
+  width: 100%;
+}
+
+.vt-card-toolbar .vt-menu {
+  float: left;
+}
+.vt-card-toolbar .vt-title {
+  float: right;
+  margin: 0;
+  padding-left: 25px;
+}
+
+md-list:hover {
+  background: #E8E8E8
 }

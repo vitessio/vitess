@@ -41,7 +41,7 @@ func (zkts *Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet)
 	}
 
 	// Create /zk/<cell>/vt/tablets/<uid>
-	_, err = zk.CreateRecursive(zkts.zconn, zkTabletPath, string(data), 0, zookeeper.WorldACL(zookeeper.PermAll))
+	_, err = zk.CreateRecursive(zkts.zconn, zkTabletPath, data, 0, zookeeper.WorldACL(zookeeper.PermAll))
 	if err != nil {
 		return convertError(err)
 	}
@@ -56,7 +56,7 @@ func (zkts *Server) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet,
 		return 0, err
 	}
 
-	stat, err := zkts.zconn.Set(zkTabletPath, string(data), int32(existingVersion))
+	stat, err := zkts.zconn.Set(zkTabletPath, data, int32(existingVersion))
 	if err != nil {
 		return 0, convertError(err)
 	}
@@ -81,7 +81,7 @@ func (zkts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias
 	}
 
 	tablet := &topodatapb.Tablet{}
-	if err := json.Unmarshal([]byte(data), tablet); err != nil {
+	if err := json.Unmarshal(data, tablet); err != nil {
 		return nil, 0, err
 	}
 	return tablet, int64(stat.Version), nil

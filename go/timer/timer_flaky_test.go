@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	one     = time.Duration(1e8)
 	half    = time.Duration(500e5)
 	quarter = time.Duration(250e5)
 	tenth   = time.Duration(100e5)

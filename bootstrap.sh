@@ -98,6 +98,7 @@ gotools=" \
        github.com/golang/mock/mockgen \
        github.com/kardianos/govendor \
        golang.org/x/tools/cmd/goimports \
+       honnef.co/go/unused/cmd/unused \
 "
 
 # Tools for uploading code coverage to coveralls.io (used by Travis CI).

@@ -1,14 +1,13 @@
-<h1>{{keyspaceName}}</h1>
-<div class="vt-action-center">
-  <button md-raised-button (click)="openValidateKeyspaceDialog();">Validate</button>
-  <button md-raised-button (click)="openRebuildKeyspaceGraphDialog();">Rebuild Keyspace Graph</button>
-  <button md-raised-button (click)="openRemoveKeyspaceCellDialog();">Remove Keyspace Cell</button>
+<div class="vt-toolbar vt-padding">
+  <md-icon class="vt-menu" (click)="menu.toggle($event)">menu</md-icon>
+  <p-menu #menu popup="popup" [model]="actions"></p-menu>
+  <h1 class="vt-title">{{keyspaceName}}</h1>
 </div>
 
 <h2 *ngIf="noShards()">There are no shards in this keyspace</h2>
 
 <div *ngIf="keyspace.servingShards != undefined && keyspace.servingShards.length > 0">
-  <h2>Serving Shards</h2>
+  <h2 class="vt-padding">Serving Shards</h2>
   <div *ngFor="let shard of keyspace.servingShards" class="vt-card">
     <a class="vt-dark-link" [routerLink]="['/shard']" [queryParams]="{keyspace: keyspaceName, shard: shard}">
       <md-card > 
@@ -19,7 +18,7 @@
 </div>
 
 <div *ngIf="keyspace.nonservingShards != undefined && keyspace.nonservingShards.length > 0">
-  <h2>Nonserving Shards</h2>
+  <h2 class="vt-padding">Nonserving Shards</h2>
   <div *ngFor="let shard of keyspace.nonservingShards" class="vt-card">
     <a class="vt-dark-link" [routerLink]="['/shard']" [queryParams]="{keyspace: keyspaceName, shard: shard}">
       <md-card > 

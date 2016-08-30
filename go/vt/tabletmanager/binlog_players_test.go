@@ -444,8 +444,10 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 				Sql:      []byte("INSERT INTO tablet VALUES(1)"),
 			},
 		},
-		Timestamp:     72,
-		TransactionId: "MariaDB/0-1-1235",
+		EventToken: &querypb.EventToken{
+			Timestamp: 72,
+			Position:  "MariaDB/0-1-1235",
+		},
 	}
 
 	// and make sure it results in a committed statement
@@ -640,8 +642,10 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 					Sql:      []byte("INSERT INTO tablet VALUES(1)"),
 				},
 			},
-			Timestamp:     72,
-			TransactionId: "MariaDB/0-1-1235",
+			EventToken: &querypb.EventToken{
+				Timestamp: 72,
+				Position:  "MariaDB/0-1-1235",
+			},
 		}
 
 		// and make sure it results in a committed statement
@@ -825,8 +829,10 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 				Sql:      []byte("INSERT INTO tablet VALUES(1)"),
 			},
 		},
-		Timestamp:     72,
-		TransactionId: "MariaDB/0-1-1235",
+		EventToken: &querypb.EventToken{
+			Timestamp: 72,
+			Position:  "MariaDB/0-1-1235",
+		},
 	}
 
 	// and make sure it results in a committed statement

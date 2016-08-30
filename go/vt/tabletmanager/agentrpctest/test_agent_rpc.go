@@ -1254,6 +1254,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	agentRPCTestExecuteHookPanic(ctx, t, client, tablet)
 	agentRPCTestRefreshStatePanic(ctx, t, client, tablet)
 	agentRPCTestRunHealthCheckPanic(ctx, t, client, tablet)
+	agentRPCTestIgnoreHealthErrorPanic(ctx, t, client, tablet)
 	agentRPCTestReloadSchemaPanic(ctx, t, client, tablet)
 	agentRPCTestPreflightSchemaPanic(ctx, t, client, tablet)
 	agentRPCTestApplySchemaPanic(ctx, t, client, tablet)
