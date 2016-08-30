@@ -13,36 +13,38 @@ if [ -z "$(which unused)" ]; then
 fi
 
 # This script does not handle file names that contain spaces.
+# Exclude auto-generated files (from proto or yacc compile).
 gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$' | grep -v '^go/vt/proto/' | grep -v 'go/vt/sqlparser/sql.go')
 if [ "$gofiles" = "" ]; then
   exit 0
 fi
 gopackages=$(echo $gofiles | xargs dirname | sort -u)
 
-errors=
+warnings=
 
 # Run on one package at a time
 gopackages_with_warnings=()
 for gopackage in $gopackages
 do
-  errcount=$(unused github.com/youtube/vitess/$gopackage | wc -l)
-  if [ "$errcount" -gt "0" ]; then
-    errors=YES
-    echo "$errcount reports for:"
+  warningcount=$(unused github.com/youtube/vitess/$gopackage | wc -l)
+  if [ "$warningcount" -gt "0" ]; then
+    warnings=YES
+    echo "$warningcount reports for:"
     echo "unused github.com/youtube/vitess/$gopackage"
     gopackages_with_warnings+=($gopackage)
   fi
 done
 
-[ -z "$errors" ] && exit 0
+[ -z "$warnings" ] && exit 0
 
 # git doesn't give us access to user input, so let's steal it.
 exec < /dev/tty
 if [[ $? -eq 0 ]]; then
   # interactive shell. Prompt the user.
   echo
-  echo "Unused suggestions were found. They're not enforced, but we're pausing"
-  echo "to let you know before they get clobbered in the scrollback buffer."
+  echo "Suggestions from the go 'unused' program were found."
+  echo "They're not enforced, but we're pausing to let you know"
+  echo "before they get clobbered in the scrollback buffer."
   echo
   read -r -p 'Press enter to cancel, "s" to step through the warnings or type "ack" to continue: '
   if [ "$REPLY" = "ack" ]; then
@@ -54,15 +56,15 @@ if [[ $? -eq 0 ]]; then
     do
       echo
       if [ "$first_file" != "true" ]; then
-	echo "Press enter to show the warnings for the next file."
-	read
+        echo "Press enter to show the warnings for the next file."
+        read
       fi
       unused github.com/youtube/vitess/$gopackage
       first_file="false"
     done
   fi
 else
-  # non-interactive shell (e.g. called from Eclipse). Just display the errors.
+  # non-interactive shell (e.g. called from Eclipse). Just display the warnings.
   for gopackage in "${gopackages_with_warnings[@]}"
   do
     unused github.com/youtube/vitess/$gopackage
