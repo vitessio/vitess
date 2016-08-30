@@ -65,54 +65,113 @@ export class TabletComponent implements OnInit, OnDestroy {
     });
   }
 
-  deleteTablet() {
-    this.runCommand('DeleteTablet', 'There was a problem deleting {{tablet_alias}}:');
-  }
-
-  refreshTablet() {
-    this.runCommand('RefreshState', 'There was a problem refreshing {{tablet_alias}}:');
-  }
-
-  pingTablet() {
-    this.runCommand('Ping', 'There was a problem pinging {{tablet_alias}}:');
-  }
-
-  runCommand(action: string, errorMessage: string) {
-    this.dialogSettings.startPending();
-    this.vtctlService.runCommand(this.dialogContent.getPostBody(action)).subscribe(resp => {
-      if (resp.Error) {
-        this.dialogSettings.setMessage(`${errorMessage} ${resp.Error}`);
-      }
-      this.dialogSettings.setLog(resp.Output);
-      this.dialogSettings.endPending();
-    });
-  }
-
   openDeleteTabletDialog() {
-    this.dialogSettings = new DialogSettings('Delete', this.deleteTablet.bind(this),
-                                             `Delete ${this.tablet.label}`, `Are you sure you want to delete ${this.tablet.label}?`);
-    this.dialogSettings.setMessage('Deleted {{tablet_alias}}');
+    this.dialogSettings = new DialogSettings('Delete', `Delete ${this.tablet.label}`,
+                                             `Are you sure you want to delete ${this.tablet.label}?`,
+                                             `There was a problem deleting ${this.tablet.label}:`);
+    this.dialogSettings.setMessage(`Deleted ${this.tablet.label}`);
     this.dialogSettings.onCloseFunction = this.navigateToShard.bind(this);
     let flags = new DeleteTabletFlags(this.tablet.ref).flags;
-    this.dialogContent = new DialogContent('tablet_alias', flags);
+    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'DeleteTablet');
     this.dialogSettings.toggleModal();
   }
 
   openRefreshTabletDialog() {
-    this.dialogSettings = new DialogSettings('Refresh', this.refreshTablet.bind(this), `Refresh ${this.tablet.label}`);
-    this.dialogSettings.setMessage('Refreshed {{tablet_alias}}');
+    this.dialogSettings = new DialogSettings('Refresh', `Refresh ${this.tablet.label}`, '',
+                                             `There was a problem refreshing ${this.tablet.label}:`);
+    this.dialogSettings.setMessage(`Refreshed ${this.tablet.label}`);
     this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
     let flags = new RefreshTabletFlags(this.tablet.ref).flags;
-    this.dialogContent = new DialogContent('tablet_alias', flags);
+    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'RefreshState');
     this.dialogSettings.toggleModal();
   }
 
   openPingTabletDialog() {
-    this.dialogSettings = new DialogSettings('Ping', this.pingTablet.bind(this), `Ping ${this.tablet.label}`);
-    this.dialogSettings.setMessage('Pinged {{tablet_alias}}');
+    this.dialogSettings = new DialogSettings('Ping', `Ping ${this.tablet.label}`, '', `There was a problem pinging ${this.tablet.label}:`);
+    this.dialogSettings.setMessage(`Pinged ${this.tablet.label}`);
     this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
     let flags = new PingTabletFlags(this.tablet.ref).flags;
-    this.dialogContent = new DialogContent('tablet_alias', flags);
+    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'Ping');
+    this.dialogSettings.toggleModal();
+  }
+
+  openSetReadOnlyDialog() {
+    this.dialogSettings = new DialogSettings('Set', `Set ${this.tablet.label} to Read Only`, '',
+                                             `There was a problem setting ${this.tablet.label} to Read Only:`);
+    this.dialogSettings.setMessage(`Set ${this.tablet.label} to Read Only`);
+    this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
+    let flags = new PingTabletFlags(this.tablet.ref).flags;
+    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'SetReadOnly');
+    this.dialogSettings.toggleModal();
+  }
+
+  openSetReadWriteDialog() {
+    this.dialogSettings = new DialogSettings('Set', `Set ${this.tablet.label} to Read/Write`, '',
+                                             `There was a problem setting ${this.tablet.label} to Read/Write:`);
+    this.dialogSettings.setMessage(`Set ${this.tablet.label} to Read/Write`);
+    this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
+    let flags = new PingTabletFlags(this.tablet.ref).flags;
+    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'SetReadWrite');
+    this.dialogSettings.toggleModal();
+  }
+
+  openStartSlaveDialog() {
+    this.dialogSettings = new DialogSettings('Start', `Start Slave, ${this.tablet.label}`, '',
+                                             `There was a problem starting slave, ${this.tablet.label}:`);
+    this.dialogSettings.setMessage(`Started Slave, ${this.tablet.label}`);
+    this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
+    let flags = new PingTabletFlags(this.tablet.ref).flags;
+    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'StartSlave');
+    this.dialogSettings.toggleModal();
+  }
+
+  openStopSlaveDialog() {
+    this.dialogSettings = new DialogSettings('Stop', `Stop Slave, ${this.tablet.label}`, '',
+                                             `There was a problem stopping slave, ${this.tablet.label}:`);
+    this.dialogSettings.setMessage(`Stopped Slave, ${this.tablet.label}`);
+    this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
+    let flags = new PingTabletFlags(this.tablet.ref).flags;
+    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'StopSlave');
+    this.dialogSettings.toggleModal();
+  }
+
+  openRunHealthCheckDialog() {
+    this.dialogSettings = new DialogSettings('Run', `Run Health Check on ${this.tablet.label}`, '',
+                                             `There was a problem running Health Check on ${this.tablet.label}:`);
+    this.dialogSettings.setMessage(`Ran Health Check on ${this.tablet.label}`);
+    this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
+    let flags = new PingTabletFlags(this.tablet.ref).flags;
+    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'RunHealthCheck');
+    this.dialogSettings.toggleModal();
+  }
+
+  openIgnoreHealthErrorDialog() {
+    this.dialogSettings = new DialogSettings('Ignore', `Ignore Health Check for ${this.tablet.label}`, '',
+                                             `There was a problem ignoring the Health Check for ${this.tablet.label}:`);
+    this.dialogSettings.setMessage(`Ignored ${this.tablet.label}`);
+    this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
+    let flags = new PingTabletFlags(this.tablet.ref).flags;
+    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'IgnoreHealthError');
+    this.dialogSettings.toggleModal();
+  }
+
+  openDemoteMasterDialog() {
+    this.dialogSettings = new DialogSettings('Demote', `Demote ${this.tablet.label}`, '',
+                                             `There was a problem demoting ${this.tablet.label}:`);
+    this.dialogSettings.setMessage(`Demoted ${this.tablet.label}`);
+    this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
+    let flags = new PingTabletFlags(this.tablet.ref).flags;
+    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'DemoteMaster');
+    this.dialogSettings.toggleModal();
+  }
+
+  openReparentTabletDialog() {
+    this.dialogSettings = new DialogSettings('Reparent', `Reparent ${this.tablet.label}`, '',
+                                             `There was a problem reparenting ${this.tablet.label}:`);
+    this.dialogSettings.setMessage(`Reparented ${this.tablet.label}`);
+    this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
+    let flags = new PingTabletFlags(this.tablet.ref).flags;
+    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'ReparentTablet');
     this.dialogSettings.toggleModal();
   }
 
@@ -124,10 +183,6 @@ export class TabletComponent implements OnInit, OnDestroy {
 
   navigateToShard(dialogContent: DialogContent) {
     this.router.navigate(['/shard'], {queryParams: {keyspace: this.keyspaceName, shard: this.shardName}});
-  }
-
-  navigate(tablet) {
-    this.router.navigate(['/tablet'], {queryParams: {keyspace: this.keyspaceName, shard: this.shardName, tablet: tablet.ref}});
   }
 
   canDeactivate(): Observable<boolean> | boolean {

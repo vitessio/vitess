@@ -59,7 +59,7 @@ export class Flag {
     return this.value;
   }
 
-  public setValue(value: string) {
+  public setValue(value) {
     this.value = value;
   }
 

@@ -284,9 +284,17 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 					return nil, err
 				}
 				if cell != "" {
-					return ts.FindAllTabletAliasesInShardByCell(ctx, keyspace, shard, []string{cell})
+					result, err := ts.FindAllTabletAliasesInShardByCell(ctx, keyspace, shard, []string{cell})
+					if err != nil && err != topo.ErrPartialResult {
+						return result, err
+					}
+					return result, nil
 				}
-				return ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
+				result, err := ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
+				if err != nil && err != topo.ErrPartialResult {
+					return result, err
+				}
+				return result, nil
 			}
 
 			// Get all tablets in a cell.
