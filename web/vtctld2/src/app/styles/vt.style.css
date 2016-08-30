@@ -94,12 +94,25 @@ p-menu {
   float: left;
 }
 
-.vt-menu {
+.vt-toolbar .vt-menu {
   padding-top: 19px;
-  display: inline-block;
   float: left;
 }
 
-.vt-title {
+.vt-card-toolbar {
   display: inline-block;
+  width: 100%;
+}
+
+.vt-card-toolbar .vt-menu {
+  float: left;
+}
+.vt-card-toolbar .vt-title {
+  float: right;
+  margin: 0;
+  padding-left: 25px;
+}
+
+md-list:hover {
+  background: #E8E8E8
 }

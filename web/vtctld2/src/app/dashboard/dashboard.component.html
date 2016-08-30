@@ -6,14 +6,13 @@
 <div>
   <div *ngFor="let keyspace of keyspaces" class="vt-card">
     <md-card>
-      <md-card-title>
-        
-        <div class="vt-toolbar">
+      <div>
+        <div class="vt-card-toolbar">
           <md-icon class="vt-menu" (click)="setSelectedKeyspace(keyspace);cardMenu.toggle($event)">menu</md-icon>
           <p-menu #cardMenu popup="popup" [model]="keyspaceActions"></p-menu>
-          <h4>{{keyspace.name}}</h4>
+          <h2 class="vt-title">{{keyspace.name}}</h2>
         </div>
-      </md-card-title>   
+      </div>   
       <a class="vt-dark-link" [routerLink]="['/keyspace']" [queryParams]="{keyspace: keyspace.name}">
         <md-card-content >
           <div class="stats-container">
@@ -21,9 +20,9 @@
               <md-list-item>
                 <span class="vt-stat-value-container">
                     {{keyspace.servingShards.length}} Shards
-                  <span style="color: red" *ngIf="keyspace.nonservingShards.length > 0">
+                  <div style="color: red" *ngIf="keyspace.nonservingShards.length > 0">
                     (+{{keyspace.nonservingShards.length}} Not serving)
-                  </span>
+                  </div>
                 </span>
               </md-list-item>
             </md-list>

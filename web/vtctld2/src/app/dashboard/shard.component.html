@@ -6,7 +6,6 @@
   </div>
   <div class="vt-tablet-container">
     <p-dataTable [value]="tablets" selectionMode="single" [(selection)]="selectedTablet">
-      <header>Tablets</header>
       <p-column header="Actions">
         <template let-tab="rowData" let-i="rowIndex">
           <md-icon class="vt-menu" (click)="rowMenu.toggle($event)">menu</md-icon>
