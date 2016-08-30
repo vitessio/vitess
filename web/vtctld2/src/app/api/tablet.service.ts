@@ -20,7 +20,9 @@ export class TabletService {
         let tablet = tabletJson.json();
         tablet['type'] = Proto.VT_TABLET_TYPES[tablet['type']];
         tablet['label'] = `${tablet['type']}(${tablet['alias']['uid']})`;
-        tablet['ref'] = `${tablet['alias']['cell']}-${tablet['alias']['uid']}`;
+        tablet['cell'] = tablet['alias']['cell'];
+        tablet['uid'] = tablet['alias']['uid'];
+        tablet['alias'] = `${tablet['cell']}-${tablet['uid']}`;
         return tablet;
       });
   }
