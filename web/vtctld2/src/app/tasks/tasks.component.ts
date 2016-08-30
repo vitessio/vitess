@@ -5,6 +5,7 @@ import { Component } from '@angular/core';
   templateUrl: './tasks.component.html',
   styleUrls: ['./tasks.component.css'],
 })
+
 export class TasksComponent {
   jobs = [
     {name: 'Resharding', progress: 60},

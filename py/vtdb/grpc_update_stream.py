@@ -67,8 +67,8 @@ class GRPCUpdateStreamConnection(update_stream.UpdateStreamConnection):
             fields=fields,
             rows=rows,
             sql=stream_event.sql,
-            timestamp=stream_event.timestamp,
-            transaction_id=stream_event.transaction_id)
+            timestamp=stream_event.event_token.timestamp,
+            position=stream_event.event_token.position)
     except face.AbortionError as e:
       # FIXME(alainjobart) These exceptions don't print well, so raise
       # one that will.  The real fix is to define a set of exceptions

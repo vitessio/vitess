@@ -30,6 +30,23 @@ message VTGateCallerID {
   string username = 1;
 }
 
+// EventToken is a structure that describes a point in time in a
+// replication stream on one shard. The most recent known replication
+// position can be retrieved from vttablet when executing a query. It
+// is also sent with the replication streams from the binlog service.
+message EventToken {
+  // timestamp is the MySQL timestamp of the statements. Seconds since Epoch.
+  int64 timestamp = 1;
+
+  // The shard name that applied the statements. Note this is not set when
+  // streaming from a vttablet. It is only used on the client -> vtgate link.
+  string shard = 2;
+
+  // The position on the replication stream after this statement was applied.
+  // It is not the transaction ID / GTID, but the position / GTIDSet.
+  string position = 3;
+}
+
 // Flag allows us to qualify types by their common properties.
 enum Flag {
   NONE = 0;

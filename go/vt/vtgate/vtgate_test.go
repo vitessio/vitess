@@ -822,7 +822,6 @@ func TestVTGateSplitQueryV2Sharded(t *testing.T) {
 	type testCaseType struct {
 		splitCount          int64
 		numRowsPerQueryPart int64
-		algorithm           querypb.SplitQueryRequest_Algorithm
 	}
 	testCases := []testCaseType{
 		{splitCount: 100, numRowsPerQueryPart: 0},
@@ -898,7 +897,6 @@ func TestVTGateSplitQueryV2Unsharded(t *testing.T) {
 	type testCaseType struct {
 		splitCount          int64
 		numRowsPerQueryPart int64
-		algorithm           querypb.SplitQueryRequest_Algorithm
 	}
 	testCases := []testCaseType{
 		{splitCount: 100, numRowsPerQueryPart: 0},

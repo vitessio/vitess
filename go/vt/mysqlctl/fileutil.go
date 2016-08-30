@@ -17,7 +17,6 @@ import (
 // Use this to simulate failures in tests
 var (
 	simulateFailures = false
-	failureCounter   = 0
 )
 
 func init() {

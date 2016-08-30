@@ -349,7 +349,7 @@ type MasterParticipation interface {
 type SrvTopoServer interface {
 	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
-	WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSchemaData, <-chan *WatchSrvVSchemaData, func())
+	WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSchemaData, <-chan *WatchSrvVSchemaData, CancelFunc)
 }
 
 // Registry for Server implementations.

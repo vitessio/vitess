@@ -71,9 +71,11 @@ var testStreamEvent = &binlogdatapb.StreamEvent{
 			Values:  []byte{'1', '2', '3'},
 		},
 	},
-	Sql:           []byte("test sql with invalid utf-8 character \x80"),
-	Timestamp:     372,
-	TransactionId: "StreamEvent returned transaction id",
+	Sql: []byte("test sql with invalid utf-8 character \x80"),
+	EventToken: &querypb.EventToken{
+		Timestamp: 372,
+		Position:  "StreamEvent returned position",
+	},
 }
 
 // ServeUpdateStream is part of the the UpdateStream interface
@@ -150,8 +152,10 @@ var testBinlogTransaction = &binlogdatapb.BinlogTransaction{
 			Sql: []byte("my statement"),
 		},
 	},
-	Timestamp:     78,
-	TransactionId: "BinlogTransaction returned transaction id",
+	EventToken: &querypb.EventToken{
+		Timestamp: 78,
+		Position:  "BinlogTransaction returned position",
+	},
 }
 
 // StreamKeyRange is part of the the UpdateStream interface

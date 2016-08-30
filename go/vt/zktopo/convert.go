@@ -41,7 +41,7 @@ const (
 // It is mindful of the backward compatibility, i.e. for newer objects
 // it doesn't do anything, but for old object types that were stored in JSON
 // format in converts them to proto3 binary encoding.
-func rawDataFromNodeValue(what dataType, data string) ([]byte, error) {
+func rawDataFromNodeValue(what dataType, data []byte) ([]byte, error) {
 	var p proto.Message
 	switch what {
 	case srvKeyspaceType:
@@ -49,10 +49,10 @@ func rawDataFromNodeValue(what dataType, data string) ([]byte, error) {
 	case srvVSchemaType:
 		p = &vschemapb.SrvVSchema{}
 	default:
-		return []byte(data), nil
+		return data, nil
 	}
 
-	if err := json.Unmarshal([]byte(data), p); err != nil {
+	if err := json.Unmarshal(data, p); err != nil {
 		return nil, err
 	}
 

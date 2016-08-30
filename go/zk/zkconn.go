@@ -187,35 +187,35 @@ func resolveZkAddr(zkAddr string) ([]string, error) {
 }
 
 // Get is part of the ZkConn interface.
-func (conn *ZkConn) Get(path string) (string, *zookeeper.Stat, error) {
+func (conn *ZkConn) Get(path string) ([]byte, *zookeeper.Stat, error) {
 	c := conn.getConn()
 	if c == nil {
-		return "", nil, ErrConnectionClosed
+		return nil, nil, ErrConnectionClosed
 	}
 
 	sem.Acquire()
 	defer sem.Release()
 	data, stat, err := c.Get(path)
 	if err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
-	return string(data), stat, nil
+	return data, stat, nil
 }
 
 // GetW is part of the ZkConn interface.
-func (conn *ZkConn) GetW(path string) (string, *zookeeper.Stat, <-chan zookeeper.Event, error) {
+func (conn *ZkConn) GetW(path string) ([]byte, *zookeeper.Stat, <-chan zookeeper.Event, error) {
 	c := conn.getConn()
 	if c == nil {
-		return "", nil, nil, ErrConnectionClosed
+		return nil, nil, nil, ErrConnectionClosed
 	}
 
 	sem.Acquire()
 	defer sem.Release()
 	data, stat, watch, err := c.GetW(path)
 	if err != nil {
-		return "", nil, nil, err
+		return nil, nil, nil, err
 	}
-	return string(data), stat, watch, nil
+	return data, stat, watch, nil
 }
 
 // Children is part of the ZkConn interface.
@@ -289,7 +289,7 @@ func (conn *ZkConn) ExistsW(path string) (*zookeeper.Stat, <-chan zookeeper.Even
 }
 
 // Create is part of the ZkConn interface.
-func (conn *ZkConn) Create(path, value string, flags int, aclv []zookeeper.ACL) (pathCreated string, err error) {
+func (conn *ZkConn) Create(path string, value []byte, flags int, aclv []zookeeper.ACL) (pathCreated string, err error) {
 	c := conn.getConn()
 	if c == nil {
 		return "", ErrConnectionClosed
@@ -301,7 +301,7 @@ func (conn *ZkConn) Create(path, value string, flags int, aclv []zookeeper.ACL) 
 }
 
 // Set is part of the ZkConn interface.
-func (conn *ZkConn) Set(path, value string, version int32) (*zookeeper.Stat, error) {
+func (conn *ZkConn) Set(path string, value []byte, version int32) (*zookeeper.Stat, error) {
 	c := conn.getConn()
 	if c == nil {
 		return nil, ErrConnectionClosed

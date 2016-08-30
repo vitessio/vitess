@@ -1,48 +1,34 @@
-<h1>Dashboard</h1>
-<div class="vt-action-center">
-  <button md-raised-button (click)="openValidateDialog();">Validate</button>
+<div class="vt-toolbar vt-padding">
+  <md-icon class="vt-menu" (click)="menu.toggle($event)">menu</md-icon>
+  <p-menu #menu popup="popup" [model]="actions"></p-menu>
+  <h1 class="vt-title">Keyspaces</h1>
 </div>
-
 <div>
   <div *ngFor="let keyspace of keyspaces" class="vt-card">
     <md-card>
-      <md-card-title>{{keyspace.name}}</md-card-title>   
+      <div>
+        <div class="vt-card-toolbar">
+          <md-icon class="vt-menu" (click)="setSelectedKeyspace(keyspace);cardMenu.toggle($event)">menu</md-icon>
+          <p-menu #cardMenu popup="popup" [model]="keyspaceActions"></p-menu>
+          <h2 class="vt-title">{{keyspace.name}}</h2>
+        </div>
+      </div>   
       <a class="vt-dark-link" [routerLink]="['/keyspace']" [queryParams]="{keyspace: keyspace.name}">
         <md-card-content >
           <div class="stats-container">
             <md-list>
               <md-list-item>
                 <span class="vt-stat-value-container">
-                  <span class="vt-stat-value">
-                    {{keyspace.servingShards.length}}
-                  </span>
-                   
-                  <span class="vt-stat-category">
-                    Serving Shards
-                  </span>
-                </span>
-              </md-list-item>
-              <md-list-item>
-                <span class="vt-stat-value-container">
-                  <span class="vt-stat-value">
-                    {{keyspace.nonservingShards.length}}
-                  </span>
-                   
-                  <span class="vt-stat-category">
-                    Nonserving Shards
-                  </span>
+                    {{keyspace.servingShards.length}} Shards
+                  <div style="color: red" *ngIf="keyspace.nonservingShards.length > 0">
+                    (+{{keyspace.nonservingShards.length}} Not serving)
+                  </div>
                 </span>
               </md-list-item>
             </md-list>
           </div>
         </md-card-content>
       </a>
-      <md-card-actions>
-        <div class="vt-actions-container">
-          <button md-button (click)="openDeleteDialog(keyspace);">Delete</button>
-          <button md-button (click)="openEditDialog(keyspace);">Edit</button>
-        </div>
-      </md-card-actions>
     </md-card>
   </div>
 </div>

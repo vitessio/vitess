@@ -29,7 +29,7 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 	toTS := zktopo.NewServer(toConn)
 
 	for _, zkPath := range []string{"/zk/test_cell/vt", "/zk/global/vt"} {
-		if _, err := zk.CreateRecursive(fromConn, zkPath, "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
+		if _, err := zk.CreateRecursive(fromConn, zkPath, nil, 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 			t.Fatalf("cannot init fromTS: %v", err)
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -31,7 +32,9 @@ func TestKeyRangeFilterPass(t *testing.T) {
 				Sql:      []byte("dml2 /* vtgate:: keyspace_id:02 */"),
 			},
 		},
-		TransactionId: "MariaDB/0-41983-1",
+		EventToken: &querypb.EventToken{
+			Position: "MariaDB/0-41983-1",
+		},
 	}
 	var got string
 	f := KeyRangeFilterFunc(testKeyRange, func(reply *binlogdatapb.BinlogTransaction) error {
@@ -39,7 +42,7 @@ func TestKeyRangeFilterPass(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `statement: <6, "set1"> statement: <4, "dml2 /* vtgate:: keyspace_id:02 */"> transaction_id: "MariaDB/0-41983-1" `
+	want := `statement: <6, "set1"> statement: <4, "dml2 /* vtgate:: keyspace_id:02 */"> position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -56,7 +59,9 @@ func TestKeyRangeFilterSkip(t *testing.T) {
 				Sql:      []byte("dml1 /* vtgate:: keyspace_id:20 */"),
 			},
 		},
-		TransactionId: "MariaDB/0-41983-1",
+		EventToken: &querypb.EventToken{
+			Position: "MariaDB/0-41983-1",
+		},
 	}
 	var got string
 	f := KeyRangeFilterFunc(testKeyRange, func(reply *binlogdatapb.BinlogTransaction) error {
@@ -64,7 +69,7 @@ func TestKeyRangeFilterSkip(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `transaction_id: "MariaDB/0-41983-1" `
+	want := `position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -81,7 +86,9 @@ func TestKeyRangeFilterDDL(t *testing.T) {
 				Sql:      []byte("ddl"),
 			},
 		},
-		TransactionId: "MariaDB/0-41983-1",
+		EventToken: &querypb.EventToken{
+			Position: "MariaDB/0-41983-1",
+		},
 	}
 	var got string
 	f := KeyRangeFilterFunc(testKeyRange, func(reply *binlogdatapb.BinlogTransaction) error {
@@ -89,7 +96,7 @@ func TestKeyRangeFilterDDL(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `transaction_id: "MariaDB/0-41983-1" `
+	want := `position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -112,7 +119,9 @@ func TestKeyRangeFilterMalformed(t *testing.T) {
 				Sql:      []byte("dml1 /* vtgate:: keyspace_id:2 */"), // Odd-length hex string.
 			},
 		},
-		TransactionId: "MariaDB/0-41983-1",
+		EventToken: &querypb.EventToken{
+			Position: "MariaDB/0-41983-1",
+		},
 	}
 	var got string
 	f := KeyRangeFilterFunc(testKeyRange, func(reply *binlogdatapb.BinlogTransaction) error {
@@ -120,7 +129,7 @@ func TestKeyRangeFilterMalformed(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `transaction_id: "MariaDB/0-41983-1" `
+	want := `position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -131,6 +140,6 @@ func bltToString(tx *binlogdatapb.BinlogTransaction) string {
 	for _, statement := range tx.Statements {
 		result += fmt.Sprintf("statement: <%d, \"%s\"> ", statement.Category, string(statement.Sql))
 	}
-	result += fmt.Sprintf("transaction_id: \"%v\" ", tx.TransactionId)
+	result += fmt.Sprintf("position: \"%v\" ", tx.EventToken.Position)
 	return result
 }

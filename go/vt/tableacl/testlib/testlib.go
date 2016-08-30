@@ -26,7 +26,7 @@ func TestSuite(t *testing.T, factory acl.Factory) {
 	testDenyReaderInsert(t)
 	testAllowReaderSelect(t)
 	testDenyReaderDDL(t)
-	//testAllowUnmatchedTable(t)
+	testAllowUnmatchedTable(t)
 }
 
 func currentUser() string {

@@ -4,8 +4,8 @@ import { Proto } from '../proto';
 // Groups of flags for vtctl actions.
 export class DeleteKeyspaceFlags {
   flags= {};
-  constructor(keyspace) {
-    this.flags['keyspace_name'] = new KeyspaceNameFlag(0, 'keyspace_name', keyspace.name, false);
+  constructor(keyspaceName: string) {
+    this.flags['keyspace_name'] = new KeyspaceNameFlag(0, 'keyspace_name', keyspaceName, false);
     this.flags['keyspace_name']['positional'] = true;
     this.flags['recursive'] = new RecursiveFlag(1, 'recursive');
   }
@@ -60,7 +60,7 @@ export class RemoveKeyspaceCellFlags {
 export class ValidateAllFlags {
   flags= {};
   constructor() {
-    this.flags['ping-tablet'] = new PingTabletsFlag(0, 'ping-tablet');
+    this.flags['ping-tablets'] = new PingTabletsFlag(0, 'ping-tablets');
   }
 }
 
@@ -69,7 +69,23 @@ export class ValidateKeyspaceFlags {
   constructor(keyspaceName) {
     this.flags['keyspace_name'] = new KeyspaceNameFlag(0, 'keyspace_name', keyspaceName, false);
     this.flags['keyspace_name']['positional'] = true;
-    this.flags['ping-tablet'] = new PingTabletsFlag(1, 'ping-tablet');
+    this.flags['ping-tablets'] = new PingTabletsFlag(1, 'ping-tablets');
+  }
+}
+
+export class ValidateSchemaFlags {
+  flags= {};
+  constructor(keyspaceName) {
+    this.flags['keyspace_name'] = new KeyspaceNameFlag(0, 'keyspace_name', keyspaceName, false);
+    this.flags['keyspace_name']['positional'] = true;
+  }
+}
+
+export class ValidateVersionFlags {
+  flags= {};
+  constructor(keyspaceName) {
+    this.flags['keyspace_name'] = new KeyspaceNameFlag(0, 'keyspace_name', keyspaceName, false);
+    this.flags['keyspace_name']['positional'] = true;
   }
 }
 
@@ -129,11 +145,13 @@ export class ShardingColumnNameFlag extends InputFlag {
 }
 
 export class ShardingColumnTypeFlag extends DropDownFlag {
-  constructor(position: number, id: string, value= '') {
+  constructor(position: number, id: string, value= 'UINT64') {
     super(position, id, 'Sharding Column Type', 'Specifies the type of the column to use for sharding operations.', value);
     let options = [];
     Proto.SHARDING_COLUMN_NAMES.forEach(name => {
-        options.push({label: name, value: Proto.SHARDING_COLUMN_NAME_TO_TYPE[name]});
+        if (name !== '') {
+          options.push({label: name, value: Proto.SHARDING_COLUMN_NAME_TO_TYPE[name]});
+        }
     });
     this.setOptions(options);
     this.setBlockOnEmptyList(['sharding_column_name']);

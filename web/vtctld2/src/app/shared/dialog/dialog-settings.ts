@@ -9,6 +9,7 @@ export class DialogSettings {
   public dialogTitle: string;
   public dialogSubtitle: string;
   public respText: string;
+  public errMsg: string;
   public logText: string;
   public open= false;
   public dialogForm= true;
@@ -16,12 +17,11 @@ export class DialogSettings {
   public pending= false;
   public onCloseFunction= undefined;
 
-  constructor(actionWord= '', actionFunction= undefined, dialogTitle= '',
-                     dialogSubtitle= '') {
+  constructor(actionWord = '', dialogTitle = '', dialogSubtitle = '', errMsg = '') {
     this.actionWord = actionWord;
-    this.actionFunction = actionFunction;
     this.dialogTitle = dialogTitle;
     this.dialogSubtitle = dialogSubtitle;
+    this.errMsg = errMsg;
   }
 
   public startPending() {

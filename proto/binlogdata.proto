@@ -19,6 +19,7 @@ message Charset {
 }
 
 // BinlogTransaction describes a transaction inside the binlogs.
+// It is streamed by vttablet for filtered replication, used during resharding.
 message BinlogTransaction {
   message Statement {
     enum Category {
@@ -44,14 +45,23 @@ message BinlogTransaction {
   // the statements in this transaction
   repeated Statement statements = 1;
 
-  // the timestamp of the statements
-  int64 timestamp = 2;
+  // DEPRECATED (replaced by event_token): the timestamp of the statements.
+  // int64 timestamp = 2;
+  reserved 2;
 
-  // the Transaction ID after this statement was applied
-  string transaction_id = 3;
+  // DEPRECATED (replaced by event_token): the Transaction ID after
+  // this statement was applied.
+  // string transaction_id = 3;
+  reserved 3;
+
+  // The Event Token for this event.
+  query.EventToken event_token = 4;
 }
 
 // StreamEvent describes an update stream event inside the binlogs.
+// It is streamed by vttablet for the Update Stream feature.
+// For each BinlogTransaction (transactional unit), we will send any
+// number of SE_ERR, SE_DML and SE_DDL statements, followed by one SE_POS.
 message StreamEvent {
   // the category of this event
   enum Category {
@@ -62,19 +72,25 @@ message StreamEvent {
   }
   Category category = 1;
 
-  // table_name, primary_key_fields and primary_key_values are set for SE_DML
+  // table_name, primary_key_fields and primary_key_values are set for SE_DML.
   string table_name = 2;
   repeated query.Field primary_key_fields = 3;
   repeated query.Row primary_key_values = 4;
 
-  // sql is set for SE_DDL or SE_ERR
+  // sql is set for SE_DDL or SE_ERR.
   bytes sql = 5;
 
-  // timestamp is set for SE_DML, SE_DDL or SE_ERR
-  int64 timestamp = 6;
+  // DEPRECATED (replaced by event_token): timestamp is the timestamp of the statements (set for all categories).
+  // int64 timestamp = 6;
+  reserved 6;
 
-  // the Transaction ID after this statement was applied
-  string transaction_id = 7;
+  // DEPRECATED (replaced by event_token): Transaction ID after this
+  // statement was applied (set for all categories).
+  // string transaction_id = 7;
+  reserved 7;
+
+  // The Event Token for this event. Only set for SE_POS.
+  query.EventToken event_token = 8;
 }
 
 // StreamUpdateRequest is the payload to StreamUpdate

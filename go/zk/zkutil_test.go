@@ -20,11 +20,11 @@ type TestZkConn struct {
 	children map[string][]string
 }
 
-func (conn *TestZkConn) Get(path string) (data string, stat *zookeeper.Stat, err error) {
+func (conn *TestZkConn) Get(path string) (data []byte, stat *zookeeper.Stat, err error) {
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) GetW(path string) (data string, stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error) {
+func (conn *TestZkConn) GetW(path string) (data []byte, stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error) {
 	panic("Should not be used")
 }
 
@@ -55,11 +55,11 @@ func (conn *TestZkConn) ExistsW(path string) (stat *zookeeper.Stat, watch <-chan
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) Create(path, value string, flags int, aclv []zookeeper.ACL) (pathCreated string, err error) {
+func (conn *TestZkConn) Create(path string, value []byte, flags int, aclv []zookeeper.ACL) (pathCreated string, err error) {
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) Set(path, value string, version int32) (stat *zookeeper.Stat, err error) {
+func (conn *TestZkConn) Set(path string, value []byte, version int32) (stat *zookeeper.Stat, err error) {
 	panic("Should not be used")
 }
 

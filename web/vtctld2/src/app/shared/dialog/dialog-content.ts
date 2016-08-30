@@ -15,13 +15,15 @@ export class DialogContent {
   public nameId: string; // Id for the flag whose value should be used for name properties
   public flags: {};
   public requiredFlags: {};
+  public action: string;
   private prepareFunction: any;
 
-  constructor(nameId= '', flags: any = {}, requiredFlags: any = {}, prepareFunction: any= undefined) {
+  constructor(nameId = '', flags = {}, requiredFlags = {}, prepareFunction = undefined, action = '') {
     this.nameId = nameId;
     this.flags = flags;
     this.requiredFlags = requiredFlags;
     this.prepareFunction = prepareFunction;
+    this.action = action;
   }
 
   getName(): string {
@@ -38,15 +40,18 @@ export class DialogContent {
     Currently turns the flagIds and their values into a url encoded string for
     submission to the server.
   */
-  public getPostBody(action: string): string[] {
-    let flags = [];
-    let args = [];
-    flags.push(action);
-    for (let flag of this.getFlags()) {
-      flags = flags.concat(flag.getFlags());
-      args = args.concat(flag.getArgs());
+  public getPostBody(flags = undefined): string[] {
+    if (!flags) {
+      flags = this.getFlags();
     }
-    return flags.concat(args);
+    let flagArgs = [];
+    let posArgs = [];
+    flagArgs.push(this.action);
+    for (let flag of flags) {
+      flagArgs = flagArgs.concat(flag.getFlags());
+      posArgs = posArgs.concat(flag.getArgs());
+    }
+    return flagArgs.concat(posArgs);
   }
 
   public getBody(action: string): string {
@@ -104,10 +109,13 @@ export class DialogContent {
     Returns a sorted list of the flags in the flag object based on their 
     position parameter.
   */
-  public getFlags(): Flag[] {
+  public getFlags(flagsMap = undefined): Flag[] {
+    if (!flagsMap) {
+      flagsMap = this.flags;
+    }
     let flags = [];
-    for (let flagName of Object.keys(this.flags)) {
-      flags.push(this.flags[flagName]);
+    for (let flagName of Object.keys(flagsMap)) {
+      flags.push(flagsMap[flagName]);
     }
     flags.sort(this.orderFlags);
     return flags;
@@ -140,9 +148,12 @@ export class DialogContent {
     true than the instance flags will bet set to the flags in the response.
     The PrepareResponse will also be returned to the caller.
   */
-  public prepare(): PrepareResponse {
+  public prepare(setFlags = true): PrepareResponse {
     if (this.prepareFunction === undefined) {
-      return new PrepareResponse(true);
+      return new PrepareResponse(true, this.flags);
+    }
+    if (!setFlags) {
+      return this.prepareFunction(this.flags);
     }
     let resp = this.prepareFunction(this.flags);
     if (resp.success) {
@@ -155,16 +166,20 @@ export class DialogContent {
     let indexOfOpenDoubleBracket = fmtString.indexOf('{{');
     while (indexOfOpenDoubleBracket !== -1) {
       let indexOfCloseDoubleBracket = fmtString.indexOf('}}', indexOfOpenDoubleBracket);
-      let lookUpId = fmtString.substring(indexOfOpenDoubleBracket + 2, indexOfCloseDoubleBracket);
-      if (this.flags[lookUpId] && this.flags[lookUpId].getStrValue()) {
-        fmtString = fmtString.substring(0, indexOfOpenDoubleBracket)
-                    + this.flags[lookUpId].getStrValue()
-                    + fmtString.substring(indexOfCloseDoubleBracket + 2);
+      if (indexOfCloseDoubleBracket !== -1) {
+        let lookUpId = fmtString.substring(indexOfOpenDoubleBracket + 2, indexOfCloseDoubleBracket);
+        if (this.flags[lookUpId] && this.flags[lookUpId].getStrValue()) {
+          fmtString = fmtString.substring(0, indexOfOpenDoubleBracket)
+                      + this.flags[lookUpId].getStrValue()
+                      + fmtString.substring(indexOfCloseDoubleBracket + 2);
+        } else {
+          fmtString = fmtString.substring(0, indexOfOpenDoubleBracket)
+                      + fmtString.substring(indexOfCloseDoubleBracket + 2);
+        }
+        indexOfOpenDoubleBracket = fmtString.indexOf('{{');
       } else {
-        fmtString = fmtString.substring(0, indexOfOpenDoubleBracket)
-                    + fmtString.substring(indexOfCloseDoubleBracket + 2);
+        break;
       }
-      indexOfOpenDoubleBracket = fmtString.indexOf('{{');
     }
     return fmtString;
   }
