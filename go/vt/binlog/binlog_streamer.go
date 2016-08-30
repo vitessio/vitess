@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var (
@@ -161,9 +162,11 @@ func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replic
 	// Statements that aren't wrapped in BEGIN/COMMIT are committed immediately.
 	commit := func(timestamp uint32) error {
 		trans := &binlogdatapb.BinlogTransaction{
-			Statements:    statements,
-			Timestamp:     int64(timestamp),
-			TransactionId: replication.EncodeGTID(gtid),
+			Statements: statements,
+			EventToken: &querypb.EventToken{
+				Timestamp: int64(timestamp),
+				Position:  replication.EncodePosition(pos),
+			},
 		}
 		if err = bls.sendTransaction(trans); err != nil {
 			if err == io.EOF {

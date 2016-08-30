@@ -74,24 +74,21 @@ func (evs *EventStreamer) transactionToEvent(trans *binlogdatapb.BinlogTransacti
 					Sql:      stmt.Sql,
 				}
 			}
-			dmlEvent.Timestamp = trans.Timestamp
 			if err = evs.sendEvent(dmlEvent); err != nil {
 				return err
 			}
 		case binlogdatapb.BinlogTransaction_Statement_BL_DDL:
 			ddlEvent := &binlogdatapb.StreamEvent{
-				Category:  binlogdatapb.StreamEvent_SE_DDL,
-				Sql:       stmt.Sql,
-				Timestamp: trans.Timestamp,
+				Category: binlogdatapb.StreamEvent_SE_DDL,
+				Sql:      stmt.Sql,
 			}
 			if err = evs.sendEvent(ddlEvent); err != nil {
 				return err
 			}
 		case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
 			unrecognized := &binlogdatapb.StreamEvent{
-				Category:  binlogdatapb.StreamEvent_SE_ERR,
-				Sql:       stmt.Sql,
-				Timestamp: trans.Timestamp,
+				Category: binlogdatapb.StreamEvent_SE_ERR,
+				Sql:      stmt.Sql,
 			}
 			if err = evs.sendEvent(unrecognized); err != nil {
 				return err
@@ -102,9 +99,8 @@ func (evs *EventStreamer) transactionToEvent(trans *binlogdatapb.BinlogTransacti
 		}
 	}
 	posEvent := &binlogdatapb.StreamEvent{
-		Category:      binlogdatapb.StreamEvent_SE_POS,
-		TransactionId: trans.TransactionId,
-		Timestamp:     trans.Timestamp,
+		Category:   binlogdatapb.StreamEvent_SE_POS,
+		EventToken: trans.EventToken,
 	}
 	if err = evs.sendEvent(posEvent); err != nil {
 		return err

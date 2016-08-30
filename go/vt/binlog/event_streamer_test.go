@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var dmlErrorCases = []string{
@@ -98,32 +99,34 @@ func TestDMLEvent(t *testing.T) {
 			Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
 			Sql:      []byte("query"),
 		}},
-		Timestamp:     1,
-		TransactionId: "MariaDB/0-41983-20",
+		EventToken: &querypb.EventToken{
+			Timestamp: 1,
+			Position:  "MariaDB/0-41983-20",
+		},
 	}
 	evs := &EventStreamer{
 		sendEvent: func(event *binlogdatapb.StreamEvent) error {
 			switch event.Category {
 			case binlogdatapb.StreamEvent_SE_DML:
-				want := `category:SE_DML table_name:"_table_" primary_key_fields:<name:"eid" type:INT64 > primary_key_fields:<name:"id" type:UINT64 > primary_key_fields:<name:"name" type:VARBINARY > primary_key_values:<lengths:2 lengths:1 lengths:4 values:"101name" > primary_key_values:<lengths:2 lengths:20 lengths:4 values:"1118446744073709551615name" > timestamp:1 `
+				want := `category:SE_DML table_name:"_table_" primary_key_fields:<name:"eid" type:INT64 > primary_key_fields:<name:"id" type:UINT64 > primary_key_fields:<name:"name" type:VARBINARY > primary_key_values:<lengths:2 lengths:1 lengths:4 values:"101name" > primary_key_values:<lengths:2 lengths:20 lengths:4 values:"1118446744073709551615name" > `
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got \n%s, want \n%s", got, want)
 				}
 			case binlogdatapb.StreamEvent_SE_ERR:
-				want := `sql:"query" timestamp:1 `
+				want := `sql:"query" `
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got %s, want %s", got, want)
 				}
 			case binlogdatapb.StreamEvent_SE_POS:
-				want := `category:SE_POS timestamp:1 transaction_id:"MariaDB/0-41983-20" `
+				want := `category:SE_POS event_token:<timestamp:1 position:"MariaDB/0-41983-20" > `
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got %s, want %s", got, want)
 				}
 			default:
-				t.Errorf("unexppected: %#v", event)
+				t.Errorf("unexpected: %#v", event)
 			}
 			return nil
 		},
@@ -145,26 +148,28 @@ func TestDDLEvent(t *testing.T) {
 				Sql:      []byte("DDL"),
 			},
 		},
-		Timestamp:     1,
-		TransactionId: "MariaDB/0-41983-20",
+		EventToken: &querypb.EventToken{
+			Timestamp: 1,
+			Position:  "MariaDB/0-41983-20",
+		},
 	}
 	evs := &EventStreamer{
 		sendEvent: func(event *binlogdatapb.StreamEvent) error {
 			switch event.Category {
 			case binlogdatapb.StreamEvent_SE_DDL:
-				want := `category:SE_DDL sql:"DDL" timestamp:1 `
+				want := `category:SE_DDL sql:"DDL" `
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got %s, want %s", got, want)
 				}
 			case binlogdatapb.StreamEvent_SE_POS:
-				want := `category:SE_POS timestamp:1 transaction_id:"MariaDB/0-41983-20" `
+				want := `category:SE_POS event_token:<timestamp:1 position:"MariaDB/0-41983-20" > `
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got %s, want %s", got, want)
 				}
 			default:
-				t.Errorf("unexppected: %#v", event)
+				t.Errorf("unexpected: %#v", event)
 			}
 			return nil
 		},
