@@ -47,7 +47,7 @@ export class DialogContent {
     let flagArgs = [];
     let posArgs = [];
     flagArgs.push(this.action);
-    for (let flag of this.getFlags()) {
+    for (let flag of flags) {
       flagArgs = flagArgs.concat(flag.getFlags());
       posArgs = posArgs.concat(flag.getArgs());
     }
@@ -152,8 +152,11 @@ export class DialogContent {
     if (this.prepareFunction === undefined) {
       return new PrepareResponse(true, this.flags);
     }
+    if (!setFlags) {
+      return this.prepareFunction(this.flags);
+    }
     let resp = this.prepareFunction(this.flags);
-    if (resp.success && setFlags) {
+    if (resp.success) {
       this.flags = resp.flags;
     }
     return resp;

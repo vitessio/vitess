@@ -9,6 +9,7 @@ import { DialogSettings } from '../shared/dialog/dialog-settings';
 import { Keyspace } from '../api/keyspace';
 import { KeyspaceService } from '../api/keyspace.service';
 import { VtctlService } from '../api/vtctl.service';
+import { PrepareResponse } from '../shared/prepare-response';
 
 import { MenuItem } from 'primeng/primeng';
 
@@ -21,9 +22,11 @@ import { MenuItem } from 'primeng/primeng';
 export class DashboardComponent implements OnInit {
   keyspaces = [];
   keyspacesReady = false;
+  selectedKeyspace: Keyspace;
   dialogSettings: DialogSettings;
   dialogContent: DialogContent;
   private actions: MenuItem[];
+  private keyspaceActions: MenuItem[];
 
   constructor(
               private keyspaceService: KeyspaceService,
@@ -35,6 +38,9 @@ export class DashboardComponent implements OnInit {
     this.dialogContent = new DialogContent();
     this.dialogSettings = new DialogSettings();
     this.actions = [{label: 'Validate', command: (event) => {this.openValidateDialog(); }}];
+    this.keyspaceActions = [{label: 'Edit', command: (event) => {this.openEditDialog(); }},
+      {label: 'Delete', command: (event) => {this.openDeleteDialog(); }},
+    ];
   }
 
   getKeyspaces() {
@@ -59,12 +65,16 @@ export class DashboardComponent implements OnInit {
     return 0;
   }
 
-  openEditDialog(keyspace: Keyspace) {
+  setSelectedKeyspace(keyspace) {
+    this.selectedKeyspace = keyspace;
+  }
+
+  openEditDialog(keyspace = this.selectedKeyspace) {
     this.dialogSettings = new DialogSettings('Edit', `Edit ${keyspace.name}`, '', 'There was a problem editing {{keyspace_name}}:');
     this.dialogSettings.setMessage('Edited {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.getKeyspaces.bind(this);
     let flags = new EditKeyspaceFlags(keyspace).flags;
-    this.dialogContent = new DialogContent('keyspace_name', flags, {}, undefined, 'SetKeyspaceShardingInfo');
+    this.dialogContent = new DialogContent('keyspace_name', flags, {}, this.prepareEdit.bind(this), 'SetKeyspaceShardingInfo');
     this.dialogSettings.toggleModal();
   }
 
@@ -73,11 +83,11 @@ export class DashboardComponent implements OnInit {
     this.dialogSettings.setMessage('Created {{keyspace_name}}');
     this.dialogSettings.onCloseFunction = this.getKeyspaces.bind(this);
     let flags = new NewKeyspaceFlags().flags;
-    this.dialogContent = new DialogContent('keyspace_name', flags, {'keyspace_name': true}, undefined, 'CreateKeyspace');
+    this.dialogContent = new DialogContent('keyspace_name', flags, {'keyspace_name': true}, this.prepareNew.bind(this), 'CreateKeyspace');
     this.dialogSettings.toggleModal();
   }
 
-  openDeleteDialog(keyspace: Keyspace) {
+  openDeleteDialog(keyspace = this.selectedKeyspace) {
     this.dialogSettings = new DialogSettings('Delete', `Delete ${keyspace.name}`, `Are you sure you want to delete ${keyspace.name}?`,
                                              'There was a problem deleting {{keyspace_name}}:');
     this.dialogSettings.setMessage('Deleted {{keyspace_name}}');
@@ -94,6 +104,33 @@ export class DashboardComponent implements OnInit {
     let flags = new ValidateAllFlags().flags;
     this.dialogContent = new DialogContent('keyspace_name', flags, {}, undefined, 'Validate');
     this.dialogSettings.toggleModal();
+  }
+
+  prepareNew(flags) {
+    let new_flags = new NewKeyspaceFlags().flags;
+    for (let key of Object.keys(flags)) {
+      new_flags[key].value = flags[key].value;
+    }
+    this.shardColumnAndNameTest(new_flags);
+    return new PrepareResponse(true, new_flags);
+  }
+
+  prepareEdit(flags) {
+    let new_flags = new EditKeyspaceFlags({name: '', shardingColumnName: '', shardingColumnType: ''}).flags;
+    for (let key of Object.keys(flags)) {
+      new_flags[key].value = flags[key].value;
+    }
+    this.shardColumnAndNameTest(new_flags);
+    return new PrepareResponse(true, new_flags);
+  }
+
+  shardColumnAndNameTest(new_flags) {
+    if (!new_flags['sharding_column_name'].value) {
+      new_flags['sharding_column_type']['value'] = '';
+    }
+    if (new_flags['sharding_column_name'].value && !new_flags['sharding_column_type'].value) {
+      new_flags['sharding_column_type']['value'] = 'UINT64';
+    }
   }
 
   navigate(keyspaceName: string) {

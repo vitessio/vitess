@@ -27,7 +27,7 @@
   left: 50%  !important;
   transform: translate(-50%, -50%);
   margin: 0;
-  width: 70% !important;
+  width: auto !important;
 }
 
 .vt-popUpContainer{

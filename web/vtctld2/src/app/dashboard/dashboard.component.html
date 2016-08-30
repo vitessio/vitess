@@ -6,30 +6,23 @@
 <div>
   <div *ngFor="let keyspace of keyspaces" class="vt-card">
     <md-card>
-      <md-card-title>{{keyspace.name}}</md-card-title>   
+      <md-card-title>
+        
+        <div class="vt-toolbar">
+          <md-icon class="vt-menu" (click)="setSelectedKeyspace(keyspace);cardMenu.toggle($event)">menu</md-icon>
+          <p-menu #cardMenu popup="popup" [model]="keyspaceActions"></p-menu>
+          <h4>{{keyspace.name}}</h4>
+        </div>
+      </md-card-title>   
       <a class="vt-dark-link" [routerLink]="['/keyspace']" [queryParams]="{keyspace: keyspace.name}">
         <md-card-content >
           <div class="stats-container">
             <md-list>
               <md-list-item>
                 <span class="vt-stat-value-container">
-                  <span class="vt-stat-value">
-                    {{keyspace.servingShards.length}}
-                  </span>
-                   
-                  <span class="vt-stat-category">
-                    Serving Shards
-                  </span>
-                </span>
-              </md-list-item>
-              <md-list-item>
-                <span class="vt-stat-value-container">
-                  <span class="vt-stat-value">
-                    {{keyspace.nonservingShards.length}}
-                  </span>
-                   
-                  <span class="vt-stat-category">
-                    Nonserving Shards
+                    {{keyspace.servingShards.length}} Shards
+                  <span style="color: red" *ngIf="keyspace.nonservingShards.length > 0">
+                    (+{{keyspace.nonservingShards.length}} Not serving)
                   </span>
                 </span>
               </md-list-item>
@@ -37,12 +30,6 @@
           </div>
         </md-card-content>
       </a>
-      <md-card-actions>
-        <div class="vt-actions-container">
-          <button md-button (click)="openDeleteDialog(keyspace);">Delete</button>
-          <button md-button (click)="openEditDialog(keyspace);">Edit</button>
-        </div>
-      </md-card-actions>
     </md-card>
   </div>
 </div>

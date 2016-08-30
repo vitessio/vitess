@@ -53,3 +53,8 @@
 >>> md-input {
   width: 100%;
 }
+
+.vt-action-container {
+  margin-top: 20px;
+  float: right;
+}

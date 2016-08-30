@@ -4,7 +4,14 @@
     <div class="vt-padding">
       <div *ngFor="let flag of dialogContent.getFlags()">
         <div  *ngIf="dialogContent.canDisplay(flag.id)" class="vt-form-member">
-          <div class="vt-cell-left"><strong>{{flag.name}}</strong>: {{flag.description}}</div>
+          <div class="vt-cell-left">
+            <div>
+              <strong>{{flag.name}}<span *ngIf="dialogContent.isRequired(flag.id)"> (Required)</span>:</strong>
+            </div> 
+            <div>
+              {{flag.description}}
+            </div>
+          </div>
           <div class="vt-cell-right">
             <md-input *ngIf="flag.type=='input'" [(ngModel)]="flag.value" [required]="dialogContent.isRequired(flag.id)" placeholder="{{flag.name}}"></md-input>
             <div  *ngIf="flag.type == 'checkBox'" class="checkbox-wrapper">
@@ -22,9 +29,10 @@
       {{cmd}}
     </div>
   </div>
-  <div class="vt-padding">
-    <button md-button disableRipple="true" (click)="cancelDialog();">Cancel</button>
+  <div class="vt-padding vt-action-container">
+    
     <button md-button disableRipple="true" [disabled]="!dialogContent.canSubmit()" (click)="sendAction();">{{dialogSettings.actionWord}}</button>
+    <button md-button disableRipple="true" (click)="cancelDialog();">Cancel</button>
   </div>
 </div>
 <div class="vt-padding" *ngIf="dialogSettings.dialogLog">
