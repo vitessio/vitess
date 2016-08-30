@@ -458,7 +458,7 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
     if not mysql_down:
       # Make the clone as slow as necessary such that there is enough time to
       # run PlannedReparent in the meantime.
-      # TOOD(mberlin): Once insert_values is fixed to uniformly distribute the
+      # TODO(mberlin): Once insert_values is fixed to uniformly distribute the
       #                rows across shards when sorted by primary key, remove
       #                --chunk_count 2, --min_rows_per_chunk 1 and set
       #                --source_reader_count back to 1.
