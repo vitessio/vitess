@@ -89,7 +89,6 @@ type SplitCloneWorker struct {
 	tsc         *discovery.TabletStatsCache
 
 	// populated during WorkerStateFindTargets, read-only after that
-	sourceAliases []*topodatapb.TabletAlias
 	sourceTablets []*topodatapb.Tablet
 	// shardWatchers contains a TopologyWatcher for each source and destination
 	// shard. It updates the list of tablets in the healthcheck if replicas are

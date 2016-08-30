@@ -93,11 +93,6 @@ func CreateOrUpdate(zconn Conn, zkPath string, value []byte, flags int, aclv []z
 	return
 }
 
-type pathItem struct {
-	path string
-	err  error
-}
-
 // ChildrenRecursive returns the relative path of all the children of
 // the provided node.
 func ChildrenRecursive(zconn Conn, zkPath string) ([]string, error) {
@@ -561,17 +556,7 @@ func (zm *zMutex) deleteLock() error {
 // ZElector stores basic state for running an election.
 type ZElector struct {
 	*zMutex
-	path   string
-	leader string
-}
-
-func (ze *ZElector) isLeader() bool {
-	return ze.leader == ze.name
-}
-
-type electionEvent struct {
-	Event int
-	Err   error
+	path string
 }
 
 type backoffDelay struct {

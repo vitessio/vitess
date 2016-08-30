@@ -10,7 +10,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
@@ -27,9 +26,8 @@ Commands:
 var (
 	zkCfg = flag.String("zk.cfg", "6@<hostname>:3801:3802:3803",
 		"zkid@server1:leaderPort1:electionPort1:clientPort1,...)")
-	myId = flag.Uint("zk.myid", 0,
+	myID = flag.Uint("zk.myid", 0,
 		"which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname")
-	force = flag.Bool("force", false, "force action, no prompting")
 
 	stdin *bufio.Reader
 )
@@ -41,16 +39,6 @@ func init() {
 		fmt.Fprintf(os.Stderr, usage)
 	}
 	stdin = bufio.NewReader(os.Stdin)
-}
-
-func confirm(prompt string) bool {
-	if *force {
-		return true
-	}
-	fmt.Fprintf(os.Stderr, prompt+" [NO/yes] ")
-
-	line, _ := stdin.ReadString('\n')
-	return strings.ToLower(strings.TrimSpace(line)) == "yes"
 }
 
 func main() {
@@ -65,7 +53,7 @@ func main() {
 		exit.Return(1)
 	}
 
-	zkConfig := zkctl.MakeZkConfigFromString(*zkCfg, uint32(*myId))
+	zkConfig := zkctl.MakeZkConfigFromString(*zkCfg, uint32(*myID))
 	zkd := zkctl.NewZkd(zkConfig)
 
 	action := flag.Arg(0)

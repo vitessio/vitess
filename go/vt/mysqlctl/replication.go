@@ -9,12 +9,10 @@ Handle creating replicas and setting up the replication streams.
 package mysqlctl
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
-	"text/template"
 	"time"
 
 	"golang.org/x/net/context"
@@ -35,15 +33,6 @@ const (
 	// SQLStopSlave is the SQl command issued to stop MySQL replication
 	SQLStopSlave = "STOP SLAVE"
 )
-
-func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
-	myTemplate := template.Must(template.New("").Parse(tmpl))
-	data := new(bytes.Buffer)
-	if err := myTemplate.Execute(data, vars); err != nil {
-		return "", err
-	}
-	return data.String(), nil
-}
 
 func changeMasterArgs(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) []string {
 	var args []string
