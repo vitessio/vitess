@@ -10,8 +10,10 @@
 .collapsed-border {
     border-collapse: collapse;
     border-spacing: 0;
-    width: 80%;
+    width: 70%;
     float: left;
+    margin: 0 0;
+    border: 1px solid black;
 }
 
 .no-padding {

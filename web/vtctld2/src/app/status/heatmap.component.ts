@@ -86,17 +86,14 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
     this.yGrid = this.heatmap.YGridLines;
 
     let heatmapTable = document.getElementById('heatmapTable');
-    this.heatmapWidth = heatmapTable.clientWidth - 100;
-    if (this.heatmapWidth < 10) {
-      this.heatmapWidth = 10;
-    }
+    this.heatmapWidth = heatmapTable.clientWidth < 10 ? 10 : heatmapTable.clientWidth;
   }
 
   getCell(rowClicked) {
     let sum = 0;
     for (let i = this.yLabels.length - 1; i >= 0; i--) {
       sum += this.yLabels[i].CellLabel.Rowspan;
-      if (rowClicked <= sum) {
+      if (rowClicked < sum) {
         return this.yLabels[i].CellLabel.Name;
       }
     }
@@ -199,8 +196,9 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
     if (metric === 'healthy') {
       this.colorscaleValue = [
         [0.0, '#000000'],
-        [0.33, '#F7EEDE'],
-        [0.66, '#EA109A'],
+        [0.25, '#FFFFFF'],
+        [0.5, '#F8CFE9'],
+        [0.75, '#EA109A'],
         [1.0, '#A22417'],
       ];
       this.dataMin = -1;
@@ -208,10 +206,10 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
     } else {
       let max = this.data.reduce((a, b) => a.concat(b))
                          .reduce((a, b) => (a > b) ? a : b);
-      let percent = (max === 0) ? 1.0 : 1 / max;
+      let percent = (max === 0) ? 1.0 : 1 / (1 + max);
       this.colorscaleValue = [
         [0.0, '#000000'],
-        [percent, '#F7EEDE'],
+        [percent, '#FFFFFF'],
         [1.0, '#A22417'],
       ];
       this.dataMin = -1;

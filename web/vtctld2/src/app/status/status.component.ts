@@ -10,7 +10,7 @@ import { SelectItem } from 'primeng/primeng';
 @Component({
   selector: 'vt-status',
   templateUrl: './status.component.html',
-  styleUrls: [],
+  styleUrls: ['./status.component.css'],
 })
 
 export class StatusComponent implements OnInit, OnDestroy {
