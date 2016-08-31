@@ -7,11 +7,9 @@
 import datetime
 from urlparse import urlparse
 
-# Import main protobuf library first
-# to work around import order issues.
-import google.protobuf  # pylint: disable=unused-import
+from vtdb import prefer_vtroot_imports  # pylint: disable=unused-import
 
-from grpc.beta import implementations
+import grpc
 
 import vtctl_client
 
@@ -38,8 +36,8 @@ class GRPCVtctlClient(vtctl_client.VtctlClient):
       self.stub.close()
 
     p = urlparse('http://' + self.addr)
-    channel = implementations.insecure_channel(p.hostname, p.port)
-    self.stub = vtctlservice_pb2.beta_create_Vtctl_stub(channel)
+    channel = grpc.insecure_channel('%s:%s' % (p.hostname, p.port))
+    self.stub = vtctlservice_pb2.VtctlStub(channel)
 
   def close(self):
     self.stub = None

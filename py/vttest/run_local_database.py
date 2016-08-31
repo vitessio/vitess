@@ -34,6 +34,8 @@ import optparse
 import os
 import sys
 
+from vtdb import prefer_vtroot_imports  # pylint: disable=unused-import
+
 from google.protobuf import text_format
 
 from vttest import environment

@@ -211,14 +211,14 @@ _CONFIGURATION = _descriptor.Descriptor(
     _descriptor.FieldDescriptor(
       name='max_increase', full_name='throttlerdata.Configuration.max_increase', index=3,
       number=4, type=1, cpp_type=5, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
       name='emergency_decrease', full_name='throttlerdata.Configuration.emergency_decrease', index=4,
       number=5, type=1, cpp_type=5, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
@@ -267,7 +267,7 @@ _CONFIGURATION = _descriptor.Descriptor(
     _descriptor.FieldDescriptor(
       name='bad_rate_increase', full_name='throttlerdata.Configuration.bad_rate_increase', index=11,
       number=12, type=1, cpp_type=5, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
@@ -640,8 +640,9 @@ _MAXRATESRESPONSE_RATESENTRY.has_options = True
 _MAXRATESRESPONSE_RATESENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
 _GETCONFIGURATIONRESPONSE_CONFIGURATIONSENTRY.has_options = True
 _GETCONFIGURATIONRESPONSE_CONFIGURATIONSENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
-import abc
+import grpc
 from grpc.beta import implementations as beta_implementations
+from grpc.beta import interfaces as beta_interfaces
 from grpc.framework.common import cardinality
 from grpc.framework.interfaces.face import utilities as face_utilities
 # @@protoc_insertion_point(module_scope)

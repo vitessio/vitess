@@ -29,33 +29,82 @@ _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
 
-import abc
+import grpc
 from grpc.beta import implementations as beta_implementations
+from grpc.beta import interfaces as beta_interfaces
 from grpc.framework.common import cardinality
 from grpc.framework.interfaces.face import utilities as face_utilities
 
-class BetaVtworkerServicer(object):
-  """<fill me in later!>"""
-  __metaclass__ = abc.ABCMeta
-  @abc.abstractmethod
+
+class VtworkerStub(object):
+  """Vtworker contains the vtworker RPC calls.
+  """
+
+  def __init__(self, channel):
+    """Constructor.
+
+    Args:
+      channel: A grpc.Channel.
+    """
+    self.ExecuteVtworkerCommand = channel.unary_stream(
+        '/vtworkerservice.Vtworker/ExecuteVtworkerCommand',
+        request_serializer=vtworkerdata__pb2.ExecuteVtworkerCommandRequest.SerializeToString,
+        response_deserializer=vtworkerdata__pb2.ExecuteVtworkerCommandResponse.FromString,
+        )
+
+
+class VtworkerServicer(object):
+  """Vtworker contains the vtworker RPC calls.
+  """
+
   def ExecuteVtworkerCommand(self, request, context):
-    raise NotImplementedError()
+    """ExecuteVtworkerCommand allows to run a vtworker command by specifying the
+    same arguments as on the command line.
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
+
+def add_VtworkerServicer_to_server(servicer, server):
+  rpc_method_handlers = {
+      'ExecuteVtworkerCommand': grpc.unary_stream_rpc_method_handler(
+          servicer.ExecuteVtworkerCommand,
+          request_deserializer=vtworkerdata__pb2.ExecuteVtworkerCommandRequest.FromString,
+          response_serializer=vtworkerdata__pb2.ExecuteVtworkerCommandResponse.SerializeToString,
+      ),
+  }
+  generic_handler = grpc.method_handlers_generic_handler(
+      'vtworkerservice.Vtworker', rpc_method_handlers)
+  server.add_generic_rpc_handlers((generic_handler,))
+
+
+class BetaVtworkerServicer(object):
+  """Vtworker contains the vtworker RPC calls.
+  """
+  def ExecuteVtworkerCommand(self, request, context):
+    """ExecuteVtworkerCommand allows to run a vtworker command by specifying the
+    same arguments as on the command line.
+    """
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+
 
 class BetaVtworkerStub(object):
-  """The interface to which stubs will conform."""
-  __metaclass__ = abc.ABCMeta
-  @abc.abstractmethod
-  def ExecuteVtworkerCommand(self, request, timeout):
+  """Vtworker contains the vtworker RPC calls.
+  """
+  def ExecuteVtworkerCommand(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
+    """ExecuteVtworkerCommand allows to run a vtworker command by specifying the
+    same arguments as on the command line.
+    """
     raise NotImplementedError()
 
+
 def beta_create_Vtworker_server(servicer, pool=None, pool_size=None, default_timeout=None, maximum_timeout=None):
-  import vtworkerdata_pb2
-  import vtworkerdata_pb2
   request_deserializers = {
-    ('vtworkerservice.Vtworker', 'ExecuteVtworkerCommand'): vtworkerdata_pb2.ExecuteVtworkerCommandRequest.FromString,
+    ('vtworkerservice.Vtworker', 'ExecuteVtworkerCommand'): vtworkerdata__pb2.ExecuteVtworkerCommandRequest.FromString,
   }
   response_serializers = {
-    ('vtworkerservice.Vtworker', 'ExecuteVtworkerCommand'): vtworkerdata_pb2.ExecuteVtworkerCommandResponse.SerializeToString,
+    ('vtworkerservice.Vtworker', 'ExecuteVtworkerCommand'): vtworkerdata__pb2.ExecuteVtworkerCommandResponse.SerializeToString,
   }
   method_implementations = {
     ('vtworkerservice.Vtworker', 'ExecuteVtworkerCommand'): face_utilities.unary_stream_inline(servicer.ExecuteVtworkerCommand),
@@ -63,14 +112,13 @@ def beta_create_Vtworker_server(servicer, pool=None, pool_size=None, default_tim
   server_options = beta_implementations.server_options(request_deserializers=request_deserializers, response_serializers=response_serializers, thread_pool=pool, thread_pool_size=pool_size, default_timeout=default_timeout, maximum_timeout=maximum_timeout)
   return beta_implementations.server(method_implementations, options=server_options)
 
+
 def beta_create_Vtworker_stub(channel, host=None, metadata_transformer=None, pool=None, pool_size=None):
-  import vtworkerdata_pb2
-  import vtworkerdata_pb2
   request_serializers = {
-    ('vtworkerservice.Vtworker', 'ExecuteVtworkerCommand'): vtworkerdata_pb2.ExecuteVtworkerCommandRequest.SerializeToString,
+    ('vtworkerservice.Vtworker', 'ExecuteVtworkerCommand'): vtworkerdata__pb2.ExecuteVtworkerCommandRequest.SerializeToString,
   }
   response_deserializers = {
-    ('vtworkerservice.Vtworker', 'ExecuteVtworkerCommand'): vtworkerdata_pb2.ExecuteVtworkerCommandResponse.FromString,
+    ('vtworkerservice.Vtworker', 'ExecuteVtworkerCommand'): vtworkerdata__pb2.ExecuteVtworkerCommandResponse.FromString,
   }
   cardinalities = {
     'ExecuteVtworkerCommand': cardinality.Cardinality.UNARY_STREAM,

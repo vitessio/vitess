@@ -33,7 +33,7 @@ fi
 # clone the repository, setup the submodules
 git clone https://github.com/grpc/grpc.git
 cd grpc
-git checkout release-0_13_0
+git checkout v1.0.0
 git submodule update --init
 
 # OSX specific setting + dependencies
@@ -65,21 +65,13 @@ else
   make install
 fi
 
-# Pin the protobuf python dependency to a specific version which is >=3.0.0a3.
-#
-# This prevents us from running into the bug that the protobuf package with the
-# version "3.0.0-alpha-1" is treated as newer than "3.0.0a3" (alpha-3).
-# See: https://github.com/google/protobuf/issues/855
-# Also discussed here: https://github.com/grpc/grpc/issues/5534
-# In particular, we hit this issue on Travis.
-sed -i -e 's/protobuf>=3.0.0a3/protobuf==3.0.0a3/' setup.py
-
-# and now build and install gRPC python libraries
-# (Dependencies like protobuf python will be installed automatically.)
+# Install gRPC python libraries from PyPI.
+# Dependencies like protobuf python will be installed automatically.
+grpcio_ver=1.0.0
 if [ -n "$grpc_dist" ]; then
-  $grpc_dist/usr/local/bin/pip install .
+  $grpc_dist/usr/local/bin/pip install --upgrade grpcio==$grpcio_ver
 else
-  pip install .
+  pip install --upgrade grpcio==$grpcio_ver
 fi
 
 # Build PHP extension, only if requested.
