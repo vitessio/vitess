@@ -220,8 +220,8 @@ func (c *tabletStatsCache) heatmapData(selectedKeyspace, selectedCell, selectedT
 		metricFunc = replicationLag
 	case "qps":
 		metricFunc = qps
-	case "healthy":
-		metricFunc = healthy
+	case "health":
+		metricFunc = health
 	default:
 		return nil, fmt.Errorf("invalid metric: %v Select 'lag', 'cpu', or 'qps'", selectedMetric)
 	}
@@ -375,7 +375,7 @@ func (c *tabletStatsCache) aggregatedData(keyspace, cell, selectedType, selected
 			for _, tablet := range tablets {
 				hasTablets = true
 				// If even one tablet is unhealthy then the entire groups becomes unhealthy.
-				if (selectedMetric == "healthy" && metricFunc(tablet) == tabletUnhealthy) ||
+				if (selectedMetric == "health" && metricFunc(tablet) == tabletUnhealthy) ||
 					(selectedMetric == "lag" && metricFunc(tablet) > lagThresholdUnhealthy) {
 					sum = metricFunc(tablet)
 					count = 1
@@ -413,7 +413,7 @@ func (c *tabletStatsCache) tabletStats(tabletAlias *topodatapb.TabletAlias) (dis
 	return *ts, nil
 }
 
-func healthy(stat *discovery.TabletStats) float64 {
+func health(stat *discovery.TabletStats) float64 {
 	health := tabletHealthy
 	// The tablet is unhealthy if there is a health error.
 	if stat.Stats.HealthError != "" {
