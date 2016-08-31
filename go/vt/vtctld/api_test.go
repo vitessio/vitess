@@ -194,6 +194,18 @@ func TestAPI(t *testing.T) {
 		  "Stats": { "seconds_behind_master": 100 }, "LastError": null }`},
 		{"GET", "tablet_health/cell1", "can't get tablet_health: invalid tablet_health path: \"cell1\"  expected path: /tablet_health/<cell>/<uid>"},
 		{"GET", "tablet_health/cell1/gh", "can't get tablet_health: incorrect uid: bad tablet uid strconv.ParseUint: parsing \"gh\": invalid syntax"},
+
+		// Topology Info
+		{"GET", "topology_info/?keyspace=all&cell=all", `{
+		   "Keyspaces": ["ks1"],
+		   "Cells": ["cell1","cell2"],
+		  "TabletTypes": ["REPLICA","RDONLY"]
+		}`},
+		{"GET", "topology_info/?keyspace=ks1&cell=cell1", `{
+		   "Keyspaces": ["ks1"],
+		   "Cells": ["cell1","cell2"],
+		  "TabletTypes": ["REPLICA", "RDONLY"]
+		}`},
 	}
 	for _, in := range table {
 		var resp *http.Response

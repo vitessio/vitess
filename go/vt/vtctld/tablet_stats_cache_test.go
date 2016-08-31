@@ -359,6 +359,79 @@ func TestTabletStats(t *testing.T) {
 	}
 }
 
+func TestTopologyInfo(t *testing.T) {
+	ts1 := tabletStats("ks1", "cell1", "0", topodatapb.TabletType_MASTER, 100)
+	ts2 := tabletStats("ks1", "cell1", "0", topodatapb.TabletType_REPLICA, 200)
+	ts3 := tabletStats("ks1", "cell2", "0", topodatapb.TabletType_REPLICA, 300)
+	ts4 := tabletStats("ks1", "cell2", "0", topodatapb.TabletType_RDONLY, 400)
+	ts5 := tabletStats("ks1", "cell3", "0", topodatapb.TabletType_RDONLY, 500)
+	ts6 := tabletStats("ks1", "cell3", "0", topodatapb.TabletType_RDONLY, 600)
+	ts7 := tabletStats("ks2", "cell1", "0", topodatapb.TabletType_MASTER, 700)
+
+	tabletStatsCache := newTabletStatsCache()
+	tabletStatsCache.StatsUpdate(ts1)
+	tabletStatsCache.StatsUpdate(ts2)
+	tabletStatsCache.StatsUpdate(ts3)
+	tabletStatsCache.StatsUpdate(ts4)
+	tabletStatsCache.StatsUpdate(ts5)
+	tabletStatsCache.StatsUpdate(ts6)
+	tabletStatsCache.StatsUpdate(ts7)
+
+	// Topology information for all keyspaces and cells.
+	got1 := tabletStatsCache.topologyInfo("all", "all")
+	want1 := &topologyInfo{
+		Keyspaces:   []string{"ks1", "ks2"},
+		Cells:       []string{"cell1", "cell2", "cell3"},
+		TabletTypes: []string{topodatapb.TabletType_MASTER.String(), topodatapb.TabletType_REPLICA.String(), topodatapb.TabletType_RDONLY.String()},
+	}
+	if !reflect.DeepEqual(got1, want1) {
+		t.Errorf("got: %v, want: %v", got1, want1)
+	}
+
+	// Topology information for a specific keyspaces and all cells.
+	got2 := tabletStatsCache.topologyInfo("ks1", "all")
+	want2 := &topologyInfo{
+		Keyspaces:   []string{"ks1", "ks2"},
+		Cells:       []string{"cell1", "cell2", "cell3"},
+		TabletTypes: []string{topodatapb.TabletType_MASTER.String(), topodatapb.TabletType_REPLICA.String(), topodatapb.TabletType_RDONLY.String()},
+	}
+	if !reflect.DeepEqual(got2, want2) {
+		t.Errorf("got: %v, want: %v", got2, want2)
+	}
+
+	got3 := tabletStatsCache.topologyInfo("ks2", "all")
+	want3 := &topologyInfo{
+		Keyspaces:   []string{"ks1", "ks2"},
+		Cells:       []string{"cell1"},
+		TabletTypes: []string{topodatapb.TabletType_MASTER.String()},
+	}
+	if !reflect.DeepEqual(got3, want3) {
+		t.Errorf("got: %v, want: %v", got3, want3)
+	}
+
+	// Topology information for a specific keyspaces, specific cell, and all types.
+	got4 := tabletStatsCache.topologyInfo("ks1", "cell2")
+	want4 := &topologyInfo{
+		Keyspaces:   []string{"ks1", "ks2"},
+		Cells:       []string{"cell1", "cell2", "cell3"},
+		TabletTypes: []string{topodatapb.TabletType_REPLICA.String(), topodatapb.TabletType_RDONLY.String()},
+	}
+	if !reflect.DeepEqual(got4, want4) {
+		t.Errorf("got: %v, want: %v", got4, want4)
+	}
+
+	// Topology information for a specific keyspaces, specific cell, and specific type.
+	got5 := tabletStatsCache.topologyInfo("all", "cell2")
+	want5 := &topologyInfo{
+		Keyspaces:   []string{"ks1", "ks2"},
+		Cells:       []string{"cell1", "cell2", "cell3"},
+		TabletTypes: []string{topodatapb.TabletType_REPLICA.String(), topodatapb.TabletType_RDONLY.String()},
+	}
+	if !reflect.DeepEqual(got5, want5) {
+		t.Errorf("got: %v, want: %v", got5, want5)
+	}
+}
+
 // tabletStats will create a discovery.TabletStats object.
 func tabletStats(keyspace, cell, shard string, tabletType topodatapb.TabletType, uid uint32) *discovery.TabletStats {
 	target := &querypb.Target{

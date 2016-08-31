@@ -355,6 +355,20 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 			}
 			metric := r.FormValue("metric")
 
+			// Setting default values if none was specified in the query params.
+			if keyspace == "" {
+				keyspace = "all"
+			}
+			if cell == "" {
+				cell = "all"
+			}
+			if tabletType == "" {
+				tabletType = "all"
+			}
+			if metric == "" {
+				metric = "health"
+			}
+
 			if realtimeStats == nil {
 				return nil, fmt.Errorf("realtimeStats not initialized")
 			}
@@ -398,6 +412,34 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 			return nil, fmt.Errorf("could not get tabletStats: %v", err)
 		}
 		return tabletStat, nil
+	})
+
+	handleCollection("topology_info", func(r *http.Request) (interface{}, error) {
+		targetPath := getItemPath(r.URL.Path)
+
+		// Retreiving topology information (keyspaces, cells, and types) based on query params.
+		if targetPath == "" {
+			if err := r.ParseForm(); err != nil {
+				return nil, err
+			}
+			keyspace := r.FormValue("keyspace")
+			cell := r.FormValue("cell")
+
+			// Setting default values if none was specified in the query params.
+			if keyspace == "" {
+				keyspace = "all"
+			}
+			if cell == "" {
+				cell = "all"
+			}
+
+			if realtimeStats == nil {
+				return nil, fmt.Errorf("realtimeStats not initialized")
+			}
+
+			return realtimeStats.topologyInfo(keyspace, cell), nil
+		}
+		return nil, fmt.Errorf("invalid target path: %q  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>", targetPath)
 	})
 
 	// Vtctl Command

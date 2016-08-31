@@ -58,32 +58,32 @@ export class StatusComponent implements OnInit, OnDestroy {
   }
 
   // getTopologyInfo gets the keyspace, cell, tabletType, and metric information from the service.
-  getTopologyInfo() {
-    this.topoInfoService.getCombinedTopologyInfo().subscribe( stream => {
-       let keyspacesReturned = stream[0];
-       this.keyspaces = [];
-       for (let i = 0; i < keyspacesReturned.length; i++) {
-         let keyspace = keyspacesReturned[i];
-         this.keyspaces.push({label: keyspace, value: keyspace});
-       }
-       this.keyspaces.push({label: 'all', value: 'all'});
+  getTopologyInfo(selectedKeyspace, selectedCell) {
+    this.topoInfoService.getCombinedTopologyInfo(selectedKeyspace, selectedCell).subscribe( data => {
+      let keyspacesReturned = data.Keyspaces;
+      this.keyspaces = [];
+      for (let i = 0; i < keyspacesReturned.length; i++) {
+        let keyspace = keyspacesReturned[i];
+        this.keyspaces.push({label: keyspace, value: keyspace});
+      }
+      this.keyspaces.push({label: 'all', value: 'all'});
 
-       let cellsReturned = stream[1];
-       this.cells = [];
-       for (let i = 0; i < cellsReturned.length; i++) {
-         let cell = cellsReturned[i];
-         this.cells.push({label: cell, value: cell});
-       }
-       this.cells.push({label: 'all', value: 'all'});
+      let cellsReturned = data.Cells;
+      this.cells = [];
+      for (let i = 0; i < cellsReturned.length; i++) {
+        let cell = cellsReturned[i];
+        this.cells.push({label: cell, value: cell});
+      }
+      this.cells.push({label: 'all', value: 'all'});
+
+      let tabletTypesReturned = data.TabletTypes;
+      this.tabletTypes = [];
+      for (let i = 0; i < tabletTypesReturned.length; i++) {
+        let tabletType = tabletTypesReturned[i];
+        this.tabletTypes.push({label: tabletType, value: tabletType});
+      }
+      this.tabletTypes.push({label: 'all', value: 'all'});
     });
-
-    this.tabletTypes = [];
-    let tabletTypesReturned = this.topoInfoService.getTypes();
-    for (let i = 0; i < tabletTypesReturned.length; i++) {
-      let tabletType = tabletTypesReturned[i];
-      this.tabletTypes.push({label: tabletType, value: tabletType});
-    }
-    this.tabletTypes.push({label: 'all', value: 'all'});
 
     this.metrics = [];
     let metricsReturned = this.topoInfoService.getMetrics();
@@ -96,7 +96,6 @@ export class StatusComponent implements OnInit, OnDestroy {
   // getBasicInfo is responsible for populating the dropdowns based on the URL.
   getBasicInfo() {
     this.sub = this.route.queryParams.subscribe(params => {
-        this.getTopologyInfo();
         // Setting the beginning values of each category.
         this.selectedKeyspace = params['keyspace'];
         this.selectedCell = params['cell'];
@@ -107,6 +106,7 @@ export class StatusComponent implements OnInit, OnDestroy {
         this.previousType = params['type'];
         this.previousMetric = params['metric'];
 
+        this.getTopologyInfo(this.selectedKeyspace, this.selectedCell);
         this.zone.run(() => {
           this.getHeatmapData();
         });
