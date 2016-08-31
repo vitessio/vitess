@@ -547,6 +547,101 @@ func testStreamHealthPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQue
 	})
 }
 
+func testUpdateStream(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	t.Log("testUpdateStream")
+	ctx := context.Background()
+	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
+	stream, err := conn.UpdateStream(ctx, TestTarget, UpdateStreamPosition, UpdateStreamTimestamp)
+	if err != nil {
+		t.Fatalf("UpdateStream failed: %v", err)
+	}
+	qr, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("UpdateStream failed: cannot read result1: %v", err)
+	}
+	if !reflect.DeepEqual(*qr, UpdateStreamStreamEvent1) {
+		t.Errorf("Unexpected result1 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent1)
+	}
+	qr, err = stream.Recv()
+	if err != nil {
+		t.Fatalf("UpdateStream failed: cannot read result2: %v", err)
+	}
+	if !reflect.DeepEqual(*qr, UpdateStreamStreamEvent2) {
+		t.Errorf("Unexpected result2 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent2)
+	}
+	qr, err = stream.Recv()
+	if err != io.EOF {
+		t.Fatalf("UpdateStream errFunc failed: %v", err)
+	}
+}
+
+func testUpdateStreamError(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	t.Log("testUpdateStreamError")
+	f.HasError = true
+	testErrorHelper(t, f, "UpdateStream", func(ctx context.Context) error {
+		f.ErrorWait = make(chan struct{})
+		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
+		stream, err := conn.UpdateStream(ctx, TestTarget, UpdateStreamPosition, UpdateStreamTimestamp)
+		if err != nil {
+			t.Fatalf("UpdateStream failed: %v", err)
+		}
+		qr, err := stream.Recv()
+		if err != nil {
+			t.Fatalf("UpdateStream failed: cannot read result1: %v", err)
+		}
+		if !reflect.DeepEqual(*qr, UpdateStreamStreamEvent1) {
+			t.Errorf("Unexpected result1 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent1)
+		}
+		// signal to the server that the first result has been received
+		close(f.ErrorWait)
+		// After 1 result, we expect to get an error (no more results).
+		qr, err = stream.Recv()
+		if err == nil {
+			t.Fatalf("UpdateStream channel wasn't closed")
+		}
+		return err
+	})
+	f.HasError = false
+}
+
+func testUpdateStreamPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	t.Log("testUpdateStreamPanics")
+	// early panic is before sending the Fields, that is returned
+	// by the UpdateStream call itself, or as the first error
+	// by ErrFunc
+	f.UpdateStreamPanicsEarly = true
+	testPanicHelper(t, f, "UpdateStream.Early", func(ctx context.Context) error {
+		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
+		stream, err := conn.UpdateStream(ctx, TestTarget, UpdateStreamPosition, UpdateStreamTimestamp)
+		if err != nil {
+			return err
+		}
+		_, err = stream.Recv()
+		return err
+	})
+
+	// late panic is after sending Fields
+	f.UpdateStreamPanicsEarly = false
+	testPanicHelper(t, f, "UpdateStream.Late", func(ctx context.Context) error {
+		f.PanicWait = make(chan struct{})
+		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
+		stream, err := conn.UpdateStream(ctx, TestTarget, UpdateStreamPosition, UpdateStreamTimestamp)
+		if err != nil {
+			t.Fatalf("UpdateStream failed: %v", err)
+		}
+		qr, err := stream.Recv()
+		if err != nil {
+			t.Fatalf("UpdateStream failed: cannot read result1: %v", err)
+		}
+		if !reflect.DeepEqual(*qr, UpdateStreamStreamEvent1) {
+			t.Errorf("Unexpected result1 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent1)
+		}
+		close(f.PanicWait)
+		_, err = stream.Recv()
+		return err
+	})
+}
+
 // TestSuite runs all the tests.
 // If fake.TestingGateway is set, we only test the calls that can go through
 // a gateway.
@@ -563,6 +658,7 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testBeginExecuteBatch,
 		testSplitQuery,
 		testSplitQueryV2,
+		testUpdateStream,
 
 		// error test cases
 		testBeginError,
@@ -576,6 +672,7 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testBeginExecuteBatchErrorInBegin,
 		testBeginExecuteBatchErrorInExecuteBatch,
 		testSplitQueryError,
+		testUpdateStreamError,
 
 		// panic test cases
 		testBeginPanics,
@@ -587,6 +684,7 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testExecuteBatchPanics,
 		testBeginExecuteBatchPanics,
 		testSplitQueryPanics,
+		testUpdateStreamPanics,
 	}
 
 	if !fake.TestingGateway {

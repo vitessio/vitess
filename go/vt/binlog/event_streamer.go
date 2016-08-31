@@ -11,8 +11,9 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -28,7 +29,7 @@ var (
 	streamCommentStartLen = len(streamCommentStart)
 )
 
-type sendEventFunc func(event *binlogdatapb.StreamEvent) error
+type sendEventFunc func(event *querypb.StreamEvent) error
 
 // EventStreamer is an adapter on top of a binlog Streamer that convert
 // the events into StreamEvent objects.
@@ -38,20 +39,23 @@ type EventStreamer struct {
 }
 
 // NewEventStreamer returns a new EventStreamer on top of a Streamer
-func NewEventStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, startPos replication.Position, sendEvent sendEventFunc) *EventStreamer {
+func NewEventStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, startPos replication.Position, timestamp int64, sendEvent sendEventFunc) *EventStreamer {
 	evs := &EventStreamer{
 		sendEvent: sendEvent,
 	}
-	evs.bls = NewStreamer(dbname, mysqld, nil, startPos, evs.transactionToEvent)
+	evs.bls = NewStreamer(dbname, mysqld, nil, startPos, timestamp, evs.transactionToEvent)
 	return evs
 }
 
 // Stream starts streaming updates
-func (evs *EventStreamer) Stream(ctx *sync2.ServiceContext) error {
+func (evs *EventStreamer) Stream(ctx context.Context) error {
 	return evs.bls.Stream(ctx)
 }
 
 func (evs *EventStreamer) transactionToEvent(trans *binlogdatapb.BinlogTransaction) error {
+	event := &querypb.StreamEvent{
+		EventToken: trans.EventToken,
+	}
 	var err error
 	var insertid int64
 	for _, stmt := range trans.Statements {
@@ -66,55 +70,42 @@ func (evs *EventStreamer) transactionToEvent(trans *binlogdatapb.BinlogTransacti
 				}
 			}
 		case binlogdatapb.BinlogTransaction_Statement_BL_DML:
-			var dmlEvent *binlogdatapb.StreamEvent
-			dmlEvent, insertid, err = evs.buildDMLEvent(string(stmt.Sql), insertid)
+			var dmlStatement *querypb.StreamEvent_Statement
+			dmlStatement, insertid, err = evs.buildDMLStatement(string(stmt.Sql), insertid)
 			if err != nil {
-				dmlEvent = &binlogdatapb.StreamEvent{
-					Category: binlogdatapb.StreamEvent_SE_ERR,
+				dmlStatement = &querypb.StreamEvent_Statement{
+					Category: querypb.StreamEvent_Statement_Error,
 					Sql:      stmt.Sql,
 				}
 			}
-			if err = evs.sendEvent(dmlEvent); err != nil {
-				return err
-			}
+			event.Statements = append(event.Statements, dmlStatement)
 		case binlogdatapb.BinlogTransaction_Statement_BL_DDL:
-			ddlEvent := &binlogdatapb.StreamEvent{
-				Category: binlogdatapb.StreamEvent_SE_DDL,
+			ddlStatement := &querypb.StreamEvent_Statement{
+				Category: querypb.StreamEvent_Statement_DDL,
 				Sql:      stmt.Sql,
 			}
-			if err = evs.sendEvent(ddlEvent); err != nil {
-				return err
-			}
+			event.Statements = append(event.Statements, ddlStatement)
 		case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
-			unrecognized := &binlogdatapb.StreamEvent{
-				Category: binlogdatapb.StreamEvent_SE_ERR,
+			unrecognized := &querypb.StreamEvent_Statement{
+				Category: querypb.StreamEvent_Statement_Error,
 				Sql:      stmt.Sql,
 			}
-			if err = evs.sendEvent(unrecognized); err != nil {
-				return err
-			}
+			event.Statements = append(event.Statements, unrecognized)
 		default:
 			binlogStreamerErrors.Add("EventStreamer", 1)
 			log.Errorf("Unrecognized event: %v: %s", stmt.Category, stmt.Sql)
 		}
 	}
-	posEvent := &binlogdatapb.StreamEvent{
-		Category:   binlogdatapb.StreamEvent_SE_POS,
-		EventToken: trans.EventToken,
-	}
-	if err = evs.sendEvent(posEvent); err != nil {
-		return err
-	}
-	return nil
+	return evs.sendEvent(event)
 }
 
 /*
-buildDMLEvent parses the tuples of the full stream comment.
-The _stream comment is extracted into a StreamEvent.
+buildDMLStatement parses the tuples of the full stream comment.
+The _stream comment is extracted into a StreamEvent.Statement.
 */
 // Example query: insert into _table_(foo) values ('foo') /* _stream _table_ (eid id name ) (null 1 'bmFtZQ==' ); */
 // the "null" value is used for auto-increment columns.
-func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*binlogdatapb.StreamEvent, int64, error) {
+func (evs *EventStreamer) buildDMLStatement(sql string, insertid int64) (*querypb.StreamEvent_Statement, int64, error) {
 	// first extract the comment
 	commentIndex := strings.LastIndex(sql, streamCommentStart)
 	if commentIndex == -1 {
@@ -123,8 +114,8 @@ func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*binlogdata
 	dmlComment := sql[commentIndex+streamCommentStartLen:]
 
 	// then strat building the response
-	dmlEvent := &binlogdatapb.StreamEvent{
-		Category: binlogdatapb.StreamEvent_SE_DML,
+	dmlStatement := &querypb.StreamEvent_Statement{
+		Category: querypb.StreamEvent_Statement_DML,
 	}
 	tokenizer := sqlparser.NewStringTokenizer(dmlComment)
 
@@ -133,12 +124,12 @@ func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*binlogdata
 	if typ != sqlparser.ID {
 		return nil, insertid, fmt.Errorf("expecting table name in stream comment")
 	}
-	dmlEvent.TableName = string(val)
+	dmlStatement.TableName = string(val)
 
 	// then parse the PK names
 	var err error
-	dmlEvent.PrimaryKeyFields, err = parsePkNames(tokenizer)
-	hasNegatives := make([]bool, len(dmlEvent.PrimaryKeyFields))
+	dmlStatement.PrimaryKeyFields, err = parsePkNames(tokenizer)
+	hasNegatives := make([]bool, len(dmlStatement.PrimaryKeyFields))
 	if err != nil {
 		return nil, insertid, err
 	}
@@ -149,17 +140,17 @@ func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*binlogdata
 		case '(':
 			// pkTuple is a list of pk values
 			var pkTuple *querypb.Row
-			pkTuple, insertid, err = parsePkTuple(tokenizer, insertid, dmlEvent.PrimaryKeyFields, hasNegatives)
+			pkTuple, insertid, err = parsePkTuple(tokenizer, insertid, dmlStatement.PrimaryKeyFields, hasNegatives)
 			if err != nil {
 				return nil, insertid, err
 			}
-			dmlEvent.PrimaryKeyValues = append(dmlEvent.PrimaryKeyValues, pkTuple)
+			dmlStatement.PrimaryKeyValues = append(dmlStatement.PrimaryKeyValues, pkTuple)
 		default:
 			return nil, insertid, fmt.Errorf("expecting '('")
 		}
 	}
 
-	return dmlEvent, insertid, nil
+	return dmlStatement, insertid, nil
 }
 
 // parsePkNames parses something like (eid id name )

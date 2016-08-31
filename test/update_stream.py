@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
 import logging
-import traceback
-import threading
+import time
 import unittest
 
 import environment
@@ -11,6 +10,7 @@ import utils
 from vtdb import dbexceptions
 from vtdb import update_stream
 from vtdb import vtgate_client
+from vtproto import topodata_pb2
 from mysql_flavor import mysql_flavor
 from protocols_flavor import protocols_flavor
 
@@ -167,100 +167,6 @@ class TestUpdateStream(unittest.TestCase):
     protocol, endpoint = replica_tablet.update_stream_python_endpoint()
     return update_stream.connect(protocol, endpoint, 30)
 
-  def _test_service_disabled(self):
-    # it looks like update stream would be re-enabled automatically
-    # because of vttablet health check
-    return
-    start_position = _get_repl_current_position()
-    logging.debug('_test_service_disabled starting @ %s', start_position)
-    self._exec_vt_txn(self._populate_vt_insert_test)
-    self._exec_vt_txn(['delete from vt_insert_test'])
-    utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
-    utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'spare')
-    logging.debug('dialing replica update stream service')
-    replica_conn = self._get_replica_stream_conn()
-    try:
-      for _ in replica_conn.stream_update(start_position):
-        break
-    except dbexceptions.DatabaseError as e:
-      self.assertIn('update stream service is not enabled', str(e))
-    replica_conn.close()
-
-    v = utils.get_vars(replica_tablet.port)
-    if v['UpdateStreamState'] != 'Disabled':
-      self.fail("Update stream service should be 'Disabled' but is '%s'" %
-                v['UpdateStreamState'])
-
-  def perform_writes(self, count):
-    for _ in xrange(count):
-      self._exec_vt_txn(self._populate_vt_insert_test)
-      self._exec_vt_txn(['delete from vt_insert_test'])
-
-  def _test_service_enabled(self):
-    # it looks like update stream would be re-enabled automatically
-    # because of vttablet health check
-    return
-    start_position = _get_repl_current_position()
-    logging.debug('_test_service_enabled starting @ %s', start_position)
-    utils.run_vtctl(
-        ['ChangeSlaveType', replica_tablet.tablet_alias, 'replica'])
-    logging.debug('sleeping a bit for the replica action to complete')
-    utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'replica', 30)
-    thd = threading.Thread(target=self.perform_writes, name='write_thd',
-                           args=(100,))
-    thd.daemon = True
-    thd.start()
-    replica_conn = self._get_replica_stream_conn()
-
-    try:
-      for stream_event in replica_conn.stream_update(start_position):
-        if stream_event.category == update_stream.StreamEvent.DML:
-          logging.debug('Test Service Enabled: Pass')
-          break
-    except dbexceptions.DatabaseError as e:
-      self.fail('Exception in getting stream from replica: %s\n Traceback %s' %
-                (str(e), traceback.format_exc()))
-    thd.join(timeout=30)
-    replica_conn.close()
-
-    v = utils.get_vars(replica_tablet.port)
-    if v['UpdateStreamState'] != 'Enabled':
-      self.fail("Update stream service should be 'Enabled' but is '%s'" %
-                v['UpdateStreamState'])
-    self.assertIn('SE_DML', v['UpdateStreamEvents'])
-    self.assertIn('SE_POS', v['UpdateStreamEvents'])
-
-    logging.debug('Testing enable -> disable switch starting @ %s',
-                  start_position)
-    replica_conn = self._get_replica_stream_conn()
-    first = True
-    txn_count = 0
-    try:
-      for stream_event in replica_conn.stream_update(start_position):
-        if first:
-          utils.run_vtctl(
-              ['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
-          utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'spare', 30)
-          first = False
-        else:
-          if stream_event.category == update_stream.StreamEvent.POS:
-            txn_count += 1
-        # FIXME(alainjobart) gasp, the test fails but we don't assert?
-        logging.debug('Test Service Switch: FAIL')
-        replica_conn.close()
-        return
-    except dbexceptions.DatabaseError as e:
-      self.assertEqual(
-          'Fatal Service Error: Disconnecting because the Update Stream '
-          'service has been disabled',
-          str(e))
-    except Exception as e:
-      logging.error('Exception: %s', str(e))
-      logging.error('Traceback: %s', traceback.format_exc())
-      self.fail("Update stream returned error '%s'" % str(e))
-    logging.debug('Streamed %d transactions before exiting', txn_count)
-    replica_conn.close()
-
   def _exec_vt_txn(self, query_list):
     protocol, addr = utils.vtgate.rpc_endpoint(python=True)
     vtgate_conn = vtgate_client.connect(protocol, addr, 30.0)
@@ -297,50 +203,62 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(self._populate_vt_b(14))
     self._exec_vt_txn(['delete from vt_a'])
     self._exec_vt_txn(['delete from vt_b'])
+
+    # get master events
     master_conn = self._get_master_stream_conn()
     master_events = []
-    for stream_event in master_conn.stream_update(master_start_position):
-      master_events.append(stream_event)
-      if stream_event.category == update_stream.StreamEvent.POS:
+    for event in master_conn.stream_update('test_keyspace', '0',
+                                           topodata_pb2.MASTER,
+                                           position=master_start_position):
+      master_events.append(event)
+      if event.event_token.position:
         break
+    master_conn.close()
+
+    # get replica events
     replica_events = []
     replica_conn = self._get_replica_stream_conn()
-    for stream_event in replica_conn.stream_update(replica_start_position):
-      replica_events.append(stream_event)
-      if stream_event.category == update_stream.StreamEvent.POS:
+    for event in replica_conn.stream_update('test_keyspace', '0',
+                                            topodata_pb2.REPLICA,
+                                            position=replica_start_position):
+      replica_events.append(event)
+      if event.event_token.position:
         break
+    replica_conn.close()
+
+    # and compare
     if len(master_events) != len(replica_events):
       logging.debug(
           'Test Failed - # of records mismatch, master %s replica %s',
           master_events, replica_events)
-    for master_val, replica_val in zip(master_events, replica_events):
-      master_data = master_val.__dict__
-      replica_data = replica_val.__dict__
-      # the timestamp is from when the event was written to the binlogs.
+    for master_event, replica_event in zip(master_events, replica_events):
+      # The timestamp is from when the event was written to the binlogs.
       # the master uses the timestamp of when it wrote it originally,
       # the slave of when it applied the logs. These can differ and make this
       # test flaky. So we just blank them out, easier. We really want to
       # compare the replication positions.
-      master_data['timestamp'] = 'XXX'
-      replica_data['timestamp'] = 'XXX'
+      master_event.event_token.timestamp = 123
+      replica_event.event_token.timestamp = 123
       self.assertEqual(
-          master_data, replica_data,
-          "Test failed, data mismatch - master '%s' and replica position '%s'" %
-          (master_data, replica_data))
-    master_conn.close()
-    replica_conn.close()
+          master_event, replica_event,
+          "Test failed, data mismatch - master '%s' and replica '%s'" %
+          (master_event, replica_event))
     logging.debug('Test Writes: PASS')
 
   def test_ddl(self):
     start_position = master_start_position
     logging.debug('test_ddl: starting @ %s', start_position)
     master_conn = self._get_master_stream_conn()
-    for stream_event in master_conn.stream_update(start_position):
-      self.assertEqual(stream_event.sql, _create_vt_insert_test,
-                       "DDL didn't match original")
-      master_conn.close()
-      return
-    self.fail("didn't get right sql")
+    found = False
+    for event in master_conn.stream_update('test_keyspace', '0',
+                                           topodata_pb2.MASTER,
+                                           position=start_position):
+      for statement in event.statements:
+        if statement.sql == _create_vt_insert_test:
+          found = True
+      break
+    master_conn.close()
+    self.assertTrue(found, "didn't get right sql")
 
   def test_set_insert_id(self):
     start_position = _get_master_current_position()
@@ -349,12 +267,15 @@ class TestUpdateStream(unittest.TestCase):
     logging.debug('test_set_insert_id: starting @ %s', start_position)
     master_conn = self._get_master_stream_conn()
     expected_id = 1000000
-    for stream_event in master_conn.stream_update(start_position):
-      if stream_event.category == update_stream.StreamEvent.POS:
-        break
-      self.assertEqual(stream_event.fields[0], 'id')
-      self.assertEqual(stream_event.rows[0][0], expected_id)
-      expected_id += 1
+    for event in master_conn.stream_update('test_keyspace', '0',
+                                           topodata_pb2.MASTER,
+                                           position=start_position):
+      for statement in event.statements:
+        fields, rows = update_stream.convert_statement(statement)
+        self.assertEqual(fields[0], 'id')
+        self.assertEqual(rows[0][0], expected_id)
+        expected_id += 1
+      break
     if expected_id != 1000004:
       self.fail('did not get my four values!')
     master_conn.close()
@@ -365,25 +286,94 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(self._populate_vt_insert_test)
     logging.debug('test_database_filter: starting @ %s', start_position)
     master_conn = self._get_master_stream_conn()
-    for stream_event in master_conn.stream_update(start_position):
-      if stream_event.category == update_stream.StreamEvent.POS:
-        break
-      self.assertNotEqual(
-          stream_event.category, update_stream.StreamEvent.DDL,
-          "query using other_database wasn't filted out")
+    for event in master_conn.stream_update('test_keyspace', '0',
+                                           topodata_pb2.MASTER,
+                                           position=start_position):
+      for statement in event.statements:
+        self.assertNotEqual(statement.category, 2,  # query_pb2.StreamEvent.DDL
+                            "query using other_database wasn't filtered out")
+      break
     master_conn.close()
 
   def test_service_switch(self):
     """tests the service switch from disable -> enable -> disable."""
-    self._test_service_disabled()
-    self._test_service_enabled()
-    # The above tests leaves the service in disabled state, hence enabling it.
+    # make the replica spare
+    utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
+    utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'spare')
+
+    # Check UpdateStreamState is disabled.
+    v = utils.get_vars(replica_tablet.port)
+    if v['UpdateStreamState'] != 'Disabled':
+      self.fail("Update stream service should be 'Disabled' but is '%s'" %
+                v['UpdateStreamState'])
+
+    # Make sure we can't start a new request.
+    start_position = _get_repl_current_position()
+    replica_conn = self._get_replica_stream_conn()
+    try:
+      for event in replica_conn.stream_update('test_keyspace', '0',
+                                              topodata_pb2.REPLICA,
+                                              position=start_position):
+        self.assertFail('got event: %s' % str(event))
+      self.assertFail('stream_update terminated with no exception')
+    except dbexceptions.DatabaseError as e:
+      self.assertIn('operation not allowed in state NOT_SERVING', str(e))
+
+    # Go back to replica.
     utils.run_vtctl(
         ['ChangeSlaveType', replica_tablet.tablet_alias, 'replica'])
+    utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'replica')
+
+    # Check UpdateStreamState is enabled.
+    v = utils.get_vars(replica_tablet.port)
+    if v['UpdateStreamState'] != 'Enabled':
+      self.fail("Update stream service should be 'Enabled' but is '%s'" %
+                v['UpdateStreamState'])
+
+  def test_update_stream_interrupt(self):
+    """Checks that a running query is terminated on going non-serving."""
+    # Make sure the replica is replica type.
+    utils.run_vtctl(
+        ['ChangeSlaveType', replica_tablet.tablet_alias, 'replica'])
+    logging.debug('sleeping a bit for the replica action to complete')
     utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'replica', 30)
+
+    # Save current position, insert some data.
+    start_position = _get_repl_current_position()
+    logging.debug('test_update_stream_interrupt starting @ %s', start_position)
+    self._exec_vt_txn(self._populate_vt_a(1))
+    self._exec_vt_txn(['delete from vt_a'])
+
+    # Start an Update Stream from the slave. When we get the data, go to spare.
+    # That should interrupt the streaming RPC.
+    replica_conn = self._get_replica_stream_conn()
+    first = True
+    txn_count = 0
+    try:
+      for event in replica_conn.stream_update('test_keyspace', '0',
+                                              topodata_pb2.REPLICA,
+                                              position=start_position):
+        logging.debug('test_update_stream_interrupt got event: %s', event)
+        if first:
+          utils.run_vtctl(
+              ['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
+          utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'spare', 30)
+          first = False
+        else:
+          if event.event_token.position:
+            txn_count += 1
+
+      self.assertFail('stream_update terminated with no exception')
+    except dbexceptions.DatabaseError as e:
+      self.assertIn('context canceled', str(e))
+    self.assertFalse(first)
+
+    logging.debug('Streamed %d transactions before exiting', txn_count)
+    replica_conn.close()
 
   def test_log_rotation(self):
     start_position = _get_master_current_position()
+    logging.debug('test_log_rotation: starting @ %s', start_position)
     position = start_position
     master_tablet.mquery('vt_test_keyspace', 'flush logs')
     self._exec_vt_txn(self._populate_vt_a(15))
@@ -391,10 +381,12 @@ class TestUpdateStream(unittest.TestCase):
     master_conn = self._get_master_stream_conn()
     master_txn_count = 0
     logs_correct = False
-    for stream_event in master_conn.stream_update(start_position):
-      if stream_event.category == update_stream.StreamEvent.POS:
+    for event in master_conn.stream_update('test_keyspace', '0',
+                                           topodata_pb2.MASTER,
+                                           position=start_position):
+      if event.event_token.position:
         master_txn_count += 1
-        position = stream_event.position
+        position = event.event_token.position
         if mysql_flavor().position_after(position, start_position):
           logs_correct = True
           logging.debug('Log rotation correctly interpreted')
@@ -404,6 +396,117 @@ class TestUpdateStream(unittest.TestCase):
     if not logs_correct:
       self.fail("Flush logs didn't get properly interpreted")
     master_conn.close()
+
+  def test_timestamp_start_current_log(self):
+    """Test we can start binlog streaming from the current binlog.
+
+    Order of operation:
+    - Insert something in the binlogs for tablet vt_a then delete it.
+    - Get the current timestamp.
+    - Wait for 4 seconds for the timestamp to change for sure.
+    - Insert something else in vt_b and delete it.
+    - Then we stream events starting at the original timestamp + 2, we
+    should get only the vt_b events.
+    """
+    self._test_timestamp_start(rotate_before_sleep=False,
+                               rotate_after_sleep=False)
+
+  def test_timestamp_start_rotated_log_before_sleep(self):
+    """Test we can start binlog streaming from the current rotated binlog.
+
+    Order of operation:
+    - Insert something in the binlogs for tablet vt_a then delete it.
+    - Rotate the logs.
+    - Get the current timestamp.
+    - Wait for 4 seconds for the timestamp to change for sure.
+    - Insert something else in vt_b and delete it.
+    - Then we stream events starting at the original timestamp + 2, we
+    should get only the vt_b events.
+
+    In this test case, the current binlogs have a starting time stamp
+    that is smaller than what we ask for, so it should just stay on it.
+    """
+    self._test_timestamp_start(rotate_before_sleep=True,
+                               rotate_after_sleep=False)
+
+  def test_timestamp_start_rotated_log_after_sleep(self):
+    """Test we can start binlog streaming from the previous binlog.
+
+    Order of operation:
+    - Insert something in the binlogs for tablet vt_a then delete it.
+    - Get the current timestamp.
+    - Wait for 4 seconds for the timestamp to change for sure.
+    - Rotate the logs.
+    - Insert something else in vt_b and delete it.
+    - Then we stream events starting at the original timestamp + 2, we
+    should get only the vt_b events.
+
+    In this test case, the current binlogs have a starting time stamp
+    that is 2s higher than what we ask for, so it should go back to
+    the previous binlog.
+    """
+    self._test_timestamp_start(rotate_before_sleep=False,
+                               rotate_after_sleep=True)
+
+  def _test_timestamp_start(self,
+                            rotate_before_sleep=False,
+                            rotate_after_sleep=False):
+    """Common function for timestamp tests."""
+    # Insert something in the binlogs for tablet vt_a then delete it.
+    self._exec_vt_txn(self._populate_vt_a(1))
+    self._exec_vt_txn(['delete from vt_a'])
+
+    # (optional) Rotate the logs
+    if rotate_before_sleep:
+      master_tablet.mquery('vt_test_keyspace', 'flush logs')
+
+    # Get the current timestamp.
+    starting_timestamp = long(time.time())
+    logging.debug('test_timestamp_start_current_log: starting @ %d',
+                  starting_timestamp)
+
+    # Wait for 4 seconds for the timestamp to change for sure.
+    time.sleep(4)
+
+    # (optional) Rotate the logs
+    if rotate_after_sleep:
+      master_tablet.mquery('vt_test_keyspace', 'flush logs')
+
+    # Insert something else in vt_b and delete it.
+    self._exec_vt_txn(self._populate_vt_b(1))
+    self._exec_vt_txn(['delete from vt_b'])
+
+    # make sure we only get events related to vt_b.
+    master_conn = self._get_master_stream_conn()
+    count = 0
+    for event in master_conn.stream_update('test_keyspace', '0',
+                                           topodata_pb2.MASTER,
+                                           timestamp=starting_timestamp+2):
+      logging.debug('_test_timestamp_start: got event: %s',
+                    str(event))
+      # we might get a couple extra events from the rotation, ignore these.
+      if event.statements[0].category == 0:  # Statement.Category.Error
+        continue
+      self.assertEqual(event.statements[0].table_name, 'vt_b',
+                       'got wrong event: %s' % str(event))
+      count += 1
+      if count == 2:
+        break
+    master_conn.close()
+
+  def test_timestamp_start_too_old(self):
+    """Ask the server to start streaming from a timestamp 4h ago."""
+    starting_timestamp = long(time.time()) - 4*60*60
+    master_conn = self._get_master_stream_conn()
+    try:
+      for event in master_conn.stream_update('test_keyspace', '0',
+                                             topodata_pb2.MASTER,
+                                             timestamp=starting_timestamp):
+        self.assertFail('got an event: %s' % str(event))
+    except dbexceptions.OperationalError as e:
+      self.assertIn('retry: cannot find relevant binlogs on this server',
+                    str(e))
+
 
 if __name__ == '__main__':
   utils.main()

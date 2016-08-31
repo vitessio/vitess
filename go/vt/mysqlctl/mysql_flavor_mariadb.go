@@ -156,22 +156,14 @@ func (*mariaDB10) ParseReplicationPosition(s string) (replication.Position, erro
 
 // SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
 func (*mariaDB10) SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.Position) error {
-	const ComBinlogDump = 0x12
-
 	// Tell the server that we understand GTIDs by setting our slave capability
 	// to MARIA_SLAVE_CAPABILITY_GTID = 4 (MariaDB >= 10.0.1).
 	if _, err := conn.ExecuteFetch("SET @mariadb_slave_capability=4", 0, false); err != nil {
 		return fmt.Errorf("failed to set @mariadb_slave_capability=4: %v", err)
 	}
 
-	// Tell the server that we understand the format of events that will be used
-	// if binlog_checksum is enabled on the server.
-	if _, err := conn.ExecuteFetch("SET @master_binlog_checksum=@@global.binlog_checksum", 0, false); err != nil {
-		return fmt.Errorf("failed to set @master_binlog_checksum=@@global.binlog_checksum: %v", err)
-	}
-
-	// Set the slave_connect_state variable before issuing COM_BINLOG_DUMP to
-	// provide the start position in GTID form.
+	// Set the slave_connect_state variable before issuing COM_BINLOG_DUMP
+	// to provide the start position in GTID form.
 	query := fmt.Sprintf("SET @slave_connect_state='%s'", startPos)
 	if _, err := conn.ExecuteFetch(query, 0, false); err != nil {
 		return fmt.Errorf("failed to set @slave_connect_state='%s': %v", startPos, err)

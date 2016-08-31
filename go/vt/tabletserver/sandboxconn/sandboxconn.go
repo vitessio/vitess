@@ -265,6 +265,12 @@ func (sbc *SandboxConn) StreamHealth(ctx context.Context) (tabletconn.StreamHeal
 	return nil, fmt.Errorf("Not implemented in test")
 }
 
+// UpdateStream is part of the TabletConn interface.
+func (sbc *SandboxConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
+	// FIXME(alainjobart) implement, use in vtgate tests.
+	return nil, fmt.Errorf("Not implemented in test")
+}
+
 // Close does not change ExecCount
 func (sbc *SandboxConn) Close() {
 }

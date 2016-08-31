@@ -245,6 +245,21 @@ func (dg *discoveryGateway) SplitQueryV2(
 	return
 }
 
+// UpdateStream starts an update stream for the specified keyspace,
+// shard, and tablet type.
+func (dg *discoveryGateway) UpdateStream(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
+	var stream tabletconn.StreamEventReader
+	err := dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn, target *querypb.Target) error {
+		var err error
+		stream, err = conn.UpdateStream(ctx, target, position, timestamp)
+		return err
+	}, 0, true)
+	if err != nil {
+		return nil, err
+	}
+	return stream, nil
+}
+
 // Close shuts down underlying connections.
 func (dg *discoveryGateway) Close(ctx context.Context) error {
 	for _, ctw := range dg.tabletsWatchers {

@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -76,6 +77,10 @@ type Gateway interface {
 		splitCount int64,
 		numRowsPerQueryPart int64,
 		algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error)
+
+	// UpdateStream asks for an update stream query for the
+	// specified keyspace, shard, and tablet type.
+	UpdateStream(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, position string, timestamp int64) (tabletconn.StreamEventReader, error)
 
 	// WaitForTablets asks the gateway to wait for the provided
 	// tablets types to be available. It the context is canceled

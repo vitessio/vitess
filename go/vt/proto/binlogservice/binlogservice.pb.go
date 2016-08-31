@@ -44,8 +44,6 @@ const _ = grpc.SupportPackageIsVersion3
 // Client API for UpdateStream service
 
 type UpdateStreamClient interface {
-	// StreamUpdate streams the binlog events, to know which objects have changed.
-	StreamUpdate(ctx context.Context, in *binlogdata.StreamUpdateRequest, opts ...grpc.CallOption) (UpdateStream_StreamUpdateClient, error)
 	// StreamKeyRange returns the binlog transactions related to
 	// the specified Keyrange.
 	StreamKeyRange(ctx context.Context, in *binlogdata.StreamKeyRangeRequest, opts ...grpc.CallOption) (UpdateStream_StreamKeyRangeClient, error)
@@ -62,40 +60,8 @@ func NewUpdateStreamClient(cc *grpc.ClientConn) UpdateStreamClient {
 	return &updateStreamClient{cc}
 }
 
-func (c *updateStreamClient) StreamUpdate(ctx context.Context, in *binlogdata.StreamUpdateRequest, opts ...grpc.CallOption) (UpdateStream_StreamUpdateClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_UpdateStream_serviceDesc.Streams[0], c.cc, "/binlogservice.UpdateStream/StreamUpdate", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &updateStreamStreamUpdateClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type UpdateStream_StreamUpdateClient interface {
-	Recv() (*binlogdata.StreamUpdateResponse, error)
-	grpc.ClientStream
-}
-
-type updateStreamStreamUpdateClient struct {
-	grpc.ClientStream
-}
-
-func (x *updateStreamStreamUpdateClient) Recv() (*binlogdata.StreamUpdateResponse, error) {
-	m := new(binlogdata.StreamUpdateResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
 func (c *updateStreamClient) StreamKeyRange(ctx context.Context, in *binlogdata.StreamKeyRangeRequest, opts ...grpc.CallOption) (UpdateStream_StreamKeyRangeClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_UpdateStream_serviceDesc.Streams[1], c.cc, "/binlogservice.UpdateStream/StreamKeyRange", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_UpdateStream_serviceDesc.Streams[0], c.cc, "/binlogservice.UpdateStream/StreamKeyRange", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +93,7 @@ func (x *updateStreamStreamKeyRangeClient) Recv() (*binlogdata.StreamKeyRangeRes
 }
 
 func (c *updateStreamClient) StreamTables(ctx context.Context, in *binlogdata.StreamTablesRequest, opts ...grpc.CallOption) (UpdateStream_StreamTablesClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_UpdateStream_serviceDesc.Streams[2], c.cc, "/binlogservice.UpdateStream/StreamTables", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_UpdateStream_serviceDesc.Streams[1], c.cc, "/binlogservice.UpdateStream/StreamTables", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -161,8 +127,6 @@ func (x *updateStreamStreamTablesClient) Recv() (*binlogdata.StreamTablesRespons
 // Server API for UpdateStream service
 
 type UpdateStreamServer interface {
-	// StreamUpdate streams the binlog events, to know which objects have changed.
-	StreamUpdate(*binlogdata.StreamUpdateRequest, UpdateStream_StreamUpdateServer) error
 	// StreamKeyRange returns the binlog transactions related to
 	// the specified Keyrange.
 	StreamKeyRange(*binlogdata.StreamKeyRangeRequest, UpdateStream_StreamKeyRangeServer) error
@@ -173,27 +137,6 @@ type UpdateStreamServer interface {
 
 func RegisterUpdateStreamServer(s *grpc.Server, srv UpdateStreamServer) {
 	s.RegisterService(&_UpdateStream_serviceDesc, srv)
-}
-
-func _UpdateStream_StreamUpdate_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(binlogdata.StreamUpdateRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(UpdateStreamServer).StreamUpdate(m, &updateStreamStreamUpdateServer{stream})
-}
-
-type UpdateStream_StreamUpdateServer interface {
-	Send(*binlogdata.StreamUpdateResponse) error
-	grpc.ServerStream
-}
-
-type updateStreamStreamUpdateServer struct {
-	grpc.ServerStream
-}
-
-func (x *updateStreamStreamUpdateServer) Send(m *binlogdata.StreamUpdateResponse) error {
-	return x.ServerStream.SendMsg(m)
 }
 
 func _UpdateStream_StreamKeyRange_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -244,11 +187,6 @@ var _UpdateStream_serviceDesc = grpc.ServiceDesc{
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "StreamUpdate",
-			Handler:       _UpdateStream_StreamUpdate_Handler,
-			ServerStreams: true,
-		},
-		{
 			StreamName:    "StreamKeyRange",
 			Handler:       _UpdateStream_StreamKeyRange_Handler,
 			ServerStreams: true,
@@ -265,16 +203,15 @@ var _UpdateStream_serviceDesc = grpc.ServiceDesc{
 func init() { proto.RegisterFile("binlogservice.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
-	// 164 bytes of a gzipped FileDescriptorProto
+	// 149 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0x12, 0x4e, 0xca, 0xcc, 0xcb,
 	0xc9, 0x4f, 0x2f, 0x4e, 0x2d, 0x2a, 0xcb, 0x4c, 0x4e, 0xd5, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17,
-	0xe2, 0x45, 0x11, 0x94, 0x12, 0x80, 0x70, 0x53, 0x12, 0x4b, 0x12, 0x21, 0x0a, 0x8c, 0x66, 0x32,
-	0x71, 0xf1, 0x84, 0x16, 0xa4, 0x24, 0x96, 0xa4, 0x06, 0x97, 0x14, 0xa5, 0x26, 0xe6, 0x0a, 0x85,
-	0x72, 0xf1, 0x40, 0x58, 0x10, 0x51, 0x21, 0x79, 0x3d, 0x24, 0x3d, 0xc8, 0x32, 0x41, 0xa9, 0x85,
-	0xa5, 0xa9, 0xc5, 0x25, 0x52, 0x0a, 0xb8, 0x15, 0x14, 0x17, 0xe4, 0xe7, 0x15, 0xa7, 0x2a, 0x31,
-	0x18, 0x30, 0x0a, 0x45, 0x73, 0xf1, 0x41, 0xe4, 0xbc, 0x53, 0x2b, 0x83, 0x12, 0xf3, 0xd2, 0x53,
-	0x85, 0x14, 0x31, 0xf5, 0xc1, 0xe4, 0x60, 0x46, 0x2b, 0xe1, 0x53, 0x82, 0x64, 0x38, 0xdc, 0xcd,
-	0x21, 0x89, 0x49, 0x39, 0xa9, 0xc5, 0xd8, 0xdc, 0x0c, 0x91, 0xc1, 0xe3, 0x66, 0x98, 0x02, 0x84,
-	0xb1, 0x49, 0x6c, 0xe0, 0x20, 0x32, 0x06, 0x04, 0x00, 0x00, 0xff, 0xff, 0x4c, 0x73, 0x00, 0xff,
-	0x5a, 0x01, 0x00, 0x00,
+	0xe2, 0x45, 0x11, 0x94, 0x12, 0x80, 0x70, 0x53, 0x12, 0x4b, 0x12, 0x21, 0x0a, 0x8c, 0x0e, 0x31,
+	0x72, 0xf1, 0x84, 0x16, 0xa4, 0x24, 0x96, 0xa4, 0x06, 0x97, 0x14, 0xa5, 0x26, 0xe6, 0x0a, 0x45,
+	0x73, 0xf1, 0x41, 0x58, 0xde, 0xa9, 0x95, 0x41, 0x89, 0x79, 0xe9, 0xa9, 0x42, 0x8a, 0x7a, 0x48,
+	0xba, 0x50, 0xe5, 0x82, 0x52, 0x0b, 0x4b, 0x53, 0x8b, 0x4b, 0xa4, 0x94, 0xf0, 0x29, 0x29, 0x2e,
+	0xc8, 0xcf, 0x2b, 0x4e, 0x55, 0x62, 0x30, 0x60, 0x14, 0x0a, 0xe5, 0xe2, 0x81, 0xc8, 0x86, 0x24,
+	0x26, 0xe5, 0xa4, 0x16, 0x0b, 0xc9, 0x63, 0xea, 0x83, 0xc8, 0xc0, 0x0c, 0x56, 0xc0, 0xad, 0x00,
+	0x61, 0x6c, 0x12, 0x1b, 0xd8, 0x2f, 0xc6, 0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0xa3, 0x4c, 0x2b,
+	0x54, 0x03, 0x01, 0x00, 0x00,
 }

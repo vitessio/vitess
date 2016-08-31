@@ -278,6 +278,20 @@ func (lg *l2VTGateGateway) SplitQueryV2(
 	return
 }
 
+// UpdateStream request an update stream for the specified keyspace, shard, and tablet type.
+func (lg *l2VTGateGateway) UpdateStream(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
+	var stream tabletconn.StreamEventReader
+	err := lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+		var err error
+		stream, err = conn.conn.UpdateStream(ctx, target, position, timestamp)
+		return err
+	}, 0, true)
+	if err != nil {
+		return nil, err
+	}
+	return stream, nil
+}
+
 // Close shuts down underlying connections.
 func (lg *l2VTGateGateway) Close(ctx context.Context) error {
 	lg.mu.Lock()
