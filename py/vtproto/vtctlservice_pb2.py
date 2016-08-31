@@ -29,33 +29,73 @@ _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
 
-import abc
+import grpc
 from grpc.beta import implementations as beta_implementations
+from grpc.beta import interfaces as beta_interfaces
 from grpc.framework.common import cardinality
 from grpc.framework.interfaces.face import utilities as face_utilities
 
-class BetaVtctlServicer(object):
-  """<fill me in later!>"""
-  __metaclass__ = abc.ABCMeta
-  @abc.abstractmethod
+
+class VtctlStub(object):
+  """Service Vtctl allows you to call vt commands through gRPC.
+  """
+
+  def __init__(self, channel):
+    """Constructor.
+
+    Args:
+      channel: A grpc.Channel.
+    """
+    self.ExecuteVtctlCommand = channel.unary_stream(
+        '/vtctlservice.Vtctl/ExecuteVtctlCommand',
+        request_serializer=vtctldata__pb2.ExecuteVtctlCommandRequest.SerializeToString,
+        response_deserializer=vtctldata__pb2.ExecuteVtctlCommandResponse.FromString,
+        )
+
+
+class VtctlServicer(object):
+  """Service Vtctl allows you to call vt commands through gRPC.
+  """
+
   def ExecuteVtctlCommand(self, request, context):
-    raise NotImplementedError()
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
+
+def add_VtctlServicer_to_server(servicer, server):
+  rpc_method_handlers = {
+      'ExecuteVtctlCommand': grpc.unary_stream_rpc_method_handler(
+          servicer.ExecuteVtctlCommand,
+          request_deserializer=vtctldata__pb2.ExecuteVtctlCommandRequest.FromString,
+          response_serializer=vtctldata__pb2.ExecuteVtctlCommandResponse.SerializeToString,
+      ),
+  }
+  generic_handler = grpc.method_handlers_generic_handler(
+      'vtctlservice.Vtctl', rpc_method_handlers)
+  server.add_generic_rpc_handlers((generic_handler,))
+
+
+class BetaVtctlServicer(object):
+  """Service Vtctl allows you to call vt commands through gRPC.
+  """
+  def ExecuteVtctlCommand(self, request, context):
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+
 
 class BetaVtctlStub(object):
-  """The interface to which stubs will conform."""
-  __metaclass__ = abc.ABCMeta
-  @abc.abstractmethod
-  def ExecuteVtctlCommand(self, request, timeout):
+  """Service Vtctl allows you to call vt commands through gRPC.
+  """
+  def ExecuteVtctlCommand(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
     raise NotImplementedError()
 
+
 def beta_create_Vtctl_server(servicer, pool=None, pool_size=None, default_timeout=None, maximum_timeout=None):
-  import vtctldata_pb2
-  import vtctldata_pb2
   request_deserializers = {
-    ('vtctlservice.Vtctl', 'ExecuteVtctlCommand'): vtctldata_pb2.ExecuteVtctlCommandRequest.FromString,
+    ('vtctlservice.Vtctl', 'ExecuteVtctlCommand'): vtctldata__pb2.ExecuteVtctlCommandRequest.FromString,
   }
   response_serializers = {
-    ('vtctlservice.Vtctl', 'ExecuteVtctlCommand'): vtctldata_pb2.ExecuteVtctlCommandResponse.SerializeToString,
+    ('vtctlservice.Vtctl', 'ExecuteVtctlCommand'): vtctldata__pb2.ExecuteVtctlCommandResponse.SerializeToString,
   }
   method_implementations = {
     ('vtctlservice.Vtctl', 'ExecuteVtctlCommand'): face_utilities.unary_stream_inline(servicer.ExecuteVtctlCommand),
@@ -63,14 +103,13 @@ def beta_create_Vtctl_server(servicer, pool=None, pool_size=None, default_timeou
   server_options = beta_implementations.server_options(request_deserializers=request_deserializers, response_serializers=response_serializers, thread_pool=pool, thread_pool_size=pool_size, default_timeout=default_timeout, maximum_timeout=maximum_timeout)
   return beta_implementations.server(method_implementations, options=server_options)
 
+
 def beta_create_Vtctl_stub(channel, host=None, metadata_transformer=None, pool=None, pool_size=None):
-  import vtctldata_pb2
-  import vtctldata_pb2
   request_serializers = {
-    ('vtctlservice.Vtctl', 'ExecuteVtctlCommand'): vtctldata_pb2.ExecuteVtctlCommandRequest.SerializeToString,
+    ('vtctlservice.Vtctl', 'ExecuteVtctlCommand'): vtctldata__pb2.ExecuteVtctlCommandRequest.SerializeToString,
   }
   response_deserializers = {
-    ('vtctlservice.Vtctl', 'ExecuteVtctlCommand'): vtctldata_pb2.ExecuteVtctlCommandResponse.FromString,
+    ('vtctlservice.Vtctl', 'ExecuteVtctlCommand'): vtctldata__pb2.ExecuteVtctlCommandResponse.FromString,
   }
   cardinalities = {
     'ExecuteVtctlCommand': cardinality.Cardinality.UNARY_STREAM,

@@ -9,13 +9,9 @@ import logging
 import re
 from urlparse import urlparse
 
-# Import main protobuf library first
-# to work around import order issues.
-import google.protobuf  # pylint: disable=unused-import
+from vtdb import prefer_vtroot_imports  # pylint: disable=unused-import
 
-from grpc.beta import implementations
-from grpc.beta import interfaces
-from grpc.framework.interfaces.face import face
+import grpc
 
 from vtproto import vtgate_pb2
 from vtproto import vtgateservice_pb2
@@ -63,14 +59,15 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       self.stub.close()
 
     p = urlparse('http://' + self.addr)
+    target = '%s:%s' % (p.hostname, p.port)
 
     if self.root_certificates or self.private_key or self.certificate_chain:
-      creds = implementations.ssl_channel_credentials(
+      creds = grpc.ssl_channel_credentials(
           self.root_certificates, self.private_key, self.certificate_chain)
-      channel = implementations.secure_channel(p.hostname, p.port, creds)
+      channel = grpc.secure_channel(target, creds)
     else:
-      channel = implementations.insecure_channel(p.hostname, p.port)
-    self.stub = vtgateservice_pb2.beta_create_Vitess_stub(channel)
+      channel = grpc.insecure_channel(target)
+    self.stub = vtgateservice_pb2.VitessStub(channel)
 
   def close(self):
     """close closes the server connection and frees up associated resources.
@@ -84,7 +81,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       # Let's swallow that exception.
       try:
         self.rollback()
-      except dbexceptions.TimeoutError:
+      except dbexceptions.DatabaseError:
         pass
     self.stub = None
 
@@ -100,14 +97,14 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       request = self.begin_request(effective_caller_id)
       response = self.stub.Begin(request, self.timeout)
       self.update_session(response)
-    except (face.AbortionError, vtgate_utils.VitessError) as e:
+    except (grpc.RpcError, vtgate_utils.VitessError) as e:
       raise _convert_exception(e, 'Begin')
 
   def commit(self):
     try:
       request = self.commit_request()
       self.stub.Commit(request, self.timeout)
-    except (face.AbortionError, vtgate_utils.VitessError) as e:
+    except (grpc.RpcError, vtgate_utils.VitessError) as e:
       raise _convert_exception(e, 'Commit')
     finally:
       self.session = None
@@ -116,7 +113,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     try:
       request = self.rollback_request()
       self.stub.Rollback(request, self.timeout)
-    except (face.AbortionError, vtgate_utils.VitessError) as e:
+    except (grpc.RpcError, vtgate_utils.VitessError) as e:
       raise _convert_exception(e, 'Rollback')
     finally:
       self.session = None
@@ -143,7 +140,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       response = method(request, self.timeout)
       return self.process_execute_response(method_name, response)
 
-    except (face.AbortionError, vtgate_utils.VitessError) as e:
+    except (grpc.RpcError, vtgate_utils.VitessError) as e:
       self.logger_object.log_private_data(bind_variables)
       raise _convert_exception(
           e, method_name,
@@ -166,7 +163,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       response = method(request, self.timeout)
       return self.process_execute_batch_response(method_name, response)
 
-    except (face.AbortionError, vtgate_utils.VitessError) as e:
+    except (grpc.RpcError, vtgate_utils.VitessError) as e:
       self.logger_object.log_private_data(bind_variables_list)
       raise _convert_exception(
           e, method_name,
@@ -181,17 +178,18 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       **kwargs):
 
     try:
-      request, routing_kwargs, method_name = self.stream_execute_request_and_name(
-          sql, bind_variables, tablet_type,
-          keyspace_name,
-          shards,
-          keyspace_ids,
-          keyranges,
-          effective_caller_id)
+      request, routing_kwargs, method_name = (
+          self.stream_execute_request_and_name(
+              sql, bind_variables, tablet_type,
+              keyspace_name,
+              shards,
+              keyspace_ids,
+              keyranges,
+              effective_caller_id))
       method = getattr(self.stub, method_name)
       it = method(request, self.timeout)
       first_response = it.next()
-    except (face.AbortionError, vtgate_utils.VitessError) as e:
+    except (grpc.RpcError, vtgate_utils.VitessError) as e:
       self.logger_object.log_private_data(bind_variables)
       raise _convert_exception(
           e, method_name,
@@ -219,7 +217,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       response = self.stub.GetSrvKeyspace(request, self.timeout)
       return self.keyspace_from_response(name, response)
 
-    except (face.AbortionError, vtgate_utils.VitessError) as e:
+    except (grpc.RpcError, vtgate_utils.VitessError) as e:
       raise _convert_exception(e, keyspace=name)
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
@@ -272,27 +270,30 @@ def _convert_exception(exc, *args, **kwargs):
   new_args = (type(exc).__name__,) + exc.args
   if isinstance(exc, vtgate_utils.VitessError):
     new_exc = exc.convert_to_dbexception(new_args)
-  elif isinstance(exc, face.ExpirationError):
-    # face.ExpirationError is returned by the gRPC library when
-    # a request times out. Note it is a subclass of face.AbortionError
-    # so we have to test for it before.
-    new_exc = dbexceptions.TimeoutError(new_args)
-  elif isinstance(exc, face.AbortionError):
-    # face.AbortionError is the toplevel error returned by gRPC for any
-    # RPC that finishes earlier than expected.
-    msg = exc.details
-    if exc.code == interfaces.StatusCode.UNAVAILABLE:
-      if _throttler_err_pattern.search(msg):
-        return dbexceptions.ThrottledError(new_args)
+  elif isinstance(exc, grpc.RpcError):
+    # Most RpcErrors should also implement Call so we can get details.
+    if isinstance(exc, grpc.Call):
+      code = exc.code()
+      details = exc.details()
+
+      if code == grpc.StatusCode.DEADLINE_EXCEEDED:
+        new_exc = dbexceptions.TimeoutError(new_args)
+      elif code == grpc.StatusCode.UNAVAILABLE:
+        if _throttler_err_pattern.search(details):
+          return dbexceptions.ThrottledError(new_args)
+        else:
+          return dbexceptions.TransientError(new_args)
+      elif code == grpc.StatusCode.ALREADY_EXISTS:
+        new_exc = _prune_integrity_error(details, new_args)
+      elif code == grpc.StatusCode.FAILED_PRECONDITION:
+        return dbexceptions.QueryNotServed(details, new_args)
       else:
-        return dbexceptions.TransientError(new_args)
-    elif exc.code == interfaces.StatusCode.ALREADY_EXISTS:
-      new_exc = _prune_integrity_error(msg, new_args)
-    elif exc.code == interfaces.StatusCode.FAILED_PRECONDITION:
-      return dbexceptions.QueryNotServed(msg, new_args)
+        # Other RPC error that we don't specifically handle.
+        new_exc = dbexceptions.DatabaseError(new_args + (code, details))
     else:
-      # Unhandled RPC application error
-      new_exc = dbexceptions.DatabaseError(new_args + (msg,))
+      # RPC error that doesn't provide code and details.
+      # Don't let gRPC-specific errors leak beyond this package.
+      new_exc = dbexceptions.DatabaseError(new_args + (exc,))
   else:
     new_exc = exc
   vtgate_utils.log_exception(

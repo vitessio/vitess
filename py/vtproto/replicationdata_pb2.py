@@ -108,8 +108,9 @@ Status = _reflection.GeneratedProtocolMessageType('Status', (_message.Message,),
 _sym_db.RegisterMessage(Status)
 
 
-import abc
+import grpc
 from grpc.beta import implementations as beta_implementations
+from grpc.beta import interfaces as beta_interfaces
 from grpc.framework.common import cardinality
 from grpc.framework.interfaces.face import utilities as face_utilities
 # @@protoc_insertion_point(module_scope)
