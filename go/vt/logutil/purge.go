@@ -22,7 +22,7 @@ func parseTimestamp(filename string) (timestamp time.Time, err error) {
 	if len(parts) < 6 {
 		return time.Time{}, fmt.Errorf("malformed logfile name: %v", filename)
 	}
-	return time.Parse("20060102-150405", parts[5])
+	return time.ParseInLocation("20060102-150405", parts[len(parts)-2], time.Now().Location())
 
 }
 
