@@ -3,8 +3,13 @@
   <h3> Nothing selected. Hover over a point to show details. </h3>
 </div>
 
+<!-- Popup displayed when tablet does not exist --> 
+<div *ngIf="missingPopup" class="centered">
+  <h3> Tablet does not exist. </h3>
+</div>
+
 <!-- Popup of details of tablet when hovering/clicked -->
-<div *ngIf="!defaultPopup" class="centered">
+<div *ngIf="!defaultPopup && !missingPopup" class="centered">
   <b *ngIf="title!=null"> {{title}} </b>
   <p> Keyspace: {{keyspace}} </p>
   <p> Shard: {{shard}} </p>

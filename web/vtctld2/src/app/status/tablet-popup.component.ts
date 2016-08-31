@@ -34,6 +34,7 @@ export class TabletPopupComponent implements OnInit {
   defaultPopup = false;
   hoverPopup = false;
   clickPopup = false;
+  missingPopup = false;
 
   healthDataReady = false;
 
@@ -43,8 +44,12 @@ export class TabletPopupComponent implements OnInit {
   ngOnInit() {
     // There is no hovering/clicking so the default popup must be shown.
     if (this.data == null) {
-      this.defaultPopup = true;
+      this.zone.run( () => { this.defaultPopup = true; });
       return;
+    }
+    // It is a missing tablet so display a proper message.
+    if (this.alias == null && this.data === -1) {
+        this.zone.run( () => { this.missingPopup = true; });
     }
     // It is the unaggregated view where each tablet has it's alias as a title.
     if (this.alias != null) {
@@ -81,11 +86,11 @@ export class TabletPopupComponent implements OnInit {
       this.tabletType = this.getType(health.Target.tablet_type);
       this.hostname = health.Tablet.hostname;
       this.tabletUrl = this.sanitizer.bypassSecurityTrustResourceUrl(`http://${health.Tablet.hostname}:${health.Tablet.port_map.vt}`);
-      this.lag = (typeof health.Stats.secondsBehindMaster === 'undefined') ? 0 : health.Stats.secondsBehindMaster;
+      this.lag = (typeof health.Stats.seconds_behind_master === 'undefined') ? 0 : health.Stats.seconds_behind_master;
       this.qps = (typeof health.Stats.qps === 'undefined') ? 0 : health.Stats.qps;
       this.serving = (typeof health.Serving === 'undefined') ? true : health.Serving;
-      this.error = (typeof health.Stats.healthError === 'undefined') ? 'None' : health.Stats.healthError;
-      this.lastError = (health.LastError == null) ? 'None' : health.LastError.string;
+      this.error = (typeof health.Stats.health_error === 'undefined') ? 'None' : health.Stats.health_error;
+      this.lastError = (health.LastError == null) ? 'None' : health.LastError;
       this.zone.run(() => { this.healthDataReady = true; });
     });
   }
