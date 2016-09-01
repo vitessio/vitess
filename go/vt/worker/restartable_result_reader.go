@@ -13,6 +13,8 @@ import (
 
 	"golang.org/x/net/context"
 
+	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
@@ -130,7 +132,7 @@ func (r *RestartableResultReader) startStream() (bool, error) {
 
 	alias := topoproto.TabletAliasString(r.tablet.Alias)
 	statsStreamingQueryCounters.Add(alias, 1)
-	r.logger.Infof("tablet=%v table=%v chunk=%v: Starting to stream rows using query '%v'.", alias, r.td.Name, r.chunk, r.query)
+	log.V(2).Infof("tablet=%v table=%v chunk=%v: Starting to stream rows using query '%v'.", alias, r.td.Name, r.chunk, r.query)
 	return false, nil
 }
 
