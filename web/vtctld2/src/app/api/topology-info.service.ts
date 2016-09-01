@@ -27,7 +27,7 @@ export class TopologyInfoService {
    }
 
    getMetrics() {
-    let metrics = ['lag', 'qps', 'healthy'];
+    let metrics = ['lag', 'qps', 'health'];
     return metrics;
    }
 }

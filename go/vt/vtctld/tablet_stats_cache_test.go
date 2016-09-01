@@ -15,9 +15,9 @@ func TestStatsUpdate(t *testing.T) {
 	tabletStatsCache := newTabletStatsCache()
 
 	// Creating some tablets with their latest health information.
-	tablet1Stats1 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 200)
-	tablet1Stats2 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 200)
-	tablet2Stats1 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 100)
+	tablet1Stats1 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 200)
+	tablet1Stats2 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 200)
+	tablet2Stats1 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 100)
 
 	// Insert tablet1.
 	tabletStatsCache.StatsUpdate(tablet1Stats1)
@@ -81,18 +81,27 @@ func TestStatsUpdate(t *testing.T) {
 
 func TestHeatmapData(t *testing.T) {
 	// Creating and Sending updates to 12 tablets.
-	ts1 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_MASTER, 100)
-	ts2 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 200)
-	ts3 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 300)
-	ts4 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_RDONLY, 400)
-	ts5 := tabletStats("cell2", "ks1", "-80", topodatapb.TabletType_MASTER, 500)
-	ts6 := tabletStats("cell2", "ks1", "-80", topodatapb.TabletType_REPLICA, 600)
-	ts7 := tabletStats("cell1", "ks1", "80-", topodatapb.TabletType_MASTER, 700)
-	ts8 := tabletStats("cell1", "ks1", "80-", topodatapb.TabletType_REPLICA, 800)
-	ts9 := tabletStats("cell1", "ks1", "80-", topodatapb.TabletType_RDONLY, 900)
-	ts10 := tabletStats("cell1", "ks1", "80-", topodatapb.TabletType_RDONLY, 1000)
-	ts11 := tabletStats("cell2", "ks1", "80-", topodatapb.TabletType_MASTER, 1100)
-	ts12 := tabletStats("cell2", "ks1", "80-", topodatapb.TabletType_RDONLY, 1200)
+	ts1 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_MASTER, 100)
+	ts2 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 200)
+	ts3 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 300)
+	ts4 := tabletStats("ks1", "cell1", "80-", topodatapb.TabletType_REPLICA, 400)
+
+	ts5 := tabletStats("ks1", "cell2", "-80", topodatapb.TabletType_REPLICA, 500)
+	ts6 := tabletStats("ks1", "cell2", "-80", topodatapb.TabletType_RDONLY, 600)
+	ts7 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_MASTER, 700)
+	ts8 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_RDONLY, 800)
+	ts9 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_RDONLY, 900)
+
+	ts10 := tabletStats("ks2", "cell1", "-80", topodatapb.TabletType_MASTER, 1000)
+	ts11 := tabletStats("ks2", "cell1", "-80", topodatapb.TabletType_RDONLY, 1100)
+	ts12 := tabletStats("ks2", "cell1", "-80", topodatapb.TabletType_RDONLY, 1200)
+	ts13 := tabletStats("ks2", "cell1", "80-", topodatapb.TabletType_RDONLY, 1300)
+
+	ts14 := tabletStats("ks2", "cell2", "-80", topodatapb.TabletType_REPLICA, 1400)
+	ts15 := tabletStats("ks2", "cell2", "-80", topodatapb.TabletType_RDONLY, 1500)
+	ts16 := tabletStats("ks2", "cell2", "80-", topodatapb.TabletType_MASTER, 1600)
+	ts17 := tabletStats("ks2", "cell2", "80-", topodatapb.TabletType_REPLICA, 1700)
+	ts18 := tabletStats("ks2", "cell2", "80-", topodatapb.TabletType_REPLICA, 1800)
 
 	tabletStatsCache := newTabletStatsCache()
 
@@ -108,71 +117,222 @@ func TestHeatmapData(t *testing.T) {
 	tabletStatsCache.StatsUpdate(ts10)
 	tabletStatsCache.StatsUpdate(ts11)
 	tabletStatsCache.StatsUpdate(ts12)
+	tabletStatsCache.StatsUpdate(ts13)
+	tabletStatsCache.StatsUpdate(ts14)
+	tabletStatsCache.StatsUpdate(ts15)
+	tabletStatsCache.StatsUpdate(ts16)
+	tabletStatsCache.StatsUpdate(ts17)
+	tabletStatsCache.StatsUpdate(ts18)
 
-	// Checking that the heatmap data is returned correctly for the following view: (keyspace="ks1", cell=all, type=all).
-	heatmap, err := tabletStatsCache.heatmapData("ks1", "all", "all", "lag")
-	gotData, gotTabletAliases, gotLabels := heatmap.Data, heatmap.Aliases, heatmap.Labels
-	wantData := [][]float64{
-		{float64(ts1.Stats.SecondsBehindMaster), float64(ts7.Stats.SecondsBehindMaster)},
-		{float64(ts2.Stats.SecondsBehindMaster), float64(ts8.Stats.SecondsBehindMaster)},
-		{float64(ts3.Stats.SecondsBehindMaster), float64(-1)},
-		{float64(ts4.Stats.SecondsBehindMaster), float64(ts9.Stats.SecondsBehindMaster)},
-		{float64(-1), float64(ts10.Stats.SecondsBehindMaster)},
-		{float64(ts5.Stats.SecondsBehindMaster), float64(ts11.Stats.SecondsBehindMaster)},
-		{float64(ts6.Stats.SecondsBehindMaster), float64(-1)},
-		{float64(-1), float64(ts12.Stats.SecondsBehindMaster)},
-	}
-	wantTabletAliases := [][]*topodata.TabletAlias{
-		{ts1.Tablet.Alias, ts7.Tablet.Alias},
-		{ts2.Tablet.Alias, ts8.Tablet.Alias},
-		{ts3.Tablet.Alias, nil},
-		{ts4.Tablet.Alias, ts9.Tablet.Alias},
-		{nil, ts10.Tablet.Alias},
-		{ts5.Tablet.Alias, ts11.Tablet.Alias},
-		{ts6.Tablet.Alias, nil},
-		{nil, ts12.Tablet.Alias},
-	}
-	wantLabels := []yLabel{
-		{
-			Label: label{Name: "cell1", Rowspan: 5},
-			NestedLabels: []label{
-				{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
-				{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 2},
-				{Name: topodatapb.TabletType_RDONLY.String(), Rowspan: 2},
-			},
-		},
-		{
-			Label: label{Name: "cell2", Rowspan: 3},
-			NestedLabels: []label{
-				{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
-				{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 1},
-				{Name: topodatapb.TabletType_RDONLY.String(), Rowspan: 1},
-			},
-		},
-	}
-
+	// Checking that the heatmap data is returned correctly for the following view: (keyspace="ks1", cell=all, type="all").
+	got, err := tabletStatsCache.heatmapData("ks1", "all", "all", "lag")
 	if err != nil {
-		t.Errorf("couldn't get heatmap data: %v", err)
+		t.Errorf("could not get heatmap data: %v", err)
+	}
+	want := []heatmap{
+		{
+			KeyspaceLabel: label{Name: "ks1", Rowspan: 7},
+			Data: [][]float64{
+				{float64(-1), float64(ts9.Stats.SecondsBehindMaster)},
+				{float64(ts6.Stats.SecondsBehindMaster), float64(ts8.Stats.SecondsBehindMaster)},
+				{float64(ts5.Stats.SecondsBehindMaster), float64(-1)},
+				{float64(-1), float64(ts7.Stats.SecondsBehindMaster)},
+				{float64(ts3.Stats.SecondsBehindMaster), float64(-1)},
+				{float64(ts2.Stats.SecondsBehindMaster), float64(ts4.Stats.SecondsBehindMaster)},
+				{float64(ts1.Stats.SecondsBehindMaster), float64(-1)},
+			},
+			Aliases: [][]*topodata.TabletAlias{
+				{nil, ts9.Tablet.Alias},
+				{ts6.Tablet.Alias, ts8.Tablet.Alias},
+				{ts5.Tablet.Alias, nil},
+				{nil, ts7.Tablet.Alias},
+				{ts3.Tablet.Alias, nil},
+				{ts2.Tablet.Alias, ts4.Tablet.Alias},
+				{ts1.Tablet.Alias, nil},
+			},
+			CellAndTypeLabels: []yLabel{
+				{
+					CellLabel: label{Name: "cell1", Rowspan: 3},
+					TypeLabels: []label{
+						{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
+						{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 2},
+					},
+				},
+				{
+					CellLabel: label{Name: "cell2", Rowspan: 4},
+					TypeLabels: []label{
+						{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
+						{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 1},
+						{Name: topodatapb.TabletType_RDONLY.String(), Rowspan: 2},
+					},
+				},
+			},
+			ShardLabels: []string{"-80", "80-"},
+			YGridLines:  []float64{1.5, 2.5, 3.5, 5.5, 6.5},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got: %v, want: %v", got, want)
 	}
 
-	if !reflect.DeepEqual(gotData, wantData) {
-		t.Errorf("got: %v, want: %v", gotData, wantData)
+	// Checking that the heatmap data is returned correctly for the following view: (keyspace="ks1", cell=all, type="REPLICA").
+	got2, err := tabletStatsCache.heatmapData("ks1", "all", "REPLICA", "lag")
+	if err != nil {
+		t.Errorf("could not get heatmap data: %v", err)
+	}
+	want2 := []heatmap{
+		{
+			KeyspaceLabel: label{Name: "ks1", Rowspan: 3},
+			Data: [][]float64{
+				{float64(ts5.Stats.SecondsBehindMaster), float64(-1)},
+				{float64(ts3.Stats.SecondsBehindMaster), float64(-1)},
+				{float64(ts2.Stats.SecondsBehindMaster), float64(ts4.Stats.SecondsBehindMaster)},
+			},
+			Aliases: [][]*topodata.TabletAlias{
+				{ts5.Tablet.Alias, nil},
+				{ts3.Tablet.Alias, nil},
+				{ts2.Tablet.Alias, ts4.Tablet.Alias},
+			},
+			CellAndTypeLabels: []yLabel{
+				{
+					CellLabel: label{Name: "cell1", Rowspan: 2},
+					TypeLabels: []label{
+						{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 2},
+					},
+				},
+				{
+					CellLabel: label{Name: "cell2", Rowspan: 1},
+					TypeLabels: []label{
+						{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 1},
+					},
+				},
+			},
+			ShardLabels: []string{"-80", "80-"},
+			YGridLines:  []float64{0.5, 2.5},
+		},
+	}
+	if !reflect.DeepEqual(got2, want2) {
+		t.Errorf("got: %v, want: %v", got2, want2)
 	}
 
-	if !reflect.DeepEqual(gotTabletAliases, wantTabletAliases) {
-		t.Errorf("got: %v, want: %v", gotData, wantData)
+	// Checking that the heatmap data is returned correctly for the following view: (keyspace="ks2", cell="cell1", type="all").
+	got3, err := tabletStatsCache.heatmapData("ks2", "cell1", "all", "lag")
+	if err != nil {
+		t.Errorf("could not get heatmap data: %v", err)
+	}
+	want3 := []heatmap{
+		{
+			KeyspaceLabel: label{Name: "ks2", Rowspan: 3},
+			Data: [][]float64{
+				{float64(ts12.Stats.SecondsBehindMaster), float64(-1)},
+				{float64(ts11.Stats.SecondsBehindMaster), float64(ts13.Stats.SecondsBehindMaster)},
+				{float64(ts10.Stats.SecondsBehindMaster), float64(-1)},
+			},
+			Aliases: [][]*topodata.TabletAlias{
+				{ts12.Tablet.Alias, nil},
+				{ts11.Tablet.Alias, ts13.Tablet.Alias},
+				{ts10.Tablet.Alias, nil},
+			},
+			CellAndTypeLabels: []yLabel{
+				{
+					CellLabel: label{Name: "cell1", Rowspan: 3},
+					TypeLabels: []label{
+						{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
+						{Name: topodatapb.TabletType_RDONLY.String(), Rowspan: 2},
+					},
+				},
+			},
+			ShardLabels: []string{"-80", "80-"},
+			YGridLines:  []float64{1.5, 2.5},
+		},
+	}
+	if !reflect.DeepEqual(got3, want3) {
+		t.Errorf("got: %v, want: %v", got3, want3)
 	}
 
-	if !reflect.DeepEqual(gotLabels, wantLabels) {
-		t.Errorf("got: %v, want: %v", gotLabels, wantLabels)
+	// Checking that the heatmap data is returned correctly for the following view: (keyspace="all", cell="all", type="all").
+	got4, err := tabletStatsCache.heatmapData("all", "all", "all", "lag")
+	if err != nil {
+		t.Errorf("could not get heatmap data: %v", err)
+	}
+	want4 := []heatmap{
+		{
+			KeyspaceLabel: label{Name: "ks1", Rowspan: 2},
+			Data: [][]float64{
+				{float64(500), float64(700)},
+				{float64(200), float64(400)},
+			},
+			Aliases: nil,
+			CellAndTypeLabels: []yLabel{
+				{
+					CellLabel: label{Name: "cell1", Rowspan: 1},
+				},
+				{
+					CellLabel: label{Name: "cell2", Rowspan: 1},
+				},
+			},
+			ShardLabels: []string{"-80", "80-"},
+			YGridLines:  []float64{0.5, 1.5},
+		},
+		{
+			KeyspaceLabel: label{Name: "ks2", Rowspan: 2},
+			Data: [][]float64{
+				{float64(1400), float64(1600)},
+				{float64(1000), float64(1300)},
+			},
+			Aliases: nil,
+			CellAndTypeLabels: []yLabel{
+				{
+					CellLabel: label{Name: "cell1", Rowspan: 1},
+				},
+				{
+					CellLabel: label{Name: "cell2", Rowspan: 1},
+				},
+			},
+			ShardLabels: []string{"-80", "80-"},
+			YGridLines:  []float64{0.5, 1.5},
+		},
+	}
+	if !reflect.DeepEqual(got4, want4) {
+		t.Errorf("got: %v, want: %v", got4, want4)
+	}
+
+	// Checking that the heatmap data is returned correctly for the following view: (keyspace="ks1", cell="cell2", type="MASTER").
+	got5, err := tabletStatsCache.heatmapData("ks1", "cell2", "MASTER", "lag")
+	if err != nil {
+		t.Errorf("could not get heatmap data: %v", err)
+	}
+	want5 := []heatmap{
+		{
+			KeyspaceLabel: label{Name: "ks1", Rowspan: 1},
+			Data: [][]float64{
+				{float64(-1), float64(ts7.Stats.SecondsBehindMaster)},
+			},
+			Aliases: [][]*topodata.TabletAlias{
+				{nil, ts7.Tablet.Alias},
+			},
+			CellAndTypeLabels: []yLabel{
+				{
+					CellLabel: label{Name: "cell2", Rowspan: 1},
+					TypeLabels: []label{
+						{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
+					},
+				},
+			},
+			ShardLabels: []string{"-80", "80-"},
+			YGridLines:  []float64{0.5},
+		},
+	}
+	if !reflect.DeepEqual(got5, want5) {
+		t.Errorf("got: %v, want: %v", got5, want5)
 	}
 }
 
 func TestTabletStats(t *testing.T) {
 	// Creating tabletStats.
-	ts1 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_MASTER, 200)
-	ts2 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 100)
-	ts3 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 300)
+	ts1 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_MASTER, 200)
+	ts2 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 100)
+	ts3 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 300)
 
 	tabletStatsCache := newTabletStatsCache()
 	tabletStatsCache.StatsUpdate(ts1)
@@ -200,7 +360,7 @@ func TestTabletStats(t *testing.T) {
 }
 
 // tabletStats will create a discovery.TabletStats object.
-func tabletStats(cell, keyspace, shard string, tabletType topodatapb.TabletType, uid uint32) *discovery.TabletStats {
+func tabletStats(keyspace, cell, shard string, tabletType topodatapb.TabletType, uid uint32) *discovery.TabletStats {
 	target := &querypb.Target{
 		Keyspace:   keyspace,
 		Shard:      shard,

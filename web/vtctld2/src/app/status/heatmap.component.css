@@ -10,16 +10,27 @@
 .collapsed-border {
     border-collapse: collapse;
     border-spacing: 0;
+    width: 70%;
+    float: left;
+    margin: 0 0;
+    border: 1px solid black;
 }
 
 .no-padding {
   padding: 0;
 }
-.left {
-  float: left;
+
+.centered {
+  margin: 0 auto;
 }
-.popop {
+
+.popup {
   position: absolute;
-  right: 100px;
-  top: 1000;
+  right: 5px;
+  width: 20%;
+  height: auto;
+  border: 1px solid black;
+  background-color: #FFFFFF;
+  float: right;
+  text-align: center;
 }

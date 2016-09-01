@@ -11,10 +11,16 @@
 <p-dropdown #metric (onChange)="handleMetricChange($event)" [options]="metrics" [(ngModel)]="selectedMetric"></p-dropdown>
 
 <!-- Wait until the heatmap data has been obtained from the service -->
-<div *ngFor="let h of heatmaps">
+<div *ngFor="let keyspace of listOfKeyspaces" style="overflow: auto">
   <vt-heatmap *ngIf="heatmapDataReady"
-    [heatmap]="h"
-    [metric]="metric"
+    [heatmap]="mapOfKeyspaces[keyspace]"
+    [name]="keyspace"
+    [metric]="selectedMetric"
   >
   </vt-heatmap>
+  <br/>
+  <br/>
 </div>
+
+<br/>
+<br/>

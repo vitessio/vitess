@@ -16,11 +16,6 @@
   width: 39% !important;
 }
 
->>> .ui-dropdown {
-  width: 100% !important;
-  display: inline-block !important;
-}
-
 .checkbox-wrapper {
   width: 100%;
   text-align: center;
