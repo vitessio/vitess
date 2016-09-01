@@ -7,7 +7,7 @@
 //
 // The throttler has two main goals:
 // a) allow resharding data into an existing keyspace by throttling at a fixed
-//    rate
+// rate
 // b) ensure that the MySQL replicas do not become overloaded
 //
 // To support b), the throttler constantly monitors the health of all replicas
