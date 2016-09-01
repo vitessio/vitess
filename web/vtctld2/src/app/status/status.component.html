@@ -1,14 +1,14 @@
 <!-- Keyspace selector -->
-<p-dropdown #keyspace (onChange)="handleKeyspaceChange($event)" [options]="keyspaces" [(ngModel)]="selectedKeyspace"></p-dropdown>
+<p-dropdown id="keyspace" (onChange)="handleKeyspaceChange($event)" [options]="keyspaces" [(ngModel)]="selectedKeyspace"></p-dropdown>
 
 <!-- Cell selector -->
-<p-dropdown #cell (onChange)="handleCellChange($event)" [options]="cells" [(ngModel)]="selectedCell"></p-dropdown>
+<p-dropdown id="cell" (onChange)="handleCellChange($event)" [options]="cells" [(ngModel)]="selectedCell"></p-dropdown>
 
 <!-- Type selector -->
-<p-dropdown #tabletType (onChange)="handleTypeChange($event)" [options]="tabletTypes" [(ngModel)]="selectedType"></p-dropdown>
+<p-dropdown id="type" (onChange)="handleTypeChange($event)" [options]="tabletTypes" [(ngModel)]="selectedType"></p-dropdown>
 
 <!-- Metric selector -->
-<p-dropdown #metric (onChange)="handleMetricChange($event)" [options]="metrics" [(ngModel)]="selectedMetric"></p-dropdown>
+<p-dropdown id="metric" (onChange)="handleMetricChange($event)" [options]="metrics" [(ngModel)]="selectedMetric"></p-dropdown>
 
 <!-- Wait until the heatmap data has been obtained from the service -->
 <div *ngFor="let keyspace of listOfKeyspaces" style="overflow: auto">

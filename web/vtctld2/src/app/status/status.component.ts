@@ -83,8 +83,6 @@ export class StatusComponent implements OnInit, OnDestroy {
         let tabletType = tabletTypesReturned[i];
         this.tabletTypes.push({label: tabletType, value: tabletType});
       }
-    }); 
-
     this.metrics = [];
     let metricsReturned = this.topoInfoService.getMetrics();
     for (let i = 0; i < metricsReturned.length; i++) {
@@ -105,7 +103,7 @@ export class StatusComponent implements OnInit, OnDestroy {
         this.previousCell = params['cell'];
         this.previousType = params['type'];
         this.previousMetric = params['metric'];
-        
+
         this.getTopologyInfo(this.selectedKeyspace, this.selectedCell);
         this.zone.run(() => {
           this.getHeatmapData();
