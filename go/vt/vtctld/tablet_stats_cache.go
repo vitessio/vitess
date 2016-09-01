@@ -185,7 +185,7 @@ func makeStringTypeList(types []topodata.TabletType) []string {
 // keyspacesLocked returns the keyspaces to be displayed in the heatmap based on the dropdown filters.
 // It returns one keyspace if a specific one was chosen or returns all of them if 'all' is chosen.
 // This method is used by heatmapData to traverse over desired keyspaces and
-// topologyInfo to send all available options for the keyspace dropdown
+// topologyInfo to send all available options for the keyspace dropdown.
 func (c *tabletStatsCache) keyspacesLocked(keyspace string) []string {
 	if keyspace != "all" {
 		return []string{keyspace}
