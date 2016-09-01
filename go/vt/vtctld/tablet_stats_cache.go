@@ -166,25 +166,25 @@ func remove(tablets []*discovery.TabletStats, tabletAlias *topodata.TabletAlias)
 func (c *tabletStatsCache) topologyInfo(selectedKeyspace, selectedCell string) *topologyInfo {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	tabletTypeStrings := makeStringTypeList(c.typesInTopology(selectedKeyspace, selectedCell))
+
 	return &topologyInfo{
 		Keyspaces:   c.keyspacesLocked("all"),
 		Cells:       c.cellsInTopology(selectedKeyspace),
-		TabletTypes: tabletTypeStrings,
+		TabletTypes: makeStringTypeList(c.typesInTopology(selectedKeyspace, selectedCell)),
 	}
 }
 
-func makeStringTypeList(tabletTypeObj []topodata.TabletType) []string {
+func makeStringTypeList(types []topodata.TabletType) []string {
 	var list []string
-	for _, t := range tabletTypeObj {
+	for _, t := range types {
 		list = append(list, t.String())
 	}
 	return list
 }
 
 // keyspacesLocked returns the keyspaces to be displayed in the heatmap based on the dropdown filters.
-// returns one keyspace if a specific one was chosen or returns all of them if 'all' is chosen.
-// Used by heatmapData to traverse over desired keyspaces and
+// It returns one keyspace if a specific one was chosen or returns all of them if 'all' is chosen.
+// This method is used by heatmapData to traverse over desired keyspaces and
 // topologyInfo to send all available options for the keyspace dropdown
 func (c *tabletStatsCache) keyspacesLocked(keyspace string) []string {
 	if keyspace != "all" {
@@ -200,7 +200,7 @@ func (c *tabletStatsCache) keyspacesLocked(keyspace string) []string {
 
 // cellsLocked returns the cells needed to be displayed in the heatmap based on the dropdown filters.
 // returns one cell if a specific one was chosen or returns all of them if 'all' is chosen.
-// Used by heatmapData to traverse over the desired cells.
+// This method is used by heatmapData to traverse over the desired cells.
 func (c *tabletStatsCache) cellsLocked(keyspace, cell string) []string {
 	if cell != "all" {
 		return []string{cell}
@@ -208,9 +208,9 @@ func (c *tabletStatsCache) cellsLocked(keyspace, cell string) []string {
 	return c.cellsInTopology(keyspace)
 }
 
-// cellsLocked returns the tablet types needed to be displayed in the heatmap based on the dropdown filters.
-// returns tablet type cell if a specific one was chosen or returns all of them if 'all' is chosen.
-// Used by heatmapData to traverse over the desired tablet types.
+// tabletTypesLocked returns the tablet types needed to be displayed in the heatmap based on the dropdown filters.
+// It returns tablet type if a specific one was chosen or returns all of them if 'all' is chosen for keyspace and/or cell.
+// This method is used by heatmapData to traverse over the desired tablet types.
 func (c *tabletStatsCache) tabletTypesLocked(keyspace, cell, tabletType string) []topodata.TabletType {
 	if tabletType != "all" {
 		tabletTypeObj, _ := topoproto.ParseTabletType(tabletType)
@@ -221,7 +221,7 @@ func (c *tabletStatsCache) tabletTypesLocked(keyspace, cell, tabletType string) 
 
 // cellsInTopology returns all the cells in the given keyspace.
 // If all keyspaces is chosen, it returns the cells from every keyspace.
-// Used by topologyInfo to send all available options for the cell dropdown
+// This method is used by topologyInfo to send all available options for the cell dropdown
 func (c *tabletStatsCache) cellsInTopology(keyspace string) []string {
 	keyspaces := c.keyspacesLocked(keyspace)
 	cells := make(map[string]bool)
@@ -235,8 +235,8 @@ func (c *tabletStatsCache) cellsInTopology(keyspace string) []string {
 		}
 	}
 	var cellList []string
-	for cl := range cells {
-		cellList = append(cellList, cl)
+	for cell := range cells {
+		cellList = append(cellList, cell)
 	}
 	sort.Strings(cellList)
 	return cellList
@@ -244,10 +244,10 @@ func (c *tabletStatsCache) cellsInTopology(keyspace string) []string {
 
 // typesInTopology returns all the cells in the given keyspace and cell.
 // If all keyspaces and cells is chosen, it returns the types from every cell in every keyspace.
-// Used by topologyInfo to send all available options for the tablet type dropdown
+// This method is used by topologyInfo to send all available options for the tablet type dropdown
 func (c *tabletStatsCache) typesInTopology(keyspace, cell string) []topodata.TabletType {
 	keyspaces := c.keyspacesLocked(keyspace)
-	types := make(map[string]bool)
+	types := make(map[topodata.TabletType]bool)
 	for _, ks := range keyspaces {
 		cellsPerKeyspace := c.cellsLocked(ks, cell)
 		for _, cl := range cellsPerKeyspace {
@@ -255,7 +255,7 @@ func (c *tabletStatsCache) typesInTopology(keyspace, cell string) []topodata.Tab
 			for s := range shardsPerKeyspace {
 				typesPerShard := c.statuses[ks][s][cl]
 				for t := range typesPerShard {
-					types[t.String()] = true
+					types[t] = true
 					if len(types) == 3 {
 						break
 					}
@@ -267,18 +267,18 @@ func (c *tabletStatsCache) typesInTopology(keyspace, cell string) []topodata.Tab
 	return typesList
 }
 
-func sortTypes(listOfTypes map[string]bool) []topodata.TabletType {
-	var types []topodata.TabletType
-	if val, ok := listOfTypes[topodata.TabletType_MASTER.String()]; ok && val == true {
-		types = append(types, topodata.TabletType_MASTER)
+func sortTypes(types map[topodata.TabletType]bool) []topodata.TabletType {
+	var listOfTypes []topodata.TabletType
+	if t, _ := types[topodata.TabletType_MASTER]; t {
+		listOfTypes = append(listOfTypes, topodata.TabletType_MASTER)
 	}
-	if val, ok := listOfTypes[topodata.TabletType_REPLICA.String()]; ok && val == true {
-		types = append(types, topodata.TabletType_REPLICA)
+	if t, _ := types[topodata.TabletType_REPLICA]; t {
+		listOfTypes = append(listOfTypes, topodata.TabletType_REPLICA)
 	}
-	if val, ok := listOfTypes[topodata.TabletType_RDONLY.String()]; ok && val == true {
-		types = append(types, topodata.TabletType_RDONLY)
+	if t, _ := types[topodata.TabletType_RDONLY]; t {
+		listOfTypes = append(listOfTypes, topodata.TabletType_RDONLY)
 	}
-	return types
+	return listOfTypes
 }
 
 func (c *tabletStatsCache) shards(keyspace string) []string {

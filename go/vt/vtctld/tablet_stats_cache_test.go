@@ -367,34 +367,35 @@ func TestTopologyInfo(t *testing.T) {
 	tabletStatsCache.StatsUpdate(ts7)
 
 	var testcases = []struct {
-		in  *topologyInfo
-		out *topologyInfo
+		keyspace string
+		cell     string
+		want     *topologyInfo
 	}{
-		{tabletStatsCache.topologyInfo("all", "all"), &topologyInfo{
+		{"all", "all", &topologyInfo{
 			Keyspaces:   []string{"ks1", "ks2"},
 			Cells:       []string{"cell1", "cell2", "cell3"},
 			TabletTypes: []string{topodatapb.TabletType_MASTER.String(), topodatapb.TabletType_REPLICA.String(), topodatapb.TabletType_RDONLY.String()},
 		},
 		},
-		{tabletStatsCache.topologyInfo("ks1", "all"), &topologyInfo{
+		{"ks1", "all", &topologyInfo{
 			Keyspaces:   []string{"ks1", "ks2"},
 			Cells:       []string{"cell1", "cell2", "cell3"},
 			TabletTypes: []string{topodatapb.TabletType_MASTER.String(), topodatapb.TabletType_REPLICA.String(), topodatapb.TabletType_RDONLY.String()},
 		},
 		},
-		{tabletStatsCache.topologyInfo("ks2", "all"), &topologyInfo{
+		{"ks2", "all", &topologyInfo{
 			Keyspaces:   []string{"ks1", "ks2"},
 			Cells:       []string{"cell1"},
 			TabletTypes: []string{topodatapb.TabletType_MASTER.String()},
 		},
 		},
-		{tabletStatsCache.topologyInfo("ks1", "cell2"), &topologyInfo{
+		{"ks1", "cell2", &topologyInfo{
 			Keyspaces:   []string{"ks1", "ks2"},
 			Cells:       []string{"cell1", "cell2", "cell3"},
 			TabletTypes: []string{topodatapb.TabletType_REPLICA.String(), topodatapb.TabletType_RDONLY.String()},
 		},
 		},
-		{tabletStatsCache.topologyInfo("all", "cell2"), &topologyInfo{
+		{"all", "cell2", &topologyInfo{
 			Keyspaces:   []string{"ks1", "ks2"},
 			Cells:       []string{"cell1", "cell2", "cell3"},
 			TabletTypes: []string{topodatapb.TabletType_REPLICA.String(), topodatapb.TabletType_RDONLY.String()},
@@ -403,8 +404,9 @@ func TestTopologyInfo(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		if !reflect.DeepEqual(tc.in, tc.out) {
-			t.Errorf("got: %v, want: %v", tc.in, tc.out)
+		got := tabletStatsCache.topologyInfo(tc.keyspace, tc.cell)
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("got: %v, want: %v", got, tc.want)
 		}
 	}
 }
