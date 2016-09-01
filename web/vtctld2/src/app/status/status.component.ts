@@ -62,27 +62,27 @@ export class StatusComponent implements OnInit, OnDestroy {
     this.topoInfoService.getCombinedTopologyInfo(selectedKeyspace, selectedCell).subscribe( data => {
       let keyspacesReturned = data.Keyspaces;
       this.keyspaces = [];
+      this.keyspaces.push({label: 'all', value: 'all'});
       for (let i = 0; i < keyspacesReturned.length; i++) {
         let keyspace = keyspacesReturned[i];
         this.keyspaces.push({label: keyspace, value: keyspace});
       }
-      this.keyspaces.push({label: 'all', value: 'all'});
 
       let cellsReturned = data.Cells;
       this.cells = [];
+      this.cells.push({label: 'all', value: 'all'});
       for (let i = 0; i < cellsReturned.length; i++) {
         let cell = cellsReturned[i];
         this.cells.push({label: cell, value: cell});
       }
-      this.cells.push({label: 'all', value: 'all'});
 
       let tabletTypesReturned = data.TabletTypes;
       this.tabletTypes = [];
+      this.tabletTypes.push({label: 'all', value: 'all'});
       for (let i = 0; i < tabletTypesReturned.length; i++) {
         let tabletType = tabletTypesReturned[i];
         this.tabletTypes.push({label: tabletType, value: tabletType});
       }
-      this.tabletTypes.push({label: 'all', value: 'all'});
     });
 
     this.metrics = [];

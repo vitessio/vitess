@@ -23,7 +23,6 @@ $VTROOT/bin/vtctld \
   -port $web_port \
   -grpc_port $grpc_port \
   -pid_file $VTDATAROOT/tmp/vtctld.pid \
-  -enable_realtime_stats true \
   > $VTDATAROOT/tmp/vtctld.out 2>&1 &
 disown -a
 

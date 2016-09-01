@@ -417,7 +417,7 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 	handleCollection("topology_info", func(r *http.Request) (interface{}, error) {
 		targetPath := getItemPath(r.URL.Path)
 
-		// Retreiving topology information (keyspaces, cells, and types) based on query params.
+		// Retrieving topology information (keyspaces, cells, and types) based on query params.
 		if targetPath == "" {
 			if err := r.ParseForm(); err != nil {
 				return nil, err
@@ -439,7 +439,7 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 
 			return realtimeStats.topologyInfo(keyspace, cell), nil
 		}
-		return nil, fmt.Errorf("invalid target path: %q  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>", targetPath)
+		return nil, fmt.Errorf("invalid target path: %q  expected path: ?keyspace=<keyspace>&cell=<cell>", targetPath)
 	})
 
 	// Vtctl Command

@@ -8,8 +8,6 @@ import (
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // yLabel is used to keep track of the outer and inner labels of the heatmap.
@@ -70,12 +68,10 @@ type tabletStatsCache struct {
 	// The first key is the keyspace, the second key is the shard,
 	// the third key is the cell, the last key is the tabletType.
 	// The keys are strings to allow exposing this map as a JSON object in api.go.
-	statuses map[string]map[string]map[string]map[topodatapb.TabletType][]*discovery.TabletStats
+	statuses map[string]map[string]map[string]map[topodata.TabletType][]*discovery.TabletStats
 	// statusesByAlias is a copy of statuses and will be updated simultaneously.
 	// The first key is the string representation of the tablet alias.
 	statusesByAlias map[string]*discovery.TabletStats
-	// cells counts the number of tablets per cell.
-	tabletCountsByCell map[string]int
 }
 
 type topologyInfo struct {
@@ -86,9 +82,8 @@ type topologyInfo struct {
 
 func newTabletStatsCache() *tabletStatsCache {
 	return &tabletStatsCache{
-		statuses:           make(map[string]map[string]map[string]map[topodatapb.TabletType][]*discovery.TabletStats),
-		statusesByAlias:    make(map[string]*discovery.TabletStats),
-		tabletCountsByCell: make(map[string]int),
+		statuses:        make(map[string]map[string]map[string]map[topodata.TabletType][]*discovery.TabletStats),
+		statusesByAlias: make(map[string]*discovery.TabletStats),
 	}
 }
 
@@ -113,10 +108,6 @@ func (c *tabletStatsCache) StatsUpdate(stats *discovery.TabletStats) {
 		// The tablet still exists in our cache but was recently deleted or changed its type. Delete it now.
 		c.statuses[keyspace][shard][cell][tabletType] = remove(c.statuses[keyspace][shard][cell][tabletType], stats.Tablet.Alias)
 		delete(c.statusesByAlias, aliasKey)
-		c.tabletCountsByCell[cell]--
-		if c.tabletCountsByCell[cell] == 0 {
-			delete(c.tabletCountsByCell, cell)
-		}
 		return
 	}
 
@@ -124,19 +115,19 @@ func (c *tabletStatsCache) StatsUpdate(stats *discovery.TabletStats) {
 		// Tablet isn't tracked yet so just add it.
 		shards, ok := c.statuses[keyspace]
 		if !ok {
-			shards = make(map[string]map[string]map[topodatapb.TabletType][]*discovery.TabletStats)
+			shards = make(map[string]map[string]map[topodata.TabletType][]*discovery.TabletStats)
 			c.statuses[keyspace] = shards
 		}
 
 		cells, ok := c.statuses[keyspace][shard]
 		if !ok {
-			cells = make(map[string]map[topodatapb.TabletType][]*discovery.TabletStats)
+			cells = make(map[string]map[topodata.TabletType][]*discovery.TabletStats)
 			c.statuses[keyspace][shard] = cells
 		}
 
 		types, ok := c.statuses[keyspace][shard][cell]
 		if !ok {
-			types = make(map[topodatapb.TabletType][]*discovery.TabletStats)
+			types = make(map[topodata.TabletType][]*discovery.TabletStats)
 			c.statuses[keyspace][shard][cell] = types
 		}
 
@@ -149,7 +140,6 @@ func (c *tabletStatsCache) StatsUpdate(stats *discovery.TabletStats) {
 		c.statuses[keyspace][shard][cell][tabletType] = append(c.statuses[keyspace][shard][cell][tabletType], stats)
 		sort.Sort(byTabletUID(c.statuses[keyspace][shard][cell][tabletType]))
 		c.statusesByAlias[aliasKey] = stats
-		c.tabletCountsByCell[cell]++
 		return
 	}
 
@@ -173,81 +163,30 @@ func remove(tablets []*discovery.TabletStats, tabletAlias *topodata.TabletAlias)
 	return filteredTablets
 }
 
-func containsString(array []string, element string) bool {
-	for _, entry := range array {
-		if entry == element {
-			return true
-		}
-	}
-	return false
-}
-
-func (c *tabletStatsCache) cellsInTopology(keyspace string) []string {
-	keyspaces := c.keyspaces(keyspace)
-	var cells []string
-	for _, ks := range keyspaces {
-		shardsPerKeyspace := c.statuses[ks]
-		for s := range shardsPerKeyspace {
-			cellsInKeyspace := c.statuses[ks][s]
-			for cl := range cellsInKeyspace {
-				if !containsString(cells, cl) {
-					cells = append(cells, cl)
-				}
-			}
-		}
-		sort.Strings(cells)
-	}
-	return cells
-}
-
-func sortTypes(listOfTypes []string) []string {
-	var types []string
-	if containsString(listOfTypes, topodatapb.TabletType_MASTER.String()) {
-		types = append(types, topodatapb.TabletType_MASTER.String())
-	}
-	if containsString(listOfTypes, topodatapb.TabletType_REPLICA.String()) {
-		types = append(types, topodatapb.TabletType_REPLICA.String())
-	}
-	if containsString(listOfTypes, topodatapb.TabletType_RDONLY.String()) {
-		types = append(types, topodatapb.TabletType_RDONLY.String())
-	}
-	return types
-}
-
-func (c *tabletStatsCache) typesInTopology(keyspace, cell string) []string {
-	keyspaces := c.keyspaces(keyspace)
-	var types []string
-	for _, ks := range keyspaces {
-		cellsPerKeyspace := c.cells(ks, cell)
-		for _, cl := range cellsPerKeyspace {
-			shardsPerKeyspace := c.statuses[ks]
-			for s := range shardsPerKeyspace {
-				typesPerShard := c.statuses[ks][s][cl]
-				for t := range typesPerShard {
-					if !containsString(types, t.String()) {
-						types = append(types, t.String())
-						if len(types) == 3 {
-							types = sortTypes(types)
-							return types
-						}
-					}
-				}
-			}
-		}
-	}
-	types = sortTypes(types)
-	return types
-}
-
 func (c *tabletStatsCache) topologyInfo(selectedKeyspace, selectedCell string) *topologyInfo {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	tabletTypeStrings := makeStringTypeList(c.typesInTopology(selectedKeyspace, selectedCell))
 	return &topologyInfo{
-		Keyspaces:   c.keyspaces("all"),
+		Keyspaces:   c.keyspacesLocked("all"),
 		Cells:       c.cellsInTopology(selectedKeyspace),
-		TabletTypes: c.typesInTopology(selectedKeyspace, selectedCell),
+		TabletTypes: tabletTypeStrings,
 	}
 }
 
-func (c *tabletStatsCache) keyspaces(keyspace string) []string {
+func makeStringTypeList(tabletTypeObj []topodata.TabletType) []string {
+	var list []string
+	for _, t := range tabletTypeObj {
+		list = append(list, t.String())
+	}
+	return list
+}
+
+// keyspacesLocked returns the keyspaces to be displayed in the heatmap based on the dropdown filters.
+// returns one keyspace if a specific one was chosen or returns all of them if 'all' is chosen.
+// Used by heatmapData to traverse over desired keyspaces and
+// topologyInfo to send all available options for the keyspace dropdown
+func (c *tabletStatsCache) keyspacesLocked(keyspace string) []string {
 	if keyspace != "all" {
 		return []string{keyspace}
 	}
@@ -259,25 +198,87 @@ func (c *tabletStatsCache) keyspaces(keyspace string) []string {
 	return keyspaces
 }
 
-func (c *tabletStatsCache) cells(keyspace, cell string) []string {
+// cellsLocked returns the cells needed to be displayed in the heatmap based on the dropdown filters.
+// returns one cell if a specific one was chosen or returns all of them if 'all' is chosen.
+// Used by heatmapData to traverse over the desired cells.
+func (c *tabletStatsCache) cellsLocked(keyspace, cell string) []string {
 	if cell != "all" {
 		return []string{cell}
 	}
 	return c.cellsInTopology(keyspace)
 }
 
-func (c *tabletStatsCache) tabletTypes(keyspace, cell, tabletType string) []topodata.TabletType {
+// cellsLocked returns the tablet types needed to be displayed in the heatmap based on the dropdown filters.
+// returns tablet type cell if a specific one was chosen or returns all of them if 'all' is chosen.
+// Used by heatmapData to traverse over the desired tablet types.
+func (c *tabletStatsCache) tabletTypesLocked(keyspace, cell, tabletType string) []topodata.TabletType {
 	if tabletType != "all" {
 		tabletTypeObj, _ := topoproto.ParseTabletType(tabletType)
 		return []topodata.TabletType{tabletTypeObj}
 	}
-	typeStrings := c.typesInTopology(keyspace, cell)
-	var typeObjects []topodatapb.TabletType
-	for _, t := range typeStrings {
-		typeObj, _ := topoproto.ParseTabletType(t)
-		typeObjects = append(typeObjects, typeObj)
+	return c.typesInTopology(keyspace, cell)
+}
+
+// cellsInTopology returns all the cells in the given keyspace.
+// If all keyspaces is chosen, it returns the cells from every keyspace.
+// Used by topologyInfo to send all available options for the cell dropdown
+func (c *tabletStatsCache) cellsInTopology(keyspace string) []string {
+	keyspaces := c.keyspacesLocked(keyspace)
+	cells := make(map[string]bool)
+	for _, ks := range keyspaces {
+		shardsPerKeyspace := c.statuses[ks]
+		for s := range shardsPerKeyspace {
+			cellsInKeyspace := c.statuses[ks][s]
+			for cl := range cellsInKeyspace {
+				cells[cl] = true
+			}
+		}
 	}
-	return typeObjects
+	var cellList []string
+	for cl := range cells {
+		cellList = append(cellList, cl)
+	}
+	sort.Strings(cellList)
+	return cellList
+}
+
+// typesInTopology returns all the cells in the given keyspace and cell.
+// If all keyspaces and cells is chosen, it returns the types from every cell in every keyspace.
+// Used by topologyInfo to send all available options for the tablet type dropdown
+func (c *tabletStatsCache) typesInTopology(keyspace, cell string) []topodata.TabletType {
+	keyspaces := c.keyspacesLocked(keyspace)
+	types := make(map[string]bool)
+	for _, ks := range keyspaces {
+		cellsPerKeyspace := c.cellsLocked(ks, cell)
+		for _, cl := range cellsPerKeyspace {
+			shardsPerKeyspace := c.statuses[ks]
+			for s := range shardsPerKeyspace {
+				typesPerShard := c.statuses[ks][s][cl]
+				for t := range typesPerShard {
+					types[t.String()] = true
+					if len(types) == 3 {
+						break
+					}
+				}
+			}
+		}
+	}
+	typesList := sortTypes(types)
+	return typesList
+}
+
+func sortTypes(listOfTypes map[string]bool) []topodata.TabletType {
+	var types []topodata.TabletType
+	if val, ok := listOfTypes[topodata.TabletType_MASTER.String()]; ok && val == true {
+		types = append(types, topodata.TabletType_MASTER)
+	}
+	if val, ok := listOfTypes[topodata.TabletType_REPLICA.String()]; ok && val == true {
+		types = append(types, topodata.TabletType_REPLICA)
+	}
+	if val, ok := listOfTypes[topodata.TabletType_RDONLY.String()]; ok && val == true {
+		types = append(types, topodata.TabletType_RDONLY)
+	}
+	return types
 }
 
 func (c *tabletStatsCache) shards(keyspace string) []string {
@@ -313,7 +314,7 @@ func (c *tabletStatsCache) heatmapData(selectedKeyspace, selectedCell, selectedT
 		aggregated = true
 	}
 
-	keyspaces := c.keyspaces(selectedKeyspace)
+	keyspaces := c.keyspacesLocked(selectedKeyspace)
 	var listOfHeatmaps []heatmap
 	for _, keyspace := range keyspaces {
 		var heatmapData [][]float64
@@ -322,7 +323,7 @@ func (c *tabletStatsCache) heatmapData(selectedKeyspace, selectedCell, selectedT
 		shards := c.shards(keyspace)
 		keyspaceLabelSpan := 0
 
-		cells := c.cells(keyspace, selectedCell)
+		cells := c.cellsLocked(keyspace, selectedCell)
 		// The loop goes through every outer label (in this case, cell).
 		for _, cell := range cells {
 			var cellData [][]float64
@@ -385,7 +386,7 @@ func (c *tabletStatsCache) unaggregatedData(keyspace, cell, selectedType string,
 	var heatmapTabletAliases [][]*topodata.TabletAlias
 	var cellLabel yLabel
 	cellLabelSpan := 0
-	tabletTypes := c.tabletTypes(keyspace, cell, selectedType)
+	tabletTypes := c.tabletTypesLocked(keyspace, cell, selectedType)
 	shards := c.shards(keyspace)
 	for _, tabletType := range tabletTypes {
 		maxRowLength := 0
@@ -439,7 +440,7 @@ func (c *tabletStatsCache) unaggregatedData(keyspace, cell, selectedType string,
 
 func (c *tabletStatsCache) aggregatedData(keyspace, cell, selectedType, selectedMetric string, metricFunc func(stats *discovery.TabletStats) float64) ([][]float64, [][]*topodata.TabletAlias, yLabel) {
 	shards := c.shards(keyspace)
-	tabletTypes := c.tabletTypes(keyspace, cell, selectedType)
+	tabletTypes := c.tabletTypesLocked(keyspace, cell, selectedType)
 
 	var heatmapData [][]float64
 	dataRow := make([]float64, len(shards))
@@ -484,7 +485,7 @@ func (c *tabletStatsCache) aggregatedData(keyspace, cell, selectedType, selected
 	return heatmapData, nil, heatmapCellLabel
 }
 
-func (c *tabletStatsCache) tabletStats(tabletAlias *topodatapb.TabletAlias) (discovery.TabletStats, error) {
+func (c *tabletStatsCache) tabletStats(tabletAlias *topodata.TabletAlias) (discovery.TabletStats, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
