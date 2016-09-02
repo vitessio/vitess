@@ -215,12 +215,12 @@ func TestAPI(t *testing.T) {
 		{"GET", "topology_info/?keyspace=all&cell=all", `{
 		   "Keyspaces": ["ks1", "ks2"],
 		   "Cells": ["cell1","cell2"],
-		  "TabletTypes": ["REPLICA","RDONLY"]
+		   "TabletTypes": ["REPLICA","RDONLY"]
 		}`},
 		{"GET", "topology_info/?keyspace=ks1&cell=cell1", `{
 		   "Keyspaces": ["ks1", "ks2"],
 		   "Cells": ["cell1","cell2"],
-		  "TabletTypes": ["REPLICA", "RDONLY"]
+		   "TabletTypes": ["REPLICA", "RDONLY"]
 		}`},
 	}
 	for _, in := range table {

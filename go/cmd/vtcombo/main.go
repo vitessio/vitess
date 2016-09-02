@@ -81,6 +81,8 @@ func main() {
 
 	// vtctld UI requires the cell flag
 	flag.Set("cell", tpb.Cells[0])
+	flag.Set("enable_realtime_stats", "true")
+	flag.Set("log_dir", "$VTDATAROOT/tmp")
 
 	// create zk client config file
 	config := path.Join(os.Getenv("VTDATAROOT"), "vt_0000000001/tmp/test-zk-client-conf.json")

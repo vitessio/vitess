@@ -1,4 +1,4 @@
-<h2> {{keyspace.Name}} </h2>
+<h2 id="keyspaceName"> {{keyspace.Name}} </h2>
 
 <table id="heatmapTable" class="collapsed-border">
   <!-- The first row with an offset to match the heatmap labels. -->
@@ -16,7 +16,7 @@
 <template ngFor let-label [ngForOf]="yLabels" let-firstKeyspace="first">
      <template [ngIf]="label.TypeLabels == null">
        <tr [ngStyle]="{'height': getRowHeight()+'px'}">
-         <td  [attr.rowspan]="label.CellLabel.Rowspan" class="bordered"> {{label.CellLabel.Name}} </td>
+         <td [attr.rowspan]="label.CellLabel.Rowspan" class="bordered">{{label.CellLabel.Name}}</td>
        </tr>
 
        <tr *ngFor="let num of getRemainingRows(label.CellLabel.Rowspan)" [ngStyle]="{'height': getRowHeight()+'px'}"></tr>
@@ -25,8 +25,8 @@
     <template [ngIf]="label.TypeLabels != null">
       <template ngFor let-nestedLabel [ngForOf]="label.TypeLabels" let-firstCell="first">
         <tr [ngStyle]="{'height': getRowHeight()+'px'}">
-          <td *ngIf="firstCell" [attr.rowspan]="label.CellLabel.Rowspan" class="bordered"> {{label.CellLabel.Name}}</td>
-          <td class="bordered" [attr.rowspan]="nestedLabel.Rowspan"> {{nestedLabel.Name}}</td>
+          <td *ngIf="firstCell" [attr.rowspan]="label.CellLabel.Rowspan" class="bordered">{{label.CellLabel.Name}}</td>
+          <td class="bordered" [attr.rowspan]="nestedLabel.Rowspan">{{nestedLabel.Name}}</td>
         </tr>
 
          <tr *ngFor="let num of getRemainingRows(nestedLabel.Rowspan)" [ngStyle]="{'height': getRowHeight()+'px'}"></tr>
@@ -46,5 +46,5 @@
                    [clicked]="popupClickState"
                    >
   </vt-tablet-popup>
- <button md-button (click)="closePopup()" class="centered"> Dismiss </button>
+ <button md-button (click)="closePopup()" class="centered">Dismiss</button>
 </div>
