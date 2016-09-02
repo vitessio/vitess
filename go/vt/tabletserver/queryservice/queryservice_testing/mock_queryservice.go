@@ -162,6 +162,16 @@ func (_mr *_MockQueryServiceRecorder) StreamHealthUnregister(arg0 interface{}) *
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "StreamHealthUnregister", arg0)
 }
 
+func (_m *MockQueryService) UpdateStream(ctx context.Context, target *query.Target, position string, timestamp int64, sendReply func(*query.StreamEvent) error) error {
+	ret := _m.ctrl.Call(_m, "UpdateStream", ctx, target, position, timestamp, sendReply)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockQueryServiceRecorder) UpdateStream(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "UpdateStream", arg0, arg1, arg2, arg3, arg4)
+}
+
 func (_m *MockQueryService) HandlePanic(_param0 *error) {
 	_m.ctrl.Call(_m, "HandlePanic", _param0)
 }

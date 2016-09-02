@@ -89,6 +89,11 @@ func (e *ErrorQueryService) StreamHealthUnregister(int) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
+// UpdateStream is part of QueryService interface
+func (e *ErrorQueryService) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, sendReply func(*querypb.StreamEvent) error) error {
+	return fmt.Errorf("ErrorQueryService does not implement any method")
+}
+
 // HandlePanic is part of QueryService interface
 func (e *ErrorQueryService) HandlePanic(*error) {
 }

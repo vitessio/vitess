@@ -13,7 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/sync2"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 
@@ -197,15 +198,11 @@ func TestStreamerParseEventsXID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	if err := svm.Join(); err != ErrServerEOF {
+	_, err := bls.parseEvents(context.Background(), events)
+	if err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -254,15 +251,11 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	if err := svm.Join(); err != ErrServerEOF {
+	_, err := bls.parseEvents(context.Background(), events)
+	if err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -277,26 +270,24 @@ func TestStreamerStop(t *testing.T) {
 	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	// Start parseEvents(), but don't send it anything, so it just waits.
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-		return nil
-	})
-
-	done := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error)
 	go func() {
-		svm.Stop()
-		close(done)
+		_, err := bls.parseEvents(ctx, events)
+		done <- err
 	}()
 
+	// close the context, expect the parser to return
+	cancel()
+
 	select {
-	case <-done:
+	case err := <-done:
+		if err != context.Canceled {
+			t.Errorf("wrong context interruption returned value: %v", err)
+		}
 	case <-time.After(1 * time.Second):
 		t.Errorf("timed out waiting for binlogConnStreamer.Stop()")
 	}
@@ -321,18 +312,10 @@ func TestStreamerParseEventsClientEOF(t *testing.T) {
 	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return io.EOF
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	err := svm.Join()
-	if err == nil {
-		t.Errorf("expected error, got none")
-	}
+	_, err := bls.parseEvents(context.Background(), events)
 	if err != want {
 		t.Errorf("wrong error, got %#v, want %#v", err, want)
 	}
@@ -347,17 +330,9 @@ func TestStreamerParseEventsServerEOF(t *testing.T) {
 	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	err := svm.Join()
-	if err == nil {
-		t.Errorf("expected error, got none")
-	}
+	_, err := bls.parseEvents(context.Background(), events)
 	if err != want {
 		t.Errorf("wrong error, got %#v, want %#v", err, want)
 	}
@@ -382,15 +357,11 @@ func TestStreamerParseEventsSendErrorXID(t *testing.T) {
 	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	err := svm.Join()
+
+	_, err := bls.parseEvents(context.Background(), events)
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -421,15 +392,10 @@ func TestStreamerParseEventsSendErrorCommit(t *testing.T) {
 	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	err := svm.Join()
+	_, err := bls.parseEvents(context.Background(), events)
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -456,15 +422,10 @@ func TestStreamerParseEventsInvalid(t *testing.T) {
 	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	err := svm.Join()
+	_, err := bls.parseEvents(context.Background(), events)
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -493,15 +454,10 @@ func TestStreamerParseEventsInvalidFormat(t *testing.T) {
 	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	err := svm.Join()
+	_, err := bls.parseEvents(context.Background(), events)
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -530,15 +486,10 @@ func TestStreamerParseEventsNoFormat(t *testing.T) {
 	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	err := svm.Join()
+	_, err := bls.parseEvents(context.Background(), events)
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -565,15 +516,10 @@ func TestStreamerParseEventsInvalidQuery(t *testing.T) {
 	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	err := svm.Join()
+	_, err := bls.parseEvents(context.Background(), events)
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -646,15 +592,10 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	if err := svm.Join(); err != ErrServerEOF {
+	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -711,15 +652,10 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	if err := svm.Join(); err != ErrServerEOF {
+	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -779,15 +715,10 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	if err := svm.Join(); err != ErrServerEOF {
+	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -836,15 +767,10 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	if err := svm.Join(); err != ErrServerEOF {
+	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -873,15 +799,10 @@ func TestStreamerParseEventsInvalidIntVar(t *testing.T) {
 	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	err := svm.Join()
+	_, err := bls.parseEvents(context.Background(), events)
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -932,15 +853,10 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	if err := svm.Join(); err != ErrServerEOF {
+	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -990,15 +906,10 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	if err := svm.Join(); err != ErrServerEOF {
+	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -1027,16 +938,11 @@ func TestStreamerParseEventsBeginAgain(t *testing.T) {
 	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 	before := binlogStreamerErrors.Counts()["ParseEvents"]
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	if err := svm.Join(); err != ErrServerEOF {
+	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 	after := binlogStreamerErrors.Counts()["ParseEvents"]
@@ -1079,15 +985,10 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	if err := svm.Join(); err != ErrServerEOF {
+	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -1129,15 +1030,10 @@ func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		_, err := bls.parseEvents(ctx, events)
-		return err
-	})
-	if err := svm.Join(); err != ErrServerEOF {
+	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 

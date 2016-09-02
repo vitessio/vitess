@@ -81,11 +81,6 @@ func (fbc *fakeBinlogClient) Dial(tablet *topodatapb.Tablet, connTimeout time.Du
 func (fbc *fakeBinlogClient) Close() {
 }
 
-// ServeUpdateStream is part of the binlogplayer.Client interface
-func (fbc *fakeBinlogClient) ServeUpdateStream(ctx context.Context, position string) (binlogplayer.StreamEventStream, error) {
-	return nil, fmt.Errorf("Should never be called")
-}
-
 type testStreamEventAdapter struct {
 	c   chan *binlogdatapb.BinlogTransaction
 	ctx context.Context
@@ -164,15 +159,6 @@ func (ftc *fakeTabletConn) BeginExecuteBatch(ctx context.Context, target *queryp
 	return nil, 0, fmt.Errorf("not implemented in this test")
 }
 
-// Close is part of the TabletConn interface
-func (ftc *fakeTabletConn) Close() {
-}
-
-// Tablet is part of the TabletConn interface
-func (ftc *fakeTabletConn) Tablet() *topodatapb.Tablet {
-	return ftc.tablet
-}
-
 // SplitQuery is part of the TabletConn interface
 func (ftc *fakeTabletConn) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
 	return nil, fmt.Errorf("not implemented in this test")
@@ -232,6 +218,20 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context) (tabletconn.StreamH
 		c:   c,
 		err: &finalErr,
 	}, nil
+}
+
+// UpdateStream is part of the TabletConn interface
+func (ftc *fakeTabletConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
+	return nil, fmt.Errorf("not implemented in this test")
+}
+
+// Close is part of the TabletConn interface
+func (ftc *fakeTabletConn) Close() {
+}
+
+// Tablet is part of the TabletConn interface
+func (ftc *fakeTabletConn) Tablet() *topodatapb.Tablet {
+	return ftc.tablet
 }
 
 // createSourceTablet is a helper method to create the source tablet

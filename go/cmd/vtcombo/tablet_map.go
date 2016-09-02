@@ -485,6 +485,11 @@ func (itc *internalTabletConn) StreamHealth(ctx context.Context) (tabletconn.Str
 	}, nil
 }
 
+// UpdateStream is part of tabletconn.TabletConn. Not implemented here.
+func (itc *internalTabletConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
 //
 // TabletManagerClient implementation
 //

@@ -140,6 +140,26 @@ func (l *L2VTGate) StreamHealthUnregister(int) error {
 	return fmt.Errorf("L2VTGate does not provide health status")
 }
 
+// UpdateStream is part of the queryservice.QueryService interface
+func (l *L2VTGate) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, sendReply func(*querypb.StreamEvent) error) error {
+	stream, err := l.gateway.UpdateStream(ctx, target.Keyspace, target.Shard, target.TabletType, position, timestamp)
+	if err != nil {
+		return err
+	}
+	for {
+		r, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+		if err := sendReply(r); err != nil {
+			return err
+		}
+	}
+}
+
 // HandlePanic is part of the queryservice.QueryService interface
 func (l *L2VTGate) HandlePanic(err *error) {
 	if x := recover(); x != nil {

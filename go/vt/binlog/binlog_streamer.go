@@ -10,8 +10,9 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 
@@ -63,11 +64,13 @@ func getStatementCategory(sql string) binlogdatapb.BinlogTransaction_Statement_C
 // A Streamer should only be used once. To start another stream, call
 // NewStreamer() again.
 type Streamer struct {
-	// dbname and mysqld are set at creation.
-	dbname          string
-	mysqld          mysqlctl.MysqlDaemon
+	// dbname and mysqld are set at creation and immutable.
+	dbname string
+	mysqld mysqlctl.MysqlDaemon
+
 	clientCharset   *binlogdatapb.Charset
 	startPos        replication.Position
+	timestamp       int64
 	sendTransaction sendTransactionFunc
 
 	conn *mysqlctl.SlaveConnection
@@ -78,23 +81,25 @@ type Streamer struct {
 // dbname specifes the database to stream events for.
 // mysqld is the local instance of mysqlctl.Mysqld.
 // charset is the default character set on the BinlogPlayer side.
-// startPos is the position to start streaming at.
+// startPos is the position to start streaming at. Incompatible with timestamp.
+// timestamp is the timestamp to start streaming at. Incompatible with startPos.
 // sendTransaction is called each time a transaction is committed or rolled back.
-func NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, clientCharset *binlogdatapb.Charset, startPos replication.Position, sendTransaction sendTransactionFunc) *Streamer {
+func NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, clientCharset *binlogdatapb.Charset, startPos replication.Position, timestamp int64, sendTransaction sendTransactionFunc) *Streamer {
 	return &Streamer{
 		dbname:          dbname,
 		mysqld:          mysqld,
 		clientCharset:   clientCharset,
 		startPos:        startPos,
+		timestamp:       timestamp,
 		sendTransaction: sendTransaction,
 	}
 }
 
 // Stream starts streaming binlog events using the settings from NewStreamer().
-func (bls *Streamer) Stream(ctx *sync2.ServiceContext) (err error) {
+func (bls *Streamer) Stream(ctx context.Context) (err error) {
 	stopPos := bls.startPos
 	defer func() {
-		if err != nil {
+		if err != nil && err != mysqlctl.ErrBinlogUnavailable {
 			err = fmt.Errorf("stream error @ %v: %v", stopPos, err)
 		}
 		log.Infof("stream ended @ %v, err = %v", stopPos, err)
@@ -124,7 +129,11 @@ func (bls *Streamer) Stream(ctx *sync2.ServiceContext) (err error) {
 	}
 
 	var events <-chan replication.BinlogEvent
-	events, err = bls.conn.StartBinlogDump(bls.startPos)
+	if bls.timestamp != 0 {
+		events, err = bls.conn.StartBinlogDumpFromTimestamp(ctx, bls.timestamp)
+	} else {
+		events, err = bls.conn.StartBinlogDumpFromPosition(ctx, bls.startPos)
+	}
 	if err != nil {
 		return err
 	}
@@ -140,7 +149,8 @@ func (bls *Streamer) Stream(ctx *sync2.ServiceContext) (err error) {
 //
 // If the sendTransaction func returns io.EOF, parseEvents returns ErrClientEOF.
 // If the events channel is closed, parseEvents returns ErrServerEOF.
-func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replication.BinlogEvent) (replication.Position, error) {
+// If the context is done, returns ctx.Err().
+func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.BinlogEvent) (replication.Position, error) {
 	var statements []*binlogdatapb.BinlogTransaction_Statement
 	var format replication.BinlogFormat
 	var gtid replication.GTID
@@ -180,7 +190,7 @@ func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replic
 	}
 
 	// Parse events.
-	for ctx.IsRunning() {
+	for {
 		var ev replication.BinlogEvent
 		var ok bool
 
@@ -191,9 +201,9 @@ func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replic
 				log.Infof("reached end of binlog event stream")
 				return pos, ErrServerEOF
 			}
-		case <-ctx.ShuttingDown:
-			log.Infof("stopping early due to binlog Streamer service shutdown")
-			return pos, nil
+		case <-ctx.Done():
+			log.Infof("stopping early due to binlog Streamer service shutdown or client disconnect")
+			return pos, ctx.Err()
 		}
 
 		// Validate the buffer before reading fields from it.
@@ -317,6 +327,4 @@ func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replic
 			}
 		}
 	}
-
-	return pos, nil
 }

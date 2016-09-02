@@ -210,6 +210,37 @@ message QueryResult {
   repeated Row rows = 4;
 }
 
+// StreamEvent describes a set of transformations that happened as a
+// single transactional unit on a server. It is streamed back by the
+// Update Stream calls.
+message StreamEvent {
+  // One individual Statement in a transaction.
+  message Statement {
+    // The category of one statement.
+    enum Category {
+      Error = 0;
+      DML = 1;
+      DDL = 2;
+    }
+    Category category = 1;
+
+    // table_name, primary_key_fields and primary_key_values are set for DML.
+    string table_name = 2;
+    repeated Field primary_key_fields = 3;
+    repeated Row primary_key_values = 4;
+
+    // sql is set for all queries.
+    // FIXME(alainjobart) we may not need it for DMLs.
+    bytes sql = 5;
+  }
+
+  // The statements in this transaction.
+  repeated Statement statements = 1;
+
+  // The Event Token for this event.
+  EventToken event_token = 2;
+}
+
 // ExecuteRequest is the payload to Execute
 message ExecuteRequest {
   vtrpc.CallerID effective_caller_id = 1;
@@ -435,4 +466,25 @@ message StreamHealthResponse {
 
   // realtime_stats contains information about the tablet status
   RealtimeStats realtime_stats = 4;
+}
+
+// UpdateStreamRequest is the payload for UpdateStream. Only one of
+// position and timestamp can be set.
+message UpdateStreamRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+
+  // If position is set, we will start the streaming from that replication
+  // position. Incompatible with timestamp.
+  string position = 4;
+
+  // If timestamp is set, we will start the streaming from the first
+  // event in the binlogs that have that timestamp. Incompatible with position.
+  int64 timestamp = 5;
+}
+
+// UpdateStreamResponse is returned by UpdateStream
+message UpdateStreamResponse {
+  StreamEvent event = 1;
 }

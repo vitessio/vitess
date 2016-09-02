@@ -40,29 +40,6 @@ func (client *client) Close() {
 	client.cc.Close()
 }
 
-type serveUpdateStreamAdapter struct {
-	stream binlogservicepb.UpdateStream_StreamUpdateClient
-}
-
-func (s *serveUpdateStreamAdapter) Recv() (*binlogdatapb.StreamEvent, error) {
-	r, err := s.stream.Recv()
-	if err != nil {
-		return nil, err
-	}
-	return r.StreamEvent, nil
-}
-
-func (client *client) ServeUpdateStream(ctx context.Context, position string) (binlogplayer.StreamEventStream, error) {
-	query := &binlogdatapb.StreamUpdateRequest{
-		Position: position,
-	}
-	stream, err := client.c.StreamUpdate(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	return &serveUpdateStreamAdapter{stream}, nil
-}
-
 type serveStreamKeyRangeAdapter struct {
 	stream binlogservicepb.UpdateStream_StreamKeyRangeClient
 }

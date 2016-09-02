@@ -22,9 +22,11 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
+	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
@@ -95,15 +97,14 @@ type TabletServer struct {
 	begins    sync.WaitGroup
 
 	// The following variables should be initialized only once
-	// before starting the tabletserver. For backward compatibility,
-	// we temporarily allow them to be changed until the migration
-	// to the new API is complete.
+	// before starting the tabletserver.
 	dbconfigs dbconfigs.DBConfigs
 	mysqld    mysqlctl.MysqlDaemon
 
 	// The following variables should only be accessed within
 	// the context of a startRequest-endRequest.
-	qe *QueryEngine
+	qe               *QueryEngine
+	updateStreamList *binlog.StreamList
 
 	// checkMySQLThrottler is used to throttle the number of
 	// requests sent to CheckMySQL.
@@ -147,6 +148,7 @@ func NewTabletServer(config Config) *TabletServer {
 		history:             history.New(10),
 	}
 	tsv.qe = NewQueryEngine(tsv, config)
+	tsv.updateStreamList = &binlog.StreamList{}
 	if config.EnablePublishStats {
 		stats.Publish(config.StatsPrefix+"TabletState", stats.IntFunc(func() int64 {
 			tsv.mu.Lock()
@@ -349,6 +351,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 		if x := recover(); x != nil {
 			log.Errorf("Could not start tabletserver: %v", x)
 			tsv.qe.Close()
+			tsv.updateStreamList.Stop()
 			tsv.transition(StateNotConnected)
 			err = x.(error)
 		}
@@ -361,6 +364,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 	c.Close()
 
 	tsv.qe.Open(tsv.dbconfigs)
+	tsv.updateStreamList.Init()
 	return tsv.serveNewType()
 }
 
@@ -369,6 +373,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		if x := recover(); x != nil {
 			log.Errorf("Could not start tabletserver: %v", x)
 			tsv.qe.Close()
+			tsv.updateStreamList.Stop()
 			tsv.transition(StateNotConnected)
 			err = x.(error)
 		}
@@ -414,6 +419,7 @@ func (tsv *TabletServer) waitForShutdown() {
 	tsv.begins.Wait()
 	tsv.qe.WaitForTxEmpty()
 	tsv.qe.streamQList.TerminateAll()
+	tsv.updateStreamList.Stop()
 	tsv.requests.Wait()
 }
 
@@ -1102,6 +1108,47 @@ func (tsv *TabletServer) StreamHealthUnregister(id int) error {
 
 	delete(tsv.streamHealthMap, id)
 	return nil
+}
+
+// UpdateStream streams binlog events.
+func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, sendReply func(*querypb.StreamEvent) error) error {
+	// Parse the position if needed.
+	var p replication.Position
+	var err error
+	if timestamp == 0 {
+		p, err = replication.DecodePosition(position)
+		if err != nil {
+			return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "cannot parse position: %v", err)
+		}
+	} else if position != "" {
+		return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "only one of position and timestamp should be specified")
+	}
+
+	// Validate proper target is used.
+	if err = tsv.startRequest(target, false, false); err != nil {
+		return err
+	}
+	defer tsv.endRequest(false)
+
+	s := binlog.NewEventStreamer(tsv.dbconfigs.App.DbName, tsv.mysqld, p, timestamp, func(event *querypb.StreamEvent) error {
+		return sendReply(event)
+	})
+
+	// Create a cancelable wrapping context.
+	streamCtx, streamCancel := context.WithCancel(ctx)
+	i := tsv.updateStreamList.Add(streamCancel)
+	defer tsv.updateStreamList.Delete(i)
+
+	// And stream with it.
+	err = s.Stream(streamCtx)
+	switch err {
+	case mysqlctl.ErrBinlogUnavailable:
+		return NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "%v", err)
+	case nil:
+		return nil
+	default:
+		return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "%v", err)
+	}
 }
 
 // HandlePanic is part of the queryservice.QueryService interface
