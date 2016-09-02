@@ -516,7 +516,7 @@ func health(stat *discovery.TabletStats) float64 {
 	case lag >= lagThresholdDegraded:
 		return tabletDegraded
 	}
-	
+
 	// The tablet is degraded if there was an error previously.
 	if stat.LastError != nil {
 		return tabletDegraded
@@ -526,7 +526,7 @@ func health(stat *discovery.TabletStats) float64 {
 	if !stat.Serving {
 		return tabletDegraded
 	}
-	
+
 	// All else is ok so tablet is healthy.
 	return tabletHealthy
 }
