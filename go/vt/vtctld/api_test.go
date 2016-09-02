@@ -83,10 +83,16 @@ func TestAPI(t *testing.T) {
 	ts2 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_RDONLY, 200)
 	ts3 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_REPLICA, 300)
 	ts4 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_RDONLY, 400)
+
+	ts5 := tabletStats("ks2", "cell1", "0", topodatapb.TabletType_REPLICA, 500)
+	ts6 := tabletStats("ks2", "cell2", "0", topodatapb.TabletType_REPLICA, 600)
+
 	realtimeStats.StatsUpdate(ts1)
 	realtimeStats.StatsUpdate(ts2)
 	realtimeStats.StatsUpdate(ts3)
 	realtimeStats.StatsUpdate(ts4)
+	realtimeStats.StatsUpdate(ts5)
+	realtimeStats.StatsUpdate(ts6)
 
 	// Test cases.
 	table := []struct {
@@ -183,6 +189,16 @@ func TestAPI(t *testing.T) {
 		    {"CellLabel":{"Name":"cell2","Rowspan":1},"TypeLabels":null}],
 		  "ShardLabels":["-80","80-"],
 		  "YGridLines":[0.5,1.5]
+		  },
+		  {
+		    "Data":[[600],[500]],
+		   "Aliases":null,
+		   "KeyspaceLabel":{"Name":"ks2","Rowspan":2},
+		  "CellAndTypeLabels":[
+		    {"CellLabel":{"Name":"cell1","Rowspan":1},"TypeLabels":null},
+		    {"CellLabel":{"Name":"cell2","Rowspan":1},"TypeLabels":null}],
+		  "ShardLabels":["0"],
+		  "YGridLines":[0.5, 1.5]
 		  }
 		]`},
 		{"GET", "tablet_statuses/cell1/REPLICA/lag", "can't get tablet_statuses: invalid target path: \"cell1/REPLICA/lag\"  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>"},
@@ -194,6 +210,18 @@ func TestAPI(t *testing.T) {
 		  "Stats": { "seconds_behind_master": 100 }, "LastError": null }`},
 		{"GET", "tablet_health/cell1", "can't get tablet_health: invalid tablet_health path: \"cell1\"  expected path: /tablet_health/<cell>/<uid>"},
 		{"GET", "tablet_health/cell1/gh", "can't get tablet_health: incorrect uid: bad tablet uid strconv.ParseUint: parsing \"gh\": invalid syntax"},
+
+		// Topology Info
+		{"GET", "topology_info/?keyspace=all&cell=all", `{
+		   "Keyspaces": ["ks1", "ks2"],
+		   "Cells": ["cell1","cell2"],
+		  "TabletTypes": ["REPLICA","RDONLY"]
+		}`},
+		{"GET", "topology_info/?keyspace=ks1&cell=cell1", `{
+		   "Keyspaces": ["ks1", "ks2"],
+		   "Cells": ["cell1","cell2"],
+		  "TabletTypes": ["REPLICA", "RDONLY"]
+		}`},
 	}
 	for _, in := range table {
 		var resp *http.Response

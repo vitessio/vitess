@@ -45,11 +45,6 @@ func TestStatsUpdate(t *testing.T) {
 		t.Errorf("got: %v, want: %v", got, want)
 	}
 
-	// Check tablet count in cell1.
-	if got, want := tabletStatsCache.tabletCountsByCell["cell1"], 2; got != want {
-		t.Errorf("got: %v, want: %v", got, want)
-	}
-
 	// Delete tablet2.
 	tablet2Stats1.Up = false
 	tabletStatsCache.StatsUpdate(tablet2Stats1)
@@ -65,15 +60,9 @@ func TestStatsUpdate(t *testing.T) {
 		t.Errorf("not deleted from statusesByAliases")
 	}
 
-	// Check tablet count in cell1.
-	if got, want := tabletStatsCache.tabletCountsByCell["cell1"], 1; got != want {
-		t.Errorf("got: %v, want: %v", got, want)
-	}
-
 	// Delete tablet1. List of known cells should be empty now.
 	tablet1Stats2.Up = false
 	tabletStatsCache.StatsUpdate(tablet1Stats2)
-	_, ok = tabletStatsCache.tabletCountsByCell["cell1"]
 	if ok {
 		t.Errorf("not deleted from cells")
 	}
@@ -356,6 +345,69 @@ func TestTabletStats(t *testing.T) {
 	wantErr := "could not find tablet: cell:\"cell1\" uid:300 "
 	if gotErr.Error() != wantErr {
 		t.Errorf("got: %v, want: %v", gotErr.Error(), wantErr)
+	}
+}
+
+func TestTopologyInfo(t *testing.T) {
+	ts1 := tabletStats("ks1", "cell1", "0", topodatapb.TabletType_MASTER, 100)
+	ts2 := tabletStats("ks1", "cell1", "0", topodatapb.TabletType_REPLICA, 200)
+	ts3 := tabletStats("ks1", "cell2", "0", topodatapb.TabletType_REPLICA, 300)
+	ts4 := tabletStats("ks1", "cell2", "0", topodatapb.TabletType_RDONLY, 400)
+	ts5 := tabletStats("ks1", "cell3", "0", topodatapb.TabletType_RDONLY, 500)
+	ts6 := tabletStats("ks1", "cell3", "0", topodatapb.TabletType_RDONLY, 600)
+	ts7 := tabletStats("ks2", "cell1", "0", topodatapb.TabletType_MASTER, 700)
+
+	tabletStatsCache := newTabletStatsCache()
+	tabletStatsCache.StatsUpdate(ts1)
+	tabletStatsCache.StatsUpdate(ts2)
+	tabletStatsCache.StatsUpdate(ts3)
+	tabletStatsCache.StatsUpdate(ts4)
+	tabletStatsCache.StatsUpdate(ts5)
+	tabletStatsCache.StatsUpdate(ts6)
+	tabletStatsCache.StatsUpdate(ts7)
+
+	var testcases = []struct {
+		keyspace string
+		cell     string
+		want     *topologyInfo
+	}{
+		{"all", "all", &topologyInfo{
+			Keyspaces:   []string{"ks1", "ks2"},
+			Cells:       []string{"cell1", "cell2", "cell3"},
+			TabletTypes: []string{topodatapb.TabletType_MASTER.String(), topodatapb.TabletType_REPLICA.String(), topodatapb.TabletType_RDONLY.String()},
+		},
+		},
+		{"ks1", "all", &topologyInfo{
+			Keyspaces:   []string{"ks1", "ks2"},
+			Cells:       []string{"cell1", "cell2", "cell3"},
+			TabletTypes: []string{topodatapb.TabletType_MASTER.String(), topodatapb.TabletType_REPLICA.String(), topodatapb.TabletType_RDONLY.String()},
+		},
+		},
+		{"ks2", "all", &topologyInfo{
+			Keyspaces:   []string{"ks1", "ks2"},
+			Cells:       []string{"cell1"},
+			TabletTypes: []string{topodatapb.TabletType_MASTER.String()},
+		},
+		},
+		{"ks1", "cell2", &topologyInfo{
+			Keyspaces:   []string{"ks1", "ks2"},
+			Cells:       []string{"cell1", "cell2", "cell3"},
+			TabletTypes: []string{topodatapb.TabletType_REPLICA.String(), topodatapb.TabletType_RDONLY.String()},
+		},
+		},
+		{"all", "cell2", &topologyInfo{
+			Keyspaces:   []string{"ks1", "ks2"},
+			Cells:       []string{"cell1", "cell2", "cell3"},
+			TabletTypes: []string{topodatapb.TabletType_REPLICA.String(), topodatapb.TabletType_RDONLY.String()},
+		},
+		},
+	}
+
+	for _, tc := range testcases {
+		got := tabletStatsCache.topologyInfo(tc.keyspace, tc.cell)
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("got: %v, want: %v", got, tc.want)
+		}
 	}
 }
 
