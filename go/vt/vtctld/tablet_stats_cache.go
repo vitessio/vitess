@@ -57,7 +57,7 @@ const tabletUnhealthy = 2
 
 // availableTabletTypes is an array of tabletTypes that are being considered to display on the heatmap.
 // Note: this list must always be sorted by the order they should appear (i.e. MASTER first, then REPLICA, then RDONLY)
-var availableTabletTypes = [...]topodata.TabletType {topodata.TabletType_MASTER, topodata.TabletType_REPLICA, topodata.TabletType_RDONLY}
+var availableTabletTypes = [...]topodata.TabletType{topodata.TabletType_MASTER, topodata.TabletType_REPLICA, topodata.TabletType_RDONLY}
 
 // tabletStatsCache holds the most recent status update received for
 // each tablet. The tablets are indexed by uid, so it is different
