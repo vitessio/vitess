@@ -46,9 +46,6 @@ func (a byTabletUID) Less(i, j int) bool { return a[i].Tablet.Alias.Uid < a[j].T
 // This value represents a missing/non-existent tablet for any metric.
 const tabletMissing = -1
 
-// This value is needed to indicate when there's data but no labels are needed.
-const empty = "EMPTY"
-
 // These values represent the threshold for replication lag.
 const lagThresholdDegraded = 60
 const lagThresholdUnhealthy = 120
@@ -187,75 +184,6 @@ func makeStringTypeList(types []topodata.TabletType) []string {
 // This method is used by heatmapData to traverse over desired keyspaces and
 // topologyInfo to send all available options for the keyspace dropdown.
 func (c *tabletStatsCache) keyspacesLocked(keyspace string) []string {
-	}
-	return false
-}
-
-func (c *tabletStatsCache) cellsInTopology(keyspace string) []string {
-	keyspaces := c.keyspaces(keyspace)
-	var cells []string
-	for _, ks := range keyspaces {
-		shardsPerKeyspace := c.statuses[ks]
-		for s := range shardsPerKeyspace {
-			cellsInKeyspace := c.statuses[ks][s]
-			for cl := range cellsInKeyspace {
-				if !containsString(cells, cl) {
-					cells = append(cells, cl)
-				}
-			}
-		}
-		sort.Strings(cells)
-	}
-	return cells
-}
-
-func sortTypes(listOfTypes []string) []string {
-	var types []string
-	if containsString(listOfTypes, topodatapb.TabletType_MASTER.String()) {
-		types = append(types, topodatapb.TabletType_MASTER.String())
-	}
-	if containsString(listOfTypes, topodatapb.TabletType_REPLICA.String()) {
-		types = append(types, topodatapb.TabletType_REPLICA.String())
-	}
-	if containsString(listOfTypes, topodatapb.TabletType_RDONLY.String()) {
-		types = append(types, topodatapb.TabletType_RDONLY.String())
-	}
-	return types
-}
-
-func (c *tabletStatsCache) typesInTopology(keyspace, cell string) []string {
-	keyspaces := c.keyspaces(keyspace)
-	var types []string
-	for _, ks := range keyspaces {
-		cellsPerKeyspace := c.cells(ks, cell)
-		for _, cl := range cellsPerKeyspace {
-			shardsPerKeyspace := c.statuses[ks]
-			for s := range shardsPerKeyspace {
-				typesPerShard := c.statuses[ks][s][cl]
-				for t := range typesPerShard {
-					if !containsString(types, t.String()) {
-						types = append(types, t.String())
-						if len(types) == 3 {
-							types = sortTypes(types)
-							return types
-						}
-					}
-				}
-			}
-		}
-	}
-	types = sortTypes(types)
-	return types
-}
-
-func (c *tabletStatsCache) topologyInfo(selectedKeyspace, selectedCell string) *topologyInfo {
-	return &topologyInfo{
-		Keyspaces:   c.keyspaces("all"),
-		Cells:       c.cellsInTopology(selectedKeyspace),
-		TabletTypes: c.typesInTopology(selectedKeyspace, selectedCell),
-	}
-}
-
 	if keyspace != "all" {
 		return []string{keyspace}
 	}
@@ -294,6 +222,7 @@ func (c *tabletStatsCache) tabletTypesLocked(keyspace, cell, tabletType string) 
 func (c *tabletStatsCache) cellsInTopology(keyspace string) []string {
 	keyspaces := c.keyspacesLocked(keyspace)
 	cells := make(map[string]bool)
+	// Going through all shards in each keyspace to get all existing cells
 	for _, ks := range keyspaces {
 		shardsPerKeyspace := c.statuses[ks]
 		for s := range shardsPerKeyspace {
@@ -317,6 +246,7 @@ func (c *tabletStatsCache) cellsInTopology(keyspace string) []string {
 func (c *tabletStatsCache) typesInTopology(keyspace, cell string) []topodata.TabletType {
 	keyspaces := c.keyspacesLocked(keyspace)
 	types := make(map[topodata.TabletType]bool)
+	// Going through the shards in every cell in every keyspace to get existing tablet types
 	for _, ks := range keyspaces {
 		cellsPerKeyspace := c.cellsLocked(ks, cell)
 		for _, cl := range cellsPerKeyspace {
@@ -391,6 +321,7 @@ func (c *tabletStatsCache) heatmapData(selectedKeyspace, selectedCell, selectedT
 		var heatmapCellAndTypeLabels []yLabel
 		shards := c.shards(keyspace)
 		keyspaceLabelSpan := 0
+
 		cells := c.cellsLocked(keyspace, selectedCell)
 		// The loop goes through every outer label (in this case, cell).
 		for _, cell := range cells {

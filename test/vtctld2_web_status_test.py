@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""A vtctld2 webdriver test."""
+"""A vtctld2 webdriver test that tests the different views of status page."""
 
 import logging
 import os
@@ -115,11 +115,13 @@ class TestVtctldWeb(unittest.TestCase):
     options = dropdown.find_elements_by_tag_name('li')
     for op in options:
       if op.text == dropdown_value:
+        logging.info('dropdown %s: option %s clicked', dropdown_id, op.text)
         op.click()
         break
 
   def _check_dropdowns(self, keyspaces, selected_keyspace, cells, selected_cell,
                        types, selected_type, metrics, selected_metric):
+    """Checking that all dropdowns have the correct options and selection."""
     keyspace_options = self._get_dropdown_options('keyspace')
     keyspace_selected = self._get_dropdown_selection('keyspace')
     logging.info('Keyspace options: %s Keyspace selected: %s',
@@ -148,9 +150,8 @@ class TestVtctldWeb(unittest.TestCase):
     self.assertListEqual(metrics, metric_options)
     self.assertEqual(selected_metric, metric_selected)
 
-  # Responsible for checking the number of heatmaps is as expected and that the
-  # title is correct as well as the div for the map is properly drawn.
   def _check_heatmaps(self, selected_keyspace):
+    """Checking that the view has the correct number of heatmaps drawn."""
     status_content = self.driver.find_element_by_tag_name('vt-status')
     keyspaces = status_content.find_elements_by_tag_name('vt-heatmap')
     logging.info('Number of keyspaces found: %d', len(keyspaces))
@@ -160,32 +161,25 @@ class TestVtctldWeb(unittest.TestCase):
       for ks in keyspaces:
         heading = ks.find_element_by_id('keyspaceName')
         logging.info('Keyspace name: %s', heading.text)
-        present = False
         try:
           ks.find_element_by_id(heading.text)
-          present = True
-        except NoSuchElementException as err:
-          logging.info('Cannot get keyspace: %s', err)
-        self.assertTrue(present)
+        except NoSuchElementException:
+          self.fail('Cannot get keyspace')
         self.assertIn(heading.text, available_keyspaces)
     else:
       self.assertEquals(len(keyspaces), 1)
       heading = keyspaces[0].find_element_by_id('keyspaceName')
       logging.info('Keyspace name: %s', heading.text)
-      present = False
       try:
         keyspaces[0].find_element_by_id(heading.text)
-        present = True
-      except NoSuchElementException as err:
-        logging.info('Cannot get keyspace: %s', err)
-      self.assertTrue(present)
+      except NoSuchElementException:
+        self.fail('Cannot get keyspace')
       self.assertEquals(heading.text, selected_keyspace)
 
-  # Responsible for checking the dropdowns and heatmaps for each newly routed
-  # views.
   def _check_new_view(
       self, keyspaces, selected_keyspace, cells, selected_cell, types,
       selected_type, metrics, selected_metric):
+    """Checking the dropdowns and heatmaps for each newly routed view."""
     logging.info('Testing realtime stats view')
     self._check_dropdowns(keyspaces, selected_keyspace, cells, selected_cell,
                           types, selected_type, metrics, selected_metric)
@@ -194,7 +188,9 @@ class TestVtctldWeb(unittest.TestCase):
   def test_realtime_stats(self):
     logging.info('Testing realtime stats view')
 
-    # Navigate to the status page from intial app.
+    # Navigate to the status page from initial app.
+    # TODO(thompsonja): Fix this once direct navigation works (after adding
+    # support for web-dir2 flag)
     self.driver.get(self.vtctld_addr)
     status_button = self.driver.find_element_by_partial_link_text('Status')
     status_button.click()
@@ -202,98 +198,33 @@ class TestVtctldWeb(unittest.TestCase):
     wait.until(expected_conditions.visibility_of_element_located(
         (By.TAG_NAME, 'vt-status')))
 
-    self._check_new_view(keyspaces=['test_keyspace', 'test_keyspace2', 'all'],
-                         selected_keyspace='all',
-                         cells=['test', 'test2', 'all'],
-                         selected_cell='all',
-                         types=['MASTER', 'REPLICA', 'RDONLY', 'all'],
-                         selected_type='all',
-                         metrics=['lag', 'qps', 'health'],
-                         selected_metric='health'
-                        )
+    test_cases = [
+        (None, None, 'all', 'all', 'all'),
+        ('type', 'REPLICA', 'all', 'all', 'REPLICA'),
+        ('cell', 'test2', 'all', 'test2', 'REPLICA'),
+        ('keyspace', 'test_keyspace', 'test_keyspace', 'test2', 'REPLICA'),
+        ('cell', 'all', 'test_keyspace', 'all', 'REPLICA'),
+        ('type', 'all', 'test_keyspace', 'all', 'all'),
+        ('cell', 'test2', 'test_keyspace', 'test2', 'all'),
+        ('keyspace', 'all', 'all', 'test2', 'all'),
+    ]
 
-    logging.info('Routing to all-all-REPLICA view')
-    self._change_dropdown_option('type', 'REPLICA')
-    self._check_new_view(keyspaces=['test_keyspace', 'test_keyspace2', 'all'],
-                         selected_keyspace='all',
-                         cells=['test', 'test2', 'all'],
-                         selected_cell='all',
-                         types=['MASTER', 'REPLICA', 'RDONLY', 'all'],
-                         selected_type='REPLICA',
-                         metrics=['lag', 'qps', 'health'],
-                         selected_metric='health'
-                        )
-
-    logging.info('Routing to all-test2-REPLICA')
-    self._change_dropdown_option('cell', 'test2')
-    self._check_new_view(keyspaces=['test_keyspace', 'test_keyspace2', 'all'],
-                         selected_keyspace='all',
-                         cells=['test', 'test2', 'all'],
-                         selected_cell='test2',
-                         types=['REPLICA', 'RDONLY', 'all'],
-                         selected_type='REPLICA',
-                         metrics=['lag', 'qps', 'health'],
-                         selected_metric='health'
-                        )
-
-    logging.info('Routing to test_keyspace-test2-REPLICA')
-    self._change_dropdown_option('keyspace', 'test_keyspace')
-    self._check_new_view(keyspaces=['test_keyspace', 'test_keyspace2', 'all'],
-                         selected_keyspace='test_keyspace',
-                         cells=['test', 'test2', 'all'],
-                         selected_cell='test2',
-                         types=['REPLICA', 'RDONLY', 'all'],
-                         selected_type='REPLICA',
-                         metrics=['lag', 'qps', 'health'],
-                         selected_metric='health'
-                        )
-    logging.info('Routing to test_keyspace-all-REPLICA')
-    self._change_dropdown_option('cell', 'all')
-    self._check_new_view(keyspaces=['test_keyspace', 'test_keyspace2', 'all'],
-                         selected_keyspace='test_keyspace',
-                         cells=['test', 'test2', 'all'],
-                         selected_cell='all',
-                         types=['MASTER', 'REPLICA', 'RDONLY', 'all'],
-                         selected_type='REPLICA',
-                         metrics=['lag', 'qps', 'health'],
-                         selected_metric='health'
-                        )
-
-    logging.info('Routing to test_keyspace-all-all')
-    self._change_dropdown_option('type', 'all')
-    self._check_new_view(keyspaces=['test_keyspace', 'test_keyspace2', 'all'],
-                         selected_keyspace='test_keyspace',
-                         cells=['test', 'test2', 'all'],
-                         selected_cell='all',
-                         types=['MASTER', 'REPLICA', 'RDONLY', 'all'],
-                         selected_type='all',
-                         metrics=['lag', 'qps', 'health'],
-                         selected_metric='health'
-                        )
-
-    logging.info('Routing to test_keyspace-test2-all')
-    self._change_dropdown_option('cell', 'test2')
-    self._check_new_view(keyspaces=['test_keyspace', 'test_keyspace2', 'all'],
-                         selected_keyspace='test_keyspace',
-                         cells=['test', 'test2', 'all'],
-                         selected_cell='test2',
-                         types=['REPLICA', 'RDONLY', 'all'],
-                         selected_type='all',
-                         metrics=['lag', 'qps', 'health'],
-                         selected_metric='health'
-                        )
-
-    logging.info('Routing to all-test2-all')
-    self._change_dropdown_option('keyspace', 'all')
-    self._check_new_view(keyspaces=['test_keyspace', 'test_keyspace2', 'all'],
-                         selected_keyspace='all',
-                         cells=['test', 'test2', 'all'],
-                         selected_cell='test2',
-                         types=['REPLICA', 'RDONLY', 'all'],
-                         selected_type='all',
-                         metrics=['lag', 'qps', 'health'],
-                         selected_metric='health'
-                        )
+    for (dropdown_id, dropdown_val, keyspace, cell, tablet_type) in test_cases:
+      logging.info('Routing to new %s-%s-%s view', keyspace, cell, tablet_type)
+      if dropdown_id and dropdown_val:
+        self._change_dropdown_option(dropdown_id, dropdown_val)
+      tablet_type_options = ['all', 'MASTER', 'REPLICA', 'RDONLY']
+      if cell == 'test2':
+        tablet_type_options = ['all', 'REPLICA', 'RDONLY']
+      self._check_new_view(keyspaces=['all', 'test_keyspace', 'test_keyspace2'],
+                           selected_keyspace=keyspace,
+                           cells=['all', 'test', 'test2'],
+                           selected_cell=cell,
+                           types=tablet_type_options,
+                           selected_type=tablet_type,
+                           metrics=['lag', 'qps', 'health'],
+                           selected_metric='health'
+                          )
 
 
 def add_test_options(parser):

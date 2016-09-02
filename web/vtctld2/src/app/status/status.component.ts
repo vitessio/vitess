@@ -83,6 +83,7 @@ export class StatusComponent implements OnInit, OnDestroy {
         let tabletType = tabletTypesReturned[i];
         this.tabletTypes.push({label: tabletType, value: tabletType});
       }
+    });
     this.metrics = [];
     let metricsReturned = this.topoInfoService.getMetrics();
     for (let i = 0; i < metricsReturned.length; i++) {
