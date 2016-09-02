@@ -68,7 +68,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
   }
 
   // getRemainingRows returns a list of the numbers from 1 to upperbound.
-  // It is used by the html code to get the number of empty rows needed to properly
+  // It is used by the HTML template to get the number of empty rows needed to properly
   // have a column spanning additional rows.
   getRemainingRows(upperBound) {
     let numbers = [];
@@ -207,7 +207,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
       this.dataMin = -1;
       this.dataMax = 3;
     } else {
-      // The max value descibes the highest value of lag or qps present in the current data.
+      // The max value describes the highest value of lag or qps present in the current data.
       let max = this.data.reduce((a, b) => a.concat(b))
                          .reduce((a, b) => (a > b) ? a : b);
       let percent = (max === 0) ? 1.0 : 1 / (1 + max);

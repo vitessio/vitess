@@ -19,7 +19,7 @@
     <td [attr.rowspan]="label.CellLabel.Rowspan" class="bordered">{{label.CellLabel.Name}}</td>
   </tr>
 
-  <!-- Need to add empty rows in order for rowspan to cover the correct number of rows -->
+  <!-- We add empty rows here becuase the rowspan value of the heatmap's cell labels expects them. -->
   <tr *ngFor="let num of getRemainingRows(label.CellLabel.Rowspan)" [ngStyle]="{'height': getRowHeight()+'px'}"></tr>
   </template>
 
@@ -30,7 +30,7 @@
       <td class="bordered" [attr.rowspan]="typeLabel.Rowspan">{{typeLabel.Name}}</td>
     </tr>
 
-    <!-- Need to add empty rows in order for rowspan to cover the correct number of rows -->
+    <!-- We add empty rows here becuase the rowspan value of the heatmap's cell and type labels expects them. -->
     <tr *ngFor="let num of getRemainingRows(typeLabel.Rowspan)" [ngStyle]="{'height': getRowHeight()+'px'}"></tr>
     </template>
   </template>

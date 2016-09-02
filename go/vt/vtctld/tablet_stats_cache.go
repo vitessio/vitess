@@ -334,7 +334,7 @@ func (c *tabletStatsCache) heatmapData(selectedKeyspace, selectedCell, selectedT
 			}
 
 			if cellLabel.CellLabel.Rowspan > 0 {
-				// Iterating over the rows of data for the current cell
+				// Iterating over the rows of data for the current cell.
 				for i := 0; i < len(cellData); i++ {
 					// Adding the data in reverse to match the format that the plotly map takes in.
 					h.Data = append([][]float64{cellData[i]}, h.Data...)
@@ -355,17 +355,19 @@ func (c *tabletStatsCache) heatmapData(selectedKeyspace, selectedCell, selectedT
 			// For example if h.CellAndTypeLabels =
 			//   { CellLabel: {Name: 'cell1', Rowspan: 2}, TypeLabels: nil },
 			//   { CellLabel: {Name: 'cell2', Rowspan: 3}, TypeLabels: nil },
-			// then the resulting array will be [2.5, 4.5]
+			// then the resulting array will be [2.5, 4.5] which specifies the grid line indexes
+			// starting from 0 which is at the bottom of the heatmap.
 			if h.CellAndTypeLabels[c].TypeLabels == nil {
 				sum += h.CellAndTypeLabels[c].CellLabel.Rowspan
 				h.YGridLines = append(h.YGridLines, (float64(sum) - 0.5))
 				continue
 			}
-			//Otherwise traverse the type labels because that is the innermost label.
+			// Otherwise traverse the type labels because that is the innermost label.
 			// For example if h.CellAndTypeLabels =
-			//   { CellLabel: {Name: 'cell1', Rowspan: 2}, TypeLabels: [{Name: 'Master', Rowspan: 1},  {Name: 'Replica', Rowspan: 2}] },
+			//   { CellLabel: {Name: 'cell1', Rowspan: 3}, TypeLabels: [{Name: 'Master', Rowspan: 1},  {Name: 'Replica', Rowspan: 2}] },
 			//   { CellLabel: {Name: 'cell2', Rowspan: 3}, TypeLabels: [{Name: 'Master', Rowspan: 1},  {Name: 'Replica', Rowspan: 2}] },
-			// then the resulting array will be [1.5, 2.5, 4.5, 5.5]
+			// then the resulting array will be [1.5, 2.5, 4.5, 5.5] which specifies the grid line indexes
+			// starting from 0 which is at the bottom of the heatmap.
 			for t := len(h.CellAndTypeLabels[c].TypeLabels) - 1; t >= 0; t-- {
 				sum += h.CellAndTypeLabels[c].TypeLabels[t].Rowspan
 				h.YGridLines = append(h.YGridLines, (float64(sum) - 0.5))
@@ -439,7 +441,7 @@ func (c *tabletStatsCache) unaggregatedData(keyspace, cell, selectedType string,
 }
 
 // aggregatedData gets heatmapData by taking the average of the metric value of all tablets within the keyspace and cell of the
-// specified type (or from all types if keyword 'all' was used).
+// specified type (or from all types if 'all' was selected).
 func (c *tabletStatsCache) aggregatedData(keyspace, cell, selectedType, selectedMetric string, metricFunc func(stats *discovery.TabletStats) float64) ([][]float64, [][]*topodata.TabletAlias, yLabel) {
 	shards := c.shards(keyspace)
 	tabletTypes := c.tabletTypesLocked(keyspace, cell, selectedType)
@@ -501,15 +503,9 @@ func (c *tabletStatsCache) tabletStats(tabletAlias *topodata.TabletAlias) (disco
 }
 
 func health(stat *discovery.TabletStats) float64 {
-	health := float64(tabletHealthy)
 	// The tablet is unhealthy if there is an health error.
 	if stat.Stats.HealthError != "" {
 		return tabletUnhealthy
-	}
-
-	// The tablet is degraded if there was an error previously.
-	if stat.LastError != nil {
-		return tabletDegraded
 	}
 
 	// The tablet is healthy/degraded/unheathy depending on the lag.
@@ -519,21 +515,20 @@ func health(stat *discovery.TabletStats) float64 {
 		return tabletUnhealthy
 	case lag >= lagThresholdDegraded:
 		return tabletDegraded
-	default:
-		health = tabletHealthy
+	}
+	
+	// The tablet is degraded if there was an error previously.
+	if stat.LastError != nil {
+		return tabletDegraded
 	}
 
-	// The tablet is healthy or degraded based on serving status
-	if stat.Serving {
-		if health < tabletHealthy {
-			health = tabletHealthy
-		}
-	} else {
-		if health < tabletDegraded {
-			health = tabletDegraded
-		}
+	// The tablet is healthy or degraded based on serving status.
+	if !stat.Serving {
+		return tabletDegraded
 	}
-	return health
+	
+	// All else is ok so tablet is healthy.
+	return tabletHealthy
 }
 
 func replicationLag(stat *discovery.TabletStats) float64 {
