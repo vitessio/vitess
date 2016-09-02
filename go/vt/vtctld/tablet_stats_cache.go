@@ -10,7 +10,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
 
-// yLabel is used to keep track of the outer and inner labels of the heatmap.
+// yLabel is used to keep track of the cell and type labels of the heatmap.
 type yLabel struct {
 	CellLabel  label
 	TypeLabels []label
@@ -33,7 +33,7 @@ type heatmap struct {
 	CellAndTypeLabels []yLabel
 	ShardLabels       []string
 
-	// The following array is used to draw gridLines on the map in the right places.
+	// YGridLines is used to draw gridLines on the map in the right places.
 	YGridLines []float64
 }
 
@@ -43,7 +43,7 @@ func (a byTabletUID) Len() int           { return len(a) }
 func (a byTabletUID) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byTabletUID) Less(i, j int) bool { return a[i].Tablet.Alias.Uid < a[j].Tablet.Alias.Uid }
 
-// This value represents a missing/non-existent tablet for any metric.
+// tabletMissing represents a missing/non-existent tablet for any metric.
 const tabletMissing = -1
 
 // These values represent the threshold for replication lag.
@@ -314,12 +314,10 @@ func (c *tabletStatsCache) heatmapData(selectedKeyspace, selectedCell, selectedT
 	}
 
 	keyspaces := c.keyspacesLocked(selectedKeyspace)
-	var listOfHeatmaps []heatmap
+	var heatmaps []heatmap
 	for _, keyspace := range keyspaces {
-		var heatmapData [][]float64
-		var heatmapTabletAliases [][]*topodata.TabletAlias
-		var heatmapCellAndTypeLabels []yLabel
-		shards := c.shards(keyspace)
+		var h heatmap
+		h.ShardLabels = c.shards(keyspace)
 		keyspaceLabelSpan := 0
 
 		cells := c.cellsLocked(keyspace, selectedCell)
@@ -336,53 +334,56 @@ func (c *tabletStatsCache) heatmapData(selectedKeyspace, selectedCell, selectedT
 			}
 
 			if cellLabel.CellLabel.Rowspan > 0 {
-				// Adding the data in reverse to match the format that the plotly map takes in.
+				// Iterating over the rows of data for the current cell
 				for i := 0; i < len(cellData); i++ {
-					heatmapData = append([][]float64{cellData[i]}, heatmapData...)
-					if cellAliases == nil {
-						continue
+					// Adding the data in reverse to match the format that the plotly map takes in.
+					h.Data = append([][]float64{cellData[i]}, h.Data...)
+					if cellAliases != nil {
+						h.Aliases = append([][]*topodata.TabletAlias{cellAliases[i]}, h.Aliases...)
 					}
-					heatmapTabletAliases = append([][]*topodata.TabletAlias{cellAliases[i]}, heatmapTabletAliases...)
 				}
-				heatmapCellAndTypeLabels = append(heatmapCellAndTypeLabels, cellLabel)
+				h.CellAndTypeLabels = append(h.CellAndTypeLabels, cellLabel)
 			}
 			keyspaceLabelSpan += cellLabel.CellLabel.Rowspan
 		}
 
-		// Setting the values for the yGridLines by going in reverse and subtracting 0.5 as an offset
-		var yGridLines []float64
+		// Setting the values for the yGridLines by going in reverse and subtracting 0.5 as an offset.
 		sum := 0
-		for c := len(heatmapCellAndTypeLabels) - 1; c >= 0; c-- {
-			if heatmapCellAndTypeLabels[c].TypeLabels == nil {
-				sum += heatmapCellAndTypeLabels[c].CellLabel.Rowspan
-				yGridLines = append(yGridLines, (float64(sum) - 0.5))
+		for c := len(h.CellAndTypeLabels) - 1; c >= 0; c-- {
+			// If the current view is aggregated then we need to traverse the cell labels
+			// to calculate the values for the grid line since that is the innermost label.
+			// For example if h.CellAndTypeLabels =
+			//   { CellLabel: {Name: 'cell1', Rowspan: 2}, TypeLabels: nil },
+			//   { CellLabel: {Name: 'cell2', Rowspan: 3}, TypeLabels: nil },
+			// then the resulting array will be [2.5, 4.5]
+			if h.CellAndTypeLabels[c].TypeLabels == nil {
+				sum += h.CellAndTypeLabels[c].CellLabel.Rowspan
+				h.YGridLines = append(h.YGridLines, (float64(sum) - 0.5))
 				continue
 			}
-			for t := len(heatmapCellAndTypeLabels[c].TypeLabels) - 1; t >= 0; t-- {
-				sum += heatmapCellAndTypeLabels[c].TypeLabels[t].Rowspan
-				yGridLines = append(yGridLines, (float64(sum) - 0.5))
+			//Otherwise traverse the type labels because that is the innermost label.
+			// For example if h.CellAndTypeLabels =
+			//   { CellLabel: {Name: 'cell1', Rowspan: 2}, TypeLabels: [{Name: 'Master', Rowspan: 1},  {Name: 'Replica', Rowspan: 2}] },
+			//   { CellLabel: {Name: 'cell2', Rowspan: 3}, TypeLabels: [{Name: 'Master', Rowspan: 1},  {Name: 'Replica', Rowspan: 2}] },
+			// then the resulting array will be [1.5, 2.5, 4.5, 5.5]
+			for t := len(h.CellAndTypeLabels[c].TypeLabels) - 1; t >= 0; t-- {
+				sum += h.CellAndTypeLabels[c].TypeLabels[t].Rowspan
+				h.YGridLines = append(h.YGridLines, (float64(sum) - 0.5))
 			}
 		}
 
-		heatmapKeyspaceLabel := label{Name: keyspace, Rowspan: keyspaceLabelSpan}
-		currHeatmap := heatmap{
-			Data:              heatmapData,
-			Aliases:           heatmapTabletAliases,
-			KeyspaceLabel:     heatmapKeyspaceLabel,
-			CellAndTypeLabels: heatmapCellAndTypeLabels,
-			ShardLabels:       shards,
-			YGridLines:        yGridLines,
-		}
-		listOfHeatmaps = append(listOfHeatmaps, currHeatmap)
+		h.KeyspaceLabel = label{Name: keyspace, Rowspan: keyspaceLabelSpan}
+
+		heatmaps = append(heatmaps, h)
 	}
 
-	return listOfHeatmaps, nil
+	return heatmaps, nil
 }
 
 func (c *tabletStatsCache) unaggregatedData(keyspace, cell, selectedType string, metricFunc func(stats *discovery.TabletStats) float64) ([][]float64, [][]*topodata.TabletAlias, yLabel) {
 	// This loop goes through every nested label (in this case, tablet type).
-	var heatmapData [][]float64
-	var heatmapTabletAliases [][]*topodata.TabletAlias
+	var cellData [][]float64
+	var cellAliases [][]*topodata.TabletAlias
 	var cellLabel yLabel
 	cellLabelSpan := 0
 	tabletTypes := c.tabletTypesLocked(keyspace, cell, selectedType)
@@ -427,28 +428,30 @@ func (c *tabletStatsCache) unaggregatedData(keyspace, cell, selectedType string,
 		cellLabelSpan += maxRowLength
 
 		for i := 0; i < len(dataRowsPerType); i++ {
-			heatmapData = append(heatmapData, dataRowsPerType[i])
-			heatmapTabletAliases = append(heatmapTabletAliases, aliasRowsPerType[i])
+			cellData = append(cellData, dataRowsPerType[i])
+			cellAliases = append(cellAliases, aliasRowsPerType[i])
 		}
 	}
 
 	cellLabel.CellLabel = label{Name: cell, Rowspan: cellLabelSpan}
 
-	return heatmapData, heatmapTabletAliases, cellLabel
+	return cellData, cellAliases, cellLabel
 }
 
+// aggregatedData gets heatmapData by taking the average of the metric value of all tablets within the keyspace and cell of the
+// specified type (or from all types if keyword 'all' was used).
 func (c *tabletStatsCache) aggregatedData(keyspace, cell, selectedType, selectedMetric string, metricFunc func(stats *discovery.TabletStats) float64) ([][]float64, [][]*topodata.TabletAlias, yLabel) {
 	shards := c.shards(keyspace)
 	tabletTypes := c.tabletTypesLocked(keyspace, cell, selectedType)
 
-	var heatmapData [][]float64
+	var cellData [][]float64
 	dataRow := make([]float64, len(shards))
 	// This loop goes through each shard in the (keyspace-cell) combination.
 	for shardIndex, shard := range shards {
-		var sum, count float64 = 0, 0
+		var sum, count float64
 		hasTablets := false
 		unhealthyFound := false
-		// Going through all the types of tablets and aggregating their information
+		// Going through all the types of tablets and aggregating their information.
 		for _, tabletType := range tabletTypes {
 			tablets, ok := c.statuses[keyspace][shard][cell][tabletType]
 			if !ok {
@@ -456,15 +459,16 @@ func (c *tabletStatsCache) aggregatedData(keyspace, cell, selectedType, selected
 			}
 			for _, tablet := range tablets {
 				hasTablets = true
-				// If even one tablet is unhealthy then the entire groups becomes unhealthy.
-				if (selectedMetric == "health" && metricFunc(tablet) == tabletUnhealthy) ||
-					(selectedMetric == "lag" && metricFunc(tablet) > lagThresholdUnhealthy) {
-					sum = metricFunc(tablet)
+				// If even one tablet is unhealthy then the entire group becomes unhealthy.
+				metricVal := metricFunc(tablet)
+				if (selectedMetric == "health" && metricVal == tabletUnhealthy) ||
+					(selectedMetric == "lag" && metricVal > lagThresholdUnhealthy) {
+					sum = metricVal
 					count = 1
 					unhealthyFound = true
 					break
 				}
-				sum += metricFunc(tablet)
+				sum += metricVal
 				count++
 			}
 			if unhealthyFound == true {
@@ -477,11 +481,12 @@ func (c *tabletStatsCache) aggregatedData(keyspace, cell, selectedType, selected
 			dataRow[shardIndex] = tabletMissing
 		}
 	}
-	heatmapData = append(heatmapData, dataRow)
-	var heatmapCellLabel yLabel
-	heatmapCellLabel.CellLabel = label{Name: cell, Rowspan: 1}
+	cellData = append(cellData, dataRow)
+	cellLabel := yLabel{
+		CellLabel: label{Name: cell, Rowspan: 1},
+	}
 
-	return heatmapData, nil, heatmapCellLabel
+	return cellData, nil, cellLabel
 }
 
 func (c *tabletStatsCache) tabletStats(tabletAlias *topodata.TabletAlias) (discovery.TabletStats, error) {
@@ -496,35 +501,30 @@ func (c *tabletStatsCache) tabletStats(tabletAlias *topodata.TabletAlias) (disco
 }
 
 func health(stat *discovery.TabletStats) float64 {
-	health := tabletHealthy
-	// The tablet is unhealthy if there is a health error.
+	health := float64(tabletHealthy)
+	// The tablet is unhealthy if there is an health error.
 	if stat.Stats.HealthError != "" {
 		return tabletUnhealthy
 	}
 
 	// The tablet is degraded if there was an error previously.
 	if stat.LastError != nil {
-		if health < tabletDegraded {
-			health = tabletDegraded
-		}
+		return tabletDegraded
 	}
 
 	// The tablet is healthy/degraded/unheathy depending on the lag.
 	lag := stat.Stats.SecondsBehindMaster
-	if lag < lagThresholdDegraded {
-		if health < tabletHealthy {
-			health = tabletHealthy
-		}
-	} else if lag < lagThresholdUnhealthy {
-		if health < tabletDegraded {
-			health = tabletDegraded
-		}
-	} else {
+	switch {
+	case lag >= lagThresholdUnhealthy:
 		return tabletUnhealthy
+	case lag >= lagThresholdDegraded:
+		return tabletDegraded
+	default:
+		health = tabletHealthy
 	}
 
 	// The tablet is healthy or degraded based on serving status
-	if stat.Serving == true {
+	if stat.Serving {
 		if health < tabletHealthy {
 			health = tabletHealthy
 		}
@@ -533,7 +533,7 @@ func health(stat *discovery.TabletStats) float64 {
 			health = tabletDegraded
 		}
 	}
-	return float64(health)
+	return health
 }
 
 func replicationLag(stat *discovery.TabletStats) float64 {

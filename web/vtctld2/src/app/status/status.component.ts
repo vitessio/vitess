@@ -23,7 +23,7 @@ export class StatusComponent implements OnInit, OnDestroy {
   private heatmapDataReady: boolean = false;
   // listOfKeyspaces is an array of strings representing keyspace names.
   listOfKeyspaces: Array<string> = [];
-  // mapOfKeyspaces is a mapping between a keyspace and it's heatmap struct, which has
+  // mapOfKeyspaces is a mapping between a keyspace and its heatmap struct, which has
   // all the information to construct a heatmap such as data, aliases, and labels.
   mapOfKeyspaces: { [key: string]: any; } = {};
 
@@ -161,15 +161,7 @@ export class StatusComponent implements OnInit, OnDestroy {
 
   // equals checks the equality of 2 arrays.
   equals(arr1, arr2) {
-    if (arr1.length !== arr2.length) {
-      return false;
-    }
-    for (let i = 0; i < arr1.length && i < arr2.length; i++) {
-      if (arr1[i] !== arr2[i]) {
-        return false;
-      }
-    }
-    return true;
+    return arr1.length === arr2.length && arr1.every((elem1, elem2) => elem1 === arr2[elem2]);
   }
 
   updateKeyspaces(stats) {
@@ -199,7 +191,7 @@ export class StatusComponent implements OnInit, OnDestroy {
            let wasChanged = this.updateKeyspaces(stats);
            // If there is no change in the keyspaces, then we will update the map already created.
            if (!wasChanged) {
-             this.heatmaps.toArray().forEach((map) => map.redraw(this.mapOfKeyspaces[map.name], this.selectedMetric));
+             this.heatmaps.toArray().forEach((heatmap) => heatmap.redraw(this.mapOfKeyspaces[heatmap.name], this.selectedMetric));
            }
            this.heatmapDataReady = true;
          });

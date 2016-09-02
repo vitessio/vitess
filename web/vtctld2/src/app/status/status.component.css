@@ -1,3 +1,7 @@
 >>> .ui-dropdown {
   width: auto !important;
 }
+
+.heatmaps {
+  overflow: auto;
+}
