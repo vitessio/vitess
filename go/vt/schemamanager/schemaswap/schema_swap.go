@@ -1,4 +1,4 @@
-package swap
+package schemaswap
 
 import (
 	"flag"
@@ -21,12 +21,14 @@ import (
 )
 
 var (
-	delayBetweenErrors = flag.Duration("schema_swap_delay_between_errors", time.Second,
+	delayBetweenErrors = flag.Duration("schema_swap_delay_between_errors", time.Minute,
 		"time to wait after a retryable error happened in the schema swap process")
+	adminQueryTimeout = flag.Duration("schema_swap_admin_query_timeout", 5*time.Second,
+		"timeout for SQL queries used to save and retrieve meta information for schema swap process")
 )
 
 // schemaSwap contains meta-information and methods controlling schema swap process as a whole.
-type schemaSwap struct {
+type Swap struct {
 	// ctx is the context of the whole schema swap process. Once this context is cancelled
 	// the schema swap process stops.
 	ctx context.Context
@@ -46,16 +48,19 @@ type schemaSwap struct {
 // shardSchemaSwap contains data related to schema swap happening on a specific shard.
 type shardSchemaSwap struct {
 	// parent is the structure with meta-information about the whole schema swap process.
-	parent schemaSwap
+	parent *Swap
 	// shard is the name of the shard this struct operates on.
 	shard string
 
 	// tabletHealthCheck watches after the healthiness of all tablets in the shard.
 	tabletHealthCheck discovery.HealthCheck
 	// tabletWatchers contains list of topology watchers monitoring changes in the shard
-	// topology. There are several of them because the watchers are per-cell. They are
-	// here just to not get GC'ed.
+	// topology. There are several of them because the watchers are per-cell.
 	tabletWatchers []*discovery.TopologyWatcher
+
+	// allTabletsLock is a mutex protecting access to contents of helth check related
+	// variables below.
+	allTabletsLock sync.RWMutex
 	// allTablets is the list of all tablets on the shard mapped by the key provided
 	// by discovery. The contents of the map is guarded by allTabletsLock.
 	allTablets map[string]*discovery.TabletStats
@@ -68,14 +73,12 @@ type shardSchemaSwap struct {
 	// variable is set to nil when nothing is waited on at the moment. The variable is
 	// protected by allTabletsLock.
 	healthWaitingChannel *chan interface{}
-	// allTabletsLock is a mutex protecting access to contents of helth check related
-	// variables above.
-	allTabletsLock sync.RWMutex
 }
 
-// startTabletStatsWatchers launches the topology watchers and health checking to monitor
-// all tablets on the shard.
-func (shardSwap *shardSchemaSwap) startTabletStatsWatchers() error {
+// startHealthWatchers launches the topology watchers and health checking to monitor
+// all tablets on the shard. Function should be called before the start of the schema
+// swap process.
+func (shardSwap *shardSchemaSwap) startHealthWatchers() error {
 	shardSwap.tabletHealthCheck = discovery.NewHealthCheck(
 		*vtctl.HealthCheckTopologyRefresh, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
 	shardSwap.tabletHealthCheck.SetListener(shardSwap, true /* sendDownEvents */)
@@ -97,6 +100,19 @@ func (shardSwap *shardSchemaSwap) startTabletStatsWatchers() error {
 		shardSwap.tabletWatchers = append(shardSwap.tabletWatchers, watcher)
 	}
 	return nil
+}
+
+// stopHealthWatchers stops the health checking and topology monitoring. The function
+// should be called when schema swap process has finished (successfully or with error)
+// and this struct is going to be disposed.
+func (shardSwap *shardSchemaSwap) stopHealthWatchers() {
+	for _, watcher := range shardSwap.tabletWatchers {
+		watcher.Stop()
+	}
+	err := shardSwap.tabletHealthCheck.Close()
+	if err != nil {
+		log.Errorf("Error closing health checking: %v", err)
+	}
 }
 
 // isTabletHealthy verifies that the given TabletStats represents a healthy tablet that is
@@ -132,6 +148,7 @@ func (shardSwap *shardSchemaSwap) startWaitingOnUnhealthyTablet(tablet *topodata
 // checkWaitingTabletHealthiness verifies whether the provided TabletStats represent the
 // tablet that is being waited to become healthy, and notifies the waiting go routine if
 // it is the tablet and if it is healthy now.
+// The function should be called with shardSwap.allTabletsLock mutex locked.
 func (shardSwap *shardSchemaSwap) checkWaitingTabletHealthiness(tabletStats *discovery.TabletStats) {
 	if shardSwap.healthWaitingTablet == tabletStats.Key && isTabletHealthy(tabletStats) {
 		close(*shardSwap.healthWaitingChannel)
@@ -220,8 +237,11 @@ func (array orderTabletsForSwap) Less(i, j int) bool {
 // considered to be applied if _vt.local_metadata table has the swap id in the row titled
 // 'LastAppliedSchemaSwap'.
 func (shardSwap *shardSchemaSwap) isSwapApplied(tablet *topodatapb.Tablet) (bool, error) {
+	sqlCtx, cancelSqlCtx := context.WithTimeout(shardSwap.parent.ctx, *adminQueryTimeout)
+	defer cancelSqlCtx()
+
 	swapIDProto, err := shardSwap.parent.tabletClient.ExecuteFetchAsDba(
-		shardSwap.parent.ctx,
+		sqlCtx,
 		tablet,
 		true, /* usePool */
 		[]byte("SELECT value FROM _vt.local_metadata WHERE name = 'LastAppliedSchemaSwap'"),
@@ -254,10 +274,10 @@ func (shardSwap *shardSchemaSwap) findNextTablet() (*topodatapb.Tablet, error) {
 	for _, tabletStats := range tabletList {
 		if tabletStats.Tablet.Type == topodatapb.TabletType_BACKUP || tabletStats.Tablet.Type == topodatapb.TabletType_RESTORE ||
 			tabletStats.Stats.HealthError != "" {
-			return nil, fmt.Errorf("All healthy tablets on shard %v have new schema, only unhealthy tablets have left", shardSwap.shard)
+			return nil, fmt.Errorf("All healthy tablets on shard %v have new schema, only unhealthy tablets are left", shardSwap.shard)
 		}
 		if tabletStats.Tablet.Type == topodatapb.TabletType_MASTER {
-			// Only master have left.
+			// Only master is left.
 			return nil, nil
 		}
 		swapApplied, err := shardSwap.isSwapApplied(tabletStats.Tablet)
