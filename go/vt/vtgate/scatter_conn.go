@@ -492,6 +492,25 @@ func (stc *ScatterConn) Rollback(ctx context.Context, session *SafeSession) (err
 	return nil
 }
 
+// UpdateStream just sends the query to the gateway,
+// and sends the results back.
+func (stc *ScatterConn) UpdateStream(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, timestamp int64, position string, sendReply func(*querypb.StreamEvent) error) error {
+	ser, err := stc.gateway.UpdateStream(ctx, keyspace, shard, tabletType, position, timestamp)
+	if err != nil {
+		return err
+	}
+
+	for {
+		se, err := ser.Recv()
+		if err != nil {
+			return err
+		}
+		if err = sendReply(se); err != nil {
+			return err
+		}
+	}
+}
+
 // SplitQueryKeyRange scatters a SplitQuery request to all shards. For a set of
 // splits received from a shard, it construct a KeyRange queries by
 // appending that shard's keyrange to the splits. Aggregates all splits across

@@ -80,6 +80,7 @@ type VTGate struct {
 	logStreamExecuteKeyspaceIds *logutil.ThrottledLogger
 	logStreamExecuteKeyRanges   *logutil.ThrottledLogger
 	logStreamExecuteShards      *logutil.ThrottledLogger
+	logUpdateStream             *logutil.ThrottledLogger
 }
 
 // RegisterVTGate defines the type of registration mechanism.
@@ -111,6 +112,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 		logStreamExecuteKeyspaceIds: logutil.NewThrottledLogger("StreamExecuteKeyspaceIds", 5*time.Second),
 		logStreamExecuteKeyRanges:   logutil.NewThrottledLogger("StreamExecuteKeyRanges", 5*time.Second),
 		logStreamExecuteShards:      logutil.NewThrottledLogger("StreamExecuteShards", 5*time.Second),
+		logUpdateStream:             logutil.NewThrottledLogger("UpdateStream", 5*time.Second),
 	}
 	// Resuse resolver's scatterConn.
 	rpcVTGate.router = NewRouter(ctx, serv, cell, "VTGateRouter", rpcVTGate.resolver.scatterConn)
@@ -382,7 +384,6 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables 
 	statsKey := []string{"StreamExecute", "Any", ltt}
 	defer vtg.timings.Record(statsKey, startTime)
 
-	var rowCount int64
 	err := vtg.router.StreamExecute(
 		ctx,
 		sql,
@@ -390,7 +391,6 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables 
 		keyspace,
 		tabletType,
 		func(reply *sqltypes.Result) error {
-			rowCount += int64(len(reply.Rows))
 			vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
 			return sendReply(reply)
 		})
@@ -420,7 +420,6 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bin
 	statsKey := []string{"StreamExecuteKeyspaceIds", keyspace, ltt}
 	defer vtg.timings.Record(statsKey, startTime)
 
-	var rowCount int64
 	err := vtg.resolver.StreamExecuteKeyspaceIds(
 		ctx,
 		sql,
@@ -429,7 +428,6 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bin
 		keyspaceIds,
 		tabletType,
 		func(reply *sqltypes.Result) error {
-			rowCount += int64(len(reply.Rows))
 			vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
 			return sendReply(reply)
 		})
@@ -460,7 +458,6 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, sql string, bindV
 	statsKey := []string{"StreamExecuteKeyRanges", keyspace, ltt}
 	defer vtg.timings.Record(statsKey, startTime)
 
-	var rowCount int64
 	err := vtg.resolver.StreamExecuteKeyRanges(
 		ctx,
 		sql,
@@ -469,7 +466,6 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, sql string, bindV
 		keyRanges,
 		tabletType,
 		func(reply *sqltypes.Result) error {
-			rowCount += int64(len(reply.Rows))
 			vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
 			return sendReply(reply)
 		})
@@ -495,8 +491,7 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 	statsKey := []string{"StreamExecuteShards", keyspace, ltt}
 	defer vtg.timings.Record(statsKey, startTime)
 
-	var rowCount int64
-	err := vtg.resolver.StreamExecute(
+	err := vtg.resolver.streamExecute(
 		ctx,
 		sql,
 		bindVariables,
@@ -506,7 +501,6 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 			return keyspace, shards, nil
 		},
 		func(reply *sqltypes.Result) error {
-			rowCount += int64(len(reply.Rows))
 			vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
 			return sendReply(reply)
 		})
@@ -720,6 +714,37 @@ func getQuerySplitToShardPartFunc(keyspace string) func(
 // GetSrvKeyspace is part of the vtgate service API.
 func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	return vtg.resolver.toposerv.GetSrvKeyspace(ctx, vtg.resolver.cell, keyspace)
+}
+
+// UpdateStream is part of the vtgate service API.
+func (vtg *VTGate) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, sendReply func(*querypb.StreamEvent, int64) error) error {
+	startTime := time.Now()
+	ltt := topoproto.TabletTypeLString(tabletType)
+	statsKey := []string{"UpdateStream", keyspace, ltt}
+	defer vtg.timings.Record(statsKey, startTime)
+
+	err := vtg.resolver.UpdateStream(
+		ctx,
+		keyspace,
+		shard,
+		keyRange,
+		tabletType,
+		timestamp,
+		event,
+		sendReply,
+	)
+	if err != nil {
+		normalErrors.Add(statsKey, 1)
+		query := map[string]interface{}{
+			"Keyspace":   keyspace,
+			"Shard":      shard,
+			"KeyRange":   keyRange,
+			"TabletType": ltt,
+			"Timestamp":  timestamp,
+		}
+		logError(err, query, vtg.logUpdateStream)
+	}
+	return formatError(err)
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.

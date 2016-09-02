@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtgateservice.proto',
   package='vtgateservice',
   syntax='proto3',
-  serialized_pb=_b('\n\x13vtgateservice.proto\x12\rvtgateservice\x1a\x0cvtgate.proto2\xd8\n\n\x06Vitess\x12<\n\x07\x45xecute\x12\x16.vtgate.ExecuteRequest\x1a\x17.vtgate.ExecuteResponse\"\x00\x12N\n\rExecuteShards\x12\x1c.vtgate.ExecuteShardsRequest\x1a\x1d.vtgate.ExecuteShardsResponse\"\x00\x12]\n\x12\x45xecuteKeyspaceIds\x12!.vtgate.ExecuteKeyspaceIdsRequest\x1a\".vtgate.ExecuteKeyspaceIdsResponse\"\x00\x12W\n\x10\x45xecuteKeyRanges\x12\x1f.vtgate.ExecuteKeyRangesRequest\x1a .vtgate.ExecuteKeyRangesResponse\"\x00\x12W\n\x10\x45xecuteEntityIds\x12\x1f.vtgate.ExecuteEntityIdsRequest\x1a .vtgate.ExecuteEntityIdsResponse\"\x00\x12]\n\x12\x45xecuteBatchShards\x12!.vtgate.ExecuteBatchShardsRequest\x1a\".vtgate.ExecuteBatchShardsResponse\"\x00\x12l\n\x17\x45xecuteBatchKeyspaceIds\x12&.vtgate.ExecuteBatchKeyspaceIdsRequest\x1a\'.vtgate.ExecuteBatchKeyspaceIdsResponse\"\x00\x12P\n\rStreamExecute\x12\x1c.vtgate.StreamExecuteRequest\x1a\x1d.vtgate.StreamExecuteResponse\"\x00\x30\x01\x12\x62\n\x13StreamExecuteShards\x12\".vtgate.StreamExecuteShardsRequest\x1a#.vtgate.StreamExecuteShardsResponse\"\x00\x30\x01\x12q\n\x18StreamExecuteKeyspaceIds\x12\'.vtgate.StreamExecuteKeyspaceIdsRequest\x1a(.vtgate.StreamExecuteKeyspaceIdsResponse\"\x00\x30\x01\x12k\n\x16StreamExecuteKeyRanges\x12%.vtgate.StreamExecuteKeyRangesRequest\x1a&.vtgate.StreamExecuteKeyRangesResponse\"\x00\x30\x01\x12\x36\n\x05\x42\x65gin\x12\x14.vtgate.BeginRequest\x1a\x15.vtgate.BeginResponse\"\x00\x12\x39\n\x06\x43ommit\x12\x15.vtgate.CommitRequest\x1a\x16.vtgate.CommitResponse\"\x00\x12?\n\x08Rollback\x12\x17.vtgate.RollbackRequest\x1a\x18.vtgate.RollbackResponse\"\x00\x12\x45\n\nSplitQuery\x12\x19.vtgate.SplitQueryRequest\x1a\x1a.vtgate.SplitQueryResponse\"\x00\x12Q\n\x0eGetSrvKeyspace\x12\x1d.vtgate.GetSrvKeyspaceRequest\x1a\x1e.vtgate.GetSrvKeyspaceResponse\"\x00\x42\x1f\n\x1d\x63om.youtube.vitess.proto.grpcb\x06proto3')
+  serialized_pb=_b('\n\x13vtgateservice.proto\x12\rvtgateservice\x1a\x0cvtgate.proto2\xa7\x0b\n\x06Vitess\x12<\n\x07\x45xecute\x12\x16.vtgate.ExecuteRequest\x1a\x17.vtgate.ExecuteResponse\"\x00\x12N\n\rExecuteShards\x12\x1c.vtgate.ExecuteShardsRequest\x1a\x1d.vtgate.ExecuteShardsResponse\"\x00\x12]\n\x12\x45xecuteKeyspaceIds\x12!.vtgate.ExecuteKeyspaceIdsRequest\x1a\".vtgate.ExecuteKeyspaceIdsResponse\"\x00\x12W\n\x10\x45xecuteKeyRanges\x12\x1f.vtgate.ExecuteKeyRangesRequest\x1a .vtgate.ExecuteKeyRangesResponse\"\x00\x12W\n\x10\x45xecuteEntityIds\x12\x1f.vtgate.ExecuteEntityIdsRequest\x1a .vtgate.ExecuteEntityIdsResponse\"\x00\x12]\n\x12\x45xecuteBatchShards\x12!.vtgate.ExecuteBatchShardsRequest\x1a\".vtgate.ExecuteBatchShardsResponse\"\x00\x12l\n\x17\x45xecuteBatchKeyspaceIds\x12&.vtgate.ExecuteBatchKeyspaceIdsRequest\x1a\'.vtgate.ExecuteBatchKeyspaceIdsResponse\"\x00\x12P\n\rStreamExecute\x12\x1c.vtgate.StreamExecuteRequest\x1a\x1d.vtgate.StreamExecuteResponse\"\x00\x30\x01\x12\x62\n\x13StreamExecuteShards\x12\".vtgate.StreamExecuteShardsRequest\x1a#.vtgate.StreamExecuteShardsResponse\"\x00\x30\x01\x12q\n\x18StreamExecuteKeyspaceIds\x12\'.vtgate.StreamExecuteKeyspaceIdsRequest\x1a(.vtgate.StreamExecuteKeyspaceIdsResponse\"\x00\x30\x01\x12k\n\x16StreamExecuteKeyRanges\x12%.vtgate.StreamExecuteKeyRangesRequest\x1a&.vtgate.StreamExecuteKeyRangesResponse\"\x00\x30\x01\x12\x36\n\x05\x42\x65gin\x12\x14.vtgate.BeginRequest\x1a\x15.vtgate.BeginResponse\"\x00\x12\x39\n\x06\x43ommit\x12\x15.vtgate.CommitRequest\x1a\x16.vtgate.CommitResponse\"\x00\x12?\n\x08Rollback\x12\x17.vtgate.RollbackRequest\x1a\x18.vtgate.RollbackResponse\"\x00\x12\x45\n\nSplitQuery\x12\x19.vtgate.SplitQueryRequest\x1a\x1a.vtgate.SplitQueryResponse\"\x00\x12Q\n\x0eGetSrvKeyspace\x12\x1d.vtgate.GetSrvKeyspaceRequest\x1a\x1e.vtgate.GetSrvKeyspaceResponse\"\x00\x12M\n\x0cUpdateStream\x12\x1b.vtgate.UpdateStreamRequest\x1a\x1c.vtgate.UpdateStreamResponse\"\x00\x30\x01\x42\x1f\n\x1d\x63om.youtube.vitess.proto.grpcb\x06proto3')
   ,
   dependencies=[vtgate__pb2.DESCRIPTOR,])
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
@@ -87,6 +87,9 @@ class BetaVitessServicer(object):
   @abc.abstractmethod
   def GetSrvKeyspace(self, request, context):
     raise NotImplementedError()
+  @abc.abstractmethod
+  def UpdateStream(self, request, context):
+    raise NotImplementedError()
 
 class BetaVitessStub(object):
   """The interface to which stubs will conform."""
@@ -151,8 +154,13 @@ class BetaVitessStub(object):
   def GetSrvKeyspace(self, request, timeout):
     raise NotImplementedError()
   GetSrvKeyspace.future = None
+  @abc.abstractmethod
+  def UpdateStream(self, request, timeout):
+    raise NotImplementedError()
 
 def beta_create_Vitess_server(servicer, pool=None, pool_size=None, default_timeout=None, maximum_timeout=None):
+  import vtgate_pb2
+  import vtgate_pb2
   import vtgate_pb2
   import vtgate_pb2
   import vtgate_pb2
@@ -202,6 +210,7 @@ def beta_create_Vitess_server(servicer, pool=None, pool_size=None, default_timeo
     ('vtgateservice.Vitess', 'StreamExecuteKeyRanges'): vtgate_pb2.StreamExecuteKeyRangesRequest.FromString,
     ('vtgateservice.Vitess', 'StreamExecuteKeyspaceIds'): vtgate_pb2.StreamExecuteKeyspaceIdsRequest.FromString,
     ('vtgateservice.Vitess', 'StreamExecuteShards'): vtgate_pb2.StreamExecuteShardsRequest.FromString,
+    ('vtgateservice.Vitess', 'UpdateStream'): vtgate_pb2.UpdateStreamRequest.FromString,
   }
   response_serializers = {
     ('vtgateservice.Vitess', 'Begin'): vtgate_pb2.BeginResponse.SerializeToString,
@@ -220,6 +229,7 @@ def beta_create_Vitess_server(servicer, pool=None, pool_size=None, default_timeo
     ('vtgateservice.Vitess', 'StreamExecuteKeyRanges'): vtgate_pb2.StreamExecuteKeyRangesResponse.SerializeToString,
     ('vtgateservice.Vitess', 'StreamExecuteKeyspaceIds'): vtgate_pb2.StreamExecuteKeyspaceIdsResponse.SerializeToString,
     ('vtgateservice.Vitess', 'StreamExecuteShards'): vtgate_pb2.StreamExecuteShardsResponse.SerializeToString,
+    ('vtgateservice.Vitess', 'UpdateStream'): vtgate_pb2.UpdateStreamResponse.SerializeToString,
   }
   method_implementations = {
     ('vtgateservice.Vitess', 'Begin'): face_utilities.unary_unary_inline(servicer.Begin),
@@ -238,11 +248,14 @@ def beta_create_Vitess_server(servicer, pool=None, pool_size=None, default_timeo
     ('vtgateservice.Vitess', 'StreamExecuteKeyRanges'): face_utilities.unary_stream_inline(servicer.StreamExecuteKeyRanges),
     ('vtgateservice.Vitess', 'StreamExecuteKeyspaceIds'): face_utilities.unary_stream_inline(servicer.StreamExecuteKeyspaceIds),
     ('vtgateservice.Vitess', 'StreamExecuteShards'): face_utilities.unary_stream_inline(servicer.StreamExecuteShards),
+    ('vtgateservice.Vitess', 'UpdateStream'): face_utilities.unary_stream_inline(servicer.UpdateStream),
   }
   server_options = beta_implementations.server_options(request_deserializers=request_deserializers, response_serializers=response_serializers, thread_pool=pool, thread_pool_size=pool_size, default_timeout=default_timeout, maximum_timeout=maximum_timeout)
   return beta_implementations.server(method_implementations, options=server_options)
 
 def beta_create_Vitess_stub(channel, host=None, metadata_transformer=None, pool=None, pool_size=None):
+  import vtgate_pb2
+  import vtgate_pb2
   import vtgate_pb2
   import vtgate_pb2
   import vtgate_pb2
@@ -292,6 +305,7 @@ def beta_create_Vitess_stub(channel, host=None, metadata_transformer=None, pool=
     ('vtgateservice.Vitess', 'StreamExecuteKeyRanges'): vtgate_pb2.StreamExecuteKeyRangesRequest.SerializeToString,
     ('vtgateservice.Vitess', 'StreamExecuteKeyspaceIds'): vtgate_pb2.StreamExecuteKeyspaceIdsRequest.SerializeToString,
     ('vtgateservice.Vitess', 'StreamExecuteShards'): vtgate_pb2.StreamExecuteShardsRequest.SerializeToString,
+    ('vtgateservice.Vitess', 'UpdateStream'): vtgate_pb2.UpdateStreamRequest.SerializeToString,
   }
   response_deserializers = {
     ('vtgateservice.Vitess', 'Begin'): vtgate_pb2.BeginResponse.FromString,
@@ -310,6 +324,7 @@ def beta_create_Vitess_stub(channel, host=None, metadata_transformer=None, pool=
     ('vtgateservice.Vitess', 'StreamExecuteKeyRanges'): vtgate_pb2.StreamExecuteKeyRangesResponse.FromString,
     ('vtgateservice.Vitess', 'StreamExecuteKeyspaceIds'): vtgate_pb2.StreamExecuteKeyspaceIdsResponse.FromString,
     ('vtgateservice.Vitess', 'StreamExecuteShards'): vtgate_pb2.StreamExecuteShardsResponse.FromString,
+    ('vtgateservice.Vitess', 'UpdateStream'): vtgate_pb2.UpdateStreamResponse.FromString,
   }
   cardinalities = {
     'Begin': cardinality.Cardinality.UNARY_UNARY,
@@ -328,6 +343,7 @@ def beta_create_Vitess_stub(channel, host=None, metadata_transformer=None, pool=
     'StreamExecuteKeyRanges': cardinality.Cardinality.UNARY_STREAM,
     'StreamExecuteKeyspaceIds': cardinality.Cardinality.UNARY_STREAM,
     'StreamExecuteShards': cardinality.Cardinality.UNARY_STREAM,
+    'UpdateStream': cardinality.Cardinality.UNARY_STREAM,
   }
   stub_options = beta_implementations.stub_options(host=host, metadata_transformer=metadata_transformer, request_serializers=request_serializers, response_deserializers=response_deserializers, thread_pool=pool, thread_pool_size=pool_size)
   return beta_implementations.dynamic_stub(channel, 'vtgateservice.Vitess', cardinalities, options=stub_options)

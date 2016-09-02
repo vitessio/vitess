@@ -21,6 +21,12 @@ namespace Vitess\Proto\Vttest {
     /**  @var string */
     public $served_from = null;
     
+    /**  @var int */
+    public $replica_count = null;
+    
+    /**  @var int */
+    public $rdonly_count = null;
+    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -67,6 +73,22 @@ namespace Vitess\Proto\Vttest {
       $f->number    = 5;
       $f->name      = "served_from";
       $f->type      = \DrSlump\Protobuf::TYPE_STRING;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $descriptor->addField($f);
+
+      // OPTIONAL INT32 replica_count = 6
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 6;
+      $f->name      = "replica_count";
+      $f->type      = \DrSlump\Protobuf::TYPE_INT32;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $descriptor->addField($f);
+
+      // OPTIONAL INT32 rdonly_count = 7
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 7;
+      $f->name      = "rdonly_count";
+      $f->type      = \DrSlump\Protobuf::TYPE_INT32;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
@@ -280,6 +302,80 @@ namespace Vitess\Proto\Vttest {
      */
     public function setServedFrom( $value){
       return $this->_set(5, $value);
+    }
+    
+    /**
+     * Check if <replica_count> has a value
+     *
+     * @return boolean
+     */
+    public function hasReplicaCount(){
+      return $this->_has(6);
+    }
+    
+    /**
+     * Clear <replica_count> value
+     *
+     * @return \Vitess\Proto\Vttest\Keyspace
+     */
+    public function clearReplicaCount(){
+      return $this->_clear(6);
+    }
+    
+    /**
+     * Get <replica_count> value
+     *
+     * @return int
+     */
+    public function getReplicaCount(){
+      return $this->_get(6);
+    }
+    
+    /**
+     * Set <replica_count> value
+     *
+     * @param int $value
+     * @return \Vitess\Proto\Vttest\Keyspace
+     */
+    public function setReplicaCount( $value){
+      return $this->_set(6, $value);
+    }
+    
+    /**
+     * Check if <rdonly_count> has a value
+     *
+     * @return boolean
+     */
+    public function hasRdonlyCount(){
+      return $this->_has(7);
+    }
+    
+    /**
+     * Clear <rdonly_count> value
+     *
+     * @return \Vitess\Proto\Vttest\Keyspace
+     */
+    public function clearRdonlyCount(){
+      return $this->_clear(7);
+    }
+    
+    /**
+     * Get <rdonly_count> value
+     *
+     * @return int
+     */
+    public function getRdonlyCount(){
+      return $this->_get(7);
+    }
+    
+    /**
+     * Set <rdonly_count> value
+     *
+     * @param int $value
+     * @return \Vitess\Proto\Vttest\Keyspace
+     */
+    public function setRdonlyCount( $value){
+      return $this->_set(7, $value);
     }
   }
 }

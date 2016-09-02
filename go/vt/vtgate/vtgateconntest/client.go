@@ -684,6 +684,74 @@ func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string)
 	return getSrvKeyspaceResult, nil
 }
 
+// queryUpdateStream contains all the fields we use to test UpdateStream
+type queryUpdateStream struct {
+	Keyspace   string
+	Shard      string
+	KeyRange   *topodatapb.KeyRange
+	TabletType topodatapb.TabletType
+	Timestamp  int64
+	Event      *querypb.EventToken
+}
+
+// UpdateStream is part of the VTGateService interface
+func (f *fakeVTGateService) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, sendReply func(*querypb.StreamEvent, int64) error) error {
+	if f.panics {
+		panic(fmt.Errorf("test forced panic"))
+	}
+	execCase, ok := execMap[shard]
+	if !ok {
+		return fmt.Errorf("no match for: %s", shard)
+	}
+	f.checkCallerID(ctx, "UpdateStream")
+	query := &queryUpdateStream{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		KeyRange:   keyRange,
+		TabletType: tabletType,
+		Timestamp:  timestamp,
+		Event:      event,
+	}
+	if !reflect.DeepEqual(query, execCase.updateStreamQuery) {
+		f.t.Errorf("UpdateStream: %+v, want %+v", query, execCase.updateStreamQuery)
+		return nil
+	}
+	if execCase.result != nil {
+		// The first result only has statement with fields.
+		result := &querypb.StreamEvent{
+			Statements: []*querypb.StreamEvent_Statement{
+				{
+					PrimaryKeyFields: execCase.result.Fields,
+				},
+			},
+		}
+		if err := sendReply(result, int64(execCase.result.RowsAffected)); err != nil {
+			return err
+		}
+		if f.hasError {
+			// wait until the client has the response, since all streaming implementation may not
+			// send previous messages if an error has been triggered.
+			<-f.errorWait
+			f.errorWait = make(chan struct{}) // for next test
+			return errTestVtGateError
+		}
+		for _, row := range execCase.result.Rows {
+
+			result := &querypb.StreamEvent{
+				Statements: []*querypb.StreamEvent_Statement{
+					{
+						PrimaryKeyValues: sqltypes.RowsToProto3([][]sqltypes.Value{row}),
+					},
+				},
+			}
+			if err := sendReply(result, int64(execCase.result.RowsAffected)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // CreateFakeServer returns the fake server for the tests
 func CreateFakeServer(t *testing.T) vtgateservice.VTGateService {
 	return &fakeVTGateService{
@@ -737,6 +805,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testSplitQuery(t, conn)
 	testSplitQueryV2(t, conn)
 	testGetSrvKeyspace(t, conn)
+	testUpdateStream(t, conn)
 
 	// force a panic at every call, then test that works
 	fs.panics = true
@@ -757,6 +826,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testSplitQueryPanic(t, conn)
 	testSplitQueryV2Panic(t, conn)
 	testGetSrvKeyspacePanic(t, conn)
+	testUpdateStreamPanic(t, conn)
 	fs.panics = false
 }
 
@@ -788,6 +858,7 @@ func TestErrorSuite(t *testing.T, fakeServer vtgateservice.VTGateService) {
 	testSplitQueryError(t, conn)
 	testSplitQueryV2Error(t, conn)
 	testGetSrvKeyspaceError(t, conn)
+	testUpdateStreamError(t, conn, fs)
 	fs.hasError = false
 }
 
@@ -1739,6 +1810,88 @@ func testGetSrvKeyspacePanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	expectPanic(t, err)
 }
 
+func testUpdateStream(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := newContext()
+	execCase := execMap["request1"]
+	stream, err := conn.UpdateStream(ctx, execCase.updateStreamQuery.Shard, execCase.updateStreamQuery.KeyRange, execCase.execQuery.TabletType, execCase.updateStreamQuery.Timestamp, execCase.updateStreamQuery.Event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var qr querypb.QueryResult
+	for {
+		packet, resumeTimestamp, err := stream.Recv()
+		if err != nil {
+			if err != io.EOF {
+				t.Error(err)
+			}
+			break
+		}
+		qr.RowsAffected = uint64(resumeTimestamp)
+		if len(packet.Statements[0].PrimaryKeyFields) != 0 {
+			qr.Fields = packet.Statements[0].PrimaryKeyFields
+		}
+		if len(packet.Statements[0].PrimaryKeyValues) != 0 {
+			qr.Rows = append(qr.Rows, packet.Statements[0].PrimaryKeyValues...)
+		}
+	}
+
+	sqr := sqltypes.Proto3ToResult(&qr)
+	wantResult := *execCase.result
+	wantResult.InsertID = 0
+	if !reflect.DeepEqual(sqr, &wantResult) {
+		t.Errorf("Unexpected result from Execute: got %+v want %+v", sqr, wantResult)
+	}
+
+	stream, err = conn.UpdateStream(ctx, "none", nil, topodatapb.TabletType_RDONLY, 0, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = stream.Recv()
+	want := "no match for: none"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("none request: %v, want %v", err, want)
+	}
+}
+
+func testUpdateStreamError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
+	ctx := newContext()
+	execCase := execMap["request1"]
+	stream, err := conn.UpdateStream(ctx, execCase.updateStreamQuery.Shard, execCase.updateStreamQuery.KeyRange, execCase.execQuery.TabletType, execCase.updateStreamQuery.Timestamp, execCase.updateStreamQuery.Event)
+	if err != nil {
+		t.Fatalf("UpdateStream failed: %v", err)
+	}
+	qr, _, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("UpdateStream failed: cannot read result1: %v", err)
+	}
+
+	if !reflect.DeepEqual(qr.Statements[0].PrimaryKeyFields, execCase.result.Fields) {
+		t.Errorf("Unexpected result from UpdateStream: got %#v want %#v", qr.Statements[0].PrimaryKeyFields, execCase.result.Fields)
+	}
+	// signal to the server that the first result has been received
+	close(fake.errorWait)
+	// After 1 result, we expect to get an error (no more results).
+	qr, _, err = stream.Recv()
+	if err == nil {
+		t.Fatalf("UpdateStream channel wasn't closed")
+	}
+	verifyError(t, err, "UpdateStream")
+}
+
+func testUpdateStreamPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := newContext()
+	execCase := execMap["request1"]
+	stream, err := conn.UpdateStream(ctx, execCase.updateStreamQuery.Shard, execCase.updateStreamQuery.KeyRange, execCase.execQuery.TabletType, execCase.updateStreamQuery.Timestamp, execCase.updateStreamQuery.Event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = stream.Recv()
+	if err == nil {
+		t.Fatalf("Received packets instead of panic?")
+	}
+	expectPanic(t, err)
+}
+
 var testCallerID = &vtrpcpb.CallerID{
 	Principal:    "test_principal",
 	Component:    "test_component",
@@ -1753,6 +1906,7 @@ var execMap = map[string]struct {
 	entityIdsQuery       *queryExecuteEntityIds
 	batchQueryShard      *queryExecuteBatchShards
 	keyspaceIDBatchQuery *queryExecuteBatchKeyspaceIds
+	updateStreamQuery    *queryUpdateStream
 	result               *sqltypes.Result
 	outSession           *vtgatepb.Session
 	err                  error
@@ -1863,6 +2017,21 @@ var execMap = map[string]struct {
 			AsTransaction: true,
 			Session:       nil,
 		},
+		updateStreamQuery: &queryUpdateStream{
+			Keyspace: "connection_ks",
+			Shard:    "request1",
+			KeyRange: &topodatapb.KeyRange{
+				Start: []byte{0x72},
+				End:   []byte{0x90},
+			},
+			TabletType: topodatapb.TabletType_RDONLY,
+			Timestamp:  123789,
+			Event: &querypb.EventToken{
+				Timestamp: 1234567,
+				Shard:     "request1",
+				Position:  "streaming_position",
+			},
+		},
 		result:     &result1,
 		outSession: nil,
 	},
@@ -1972,6 +2141,21 @@ var execMap = map[string]struct {
 			AsTransaction: false,
 			Session:       nil,
 		},
+		updateStreamQuery: &queryUpdateStream{
+			Keyspace: "connection_ks",
+			Shard:    "errorRequst",
+			KeyRange: &topodatapb.KeyRange{
+				Start: []byte{0x72},
+				End:   []byte{0x90},
+			},
+			TabletType: topodatapb.TabletType_RDONLY,
+			Timestamp:  123789,
+			Event: &querypb.EventToken{
+				Timestamp: 1234567,
+				Shard:     "request1",
+				Position:  "streaming_position",
+			},
+		},
 		result:     nil,
 		outSession: nil,
 	},
@@ -2078,6 +2262,21 @@ var execMap = map[string]struct {
 			},
 			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    session1,
+		},
+		updateStreamQuery: &queryUpdateStream{
+			Keyspace: "connection_ks",
+			Shard:    "txRequest",
+			KeyRange: &topodatapb.KeyRange{
+				Start: []byte{0x72},
+				End:   []byte{0x90},
+			},
+			TabletType: topodatapb.TabletType_RDONLY,
+			Timestamp:  123789,
+			Event: &querypb.EventToken{
+				Timestamp: 1234567,
+				Shard:     "request1",
+				Position:  "streaming_position",
+			},
 		},
 		result:     nil,
 		outSession: session2,

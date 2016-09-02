@@ -22,6 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtgateservicepb "github.com/youtube/vitess/go/vt/proto/vtgateservice"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -388,6 +389,26 @@ func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, request *vtgatepb.GetSrvK
 	return &vtgatepb.GetSrvKeyspaceResponse{
 		SrvKeyspace: sk,
 	}, nil
+}
+
+// UpdateStream is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) UpdateStream(request *vtgatepb.UpdateStreamRequest, stream vtgateservicepb.Vitess_UpdateStreamServer) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx := withCallerIDContext(stream.Context(), request.CallerId)
+	vtgErr := vtg.server.UpdateStream(ctx,
+		request.Keyspace,
+		request.Shard,
+		request.KeyRange,
+		request.TabletType,
+		request.Timestamp,
+		request.Event,
+		func(event *querypb.StreamEvent, resumeTimestamp int64) error {
+			return stream.Send(&vtgatepb.UpdateStreamResponse{
+				Event:           event,
+				ResumeTimestamp: resumeTimestamp,
+			})
+		})
+	return vterrors.ToGRPCError(vtgErr)
 }
 
 func init() {

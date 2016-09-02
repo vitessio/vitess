@@ -105,5 +105,11 @@ namespace Vitess\Proto\Vtgateservice {
     public function GetSrvKeyspace(\Vitess\Proto\Vtgate\GetSrvKeyspaceRequest $argument, $metadata = array(), $options = array()) {
       return $this->_simpleRequest('/vtgateservice.Vitess/GetSrvKeyspace', $argument, '\Vitess\Proto\Vtgate\GetSrvKeyspaceResponse::deserialize', $metadata, $options);
     }
+    /**
+     * @param Vitess\Proto\Vtgate\UpdateStreamRequest $input
+     */
+    public function UpdateStream($argument, $metadata = array(), $options = array()) {
+      return $this->_serverStreamRequest('/vtgateservice.Vitess/UpdateStream', $argument, '\Vitess\Proto\Vtgate\UpdateStreamResponse::deserialize', $metadata, $options);
+    }
   }
 }

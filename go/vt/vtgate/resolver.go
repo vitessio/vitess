@@ -21,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -302,7 +303,7 @@ func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, sql string, b
 			tabletType,
 			keyspaceIds)
 	}
-	return res.StreamExecute(ctx, sql, bindVariables, keyspace, tabletType, mapToShards, sendReply)
+	return res.streamExecute(ctx, sql, bindVariables, keyspace, tabletType, mapToShards, sendReply)
 }
 
 // StreamExecuteKeyRanges executes a streaming query on the specified KeyRanges.
@@ -321,14 +322,14 @@ func (res *Resolver) StreamExecuteKeyRanges(ctx context.Context, sql string, bin
 			tabletType,
 			keyRanges)
 	}
-	return res.StreamExecute(ctx, sql, bindVariables, keyspace, tabletType, mapToShards, sendReply)
+	return res.streamExecute(ctx, sql, bindVariables, keyspace, tabletType, mapToShards, sendReply)
 }
 
-// StreamExecute executes a streaming query on shards resolved by given func.
+// streamExecute executes a streaming query on shards resolved by given func.
 // This function currently temporarily enforces the restriction of executing on
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
-func (res *Resolver) StreamExecute(
+func (res *Resolver) streamExecute(
 	ctx context.Context,
 	sql string,
 	bindVars map[string]interface{},
@@ -360,6 +361,54 @@ func (res *Resolver) Commit(ctx context.Context, inSession *vtgatepb.Session) er
 // Rollback rolls back a transaction.
 func (res *Resolver) Rollback(ctx context.Context, inSession *vtgatepb.Session) error {
 	return res.scatterConn.Rollback(ctx, NewSafeSession(inSession))
+}
+
+// UpdateStream streams the events.
+// TODO(alainjobart): Implement the multi-shards merge code.
+func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, sendReply func(*querypb.StreamEvent, int64) error) error {
+	if shard != "" {
+		// If we pass in a shard, resolve the keyspace following redirects.
+		var err error
+		keyspace, _, _, err = getKeyspaceShards(ctx, res.toposerv, res.cell, keyspace, tabletType)
+		if err != nil {
+			return err
+		}
+	} else {
+		// If we pass in a KeyRange, resolve it to one shard only for now.
+		var shards []string
+		var err error
+		keyspace, shards, err = mapExactShards(
+			ctx,
+			res.toposerv,
+			res.cell,
+			keyspace,
+			tabletType,
+			keyRange)
+		if err != nil {
+			return err
+		}
+		if len(shards) != 1 {
+			return fmt.Errorf("UpdateStream only supports exactly one shard per keyrange at the moment, but provided keyrange %v maps to %v.", keyRange, shards)
+		}
+		shard = shards[0]
+	}
+
+	// Just send it to ScatterConn.  With just one connection, the
+	// timestamp to resume from is the one we get.
+	// Also use the incoming event if the shard matches.
+	position := ""
+	if event != nil && event.Shard == shard {
+		position = event.Position
+		timestamp = 0
+	}
+	return res.scatterConn.UpdateStream(ctx, keyspace, shard, tabletType, timestamp, position, func(se *querypb.StreamEvent) error {
+		var timestamp int64
+		if se.EventToken != nil {
+			timestamp = se.EventToken.Timestamp
+			se.EventToken.Shard = shard
+		}
+		return sendReply(se, timestamp)
+	})
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.

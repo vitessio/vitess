@@ -106,6 +106,10 @@ func (c fallbackClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*t
 	return c.fallback.GetSrvKeyspace(ctx, keyspace)
 }
 
+func (c fallbackClient) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, sendReply func(*querypb.StreamEvent, int64) error) error {
+	return c.fallback.UpdateStream(ctx, keyspace, shard, keyRange, tabletType, timestamp, event, sendReply)
+}
+
 func (c fallbackClient) HandlePanic(err *error) {
 	c.fallback.HandlePanic(err)
 }

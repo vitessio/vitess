@@ -345,3 +345,37 @@ class VTGateClient(object):
       TBD
     """
     raise NotImplementedError('Child class needs to implement this')
+
+  def update_stream(self,
+                    keyspace_name, tablet_type,
+                    timestamp=None, event=None,
+                    shard=None, key_range=None,
+                    effective_caller_id=None,
+                    **kwargs):
+    """Asks for an update stream.
+
+    Args:
+      keyspace_name: the keyspace to get updates from.
+      tablet_type: the (proto3) version of the tablet type.
+      timestamp: when to start the stream from. Unused if event is set,
+        and event.shard matches the only shard we stream from.
+      event: query_pb2.EventToken to start streaming from. Used only if its
+        shard field matches the single shard we're going to stream from.
+      shard: the shard name to listen for.
+        Incompatible with key_range.
+      key_range: the key range to listen for.
+        Incompatible with shard.
+      effective_caller_id: CallerID object.
+      **kwargs: implementation specific parameters.
+
+    Returns:
+      A row generator that returns tuples (event, resume timestamp).
+
+    Raises:
+      dbexceptions.TimeoutError: for connection timeout.
+      dbexceptions.TransientError: the server is overloaded, and this query
+        is asked to back off.
+      dbexceptions.DatabaseError: generic database error.
+      dbexceptions.FatalError: this query should not be retried.
+    """
+    raise NotImplementedError('Child class needs to implement this')

@@ -6,8 +6,8 @@ namespace Vitess\Proto\Queryservice {
 
   class QueryClient extends \Grpc\BaseStub {
 
-    public function __construct($hostname, $opts, $channel = null) {
-      parent::__construct($hostname, $opts, $channel);
+    public function __construct($hostname, $opts) {
+      parent::__construct($hostname, $opts);
     }
     /**
      * @param Vitess\Proto\Query\ExecuteRequest $input
@@ -68,6 +68,12 @@ namespace Vitess\Proto\Queryservice {
      */
     public function StreamHealth($argument, $metadata = array(), $options = array()) {
       return $this->_serverStreamRequest('/queryservice.Query/StreamHealth', $argument, '\Vitess\Proto\Query\StreamHealthResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Query\UpdateStreamRequest $input
+     */
+    public function UpdateStream($argument, $metadata = array(), $options = array()) {
+      return $this->_serverStreamRequest('/queryservice.Query/UpdateStream', $argument, '\Vitess\Proto\Query\UpdateStreamResponse::deserialize', $metadata, $options);
     }
   }
 }

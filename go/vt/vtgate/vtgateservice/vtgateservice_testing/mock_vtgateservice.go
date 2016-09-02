@@ -214,6 +214,16 @@ func (_mr *_MockVTGateServiceRecorder) GetSrvKeyspace(arg0, arg1 interface{}) *g
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "GetSrvKeyspace", arg0, arg1)
 }
 
+func (_m *MockVTGateService) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodata.KeyRange, tabletType topodata.TabletType, timestamp int64, event *query.EventToken, sendReply func(*query.StreamEvent, int64) error) error {
+	ret := _m.ctrl.Call(_m, "UpdateStream", ctx, keyspace, shard, keyRange, tabletType, timestamp, event, sendReply)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockVTGateServiceRecorder) UpdateStream(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "UpdateStream", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+}
+
 func (_m *MockVTGateService) HandlePanic(err *error) {
 	_m.ctrl.Call(_m, "HandlePanic", err)
 }

@@ -13,13 +13,6 @@ class ProtocolsFlavor(object):
     """The binlog player protocol between vttablets, in go."""
     raise NotImplementedError('Not implemented in the base class')
 
-  def binlog_player_python_protocol(self):
-    """The binlog player protocol in for python connections.
-
-    This is for python connections to update_stream service.
-    """
-    raise NotImplementedError('Not implemented in the base class')
-
   def vtctl_client_protocol(self):
     """The protocol to use for vtctl connections.
 
