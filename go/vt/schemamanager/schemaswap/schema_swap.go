@@ -23,7 +23,7 @@ import (
 var (
 	delayBetweenErrors = flag.Duration("schema_swap_delay_between_errors", time.Minute,
 		"time to wait after a retryable error happened in the schema swap process")
-	adminQueryTimeout = flag.Duration("schema_swap_admin_query_timeout", 5*time.Second,
+	adminQueryTimeout = flag.Duration("schema_swap_admin_query_timeout", 30*time.Second,
 		"timeout for SQL queries used to save and retrieve meta information for schema swap process")
 )
 
@@ -58,7 +58,7 @@ type shardSchemaSwap struct {
 	// topology. There are several of them because the watchers are per-cell.
 	tabletWatchers []*discovery.TopologyWatcher
 
-	// allTabletsLock is a mutex protecting access to contents of helth check related
+	// allTabletsLock is a mutex protecting access to contents of health check related
 	// variables below.
 	allTabletsLock sync.RWMutex
 	// allTablets is the list of all tablets on the shard mapped by the key provided
