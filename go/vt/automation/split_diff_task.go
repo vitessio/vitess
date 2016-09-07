@@ -16,6 +16,11 @@ type SplitDiffTask struct {
 
 // Run is part of the Task interface.
 func (t *SplitDiffTask) Run(parameters map[string]string) ([]*automationpb.TaskContainer, string, error) {
+	// Run a "Reset" first to clear the state of a previous finished command.
+	// This reset is best effort. We ignore the output and error of it.
+	// TODO(mberlin): Remove explicit reset when vtworker supports it implicility.
+	ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], []string{"Reset"})
+
 	args := []string{"SplitDiff"}
 	if excludeTables := parameters["exclude_tables"]; excludeTables != "" {
 		args = append(args, "--exclude_tables="+excludeTables)
@@ -24,13 +29,8 @@ func (t *SplitDiffTask) Run(parameters map[string]string) ([]*automationpb.TaskC
 		args = append(args, "--min_healthy_rdonly_tablets="+minHealthyRdonlyTablets)
 	}
 	args = append(args, topoproto.KeyspaceShardString(parameters["keyspace"], parameters["dest_shard"]))
-	output, err := ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], args)
 
-	// TODO(mberlin): Remove explicit reset when vtworker supports it implicility.
-	if err == nil {
-		// Ignore output and error of the Reset.
-		ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], []string{"Reset"})
-	}
+	output, err := ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], args)
 	return nil, output, err
 }
 

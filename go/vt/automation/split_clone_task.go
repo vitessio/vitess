@@ -16,6 +16,11 @@ type SplitCloneTask struct {
 
 // Run is part of the Task interface.
 func (t *SplitCloneTask) Run(parameters map[string]string) ([]*automationpb.TaskContainer, string, error) {
+	// Run a "Reset" first to clear the state of a previous finished command.
+	// This reset is best effort. We ignore the output and error of it.
+	// TODO(mberlin): Remove explicit reset when vtworker supports it implicility.
+	ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], []string{"Reset"})
+
 	// TODO(mberlin): Add parameters for the following options?
 	//                        '--source_reader_count', '1',
 	//                        '--destination_writer_count', '1',
@@ -51,13 +56,8 @@ func (t *SplitCloneTask) Run(parameters map[string]string) ([]*automationpb.Task
 		args = append(args, "--max_replication_lag="+maxReplicationLag)
 	}
 	args = append(args, topoproto.KeyspaceShardString(parameters["keyspace"], parameters["source_shard"]))
-	output, err := ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], args)
 
-	// TODO(mberlin): Remove explicit reset when vtworker supports it implicility.
-	if err == nil {
-		// Ignore output and error of the Reset.
-		ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], []string{"Reset"})
-	}
+	output, err := ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], args)
 	return nil, output, err
 }
 
