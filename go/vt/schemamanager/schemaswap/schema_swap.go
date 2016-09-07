@@ -27,7 +27,7 @@ var (
 		"timeout for SQL queries used to save and retrieve meta information for schema swap process")
 )
 
-// schemaSwap contains meta-information and methods controlling schema swap process as a whole.
+// Swap contains meta-information and methods controlling schema swap process as a whole.
 type Swap struct {
 	// ctx is the context of the whole schema swap process. Once this context is cancelled
 	// the schema swap process stops.
@@ -237,8 +237,8 @@ func (array orderTabletsForSwap) Less(i, j int) bool {
 // considered to be applied if _vt.local_metadata table has the swap id in the row titled
 // 'LastAppliedSchemaSwap'.
 func (shardSwap *shardSchemaSwap) isSwapApplied(tablet *topodatapb.Tablet) (bool, error) {
-	sqlCtx, cancelSqlCtx := context.WithTimeout(shardSwap.parent.ctx, *adminQueryTimeout)
-	defer cancelSqlCtx()
+	sqlCtx, cancelSQLCtx := context.WithTimeout(shardSwap.parent.ctx, *adminQueryTimeout)
+	defer cancelSQLCtx()
 
 	swapIDProto, err := shardSwap.parent.tabletClient.ExecuteFetchAsDba(
 		sqlCtx,
@@ -272,10 +272,6 @@ func (shardSwap *shardSchemaSwap) findNextTablet() (*topodatapb.Tablet, error) {
 	tabletList := shardSwap.getTabletList()
 	sort.Sort(orderTabletsForSwap(tabletList))
 	for _, tabletStats := range tabletList {
-		if tabletStats.Tablet.Type == topodatapb.TabletType_BACKUP || tabletStats.Tablet.Type == topodatapb.TabletType_RESTORE ||
-			tabletStats.Stats.HealthError != "" {
-			return nil, fmt.Errorf("All healthy tablets on shard %v have new schema, only unhealthy tablets are left", shardSwap.shard)
-		}
 		if tabletStats.Tablet.Type == topodatapb.TabletType_MASTER {
 			// Only master is left.
 			return nil, nil

@@ -13,7 +13,7 @@ var (
 	highReplicationLagMinServing = flag.Duration("discovery_high_replication_lag_minimum_serving", 2*time.Hour, "the replication lag that is considered too high when selecting miminum 2 vttablets for serving")
 )
 
-// IsReplicationLagHigh verifies that given TabletStats refers to a tablet with high
+// IsReplicationLagHigh verifies that the given TabletStats refers to a tablet with high
 // replication lag, i.e. higher than the configured discovery_low_replication_lag flag.
 func IsReplicationLagHigh(tabletStats *TabletStats) bool {
 	return float64(tabletStats.Stats.SecondsBehindMaster) > lowReplicationLag.Seconds()
