@@ -775,8 +775,9 @@ primary key (name)
 
     # reparent shard_2 to shard_2_replica1, then insert more data and
     # see it flow through still
-    utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/80-c0',
-                     shard_2_replica1.tablet_alias])
+    utils.run_vtctl(['PlannedReparentShard',
+                     '-keyspace_shard', 'test_keyspace/80-c0',
+                     '-new_master', shard_2_replica1.tablet_alias])
 
     # update our test variables to point at the new master
     shard_2_master, shard_2_replica1 = shard_2_replica1, shard_2_master

@@ -496,11 +496,11 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
 
       # Reparent away from the old masters.
       utils.run_vtctl(
-          ['PlannedReparentShard', 'test_keyspace/-80',
-           shard_0_replica.tablet_alias], auto_log=True)
+          ['PlannedReparentShard', '-keyspace_shard', 'test_keyspace/-80',
+           '-new_master', shard_0_replica.tablet_alias], auto_log=True)
       utils.run_vtctl(
-          ['PlannedReparentShard', 'test_keyspace/80-',
-           shard_1_replica.tablet_alias], auto_log=True)
+          ['PlannedReparentShard', '-keyspace_shard', 'test_keyspace/80-',
+           '-new_master', shard_1_replica.tablet_alias], auto_log=True)
 
     else:
       # NOTE: There is a race condition around this:
@@ -523,11 +523,11 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
       logging.debug('Worker is in copy state, starting reparent now')
 
       utils.run_vtctl(
-          ['PlannedReparentShard', 'test_keyspace/-80',
-           shard_0_replica.tablet_alias], auto_log=True)
+          ['PlannedReparentShard', '-keyspace_shard', 'test_keyspace/-80',
+           '-new_master', shard_0_replica.tablet_alias], auto_log=True)
       utils.run_vtctl(
-          ['PlannedReparentShard', 'test_keyspace/80-',
-           shard_1_replica.tablet_alias], auto_log=True)
+          ['PlannedReparentShard', '-keyspace_shard', 'test_keyspace/80-',
+           '-new_master', shard_1_replica.tablet_alias], auto_log=True)
 
     utils.wait_procs([workerclient_proc])
 
