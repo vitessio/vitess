@@ -34,7 +34,7 @@ func shardReplicationPath(cell, keyspace, shard string) string {
 func (zkts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*topodatapb.ShardReplication) error) error {
 	// create the parent directory to be sure it's here
 	zkDir := path.Join("/zk", cell, "vt", "replication", keyspace)
-	if _, err := zk.CreateRecursive(zkts.zconn, zkDir, "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil && err != zookeeper.ErrNodeExists {
+	if _, err := zk.CreateRecursive(zkts.zconn, zkDir, nil, 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil && err != zookeeper.ErrNodeExists {
 		return convertError(err)
 	}
 
@@ -49,8 +49,8 @@ func (zkts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keys
 			// empty node, version is 0
 		case nil:
 			version = stat.Version
-			if data != "" {
-				if err = json.Unmarshal([]byte(data), sr); err != nil {
+			if len(data) > 0 {
+				if err = json.Unmarshal(data, sr); err != nil {
 					return fmt.Errorf("bad ShardReplication data %v", err)
 				}
 			}
@@ -74,12 +74,12 @@ func (zkts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keys
 			return err
 		}
 		if version == -1 {
-			_, err = zkts.zconn.Create(zkPath, string(d), 0, zookeeper.WorldACL(zookeeper.PermAll))
+			_, err = zkts.zconn.Create(zkPath, d, 0, zookeeper.WorldACL(zookeeper.PermAll))
 			if err != zookeeper.ErrNodeExists {
 				return convertError(err)
 			}
 		} else {
-			_, err = zkts.zconn.Set(zkPath, string(d), version)
+			_, err = zkts.zconn.Set(zkPath, d, version)
 			if err != zookeeper.ErrBadVersion {
 				return convertError(err)
 			}
@@ -96,7 +96,7 @@ func (zkts *Server) GetShardReplication(ctx context.Context, cell, keyspace, sha
 	}
 
 	sr := &topodatapb.ShardReplication{}
-	if err = json.Unmarshal([]byte(data), sr); err != nil {
+	if err = json.Unmarshal(data, sr); err != nil {
 		return nil, fmt.Errorf("bad ShardReplication data %v", err)
 	}
 

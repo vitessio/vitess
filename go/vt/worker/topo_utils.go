@@ -10,6 +10,8 @@ import (
 	"math/rand"
 	"time"
 
+	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -58,7 +60,7 @@ func waitForHealthyRdonlyTablets(ctx context.Context, wr *wrangler.Wrangler, tsc
 
 	start := time.Now()
 	deadlineForLog, _ := busywaitCtx.Deadline()
-	wr.Logger().Infof("Waiting for enough healthy RDONLY tablets to become available in (%v,%v/%v). required: %v Waiting up to %.1f seconds.",
+	log.V(2).Infof("Waiting for enough healthy RDONLY tablets to become available in (%v,%v/%v). required: %v Waiting up to %.1f seconds.",
 		cell, keyspace, shard, minHealthyRdonlyTablets, deadlineForLog.Sub(time.Now()).Seconds())
 
 	// Wait for at least one RDONLY tablet initially before checking the list.
@@ -91,7 +93,7 @@ func waitForHealthyRdonlyTablets(ctx context.Context, wr *wrangler.Wrangler, tsc
 		case <-timer.C:
 		}
 	}
-	wr.Logger().Infof("At least %v healthy RDONLY tablets are available in (%v,%v/%v) (required: %v). Took %.1f seconds to find this out.",
+	log.V(2).Infof("At least %v healthy RDONLY tablets are available in (%v,%v/%v) (required: %v). Took %.1f seconds to find this out.",
 		len(healthyTablets), cell, keyspace, shard, minHealthyRdonlyTablets, time.Now().Sub(start).Seconds())
 	return healthyTablets, nil
 }

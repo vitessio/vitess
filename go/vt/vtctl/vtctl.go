@@ -1505,7 +1505,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 	err = wr.TopoServer().CreateKeyspace(ctx, keyspace, ki)
 	if *force && err == topo.ErrNodeExists {
-		log.Infof("keyspace %v already exists (ignoring error with -force)", keyspace)
+		wr.Logger().Infof("keyspace %v already exists (ignoring error with -force)", keyspace)
 		err = nil
 	}
 	return err

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/topo"
-	"golang.org/x/net/context"
 )
 
 func waitForMasterID(t *testing.T, mp topo.MasterParticipation, expected string) {
@@ -65,10 +64,9 @@ func checkElection(t *testing.T, ts topo.Impl) {
 
 	// wait until mp2 gets to be the master in the background
 	mp2IsMaster := make(chan error)
-	var ctx2 context.Context
 	go func() {
 		var err error
-		ctx2, err = mp2.WaitForMastership()
+		_, err = mp2.WaitForMastership()
 		mp2IsMaster <- err
 	}()
 

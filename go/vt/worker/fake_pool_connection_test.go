@@ -127,6 +127,7 @@ func (f *FakePoolConnection) deleteAllEntries() {
 	defer f.mu.Unlock()
 
 	f.expectedExecuteFetch = make([]ExpectedExecuteFetch, 0)
+	f.expectedExecuteFetchIndex = 0
 }
 
 func (f *FakePoolConnection) deleteAllEntriesAfterIndex(index int) {

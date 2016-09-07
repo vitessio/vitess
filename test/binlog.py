@@ -14,6 +14,7 @@ import unittest
 
 from vtdb import keyrange_constants
 from vtdb import update_stream
+from vtproto import topodata_pb2
 
 import environment
 import tablet
@@ -158,8 +159,9 @@ class TestBinlog(unittest.TestCase):
 
     # Wait for it to replicate.
     stream = _get_update_stream(dst_replica)
-    for stream_event in stream.stream_update(start_position):
-      if stream_event.category == update_stream.StreamEvent.POS:
+    for event in stream.stream_update('test_keyspace', '-',
+                                      topodata_pb2.REPLICA, start_position):
+      if event.event_token.position:
         break
     stream.close()
 
@@ -194,12 +196,12 @@ class TestBinlog(unittest.TestCase):
     # dst_replica, which now has binlog_checksum enabled.
     stream = _get_update_stream(dst_replica)
     found = False
-    for stream_event in stream.stream_update(start_position):
-      if stream_event.category == update_stream.StreamEvent.POS:
-        break
-      if stream_event.sql == sql:
-        found = True
-        break
+    for event in stream.stream_update('test_keyspace', '-',
+                                      topodata_pb2.REPLICA, start_position):
+      for statement in event.statements:
+        if statement.sql == sql:
+          found = True
+      break
     stream.close()
     self.assertEqual(found, True, 'expected query not found in update stream')
 
@@ -224,12 +226,12 @@ class TestBinlog(unittest.TestCase):
     # dst_replica, which now has binlog_checksum disabled.
     stream = _get_update_stream(dst_replica)
     found = False
-    for stream_event in stream.stream_update(start_position):
-      if stream_event.category == update_stream.StreamEvent.POS:
-        break
-      if stream_event.sql == sql:
-        found = True
-        break
+    for event in stream.stream_update('test_keyspace', '-',
+                                      topodata_pb2.REPLICA, start_position):
+      for statement in event.statements:
+        if statement.sql == sql:
+          found = True
+      break
     stream.close()
     self.assertEqual(found, True, 'expected query not found in update stream')
 

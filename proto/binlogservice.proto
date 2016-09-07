@@ -1,5 +1,6 @@
-// This file contains all the types and servers necessary to make
-// RPC calls to VtTablet for the binlog protocol.
+// This file contains the UpdateStream service definition, necessary
+// to make RPC calls to VtTablet for the binlog protocol, used by
+// filtered replication only.
 
 syntax = "proto3";
 
@@ -9,10 +10,6 @@ import "binlogdata.proto";
 
 // UpdateStream is the RPC version of binlog.UpdateStream.
 service UpdateStream {
-
-  // StreamUpdate streams the binlog events, to know which objects have changed.
-  rpc StreamUpdate(binlogdata.StreamUpdateRequest) returns (stream binlogdata.StreamUpdateResponse) {};
-
   // StreamKeyRange returns the binlog transactions related to
   // the specified Keyrange.
   rpc StreamKeyRange(binlogdata.StreamKeyRangeRequest) returns (stream binlogdata.StreamKeyRangeResponse) {};

@@ -1,6 +1,10 @@
 # Copyright 2015, Google Inc. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
+"""This module defines the update stream client interface.
+"""
+
+from vtdb import proto3_encoding
 
 # mapping from protocol to python class. The protocol matches the string
 # used by vttablet as a -binlog_player_protocol parameter.
@@ -38,28 +42,6 @@ def connect(protocol, *pargs, **kargs):
   return conn
 
 
-class StreamEvent(object):
-  """StreamEvent describes a single event in the update stream.
-
-  Eventually we will use the proto3 definition object.
-  """
-
-  ERR = 0
-  DML = 1
-  DDL = 2
-  POS = 3
-
-  def __init__(self, category, table_name, fields, rows, sql, timestamp,
-               transaction_id):
-    self.category = category
-    self.table_name = table_name
-    self.fields = fields
-    self.rows = rows
-    self.sql = sql
-    self.timestamp = timestamp
-    self.transaction_id = transaction_id
-
-
 class UpdateStreamConnection(object):
   """The interface for the update stream client implementations.
 
@@ -94,14 +76,45 @@ class UpdateStreamConnection(object):
     """
     pass
 
-  def stream_update(self, position, timeout=3600.0):
+  def stream_update(self, keyspace, shard, tablet_type,
+                    position='', timestamp=0,
+                    timeout=3600.0):
     """Generator method to stream the updates from a given replication point.
 
     Args:
+      keyspace: keyspace to target.
+      shard: shard to target.
+      tablet_type: tablet_type to target.
       position: Starting position to stream from.
+      timestamp: Starting timestamp to stream from.
       timeout: Should stop streaming after we reach this timeout.
 
     Returns:
-      This is a generator method that yields StreamEvent objects.
+      This is a generator method that yields query_pb2.StreamEvent objects.
     """
     pass
+
+
+def convert_statement(statement):
+  """Converts encoded rows inside a StreamEvent.Statement to native types.
+
+  Args:
+    statement: the StreamEvent.Statement object.
+
+  Returns:
+    fields: array of names for the primary key columns.
+    rows: array of tuples for each primary key value.
+  """
+  fields = []
+  rows = []
+  if statement.primary_key_fields:
+    conversions = []
+    for field in statement.primary_key_fields:
+      fields.append(field.name)
+      conversions.append(proto3_encoding.conversions.get(field.type))
+
+    for r in statement.primary_key_values:
+      row = tuple(proto3_encoding.make_row(r, conversions))
+      rows.append(row)
+
+  return fields, rows

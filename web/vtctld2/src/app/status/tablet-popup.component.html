@@ -1,0 +1,94 @@
+<!-- Default div when no hovering or clicking -->
+<div *ngIf="defaultPopup" class="centered">
+  <h3> Nothing selected. Hover over a point to show details. </h3>
+</div>
+
+<!-- Popup displayed when tablet does not exist --> 
+<div *ngIf="missingPopup" class="centered">
+  <h3> Tablet does not exist. </h3>
+</div>
+
+<!-- Popup of details of tablet when hovering/clicked -->
+<div *ngIf="!defaultPopup && !missingPopup" class="centered">
+  <b *ngIf="title!=null"> {{title}} </b>
+  <p> Keyspace: {{keyspace}} </p>
+  <p> Shard: {{shard}} </p>
+  <p> Cell: {{cell}} </p>
+  <p> Tablet type: {{tabletType}} </p>
+  <div *ngIf="!clicked">
+     <h3> Click on tablet for more details </h3>
+  </div>
+  <!-- Additional tablet details when clicked -->
+  <div *ngIf="clicked && aggregated" class="centered">
+    <b> Aggregated tablets of all types </b>
+    <br/>
+    <p> Value: {{data}} </p>
+  </div>
+  <div *ngIf="clicked && unaggregated && healthDataReady" class="centered">
+   <p class="smaller"> {{hostname}} </p>
+    <a [href]="tabletUrl"> Go to tablet </a>
+    <table class="collapsed-border" >
+      <tr>
+        <td>Replication Lag
+        <td>{{lag}}
+      </tr>
+      <tr>
+        <td>Qps
+        <td>{{qps}}
+      </tr>
+      <tr>
+        <td>Serving
+        <td>{{serving}}
+      </tr>
+      <tr>
+        <td>Health Error
+        <td>{{error}}
+      </tr>
+      <tr>
+        <td>Last Error
+        <td>{{lastError}}
+      </tr>
+    </table>
+  </div>
+</div>
+
+<!--
+<div *ngIf="unaggregatedPopup" class="popup">
+  <b> {{title}} </b>
+  <div *ngIf="healthDataReady" >
+    <p> Keyspace: {{keyspace}} </p>
+    <p> Shard: {{shard}} </p>
+    <p> TabletType: {{tabletType}} </p>
+    <p> {{hostname}} </p>
+    <a [href]="tabletUrl"> Go to tablet </a>
+    <table class="collapsed-border" >
+      <tr>
+        <td class="padded">Replication Lag
+        <td class="padded">{{lag}}
+      </tr>
+      <tr>
+        <td class="padded">Qps
+        <td class="padded">{{qps}}
+      </tr>
+      <tr>
+        <td class="padded">Serving
+        <td class="padded">{{serving}}
+      </tr>
+      <tr>
+        <td class="padded">Health Error
+        <td class="padded">{{error}}
+      </tr>
+      <tr>
+        <td class="padded">Last Error
+        <td class="padded">{{lastError}}
+      </tr>
+    </table>
+  </div>
+</div>
+<div *ngIf="aggregatedPopup">
+  <b> Aggregated tablets of all types from </b>
+  <br/>
+  <b> {{title}} </b>
+  <p> Value: {{data}} </p>
+</div>
+-->

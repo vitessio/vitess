@@ -8,39 +8,87 @@ import "golang.org/x/net/context"
 // Zookeeper is a good example of an implementation, as defined in
 // go/vt/zktopo.
 //
-// This API is very generic, and file oriented.
+// This API is very generic, and key/value store oriented.
+// We use regular paths for object names, and we can list all
+// immediate children of a path.
 //
 // FIXME(alainjobart) add all parts of the API, implement them all for
 // all our current systems, and convert the higher levels to talk to
 // this API. This is a long-term project.
 type Backend interface {
-	// Directory support: NYI
-	//	MkDir(ctx context.Context, cell string, path string) error
-	//	RmDir(ctx context.Context, cell string, path string) error
-	//	ListDir(ctx context.Context, cell string, path string) ([]string, error)
+	//
+	// Directory support
+	//
 
-	// File support: NYI
+	// ListDir returns the entries in a directory.  The returned
+	// list should be sorted (by sort.Strings for instance).
+	// If there are no files under the provided path, returns ErrNoNode.
+	ListDir(ctx context.Context, cell, dirPath string) ([]string, error)
+
+	//
+	// File support
 	// if version == nil, then it’s an unconditional update / delete.
-	//	Create(ctx context.Context, cell string, path string, contents []byte) error
-	//	Update(ctx context.Context, cell string, path string, contents []byte, version Version) (Version, error)
-	//	Get(ctx context.Context, cell string, path string) ([]byte, Version, error)
-	//	Delete(ctx context.Context, cell string, path string, version Version)
+	//
 
-	// Locks: NYI
-	//	Lock(ctx context.Context, cell string, dirPath string) (LockDescriptor, error)
-	//	Unlock(ctx context.Context, descriptor LockDescriptor) error
+	// Create creates the initial version of a file.
+	// Returns ErrNodeExists if the file exists.
+	Create(ctx context.Context, cell, filePath string, contents []byte) (Version, error)
+
+	// Update updates the file with the provided filename with the
+	// new content.
+	// If version is nil, it is an unconditional update
+	// (which is then the same as a Create is the file doesn't exist).
+	// It returns the new Version of the file after update.
+	// Returns ErrBadVersion if the provided version is not current.
+	Update(ctx context.Context, cell, filePath string, contents []byte, version Version) (Version, error)
+
+	// Get returns the content and version of a file.
+	// Can return ErrNoNode if the file doesn't exist.
+	Get(ctx context.Context, cell, filePath string) ([]byte, Version, error)
+
+	// Delete deletes the provided file.
+	// If version is nil, it is an unconditional delete.
+	// If the last entry of a directory is deleted, using ListDir
+	// on its parent directory should not return the directory.
+	// For instance, when deleting /keyspaces/aaa/Keyspace, and if
+	// there is no other file in /keyspaces/aaa, then aaa should not
+	// appear any more when listing /keyspaces.
+	//
+	// Delete will never be called on a directory.
+	// Returns ErrNodeExists if the file doesn't exist.
+	// Returns ErrBadVersion if the provided version is not current.
+	Delete(ctx context.Context, cell, filePath string, version Version) error
+
+	//
+	// Locks
+	//
+
+	//	NYI: Lock(ctx context.Context, cell string, dirPath string) (LockDescriptor, error)
+	//	NYI: Unlock(ctx context.Context, descriptor LockDescriptor) error
+
+	//
+	// Watches
+	//
 
 	// Watch starts watching a file in the provided cell.  It
-	// returns the current value, as well as a channel to read the
-	// changes from.  If the initial read fails, or the file
-	// doesn't exist, current.Err is set, and 'changes' is nil.
+	// returns the current value, a 'changes' channel to read the
+	// changes from, and a 'cancel' function to call to stop the
+	// watch.  If the initial read fails, or the file doesn't
+	// exist, current.Err is set, and 'changes'/'cancel' are nil.
 	// Otherwise current.Err is nil, and current.Contents /
-	// current.Version are accurate.
+	// current.Version are accurate. The provided context is only
+	// used to setup the current watch, and not after Watch()
+	// returns.
+	//
+	// To stop the watch, just call the returned 'cancel' function.
+	// This will eventually result in a final WatchData result with Err =
+	// ErrInterrupted. It should be safe to call the 'cancel' function
+	// multiple times, or after the Watch already errored out.
 	//
 	// The 'changes' channel may return a record with Err != nil.
 	// In that case, the channel will also be closed right after
 	// that record.  In any case, 'changes' has to be drained of
-	// all events, even when the Context is canceled.
+	// all events, even when 'stop' is closed.
 	//
 	// Note the 'changes' channel can return twice the same
 	// Version/Contents (for instance, if the watch is interrupted
@@ -60,9 +108,7 @@ type Backend interface {
 	// yet). The only guarantee is that the watch data will
 	// eventually converge. Vitess doesn't explicitly depend on the data
 	// being correct quickly, as long as it eventually gets there.
-	//
-	// To stop the watch, just cancel the context.
-	Watch(ctx context.Context, cell string, path string) (current *WatchData, changes <-chan *WatchData)
+	Watch(ctx context.Context, cell, filePath string) (current *WatchData, changes <-chan *WatchData, cancel CancelFunc)
 }
 
 // Version is an interface that describes a file version.
@@ -76,6 +122,9 @@ type LockDescriptor interface {
 	// String returns a text representation of the lock.
 	String() string
 }
+
+// CancelFunc is returned by the Watch method.
+type CancelFunc func()
 
 // WatchData is the structure returned by the Watch() API.
 // It can contain:
@@ -95,8 +144,7 @@ type WatchData struct {
 	// channel. It can be:
 	// - nil, then Contents and Version are set.
 	// - ErrNoNode if the file doesn't exist.
-	// - context.Err() if context.Done() is closed (then the value
-	//   will be context.DeadlineExceeded or context.Interrupted).
+	// - ErrInterrupted if 'cancel' was called.
 	// - any other platform-specific error.
 	Err error
 }

@@ -169,15 +169,15 @@ func NewBinlogPlayerTables(dbClient VtClient, tablet *topodatapb.Tablet, tables 
 //   transaction_timestamp alone (keeping the old value), and we don't
 //   change SecondsBehindMaster
 func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransaction) error {
-	gtid, err := replication.DecodeGTID(tx.TransactionId)
+	position, err := replication.DecodePosition(tx.EventToken.Position)
 	if err != nil {
 		return err
 	}
 
 	now := time.Now().Unix()
 
-	blp.position = replication.AppendGTID(blp.position, gtid)
-	updateRecovery := updateBlpCheckpoint(blp.uid, blp.position, now, tx.Timestamp)
+	blp.position = position
+	updateRecovery := updateBlpCheckpoint(blp.uid, blp.position, now, tx.EventToken.Timestamp)
 
 	qr, err := blp.exec(updateRecovery)
 	if err != nil {
@@ -187,8 +187,8 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 		return fmt.Errorf("Cannot update blp_recovery table, affected %v rows", qr.RowsAffected)
 	}
 	blp.blplStats.SetLastPosition(blp.position)
-	if tx.Timestamp != 0 {
-		blp.blplStats.SecondsBehindMaster.Set(now - tx.Timestamp)
+	if tx.EventToken.Timestamp != 0 {
+		blp.blplStats.SecondsBehindMaster.Set(now - tx.EventToken.Timestamp)
 	}
 	return nil
 }

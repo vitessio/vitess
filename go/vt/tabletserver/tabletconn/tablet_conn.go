@@ -48,10 +48,18 @@ type OperationalError string
 
 func (e OperationalError) Error() string { return string(e) }
 
-// StreamHealthReader defines the interface for a reader to read StreamHealth messages.
+// StreamHealthReader defines the interface for a reader to read
+// StreamHealth messages.
 type StreamHealthReader interface {
 	// Recv reads one StreamHealthResponse.
 	Recv() (*querypb.StreamHealthResponse, error)
+}
+
+// StreamEventReader defines the interface for a reader to read
+// StreamEvent messages.
+type StreamEventReader interface {
+	// Recv reads one StreamEvent.
+	Recv() (*querypb.StreamEvent, error)
 }
 
 // In all the following calls, context is an opaque structure that may
@@ -129,6 +137,13 @@ type TabletConn interface {
 
 	// StreamHealth starts a streaming RPC for VTTablet health status updates.
 	StreamHealth(ctx context.Context) (StreamHealthReader, error)
+
+	// UpdateStream asks for a stream of updates from a server.
+	// It returns a StreamEventReader to get results from. If
+	// error is non-nil, it means that the UpdateStream failed to
+	// send the request. Otherwise, you can pull values from the
+	// StreamEventReader until io.EOF, or any other error.
+	UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (StreamEventReader, error)
 }
 
 var dialers = make(map[string]TabletDialer)

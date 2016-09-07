@@ -5,12 +5,10 @@ import static com.google.common.base.Preconditions.checkArgument;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
-
 import com.youtube.vitess.mysql.DateTime;
 import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Query.Field;
 import com.youtube.vitess.proto.Query.Type;
-
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.SQLDataException;
@@ -21,24 +19,21 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
-
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
- * Type-converting wrapper around raw
- * {@link com.youtube.vitess.proto.Query.Row} proto.
+ * Type-converting wrapper around raw {@link com.youtube.vitess.proto.Query.Row} proto.
  *
- * <p>Usually you get Row objects from a {@link Cursor}, which builds
- * them by combining {@link com.youtube.vitess.proto.Query.Row} with
- * the list of {@link Field}s from the corresponding
+ * <p>
+ * Usually you get Row objects from a {@link Cursor}, which builds them by combining
+ * {@link com.youtube.vitess.proto.Query.Row} with the list of {@link Field}s from the corresponding
  * {@link com.youtube.vitess.proto.Query.QueryResult}.
  *
- * <p>Methods on {@code Row} are intended to be compatible with those on
- * {@link java.sql.ResultSet} where possible.
- * This means {@code columnIndex} values start at 1 for the first column,
- * and {@code columnLabel} values are case-insensitive. If multiple columns
- * have the same case-insensitive {@code columnLabel}, the earliest one will
- * be returned.
+ * <p>
+ * Methods on {@code Row} are intended to be compatible with those on {@link java.sql.ResultSet}
+ * where possible. This means {@code columnIndex} values start at 1 for the first column, and
+ * {@code columnLabel} values are case-insensitive. If multiple columns have the same
+ * case-insensitive {@code columnLabel}, the earliest one will be returned.
  */
 @NotThreadSafe
 public class Row {
@@ -46,21 +41,21 @@ public class Row {
   private final List<ByteString> values;
   private final Query.Row rawRow;
   /**
-   * Remembers whether the column referenced by the last {@code get*()} was
-   * MySQL {@code NULL}.
+   * Remembers whether the column referenced by the last {@code get*()} was MySQL {@code NULL}.
    *
-   * <p>Although {@link Row} is not supposed to be used by multiple threads,
-   * we defensively declare {@code lastGetWasNull} as {@code volatile} since
-   * {@link Cursor} in general is used in asynchronous callbacks.
+   * <p>
+   * Although {@link Row} is not supposed to be used by multiple threads, we defensively declare
+   * {@code lastGetWasNull} as {@code volatile} since {@link Cursor} in general is used in
+   * asynchronous callbacks.
    */
   private volatile boolean lastGetWasNull;
 
   /**
-   * Construct a Row from {@link com.youtube.vitess.proto.Query.Row}
-   * proto with a pre-built {@link FieldMap}.
+   * Construct a Row from {@link com.youtube.vitess.proto.Query.Row} proto with a pre-built
+   * {@link FieldMap}.
    *
-   * <p>{@link Cursor} uses this to share a {@link FieldMap}
-   * among multiple rows.
+   * <p>
+   * {@link Cursor} uses this to share a {@link FieldMap} among multiple rows.
    */
   public Row(FieldMap fieldMap, Query.Row rawRow) {
     this.fieldMap = fieldMap;
@@ -80,14 +75,14 @@ public class Row {
   /**
    * Construct a Row manually (not from proto).
    *
-   * <p>The primary purpose of this Row class is to wrap the
-   * {@link com.youtube.vitess.proto.Query.Row} proto, which stores values
-   * in a packed format. However, when writing tests you may want to create
-   * a Row from unpacked data.
+   * <p>
+   * The primary purpose of this Row class is to wrap the {@link com.youtube.vitess.proto.Query.Row}
+   * proto, which stores values in a packed format. However, when writing tests you may want to
+   * create a Row from unpacked data.
    *
-   * <p>Note that {@link #getRowProto()} will return null in this case,
-   * so a Row created in this way can't be used with code that requires
-   * access to the raw row proto.
+   * <p>
+   * Note that {@link #getRowProto()} will return null in this case, so a Row created in this way
+   * can't be used with code that requires access to the raw row proto.
    */
   @VisibleForTesting
   public Row(List<Field> fields, List<ByteString> values) {
@@ -150,6 +145,15 @@ public class Row {
 
   /**
    * Returns the raw {@link ByteString} for a column.
+   * 
+   * @param columnLabel case-insensitive column label
+   */
+  public ByteString getRawValue(String columnLabel) throws SQLException {
+    return getRawValue(findColumn(columnLabel));
+  }
+
+  /**
+   * Returns the raw {@link ByteString} for a column.
    *
    * @param columnIndex 1-based column number (0 is invalid)
    */
@@ -166,8 +170,9 @@ public class Row {
   /**
    * Returns the column value, or 0 if the value is SQL NULL.
    *
-   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
-   * or {@link #getObject(String,Class)}.
+   * <p>
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
+   * {@link #getObject(String,Class)}.
    *
    * @param columnLabel case-insensitive column label
    */
@@ -178,8 +183,9 @@ public class Row {
   /**
    * Returns the column value, or 0 if the value is SQL NULL.
    *
-   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
-   * or {@link #getObject(int,Class)}.
+   * <p>
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
+   * {@link #getObject(int,Class)}.
    *
    * @param columnIndex 1-based column number (0 is invalid)
    */
@@ -219,8 +225,9 @@ public class Row {
   /**
    * Returns the column value, or 0 if the value is SQL NULL.
    *
-   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
-   * or {@link #getObject(String,Class)}.
+   * <p>
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
+   * {@link #getObject(String,Class)}.
    *
    * @param columnLabel case-insensitive column label
    */
@@ -231,8 +238,9 @@ public class Row {
   /**
    * Returns the column value, or 0 if the value is SQL NULL.
    *
-   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
-   * or {@link #getObject(int,Class)}.
+   * <p>
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
+   * {@link #getObject(int,Class)}.
    *
    * @param columnIndex 1-based column number (0 is invalid)
    */
@@ -244,8 +252,9 @@ public class Row {
   /**
    * Returns the column value, or 0 if the value is SQL NULL.
    *
-   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
-   * or {@link #getObject(String,Class)}.
+   * <p>
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
+   * {@link #getObject(String,Class)}.
    *
    * @param columnLabel case-insensitive column label
    */
@@ -256,8 +265,9 @@ public class Row {
   /**
    * Returns the column value, or 0 if the value is SQL NULL.
    *
-   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
-   * or {@link #getObject(int,Class)}.
+   * <p>
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
+   * {@link #getObject(int,Class)}.
    *
    * @param columnIndex 1-based column number (0 is invalid)
    */
@@ -269,8 +279,9 @@ public class Row {
   /**
    * Returns the column value, or 0 if the value is SQL NULL.
    *
-   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
-   * or {@link #getObject(String,Class)}.
+   * <p>
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
+   * {@link #getObject(String,Class)}.
    *
    * @param columnLabel case-insensitive column label
    */
@@ -281,8 +292,9 @@ public class Row {
   /**
    * Returns the column value, or 0 if the value is SQL NULL.
    *
-   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
-   * or {@link #getObject(int,Class)}.
+   * <p>
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
+   * {@link #getObject(int,Class)}.
    *
    * @param columnIndex 1-based column number (0 is invalid)
    */
@@ -428,13 +440,8 @@ public class Row {
     }
     Field field = fieldMap.get(columnIndex);
     if (field.getType() != Type.TIMESTAMP && field.getType() != Type.DATETIME) {
-      throw new SQLDataException(
-          "type mismatch, expected: "
-              + Type.TIMESTAMP
-              + " or "
-              + Type.DATETIME
-              + ", actual: "
-              + field.getType());
+      throw new SQLDataException("type mismatch, expected: " + Type.TIMESTAMP + " or "
+          + Type.DATETIME + ", actual: " + field.getType());
     }
     try {
       return DateTime.parseTimestamp(rawValue.toStringUtf8(), cal);
@@ -474,8 +481,9 @@ public class Row {
   /**
    * Returns the column value, or 0 if the value is SQL NULL.
    *
-   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
-   * or {@link #getObject(String,Class)}.
+   * <p>
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
+   * {@link #getObject(String,Class)}.
    *
    * @param columnLabel case-insensitive column label
    */
@@ -486,8 +494,9 @@ public class Row {
   /**
    * Returns the column value, or 0 if the value is SQL NULL.
    *
-   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
-   * or {@link #getObject(int,Class)}.
+   * <p>
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
+   * {@link #getObject(int,Class)}.
    *
    * @param columnIndex 1-based column number (0 is invalid)
    */
@@ -499,15 +508,20 @@ public class Row {
   /**
    * Returns the column value, cast to the specified type.
    *
-   * <p>This can be used as an alternative to getters that return primitive
-   * types, if you need to distinguish between 0 and SQL NULL. For example:
+   * <p>
+   * This can be used as an alternative to getters that return primitive types, if you need to
+   * distinguish between 0 and SQL NULL. For example:
    *
-   * <blockquote><pre>
+   * <blockquote>
+   * 
+   * <pre>
    * Long value = row.getObject(0, Long.class);
    * if (value == null) {
    *   // The value was SQL NULL, not 0.
    * }
-   * </pre></blockquote>
+   * </pre>
+   * 
+   * </blockquote>
    *
    * @param columnIndex 1-based column number (0 is invalid)
    * @throws SQLDataException if the type doesn't match the actual value.
@@ -525,15 +539,20 @@ public class Row {
   /**
    * Returns the column value, cast to the specified type.
    *
-   * <p>This can be used as an alternative to getters that return primitive
-   * types, if you need to distinguish between 0 and SQL NULL. For example:
+   * <p>
+   * This can be used as an alternative to getters that return primitive types, if you need to
+   * distinguish between 0 and SQL NULL. For example:
    *
-   * <blockquote><pre>
+   * <blockquote>
+   * 
+   * <pre>
    * Long value = row.getObject("col0", Long.class);
    * if (value == null) {
    *   // The value was SQL NULL, not 0.
    * }
-   * </pre></blockquote>
+   * </pre>
+   * 
+   * </blockquote>
    *
    * @param columnLabel case-insensitive column label
    * @throws SQLDataException if the type doesn't match the actual value.
@@ -545,17 +564,20 @@ public class Row {
   /**
    * Reports whether the last column read had a value of SQL NULL.
    *
-   * <p>Getter methods that return primitive types, such as {@link #getLong(int)},
-   * will return 0 if the value is SQL NULL. To distinguish 0 from SQL NULL,
-   * you can call {@code wasNull()} immediately after retrieving the value.
+   * <p>
+   * Getter methods that return primitive types, such as {@link #getLong(int)}, will return 0 if the
+   * value is SQL NULL. To distinguish 0 from SQL NULL, you can call {@code wasNull()} immediately
+   * after retrieving the value.
    *
-   * <p>Note that this is not thread-safe: the value of {@code wasNull()} is only
-   * trustworthy if there are no concurrent calls on this {@code Row} between the
-   * call to {@code get*()} and the call to {@code wasNull()}.
+   * <p>
+   * Note that this is not thread-safe: the value of {@code wasNull()} is only trustworthy if there
+   * are no concurrent calls on this {@code Row} between the call to {@code get*()} and the call to
+   * {@code wasNull()}.
    *
-   * <p>As an alternative to {@code wasNull()}, you can use {@link #getObject(int,Class)}
-   * (e.g. {@code getObject(0, Long.class)} instead of {@code getLong(0)}) to get a
-   * wrapped {@code Long} value that will be {@code null} if the column value was SQL NULL.
+   * <p>
+   * As an alternative to {@code wasNull()}, you can use {@link #getObject(int,Class)} (e.g.
+   * {@code getObject(0, Long.class)} instead of {@code getLong(0)}) to get a wrapped {@code Long}
+   * value that will be {@code null} if the column value was SQL NULL.
    *
    * @throws SQLException
    */
@@ -640,7 +662,8 @@ public class Row {
   /**
    * Extract cell values from the single-buffer wire format.
    *
-   * <p>See the docs for the {@code Row} message in {@code query.proto}.
+   * <p>
+   * See the docs for the {@code Row} message in {@code query.proto}.
    */
   private static List<ByteString> extractValues(List<Long> lengths, ByteString buf) {
     List<ByteString> list = new ArrayList<ByteString>(lengths.size());

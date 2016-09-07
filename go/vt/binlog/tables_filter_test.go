@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var testTables = []string{
@@ -29,6 +30,9 @@ func TestTablesFilterPass(t *testing.T) {
 				Sql:      []byte("dml2 /* _stream included2 (id ) (500 ); */"),
 			},
 		},
+		EventToken: &querypb.EventToken{
+			Position: "MariaDB/0-41983-1",
+		},
 	}
 	var got string
 	f := TablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
@@ -36,7 +40,7 @@ func TestTablesFilterPass(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `statement: <6, "set1"> statement: <4, "dml1 /* _stream included1 (id ) (500 ); */"> statement: <4, "dml2 /* _stream included2 (id ) (500 ); */"> transaction_id: "" `
+	want := `statement: <6, "set1"> statement: <4, "dml1 /* _stream included1 (id ) (500 ); */"> statement: <4, "dml2 /* _stream included2 (id ) (500 ); */"> position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -53,6 +57,9 @@ func TestTablesFilterSkip(t *testing.T) {
 				Sql:      []byte("dml1 /* _stream excluded1 (id ) (500 ); */"),
 			},
 		},
+		EventToken: &querypb.EventToken{
+			Position: "MariaDB/0-41983-1",
+		},
 	}
 	var got string
 	f := TablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
@@ -60,7 +67,7 @@ func TestTablesFilterSkip(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `transaction_id: "" `
+	want := `position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -77,6 +84,9 @@ func TestTablesFilterDDL(t *testing.T) {
 				Sql:      []byte("ddl"),
 			},
 		},
+		EventToken: &querypb.EventToken{
+			Position: "MariaDB/0-41983-1",
+		},
 	}
 	var got string
 	f := TablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
@@ -84,7 +94,7 @@ func TestTablesFilterDDL(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `transaction_id: "" `
+	want := `position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -104,6 +114,9 @@ func TestTablesFilterMalformed(t *testing.T) {
 				Sql:      []byte("dml1 /* _stream excluded1*/"),
 			},
 		},
+		EventToken: &querypb.EventToken{
+			Position: "MariaDB/0-41983-1",
+		},
 	}
 	var got string
 	f := TablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
@@ -111,7 +124,7 @@ func TestTablesFilterMalformed(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `transaction_id: "" `
+	want := `position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}

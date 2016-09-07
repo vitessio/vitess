@@ -7,6 +7,7 @@ package throttler
 import (
 	"fmt"
 	"sort"
+	"time"
 )
 
 // memory tracks "good" and "bad" throttler rates where good rates are below
@@ -17,23 +18,43 @@ import (
 // bad rate which will get lower over time and turn known good rates into
 // bad ones.
 //
+// To protect against temporary performance degradations, a stable bad rate,
+// which hasn't changed for a certain time, "ages out" and will be increased
+// again. This ensures that rates above past bad rates will be tested again in
+// the future.
+//
 // To simplify tracking all possible rates, they are slotted into buckets
 // e.g. of the size 5.
 type memory struct {
 	bucketSize int
 
-	good []int64
-	bad  int64
+	good             []int64
+	bad              int64
+	nextBadRateAging time.Time
+
+	ageBadRateAfter time.Duration
+	badRateIncrease float64
 }
 
-func newMemory(bucketSize int) *memory {
+func newMemory(bucketSize int, ageBadRateAfter time.Duration, badRateIncrease float64) *memory {
 	if bucketSize == 0 {
 		bucketSize = 1
 	}
 	return &memory{
-		bucketSize: bucketSize,
-		good:       make([]int64, 0),
+		bucketSize:      bucketSize,
+		good:            make([]int64, 0),
+		ageBadRateAfter: ageBadRateAfter,
+		badRateIncrease: badRateIncrease,
 	}
+}
+
+func (m *memory) updateAgingConfiguration(ageBadRateAfter time.Duration, badRateIncrease float64) {
+	if !m.nextBadRateAging.IsZero() {
+		// Adjust the current age timer immediately.
+		m.nextBadRateAging = m.nextBadRateAging.Add(ageBadRateAfter).Add(-m.ageBadRateAfter)
+	}
+	m.ageBadRateAfter = ageBadRateAfter
+	m.badRateIncrease = badRateIncrease
 }
 
 // int64Slice is used to sort int64 slices.
@@ -65,8 +86,10 @@ func (m *memory) markGood(rate int64) error {
 	return nil
 }
 
-func (m *memory) markBad(rate int64) error {
-	rate = m.roundDown(rate)
+func (m *memory) markBad(rate int64, now time.Time) error {
+	// Bad rates are rounded up instead of down to not be too extreme on the
+	// reduction and account for some margin of error.
+	rate = m.roundUp(rate)
 
 	// Ignore higher bad rates than the current one.
 	if m.bad != 0 && rate >= m.bad {
@@ -98,7 +121,31 @@ func (m *memory) markBad(rate int64) error {
 	m.good = m.good[:goodLength]
 
 	m.bad = rate
+	m.nextBadRateAging = now.Add(m.ageBadRateAfter)
 	return nil
+}
+
+func (m *memory) ageBadRate(now time.Time) {
+	if m.badRateIncrease == 0 {
+		return
+	}
+	if m.bad == 0 {
+		return
+	}
+	if m.nextBadRateAging.IsZero() {
+		return
+	}
+	if now.Before(m.nextBadRateAging) {
+		return
+	}
+
+	newBad := float64(m.bad) * (1 + m.badRateIncrease)
+	if int64(newBad) == m.bad {
+		// Increase had no effect. Increase it at least by the granularity.
+		newBad += memoryGranularity
+	}
+	m.bad = int64(newBad)
+	m.nextBadRateAging = now.Add(m.ageBadRateAfter)
 }
 
 func (m *memory) highestGood() int64 {
@@ -115,4 +162,12 @@ func (m *memory) lowestBad() int64 {
 
 func (m *memory) roundDown(rate int64) int64 {
 	return rate / int64(m.bucketSize) * int64(m.bucketSize)
+}
+
+func (m *memory) roundUp(rate int64) int64 {
+	ceil := rate / int64(m.bucketSize) * int64(m.bucketSize)
+	if rate%int64(m.bucketSize) != 0 {
+		ceil += int64(m.bucketSize)
+	}
+	return ceil
 }

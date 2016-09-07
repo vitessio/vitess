@@ -87,7 +87,7 @@ func (c *replicationLagCache) sortByLag(ignoreNSlowestReplicas int, minimumRepli
 	// Reset the current list of ignored replicas.
 	c.slowReplicas = make(map[string]bool)
 
-	if ignoreNSlowestReplicas >= len(c.entries)+1 {
+	if ignoreNSlowestReplicas >= len(c.entries) {
 		// Do not ignore slow replicas if all would get ignored.
 		return
 	}
@@ -216,7 +216,7 @@ func (h *replicationLagHistory) atOrAfter(at time.Time) replicationLagRecord {
 
 func (h *replicationLagHistory) advanceCurrent() {
 	h.current++
-	if h.current > len(h.records) {
+	if h.current == len(h.records) {
 		h.current = 0
 	}
 }

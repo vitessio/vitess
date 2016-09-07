@@ -72,6 +72,7 @@ type SplitCloneWorker struct {
 	destinationWriterCount  int
 	minHealthyRdonlyTablets int
 	maxTPS                  int64
+	maxReplicationLag       int64
 	cleaner                 *wrangler.Cleaner
 	tabletTracker           *TabletTracker
 
@@ -88,7 +89,6 @@ type SplitCloneWorker struct {
 	tsc         *discovery.TabletStatsCache
 
 	// populated during WorkerStateFindTargets, read-only after that
-	sourceAliases []*topodatapb.TabletAlias
 	sourceTablets []*topodatapb.Tablet
 	// shardWatchers contains a TopologyWatcher for each source and destination
 	// shard. It updates the list of tablets in the healthcheck if replicas are
@@ -133,20 +133,20 @@ type SplitCloneWorker struct {
 }
 
 // newSplitCloneWorker returns a new worker object for the SplitClone command.
-func newSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, excludeTables []string, strategyStr string, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
-	return newCloneWorker(wr, horizontalResharding, cell, keyspace, shard, online, offline, nil /* tables */, excludeTables, strategyStr, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets, maxTPS)
+func newSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, excludeTables []string, strategyStr string, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS, maxReplicationLag int64) (Worker, error) {
+	return newCloneWorker(wr, horizontalResharding, cell, keyspace, shard, online, offline, nil /* tables */, excludeTables, strategyStr, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets, maxTPS, maxReplicationLag)
 }
 
 // newVerticalSplitCloneWorker returns a new worker object for the
 // VerticalSplitClone command.
-func newVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, tables []string, strategyStr string, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
-	return newCloneWorker(wr, verticalSplit, cell, keyspace, shard, online, offline, tables, nil /* excludeTables */, strategyStr, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets, maxTPS)
+func newVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, tables []string, strategyStr string, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS, maxReplicationLag int64) (Worker, error) {
+	return newCloneWorker(wr, verticalSplit, cell, keyspace, shard, online, offline, tables, nil /* excludeTables */, strategyStr, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets, maxTPS, maxReplicationLag)
 }
 
 // newCloneWorker returns a new SplitCloneWorker object which is used both by
 // the SplitClone and VerticalSplitClone command.
 // TODO(mberlin): Rename SplitCloneWorker to cloneWorker.
-func newCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, shard string, online, offline bool, tables, excludeTables []string, strategyStr string, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
+func newCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, shard string, online, offline bool, tables, excludeTables []string, strategyStr string, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS, maxReplicationLag int64) (Worker, error) {
 	if cloneType != horizontalResharding && cloneType != verticalSplit {
 		return nil, fmt.Errorf("unknown cloneType: %v This is a bug. Please report", cloneType)
 	}
@@ -187,6 +187,7 @@ func newCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, 
 		destinationWriterCount:  destinationWriterCount,
 		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
 		maxTPS:                  maxTPS,
+		maxReplicationLag:       maxReplicationLag,
 		cleaner:                 &wrangler.Cleaner{},
 		tabletTracker:           NewTabletTracker(),
 		throttlers:              make(map[string]*throttler.Throttler),
@@ -794,7 +795,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	} else {
 		// Pick any healthy serving source tablet.
 		si := scw.sourceShards[0]
-		tablets := discovery.RemoveUnhealthyTablets(scw.tsc.GetTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY))
+		tablets := scw.tsc.GetTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY)
 		if len(tablets) == 0 {
 			// We fail fast on this problem and don't retry because at the start all tablets should be healthy.
 			return fmt.Errorf("no healthy RDONLY tablet in source shard (%v) available (required to find out the schema)", topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName()))
@@ -805,10 +806,10 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	var tableStatusList *tableStatusList
 	switch state {
 	case WorkerStateCloneOnline:
-		statsCounters = []*stats.Counters{statsOnlineInsertsCounters, statsOnlineUpdatesCounters, statsOnlineDeletesCounters}
+		statsCounters = []*stats.Counters{statsOnlineInsertsCounters, statsOnlineUpdatesCounters, statsOnlineDeletesCounters, statsOnlineEqualRowsCounters}
 		tableStatusList = scw.tableStatusListOnline
 	case WorkerStateCloneOffline:
-		statsCounters = []*stats.Counters{statsOfflineInsertsCounters, statsOfflineUpdatesCounters, statsOfflineDeletesCounters}
+		statsCounters = []*stats.Counters{statsOfflineInsertsCounters, statsOfflineUpdatesCounters, statsOfflineDeletesCounters, statsOfflineEqualRowsCounters}
 		tableStatusList = scw.tableStatusListOffline
 	}
 
@@ -891,6 +892,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 			sourceWaitGroup.Add(1)
 			go func(td *tabletmanagerdatapb.TableDefinition, tableIndex int, chunk chunk) {
 				defer sourceWaitGroup.Done()
+				errPrefix := fmt.Sprintf("table=%v chunk=%v", td.Name, chunk)
 
 				// We need our own error per Go routine to avoid races.
 				var err error
@@ -904,7 +906,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					// Wait for enough healthy tablets (they might have become unhealthy
 					// and their replication lag might have increased since we started.)
 					if err := scw.waitForTablets(ctx, scw.sourceShards, *retryDuration); err != nil {
-						processError("table=%v chunk=%v: No healthy source tablets found (gave up after %v): ", td.Name, chunk, *retryDuration, err)
+						processError("%v: No healthy source tablets found (gave up after %v): ", errPrefix, *retryDuration, err)
 						return
 					}
 				}
@@ -914,49 +916,41 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				sourceReaders := make([]ResultReader, len(scw.sourceShards))
 				destReaders := make([]ResultReader, len(scw.destinationShards))
 				for shardIndex, si := range scw.sourceShards {
-					var sourceAlias *topodatapb.TabletAlias
+					var tp tabletProvider
+					allowMultipleRetries := true
 					if state == WorkerStateCloneOffline {
-						// Use the source tablet which we took offline for this phase.
-						sourceAlias = scw.offlineSourceAliases[shardIndex]
+						tp = newSingleTabletProvider(ctx, scw.wr.TopoServer(), scw.offlineSourceAliases[shardIndex])
+						// allowMultipleRetries is false to avoid that we'll keep retrying
+						// on the same tablet alias for hours. This guards us against the
+						// situation that an offline tablet gets restarted and serves again.
+						// In that case we cannot use it because its replication is no
+						// longer stopped at the same point as we took it offline initially.
+						allowMultipleRetries = false
 					} else {
-						// Pick any healthy serving source tablet.
-						tablets := discovery.RemoveUnhealthyTablets(scw.tsc.GetTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY))
-						if len(tablets) == 0 {
-							processError("no healthy RDONLY tablets in source shard (%v) available", topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName()))
-							return
-						}
-						sourceAlias = scw.tabletTracker.Track(tablets)
-						defer scw.tabletTracker.Untrack(sourceAlias)
+						tp = newShardTabletProvider(scw.tsc, scw.tabletTracker, si.Keyspace(), si.ShardName())
 					}
-
-					sourceResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), scw.wr.TopoServer(), sourceAlias, td, chunk)
+					sourceResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, allowMultipleRetries)
 					if err != nil {
-						processError("NewRestartableResultReader for source tablet: %v failed: %v", sourceAlias, err)
+						processError("%v: NewRestartableResultReader for source: %v failed", errPrefix, tp.description())
 						return
 					}
 					defer sourceResultReader.Close()
 					sourceReaders[shardIndex] = sourceResultReader
 				}
+
 				// Wait for enough healthy tablets (they might have become unhealthy
 				// and their replication lag might have increased due to a previous
 				// chunk pipeline.)
 				if err := scw.waitForTablets(ctx, scw.destinationShards, *retryDuration); err != nil {
-					processError("table=%v chunk=%v: No healthy destination tablets found (gave up after %v): ", td.Name, chunk, *retryDuration, err)
+					processError("%v: No healthy destination tablets found (gave up after %v): ", errPrefix, *retryDuration, err)
 					return
 				}
-				for shardIndex, si := range scw.destinationShards {
-					// Pick any healthy serving destination tablet.
-					tablets := discovery.RemoveUnhealthyTablets(scw.tsc.GetTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY))
-					if len(tablets) == 0 {
-						processError("no healthy RDONLY tablets in destination shard (%v) available", topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName()))
-						return
-					}
-					destAlias := scw.tabletTracker.Track(tablets)
-					defer scw.tabletTracker.Untrack(destAlias)
 
-					destResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), scw.wr.TopoServer(), destAlias, td, chunk)
+				for shardIndex, si := range scw.destinationShards {
+					tp := newShardTabletProvider(scw.tsc, scw.tabletTracker, si.Keyspace(), si.ShardName())
+					destResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, true /* allowMultipleRetries */)
 					if err != nil {
-						processError("NewQueryResultReaderForTablet for destination tablet: %v failed: %v", destAlias, err)
+						processError("%v: NewRestartableResultReader for destination: %v failed: %v", errPrefix, tp.description(), err)
 						return
 					}
 					defer destResultReader.Close()
@@ -968,7 +962,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				if len(sourceReaders) >= 2 {
 					sourceReader, err = NewResultMerger(sourceReaders, len(td.PrimaryKeyColumns))
 					if err != nil {
-						processError("NewResultMerger for table: %v for source tablets failed: %v", td.Name, err)
+						processError("%v: NewResultMerger for source tablets failed: %v", errPrefix, err)
 						return
 					}
 				} else {
@@ -977,7 +971,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				if len(destReaders) >= 2 {
 					destReader, err = NewResultMerger(destReaders, len(td.PrimaryKeyColumns))
 					if err != nil {
-						processError("NewResultMerger for table: %v for destination tablets failed: %v", td.Name, err)
+						processError("%v: NewResultMerger for destination tablets failed: %v", errPrefix, err)
 						return
 					}
 				} else {
@@ -994,13 +988,13 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					scw.destinationShards, keyResolver,
 					insertChannels, ctx.Done(), dbNames, scw.writeQueryMaxRows, scw.writeQueryMaxSize, scw.writeQueryMaxRowsDelete, statsCounters)
 				if err != nil {
-					processError("NewRowDiffer2 failed: %v", err)
+					processError("%v: NewRowDiffer2 failed: %v", errPrefix, err)
 					return
 				}
 				// Ignore the diff report because all diffs should get reconciled.
 				_ /* DiffReport */, err = differ.Diff()
 				if err != nil {
-					processError("RowDiffer2 failed for table: %v, Error: %v", td.Name, err)
+					processError("%v: RowDiffer2 failed: %v", errPrefix, err)
 					return
 				}
 
@@ -1040,6 +1034,8 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					return err
 				}
 
+				// TODO(mberlin): Fill in scw.maxReplicationLag once the adapative
+				//                throttler is enabled by default.
 				queries = append(queries, binlogplayer.PopulateBlpCheckpoint(uint32(shardIndex), status.Position, scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), flags))
 			}
 
@@ -1179,8 +1175,7 @@ func (scw *SplitCloneWorker) createThrottlers() error {
 	for _, si := range scw.destinationShards {
 		// Set up the throttler for each destination shard.
 		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
-		t, err := throttler.NewThrottler(
-			keyspaceAndShard, "transactions", scw.destinationWriterCount, scw.maxTPS, throttler.ReplicationLagModuleDisabled)
+		t, err := throttler.NewThrottler(keyspaceAndShard, "transactions", scw.destinationWriterCount, scw.maxTPS, scw.maxReplicationLag)
 		if err != nil {
 			return fmt.Errorf("cannot instantiate throttler: %v", err)
 		}

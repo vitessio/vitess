@@ -1,24 +1,42 @@
-<h1>{{shardName}}</h1>
-<button md-raised-button (click)="blockClicks($event);prepareDelete(shardName);dialog.open();toggleModal();">Delete</button>
-<!-- Table from ng prime that will be attached to Vitess next.
-
-<div class="vt-tablet-container">
-  <md-card class="vt-card"> 
-    <p-dataTable [value]="tablets">
-      <p-column field="type" header="Type" sortable="true">
-        <template let-col let-tab="rowData">
-        {{getName(tab[col.field])}}
+<div *ngIf="tabletsReady">
+  <div class="vt-toolbar vt-padding">
+    <md-icon class="vt-menu" (click)="menu.toggle($event)">menu</md-icon>
+    <p-menu #menu popup="popup" [model]="actions"></p-menu>
+    <h1 class="vt-title">{{keyspaceName}}/{{shardName}}</h1>
+  </div>
+  <div class="vt-tablet-container">
+    <p-dataTable [value]="tablets" selectionMode="single" [(selection)]="selectedTablet">
+      <p-column header="Actions">
+        <template let-tab="rowData" let-i="rowIndex">
+          <md-icon class="vt-menu" (click)="rowMenu.toggle($event)">menu</md-icon>
+          <p-menu #rowMenu popup="popup" [model]="tabletActions"></p-menu>
         </template>
       </p-column>
-      <p-column field="status" header="Status" sortable="true"></p-column>
-      <p-column field="stat" header="Stat1" sortable="true"></p-column>
-      <p-column field="stat2" header="Stat2" sortable="true"></p-column>
+      <p-column field="type" header="Type" sortable="true"></p-column>
+      <p-column field="cell" header="Cell" sortable="true"></p-column>
+      <p-column field="uid" header="UID" sortable="true"></p-column>
+      <p-column field="hostname" header="Host"></p-column>
+      <p-column header="Ports">
+        <template let-tab="rowData">
+          <span *ngFor="let portName of portNames(tab)">
+            <strong>{{portName}}:</strong> {{tab.port_map[portName]}},
+          </span>
+        </template>
+      </p-column>
+      <p-column header="Status">
+        <template let-tab="rowData">
+          <a href="{{getUrl(tab)}}">
+            <button md-button>Status</button>
+          </a>
+        </template>
+      </p-column>
     </p-dataTable>
-  </md-card>
-</div>
--->
-<paper-dialog #dialog  no-cancel-on-outside-click="true" no-cancel-on-esc-key="true">
-  <vt-dialog [(dialogContent)]="dialogContent" [(dialogSettings)]="dialogSettings" (close)="dialog.close();"></vt-dialog>
-</paper-dialog>
-<div *ngIf="dialogSettings.openModal" class="vt-popUpContainer" >
+    <h2 class="vt-padding" *ngIf="tablets.length == 0">There are no tablets in this shard</h2>
+  </div>
+  
+  <p-dialog [(header)]="dialogSettings.dialogTitle" [(visible)]="dialogSettings.open" draggable="" resizable="" width="800">
+    <vt-dialog [(dialogContent)]="dialogContent" [(dialogSettings)]="dialogSettings"></vt-dialog>
+  </p-dialog>
+  <div *ngIf="dialogSettings.open" class="vt-popUpContainer" >
+  </div>
 </div>

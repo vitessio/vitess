@@ -460,6 +460,11 @@ func (fc *fakeConn) SplitQueryV2(
 	return nil, fmt.Errorf("not implemented")
 }
 
+// UpdateStream implements tabletconn.TabletConn.
+func (fc *fakeConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
 // Tablet returns the tablet associated with the connection.
 func (fc *fakeConn) Tablet() *topodatapb.Tablet {
 	return fc.tablet

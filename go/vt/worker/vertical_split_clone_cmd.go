@@ -75,6 +75,8 @@ const verticalSplitCloneHTML2 = `
         <INPUT type="text" id="minHealthyRdonlyTablets" name="minHealthyRdonlyTablets" value="{{.DefaultMinHealthyRdonlyTablets}}"></BR>
       <LABEL for="maxTPS">Maximum Write Transactions/second (If non-zero, writes on the destination will be throttled. Unlimited by default.): </LABEL>
         <INPUT type="text" id="maxTPS" name="maxTPS" value="{{.DefaultMaxTPS}}"></BR>
+      <LABEL for="maxReplicationLag">Maximum Replication Lag (enables the adapative throttler. Disabled by default.): </LABEL>
+        <INPUT type="text" id="maxReplicationLag" name="maxReplicationLag" value="{{.DefaultMaxReplicationLag}}"></BR>
       <INPUT type="hidden" name="keyspace" value="{{.Keyspace}}"/>
       <INPUT type="submit" value="Clone"/>
     </form>
@@ -98,7 +100,7 @@ func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *fl
 	tables := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split)")
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'vtworker VerticalSplitClone --strategy=-help k/s' for more info")
 	chunkCount := subFlags.Int("chunk_count", defaultChunkCount, "number of chunks per table")
-	minRowsPerChunk := subFlags.Int("min_rows_per_chunk", defaultChunkCount, "minimum number of rows per chunk (may reduce --chunk_count)")
+	minRowsPerChunk := subFlags.Int("min_rows_per_chunk", defaultMinRowsPerChunk, "minimum number of rows per chunk (may reduce --chunk_count)")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
 	writeQueryMaxRows := subFlags.Int("write_query_max_rows", defaultWriteQueryMaxRows, "maximum number of rows per write query")
 	writeQueryMaxSize := subFlags.Int("write_query_max_size", defaultWriteQueryMaxSize, "maximum size (in bytes) per write query")
@@ -106,6 +108,7 @@ func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *fl
 	destinationWriterCount := subFlags.Int("destination_writer_count", defaultDestinationWriterCount, "number of concurrent RPCs to execute on the destination")
 	minHealthyRdonlyTablets := subFlags.Int("min_healthy_rdonly_tablets", defaultMinHealthyRdonlyTablets, "minimum number of healthy RDONLY tablets before taking out one")
 	maxTPS := subFlags.Int64("max_tps", defaultMaxTPS, "if non-zero, limit copy to maximum number of (write) transactions/second on the destination (unlimited by default)")
+	maxReplicationLag := subFlags.Int64("max_replication_lag", defaultMaxReplicationLag, "if set, the adapative throttler will be enabled and automatically adjust the write rate to keep the lag below the set value (disabled by default)")
 	if err := subFlags.Parse(args); err != nil {
 		return nil, err
 	}
@@ -122,7 +125,7 @@ func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *fl
 	if *tables != "" {
 		tableArray = strings.Split(*tables, ",")
 	}
-	worker, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, shard, *online, *offline, tableArray, *strategy, *chunkCount, *minRowsPerChunk, *sourceReaderCount, *writeQueryMaxRows, *writeQueryMaxSize, *writeQueryMaxRowsDelete, *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS)
+	worker, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, shard, *online, *offline, tableArray, *strategy, *chunkCount, *minRowsPerChunk, *sourceReaderCount, *writeQueryMaxRows, *writeQueryMaxSize, *writeQueryMaxRowsDelete, *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS, *maxReplicationLag)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create worker: %v", err)
 	}
@@ -206,6 +209,7 @@ func interactiveVerticalSplitClone(ctx context.Context, wi *Instance, wr *wrangl
 		result["DefaultDestinationWriterCount"] = fmt.Sprintf("%v", defaultDestinationWriterCount)
 		result["DefaultMinHealthyRdonlyTablets"] = fmt.Sprintf("%v", defaultMinHealthyRdonlyTablets)
 		result["DefaultMaxTPS"] = fmt.Sprintf("%v", defaultMaxTPS)
+		result["DefaultMaxReplicationLag"] = fmt.Sprintf("%v", defaultMaxReplicationLag)
 		return nil, verticalSplitCloneTemplate2, result, nil
 	}
 	tableArray := strings.Split(tables, ",")
@@ -261,9 +265,14 @@ func interactiveVerticalSplitClone(ctx context.Context, wi *Instance, wr *wrangl
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot parse maxTPS: %s", err)
 	}
+	maxReplicationLagStr := r.FormValue("maxReplicationLag")
+	maxReplicationLag, err := strconv.ParseInt(maxReplicationLagStr, 0, 64)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("cannot parse maxReplicationLag: %s", err)
+	}
 
 	// start the clone job
-	wrk, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, "0", online, offline, tableArray, strategy, int(chunkCount), int(minRowsPerChunk), int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize), int(writeQueryMaxRowsDelete), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS)
+	wrk, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, "0", online, offline, tableArray, strategy, int(chunkCount), int(minRowsPerChunk), int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize), int(writeQueryMaxRowsDelete), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS, maxReplicationLag)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot create worker: %v", err)
 	}

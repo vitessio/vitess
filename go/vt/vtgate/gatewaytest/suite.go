@@ -84,6 +84,10 @@ func (ga *gatewayAdapter) StreamHealth(ctx context.Context) (tabletconn.StreamHe
 	return nil, fmt.Errorf("Not Implemented")
 }
 
+func (ga *gatewayAdapter) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
+	return ga.g.UpdateStream(ctx, target.Keyspace, target.Shard, target.TabletType, position, timestamp)
+}
+
 // CreateFakeServers returns the servers to use for these tests
 func CreateFakeServers(t *testing.T) (*tabletconntest.FakeQueryService, topo.Server, string) {
 	cell := "local"

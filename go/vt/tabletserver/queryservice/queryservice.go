@@ -64,6 +64,9 @@ type QueryService interface {
 	// StreamHealthUnregister unregisters a listener for StreamHealth
 	StreamHealthUnregister(int) error
 
+	// UpdateStream streams updates from the provided position or timestamp.
+	UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, sendReply func(*querypb.StreamEvent) error) error
+
 	// Helper for RPC panic handling: call this in a defer statement
 	// at the beginning of each RPC handling method.
 	HandlePanic(*error)

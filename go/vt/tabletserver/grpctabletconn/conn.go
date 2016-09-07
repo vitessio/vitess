@@ -463,6 +463,44 @@ func (conn *gRPCQueryClient) StreamHealth(ctx context.Context) (tabletconn.Strea
 	return conn.c.StreamHealth(ctx, &querypb.StreamHealthRequest{})
 }
 
+type updateStreamAdapter struct {
+	stream queryservicepb.Query_UpdateStreamClient
+}
+
+func (a *updateStreamAdapter) Recv() (*querypb.StreamEvent, error) {
+	r, err := a.stream.Recv()
+	switch err {
+	case nil:
+		return r.Event, nil
+	case io.EOF:
+		return nil, err
+	default:
+		return nil, tabletconn.TabletErrorFromGRPC(err)
+	}
+}
+
+// UpdateStream starts a streaming query to VTTablet.
+func (conn *gRPCQueryClient) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return nil, tabletconn.ConnClosed
+	}
+
+	req := &querypb.UpdateStreamRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Position:          position,
+		Timestamp:         timestamp,
+	}
+	stream, err := conn.c.UpdateStream(ctx, req)
+	if err != nil {
+		return nil, tabletconn.TabletErrorFromGRPC(err)
+	}
+	return &updateStreamAdapter{stream: stream}, err
+}
+
 // Close closes underlying gRPC channel.
 func (conn *gRPCQueryClient) Close() {
 	conn.mu.Lock()

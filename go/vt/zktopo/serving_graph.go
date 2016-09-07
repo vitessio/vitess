@@ -11,7 +11,6 @@ import (
 	"sort"
 	"time"
 
-	log "github.com/golang/glog"
 	zookeeper "github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
@@ -61,84 +60,6 @@ func (zkts *Server) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]str
 	}
 }
 
-// WatchSrvKeyspace is part of the topo.Server interface
-func (zkts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, error) {
-	filePath := zkPathForSrvKeyspace(cell, keyspace)
-
-	notifications := make(chan *topodatapb.SrvKeyspace, 10)
-
-	// waitOrInterrupted will return true if context.Done() is triggered
-	waitOrInterrupted := func() bool {
-		timer := time.After(WatchSleepDuration)
-		select {
-		case <-ctx.Done():
-			close(notifications)
-			return true
-		case <-timer:
-		}
-		return false
-	}
-
-	go func() {
-		for {
-			// set the watch
-			data, _, watch, err := zkts.zconn.GetW(filePath)
-			if err != nil {
-				if err == zookeeper.ErrNoNode {
-					// the parent directory doesn't exist
-					notifications <- nil
-				}
-
-				log.Errorf("Cannot set watch on %v, waiting for %v to retry: %v", filePath, WatchSleepDuration, err)
-				if waitOrInterrupted() {
-					return
-				}
-				continue
-			}
-
-			// get the initial value, send it, or send nil if no
-			// data
-			var srvKeyspace *topodatapb.SrvKeyspace
-			sendIt := true
-			if len(data) > 0 {
-				srvKeyspace = &topodatapb.SrvKeyspace{}
-				if err := json.Unmarshal([]byte(data), srvKeyspace); err != nil {
-					log.Errorf("SrvKeyspace unmarshal failed: %v %v", data, err)
-					sendIt = false
-				}
-			}
-			if sendIt {
-				notifications <- srvKeyspace
-			}
-
-			// now act on the watch
-			select {
-			case event, ok := <-watch:
-				if !ok {
-					log.Warningf("watch on %v was closed, waiting for %v to retry", filePath, WatchSleepDuration)
-					if waitOrInterrupted() {
-						return
-					}
-					continue
-				}
-
-				if event.Err != nil {
-					log.Warningf("received a non-OK event for %v, waiting for %v to retry: %v", filePath, WatchSleepDuration, event.Err)
-					if waitOrInterrupted() {
-						return
-					}
-				}
-			case <-ctx.Done():
-				// user is not interested any more
-				close(notifications)
-				return
-			}
-		}
-	}()
-
-	return notifications, nil
-}
-
 // UpdateSrvKeyspace is part of the topo.Server interface
 func (zkts *Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error {
 	path := zkPathForSrvKeyspace(cell, keyspace)
@@ -146,9 +67,9 @@ func (zkts *Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string
 	if err != nil {
 		return err
 	}
-	_, err = zkts.zconn.Set(path, string(data), -1)
+	_, err = zkts.zconn.Set(path, data, -1)
 	if err == zookeeper.ErrNoNode {
-		_, err = zk.CreateRecursive(zkts.zconn, path, string(data), 0, zookeeper.WorldACL(zookeeper.PermAll))
+		_, err = zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PermAll))
 	}
 	return convertError(err)
 }
@@ -174,88 +95,10 @@ func (zkts *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (
 		return nil, topo.ErrNoNode
 	}
 	srvKeyspace := &topodatapb.SrvKeyspace{}
-	if err := json.Unmarshal([]byte(data), srvKeyspace); err != nil {
+	if err := json.Unmarshal(data, srvKeyspace); err != nil {
 		return nil, fmt.Errorf("SrvKeyspace unmarshal failed: %v %v", data, err)
 	}
 	return srvKeyspace, nil
-}
-
-// WatchSrvVSchema is part of the topo.Server interface
-func (zkts *Server) WatchSrvVSchema(ctx context.Context, cell string) (<-chan *vschemapb.SrvVSchema, error) {
-	filePath := zkPathForSrvVSchema(cell)
-
-	notifications := make(chan *vschemapb.SrvVSchema, 10)
-
-	// waitOrInterrupted will return true if context.Done() is triggered
-	waitOrInterrupted := func() bool {
-		timer := time.After(WatchSleepDuration)
-		select {
-		case <-ctx.Done():
-			close(notifications)
-			return true
-		case <-timer:
-		}
-		return false
-	}
-
-	go func() {
-		for {
-			// set the watch
-			data, _, watch, err := zkts.zconn.GetW(filePath)
-			if err != nil {
-				if err == zookeeper.ErrNoNode {
-					// the parent directory doesn't exist
-					notifications <- nil
-				}
-
-				log.Errorf("Cannot set watch on %v, waiting for %v to retry: %v", filePath, WatchSleepDuration, err)
-				if waitOrInterrupted() {
-					return
-				}
-				continue
-			}
-
-			// get the initial value, send it, or send nil if no
-			// data
-			var srvVSchema *vschemapb.SrvVSchema
-			sendIt := true
-			if len(data) > 0 {
-				srvVSchema = &vschemapb.SrvVSchema{}
-				if err := json.Unmarshal([]byte(data), srvVSchema); err != nil {
-					log.Errorf("SrvVSchema unmarshal failed: %v %v", data, err)
-					sendIt = false
-				}
-			}
-			if sendIt {
-				notifications <- srvVSchema
-			}
-
-			// now act on the watch
-			select {
-			case event, ok := <-watch:
-				if !ok {
-					log.Warningf("watch on %v was closed, waiting for %v to retry", filePath, WatchSleepDuration)
-					if waitOrInterrupted() {
-						return
-					}
-					continue
-				}
-
-				if event.Err != nil {
-					log.Warningf("received a non-OK event for %v, waiting for %v to retry: %v", filePath, WatchSleepDuration, event.Err)
-					if waitOrInterrupted() {
-						return
-					}
-				}
-			case <-ctx.Done():
-				// user is not interested any more
-				close(notifications)
-				return
-			}
-		}
-	}()
-
-	return notifications, nil
 }
 
 // UpdateSrvVSchema is part of the topo.Server interface
@@ -265,9 +108,9 @@ func (zkts *Server) UpdateSrvVSchema(ctx context.Context, cell string, srvVSchem
 	if err != nil {
 		return err
 	}
-	_, err = zkts.zconn.Set(path, string(data), -1)
+	_, err = zkts.zconn.Set(path, data, -1)
 	if err == zookeeper.ErrNoNode {
-		_, err = zk.CreateRecursive(zkts.zconn, path, string(data), 0, zookeeper.WorldACL(zookeeper.PermAll))
+		_, err = zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PermAll))
 	}
 	return convertError(err)
 }
@@ -283,7 +126,7 @@ func (zkts *Server) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.
 		return nil, topo.ErrNoNode
 	}
 	srvVSchema := &vschemapb.SrvVSchema{}
-	if err := json.Unmarshal([]byte(data), srvVSchema); err != nil {
+	if err := json.Unmarshal(data, srvVSchema); err != nil {
 		return nil, fmt.Errorf("SrvVSchema unmarshal failed: %v %v", data, err)
 	}
 	return srvVSchema, nil

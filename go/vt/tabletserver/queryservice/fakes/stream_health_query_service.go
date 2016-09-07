@@ -83,6 +83,18 @@ func (q *StreamHealthQueryService) AddHealthResponseWithSecondsBehindMaster(repl
 	}
 }
 
+// AddHealthResponseWithNotServing adds a faked health response to the
+// buffer channel. Only "Serving" is different in this message.
+func (q *StreamHealthQueryService) AddHealthResponseWithNotServing() {
+	q.healthResponses <- &querypb.StreamHealthResponse{
+		Target:  proto.Clone(&q.target).(*querypb.Target),
+		Serving: false,
+		RealtimeStats: &querypb.RealtimeStats{
+			SecondsBehindMaster: DefaultSecondsBehindMaster,
+		},
+	}
+}
+
 // UpdateType changes the type of the query service.
 // Only newly sent health messages will use the new type.
 func (q *StreamHealthQueryService) UpdateType(tabletType topodatapb.TabletType) {

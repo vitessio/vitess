@@ -1,40 +1,26 @@
 <!-- Keyspace selector -->
-<paper-dropdown-menu label="Keyspace">
-  <paper-listbox class="dropdown-content" *ngFor="let k of keyspaces; let isLast = last">
-    <paper-item>{{k}}</paper-item>
-    <paper-item *ngIf="isLast">all</paper-item>
-  </paper-listbox>
-</paper-dropdown-menu>
+<p-dropdown id="keyspace" (onChange)="handleKeyspaceChange($event)" [options]="keyspaces" [(ngModel)]="selectedKeyspace"></p-dropdown>
 
 <!-- Cell selector -->
-<paper-dropdown-menu label="Cell">
-  <paper-listbox class="dropdown-content" *ngFor="let c of cells; let isLast = last" >
-    <paper-item>{{c}}</paper-item>
-    <paper-item *ngIf="isLast">all</paper-item>
-  </paper-listbox>
-</paper-dropdown-menu>
+<p-dropdown id="cell" (onChange)="handleCellChange($event)" [options]="cells" [(ngModel)]="selectedCell"></p-dropdown>
 
-<!-- TabletType selector -->
-<paper-dropdown-menu label="TabletType">
-  <paper-listbox class="dropdown-content" *ngFor="let t of tabletTypes; let isLast = last">
-    <paper-item>{{t}}</paper-item>
-    <paper-item *ngIf="isLast">all</paper-item>
-  </paper-listbox>
-</paper-dropdown-menu>
+<!-- Type selector -->
+<p-dropdown id="type" (onChange)="handleTypeChange($event)" [options]="tabletTypes" [(ngModel)]="selectedType"></p-dropdown>
 
 <!-- Metric selector -->
-<paper-dropdown-menu label="Metric">
-  <paper-listbox class="dropdown-content" *ngFor="let m of metrics; let isLast = last">
-    <paper-item>{{m}}</paper-item>
-    <paper-item *ngIf="isLast">all</paper-item>
-  </paper-listbox>
-</paper-dropdown-menu>
+<p-dropdown id="metric" (onChange)="handleMetricChange($event)" [options]="metrics" [(ngModel)]="selectedMetric"></p-dropdown>
 
 <!-- Wait until the heatmap data has been obtained from the service -->
-<vt-heatmap *ngIf="heatmapDataReady"
-  [data]="data"
-  [aliases]="aliases"
-  [xLabels]="xLabels"
-  [yLabels]="yLabels"
->
-</vt-heatmap>
+<div *ngFor="let keyspace of listOfKeyspaces" style="overflow: auto">
+  <vt-heatmap *ngIf="heatmapDataReady"
+    [heatmap]="mapOfKeyspaces[keyspace]"
+    [name]="keyspace"
+    [metric]="selectedMetric"
+  >
+  </vt-heatmap>
+  <br/>
+  <br/>
+</div>
+
+<br/>
+<br/>

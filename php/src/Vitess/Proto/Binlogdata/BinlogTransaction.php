@@ -9,11 +9,8 @@ namespace Vitess\Proto\Binlogdata {
     /**  @var \Vitess\Proto\Binlogdata\BinlogTransaction\Statement[]  */
     public $statements = array();
     
-    /**  @var int */
-    public $timestamp = null;
-    
-    /**  @var string */
-    public $transaction_id = null;
+    /**  @var \Vitess\Proto\Query\EventToken */
+    public $event_token = null;
     
 
     /** @var \Closure[] */
@@ -32,20 +29,13 @@ namespace Vitess\Proto\Binlogdata {
       $f->reference = '\Vitess\Proto\Binlogdata\BinlogTransaction\Statement';
       $descriptor->addField($f);
 
-      // OPTIONAL INT64 timestamp = 2
+      // OPTIONAL MESSAGE event_token = 4
       $f = new \DrSlump\Protobuf\Field();
-      $f->number    = 2;
-      $f->name      = "timestamp";
-      $f->type      = \DrSlump\Protobuf::TYPE_INT64;
+      $f->number    = 4;
+      $f->name      = "event_token";
+      $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
-      $descriptor->addField($f);
-
-      // OPTIONAL STRING transaction_id = 3
-      $f = new \DrSlump\Protobuf\Field();
-      $f->number    = 3;
-      $f->name      = "transaction_id";
-      $f->type      = \DrSlump\Protobuf::TYPE_STRING;
-      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $f->reference = '\Vitess\Proto\Query\EventToken';
       $descriptor->addField($f);
 
       foreach (self::$__extensions as $cb) {
@@ -113,77 +103,40 @@ namespace Vitess\Proto\Binlogdata {
     }
     
     /**
-     * Check if <timestamp> has a value
+     * Check if <event_token> has a value
      *
      * @return boolean
      */
-    public function hasTimestamp(){
-      return $this->_has(2);
+    public function hasEventToken(){
+      return $this->_has(4);
     }
     
     /**
-     * Clear <timestamp> value
+     * Clear <event_token> value
      *
      * @return \Vitess\Proto\Binlogdata\BinlogTransaction
      */
-    public function clearTimestamp(){
-      return $this->_clear(2);
+    public function clearEventToken(){
+      return $this->_clear(4);
     }
     
     /**
-     * Get <timestamp> value
+     * Get <event_token> value
      *
-     * @return int
+     * @return \Vitess\Proto\Query\EventToken
      */
-    public function getTimestamp(){
-      return $this->_get(2);
+    public function getEventToken(){
+      return $this->_get(4);
     }
     
     /**
-     * Set <timestamp> value
+     * Set <event_token> value
      *
-     * @param int $value
+     * @param \Vitess\Proto\Query\EventToken $value
      * @return \Vitess\Proto\Binlogdata\BinlogTransaction
      */
-    public function setTimestamp( $value){
-      return $this->_set(2, $value);
-    }
-    
-    /**
-     * Check if <transaction_id> has a value
-     *
-     * @return boolean
-     */
-    public function hasTransactionId(){
-      return $this->_has(3);
-    }
-    
-    /**
-     * Clear <transaction_id> value
-     *
-     * @return \Vitess\Proto\Binlogdata\BinlogTransaction
-     */
-    public function clearTransactionId(){
-      return $this->_clear(3);
-    }
-    
-    /**
-     * Get <transaction_id> value
-     *
-     * @return string
-     */
-    public function getTransactionId(){
-      return $this->_get(3);
-    }
-    
-    /**
-     * Set <transaction_id> value
-     *
-     * @param string $value
-     * @return \Vitess\Proto\Binlogdata\BinlogTransaction
-     */
-    public function setTransactionId( $value){
-      return $this->_set(3, $value);
+    public function setEventToken(\Vitess\Proto\Query\EventToken $value){
+      return $this->_set(4, $value);
     }
   }
 }

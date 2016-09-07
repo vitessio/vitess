@@ -29,6 +29,9 @@ var defaultMaxReplicationLagModuleConfig = MaxReplicationLagModuleConfig{
 		// corresponds to three 3 broadcasts (assuming --health_check_interval=20s).
 		// The 2 extra seconds give us headroom to account for delay in the process.
 		MaxDurationBetweenIncreasesSec: 60 + 2,
+
+		AgeBadRateAfterSec: 3 * 60,
+		BadRateIncrease:    0.10,
 	},
 }
 
@@ -73,6 +76,9 @@ func (c MaxReplicationLagModuleConfig) Verify() error {
 	if c.IgnoreNSlowestReplicas < 0 {
 		return fmt.Errorf("ignore_n_slowest_replicas must be >= 0")
 	}
+	if c.AgeBadRateAfterSec < 1 {
+		return fmt.Errorf("age_bad_rate_after_sec must be >= 1")
+	}
 	return nil
 }
 
@@ -86,4 +92,10 @@ func (c MaxReplicationLagModuleConfig) MinDurationBetweenChanges() time.Duration
 // protobuf field as native Go type.
 func (c MaxReplicationLagModuleConfig) MaxDurationBetweenIncreases() time.Duration {
 	return time.Duration(c.MaxDurationBetweenIncreasesSec) * time.Second
+}
+
+// AgeBadRateAfter is a helper function which returns the respective
+// protobuf field as native Go type.
+func (c MaxReplicationLagModuleConfig) AgeBadRateAfter() time.Duration {
+	return time.Duration(c.AgeBadRateAfterSec) * time.Second
 }

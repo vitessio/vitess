@@ -20,11 +20,36 @@ type FakeTopo struct{}
 // Close is part of the topo.Server interface.
 func (ft FakeTopo) Close() {}
 
+// ListDir is part of the topo.Backend interface.
+func (ft FakeTopo) ListDir(ctx context.Context, cell, dirPath string) ([]string, error) {
+	return nil, errNotImplemented
+}
+
+// Create is part of the topo.Backend interface.
+func (ft FakeTopo) Create(ctx context.Context, cell, filePath string, contents []byte) (topo.Version, error) {
+	return nil, errNotImplemented
+}
+
+// Update is part of the topo.Backend interface.
+func (ft FakeTopo) Update(ctx context.Context, cell, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
+	return nil, errNotImplemented
+}
+
+// Get is part of the topo.Backend interface.
+func (ft FakeTopo) Get(ctx context.Context, cell, filePath string) ([]byte, topo.Version, error) {
+	return nil, nil, errNotImplemented
+}
+
+// Delete is part of the topo.Backend interface.
+func (ft FakeTopo) Delete(ctx context.Context, cell, filePath string, version topo.Version) error {
+	return errNotImplemented
+}
+
 // Watch is part of the topo.Backend interface.
-func (ft FakeTopo) Watch(ctx context.Context, cell string, path string) (current *topo.WatchData, changes <-chan *topo.WatchData) {
+func (ft FakeTopo) Watch(ctx context.Context, cell string, path string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
 	return &topo.WatchData{
 		Err: errNotImplemented,
-	}, nil
+	}, nil, nil
 }
 
 // GetKnownCells is part of the topo.Server interface.
@@ -142,11 +167,6 @@ func (ft FakeTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]stri
 	return nil, errNotImplemented
 }
 
-// WatchSrvKeyspace is part of the topo.Server interface.
-func (ft FakeTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, error) {
-	return nil, errNotImplemented
-}
-
 // UpdateSrvKeyspace is part of the topo.Server interface.
 func (ft FakeTopo) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error {
 	return errNotImplemented
@@ -159,11 +179,6 @@ func (ft FakeTopo) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string)
 
 // GetSrvKeyspace is part of the topo.Server interface.
 func (ft FakeTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
-	return nil, errNotImplemented
-}
-
-// WatchSrvVSchema is part of the topo.Server interface.
-func (ft FakeTopo) WatchSrvVSchema(ctx context.Context, cell string) (<-chan *vschemapb.SrvVSchema, error) {
 	return nil, errNotImplemented
 }
 

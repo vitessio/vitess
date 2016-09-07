@@ -33,6 +33,7 @@ type FakeQueryService struct {
 	// these fields are used to simulate and synchronize on panics
 	Panics                   bool
 	StreamExecutePanicsEarly bool
+	UpdateStreamPanicsEarly  bool
 	PanicWait                chan struct{}
 
 	// ExpectedTransactionID is what transactionID to expect for Execute
@@ -461,11 +462,11 @@ func (f *FakeQueryService) SplitQueryV2(
 		f.t.Errorf("invalid SplitQuery.SplitColumn: got %v expected %v",
 			splitColumns, SplitQueryV2SplitColumns)
 	}
-	if !reflect.DeepEqual(splitCount, SplitQueryV2SplitCount) {
+	if splitCount != SplitQueryV2SplitCount {
 		f.t.Errorf("invalid SplitQuery.SplitCount: got %v expected %v",
 			splitCount, SplitQueryV2SplitCount)
 	}
-	if !reflect.DeepEqual(numRowsPerQueryPart, SplitQueryV2NumRowsPerQueryPart) {
+	if numRowsPerQueryPart != SplitQueryV2NumRowsPerQueryPart {
 		f.t.Errorf("invalid SplitQuery.numRowsPerQueryPart: got %v expected %v",
 			numRowsPerQueryPart, SplitQueryV2NumRowsPerQueryPart)
 	}
@@ -512,6 +513,71 @@ func (f *FakeQueryService) StreamHealthRegister(c chan<- *querypb.StreamHealthRe
 
 // StreamHealthUnregister is part of the queryservice.QueryService interface
 func (f *FakeQueryService) StreamHealthUnregister(int) error {
+	return nil
+}
+
+const UpdateStreamPosition = "update stream position"
+
+const UpdateStreamTimestamp = 123654
+
+var UpdateStreamStreamEvent1 = querypb.StreamEvent{
+	Statements: []*querypb.StreamEvent_Statement{
+		{
+			Category:  querypb.StreamEvent_Statement_DML,
+			TableName: "table1",
+		},
+	},
+	EventToken: &querypb.EventToken{
+		Timestamp: 789654,
+		Shard:     "shard1",
+		Position:  "streaming position 1",
+	},
+}
+
+var UpdateStreamStreamEvent2 = querypb.StreamEvent{
+	Statements: []*querypb.StreamEvent_Statement{
+		{
+			Category:  querypb.StreamEvent_Statement_DML,
+			TableName: "table2",
+		},
+	},
+	EventToken: &querypb.EventToken{
+		Timestamp: 789655,
+		Shard:     "shard1",
+		Position:  "streaming position 2",
+	},
+}
+
+// UpdateStream is part of the queryservice.QueryService interface
+func (f *FakeQueryService) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, sendReply func(*querypb.StreamEvent) error) error {
+	if f.Panics && f.UpdateStreamPanicsEarly {
+		panic(fmt.Errorf("test-triggered panic early"))
+	}
+	if position != UpdateStreamPosition {
+		f.t.Errorf("invalid UpdateStream.position: got %v expected %v", position, UpdateStreamPosition)
+	}
+	if timestamp != UpdateStreamTimestamp {
+		f.t.Errorf("invalid UpdateStream.timestamp: got %v expected %v", timestamp, UpdateStreamTimestamp)
+	}
+	f.checkTargetCallerID(ctx, "UpdateStream", target)
+	if err := sendReply(&UpdateStreamStreamEvent1); err != nil {
+		f.t.Errorf("sendReply1 failed: %v", err)
+	}
+	if f.Panics && !f.UpdateStreamPanicsEarly {
+		// wait until the client gets the response, then panics
+		<-f.PanicWait
+		panic(fmt.Errorf("test-triggered panic late"))
+	}
+	if f.HasError {
+		// wait until the client has the response, since all
+		// streaming implementation may not send previous
+		// messages if an error has been triggered.
+		<-f.ErrorWait
+		return f.TabletError
+	}
+	if err := sendReply(&UpdateStreamStreamEvent2); err != nil {
+		f.t.Errorf("sendReply2 failed: %v", err)
+	}
 	return nil
 }
 

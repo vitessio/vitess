@@ -63,19 +63,9 @@ func TopoServerTestSuite(t *testing.T, factory func() topo.Impl) {
 	checkSrvKeyspace(t, ts)
 	ts.Close()
 
-	t.Log("=== checkWatchSrvKeyspace")
-	ts = factory()
-	checkWatchSrvKeyspace(t, ts)
-	ts.Close()
-
 	t.Log("=== checkSrvVSchema")
 	ts = factory()
 	checkSrvVSchema(t, ts)
-	ts.Close()
-
-	t.Log("=== checkWatchSrvVSchema")
-	ts = factory()
-	checkWatchSrvVSchema(t, ts)
 	ts.Close()
 
 	t.Log("=== checkKeyspaceLock")
@@ -96,6 +86,16 @@ func TopoServerTestSuite(t *testing.T, factory func() topo.Impl) {
 	t.Log("=== checkElection")
 	ts = factory()
 	checkElection(t, ts)
+	ts.Close()
+
+	t.Log("=== checkDirectory")
+	ts = factory()
+	checkDirectory(t, ts)
+	ts.Close()
+
+	t.Log("=== checkFile")
+	ts = factory()
+	checkFile(t, ts)
 	ts.Close()
 
 	t.Log("=== checkWatch")
