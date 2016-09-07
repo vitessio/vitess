@@ -30,6 +30,7 @@ var storageConfig struct {
 	AccessKey string `json:"accessKey"`
 	SecretKey string `json:"secretKey"`
 	EndPoint  string `json:"endPoint"`
+	UseSSL    bool   `json:"useSSL"`
 }
 
 // CephBackupHandle implements BackupHandle for Ceph Cloud Storage.
@@ -135,6 +136,10 @@ func (bs *CephBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHand
 	doneCh := make(chan struct{})
 	for object := range c.ListObjects(bucket, searchPrefix, false, doneCh) {
 		if object.Err != nil {
+			err := c.BucketExists(bucket)
+			if err != nil {
+				return nil, nil
+			}
 			return nil, object.Err
 		}
 		subdir := strings.TrimPrefix(object.Key, searchPrefix)
@@ -246,8 +251,9 @@ func (bs *CephBackupStorage) client() (*minio.Client, error) {
 		accessKey := storageConfig.AccessKey
 		secretKey := storageConfig.SecretKey
 		url := storageConfig.EndPoint
+		useSSL := storageConfig.UseSSL
 
-		client, err := minio.NewV2(url, accessKey, secretKey, true)
+		client, err := minio.NewV2(url, accessKey, secretKey, useSSL)
 		if err != nil {
 			return nil, err
 		}
