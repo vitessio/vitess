@@ -218,7 +218,7 @@
 				"make",
 				"php_test"
 			],
-			"Manual": false,
+			"Manual": true,
 			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": []
@@ -321,7 +321,7 @@
 				"make",
 				"unit_test_race"
 			],
-			"Manual": false,
+			"Manual": true,
 			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": []
@@ -370,7 +370,7 @@
 			"File": "vtctld2_web_test.py",
 			"Args": [],
 			"Command": [],
-			"Manual": true,
+			"Manual": false,
 			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": [
@@ -381,7 +381,7 @@
 			"File": "vtctld2_web_status_test.py",
 			"Args": [],
 			"Command": [],
-			"Manual": true,
+			"Manual": false,
 			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": [

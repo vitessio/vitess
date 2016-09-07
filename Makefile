@@ -10,7 +10,7 @@ MAKEFLAGS = -s
 
 .PHONY: all build build_web test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test php_test reshard_tests
 
-all: build build_web test
+all: build test
 
 # Set a custom value for -p, the number of packages to be built/tested in parallel.
 # This is currently only used by our Travis CI test configuration.
