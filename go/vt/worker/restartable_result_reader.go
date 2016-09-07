@@ -145,7 +145,7 @@ func (r *RestartableResultReader) Next() (*sqltypes.Result, error) {
 		// when no error occurs.
 		alias := topoproto.TabletAliasString(r.tablet.Alias)
 		statsStreamingQueryErrorsCounters.Add(alias, 1)
-		r.logger.Infof("tablet=%v table=%v chunk=%v: Failed to read next rows from active streaming query. Trying to restart stream on the same tablet. Original Error: %v", alias, r.td.Name, r.chunk, err)
+		log.V(2).Infof("tablet=%v table=%v chunk=%v: Failed to read next rows from active streaming query. Trying to restart stream on the same tablet. Original Error: %v", alias, r.td.Name, r.chunk, err)
 		result, err = r.nextWithRetries()
 	}
 	if result != nil && len(result.Rows) > 0 {
@@ -178,7 +178,7 @@ func (r *RestartableResultReader) nextWithRetries() (*sqltypes.Result, error) {
 			retryable, err = r.getTablet()
 			if err != nil {
 				if !retryable {
-					r.logger.Infof("table=%v chunk=%v: Failed to restart streaming query (attempt %d) and failover to a different tablet (%v) due to a non-retryable error: %v", r.td.Name, r.chunk, attempt, r.tablet, err)
+					r.logger.Errorf("table=%v chunk=%v: Failed to restart streaming query (attempt %d) and failover to a different tablet (%v) due to a non-retryable error: %v", r.td.Name, r.chunk, attempt, r.tablet, err)
 					return nil, err
 				}
 				goto retry
@@ -190,7 +190,7 @@ func (r *RestartableResultReader) nextWithRetries() (*sqltypes.Result, error) {
 			retryable, err = r.startStream()
 			if err != nil {
 				if !retryable {
-					r.logger.Infof("tablet=%v table=%v chunk=%v: Failed to restart streaming query (attempt %d) with query '%v' and stopped due to a non-retryable error: %v", topoproto.TabletAliasString(r.tablet.Alias), r.td.Name, r.chunk, attempt, r.query, err)
+					r.logger.Errorf("tablet=%v table=%v chunk=%v: Failed to restart streaming query (attempt %d) with query '%v' and stopped due to a non-retryable error: %v", topoproto.TabletAliasString(r.tablet.Alias), r.td.Name, r.chunk, attempt, r.query, err)
 					return nil, err
 				}
 				goto retry
@@ -199,7 +199,13 @@ func (r *RestartableResultReader) nextWithRetries() (*sqltypes.Result, error) {
 
 		result, err = r.output.Recv()
 		if err == nil || err == io.EOF {
-			r.logger.Infof("tablet=%v table=%v chunk=%v: Successfully restarted streaming query with query '%v' after %.1f seconds.", topoproto.TabletAliasString(r.tablet.Alias), r.td.Name, r.chunk, r.query, time.Now().Sub(start).Seconds())
+			alias := topoproto.TabletAliasString(r.tablet.Alias)
+			log.V(2).Infof("tablet=%v table=%v chunk=%v: Successfully restarted streaming query with query '%v' after %.1f seconds.", alias, r.td.Name, r.chunk, r.query, time.Now().Sub(start).Seconds())
+			if attempt == 2 {
+				statsStreamingQueryRestartsSameTabletCounters.Add(alias, 1)
+			} else {
+				statsStreamingQueryRestartsDifferentTablet.Add(1)
+			}
 
 			// Recv() was successful.
 			return result, err
@@ -220,7 +226,7 @@ func (r *RestartableResultReader) nextWithRetries() (*sqltypes.Result, error) {
 		}
 
 		deadline, _ := retryCtx.Deadline()
-		r.logger.Infof("tablet=%v table=%v chunk=%v: Failed to restart streaming query (attempt %d) with query '%v'. Retrying to restart stream on a different tablet (for up to %.1f minutes). Next retry is in %.1f seconds. Error: %v", alias, r.td.Name, r.chunk, attempt, r.query, deadline.Sub(time.Now()).Minutes(), executeFetchRetryTime.Seconds(), err)
+		log.V(2).Infof("tablet=%v table=%v chunk=%v: Failed to restart streaming query (attempt %d) with query '%v'. Retrying to restart stream on a different tablet (for up to %.1f minutes). Next retry is in %.1f seconds. Error: %v", alias, r.td.Name, r.chunk, attempt, r.query, deadline.Sub(time.Now()).Minutes(), executeFetchRetryTime.Seconds(), err)
 
 		select {
 		case <-retryCtx.Done():
