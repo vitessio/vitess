@@ -98,30 +98,48 @@ func NewVitessError(code vtrpcpb.ErrorCode, err error, format string, args ...in
 	}
 }
 
-// WithPrefix allows a string to be prefixed to an error, without chaining a new VitessError.
+// WithPrefix allows a string to be prefixed to an error.
+// If the original error implements the VtError interface it returns a VitessError wrapping the
+// original error (with one exception: if the original error is an instance of VitessError it
+// doesn't wrap it in a new VitessError instance, but only changes the 'Message' field).
+// Otherwise, it returns a string prefixed with the given prefix.
 func WithPrefix(prefix string, in error) error {
-	vtErr, ok := in.(*VitessError)
-	if !ok {
-		return fmt.Errorf("%s%s", prefix, in)
+	if vitessError, ok := in.(*VitessError); ok {
+		return &VitessError{
+			Code:    vitessError.Code,
+			err:     vitessError.err,
+			Message: fmt.Sprintf("%s%s", prefix, in.Error()),
+		}
 	}
-
-	return &VitessError{
-		Code:    vtErr.Code,
-		err:     vtErr.err,
-		Message: fmt.Sprintf("%s%s", prefix, vtErr.Error()),
+	if vtError, ok := in.(VtError); ok {
+		return &VitessError{
+			Code:    vtError.VtErrorCode(),
+			err:     in,
+			Message: fmt.Sprintf("%s%s", prefix, in.Error()),
+		}
 	}
+	return fmt.Errorf("%s%s", prefix, in)
 }
 
-// WithSuffix allows a string to be suffixed to an error, without chaining a new VitessError.
+// WithSuffix allows a string to be suffixed to an error.
+// If the original error implements the VtError interface it returns a VitessError wrapping the
+// original error (with one exception: if the original error is an instance of VitessError
+// it doesn't wrap it in a new VitessError instance, but only changes the 'Message' field).
+// Otherwise, it returns a string suffixed with the given suffix.
 func WithSuffix(in error, suffix string) error {
-	vtErr, ok := in.(*VitessError)
-	if !ok {
-		return fmt.Errorf("%s%s", in, suffix)
+	if vitessError, ok := in.(*VitessError); ok {
+		return &VitessError{
+			Code:    vitessError.Code,
+			err:     vitessError.err,
+			Message: fmt.Sprintf("%s%s", in.Error(), suffix),
+		}
 	}
-
-	return &VitessError{
-		Code:    vtErr.Code,
-		err:     vtErr.err,
-		Message: fmt.Sprintf("%s%s", vtErr.Error(), suffix),
+	if vtError, ok := in.(VtError); ok {
+		return &VitessError{
+			Code:    vtError.VtErrorCode(),
+			err:     in,
+			Message: fmt.Sprintf("%s%s", in.Error(), suffix),
+		}
 	}
+	return fmt.Errorf("%s%s", in, suffix)
 }
