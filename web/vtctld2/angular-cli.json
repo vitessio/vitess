@@ -1,25 +1,13 @@
 {
   "project": {
-    "version": "1.0.0-beta.11-webpack.2",
+    "version": "1.0.0-beta.11-webpack.8",
     "name": "vtctld2"
   },
   "apps": [
     {
-      "root": "src",
-      "outDir": "dist",
-      "assets": "assets",
-      "index": "index.html",
-      "main": "main.ts",
-      "test": "test.ts",
-      "tsconfig": "tsconfig.json",
-      "prefix": "vt",
-      "mobile": false,
-      "styles": "styles.css",
-      "environments": {
-        "source": "environments/environment.ts",
-        "prod": "environments/environment.prod.ts",
-        "dev": "environments/environment.dev.ts"
-      }
+      "main": "src/main.ts",
+      "tsconfig": "src/tsconfig.json",
+      "mobile": false
     }
   ],
   "addons": [],
@@ -35,6 +23,8 @@
     }
   },
   "defaults": {
+    "prefix": "vt",
+    "sourceDir": "src",
     "styleExt": "css",
     "prefixInterfaces": false,
     "lazyRoutePrefix": "+"

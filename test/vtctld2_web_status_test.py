@@ -43,7 +43,7 @@ def tearDownModule():
   utils.remove_tmp_files()
 
 
-class TestVtctldWeb(unittest.TestCase):
+class TestVtctld2WebStatus(unittest.TestCase):
 
   @classmethod
   def setUpClass(cls):
