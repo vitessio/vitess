@@ -110,6 +110,10 @@ func (c *terminalClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*
 	return nil, errTerminal
 }
 
+func (c *terminalClient) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, sendReply func(*querypb.StreamEvent, int64) error) error {
+	return errTerminal
+}
+
 func (c *terminalClient) HandlePanic(err *error) {
 	if x := recover(); x != nil {
 		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))

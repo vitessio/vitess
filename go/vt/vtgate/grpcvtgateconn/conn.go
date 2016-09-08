@@ -457,6 +457,40 @@ func (conn *vtgateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*t
 	return response.SrvKeyspace, nil
 }
 
+type updateStreamAdapter struct {
+	stream vtgateservicepb.Vitess_UpdateStreamClient
+}
+
+func (a *updateStreamAdapter) Recv() (*querypb.StreamEvent, int64, error) {
+	r, err := a.stream.Recv()
+	if err != nil {
+		if err != io.EOF {
+			err = vterrors.FromGRPCError(err)
+		}
+		return nil, 0, err
+	}
+	return r.Event, r.ResumeTimestamp, nil
+}
+
+func (conn *vtgateConn) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken) (vtgateconn.UpdateStreamReader, error) {
+	req := &vtgatepb.UpdateStreamRequest{
+		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
+		Keyspace:   keyspace,
+		Shard:      shard,
+		KeyRange:   keyRange,
+		TabletType: tabletType,
+		Timestamp:  timestamp,
+		Event:      event,
+	}
+	stream, err := conn.c.UpdateStream(ctx, req)
+	if err != nil {
+		return nil, vterrors.FromGRPCError(err)
+	}
+	return &updateStreamAdapter{
+		stream: stream,
+	}, nil
+}
+
 func (conn *vtgateConn) Close() {
 	conn.cc.Close()
 }

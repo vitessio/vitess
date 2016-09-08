@@ -8,7 +8,6 @@ import protocols_flavor
 # Now imports all the implementations we need.
 # We will change this to explicit registration soon.
 from vtctl import grpc_vtctl_client  # pylint: disable=unused-import
-from vtdb import grpc_update_stream  # pylint: disable=unused-import
 from vtdb import grpc_vtgate_client  # pylint: disable=unused-import
 
 
@@ -17,9 +16,6 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
   """
 
   def binlog_player_protocol(self):
-    return 'grpc'
-
-  def binlog_player_python_protocol(self):
     return 'grpc'
 
   def vtctl_client_protocol(self):

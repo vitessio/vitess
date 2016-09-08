@@ -160,6 +160,21 @@ func (conn *VTGateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*t
 	return conn.impl.GetSrvKeyspace(ctx, keyspace)
 }
 
+// UpdateStreamReader is returned by UpdateStream.
+type UpdateStreamReader interface {
+	// Recv returns the next result on the stream.
+	// It will return io.EOF if the stream ended.
+	Recv() (*querypb.StreamEvent, int64, error)
+}
+
+// UpdateStream executes a streaming query on vtgate. It returns an
+// UpdateStreamReader and an error. First check the error. Then you
+// can pull values from the UpdateStreamReader until io.EOF, or
+// another error.
+func (conn *VTGateConn) UpdateStream(ctx context.Context, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken) (UpdateStreamReader, error) {
+	return conn.impl.UpdateStream(ctx, conn.keyspace, shard, keyRange, tabletType, timestamp, event)
+}
+
 // VTGateTx defines an ongoing transaction.
 // It should not be concurrently used across goroutines.
 type VTGateTx struct {
@@ -325,13 +340,15 @@ type Impl interface {
 	// GetSrvKeyspace returns a topo.SrvKeyspace.
 	GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error)
 
+	// UpdateStream asks for a stream of StreamEvent.
+	UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken) (UpdateStreamReader, error)
+
 	// Close must be called for releasing resources.
 	Close()
 }
 
-// DialerFunc represents a function that will return a VTGateConn
-// object that can communicate with a VTGate. Keyspace is only used
-// for Execute and StreamExecute calls.
+// DialerFunc represents a function that will return an Impl
+// object that can communicate with a VTGate.
 type DialerFunc func(ctx context.Context, address string, timeout time.Duration) (Impl, error)
 
 var dialers = make(map[string]DialerFunc)

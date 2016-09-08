@@ -8,16 +8,21 @@ import environment
 import tablet
 import utils
 from vtdb import dbexceptions
-from vtdb import update_stream
+from vtdb import proto3_encoding
 from vtdb import vtgate_client
+from vtproto import query_pb2
 from vtproto import topodata_pb2
 from mysql_flavor import mysql_flavor
 from protocols_flavor import protocols_flavor
+from vtgate_gateway_flavor.gateway import vtgate_gateway_flavor
 
 master_tablet = tablet.Tablet()
 replica_tablet = tablet.Tablet()
 master_host = 'localhost:%d' % master_tablet.port
 
+# master_start_position has the replication position before we start
+# doing anything to the master database. It is used by test_ddl to
+# make sure we see DDLs.
 master_start_position = None
 
 _create_vt_insert_test = '''create table if not exists vt_insert_test (
@@ -159,13 +164,9 @@ class TestUpdateStream(unittest.TestCase):
         "insert into vt_b (eid, name, foo) values (%d, 'name %s', 'foo %s')" %
         (x, x, x) for x in xrange(count)]
 
-  def _get_master_stream_conn(self):
-    protocol, endpoint = master_tablet.update_stream_python_endpoint()
-    return update_stream.connect(protocol, endpoint, 30)
-
-  def _get_replica_stream_conn(self):
-    protocol, endpoint = replica_tablet.update_stream_python_endpoint()
-    return update_stream.connect(protocol, endpoint, 30)
+  def _get_vtgate_stream_conn(self):
+    protocol, addr = utils.vtgate.rpc_endpoint(python=True)
+    return vtgate_client.connect(protocol, addr, 30.0)
 
   def _exec_vt_txn(self, query_list):
     protocol, addr = utils.vtgate.rpc_endpoint(python=True)
@@ -185,44 +186,46 @@ class TestUpdateStream(unittest.TestCase):
     Also tests transactions are retrieved properly.
     """
 
-    global master_start_position
-
     timeout = 30
     while True:
-      master_start_position = _get_master_current_position()
-      replica_start_position = _get_repl_current_position()
-      if master_start_position == replica_start_position:
+      master_position = _get_master_current_position()
+      replica_position = _get_repl_current_position()
+      if master_position == replica_position:
         break
       timeout = utils.wait_step(
-          '%s == %s' % (master_start_position, replica_start_position),
+          '%s == %s' % (master_position, replica_position),
           timeout
       )
     logging.debug('run_test_stream_parity starting @ %s',
-                  master_start_position)
+                  master_position)
     self._exec_vt_txn(self._populate_vt_a(15))
     self._exec_vt_txn(self._populate_vt_b(14))
     self._exec_vt_txn(['delete from vt_a'])
     self._exec_vt_txn(['delete from vt_b'])
 
     # get master events
-    master_conn = self._get_master_stream_conn()
+    master_conn = self._get_vtgate_stream_conn()
     master_events = []
-    for event in master_conn.stream_update('test_keyspace', '0',
-                                           topodata_pb2.MASTER,
-                                           position=master_start_position):
+    for event, resume_timestamp in master_conn.update_stream(
+        'test_keyspace', topodata_pb2.MASTER,
+        event=query_pb2.EventToken(shard='0', position=master_position),
+        shard='0'):
+      logging.debug('Got master event(%d): %s', resume_timestamp, event)
       master_events.append(event)
-      if event.event_token.position:
+      if len(master_events) == 4:
         break
     master_conn.close()
 
     # get replica events
+    replica_conn = self._get_vtgate_stream_conn()
     replica_events = []
-    replica_conn = self._get_replica_stream_conn()
-    for event in replica_conn.stream_update('test_keyspace', '0',
-                                            topodata_pb2.REPLICA,
-                                            position=replica_start_position):
+    for event, resume_timestamp in replica_conn.update_stream(
+        'test_keyspace', topodata_pb2.REPLICA,
+        event=query_pb2.EventToken(shard='0', position=replica_position),
+        shard='0'):
+      logging.debug('Got slave event(%d): %s', resume_timestamp, event)
       replica_events.append(event)
-      if event.event_token.position:
+      if len(replica_events) == 4:
         break
     replica_conn.close()
 
@@ -246,16 +249,19 @@ class TestUpdateStream(unittest.TestCase):
     logging.debug('Test Writes: PASS')
 
   def test_ddl(self):
+    """Asks for all statements since we started, find the DDL."""
     start_position = master_start_position
     logging.debug('test_ddl: starting @ %s', start_position)
-    master_conn = self._get_master_stream_conn()
+    master_conn = self._get_vtgate_stream_conn()
     found = False
-    for event in master_conn.stream_update('test_keyspace', '0',
-                                           topodata_pb2.MASTER,
-                                           position=start_position):
+    for event, _ in master_conn.update_stream(
+        'test_keyspace', topodata_pb2.MASTER,
+        event=query_pb2.EventToken(shard='0', position=start_position),
+        shard='0'):
       for statement in event.statements:
         if statement.sql == _create_vt_insert_test:
           found = True
+          break
       break
     master_conn.close()
     self.assertTrue(found, "didn't get right sql")
@@ -265,13 +271,14 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(
         ['SET INSERT_ID=1000000'] + self._populate_vt_insert_test)
     logging.debug('test_set_insert_id: starting @ %s', start_position)
-    master_conn = self._get_master_stream_conn()
+    master_conn = self._get_vtgate_stream_conn()
     expected_id = 1000000
-    for event in master_conn.stream_update('test_keyspace', '0',
-                                           topodata_pb2.MASTER,
-                                           position=start_position):
+    for event, _ in master_conn.update_stream(
+        'test_keyspace', topodata_pb2.MASTER,
+        event=query_pb2.EventToken(shard='0', position=start_position),
+        shard='0'):
       for statement in event.statements:
-        fields, rows = update_stream.convert_statement(statement)
+        fields, rows = proto3_encoding.convert_stream_event_statement(statement)
         self.assertEqual(fields[0], 'id')
         self.assertEqual(rows[0][0], expected_id)
         expected_id += 1
@@ -285,10 +292,11 @@ class TestUpdateStream(unittest.TestCase):
     master_tablet.mquery('other_database', _create_vt_insert_test)
     self._exec_vt_txn(self._populate_vt_insert_test)
     logging.debug('test_database_filter: starting @ %s', start_position)
-    master_conn = self._get_master_stream_conn()
-    for event in master_conn.stream_update('test_keyspace', '0',
-                                           topodata_pb2.MASTER,
-                                           position=start_position):
+    master_conn = self._get_vtgate_stream_conn()
+    for event, _ in master_conn.update_stream(
+        'test_keyspace', topodata_pb2.MASTER,
+        event=query_pb2.EventToken(shard='0', position=start_position),
+        shard='0'):
       for statement in event.statements:
         self.assertNotEqual(statement.category, 2,  # query_pb2.StreamEvent.DDL
                             "query using other_database wasn't filtered out")
@@ -307,17 +315,26 @@ class TestUpdateStream(unittest.TestCase):
       self.fail("Update stream service should be 'Disabled' but is '%s'" %
                 v['UpdateStreamState'])
 
-    # Make sure we can't start a new request.
     start_position = _get_repl_current_position()
-    replica_conn = self._get_replica_stream_conn()
+
+    # Make sure we can't start a new request to vttablet directly.
+    _, stderr = utils.run_vtctl(['VtTabletUpdateStream',
+                                 '-position', start_position,
+                                 replica_tablet.tablet_alias],
+                                expect_fail=True)
+    self.assertIn('operation not allowed in state NOT_SERVING', stderr)
+
+    # Make sure we can't start a new request through vtgate.
+    replica_conn = self._get_vtgate_stream_conn()
     try:
-      for event in replica_conn.stream_update('test_keyspace', '0',
-                                              topodata_pb2.REPLICA,
-                                              position=start_position):
-        self.assertFail('got event: %s' % str(event))
-      self.assertFail('stream_update terminated with no exception')
+      for event, resume_timestamp in replica_conn.update_stream(
+          'test_keyspace', topodata_pb2.REPLICA,
+          event=query_pb2.EventToken(shard='0', position=start_position),
+          shard='0'):
+        self.assertFail('got event(%d): %s' % (resume_timestamp, str(event)))
+      self.assertFail('update_stream terminated with no exception')
     except dbexceptions.DatabaseError as e:
-      self.assertIn('operation not allowed in state NOT_SERVING', str(e))
+      self.assertIn(vtgate_gateway_flavor().no_tablet_found_message(), str(e))
 
     # Go back to replica.
     utils.run_vtctl(
@@ -346,14 +363,16 @@ class TestUpdateStream(unittest.TestCase):
 
     # Start an Update Stream from the slave. When we get the data, go to spare.
     # That should interrupt the streaming RPC.
-    replica_conn = self._get_replica_stream_conn()
+    replica_conn = self._get_vtgate_stream_conn()
     first = True
     txn_count = 0
     try:
-      for event in replica_conn.stream_update('test_keyspace', '0',
-                                              topodata_pb2.REPLICA,
-                                              position=start_position):
-        logging.debug('test_update_stream_interrupt got event: %s', event)
+      for event, resume_timestamp in replica_conn.update_stream(
+          'test_keyspace', topodata_pb2.REPLICA,
+          event=query_pb2.EventToken(shard='0', position=start_position),
+          shard='0'):
+        logging.debug('test_update_stream_interrupt got event(%d): %s',
+                      resume_timestamp, event)
         if first:
           utils.run_vtctl(
               ['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
@@ -363,7 +382,7 @@ class TestUpdateStream(unittest.TestCase):
           if event.event_token.position:
             txn_count += 1
 
-      self.assertFail('stream_update terminated with no exception')
+      self.assertFail('update_stream terminated with no exception')
     except dbexceptions.DatabaseError as e:
       self.assertIn('context canceled', str(e))
     self.assertFalse(first)
@@ -378,12 +397,13 @@ class TestUpdateStream(unittest.TestCase):
     master_tablet.mquery('vt_test_keyspace', 'flush logs')
     self._exec_vt_txn(self._populate_vt_a(15))
     self._exec_vt_txn(['delete from vt_a'])
-    master_conn = self._get_master_stream_conn()
+    master_conn = self._get_vtgate_stream_conn()
     master_txn_count = 0
     logs_correct = False
-    for event in master_conn.stream_update('test_keyspace', '0',
-                                           topodata_pb2.MASTER,
-                                           position=start_position):
+    for event, _ in master_conn.update_stream(
+        'test_keyspace', topodata_pb2.MASTER,
+        event=query_pb2.EventToken(shard='0', position=start_position),
+        shard='0'):
       if event.event_token.position:
         master_txn_count += 1
         position = event.event_token.position
@@ -477,13 +497,14 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(['delete from vt_b'])
 
     # make sure we only get events related to vt_b.
-    master_conn = self._get_master_stream_conn()
+    master_conn = self._get_vtgate_stream_conn()
     count = 0
-    for event in master_conn.stream_update('test_keyspace', '0',
-                                           topodata_pb2.MASTER,
-                                           timestamp=starting_timestamp+2):
-      logging.debug('_test_timestamp_start: got event: %s',
-                    str(event))
+    for (event, resume_timestamp) in master_conn.update_stream(
+        'test_keyspace', topodata_pb2.MASTER,
+        timestamp=starting_timestamp+2,
+        shard='0'):
+      logging.debug('_test_timestamp_start: got event: %s @ %d',
+                    str(event), resume_timestamp)
       # we might get a couple extra events from the rotation, ignore these.
       if event.statements[0].category == 0:  # Statement.Category.Error
         continue
@@ -497,13 +518,14 @@ class TestUpdateStream(unittest.TestCase):
   def test_timestamp_start_too_old(self):
     """Ask the server to start streaming from a timestamp 4h ago."""
     starting_timestamp = long(time.time()) - 4*60*60
-    master_conn = self._get_master_stream_conn()
+    master_conn = self._get_vtgate_stream_conn()
     try:
-      for event in master_conn.stream_update('test_keyspace', '0',
-                                             topodata_pb2.MASTER,
-                                             timestamp=starting_timestamp):
-        self.assertFail('got an event: %s' % str(event))
-    except dbexceptions.OperationalError as e:
+      for (event, resume_timestamp) in master_conn.update_stream(
+          'test_keyspace', topodata_pb2.MASTER,
+          timestamp=starting_timestamp,
+          shard='0'):
+        self.assertFail('got an event: %s %d' % (str(event), resume_timestamp))
+    except dbexceptions.QueryNotServed as e:
       self.assertIn('retry: cannot find relevant binlogs on this server',
                     str(e))
 

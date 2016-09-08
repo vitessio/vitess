@@ -92,6 +92,11 @@ func init() {
 			commandVtTabletStreamHealth,
 			"[-count <count, default 1>] [-connect_timeout <connect timeout>] <tablet alias>",
 			"Executes the StreamHealth streaming query to a vttablet process. Will stop after getting <count> answers."})
+		addCommand(queriesGroupName, command{
+			"VtTabletUpdateStream",
+			commandVtTabletUpdateStream,
+			"[-count <count, default 1>] [-connect_timeout <connect timeout>] [-position <position>] [-timestamp <timestamp>] <tablet alias>",
+			"Executes the UpdateStream streaming query to a vttablet process. Will stop after getting <count> answers."})
 	})
 }
 
@@ -463,6 +468,54 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 			return fmt.Errorf("stream ended early: %v", err)
 		}
 		data, err := json.Marshal(shr)
+		if err != nil {
+			wr.Logger().Errorf("cannot json-marshal structure: %v", err)
+		} else {
+			wr.Logger().Printf("%v\n", string(data))
+		}
+	}
+	return nil
+}
+
+func commandVtTabletUpdateStream(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	count := subFlags.Int("count", 1, "number of responses to wait for")
+	timestamp := subFlags.Int("timestamp", 0, "timestamp to start the stream from")
+	position := subFlags.String("position", "", "position to start the stream from")
+	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("The <tablet alias> argument is required for the VtTabletUpdateStream command.")
+	}
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return err
+	}
+
+	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, *connectTimeout)
+	if err != nil {
+		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
+	}
+
+	stream, err := conn.UpdateStream(ctx, &querypb.Target{
+		Keyspace:   tabletInfo.Tablet.Keyspace,
+		Shard:      tabletInfo.Tablet.Shard,
+		TabletType: tabletInfo.Tablet.Type,
+	}, *position, int64(*timestamp))
+	if err != nil {
+		return err
+	}
+	for i := 0; i < *count; i++ {
+		se, err := stream.Recv()
+		if err != nil {
+			return fmt.Errorf("stream ended early: %v", err)
+		}
+		data, err := json.Marshal(se)
 		if err != nil {
 			wr.Logger().Errorf("cannot json-marshal structure: %v", err)
 		} else {

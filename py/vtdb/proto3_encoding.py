@@ -142,6 +142,31 @@ def convert_bind_vars(bind_variables, request_bind_variables):
     convert_value(val, request_bind_variables[key], allow_lists=True)
 
 
+def convert_stream_event_statement(statement):
+  """Converts encoded rows inside a StreamEvent.Statement to native types.
+
+  Args:
+    statement: the StreamEvent.Statement object.
+
+  Returns:
+    fields: array of names for the primary key columns.
+    rows: array of tuples for each primary key value.
+  """
+  fields = []
+  rows = []
+  if statement.primary_key_fields:
+    convs = []
+    for field in statement.primary_key_fields:
+      fields.append(field.name)
+      convs.append(conversions.get(field.type))
+
+    for r in statement.primary_key_values:
+      row = tuple(make_row(r, convs))
+      rows.append(row)
+
+  return fields, rows
+
+
 class Proto3Connection(object):
   """A base class for proto3-based python connectors.
 
@@ -458,6 +483,46 @@ class Proto3Connection(object):
       rowset = self._get_rowset_from_query_result(result)
       rowsets.append(rowset)
     return rowsets
+
+  def update_stream_request(self,
+                            keyspace_name,
+                            shard,
+                            key_range,
+                            tablet_type,
+                            timestamp,
+                            event,
+                            effective_caller_id):
+    """Builds the right vtgate_pb2 UpdateStreamRequest.
+
+    Args:
+      keyspace_name: keyspace to apply the query to.
+      shard: shard to ask for.
+      key_range: keyrange.KeyRange object.
+      tablet_type: string tablet type.
+      timestamp: when to start the stream from.
+      event: alternate way to describe where to start the stream from.
+      effective_caller_id: optional vtgate_client.CallerID.
+
+    Returns:
+      A vtgate_pb2.UpdateStreamRequest object.
+    """
+    request = vtgate_pb2.UpdateStreamRequest(keyspace=keyspace_name,
+                                             tablet_type=tablet_type,
+                                             shard=shard)
+    if timestamp:
+      request.timestamp = timestamp
+    if event:
+      if event.timestamp:
+        request.event.timestamp = event.timestamp
+      if event.shard:
+        request.event.shard = event.shard
+      if event.position:
+        request.event.position = event.position
+    if key_range:
+      request.key_range.start = key_range.Start
+      request.key_range.end = key_range.End
+    self._add_caller_id(request, effective_caller_id)
+    return request
 
   def stream_execute_request_and_name(self, sql, bind_variables, tablet_type,
                                       keyspace_name,

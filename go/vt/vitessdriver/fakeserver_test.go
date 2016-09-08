@@ -237,6 +237,11 @@ func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string)
 	return &topodatapb.SrvKeyspace{}, nil
 }
 
+// UpdateStream is part of the VTGateService interface
+func (f *fakeVTGateService) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, sendReply func(*querypb.StreamEvent, int64) error) error {
+	return nil
+}
+
 // HandlePanic is part of the VTGateService interface
 func (f *fakeVTGateService) HandlePanic(err *error) {
 	if x := recover(); x != nil {

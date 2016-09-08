@@ -37,7 +37,8 @@ var (
 	keyRanges = []*topodatapb.KeyRange{
 		{Start: []byte{1, 2, 3, 4}, End: []byte{5, 6, 7, 8}},
 	}
-	keyRangesEcho = "[start:\"\\001\\002\\003\\004\" end:\"\\005\\006\\007\\010\" ]"
+	keyRangeZeroEcho = "start:\"\\001\\002\\003\\004\" end:\"\\005\\006\\007\\010\" "
+	keyRangesEcho    = "[" + keyRangeZeroEcho + "]"
 
 	entityKeyspaceIDs = []*vtgatepb.ExecuteEntityIdsRequest_EntityId{
 		{
@@ -87,6 +88,10 @@ var (
 
 	callerID     = callerid.NewEffectiveCallerID("test_principal", "test_component", "test_subcomponent")
 	callerIDEcho = "principal:\"test_principal\" component:\"test_component\" subcomponent:\"test_subcomponent\" "
+
+	timestamp        int64 = 876543
+	position               = "test_position"
+	updateStreamEcho       = "map[callerId:" + callerIDEcho + " event:timestamp:876543 shard:\"-80\" position:\"" + position + "\"  keyRange:" + keyRangeZeroEcho + " keyspace:conn_ks shard:echo://test query tabletType:REPLICA timestamp:0]"
 )
 
 // testEcho exercises the test cases provided by the "echo" service.
@@ -95,6 +100,7 @@ func testEcho(t *testing.T, conn *vtgateconn.VTGateConn) {
 	testEchoStreamExecute(t, conn)
 	testEchoTransactionExecute(t, conn)
 	testEchoSplitQuery(t, conn)
+	testEchoUpdateStream(t, conn)
 }
 
 func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -404,9 +410,35 @@ func testEchoSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 }
 
+func testEchoUpdateStream(t *testing.T, conn *vtgateconn.VTGateConn) {
+	var stream vtgateconn.UpdateStreamReader
+	var err error
+
+	ctx := callerid.NewContext(context.Background(), callerID, nil)
+
+	stream, err = conn.UpdateStream(ctx, echoPrefix+query, keyRanges[0], tabletType, 0, &querypb.EventToken{
+		Timestamp: timestamp,
+		Shard:     shards[0],
+		Position:  position,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	se, _, err := stream.Recv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if se.EventToken.Position != updateStreamEcho {
+		t.Errorf("UpdateStream(0) = %v, want %v", se.EventToken.Position, updateStreamEcho)
+	}
+}
+
 // getEcho extracts the echoed field values from a query result.
 func getEcho(qr *sqltypes.Result) map[string]sqltypes.Value {
 	values := map[string]sqltypes.Value{}
+	if qr == nil {
+		return values
+	}
 	for i, field := range qr.Fields {
 		values[field.Name] = qr.Rows[0][i]
 	}

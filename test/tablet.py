@@ -118,13 +118,6 @@ class Tablet(object):
     return 'tablet: uid: %d web: http://localhost:%d/ rpc port: %d' % (
         self.tablet_uid, self.port, self.grpc_port)
 
-  def update_stream_python_endpoint(self):
-    protocol = protocols_flavor().binlog_player_python_protocol()
-    port = self.port
-    if protocol == 'grpc':
-      port = self.grpc_port
-    return (protocol, 'localhost:%d' % port)
-
   def mysqlctl(self, cmd, extra_my_cnf=None, with_ports=False, verbose=False):
     """Runs a mysqlctl command.
 

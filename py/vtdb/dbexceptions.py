@@ -72,6 +72,7 @@ class TimeoutError(OperationalError):
 class TxPoolFull(DatabaseError):
   pass
 
+
 # TransientError is raised for an error that is expected to go away soon. These
 # errors should be retried. Examples: when a client exceedes allocated quota on
 # a server, or when there's a backlog of requests and new ones are temporarily
@@ -83,4 +84,11 @@ class TransientError(DatabaseError):
 # TODO(aaijazi): These are deprecated. They will be replaced by TransientError.
 # ThrottledError is raised when client exceeds allocated quota on the server
 class ThrottledError(DatabaseError):
+  pass
+
+
+# QueryNotServed is raised when a pre-condition has failed. For instance,
+# an update stream query cannot be served because there aren't enough
+# binlogs on the server.
+class QueryNotServed(DatabaseError):
   pass

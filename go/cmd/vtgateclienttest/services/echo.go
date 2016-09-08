@@ -325,3 +325,25 @@ func (c *echoClient) SplitQueryV2(
 		numRowsPerQueryPart,
 		algorithm)
 }
+
+func (c *echoClient) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, sendReply func(*querypb.StreamEvent, int64) error) error {
+	if strings.HasPrefix(shard, EchoPrefix) {
+		m := map[string]interface{}{
+			"callerId":   callerid.EffectiveCallerIDFromContext(ctx),
+			"keyspace":   keyspace,
+			"shard":      shard,
+			"keyRange":   keyRange,
+			"timestamp":  timestamp,
+			"tabletType": tabletType,
+			"event":      event,
+		}
+		bytes := printSortedMap(reflect.ValueOf(m))
+		sendReply(&querypb.StreamEvent{
+			EventToken: &querypb.EventToken{
+				Position: string(bytes),
+			},
+		}, 0)
+		return nil
+	}
+	return c.fallbackClient.UpdateStream(ctx, keyspace, shard, keyRange, tabletType, timestamp, event, sendReply)
+}

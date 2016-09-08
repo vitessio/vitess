@@ -220,6 +220,33 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     except (face.AbortionError, vtgate_utils.VitessError) as e:
       raise _convert_exception(e, keyspace=name)
 
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
+  def update_stream(
+      self, keyspace_name, tablet_type,
+      timestamp=None, event=None,
+      shard=None, key_range=None,
+      effective_caller_id=None,
+      **kwargs):
+
+    try:
+      request = self.update_stream_request(
+          keyspace_name, shard, key_range, tablet_type,
+          timestamp, event, effective_caller_id)
+      it = self.stub.UpdateStream(request, self.timeout)
+    except (face.AbortionError, vtgate_utils.VitessError) as e:
+      raise _convert_exception(
+          e, 'UpdateStream',
+          keyspace=keyspace_name, tablet_type=tablet_type)
+
+    def row_generator():
+      try:
+        for response in it:
+          yield (response.event, response.resume_timestamp)
+      except Exception as e:
+        raise _convert_exception(e)
+
+    return row_generator()
+
 
 def _convert_exception(exc, *args, **kwargs):
   """This parses the protocol exceptions to the api interface exceptions.
@@ -259,6 +286,8 @@ def _convert_exception(exc, *args, **kwargs):
         return dbexceptions.TransientError(new_args)
     elif exc.code == interfaces.StatusCode.ALREADY_EXISTS:
       new_exc = _prune_integrity_error(msg, new_args)
+    elif exc.code == interfaces.StatusCode.FAILED_PRECONDITION:
+      return dbexceptions.QueryNotServed(msg, new_args)
     else:
       # Unhandled RPC application error
       new_exc = dbexceptions.DatabaseError(new_args + (msg,))
