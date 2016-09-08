@@ -42,6 +42,8 @@ type result struct {
 	// count is the number of times this result is registered for the same
 	// command. With each stream of this result, count will be decreased by one.
 	count int
+	// addr optionally specifies which server address is expected from the client.
+	addr string
 }
 
 func (r1 result) Equals(r2 result) bool {
@@ -53,11 +55,17 @@ func (r1 result) Equals(r2 result) bool {
 // RegisterResult registers for a given command (args) the result which the fake should return.
 // Once the result was returned, it will be automatically deregistered.
 func (f *FakeLoggerEventStreamingClient) RegisterResult(args []string, output string, err error) error {
+	return f.RegisterResultForAddr("" /* addr */, args, output, err)
+}
+
+// RegisterResultForAddr is identical to RegisterResult but also expects that
+// the client did dial "addr" as server address.
+func (f *FakeLoggerEventStreamingClient) RegisterResultForAddr(addr string, args []string, output string, err error) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	k := generateKey(args)
-	v := result{output, err, 1}
+	v := result{output, err, 1, addr}
 	if result, ok := f.results[k]; ok {
 		if result.Equals(v) {
 			result.count++
@@ -107,14 +115,18 @@ func (s *streamResultAdapter) Recv() (*logutilpb.Event, error) {
 }
 
 // StreamResult returns an EventStream which streams back a registered result as logging events.
-func (f *FakeLoggerEventStreamingClient) StreamResult(args []string) (logutil.EventStream, error) {
+// "addr" is the server address which the client dialed and may be empty.
+func (f *FakeLoggerEventStreamingClient) StreamResult(addr string, args []string) (logutil.EventStream, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	k := generateKey(args)
 	result, ok := f.results[k]
 	if !ok {
-		return nil, fmt.Errorf("No response was registered for args: %v", args)
+		return nil, fmt.Errorf("no response was registered for args: %v", args)
+	}
+	if result.addr != "" && addr != result.addr {
+		return nil, fmt.Errorf("client sent request to wrong server address. got: %v want: %v", addr, result.addr)
 	}
 	result.count--
 	if result.count == 0 {

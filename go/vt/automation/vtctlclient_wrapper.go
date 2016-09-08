@@ -36,7 +36,7 @@ func ExecuteVtctl(ctx context.Context, server string, args []string) (string, er
 		// TODO(mberlin): Should these values be configurable as flags?
 		30*time.Second, // dialTimeout
 		time.Hour,      // actionTimeout
-		createLoggerEventToBufferFunction(&output))
+		loggerToBufferFunc)
 
 	endMsg := fmt.Sprintf("Executed remote vtctl command: %v server: %v err: %v", args, server, err)
 	outputLogger.Infof(endMsg)
