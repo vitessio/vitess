@@ -139,12 +139,11 @@ class LocalDatabase(object):
         # redirected keyspaces have no underlying database
         continue
 
-      for cell in self.topology.cells:
-        for spb in kpb.shards:
-          db_name = spb.db_name_override
-          if not db_name:
-            db_name = 'vt_%s_%s_%s' % (cell, kpb.name, spb.name)
-          cmds.append('create database `%s`' % db_name)
+      for spb in kpb.shards:
+        db_name = spb.db_name_override
+        if not db_name:
+          db_name = 'vt_%s_%s' % (kpb.name, spb.name)
+        cmds.append('create database `%s`' % db_name)
     logging.info('Creating databases')
     self.mysql_execute(cmds)
 
@@ -185,12 +184,11 @@ class LocalDatabase(object):
         cmds = self.get_sql_commands_from_file(filepath, schema_dir)
 
         # Run the cmds on each shard and cell in the keyspace.
-        for cell in self.topology.cells:
-          for spb in kpb.shards:
-            db_name = spb.db_name_override
-            if not db_name:
-              db_name = 'vt_%s_%s_%s' % (cell, kpb.name, spb.name)
-            self.mysql_execute(cmds, db_name=db_name)
+        for spb in kpb.shards:
+          db_name = spb.db_name_override
+          if not db_name:
+            db_name = 'vt_%s_%s' % (kpb.name, spb.name)
+          self.mysql_execute(cmds, db_name=db_name)
 
   def populate_with_random_data(self):
     """Populates all shards with randomly generated data."""
@@ -200,12 +198,11 @@ class LocalDatabase(object):
         # redirected keyspaces have no underlying database
         continue
 
-      for cell in self.topology.cells:
-        for spb in kpb.shards:
-          db_name = spb.db_name_override
-          if not db_name:
-            db_name = 'vt_%s_%s_%s' % (cell, kpb.name, spb.name)
-          self.populate_shard_with_random_data(db_name)
+      for spb in kpb.shards:
+        db_name = spb.db_name_override
+        if not db_name:
+          db_name = 'vt_%s_%s' % (kpb.name, spb.name)
+        self.populate_shard_with_random_data(db_name)
 
   def populate_shard_with_random_data(self, db_name):
     """Populates the given database with randomly generated data.

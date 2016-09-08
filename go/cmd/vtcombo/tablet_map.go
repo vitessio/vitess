@@ -10,6 +10,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -149,7 +150,7 @@ func initTabletMap(ts topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl
 				for _, cell := range tpb.Cells {
 					dbname := spb.DbNameOverride
 					if dbname == "" {
-						dbname = fmt.Sprintf("vt_%v_%v_%v", cell, keyspace, shard)
+						dbname = fmt.Sprintf("vt_%v_%v", keyspace, shard)
 					}
 					dbcfgs.App.DbName = dbname
 
@@ -347,6 +348,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, target *queryp
 			result <- reply.Copy()
 			return nil
 		})
+		finalErr = tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(finalErr))
 
 		// the client will only access finalErr after the
 		// channel is closed, and then it's already set.
@@ -485,9 +487,42 @@ func (itc *internalTabletConn) StreamHealth(ctx context.Context) (tabletconn.Str
 	}, nil
 }
 
+type updateStreamAdapter struct {
+	c   chan *querypb.StreamEvent
+	err *error
+}
+
+func (a *updateStreamAdapter) Recv() (*querypb.StreamEvent, error) {
+	r, ok := <-a.c
+	if !ok {
+		if *a.err == nil {
+			return nil, io.EOF
+		}
+		return nil, *a.err
+	}
+	return r, nil
+}
+
 // UpdateStream is part of tabletconn.TabletConn. Not implemented here.
 func (itc *internalTabletConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
-	return nil, fmt.Errorf("not implemented in vtcombo")
+	result := make(chan *querypb.StreamEvent, 10)
+	var finalErr error
+
+	go func() {
+		finalErr = itc.tablet.qsc.QueryService().UpdateStream(ctx, target, position, timestamp, func(reply *querypb.StreamEvent) error {
+			// We need to deep-copy the reply before returning,
+			// because the underlying buffers are reused.
+			result <- proto.Clone(reply).(*querypb.StreamEvent)
+			return nil
+		})
+		finalErr = tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(finalErr))
+
+		// the client will only access finalErr after the
+		// channel is closed, and then it's already set.
+		close(result)
+	}()
+
+	return &updateStreamAdapter{result, &finalErr}, nil
 }
 
 //
