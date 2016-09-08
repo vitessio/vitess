@@ -14,6 +14,7 @@ from vtproto import query_pb2
 from vtproto import topodata_pb2
 from mysql_flavor import mysql_flavor
 from protocols_flavor import protocols_flavor
+from vtgate_gateway_flavor.gateway import vtgate_gateway_flavor
 
 master_tablet = tablet.Tablet()
 replica_tablet = tablet.Tablet()
@@ -333,7 +334,7 @@ class TestUpdateStream(unittest.TestCase):
         self.assertFail('got event(%d): %s' % (resume_timestamp, str(event)))
       self.assertFail('update_stream terminated with no exception')
     except dbexceptions.DatabaseError as e:
-      self.assertIn('no valid tablet', str(e))
+      self.assertIn(vtgate_gateway_flavor().no_tablet_found_message(), str(e))
 
     # Go back to replica.
     utils.run_vtctl(
