@@ -503,7 +503,7 @@ func (a *updateStreamAdapter) Recv() (*querypb.StreamEvent, error) {
 	return r, nil
 }
 
-// UpdateStream is part of tabletconn.TabletConn. Not implemented here.
+// UpdateStream is part of tabletconn.TabletConn.
 func (itc *internalTabletConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
 	result := make(chan *querypb.StreamEvent, 10)
 	var finalErr error
