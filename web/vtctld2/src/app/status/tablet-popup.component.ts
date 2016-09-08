@@ -51,7 +51,7 @@ export class TabletPopupComponent implements OnInit {
     if (this.alias == null && this.data === -1) {
         this.zone.run( () => { this.missingPopup = true; });
     }
-    // It is the unaggregated view where each tablet has it's alias as a title.
+    // It is the unaggregated view where each tablet has its alias as a title.
     if (this.alias != null) {
       this.title = this.alias.cell + ' - ' + this.alias.uid;
     }
@@ -66,7 +66,7 @@ export class TabletPopupComponent implements OnInit {
     }
   }
 
-  getType(type: number) {
+  typeToString(type: number) {
     if (type === 1) {
       return 'MASTER';
     }
@@ -78,12 +78,12 @@ export class TabletPopupComponent implements OnInit {
     }
   }
 
-  // parseData gets the tabletStats and sets the proper values.
+  // parseUnaggregatedData gets the tabletStats and sets the proper values.
   parseUnaggregatedData() {
     this.tabletService.getTabletHealth(this.alias.cell, this.alias.uid).subscribe( health => {
       this.keyspace = health.Target.keyspace;
       this.shard = health.Target.shard;
-      this.tabletType = this.getType(health.Target.tablet_type);
+      this.tabletType = this.typeToString(health.Target.tablet_type);
       this.hostname = health.Tablet.hostname;
       this.tabletUrl = this.sanitizer.bypassSecurityTrustResourceUrl(`http://${health.Tablet.hostname}:${health.Tablet.port_map.vt}`);
       this.lag = (typeof health.Stats.seconds_behind_master === 'undefined') ? 0 : health.Stats.seconds_behind_master;

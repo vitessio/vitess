@@ -22,7 +22,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
   data: number[][];
   // aliases holds the alias references for each datapoint in the heatmap.
   aliases: any[][];
-  // Keyspace is a label object with the keyspace name and it's rowspan.
+  // Keyspace is a label object with the keyspace name and its rowspan.
   keyspace: any;
   // yLabels is an array of objects each with one cell label and multiple type labels
   // each of which have a name and a rowspan
@@ -67,6 +67,9 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
     return this.heatmap.KeyspaceLabel.Rowspan;
   }
 
+  // getRemainingRows returns a list of the numbers from 1 to upperbound.
+  // It is used by the HTML template to get the number of empty rows needed to properly
+  // have a column spanning additional rows.
   getRemainingRows(upperBound) {
     let numbers = [];
     for (let i = 1; i < upperBound; i++) {
@@ -80,8 +83,8 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
                           this.getXLabelsRowHeight());
     this.data = this.heatmap.Data;
     this.aliases = this.heatmap.Aliases;
-    this.yLabels = this.heatmap.CellAndTypeLabels;
     this.xLabels = this.heatmap.ShardLabels;
+    this.yLabels = this.heatmap.CellAndTypeLabels;
     this.keyspace = this.heatmap.KeyspaceLabel;
     this.yGrid = this.heatmap.YGridLines;
 
@@ -124,18 +127,18 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
     // Upon clicking, the popup will display all relevent data for that data point.
     elem.on('plotly_click', function(data) {
       this.zone.run(() => { this.showPopup = false; });
-      let x = this.xLabels.indexOf(data.points[0].x);
-      let y = data.points[0].y;
+      let shardIndex = this.xLabels.indexOf(data.points[0].x);
+      let rowIndex = data.points[0].y;
       if (this.aliases == null) {
         this.popupAlias = null;
       } else {
-        this.popupAlias = this.aliases[y][x];
+        this.popupAlias = this.aliases[rowIndex][shardIndex];
       }
       this.popupData = data.points[0].z;
       this.popupKeyspace = this.keyspace.Name;
       this.popupShard = data.points[0].x;
-      this.popupCell = this.getCell(y);
-      this.popupType = this.getType(y);
+      this.popupCell = this.getCell(rowIndex);
+      this.popupType = this.getType(rowIndex);
       this.popupClickState = true;
       this.zone.run(() => { this.showPopup = true; });
       this.clicked = true;
@@ -149,18 +152,18 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
         return;
       }
       this.zone.run(() => { this.showPopup = false; });
-      let x = this.xLabels.indexOf(data.points[0].x);
-      let y = data.points[0].y;
+      let shardIndex = this.xLabels.indexOf(data.points[0].x);
+      let rowIndex = data.points[0].y;
       if (this.aliases == null) {
         this.popupAlias = null;
       } else {
-        this.popupAlias = this.aliases[y][x];
+        this.popupAlias = this.aliases[rowIndex][shardIndex];
       }
       this.popupData = data.points[0].z;
       this.popupKeyspace = this.keyspace.Name;
       this.popupShard = data.points[0].x;
-      this.popupCell = this.getCell(y);
-      this.popupType = this.getType(y);
+      this.popupCell = this.getCell(rowIndex);
+      this.popupType = this.getType(rowIndex);
       this.popupClickState = false;
       this.zone.run(() => { this.showPopup = true; });
     }.bind(this));
@@ -193,7 +196,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
 
   // setupColorscale sets the right scale based on what metric the heatmap is displaying.
   setupColorscale(metric) {
-    if (metric === 'healthy') {
+    if (metric === 'health') {
       this.colorscaleValue = [
         [0.0, '#000000'],
         [0.25, '#FFFFFF'],
@@ -204,6 +207,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
       this.dataMin = -1;
       this.dataMax = 3;
     } else {
+      // The max value describes the highest value of lag or qps present in the current data.
       let max = this.data.reduce((a, b) => a.concat(b))
                          .reduce((a, b) => (a > b) ? a : b);
       let percent = (max === 0) ? 1.0 : 1 / (1 + max);

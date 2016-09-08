@@ -12,32 +12,33 @@
     </td>
   </tr>
 
-  <!-- The labels, and nested labels, of the map are drawn -->
+<!-- The cell and type labels of the map are drawn -->
 <template ngFor let-label [ngForOf]="yLabels" let-firstKeyspace="first">
-     <template [ngIf]="label.TypeLabels == null">
-       <tr [ngStyle]="{'height': getRowHeight()+'px'}">
-         <td [attr.rowspan]="label.CellLabel.Rowspan" class="bordered">{{label.CellLabel.Name}}</td>
-       </tr>
+  <template [ngIf]="label.TypeLabels == null">
+  <tr [ngStyle]="{'height': getRowHeight()+'px'}">
+    <td [attr.rowspan]="label.CellLabel.Rowspan" class="bordered">{{label.CellLabel.Name}}</td>
+  </tr>
 
-       <tr *ngFor="let num of getRemainingRows(label.CellLabel.Rowspan)" [ngStyle]="{'height': getRowHeight()+'px'}"></tr>
-     </template>
+  <!-- We add empty rows here because the rowspan value of the heatmap's cell labels expects them. -->
+  <tr *ngFor="let num of getRemainingRows(label.CellLabel.Rowspan)" [ngStyle]="{'height': getRowHeight()+'px'}"></tr>
+  </template>
 
-    <template [ngIf]="label.TypeLabels != null">
-      <template ngFor let-nestedLabel [ngForOf]="label.TypeLabels" let-firstCell="first">
-        <tr [ngStyle]="{'height': getRowHeight()+'px'}">
-          <td *ngIf="firstCell" [attr.rowspan]="label.CellLabel.Rowspan" class="bordered">{{label.CellLabel.Name}}</td>
-          <td class="bordered" [attr.rowspan]="nestedLabel.Rowspan">{{nestedLabel.Name}}</td>
-        </tr>
+  <template [ngIf]="label.TypeLabels != null">
+    <template ngFor let-typeLabel [ngForOf]="label.TypeLabels" let-firstCell="first">
+    <tr [ngStyle]="{'height': getRowHeight()+'px'}">
+      <td *ngIf="firstCell" [attr.rowspan]="label.CellLabel.Rowspan" class="bordered">{{label.CellLabel.Name}}</td>
+      <td class="bordered" [attr.rowspan]="typeLabel.Rowspan">{{typeLabel.Name}}</td>
+    </tr>
 
-         <tr *ngFor="let num of getRemainingRows(nestedLabel.Rowspan)" [ngStyle]="{'height': getRowHeight()+'px'}"></tr>
-      </template>
+    <!-- We add empty rows here because the rowspan value of the heatmap's cell and type labels expects them. -->
+    <tr *ngFor="let num of getRemainingRows(typeLabel.Rowspan)" [ngStyle]="{'height': getRowHeight()+'px'}"></tr>
     </template>
+  </template>
 </template>
 </table>
 
 <div *ngIf="showPopup" class="popup">
-  <vt-tablet-popup
-                   [data]="popupData"
+  <vt-tablet-popup [data]="popupData"
                    [alias]="popupAlias"
                    [keyspace]="popupKeyspace"
                    [shard]="popupShard"
