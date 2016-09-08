@@ -28,7 +28,7 @@ addons:
       - time
       # Optional dependency. Without a running syslog daemon, Vitess will keep complaining that it could not log events and spam the logs.
       - rsyslog
-  sauce_connect: true
+  sauce_connect: false
 # Cache directories of dependencies which are built by bootstrap.sh
 cache:
   directories:
@@ -84,11 +84,8 @@ env:
     #       All our tests should be spread out as evenly as possible across these 5 slots.
     #       We should always utilize all 5 slots because the cost of the setup is high (up to one minute).
     # NOTE: Use "" if you specify a space separated list of multiple targets.
-    #- TEST_MATRIX="-shard 0"
-    #- TEST_MATRIX="-shard 1"
-    #- TEST_MATRIX="-shard 2"
-    #- TEST_MATRIX="-shard 3"
-    - TEST_MATRIX="-shard 4"
+    - TEST_MATRIX=4
+    - TEST_MATRIX=0
 before_install:
   - travis/download_mariadb.sh
   - travis/php_init.sh
@@ -100,7 +97,7 @@ before_script:
   # Travis only tests. Run only on the first shard.
   # Part of "before_script" because in "script" the job would not fail immediately if a command fails.
   - |
-    if [[ $TEST_MATRIX = *"-shard 0"* ]]; then
+    if [[ $TEST_MATRIX -eq 0 ]]; then
       travis/check_make_proto.sh
       #elif [[ $TEST_MATRIX = *"-shard 4"* ]]; then
       #tools/bootstrap_web.sh
@@ -110,10 +107,10 @@ script:
   - go run travis/log_gomaxprocs.go
   - |
     if [[ $TRAVIS_PULL_REQUEST = "false" ]]; then
-      go run test.go $TEST_FLAGS -tag=webdriver
+      go run test.go $TEST_FLAGS -shard $TEST_MATRIX
     else
       # Exclude webdriver tests on Travis PRs since the sauce addon does not work for PRs
-      go run test.go $TEST_FLAGS $TEST_MATRIX -exclude=webdriver
+      go run test.go $TEST_FLAGS -shard $TEST_MATRIX -exclude=webdriver
     fi
 after_failure:
   # In case of errors, output log files to make it easier to debug the error.
