@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/env"
 )
 
@@ -19,9 +19,7 @@ var MycnfPath = "/tmp/my.cnf"
 
 func TestMycnf(t *testing.T) {
 	os.Setenv("MYSQL_FLAVOR", "MariaDB")
-	dbaConfig := dbconfigs.DefaultDBConfigs.Dba
-	appConfig := dbconfigs.DefaultDBConfigs.App.ConnParams
-	replConfig := dbconfigs.DefaultDBConfigs.Repl
+	var dbaConfig, appConfig, replConfig sqldb.ConnParams
 	cnf := NewMycnf(11111, 6802)
 	// Assigning ServerID to be different from tablet UID to make sure that there are no
 	// assumptions in the code that those IDs are the same.

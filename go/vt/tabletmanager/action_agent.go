@@ -554,8 +554,6 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		if agent.DBConfigs.Filtered.DbName == "" {
 			agent.DBConfigs.Filtered.DbName = topoproto.TabletDbName(tablet)
 		}
-		agent.DBConfigs.App.Keyspace = tablet.Keyspace
-		agent.DBConfigs.App.Shard = tablet.Shard
 	}
 
 	// create and register the RPC services from UpdateStream

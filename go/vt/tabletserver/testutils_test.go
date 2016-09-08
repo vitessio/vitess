@@ -86,19 +86,14 @@ func (util *testUtils) newMysqld(dbconfigs *dbconfigs.DBConfigs) mysqlctl.MysqlD
 		"",
 		cnf,
 		&dbconfigs.Dba,
-		&dbconfigs.App.ConnParams,
+		&dbconfigs.App,
 		&dbconfigs.Repl,
 	)
 }
 
 func (util *testUtils) newDBConfigs(db *fakesqldb.DB) dbconfigs.DBConfigs {
-	appDBConfig := dbconfigs.DBConfig{
-		ConnParams: sqldb.ConnParams{Engine: db.Name},
-		Keyspace:   "test_keyspace",
-		Shard:      "0",
-	}
 	return dbconfigs.DBConfigs{
-		App: appDBConfig,
+		App: sqldb.ConnParams{Engine: db.Name},
 	}
 }
 

@@ -357,7 +357,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 		}
 	}()
 
-	c, err := dbconnpool.NewDBConnection(&tsv.dbconfigs.App.ConnParams, tsv.qe.queryServiceStats.MySQLStats)
+	c, err := dbconnpool.NewDBConnection(&tsv.dbconfigs.App, tsv.qe.queryServiceStats.MySQLStats)
 	if err != nil {
 		panic(err)
 	}

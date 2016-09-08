@@ -34,11 +34,7 @@ var (
 // once at the beginning of the test.
 func StartServer(connParams sqldb.ConnParams) error {
 	dbcfgs := dbconfigs.DBConfigs{
-		App: dbconfigs.DBConfig{
-			ConnParams: connParams,
-			Keyspace:   "vttest",
-			Shard:      "0",
-		},
+		App: connParams,
 	}
 
 	mysqld := mysqlctl.NewMysqld(
@@ -46,7 +42,7 @@ func StartServer(connParams sqldb.ConnParams) error {
 		"App",
 		&mysqlctl.Mycnf{},
 		&dbcfgs.Dba,
-		&dbcfgs.App.ConnParams,
+		&dbcfgs.App,
 		&dbcfgs.Repl)
 
 	BaseConfig = tabletserver.DefaultQsConfig
