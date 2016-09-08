@@ -13,6 +13,12 @@ var (
 	highReplicationLagMinServing = flag.Duration("discovery_high_replication_lag_minimum_serving", 2*time.Hour, "the replication lag that is considered too high when selecting miminum 2 vttablets for serving")
 )
 
+// IsReplicationLagHigh verifies that the given TabletStats refers to a tablet with high
+// replication lag, i.e. higher than the configured discovery_low_replication_lag flag.
+func IsReplicationLagHigh(tabletStats *TabletStats) bool {
+	return float64(tabletStats.Stats.SecondsBehindMaster) > lowReplicationLag.Seconds()
+}
+
 // FilterByReplicationLag filters the list of TabletStats by TabletStats.Stats.SecondsBehindMaster.
 // The algorithm (TabletStats that is non-serving or has error is ignored):
 // - Return the list if there is 0 or 1 tablet.
@@ -46,7 +52,7 @@ func filterByLag(tabletStatsList []*TabletStats) []*TabletStats {
 	// if all have low replication lag (<=30s), return all tablets.
 	allLowLag := true
 	for _, ts := range list {
-		if float64(ts.Stats.SecondsBehindMaster) > lowReplicationLag.Seconds() {
+		if IsReplicationLagHigh(ts) {
 			allLowLag = false
 			break
 		}
