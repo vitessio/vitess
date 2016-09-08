@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"strings"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -51,6 +52,60 @@ func ParseKeyspaceIDType(param string) (topodatapb.KeyspaceIdType, error) {
 //
 // KeyRange helper methods
 //
+
+// EvenShardsKeyRange returns a key range definition for a shard at index "i",
+// assuming range based sharding with "n" equal-width shards in total.
+// i starts at 0.
+//
+// Example: (1, 2) returns the second out of two shards in total i.e. "80-".
+//
+// This function must not be used in the Vitess code base because Vitess also
+// supports shards with different widths. In that case, the output of this
+// function would be wrong.
+//
+// Note: start and end values have trailing zero bytes omitted.
+// For example, "80-" has only the first byte (0x80) set.
+// We do this to produce the same KeyRange objects as ParseKeyRangeParts() does.
+// Because it's using the Go hex methods, it's omitting trailing zero bytes as
+// well.
+func EvenShardsKeyRange(i, n int) (*topodatapb.KeyRange, error) {
+	if n <= 0 {
+		return nil, fmt.Errorf("the shard count must be > 0: %v", n)
+	}
+	if i >= n {
+		return nil, fmt.Errorf("the index of the shard must be less than the total number of shards: %v < %v", i, n)
+	}
+	if n&(n-1) != 0 {
+		return nil, fmt.Errorf("the shard count must be a power of two: %v", n)
+	}
+
+	// Determine the number of bytes which are required to represent any
+	// KeyRange start or end for the given n.
+	// This is required to trim the returned values to the same length e.g.
+	// (256, 512) should return 8000-8080 as shard key range.
+	minBytes := 0
+	for nn := Uint64Key(n - 1); nn > 0; nn >>= 8 {
+		minBytes++
+	}
+
+	width := Uint64Key(math.MaxUint64)/Uint64Key(n) + 1
+	start := Uint64Key(i) * width
+	end := start + width
+
+	// Note: The byte value is empty if start or end is the min or the max
+	// respectively.
+	startBytes := start.Bytes()[:minBytes]
+	endBytes := end.Bytes()[:minBytes]
+	if start == 0 {
+		startBytes = []byte{}
+	}
+	if end == 0 {
+		// Always set the end except for the last shard. In that case, the
+		// end value (2^64) flows over and is the same as 0.
+		endBytes = []byte{}
+	}
+	return &topodatapb.KeyRange{Start: startBytes, End: endBytes}, nil
+}
 
 // KeyRangeContains returns true if the provided id is in the keyrange.
 func KeyRangeContains(kr *topodatapb.KeyRange, id []byte) bool {
