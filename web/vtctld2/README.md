@@ -1,6 +1,6 @@
 # Vitess Control Panel
 
-This project was generated with [angular-cli](https://github.com/angular/angular-cli) version 1.0.0-beta.11-webpack.2.
+This project was generated with [angular-cli](https://github.com/angular/angular-cli) version 1.0.0-beta.11-webpack.8.
 
 ## Installation
 Once downloaded, run `npm install` and `bower install` to retrieve dependencies.
