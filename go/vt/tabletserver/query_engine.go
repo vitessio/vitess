@@ -192,10 +192,10 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 // Open must be called before sending requests to QueryEngine.
 func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) {
 	qe.dbconfigs = dbconfigs
-	appParams := dbconfigs.App.ConnParams
+	appParams := dbconfigs.App
 	// Create dba params based on App connection params
 	// and Dba credentials.
-	dbaParams := dbconfigs.App.ConnParams
+	dbaParams := dbconfigs.App
 	if dbconfigs.Dba.Uname != "" {
 		dbaParams.Uname = dbconfigs.Dba.Uname
 		dbaParams.Pass = dbconfigs.Dba.Pass
@@ -217,7 +217,7 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) {
 
 // IsMySQLReachable returns true if we can connect to MySQL.
 func (qe *QueryEngine) IsMySQLReachable() bool {
-	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App.ConnParams, qe.queryServiceStats.MySQLStats)
+	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App, qe.queryServiceStats.MySQLStats)
 	if err != nil {
 		if IsConnErr(err) {
 			return false

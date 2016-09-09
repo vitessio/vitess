@@ -30,7 +30,6 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	vtenv "github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/hook"
@@ -72,7 +71,8 @@ type Mysqld struct {
 // and connection parameters.
 // dbaName and appName are the base for stats exports, use 'Dba' and 'App', except in tests
 func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *sqldb.ConnParams) *Mysqld {
-	if *dba == dbconfigs.DefaultDBConfigs.Dba {
+	noParams := sqldb.ConnParams{}
+	if *dba == noParams {
 		dba.UnixSocket = config.SocketFile
 	}
 
