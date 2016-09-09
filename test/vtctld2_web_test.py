@@ -91,7 +91,7 @@ class TestVtctld2WebStatus(unittest.TestCase):
         web_dir=os.path.join(os.environ['VTTOP'], 'web/vtctld'),
         default_schema_dir=os.path.join(
             os.environ['VTTOP'], 'test/vttest_schema/default'),
-        web_dir2=os.path.join(os.environ['VTTOP'], 'web/vtctld2/dist'))
+        web_dir2=os.path.join(os.environ['VTTOP'], 'web/vtctld2/app'))
     cls.db.setup()
     cls.vtctld_addr = 'http://localhost:%d' % cls.db.config()['port']
     utils.pause('Paused test after vtcombo was started.\n'
