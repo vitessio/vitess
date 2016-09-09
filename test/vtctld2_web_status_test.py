@@ -85,9 +85,13 @@ class TestVtctld2WebStatus(unittest.TestCase):
     mysql_flavor.set_mysql_flavor(None)
 
     cls.db = local_database.LocalDatabase(
-        topology, '', False, None,
-        os.path.join(os.environ['VTTOP'], 'web/vtctld2/dist'),
-        os.path.join(os.environ['VTTOP'], 'test/vttest_schema/default'))
+        topology,
+        os.path.join(os.environ['VTTOP'], 'test/vttest_schema'),
+        False, None,
+        web_dir=os.path.join(os.environ['VTTOP'], 'web/vtctld'),
+        default_schema_dir=os.path.join(
+            os.environ['VTTOP'], 'test/vttest_schema/default'),
+        web_dir2=os.path.join(os.environ['VTTOP'], 'web/vtctld2/dist'))
     cls.db.setup()
     cls.vtctld_addr = 'http://localhost:%d' % cls.db.config()['port']
     utils.pause('Paused test after vtcombo was started.\n'
@@ -190,9 +194,9 @@ class TestVtctld2WebStatus(unittest.TestCase):
     logging.info('Testing realtime stats view')
 
     # Navigate to the status page from initial app.
-    # TODO(thompsonja): Fix this once direct navigation works (after adding
-    # support for web-dir2 flag)
-    self.driver.get(self.vtctld_addr)
+    # TODO(thompsonja): Fix this once direct navigation works (going to status
+    # page directly should display correctly)
+    self.driver.get('%s/app2' % self.vtctld_addr)
     status_button = self.driver.find_element_by_partial_link_text('Status')
     status_button.click()
     wait = WebDriverWait(self.driver, 10)

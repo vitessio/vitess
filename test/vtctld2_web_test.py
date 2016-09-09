@@ -83,9 +83,13 @@ class TestVtctld2Web(unittest.TestCase):
     mysql_flavor.set_mysql_flavor(None)
 
     cls.db = local_database.LocalDatabase(
-        topology, '', False, None,
-        os.path.join(os.environ['VTTOP'], 'web/vtctld2/dist'),
-        os.path.join(os.environ['VTTOP'], 'test/vttest_schema/default'))
+        topology,
+        os.path.join(os.environ['VTTOP'], 'test/vttest_schema'),
+        False, None,
+        web_dir=os.path.join(os.environ['VTTOP'], 'web/vtctld'),
+        default_schema_dir=os.path.join(
+            os.environ['VTTOP'], 'test/vttest_schema/default'),
+        web_dir2=os.path.join(os.environ['VTTOP'], 'web/vtctld2/dist'))
     cls.db.setup()
     cls.vtctld_addr = 'http://localhost:%d' % cls.db.config()['port']
     utils.pause('Paused test after vtcombo was started.\n'
@@ -102,14 +106,14 @@ class TestVtctld2Web(unittest.TestCase):
     wait.until(expected_conditions.visibility_of_element_located(
         (By.TAG_NAME, 'vt-dashboard')))
     dashboard_content = self.driver.find_element_by_tag_name('vt-dashboard')
-    return [ks.text for ks in
-            dashboard_content.find_elements_by_tag_name('md-card-title')]
+    toolbars = dashboard_content.find_elements_by_class_name('vt-card-toolbar')
+    return [t.find_element_by_class_name('vt-title').text for t in toolbars]
 
   def test_dashboard(self):
     logging.info('Testing dashboard view')
 
-    logging.info('Fetching main vtctld page: %s', self.vtctld_addr)
-    self.driver.get(self.vtctld_addr)
+    logging.info('Fetching main vtctld page: %s/app2', self.vtctld_addr)
+    self.driver.get('%s/app2' % self.vtctld_addr)
 
     keyspace_names = self._get_keyspaces()
     logging.info('Keyspaces: %s', ', '.join(keyspace_names))
