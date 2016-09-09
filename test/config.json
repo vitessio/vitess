@@ -281,17 +281,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"sql_builder": {
-			"File": "sql_builder_test.py",
-			"Args": [],
-			"Command": [
-				"test/sql_builder_test.py"
-			],
-			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"tabletmanager": {
 			"File": "tabletmanager.py",
 			"Args": [],
