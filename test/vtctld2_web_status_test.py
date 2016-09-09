@@ -41,9 +41,10 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
   utils.remove_tmp_files()
+  utils.kill_sub_processes()
 
 
-class TestVtctldWeb(unittest.TestCase):
+class TestVtctld2WebStatus(unittest.TestCase):
 
   @classmethod
   def setUpClass(cls):
