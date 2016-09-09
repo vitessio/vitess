@@ -754,7 +754,7 @@ func selectedTests(args []string, config *Config) []*Test {
 		// This can be combined with positional args.
 		var names []string
 		for name, t := range config.Tests {
-			if t.Shard == *shard && (*exclude == "" || !t.hasAnyTag(excluded_tests)) {
+			if t.Shard == *shard && !t.Manual && (*exclude == "" || !t.hasAnyTag(excluded_tests)) {
 				t.name = name
 				names = append(names, name)
 			}
