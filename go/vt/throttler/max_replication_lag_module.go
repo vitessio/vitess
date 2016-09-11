@@ -70,9 +70,8 @@ type MaxReplicationLagModule struct {
 	rate         sync2.AtomicInt64
 	currentState state
 	// lastRateChange is the time when rate was adjusted last.
-	lastRateChange       time.Time
-	lastRateChangeReason string
-	nextAllowedIncrease  time.Time
+	lastRateChange      time.Time
+	nextAllowedIncrease time.Time
 	// replicaUnderIncreaseTest holds the discovery.TabletStats.Key value for the
 	// replica for which we started the last increase test. After
 	// nextAllowedIncrease is up, we wait for a lag update from this replica.
@@ -544,7 +543,6 @@ func (m *MaxReplicationLagModule) updateRate(r *result, newState state, rate int
 
 	m.currentState = newState
 	m.lastRateChange = now
-	m.lastRateChangeReason = reason
 	if newState != stateIncreaseRate {
 		// Clear the replica under test from a previous increase.
 		m.replicaUnderIncreaseTest = ""
