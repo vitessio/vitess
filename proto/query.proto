@@ -468,8 +468,9 @@ message StreamHealthResponse {
   RealtimeStats realtime_stats = 4;
 }
 
-// UpdateStreamRequest is the payload for UpdateStream. Only one of
-// position and timestamp can be set.
+// UpdateStreamRequest is the payload for UpdateStream. At most one of
+// position and timestamp can be set. If neither is set, we will start
+// streaming from the current binlog position.
 message UpdateStreamRequest {
   vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;

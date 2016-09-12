@@ -84,6 +84,25 @@ func (mysqld *Mysqld) connectForReplication() (sqldb.Conn, error) {
 // slaveIDPool is the IDPool for server IDs used to connect as a slave.
 var slaveIDPool = pools.NewIDPool()
 
+// StartBinlogDumpFromCurrent requests a replication binlog dump from
+// the current position.
+func (sc *SlaveConnection) StartBinlogDumpFromCurrent(ctx context.Context) (replication.Position, <-chan replication.BinlogEvent, error) {
+	ctx, sc.cancel = context.WithCancel(ctx)
+
+	flavor, err := sc.mysqld.flavor()
+	if err != nil {
+		return replication.Position{}, nil, fmt.Errorf("StartBinlogDump needs flavor: %v", err)
+	}
+
+	masterPosition, err := flavor.MasterPosition(sc.mysqld)
+	if err != nil {
+		return replication.Position{}, nil, fmt.Errorf("failed to get master position: %v", err)
+	}
+
+	c, err := sc.StartBinlogDumpFromPosition(ctx, masterPosition)
+	return masterPosition, c, err
+}
+
 // StartBinlogDumpFromPosition requests a replication binlog dump from
 // the master mysqld at the given Position and then sends binlog
 // events to the provided channel.

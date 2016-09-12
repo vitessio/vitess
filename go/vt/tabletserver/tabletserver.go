@@ -35,6 +35,7 @@ import (
 	"github.com/youtube/vitess/go/vt/utils"
 	"golang.org/x/net/context"
 
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -119,6 +120,13 @@ type TabletServer struct {
 	// history records changes in state for display on the status page.
 	// It has its own internal mutex.
 	history *history.History
+
+	// UpdateStream helpers.
+	updateStreamCancel context.CancelFunc
+
+	// eventTokenMutex protects the current EventToken
+	eventTokenMutex sync.RWMutex
+	eventToken      *querypb.EventToken
 }
 
 // RegisterFunction is a callback type to be called when we
@@ -159,6 +167,22 @@ func NewTabletServer(config Config) *TabletServer {
 		stats.Publish(config.StatsPrefix+"QueryTimeout", stats.DurationFunc(tsv.QueryTimeout.Get))
 		stats.Publish(config.StatsPrefix+"BeginTimeout", stats.DurationFunc(tsv.BeginTimeout.Get))
 		stats.Publish(config.StatsPrefix+"TabletStateName", stats.StringFunc(tsv.GetState))
+		stats.Publish(config.StatsPrefix+"EventTokenPosition", stats.StringFunc(func() string {
+			tsv.eventTokenMutex.RLock()
+			defer tsv.eventTokenMutex.RUnlock()
+			if tsv.eventToken != nil {
+				return tsv.eventToken.Position
+			}
+			return ""
+		}))
+		stats.Publish(config.StatsPrefix+"EventTokenTimestamp", stats.IntFunc(func() int64 {
+			tsv.eventTokenMutex.RLock()
+			defer tsv.eventTokenMutex.RUnlock()
+			if tsv.eventToken != nil {
+				return tsv.eventToken.Timestamp
+			}
+			return 0
+		}))
 	}
 	return tsv
 }
@@ -352,6 +376,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 			log.Errorf("Could not start tabletserver: %v", x)
 			tsv.qe.Close()
 			tsv.updateStreamList.Stop()
+			tsv.stopReplicationStreamer()
 			tsv.transition(StateNotConnected)
 			err = x.(error)
 		}
@@ -374,10 +399,14 @@ func (tsv *TabletServer) serveNewType() (err error) {
 			log.Errorf("Could not start tabletserver: %v", x)
 			tsv.qe.Close()
 			tsv.updateStreamList.Stop()
+			tsv.stopReplicationStreamer()
 			tsv.transition(StateNotConnected)
 			err = x.(error)
 		}
 	}()
+	if tsv.target.TabletType != topodatapb.TabletType_MASTER {
+		tsv.startReplicationStreamer()
+	}
 	tsv.transition(StateServing)
 	return nil
 }
@@ -420,6 +449,7 @@ func (tsv *TabletServer) waitForShutdown() {
 	tsv.qe.WaitForTxEmpty()
 	tsv.qe.streamQList.TerminateAll()
 	tsv.updateStreamList.Stop()
+	tsv.stopReplicationStreamer()
 	tsv.requests.Wait()
 }
 
@@ -521,9 +551,66 @@ func (tsv *TabletServer) QueryService() queryservice.QueryService {
 	return tsv
 }
 
-// QueryServiceStats returns the QueryServiceStats instance of the TabletServer's QueryEngine.
+// QueryServiceStats returns the QueryServiceStats instance of the
+// TabletServer's QueryEngine.
 func (tsv *TabletServer) QueryServiceStats() *QueryServiceStats {
 	return tsv.qe.queryServiceStats
+}
+
+func (tsv *TabletServer) startReplicationStreamer() {
+	if !*watchReplicationStream {
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+
+	tsv.updateStreamCancel = cancel
+	go tsv.replicationStreamer(ctx)
+}
+
+func (tsv *TabletServer) stopReplicationStreamer() {
+	if tsv.updateStreamCancel != nil {
+		tsv.updateStreamCancel()
+		tsv.updateStreamCancel = nil
+	}
+}
+
+// replicationStreamer is the background thread that reads the
+// replication stream. It will run in a loop. If it errors out, it
+// will wait for 5 seconds before restarting.
+func (tsv *TabletServer) replicationStreamer(ctx context.Context) {
+	for {
+		log.Infof("Starting a binlog Streamer from current replication position to monitor binlogs")
+		streamer := binlog.NewStreamer(tsv.dbconfigs.App.DbName, tsv.mysqld, nil /*clientCharset*/, replication.Position{}, 0 /*timestamp*/, func(trans *binlogdatapb.BinlogTransaction) error {
+			// Save the event token.
+			tsv.eventTokenMutex.Lock()
+			tsv.eventToken = trans.EventToken
+			tsv.eventTokenMutex.Unlock()
+
+			// If it's a DDL, trigger a schema reload.
+			isDDL := false
+			for _, statement := range trans.Statements {
+				if statement.Category == binlogdatapb.BinlogTransaction_Statement_BL_DDL {
+					isDDL = true
+				}
+			}
+			if isDDL {
+				err := tsv.ReloadSchema(ctx)
+				log.Infof("Streamer triggered a schema reload, with result: %v", err)
+			}
+
+			return nil
+		})
+
+		if err := streamer.Stream(ctx); err != nil {
+			log.Infof("Streamer stopped: %v", err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(5 * time.Second):
+		}
+	}
 }
 
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
@@ -1116,12 +1203,14 @@ func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Targe
 	var p replication.Position
 	var err error
 	if timestamp == 0 {
-		p, err = replication.DecodePosition(position)
-		if err != nil {
-			return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "cannot parse position: %v", err)
+		if position != "" {
+			p, err = replication.DecodePosition(position)
+			if err != nil {
+				return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "cannot parse position: %v", err)
+			}
 		}
 	} else if position != "" {
-		return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "only one of position and timestamp should be specified")
+		return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "at most one of position and timestamp should be specified")
 	}
 
 	// Validate proper target is used.

@@ -131,8 +131,10 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 	var events <-chan replication.BinlogEvent
 	if bls.timestamp != 0 {
 		events, err = bls.conn.StartBinlogDumpFromTimestamp(ctx, bls.timestamp)
-	} else {
+	} else if !bls.startPos.IsZero() {
 		events, err = bls.conn.StartBinlogDumpFromPosition(ctx, bls.startPos)
+	} else {
+		bls.startPos, events, err = bls.conn.StartBinlogDumpFromCurrent(ctx)
 	}
 	if err != nil {
 		return err

@@ -347,6 +347,28 @@ class TestUpdateStream(unittest.TestCase):
       self.fail("Update stream service should be 'Enabled' but is '%s'" %
                 v['UpdateStreamState'])
 
+  def test_event_token(self):
+    """Checks the background binlog monitor thread works."""
+    replica_position = _get_repl_current_position()
+    timeout = 10
+    while True:
+      value = None
+      v = utils.get_vars(replica_tablet.port)
+      if 'EventTokenPosition' in v:
+        value = v['EventTokenPosition']
+      if value == replica_position:
+        logging.debug('got expected EventTokenPosition vars: %s', value)
+        ts = v['EventTokenTimestamp']
+        now = long(time.time())
+        self.assertTrue(ts >= now - 120,
+                        'EventTokenTimestamp is too old: %d < %d' %
+                        (ts, now-120))
+        self.assertTrue(ts <= now,
+                        'EventTokenTimestamp is too recent: %d > %d' %(ts, now))
+        break
+      timeout = utils.wait_step(
+          'EventTokenPosition must be up to date but got %s' % value, timeout)
+
   def test_update_stream_interrupt(self):
     """Checks that a running query is terminated on going non-serving."""
     # Make sure the replica is replica type.

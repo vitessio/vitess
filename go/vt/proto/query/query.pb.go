@@ -1164,8 +1164,9 @@ func (m *StreamHealthResponse) GetRealtimeStats() *RealtimeStats {
 	return nil
 }
 
-// UpdateStreamRequest is the payload for UpdateStream. Only one of
-// position and timestamp can be set.
+// UpdateStreamRequest is the payload for UpdateStream. At most one of
+// position and timestamp can be set. If neither is set, we will start
+// streaming from the current binlog position.
 type UpdateStreamRequest struct {
 	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
 	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`

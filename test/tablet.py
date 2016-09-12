@@ -301,7 +301,8 @@ class Tablet(object):
     rows = self.mquery('', 'show databases')
     for row in rows:
       dbname = row[0]
-      if dbname in ['information_schema', 'performance_schema', 'mysql', 'sys', '_vt']:
+      if dbname in ['information_schema', 'performance_schema', 'mysql', 'sys',
+                    '_vt']:
         continue
       self.drop_db(dbname)
 
@@ -427,6 +428,7 @@ class Tablet(object):
     args.extend(['-health_check_interval', '2s'])
     args.extend(['-enable_replication_reporter'])
     args.extend(['-degraded_threshold', '5s'])
+    args.extend(['-watch_replication_stream'])
     if enable_semi_sync:
       args.append('-enable_semi_sync')
     if self.use_mysqlctld:
