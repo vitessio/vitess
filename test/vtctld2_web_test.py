@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""A vtctld2 webdriver test that tests the different views of status page."""
+"""A vtctld2 webdriver test."""
 
 import logging
 import os
