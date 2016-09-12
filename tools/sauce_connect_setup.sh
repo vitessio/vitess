@@ -1,15 +1,17 @@
 #!/bin/bash
 
-CONNECT_URL="https://saucelabs.com/downloads/sc-4.4.0-rc2-linux.tar.gz"
+set -e
+
+CONNECT_URL="https://saucelabs.com/downloads/sc-latest-linux.tar.gz"
 CONNECT_DIR="/tmp/sauce-connect-$RANDOM"
 CONNECT_DOWNLOAD="sc-latest-linux.tar.gz"
 
 # Get Connect and start it
 mkdir -p $CONNECT_DIR
 cd $CONNECT_DIR
-curl $CONNECT_URL -o $CONNECT_DOWNLOAD 2> /dev/null 1> /dev/null
+curl -s $CONNECT_URL -o $CONNECT_DOWNLOAD
 mkdir sauce-connect
-tar --extract --file=$CONNECT_DOWNLOAD --strip-components=1 --directory=sauce-connect > /dev/null
+tar --extract --file=$CONNECT_DOWNLOAD --strip-components=1 --directory=sauce-connect
 rm $CONNECT_DOWNLOAD
 
 ARGS=""
