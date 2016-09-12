@@ -288,9 +288,13 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 
 // PlannedReparentShard will make the provided tablet the master for the shard,
 // when both the current and new master are reachable and in good shape.
-func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) (err error) {
+func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias, avoidMasterAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) (err error) {
 	// lock the shard
-	ctx, unlock, lockErr := wr.ts.LockShard(ctx, keyspace, shard, fmt.Sprintf("PlannedReparentShard(%v)", topoproto.TabletAliasString(masterElectTabletAlias)))
+	lockAction := fmt.Sprintf(
+		"PlannedReparentShard(%v, avoid_master=%v)",
+		topoproto.TabletAliasString(masterElectTabletAlias),
+		topoproto.TabletAliasString(avoidMasterAlias))
+	ctx, unlock, lockErr := wr.ts.LockShard(ctx, keyspace, shard, lockAction)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -300,7 +304,7 @@ func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard st
 	ev := &events.Reparent{}
 
 	// do the work
-	err = wr.plannedReparentShardLocked(ctx, ev, keyspace, shard, masterElectTabletAlias, waitSlaveTimeout)
+	err = wr.plannedReparentShardLocked(ctx, ev, keyspace, shard, masterElectTabletAlias, avoidMasterAlias, waitSlaveTimeout)
 	if err != nil {
 		event.DispatchUpdate(ev, "failed PlannedReparentShard: "+err.Error())
 	} else {
@@ -309,7 +313,7 @@ func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard st
 	return err
 }
 
-func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) error {
+func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias, avoidMasterTabletAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) error {
 	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
@@ -323,6 +327,25 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 	}
 
 	// Check corner cases we're going to depend on
+	if topoproto.TabletAliasEqual(masterElectTabletAlias, avoidMasterTabletAlias) {
+		return fmt.Errorf("master-elect tablet %v is the same as the tablet to avoid", topoproto.TabletAliasString(masterElectTabletAlias))
+	}
+	if masterElectTabletAlias == nil {
+		if !topoproto.TabletAliasEqual(avoidMasterTabletAlias, shardInfo.MasterAlias) {
+			event.DispatchUpdate(ev, "current master is different than -avoid_master, nothing to do")
+			return nil
+		}
+		event.DispatchUpdate(ev, "searching for master candidate")
+		masterElectTabletAlias, err = wr.chooseNewMaster(ctx, shardInfo, tabletMap, avoidMasterTabletAlias, waitSlaveTimeout)
+		if err != nil {
+			return err
+		}
+		if masterElectTabletAlias == nil {
+			return fmt.Errorf("cannot find a tablet to reparent to")
+		}
+		wr.logger.Infof("elected new master candidate %v", topoproto.TabletAliasString(masterElectTabletAlias))
+		event.DispatchUpdate(ev, "elected new master candidate")
+	}
 	masterElectTabletInfo, ok := tabletMap[*masterElectTabletAlias]
 	if !ok {
 		return fmt.Errorf("master-elect tablet %v is not in the shard", topoproto.TabletAliasString(masterElectTabletAlias))
@@ -411,6 +434,89 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 	}
 
 	return nil
+}
+
+// maxReplPosSearch is a struct helping to search for a tablet with the largest replication
+// position querying status from all tablets in parallel.
+type maxReplPosSearch struct {
+	wrangler         *Wrangler
+	ctx              context.Context
+	waitSlaveTimeout time.Duration
+	waitGroup        sync.WaitGroup
+	maxPosLock       sync.Mutex
+	maxPos           replication.Position
+	maxPosTablet     *topodatapb.Tablet
+}
+
+func (maxPosSearch *maxReplPosSearch) processTablet(tablet *topodatapb.Tablet) {
+	defer maxPosSearch.waitGroup.Done()
+	maxPosSearch.wrangler.logger.Infof("getting replication position from %v", topoproto.TabletAliasString(tablet.Alias))
+
+	slaveStatusCtx, cancelSlaveStatus := context.WithTimeout(maxPosSearch.ctx, maxPosSearch.waitSlaveTimeout)
+	defer cancelSlaveStatus()
+
+	status, err := maxPosSearch.wrangler.tmc.SlaveStatus(slaveStatusCtx, tablet)
+	if err != nil {
+		maxPosSearch.wrangler.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(tablet.Alias), err)
+		return
+	}
+	replPos, err := replication.DecodePosition(status.Position)
+	if err != nil {
+		maxPosSearch.wrangler.logger.Warningf("cannot decode slave %v position %v: %v", topoproto.TabletAliasString(tablet.Alias), status.Position, err)
+		return
+	}
+
+	maxPosSearch.maxPosLock.Lock()
+	if maxPosSearch.maxPosTablet == nil || !maxPosSearch.maxPos.AtLeast(replPos) {
+		maxPosSearch.maxPos = replPos
+		maxPosSearch.maxPosTablet = tablet
+	}
+	maxPosSearch.maxPosLock.Unlock()
+}
+
+// chooseNewMaster finds a tablet that is going to become master after reparent. The criterias
+// for the new master-elect are (preferably) to be in the same cell as the current master, and
+// to be different from avoidMasterTabletAlias. The tablet with the largest replication
+// position is chosen to minimize the time of catching up with the master. Note that the search
+// for largest replication position will race with transactions being executed on the master at
+// the same time, so when all tablets are roughly at the same position then the choice of the
+// new master-elect will be somewhat unpredictable.
+func (wr *Wrangler) chooseNewMaster(
+	ctx context.Context,
+	shardInfo *topo.ShardInfo,
+	tabletMap map[topodatapb.TabletAlias]*topo.TabletInfo,
+	avoidMasterTabletAlias *topodatapb.TabletAlias,
+	waitSlaveTimeout time.Duration) (*topodatapb.TabletAlias, error) {
+
+	if avoidMasterTabletAlias == nil {
+		return nil, fmt.Errorf("tablet to avoid for reparent is not provided, cannot choose new master")
+	}
+	var masterCell string
+	if shardInfo.MasterAlias != nil {
+		masterCell = shardInfo.MasterAlias.Cell
+	}
+
+	maxPosSearch := maxReplPosSearch{
+		wrangler:         wr,
+		ctx:              ctx,
+		waitSlaveTimeout: waitSlaveTimeout,
+		waitGroup:        sync.WaitGroup{},
+		maxPosLock:       sync.Mutex{},
+	}
+	for tabletAlias, tabletInfo := range tabletMap {
+		if (masterCell != "" && tabletAlias.Cell != masterCell) ||
+			topoproto.TabletAliasEqual(&tabletAlias, avoidMasterTabletAlias) {
+			continue
+		}
+		maxPosSearch.waitGroup.Add(1)
+		go maxPosSearch.processTablet(tabletInfo.Tablet)
+	}
+	maxPosSearch.waitGroup.Wait()
+
+	if maxPosSearch.maxPosTablet == nil {
+		return nil, nil
+	}
+	return maxPosSearch.maxPosTablet.Alias, nil
 }
 
 // EmergencyReparentShard will make the provided tablet the master for

@@ -226,8 +226,9 @@ class TestBackup(unittest.TestCase):
     self._check_data(tablet_replica2, 2, 'replica2 tablet getting data')
 
     # Promote replica2 to master.
-    utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/0',
-                     tablet_replica2.tablet_alias])
+    utils.run_vtctl(['PlannedReparentShard',
+                     '-keyspace_shard', 'test_keyspace/0',
+                     '-new_master', tablet_replica2.tablet_alias])
 
     # insert more data on replica2 (current master)
     self._insert_data(tablet_replica2, 3)
@@ -266,8 +267,9 @@ class TestBackup(unittest.TestCase):
     self._insert_data(tablet_master, 2)
 
     # reparent to replica1
-    utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/0',
-                     tablet_replica1.tablet_alias])
+    utils.run_vtctl(['PlannedReparentShard',
+                     '-keyspace_shard', 'test_keyspace/0',
+                     '-new_master', tablet_replica1.tablet_alias])
 
     # insert more data on new master
     self._insert_data(tablet_replica1, 3)
