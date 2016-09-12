@@ -515,7 +515,7 @@ func (m *MaxReplicationLagModule) guessSlaveRate(r *result, avgMasterRate float6
 		// Backlog is too high. Reduce rate to 1 request/second.
 		// TODO(mberlin): Make this a constant.
 		newRate = 1
-		reason = fmt.Sprintf("based on the guessed slave rate of: %v the slave won't be able to process the guessed backlog of %d requests within the next %.f seconds", avgSlaveRate, int64(requestsBehind), m.config.MinDurationBetweenChanges().Seconds())
+		reason = fmt.Sprintf("based on the guessed slave rate of: %v the slave won't be able to process the guessed backlog of %d requests within the next %.f seconds", int64(avgSlaveRate), int64(requestsBehind), m.config.MinDurationBetweenChanges().Seconds())
 	} else {
 		reason = fmt.Sprintf("new rate is %d lower than the guessed slave rate to account for a guessed backlog of %d requests over %.f seconds", int64(avgSlaveRate-newRate), int64(requestsBehind), m.config.MinDurationBetweenChanges().Seconds())
 	}
