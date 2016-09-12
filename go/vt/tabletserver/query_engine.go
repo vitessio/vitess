@@ -49,6 +49,7 @@ type QueryEngine struct {
 	txPool       *TxPool
 	consolidator *sync2.Consolidator
 	streamQList  *QueryList
+	twoPC        *TwoPC
 
 	// Vars
 	strictMode       sync2.AtomicInt64
@@ -137,6 +138,8 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 		qe.queryServiceStats,
 		checker,
 	)
+	// twoPC depends on txPool for some of its operations.
+	qe.twoPC = NewTwoPC(qe.txPool)
 	qe.consolidator = sync2.NewConsolidator()
 	http.Handle(config.DebugURLPrefix+"/consolidations", qe.consolidator)
 	qe.streamQList = NewQueryList()
@@ -213,6 +216,7 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) {
 	qe.connPool.Open(&appParams, &dbaParams)
 	qe.streamConnPool.Open(&appParams, &dbaParams)
 	qe.txPool.Open(&appParams, &dbaParams)
+	qe.twoPC.Open(qe.dbconfigs.SidecarDBName, &dbaParams)
 }
 
 // IsMySQLReachable returns true if we can connect to MySQL.
@@ -241,6 +245,7 @@ func (qe *QueryEngine) WaitForTxEmpty() {
 // before calling Close.
 func (qe *QueryEngine) Close() {
 	// Close in reverse order of Open.
+	qe.twoPC.Close()
 	qe.txPool.Close()
 	qe.streamConnPool.Close()
 	qe.connPool.Close()

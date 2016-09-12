@@ -153,6 +153,8 @@ func initTabletMap(ts topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl
 						dbname = fmt.Sprintf("vt_%v_%v", keyspace, shard)
 					}
 					dbcfgs.App.DbName = dbname
+					// Override SidecarDBName because there will be one for each db.
+					dbcfgs.SidecarDBName = "_" + dbname
 
 					replicas := int(kpb.ReplicaCount)
 					if replicas == 0 {

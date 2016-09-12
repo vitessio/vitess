@@ -224,15 +224,15 @@ func TestSchemaReload(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	defer conn.Close()
+
 	_, err = conn.ExecuteFetch("create table vitess_temp(intval int)", 10, false)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	defer func() {
-		_, _ = conn.ExecuteFetch("drop table vitess_temp", 10, false)
-		conn.Close()
-	}()
+	defer conn.ExecuteFetch("drop table vitess_temp", 10, false)
+
 	framework.Server.ReloadSchema(context.Background())
 	client := framework.NewClient()
 	waitTime := 50 * time.Millisecond
@@ -250,6 +250,27 @@ func TestSchemaReload(t *testing.T) {
 		}
 	}
 	t.Error("schema did not reload")
+}
+
+func TestSidecarTables(t *testing.T) {
+	conn, err := mysql.Connect(connParams)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer conn.Close()
+	for _, table := range []string{
+		"redo_log_transaction",
+		"redo_log_statement",
+		"transaction",
+		"participant",
+	} {
+		_, err = conn.ExecuteFetch(fmt.Sprintf("describe _vt.%s", table), 10, false)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+	}
 }
 
 func TestConsolidation(t *testing.T) {
