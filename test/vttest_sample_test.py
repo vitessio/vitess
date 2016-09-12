@@ -76,7 +76,6 @@ class TestMysqlctl(unittest.TestCase):
                                          'vttest_schema'),
             '--web_dir', environment.vttop + '/web/vtctld',
            ]
-    print args
     sp = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     config = json.loads(sp.stdout.readline())
 
