@@ -28,7 +28,6 @@ addons:
       - time
       # Optional dependency. Without a running syslog daemon, Vitess will keep complaining that it could not log events and spam the logs.
       - rsyslog
-  sauce_connect: true
 # Cache directories of dependencies which are built by bootstrap.sh
 cache:
   directories:
@@ -99,9 +98,12 @@ before_script:
   - source dev.env
   # Travis only tests. Run only on the first shard.
   # Part of "before_script" because in "script" the job would not fail immediately if a command fails.
+  # Webdriver tests are only on the last shard for non PRs. Start Sauce Connect only on this shard.
   - |
     if [[ $TEST_MATRIX = *"-shard 0"* ]]; then
       travis/check_make_proto.sh
+    elif [[ $TEST_MATRIX = *"-shard 4"* && $TRAVIS_PULL_REQUEST = "false" ]]; then
+      tools/sauce_connect_setup.sh
     fi
 script:
   # Log GOMAXPROCS (should be 2 as of 07/2015).
@@ -112,6 +114,12 @@ script:
     else
       # Exclude webdriver tests on Travis PRs since the sauce addon does not work for PRs
       go run test.go $TEST_FLAGS $TEST_MATRIX -exclude=webdriver
+    fi
+after_script:
+  # Stop Sauce Connect at the end
+  - |
+    if [[ $TEST_MATRIX = *"-shard 4"* && $TRAVIS_PULL_REQUEST = "false" ]]; then
+      tools/sauce_connect_teardown.sh
     fi
 after_failure:
   # In case of errors, output log files to make it easier to debug the error.
