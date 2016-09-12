@@ -542,7 +542,6 @@ func (m *MaxReplicationLagModule) updateRate(r *result, newState state, rate int
 	oldRate := m.rate.Get()
 
 	m.currentState = newState
-	m.lastRateChange = now
 	if newState != stateIncreaseRate {
 		// Clear the replica under test from a previous increase.
 		m.replicaUnderIncreaseTest = ""
@@ -562,6 +561,7 @@ func (m *MaxReplicationLagModule) updateRate(r *result, newState state, rate int
 		return
 	}
 
+	m.lastRateChange = now
 	m.rate.Set(int64(rate))
 	// Notify the throttler that we updated our max rate.
 	m.rateUpdateChan <- struct{}{}
