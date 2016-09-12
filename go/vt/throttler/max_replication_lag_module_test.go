@@ -336,7 +336,7 @@ func TestMaxReplicationLagModule_Decrease(t *testing.T) {
 	// r2 @  90s, 3s lag (above target, provokes a decrease)
 	tf.ratesHistory.add(sinceZero(70*time.Second), 100)
 	tf.ratesHistory.add(sinceZero(89*time.Second), 200)
-	tf.process(lagRecord(sinceZero(90*time.Second), r2, uint32(tf.m.config.TargetReplicationLagSec+1)))
+	tf.process(lagRecord(sinceZero(90*time.Second), r2, 3))
 	// The guessed replica (slave) rate is 140 because of the 3s lag increase
 	// within the elapsed 20s.
 	// The replica processed only 17s worth of work (20s duration - 3s lag increase)
@@ -372,7 +372,7 @@ func TestMaxReplicationLagModule_Decrease_NoReplicaHistory(t *testing.T) {
 	// r1 @  80s, 3s lag (above target, but no decrease triggered)
 	tf.ratesHistory.add(sinceZero(70*time.Second), 100)
 	tf.ratesHistory.add(sinceZero(79*time.Second), 200)
-	tf.process(lagRecord(sinceZero(80*time.Second), r1, uint32(tf.m.config.TargetReplicationLagSec+1)))
+	tf.process(lagRecord(sinceZero(80*time.Second), r1, 3))
 	// Rate was not decreased because r1 has no lag record @ 70s or higher.
 	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
 		t.Fatal(err)
@@ -380,7 +380,7 @@ func TestMaxReplicationLagModule_Decrease_NoReplicaHistory(t *testing.T) {
 
 	// r2 @  90s, 3s lag (above target, provokes a decrease)
 	tf.ratesHistory.add(sinceZero(89*time.Second), 200)
-	tf.process(lagRecord(sinceZero(90*time.Second), r2, uint32(tf.m.config.TargetReplicationLagSec+1)*2))
+	tf.process(lagRecord(sinceZero(90*time.Second), r2, 6))
 	// Rate was decreased because r2 has a lag record @ 70s.
 	//
 	// The guessed replica (slave) rate is 140 because of the 6s lag increase
