@@ -359,7 +359,7 @@ func (m *MaxReplicationLagModule) increaseRate(r *result, now time.Time, lagReco
 	// - MaxIncrease is too low and the rate might not increase
 	// - after the new rate was limited by the bad rate, we got the old rate
 	//   (In this case we might slightly go above the bad rate which we accept.)
-	if rate <= float64(oldRate) {
+	if int64(rate) <= oldRate {
 		rate = float64(oldRate) + memoryGranularity
 		increaseReason += fmt.Sprintf(" (minimum progress by %v)", memoryGranularity)
 		previousRateSource = "previous set rate"
