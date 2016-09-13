@@ -93,7 +93,7 @@ def convert_value(value, proto_value, allow_lists=False):
     allow_lists: allows the use of python lists.
   """
   if isinstance(value, bool):
-    proto_value.type = query_pb2.INT8
+    proto_value.type = query_pb2.INT64
     proto_value.value = str(int(value))
   elif isinstance(value, int):
     proto_value.type = query_pb2.INT64
