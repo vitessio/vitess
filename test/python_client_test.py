@@ -495,7 +495,7 @@ class TestEcho(TestPythonClientBase):
       'bool': True,
   }
   bind_variables_echo = 'map[bool:1 bytes:[1 2 3] float:2.1 int:123]'
-  bind_variables_p3_echo = ('map[bool:type:INT8 value:"1"  '
+  bind_variables_p3_echo = ('map[bool:type:INT64 value:"1"  '
                             'bytes:type:VARBINARY value:"\\001\\002\\003"  '
                             'float:type:FLOAT64 value:"2.1"  '
                             'int:type:INT64 value:"123" ]')
