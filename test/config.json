@@ -1,3 +1,4 @@
+
 {
 	"Tests": {
 		"automation_horizontal_resharding": {
@@ -311,7 +312,7 @@
 				"unit_test_race"
 			],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": []
 		},
