@@ -34,7 +34,8 @@ var (
 // once at the beginning of the test.
 func StartServer(connParams sqldb.ConnParams) error {
 	dbcfgs := dbconfigs.DBConfigs{
-		App: connParams,
+		App:           connParams,
+		SidecarDBName: "_vt",
 	}
 
 	mysqld := mysqlctl.NewMysqld(

@@ -231,7 +231,7 @@ func (tsv *TabletServer) IsServing() bool {
 }
 
 // InitDBConfig inititalizes the db config variables for TabletServer. You must call this function before
-// calling StartService or SetServingType.
+// calling SetServingType.
 func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbconfigs dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) error {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()

@@ -18,7 +18,9 @@ import (
 
 // We keep a global singleton for the db configs, and that's the one
 // the flags will change
-var dbConfigs DBConfigs
+var dbConfigs = DBConfigs{
+	SidecarDBName: "_vt",
+}
 
 // DBConfigFlag describes which flags we need
 type DBConfigFlag int
@@ -102,15 +104,17 @@ func MysqlParams(cp *sqldb.ConnParams) (sqldb.ConnParams, error) {
 }
 
 // DBConfigs is all we need for a smart tablet server:
-// - DBConfig for the query engine, running for the specified keyspace / shard
+// - App access with db name for serving app queries
 // - Dba access for any dba-type operation (db creation, replication, ...)
 // - Filtered access for filtered replication
 // - Replication access to change master
+// - SidecarDBName for storing operational metadata
 type DBConfigs struct {
-	App      sqldb.ConnParams
-	Dba      sqldb.ConnParams
-	Filtered sqldb.ConnParams
-	Repl     sqldb.ConnParams
+	App           sqldb.ConnParams
+	Dba           sqldb.ConnParams
+	Filtered      sqldb.ConnParams
+	Repl          sqldb.ConnParams
+	SidecarDBName string
 }
 
 func (dbcfgs *DBConfigs) String() string {

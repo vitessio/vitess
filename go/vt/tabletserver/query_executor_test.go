@@ -1007,6 +1007,13 @@ func checkPlanID(
 
 func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
+		// queries for twopc
+		sqlTurnoffBinlog:                                     {},
+		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):               {},
+		fmt.Sprintf(sqlCreateTableRedoLogTransaction, "_vt"): {},
+		fmt.Sprintf(sqlCreateTableRedoLogStatement, "_vt"):   {},
+		fmt.Sprintf(sqlCreateTableTransaction, "_vt"):        {},
+		fmt.Sprintf(sqlCreateTableParticipant, "_vt"):        {},
 		// queries for schema info
 		"select unix_timestamp()": {
 			RowsAffected: 1,

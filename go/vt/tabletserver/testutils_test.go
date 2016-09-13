@@ -93,7 +93,8 @@ func (util *testUtils) newMysqld(dbconfigs *dbconfigs.DBConfigs) mysqlctl.MysqlD
 
 func (util *testUtils) newDBConfigs(db *fakesqldb.DB) dbconfigs.DBConfigs {
 	return dbconfigs.DBConfigs{
-		App: sqldb.ConnParams{Engine: db.Name},
+		App:           sqldb.ConnParams{Engine: db.Name},
+		SidecarDBName: "_vt",
 	}
 }
 
