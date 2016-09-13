@@ -374,7 +374,7 @@ func (m *MaxReplicationLagModule) increaseRate(r *result, now time.Time, lagReco
 }
 
 func (m *MaxReplicationLagModule) updateNextAllowedIncrease(now time.Time, increase float64, key string) {
-	minDuration := m.config.MinDurationBetweenChanges()
+	minDuration := m.config.MinDurationBetweenIncreases()
 	// We may have to wait longer than the configured minimum duration
 	// until we see an effect of the increase.
 	// Example: If the increase was fully over the capacity, it will take
@@ -471,7 +471,7 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(r *result, now time.Time,
 	// Guess the slave capacity based on the replication lag change.
 	rate, reason := m.guessSlaveRate(r, avgMasterRate, lagBefore, lagNow, lagDifference, d)
 
-	m.nextAllowedDecrease = now.Add(m.config.MinDurationBetweenChanges() + 2*time.Second)
+	m.nextAllowedDecrease = now.Add(m.config.MinDurationBetweenDecreases())
 	m.updateRate(r, stateDecreaseAndGuessRate, rate, reason, now, lagRecordNow)
 }
 
@@ -508,16 +508,16 @@ func (m *MaxReplicationLagModule) guessSlaveRate(r *result, avgMasterRate float6
 	newRate := avgSlaveRate
 	// Reduce the new rate such that it has time to catch up the requests it's
 	// behind within the next interval.
-	futureRequests := newRate * m.config.MinDurationBetweenChanges().Seconds()
+	futureRequests := newRate * m.config.SpreadBacklogAcross().Seconds()
 	newRate *= (futureRequests - requestsBehind) / futureRequests
 	var reason string
 	if newRate < 1 {
 		// Backlog is too high. Reduce rate to 1 request/second.
 		// TODO(mberlin): Make this a constant.
 		newRate = 1
-		reason = fmt.Sprintf("based on the guessed slave rate of: %v the slave won't be able to process the guessed backlog of %d requests within the next %.f seconds", int64(avgSlaveRate), int64(requestsBehind), m.config.MinDurationBetweenChanges().Seconds())
+		reason = fmt.Sprintf("based on the guessed slave rate of: %v the slave won't be able to process the guessed backlog of %d requests within the next %.f seconds", int64(avgSlaveRate), int64(requestsBehind), m.config.SpreadBacklogAcross().Seconds())
 	} else {
-		reason = fmt.Sprintf("new rate is %d lower than the guessed slave rate to account for a guessed backlog of %d requests over %.f seconds", int64(avgSlaveRate-newRate), int64(requestsBehind), m.config.MinDurationBetweenChanges().Seconds())
+		reason = fmt.Sprintf("new rate is %d lower than the guessed slave rate to account for a guessed backlog of %d requests over %.f seconds", int64(avgSlaveRate-newRate), int64(requestsBehind), m.config.SpreadBacklogAcross().Seconds())
 	}
 
 	return int64(newRate), reason

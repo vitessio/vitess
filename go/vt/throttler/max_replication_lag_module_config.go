@@ -14,6 +14,10 @@ type MaxReplicationLagModuleConfig struct {
 	throttlerdata.Configuration
 }
 
+// Most of the values are based on the assumption that vttablet is started
+// with the flag --health_check_interval=20s.
+const healthCheckInterval = 20
+
 var defaultMaxReplicationLagModuleConfig = MaxReplicationLagModuleConfig{
 	throttlerdata.Configuration{
 		TargetReplicationLagSec: 2,
@@ -24,11 +28,15 @@ var defaultMaxReplicationLagModuleConfig = MaxReplicationLagModuleConfig{
 		MaxIncrease:       1,
 		EmergencyDecrease: 0.5,
 
-		MinDurationBetweenChangesSec: 10,
+		// Wait for two health broadcast rounds. Otherwise, the "decrease" mode
+		// has less than 2 lag records available to calculate the actual slave rate.
+		MinDurationBetweenIncreasesSec: 2 * healthCheckInterval,
 		// MaxDurationBetweenIncreasesSec defaults to 60+2 seconds because this
-		// corresponds to three 3 broadcasts (assuming --health_check_interval=20s).
+		// corresponds to three 3 broadcasts.
 		// The 2 extra seconds give us headroom to account for delay in the process.
-		MaxDurationBetweenIncreasesSec: 60 + 2,
+		MaxDurationBetweenIncreasesSec: 3*healthCheckInterval + 2,
+		MinDurationBetweenDecreasesSec: healthCheckInterval,
+		SpreadBacklogAcrossSec:         healthCheckInterval,
 
 		AgeBadRateAfterSec: 3 * 60,
 		BadRateIncrease:    0.10,
@@ -67,11 +75,17 @@ func (c MaxReplicationLagModuleConfig) Verify() error {
 	if c.EmergencyDecrease <= 0 {
 		return fmt.Errorf("emergency_decrease must be > 0")
 	}
-	if c.MinDurationBetweenChangesSec < 1 {
-		return fmt.Errorf("min_duration_between_changes_sec must be >= 1")
+	if c.MinDurationBetweenIncreasesSec < 1 {
+		return fmt.Errorf("min_duration_between_increases_sec must be >= 1")
 	}
 	if c.MaxDurationBetweenIncreasesSec < 1 {
 		return fmt.Errorf("max_duration_between_increases_sec must be >= 1")
+	}
+	if c.MinDurationBetweenDecreasesSec < 1 {
+		return fmt.Errorf("min_duration_between_decreases_sec must be >= 1")
+	}
+	if c.SpreadBacklogAcrossSec < 1 {
+		return fmt.Errorf("spread_backlog_across_sec must be >= 1")
 	}
 	if c.IgnoreNSlowestReplicas < 0 {
 		return fmt.Errorf("ignore_n_slowest_replicas must be >= 0")
@@ -82,16 +96,28 @@ func (c MaxReplicationLagModuleConfig) Verify() error {
 	return nil
 }
 
-// MinDurationBetweenChanges is a helper function which returns the respective
+// MinDurationBetweenIncreases is a helper function which returns the respective
 // protobuf field as native Go type.
-func (c MaxReplicationLagModuleConfig) MinDurationBetweenChanges() time.Duration {
-	return time.Duration(c.MinDurationBetweenChangesSec) * time.Second
+func (c MaxReplicationLagModuleConfig) MinDurationBetweenIncreases() time.Duration {
+	return time.Duration(c.MinDurationBetweenIncreasesSec) * time.Second
 }
 
 // MaxDurationBetweenIncreases is a helper function which returns the respective
 // protobuf field as native Go type.
 func (c MaxReplicationLagModuleConfig) MaxDurationBetweenIncreases() time.Duration {
 	return time.Duration(c.MaxDurationBetweenIncreasesSec) * time.Second
+}
+
+// MinDurationBetweenDecreases is a helper function which returns the respective
+// protobuf field as native Go type.
+func (c MaxReplicationLagModuleConfig) MinDurationBetweenDecreases() time.Duration {
+	return time.Duration(c.MinDurationBetweenDecreasesSec) * time.Second
+}
+
+// SpreadBacklogAcross is a helper function which returns the respective
+// protobuf field as native Go type.
+func (c MaxReplicationLagModuleConfig) SpreadBacklogAcross() time.Duration {
+	return time.Duration(c.SpreadBacklogAcrossSec) * time.Second
 }
 
 // AgeBadRateAfter is a helper function which returns the respective

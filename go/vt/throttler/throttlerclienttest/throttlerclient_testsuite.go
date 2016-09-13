@@ -122,11 +122,13 @@ func (tf *testFixture) configuration(t *testing.T, client throttlerclient.Client
 		InitialRate:                    3,
 		MaxIncrease:                    0.4,
 		EmergencyDecrease:              0.5,
-		MinDurationBetweenChangesSec:   6,
+		MinDurationBetweenIncreasesSec: 6,
 		MaxDurationBetweenIncreasesSec: 7,
-		IgnoreNSlowestReplicas:         8,
-		AgeBadRateAfterSec:             9,
-		BadRateIncrease:                0.10,
+		MinDurationBetweenDecreasesSec: 8,
+		SpreadBacklogAcrossSec:         9,
+		IgnoreNSlowestReplicas:         10,
+		AgeBadRateAfterSec:             11,
+		BadRateIncrease:                0.12,
 	}
 	names, err := client.UpdateConfiguration(context.Background(), "t2", config /* false */, true /* copyZeroValues */)
 	if err != nil {
