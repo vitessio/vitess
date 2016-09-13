@@ -269,7 +269,15 @@ func FindSlaves(mysqld MysqlDaemon) ([]string, error) {
 	for _, row := range qr.Rows {
 		// Check for prefix, since it could be "Binlog Dump GTID".
 		if strings.HasPrefix(row[colCommand].String(), binlogDumpCommand) {
-			host, _, err := netutil.SplitHostPort(row[colClientAddr].String())
+			host := row[colClientAddr].String()
+			if host == "localhost" {
+				// If we have a local binlog streamer, it will
+				// show up as being connected
+				// from 'localhost' through the local
+				// socket. Ignore it.
+				continue
+			}
+			host, _, err = netutil.SplitHostPort(host)
 			if err != nil {
 				return nil, fmt.Errorf("FindSlaves: malformed addr %v", err)
 			}
