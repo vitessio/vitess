@@ -124,8 +124,8 @@ func TestMaxReplicationLagModule_Increase(t *testing.T) {
 	if err := tf.checkState(stateIncreaseRate, 100, sinceZero(1*time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	// After the initial wait period of 62s (config.MaxDurationBetweenChangesSec),
-	// regular increments start.
+	// After the initial wait period of 62s
+	// (config.MaxDurationBetweenIncreasesSec), regular increments start.
 
 	// r2 @  70s, 0s lag
 	tf.ratesHistory.add(sinceZero(69*time.Second), 100)
