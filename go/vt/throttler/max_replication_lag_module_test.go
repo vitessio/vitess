@@ -667,6 +667,130 @@ func TestMaxReplicationLagModule_IgnoreNSlowestReplicas_IsIgnoredDuringIncrease(
 	}
 }
 
+// TestMaxReplicationLagModule_EmergencyDoesNotChangeBadValues verifies that a
+// replica, which triggers the emergency state and drags the rate all the way
+// down to the minimum, does not influence the stored bad rate in the "memory".
+// This situation occurs when a tablet gets restarted and restores from a
+// backup. During that time, the reported replication lag is very high and won't
+// go down until the restore finished (which may take hours). Once the restore
+// is done, the throttler should immediately continue from the last good rate
+// before the emergency and not have to test rates starting from the minimum.
+// In particular, the stored bad rate must not be close the minimum rate or it
+// may take hours until e.g. a bad rate of 2 ages out to the actual bad rate of
+// e.g. 201.
+func TestMaxReplicationLagModule_EmergencyDoesNotChangeBadValues(t *testing.T) {
+	config := NewMaxReplicationLagModuleConfig(5)
+	// Use a very aggressive aging rate to verify that bad rates do not age while
+	// we're in the "emergency" state.
+	config.AgeBadRateAfterSec = 21
+	tf, err := newTestFixture(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// INCREASE (necessary to set a "good" rate in the memory)
+
+	// r2 @  70s, 0s lag
+	tf.ratesHistory.add(sinceZero(69*time.Second), 100)
+	tf.process(lagRecord(sinceZero(70*time.Second), r2, 0))
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// r2 @ 110s, 0s lag
+	tf.ratesHistory.add(sinceZero(70*time.Second), 100)
+	tf.ratesHistory.add(sinceZero(109*time.Second), 200)
+	tf.process(lagRecord(sinceZero(110*time.Second), r2, 0))
+	if err := tf.checkState(stateIncreaseRate, 400, sinceZero(110*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := tf.m.memory.highestGood(), int64(200); got != want {
+		t.Fatalf("wrong good rate: got = %v, want = %v", got, want)
+	}
+
+	// DECREASE (necessary to set a "bad" rate in the memory)
+
+	// r2 @ 130s, 3s lag (above target, provokes a decrease)
+	tf.ratesHistory.add(sinceZero(110*time.Second), 200)
+	tf.ratesHistory.add(sinceZero(129*time.Second), 400)
+	tf.process(lagRecord(sinceZero(130*time.Second), r2, 3))
+	if err := tf.checkState(stateDecreaseAndGuessRate, 280, sinceZero(130*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := tf.m.memory.lowestBad(), int64(400); got != want {
+		t.Fatalf("wrong bad rate: got = %v, want = %v", got, want)
+	}
+
+	// memory: [good, bad] now is [200, 400].
+
+	// EMERGENCY
+
+	// Assume that "r1" was just restored and has a very high replication lag.
+	// r1 @ 140s, 3600s lag
+	tf.ratesHistory.add(sinceZero(130*time.Second), 400)
+	tf.ratesHistory.add(sinceZero(139*time.Second), 280)
+	tf.process(lagRecord(sinceZero(140*time.Second), r1, 3600))
+	if err := tf.checkState(stateEmergency, 140, sinceZero(140*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := tf.m.memory.lowestBad(), int64(280); got != want {
+		t.Fatalf("bad rate should change when we transition to the emergency state: got = %v, want = %v", got, want)
+	}
+
+	// memory: [good, bad] now is [200, 280].
+
+	// r2 @ 150s, 0s lag (ignored because r1 is the "replica under test")
+	tf.ratesHistory.add(sinceZero(140*time.Second), 280)
+	tf.ratesHistory.add(sinceZero(149*time.Second), 140)
+	tf.process(lagRecord(sinceZero(150*time.Second), r2, 0))
+	if err := tf.checkState(stateEmergency, 140, sinceZero(140*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	tf.ratesHistory.add(sinceZero(160*time.Second), 140)
+
+	// r1 keeps to drive the throttler rate down, but not the bad rate.
+
+	times := []int{160, 180, 200, 220, 240, 260, 280}
+	rates := []int{70, 35, 17, 8, 4, 2, 1}
+
+	for i, tm := range times {
+		// r1 @ <tt>s, 3600s lag
+		r1Time := sinceZero(time.Duration(tm) * time.Second)
+		if i > 0 {
+			tf.ratesHistory.add(r1Time, int64(rates[i-1]))
+		}
+		tf.process(lagRecord(r1Time, r1, 3600))
+		if err := tf.checkState(stateEmergency, int64(rates[i]), r1Time); err != nil {
+			t.Fatalf("time=%d: %v", tm, err)
+		}
+		if got, want := tf.m.memory.lowestBad(), int64(280); got != want {
+			t.Fatalf("time=%d: bad rate must not change when the old state is the emergency state: got = %v, want = %v", tm, got, want)
+		}
+
+		// r2 @ <tt+10>s, 0s lag (ignored because r1 is the "replica under test")
+		r2Time := sinceZero(time.Duration(tm+10) * time.Second)
+		tf.ratesHistory.add(r2Time, int64(rates[i]))
+		tf.process(lagRecord(r2Time, r2, 0))
+		if err := tf.checkState(stateEmergency, int64(rates[i]), r1Time); err != nil {
+			t.Fatalf("time=%d: %v", tm, err)
+		}
+	}
+
+	// INCREASE
+
+	// r1 is fully restored now and its lag is zero.
+	// We'll leave the emergency state and increase the rate based of the last
+	// stored "good" rate.
+
+	// r1 @ 300s, 0s lag
+	tf.ratesHistory.add(sinceZero(299*time.Second), 1)
+	tf.process(lagRecord(sinceZero(300*time.Second), r1, 0))
+	// New rate is 240, the middle of [good, bad] = [200, 240].
+	if err := tf.checkState(stateIncreaseRate, 240, sinceZero(300*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // lagRecord creates a fake record using a fake TabletStats object.
 func lagRecord(t time.Time, uid, lag uint32) replicationLagRecord {
 	return replicationLagRecord{t, tabletStats(uid, lag)}

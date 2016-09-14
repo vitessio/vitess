@@ -713,6 +713,7 @@ func (m *MaxReplicationLagModule) markCurrentRateAsBadOrGood(r *result, now time
 	case stateEmergency:
 		// Rate changes initiated during an "emergency" phase provide no meaningful data point.
 		r.MemorySkipReason = "not marking a rate as good or bad while in the emergency state"
+		m.memory.touchBadRateAge(now)
 		return
 	}
 
