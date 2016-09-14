@@ -77,13 +77,7 @@ fi
 # Build PHP extension, only if requested.
 if [ -n "$INSTALL_GRPC_PHP" ]; then
   echo "Building gRPC PHP extension..."
-  cd src/php/ext/grpc
-  phpize
-  if ! LDFLAGS="$LDFLAGS -lrt" ./configure --enable-grpc=$grpc_dist/usr/local; then
-    cat config.log
-    exit 1
-  fi
-  make
-  mkdir -p $INSTALL_GRPC_PHP
-  mv modules/grpc.so $INSTALL_GRPC_PHP
+  wget https://pear.php.net/install-pear-nozlib.phar -O /tmp/install-pear.phar
+  php /tmp/install-pear.phar
+  LDFLAGS="-lpthread -lrt" $INSTALL_GRPC_PHP/../versions/5.5.9/bin/pecl install grpc
 fi
