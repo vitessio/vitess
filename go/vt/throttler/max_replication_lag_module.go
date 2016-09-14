@@ -520,8 +520,10 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(r *result, now time.Time,
 		// No lag record for this replica in the time span
 		// [last rate change, current lag record).
 		// Without it we won't be able to guess the slave rate.
-		// Therefore, we'll stay in the current state and wait for more records.
-		r.Reason = fmt.Sprintf("no previous lag record for this replica available since the last rate change (%.1f seconds ago)", now.Sub(m.lastRateChange).Seconds())
+		// We err on the side of caution and reduce the rate by half the emergency
+		// decrease percentage.
+		decreaseReason := fmt.Sprintf("no previous lag record for this replica available since the last rate change (%.1f seconds ago)", now.Sub(m.lastRateChange).Seconds())
+		m.decreaseRateByPercentage(r, now, lagRecordNow, stateDecreaseAndGuessRate, m.config.EmergencyDecrease/2, decreaseReason)
 		return
 	}
 
@@ -622,15 +624,20 @@ func (m *MaxReplicationLagModule) guessSlaveRate(r *result, avgMasterRate float6
 func (m *MaxReplicationLagModule) emergency(r *result, now time.Time, lagRecordNow replicationLagRecord) {
 	m.markCurrentRateAsBadOrGood(r, now, stateEmergency, unknown)
 
+	decreaseReason := fmt.Sprintf("replication lag went beyond max: %d > %d", lagRecordNow.lag(), m.config.MaxReplicationLagSec)
+	m.decreaseRateByPercentage(r, now, lagRecordNow, stateEmergency, m.config.EmergencyDecrease, decreaseReason)
+}
+
+func (m *MaxReplicationLagModule) decreaseRateByPercentage(r *result, now time.Time, lagRecordNow replicationLagRecord, newState state, decrease float64, decreaseReason string) {
 	oldRate := m.rate.Get()
-	rate := int64(float64(oldRate) * m.config.EmergencyDecrease)
+	rate := int64(float64(oldRate) - float64(oldRate)*decrease)
 	if rate == 0 {
 		// Never fully stop throttling.
 		rate = 1
 	}
 
-	reason := fmt.Sprintf("replication lag went beyond max: %d > %d reducing previous rate of %d by %.f%% to: %v", lagRecordNow.lag(), m.config.MaxReplicationLagSec, oldRate, m.config.EmergencyDecrease*100, rate)
-	m.updateRate(r, stateEmergency, rate, reason, now, lagRecordNow, m.config.MinDurationBetweenDecreases())
+	reason := fmt.Sprintf("%v: reducing previous rate of %d by %.f%% to: %v", decreaseReason, oldRate, decrease*100, rate)
+	m.updateRate(r, newState, rate, reason, now, lagRecordNow, m.config.MinDurationBetweenDecreases())
 }
 
 func (m *MaxReplicationLagModule) updateRate(r *result, newState state, rate int64, reason string, now time.Time, lagRecordNow replicationLagRecord, testDuration time.Duration) {

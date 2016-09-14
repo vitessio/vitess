@@ -535,26 +535,25 @@ func TestMaxReplicationLagModule_Decrease_NoReplicaHistory(t *testing.T) {
 	tf.ratesHistory.add(sinceZero(70*time.Second), 100)
 	tf.ratesHistory.add(sinceZero(79*time.Second), 200)
 	tf.process(lagRecord(sinceZero(80*time.Second), r1, 3))
-	// Rate was not decreased because r1 has no lag record @ 70s or higher.
-	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
+	// Rate was decreased by 25% (half the emergency decrease) as safety measure.
+	if err := tf.checkState(stateDecreaseAndGuessRate, 150, sinceZero(80*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
-	// r2 @  90s, 3s lag (above target, provokes a decrease)
-	tf.ratesHistory.add(sinceZero(89*time.Second), 200)
-	tf.process(lagRecord(sinceZero(90*time.Second), r2, 6))
-	// Rate was decreased because r2 has a lag record @ 70s.
-	//
-	// The guessed replica (slave) rate is 140 because of the 6s lag increase
-	// within the elapsed 20s.
-	// The replica processed only 14s worth of work (20s elapsed - 6s lag increase)
-	// 14s / 20s * 200 QPS actual rate => 140 QPS replica rate
-	//
-	// This results in a backlog of 6s * 200 QPS = 1200 queries.
-	// Since this backlog is spread across SpreadBacklogAcrossSec (20s),
-	// the guessed rate gets further reduced by 60 QPS (1200 queries / 20s).
-	// Hence, the rate is set to 80 QPS (140 - 60).
-	if err := tf.checkState(stateDecreaseAndGuessRate, 80, sinceZero(90*time.Second)); err != nil {
+	// r2 @  90s, 0s lag
+	tf.ratesHistory.add(sinceZero(80*time.Second), 200)
+	tf.ratesHistory.add(sinceZero(89*time.Second), 150)
+	tf.process(lagRecord(sinceZero(90*time.Second), r2, 0))
+	// r2 is ignored because r1 is the "replica under test".
+	if err := tf.checkState(stateDecreaseAndGuessRate, 150, sinceZero(80*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// r1 recovers after the rate decrease and triggers a new increase.
+	// r1 @ 100s, 0s lag
+	tf.ratesHistory.add(sinceZero(99*time.Second), 150)
+	tf.process(lagRecord(sinceZero(100*time.Second), r1, 0))
+	if err := tf.checkState(stateIncreaseRate, 300, sinceZero(100*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 }
