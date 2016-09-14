@@ -751,8 +751,8 @@ func TestMaxReplicationLagModule_EmergencyDoesNotChangeBadValues(t *testing.T) {
 
 	// r1 keeps to drive the throttler rate down, but not the bad rate.
 
-	times := []int{160, 180, 200, 220, 240, 260, 280}
-	rates := []int{70, 35, 17, 8, 4, 2, 1}
+	times := []int{160, 180, 200, 220, 240, 260, 280, 300, 320}
+	rates := []int{70, 35, 17, 8, 4, 2, 1, 1, 1}
 
 	for i, tm := range times {
 		// r1 @ <tt>s, 3600s lag
@@ -783,11 +783,11 @@ func TestMaxReplicationLagModule_EmergencyDoesNotChangeBadValues(t *testing.T) {
 	// We'll leave the emergency state and increase the rate based of the last
 	// stored "good" rate.
 
-	// r1 @ 300s, 0s lag
-	tf.ratesHistory.add(sinceZero(299*time.Second), 1)
-	tf.process(lagRecord(sinceZero(300*time.Second), r1, 0))
+	// r1 @ 340s, 0s lag
+	tf.ratesHistory.add(sinceZero(339*time.Second), 1)
+	tf.process(lagRecord(sinceZero(340*time.Second), r1, 0))
 	// New rate is 240, the middle of [good, bad] = [200, 240].
-	if err := tf.checkState(stateIncreaseRate, 240, sinceZero(300*time.Second)); err != nil {
+	if err := tf.checkState(stateIncreaseRate, 240, sinceZero(340*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 }

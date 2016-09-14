@@ -655,12 +655,12 @@ func (m *MaxReplicationLagModule) updateRate(r *result, newState state, rate int
 		r.RateChange = decreasedRate
 	}
 
+	m.lastRateChange = now
+	m.replicaUnderTest = &replicaUnderTest{lagRecordNow.Key, topoproto.TabletAliasString(lagRecordNow.Tablet.Alias), newState, now.Add(testDuration)}
+
 	if rate == oldRate {
 		return
 	}
-
-	m.lastRateChange = now
-	m.replicaUnderTest = &replicaUnderTest{lagRecordNow.Key, topoproto.TabletAliasString(lagRecordNow.Tablet.Alias), newState, now.Add(testDuration)}
 	m.rate.Set(int64(rate))
 	// Notify the throttler that we updated our max rate.
 	m.rateUpdateChan <- struct{}{}
