@@ -16,12 +16,10 @@ import (
 	"net/http"
 )
 
+// StartHTMLTable writes the start of a logz-style table to an HTTP response.
 func StartHTMLTable(w http.ResponseWriter) {
-	w.Write([]byte(`
-		<!DOCTYPE html>
-		<html>
-		<head>
-		<style type="text/css">
+	w.Write([]byte(`<!DOCTYPE html>
+<style type="text/css">
 		table.gridtable {
 			font-family: verdana,arial,sans-serif;
 			font-size:11px;
@@ -67,13 +65,13 @@ func StartHTMLTable(w http.ResponseWriter) {
                   content: "▼";
                   float: left;
                 }
-		</style>
-		</head>
-		<body>
-		<table class="gridtable">
-	`))
+</style>
+
+<table class="gridtable">
+`))
 }
 
+// EndHTMLTable writes the end of a logz-style table to an HTTP response.
 func EndHTMLTable(w http.ResponseWriter) {
 	defer w.Write([]byte(`
 </table>
@@ -118,8 +116,7 @@ $(function() {
   $('table').sortableByColumn();
 });
 </script>
-</body>
-</html>`))
+`))
 }
 
 // Wrappable inserts zero-width whitespaces to make
