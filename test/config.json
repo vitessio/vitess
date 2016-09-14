@@ -350,7 +350,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": [
 				"webdriver"
@@ -360,19 +360,8 @@
 			"File": "vtctld2_web_test.py",
 			"Args": [],
 			"Command": [],
-			"Manual": true,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": [
-				"webdriver"
-			]
-		},
-		"vtctld2_web_status": {
-			"File": "vtctld2_web_status_test.py",
-			"Args": [],
-			"Command": [],
-			"Manual": true,
-			"Shard": 4,
+			"Manual": false,
+			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": [
 				"webdriver"

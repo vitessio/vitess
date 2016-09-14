@@ -125,7 +125,7 @@ class VtcomboProcess(VtProcess):
       ]
 
   def __init__(self, directory, topology, mysql_db, schema_dir, charset,
-               web_dir=None):
+               web_dir=None, web_dir2=None):
     VtProcess.__init__(self, 'vtcombo-%s' % os.environ['USER'], directory,
                        environment.vtcombo_binary, port_name='vtcombo')
     self.extraparams = [
@@ -143,6 +143,8 @@ class VtcomboProcess(VtProcess):
       self.extraparams.extend(['-schema_dir', schema_dir])
     if web_dir:
       self.extraparams.extend(['-web_dir', web_dir])
+    if web_dir2:
+      self.extraparams.extend(['-web_dir2', web_dir2])
     if mysql_db.unix_socket():
       self.extraparams.extend(
           ['-db-config-app-unixsocket', mysql_db.unix_socket(),
@@ -159,7 +161,7 @@ vtcombo_process = None
 
 
 def start_vt_processes(directory, topology, mysql_db, schema_dir,
-                       charset='utf8', web_dir=None):
+                       charset='utf8', web_dir=None, web_dir2=None):
   """Start the vt processes.
 
   Args:
@@ -169,13 +171,14 @@ def start_vt_processes(directory, topology, mysql_db, schema_dir,
     schema_dir: the directory that contains the schema / vschema.
     charset: the character set for the database connections.
     web_dir: contains the web app for vtctld side of vtcombo.
+    web_dir2: contains the web app for vtctld side of vtcombo.
   """
   global vtcombo_process
 
   logging.info('start_vt_processes(directory=%s,vtcombo_binary=%s)',
                directory, environment.vtcombo_binary)
   vtcombo_process = VtcomboProcess(directory, topology, mysql_db, schema_dir,
-                                   charset, web_dir=web_dir)
+                                   charset, web_dir=web_dir, web_dir2=web_dir2)
   vtcombo_process.wait_start()
 
 

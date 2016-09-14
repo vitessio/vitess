@@ -30,11 +30,13 @@ fi
 echo "Installing dependencies for building web UI"
 angular_cli_dir=$VTROOT/dist/angular-cli
 web_dir2=$VTTOP/web/vtctld2
-rm -rf $angular_cli_dir
-cd $VTROOT/dist && git clone https://github.com/angular/angular-cli.git --quiet
-cd $angular_cli_dir && git checkout 3dcd49bc625db36dd9f539cf9ce2492107e0258c --quiet
+angular_cli_commit=cacaa4eff10e135016ef81076fab1086a3bce92f
+if [[ -d $angular_cli_dir && `cd $angular_cli_dir && git rev-parse HEAD` == "$angular_cli_commit" ]]; then
+  echo "skipping angular cli download. remove $angular_cli_dir to force download."
+else
+  cd $VTROOT/dist && git clone https://github.com/angular/angular-cli.git --quiet
+  cd $angular_cli_dir && git checkout $angular_cli_commit --quiet
+fi
 cd $angular_cli_dir && $node_dist/bin/npm link --silent
-$node_dist/bin/npm install -g bower --silent
 cd $web_dir2 && $node_dist/bin/npm install --silent
 cd $web_dir2 && $node_dist/bin/npm link angular-cli --silent
-cd $web_dir2 && $node_dist/bin/bower install --silent

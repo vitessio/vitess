@@ -1,6 +1,6 @@
 {
   "project": {
-    "version": "1.0.0-beta.11-webpack.2",
+    "version": "1.0.0-beta.11-webpack.8",
     "name": "vtctld2"
   },
   "apps": [
@@ -14,7 +14,10 @@
       "tsconfig": "tsconfig.json",
       "prefix": "vt",
       "mobile": false,
-      "styles": "styles.css",
+      "styles": [
+        "styles.css"
+      ],
+      "scripts": [],
       "environments": {
         "source": "environments/environment.ts",
         "prod": "environments/environment.prod.ts",
@@ -26,12 +29,12 @@
   "packages": [],
   "e2e": {
     "protractor": {
-      "config": "config/protractor.conf.js"
+      "config": "./protractor.conf.js"
     }
   },
   "test": {
     "karma": {
-      "config": "config/karma.conf.js"
+      "config": "./karma.conf.js"
     }
   },
   "defaults": {
