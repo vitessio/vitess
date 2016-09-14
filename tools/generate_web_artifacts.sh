@@ -11,6 +11,8 @@
 set -e
 
 vtctld2_dir=$VTTOP/web/vtctld2
-rm -rf $vtctld2_dir/app
+if [[ -d $vtctld2_dir/app ]]; then
+  rm -rf $vtctld2_dir/app
+fi
 cd $vtctld2_dir && ng build -prod --output-path app/
 rm -rf $vtctld2_dir/app/assets
