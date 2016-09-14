@@ -36,7 +36,7 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
-	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, bv, request.TransactionId)
+	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, bv, request.TransactionId, request.Options)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
@@ -56,7 +56,7 @@ func (q *query) ExecuteBatch(ctx context.Context, request *querypb.ExecuteBatchR
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
-	results, err := q.server.ExecuteBatch(ctx, request.Target, bql, request.AsTransaction, request.TransactionId)
+	results, err := q.server.ExecuteBatch(ctx, request.Target, bql, request.AsTransaction, request.TransactionId, request.Options)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
@@ -76,7 +76,7 @@ func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream quer
 	if err != nil {
 		return vterrors.ToGRPCError(err)
 	}
-	if err := q.server.StreamExecute(ctx, request.Target, request.Query.Sql, bv, func(reply *sqltypes.Result) error {
+	if err := q.server.StreamExecute(ctx, request.Target, request.Query.Sql, bv, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.StreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
@@ -142,7 +142,7 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 		return nil, vterrors.ToGRPCError(err)
 	}
 
-	result, transactionID, err := q.server.BeginExecute(ctx, request.Target, request.Query.Sql, bv)
+	result, transactionID, err := q.server.BeginExecute(ctx, request.Target, request.Query.Sql, bv, request.Options)
 	if err != nil {
 		// if we have a valid transactionID, return the error in-band
 		if transactionID != 0 {
@@ -171,7 +171,7 @@ func (q *query) BeginExecuteBatch(ctx context.Context, request *querypb.BeginExe
 		return nil, vterrors.ToGRPCError(err)
 	}
 
-	results, transactionID, err := q.server.BeginExecuteBatch(ctx, request.Target, bql, request.AsTransaction)
+	results, transactionID, err := q.server.BeginExecuteBatch(ctx, request.Target, bql, request.AsTransaction, request.Options)
 	if err != nil {
 		// if we have a valid transactionID, return the error in-band
 		if transactionID != 0 {

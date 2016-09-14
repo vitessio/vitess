@@ -37,7 +37,8 @@ func TestResolverExecuteKeyspaceIds(t *testing.T) {
 			[][]byte{{0x10}, {0x25}},
 			topodatapb.TabletType_MASTER,
 			nil,
-			false)
+			false,
+			nil)
 	})
 }
 
@@ -50,7 +51,8 @@ func TestResolverExecuteKeyRanges(t *testing.T) {
 			[]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x25}}},
 			topodatapb.TabletType_MASTER,
 			nil,
-			false)
+			false,
+			nil)
 	})
 }
 
@@ -75,7 +77,8 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 			},
 			topodatapb.TabletType_MASTER,
 			nil,
-			false)
+			false,
+			nil)
 	})
 }
 
@@ -95,6 +98,7 @@ func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 			}},
 			topodatapb.TabletType_MASTER,
 			false,
+			nil,
 			nil)
 		if err != nil {
 			return nil, err
@@ -113,6 +117,7 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 			keyspace,
 			[][]byte{{0x10}, {0x15}},
 			topodatapb.TabletType_MASTER,
+			nil,
 			func(r *sqltypes.Result) error {
 				appendResult(qr, r)
 				return nil
@@ -127,6 +132,7 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 			keyspace,
 			[][]byte{{0x10}, {0x15}, {0x25}},
 			topodatapb.TabletType_MASTER,
+			nil,
 			func(r *sqltypes.Result) error {
 				appendResult(qr, r)
 				return nil
@@ -146,6 +152,7 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 			keyspace,
 			[]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x15}}},
 			topodatapb.TabletType_MASTER,
+			nil,
 			func(r *sqltypes.Result) error {
 				appendResult(qr, r)
 				return nil
@@ -161,6 +168,7 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 			keyspace,
 			[]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x25}}},
 			topodatapb.TabletType_MASTER,
+			nil,
 			func(r *sqltypes.Result) error {
 				appendResult(qr, r)
 				return nil
@@ -462,7 +470,8 @@ func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
 		[][]byte{{0x10}, {0x25}},
 		topodatapb.TabletType_MASTER,
 		nil,
-		false)
+		false,
+		nil)
 	if err == nil {
 		t.Errorf("want %v, got nil", errStr)
 	}
@@ -491,7 +500,7 @@ func TestResolverExecBatchReresolve(t *testing.T) {
 		return boundShardQueriesToScatterBatchRequest(queries)
 	}
 
-	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, false, nil, buildBatchRequest)
+	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, false, nil, nil, buildBatchRequest)
 	want := "shard, host: TestResolverExecBatchReresolve.0.master, alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"TestResolverExecBatchReresolve\" shard:\"0\" type:MASTER , retry: err"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
@@ -528,7 +537,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 		return boundShardQueriesToScatterBatchRequest(queries)
 	}
 
-	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, true, nil, buildBatchRequest)
+	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, true, nil, nil, buildBatchRequest)
 	want := "shard, host: TestResolverExecBatchAsTransaction.0.master, alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"TestResolverExecBatchAsTransaction\" shard:\"0\" type:MASTER , retry: err"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %v, got %v", want, err)

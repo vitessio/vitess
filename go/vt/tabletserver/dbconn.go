@@ -103,7 +103,7 @@ func (dbc *DBConn) ExecOnce(ctx context.Context, query string, maxrows int, want
 }
 
 // Stream executes the query and streams the results.
-func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
+func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int, excludeFieldNames bool) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("DBConn.Stream")
 	defer span.Finish()
@@ -114,7 +114,12 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 			ctx,
 			query,
 			func(r *sqltypes.Result) error {
-				resultSent = true
+				if !resultSent {
+					resultSent = true
+					if excludeFieldNames {
+						r.StripFieldNames()
+					}
+				}
 				return callback(r)
 			},
 			streamBufferSize,

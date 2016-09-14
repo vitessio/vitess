@@ -8,6 +8,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/tabletserver"
@@ -66,6 +67,10 @@ var TestCallerID = &vtrpcpb.CallerID{
 
 var TestVTGateCallerID = &querypb.VTGateCallerID{
 	Username: "test_username",
+}
+
+var TestExecuteOptions = &querypb.ExecuteOptions{
+	ExcludeFieldNames: true,
 }
 
 const TestAsTransaction bool = true
@@ -176,7 +181,7 @@ var ExecuteQueryResult = sqltypes.Result{
 }
 
 // Execute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
+func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	if f.HasError {
 		return nil, f.TabletError
 	}
@@ -188,6 +193,9 @@ func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, 
 	}
 	if !reflect.DeepEqual(bindVariables, ExecuteBindVars) {
 		f.t.Errorf("invalid Execute.BindVariables: got %v expected %v", bindVariables, ExecuteBindVars)
+	}
+	if !proto.Equal(options, TestExecuteOptions) {
+		f.t.Errorf("invalid Execute.ExecuteOptions: got %v expected %v", options, TestExecuteOptions)
 	}
 	f.checkTargetCallerID(ctx, "Execute", target)
 	if transactionID != f.ExpectedTransactionID {
@@ -229,7 +237,7 @@ var StreamExecuteQueryResult2 = sqltypes.Result{
 }
 
 // StreamExecute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sendReply func(*sqltypes.Result) error) error {
+func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
 	if f.Panics && f.StreamExecutePanicsEarly {
 		panic(fmt.Errorf("test-triggered panic early"))
 	}
@@ -238,6 +246,9 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Ta
 	}
 	if !reflect.DeepEqual(bindVariables, StreamExecuteBindVars) {
 		f.t.Errorf("invalid StreamExecute.BindVariables: got %v expected %v", bindVariables, StreamExecuteBindVars)
+	}
+	if !proto.Equal(options, TestExecuteOptions) {
+		f.t.Errorf("invalid StreamExecute.ExecuteOptions: got %v expected %v", options, TestExecuteOptions)
 	}
 	f.checkTargetCallerID(ctx, "StreamExecute", target)
 	if err := sendReply(&StreamExecuteQueryResult1); err != nil {
@@ -318,7 +329,7 @@ var ExecuteBatchQueryResultList = []sqltypes.Result{
 }
 
 // ExecuteBatch is part of the queryservice.QueryService interface
-func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	if f.HasError {
 		return nil, f.TabletError
 	}
@@ -327,6 +338,9 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Tar
 	}
 	if !reflect.DeepEqual(queries, ExecuteBatchQueries) {
 		f.t.Errorf("invalid ExecuteBatch.Queries: got %v expected %v", queries, ExecuteBatchQueries)
+	}
+	if !proto.Equal(options, TestExecuteOptions) {
+		f.t.Errorf("invalid ExecuteBatch.ExecuteOptions: got %v expected %v", options, TestExecuteOptions)
 	}
 	f.checkTargetCallerID(ctx, "ExecuteBatch", target)
 	if asTransaction != TestAsTransaction {
@@ -386,24 +400,24 @@ var SplitQueryQueryV2SplitList = []querytypes.QuerySplit{
 }
 
 // BeginExecute combines Begin and Execute.
-func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}) (*sqltypes.Result, int64, error) {
+func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
 	transactionID, err := f.Begin(ctx, target)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	result, err := f.Execute(ctx, target, sql, bindVariables, transactionID)
+	result, err := f.Execute(ctx, target, sql, bindVariables, transactionID, options)
 	return result, transactionID, err
 }
 
 // BeginExecuteBatch combines Begin and ExecuteBatch.
-func (f *FakeQueryService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+func (f *FakeQueryService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
 	transactionID, err := f.Begin(ctx, target)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	results, err := f.ExecuteBatch(ctx, target, queries, asTransaction, transactionID)
+	results, err := f.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
 	return results, transactionID, err
 }
 

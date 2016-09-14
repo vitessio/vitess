@@ -47,6 +47,9 @@ type SandboxConn struct {
 	// Each batch request is inlined as a slice of Queries.
 	BatchQueries [][]querytypes.BoundQuery
 
+	// Options stores the options received by all calls.
+	Options []*querypb.ExecuteOptions
+
 	// results specifies the results to be returned.
 	// They're consumed as results are returned. If there are
 	// no results left, SingleRowResult is returned.
@@ -114,7 +117,7 @@ func (sbc *SandboxConn) SetResults(r []*sqltypes.Result) {
 }
 
 // Execute is part of the TabletConn interface.
-func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
+func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]interface{})
 	for k, v := range bindVars {
@@ -124,6 +127,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 		Sql:           query,
 		BindVariables: bv,
 	})
+	sbc.Options = append(sbc.Options, options)
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
@@ -131,7 +135,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 }
 
 // ExecuteBatch is part of the TabletConn interface.
-func (sbc *SandboxConn) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+func (sbc *SandboxConn) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	sbc.ExecCount.Add(1)
 	if asTransaction {
 		sbc.AsTransactionCount.Add(1)
@@ -140,6 +144,7 @@ func (sbc *SandboxConn) ExecuteBatch(ctx context.Context, target *querypb.Target
 		return nil, err
 	}
 	sbc.BatchQueries = append(sbc.BatchQueries, queries)
+	sbc.Options = append(sbc.Options, options)
 	result := make([]sqltypes.Result, 0, len(queries))
 	for range queries {
 		result = append(result, *(sbc.getNextResult()))
@@ -161,7 +166,7 @@ func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 }
 
 // StreamExecute is part of the TabletConn interface.
-func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
+func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]interface{})
 	for k, v := range bindVars {
@@ -171,6 +176,7 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 		Sql:           query,
 		BindVariables: bv,
 	})
+	sbc.Options = append(sbc.Options, options)
 	err := sbc.getError()
 	if err != nil {
 		return nil, err
@@ -202,22 +208,22 @@ func (sbc *SandboxConn) Rollback(ctx context.Context, target *querypb.Target, tr
 }
 
 // BeginExecute is part of the TabletConn interface.
-func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error) {
+func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
 	transactionID, err := sbc.Begin(ctx, target)
 	if err != nil {
 		return nil, 0, err
 	}
-	result, err := sbc.Execute(ctx, target, query, bindVars, transactionID)
+	result, err := sbc.Execute(ctx, target, query, bindVars, transactionID, options)
 	return result, transactionID, err
 }
 
 // BeginExecuteBatch is part of the TabletConn interface.
-func (sbc *SandboxConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+func (sbc *SandboxConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
 	transactionID, err := sbc.Begin(ctx, target)
 	if err != nil {
 		return nil, 0, err
 	}
-	results, err := sbc.ExecuteBatch(ctx, target, queries, asTransaction, transactionID)
+	results, err := sbc.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
 	return results, transactionID, err
 }
 

@@ -72,3 +72,74 @@ func TestCopy(t *testing.T) {
 		t.Errorf("Copy:\n%#v, want\n%#v", out, want)
 	}
 }
+
+func TestStripFieldNames(t *testing.T) {
+	testcases := []struct {
+		name string
+		in   *Result
+		out  *Result
+	}{{
+		name: "no fields",
+		in:   &Result{},
+		out:  &Result{},
+	}, {
+		name: "empty fields",
+		in: &Result{
+			Fields: []*querypb.Field{},
+		},
+		out: &Result{
+			Fields: []*querypb.Field{},
+		},
+	}, {
+		name: "no name",
+		in: &Result{
+			Fields: []*querypb.Field{{
+				Type: Int64,
+			}, {
+				Type: VarChar,
+			}},
+		},
+		out: &Result{
+			Fields: []*querypb.Field{{
+				Type: Int64,
+			}, {
+				Type: VarChar,
+			}},
+		},
+	}, {
+		name: "names",
+		in: &Result{
+			Fields: []*querypb.Field{{
+				Name: "field1",
+				Type: Int64,
+			}, {
+				Name: "field2",
+				Type: VarChar,
+			}},
+		},
+		out: &Result{
+			Fields: []*querypb.Field{{
+				Type: Int64,
+			}, {
+				Type: VarChar,
+			}},
+		},
+	}}
+	for _, tcase := range testcases {
+		checkEqual := false
+		var firstFieldValue *querypb.Field
+		if len(tcase.in.Fields) > 0 {
+			checkEqual = true
+			firstFieldValue = tcase.in.Fields[0]
+		}
+		tcase.in.StripFieldNames()
+		if !reflect.DeepEqual(tcase.in, tcase.out) {
+			t.Errorf("StripFieldNames unexpected result for %v: %v", tcase.name, tcase.in)
+		}
+		if checkEqual {
+			if tcase.in.Fields[0] == firstFieldValue {
+				t.Errorf("StripFieldNames modified original Field for %v", tcase.name)
+			}
+		}
+	}
+}

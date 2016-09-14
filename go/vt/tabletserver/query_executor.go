@@ -40,6 +40,13 @@ type poolConn interface {
 	Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
 }
 
+var sequenceFields = []*querypb.Field{
+	{
+		Name: "nextval",
+		Type: sqltypes.Int64,
+	},
+}
+
 func addUserTableQueryStats(queryServiceStats *QueryServiceStats, ctx context.Context, tableName string, queryType string, duration int64) {
 	username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(ctx))
 	if username == "" {
@@ -135,7 +142,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 }
 
 // Stream performs a streaming query execution.
-func (qre *QueryExecutor) Stream(sendReply func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) Stream(excludeFieldNames bool, sendReply func(*sqltypes.Result) error) error {
 	qre.logStats.OriginalSQL = qre.query
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
@@ -158,7 +165,7 @@ func (qre *QueryExecutor) Stream(sendReply func(*sqltypes.Result) error) error {
 	qre.qe.streamQList.Add(qd)
 	defer qre.qe.streamQList.Remove(qd)
 
-	return qre.fullStreamFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, sendReply)
+	return qre.fullStreamFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, excludeFieldNames, sendReply)
 }
 
 func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error) {
@@ -362,10 +369,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	ret := t.NextVal
 	t.NextVal += t.Increment
 	return &sqltypes.Result{
-		Fields: []*querypb.Field{{
-			Name: "nextval",
-			Type: sqltypes.Int64,
-		}},
+		Fields: sequenceFields,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt(nil, ret, 10)),
 		}},
@@ -603,12 +607,12 @@ func (qre *QueryExecutor) fullFetch(conn poolConn, parsedQuery *sqlparser.Parsed
 	return qre.execSQL(conn, sql, true)
 }
 
-func (qre *QueryExecutor) fullStreamFetch(conn *DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte, callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) fullStreamFetch(conn *DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte, excludeFieldNames bool, callback func(*sqltypes.Result) error) error {
 	sql, err := qre.generateFinalSQL(parsedQuery, bindVars, buildStreamComment)
 	if err != nil {
 		return err
 	}
-	return qre.execStreamSQL(conn, sql, callback)
+	return qre.execStreamSQL(conn, sql, excludeFieldNames, callback)
 }
 
 func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) (string, error) {
@@ -630,9 +634,9 @@ func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) (*
 	return conn.Exec(qre.ctx, sql, int(qre.qe.maxResultSize.Get()), wantfields)
 }
 
-func (qre *QueryExecutor) execStreamSQL(conn *DBConn, sql string, callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) execStreamSQL(conn *DBConn, sql string, excludeFieldNames bool, callback func(*sqltypes.Result) error) error {
 	start := time.Now()
-	err := conn.Stream(qre.ctx, sql, callback, int(qre.qe.streamBufferSize.Get()))
+	err := conn.Stream(qre.ctx, sql, callback, int(qre.qe.streamBufferSize.Get()), excludeFieldNames)
 	qre.logStats.AddRewrittenSQL(sql, start)
 	if err != nil {
 		// MySQL error that isn't due to a connection issue

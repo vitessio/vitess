@@ -86,3 +86,18 @@ func MakeRowTrusted(fields []*querypb.Field, row *querypb.Row) []Value {
 	}
 	return sqlRow
 }
+
+// StripFieldNames will remove the field names from the Fields.
+// It does not change the original fields, but creates new ones if it needs to.
+func (result *Result) StripFieldNames() {
+	if len(result.Fields) == 0 {
+		return
+	}
+	newFields := make([]*querypb.Field, len(result.Fields))
+	newFieldsArray := make([]querypb.Field, len(result.Fields))
+	for i, f := range result.Fields {
+		newFields[i] = &newFieldsArray[i]
+		newFieldsArray[i].Type = f.Type
+	}
+	result.Fields = newFields
+}

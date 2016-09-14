@@ -120,17 +120,17 @@ type fakeTabletConn struct {
 }
 
 // Execute is part of the TabletConn interface
-func (ftc *fakeTabletConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
+func (ftc *fakeTabletConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
 // Execute is part of the TabletConn interface
-func (ftc *fakeTabletConn) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+func (ftc *fakeTabletConn) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
 // StreamExecute is part of the TabletConn interface
-func (ftc *fakeTabletConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
+func (ftc *fakeTabletConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
@@ -150,12 +150,12 @@ func (ftc *fakeTabletConn) Rollback(ctx context.Context, target *querypb.Target,
 }
 
 // BeginExecute is part of the TabletConn interface
-func (ftc *fakeTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (*sqltypes.Result, int64, error) {
+func (ftc *fakeTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
 	return nil, 0, fmt.Errorf("not implemented in this test")
 }
 
 // BeginExecuteBatch is part of the TabletConn interface
-func (ftc *fakeTabletConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+func (ftc *fakeTabletConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
 	return nil, 0, fmt.Errorf("not implemented in this test")
 }
 

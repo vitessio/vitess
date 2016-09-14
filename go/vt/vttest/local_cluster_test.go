@@ -64,7 +64,7 @@ func TestVitess(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	_, err = conn.ExecuteShards(ctx, "select 1 from dual", "test_keyspace", []string{"0"}, nil, topodatapb.TabletType_MASTER)
+	_, err = conn.ExecuteShards(ctx, "select 1 from dual", "test_keyspace", []string{"0"}, nil, topodatapb.TabletType_MASTER, nil)
 	if err != nil {
 		t.Error(err)
 		return

@@ -484,6 +484,7 @@ func (tsv *TabletServer) IsHealthy() error {
 		"select 1 from dual",
 		nil,
 		0,
+		nil,
 	)
 	return err
 }
@@ -747,7 +748,7 @@ func (tsv *TabletServer) handleExecErrorNoPanic(sql string, bindVariables map[st
 }
 
 // Execute executes the query and returns the result as response.
-func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, transactionID int64) (result *sqltypes.Result, err error) {
+func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
 	logStats := newLogStats("Execute", ctx)
 	defer tsv.handleExecError(sql, bindVariables, &err, logStats)
 
@@ -779,13 +780,16 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 	if err != nil {
 		return nil, tsv.handleExecErrorNoPanic(sql, bindVariables, err, logStats)
 	}
+	if options != nil && options.ExcludeFieldNames {
+		result.StripFieldNames()
+	}
 	return result, nil
 }
 
 // StreamExecute executes the query and streams the result.
 // The first QueryResult will have Fields set (and Rows nil).
 // The subsequent QueryResult will have Rows set (and Fields nil).
-func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sendReply func(*sqltypes.Result) error) (err error) {
+func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) (err error) {
 	logStats := newLogStats("StreamExecute", ctx)
 	defer tsv.handleExecError(sql, bindVariables, &err, logStats)
 
@@ -806,7 +810,11 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 		logStats: logStats,
 		qe:       tsv.qe,
 	}
-	err = qre.Stream(sendReply)
+	excludeFieldNames := false
+	if options != nil && options.ExcludeFieldNames {
+		excludeFieldNames = true
+	}
+	err = qre.Stream(excludeFieldNames, sendReply)
 	if err != nil {
 		return tsv.handleExecErrorNoPanic(sql, bindVariables, err, logStats)
 	}
@@ -817,7 +825,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 // ExecuteBatch can be called for an existing transaction, or it can be called with
 // the AsTransaction flag which will execute all statements inside an independent
 // transaction. If AsTransaction is true, TransactionId must be 0.
-func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) (results []sqltypes.Result, err error) {
+func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) (results []sqltypes.Result, err error) {
 	if len(queries) == 0 {
 		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "Empty query list")
 	}
@@ -847,7 +855,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	}
 	results = make([]sqltypes.Result, 0, len(queries))
 	for _, bound := range queries {
-		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, transactionID)
+		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, transactionID, options)
 		if err != nil {
 			return nil, err
 		}
@@ -864,24 +872,24 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 }
 
 // BeginExecute combines Begin and Execute.
-func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}) (*sqltypes.Result, int64, error) {
+func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
 	transactionID, err := tsv.Begin(ctx, target)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	result, err := tsv.Execute(ctx, target, sql, bindVariables, transactionID)
+	result, err := tsv.Execute(ctx, target, sql, bindVariables, transactionID, options)
 	return result, transactionID, err
 }
 
 // BeginExecuteBatch combines Begin and ExecuteBatch.
-func (tsv *TabletServer) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+func (tsv *TabletServer) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
 	transactionID, err := tsv.Begin(ctx, target)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	results, err := tsv.ExecuteBatch(ctx, target, queries, asTransaction, transactionID)
+	results, err := tsv.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
 	return results, transactionID, err
 }
 

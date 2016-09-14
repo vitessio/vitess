@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
@@ -56,11 +57,11 @@ func NewRouter(ctx context.Context, serv topo.SrvTopoServer, cell, statsName str
 }
 
 // Execute routes a non-streaming query.
-func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
+func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
-	vcursor := newRequestContext(ctx, sql, bindVars, keyspace, tabletType, session, notInTransaction, rtr)
+	vcursor := newRequestContext(ctx, sql, bindVars, keyspace, tabletType, session, notInTransaction, options, rtr)
 	plan, err := rtr.planner.GetPlan(sql, keyspace)
 	if err != nil {
 		return nil, err
@@ -69,11 +70,11 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 }
 
 // StreamExecute executes a streaming query.
-func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
+func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
-	vcursor := newRequestContext(ctx, sql, bindVars, keyspace, tabletType, nil, false, rtr)
+	vcursor := newRequestContext(ctx, sql, bindVars, keyspace, tabletType, nil, false, options, rtr)
 	plan, err := rtr.planner.GetPlan(sql, keyspace)
 	if err != nil {
 		return err
@@ -125,6 +126,7 @@ func (rtr *Router) ExecuteRoute(vcursor *requestContext, route *engine.Route, jo
 		vcursor.tabletType,
 		NewSafeSession(vcursor.session),
 		vcursor.notInTransaction,
+		vcursor.options,
 	)
 }
 
@@ -157,6 +159,7 @@ func (rtr *Router) GetRouteFields(vcursor *requestContext, route *engine.Route, 
 		vcursor.tabletType,
 		NewSafeSession(vcursor.session),
 		vcursor.notInTransaction,
+		vcursor.options,
 	)
 }
 
@@ -191,6 +194,7 @@ func (rtr *Router) StreamExecuteRoute(vcursor *requestContext, route *engine.Rou
 		params.ks,
 		params.shardVars,
 		vcursor.tabletType,
+		vcursor.options,
 		sendReply,
 	)
 }
@@ -280,7 +284,8 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, route *engine.Route)
 		[]string{shard},
 		vcursor.tabletType,
 		NewSafeSession(vcursor.session),
-		vcursor.notInTransaction)
+		vcursor.notInTransaction,
+		vcursor.options)
 }
 
 func (rtr *Router) execDeleteEqual(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
@@ -310,7 +315,8 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, route *engine.Route)
 		[]string{shard},
 		vcursor.tabletType,
 		NewSafeSession(vcursor.session),
-		vcursor.notInTransaction)
+		vcursor.notInTransaction,
+		vcursor.options)
 }
 
 func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
@@ -360,7 +366,8 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 		[]string{shard},
 		vcursor.tabletType,
 		NewSafeSession(vcursor.session),
-		vcursor.notInTransaction)
+		vcursor.notInTransaction,
+		vcursor.options)
 
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
@@ -460,7 +467,8 @@ func (rtr *Router) deleteVindexEntries(vcursor *requestContext, route *engine.Ro
 		[]string{shard},
 		vcursor.tabletType,
 		NewSafeSession(vcursor.session),
-		vcursor.notInTransaction)
+		vcursor.notInTransaction,
+		vcursor.options)
 	if err != nil {
 		return err
 	}
@@ -527,6 +535,7 @@ func (rtr *Router) handleGenerate(vcursor *requestContext, gen *engine.Generate,
 		vcursor.tabletType,
 		NewSafeSession(nil),
 		false,
+		vcursor.options,
 	)
 	if err != nil {
 		return 0, err

@@ -58,7 +58,7 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 		Keyspace:   tablet.Tablet.Keyspace,
 		Shard:      tablet.Tablet.Shard,
 		TabletType: tablet.Tablet.Type,
-	}, sql, make(map[string]interface{}))
+	}, sql, make(map[string]interface{}), nil)
 	if err != nil {
 		return nil, err
 	}

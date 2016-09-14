@@ -107,11 +107,11 @@ func (dg *discoveryGateway) WaitForTablets(ctx context.Context, tabletTypesToWai
 }
 
 // Execute executes the non-streaming query for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) Execute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (qr *sqltypes.Result, err error) {
+func (dg *discoveryGateway) Execute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (qr *sqltypes.Result, err error) {
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn, target *querypb.Target) error {
 		var innerErr error
 		startTime := time.Now()
-		qr, innerErr = conn.Execute(ctx, target, query, bindVars, transactionID)
+		qr, innerErr = conn.Execute(ctx, target, query, bindVars, transactionID, options)
 		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
 		return innerErr
 	}, transactionID, false)
@@ -119,11 +119,11 @@ func (dg *discoveryGateway) Execute(ctx context.Context, keyspace, shard string,
 }
 
 // ExecuteBatch executes a group of queries for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) ExecuteBatch(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) (qrs []sqltypes.Result, err error) {
+func (dg *discoveryGateway) ExecuteBatch(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) (qrs []sqltypes.Result, err error) {
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn, target *querypb.Target) error {
 		var innerErr error
 		startTime := time.Now()
-		qrs, innerErr = conn.ExecuteBatch(ctx, target, queries, asTransaction, transactionID)
+		qrs, innerErr = conn.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
 		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
 		return innerErr
 	}, transactionID, false)
@@ -131,11 +131,11 @@ func (dg *discoveryGateway) ExecuteBatch(ctx context.Context, keyspace, shard st
 }
 
 // StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
+func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
 	var stream sqltypes.ResultStream
 	err := dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn, target *querypb.Target) error {
 		var err error
-		stream, err = conn.StreamExecute(ctx, target, query, bindVars)
+		stream, err = conn.StreamExecute(ctx, target, query, bindVars, options)
 		return err
 	}, 0, true)
 	if err != nil {
@@ -179,11 +179,11 @@ func (dg *discoveryGateway) Rollback(ctx context.Context, keyspace, shard string
 
 // BeginExecute executes a begin and the non-streaming query for the
 // specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) BeginExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}) (qr *sqltypes.Result, transactionID int64, err error) {
+func (dg *discoveryGateway) BeginExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (qr *sqltypes.Result, transactionID int64, err error) {
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn, target *querypb.Target) error {
 		var innerErr error
 		startTime := time.Now()
-		qr, transactionID, innerErr = conn.BeginExecute(ctx, target, query, bindVars)
+		qr, transactionID, innerErr = conn.BeginExecute(ctx, target, query, bindVars, options)
 		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
 		return innerErr
 	}, 0, false)
@@ -192,11 +192,11 @@ func (dg *discoveryGateway) BeginExecute(ctx context.Context, keyspace, shard st
 
 // BeginExecuteBatch executes a begin and a group of queries for the
 // specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) BeginExecuteBatch(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, queries []querytypes.BoundQuery, asTransaction bool) (qrs []sqltypes.Result, transactionID int64, err error) {
+func (dg *discoveryGateway) BeginExecuteBatch(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (qrs []sqltypes.Result, transactionID int64, err error) {
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn, target *querypb.Target) error {
 		var innerErr error
 		startTime := time.Now()
-		qrs, transactionID, innerErr = conn.BeginExecuteBatch(ctx, target, queries, asTransaction)
+		qrs, transactionID, innerErr = conn.BeginExecuteBatch(ctx, target, queries, asTransaction, options)
 		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
 		return innerErr
 	}, 0, false)

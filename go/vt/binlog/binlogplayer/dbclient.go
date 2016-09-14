@@ -90,8 +90,8 @@ func (dc *DBClient) Close() {
 }
 
 // ExecuteFetch sends query to the db server and fetch the result
-func (dc *DBClient) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	mqr, err := dc.dbConn.ExecuteFetch(query, maxrows, wantfields)
+func (dc *DBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	mqr, err := dc.dbConn.ExecuteFetch(query, maxrows, false)
 	if err != nil {
 		log.Errorf("ExecuteFetch failed w/ error %v", err)
 		dc.handleError(err)

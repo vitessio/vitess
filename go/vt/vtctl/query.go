@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/olekukonko/tablewriter"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -48,17 +49,17 @@ func init() {
 		addCommand(queriesGroupName, command{
 			"VtGateExecute",
 			commandVtGateExecute,
-			"-server <vtgate> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-keyspace <default keyspace>] [-tablet_type <tablet type>] [-json] <sql>",
+			"-server <vtgate> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-keyspace <default keyspace>] [-tablet_type <tablet type>] [-options <proto text options>] [-json] <sql>",
 			"Executes the given SQL query with the provided bound variables against the vtgate server."})
 		addCommand(queriesGroupName, command{
 			"VtGateExecuteShards",
 			commandVtGateExecuteShards,
-			"-server <vtgate> -keyspace <keyspace> -shards <shard0>,<shard1>,... [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] [-json] <sql>",
+			"-server <vtgate> -keyspace <keyspace> -shards <shard0>,<shard1>,... [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] [-options <proto text options>] [-json] <sql>",
 			"Executes the given SQL query with the provided bound variables against the vtgate server. It is routed to the provided shards."})
 		addCommand(queriesGroupName, command{
 			"VtGateExecuteKeyspaceIds",
 			commandVtGateExecuteKeyspaceIds,
-			"-server <vtgate> -keyspace <keyspace> -keyspace_ids <ks1 in hex>,<k2 in hex>,... [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] [-json] <sql>",
+			"-server <vtgate> -keyspace <keyspace> -keyspace_ids <ks1 in hex>,<k2 in hex>,... [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] [-options <proto text options>] [-json] <sql>",
 			"Executes the given SQL query with the provided bound variables against the vtgate server. It is routed to the shards that contain the provided keyspace ids."})
 		addCommand(queriesGroupName, command{
 			"VtGateSplitQuery",
@@ -70,7 +71,7 @@ func init() {
 		addCommand(queriesGroupName, command{
 			"VtTabletExecute",
 			commandVtTabletExecute,
-			"[-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-transaction_id <transaction_id>] [-tablet_type <tablet_type>] [-json] -keyspace <keyspace> -shard <shard> <tablet alias> <sql>",
+			"[-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-transaction_id <transaction_id>] [-tablet_type <tablet_type>] [-options <proto text options>] [-json] -keyspace <keyspace> -shard <shard> <tablet alias> <sql>",
 			"Executes the given query on the given tablet."})
 		addCommand(queriesGroupName, command{
 			"VtTabletBegin",
@@ -140,12 +141,24 @@ func newBindvars(subFlags *flag.FlagSet) *bindvars {
 	return &bv
 }
 
+func parseExecuteOptions(value string) (*querypb.ExecuteOptions, error) {
+	if value == "" {
+		return nil, nil
+	}
+	result := &querypb.ExecuteOptions{}
+	if err := proto.UnmarshalText(value, result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal options: %v", err)
+	}
+	return result, nil
+}
+
 func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	server := subFlags.String("server", "", "VtGate server to connect to")
 	bindVariables := newBindvars(subFlags)
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vtgate client")
 	keyspace := subFlags.String("keyspace", "", "default keyspace to use")
 	tabletType := subFlags.String("tablet_type", "master", "tablet type to query")
+	options := subFlags.String("options", "", "execute options values as a text encoded proto of the ExecuteOptions structure")
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -158,13 +171,17 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	if err != nil {
 		return err
 	}
+	executeOptions, err := parseExecuteOptions(*options)
+	if err != nil {
+		return err
+	}
 
 	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout, *keyspace)
 	if err != nil {
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
 	defer vtgateConn.Close()
-	qr, err := vtgateConn.Execute(ctx, subFlags.Arg(0), *bindVariables, t)
+	qr, err := vtgateConn.Execute(ctx, subFlags.Arg(0), *bindVariables, t, executeOptions)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
@@ -182,6 +199,7 @@ func commandVtGateExecuteShards(ctx context.Context, wr *wrangler.Wrangler, subF
 	tabletType := subFlags.String("tablet_type", "master", "tablet type to query")
 	keyspace := subFlags.String("keyspace", "", "keyspace to send query to")
 	shardsStr := subFlags.String("shards", "", "comma-separated list of shards to send query to")
+	options := subFlags.String("options", "", "execute options values as a text encoded proto of the ExecuteOptions structure")
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -198,13 +216,17 @@ func commandVtGateExecuteShards(ctx context.Context, wr *wrangler.Wrangler, subF
 	if *shardsStr != "" {
 		shards = strings.Split(*shardsStr, ",")
 	}
+	executeOptions, err := parseExecuteOptions(*options)
+	if err != nil {
+		return err
+	}
 
 	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout, "")
 	if err != nil {
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
 	defer vtgateConn.Close()
-	qr, err := vtgateConn.ExecuteShards(ctx, subFlags.Arg(0), *keyspace, shards, *bindVariables, t)
+	qr, err := vtgateConn.ExecuteShards(ctx, subFlags.Arg(0), *keyspace, shards, *bindVariables, t, executeOptions)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
@@ -222,6 +244,7 @@ func commandVtGateExecuteKeyspaceIds(ctx context.Context, wr *wrangler.Wrangler,
 	tabletType := subFlags.String("tablet_type", "master", "tablet type to query")
 	keyspace := subFlags.String("keyspace", "", "keyspace to send query to")
 	keyspaceIDsStr := subFlags.String("keyspace_ids", "", "comma-separated list of keyspace ids (in hex) that will map into shards to send query to")
+	options := subFlags.String("options", "", "execute options values as a text encoded proto of the ExecuteOptions structure")
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -245,13 +268,17 @@ func commandVtGateExecuteKeyspaceIds(ctx context.Context, wr *wrangler.Wrangler,
 			}
 		}
 	}
+	executeOptions, err := parseExecuteOptions(*options)
+	if err != nil {
+		return err
+	}
 
 	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout, "")
 	if err != nil {
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
 	defer vtgateConn.Close()
-	qr, err := vtgateConn.ExecuteKeyspaceIds(ctx, subFlags.Arg(0), *keyspace, keyspaceIDs, *bindVariables, t)
+	qr, err := vtgateConn.ExecuteKeyspaceIds(ctx, subFlags.Arg(0), *keyspace, keyspaceIDs, *bindVariables, t, executeOptions)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
@@ -292,6 +319,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	transactionID := subFlags.Int("transaction_id", 0, "transaction id to use, if inside a transaction.")
 	bindVariables := newBindvars(subFlags)
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
+	options := subFlags.String("options", "", "execute options values as a text encoded proto of the ExecuteOptions structure")
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -308,6 +336,10 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if err != nil {
 		return err
 	}
+	executeOptions, err := parseExecuteOptions(*options)
+	if err != nil {
+		return err
+	}
 
 	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, *connectTimeout)
 	if err != nil {
@@ -319,7 +351,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		Keyspace:   tabletInfo.Tablet.Keyspace,
 		Shard:      tabletInfo.Tablet.Shard,
 		TabletType: tabletInfo.Tablet.Type,
-	}, subFlags.Arg(1), *bindVariables, int64(*transactionID))
+	}, subFlags.Arg(1), *bindVariables, int64(*transactionID), executeOptions)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
