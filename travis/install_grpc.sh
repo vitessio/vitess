@@ -79,7 +79,10 @@ if [ -n "$INSTALL_GRPC_PHP" ]; then
   echo "Building gRPC PHP extension..."
   cd src/php/ext/grpc
   phpize
-  ./configure --enable-grpc=$grpc_dist/usr/local
+  if ! LDFLAGS="$LDFLAGS -lrt" ./configure --enable-grpc=$grpc_dist/usr/local; then
+    cat config.log
+    exit 1
+  fi
   make
   mkdir -p $INSTALL_GRPC_PHP
   mv modules/grpc.so $INSTALL_GRPC_PHP
