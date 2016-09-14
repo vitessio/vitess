@@ -107,7 +107,7 @@ func TestMaxReplicationLagModule_InitialStateAndWait(t *testing.T) {
 	}
 	// After startup, the next increment won't happen until
 	// config.MaxDurationBetweenIncreasesSec elapsed.
-	if got, want := tf.m.nextAllowedIncrease, tf.fc.now().Add(config.MaxDurationBetweenIncreases()); got != want {
+	if got, want := tf.m.nextAllowedChangeAfterInit, tf.fc.now().Add(config.MaxDurationBetweenIncreases()); got != want {
 		t.Fatalf("got = %v, want = %v", got, want)
 	}
 }
@@ -128,6 +128,8 @@ func TestMaxReplicationLagModule_Increase(t *testing.T) {
 	// (config.MaxDurationBetweenIncreasesSec), regular increments start.
 
 	// r2 @  70s, 0s lag
+	// NOTE: We don't add a record for 70s itself because the throttler only
+	// publishes it at the "end" of that second i.e. when the time at 71s started.
 	tf.ratesHistory.add(sinceZero(69*time.Second), 100)
 	tf.process(lagRecord(sinceZero(70*time.Second), r2, 0))
 	// Rate was increased to 200 based on actual rate of 100 within [0s, 69s].
@@ -137,7 +139,7 @@ func TestMaxReplicationLagModule_Increase(t *testing.T) {
 	}
 	// We have to wait at least config.MinDurationBetweenIncreasesSec (40s) before
 	// the next increase.
-	if got, want := tf.m.nextAllowedIncrease, sinceZero(70*time.Second).Add(tf.m.config.MinDurationBetweenIncreases()); got != want {
+	if got, want := tf.m.replicaUnderTest.nextAllowedChange, sinceZero(70*time.Second).Add(tf.m.config.MinDurationBetweenIncreases()); got != want {
 		t.Fatalf("got = %v, want = %v", got, want)
 	}
 	// r2 @  75s, 0s lag
@@ -185,11 +187,11 @@ func TestMaxReplicationLagModule_Increase(t *testing.T) {
 	}
 }
 
-// TestMaxReplicationLagModule_Increase_LastErrorOrNotUp is almost identical to
-// TestMaxReplicationLagModule_Increase but this time we test that the system
-// makes progress if the currently tracked replica has LastError set or is
-// no longer tracked.
-func TestMaxReplicationLagModule_Increase_LastErrorOrNotUp(t *testing.T) {
+// TestMaxReplicationLagModule_ReplicaUnderTest_LastErrorOrNotUp is
+// almost identical to TestMaxReplicationLagModule_Increase but this time we
+// test that the system makes progress if the currently tracked replica has
+// LastError set or is no longer tracked.
+func TestMaxReplicationLagModule_ReplicaUnderTest_LastErrorOrNotUp(t *testing.T) {
 	tf, err := newTestFixtureWithMaxReplicationLag(5)
 	if err != nil {
 		t.Fatal(err)
@@ -239,10 +241,48 @@ func TestMaxReplicationLagModule_Increase_LastErrorOrNotUp(t *testing.T) {
 	}
 }
 
-// TestMaxReplicationLagModule_Reset_ReplicaUnderIncreaseTest verifies that
-// the field "replicaUnderIncreaseTest" is correctly reset if we're leaving
-// the increase state.
-func TestMaxReplicationLagModule_Reset_ReplicaUnderIncreaseTest(t *testing.T) {
+// TestMaxReplicationLagModule_ReplicaUnderTest_Timeout tests the safe guard
+// that a "replica under test" which didn't report its lag for a while will be
+// cleared such that any other replica can become the new "replica under test".
+func TestMaxReplicationLagModule_ReplicaUnderTest_Timeout(t *testing.T) {
+	tf, err := newTestFixtureWithMaxReplicationLag(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// r2 @  70s, 0s lag
+	tf.ratesHistory.add(sinceZero(69*time.Second), 100)
+	tf.process(lagRecord(sinceZero(70*time.Second), r2, 0))
+	// Rate was increased to 200 based on actual rate of 100 within [0s, 69s].
+	// r2 becomes the "replica under test".
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// r1 @  80s, 0s lag (ignored because r2 is the "replica under test")
+	tf.ratesHistory.add(sinceZero(70*time.Second), 100)
+	tf.ratesHistory.add(sinceZero(79*time.Second), 200)
+	tf.process(lagRecord(sinceZero(80*time.Second), r1, 0))
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// r2 as "replica under test" did not report its lag for too long.
+	// We'll ignore it from now and and let other replicas trigger rate changes.
+	// r1 @  173s, 0s lag
+	// time for r1 must be > 172s (70s + 40s + 62s) which is
+	// (last rate change + test duration + max duration between increases).
+	tf.ratesHistory.add(sinceZero(172*time.Second), 200)
+	tf.process(lagRecord(sinceZero(173*time.Second), r1, 0))
+	if err := tf.checkState(stateIncreaseRate, 400, sinceZero(173*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestMaxReplicationLagModule_ReplicaUnderTest_IncreaseToDecrease verifies that
+// the current "replica under test" is ignored when our state changes from
+// "stateIncreaseRate" to "stateDecreaseAndGuessRate".
+func TestMaxReplicationLagModule_ReplicaUnderTest_IncreaseToDecrease(t *testing.T) {
 	tf, err := newTestFixtureWithMaxReplicationLag(5)
 	if err != nil {
 		t.Fatal(err)
@@ -257,23 +297,128 @@ func TestMaxReplicationLagModule_Reset_ReplicaUnderIncreaseTest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// r1 @  75s, 10s lag (triggers the emergency state)
+	// r1 @  80s, 0s lag
+	// This lag record is required in the next step to correctly calculate how
+	// much r1 lags behind due to the rate increase.
 	tf.ratesHistory.add(sinceZero(70*time.Second), 100)
-	tf.ratesHistory.add(sinceZero(74*time.Second), 200)
-	tf.process(lagRecord(sinceZero(75*time.Second), r1, 10))
-	// The r1 lag update triggered the emergency state and did not wait for the
-	// pending increase of r2.
-	if err := tf.checkState(stateEmergency, 100, sinceZero(75*time.Second)); err != nil {
+	tf.ratesHistory.add(sinceZero(79*time.Second), 200)
+	tf.process(lagRecord(sinceZero(80*time.Second), r1, 0))
+	// r1 remains the "replica under test".
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
-	// Now everything goes back to normal and the minimum time between increases
-	// (40s) has passed as well. r2 or r1 can start an increase now.
-	// r1 @ 110s, 0s lag (triggers the increase state)
-	tf.ratesHistory.add(sinceZero(75*time.Second), 200)
-	tf.ratesHistory.add(sinceZero(109*time.Second), 100)
-	tf.process(lagRecord(sinceZero(110*time.Second), r1, 0))
-	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(110*time.Second)); err != nil {
+	// r2 @  90s, 0s lag (ignored because the test duration is not up yet)
+	tf.ratesHistory.add(sinceZero(89*time.Second), 200)
+	tf.process(lagRecord(sinceZero(90*time.Second), r2, 0))
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// r1 @ 100s, 3s lag (above target, provokes a decrease)
+	tf.ratesHistory.add(sinceZero(99*time.Second), 200)
+	tf.process(lagRecord(sinceZero(100*time.Second), r1, 3))
+	// r1 becomes the "replica under test".
+	// r1's high lag triggered the decrease state and therefore we did not wait
+	// for the pending increase of "replica under test" r2.
+	if err := tf.checkState(stateDecreaseAndGuessRate, 140, sinceZero(100*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// r2 lag records are ignored while r1 is the "replica under test".
+	// r2 @ 110s, 0s lag
+	tf.ratesHistory.add(sinceZero(100*time.Second), 200)
+	tf.ratesHistory.add(sinceZero(109*time.Second), 140)
+	tf.process(lagRecord(sinceZero(110*time.Second), r2, 0))
+	if err := tf.checkState(stateDecreaseAndGuessRate, 140, sinceZero(100*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// r1 leaves the "replica under test" as soon as the test duration is up
+	// or its lag improved to a better state.
+	// Here we simulate that its lag improved and the resulting state goes from
+	// "decrease" to "increase".
+	// r1 @ 119s, 0s lag (triggers the increase state)
+	tf.ratesHistory.add(sinceZero(118*time.Second), 140)
+	tf.process(lagRecord(sinceZero(119*time.Second), r1, 0))
+	// Rate increases to 170, the middle of: [good, bad] = [140, 200].
+	if err := tf.checkState(stateIncreaseRate, 170, sinceZero(119*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestMaxReplicationLagModule_ReplicaUnderTest_DecreaseToEmergency verifies
+// that the current "replica under test" is ignored when our state changes from
+// "stateDecreaseAndGuessRate" to "stateEmergency".
+func TestMaxReplicationLagModule_ReplicaUnderTest_DecreaseToEmergency(t *testing.T) {
+	tf, err := newTestFixtureWithMaxReplicationLag(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// INCREASE
+
+	// r1 @  20s, 0s lag
+	// This lag record is required in the next step to correctly calculate how
+	// much r1 lags behind due to the rate increase.
+	tf.ratesHistory.add(sinceZero(19*time.Second), 100)
+	tf.process(lagRecord(sinceZero(20*time.Second), r1, 0))
+	if err := tf.checkState(stateIncreaseRate, 100, sinceZero(1*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// DECREASE
+
+	// r1 @  40s, 3s lag (above target, provokes a decrease)
+	tf.ratesHistory.add(sinceZero(39*time.Second), 100)
+	tf.process(lagRecord(sinceZero(40*time.Second), r1, 3))
+	// r1 becomes the "replica under test".
+	if err := tf.checkState(stateDecreaseAndGuessRate, 70, sinceZero(40*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// EMERGENCY
+
+	// r2 lag is even worse and triggers the "emergency" state.
+	// r2 @  50s, 10s lag
+	tf.ratesHistory.add(sinceZero(40*time.Second), 100)
+	tf.ratesHistory.add(sinceZero(49*time.Second), 70)
+	tf.process(lagRecord(sinceZero(50*time.Second), r2, 10))
+	// r1 overrides r2 as new "replica under test".
+	if err := tf.checkState(stateEmergency, 35, sinceZero(50*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// r1 lag becomes worse than the r1 lag now. We don't care and keep r1 as
+	// "replica under test" for now.
+	// r1 @  60s, 15s lag
+	tf.ratesHistory.add(sinceZero(50*time.Second), 70)
+	tf.ratesHistory.add(sinceZero(59*time.Second), 35)
+	tf.process(lagRecord(sinceZero(60*time.Second), r1, 15))
+	if err := tf.checkState(stateEmergency, 35, sinceZero(50*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// INCREASE
+
+	// r2 fully recovers and triggers an increase.
+	// r2 @  70s, 0s lag
+	tf.ratesHistory.add(sinceZero(69*time.Second), 35)
+	tf.process(lagRecord(sinceZero(70*time.Second), r2, 0))
+	// r2 becomes the new "replica under test".
+	if err := tf.checkState(stateIncreaseRate, 70, sinceZero(70*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// EMERGENCY
+
+	// r1 hasn't recovered yet and forces us to go back to the "emergency" state.
+	// r1 @  80s, 15s lag
+	tf.ratesHistory.add(sinceZero(70*time.Second), 35)
+	tf.ratesHistory.add(sinceZero(79*time.Second), 70)
+	tf.process(lagRecord(sinceZero(80*time.Second), r1, 15))
+	// r1 becomes the new "replica under test".
+	if err := tf.checkState(stateEmergency, 35, sinceZero(80*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -449,7 +594,7 @@ func TestMaxReplicationLagModule_IgnoreNSlowestReplicas(t *testing.T) {
 	// r1 would become the new 1 slowest replica. However, we do not ignore it
 	// because then we would ignore all known replicas in a row.
 	// => react to the high lag and reduce the rate by 50% from 200 to 100.
-	if err := tf.checkState(stateEmergency, 50, sinceZero(100*time.Second)); err != nil {
+	if err := tf.checkState(stateEmergency, 100, sinceZero(100*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 }
