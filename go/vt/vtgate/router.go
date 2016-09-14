@@ -233,7 +233,11 @@ func (rtr *Router) paramsSelectEqual(vcursor *requestContext, route *engine.Rout
 }
 
 func (rtr *Router) paramsSelectIN(vcursor *requestContext, route *engine.Route) (*scatterParams, error) {
-	keys, err := rtr.resolveKeys(route.Values.([]interface{}), vcursor.bindVars)
+	vals, err := rtr.resolveList(route.Values, vcursor.bindVars)
+	if err != nil {
+		return nil, fmt.Errorf("paramsSelectIN: %v", err)
+	}
+	keys, err := rtr.resolveKeys(vals, vcursor.bindVars)
 	if err != nil {
 		return nil, fmt.Errorf("paramsSelectIN: %v", err)
 	}
@@ -372,6 +376,26 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 		result.InsertID = uint64(firstAutoGenInsertID)
 	}
 	return result, nil
+}
+
+func (rtr *Router) resolveList(val interface{}, bindVars map[string]interface{}) (vals []interface{}, err error) {
+	switch v := val.(type) {
+	case []interface{}:
+		vals = v
+	case string:
+		// It can only be a list bind var.
+		list, ok := bindVars[v[2:]]
+		if !ok {
+			return nil, fmt.Errorf("could not find bind var %s", v)
+		}
+		vals, ok = list.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("expecting list for bind var %s: %v", v, list)
+		}
+	default:
+		panic("unexpected")
+	}
+	return vals, nil
 }
 
 func (rtr *Router) resolveKeys(vals []interface{}, bindVars map[string]interface{}) (keys []interface{}, err error) {
