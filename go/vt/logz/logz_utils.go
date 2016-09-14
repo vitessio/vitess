@@ -123,7 +123,7 @@ $(function() {
 
 // EndHTMLTable writes the end of a logz-style table to an HTTP response.
 func EndHTMLTable(w http.ResponseWriter) {
-	defer w.Write([]byte(`
+	w.Write([]byte(`
 </table>
 `))
 }
