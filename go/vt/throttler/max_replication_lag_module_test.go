@@ -587,6 +587,13 @@ func TestMaxReplicationLagModule_IgnoreNSlowestReplicas(t *testing.T) {
 	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(80*time.Second)); err != nil {
 		t.Fatal(err)
 	}
+	results := tf.m.results.latestValues()
+	if got, want := len(results), 2; got != want {
+		t.Fatalf("skipped replica should have been recorded on the results page. got = %v, want = %v", got, want)
+	}
+	if got, want := results[0].Reason, "skipping this replica because it's among the 1 slowest replicas"; got != want {
+		t.Fatalf("skipped replica should have been recorded as skipped on the results page. got = %v, want = %v", got, want)
+	}
 
 	// r1 @ 100s, 20s lag
 	tf.ratesHistory.add(sinceZero(99*time.Second), 200)

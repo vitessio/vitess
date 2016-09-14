@@ -253,10 +253,6 @@ func (m *MaxReplicationLagModule) processRecord(lagRecord replicationLagRecord) 
 
 	m.lagCache.sortByLag(int(m.config.IgnoreNSlowestReplicas), m.config.MaxReplicationLagSec+1)
 
-	if m.lagCache.ignoreSlowReplica(lagRecord.Key) {
-		return
-	}
-
 	m.recalculateRate(lagRecord)
 }
 
@@ -291,7 +287,16 @@ func (m *MaxReplicationLagModule) recalculateRate(lagRecordNow replicationLagRec
 		r.TestedState = stateEmergency
 	}
 
-	clear, clearReason := m.clearReplicaUnderTest(now, r.TestedState, lagRecordNow)
+	// Declare new variables before we use "goto". Required by the Go compiler.
+	var clear bool
+	var clearReason string
+
+	if m.lagCache.ignoreSlowReplica(lagRecordNow.Key) {
+		r.Reason = fmt.Sprintf("skipping this replica because it's among the %d slowest replicas", m.config.IgnoreNSlowestReplicas)
+		goto logResult
+	}
+
+	clear, clearReason = m.clearReplicaUnderTest(now, r.TestedState, lagRecordNow)
 	if clear {
 		clearReason = fmt.Sprintf("; previous replica under test (%v) cleared because %v", m.replicaUnderTest.alias, clearReason)
 		m.replicaUnderTest = nil
