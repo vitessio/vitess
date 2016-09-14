@@ -28,7 +28,6 @@ const (
 
 type testFixture struct {
 	m            *MaxReplicationLagModule
-	fc           *fakeClock
 	ratesHistory *fakeRatesHistory
 }
 
@@ -52,7 +51,6 @@ func newTestFixture(config MaxReplicationLagModuleConfig) (*testFixture, error) 
 
 	return &testFixture{
 		m:            m,
-		fc:           fc,
 		ratesHistory: ratesHistory,
 	}, nil
 }
@@ -60,9 +58,6 @@ func newTestFixture(config MaxReplicationLagModuleConfig) (*testFixture, error) 
 // process does the same thing as MaxReplicationLagModule.ProcessRecords() does
 // for a new "lagRecord".
 func (tf *testFixture) process(lagRecord replicationLagRecord) {
-	// Advance the fake clock. This way the test writer does not have to do it.
-	tf.fc.setNow(lagRecord.time.Sub(time.Time{}))
-
 	tf.m.processRecord(lagRecord)
 }
 
@@ -107,7 +102,7 @@ func TestMaxReplicationLagModule_InitialStateAndWait(t *testing.T) {
 	}
 	// After startup, the next increment won't happen until
 	// config.MaxDurationBetweenIncreasesSec elapsed.
-	if got, want := tf.m.nextAllowedChangeAfterInit, tf.fc.now().Add(config.MaxDurationBetweenIncreases()); got != want {
+	if got, want := tf.m.nextAllowedChangeAfterInit, sinceZero(config.MaxDurationBetweenIncreases()+1*time.Second); got != want {
 		t.Fatalf("got = %v, want = %v", got, want)
 	}
 }

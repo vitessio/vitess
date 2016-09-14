@@ -95,7 +95,6 @@ type MaxReplicationLagModule struct {
 	// rateUpdateChan is the notification channel to tell the throttler when our
 	// max rate calculation has changed. The field is immutable (set in Start().)
 	rateUpdateChan chan<- struct{}
-	nowFunc        func() time.Time
 
 	// lagRecords buffers the replication lag records received by the HealthCheck
 	// listener. ProcessRecords() will process them.
@@ -128,7 +127,6 @@ func NewMaxReplicationLagModule(config MaxReplicationLagModuleConfig, actualRate
 		currentState:   stateIncreaseRate,
 		lastRateChange: nowFunc(),
 		memory:         newMemory(memoryGranularity, config.AgeBadRateAfter(), config.BadRateIncrease),
-		nowFunc:        nowFunc,
 		lagRecords:     make(chan replicationLagRecord, 10),
 		// Prevent an immediate increase of the initial rate.
 		nextAllowedChangeAfterInit: nowFunc().Add(config.MaxDurationBetweenIncreases()),
@@ -257,11 +255,10 @@ func (m *MaxReplicationLagModule) processRecord(lagRecord replicationLagRecord) 
 }
 
 func (m *MaxReplicationLagModule) recalculateRate(lagRecordNow replicationLagRecord) {
-	now := m.nowFunc()
-
 	if lagRecordNow.isZero() {
 		panic("rate recalculation was triggered with a zero replication lag record")
 	}
+	now := lagRecordNow.time
 	lagNow := lagRecordNow.lag()
 
 	m.memory.ageBadRate(now)
