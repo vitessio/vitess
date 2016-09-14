@@ -378,6 +378,9 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 	return result, nil
 }
 
+// resloveList returns a list of values, typically for an IN clause. If the input
+// is a bind var name, it uses the list provided in the bind var. If the input is
+// already a list, it returns just that.
 func (rtr *Router) resolveList(val interface{}, bindVars map[string]interface{}) (vals []interface{}, err error) {
 	switch v := val.(type) {
 	case []interface{}:
@@ -398,6 +401,8 @@ func (rtr *Router) resolveList(val interface{}, bindVars map[string]interface{})
 	return vals, nil
 }
 
+// resolveKeys takes a list as input that may have values or bind var names.
+// It returns a new list with all the bind vars resolved.
 func (rtr *Router) resolveKeys(vals []interface{}, bindVars map[string]interface{}) (keys []interface{}, err error) {
 	keys = make([]interface{}, 0, len(vals))
 	for _, val := range vals {
