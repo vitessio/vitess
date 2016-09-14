@@ -60,14 +60,6 @@ class TestAutomationVerticalSplit(vertical_split.TestVerticalSplit):
       utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
 
     self._check_srv_keyspace('')
-    self._check_blacklisted_tables(vertical_split.source_master,
-                                   ['moving.*', 'view1'])
-    self._check_blacklisted_tables(vertical_split.source_replica,
-                                   ['moving.*', 'view1'])
-    self._check_blacklisted_tables(vertical_split.source_rdonly1,
-                                   ['moving.*', 'view1'])
-    self._check_blacklisted_tables(vertical_split.source_rdonly2,
-                                   ['moving.*', 'view1'])
 
     # check the binlog player is gone now
     vertical_split.destination_master.wait_for_binlog_player_count(0)
