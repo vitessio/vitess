@@ -366,7 +366,7 @@ func (m *MaxReplicationLagModule) clearReplicaUnderTest(now time.Time, testedSta
 
 	if m.lagCache.isIgnored(m.replicaUnderTest.key) {
 		// "replica under test" has become a slow, ignored replica.
-		return true, "its ignored as a slow replica"
+		return true, "it is ignored as a slow replica"
 	}
 
 	if now.After(m.replicaUnderTest.nextAllowedChange.Add(m.config.MaxDurationBetweenIncreases())) {
