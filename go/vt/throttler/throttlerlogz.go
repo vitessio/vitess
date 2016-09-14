@@ -121,9 +121,13 @@ func showThrottlerLog(w http.ResponseWriter, m *managerImpl, name string) {
 		panic(fmt.Sprintf("failed to execute logHeader template: %v", err))
 	}
 	for _, r := range results {
-		// Color based on the new state.
+		// Color based on max(tested state, new state).
+		state := r.TestedState
+		if stateGreater(r.NewState, state) {
+			state = r.NewState
+		}
 		var colorLevel string
-		switch r.NewState {
+		switch state {
 		case stateIncreaseRate:
 			colorLevel = "low"
 		case stateDecreaseAndGuessRate:
