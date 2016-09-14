@@ -48,7 +48,6 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -58,10 +57,6 @@ import (
 )
 
 const (
-	// keyrangeQueryRules is the QueryRuleSource name for rules that are based
-	// on the key range.
-	keyrangeQueryRules = "KeyrangeQueryRules"
-
 	// slaveStoppedFile is the file name for the file whose existence informs
 	// vttablet to NOT try to repair replication.
 	slaveStoppedFile = "do_not_replicate"
@@ -210,7 +205,6 @@ func NewActionAgent(
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 		orc:                 orc,
 	}
-	agent.registerQueryRuleSources()
 
 	// try to initialize the tablet if we have to
 	if err := agent.InitTablet(port, gRPCPort); err != nil {
@@ -322,7 +316,6 @@ func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
-	agent.registerQueryRuleSources()
 
 	// initialize the tablet
 	*initDbNameOverride = dbname
@@ -338,11 +331,6 @@ func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
 	}
 	return agent
-}
-
-// registerQueryRuleSources registers query rule sources under control of agent
-func (agent *ActionAgent) registerQueryRuleSources() {
-	agent.QueryServiceControl.RegisterQueryRuleSource(blacklistQueryRules)
 }
 
 // updateTabletFromTopo will read the tablet record from the topology,
@@ -599,11 +587,6 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		}
 	}
 
-	// initialize the key range query rule
-	if err := agent.initializeKeyRangeRule(ctx, tablet.Keyspace, tablet.KeyRange); err != nil {
-		return err
-	}
-
 	// update our state
 	oldTablet := &topodatapb.Tablet{}
 	agent.updateState(ctx, oldTablet, "Start")
@@ -662,58 +645,4 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 
 	// update worked, return the new record
 	return newTablet
-}
-
-// initializeKeyRangeRule will create and set the key range rules
-func (agent *ActionAgent) initializeKeyRangeRule(ctx context.Context, keyspace string, keyRange *topodatapb.KeyRange) error {
-	// check we have a partial key range
-	if !key.KeyRangeIsPartial(keyRange) {
-		log.Infof("Tablet covers the full KeyRange, not adding KeyRange query rule")
-		return nil
-	}
-
-	// read the keyspace to get the sharding column name
-	keyspaceInfo, err := agent.TopoServer.GetKeyspace(ctx, keyspace)
-	if err != nil {
-		return fmt.Errorf("cannot read keyspace %v to get sharding key: %v", keyspace, err)
-	}
-	if keyspaceInfo.ShardingColumnName == "" {
-		log.Infof("Keyspace %v has an empty ShardingColumnName, not adding KeyRange query rule", keyspace)
-		return nil
-	}
-
-	// create the rules
-	log.Infof("Restricting to keyrange: %v", key.KeyRangeString(keyRange))
-	keyrangeRules := tabletserver.NewQueryRules()
-	dmlPlans := []struct {
-		planID   planbuilder.PlanType
-		onAbsent bool
-	}{
-		{planbuilder.PlanInsertPK, true},
-		{planbuilder.PlanInsertSubquery, true},
-		{planbuilder.PlanPassDML, false},
-		{planbuilder.PlanDMLPK, false},
-		{planbuilder.PlanDMLSubquery, false},
-		{planbuilder.PlanUpsertPK, false},
-	}
-	for _, plan := range dmlPlans {
-		qr := tabletserver.NewQueryRule(
-			fmt.Sprintf("enforce %v range for %v", keyspaceInfo.ShardingColumnName, plan.planID),
-			fmt.Sprintf("%v_not_in_range_%v", keyspaceInfo.ShardingColumnName, plan.planID),
-			tabletserver.QRFail,
-		)
-		qr.AddPlanCond(plan.planID)
-		err := qr.AddBindVarCond(keyspaceInfo.ShardingColumnName, plan.onAbsent, true, tabletserver.QRNotIn, keyRange)
-		if err != nil {
-			return fmt.Errorf("Unable to add key range rule: %v", err)
-		}
-		keyrangeRules.Add(qr)
-	}
-
-	// and load them
-	agent.QueryServiceControl.RegisterQueryRuleSource(keyrangeQueryRules)
-	if err := agent.QueryServiceControl.SetQueryRules(keyrangeQueryRules, keyrangeRules); err != nil {
-		return fmt.Errorf("failed to load query rule set %s: %s", keyrangeQueryRules, err)
-	}
-	return nil
 }
