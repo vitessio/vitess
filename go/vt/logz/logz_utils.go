@@ -67,14 +67,6 @@ func StartHTMLTable(w http.ResponseWriter) {
                 }
 </style>
 
-<table class="gridtable">
-`))
-}
-
-// EndHTMLTable writes the end of a logz-style table to an HTTP response.
-func EndHTMLTable(w http.ResponseWriter) {
-	defer w.Write([]byte(`
-</table>
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/2.1.0/jquery.min.js"></script>
 
 <script type="text/javascript">
@@ -116,6 +108,15 @@ $(function() {
   $('table').sortableByColumn();
 });
 </script>
+
+<table class="gridtable">
+`))
+}
+
+// EndHTMLTable writes the end of a logz-style table to an HTTP response.
+func EndHTMLTable(w http.ResponseWriter) {
+	defer w.Write([]byte(`
+</table>
 `))
 }
 
