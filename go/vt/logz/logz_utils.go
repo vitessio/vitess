@@ -75,7 +75,15 @@ $.fn.sortableByColumn = function() {
   var header = this.find('thead');
   var contents = function(el, i) {
     var data = $(el).children('td').eq(i).text().toLowerCase();
+    if (data == "n/a") {
+      return -1;
+    }
+
     var asNumber = parseFloat(data);
+    if (data.slice(-1) == "s" && !isNaN(asNumber) && data.slice(0, -1) == asNumber) {
+      // Return durations (e.g. "11.2s") always as number.
+      return asNumber;
+    }
     return data == asNumber ? asNumber : data;
   };
 

@@ -20,57 +20,57 @@ const logHeaderHTML = `
   </style>
 	<thead>
 		<tr>
-			<th>Now
-			<th>Rate Change
-			<th>Old Rate
-			<th>New Rate
-			<th>Tablet
-			<th>Lag
-			<th>Last Change
-			<th>Actual Rate
-			<th>Good/&#8203;Bad?
-			<th>If Skipped
-			<th>Highest Good
-			<th>Lowest Bad
-			<th>Old State
-			<th>Tested State
-			<th>New State
-			<th>Lag Before
-			<th>Recorded Ago
-			<th>Master Rate
-			<th>Slave Rate
-			<th>Old Backlog
-			<th>New Backlog
-			<th>Reason
-  <!-- Do not omit closing thead tag or the browser won't automaticall start a
-       tbody tag and this will break the table sorting. -->
+			<th>Now</th>
+			<th>Rate Change</th>
+			<th>Old Rate</th>
+			<th>New Rate</th>
+			<th>Tablet</th>
+			<th>Lag</th>
+			<th>Last Change</th>
+			<th>Actual Rate</th>
+			<th>Good/&#8203;Bad?</th>
+			<th>If Skipped</th>
+			<th>Highest Good</th>
+			<th>Lowest Bad</th>
+			<th>Old State</th>
+			<th>Tested State</th>
+			<th>New State</th>
+			<th>Lag Before</th>
+			<th>Recorded Ago</th>
+			<th>Master Rate</th>
+			<th>Slave Rate</th>
+			<th>Old Backlog</th>
+			<th>New Backlog</th>
+			<th>Reason</th>
+	  </tr>
   </thead>
 `
 
 const logEntryHTML = `
     <tr class="{{.ColorLevel}}">
-      <td>{{.Now.Format "15:04:05"}}
-      <td>{{.RateChange}}
-      <td>{{.OldRate}}
-      <td>{{.NewRate}}
-      <td>{{.Alias}}
-      <td>{{.LagRecordNow.Stats.SecondsBehindMaster}}s
-      <td>{{.TimeSinceLastRateChange}}
-      <td>{{.CurrentRate}}
-      <td>{{.GoodOrBad}}
-      <td>{{.MemorySkipReason}}
-      <td>{{.HighestGood}}
-      <td>{{.LowestBad}}
-      <td>{{.OldState}}
-      <td>{{.TestedState}}
-      <td>{{.NewState}}
-      <td>{{.LagBefore}}
-      <td>{{.AgeOfBeforeLag}}
-      <td>{{.MasterRate}}
-      <td>{{.GuessedSlaveRate}}
-      <td>{{.GuessedSlaveBacklogOld}}
-      <td>{{.GuessedSlaveBacklogNew}}
-      <td>{{.Reason}}
+      <td>{{.Now.Format "15:04:05"}}</td>
+      <td>{{.RateChange}}</td>
+      <td>{{.OldRate}}</td>
+      <td>{{.NewRate}}</td>
+      <td>{{.Alias}}</td>
+      <td>{{.LagRecordNow.Stats.SecondsBehindMaster}}s</td>
+      <td>{{.TimeSinceLastRateChange}}</td>
+      <td>{{.CurrentRate}}</td>
+      <td>{{.GoodOrBad}}</td>
+      <td>{{.MemorySkipReason}}</td>
+      <td>{{.HighestGood}}</td>
+      <td>{{.LowestBad}}</td>
+      <td>{{.OldState}}</td>
+      <td>{{.TestedState}}</td>
+      <td>{{.NewState}}</td>
+      <td>{{.LagBefore}}</td>
+      <td>{{.AgeOfBeforeLag}}</td>
+      <td>{{.MasterRate}}</td>
+      <td>{{.GuessedSlaveRate}}</td>
+      <td>{{.GuessedSlaveBacklogOld}}</td>
+      <td>{{.GuessedSlaveBacklogNew}}</td>
+      <td>{{.Reason}}</td>
+    </tr>
 `
 
 const logFooterHTML = `
