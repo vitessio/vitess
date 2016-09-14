@@ -19,8 +19,8 @@ type TxPreparedPool struct {
 
 type preparedConn struct {
 	*DBConn
-	// inUse will contain a non-empty purpose if the conn is in use.
-	inUse string
+	// purpose will contain a non-empty purpose if the conn is in use.
+	purpose string
 }
 
 // NewTxPreparedPool creates a new TxPreparedPool.
@@ -61,10 +61,10 @@ func (pp *TxPreparedPool) Get(dtid, purpose string) (*DBConn, error) {
 	if !ok {
 		return nil, errors.New("not found")
 	}
-	if pc.inUse != "" {
-		return nil, errors.New("in use: " + pc.inUse)
+	if pc.purpose != "" {
+		return nil, errors.New("in use: " + pc.purpose)
 	}
-	pc.inUse = purpose
+	pc.purpose = purpose
 	return pc.DBConn, nil
 }
 
@@ -77,5 +77,5 @@ func (pp *TxPreparedPool) Put(dtid string) {
 		// This should never happen.
 		panic("DTID not found while trying to Put: " + dtid)
 	}
-	pc.inUse = ""
+	pc.purpose = ""
 }
