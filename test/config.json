@@ -350,7 +350,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 0,
+			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": [
 				"webdriver"
@@ -361,7 +361,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 0,
+			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": [
 				"webdriver"
