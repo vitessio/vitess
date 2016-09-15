@@ -44,7 +44,7 @@ func TestCommit(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := []string{query}
+	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null) /* _stream vitess_test (intval ) (4 ); */"}
 	if !reflect.DeepEqual(tx.Queries, want) {
 		t.Errorf("queries: %v, want %v", tx.Queries, want)
 	}
@@ -140,7 +140,7 @@ func TestRollback(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := []string{query}
+	want := []string{"insert into vitess_test values (4, null, null, null) /* _stream vitess_test (intval ) (4 ); */"}
 	if !reflect.DeepEqual(tx.Queries, want) {
 		t.Errorf("queries: %v, want %v", tx.Queries, want)
 	}
@@ -204,7 +204,7 @@ func TestAutoCommit(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := []string{query}
+	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null) /* _stream vitess_test (intval ) (4 ); */"}
 	if !reflect.DeepEqual(tx.Queries, want) {
 		t.Errorf("queries: %v, want %v", tx.Queries, want)
 	}
