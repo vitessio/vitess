@@ -1156,8 +1156,8 @@ func (scw *SplitCloneWorker) createKeyResolver(td *tabletmanagerdatapb.TableDefi
 func (scw *SplitCloneWorker) StatsUpdate(ts *discovery.TabletStats) {
 	scw.tsc.StatsUpdate(ts)
 
-	// Ignore if not REPLICA.
-	if ts.Target.TabletType != topodatapb.TabletType_REPLICA {
+	// Ignore unless REPLICA or RDONLY.
+	if ts.Target.TabletType != topodatapb.TabletType_REPLICA && ts.Target.TabletType != topodatapb.TabletType_RDONLY {
 		return
 	}
 
