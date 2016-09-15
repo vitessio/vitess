@@ -16,12 +16,10 @@ import (
 	"net/http"
 )
 
+// StartHTMLTable writes the start of a logz-style table to an HTTP response.
 func StartHTMLTable(w http.ResponseWriter) {
-	w.Write([]byte(`
-		<!DOCTYPE html>
-		<html>
-		<head>
-		<style type="text/css">
+	w.Write([]byte(`<!DOCTYPE html>
+<style type="text/css">
 		table.gridtable {
 			font-family: verdana,arial,sans-serif;
 			font-size:11px;
@@ -67,16 +65,8 @@ func StartHTMLTable(w http.ResponseWriter) {
                   content: "▼";
                   float: left;
                 }
-		</style>
-		</head>
-		<body>
-		<table class="gridtable">
-	`))
-}
+</style>
 
-func EndHTMLTable(w http.ResponseWriter) {
-	defer w.Write([]byte(`
-</table>
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/2.1.0/jquery.min.js"></script>
 
 <script type="text/javascript">
@@ -85,7 +75,15 @@ $.fn.sortableByColumn = function() {
   var header = this.find('thead');
   var contents = function(el, i) {
     var data = $(el).children('td').eq(i).text().toLowerCase();
+    if (data == "n/a") {
+      return -1;
+    }
+
     var asNumber = parseFloat(data);
+    if (data.slice(-1) == "s" && !isNaN(asNumber) && data.slice(0, -1) == asNumber) {
+      // Return durations (e.g. "11.2s") always as number.
+      return asNumber;
+    }
     return data == asNumber ? asNumber : data;
   };
 
@@ -118,8 +116,16 @@ $(function() {
   $('table').sortableByColumn();
 });
 </script>
-</body>
-</html>`))
+
+<table class="gridtable">
+`))
+}
+
+// EndHTMLTable writes the end of a logz-style table to an HTTP response.
+func EndHTMLTable(w http.ResponseWriter) {
+	w.Write([]byte(`
+</table>
+`))
 }
 
 // Wrappable inserts zero-width whitespaces to make

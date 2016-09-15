@@ -121,8 +121,14 @@ func (m *memory) markBad(rate int64, now time.Time) error {
 	m.good = m.good[:goodLength]
 
 	m.bad = rate
-	m.nextBadRateAging = now.Add(m.ageBadRateAfter)
+	m.touchBadRateAge(now)
 	return nil
+}
+
+// touchBadRateAge records that the bad rate was changed and the aging should be
+// further delayed.
+func (m *memory) touchBadRateAge(now time.Time) {
+	m.nextBadRateAging = now.Add(m.ageBadRateAfter)
 }
 
 func (m *memory) ageBadRate(now time.Time) {
@@ -145,7 +151,7 @@ func (m *memory) ageBadRate(now time.Time) {
 		newBad += memoryGranularity
 	}
 	m.bad = int64(newBad)
-	m.nextBadRateAging = now.Add(m.ageBadRateAfter)
+	m.touchBadRateAge(now)
 }
 
 func (m *memory) highestGood() int64 {

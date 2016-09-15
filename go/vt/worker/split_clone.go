@@ -304,6 +304,11 @@ func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
 		}
 	}
 
+	if (state == WorkerStateCloneOnline || state == WorkerStateCloneOffline) && (scw.maxTPS != throttler.MaxRateModuleDisabled || scw.maxReplicationLag != throttler.ReplicationLagModuleDisabled) {
+		result += "</br>\n"
+		result += `<b>Resharding Throttler:</b> <a href="/throttlerz">see /throttlerz for details</a></br>`
+	}
+
 	return template.HTML(result)
 }
 
