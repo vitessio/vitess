@@ -1128,11 +1128,13 @@ func (se *splitQuerySQLExecuter) SQLExecute(
 	parsedQuery := sqlparser.GenerateParsedQuery(ast)
 
 	// We clone "bindVariables" since fullFetch() changes it.
-	return se.queryExecutor.fullFetch(
+	return se.queryExecutor.dbConnFetch(
 		se.conn,
 		parsedQuery,
 		utils.CloneBindVariables(bindVariables),
-		nil /* buildStreamComment */)
+		nil,  /* buildStreamComment */
+		true, /* wantfields */
+	)
 }
 
 // getSchemaForSplitQuery converts the given schemaInfo object into
