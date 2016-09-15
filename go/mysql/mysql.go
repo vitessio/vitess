@@ -16,14 +16,12 @@ import "C"
 
 import (
 	"fmt"
-	"strconv"
 	"unsafe"
 
 	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
@@ -246,27 +244,6 @@ func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool)
 	return qr, err
 }
 
-// ExecuteFetchMap returns a map from column names to cell data for a query
-// that should return exactly 1 row.
-func (conn *Connection) ExecuteFetchMap(query string) (map[string]string, error) {
-	qr, err := conn.ExecuteFetch(query, 1, true)
-	if err != nil {
-		return nil, err
-	}
-	if len(qr.Rows) != 1 {
-		return nil, fmt.Errorf("query %#v returned %d rows, expected 1", query, len(qr.Rows))
-	}
-	if len(qr.Fields) != len(qr.Rows[0]) {
-		return nil, fmt.Errorf("query %#v returned %d column names, expected %d", query, len(qr.Fields), len(qr.Rows[0]))
-	}
-
-	rowMap := make(map[string]string)
-	for i, value := range qr.Rows[0] {
-		rowMap[qr.Fields[i].Name] = value.String()
-	}
-	return rowMap, nil
-}
-
 // ExecuteStreamFetch starts a streaming query to mysql. Use FetchNext
 // on the Connection until it returns nil or error
 func (conn *Connection) ExecuteStreamFetch(query string) (err error) {
@@ -425,55 +402,6 @@ func (conn *Connection) SendCommand(command uint32, data []byte) error {
 // isn't thread-safe.
 func (conn *Connection) Shutdown() {
 	C.vt_shutdown(&conn.c)
-}
-
-// GetCharset returns the current numerical values of the per-session character
-// set variables.
-func (conn *Connection) GetCharset() (*binlogdatapb.Charset, error) {
-	// character_set_client
-	row, err := conn.ExecuteFetchMap("SHOW COLLATION WHERE `charset`=@@session.character_set_client AND `default`='Yes'")
-	if err != nil {
-		return nil, err
-	}
-	client, err := strconv.ParseInt(row["Id"], 10, 16)
-	if err != nil {
-		return nil, err
-	}
-
-	// collation_connection
-	row, err = conn.ExecuteFetchMap("SHOW COLLATION WHERE `collation`=@@session.collation_connection")
-	if err != nil {
-		return nil, err
-	}
-	connection, err := strconv.ParseInt(row["Id"], 10, 16)
-	if err != nil {
-		return nil, err
-	}
-
-	// collation_server
-	row, err = conn.ExecuteFetchMap("SHOW COLLATION WHERE `collation`=@@session.collation_server")
-	if err != nil {
-		return nil, err
-	}
-	server, err := strconv.ParseInt(row["Id"], 10, 16)
-	if err != nil {
-		return nil, err
-	}
-
-	return &binlogdatapb.Charset{
-		Client: int32(client),
-		Conn:   int32(connection),
-		Server: int32(server),
-	}, nil
-}
-
-// SetCharset changes the per-session character set variables.
-func (conn *Connection) SetCharset(cs *binlogdatapb.Charset) error {
-	sql := fmt.Sprintf(
-		"SET @@session.character_set_client=%d, @@session.collation_connection=%d, @@session.collation_server=%d",
-		cs.Client, cs.Conn, cs.Server)
-	_, err := conn.ExecuteFetch(sql, 1, false)
-	return err
 }
 
 func cfree(str *C.char) {
