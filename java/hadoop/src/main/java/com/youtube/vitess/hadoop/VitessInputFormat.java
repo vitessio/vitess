@@ -2,7 +2,7 @@ package com.youtube.vitess.hadoop;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.api.client.util.Lists;
+import com.google.common.collect.Lists;
 import com.google.common.net.HostAndPort;
 
 import com.youtube.vitess.client.Context;

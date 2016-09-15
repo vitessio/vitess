@@ -89,17 +89,24 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
         }
         self::$proc = $proc;
 
-        // Wait for connection to be accepted.
+        // Wait for the server to be ready.
+        $client = new Grpc\Client("$addr:$port", [
+            'credentials' => \Grpc\ChannelCredentials::createInsecure()
+        ]);
         $ctx = Context::getDefault()->withDeadlineAfter(5.0);
         $level = error_reporting(error_reporting() & ~ E_WARNING);
+        // The client creation doesn't necessarily mean the server is up.
+        // Send a test RPC to make sure the connection is good.
+        $conn = new VTGateConn($client);
         while (! $ctx->isCancelled()) {
             try {
-                $client = new Grpc\Client("$addr:$port", [
-                    'credentials' => \Grpc\ChannelCredentials::createInsecure()
-                ]);
-            } catch (Exception $e) {
+                $conn->execute($ctx, '', array(), 0);
+            } catch (Error\Transient $e) {
+                // The connection isn't ready yet. Wait and try again.
                 usleep(100000);
                 continue;
+            } catch (\Vitess\Exception $e) {
+                // Non-transient error means the connection is at least up.
             }
             break;
         }

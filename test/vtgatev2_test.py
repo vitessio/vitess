@@ -937,7 +937,7 @@ class TestFailures(BaseTestCase):
     vtgate_conn = get_connection()
     port = utils.vtgate.port
     utils.vtgate.kill()
-    with self.assertRaises(dbexceptions.OperationalError):
+    with self.assertRaises(dbexceptions.DatabaseError):
       vtgate_conn._execute(
           'select 1 from vt_insert_test', {},
           tablet_type='replica', keyspace_name=KEYSPACE_NAME,
@@ -986,7 +986,7 @@ class TestFailures(BaseTestCase):
         cursorclass=vtgate_cursor.StreamVTGateCursor)
     port = utils.vtgate.port
     utils.vtgate.kill()
-    with self.assertRaises(dbexceptions.OperationalError):
+    with self.assertRaises(dbexceptions.DatabaseError):
       stream_cursor.execute('select * from vt_insert_test', {})
     vtgate_conn.close()
 
@@ -1029,7 +1029,7 @@ class TestFailures(BaseTestCase):
     vtgate_conn = get_connection()
     port = utils.vtgate.port
     utils.vtgate.kill()
-    with self.assertRaises(dbexceptions.OperationalError):
+    with self.assertRaises(dbexceptions.DatabaseError):
       vtgate_conn.begin()
     restart_vtgate(port)
     vtgate_conn = get_connection()
@@ -1127,7 +1127,7 @@ class TestFailures(BaseTestCase):
     # once for the _execute, once for the close's rollback).
     vtgate_conn = get_connection(timeout=5.0)
     port = utils.vtgate.port
-    with self.assertRaises(dbexceptions.OperationalError):
+    with self.assertRaises(dbexceptions.DatabaseError):
       vtgate_conn.begin()
       utils.vtgate.kill()
       vtgate_conn._execute(
