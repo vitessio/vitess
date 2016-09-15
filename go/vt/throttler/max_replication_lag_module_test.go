@@ -16,14 +16,18 @@ import (
 // Depending on a replica's replication lag and the historic throttler rate,
 // the module does increase or decrease the throttler rate.
 
-// Most of the tests assume that there are two replicas r1 and r2 which both
-// broadcast their replication lag every 20s.
+// Most of the tests assume that there are two REPLICA tablets r1 and r2 which
+// both broadcast their replication lag every 20s.
 // r1 starts to broadcast at 0s, r2 at 10s.
+// Additionally, there are two RDONLY tablets rdonly1 and rdonly2 which are only
+// used by the "IgnoreNSlowestReplicas" tests.
 const (
 	// Automatic enumeration starts at 0. But there's no r0. Ignore it.
 	_ = iota
 	r1
 	r2
+	rdonly1
+	rdonly2
 )
 
 type testFixture struct {
@@ -204,7 +208,7 @@ func TestMaxReplicationLagModule_ReplicaUnderTest_LastErrorOrNotUp(t *testing.T)
 	// r2 @  75s, 0s lag, LastError set
 	rError := lagRecord(sinceZero(75*time.Second), r2, 0)
 	rError.LastError = errors.New("HealthCheck reporting broken")
-	tf.m.lagCache.add(rError)
+	tf.m.replicaLagCache.add(rError)
 
 	// r1 @ 110s, 0s lag
 	tf.ratesHistory.add(sinceZero(70*time.Second), 100)
@@ -223,7 +227,7 @@ func TestMaxReplicationLagModule_ReplicaUnderTest_LastErrorOrNotUp(t *testing.T)
 	tf.ratesHistory.add(sinceZero(114*time.Second), 400)
 	rNotUp := lagRecord(sinceZero(115*time.Second), r1, 0)
 	rNotUp.Up = false
-	tf.m.lagCache.add(rNotUp)
+	tf.m.replicaLagCache.add(rNotUp)
 
 	// r2 @ 150s, 0s lag (lastError no longer set)
 	tf.ratesHistory.add(sinceZero(149*time.Second), 400)
@@ -558,9 +562,23 @@ func TestMaxReplicationLagModule_Decrease_NoReplicaHistory(t *testing.T) {
 	}
 }
 
-func TestMaxReplicationLagModule_IgnoreNSlowestReplicas(t *testing.T) {
+func TestMaxReplicationLagModule_IgnoreNSlowestReplicas_REPLICA(t *testing.T) {
+	testIgnoreNSlowestReplicas(t, r1, r2)
+}
+
+func TestMaxReplicationLagModule_IgnoreNSlowestReplicas_RDONLY(t *testing.T) {
+	testIgnoreNSlowestReplicas(t, rdonly1, rdonly2)
+}
+
+func testIgnoreNSlowestReplicas(t *testing.T, r1UID, r2UID uint32) {
 	config := NewMaxReplicationLagModuleConfig(5)
-	config.IgnoreNSlowestReplicas = 1
+	typ := "REPLICA"
+	if r1UID == r1 {
+		config.IgnoreNSlowestReplicas = 1
+	} else {
+		config.IgnoreNSlowestRdonlys = 1
+		typ = "RDONLY"
+	}
 	tf, err := newTestFixture(config)
 	if err != nil {
 		t.Fatal(err)
@@ -568,7 +586,7 @@ func TestMaxReplicationLagModule_IgnoreNSlowestReplicas(t *testing.T) {
 
 	// r1 @  80s, 0s lag
 	tf.ratesHistory.add(sinceZero(79*time.Second), 100)
-	tf.process(lagRecord(sinceZero(80*time.Second), r1, 0))
+	tf.process(lagRecord(sinceZero(80*time.Second), r1UID, 0))
 	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(80*time.Second)); err != nil {
 		t.Fatal(err)
 	}
@@ -576,7 +594,7 @@ func TestMaxReplicationLagModule_IgnoreNSlowestReplicas(t *testing.T) {
 	// r2 @  90s, 10s lag
 	tf.ratesHistory.add(sinceZero(80*time.Second), 100)
 	tf.ratesHistory.add(sinceZero(90*time.Second), 200)
-	tf.process(lagRecord(sinceZero(90*time.Second), r2, 10))
+	tf.process(lagRecord(sinceZero(90*time.Second), r2UID, 10))
 	// Although r2's lag is high, it's ignored because it's the 1 slowest replica.
 	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(80*time.Second)); err != nil {
 		t.Fatal(err)
@@ -585,13 +603,13 @@ func TestMaxReplicationLagModule_IgnoreNSlowestReplicas(t *testing.T) {
 	if got, want := len(results), 2; got != want {
 		t.Fatalf("skipped replica should have been recorded on the results page. got = %v, want = %v", got, want)
 	}
-	if got, want := results[0].Reason, "skipping this replica because it's among the 1 slowest replicas"; got != want {
+	if got, want := results[0].Reason, fmt.Sprintf("skipping this replica because it's among the 1 slowest %v tablets", typ); got != want {
 		t.Fatalf("skipped replica should have been recorded as skipped on the results page. got = %v, want = %v", got, want)
 	}
 
 	// r1 @ 100s, 20s lag
 	tf.ratesHistory.add(sinceZero(99*time.Second), 200)
-	tf.process(lagRecord(sinceZero(100*time.Second), r1, 20))
+	tf.process(lagRecord(sinceZero(100*time.Second), r1UID, 20))
 	// r1 would become the new 1 slowest replica. However, we do not ignore it
 	// because then we would ignore all known replicas in a row.
 	// => react to the high lag and reduce the rate by 50% from 200 to 100.
@@ -619,7 +637,8 @@ func TestMaxReplicationLagModule_IgnoreNSlowestReplicas_NotEnoughReplicas(t *tes
 }
 
 // TestMaxReplicationLagModule_IgnoreNSlowestReplicas_IsIgnoredDuringIncrease
-// is almost identical to TestMaxReplicationLagModule_Increase_LastErrorOrNotUp.
+// is almost identical to
+// TestMaxReplicationLagModule_ReplicaUnderTest_LastErrorOrNotUp.
 // r2 triggers an increase and we wait for its next update after the increase
 // waiting period. However, it becomes the slowest replica in the meantime and
 // will be completely ignored. In consequence, we no longer wait for r2 and r1
@@ -652,7 +671,7 @@ func TestMaxReplicationLagModule_IgnoreNSlowestReplicas_IsIgnoredDuringIncrease(
 	// r2 becomes slow and will be ignored now.
 	// r2 @  90s, 10s lag
 	tf.ratesHistory.add(sinceZero(89*time.Second), 200)
-	tf.m.lagCache.add(lagRecord(sinceZero(90*time.Second), r2, 10))
+	tf.m.replicaLagCache.add(lagRecord(sinceZero(90*time.Second), r2, 10))
 	// We ignore the 1 slowest replica and do not decrease despite r2's high lag.
 	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second)); err != nil {
 		t.Fatal(err)
@@ -664,6 +683,97 @@ func TestMaxReplicationLagModule_IgnoreNSlowestReplicas_IsIgnoredDuringIncrease(
 	// Meanwhile, r1 is doing fine and will trigger the next increase because
 	// we're no longer waiting for the ignored r2.
 	if err := tf.checkState(stateIncreaseRate, 400, sinceZero(110*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestMaxReplicationLagModule_IgnoreNSlowestReplicas_IncludeRdonly is the same
+// as TestMaxReplicationLagModule_IgnoreNSlowestReplicas but includes
+// RDONLY tablets as well.
+func TestMaxReplicationLagModule_IgnoreNSlowestReplicas_IncludeRdonly(t *testing.T) {
+	config := NewMaxReplicationLagModuleConfig(5)
+	// We ignore up to 1 REPLICA and 1 RDONLY tablet.
+	config.IgnoreNSlowestReplicas = 1
+	config.IgnoreNSlowestRdonlys = 1
+	tf, err := newTestFixture(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// r1     @  80s, 0s lag
+	tf.ratesHistory.add(sinceZero(79*time.Second), 100)
+	tf.process(lagRecord(sinceZero(80*time.Second), r1, 0))
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(80*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// rdonly1 @  85s, 0s lag
+	tf.ratesHistory.add(sinceZero(80*time.Second), 100)
+	tf.ratesHistory.add(sinceZero(84*time.Second), 200)
+	tf.process(lagRecord(sinceZero(85*time.Second), rdonly1, 0))
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(80*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// r2     @  90s, 10s lag
+	tf.ratesHistory.add(sinceZero(89*time.Second), 200)
+	tf.process(lagRecord(sinceZero(90*time.Second), r2, 10))
+	// Although r2's lag is high, it's ignored because it's the 1 slowest REPLICA tablet.
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(80*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	results := tf.m.results.latestValues()
+	if got, want := len(results), 3; got != want {
+		t.Fatalf("skipped replica should have been recorded on the results page. got = %v, want = %v", got, want)
+	}
+	if got, want := results[0].Reason, "skipping this replica because it's among the 1 slowest REPLICA tablets"; got != want {
+		t.Fatalf("skipped replica should have been recorded as skipped on the results page. got = %v, want = %v", got, want)
+	}
+
+	// rdonly2 @  95s, 10s lag
+	tf.ratesHistory.add(sinceZero(94*time.Second), 200)
+	tf.process(lagRecord(sinceZero(95*time.Second), rdonly2, 10))
+	// Although rdonly2's lag is high, it's ignored because it's the 1 slowest RDONLY tablet.
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(80*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	results = tf.m.results.latestValues()
+	if got, want := len(results), 4; got != want {
+		t.Fatalf("skipped replica should have been recorded on the results page. got = %v, want = %v", got, want)
+	}
+	if got, want := results[0].Reason, "skipping this replica because it's among the 1 slowest RDONLY tablets"; got != want {
+		t.Fatalf("skipped replica should have been recorded as skipped on the results page. got = %v, want = %v", got, want)
+	}
+
+	// r1     @ 100s, 11s lag
+	tf.ratesHistory.add(sinceZero(99*time.Second), 200)
+	tf.process(lagRecord(sinceZero(100*time.Second), r1, 10))
+	// r1 would become the new 1 slowest REPLICA tablet. However, we do not ignore
+	// it because then we would ignore all known replicas in a row.
+	// => react to the high lag and reduce the rate by 50% from 200 to 100.
+	if err := tf.checkState(stateEmergency, 100, sinceZero(100*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// r2 and rdonly are omitted here for brevity.
+
+	// r1 recovers, but then rdonly1 becomes slow as well.
+
+	// r1     @ 120s, 0s lag
+	tf.ratesHistory.add(sinceZero(119*time.Second), 100)
+	tf.process(lagRecord(sinceZero(120*time.Second), r1, 0))
+	if err := tf.checkState(stateIncreaseRate, 200, sinceZero(120*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// rdonly1 @ 125s, 11s lag
+	tf.ratesHistory.add(sinceZero(120*time.Second), 100)
+	tf.ratesHistory.add(sinceZero(124*time.Second), 200)
+	tf.process(lagRecord(sinceZero(125*time.Second), rdonly1, 11))
+	// rdonly1 would become the new 1 slowest RDONLY tablet. However, we do not
+	// ignore it because then we would ignore all known replicas in a row.
+	// => react to the high lag and reduce the rate by 50% from 200 to 100.
+	if err := tf.checkState(stateEmergency, 100, sinceZero(125*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -799,11 +909,15 @@ func lagRecord(t time.Time, uid, lag uint32) replicationLagRecord {
 
 // tabletStats creates fake tablet health data.
 func tabletStats(uid, lag uint32) discovery.TabletStats {
+	typ := topodatapb.TabletType_REPLICA
+	if uid == rdonly1 || uid == rdonly2 {
+		typ = topodatapb.TabletType_RDONLY
+	}
 	tablet := &topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: uid},
 		Keyspace: "ks1",
 		Shard:    "-80",
-		Type:     topodatapb.TabletType_REPLICA,
+		Type:     typ,
 		PortMap:  map[string]int32{"vt": int32(uid)},
 	}
 	return discovery.TabletStats{
@@ -812,7 +926,7 @@ func tabletStats(uid, lag uint32) discovery.TabletStats {
 		Target: &querypb.Target{
 			Keyspace:   "ks1",
 			Shard:      "-80",
-			TabletType: topodatapb.TabletType_REPLICA,
+			TabletType: typ,
 		},
 		Up:      true,
 		Serving: true,

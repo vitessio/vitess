@@ -10,13 +10,16 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
+
+	"github.com/golang/protobuf/proto"
+
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/proto/throttlerdata"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
-	log "github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 type state string
@@ -41,8 +44,9 @@ const (
 // waiting for the next record of this replica under test.
 type replicaUnderTest struct {
 	// key holds the discovery.TabletStats.Key value for the replica.
-	key   string
-	alias string
+	key        string
+	alias      string
+	tabletType topodatapb.TabletType
 	// state is the "state under test" which triggered the rate change.
 	state             state
 	nextAllowedChange time.Time
@@ -88,7 +92,10 @@ type MaxReplicationLagModule struct {
 	nextAllowedChangeAfterInit time.Time
 
 	actualRatesHistory *aggregatedIntervalHistory
-	lagCache           *replicationLagCache
+	// replicaLagCache stores the past lag records for all REPLICA tablets.
+	replicaLagCache *replicationLagCache
+	// rdonlyLagCache stores the past lag records for all RDONLY tablets.
+	rdonlyLagCache *replicationLagCache
 	// memory tracks known good and bad throttler rates.
 	memory *memory
 
@@ -131,7 +138,8 @@ func NewMaxReplicationLagModule(config MaxReplicationLagModuleConfig, actualRate
 		// Prevent an immediate increase of the initial rate.
 		nextAllowedChangeAfterInit: nowFunc().Add(config.MaxDurationBetweenIncreases()),
 		actualRatesHistory:         actualRatesHistory,
-		lagCache:                   newReplicationLagCache(1000),
+		replicaLagCache:            newReplicationLagCache(1000),
+		rdonlyLagCache:             newReplicationLagCache(1000),
 		results:                    newResultRing(1000),
 	}
 
@@ -247,11 +255,37 @@ func (m *MaxReplicationLagModule) ProcessRecords() {
 func (m *MaxReplicationLagModule) processRecord(lagRecord replicationLagRecord) {
 	m.applyLatestConfig()
 
-	m.lagCache.add(lagRecord)
+	m.lagCache(lagRecord).add(lagRecord)
 
-	m.lagCache.sortByLag(int(m.config.IgnoreNSlowestReplicas), m.config.MaxReplicationLagSec+1)
+	m.lagCache(lagRecord).sortByLag(m.getNSlowestReplicasConfig(lagRecord), m.config.MaxReplicationLagSec+1)
 
 	m.recalculateRate(lagRecord)
+}
+
+func (m *MaxReplicationLagModule) lagCache(lagRecord replicationLagRecord) *replicationLagCache {
+	return m.lagCacheByType(lagRecord.Target.TabletType)
+}
+
+func (m *MaxReplicationLagModule) lagCacheByType(tabletType topodatapb.TabletType) *replicationLagCache {
+	switch tabletType {
+	case topodatapb.TabletType_REPLICA:
+		return m.replicaLagCache
+	case topodatapb.TabletType_RDONLY:
+		return m.rdonlyLagCache
+	default:
+		panic(fmt.Sprintf("BUG: invalid TabletType forwarded: %v", tabletType))
+	}
+}
+
+func (m *MaxReplicationLagModule) getNSlowestReplicasConfig(lagRecord replicationLagRecord) int {
+	switch lagRecord.Target.TabletType {
+	case topodatapb.TabletType_REPLICA:
+		return int(m.config.IgnoreNSlowestReplicas)
+	case topodatapb.TabletType_RDONLY:
+		return int(m.config.IgnoreNSlowestRdonlys)
+	default:
+		panic(fmt.Sprintf("BUG: invalid TabletType forwarded: %v", lagRecord))
+	}
 }
 
 func (m *MaxReplicationLagModule) recalculateRate(lagRecordNow replicationLagRecord) {
@@ -288,8 +322,8 @@ func (m *MaxReplicationLagModule) recalculateRate(lagRecordNow replicationLagRec
 	var clear bool
 	var clearReason string
 
-	if m.lagCache.ignoreSlowReplica(lagRecordNow.Key) {
-		r.Reason = fmt.Sprintf("skipping this replica because it's among the %d slowest replicas", m.config.IgnoreNSlowestReplicas)
+	if m.lagCache(lagRecordNow).ignoreSlowReplica(lagRecordNow.Key) {
+		r.Reason = fmt.Sprintf("skipping this replica because it's among the %d slowest %v tablets", m.getNSlowestReplicasConfig(lagRecordNow), lagRecordNow.Target.TabletType.String())
 		goto logResult
 	}
 
@@ -352,7 +386,7 @@ func (m *MaxReplicationLagModule) clearReplicaUnderTest(now time.Time, testedSta
 	// Verify that the current replica under test is not in an error state.
 	lr := lagRecordNow
 	if m.replicaUnderTest.key != lr.Key {
-		lr = m.lagCache.latest(m.replicaUnderTest.key)
+		lr = m.lagCacheByType(m.replicaUnderTest.tabletType).latest(m.replicaUnderTest.key)
 	}
 	if lr.isZero() {
 		// Replica is no longer tracked by the cache i.e. may be offline.
@@ -364,7 +398,7 @@ func (m *MaxReplicationLagModule) clearReplicaUnderTest(now time.Time, testedSta
 		return true, "it has LastError set i.e. is no longer correctly tracked"
 	}
 
-	if m.lagCache.isIgnored(m.replicaUnderTest.key) {
+	if m.lagCacheByType(m.replicaUnderTest.tabletType).isIgnored(m.replicaUnderTest.key) {
 		// "replica under test" has become a slow, ignored replica.
 		return true, "it is ignored as a slow replica"
 	}
@@ -508,11 +542,11 @@ func (m *MaxReplicationLagModule) minTestDurationUntilNextIncrease(increase floa
 func (m *MaxReplicationLagModule) decreaseAndGuessRate(r *result, now time.Time, lagRecordNow replicationLagRecord) {
 	// Guess slave rate based on the difference in the replication lag of this
 	// particular replica.
-	lagRecordBefore := m.lagCache.atOrAfter(lagRecordNow.Key, m.lastRateChange)
+	lagRecordBefore := m.lagCache(lagRecordNow).atOrAfter(lagRecordNow.Key, m.lastRateChange)
 	if lagRecordBefore.isZero() {
 		// We should see at least "lagRecordNow" here because we did just insert it
 		// in processRecord().
-		panic(fmt.Sprintf("BUG: replicationLagCache did not return the lagRecord for current replica: %v or a previous record of it. lastRateChange: %v replicationLagCache size: %v entries: %v", lagRecordNow, m.lastRateChange, len(m.lagCache.entries), m.lagCache.entries))
+		panic(fmt.Sprintf("BUG: replicationLagCache did not return the lagRecord for current replica: %v or a previous record of it. lastRateChange: %v replicationLagCache size: %v entries: %v", lagRecordNow, m.lastRateChange, len(m.lagCache(lagRecordNow).entries), m.lagCache(lagRecordNow).entries))
 	}
 	// Store the record in the result.
 	r.LagRecordBefore = lagRecordBefore
@@ -656,7 +690,7 @@ func (m *MaxReplicationLagModule) updateRate(r *result, newState state, rate int
 	}
 
 	m.lastRateChange = now
-	m.replicaUnderTest = &replicaUnderTest{lagRecordNow.Key, topoproto.TabletAliasString(lagRecordNow.Tablet.Alias), newState, now.Add(testDuration)}
+	m.replicaUnderTest = &replicaUnderTest{lagRecordNow.Key, topoproto.TabletAliasString(lagRecordNow.Tablet.Alias), lagRecordNow.Target.TabletType, newState, now.Add(testDuration)}
 
 	if rate == oldRate {
 		return
