@@ -781,7 +781,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 		return nil, tsv.handleExecErrorNoPanic(sql, bindVariables, err, logStats)
 	}
 	if options != nil && options.ExcludeFieldNames {
-		result.StripFieldNames()
+		result = result.StripFieldNames()
 	}
 	return result, nil
 }

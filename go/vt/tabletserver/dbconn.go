@@ -117,7 +117,7 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 				if !resultSent {
 					resultSent = true
 					if excludeFieldNames {
-						r.StripFieldNames()
+						r = r.StripFieldNames()
 					}
 				}
 				return callback(r)
