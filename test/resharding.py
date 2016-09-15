@@ -311,27 +311,6 @@ primary key (name)
                         'msg-range2-%d' % i, 0xE000000000000000 + base + i,
                         should_be_here=False)
 
-  def _test_keyrange_constraints(self):
-    with self.assertRaisesRegexp(
-        Exception, '.*enforce custom_ksid_col range.*'):
-      shard_0_master.execute(
-          "insert into resharding1(id, msg, custom_ksid_col) "
-          " values(1, 'msg', :custom_ksid_col)",
-          bindvars={'custom_ksid_col': 0x9000000000000000},
-      )
-    with self.assertRaisesRegexp(
-        Exception, '.*enforce custom_ksid_col range.*'):
-      shard_0_master.execute(
-          "update resharding1 set msg = 'msg' where id = 1",
-          bindvars={'custom_ksid_col': 0x9000000000000000},
-      )
-    with self.assertRaisesRegexp(
-        Exception, '.*enforce custom_ksid_col range.*'):
-      shard_0_master.execute(
-          'delete from resharding1 where id = 1',
-          bindvars={'custom_ksid_col': 0x9000000000000000},
-      )
-
   def test_resharding(self):
     # we're going to reparent and swap these two
     global shard_2_master, shard_2_replica1
@@ -396,7 +375,6 @@ primary key (name)
     # create the tables
     self._create_schema()
     self._insert_startup_values()
-    self._test_keyrange_constraints()
 
     # run a health check on source replicas so they respond to discovery
     # (for binlog players) and on the source rdonlys (for workers)
