@@ -178,7 +178,7 @@ echo "Cflags:" "$($VT_MYSQL_ROOT/bin/mysql_config --cflags) -ggdb -fPIC" >> $VTR
 if [[ "$MYSQL_FLAVOR" == "MariaDB" || "$myversion" =~ ^5\.7\. ]]; then
   # Use static linking because the shared library doesn't export
   # some internal functions we use, like cli_safe_read.
-  echo "Libs:" "-L$VT_MYSQL_ROOT/lib $($VT_MYSQL_ROOT/bin/mysql_config --libs_r | sed -r 's,-lmysqlclient(_r)?,-l:libmysqlclient.a -lstdc++,')" >> $VTROOT/lib/gomysql.pc
+  echo "Libs:" "-L$VT_MYSQL_ROOT/lib $($VT_MYSQL_ROOT/bin/mysql_config --libs_r | sed -e 's,-lmysqlclient\(_r\)*,-l:libmysqlclient.a -lstdc++,')" >> $VTROOT/lib/gomysql.pc
 else
   echo "Libs:" "-L$VT_MYSQL_ROOT/lib $($VT_MYSQL_ROOT/bin/mysql_config --libs_r)" >> $VTROOT/lib/gomysql.pc
 fi

@@ -1,3 +1,4 @@
+
 {
 	"Tests": {
 		"automation_horizontal_resharding": {
@@ -311,7 +312,7 @@
 				"unit_test_race"
 			],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -359,18 +360,7 @@
 			"File": "vtctld2_web_test.py",
 			"Args": [],
 			"Command": [],
-			"Manual": true,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": [
-				"webdriver"
-			]
-		},
-		"vtctld2_web_status": {
-			"File": "vtctld2_web_status_test.py",
-			"Args": [],
-			"Command": [],
-			"Manual": true,
+			"Manual": false,
 			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": [

@@ -60,7 +60,8 @@ func TestQueryExecutorPlanPassDmlStrictMode(t *testing.T) {
 	ctx := context.Background()
 	// non strict mode
 	tsv := newTestTabletServer(ctx, noFlags, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, newTransaction(tsv))
+	txid := newTransaction(tsv)
+	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
@@ -68,6 +69,11 @@ func TestQueryExecutorPlanPassDmlStrictMode(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries := []string{query}
+	gotqueries := fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
 	}
 	testCommitHelper(t, tsv, qre)
 	tsv.StopService()
@@ -204,7 +210,8 @@ func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 	db.AddQuery(insertQuery, &sqltypes.Result{})
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableStrict, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, newTransaction(tsv))
+	txid := newTransaction(tsv)
+	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
@@ -216,9 +223,103 @@ func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
 	}
+	wantqueries := []string{"insert into test_table(pk) values (2) /* _stream test_table (pk ) (2 ); */"}
+	gotqueries := fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
 }
 
 func TestQueryExecutorPlanUpsertPk(t *testing.T) {
+	db := setUpQueryExecutorTest()
+	db.AddQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
+	want := &sqltypes.Result{
+		Rows: make([][]sqltypes.Value, 0),
+	}
+	query := "insert into test_table values(1) on duplicate key update val=1"
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, enableStrict, db)
+	txid := newTransaction(tsv)
+	qre := newTestQueryExecutor(ctx, tsv, query, txid)
+	defer tsv.StopService()
+	checkPlanID(t, planbuilder.PlanUpsertPK, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries := []string{"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */"}
+	gotqueries := fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
+	testCommitHelper(t, tsv, qre)
+
+	db.AddRejectedQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", errRejected)
+	txid = newTransaction(tsv)
+	qre = newTestQueryExecutor(ctx, tsv, query, txid)
+	_, err = qre.Execute()
+	wantErr := "error: rejected"
+	if err == nil || err.Error() != wantErr {
+		t.Fatalf("qre.Execute() = %v, want %v", err, wantErr)
+	}
+	wantqueries = []string{}
+	gotqueries = fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
+	testCommitHelper(t, tsv, qre)
+
+	db.AddRejectedQuery(
+		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
+		sqldb.NewSQLError(mysql.ErrDupEntry, "23000", "err"),
+	)
+	db.AddQuery("update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
+	txid = newTransaction(tsv)
+	qre = newTestQueryExecutor(ctx, tsv, query, txid)
+	_, err = qre.Execute()
+	wantErr = "error: err (errno 1062) (sqlstate 23000)"
+	if err == nil || err.Error() != wantErr {
+		t.Fatalf("qre.Execute() = %v, want %v", err, wantErr)
+	}
+	wantqueries = []string{}
+	gotqueries = fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
+	testCommitHelper(t, tsv, qre)
+
+	db.AddRejectedQuery(
+		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
+		sqldb.NewSQLError(mysql.ErrDupEntry, "23000", "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
+	)
+	db.AddQuery(
+		"update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */",
+		&sqltypes.Result{RowsAffected: 1},
+	)
+	txid = newTransaction(tsv)
+	qre = newTestQueryExecutor(ctx, tsv, query, txid)
+	got, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	want = &sqltypes.Result{
+		RowsAffected: 2,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries = []string{"update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
+	gotqueries = fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
+	testCommitHelper(t, tsv, qre)
+}
+
+func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	db.AddQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
 	want := &sqltypes.Result{
@@ -283,7 +384,8 @@ func TestQueryExecutorPlanDmlPk(t *testing.T) {
 	db.AddQuery(query, want)
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableStrict, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, newTransaction(tsv))
+	txid := newTransaction(tsv)
+	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
 	checkPlanID(t, planbuilder.PlanDMLPK, qre.plan.PlanID)
@@ -293,6 +395,11 @@ func TestQueryExecutorPlanDmlPk(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries := []string{"update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
+	gotqueries := fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
 	}
 }
 
@@ -321,10 +428,18 @@ func TestQueryExecutorPlanDmlSubQuery(t *testing.T) {
 	expandedQuery := "select pk from test_table where name = 1 limit 1000 for update"
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
-	db.AddQuery(expandedQuery, want)
+	db.AddQuery(expandedQuery, &sqltypes.Result{
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.MakeTrusted(sqltypes.Int32, []byte("2"))},
+		},
+	})
+	updateQuery := "update test_table set addr = 3 where pk in (2) /* _stream test_table (pk ) (2 ); */"
+	db.AddQuery(updateQuery, want)
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableStrict, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, newTransaction(tsv))
+	txid := newTransaction(tsv)
+	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
 	checkPlanID(t, planbuilder.PlanDMLSubquery, qre.plan.PlanID)
@@ -334,6 +449,11 @@ func TestQueryExecutorPlanDmlSubQuery(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries := []string{updateQuery}
+	gotqueries := fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
 	}
 }
 
@@ -369,7 +489,8 @@ func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
 	db.AddQuery(query, want)
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableStrict, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, newTransaction(tsv))
+	txid := newTransaction(tsv)
+	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
 	checkPlanID(t, planbuilder.PlanOther, qre.plan.PlanID)
@@ -379,6 +500,11 @@ func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries := []string{}
+	gotqueries := fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
 	}
 }
 
@@ -401,7 +527,8 @@ func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 	})
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableStrict, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, newTransaction(tsv))
+	txid := newTransaction(tsv)
+	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
 	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
@@ -411,6 +538,11 @@ func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries := []string{}
+	gotqueries := fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
 	}
 }
 
@@ -489,6 +621,24 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
 	}
+
+	// Test inside transaction.
+	txid := newTransaction(tsv)
+	qre = newTestQueryExecutor(ctx, tsv, setQuery, txid)
+	got, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
+	}
+	wantqueries := []string{"set unknown_key = 1"}
+	gotqueries := fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
+	testCommitHelper(t, tsv, qre)
+	tsv.StopService()
 }
 
 func TestQueryExecutorPlanOther(t *testing.T) {
@@ -985,6 +1135,12 @@ func initQueryExecutorTestDB(db *fakesqldb.DB) {
 	for query, result := range getQueryExecutorSupportedQueries() {
 		db.AddQuery(query, result)
 	}
+}
+
+func fetchRecordedQueries(qre *QueryExecutor) []string {
+	conn := qre.qe.txPool.Get(qre.transactionID)
+	defer conn.Recycle()
+	return conn.Queries
 }
 
 func getTestTableFields() []*querypb.Field {

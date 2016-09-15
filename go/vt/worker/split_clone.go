@@ -304,6 +304,11 @@ func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
 		}
 	}
 
+	if (state == WorkerStateCloneOnline || state == WorkerStateCloneOffline) && (scw.maxTPS != throttler.MaxRateModuleDisabled || scw.maxReplicationLag != throttler.ReplicationLagModuleDisabled) {
+		result += "</br>\n"
+		result += `<b>Resharding Throttler:</b> <a href="/throttlerz">see /throttlerz for details</a></br>`
+	}
+
 	return template.HTML(result)
 }
 
@@ -795,7 +800,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	} else {
 		// Pick any healthy serving source tablet.
 		si := scw.sourceShards[0]
-		tablets := scw.tsc.GetTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY)
+		tablets := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY)
 		if len(tablets) == 0 {
 			// We fail fast on this problem and don't retry because at the start all tablets should be healthy.
 			return fmt.Errorf("no healthy RDONLY tablet in source shard (%v) available (required to find out the schema)", topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName()))
@@ -1151,8 +1156,8 @@ func (scw *SplitCloneWorker) createKeyResolver(td *tabletmanagerdatapb.TableDefi
 func (scw *SplitCloneWorker) StatsUpdate(ts *discovery.TabletStats) {
 	scw.tsc.StatsUpdate(ts)
 
-	// Ignore if not REPLICA.
-	if ts.Target.TabletType != topodatapb.TabletType_REPLICA {
+	// Ignore unless REPLICA or RDONLY.
+	if ts.Target.TabletType != topodatapb.TabletType_REPLICA && ts.Target.TabletType != topodatapb.TabletType_RDONLY {
 		return
 	}
 

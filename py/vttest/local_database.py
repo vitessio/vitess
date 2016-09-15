@@ -20,7 +20,8 @@ class LocalDatabase(object):
                init_data_options,
                web_dir=None,
                default_schema_dir=None,
-               extra_my_cnf=None):
+               extra_my_cnf=None,
+               web_dir2=None):
     """Initializes an object of this class.
 
     Args:
@@ -38,6 +39,8 @@ class LocalDatabase(object):
       default_schema_dir: a directory to use if no keyspace is found in the
           schema_dir directory.
       extra_my_cnf: additional cnf file to use for the EXTRA_MY_CNF var.
+      web_dir2: see the documentation for the corresponding command line
+          flag in run_local_database.py
     """
 
     self.topology = topology
@@ -47,6 +50,7 @@ class LocalDatabase(object):
     self.web_dir = web_dir
     self.default_schema_dir = default_schema_dir
     self.extra_my_cnf = extra_my_cnf
+    self.web_dir2 = web_dir2
 
   def setup(self):
     """Create a MySQL instance and all Vitess processes."""
@@ -66,7 +70,8 @@ class LocalDatabase(object):
 
     vt_processes.start_vt_processes(self.directory, self.topology,
                                     self.mysql_db, self.schema_dir,
-                                    web_dir=self.web_dir)
+                                    web_dir=self.web_dir,
+                                    web_dir2=self.web_dir2)
 
   def teardown(self):
     """Kill all Vitess processes and wait for them to end.

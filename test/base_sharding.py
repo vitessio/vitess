@@ -313,11 +313,14 @@ class BaseShardingTest(object):
                                  'initial_rate:3 '
                                  'max_increase:0.4 '
                                  'emergency_decrease:0.5 '
-                                 'min_duration_between_changes_sec:6 '
+                                 'min_duration_between_increases_sec:6 '
                                  'max_duration_between_increases_sec:7 '
+                                 'min_duration_between_decreases_sec:8 '
+                                 'spread_backlog_across_sec:9 '
                                  'ignore_n_slowest_replicas:0 '
-                                 'age_bad_rate_after_sec:9 '
-                                 'bad_rate_increase:0.10 '],
+                                 'ignore_n_slowest_rdonlys:0 '
+                                 'age_bad_rate_after_sec:12 '
+                                 'bad_rate_increase:0.13 '],
                                 auto_log=True, trap_output=True)
     self.assertIn('%d active throttler(s)' % len(names), stdout)
     # Check the updated configuration.

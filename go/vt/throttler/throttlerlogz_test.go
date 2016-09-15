@@ -46,82 +46,85 @@ func TestThrottlerlogzHandler(t *testing.T) {
 			"increased rate",
 			resultIncreased,
 			`    <tr class="low">
-      <td>00:00:01
-      <td>increased
-      <td>100
-      <td>100
-      <td>cell1-0000000101
-      <td>1s
-      <td>1.2s
-      <td>99
-      <td>good
-      <td>
-      <td>95
-      <td>0
-      <td>I
-      <td>I
-      <td>I
-      <td>n/a
-      <td>n/a
-      <td>99
-      <td>0
-      <td>0
-      <td>0
-      <td>increased the rate`,
+      <td>00:00:01</td>
+      <td>increased</td>
+      <td>100</td>
+      <td>100</td>
+      <td>cell1-0000000101</td>
+      <td>1s</td>
+      <td>1.2s</td>
+      <td>99</td>
+      <td>good</td>
+      <td></td>
+      <td>95</td>
+      <td>0</td>
+      <td>I</td>
+      <td>I</td>
+      <td>I</td>
+      <td>n/a</td>
+      <td>n/a</td>
+      <td>99</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>increased the rate</td>
+    </tr>`,
 		},
 		{
 			"decreased rate",
 			resultDecreased,
 			`    <tr class="medium">
-      <td>00:00:05
-      <td>decreased
-      <td>200
-      <td>100
-      <td>cell1-0000000101
-      <td>2s
-      <td>3.8s
-      <td>200
-      <td>bad
-      <td>
-      <td>95
-      <td>200
-      <td>I
-      <td>D
-      <td>D
-      <td>1s
-      <td>3.8s
-      <td>200
-      <td>150
-      <td>10
-      <td>20
-      <td>decreased the rate`,
+      <td>00:00:05</td>
+      <td>decreased</td>
+      <td>200</td>
+      <td>100</td>
+      <td>cell1-0000000101</td>
+      <td>2s</td>
+      <td>3.8s</td>
+      <td>200</td>
+      <td>bad</td>
+      <td></td>
+      <td>95</td>
+      <td>200</td>
+      <td>I</td>
+      <td>D</td>
+      <td>D</td>
+      <td>1s</td>
+      <td>3.8s</td>
+      <td>200</td>
+      <td>150</td>
+      <td>10</td>
+      <td>20</td>
+      <td>decreased the rate</td>
+    </tr>`,
 		},
 		{
 			"emergency state decreased the rate",
 			resultEmergency,
 			`    <tr class="high">
-      <td>00:00:10
-      <td>decreased
-      <td>100
-      <td>50
-      <td>cell1-0000000101
-      <td>23s
-      <td>5.1s
-      <td>100
-      <td>bad
-      <td>
-      <td>95
-      <td>100
-      <td>D
-      <td>E
-      <td>E
-      <td>2s
-      <td>5.1s
-      <td>0
-      <td>0
-      <td>0
-      <td>0
-      <td>emergency state decreased the rate`,
+      <td>00:00:10</td>
+      <td>decreased</td>
+      <td>100</td>
+      <td>50</td>
+      <td>cell1-0000000101</td>
+      <td>23s</td>
+      <td>5.1s</td>
+      <td>100</td>
+      <td>bad</td>
+      <td></td>
+      <td>95</td>
+      <td>100</td>
+      <td>D</td>
+      <td>E</td>
+      <td>E</td>
+      <td>2s</td>
+      <td>5.1s</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>emergency state decreased the rate</td>
+    </tr>`,
 		},
 	}
 

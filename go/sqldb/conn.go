@@ -11,7 +11,6 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
@@ -31,9 +30,6 @@ var (
 type Conn interface {
 	// ExecuteFetch executes the query on the connection
 	ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
-	// ExecuteFetchMap returns a map from column names to cell data for a query
-	// that should return exactly 1 row.
-	ExecuteFetchMap(query string) (map[string]string, error)
 	// ExecuteStreamFetch starts a streaming query to db server. Use FetchNext
 	// on the Connection until it returns nil or error
 	ExecuteStreamFetch(query string) error
@@ -56,11 +52,6 @@ type Conn interface {
 	ReadPacket() ([]byte, error)
 	// SendCommand sends a raw command to the db server.
 	SendCommand(command uint32, data []byte) error
-	// GetCharset returns the current numerical values of the per-session character
-	// set variables.
-	GetCharset() (cs *binlogdatapb.Charset, err error)
-	// SetCharset changes the per-session character set variables.
-	SetCharset(cs *binlogdatapb.Charset) error
 }
 
 // RegisterDefault registers the default connection function.
