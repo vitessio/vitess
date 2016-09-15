@@ -800,7 +800,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	} else {
 		// Pick any healthy serving source tablet.
 		si := scw.sourceShards[0]
-		tablets := scw.tsc.GetTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY)
+		tablets := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY)
 		if len(tablets) == 0 {
 			// We fail fast on this problem and don't retry because at the start all tablets should be healthy.
 			return fmt.Errorf("no healthy RDONLY tablet in source shard (%v) available (required to find out the schema)", topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName()))
