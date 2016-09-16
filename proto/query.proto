@@ -180,6 +180,14 @@ message ExecuteOptions {
   // This is an optimization for high-QPS queries where the client knows
   // what it's getting.
   bool exclude_field_names = 1;
+
+  // If set, we will try to include an EventToken with the responses.
+  bool include_event_token = 2;
+
+  // If set, the fresher field may be set as a result comparison to this token.
+  // This is a shortcut so the application doesn't need to care about
+  // comparing EventTokens.
+  EventToken compare_event_token = 3;
 }
 
 // Field describes a single column returned by a query
@@ -202,6 +210,18 @@ message Row {
   bytes values = 2;
 }
 
+// ResultExtras contains optional out-of-band information. Usually the
+// extras are requested by adding ExecuteOptions flags.
+message ResultExtras {
+  // event_token is populated if the include_event_token flag is set
+  // in ExecuteOptions.
+  EventToken event_token = 1;
+
+  // If set, it means the data returned with this result is fresher
+  // than the compare_token passed in the ExecuteOptions.
+  bool fresher = 2;
+}
+
 // QueryResult is returned by Execute and ExecuteStream.
 //
 // As returned by Execute, len(fields) is always equal to len(row)
@@ -216,6 +236,7 @@ message QueryResult {
   uint64 rows_affected = 2;
   uint64 insert_id = 3;
   repeated Row rows = 4;
+  ResultExtras extras = 5;
 }
 
 // StreamEvent describes a set of transformations that happened as a

@@ -49,6 +49,14 @@ func TestCopy(t *testing.T) {
 			{testVal(Int64, "2"), MakeTrusted(VarChar, nil)},
 			{testVal(Int64, "3"), testVal(VarChar, "")},
 		},
+		Extras: &querypb.ResultExtras{
+			EventToken: &querypb.EventToken{
+				Timestamp: 123,
+				Shard:     "sh",
+				Position:  "po",
+			},
+			Fresher: true,
+		},
 	}
 	want := &Result{
 		Fields: []*querypb.Field{{
@@ -62,6 +70,14 @@ func TestCopy(t *testing.T) {
 			{testVal(Int64, "1"), MakeTrusted(Null, nil)},
 			{testVal(Int64, "2"), testVal(VarChar, "")},
 			{testVal(Int64, "3"), testVal(VarChar, "")},
+		},
+		Extras: &querypb.ResultExtras{
+			EventToken: &querypb.EventToken{
+				Timestamp: 123,
+				Shard:     "sh",
+				Position:  "po",
+			},
+			Fresher: true,
 		},
 	}
 	out := in.Copy()

@@ -16,6 +16,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/binlog/eventtoken"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
@@ -954,6 +955,31 @@ func appendResult(qr, innerqr *sqltypes.Result) {
 	qr.RowsAffected += innerqr.RowsAffected
 	if innerqr.InsertID != 0 {
 		qr.InsertID = innerqr.InsertID
+	}
+	if len(qr.Rows) == 0 {
+		// we haven't gotten any result yet, just save the new extras.
+		qr.Extras = innerqr.Extras
+	} else {
+		// Merge the EventTokens / Fresher flags within Extras.
+		if innerqr.Extras == nil {
+			// We didn't get any from innerq. Have to clear any
+			// we'd have gotten already.
+			if qr.Extras != nil {
+				qr.Extras.EventToken = nil
+				qr.Extras.Fresher = false
+			}
+		} else {
+			// We may have gotten an EventToken from
+			// innerqr.  If we also got one earlier, merge
+			// it. If we didn't get one earlier, we
+			// discard the new one.
+			if qr.Extras != nil {
+				// Note if any of the two is nil, we get nil.
+				qr.Extras.EventToken = eventtoken.Minimum(qr.Extras.EventToken, innerqr.Extras.EventToken)
+
+				qr.Extras.Fresher = qr.Extras.Fresher && innerqr.Extras.Fresher
+			}
+		}
 	}
 	qr.Rows = append(qr.Rows, innerqr.Rows...)
 }

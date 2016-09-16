@@ -369,6 +369,96 @@ class TestUpdateStream(unittest.TestCase):
       timeout = utils.wait_step(
           'EventTokenPosition must be up to date but got %s' % value, timeout)
 
+    # With vttablet up to date, test a vttablet query returns the EventToken.
+    qr = replica_tablet.execute('select * from vt_insert_test',
+                                execute_options='include_event_token:true ')
+    logging.debug('Got result: %s', qr)
+    self.assertIn('extras', qr)
+    self.assertIn('event_token', qr['extras'])
+    self.assertEqual(qr['extras']['event_token']['position'], replica_position)
+
+    # Same thing through vtgate
+    qr = utils.vtgate.execute('select * from vt_insert_test',
+                              tablet_type='replica',
+                              execute_options='include_event_token:true ')
+    logging.debug('Got result: %s', qr)
+    self.assertIn('extras', qr)
+    self.assertIn('event_token', qr['extras'])
+    self.assertEqual(qr['extras']['event_token']['position'], replica_position)
+
+    # Make sure the compare_event_token flag works, by sending a very
+    # old timestamp, or a timestamp in the future.
+    qr = replica_tablet.execute(
+        'select * from vt_insert_test',
+        execute_options='compare_event_token: <timestamp:123 > ')
+    self.assertIn('extras', qr)
+    self.assertIn('fresher', qr['extras'])
+    self.assertTrue(qr['extras']['fresher'])
+
+    future_timestamp = long(time.time()) + 100
+    qr = replica_tablet.execute(
+        'select * from vt_insert_test',
+        execute_options='compare_event_token: <timestamp:%d > ' %
+        future_timestamp)
+    self.assertTrue(qr['extras'] is None)
+
+    # Same thing through vtgate
+    qr = utils.vtgate.execute(
+        'select * from vt_insert_test', tablet_type='replica',
+        execute_options='compare_event_token: <timestamp:123 > ')
+    self.assertIn('extras', qr)
+    self.assertIn('fresher', qr['extras'])
+    self.assertTrue(qr['extras']['fresher'])
+
+    future_timestamp = long(time.time()) + 100
+    qr = utils.vtgate.execute(
+        'select * from vt_insert_test', tablet_type='replica',
+        execute_options='compare_event_token: <timestamp:%d > ' %
+        future_timestamp)
+    self.assertTrue(qr['extras'] is None)
+
+    # Make sure the compare_event_token flag works, by sending a very
+    # old timestamp, or a timestamp in the future, when combined with
+    # include_event_token flag.
+    qr = replica_tablet.execute('select * from vt_insert_test',
+                                execute_options='include_event_token:true '
+                                'compare_event_token: <timestamp:123 > ')
+    self.assertIn('extras', qr)
+    self.assertIn('fresher', qr['extras'])
+    self.assertTrue(qr['extras']['fresher'])
+    self.assertIn('event_token', qr['extras'])
+    self.assertEqual(qr['extras']['event_token']['position'], replica_position)
+
+    future_timestamp = long(time.time()) + 100
+    qr = replica_tablet.execute('select * from vt_insert_test',
+                                execute_options='include_event_token:true '
+                                'compare_event_token: <timestamp:%d > ' %
+                                future_timestamp)
+    self.assertNotIn('fresher', qr['extras'])
+    self.assertIn('event_token', qr['extras'])
+    self.assertEqual(qr['extras']['event_token']['position'], replica_position)
+
+    # Same thing through vtgate
+    qr = utils.vtgate.execute('select * from vt_insert_test',
+                              tablet_type='replica',
+                              execute_options='include_event_token:true '
+                              'compare_event_token: <timestamp:123 > ')
+    self.assertIn('extras', qr)
+    self.assertIn('fresher', qr['extras'])
+    self.assertTrue(qr['extras']['fresher'])
+    self.assertIn('event_token', qr['extras'])
+    self.assertEqual(qr['extras']['event_token']['position'], replica_position)
+
+    future_timestamp = long(time.time()) + 100
+    qr = utils.vtgate.execute('select * from vt_insert_test',
+                              tablet_type='replica',
+                              execute_options='include_event_token:true '
+                              'compare_event_token: <timestamp:%d > ' %
+                              future_timestamp)
+    self.assertNotIn('fresher', qr['extras'])
+    self.assertIn('event_token', qr['extras'])
+    self.assertEqual(qr['extras']['event_token']['position'], replica_position)
+
   def test_update_stream_interrupt(self):
     """Checks that a running query is terminated on going non-serving."""
     # Make sure the replica is replica type.
