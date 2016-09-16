@@ -71,6 +71,12 @@ var TestVTGateCallerID = &querypb.VTGateCallerID{
 
 var TestExecuteOptions = &querypb.ExecuteOptions{
 	ExcludeFieldNames: true,
+	IncludeEventToken: true,
+	CompareEventToken: &querypb.EventToken{
+		Timestamp: 9876,
+		Shard:     "ssss",
+		Position:  "pppp",
+	},
 }
 
 const TestAsTransaction bool = true
@@ -177,6 +183,14 @@ var ExecuteQueryResult = sqltypes.Result{
 			sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
 			sqltypes.MakeTrusted(sqltypes.Char, []byte("row2 value2")),
 		},
+	},
+	Extras: &querypb.ResultExtras{
+		EventToken: &querypb.EventToken{
+			Timestamp: 456321,
+			Shard:     "test_shard",
+			Position:  "test_position",
+		},
+		Fresher: true,
 	},
 }
 
@@ -306,6 +320,14 @@ var ExecuteBatchQueryResultList = []sqltypes.Result{
 			{
 				sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
 			},
+		},
+		Extras: &querypb.ResultExtras{
+			EventToken: &querypb.EventToken{
+				Timestamp: 456322,
+				Shard:     "test_shard2",
+				Position:  "test_position2",
+			},
+			Fresher: true,
 		},
 	},
 	{

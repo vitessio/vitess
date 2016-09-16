@@ -1194,8 +1194,9 @@ func testStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	wantResult := *execCase.result
 	wantResult.RowsAffected = 0
 	wantResult.InsertID = 0
+	wantResult.Extras = nil
 	if !reflect.DeepEqual(qr, wantResult) {
-		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, wantResult)
+		t.Errorf("Unexpected result from StreamExecute: got %+v want %+v", qr, wantResult)
 	}
 
 	stream, err = conn.StreamExecute(ctx, "none", nil, topodatapb.TabletType_RDONLY, testExecuteOptions)
@@ -1274,8 +1275,9 @@ func testStreamExecuteShards(t *testing.T, conn *vtgateconn.VTGateConn) {
 	wantResult := *execCase.result
 	wantResult.RowsAffected = 0
 	wantResult.InsertID = 0
+	wantResult.Extras = nil
 	if !reflect.DeepEqual(qr, wantResult) {
-		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, wantResult)
+		t.Errorf("Unexpected result from StreamExecuteShards: got %+v want %+v", qr, wantResult)
 	}
 
 	stream, err = conn.StreamExecuteShards(ctx, "none", "", []string{}, nil, topodatapb.TabletType_REPLICA, testExecuteOptions)
@@ -1354,8 +1356,9 @@ func testStreamExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 	wantResult := *execCase.result
 	wantResult.RowsAffected = 0
 	wantResult.InsertID = 0
+	wantResult.Extras = nil
 	if !reflect.DeepEqual(qr, wantResult) {
-		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, wantResult)
+		t.Errorf("Unexpected result from StreamExecuteKeyRanges: got %+v want %+v", qr, wantResult)
 	}
 
 	stream, err = conn.StreamExecuteKeyRanges(ctx, "none", "", []*topodatapb.KeyRange{}, nil, topodatapb.TabletType_REPLICA, testExecuteOptions)
@@ -1434,8 +1437,9 @@ func testStreamExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	wantResult := *execCase.result
 	wantResult.RowsAffected = 0
 	wantResult.InsertID = 0
+	wantResult.Extras = nil
 	if !reflect.DeepEqual(qr, wantResult) {
-		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, wantResult)
+		t.Errorf("Unexpected result from StreamExecuteKeyspaceIds: got %+v want %+v", qr, wantResult)
 	}
 
 	stream, err = conn.StreamExecuteKeyspaceIds(ctx, "none", "", [][]byte{}, nil, topodatapb.TabletType_REPLICA, testExecuteOptions)
@@ -1872,8 +1876,9 @@ func testUpdateStream(t *testing.T, conn *vtgateconn.VTGateConn) {
 	sqr := sqltypes.Proto3ToResult(&qr)
 	wantResult := *execCase.result
 	wantResult.InsertID = 0
+	wantResult.Extras = nil
 	if !reflect.DeepEqual(sqr, &wantResult) {
-		t.Errorf("Unexpected result from Execute: got %+v want %+v", sqr, wantResult)
+		t.Errorf("Unexpected result from UpdateStream: got %+v want %+v", sqr, wantResult)
 	}
 
 	stream, err = conn.UpdateStream(ctx, "none", nil, topodatapb.TabletType_RDONLY, 0, nil)
@@ -1934,6 +1939,12 @@ var testCallerID = &vtrpcpb.CallerID{
 
 var testExecuteOptions = &querypb.ExecuteOptions{
 	ExcludeFieldNames: true,
+	IncludeEventToken: true,
+	CompareEventToken: &querypb.EventToken{
+		Timestamp: 135,
+		Shard:     "shrd",
+		Position:  "pstn",
+	},
 }
 
 var execMap = map[string]struct {
@@ -2321,6 +2332,15 @@ var execMap = map[string]struct {
 	},
 }
 
+var extras = querypb.ResultExtras{
+	EventToken: &querypb.EventToken{
+		Timestamp: 123,
+		Shard:     "sh",
+		Position:  "po",
+	},
+	Fresher: true,
+}
+
 var result1 = sqltypes.Result{
 	Fields: []*querypb.Field{
 		{
@@ -2344,6 +2364,7 @@ var result1 = sqltypes.Result{
 			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
 		},
 	},
+	Extras: &extras,
 }
 
 // streamResultFields is only the fields, sent as the first packet

@@ -23,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog"
+	"github.com/youtube/vitess/go/vt/binlog/eventtoken"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -776,14 +777,60 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 		logStats:      logStats,
 		qe:            tsv.qe,
 	}
+	extras := tsv.computeExtras(options)
 	result, err = qre.Execute()
 	if err != nil {
 		return nil, tsv.handleExecErrorNoPanic(sql, bindVariables, err, logStats)
 	}
+	result.Extras = extras
 	if options != nil && options.ExcludeFieldNames {
 		result = result.StripFieldNames()
 	}
 	return result, nil
+}
+
+// computeExtras returns the ResultExtras to include with the result.
+func (tsv *TabletServer) computeExtras(options *querypb.ExecuteOptions) *querypb.ResultExtras {
+	if options == nil {
+		// No options passed in.
+		return nil
+	}
+
+	if !options.IncludeEventToken && options.CompareEventToken == nil {
+		// The flags that make extras exist are not there.
+		return nil
+	}
+
+	// Grab the current EventToken.
+	tsv.eventTokenMutex.RLock()
+	et := tsv.eventToken
+	tsv.eventTokenMutex.RUnlock()
+	if et == nil {
+		return nil
+	}
+
+	var extras *querypb.ResultExtras
+
+	// See if we need to fill in EventToken.
+	if options.IncludeEventToken {
+		extras = &querypb.ResultExtras{
+			EventToken: et,
+		}
+	}
+
+	// See if we need to compare.
+	if options.CompareEventToken != nil {
+		if eventtoken.Fresher(et, options.CompareEventToken) {
+			if extras == nil {
+				extras = &querypb.ResultExtras{
+					Fresher: true,
+				}
+			} else {
+				extras.Fresher = true
+			}
+		}
+	}
+	return extras
 }
 
 // StreamExecute executes the query and streams the result.
