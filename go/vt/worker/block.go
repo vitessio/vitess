@@ -5,6 +5,7 @@
 package worker
 
 import (
+	"errors"
 	"html/template"
 
 	"golang.org/x/net/context"
@@ -83,5 +84,5 @@ func (bw *BlockWorker) run(ctx context.Context) error {
 	bw.wr.Logger().Printf("Block command finished because the context is done: '%v'.\n", ctx.Err())
 	bw.SetState(WorkerStateDone)
 
-	return nil
+	return errors.New("command 'Block' was canceled")
 }

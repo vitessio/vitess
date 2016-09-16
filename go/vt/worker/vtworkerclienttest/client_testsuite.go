@@ -54,7 +54,9 @@ func TestSuite(t *testing.T, c vtworkerclient.Client) {
 
 	commandErrors(t, c)
 
-	commandErrorsBecauseBusy(t, c)
+	commandErrorsBecauseBusy(t, c, false /* client side cancelation */)
+
+	commandErrorsBecauseBusy(t, c, true /* server side cancelation */)
 
 	commandPanics(t, c)
 }
@@ -103,14 +105,17 @@ func runVtworkerCommand(client vtworkerclient.Client, args []string) error {
 	}
 }
 
-func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client) {
+// commandErrorsBecauseBusy tests that concurrent commands are rejected with
+// TRANSIENT_ERROR while a command is already running.
+// It also tests the correct propagation of the CANCELED error code.
+func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client, serverSideCancelation bool) {
 	// Run the vtworker "Block" command which blocks until we cancel the context.
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
 	// blockCommandStarted will be closed after we're sure that vtworker is
 	// running the "Block" command.
 	blockCommandStarted := make(chan struct{})
-	var blockErr error
+	var errorCodeCheck error
 	wg.Add(1)
 	go func() {
 		stream, err := client.ExecuteVtworkerCommand(ctx, []string{"Block"})
@@ -121,8 +126,10 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client) {
 		firstLineReceived := false
 		for {
 			if _, err := stream.Recv(); err != nil {
+				// We see CANCELED from the RPC client (client side cancelation) or
+				// from vtworker itself (server side cancelation).
 				if vterrors.RecoverVtErrorCode(err) != vtrpcpb.ErrorCode_CANCELLED {
-					blockErr = fmt.Errorf("Block command should only error due to canceled context: %v", err)
+					errorCodeCheck = fmt.Errorf("Block command should only error due to canceled context: %v", err)
 				}
 				// Stream has finished.
 				break
@@ -148,10 +155,18 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client) {
 	}
 
 	// Cancel running "Block" command.
+	if serverSideCancelation {
+		if err := runVtworkerCommand(client, []string{"Cancel"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Always cancel the context to not leak it (regardless of client or server
+	// side cancelation).
 	cancel()
+
 	wg.Wait()
-	if blockErr != nil {
-		t.Fatalf("Block command should not have failed: %v", blockErr)
+	if errorCodeCheck != nil {
+		t.Fatalf("Block command did not return the CANCELED error code: %v", errorCodeCheck)
 	}
 
 	// vtworker is now in a special state where the current job is already

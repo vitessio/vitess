@@ -9,14 +9,16 @@ import (
 	"flag"
 	"time"
 
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	vtworkerdatapb "github.com/youtube/vitess/go/vt/proto/vtworkerdata"
 	vtworkerservicepb "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
 )
@@ -41,7 +43,7 @@ func gRPCVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworker
 	}
 	cc, err := grpc.Dial(addr, opt, grpc.WithBlock(), grpc.WithTimeout(dialTimeout))
 	if err != nil {
-		return nil, err
+		return nil, vterrors.NewVitessError(vtrpcpb.ErrorCode_DEADLINE_EXCEEDED, err, "grpc.Dial() err: %v", err)
 	}
 	c := vtworkerservicepb.NewVtworkerClient(cc)
 
