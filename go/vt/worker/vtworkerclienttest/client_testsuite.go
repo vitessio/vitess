@@ -167,7 +167,8 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client) {
 		t.Fatalf("wrong error code for second cmd before reset: got = %v, want = %v, err: %v", gotCode2, wantCode2, gotErr2)
 	}
 
-	if err := runVtworkerCommand(client, []string{"Reset"}); err != nil {
+	// Reset vtworker for the next test function.
+	if err := resetVtworker(t, client); err != nil {
 		t.Fatal(err)
 	}
 
@@ -179,6 +180,38 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client) {
 	// Reset vtworker for the next test function.
 	if err := runVtworkerCommand(client, []string{"Reset"}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// resetVtworker will retry to "Reset" vtworker until it succeeds.
+// Retries are necessary to cope with the following race:
+// a) RPC started vtworker command e.g. "Block".
+// b) A second command runs "Cancel" and vtworker cancels the first command.
+// c) RPC returns with a response after cancelation was received by vtworker.
+// d) vtworker is still canceling and shutting down the command.
+// e) A new vtworker command e.g. "Reset" would fail at this point with
+// "vtworker still executing" until the cancelation is complete.
+func resetVtworker(t *testing.T, client vtworkerclient.Client) error {
+	start := time.Now()
+	attempts := 0
+	for {
+		attempts++
+		err := runVtworkerCommand(client, []string{"Reset"})
+
+		if err == nil {
+			return nil
+		}
+
+		if time.Since(start) > 5*time.Second {
+			return fmt.Errorf("Reset was not successful after 5s and %d attempts: %v", attempts, err)
+		}
+
+		if !strings.Contains(err.Error(), "worker still executing") {
+			return fmt.Errorf("Reset must not fail: %v", err)
+		}
+
+		t.Logf("retrying to Reset vtworker because the previous command has not finished yet. got err: %v", err)
+		continue
 	}
 }
 
