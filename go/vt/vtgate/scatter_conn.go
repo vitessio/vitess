@@ -118,6 +118,7 @@ func (stc *ScatterConn) Execute(
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
+	options *querypb.ExecuteOptions,
 ) (*sqltypes.Result, error) {
 
 	// mu protects qr
@@ -136,13 +137,13 @@ func (stc *ScatterConn) Execute(
 			var innerqr *sqltypes.Result
 			if shouldBegin {
 				var err error
-				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, keyspace, shard, tabletType, query, bindVars)
+				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, keyspace, shard, tabletType, query, bindVars, options)
 				if err != nil {
 					return transactionID, err
 				}
 			} else {
 				var err error
-				innerqr, err = stc.gateway.Execute(ctx, keyspace, shard, tabletType, query, bindVars, transactionID)
+				innerqr, err = stc.gateway.Execute(ctx, keyspace, shard, tabletType, query, bindVars, transactionID, options)
 				if err != nil {
 					return transactionID, err
 				}
@@ -172,6 +173,7 @@ func (stc *ScatterConn) ExecuteMulti(
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
+	options *querypb.ExecuteOptions,
 ) (*sqltypes.Result, error) {
 
 	// mu protects qr
@@ -190,13 +192,13 @@ func (stc *ScatterConn) ExecuteMulti(
 			var innerqr *sqltypes.Result
 			if shouldBegin {
 				var err error
-				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, keyspace, shard, tabletType, query, shardVars[shard])
+				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, keyspace, shard, tabletType, query, shardVars[shard], options)
 				if err != nil {
 					return transactionID, err
 				}
 			} else {
 				var err error
-				innerqr, err = stc.gateway.Execute(ctx, keyspace, shard, tabletType, query, shardVars[shard], transactionID)
+				innerqr, err = stc.gateway.Execute(ctx, keyspace, shard, tabletType, query, shardVars[shard], transactionID, options)
 				if err != nil {
 					return transactionID, err
 				}
@@ -225,6 +227,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
+	options *querypb.ExecuteOptions,
 ) (*sqltypes.Result, error) {
 
 	// mu protects qr
@@ -246,13 +249,13 @@ func (stc *ScatterConn) ExecuteEntityIds(
 
 			if shouldBegin {
 				var err error
-				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, keyspace, shard, tabletType, sql, bindVar)
+				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, keyspace, shard, tabletType, sql, bindVar, options)
 				if err != nil {
 					return transactionID, err
 				}
 			} else {
 				var err error
-				innerqr, err = stc.gateway.Execute(ctx, keyspace, shard, tabletType, sql, bindVar, transactionID)
+				innerqr, err = stc.gateway.Execute(ctx, keyspace, shard, tabletType, sql, bindVar, transactionID, options)
 				if err != nil {
 					return transactionID, err
 				}
@@ -293,7 +296,8 @@ func (stc *ScatterConn) ExecuteBatch(
 	batchRequest *scatterBatchRequest,
 	tabletType topodatapb.TabletType,
 	asTransaction bool,
-	session *SafeSession) (qrs []sqltypes.Result, err error) {
+	session *SafeSession,
+	options *querypb.ExecuteOptions) (qrs []sqltypes.Result, err error) {
 	allErrors := new(concurrency.AllErrorRecorder)
 
 	results := make([]sqltypes.Result, batchRequest.Length)
@@ -312,7 +316,7 @@ func (stc *ScatterConn) ExecuteBatch(
 			shouldBegin, transactionID := transactionInfo(req.Keyspace, req.Shard, tabletType, session, false)
 			var innerqrs []sqltypes.Result
 			if shouldBegin {
-				innerqrs, transactionID, err = stc.gateway.BeginExecuteBatch(ctx, req.Keyspace, req.Shard, tabletType, req.Queries, asTransaction)
+				innerqrs, transactionID, err = stc.gateway.BeginExecuteBatch(ctx, req.Keyspace, req.Shard, tabletType, req.Queries, asTransaction, options)
 				if transactionID != 0 {
 					session.Append(&vtgatepb.Session_ShardSession{
 						Target: &querypb.Target{
@@ -327,7 +331,7 @@ func (stc *ScatterConn) ExecuteBatch(
 					return
 				}
 			} else {
-				innerqrs, err = stc.gateway.ExecuteBatch(ctx, req.Keyspace, req.Shard, tabletType, req.Queries, asTransaction, transactionID)
+				innerqrs, err = stc.gateway.ExecuteBatch(ctx, req.Keyspace, req.Shard, tabletType, req.Queries, asTransaction, transactionID, options)
 				if err != nil {
 					return
 				}
@@ -396,6 +400,7 @@ func (stc *ScatterConn) StreamExecute(
 	keyspace string,
 	shards []string,
 	tabletType topodatapb.TabletType,
+	options *querypb.ExecuteOptions,
 	sendReply func(reply *sqltypes.Result) error,
 ) error {
 
@@ -411,7 +416,7 @@ func (stc *ScatterConn) StreamExecute(
 		shards,
 		tabletType,
 		func(shard string) error {
-			stream, err := stc.gateway.StreamExecute(ctx, keyspace, shard, tabletType, query, bindVars)
+			stream, err := stc.gateway.StreamExecute(ctx, keyspace, shard, tabletType, query, bindVars, options)
 			return stc.processOneStreamingResult(&mu, stream, err, &replyErr, &fieldSent, sendReply)
 		})
 	if replyErr != nil {
@@ -429,6 +434,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	keyspace string,
 	shardVars map[string]map[string]interface{},
 	tabletType topodatapb.TabletType,
+	options *querypb.ExecuteOptions,
 	sendReply func(reply *sqltypes.Result) error,
 ) error {
 	// mu protects fieldSent, sendReply and replyErr
@@ -443,7 +449,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		getShards(shardVars),
 		tabletType,
 		func(shard string) error {
-			stream, err := stc.gateway.StreamExecute(ctx, keyspace, shard, tabletType, query, shardVars[shard])
+			stream, err := stc.gateway.StreamExecute(ctx, keyspace, shard, tabletType, query, shardVars[shard], options)
 			return stc.processOneStreamingResult(&mu, stream, err, &replyErr, &fieldSent, sendReply)
 		})
 	if replyErr != nil {

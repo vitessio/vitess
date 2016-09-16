@@ -710,13 +710,15 @@ class Tablet(object):
     if Tablet.tablets_running > 0:
       raise utils.TestError('This test is not killing all its vttablets')
 
-  def execute(self, sql, bindvars=None, transaction_id=None, auto_log=True):
+  def execute(self, sql, bindvars=None, transaction_id=None,
+              execute_options=None, auto_log=True):
     """execute uses 'vtctl VtTabletExecute' to execute a command.
 
     Args:
       sql: the command to execute.
       bindvars: a dict of bind variables.
       transaction_id: the id of the transaction to use if necessary.
+      execute_options: proto-encoded ExecuteOptions object.
       auto_log: passed to run_vtctl.
 
     Returns:
@@ -729,6 +731,8 @@ class Tablet(object):
       args.extend(['-bind_variables', json.dumps(bindvars)])
     if transaction_id:
       args.extend(['-transaction_id', str(transaction_id)])
+    if execute_options:
+      args.extend(['-options', execute_options])
     args.extend([self.tablet_alias, sql])
     return utils.run_vtctl_json(args, auto_log=auto_log)
 

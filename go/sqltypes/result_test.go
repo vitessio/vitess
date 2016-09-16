@@ -72,3 +72,74 @@ func TestCopy(t *testing.T) {
 		t.Errorf("Copy:\n%#v, want\n%#v", out, want)
 	}
 }
+
+func TestStripFieldNames(t *testing.T) {
+	testcases := []struct {
+		name     string
+		in       *Result
+		expected *Result
+	}{{
+		name:     "no fields",
+		in:       &Result{},
+		expected: &Result{},
+	}, {
+		name: "empty fields",
+		in: &Result{
+			Fields: []*querypb.Field{},
+		},
+		expected: &Result{
+			Fields: []*querypb.Field{},
+		},
+	}, {
+		name: "no name",
+		in: &Result{
+			Fields: []*querypb.Field{{
+				Type: Int64,
+			}, {
+				Type: VarChar,
+			}},
+		},
+		expected: &Result{
+			Fields: []*querypb.Field{{
+				Type: Int64,
+			}, {
+				Type: VarChar,
+			}},
+		},
+	}, {
+		name: "names",
+		in: &Result{
+			Fields: []*querypb.Field{{
+				Name: "field1",
+				Type: Int64,
+			}, {
+				Name: "field2",
+				Type: VarChar,
+			}},
+		},
+		expected: &Result{
+			Fields: []*querypb.Field{{
+				Type: Int64,
+			}, {
+				Type: VarChar,
+			}},
+		},
+	}}
+	for _, tcase := range testcases {
+		inCopy := tcase.in.Copy()
+		out := inCopy.StripFieldNames()
+		if !reflect.DeepEqual(out, tcase.expected) {
+			t.Errorf("StripFieldNames unexpected result for %v: %v", tcase.name, out)
+		}
+		if len(tcase.in.Fields) > 0 {
+			// check the out array is different than the in array.
+			if out.Fields[0] == inCopy.Fields[0] {
+				t.Errorf("StripFieldNames modified original Field for %v", tcase.name)
+			}
+		}
+		// check we didn't change the original result.
+		if !reflect.DeepEqual(tcase.in, inCopy) {
+			t.Errorf("StripFieldNames modified original result")
+		}
+	}
+}

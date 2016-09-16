@@ -5,13 +5,15 @@
 package vtgate
 
 import (
-	"github.com/youtube/vitess/go/sqltypes"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 type requestContext struct {
@@ -22,10 +24,11 @@ type requestContext struct {
 	tabletType       topodatapb.TabletType
 	session          *vtgatepb.Session
 	notInTransaction bool
+	options          *querypb.ExecuteOptions
 	router           *Router
 }
 
-func newRequestContext(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, router *Router) *requestContext {
+func newRequestContext(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions, router *Router) *requestContext {
 	query, comments := sqlparser.SplitTrailingComments(sql)
 	return &requestContext{
 		ctx:              ctx,
@@ -36,6 +39,7 @@ func newRequestContext(ctx context.Context, sql string, bindVars map[string]inte
 		tabletType:       tabletType,
 		session:          session,
 		notInTransaction: notInTransaction,
+		options:          options,
 		router:           router,
 	}
 }
@@ -43,7 +47,7 @@ func newRequestContext(ctx context.Context, sql string, bindVars map[string]inte
 func (vc *requestContext) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
 	// We have to use an empty keyspace here, becasue vindexes that call back can reference
 	// any table.
-	return vc.router.Execute(vc.ctx, query, bindvars, "", vc.tabletType, vc.session, false)
+	return vc.router.Execute(vc.ctx, query, bindvars, "", vc.tabletType, vc.session, false, vc.options)
 }
 
 func (vc *requestContext) ExecuteRoute(route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {

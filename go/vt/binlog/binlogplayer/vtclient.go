@@ -13,7 +13,7 @@ type VtClient interface {
 	Commit() error
 	Rollback() error
 	Close()
-	ExecuteFetch(query string, maxrows int, wantfields bool) (qr *sqltypes.Result, err error)
+	ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error)
 }
 
 // VtClientMock is a VtClient that writes to a writer instead of executing
@@ -73,7 +73,7 @@ func (dc *VtClientMock) Close() {
 }
 
 // ExecuteFetch is part of the VtClient interface
-func (dc *VtClientMock) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *sqltypes.Result, err error) {
+func (dc *VtClientMock) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
 	dc.Stdout = append(dc.Stdout, query)
 	if dc.currentResult+1 < len(dc.results) {
 		dc.currentResult++

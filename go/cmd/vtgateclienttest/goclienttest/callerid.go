@@ -35,19 +35,19 @@ func testCallerID(t *testing.T, conn *vtgateconn.VTGateConn) {
 	query := services.CallerIDPrefix + string(data)
 
 	// test Execute calls forward the callerID
-	_, err = conn.Execute(ctx, query, nil, topodatapb.TabletType_MASTER)
+	_, err = conn.Execute(ctx, query, nil, topodatapb.TabletType_MASTER, nil)
 	checkCallerIDError(t, "Execute", err)
 
-	_, err = conn.ExecuteShards(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER)
+	_, err = conn.ExecuteShards(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER, nil)
 	checkCallerIDError(t, "ExecuteShards", err)
 
-	_, err = conn.ExecuteKeyspaceIds(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER)
+	_, err = conn.ExecuteKeyspaceIds(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER, nil)
 	checkCallerIDError(t, "ExecuteKeyspaceIds", err)
 
-	_, err = conn.ExecuteKeyRanges(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER)
+	_, err = conn.ExecuteKeyRanges(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER, nil)
 	checkCallerIDError(t, "ExecuteKeyRanges", err)
 
-	_, err = conn.ExecuteEntityIds(ctx, query, "", "", nil, nil, topodatapb.TabletType_MASTER)
+	_, err = conn.ExecuteEntityIds(ctx, query, "", "", nil, nil, topodatapb.TabletType_MASTER, nil)
 	checkCallerIDError(t, "ExecuteEntityIds", err)
 
 	// test ExecuteBatch calls forward the callerID
@@ -57,7 +57,7 @@ func testCallerID(t *testing.T, conn *vtgateconn.VTGateConn) {
 				Sql: query,
 			},
 		},
-	}, topodatapb.TabletType_MASTER, false)
+	}, topodatapb.TabletType_MASTER, false, nil)
 	checkCallerIDError(t, "ExecuteBatchShards", err)
 
 	_, err = conn.ExecuteBatchKeyspaceIds(ctx, []*vtgatepb.BoundKeyspaceIdQuery{
@@ -66,20 +66,20 @@ func testCallerID(t *testing.T, conn *vtgateconn.VTGateConn) {
 				Sql: query,
 			},
 		},
-	}, topodatapb.TabletType_MASTER, false)
+	}, topodatapb.TabletType_MASTER, false, nil)
 	checkCallerIDError(t, "ExecuteBatchKeyspaceIds", err)
 
 	// test StreamExecute calls forward the callerID
-	err = getStreamError(conn.StreamExecute(ctx, query, nil, topodatapb.TabletType_MASTER))
+	err = getStreamError(conn.StreamExecute(ctx, query, nil, topodatapb.TabletType_MASTER, nil))
 	checkCallerIDError(t, "StreamExecute", err)
 
-	err = getStreamError(conn.StreamExecuteShards(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER))
+	err = getStreamError(conn.StreamExecuteShards(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER, nil))
 	checkCallerIDError(t, "StreamExecuteShards", err)
 
-	err = getStreamError(conn.StreamExecuteKeyspaceIds(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER))
+	err = getStreamError(conn.StreamExecuteKeyspaceIds(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER, nil))
 	checkCallerIDError(t, "StreamExecuteKeyspaceIds", err)
 
-	err = getStreamError(conn.StreamExecuteKeyRanges(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER))
+	err = getStreamError(conn.StreamExecuteKeyRanges(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER, nil))
 	checkCallerIDError(t, "StreamExecuteKeyRanges", err)
 
 	// test UpdateStream forwards the callerID

@@ -117,7 +117,7 @@ func (r *RestartableResultReader) startStream() (bool, error) {
 		Keyspace:   r.tablet.Keyspace,
 		Shard:      r.tablet.Shard,
 		TabletType: r.tablet.Type,
-	}, r.query, make(map[string]interface{}))
+	}, r.query, make(map[string]interface{}), nil)
 	if err != nil {
 		return true /* retryable */, fmt.Errorf("failed to call StreamExecute() for query '%v': %v", r.query, err)
 	}

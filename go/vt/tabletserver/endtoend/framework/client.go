@@ -73,10 +73,11 @@ func (client *QueryClient) Execute(query string, bindvars map[string]interface{}
 		query,
 		bindvars,
 		client.transactionID,
+		nil,
 	)
 }
 
-// StreamExecute executes a query & streams the results.
+// StreamExecute executes a query & returns the results.
 func (client *QueryClient) StreamExecute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
 	result := &sqltypes.Result{}
 	err := client.server.StreamExecute(
@@ -84,6 +85,7 @@ func (client *QueryClient) StreamExecute(query string, bindvars map[string]inter
 		&client.target,
 		query,
 		bindvars,
+		nil,
 		func(res *sqltypes.Result) error {
 			if result.Fields == nil {
 				result.Fields = res.Fields
@@ -99,13 +101,14 @@ func (client *QueryClient) StreamExecute(query string, bindvars map[string]inter
 	return result, nil
 }
 
-// Stream streams the resutls of a query.
+// Stream streams the results of a query.
 func (client *QueryClient) Stream(query string, bindvars map[string]interface{}, sendFunc func(*sqltypes.Result) error) error {
 	return client.server.StreamExecute(
 		client.ctx,
 		&client.target,
 		query,
 		bindvars,
+		nil,
 		sendFunc,
 	)
 }
@@ -118,5 +121,6 @@ func (client *QueryClient) ExecuteBatch(queries []querytypes.BoundQuery, asTrans
 		queries,
 		asTransaction,
 		client.transactionID,
+		nil,
 	)
 }

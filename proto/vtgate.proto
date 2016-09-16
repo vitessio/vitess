@@ -44,6 +44,9 @@ message ExecuteRequest {
 
   // keyspace to target the query to.
   string keyspace = 6;
+
+  // options
+  query.ExecuteOptions options = 7;
 }
 
 // ExecuteResponse is the returned value from Execute.
@@ -84,6 +87,9 @@ message ExecuteShardsRequest {
 
   // not_in_transaction is deprecated and should not be used.
   bool not_in_transaction = 7;
+
+  // options
+  query.ExecuteOptions options = 8;
 }
 
 // ExecuteShardsResponse is the returned value from ExecuteShards.
@@ -125,6 +131,9 @@ message ExecuteKeyspaceIdsRequest {
 
   // not_in_transaction is deprecated and should not be used.
   bool not_in_transaction = 7;
+
+  // options
+  query.ExecuteOptions options = 8;
 }
 
 // ExecuteKeyspaceIdsResponse is the returned value from ExecuteKeyspaceIds.
@@ -166,6 +175,9 @@ message ExecuteKeyRangesRequest {
 
   // not_in_transaction is deprecated and should not be used.
   bool not_in_transaction = 7;
+
+  // options
+  query.ExecuteOptions options = 8;
 }
 
 // ExecuteKeyRangesResponse is the returned value from ExecuteKeyRanges.
@@ -221,6 +233,9 @@ message ExecuteEntityIdsRequest {
 
   // not_in_transaction is deprecated and should not be used.
   bool not_in_transaction = 8;
+
+  // options
+  query.ExecuteOptions options = 9;
 }
 
 // ExecuteEntityIdsResponse is the returned value from ExecuteEntityIds.
@@ -271,6 +286,9 @@ message ExecuteBatchShardsRequest {
   // (this can be seen as adding a 'begin' before and 'commit' after the queries).
   // Only makes sense if tablet_type is master. If set, the Session is ignored.
   bool as_transaction = 5;
+
+  // options
+  query.ExecuteOptions options = 6;
 }
 
 // ExecuteBatchShardsResponse is the returned value from ExecuteBatchShards.
@@ -321,6 +339,9 @@ message ExecuteBatchKeyspaceIdsRequest {
   // (this can be seen as adding a 'begin' before and 'commit' after the queries).
   // Only makes sense if tablet_type is master. If set, the Session is ignored.
   bool as_transaction = 5;
+
+  // options
+  query.ExecuteOptions options = 6;
 }
 
 // ExecuteBatchKeyspaceIdsResponse is the returned value from ExecuteBatchKeyspaceId.
@@ -351,6 +372,9 @@ message StreamExecuteRequest {
 
   // keyspace to target the query to.
   string keyspace = 4;
+
+  // options
+  query.ExecuteOptions options = 5;
 }
 
 // StreamExecuteResponse is the returned value from StreamExecute.
@@ -378,6 +402,9 @@ message StreamExecuteShardsRequest {
 
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 5;
+
+  // options
+  query.ExecuteOptions options = 6;
 }
 
 // StreamExecuteShardsResponse is the returned value from StreamExecuteShards.
@@ -406,6 +433,9 @@ message StreamExecuteKeyspaceIdsRequest {
 
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 5;
+
+  // options
+  query.ExecuteOptions options = 6;
 }
 
 // StreamExecuteKeyspaceIdsResponse is the returned value from StreamExecuteKeyspaceIds.
@@ -434,6 +464,9 @@ message StreamExecuteKeyRangesRequest {
 
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 5;
+
+  // options
+  query.ExecuteOptions options = 6;
 }
 
 // StreamExecuteKeyRangesResponse is the returned value from StreamExecuteKeyRanges.

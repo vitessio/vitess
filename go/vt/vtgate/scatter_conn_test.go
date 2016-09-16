@@ -31,7 +31,7 @@ var (
 
 func TestScatterConnExecute(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnExecute", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
-		return sc.Execute(context.Background(), "query", nil, "TestScatterConnExecute", shards, topodatapb.TabletType_REPLICA, nil, false)
+		return sc.Execute(context.Background(), "query", nil, "TestScatterConnExecute", shards, topodatapb.TabletType_REPLICA, nil, false, nil)
 	})
 }
 
@@ -41,7 +41,7 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 		for _, shard := range shards {
 			shardVars[shard] = nil
 		}
-		return sc.ExecuteMulti(context.Background(), "query", "TestScatterConnExecuteMulti", shardVars, topodatapb.TabletType_REPLICA, nil, false)
+		return sc.ExecuteMulti(context.Background(), "query", "TestScatterConnExecuteMulti", shardVars, topodatapb.TabletType_REPLICA, nil, false, nil)
 	})
 }
 
@@ -59,7 +59,7 @@ func TestScatterConnExecuteBatch(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		qrs, err := sc.ExecuteBatch(context.Background(), scatterRequest, topodatapb.TabletType_REPLICA, false, nil)
+		qrs, err := sc.ExecuteBatch(context.Background(), scatterRequest, topodatapb.TabletType_REPLICA, false, nil, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -70,7 +70,7 @@ func TestScatterConnExecuteBatch(t *testing.T) {
 func TestScatterConnStreamExecute(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnStreamExecute", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
 		qr := new(sqltypes.Result)
-		err := sc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecute", shards, topodatapb.TabletType_REPLICA, func(r *sqltypes.Result) error {
+		err := sc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecute", shards, topodatapb.TabletType_REPLICA, nil, func(r *sqltypes.Result) error {
 			appendResult(qr, r)
 			return nil
 		})
@@ -85,7 +85,7 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 		for _, shard := range shards {
 			shardVars[shard] = nil
 		}
-		err := sc.StreamExecuteMulti(context.Background(), "query", "TestScatterConnStreamExecuteMulti", shardVars, topodatapb.TabletType_REPLICA, func(r *sqltypes.Result) error {
+		err := sc.StreamExecuteMulti(context.Background(), "query", "TestScatterConnStreamExecuteMulti", shardVars, topodatapb.TabletType_REPLICA, nil, func(r *sqltypes.Result) error {
 			appendResult(qr, r)
 			return nil
 		})
@@ -236,7 +236,7 @@ func TestMultiExecs(t *testing.T) {
 			"bv1": 1,
 		},
 	}
-	_, _ = sc.ExecuteMulti(context.Background(), "query", "TestMultiExecs", shardVars, topodatapb.TabletType_REPLICA, nil, false)
+	_, _ = sc.ExecuteMulti(context.Background(), "query", "TestMultiExecs", shardVars, topodatapb.TabletType_REPLICA, nil, false, nil)
 	if len(sbc0.Queries) == 0 || len(sbc1.Queries) == 0 {
 		t.Fatalf("didn't get expected query")
 	}
@@ -248,7 +248,7 @@ func TestMultiExecs(t *testing.T) {
 	}
 	sbc0.Queries = nil
 	sbc1.Queries = nil
-	_ = sc.StreamExecuteMulti(context.Background(), "query", "TestMultiExecs", shardVars, topodatapb.TabletType_REPLICA, func(*sqltypes.Result) error {
+	_ = sc.StreamExecuteMulti(context.Background(), "query", "TestMultiExecs", shardVars, topodatapb.TabletType_REPLICA, nil, func(*sqltypes.Result) error {
 		return nil
 	})
 	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, shardVars["0"]) {
@@ -264,7 +264,7 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	hc := discovery.NewFakeHealthCheck()
 	sc := NewScatterConn(hc, topo.Server{}, new(sandboxTopo), "", "aa", retryCount, nil)
 	hc.AddTestTablet("aa", "0", 1, "TestScatterConnStreamExecuteSendError", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
-	err := sc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecuteSendError", []string{"0"}, topodatapb.TabletType_REPLICA, func(*sqltypes.Result) error {
+	err := sc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecuteSendError", []string{"0"}, topodatapb.TabletType_REPLICA, nil, func(*sqltypes.Result) error {
 		return fmt.Errorf("send error")
 	})
 	want := "send error"
@@ -304,7 +304,7 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.Execute(context.Background(), "query1", nil, "TestScatterConnCommitSuccess", []string{"0"}, topodatapb.TabletType_REPLICA, session, false)
+	sc.Execute(context.Background(), "query1", nil, "TestScatterConnCommitSuccess", []string{"0"}, topodatapb.TabletType_REPLICA, session, false, nil)
 	wantSession := vtgatepb.Session{
 		InTransaction: true,
 		ShardSessions: []*vtgatepb.Session_ShardSession{{
@@ -319,7 +319,7 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 	if !reflect.DeepEqual(wantSession, *session.Session) {
 		t.Errorf("want\n%+v, got\n%+v", wantSession, *session.Session)
 	}
-	sc.Execute(context.Background(), "query1", nil, "TestScatterConnCommitSuccess", []string{"0", "1"}, topodatapb.TabletType_REPLICA, session, false)
+	sc.Execute(context.Background(), "query1", nil, "TestScatterConnCommitSuccess", []string{"0", "1"}, topodatapb.TabletType_REPLICA, session, false, nil)
 	wantSession = vtgatepb.Session{
 		InTransaction: true,
 		ShardSessions: []*vtgatepb.Session_ShardSession{{
@@ -367,8 +367,8 @@ func TestScatterConnRollback(t *testing.T) {
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.Execute(context.Background(), "query1", nil, "TestScatterConnRollback", []string{"0"}, topodatapb.TabletType_REPLICA, session, false)
-	sc.Execute(context.Background(), "query1", nil, "TestScatterConnRollback", []string{"0", "1"}, topodatapb.TabletType_REPLICA, session, false)
+	sc.Execute(context.Background(), "query1", nil, "TestScatterConnRollback", []string{"0"}, topodatapb.TabletType_REPLICA, session, false, nil)
+	sc.Execute(context.Background(), "query1", nil, "TestScatterConnRollback", []string{"0", "1"}, topodatapb.TabletType_REPLICA, session, false, nil)
 	err := sc.Rollback(context.Background(), session)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -413,8 +413,8 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestScatterConnQueryNotInTransaction", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestScatterConnQueryNotInTransaction", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, topodatapb.TabletType_REPLICA, session, true)
-	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"1"}, topodatapb.TabletType_REPLICA, session, false)
+	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, topodatapb.TabletType_REPLICA, session, true, nil)
+	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"1"}, topodatapb.TabletType_REPLICA, session, false, nil)
 
 	wantSession := vtgatepb.Session{
 		InTransaction: true,
@@ -452,8 +452,8 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	sbc0 = hc.AddTestTablet("aa", "0", 1, "TestScatterConnQueryNotInTransaction", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1", 1, "TestScatterConnQueryNotInTransaction", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, topodatapb.TabletType_REPLICA, session, false)
-	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"1"}, topodatapb.TabletType_REPLICA, session, true)
+	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, topodatapb.TabletType_REPLICA, session, false, nil)
+	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"1"}, topodatapb.TabletType_REPLICA, session, true, nil)
 
 	wantSession = vtgatepb.Session{
 		InTransaction: true,
@@ -491,8 +491,8 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	sbc0 = hc.AddTestTablet("aa", "0", 1, "TestScatterConnQueryNotInTransaction", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1", 1, "TestScatterConnQueryNotInTransaction", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, topodatapb.TabletType_REPLICA, session, false)
-	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0", "1"}, topodatapb.TabletType_REPLICA, session, true)
+	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, topodatapb.TabletType_REPLICA, session, false, nil)
+	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0", "1"}, topodatapb.TabletType_REPLICA, session, true, nil)
 
 	wantSession = vtgatepb.Session{
 		InTransaction: true,

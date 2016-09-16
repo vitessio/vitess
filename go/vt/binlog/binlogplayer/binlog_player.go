@@ -197,7 +197,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 // the provided binlog player.
 func ReadStartPosition(dbClient VtClient, uid uint32) (string, string, error) {
 	selectRecovery := QueryBlpCheckpoint(uid)
-	qr, err := dbClient.ExecuteFetch(selectRecovery, 1, true)
+	qr, err := dbClient.ExecuteFetch(selectRecovery, 1)
 	if err != nil {
 		return "", "", fmt.Errorf("error %v in selecting from recovery table %v", err, selectRecovery)
 	}
@@ -211,7 +211,7 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (string, string, error) {
 // replication from the checkpoint table.
 func (blp *BinlogPlayer) readThrottlerSettings() (int64, int64, error) {
 	selectThrottlerSettings := QueryBlpThrottlerSettings(blp.uid)
-	qr, err := blp.dbClient.ExecuteFetch(selectThrottlerSettings, 1, true)
+	qr, err := blp.dbClient.ExecuteFetch(selectThrottlerSettings, 1)
 	if err != nil {
 		return throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("error %v in selecting the throttler settings %v", err, selectThrottlerSettings)
 	}
@@ -286,7 +286,7 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 
 func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 	queryStartTime := time.Now()
-	qr, err := blp.dbClient.ExecuteFetch(sql, 0, false)
+	qr, err := blp.dbClient.ExecuteFetch(sql, 0)
 	blp.blplStats.Timings.Record(BlplQuery, queryStartTime)
 	if d := time.Now().Sub(queryStartTime); d > SlowQueryThreshold {
 		log.Infof("SLOW QUERY (took %.2fs) '%s'", d.Seconds(), sql)

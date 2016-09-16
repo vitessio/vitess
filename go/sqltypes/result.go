@@ -86,3 +86,26 @@ func MakeRowTrusted(fields []*querypb.Field, row *querypb.Row) []Value {
 	}
 	return sqlRow
 }
+
+// StripFieldNames will return a new Result that has the same Rows,
+// but the Field objects will have their Name emptied.  Note we don't
+// proto.Copy each Field for performance reasons, but we only copy the
+// Type field. If/when more fields are added to pb.Field, they will
+// also need to be copied. Same for Result.
+func (result *Result) StripFieldNames() *Result {
+	if len(result.Fields) == 0 {
+		return result
+	}
+	r := &Result{
+		Fields:       make([]*querypb.Field, len(result.Fields)),
+		RowsAffected: result.RowsAffected,
+		InsertID:     result.InsertID,
+		Rows:         result.Rows,
+	}
+	newFieldsArray := make([]querypb.Field, len(result.Fields))
+	for i, f := range result.Fields {
+		r.Fields[i] = &newFieldsArray[i]
+		newFieldsArray[i].Type = f.Type
+	}
+	return r
+}

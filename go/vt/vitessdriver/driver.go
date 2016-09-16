@@ -312,9 +312,9 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 		var stream sqltypes.ResultStream
 		var err error
 		if s.c.useExecuteShards() {
-			stream, err = s.c.vtgateConn.StreamExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletTypeProto)
+			stream, err = s.c.vtgateConn.StreamExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletTypeProto, nil)
 		} else {
-			stream, err = s.c.vtgateConn.StreamExecute(ctx, s.query, makeBindVars(args), s.c.tabletTypeProto)
+			stream, err = s.c.vtgateConn.StreamExecute(ctx, s.query, makeBindVars(args), s.c.tabletTypeProto, nil)
 		}
 		if err != nil {
 			return nil, err
@@ -334,16 +334,16 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 func (s *stmt) executeVitess(ctx context.Context, args []driver.Value) (*sqltypes.Result, error) {
 	if s.c.tx != nil {
 		if s.c.useExecuteShards() {
-			return s.c.tx.ExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletTypeProto)
+			return s.c.tx.ExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletTypeProto, nil)
 		}
-		return s.c.tx.Execute(ctx, s.query, makeBindVars(args), s.c.tabletTypeProto)
+		return s.c.tx.Execute(ctx, s.query, makeBindVars(args), s.c.tabletTypeProto, nil)
 	}
 
 	// Non-transactional case.
 	if s.c.useExecuteShards() {
-		return s.c.vtgateConn.ExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletTypeProto)
+		return s.c.vtgateConn.ExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletTypeProto, nil)
 	}
-	return s.c.vtgateConn.Execute(ctx, s.query, makeBindVars(args), s.c.tabletTypeProto)
+	return s.c.vtgateConn.Execute(ctx, s.query, makeBindVars(args), s.c.tabletTypeProto, nil)
 }
 
 func makeBindVars(args []driver.Value) map[string]interface{} {

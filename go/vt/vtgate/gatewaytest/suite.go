@@ -33,16 +33,16 @@ type gatewayAdapter struct {
 	g gateway.Gateway
 }
 
-func (ga *gatewayAdapter) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
-	return ga.g.Execute(ctx, target.Keyspace, target.Shard, target.TabletType, query, bindVars, transactionID)
+func (ga *gatewayAdapter) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	return ga.g.Execute(ctx, target.Keyspace, target.Shard, target.TabletType, query, bindVars, transactionID, options)
 }
 
-func (ga *gatewayAdapter) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
-	return ga.g.ExecuteBatch(ctx, target.Keyspace, target.Shard, target.TabletType, queries, asTransaction, transactionID)
+func (ga *gatewayAdapter) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
+	return ga.g.ExecuteBatch(ctx, target.Keyspace, target.Shard, target.TabletType, queries, asTransaction, transactionID, options)
 }
 
-func (ga *gatewayAdapter) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
-	return ga.g.StreamExecute(ctx, target.Keyspace, target.Shard, target.TabletType, query, bindVars)
+func (ga *gatewayAdapter) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
+	return ga.g.StreamExecute(ctx, target.Keyspace, target.Shard, target.TabletType, query, bindVars, options)
 }
 
 func (ga *gatewayAdapter) Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error) {
@@ -57,12 +57,12 @@ func (ga *gatewayAdapter) Rollback(ctx context.Context, target *querypb.Target, 
 	return ga.g.Rollback(ctx, target.Keyspace, target.Shard, target.TabletType, transactionID)
 }
 
-func (ga *gatewayAdapter) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (result *sqltypes.Result, transactionID int64, err error) {
-	return ga.g.BeginExecute(ctx, target.Keyspace, target.Shard, target.TabletType, query, bindVars)
+func (ga *gatewayAdapter) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (result *sqltypes.Result, transactionID int64, err error) {
+	return ga.g.BeginExecute(ctx, target.Keyspace, target.Shard, target.TabletType, query, bindVars, options)
 }
 
-func (ga *gatewayAdapter) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) (results []sqltypes.Result, transactionID int64, err error) {
-	return ga.g.BeginExecuteBatch(ctx, target.Keyspace, target.Shard, target.TabletType, queries, asTransaction)
+func (ga *gatewayAdapter) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (results []sqltypes.Result, transactionID int64, err error) {
+	return ga.g.BeginExecuteBatch(ctx, target.Keyspace, target.Shard, target.TabletType, queries, asTransaction, options)
 }
 
 func (ga *gatewayAdapter) Close() {

@@ -651,14 +651,27 @@ class VtGate(object):
       return json.loads(out), err
     return out, err
 
-  def execute(self, sql, tablet_type='master', bindvars=None):
-    """Uses 'vtctl VtGateExecute' to execute a command."""
+  def execute(self, sql, tablet_type='master', bindvars=None,
+              execute_options=None):
+    """Uses 'vtctl VtGateExecute' to execute a command.
+
+    Args:
+      sql: the command to execute.
+      tablet_type: the tablet_type to use.
+      bindvars: a dict of bind variables.
+      execute_options: proto-encoded ExecuteOptions object.
+
+    Returns:
+      the result of running vtctl command.
+    """
     _, addr = self.rpc_endpoint()
     args = ['VtGateExecute', '-json',
             '-server', addr,
             '-tablet_type', tablet_type]
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
+    if execute_options:
+      args.extend(['-options', execute_options])
     args.append(sql)
     return run_vtctl_json(args)
 

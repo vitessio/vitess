@@ -36,7 +36,7 @@ type destinationTabletServer struct {
 	excludedTable string
 }
 
-func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sendReply func(reply *sqltypes.Result) error) error {
+func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(reply *sqltypes.Result) error) error {
 	if strings.Contains(sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on destination should skip the excluded table: %v query: %v", sq.excludedTable, sql)
 	}
@@ -98,7 +98,7 @@ type sourceTabletServer struct {
 	v3            bool
 }
 
-func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sendReply func(reply *sqltypes.Result) error) error {
+func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(reply *sqltypes.Result) error) error {
 	if strings.Contains(sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on source should skip the excluded table: %v query: %v", sq.excludedTable, sql)
 	}

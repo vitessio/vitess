@@ -82,7 +82,7 @@ func DialTablet(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.Ta
 }
 
 // Execute sends the query to VTTablet.
-func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
+func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -100,6 +100,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		Query:             q,
 		TransactionId:     transactionID,
+		Options:           options,
 	}
 	er, err := conn.c.Execute(ctx, req)
 	if err != nil {
@@ -109,7 +110,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 }
 
 // ExecuteBatch sends a batch query to VTTablet.
-func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -123,6 +124,7 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, target *querypb.T
 		Queries:           make([]*querypb.BoundQuery, len(queries)),
 		AsTransaction:     asTransaction,
 		TransactionId:     transactionID,
+		Options:           options,
 	}
 	for i, q := range queries {
 		qq, err := querytypes.BoundQueryToProto3(q.Sql, q.BindVariables)
@@ -159,7 +161,7 @@ func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 }
 
 // StreamExecute starts a streaming query to VTTablet.
-func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
+func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -175,6 +177,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		Query:             q,
+		Options:           options,
 	}
 	stream, err := conn.c.StreamExecute(ctx, req)
 	if err != nil {
@@ -246,7 +249,7 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, target *querypb.Targe
 }
 
 // BeginExecute starts a transaction and runs an Execute.
-func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (result *sqltypes.Result, transactionID int64, err error) {
+func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (result *sqltypes.Result, transactionID int64, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -265,6 +268,7 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 			Query:             q,
+			Options:           options,
 		}
 		reply, err := conn.c.BeginExecute(ctx, req)
 		if err != nil {
@@ -295,6 +299,7 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 		ImmediateCallerId: breq.ImmediateCallerId,
 		Query:             q,
 		TransactionId:     transactionID,
+		Options:           options,
 	}
 	er, err := conn.c.Execute(ctx, ereq)
 	if err != nil {
@@ -305,7 +310,7 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 }
 
 // BeginExecuteBatch starts a transaction and runs an ExecuteBatch.
-func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) (results []sqltypes.Result, transactionID int64, err error) {
+func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (results []sqltypes.Result, transactionID int64, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -320,6 +325,7 @@ func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *quer
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 			Queries:           make([]*querypb.BoundQuery, len(queries)),
 			AsTransaction:     asTransaction,
+			Options:           options,
 		}
 		for i, q := range queries {
 			qq, err := querytypes.BoundQueryToProto3(q.Sql, q.BindVariables)
@@ -357,6 +363,7 @@ func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *quer
 		Queries:           make([]*querypb.BoundQuery, len(queries)),
 		AsTransaction:     asTransaction,
 		TransactionId:     transactionID,
+		Options:           options,
 	}
 	for i, q := range queries {
 		qq, err := querytypes.BoundQueryToProto3(q.Sql, q.BindVariables)

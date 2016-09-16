@@ -35,27 +35,27 @@ func (e *ErrorQueryService) Rollback(ctx context.Context, target *querypb.Target
 }
 
 // Execute is part of QueryService interface
-func (e *ErrorQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
+func (e *ErrorQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // StreamExecute is part of QueryService interface
-func (e *ErrorQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sendReply func(*sqltypes.Result) error) error {
+func (e *ErrorQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // ExecuteBatch is part of QueryService interface
-func (e *ErrorQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+func (e *ErrorQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	return nil, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // BeginExecute is part of QueryService interface
-func (e *ErrorQueryService) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}) (*sqltypes.Result, int64, error) {
+func (e *ErrorQueryService) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
 	return nil, 0, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // BeginExecuteBatch is part of QueryService interface
-func (e *ErrorQueryService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
+func (e *ErrorQueryService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
 	return nil, 0, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
