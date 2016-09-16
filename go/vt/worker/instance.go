@@ -13,7 +13,10 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/net/context"
+
 	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/logutil"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -21,7 +24,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"golang.org/x/net/context"
 )
 
 // Instance encapsulate the execution state of vtworker.
@@ -47,16 +49,14 @@ type Instance struct {
 	lastRunError        error
 	lastRunStopTime     time.Time
 
-	// backgroundContext is context.Background() from main() which has to be plumbed through.
-	backgroundContext      context.Context
 	topoServer             topo.Server
 	cell                   string
 	commandDisplayInterval time.Duration
 }
 
 // NewInstance creates a new Instance.
-func NewInstance(ctx context.Context, ts topo.Server, cell string, commandDisplayInterval time.Duration) *Instance {
-	wi := &Instance{backgroundContext: ctx, topoServer: ts, cell: cell, commandDisplayInterval: commandDisplayInterval}
+func NewInstance(ts topo.Server, cell string, commandDisplayInterval time.Duration) *Instance {
+	wi := &Instance{topoServer: ts, cell: cell, commandDisplayInterval: commandDisplayInterval}
 	// Note: setAndStartWorker() also adds a MemoryLogger for the webserver.
 	wi.wr = wi.CreateWrangler(logutil.NewConsoleLogger())
 	return wi
@@ -70,7 +70,7 @@ func (wi *Instance) CreateWrangler(logger logutil.Logger) *wrangler.Wrangler {
 // setAndStartWorker will set the current worker.
 // We always log to both memory logger (for display on the web) and
 // console logger (for records / display of command line worker).
-func (wi *Instance) setAndStartWorker(wrk Worker, wr *wrangler.Wrangler) (chan struct{}, error) {
+func (wi *Instance) setAndStartWorker(ctx context.Context, wrk Worker, wr *wrangler.Wrangler) (chan struct{}, error) {
 	wi.currentWorkerMutex.Lock()
 	defer wi.currentWorkerMutex.Unlock()
 
@@ -99,7 +99,7 @@ func (wi *Instance) setAndStartWorker(wrk Worker, wr *wrangler.Wrangler) (chan s
 
 	wi.currentWorker = wrk
 	wi.currentMemoryLogger = logutil.NewMemoryLogger()
-	wi.currentContext, wi.currentCancelFunc = context.WithCancel(wi.backgroundContext)
+	wi.currentContext, wi.currentCancelFunc = context.WithCancel(ctx)
 	wi.lastRunError = nil
 	wi.lastRunStopTime = time.Unix(0, 0)
 	done := make(chan struct{})

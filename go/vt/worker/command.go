@@ -13,8 +13,9 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
+
+	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -105,12 +106,11 @@ func commandWorker(wi *Instance, wr *wrangler.Wrangler, args []string, cell stri
 // If wr is nil, the default wrangler will be used.
 // If you pass a wr wrangler, note that a MemoryLogger will be added to its current logger.
 // The returned worker and done channel may be nil if no worker was started e.g. in case of a "Reset".
-func (wi *Instance) RunCommand(args []string, wr *wrangler.Wrangler, runFromCli bool) (Worker, chan struct{}, error) {
+func (wi *Instance) RunCommand(ctx context.Context, args []string, wr *wrangler.Wrangler, runFromCli bool) (Worker, chan struct{}, error) {
 	if len(args) >= 1 {
 		switch args[0] {
 		case "Reset":
-			err := wi.Reset()
-			return nil, nil, err
+			return nil, nil, wi.Reset()
 		case "Cancel":
 			wi.Cancel()
 			return nil, nil, nil
@@ -124,7 +124,7 @@ func (wi *Instance) RunCommand(args []string, wr *wrangler.Wrangler, runFromCli 
 	if err != nil {
 		return nil, nil, err
 	}
-	done, err := wi.setAndStartWorker(wrk, wr)
+	done, err := wi.setAndStartWorker(ctx, wrk, wr)
 	if err != nil {
 		return nil, nil, vterrors.WithPrefix("cannot set worker: ", err)
 	}

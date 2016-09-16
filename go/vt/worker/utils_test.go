@@ -25,7 +25,7 @@ import (
 // This file contains common test helper.
 
 func runCommand(t *testing.T, wi *Instance, wr *wrangler.Wrangler, args []string) error {
-	worker, done, err := wi.RunCommand(args, wr, false /* runFromCli */)
+	worker, done, err := wi.RunCommand(context.Background(), args, wr, false /* runFromCli */)
 	if err != nil {
 		return fmt.Errorf("Worker creation failed: %v", err)
 	}

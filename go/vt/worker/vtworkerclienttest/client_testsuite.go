@@ -45,7 +45,7 @@ func init() {
 // CreateWorkerInstance returns a properly configured vtworker instance.
 func CreateWorkerInstance(t *testing.T) *worker.Instance {
 	ts := zktestserver.New(t, []string{"cell1", "cell2"})
-	return worker.NewInstance(context.Background(), ts, "cell1", 1*time.Second)
+	return worker.NewInstance(ts, "cell1", 1*time.Second)
 }
 
 // TestSuite runs the test suite on the given vtworker and vtworkerclient.
@@ -147,17 +147,13 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client) {
 		t.Fatalf("wrong error code for second cmd: got = %v, want = %v, err: %v", gotCode, wantCode, gotErr)
 	}
 
-	// Cancel Block.
+	// Cancel running "Block" command.
 	cancel()
 	wg.Wait()
 	if blockErr != nil {
 		t.Fatalf("Block command should not have failed: %v", blockErr)
 	}
-	// It looks like gRPC cancels the RPC only on the client-side. Therefore, we
-	// have to explicitly cancel the (still) running vtworker command.
-	if err := runVtworkerCommand(client, []string{"Cancel"}); err != nil {
-		t.Fatal(err)
-	}
+
 	// vtworker is now in a special state where the current job is already
 	// canceled but not reset yet. New commands are still failing with a
 	// retryable error.
@@ -186,7 +182,7 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client) {
 // resetVtworker will retry to "Reset" vtworker until it succeeds.
 // Retries are necessary to cope with the following race:
 // a) RPC started vtworker command e.g. "Block".
-// b) A second command runs "Cancel" and vtworker cancels the first command.
+// b) client cancels RPC and triggers vtworker to cancel the running command.
 // c) RPC returns with a response after cancelation was received by vtworker.
 // d) vtworker is still canceling and shutting down the command.
 // e) A new vtworker command e.g. "Reset" would fail at this point with

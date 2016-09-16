@@ -61,7 +61,7 @@ func main() {
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
-	wi = worker.NewInstance(context.Background(), ts, *cell, *commandDisplayInterval)
+	wi = worker.NewInstance(ts, *cell, *commandDisplayInterval)
 	wi.InstallSignalHandlers()
 	wi.InitStatusHandling()
 
@@ -70,7 +70,7 @@ func main() {
 		wi.InitInteractiveMode()
 	} else {
 		// In single command mode, just run it.
-		worker, done, err := wi.RunCommand(args, nil /*custom wrangler*/, true /*runFromCli*/)
+		worker, done, err := wi.RunCommand(context.Background(), args, nil /*custom wrangler*/, true /*runFromCli*/)
 		if err != nil {
 			log.Error(err)
 			exit.Return(1)
