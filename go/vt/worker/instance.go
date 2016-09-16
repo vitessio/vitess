@@ -76,7 +76,7 @@ func (wi *Instance) setAndStartWorker(ctx context.Context, wrk Worker, wr *wrang
 
 	if wi.currentContext != nil {
 		return nil, vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR,
-			fmt.Errorf("A worker job is already in progress: %v", wi.currentWorker))
+			fmt.Errorf("A worker job is already in progress: %v", wi.currentWorker.StatusAsText()))
 	}
 
 	if wi.currentWorker != nil {
