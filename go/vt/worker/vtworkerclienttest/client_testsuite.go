@@ -122,7 +122,7 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client) {
 		for {
 			if _, err := stream.Recv(); err != nil {
 				if vterrors.RecoverVtErrorCode(err) != vtrpcpb.ErrorCode_CANCELLED {
-					blockErr = fmt.Errorf("Block command should only error due to cancelled context: %v", err)
+					blockErr = fmt.Errorf("Block command should only error due to canceled context: %v", err)
 				}
 				// Stream has finished.
 				break
@@ -159,9 +159,9 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client) {
 		t.Fatal(err)
 	}
 	// vtworker is now in a special state where the current job is already
-	// cancelled but not reset yet. New commands are still failing with a
+	// canceled but not reset yet. New commands are still failing with a
 	// retryable error.
-	gotErr2 := runVtworkerCommand(client, []string{"Ping", "Cancelled and still busy?"})
+	gotErr2 := runVtworkerCommand(client, []string{"Ping", "canceled and still busy?"})
 	wantCode2 := vtrpcpb.ErrorCode_TRANSIENT_ERROR
 	if gotCode2 := vterrors.RecoverVtErrorCode(gotErr2); gotCode2 != wantCode2 {
 		t.Fatalf("wrong error code for second cmd before reset: got = %v, want = %v, err: %v", gotCode2, wantCode2, gotErr2)

@@ -26,7 +26,7 @@ const blockHTML = `
       <b>Error:</b> {{.Error}}</br>
     {{else}}
 	    <form action="/Debugging/Block" method="post">
-	      <INPUT type="submit" name="submit" value="Block (until cancelled)"/>
+	      <INPUT type="submit" name="submit" value="Block (until canceled)"/>
     </form>
     {{end}}
 </body>
@@ -71,5 +71,5 @@ func init() {
 	AddCommand("Debugging", Command{"Block",
 		commandBlock, interactiveBlock,
 		"<message>",
-		"For internal tests only. When triggered, the command will block until cancelled."})
+		"For internal tests only. When triggered, the command will block until canceled."})
 }
