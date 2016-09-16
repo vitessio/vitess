@@ -5,6 +5,7 @@
 package worker
 
 import (
+	"errors"
 	"html/template"
 
 	"golang.org/x/net/context"
@@ -12,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
-// BlockWorker will block infinitely until its context is cancelled.
+// BlockWorker will block infinitely until its context is canceled.
 type BlockWorker struct {
 	StatusWorker
 
@@ -32,7 +33,7 @@ func NewBlockWorker(wr *wrangler.Wrangler) (Worker, error) {
 func (bw *BlockWorker) StatusAsHTML() template.HTML {
 	state := bw.State()
 
-	result := "<b>Block Command</b> (blocking infinitely until context is cancelled)</br>\n"
+	result := "<b>Block Command</b> (blocking infinitely until context is canceled)</br>\n"
 	result += "<b>State:</b> " + state.String() + "</br>\n"
 	switch state {
 	case WorkerStateDebugRunning:
@@ -76,12 +77,12 @@ func (bw *BlockWorker) Run(ctx context.Context) error {
 func (bw *BlockWorker) run(ctx context.Context) error {
 	// We reuse the Copy state to reflect that the blocking is in progress.
 	bw.SetState(WorkerStateDebugRunning)
-	bw.wr.Logger().Printf("Block command was called and will block infinitely until the RPC context is cancelled.\n")
+	bw.wr.Logger().Printf("Block command was called and will block infinitely until the RPC context is canceled.\n")
 	select {
 	case <-ctx.Done():
 	}
 	bw.wr.Logger().Printf("Block command finished because the context is done: '%v'.\n", ctx.Err())
 	bw.SetState(WorkerStateDone)
 
-	return nil
+	return errors.New("command 'Block' was canceled")
 }

@@ -65,7 +65,7 @@ func (tc *legacySplitCloneTestCase) setUp(v3 bool) {
 	db := fakesqldb.Register()
 	tc.ts = zktestserver.New(tc.t, []string{"cell1", "cell2"})
 	ctx := context.Background()
-	tc.wi = NewInstance(ctx, tc.ts, "cell1", time.Second)
+	tc.wi = NewInstance(tc.ts, "cell1", time.Second)
 
 	if v3 {
 		if err := tc.ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}); err != nil {

@@ -30,8 +30,8 @@ type Worker interface {
 	StatusAsText() string
 
 	// Run is the main entry point for the worker. It will be
-	// called in a go routine.  When the passed in context is
-	// cancelled, Run should exit as soon as possible.
+	// called in a go routine.  When the passed in context is canceled, Run()
+	// should exit as soon as possible.
 	Run(context.Context) error
 }
 

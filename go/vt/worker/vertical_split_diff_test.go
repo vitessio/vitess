@@ -83,7 +83,7 @@ func TestVerticalSplitDiff(t *testing.T) {
 	db := fakesqldb.Register()
 	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	ctx := context.Background()
-	wi := NewInstance(ctx, ts, "cell1", time.Second)
+	wi := NewInstance(ts, "cell1", time.Second)
 
 	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
 		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))

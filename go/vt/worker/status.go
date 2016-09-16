@@ -124,7 +124,7 @@ func (wi *Instance) InitStatusHandling() {
 		}
 
 		if wi.Cancel() {
-			// We cancelled the running worker. Go back to the status page.
+			// We canceled the running worker. Go back to the status page.
 			http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
 		} else {
 			// No worker, or not running, we go to the menu.

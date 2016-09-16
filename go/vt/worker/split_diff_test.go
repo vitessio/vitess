@@ -161,7 +161,7 @@ func testSplitDiff(t *testing.T, v3 bool) {
 	db := fakesqldb.Register()
 	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	ctx := context.Background()
-	wi := NewInstance(ctx, ts, "cell1", time.Second)
+	wi := NewInstance(ts, "cell1", time.Second)
 
 	if v3 {
 		if err := ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}); err != nil {

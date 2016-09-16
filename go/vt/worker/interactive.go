@@ -9,7 +9,10 @@ import (
 	"html/template"
 	"net/http"
 
+	"golang.org/x/net/context"
+
 	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/servenv"
 )
@@ -100,7 +103,7 @@ func (wi *Instance) InitInteractiveMode() {
 					return
 				}
 
-				wrk, template, data, err := pc.Interactive(wi.backgroundContext, wi, wi.wr, w, r)
+				wrk, template, data, err := pc.Interactive(context.Background(), wi, wi.wr, w, r)
 				if err != nil {
 					httpError(w, "%s", err)
 				} else if template != nil && data != nil {
@@ -113,7 +116,7 @@ func (wi *Instance) InitInteractiveMode() {
 					return
 				}
 
-				if _, err := wi.setAndStartWorker(wrk, wi.wr); err != nil {
+				if _, err := wi.setAndStartWorker(context.Background(), wrk, wi.wr); err != nil {
 					httpError(w, "Could not set %s worker: %s", c.Name, err)
 					return
 				}
