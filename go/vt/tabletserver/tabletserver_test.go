@@ -574,6 +574,30 @@ func TestTabletServerTarget(t *testing.T) {
 	}
 }
 
+func TestTabletServerBeginFail(t *testing.T) {
+	db := setUpTabletServerTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.TransactionCap = 1
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	ctx := context.Background()
+	ctx, cancel := withTimeout(ctx, 1*time.Nanosecond)
+	defer cancel()
+	tsv.Begin(ctx, &target)
+	_, err = tsv.Begin(ctx, &target)
+	want := "tx_pool_full: Transaction pool connection limit exceeded"
+	if err == nil || err.Error() != want {
+		t.Fatalf("Begin err: %v, want %v", err, want)
+	}
+}
+
 func TestTabletServerCommitTransaciton(t *testing.T) {
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
@@ -605,6 +629,30 @@ func TestTabletServerCommitTransaciton(t *testing.T) {
 	}
 	if err := tsv.Commit(ctx, &target, transactionID); err != nil {
 		t.Fatalf("call TabletServer.Commit failed: %v", err)
+	}
+}
+
+func TestTabletServerCommiRollbacktFail(t *testing.T) {
+	db := setUpTabletServerTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	ctx := context.Background()
+	err = tsv.Commit(ctx, &target, -1)
+	want := "not_in_tx: Transaction -1: not found"
+	if err == nil || err.Error() != want {
+		t.Fatalf("Commit err: %v, want %v", err, want)
+	}
+	err = tsv.Rollback(ctx, &target, -1)
+	if err == nil || err.Error() != want {
+		t.Fatalf("Commit err: %v, want %v", err, want)
 	}
 }
 

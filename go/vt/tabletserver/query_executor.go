@@ -86,55 +86,57 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 
 	if qre.transactionID != 0 {
 		// Need upfront connection for DMLs and transactions
-		conn := qre.qe.txPool.Get(qre.transactionID)
+		conn, err := qre.qe.txPool.Get(qre.transactionID)
+		if err != nil {
+			return nil, err
+		}
 		defer conn.Recycle()
 		switch qre.plan.PlanID {
 		case planbuilder.PlanPassDML:
 			if qre.qe.strictMode.Get() != 0 {
 				return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "DML too complex")
 			}
-			reply, err = qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, false, true)
+			return qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, false, true)
 		case planbuilder.PlanInsertPK:
-			reply, err = qre.execInsertPK(conn)
+			return qre.execInsertPK(conn)
 		case planbuilder.PlanInsertSubquery:
-			reply, err = qre.execInsertSubquery(conn)
+			return qre.execInsertSubquery(conn)
 		case planbuilder.PlanDMLPK:
-			reply, err = qre.execDMLPK(conn)
+			return qre.execDMLPK(conn)
 		case planbuilder.PlanDMLSubquery:
-			reply, err = qre.execDMLSubquery(conn)
+			return qre.execDMLSubquery(conn)
 		case planbuilder.PlanOther:
-			reply, err = qre.execSQL(conn, qre.query, true)
+			return qre.execSQL(conn, qre.query, true)
 		case planbuilder.PlanUpsertPK:
-			reply, err = qre.execUpsertPK(conn)
+			return qre.execUpsertPK(conn)
 		case planbuilder.PlanSet:
-			reply, err = qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, false, true)
+			return qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, false, true)
 		default:
-			reply, err = qre.execDirect(conn)
+			return qre.execDirect(conn)
 		}
 	} else {
 		switch qre.plan.PlanID {
 		case planbuilder.PlanPassSelect:
-			reply, err = qre.execSelect()
+			return qre.execSelect()
 		case planbuilder.PlanSelectLock:
 			return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "Disallowed outside transaction")
 		case planbuilder.PlanSet:
-			reply, err = qre.execSet()
+			return qre.execSet()
 		case planbuilder.PlanOther:
 			conn, connErr := qre.getConn(qre.qe.connPool)
 			if connErr != nil {
 				return nil, connErr
 			}
 			defer conn.Recycle()
-			reply, err = qre.execSQL(conn, qre.query, true)
+			return qre.execSQL(conn, qre.query, true)
 		default:
 			if qre.qe.autoCommit.Get() == 0 {
 				return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT,
 					"unsupported query outside transaction: %s", qre.query)
 			}
-			reply, err = qre.execDmlAutoCommit()
+			return qre.execDmlAutoCommit()
 		}
 	}
-	return reply, err
 }
 
 // Stream performs a streaming query execution.
@@ -190,24 +192,30 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
-	transactionID := qre.qe.txPool.Begin(qre.ctx)
+	transactionID, err := qre.qe.txPool.Begin(qre.ctx)
+	if err != nil {
+		return nil, err
+	}
 	qre.logStats.AddRewrittenSQL("begin", time.Now())
-	defer func() {
-		// TxPool.Get may panic
-		if panicErr := recover(); panicErr != nil {
-			err = fmt.Errorf("DML autocommit got panic: %v", panicErr)
-		}
-		if err != nil {
-			qre.qe.txPool.Rollback(qre.ctx, transactionID)
-			qre.logStats.AddRewrittenSQL("rollback", time.Now())
-		} else {
-			qre.qe.txPool.Commit(qre.ctx, transactionID)
-			qre.logStats.AddRewrittenSQL("commit", time.Now())
-		}
-	}()
-	conn := qre.qe.txPool.Get(transactionID)
-	defer conn.Recycle()
-	return f(conn)
+
+	conn, err := qre.qe.txPool.Get(transactionID)
+	if err != nil {
+		return nil, err
+	}
+	reply, err = f(conn)
+	conn.Recycle()
+
+	if err != nil {
+		_ = qre.qe.txPool.Rollback(qre.ctx, transactionID)
+		qre.logStats.AddRewrittenSQL("rollback", time.Now())
+		return nil, err
+	}
+	err = qre.qe.txPool.Commit(qre.ctx, transactionID)
+	if err != nil {
+		return nil, err
+	}
+	qre.logStats.AddRewrittenSQL("commit", time.Now())
+	return reply, nil
 }
 
 // checkPermissions
@@ -292,11 +300,17 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "DDL is not understood")
 	}
 
-	txid := qre.qe.txPool.Begin(qre.ctx)
+	txid, err := qre.qe.txPool.Begin(qre.ctx)
+	if err != nil {
+		return nil, err
+	}
 	defer qre.qe.txPool.Commit(qre.ctx, txid)
 
 	// Stolen from Execute
-	conn := qre.qe.txPool.Get(txid)
+	conn, err := qre.qe.txPool.Get(txid)
+	if err != nil {
+		return nil, err
+	}
 	defer conn.Recycle()
 	result, err := qre.execSQL(conn, qre.query, false)
 	if err != nil {

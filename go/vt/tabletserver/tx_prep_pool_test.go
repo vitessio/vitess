@@ -8,79 +8,45 @@ import (
 	"testing"
 )
 
-func TestPrepRegisterFail(t *testing.T) {
+func TestPrepPut(t *testing.T) {
 	defer func() {
 		r := recover()
 		if r == nil {
 			t.Fatalf("panic expected")
 		}
 	}()
-	pp := NewTxPreparedPool()
-	pp.Register(nil, "aa")
-	pp.Register(nil, "aa")
-}
-
-func TestPrepUnregister(t *testing.T) {
-	pp := NewTxPreparedPool()
-	pp.Register(nil, "aa")
-	pp.Unregister("aa")
-	pp.Register(nil, "aa")
-}
-
-func TestPrepGetFailPurpose(t *testing.T) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatalf("panic expected")
-		}
-	}()
-	NewTxPreparedPool().Get("aa", "")
+	pp := NewTxPreparedPool(2)
+	err := pp.Put(nil, "aa")
+	if err != nil {
+		t.Error(err)
+	}
+	err = pp.Put(nil, "bb")
+	if err != nil {
+		t.Error(err)
+	}
+	want := "prepared transactions exceeded limit: 2"
+	err = pp.Put(nil, "cc")
+	if err == nil || err.Error() != want {
+		t.Errorf("Put err: %v, want %s", err, want)
+	}
+	// This should panic.
+	pp.Put(nil, "aa")
 }
 
 func TestPrepGet(t *testing.T) {
-	pp := NewTxPreparedPool()
+	pp := NewTxPreparedPool(2)
 	conn := &DBConn{}
-	pp.Register(conn, "aa")
-	_, err := pp.Get("bb", "use")
-	want := "not found"
-	if err == nil || err.Error() != want {
-		t.Errorf("pp.Get(bb): %v, want %s", err, want)
+	pp.Put(conn, "aa")
+	got := pp.Get("bb")
+	if got != nil {
+		t.Errorf("Get(bb): %v, want nil", got)
 	}
-	got, err := pp.Get("aa", "use")
-	if err != nil {
-		t.Error(err)
-	}
+	got = pp.Get("aa")
 	if got != conn {
 		t.Errorf("pp.Get(aa): %p, want %p", got, conn)
 	}
-	_, err = pp.Get("aa", "use")
-	want = "in use: use"
-	if err == nil || err.Error() != want {
-		t.Errorf("pp.Get(bb): %v, want %s", err, want)
-	}
-}
-
-func TestPrepPutFail(t *testing.T) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatalf("panic expected")
-		}
-	}()
-	NewTxPreparedPool().Put("aa")
-}
-
-func TestPut(t *testing.T) {
-	pp := NewTxPreparedPool()
-	conn := &DBConn{}
-	pp.Register(conn, "aa")
-	_, err := pp.Get("aa", "use")
-	if err != nil {
-		t.Error(err)
-	}
-	pp.Put("aa")
-	_, err = pp.Get("aa", "use")
-	if err != nil {
-		t.Error(err)
+	got = pp.Get("aa")
+	if got != nil {
+		t.Errorf("Get(aa): %v, want nil", got)
 	}
 }

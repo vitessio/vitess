@@ -188,34 +188,35 @@ func handleError(err *error, logStats *LogStats, queryServiceStats *QueryService
 		}
 	}()
 	if x := recover(); x != nil {
-		terr, ok := x.(*TabletError)
-		if !ok {
-			log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
-			terr = NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic", x)
-			*err = terr
-			queryServiceStats.InternalErrors.Add("Panic", 1)
-			return
-		}
-		*err = terr
-		terr.RecordStats(queryServiceStats)
-		switch terr.ErrorCode {
-		case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
-			// Retry errors are too spammy
-			return
-		case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED:
-			logTxPoolFull.Errorf("%v", terr)
+		*err = handleErrorNoPanic(x, logStats, queryServiceStats)
+	}
+}
+
+func handleErrorNoPanic(err interface{}, logStats *LogStats, queryServiceStats *QueryServiceStats) error {
+	terr, ok := err.(*TabletError)
+	if !ok {
+		log.Errorf("Uncaught panic:\n%v\n%s", err, tb.Stack(4))
+		queryServiceStats.InternalErrors.Add("Panic", 1)
+		return NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic", err)
+	}
+	terr.RecordStats(queryServiceStats)
+	switch terr.ErrorCode {
+	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
+		// Retry errors are too spammy
+	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED:
+		logTxPoolFull.Errorf("%v", terr)
+	default:
+		switch terr.SQLError {
+		// MySQL deadlock errors are (usually) due to client behavior, not server
+		// behavior, and therefore logged at the INFO level.
+		case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong,
+			mysql.ErrDataOutOfRange, mysql.ErrBadNullError:
+			log.Infof("%v", terr)
 		default:
-			switch terr.SQLError {
-			// MySQL deadlock errors are (usually) due to client behavior, not server
-			// behavior, and therefore logged at the INFO level.
-			case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong,
-				mysql.ErrDataOutOfRange, mysql.ErrBadNullError:
-				log.Infof("%v", terr)
-			default:
-				log.Errorf("%v", terr)
-			}
+			log.Errorf("%v", terr)
 		}
 	}
+	return terr
 }
 
 func logError(queryServiceStats *QueryServiceStats) {
