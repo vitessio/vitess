@@ -631,7 +631,10 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target) (tra
 		tsv.endRequest(true)
 	}(time.Now())
 
-	transactionID = tsv.qe.txPool.Begin(ctx)
+	transactionID, err = tsv.qe.txPool.Begin(ctx)
+	if err != nil {
+		return 0, handleErrorNoPanic(err, logStats, tsv.qe.queryServiceStats)
+	}
 	logStats.TransactionID = transactionID
 	return transactionID, nil
 }
@@ -653,7 +656,10 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 		tsv.endRequest(false)
 	}(time.Now())
 
-	tsv.qe.txPool.Commit(ctx, transactionID)
+	err = tsv.qe.txPool.Commit(ctx, transactionID)
+	if err != nil {
+		return handleErrorNoPanic(err, logStats, tsv.qe.queryServiceStats)
+	}
 	return nil
 }
 
@@ -674,7 +680,10 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, t
 		tsv.endRequest(false)
 	}(time.Now())
 
-	tsv.qe.txPool.Rollback(ctx, transactionID)
+	err = tsv.qe.txPool.Rollback(ctx, transactionID)
+	if err != nil {
+		return handleErrorNoPanic(err, logStats, tsv.qe.queryServiceStats)
+	}
 	return nil
 }
 
@@ -700,8 +709,7 @@ func (tsv *TabletServer) handleExecErrorNoPanic(sql string, bindVariables map[st
 	if !ok {
 		log.Errorf("Uncaught panic for %v:\n%v\n%s", querytypes.QueryAsString(sql, bindVariables), err, tb.Stack(4))
 		tsv.qe.queryServiceStats.InternalErrors.Add("Panic", 1)
-		terr = NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for %v", err, querytypes.QueryAsString(sql, bindVariables))
-		return terr
+		return NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for %v", err, querytypes.QueryAsString(sql, bindVariables))
 	}
 	var myError error
 	if tsv.config.TerseErrors && terr.SQLError != 0 && len(bindVariables) != 0 {

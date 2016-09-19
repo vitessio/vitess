@@ -263,7 +263,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	_, err = qre.Execute()
 	wantErr := "error: rejected"
 	if err == nil || err.Error() != wantErr {
-		t.Fatalf("qre.Execute() = %v, want %v", err, wantErr)
+		t.Errorf("qre.Execute() = %v, want %v", err, wantErr)
 	}
 	wantqueries = []string{}
 	gotqueries = fetchRecordedQueries(qre)
@@ -282,7 +282,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	_, err = qre.Execute()
 	wantErr = "error: err (errno 1062) (sqlstate 23000)"
 	if err == nil || err.Error() != wantErr {
-		t.Fatalf("qre.Execute() = %v, want %v", err, wantErr)
+		t.Errorf("qre.Execute() = %v, want %v", err, wantErr)
 	}
 	wantqueries = []string{}
 	gotqueries = fetchRecordedQueries(qre)
@@ -309,7 +309,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 		RowsAffected: 2,
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
+		t.Errorf("got: %v, want: %v", got, want)
 	}
 	wantqueries = []string{"update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
 	gotqueries = fetchRecordedQueries(qre)
@@ -1138,7 +1138,10 @@ func initQueryExecutorTestDB(db *fakesqldb.DB) {
 }
 
 func fetchRecordedQueries(qre *QueryExecutor) []string {
-	conn := qre.qe.txPool.Get(qre.transactionID)
+	conn, err := qre.qe.txPool.Get(qre.transactionID)
+	if err != nil {
+		panic(err)
+	}
 	defer conn.Recycle()
 	return conn.Queries
 }
