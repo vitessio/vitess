@@ -126,7 +126,8 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       self, sql, bind_variables, tablet_type, keyspace_name=None,
       shards=None, keyspace_ids=None, keyranges=None,
       entity_keyspace_id_map=None, entity_column_name=None,
-      not_in_transaction=False, effective_caller_id=None, **kwargs):
+      not_in_transaction=False, effective_caller_id=None,
+      include_event_token=False, compare_event_token=None, **kwargs):
 
     # FIXME(alainjobart): keyspace should be in routing_kwargs,
     # as it's not used for v3.
@@ -136,7 +137,8 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
           sql, bind_variables, tablet_type,
           keyspace_name, shards, keyspace_ids, keyranges,
           entity_column_name, entity_keyspace_id_map,
-          not_in_transaction, effective_caller_id)
+          not_in_transaction, effective_caller_id, include_event_token,
+          compare_event_token)
       method = getattr(self.stub, method_name)
       response = method(request, self.timeout)
       return self.process_execute_response(method_name, response)

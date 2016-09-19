@@ -18,7 +18,6 @@ from vtgate_gateway_flavor.gateway import vtgate_gateway_flavor
 
 master_tablet = tablet.Tablet()
 replica_tablet = tablet.Tablet()
-master_host = 'localhost:%d' % master_tablet.port
 
 # master_start_position has the replication position before we start
 # doing anything to the master database. It is used by test_ddl to
