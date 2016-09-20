@@ -178,6 +178,8 @@ class Proto3Connection(object):
 
   def __init__(self):
     self._effective_caller_id = None
+    self.event_token = None
+    self.fresher = None
 
   def _add_caller_id(self, request, caller_id):
     """Adds the vtgate_client.CallerID to the proto3 request, if any.
@@ -341,7 +343,8 @@ class Proto3Connection(object):
                                keyspace_ids,
                                key_ranges,
                                entity_column_name, entity_keyspace_id_map,
-                               not_in_transaction, effective_caller_id):
+                               not_in_transaction, effective_caller_id,
+                               include_event_token, compare_event_token):
     """Builds the right vtgate_pb2 Request and method for an _execute call.
 
     Args:
@@ -356,6 +359,8 @@ class Proto3Connection(object):
       entity_keyspace_id_map: map of external id to keyspace id.
       not_in_transaction: do not create a transaction to a new shard.
       effective_caller_id: optional vtgate_client.CallerID.
+      include_event_token: boolean on whether to ask for event token.
+      compare_event_token: set the result extras fresher based on this token.
 
     Returns:
       A vtgate_pb2.XXXRequest object.
@@ -404,6 +409,12 @@ class Proto3Connection(object):
     request.not_in_transaction = not_in_transaction
     self._add_caller_id(request, effective_caller_id)
     self._add_session(request)
+    if include_event_token:
+      request.options.include_event_token = True
+    if compare_event_token:
+      request.options.compare_event_token.CopyFrom(compare_event_token)
+    self.event_token = None
+    self.fresher = None
     return request, routing_kwargs, method_name
 
   def process_execute_response(self, exec_method, response):
@@ -420,6 +431,9 @@ class Proto3Connection(object):
     """
     self.update_session(response)
     self._extract_rpc_error(exec_method, response.error)
+    if response.result.extras:
+      self.event_token = response.result.extras.event_token
+      self.fresher = response.result.extras.fresher
     return self._get_rowset_from_query_result(response.result)
 
   def execute_batch_request_and_name(self, sql_list, bind_variables_list,

@@ -39,6 +39,15 @@
 				"worker_test"
 			]
 		},
+		"cache_invalidation": {
+			"File": "cache_invalidation.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"custom_sharding": {
 			"File": "custom_sharding.py",
 			"Args": [],

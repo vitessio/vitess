@@ -188,7 +188,9 @@ class VTGateClient(object):
                keyspace_ids=None,
                keyranges=None,
                entity_keyspace_id_map=None, entity_column_name=None,
-               not_in_transaction=False, effective_caller_id=None, **kwargs):
+               not_in_transaction=False, effective_caller_id=None,
+               include_event_token=False, compare_event_token=None,
+               **kwargs):
     """Executes the given sql.
 
     FIXME(alainjobart): should take the session in.
@@ -221,6 +223,10 @@ class VTGateClient(object):
       not_in_transaction: force this execute to be outside the current
         transaction, if any.
       effective_caller_id: CallerID object.
+      include_event_token: if true, the flag will be sent to vtgate.
+        The member variable event_token will be set with the result.
+      compare_event_token: set the result extras fresher based on this token.
+        The member variable fresher will be set with the result.
       **kwargs: implementation specific parameters.
 
     Returns:
