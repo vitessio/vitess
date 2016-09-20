@@ -1231,7 +1231,7 @@ func TestHandleExecUnknownError(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	defer tsv.handleExecError("select * from test_table", nil, &err, logStats)
+	defer tsv.handleError("select * from test_table", nil, &err, logStats)
 	panic("unknown exec error")
 }
 
@@ -1248,7 +1248,7 @@ func TestHandleExecTabletError(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	defer tsv.handleExecError("select * from test_table", nil, &err, logStats)
+	defer tsv.handleError("select * from test_table", nil, &err, logStats)
 	panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "tablet error"))
 }
 
@@ -1266,7 +1266,7 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handleExecError("select * from test_table", nil, &err, logStats)
+	defer tsv.handleError("select * from test_table", nil, &err, logStats)
 	panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "tablet error"))
 }
 
@@ -1284,7 +1284,7 @@ func TestTerseErrorsBindVars(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handleExecError("select * from test_table", map[string]interface{}{"a": 1}, &err, logStats)
+	defer tsv.handleError("select * from test_table", map[string]interface{}{"a": 1}, &err, logStats)
 	panic(&TabletError{
 		ErrorCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
 		Message:   "msg",
@@ -1307,7 +1307,7 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handleExecError("select * from test_table", nil, &err, logStats)
+	defer tsv.handleError("select * from test_table", nil, &err, logStats)
 	panic(&TabletError{
 		ErrorCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
 		Message:   "msg",

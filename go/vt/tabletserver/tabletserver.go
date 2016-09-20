@@ -26,6 +26,7 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/eventtoken"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/schema"
@@ -60,6 +61,9 @@ const (
 	// that are still in flight.
 	StateShuttingDown
 )
+
+// logTxPoolFull is for throttling txpool full messages in the log.
+var logTxPoolFull = logutil.NewThrottledLogger("TxPoolFull", 1*time.Minute)
 
 // stateName names every state. The number of elements must
 // match the number of states. Names can overlap.
@@ -617,184 +621,81 @@ func (tsv *TabletServer) replicationStreamer(ctx context.Context) {
 
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
 func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error) {
-	logStats := newLogStats("Begin", ctx)
-	logStats.OriginalSQL = "begin"
-	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
-
-	if err = tsv.startRequest(target, true, false); err != nil {
-		return 0, err
-	}
-	ctx, cancel := withTimeout(ctx, tsv.BeginTimeout.Get())
-	defer func(start time.Time) {
-		tsv.qe.queryServiceStats.QueryStats.Record("BEGIN", start)
-		cancel()
-		tsv.endRequest(true)
-	}(time.Now())
-
-	transactionID, err = tsv.qe.txPool.Begin(ctx)
-	if err != nil {
-		return 0, handleErrorNoPanic(err, logStats, tsv.qe.queryServiceStats)
-	}
-	logStats.TransactionID = transactionID
-	return transactionID, nil
+	err = tsv.execRequest(
+		ctx,
+		"Begin", "begin", nil,
+		target, true, false,
+		func(ctx context.Context, logStats *LogStats) error {
+			defer tsv.qe.queryServiceStats.QueryStats.Record("BEGIN", time.Now())
+			transactionID, err = tsv.qe.txPool.Begin(ctx)
+			logStats.TransactionID = transactionID
+			return err
+		},
+	)
+	return transactionID, err
 }
 
 // Commit commits the specified transaction.
 func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (err error) {
-	logStats := newLogStats("Commit", ctx)
-	logStats.OriginalSQL = "commit"
-	logStats.TransactionID = transactionID
-	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
-
-	if err = tsv.startRequest(target, false, true); err != nil {
-		return err
-	}
-	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
-	defer func(start time.Time) {
-		tsv.qe.queryServiceStats.QueryStats.Record("COMMIT", start)
-		cancel()
-		tsv.endRequest(false)
-	}(time.Now())
-
-	err = tsv.qe.txPool.Commit(ctx, transactionID)
-	if err != nil {
-		return handleErrorNoPanic(err, logStats, tsv.qe.queryServiceStats)
-	}
-	return nil
+	return tsv.execRequest(
+		ctx,
+		"Commit", "commit", nil,
+		target, false, true,
+		func(ctx context.Context, logStats *LogStats) error {
+			defer tsv.qe.queryServiceStats.QueryStats.Record("COMMIT", time.Now())
+			return tsv.qe.txPool.Commit(ctx, transactionID)
+		},
+	)
 }
 
 // Rollback rollsback the specified transaction.
 func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (err error) {
-	logStats := newLogStats("Rollback", ctx)
-	logStats.OriginalSQL = "rollback"
-	logStats.TransactionID = transactionID
-	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
-
-	if err = tsv.startRequest(target, false, true); err != nil {
-		return err
-	}
-	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
-	defer func(start time.Time) {
-		tsv.qe.queryServiceStats.QueryStats.Record("ROLLBACK", start)
-		cancel()
-		tsv.endRequest(false)
-	}(time.Now())
-
-	err = tsv.qe.txPool.Rollback(ctx, transactionID)
-	if err != nil {
-		return handleErrorNoPanic(err, logStats, tsv.qe.queryServiceStats)
-	}
-	return nil
-}
-
-// handleExecError handles panics during query execution and sets
-// the supplied error return value.
-func (tsv *TabletServer) handleExecError(sql string, bindVariables map[string]interface{}, err *error, logStats *LogStats) {
-	if x := recover(); x != nil {
-		*err = tsv.handleExecErrorNoPanic(sql, bindVariables, x, logStats)
-	}
-	if logStats != nil {
-		logStats.Send()
-	}
-}
-
-func (tsv *TabletServer) handleExecErrorNoPanic(sql string, bindVariables map[string]interface{}, err interface{}, logStats *LogStats) error {
-	var terr *TabletError
-	defer func() {
-		if logStats != nil {
-			logStats.Error = terr
-		}
-	}()
-	terr, ok := err.(*TabletError)
-	if !ok {
-		log.Errorf("Uncaught panic for %v:\n%v\n%s", querytypes.QueryAsString(sql, bindVariables), err, tb.Stack(4))
-		tsv.qe.queryServiceStats.InternalErrors.Add("Panic", 1)
-		return NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for %v", err, querytypes.QueryAsString(sql, bindVariables))
-	}
-	var myError error
-	if tsv.config.TerseErrors && terr.SQLError != 0 && len(bindVariables) != 0 {
-		myError = &TabletError{
-			SQLError:  terr.SQLError,
-			SQLState:  terr.SQLState,
-			ErrorCode: terr.ErrorCode,
-			Message:   fmt.Sprintf("(errno %d) (sqlstate %s) during query: %s", terr.SQLError, terr.SQLState, sql),
-		}
-	} else {
-		myError = terr
-	}
-	terr.RecordStats(tsv.qe.queryServiceStats)
-
-	logMethod := log.Warningf
-	// Suppress or demote some errors in logs
-	switch terr.ErrorCode {
-	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED, vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED:
-		return myError
-	case vtrpcpb.ErrorCode_INTERNAL_ERROR:
-		logMethod = log.Errorf
-	case vtrpcpb.ErrorCode_NOT_IN_TX:
-		// keep as warning
-	default:
-		// default is when we think the query itself is
-		// problematic. This doesn't indicate a system or
-		// component wide degradation, so we log to INFO.
-		logMethod = log.Infof
-	}
-	// We want to suppress/demote some MySQL error codes
-	// (regardless of the ErrorType)
-	switch terr.SQLError {
-	case mysql.ErrDupEntry:
-		return myError
-	case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong,
-		mysql.ErrDataOutOfRange, mysql.ErrBadNullError:
-		logMethod = log.Infof
-	case 0:
-		if strings.Contains(terr.Error(), "Row count exceeded") {
-			logMethod = log.Infof
-		}
-	}
-	logMethod("%v: %v", terr, querytypes.QueryAsString(sql, bindVariables))
-	return myError
+	return tsv.execRequest(
+		ctx,
+		"Rollback", "rollback", nil,
+		target, false, true,
+		func(ctx context.Context, logStats *LogStats) error {
+			defer tsv.qe.queryServiceStats.QueryStats.Record("ROLLBACK", time.Now())
+			return tsv.qe.txPool.Rollback(ctx, transactionID)
+		},
+	)
 }
 
 // Execute executes the query and returns the result as response.
 func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
-	logStats := newLogStats("Execute", ctx)
-	defer tsv.handleExecError(sql, bindVariables, &err, logStats)
-
 	allowShutdown := (transactionID != 0)
-	if err = tsv.startRequest(target, false, allowShutdown); err != nil {
-		return nil, err
-	}
-	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
-	defer func() {
-		cancel()
-		tsv.endRequest(false)
-	}()
-
-	if bindVariables == nil {
-		bindVariables = make(map[string]interface{})
-	}
-	sql = stripTrailing(sql, bindVariables)
-	plan := tsv.qe.schemaInfo.GetPlan(ctx, logStats, sql)
-	qre := &QueryExecutor{
-		query:         sql,
-		bindVars:      bindVariables,
-		transactionID: transactionID,
-		plan:          plan,
-		ctx:           ctx,
-		logStats:      logStats,
-		qe:            tsv.qe,
-	}
-	extras := tsv.computeExtras(options)
-	result, err = qre.Execute()
-	if err != nil {
-		return nil, tsv.handleExecErrorNoPanic(sql, bindVariables, err, logStats)
-	}
-	result.Extras = extras
-	if options != nil && options.ExcludeFieldNames {
-		result = result.StripFieldNames()
-	}
-	return result, nil
+	err = tsv.execRequest(
+		ctx,
+		"Execute", sql, bindVariables,
+		target, false, allowShutdown,
+		func(ctx context.Context, logStats *LogStats) error {
+			if bindVariables == nil {
+				bindVariables = make(map[string]interface{})
+			}
+			sql = stripTrailing(sql, bindVariables)
+			plan := tsv.qe.schemaInfo.GetPlan(ctx, logStats, sql)
+			qre := &QueryExecutor{
+				query:         sql,
+				bindVars:      bindVariables,
+				transactionID: transactionID,
+				plan:          plan,
+				ctx:           ctx,
+				logStats:      logStats,
+				qe:            tsv.qe,
+			}
+			extras := tsv.computeExtras(options)
+			result, err = qre.Execute()
+			if err != nil {
+				return err
+			}
+			result.Extras = extras
+			if options != nil && options.ExcludeFieldNames {
+				result = result.StripFieldNames()
+			}
+			return nil
+		},
+	)
+	return result, err
 }
 
 // computeExtras returns the ResultExtras to include with the result.
@@ -845,35 +746,31 @@ func (tsv *TabletServer) computeExtras(options *querypb.ExecuteOptions) *querypb
 // The first QueryResult will have Fields set (and Rows nil).
 // The subsequent QueryResult will have Rows set (and Fields nil).
 func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) (err error) {
-	logStats := newLogStats("StreamExecute", ctx)
-	defer tsv.handleExecError(sql, bindVariables, &err, logStats)
-
-	if err = tsv.startRequest(target, false, false); err != nil {
-		return err
-	}
-	defer tsv.endRequest(false)
-
-	if bindVariables == nil {
-		bindVariables = make(map[string]interface{})
-	}
-	sql = stripTrailing(sql, bindVariables)
-	qre := &QueryExecutor{
-		query:    sql,
-		bindVars: bindVariables,
-		plan:     tsv.qe.schemaInfo.GetStreamPlan(sql),
-		ctx:      ctx,
-		logStats: logStats,
-		qe:       tsv.qe,
-	}
-	excludeFieldNames := false
-	if options != nil && options.ExcludeFieldNames {
-		excludeFieldNames = true
-	}
-	err = qre.Stream(excludeFieldNames, sendReply)
-	if err != nil {
-		return tsv.handleExecErrorNoPanic(sql, bindVariables, err, logStats)
-	}
-	return nil
+	err = tsv.execRequest(
+		ctx,
+		"StreamExecute", sql, bindVariables,
+		target, false, false,
+		func(ctx context.Context, logStats *LogStats) error {
+			if bindVariables == nil {
+				bindVariables = make(map[string]interface{})
+			}
+			sql = stripTrailing(sql, bindVariables)
+			qre := &QueryExecutor{
+				query:    sql,
+				bindVars: bindVariables,
+				plan:     tsv.qe.schemaInfo.GetStreamPlan(sql),
+				ctx:      ctx,
+				logStats: logStats,
+				qe:       tsv.qe,
+			}
+			excludeFieldNames := false
+			if options != nil && options.ExcludeFieldNames {
+				excludeFieldNames = true
+			}
+			return qre.Stream(excludeFieldNames, sendReply)
+		},
+	)
+	return err
 }
 
 // ExecuteBatch executes a group of queries and returns their results as a list.
@@ -893,12 +790,12 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 		return nil, err
 	}
 	defer tsv.endRequest(false)
-	defer handleError(&err, nil, tsv.qe.queryServiceStats)
+	defer tsv.handleError("batch", nil, &err, nil)
 
 	if asTransaction {
 		transactionID, err = tsv.Begin(ctx, target)
 		if err != nil {
-			return nil, err
+			return nil, tsv.handleErrorNoPanic("batch", nil, &err, nil)
 		}
 		// If transaction was not committed by the end, it means
 		// that there was an error, roll it back.
@@ -912,14 +809,14 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	for _, bound := range queries {
 		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, transactionID, options)
 		if err != nil {
-			return nil, err
+			return nil, tsv.handleErrorNoPanic("batch", nil, &err, nil)
 		}
 		results = append(results, *localReply)
 	}
 	if asTransaction {
 		if err = tsv.Commit(ctx, target, transactionID); err != nil {
 			transactionID = 0
-			return nil, err
+			return nil, tsv.handleErrorNoPanic("batch", nil, &err, nil)
 		}
 		transactionID = 0
 	}
@@ -953,50 +850,45 @@ func (tsv *TabletServer) BeginExecuteBatch(ctx context.Context, target *querypb.
 // TODO(erez): Remove this method and rename SplitQueryV2 to SplitQuery once we migrate to
 // SplitQuery V2.
 func (tsv *TabletServer) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) (splits []querytypes.QuerySplit, err error) {
-	logStats := newLogStats("SplitQuery", ctx)
-	logStats.OriginalSQL = sql
-	logStats.BindVariables = bindVariables
-	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
-	if err = tsv.startRequest(target, false, false); err != nil {
-		return nil, err
-	}
-	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
-	defer func() {
-		cancel()
-		tsv.endRequest(false)
-	}()
+	err = tsv.execRequest(
+		ctx,
+		"SplitQuery", sql, bindVariables,
+		target, false, false,
+		func(ctx context.Context, logStats *LogStats) error {
+			splitter := NewQuerySplitter(sql, bindVariables, splitColumn, splitCount, tsv.qe.schemaInfo)
+			err = splitter.validateQuery()
+			if err != nil {
+				return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "splitQuery: query validation error: %s, request: %v", err, querytypes.QueryAsString(sql, bindVariables))
+			}
 
-	splitter := NewQuerySplitter(sql, bindVariables, splitColumn, splitCount, tsv.qe.schemaInfo)
-	err = splitter.validateQuery()
-	if err != nil {
-		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "splitQuery: query validation error: %s, request: %v", err, querytypes.QueryAsString(sql, bindVariables))
-	}
+			defer func(start time.Time) {
+				addUserTableQueryStats(tsv.qe.queryServiceStats, ctx, splitter.tableName, "SplitQuery", int64(time.Now().Sub(start)))
+			}(time.Now())
 
-	defer func(start time.Time) {
-		addUserTableQueryStats(tsv.qe.queryServiceStats, ctx, splitter.tableName, "SplitQuery", int64(time.Now().Sub(start)))
-	}(time.Now())
-
-	qre := &QueryExecutor{
-		ctx:      ctx,
-		logStats: logStats,
-		qe:       tsv.qe,
-	}
-	columnType, err := getColumnType(qre, splitter.splitColumn, splitter.tableName)
-	if err != nil {
-		return nil, err
-	}
-	var pkMinMax *sqltypes.Result
-	if sqltypes.IsIntegral(columnType) {
-		pkMinMax, err = getColumnMinMax(qre, splitter.splitColumn, splitter.tableName)
-		if err != nil {
-			return nil, err
-		}
-	}
-	splits, err = splitter.split(columnType, pkMinMax)
-	if err != nil {
-		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "splitQuery: query split error: %s, request: %v", err, querytypes.QueryAsString(sql, bindVariables))
-	}
-	return splits, nil
+			qre := &QueryExecutor{
+				ctx:      ctx,
+				logStats: logStats,
+				qe:       tsv.qe,
+			}
+			columnType, err := getColumnType(qre, splitter.splitColumn, splitter.tableName)
+			if err != nil {
+				return err
+			}
+			var pkMinMax *sqltypes.Result
+			if sqltypes.IsIntegral(columnType) {
+				pkMinMax, err = getColumnMinMax(qre, splitter.splitColumn, splitter.tableName)
+				if err != nil {
+					return err
+				}
+			}
+			splits, err = splitter.split(columnType, pkMinMax)
+			if err != nil {
+				return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "splitQuery: query split error: %s, request: %v", err, querytypes.QueryAsString(sql, bindVariables))
+			}
+			return nil
+		},
+	)
+	return splits, err
 }
 
 // SplitQueryV2 splits a query + bind variables into smaller queries that return a
@@ -1016,11 +908,12 @@ func (tsv *TabletServer) SplitQueryV2(
 	logStats := newLogStats("SplitQuery", ctx)
 	logStats.OriginalSQL = sql
 	logStats.BindVariables = bindVariables
-	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
+	defer tsv.handleError(sql, bindVariables, &err, logStats)
 	if err = tsv.startRequest(target, false, false); err != nil {
 		return nil, err
 	}
-	// We don't set a timeout for SplitQueryV2.
+	// We should not set a timeout for SplitQueryV2. So, we can't use execRequest.
+
 	// SplitQuery using the Full Scan algorithm can take a while and
 	// we don't expect too many of these queries to run concurrently.
 	defer tsv.endRequest(false)
@@ -1039,13 +932,13 @@ func (tsv *TabletServer) SplitQueryV2(
 		numRowsPerQueryPart,
 		algorithm,
 	); err != nil {
-		return nil, err
+		return nil, tsv.handleErrorNoPanic(sql, bindVariables, &err, logStats)
 	}
 	schema := getSchemaForSplitQuery(tsv.qe.schemaInfo)
 	splitParams, err := createSplitParams(
 		sql, bindVariables, ciSplitColumns, splitCount, numRowsPerQueryPart, schema)
 	if err != nil {
-		return nil, err
+		return nil, tsv.handleErrorNoPanic(sql, bindVariables, &err, logStats)
 	}
 	defer func(start time.Time) {
 		splitTableName := splitParams.GetSplitTableName()
@@ -1054,15 +947,121 @@ func (tsv *TabletServer) SplitQueryV2(
 	}(time.Now())
 	sqlExecuter, err := newSplitQuerySQLExecuter(ctx, logStats, tsv.qe)
 	if err != nil {
-		return nil, err
+		return nil, tsv.handleErrorNoPanic(sql, bindVariables, &err, logStats)
 	}
 	defer sqlExecuter.done()
 	algorithmObject, err := createSplitQueryAlgorithmObject(algorithm, splitParams, sqlExecuter)
 	if err != nil {
-		return nil, err
+		return nil, tsv.handleErrorNoPanic(sql, bindVariables, &err, logStats)
 	}
 	result, err := splitquery.NewSplitter(splitParams, algorithmObject).Split()
-	return result, splitQueryToTabletError(err)
+	if err != nil {
+		err = splitQueryToTabletError(err)
+		return nil, tsv.handleErrorNoPanic(sql, bindVariables, &err, logStats)
+	}
+	return result, nil
+}
+
+// execRequest performs verfications, sets up the necessary environments
+// and calls the supplied function for executing the request.
+func (tsv *TabletServer) execRequest(
+	ctx context.Context,
+	requestName, sql string, bindVariables map[string]interface{},
+	target *querypb.Target, isBegin, allowShutdown bool,
+	exec func(ctx context.Context, logStats *LogStats) error,
+) (err error) {
+	logStats := newLogStats(requestName, ctx)
+	logStats.OriginalSQL = sql
+	logStats.BindVariables = bindVariables
+	defer tsv.handleError(sql, bindVariables, &err, logStats)
+	if err = tsv.startRequest(target, isBegin, allowShutdown); err != nil {
+		return err
+	}
+	var timeout time.Duration
+	if isBegin {
+		timeout = tsv.BeginTimeout.Get()
+	} else {
+		timeout = tsv.QueryTimeout.Get()
+	}
+	ctx, cancel := withTimeout(ctx, timeout)
+	defer func(start time.Time) {
+		cancel()
+		tsv.endRequest(isBegin)
+	}(time.Now())
+
+	err = exec(ctx, logStats)
+	if err != nil {
+		return tsv.handleErrorNoPanic(sql, bindVariables, err, logStats)
+	}
+	return nil
+}
+
+// handleError handles panics during query execution and sets
+// the supplied error return value.
+func (tsv *TabletServer) handleError(sql string, bindVariables map[string]interface{}, err *error, logStats *LogStats) {
+	if x := recover(); x != nil {
+		*err = tsv.handleErrorNoPanic(sql, bindVariables, x, logStats)
+	}
+	if logStats != nil {
+		logStats.Send()
+	}
+}
+
+func (tsv *TabletServer) handleErrorNoPanic(sql string, bindVariables map[string]interface{}, err interface{}, logStats *LogStats) error {
+	var terr *TabletError
+	defer func() {
+		if logStats != nil {
+			logStats.Error = terr
+		}
+	}()
+	terr, ok := err.(*TabletError)
+	if !ok {
+		log.Errorf("Uncaught panic for %v:\n%v\n%s", querytypes.QueryAsString(sql, bindVariables), err, tb.Stack(4))
+		tsv.qe.queryServiceStats.InternalErrors.Add("Panic", 1)
+		return NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for %v", err, querytypes.QueryAsString(sql, bindVariables))
+	}
+	var myError error
+	if tsv.config.TerseErrors && terr.SQLError != 0 && len(bindVariables) != 0 {
+		myError = &TabletError{
+			SQLError:  terr.SQLError,
+			SQLState:  terr.SQLState,
+			ErrorCode: terr.ErrorCode,
+			Message:   fmt.Sprintf("(errno %d) (sqlstate %s) during query: %s", terr.SQLError, terr.SQLState, sql),
+		}
+	} else {
+		myError = terr
+	}
+	terr.RecordStats(tsv.qe.queryServiceStats)
+
+	logMethod := log.Infof
+	// Suppress or demote some errors in logs.
+	switch terr.ErrorCode {
+	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
+		return myError
+	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED:
+		logMethod = logTxPoolFull.Errorf
+	case vtrpcpb.ErrorCode_INTERNAL_ERROR:
+		logMethod = log.Errorf
+	case vtrpcpb.ErrorCode_NOT_IN_TX:
+		logMethod = log.Warningf
+	default:
+		// We want to suppress/demote some MySQL error codes.
+		switch terr.SQLError {
+		case mysql.ErrDupEntry:
+			return myError
+		case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong,
+			mysql.ErrDataOutOfRange, mysql.ErrBadNullError:
+			logMethod = log.Infof
+		case 0:
+			if !strings.Contains(terr.Error(), "Row count exceeded") {
+				logMethod = log.Errorf
+			}
+		default:
+			logMethod = log.Errorf
+		}
+	}
+	logMethod("%v: %v", terr, querytypes.QueryAsString(sql, bindVariables))
+	return myError
 }
 
 // validateSplitQueryParameters perform some validations on the SplitQuery parameters
