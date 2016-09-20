@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	finalizeReparentTimeout = flag.Duration("finalize_external_reparent_timeout", 10*time.Second, "Timeout for the finalize stage of a fast external reparent reconciliation.")
+	finalizeReparentTimeout = flag.Duration("finalize_external_reparent_timeout", 30*time.Second, "Timeout for the finalize stage of a fast external reparent reconciliation.")
 
 	externalReparentStats = stats.NewTimings("ExternalReparents", "NewMasterVisible", "FullRebuild")
 )
@@ -174,7 +174,9 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 			// Tell the old master to re-read its tablet record and change its state.
 			// We don't need to wait for it.
 			tmc := tmclient.NewTabletManagerClient()
-			tmc.RefreshState(ctx, oldMasterTablet)
+			if err := tmc.RefreshState(ctx, oldMasterTablet); err != nil {
+				log.Warningf("Error calling RefreshState on old master %v: %v", topoproto.TabletAliasString(oldMasterTablet.Alias), err)
+			}
 		}()
 	}
 
