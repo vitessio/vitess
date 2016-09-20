@@ -187,6 +187,16 @@ class TestBackup(unittest.TestCase):
     # check the new slave has the data
     self._check_data(tablet_replica2, 2, 'replica2 tablet getting data')
 
+    # check that the restored slave has the right local_metadata
+    result = tablet_replica2.mquery('_vt', 'select * from local_metadata')
+    metadata = {}
+    for row in result:
+      metadata[row[0]] = row[1]
+    self.assertEqual(metadata['Alias'], 'test_nj-0000062346')
+    self.assertEqual(metadata['ClusterAlias'], 'test_keyspace.0')
+    self.assertEqual(metadata['DataCenter'], 'test_nj')
+    self.assertEqual(metadata['PromotionRule'], 'neutral')
+
     # check that the backup shows up in the listing
     backups = self._list_backups()
     logging.debug('list of backups: %s', backups)
