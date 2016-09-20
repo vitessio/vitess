@@ -1,20 +1,13 @@
 ## Platform support
 
-Vitess runs on either Ubuntu 14.04 (Trusty) or Debian 7.0 (Wheezy).
-You can run Vitess on local hardware or as the storage engine in a
-Kubernetes cluster.
+We continuously test against Ubuntu 14.04 (Trusty) and Debian 8 (Jessie).
+Other Linux distributions should work as well.
 
 ## Database support
 
-Vitess supports [MySQL 5.6](http://dev.mysql.com/doc/refman/5.6/en/)
-and [MariaDB 10.0](https://downloads.mariadb.org/mariadb/10.0.21/)
-implementations.
-
-**Note:** If you are using MariaDB, you must install version 10.0 or
-higher. If you are using an <code>apt</code> repository, confirm that
-it offers an option to install that version. You can also download the
-source directly from
-[mariadb.org](https://downloads.mariadb.org/mariadb/10.0.21/).
+Vitess supports [MySQL 5.6](http://dev.mysql.com/doc/refman/5.6/en/),
+[MySQL 5.7](http://dev.mysql.com/doc/refman/5.7/en/),
+and [MariaDB 10.0](https://downloads.mariadb.org/mariadb/10.0.21/).
 
 ### Data types and SQL support
 
@@ -22,12 +15,9 @@ In Vitess, database tables are like MySQL relational tables, and you
 can use relational modeling schemes (normalization) to structure your
 schema. Vitess supports both primary and secondary indexes.
 
-Vitess supports all MySQL data types, which translate into almost all
-usual scalar data types. It also provides full SQL support within a
+Vitess supports almost all MySQL scalar data types.
+It also provides full SQL support within a
 [shard](/overview/concepts.html#shard), including JOIN statements.
-
-The maximum size/value is 16MB per cell/row. In addition, the limit
-on the total database size is in the tens of TB.
 
 Vitess does not currently support encoded protobufs or protocol buffer
 querying. (The latter is also known as cracking.) Protocol buffers can
@@ -81,16 +71,15 @@ client libraries and other clients that Vitess supports.
 
 | Type | Options |
 | :-------- | :--------- |
-| Client library | [gRPC](http://www.grpc.io/)<br class="bigbreak">C++<br class="bigbreak">Go<br class="bigbreak">Java<br class="bigbreak">Python |
+| Client library | [gRPC](http://www.grpc.io/)<br class="bigbreak">Go<br class="bigbreak">Java<br class="bigbreak">Python<br class="bigbreak">PHP |
 | MapReduce | [Hadoop input](https://hadoop.apache.org/docs/r2.7.0/api/org/apache/hadoop/mapreduce/InputFormat.html) |
-| Cloud Dataflow | **_coming soon_**
 
 ## Backups
 
-Vitess supports data backups to an NFS directory and can use any
-network-mounted drive as the backup repository. Vitess defines an
-interface that, in turn, defines methods for creating, listing,
-and removing backups.
+Vitess supports data backups to either a network mount (e.g. NFS) or to a blob store.
+Backup storage is implemented through a pluggable interface,
+and we currently have plugins available for Google Cloud Storage, Amazon S3,
+and Ceph.
 
 See the [Backing Up Data](/user-guide/backup-and-restore.html) section
 of this guide for more information about creating and restoring data
