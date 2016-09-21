@@ -120,12 +120,3 @@ func (zkts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 		return nil, convertError(err)
 	}
 }
-
-// DeleteKeyspaceShards is part of the topo.Server interface
-func (zkts *Server) DeleteKeyspaceShards(ctx context.Context, keyspace string) error {
-	shardsPath := path.Join(GlobalKeyspacesPath, keyspace, "shards")
-	if err := zk.DeleteRecursive(zkts.zconn, shardsPath, -1); err != nil && err != zookeeper.ErrNoNode {
-		return convertError(err)
-	}
-	return nil
-}

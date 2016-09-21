@@ -295,9 +295,6 @@ var commands = []commandGroup{
 	},
 	{
 		"Generic", []command{
-			{"RebuildReplicationGraph", commandRebuildReplicationGraph,
-				"<cell1>,<cell2>... <keyspace1>,<keyspace2>,...",
-				"HIDDEN This takes the Thor's hammer approach of recovery and should only be used in emergencies.  cell1,cell2,... are the canonical source of data for the system. This function uses that canonical data to recover the replication graph, at which point further auditing with Validate can reveal any remaining issues."},
 			{"Validate", commandValidate,
 				"[-ping-tablets]",
 				"Validates that all nodes reachable from the global replication graph and that all tablets in all discoverable cells are consistent."},
@@ -1737,24 +1734,6 @@ func commandValidate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 		log.Warningf("action Validate doesn't take any parameter any more")
 	}
 	return wr.Validate(ctx, *pingTablets)
-}
-
-func commandRebuildReplicationGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	// This is sort of a nuclear option.
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() < 2 {
-		return fmt.Errorf("The <cell> and <keyspace> arguments are both required for the RebuildReplicationGraph command. To specify multiple cells, separate the cell names with commas. Similarly, to specify multiple keyspaces, separate the keyspace names with commas.")
-	}
-
-	cells := strings.Split(subFlags.Arg(0), ",")
-	keyspaceParams := strings.Split(subFlags.Arg(1), ",")
-	keyspaces, err := keyspaceParamsToKeyspaces(ctx, wr, keyspaceParams)
-	if err != nil {
-		return err
-	}
-	return wr.RebuildReplicationGraph(ctx, cells, keyspaces)
 }
 
 func commandListAllTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

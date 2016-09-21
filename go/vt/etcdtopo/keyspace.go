@@ -7,10 +7,8 @@ package etcdtopo
 import (
 	"encoding/json"
 	"fmt"
-	"sync"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
@@ -84,32 +82,6 @@ func (s *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 	return getNodeNames(resp)
-}
-
-// DeleteKeyspaceShards implements topo.Server.
-func (s *Server) DeleteKeyspaceShards(ctx context.Context, keyspace string) error {
-	shards, err := s.GetShardNames(ctx, keyspace)
-	if err != nil {
-		return err
-	}
-
-	wg := sync.WaitGroup{}
-	rec := concurrency.AllErrorRecorder{}
-	global := s.getGlobal()
-	for _, shard := range shards {
-		wg.Add(1)
-		go func(shard string) {
-			defer wg.Done()
-			_, err := global.Delete(shardDirPath(keyspace, shard), true /* recursive */)
-			rec.RecordError(convertError(err))
-		}(shard)
-	}
-	wg.Wait()
-
-	if err = rec.Error(); err != nil {
-		return err
-	}
-	return nil
 }
 
 // DeleteKeyspace implements topo.Server.

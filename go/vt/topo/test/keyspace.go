@@ -6,7 +6,6 @@
 package test
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/topo"
@@ -78,18 +77,11 @@ func checkKeyspace(t *testing.T, ts topo.Impl) {
 		t.Errorf("GetKeyspaces: want %v, got %v", []string{"test_keyspace", "test_keyspace2"}, keyspaces)
 	}
 
-	// Call delete shards and make sure the keyspace still exists.
-	if err := ts.DeleteKeyspaceShards(ctx, "test_keyspace2"); err != nil {
-		t.Errorf("DeleteKeyspaceShards: %v", err)
-	}
+	// re-read and update.
 	storedK, storedVersion, err := ts.GetKeyspace(ctx, "test_keyspace2")
 	if err != nil {
 		t.Fatalf("GetKeyspace: %v", err)
 	}
-	if !reflect.DeepEqual(storedK, k) {
-		t.Fatalf("returned keyspace doesn't match: got %v expected %v", storedK, k)
-	}
-
 	storedK.ShardingColumnName = "other_id"
 	var newServedFroms []*topodatapb.Keyspace_ServedFrom
 	for _, ksf := range storedK.ServedFroms {

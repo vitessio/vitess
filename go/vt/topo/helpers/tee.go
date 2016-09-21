@@ -279,19 +279,6 @@ func (tee *Tee) GetKeyspaces(ctx context.Context) ([]string, error) {
 	return tee.readFrom.GetKeyspaces(ctx)
 }
 
-// DeleteKeyspaceShards is part of the topo.Server interface
-func (tee *Tee) DeleteKeyspaceShards(ctx context.Context, keyspace string) error {
-	if err := tee.primary.DeleteKeyspaceShards(ctx, keyspace); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.DeleteKeyspaceShards(ctx, keyspace); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.DeleteKeyspaceShards(%v) failed: %v", keyspace, err)
-	}
-	return nil
-}
-
 //
 // Shard management, global.
 //

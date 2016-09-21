@@ -24,8 +24,6 @@ var doShards = flag.Bool("do-shards", false, "copies the shard information")
 var doShardReplications = flag.Bool("do-shard-replications", false, "copies the shard replication information")
 var doTablets = flag.Bool("do-tablets", false, "copies the tablet information")
 
-var deleteKeyspaceShards = flag.Bool("delete-keyspace-shards", false, "when copying shards, first removes the destination shards (will nuke the replication graph)")
-
 func main() {
 	defer exit.RecoverAll()
 	defer logutil.Flush()
@@ -50,7 +48,7 @@ func main() {
 		helpers.CopyKeyspaces(ctx, fromTS.Impl, toTS.Impl)
 	}
 	if *doShards {
-		helpers.CopyShards(ctx, fromTS.Impl, toTS.Impl, *deleteKeyspaceShards)
+		helpers.CopyShards(ctx, fromTS.Impl, toTS.Impl)
 	}
 	if *doShardReplications {
 		helpers.CopyShardReplications(ctx, fromTS.Impl, toTS.Impl)

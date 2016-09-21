@@ -82,11 +82,6 @@ func (ft FakeTopo) GetKeyspaces(ctx context.Context) ([]string, error) {
 	return nil, errNotImplemented
 }
 
-// DeleteKeyspaceShards is part of the topo.Server interface.
-func (ft FakeTopo) DeleteKeyspaceShards(ctx context.Context, keyspace string) error {
-	return errNotImplemented
-}
-
 // CreateShard is part of the topo.Server interface.
 func (ft FakeTopo) CreateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard) error {
 	return errNotImplemented
