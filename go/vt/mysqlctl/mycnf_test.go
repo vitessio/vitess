@@ -24,7 +24,7 @@ func TestMycnf(t *testing.T) {
 	// Assigning ServerID to be different from tablet UID to make sure that there are no
 	// assumptions in the code that those IDs are the same.
 	cnf.ServerID = 22222
-	tablet0 := NewMysqld("Dba", "App", cnf, &dbaConfig, &appConfig, &replConfig)
+	tablet0 := NewMysqld(cnf, &dbaConfig, &appConfig, &replConfig, true /* enablePublishStats */)
 	defer tablet0.Close()
 	root, err := env.VtRoot()
 	if err != nil {

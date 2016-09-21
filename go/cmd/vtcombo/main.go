@@ -124,7 +124,7 @@ func main() {
 	if err != nil {
 		log.Warning(err)
 	}
-	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App, &dbcfgs.Repl)
+	mysqld := mysqlctl.NewMysqld(mycnf, &dbcfgs.Dba, &dbcfgs.App, &dbcfgs.Repl, true /* enablePublishStats */)
 	servenv.OnClose(mysqld.Close)
 
 	// tablets configuration and init
