@@ -773,10 +773,14 @@ func (vtg *VTGate) GetGatewayCacheStatus() gateway.TabletCacheStatusList {
 // Any errors that are caused by VTGate dependencies (e.g, VtTablet) should be logged
 // as errors in those components, but logged to Info in VTGate itself.
 func logError(err error, query map[string]interface{}, logger *logutil.ThrottledLogger) {
+	if err == context.DeadlineExceeded {
+		// Count these but don't log them because they are very common and not
+		// likely to indicate a bug in VTGate
+		infoErrors.Add("TimeoutErrors", 1)
+		return
+	}
 	logMethod := logger.Errorf
-	if isErrorCausedByVTGate(err) {
-		logMethod = logger.Errorf
-	} else {
+	if !isErrorCausedByVTGate(err) {
 		infoErrors.Add("NonVtgateErrors", 1)
 		logMethod = logger.Infof
 	}
