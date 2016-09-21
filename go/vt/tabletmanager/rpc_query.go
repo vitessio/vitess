@@ -53,7 +53,31 @@ func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query []byte, d
 	return sqltypes.ResultToProto3(result), err
 }
 
-// ExecuteFetchAsApp will execute the given query, possibly disabling binlogs.
+// ExecuteFetchAsAllPrivs will execute the given query, possibly reloading schema.
+func (agent *ActionAgent) ExecuteFetchAsAllPrivs(ctx context.Context, query []byte, dbName string, maxrows int, reloadSchema bool) (*querypb.QueryResult, error) {
+	// get a connection
+	conn, err := agent.MysqlDaemon.GetAllPrivsConnection()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	if dbName != "" {
+		// This execute might fail if db does not exist.
+		// Error is ignored because given query might create this database.
+		conn.ExecuteFetch("USE "+dbName, 1, false)
+	}
+
+	// run the query
+	result, err := conn.ExecuteFetch(string(query), maxrows, true /*wantFields*/)
+
+	if err == nil && reloadSchema {
+		agent.QueryServiceControl.ReloadSchema(ctx)
+	}
+	return sqltypes.ResultToProto3(result), err
+}
+
+// ExecuteFetchAsApp will execute the given query.
 func (agent *ActionAgent) ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error) {
 	// get a connection
 	conn, err := agent.MysqlDaemon.GetAppConnection(ctx)

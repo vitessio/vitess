@@ -40,7 +40,7 @@ func init() {
 func main() {
 	defer exit.Recover()
 
-	flags := dbconfigs.AppConfig | dbconfigs.DbaConfig |
+	flags := dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
 	dbconfigs.RegisterFlags(flags)
 	mysqlctl.RegisterFlags()
@@ -112,7 +112,7 @@ func main() {
 	// Create mysqld and register the health reporter (needs to be done
 	// before initializing the agent, so the initial health check
 	// done by the agent has the right reporter)
-	mysqld := mysqlctl.NewMysqld(mycnf, &dbcfgs.Dba, &dbcfgs.App, &dbcfgs.Repl, true /* enablePublishStats */)
+	mysqld := mysqlctl.NewMysqld(mycnf, &dbcfgs.Dba, &dbcfgs.AllPrivs, &dbcfgs.App, &dbcfgs.Repl, true /* enablePublishStats */)
 	servenv.OnClose(mysqld.Close)
 
 	// Depends on both query and updateStream.

@@ -46,7 +46,7 @@ func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
-	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.DbaConfig |
+	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
 	dbconfigs.RegisterFlags(dbconfigFlags)
 	flag.Parse()
