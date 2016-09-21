@@ -10,6 +10,8 @@ import logging
 import struct
 import unittest
 
+from google.protobuf import text_format
+
 import environment
 from protocols_flavor import protocols_flavor
 import utils
@@ -19,7 +21,7 @@ from vtdb import keyrange
 from vtdb import keyrange_constants
 from vtdb import vtgate_client
 from vtdb import vtgate_cursor
-
+from vtproto import query_pb2
 
 vtgateclienttest_process = None
 vtgateclienttest_port = None
@@ -507,18 +509,29 @@ class TestEcho(TestPythonClientBase):
   caller_id_echo = ('principal:"test_principal" component:"test_component"'
                     ' subcomponent:"test_subcomponent" ')
 
+  event_token = query_pb2.EventToken(timestamp=123,
+                                     shard=shards[0],
+                                     position='test_pos')
+  options_echo = ('include_event_token:true compare_event_token:'
+                  '<timestamp:123 shard:"-80" position:"test_pos" > ')
+
   def test_echo_execute(self):
 
     # Execute
     cursor = self.conn.cursor(tablet_type=self.tablet_type, keyspace=None)
     cursor.set_effective_caller_id(self.caller_id)
-    cursor.execute(self.echo_prefix+self.query, self.bind_variables)
+    cursor.execute(self.echo_prefix+self.query, self.bind_variables,
+                   include_event_token=True,
+                   compare_event_token=self.event_token)
     self._check_echo(cursor, {
         'callerId': self.caller_id_echo,
         # FIXME(alainjobart) change this to query_echo once v3 understand binds
         'query': self.echo_prefix+self.query,
         'bindVars': self.bind_variables_echo,
         'tabletType': self.tablet_type_echo,
+        'options': self.options_echo,
+        'fresher': True,
+        'eventToken': self.event_token,
     })
     cursor.close()
 
@@ -527,7 +540,9 @@ class TestEcho(TestPythonClientBase):
         tablet_type=self.tablet_type, keyspace=self.keyspace,
         shards=self.shards)
     cursor.set_effective_caller_id(self.caller_id)
-    cursor.execute(self.echo_prefix+self.query, self.bind_variables)
+    cursor.execute(self.echo_prefix+self.query, self.bind_variables,
+                   include_event_token=True,
+                   compare_event_token=self.event_token)
     self._check_echo(cursor, {
         'callerId': self.caller_id_echo,
         'query': self.echo_prefix+self.query_echo,
@@ -535,6 +550,9 @@ class TestEcho(TestPythonClientBase):
         'shards': self.shards_echo,
         'bindVars': self.bind_variables_echo,
         'tabletType': self.tablet_type_echo,
+        'options': self.options_echo,
+        'fresher': True,
+        'eventToken': self.event_token,
     })
     cursor.close()
 
@@ -543,7 +561,9 @@ class TestEcho(TestPythonClientBase):
         tablet_type=self.tablet_type, keyspace=self.keyspace,
         keyspace_ids=self.keyspace_ids)
     cursor.set_effective_caller_id(self.caller_id)
-    cursor.execute(self.echo_prefix+self.query, self.bind_variables)
+    cursor.execute(self.echo_prefix+self.query, self.bind_variables,
+                   include_event_token=True,
+                   compare_event_token=self.event_token)
     self._check_echo(cursor, {
         'callerId': self.caller_id_echo,
         'query': self.echo_prefix+self.query_echo,
@@ -551,6 +571,9 @@ class TestEcho(TestPythonClientBase):
         'keyspaceIds': self.keyspace_ids_echo,
         'bindVars': self.bind_variables_echo,
         'tabletType': self.tablet_type_echo,
+        'options': self.options_echo,
+        'fresher': True,
+        'eventToken': self.event_token,
     })
     cursor.close()
 
@@ -559,7 +582,9 @@ class TestEcho(TestPythonClientBase):
         tablet_type=self.tablet_type, keyspace=self.keyspace,
         keyranges=self.key_ranges)
     cursor.set_effective_caller_id(self.caller_id)
-    cursor.execute(self.echo_prefix+self.query, self.bind_variables)
+    cursor.execute(self.echo_prefix+self.query, self.bind_variables,
+                   include_event_token=True,
+                   compare_event_token=self.event_token)
     self._check_echo(cursor, {
         'callerId': self.caller_id_echo,
         'query': self.echo_prefix+self.query_echo,
@@ -576,7 +601,9 @@ class TestEcho(TestPythonClientBase):
     cursor.set_effective_caller_id(self.caller_id)
     cursor.execute(self.echo_prefix+self.query, self.bind_variables,
                    entity_keyspace_id_map=self.entity_keyspace_ids,
-                   entity_column_name='column1')
+                   entity_column_name='column1',
+                   include_event_token=True,
+                   compare_event_token=self.event_token)
     self._check_echo(cursor, {
         'callerId': self.caller_id_echo,
         'query': self.echo_prefix+self.query_echo,
@@ -585,6 +612,9 @@ class TestEcho(TestPythonClientBase):
         'entityIds': self.entity_keyspace_ids_echo,
         'bindVars': self.bind_variables_echo,
         'tabletType': self.tablet_type_echo,
+        'options': self.options_echo,
+        'fresher': True,
+        'eventToken': self.event_token,
     })
     cursor.close()
 
@@ -644,8 +674,14 @@ class TestEcho(TestPythonClientBase):
   def _check_echo(self, cursor, values):
     got = self._get_echo(cursor)
     for k, v in values.iteritems():
-      self.assertEqual(got[k], v, 'item %s is different in result: got %s'
-                       ' expected %s' % (k, got[k], v))
+      if k == 'fresher':
+        self.assertTrue(self.conn.fresher)
+      elif k == 'eventToken':
+        self.assertEqual(text_format.MessageToString(self.conn.event_token),
+                         text_format.MessageToString(v))
+      else:
+        self.assertEqual(got[k], v, 'item %s is different in result: got %s'
+                         ' expected %s' % (k, got[k], v))
 
     # Check NULL and empty string.
     self.assertEqual(got['null'], None)
