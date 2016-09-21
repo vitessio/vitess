@@ -69,8 +69,7 @@ type Mysqld struct {
 
 // NewMysqld creates a Mysqld object based on the provided configuration
 // and connection parameters.
-// dbaName and appName are the base for stats exports, use 'Dba' and 'App', except in tests
-func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *sqldb.ConnParams) *Mysqld {
+func NewMysqld(config *Mycnf, dba, app, repl *sqldb.ConnParams, enablePublishStats bool) *Mysqld {
 	noParams := sqldb.ConnParams{}
 	if *dba == noParams {
 		dba.UnixSocket = config.SocketFile
@@ -79,9 +78,9 @@ func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *sqldb.Con
 	// create and open the connection pool for dba access
 	dbaMysqlStatsName := ""
 	dbaPoolName := ""
-	if dbaName != "" {
-		dbaMysqlStatsName = "Mysql" + dbaName
-		dbaPoolName = dbaName + "ConnPool"
+	if enablePublishStats {
+		dbaMysqlStatsName = "MysqlDba"
+		dbaPoolName = "DbaConnPool"
 	}
 	dbaMysqlStats := stats.NewTimings(dbaMysqlStatsName)
 	dbaPool := dbconnpool.NewConnectionPool(dbaPoolName, *dbaPoolSize, *dbaIdleTimeout)
@@ -90,9 +89,9 @@ func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *sqldb.Con
 	// create and open the connection pool for app access
 	appMysqlStatsName := ""
 	appPoolName := ""
-	if appName != "" {
-		appMysqlStatsName = "Mysql" + appName
-		appPoolName = appName + "ConnPool"
+	if enablePublishStats {
+		appMysqlStatsName = "MysqlApp"
+		appPoolName = "AppConnPool"
 	}
 	appMysqlStats := stats.NewTimings(appMysqlStatsName)
 	appPool := dbconnpool.NewConnectionPool(appPoolName, *appPoolSize, *appIdleTimeout)

@@ -39,12 +39,11 @@ func StartServer(connParams sqldb.ConnParams) error {
 	}
 
 	mysqld := mysqlctl.NewMysqld(
-		"Dba",
-		"App",
 		&mysqlctl.Mycnf{},
 		&dbcfgs.Dba,
 		&dbcfgs.App,
-		&dbcfgs.Repl)
+		&dbcfgs.Repl,
+		true /* enablePublishStats */)
 
 	BaseConfig = tabletserver.DefaultQsConfig
 	BaseConfig.EnableAutoCommit = true

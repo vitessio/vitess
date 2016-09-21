@@ -82,12 +82,11 @@ func (util *testUtils) newMysqld(dbconfigs *dbconfigs.DBConfigs) mysqlctl.MysqlD
 	// assumptions in the code that those IDs are the same.
 	cnf.ServerID = 22222
 	return mysqlctl.NewMysqld(
-		"",
-		"",
 		cnf,
 		&dbconfigs.Dba,
 		&dbconfigs.App,
 		&dbconfigs.Repl,
+		false, /* enablePublishStats */
 	)
 }
 
