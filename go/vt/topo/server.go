@@ -106,10 +106,6 @@ type Impl interface {
 	// GetKeyspaces returns the known keyspace names. They shall be sorted.
 	GetKeyspaces(ctx context.Context) ([]string, error)
 
-	// DeleteKeyspaceShards deletes all the shards in a keyspace.
-	// Use with caution.
-	DeleteKeyspaceShards(ctx context.Context, keyspace string) error
-
 	//
 	// Shard management, global.
 	//
@@ -136,8 +132,8 @@ type Impl interface {
 	GetShard(ctx context.Context, keyspace, shard string) (*topodatapb.Shard, int64, error)
 
 	// GetShardNames returns the known shards in a keyspace.
-	// Can return ErrNoNode if the keyspace wasn't created,
-	// or if DeleteKeyspaceShards was called. They shall be sorted.
+	// Can return ErrNoNode if the keyspace wasn't created.
+	// They shall be sorted.
 	GetShardNames(ctx context.Context, keyspace string) ([]string, error)
 
 	// DeleteShard deletes the provided shard.

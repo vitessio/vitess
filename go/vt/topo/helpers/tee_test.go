@@ -20,7 +20,7 @@ func TestTee(t *testing.T) {
 	// create the setup, copy the data
 	fromTS, toTS := createSetup(ctx, t)
 	CopyKeyspaces(ctx, fromTS, toTS)
-	CopyShards(ctx, fromTS, toTS, true)
+	CopyShards(ctx, fromTS, toTS)
 	CopyTablets(ctx, fromTS, toTS)
 
 	// create a tee and check it implements the interface

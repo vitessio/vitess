@@ -542,12 +542,6 @@ class TestReparent(unittest.TestCase):
 
     self._test_reparent_from_outside_check(brutal, base_time)
 
-    # RebuildReplicationGraph will rebuild the topo data from
-    # the tablet records. It is an emergency command only.
-    utils.run_vtctl(['RebuildReplicationGraph', 'test_nj', 'test_keyspace'])
-
-    self._test_reparent_from_outside_check(brutal, base_time)
-
     if not brutal:
       tablet_62344.kill_vttablet()
     tablet.kill_tablets([tablet_31981, tablet_62044, tablet_41983])

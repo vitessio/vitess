@@ -110,7 +110,7 @@ func TestBasic(t *testing.T) {
 	CopyKeyspaces(ctx, fromTS, toTS)
 
 	// check shard copy
-	CopyShards(ctx, fromTS, toTS, true)
+	CopyShards(ctx, fromTS, toTS)
 	shards, err := toTS.GetShardNames(ctx, "test_keyspace")
 	if err != nil {
 		t.Fatalf("toTS.GetShardNames failed: %v", err)
@@ -118,7 +118,7 @@ func TestBasic(t *testing.T) {
 	if len(shards) != 1 || shards[0] != "0" {
 		t.Fatalf("unexpected shards: %v", shards)
 	}
-	CopyShards(ctx, fromTS, toTS, false)
+	CopyShards(ctx, fromTS, toTS)
 	s, _, err := toTS.GetShard(ctx, "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("cannot read shard: %v", err)

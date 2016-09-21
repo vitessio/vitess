@@ -54,7 +54,7 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS topo.Impl) {
 }
 
 // CopyShards will create the shards in the destination topo
-func CopyShards(ctx context.Context, fromTS, toTS topo.Impl, deleteKeyspaceShards bool) {
+func CopyShards(ctx context.Context, fromTS, toTS topo.Impl) {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
 		log.Fatalf("fromTS.GetKeyspaces: %v", err)
@@ -70,13 +70,6 @@ func CopyShards(ctx context.Context, fromTS, toTS topo.Impl, deleteKeyspaceShard
 			if err != nil {
 				rec.RecordError(fmt.Errorf("GetShardNames(%v): %v", keyspace, err))
 				return
-			}
-
-			if deleteKeyspaceShards {
-				if err := toTS.DeleteKeyspaceShards(ctx, keyspace); err != nil {
-					rec.RecordError(fmt.Errorf("DeleteKeyspaceShards(%v): %v", keyspace, err))
-					return
-				}
 			}
 
 			for _, shard := range shards {
