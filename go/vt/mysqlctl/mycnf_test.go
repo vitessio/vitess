@@ -19,12 +19,12 @@ var MycnfPath = "/tmp/my.cnf"
 
 func TestMycnf(t *testing.T) {
 	os.Setenv("MYSQL_FLAVOR", "MariaDB")
-	var dbaConfig, appConfig, replConfig sqldb.ConnParams
+	var dbaConfig, allprivsConfig, appConfig, replConfig sqldb.ConnParams
 	cnf := NewMycnf(11111, 6802)
 	// Assigning ServerID to be different from tablet UID to make sure that there are no
 	// assumptions in the code that those IDs are the same.
 	cnf.ServerID = 22222
-	tablet0 := NewMysqld(cnf, &dbaConfig, &appConfig, &replConfig, true /* enablePublishStats */)
+	tablet0 := NewMysqld(cnf, &dbaConfig, &allprivsConfig, &appConfig, &replConfig, true /* enablePublishStats */)
 	defer tablet0.Close()
 	root, err := env.VtRoot()
 	if err != nil {

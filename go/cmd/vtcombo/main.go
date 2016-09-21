@@ -53,7 +53,7 @@ func main() {
 	defer exit.Recover()
 
 	// flag parsing
-	flags := dbconfigs.AppConfig | dbconfigs.DbaConfig |
+	flags := dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
 	dbconfigs.RegisterFlags(flags)
 	mysqlctl.RegisterFlags()
@@ -124,7 +124,7 @@ func main() {
 	if err != nil {
 		log.Warning(err)
 	}
-	mysqld := mysqlctl.NewMysqld(mycnf, &dbcfgs.Dba, &dbcfgs.App, &dbcfgs.Repl, true /* enablePublishStats */)
+	mysqld := mysqlctl.NewMysqld(mycnf, &dbcfgs.Dba, &dbcfgs.AllPrivs, &dbcfgs.App, &dbcfgs.Repl, true /* enablePublishStats */)
 	servenv.OnClose(mysqld.Close)
 
 	// tablets configuration and init

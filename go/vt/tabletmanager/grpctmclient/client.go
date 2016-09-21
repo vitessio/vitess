@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	concurrency = flag.Int("tablet_manager_grpc_concurrency", 8, "concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,App})")
+	concurrency = flag.Int("tablet_manager_grpc_concurrency", 8, "concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,AllPrivs,App})")
 	cert        = flag.String("tablet_manager_grpc_cert", "", "the cert to use to connect")
 	key         = flag.String("tablet_manager_grpc_key", "", "the key to use to connect")
 	ca          = flag.String("tablet_manager_grpc_ca", "", "the server ca to use to validate servers when connecting")
@@ -356,6 +356,29 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.
 		MaxRows:        uint64(maxRows),
 		DisableBinlogs: disableBinlogs,
 		ReloadSchema:   reloadSchema,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return response.Result, nil
+}
+
+// ExecuteFetchAsAllPrivs is part of the tmclient.TabletManagerClient interface.
+func (client *Client) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int, reloadSchema bool) (*querypb.QueryResult, error) {
+	var c tabletmanagerservicepb.TabletManagerClient
+	var err error
+	var cc *grpc.ClientConn
+	cc, c, err = client.dial(tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer cc.Close()
+
+	response, err := c.ExecuteFetchAsAllPrivs(ctx, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+		Query:        query,
+		DbName:       topoproto.TabletDbName(tablet),
+		MaxRows:      uint64(maxRows),
+		ReloadSchema: reloadSchema,
 	})
 	if err != nil {
 		return nil, err

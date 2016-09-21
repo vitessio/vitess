@@ -84,6 +84,7 @@ func (util *testUtils) newMysqld(dbconfigs *dbconfigs.DBConfigs) mysqlctl.MysqlD
 	return mysqlctl.NewMysqld(
 		cnf,
 		&dbconfigs.Dba,
+		&dbconfigs.AllPrivs,
 		&dbconfigs.App,
 		&dbconfigs.Repl,
 		false, /* enablePublishStats */

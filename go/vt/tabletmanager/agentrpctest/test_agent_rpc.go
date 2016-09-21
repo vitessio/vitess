@@ -581,6 +581,17 @@ func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query []byte, db
 	return testExecuteFetchResult, nil
 }
 
+func (fra *fakeRPCAgent) ExecuteFetchAsAllPrivs(ctx context.Context, query []byte, dbName string, maxrows int, reloadSchema bool) (*querypb.QueryResult, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	compare(fra.t, "ExecuteFetchAsAllPrivs query", query, testExecuteFetchQuery)
+	compare(fra.t, "ExecuteFetchAsAllPrivs maxrows", maxrows, testExecuteFetchMaxRows)
+	compareBool(fra.t, "ExecuteFetchAsAllPrivs reloadSchema", reloadSchema)
+
+	return testExecuteFetchResult, nil
+}
+
 func (fra *fakeRPCAgent) ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -602,6 +613,8 @@ func agentRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient
 	compareError(t, "ExecuteFetchAsDba", err, qr, testExecuteFetchResult)
 	qr, err = client.ExecuteFetchAsApp(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows)
 	compareError(t, "ExecuteFetchAsApp", err, qr, testExecuteFetchResult)
+	qr, err = client.ExecuteFetchAsAllPrivs(ctx, tablet, testExecuteFetchQuery, testExecuteFetchMaxRows, true)
+	compareError(t, "ExecuteFetchAsAllPrivs", err, qr, testExecuteFetchResult)
 
 }
 
@@ -617,6 +630,8 @@ func agentRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmc
 	expectHandleRPCPanic(t, "ExecuteFetchAsDba", false /*verbose*/, err)
 	_, err = client.ExecuteFetchAsApp(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows)
 	expectHandleRPCPanic(t, "ExecuteFetchAsApp", false /*verbose*/, err)
+	_, err = client.ExecuteFetchAsAllPrivs(ctx, tablet, testExecuteFetchQuery, testExecuteFetchMaxRows, false)
+	expectHandleRPCPanic(t, "ExecuteFetchAsAllPrivs", false /*verbose*/, err)
 }
 
 //

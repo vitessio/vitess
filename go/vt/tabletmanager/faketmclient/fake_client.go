@@ -134,6 +134,11 @@ func (client *FakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, ta
 	return &querypb.QueryResult{}, nil
 }
 
+// ExecuteFetchAsAllPrivs is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int, reloadSchema bool) (*querypb.QueryResult, error) {
+	return &querypb.QueryResult{}, nil
+}
+
 // ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int) (*querypb.QueryResult, error) {
 	return &querypb.QueryResult{}, nil
