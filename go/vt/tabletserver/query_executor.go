@@ -53,8 +53,6 @@ func addUserTableQueryStats(queryServiceStats *QueryServiceStats, ctx context.Co
 
 // Execute performs a non-streaming query execution.
 func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
-	qre.logStats.OriginalSQL = qre.query
-	qre.logStats.BindVariables = qre.bindVars
 	qre.logStats.TransactionID = qre.transactionID
 	planName := qre.plan.PlanID.String()
 	qre.logStats.PlanType = planName

@@ -9,13 +9,11 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/tb"
-	"github.com/youtube/vitess/go/vt/logutil"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -29,8 +27,6 @@ var ErrConnPoolClosed = NewTabletError(
 	// different VtTablet.
 	vtrpcpb.ErrorCode_INTERNAL_ERROR,
 	"connection pool is closed")
-
-var logTxPoolFull = logutil.NewThrottledLogger("TxPoolFull", 1*time.Minute)
 
 // TabletError is the error type we use in this library.
 // It implements vterrors.VtError interface.
@@ -179,46 +175,6 @@ func (te *TabletError) RecordStats(queryServiceStats *QueryServiceStats) {
 	}
 }
 
-func handleError(err *error, logStats *LogStats, queryServiceStats *QueryServiceStats) {
-	var terr *TabletError
-	defer func() {
-		if logStats != nil {
-			logStats.Error = terr
-			logStats.Send()
-		}
-	}()
-	if x := recover(); x != nil {
-		*err = handleErrorNoPanic(x, logStats, queryServiceStats)
-	}
-}
-
-func handleErrorNoPanic(err interface{}, logStats *LogStats, queryServiceStats *QueryServiceStats) error {
-	terr, ok := err.(*TabletError)
-	if !ok {
-		log.Errorf("Uncaught panic:\n%v\n%s", err, tb.Stack(4))
-		queryServiceStats.InternalErrors.Add("Panic", 1)
-		return NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic", err)
-	}
-	terr.RecordStats(queryServiceStats)
-	switch terr.ErrorCode {
-	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
-		// Retry errors are too spammy
-	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED:
-		logTxPoolFull.Errorf("%v", terr)
-	default:
-		switch terr.SQLError {
-		// MySQL deadlock errors are (usually) due to client behavior, not server
-		// behavior, and therefore logged at the INFO level.
-		case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong,
-			mysql.ErrDataOutOfRange, mysql.ErrBadNullError:
-			log.Infof("%v", terr)
-		default:
-			log.Errorf("%v", terr)
-		}
-	}
-	return terr
-}
-
 func logError(queryServiceStats *QueryServiceStats) {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
@@ -227,10 +183,6 @@ func logError(queryServiceStats *QueryServiceStats) {
 			queryServiceStats.InternalErrors.Add("Panic", 1)
 			return
 		}
-		if terr.ErrorCode == vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED {
-			logTxPoolFull.Errorf("%v", terr)
-		} else {
-			log.Errorf("%v", terr)
-		}
+		log.Errorf("%v", terr)
 	}
 }
