@@ -6,8 +6,8 @@ namespace Vitess\Proto\Automationservice {
 
   class AutomationClient extends \Grpc\BaseStub {
 
-    public function __construct($hostname, $opts) {
-      parent::__construct($hostname, $opts);
+    public function __construct($hostname, $opts, $channel = null) {
+      parent::__construct($hostname, $opts, $channel);
     }
     /**
      * @param Vitess\Proto\Automation\EnqueueClusterOperationRequest $input
