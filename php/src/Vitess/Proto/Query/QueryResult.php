@@ -18,6 +18,9 @@ namespace Vitess\Proto\Query {
     /**  @var \Vitess\Proto\Query\Row[]  */
     public $rows = array();
     
+    /**  @var \Vitess\Proto\Query\ResultExtras */
+    public $extras = null;
+    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -58,6 +61,15 @@ namespace Vitess\Proto\Query {
       $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
       $f->rule      = \DrSlump\Protobuf::RULE_REPEATED;
       $f->reference = '\Vitess\Proto\Query\Row';
+      $descriptor->addField($f);
+
+      // OPTIONAL MESSAGE extras = 5
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 5;
+      $f->name      = "extras";
+      $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $f->reference = '\Vitess\Proto\Query\ResultExtras';
       $descriptor->addField($f);
 
       foreach (self::$__extensions as $cb) {
@@ -253,6 +265,43 @@ namespace Vitess\Proto\Query {
      */
     public function addRows(\Vitess\Proto\Query\Row $value){
      return $this->_add(4, $value);
+    }
+    
+    /**
+     * Check if <extras> has a value
+     *
+     * @return boolean
+     */
+    public function hasExtras(){
+      return $this->_has(5);
+    }
+    
+    /**
+     * Clear <extras> value
+     *
+     * @return \Vitess\Proto\Query\QueryResult
+     */
+    public function clearExtras(){
+      return $this->_clear(5);
+    }
+    
+    /**
+     * Get <extras> value
+     *
+     * @return \Vitess\Proto\Query\ResultExtras
+     */
+    public function getExtras(){
+      return $this->_get(5);
+    }
+    
+    /**
+     * Set <extras> value
+     *
+     * @param \Vitess\Proto\Query\ResultExtras $value
+     * @return \Vitess\Proto\Query\QueryResult
+     */
+    public function setExtras(\Vitess\Proto\Query\ResultExtras $value){
+      return $this->_set(5, $value);
     }
   }
 }
