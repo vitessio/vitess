@@ -241,6 +241,9 @@ class InvalidatorThread(threading.Thread):
             timestamp=self.timestamp,
             shard='0'):
 
+          if self.done:
+            return
+
           # Save the timestamp we get, so we can resume from it in case of
           # restart.
           self.timestamp = resume_timestamp
@@ -254,8 +257,6 @@ class InvalidatorThread(threading.Thread):
                                 event.event_token)
 
       except dbexceptions.DatabaseError:
-        if self.done:
-          return
         logging.exception(
             'InvalidatorThread got exception, continuing from timestamp %d',
             self.timestamp)
@@ -272,13 +273,16 @@ class InvalidatorThread(threading.Thread):
       logging.debug('  invalidation event is older than cache value, ignoring')
       return
 
+    logging.debug('  using cas to store invalidation token')
     self.cache.cas(table_name, row_id, version, event_token, None)
 
   def kill(self):
+    """Kill stops the invalidator. We force an event so we can exit the loop."""
     logging.info('Stopping invalidator')
     self.done = True
-    self.conn.close()
+    replica_tablet.mquery('vt_test_keyspace', 'flush logs')
     self.join()
+    self.conn.close()
 
 
 class TestCacheInvalidation(unittest.TestCase):
@@ -299,6 +303,7 @@ class TestCacheInvalidation(unittest.TestCase):
     return vtgate_client.connect(protocol, addr, 30.0)
 
   def _insert_value_a(self, row_id, name):
+    logging.debug('Inserting value %d into vt_a', row_id)
     conn = self._vtgate_connection()
     cursor = conn.cursor(tablet_type='master', keyspace='test_keyspace',
                          writable=True)
@@ -310,6 +315,7 @@ class TestCacheInvalidation(unittest.TestCase):
     }
     cursor.execute(insert, bind_variables)
     cursor.commit()
+    conn.close()
 
   def _get_value(self, table_name, row_id):
     """Returns the value for a row, as an array.
@@ -343,6 +349,7 @@ class TestCacheInvalidation(unittest.TestCase):
       value = ()
     else:
       value = result[0]
+    conn.close()
 
     # If there was no cached version, cache what we got,
     # along with the event token.
