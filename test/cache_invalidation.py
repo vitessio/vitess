@@ -28,9 +28,11 @@ import environment
 import tablet
 import utils
 from vtdb import dbexceptions
+from vtdb import event_token
 from vtdb import proto3_encoding
 from vtdb import vtgate_client
 from vtproto import topodata_pb2
+from vtproto import query_pb2
 
 
 master_tablet = tablet.Tablet()
@@ -119,7 +121,7 @@ class Cache(object):
   Its backing store is a dict, indexed by key '<table name>-<id>'.
   Each value is a dict, with three values:
   - 'version': a version number.
-  - 'event_token': an EventToken.
+  - 'token': an EventToken.
   - 'value': an optional value. We use an empty tuple if the row is
   not in the database.
   """
@@ -143,7 +145,7 @@ class Cache(object):
 
     Returns:
       version: entry version, or None if there is no entry.
-      event_token: the EventToken for that row.
+      token: the EventToken for that row.
       value: an optional value, or None if not set.
     """
     key = '%s-%d' % (table_name, row_id)
@@ -152,15 +154,15 @@ class Cache(object):
       return None, None, None
     self.stats['cache_hit'] += 1
     entry = self.values[key]
-    return entry['version'], entry['event_token'], entry['value']
+    return entry['version'], entry['token'], entry['value']
 
-  def add(self, table_name, row_id, event_token, value):
+  def add(self, table_name, row_id, token, value):
     """Add a value to the cache, only if it doesn't exist.
 
     Args:
       table_name: the name of the table.
       row_id: the row id.
-      event_token: the event_token associated with the read / invalidation.
+      token: the EventToken associated with the read / invalidation.
       value: the actual value.
 
     Raises:
@@ -172,18 +174,18 @@ class Cache(object):
     self.stats['add'] += 1
     self.values[key] = {
         'version': 1,
-        'event_token': event_token,
+        'token': token,
         'value': value,
     }
 
-  def cas(self, table_name, row_id, version, event_token, value):
+  def cas(self, table_name, row_id, version, token, value):
     """Update an entry in the cache.
 
     Args:
       table_name: the name of the table.
       row_id: the row id.
       version: the existing version to update.
-      event_token: the event_token associated with the read / invalidation.
+      token: the EventToken associated with the read / invalidation.
       value: the actual value.
 
     Raises:
@@ -200,7 +202,7 @@ class Cache(object):
     self.stats['cas'] += 1
     self.values[key] = {
         'version': version+1,
-        'event_token': event_token,
+        'token': token,
         'value': value,
     }
 
@@ -261,20 +263,27 @@ class InvalidatorThread(threading.Thread):
             'InvalidatorThread got exception, continuing from timestamp %d',
             self.timestamp)
 
-  def invalidate(self, table_name, row_id, event_token):
+  def invalidate(self, table_name, row_id, token):
     logging.debug('Invalidating %s(%d):', table_name, row_id)
     version, cache_event_token, _ = self.cache.gets(table_name, row_id)
     if version is None:
       logging.debug('  no entry in cache, saving event_token')
-      self.cache.add(table_name, row_id, event_token, None)
+      self.cache.add(table_name, row_id, token, None)
       return
 
-    if event_token.timestamp < cache_event_token.timestamp:
-      logging.debug('  invalidation event is older than cache value, ignoring')
+    if event_token.fresher(cache_event_token, token) >= 0:
+      # For invalidation, a couple things to consider:
+      # 1. If we can't compare the EventTokens, we want to store the
+      # invalidation, so it's safer.
+      # 2. If we have exactly the same EventToken, we do not want to
+      # store the ivalidation. We have either an invalidation or a
+      # value, in both cases we're fine keeping it.
+      logging.debug('  invalidation event is older or equal than cache value,'
+                    ' ignoring')
       return
 
-    logging.debug('  using cas to store invalidation token')
-    self.cache.cas(table_name, row_id, version, event_token, None)
+    logging.debug('  updating entry in the cache')
+    self.cache.cas(table_name, row_id, version, token, None)
 
   def kill(self):
     """Kill stops the invalidator. We force an event so we can exit the loop."""
@@ -388,7 +397,7 @@ class TestCacheInvalidation(unittest.TestCase):
     self.wait_for_cache_stats(stats, cache_miss=1, add=1)
 
     # Then get the value.  We cannot populate the cache here, as the
-    # timestamp of the latest replication event_token is the same as
+    # timestamp of the latest replication EventToken is the same as
     # the invalidation token (only one transaction in the binlogs so
     # far).
     stats = self.cache.stats_copy()
@@ -397,7 +406,7 @@ class TestCacheInvalidation(unittest.TestCase):
     self.assertTrue(self.cache.stats_diff(stats, cache_hit=1, noop=1))
 
     # Insert a second value with a greater timestamp to move the
-    # current replica event_token.
+    # current replica EventToken.
     time.sleep(1)
     stats = self.cache.stats_copy()
     self._insert_value_a(2, 'second object')
@@ -406,7 +415,7 @@ class TestCacheInvalidation(unittest.TestCase):
     self.wait_for_cache_stats(stats, cache_miss=1, add=1)
 
     # This time, when we get the value, the current replica
-    # event_token is ahead of the invalidation timestamp of the first
+    # EventToken is ahead of the invalidation timestamp of the first
     # object, so we should save it in the cache.
     stats = self.cache.stats_copy()
     result = self._get_value('vt_a', 1)
@@ -450,7 +459,7 @@ class TestCacheInvalidation(unittest.TestCase):
     self.assertTrue(self.cache.stats_diff(stats, cache_hit=1, noop=1))
 
     # Insert a second value with a greater timestamp to move the
-    # current replica event_token.
+    # current replica EventToken.
     time.sleep(1)
     stats = self.cache.stats_copy()
     self._insert_value_a(4, 'second object')
@@ -459,7 +468,7 @@ class TestCacheInvalidation(unittest.TestCase):
     self.wait_for_cache_stats(stats, cache_miss=1, add=1)
 
     # This time, when we get the value, the current replica
-    # event_token is ahead of the invalidation timestamp of the first
+    # EventToken is ahead of the invalidation timestamp of the first
     # object, so we should save it in the cache.
     stats = self.cache.stats_copy()
     result = self._get_value('vt_a', 3)
@@ -472,6 +481,208 @@ class TestCacheInvalidation(unittest.TestCase):
     self.assertEqual(result, (3, 'empty cache test object'))
     self.assertTrue(self.cache.stats_diff(stats, cache_hit=1,
                                           add=0, cas=0, noop=0))
+
+  def test_event_token_fresher(self):
+    """event_token.fresher test suite."""
+    test_cases = [
+        {
+            'ev1': None,
+            'ev2': None,
+            'expected': -1,
+        }, {
+            'ev1': query_pb2.EventToken(
+                timestamp=123,
+            ),
+            'ev2': None,
+            'expected': -1,
+        }, {
+            'ev1': None,
+            'ev2': query_pb2.EventToken(
+                timestamp=123,
+            ),
+            'expected': -1,
+        }, {
+            'ev1': query_pb2.EventToken(
+                timestamp=123,
+            ),
+            'ev2': query_pb2.EventToken(
+                timestamp=123,
+            ),
+            'expected': -1,
+        }, {
+            'ev1': query_pb2.EventToken(
+                timestamp=200,
+            ),
+            'ev2': query_pb2.EventToken(
+                timestamp=100,
+            ),
+            'expected': 100,
+        }, {
+            'ev1': query_pb2.EventToken(
+                timestamp=100,
+            ),
+            'ev2': query_pb2.EventToken(
+                timestamp=200,
+            ),
+            'expected': -100,
+        }, {
+            # Test cases with not enough information to compare.
+            'ev1': query_pb2.EventToken(
+                timestamp=100,
+            ),
+            'ev2': query_pb2.EventToken(
+                timestamp=100,
+            ),
+            'expected': -1,
+        }, {
+            'ev1': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+            ),
+            'ev2': query_pb2.EventToken(
+                timestamp=100,
+                shard='s2',
+            ),
+            'expected': -1,
+        }, {
+            'ev1': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+            ),
+            'ev2': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+            ),
+            'expected': -1,
+        }, {
+            'ev1': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+                position='pos1',
+            ),
+            'ev2': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+            ),
+            'expected': -1,
+        }, {
+            'ev1': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+            ),
+            'ev2': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+                position='pos2',
+            ),
+            'expected': -1,
+        }, {
+            'ev1': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+                position='pos1',  # invalid on purpose
+            ),
+            'ev2': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+                position='pos2',  # invalid on purpose
+            ),
+            'expected': -1,
+        }, {
+            'ev1': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+                position='MariaDB/0-1-123',  # valid but different
+            ),
+            'ev2': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+                position='MySQL56/33333333-3333-3333-3333-333333333333:456-789',
+            ),
+            'expected': -1,
+        }, {
+            # MariaDB test cases.
+            'ev1': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+                position='MariaDB/0-1-200',
+            ),
+            'ev2': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+                position='MariaDB/0-1-100',
+            ),
+            'expected': 100,
+        }, {
+            'ev1': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+                position='MariaDB/0-1-100',
+            ),
+            'ev2': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+                position='MariaDB/0-1-200',
+            ),
+            'expected': -100,
+        }, {
+            'ev1': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+                position='MariaDB/0-1-100',
+            ),
+            'ev2': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+                position='MariaDB/0-1-100',
+            ),
+            'expected': 0,
+        }, {
+            # MySQL56 test cases, not supported yet.
+            'ev1': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+                position='MySQL56/33333333-3333-3333-3333-333333333333:1-200',
+            ),
+            'ev2': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+                position='MySQL56/33333333-3333-3333-3333-333333333333:1-100',
+            ),
+            'expected': -1,  # Should be: 1,
+        }, {
+            'ev1': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+                position='MySQL56/33333333-3333-3333-3333-333333333333:1-100',
+            ),
+            'ev2': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+                position='MySQL56/33333333-3333-3333-3333-333333333333:1-200',
+            ),
+            'expected': -1,
+        }, {
+            'ev1': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+                position='MySQL56/33333333-3333-3333-3333-333333333333:1-100',
+            ),
+            'ev2': query_pb2.EventToken(
+                timestamp=100,
+                shard='s1',
+                position='MySQL56/33333333-3333-3333-3333-333333333333:1-100',
+            ),
+            'expected': -1,  # Should be: 0,
+        }
+    ]
+
+    for tcase in test_cases:
+      got = event_token.fresher(tcase['ev1'], tcase['ev2'])
+      self.assertEqual(got, tcase['expected'],
+                       'got %d but expected %d for Fresher(%s, %s)' %
+                       (got, tcase['expected'], tcase['ev1'], tcase['ev2']))
+
 
 if __name__ == '__main__':
   utils.main()

@@ -729,7 +729,9 @@ func (tsv *TabletServer) computeExtras(options *querypb.ExecuteOptions) *querypb
 
 	// See if we need to compare.
 	if options.CompareEventToken != nil {
-		if eventtoken.Fresher(et, options.CompareEventToken) {
+		if eventtoken.Fresher(et, options.CompareEventToken) >= 0 {
+			// For a query, we are fresher if greater or equal
+			// to the provided compare_event_token.
 			if extras == nil {
 				extras = &querypb.ResultExtras{
 					Fresher: true,
