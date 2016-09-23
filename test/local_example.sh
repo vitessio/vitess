@@ -96,9 +96,10 @@ until ./client.sh ; do
   retry_with_timeout
 done
 
-echo "Run PHP client script..."
+# TODO: uncomment when php crashing on Travis is fixed
+# echo "Run PHP client script..."
 # We don't need to retry anymore, because we've established that vtgate is ready.
-php client.php --server=localhost:15991 || teardown
+# php client.php --server=localhost:15991 || teardown
 
 echo "Run Go client script..."
 go run client.go -server=localhost:15991 || teardown
