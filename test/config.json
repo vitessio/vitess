@@ -221,6 +221,18 @@
 				"site_test"
 			]
 		},
+		"php": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"make",
+				"php_test"
+			],
+			"Manual": true,
+			"Shard": 4,
+			"RetryMax": 0,
+				"Tags": []
+		},
 		"python_client": {
 			"File": "python_client_test.py",
 			"Args": [],
