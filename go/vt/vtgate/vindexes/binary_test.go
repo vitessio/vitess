@@ -13,8 +13,8 @@ func init() {
 }
 
 func TestBinaryCost(t *testing.T) {
-	if binOnlyVindex.Cost() != 1 {
-		t.Errorf("Cost(): %d, want 1", binOnlyVindex.Cost())
+	if binOnlyVindex.Cost() != 0 {
+		t.Errorf("Cost(): %d, want 0", binOnlyVindex.Cost())
 	}
 }
 

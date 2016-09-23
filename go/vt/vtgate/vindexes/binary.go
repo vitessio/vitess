@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// Binary is a vindex that hashes binary bits to a keyspace id.
+// Binary is a vindex that converts binary bits to a keyspace id.
 type Binary struct {
 	name string
 }
@@ -22,7 +22,7 @@ func (vind *Binary) String() string {
 
 // Cost returns the cost as 1.
 func (vind *Binary) Cost() int {
-	return 1
+	return 0
 }
 
 // Verify returns true if id maps to ksid.
@@ -52,7 +52,7 @@ func (*Binary) ReverseMap(_ VCursor, ksid []byte) (interface{}, error) {
 	if ksid == nil {
 		return nil, fmt.Errorf("Binary.ReverseMap: is nil")
 	}
-	return ([]byte(ksid)), nil
+	return []byte(ksid), nil
 }
 
 func init() {
