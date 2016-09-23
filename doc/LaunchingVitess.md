@@ -1,5 +1,3 @@
-# *Draft*
-
 This document gives you guidelines on how to configure and manage Vitess in a production environment.
 
 # Vitess Philosophy
@@ -71,8 +69,8 @@ traffic.
 #### Map Reduce
 
 Vitess supports Map-Reduce access to the data. Vitess provides a Hadoop
-connector, that can also be used with Apache Spark. See the (Hadoop package
-documentation)[https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/com/youtube/vitess/hadoop]
+connector, that can also be used with Apache Spark. See the [Hadoop package
+documentation](https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/com/youtube/vitess/hadoop)
 for more information.
 
 With a Map-Reduce framework, Vitess does not support very complicated
@@ -189,7 +187,7 @@ A few things to consider:
 * *vtcombo* can also start the *vtctld* component, so the test environment is
   visible with the Vitess UI.
 * See
-  (vttest.proto)[https://github.com/youtube/vitess/blob/master/proto/vttest.proto]
+  [vttest.proto](https://github.com/youtube/vitess/blob/master/proto/vttest.proto)
   for more information.
 
 ## Using Vitess in you Application
@@ -202,7 +200,7 @@ If using low-level API directly, importance of using bind vars.
 
 TODO: Balancing traffic between master, replica & rdonly. Explain how to target the right target type.
 
-Includes Query Verification: A sharded Vitess is not 100% backward compatible with MySQL. Some queries that used to work will cease to work. It’s important that you run all your queries on a sharded test environment -- see the (Development Workflow)[#development-workflow] section above -- to make sure none will fail on production.
+Includes Query Verification: A sharded Vitess is not 100% backward compatible with MySQL. Some queries that used to work will cease to work. It’s important that you run all your queries on a sharded test environment -- see the [Development Workflow](#development-workflow) section above -- to make sure none will fail on production.
 
 # Preparing for Production
 
