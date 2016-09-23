@@ -1,8 +1,11 @@
-import { Http } from '@angular/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs/Rx';
+import { ReplaySubject } from 'rxjs/Rx';
+
 @Injectable()
 export class WorkflowService {
+  public ws: WebSocket;
+  public subject: ReplaySubject<string> = new ReplaySubject<string>(100);
+  /*
   private workflows = [
     {name: 'Going Back to the Future', path: '/UU948312', children: [
       {name: 'Acquiring Delorean', path: '/UU948312/1', children: [
@@ -26,15 +29,46 @@ export class WorkflowService {
           {name: 'Escape from Australians', path: '/UU948312/1/3/8', children: [], state: 2},
         ], state: 2}];
 
+  */
+  constructor() {
+    this.connect();
+  }
 
-  constructor(private http: Http) {}
+  connect() {
+    let t = this;
 
-  getWorkflows() {
-    return Observable.create(observer => {
-      observer.next(this.workflows);
-      observer.next(this.overrideWorkflow);
-      observer.complete();
-    });
+    let ws = new WebSocket('ws://' + window.location.hostname +
+                           ':' + window.location.port + '/api/workflow');
+    ws.onopen = function(e: MessageEvent) {
+      t.ws = ws;
+    };
+    ws.onmessage = function(e: MessageEvent) {
+      return t.subject.next(JSON.parse(e.data));
+    };
+    ws.onclose = function(e: CloseEvent) {
+      console.log('Disconnected from server, trying again in 3s.');
+      t.ws = null;
+      setTimeout(() => {
+        t.connect();
+      }, 3000);
+    };
+  }
+
+  updates() {
+    return this.subject;
+  }
+
+  sendAction(path: string, name: string) {
+    if (this.ws === null) {
+      alert('Not connected to vtctld, cannot send command.');
+      return;
+    }
+    let params = {
+      path: path,
+      name: name,
+    };
+    let message = JSON.stringify(params);
+    this.ws.send(message);
   }
 }
 
