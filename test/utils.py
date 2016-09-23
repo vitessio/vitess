@@ -17,6 +17,8 @@ import time
 import unittest
 import urllib2
 
+from vtdb import prefer_vtroot_imports  # pylint: disable=unused-import
+
 import environment
 from mysql_flavor import mysql_flavor
 from mysql_flavor import set_mysql_flavor
@@ -808,12 +810,14 @@ class L2VtGate(object):
     Args:
       name: name of the endpoint, in the form: 'keyspace.shard.type'.
     """
+    def condition(v):
+      return (v.get(vtgate_gateway_flavor().connection_count_vars())
+              .get(name, None)) is None
+
     poll_for_vars('l2vtgate', self.port,
                   'no endpoint named ' + name,
                   timeout=5.0,
-                  condition_fn=lambda v: v.get(vtgate_gateway_flavor().
-                                               connection_count_vars()).
-                  get(name, None) is None)
+                  condition_fn=condition)
 
 
 # vtctl helpers

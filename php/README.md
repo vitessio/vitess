@@ -22,7 +22,7 @@ For example, on Debian/Ubuntu:
 
 ``` sh
 $ sudo apt-get install php5-dev php5-cli php-pear
-$ sudo pecl install grpc-beta
+$ sudo pecl install grpc
 ```
 
 ### gRPC Dependencies

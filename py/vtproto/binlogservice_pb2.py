@@ -29,43 +29,112 @@ _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
 
-import abc
+import grpc
 from grpc.beta import implementations as beta_implementations
+from grpc.beta import interfaces as beta_interfaces
 from grpc.framework.common import cardinality
 from grpc.framework.interfaces.face import utilities as face_utilities
 
-class BetaUpdateStreamServicer(object):
-  """<fill me in later!>"""
-  __metaclass__ = abc.ABCMeta
-  @abc.abstractmethod
+
+class UpdateStreamStub(object):
+  """UpdateStream is the RPC version of binlog.UpdateStream.
+  """
+
+  def __init__(self, channel):
+    """Constructor.
+
+    Args:
+      channel: A grpc.Channel.
+    """
+    self.StreamKeyRange = channel.unary_stream(
+        '/binlogservice.UpdateStream/StreamKeyRange',
+        request_serializer=binlogdata__pb2.StreamKeyRangeRequest.SerializeToString,
+        response_deserializer=binlogdata__pb2.StreamKeyRangeResponse.FromString,
+        )
+    self.StreamTables = channel.unary_stream(
+        '/binlogservice.UpdateStream/StreamTables',
+        request_serializer=binlogdata__pb2.StreamTablesRequest.SerializeToString,
+        response_deserializer=binlogdata__pb2.StreamTablesResponse.FromString,
+        )
+
+
+class UpdateStreamServicer(object):
+  """UpdateStream is the RPC version of binlog.UpdateStream.
+  """
+
   def StreamKeyRange(self, request, context):
-    raise NotImplementedError()
-  @abc.abstractmethod
+    """StreamKeyRange returns the binlog transactions related to
+    the specified Keyrange.
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
   def StreamTables(self, request, context):
-    raise NotImplementedError()
+    """StreamTables returns the binlog transactions related to
+    the specified Tables.
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
+
+def add_UpdateStreamServicer_to_server(servicer, server):
+  rpc_method_handlers = {
+      'StreamKeyRange': grpc.unary_stream_rpc_method_handler(
+          servicer.StreamKeyRange,
+          request_deserializer=binlogdata__pb2.StreamKeyRangeRequest.FromString,
+          response_serializer=binlogdata__pb2.StreamKeyRangeResponse.SerializeToString,
+      ),
+      'StreamTables': grpc.unary_stream_rpc_method_handler(
+          servicer.StreamTables,
+          request_deserializer=binlogdata__pb2.StreamTablesRequest.FromString,
+          response_serializer=binlogdata__pb2.StreamTablesResponse.SerializeToString,
+      ),
+  }
+  generic_handler = grpc.method_handlers_generic_handler(
+      'binlogservice.UpdateStream', rpc_method_handlers)
+  server.add_generic_rpc_handlers((generic_handler,))
+
+
+class BetaUpdateStreamServicer(object):
+  """UpdateStream is the RPC version of binlog.UpdateStream.
+  """
+  def StreamKeyRange(self, request, context):
+    """StreamKeyRange returns the binlog transactions related to
+    the specified Keyrange.
+    """
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+  def StreamTables(self, request, context):
+    """StreamTables returns the binlog transactions related to
+    the specified Tables.
+    """
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+
 
 class BetaUpdateStreamStub(object):
-  """The interface to which stubs will conform."""
-  __metaclass__ = abc.ABCMeta
-  @abc.abstractmethod
-  def StreamKeyRange(self, request, timeout):
+  """UpdateStream is the RPC version of binlog.UpdateStream.
+  """
+  def StreamKeyRange(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
+    """StreamKeyRange returns the binlog transactions related to
+    the specified Keyrange.
+    """
     raise NotImplementedError()
-  @abc.abstractmethod
-  def StreamTables(self, request, timeout):
+  def StreamTables(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
+    """StreamTables returns the binlog transactions related to
+    the specified Tables.
+    """
     raise NotImplementedError()
 
+
 def beta_create_UpdateStream_server(servicer, pool=None, pool_size=None, default_timeout=None, maximum_timeout=None):
-  import binlogdata_pb2
-  import binlogdata_pb2
-  import binlogdata_pb2
-  import binlogdata_pb2
   request_deserializers = {
-    ('binlogservice.UpdateStream', 'StreamKeyRange'): binlogdata_pb2.StreamKeyRangeRequest.FromString,
-    ('binlogservice.UpdateStream', 'StreamTables'): binlogdata_pb2.StreamTablesRequest.FromString,
+    ('binlogservice.UpdateStream', 'StreamKeyRange'): binlogdata__pb2.StreamKeyRangeRequest.FromString,
+    ('binlogservice.UpdateStream', 'StreamTables'): binlogdata__pb2.StreamTablesRequest.FromString,
   }
   response_serializers = {
-    ('binlogservice.UpdateStream', 'StreamKeyRange'): binlogdata_pb2.StreamKeyRangeResponse.SerializeToString,
-    ('binlogservice.UpdateStream', 'StreamTables'): binlogdata_pb2.StreamTablesResponse.SerializeToString,
+    ('binlogservice.UpdateStream', 'StreamKeyRange'): binlogdata__pb2.StreamKeyRangeResponse.SerializeToString,
+    ('binlogservice.UpdateStream', 'StreamTables'): binlogdata__pb2.StreamTablesResponse.SerializeToString,
   }
   method_implementations = {
     ('binlogservice.UpdateStream', 'StreamKeyRange'): face_utilities.unary_stream_inline(servicer.StreamKeyRange),
@@ -74,18 +143,15 @@ def beta_create_UpdateStream_server(servicer, pool=None, pool_size=None, default
   server_options = beta_implementations.server_options(request_deserializers=request_deserializers, response_serializers=response_serializers, thread_pool=pool, thread_pool_size=pool_size, default_timeout=default_timeout, maximum_timeout=maximum_timeout)
   return beta_implementations.server(method_implementations, options=server_options)
 
+
 def beta_create_UpdateStream_stub(channel, host=None, metadata_transformer=None, pool=None, pool_size=None):
-  import binlogdata_pb2
-  import binlogdata_pb2
-  import binlogdata_pb2
-  import binlogdata_pb2
   request_serializers = {
-    ('binlogservice.UpdateStream', 'StreamKeyRange'): binlogdata_pb2.StreamKeyRangeRequest.SerializeToString,
-    ('binlogservice.UpdateStream', 'StreamTables'): binlogdata_pb2.StreamTablesRequest.SerializeToString,
+    ('binlogservice.UpdateStream', 'StreamKeyRange'): binlogdata__pb2.StreamKeyRangeRequest.SerializeToString,
+    ('binlogservice.UpdateStream', 'StreamTables'): binlogdata__pb2.StreamTablesRequest.SerializeToString,
   }
   response_deserializers = {
-    ('binlogservice.UpdateStream', 'StreamKeyRange'): binlogdata_pb2.StreamKeyRangeResponse.FromString,
-    ('binlogservice.UpdateStream', 'StreamTables'): binlogdata_pb2.StreamTablesResponse.FromString,
+    ('binlogservice.UpdateStream', 'StreamKeyRange'): binlogdata__pb2.StreamKeyRangeResponse.FromString,
+    ('binlogservice.UpdateStream', 'StreamTables'): binlogdata__pb2.StreamTablesResponse.FromString,
   }
   cardinalities = {
     'StreamKeyRange': cardinality.Cardinality.UNARY_STREAM,

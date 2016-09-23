@@ -461,7 +461,7 @@ type Row struct {
 	// A length of -1 means that the field is NULL. While
 	// reading values, you have to accummulate the length
 	// to know the offset where the next value begins in values.
-	Lengths []int64 `protobuf:"zigzag64,1,rep,name=lengths" json:"lengths,omitempty"`
+	Lengths []int64 `protobuf:"zigzag64,1,rep,packed,name=lengths" json:"lengths,omitempty"`
 	// values contains a concatenation of all values in the row.
 	Values []byte `protobuf:"bytes,2,opt,name=values,proto3" json:"values,omitempty"`
 }
