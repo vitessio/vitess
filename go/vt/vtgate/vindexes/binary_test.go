@@ -37,7 +37,6 @@ func TestBinary(t *testing.T) {
 			t.Error(err)
 		}
 		out := []byte(got[0])
-		fmt.Print(bytes.Compare(tcase.in, out))
 		if bytes.Compare(tcase.in, out) != 0 {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}
