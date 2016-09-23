@@ -3,7 +3,6 @@ package vindexes
 import (
 	"testing"
 	"bytes"
-	"fmt"
 )
 
 var binOnlyVindex Vindex
