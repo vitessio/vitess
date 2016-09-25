@@ -9,12 +9,6 @@ import (
 )
 
 func TestPrepPut(t *testing.T) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatalf("panic expected")
-		}
-	}()
 	pp := NewTxPreparedPool(2)
 	err := pp.Put(nil, "aa")
 	if err != nil {
@@ -29,13 +23,16 @@ func TestPrepPut(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("Put err: %v, want %s", err, want)
 	}
-	// This should panic.
-	pp.Put(nil, "aa")
+	err = pp.Put(nil, "aa")
+	want = "duplicate DTID in Prepare: aa"
+	if err == nil || err.Error() != want {
+		t.Errorf("Put err: %v, want %s", err, want)
+	}
 }
 
 func TestPrepGet(t *testing.T) {
 	pp := NewTxPreparedPool(2)
-	conn := &DBConn{}
+	conn := &TxConnection{}
 	pp.Put(conn, "aa")
 	got := pp.Get("bb")
 	if got != nil {

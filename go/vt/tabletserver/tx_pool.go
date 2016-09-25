@@ -45,7 +45,6 @@ const txLogInterval = time.Duration(1 * time.Minute)
 type TxPool struct {
 	pool              *ConnPool
 	activePool        *pools.Numbered
-	preparedPool      *TxPreparedPool
 	lastID            sync2.AtomicInt64
 	timeout           sync2.AtomicDuration
 	ticks             *timer.Timer
@@ -73,21 +72,9 @@ func NewTxPool(
 		txStatsName = txStatsPrefix + "Transactions"
 	}
 
-	// Set the prepared pool capacity to something lower than
-	// tx pool capacity. Those spare connections are needed to
-	// perform metadata state change operations. Without this,
-	// the system can deadlock if all connections get moved to
-	// the TxPreparedPool.
-	prepCap := capacity - 2
-	if prepCap < 0 {
-		// A capacity of 0 means that Prepare will always fail.
-		prepCap = 0
-	}
-
 	axp := &TxPool{
 		pool:              NewConnPool(name, capacity, idleTimeout, enablePublishStats, qStats, checker),
 		activePool:        pools.NewNumbered(),
-		preparedPool:      NewTxPreparedPool(prepCap),
 		lastID:            sync2.NewAtomicInt64(time.Now().UnixNano()),
 		timeout:           sync2.NewAtomicDuration(timeout),
 		ticks:             timer.NewTimer(timeout / 10),
@@ -184,13 +171,7 @@ func (axp *TxPool) Commit(ctx context.Context, transactionID int64) error {
 	if err != nil {
 		return err
 	}
-	defer conn.conclude(TxCommit)
-	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
-	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
-		conn.Close()
-		return NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
-	}
-	return nil
+	return axp.LocalCommit(ctx, conn)
 }
 
 // Rollback rolls back the specified transaction.
@@ -199,13 +180,7 @@ func (axp *TxPool) Rollback(ctx context.Context, transactionID int64) error {
 	if err != nil {
 		return err
 	}
-	defer conn.conclude(TxRollback)
-	axp.txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
-	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
-		conn.Close()
-		return NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
-	}
-	return nil
+	return axp.localRollback(ctx, conn)
 }
 
 // Get fetches the connection associated to the transactionID.
@@ -218,66 +193,42 @@ func (axp *TxPool) Get(transactionID int64) (*TxConnection, error) {
 	return v.(*TxConnection), nil
 }
 
-// Prepare executes a Prepare on an active transaction and
-// moves the connection to the preparedPool.
-func (axp *TxPool) Prepare(ctx context.Context, transactionID int64, dtid string) error {
-	// Remove the conn from active pool.
-	v, err := axp.activePool.Get(transactionID, "for prepare")
+// LocalBegin is equivalent to Begin->Get.
+// It's used for executing transactions within a request. It's safe
+// to always call LocalConclude at the end.
+func (axp *TxPool) LocalBegin(ctx context.Context) (*TxConnection, error) {
+	transactionID, err := axp.Begin(ctx)
 	if err != nil {
-		return NewTabletError(vtrpcpb.ErrorCode_NOT_IN_TX, "prepare failed for transaction %d: %v", transactionID, err)
+		return nil, err
 	}
-	txc := v.(*TxConnection)
-	txc.pool.activePool.Unregister(txc.TransactionID)
-	dbconn := txc.DBConn
-	txc.DBConn = nil
-	txc.log(TxPrepare)
-
-	// Add conn to prepared pool. We need to call Put first to
-	// ensure that we get a spot. If subsequent operations fail, we
-	// have to "Get" it out.
-	err = axp.preparedPool.Put(dbconn, dtid)
-	if err != nil {
-		// Always rollback a failed prepare.
-		if _, err := dbconn.Exec(ctx, "rollback", 1, false); err != nil {
-			dbconn.Close()
-		}
-		dbconn.Recycle()
-		return NewTabletError(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, "prepare failed for transaction %d: %v", transactionID, err)
-	}
-
-	// TODO(sougou): Add statements to redo log.
-
-	return nil
+	return axp.Get(transactionID)
 }
 
-// CommitPrepared commits the prepared transaction.
-func (axp *TxPool) CommitPrepared(ctx context.Context, dtid string) error {
-	dbconn := axp.preparedPool.Get(dtid)
-	if dbconn == nil {
-		return nil
-	}
-	defer dbconn.Recycle()
-	// TODO(sougou): Delete transaction metadata using dbconn.
-	if _, err := dbconn.Exec(ctx, "commit", 1, false); err != nil {
-		// TODO(sougou): Raise alerts and log info.
-		dbconn.Close()
-		return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "commit-prepared failed for transaction %s: %v", dtid, err)
+// LocalCommit is the commit function for LocalBegin.
+func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection) error {
+	defer conn.conclude(TxCommit)
+	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
+	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
+		conn.Close()
+		return NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
 	}
 	return nil
 }
 
-// RollbackPrepared rollsback the prepared transaction.
-func (axp *TxPool) RollbackPrepared(ctx context.Context, dtid string) error {
-	// TODO(sougou): Delete transaction metadata.
-	dbconn := axp.preparedPool.Get(dtid)
-	if dbconn == nil {
-		return nil
+// LocalConclude concludes a transaction started by LocalBegin.
+// If the transaction was not previously concluded, it's rolled back.
+func (axp *TxPool) LocalConclude(ctx context.Context, conn *TxConnection) {
+	if conn.DBConn != nil {
+		_ = axp.localRollback(ctx, conn)
 	}
-	defer dbconn.Recycle()
-	if _, err := dbconn.Exec(ctx, "rollback", 1, false); err != nil {
-		dbconn.Close()
-		// No need to return an error. We've ensured that the transaction
-		// can never be completed.
+}
+
+func (axp *TxPool) localRollback(ctx context.Context, conn *TxConnection) error {
+	defer conn.conclude(TxRollback)
+	axp.txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
+	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
+		conn.Close()
+		return NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
 	}
 	return nil
 }

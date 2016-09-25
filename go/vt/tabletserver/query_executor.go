@@ -190,25 +190,21 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
-	transactionID, err := qre.qe.txPool.Begin(qre.ctx)
+	conn, err := qre.qe.txPool.LocalBegin(qre.ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer qre.qe.txPool.LocalConclude(qre.ctx, conn)
 	qre.logStats.AddRewrittenSQL("begin", time.Now())
 
-	conn, err := qre.qe.txPool.Get(transactionID)
-	if err != nil {
-		return nil, err
-	}
 	reply, err = f(conn)
-	conn.Recycle()
 
 	if err != nil {
-		_ = qre.qe.txPool.Rollback(qre.ctx, transactionID)
+		qre.qe.txPool.LocalConclude(qre.ctx, conn)
 		qre.logStats.AddRewrittenSQL("rollback", time.Now())
 		return nil, err
 	}
-	err = qre.qe.txPool.Commit(qre.ctx, transactionID)
+	err = qre.qe.txPool.LocalCommit(qre.ctx, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -298,18 +294,12 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "DDL is not understood")
 	}
 
-	txid, err := qre.qe.txPool.Begin(qre.ctx)
+	conn, err := qre.qe.txPool.LocalBegin(qre.ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer qre.qe.txPool.Commit(qre.ctx, txid)
+	defer qre.qe.txPool.LocalCommit(qre.ctx, conn)
 
-	// Stolen from Execute
-	conn, err := qre.qe.txPool.Get(txid)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Recycle()
 	result, err := qre.execSQL(conn, qre.query, false)
 	if err != nil {
 		return nil, err

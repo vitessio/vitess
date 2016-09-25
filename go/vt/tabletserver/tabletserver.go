@@ -643,6 +643,7 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 		target, false, true,
 		func(ctx context.Context, logStats *LogStats) error {
 			defer tsv.qe.queryServiceStats.QueryStats.Record("COMMIT", time.Now())
+			logStats.TransactionID = transactionID
 			return tsv.qe.txPool.Commit(ctx, transactionID)
 		},
 	)
@@ -656,6 +657,7 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, t
 		target, false, true,
 		func(ctx context.Context, logStats *LogStats) error {
 			defer tsv.qe.queryServiceStats.QueryStats.Record("ROLLBACK", time.Now())
+			logStats.TransactionID = transactionID
 			return tsv.qe.txPool.Rollback(ctx, transactionID)
 		},
 	)

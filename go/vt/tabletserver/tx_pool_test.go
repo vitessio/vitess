@@ -299,6 +299,43 @@ func TestTxPoolExecFailDueToConnFail(t *testing.T) {
 	}
 }
 
+func TestTxPoolLocal(t *testing.T) {
+	db := fakesqldb.Register()
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("commit", &sqltypes.Result{})
+	txPool := newTxPool(false)
+	appParams := sqldb.ConnParams{Engine: db.Name}
+	dbaParams := sqldb.ConnParams{Engine: db.Name}
+	txPool.Open(&appParams, &dbaParams)
+	ctx := context.Background()
+	conn, err := txPool.LocalBegin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = txPool.LocalCommit(ctx, conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Call LocalConclude twice to ensure nothing blows up.
+	txPool.LocalConclude(ctx, conn)
+	txPool.LocalConclude(ctx, conn)
+
+	conn, err = txPool.LocalBegin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Call LocalConclude twice to ensure nothing blows up.
+	txPool.LocalConclude(ctx, conn)
+	txPool.LocalConclude(ctx, conn)
+
+	txPool.Close()
+	_, err = txPool.LocalBegin(ctx)
+	want := "fatal: connection pool is closed"
+	if err == nil || err.Error() != want {
+		t.Errorf("Begin err: %v, want %v", err, want)
+	}
+}
+
 func newTxPool(enablePublishStats bool) *TxPool {
 	randID := rand.Int63()
 	poolName := fmt.Sprintf("TestTransactionPool-%d", randID)
