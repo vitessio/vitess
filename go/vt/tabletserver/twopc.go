@@ -6,11 +6,17 @@ package tabletserver
 
 import (
 	"fmt"
+	"strconv"
+	"time"
 
+	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/sqlparser"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -48,12 +54,23 @@ const (
 	shard varchar(256),
   primary key(dtid, id)
 	) engine=InnoDB`
+
+	sqlInsertRedoTx   = "insert into `%s`.redo_log_transaction(dtid, state, resolution, time_created) values %a"
+	sqlInsertRedoStmt = "insert into `%s`.redo_log_statement(dtid, id, statement) values %a"
+	sqlDeleteRedoTx   = "delete from `%s`.redo_log_transaction where dtid = %a"
+	sqlDeleteRedoStmt = "delete from `%s`.redo_log_statement where dtid = %a"
 )
 
 // TwoPC performs 2PC metadata management (MM) functions.
 type TwoPC struct {
 	txpool        *TxPool
 	sidecarDBName string
+
+	// Parsed queries for efficient code generation.
+	insertRedoTx   *sqlparser.ParsedQuery
+	insertRedoStmt *sqlparser.ParsedQuery
+	deleteRedoTx   *sqlparser.ParsedQuery
+	deleteRedoStmt *sqlparser.ParsedQuery
 }
 
 // NewTwoPC creates a TwoPC variable. It requires a TxPool to
@@ -86,9 +103,74 @@ func (tpc *TwoPC) Open(sidecardbname string, dbaparams *sqldb.ConnParams) {
 			panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err.Error()))
 		}
 	}
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf(sqlInsertRedoTx, tpc.sidecarDBName, ":vals")
+	tpc.insertRedoTx = buf.ParsedQuery()
+	buf = sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf(sqlInsertRedoStmt, tpc.sidecarDBName, ":vals")
+	tpc.insertRedoStmt = buf.ParsedQuery()
+	buf = sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf(sqlDeleteRedoTx, tpc.sidecarDBName, ":dtid")
+	tpc.deleteRedoTx = buf.ParsedQuery()
+	buf = sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf(sqlDeleteRedoStmt, tpc.sidecarDBName, ":dtid")
+	tpc.deleteRedoStmt = buf.ParsedQuery()
 }
 
 // Close shuts down the 2PC MM service.
 func (tpc *TwoPC) Close() {
 	tpc.sidecarDBName = ""
+}
+
+// SaveRedo saves the statements in the redo log using the supplied connection.
+func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *TxConnection, dtid string, queries []string) error {
+	bindVars := map[string]interface{}{
+		"vals": [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(dtid)),
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("Prepared")),
+			sqltypes.NULL,
+			sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt(nil, int64(time.Now().UnixNano()), 10)),
+		}},
+	}
+	err := tpc.exec(ctx, conn, tpc.insertRedoTx, bindVars)
+	if err != nil {
+		return err
+	}
+
+	if len(queries) == 0 {
+		return nil
+	}
+	rows := make([][]sqltypes.Value, len(queries))
+	for i, query := range queries {
+		rows[i] = []sqltypes.Value{
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(dtid)),
+			sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt(nil, int64(i+1), 10)),
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(query)),
+		}
+	}
+	bindVars = map[string]interface{}{
+		"vals": rows,
+	}
+	return tpc.exec(ctx, conn, tpc.insertRedoStmt, bindVars)
+}
+
+// DeleteRedo deletes the redo log for the dtid.
+func (tpc *TwoPC) DeleteRedo(ctx context.Context, conn *TxConnection, dtid string) error {
+	bindVars := map[string]interface{}{
+		"dtid": sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(dtid)),
+	}
+	err := tpc.exec(ctx, conn, tpc.deleteRedoTx, bindVars)
+	if err != nil {
+		return err
+	}
+	return tpc.exec(ctx, conn, tpc.deleteRedoStmt, bindVars)
+}
+
+func (tpc *TwoPC) exec(ctx context.Context, conn *TxConnection, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) error {
+	b, err := pq.GenerateQuery(bindVars)
+	if err != nil {
+		return err
+	}
+	_, err = conn.Exec(ctx, hack.String(b), 1, false)
+	return err
 }

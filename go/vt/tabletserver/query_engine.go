@@ -47,6 +47,7 @@ type QueryEngine struct {
 
 	// Services
 	txPool       *TxPool
+	preparedPool *TxPreparedPool
 	consolidator *sync2.Consolidator
 	streamQList  *QueryList
 	twoPC        *TwoPC
@@ -138,6 +139,19 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 		qe.queryServiceStats,
 		checker,
 	)
+
+	// Set the prepared pool capacity to something lower than
+	// tx pool capacity. Those spare connections are needed to
+	// perform metadata state change operations. Without this,
+	// the system can deadlock if all connections get moved to
+	// the TxPreparedPool.
+	prepCap := config.TransactionCap - 2
+	if prepCap < 0 {
+		// A capacity of 0 means that Prepare will always fail.
+		prepCap = 0
+	}
+	qe.preparedPool = NewTxPreparedPool(prepCap)
+
 	// twoPC depends on txPool for some of its operations.
 	qe.twoPC = NewTwoPC(qe.txPool)
 	qe.consolidator = sync2.NewConsolidator()
