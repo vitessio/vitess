@@ -143,7 +143,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
 			if retryCtx.Err() == context.DeadlineExceeded {
 				return fmt.Errorf("failed to connect to destination tablet %v after retrying for %v", tabletString, retryDuration)
 			}
-			return fmt.Errorf("interrupted while trying to run %v on tablet %v", command, tabletString)
+			return fmt.Errorf("interrupted (context error: %v) while trying to run %v on tablet %v", retryCtx.Err(), command, tabletString)
 		case <-time.After(*executeFetchRetryTime):
 			// Retry 30s after the failure using the current master seen by the HealthCheck.
 		}
