@@ -868,6 +868,10 @@ def run_vtctl_vtctl(clargs, auto_log=False, expect_fail=False,
   args.extend(['-throttler_client_protocol',
                protocols_flavor().throttler_client_protocol()])
   args.extend(['-vtgate_protocol', protocols_flavor().vtgate_protocol()])
+  # TODO(b/26388813): Remove the next two lines once vtctl WaitForDrain is
+  #                   integrated in the vtctl MigrateServed* commands.
+  args.extend(['--wait_for_drain_sleep_rdonly', '0s'])
+  args.extend(['--wait_for_drain_sleep_replica', '0s'])
 
   if auto_log:
     args.append('--stderrthreshold=%s' % get_log_level())
@@ -1235,6 +1239,10 @@ class Vtctld(object):
         protocols_flavor().throttler_client_protocol(),
         '-vtgate_protocol', protocols_flavor().vtgate_protocol(),
     ] + environment.topo_server().flags()
+    # TODO(b/26388813): Remove the next two lines once vtctl WaitForDrain is
+    #                   integrated in the vtctl MigrateServed* commands.
+    args.extend(['--wait_for_drain_sleep_rdonly', '0s'])
+    args.extend(['--wait_for_drain_sleep_replica', '0s'])
     if enable_schema_change_dir:
       args += [
           '--schema_change_dir', self.schema_change_dir,
