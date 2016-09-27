@@ -10,15 +10,15 @@
         <div class="vt-card-toolbar">
           <md-icon class="vt-menu" (click)="setSelectedKeyspace(keyspace);cardMenu.toggle($event)">menu</md-icon>
           <p-menu #cardMenu popup="popup" [model]="keyspaceActions"></p-menu>
-          <h2 class="vt-title">{{keyspace.name}}</h2>
+          <h2 id="{{keyspace.name}}" class="vt-title vt-keyspace-card">{{keyspace.name}}</h2>
         </div>
-      </div>   
+      </div>
       <a class="vt-dark-link" [routerLink]="['/keyspace']" [queryParams]="{keyspace: keyspace.name}">
         <md-card-content >
           <div class="stats-container">
             <md-list>
               <md-list-item>
-                <span class="vt-stat-value-container">
+                <span class="vt-shard-stats">
                     {{keyspace.servingShards.length}} Shards
                   <div style="color: red" *ngIf="keyspace.nonservingShards.length > 0">
                     (+{{keyspace.nonservingShards.length}} Not serving)

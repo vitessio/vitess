@@ -99,10 +99,10 @@ export class DashboardComponent implements OnInit {
 
   openValidateDialog() {
     this.dialogSettings = new DialogSettings('Validate', `Validate all nodes`, '', 'There was a problem validating all nodes:');
-    this.dialogSettings.setMessage('Deleted {{keyspace_name}}');
+    this.dialogSettings.setMessage('Validated');
     this.dialogSettings.onCloseFunction = this.getKeyspaces.bind(this);
     let flags = new ValidateAllFlags().flags;
-    this.dialogContent = new DialogContent('keyspace_name', flags, {}, undefined, 'Validate');
+    this.dialogContent = new DialogContent('', flags, {}, undefined, 'Validate');
     this.dialogSettings.toggleModal();
   }
 
