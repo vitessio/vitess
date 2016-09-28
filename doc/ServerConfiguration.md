@@ -46,7 +46,7 @@ VTTablet uses connection pools to MySQL. If autocommit was turned off, MySQL wil
 
 ### Additional parameters
 
-TODO: Elaborate
+<!-- TODO: Elaborate -->
 
 * read-only
 * skip-slave-start
@@ -136,7 +136,7 @@ Vttablet, vtgate, vtctld need the right command line parameters to find the topo
 
 ## VTTablet
 
-TODO auto-generate a different doc from code for the command line parameters, and link from here.
+<!-- TODO: auto-generate a different doc from code for the command line parameters, and link from here. -->
 
 VTTablet has a large number of command line options. Some important ones will be covered here. In terms of provisioning these are the recommended values
 
@@ -149,7 +149,7 @@ VTTablet has a large number of command line options. Some important ones will be
 
 ### Query server parameters
 
-TODO: Change this section to link to auto-generated descriptions.
+<!-- TODO: Change this section to link to auto-generated descriptions. -->
 
 * **queryserver-config-pool-size**: This value should typically be set to the max number of simultaneous queries you want MySQL to run. This should typically be around 2-3x the number of allocated CPUs. Around 4-16. There is not much harm in going higher with this value, but you may see no additional benefits.
 * **queryserver-config-stream-pool-size**: This value is relevant only if you plan to run streaming queries against the database. It’s recommended that you use rdonly instances for such streaming queries. This value depends on how many simultaneous streaming queries you plan to run. Typical values are in the low 100s.
@@ -495,7 +495,7 @@ For VTGate, here’s a list of possible variables to alert on:
 
 ## Vtctld
 
-TODO: Elaborate.
+<!-- TODO: Elaborate. -->
 
 ## External Processes
 
@@ -511,7 +511,7 @@ You will need to run some cron jobs to archive or purge log files periodically.
 
 ### Automated Failover
 
-TODO: Elaborate on Orchestrator.
+<!-- TODO: Elaborate on Orchestrator. -->
 
 ### Monitoring
 

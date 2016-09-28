@@ -23,7 +23,7 @@ Diagnosis 4: No particular transaction seems to be the culprit. Nothing seems to
 
 ### Failover Gone Bad
 
-TODO: Elaborate.
+<!-- TODO: Elaborate. -->
 
 * Writes are failing
 * vtctl TabletExternallyReparented - if external tool (e.g. Orchestrator) has done a failover and Vitess didn't adjust

@@ -155,7 +155,7 @@ Vitess errs on the side of over-reporting, but you can be picky about which of t
 
 ## Cloud environment
 
-TODO We should add a paragraph…
+<!-- TODO We should add a paragraph… -->
 
 Vitess was built on bare metal and later adapted to run in the cloud. This gives it the unique ability of being able to run on both extremes. Cloud software like Kubernetes and Docker definitely make it easier to get Vitess up and running. Without such setups, one would need to create some custom scripts to manage the servers. This should be no more complicated than running a production setup on bare metal.
 
@@ -194,7 +194,7 @@ Drivers (JDBC, PDO, …)
 
 If using low-level API directly, importance of using bind vars.
 
-TODO: Balancing traffic between master, replica & rdonly. Explain how to target the right target type.
+<!-- TODO: Balancing traffic between master, replica & rdonly. Explain how to target the right target type. -->
 
 Includes Query Verification: A sharded Vitess is not 100% backward compatible with MySQL. Some queries that used to work will cease to work. It’s important that you run all your queries on a sharded test environment -- see the [Development Workflow](#development-workflow) section above -- to make sure none will fail on production.
 
