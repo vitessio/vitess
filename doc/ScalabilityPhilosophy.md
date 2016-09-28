@@ -65,13 +65,13 @@ Vitess doesn’t support multi-master setup. It has alternate ways of addressing
 * High availability: Vitess integrates with Orchestrator, which is capable of performing a failover to a new master within seconds of failure detection. This is usually sufficient for most applications.
 * Low-latency geographically distributed writes: This is one case that is not addressed by Vitess. The current recommendation is to absorb the latency cost of long-distance round-trips for writes. If the data distribution allows, you still have the option of sharding based on geographic affinity. You can then setup masters for different shards to be in different geographic location. This way, most of the master writes can still be local.
 
-### Big Data Queries
+### Big data queries
 
 There are two main ways to access the data for offline data processing (as
 opposed to online web or direct access to the live data): sending queries to
 rdonly servers, or using a Map Reduce framework.
 
-#### Batch Queries
+#### Batch queries
 
 These are regular queries, but they can consume a lot of data. Typically, the
 streaming APIs are used, to consume large quantities of data.
@@ -80,21 +80,21 @@ These queries are just sent to the *rdonly* servers (also known as *batch*
 servers). They can take as much resources as they want without affecting live
 traffic.
 
-#### Map Reduce
+#### MapReduce
 
-Vitess supports Map-Reduce access to the data. Vitess provides a Hadoop
+Vitess supports MapReduce access to the data. Vitess provides a Hadoop
 connector, that can also be used with Apache Spark. See the [Hadoop package
 documentation](https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/com/youtube/vitess/hadoop)
 for more information.
 
-With a Map-Reduce framework, Vitess does not support very complicated
+With a MapReduce framework, Vitess does not support very complicated
 queries. In part because it would be difficult and not very efficient, but also
-because the Map-Reduce frameworks are usually very good at data processing. So
+because the MapReduce frameworks are usually very good at data processing. So
 instead of doing very complex SQL queries and have processed results, it is
 recommended to just dump the input data out of Vitess (with simple *select*
-statements), and process it with a Map-Reduce pipeline.
+statements), and process it with a MapReduce pipeline.
 
-## Multi-cell Deployment
+## Multi-cell
 
 Vitess is meant to run in multiple data centers / regions / cells. In this part,
 we'll use *cell* as a set of servers that are very close together, and share the
@@ -131,7 +131,7 @@ brought up as needed:
 Note Vitess uses local-cell data first, and is very resilient to any cell going
 down (most of our processes handle that case gracefully).
 
-## Lock Server - Topology Service
+## Lock server
 
 Vitess is a highly available service, and Vitess itself needs to store a small
 amount of metadata very reliably. For that purpose, Vitess needs a highly
@@ -171,7 +171,7 @@ The most stressful part of running a production system is the situation where on
 
 Vitess errs on the side of over-reporting, but you can be picky about which of these variables you want to monitor.  It’s important and recommended to plot graphs of this data because it’s easy to spot the timing and magnitude of a change. It’s also essential to set up various threshold-based alerts that can be used to proactively prevent outages.
 
-## Development Workflow
+## Development workflow
 
 Vitess provides binaries and scripts to make unit testing of the application
 code very easy. With these tools, we recommend to unit test all the application
@@ -198,7 +198,7 @@ A few things to consider:
   [vttest.proto](https://github.com/youtube/vitess/blob/master/proto/vttest.proto)
   for more information.
 
-## Using Vitess in you Application
+## Using Vitess in your application
 
 Thrive to minimize app changes.
 

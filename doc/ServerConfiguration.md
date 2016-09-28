@@ -121,7 +121,7 @@ See the
 for more information on how to setup both of these features, and what command
 line parameters exist.
 
-## Lock Server Configuration
+## Lock server configuration
 
 Vttablet, vtgate, vtctld need the right command line parameters to find the topo server. First the *topo\_implementation* flag needs to be set to one of *zookeeper* or *etcd*. Then each is configured as follows:
 
@@ -497,19 +497,19 @@ For VTGate, here’s a list of possible variables to alert on:
 
 <!-- TODO: Elaborate. -->
 
-## External Processes
+## External processes
 
 Things that need to be configured:
 
-### Periodic Backup Configuration
+### Periodic backup configuration
 
 We recommend to take backups regularly e.g. you should set up a cron job for it. See our recommendations at  [http://vitess.io/user-guide/backup-and-restore.html#backup-frequency](http://vitess.io/user-guide/backup-and-restore.html#backup-frequency).
 
-### Logs Archiver/Purger
+### Logs archiver/purger
 
 You will need to run some cron jobs to archive or purge log files periodically.
 
-### Automated Failover
+### Automated failover
 
 <!-- TODO: Elaborate on Orchestrator. -->
 

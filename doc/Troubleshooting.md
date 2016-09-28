@@ -21,7 +21,7 @@ Diagnosis 3: Latency seems to be up across the board. Inspect transaction latenc
 
 Diagnosis 4: No particular transaction seems to be the culprit. Nothing seems to have changed in any of the requests. Look at system variables to see if there are hardware faults. Is the disk latency too high? Are there memory parity errors? If so, you may have to failover to a new machine.
 
-### Failover Gone Bad
+### Failover gone bad
 
 <!-- TODO: Elaborate. -->
 

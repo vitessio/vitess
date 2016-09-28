@@ -1,6 +1,6 @@
 ## Provisioning
 
-### Estimating Total Resources
+### Estimating total resources
 
 Although Vitess helps you scale indefinitely, the various layers do consume CPU and memory. Currently, the cost of Vitess servers is dominated by the RPC framework which we use: gRPC (gRPC is a relatively young product). So, Vitess servers are expected to get more efficient over time as there are improvements in gRPC as well as the Go runtime. For now, you can use the following rules of thumb to budget resources for Vitess:
 
@@ -20,7 +20,7 @@ On the server side, this could result in longer running transactions, which coul
 
 With the above numbers as starting point, the next step will be to set up benchmarks that generate production representative load. If you cannot afford this luxury, you may have to go into production with some over-provisioning, just in case.
 
-### Mapping Topology to Hardware in a Cell
+### Mapping topology to hardware
 
 The different Vitess components have different resource requirements e.g. vtgate requires little disk in comparison to vttablet. Therefore, the components should be mapped to different machine classes for optimal resource usage. If you’re using a cluster manager (such as Kubernetes), the automatic scheduler will do this for you. Otherwise, you have to allocate physical machines and plan out how you’re going to map servers onto them.
 
@@ -40,7 +40,7 @@ It’s advisable to run more instances than there are machines. VTGates are happ
 
 You may have to add a few more app class machines to absorb any additional CPU and latency overheads.
 
-## Lock Service Setup
+## Lock service setup
 
 The Lock Service should be running, and both the global and local instances
 should be up. See the
@@ -59,7 +59,7 @@ more, but only on demand to display web pages.
 As mentioned previously, if the setup is only in one cell, the global and local
 instances can be combined. Just use different top-level directories.
 
-## Production Testing
+## Production testing
 
 Before running Vitess in production, please make yourself comfortable first with the different operations. We recommend to go through the following scenarios on a non-production system.
 
