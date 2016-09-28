@@ -198,15 +198,66 @@ A few things to consider:
   [vttest.proto](https://github.com/youtube/vitess/blob/master/proto/vttest.proto)
   for more information.
 
-## Using Vitess in your application
+## Application query patterns
 
-Thrive to minimize app changes.
+Although Vitess strives to minimize the app changes required to scale,
+there are some important considerations for application queries.
 
-Drivers (JDBC, PDO, …)
+### Bind variables
 
-If using low-level API directly, importance of using bind vars.
+We strongly recommend using bind variables for all data values in a query.
+In addition to being more secure (you don't need to worry about escaping
+bind variable values), this allows Vitess to recognize queries that come from
+the same code path in your app. Vitess can then cache the execution plan for
+that query, instead of recomputing it every time you send different values.
 
-<!-- TODO: Balancing traffic between master, replica & rdonly. Explain how to target the right target type. -->
+This is similar to prepared statements in MySQL, and in fact that's how you
+would use bind variables with Vitess through a connector like JDBC or PDO.
+The difference is that Vitess connectors do not communicate with the server
+to prepare a statement. They just create a client-side object that wraps the
+query and bind variables so they can be sent together over the Vitess RPC
+interface.
 
-Includes Query Verification: A sharded Vitess is not 100% backward compatible with MySQL. Some queries that used to work will cease to work. It’s important that you run all your queries on a sharded test environment -- see the [Development Workflow](#development-workflow) section above -- to make sure none will fail on production.
+Note that bind variables are required when sending binary data, since the
+Vitess RPC interface requires the query itself to be valid UTF-8.
 
+### Tablet types
+
+Since Vitess handles query routing for you and lets you access any
+instance in the cluster from any single VTGate endpoint,
+the Vitess clients have an additional parameter for you to specify
+which [tablet type](/overview/concepts.html#tablet-types) you want
+to send your query to.
+
+Writes must be directed to a *master* type tablet, as well as reads
+that should remain part of a larger write transaction.
+You also may want to read from the master if there are queries that
+must return the most up-to-date value possible, such as when reading
+a row that was just modified.
+
+Reads that can tolerate a small amount of replication lag should
+target *replica* type tablets. This allows you to scale your read
+traffic separately from writes by adding more replicas without
+needing to add more shards. Tablets of the *replica* type are
+candidates for being promoted to master, so it's important to
+define an operational policy that prevents them from becoming so
+overloaded that they fall behind on replication by more than a
+few seconds (which would make failovers slow).
+
+The *rdonly* tablet type defines a separate pool of slaves
+that are ineligible to become master. The separation makes it
+safe to allow these instances to get behind on replication
+(such as while executing expensive analytic queries)
+or have replication stopped altogether (when taking backups
+or clones for resharding).
+
+### Query support
+
+A sharded Vitess is not 100% backward compatible with MySQL.
+Some queries that used to work will cease to work.
+It’s important that you run all your queries on a sharded test environment -- see the [Development workflow](#development-workflow) section above -- to make sure none will fail on production.
+
+Our goal is to expand query support based on the needs of users.
+If you encounter an important construct that isn't supported,
+please create or comment on an existing feature request so we
+know how to prioritize.
