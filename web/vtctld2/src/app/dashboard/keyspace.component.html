@@ -10,8 +10,8 @@
   <h2 class="vt-padding">Serving Shards</h2>
   <div *ngFor="let shard of keyspace.servingShards" class="vt-card">
     <a class="vt-dark-link" [routerLink]="['/shard']" [queryParams]="{keyspace: keyspaceName, shard: shard}">
-      <md-card > 
-        <md-card-title>{{shard}}</md-card-title>   
+      <md-card >
+        <md-card-title class="vt-serving-shard">{{shard}}</md-card-title>
       </md-card>
     </a>
   </div>
@@ -21,8 +21,8 @@
   <h2 class="vt-padding">Nonserving Shards</h2>
   <div *ngFor="let shard of keyspace.nonservingShards" class="vt-card">
     <a class="vt-dark-link" [routerLink]="['/shard']" [queryParams]="{keyspace: keyspaceName, shard: shard}">
-      <md-card > 
-        <md-card-title>{{shard}}</md-card-title>   
+      <md-card>
+        <md-card-title class="vt-nonserving-shard">{{shard}}</md-card-title>
       </md-card>
     </a>
   </div>

@@ -7,7 +7,7 @@
           <div class="vt-cell-left">
             <div>
               <strong>{{flag.name}}<span *ngIf="dialogContent.isRequired(flag.id)"> (Required)</span>:</strong>
-            </div> 
+            </div>
             <div>
               {{flag.description}}
             </div>
@@ -15,8 +15,8 @@
           <div class="vt-cell-right">
             <md-input *ngIf="flag.type=='input'" [(ngModel)]="flag.value" [required]="dialogContent.isRequired(flag.id)" placeholder="{{flag.name}}"></md-input>
             <div  *ngIf="flag.type == 'checkBox'" class="checkbox-wrapper">
-              <md-checkbox class="md-primary" [(ngModel)]="flag.value" ></md-checkbox> 
-            </div> 
+              <md-checkbox class="md-primary" [(ngModel)]="flag.value" ></md-checkbox>
+            </div>
             <p-dropdown *ngIf="flag.type == 'dropDown'" [options]="flag.getOptions()" [(ngModel)]="flag.value"></p-dropdown>
           </div>
         </div>
@@ -30,14 +30,13 @@
     </div>
   </div>
   <div class="vt-padding vt-action-container">
-    
-    <button md-button disableRipple="true" [disabled]="!dialogContent.canSubmit()" (click)="sendAction();">{{dialogSettings.actionWord}}</button>
-    <button md-button disableRipple="true" (click)="cancelDialog();">Cancel</button>
+    <button md-button disableRipple="true" id="vt-action" [disabled]="!dialogContent.canSubmit()" (click)="sendAction();">{{dialogSettings.actionWord}}</button>
+    <button md-button disableRipple="true" id="vt-cancel" (click)="cancelDialog();">Cancel</button>
   </div>
 </div>
 <div class="vt-padding" *ngIf="dialogSettings.dialogLog">
   <div *ngIf="!dialogSettings.pending">
-    <div>
+    <div class="vt-resp">
       {{dialogContent.interpolateMessage(dialogSettings.respText)}}
     </div>
     <h4 *ngIf="dialogSettings.logText">Log:</h4>
@@ -50,6 +49,6 @@
     <md-progress-bar mode="indeterminate"></md-progress-bar>
   </div>
   <div class="buttons">
-    <button md-button disableRipple="true" [disabled]="dialogSettings.pending" (click)="closeDialog()">Dismiss</button>
+    <button md-button disableRipple="true" id="vt-dismiss" [disabled]="dialogSettings.pending" (click)="closeDialog()">Dismiss</button>
   </div>
 </div>

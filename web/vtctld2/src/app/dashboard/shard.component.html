@@ -8,7 +8,7 @@
     <p-dataTable [value]="tablets" selectionMode="single" [(selection)]="selectedTablet">
       <p-column header="Actions">
         <template let-tab="rowData" let-i="rowIndex">
-          <md-icon class="vt-menu" (click)="rowMenu.toggle($event)">menu</md-icon>
+          <md-icon id="{{tab.uid}}" class="vt-menu" (click)="rowMenu.toggle($event)">menu</md-icon>
           <p-menu #rowMenu popup="popup" [model]="tabletActions"></p-menu>
         </template>
       </p-column>
