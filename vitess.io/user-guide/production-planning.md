@@ -1,6 +1,6 @@
 ---
 layout: doc
-title: "Preparing for Production"
+title: "Production Planning"
 description:
 modified:
 excerpt:
@@ -13,4 +13,4 @@ toc: true
 share: false
 ---
 
-{% include doc/PreparingForProduction.md %}
+{% include doc/ProductionPlanning.md %}
