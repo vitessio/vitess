@@ -4,9 +4,27 @@ Scalability problems can be solved using many approaches. This document describe
 
 When deciding to shard or break databases up into smaller parts, it’s tempting to break them just enough that they fit in one machine. In the industry, it’s common to run only one MySQL instance per host.
 
-Vitess recommends that instances be broken up to be even smaller, and not to shy away from running multiple instances per host. The net resource usage would be about the same. But the manageability greatly improves when MySQL instances are small. There is the complication of keeping track of ports, and separating the paths for the MySQL instances. However, everything else becomes simpler once this hurdle is crossed. There are fewer lock contentions to worry about, replication is a lot happier, production impact of outages become smaller, backups and restores run faster, and a lot more secondary advantages can be realized. For example, you can shuffle instances around to get better machine or rack diversity leading to even smaller production impact on outages, and improved resource usage.
+Vitess recommends that instances be broken up to be even smaller, and not to shy away from running multiple instances per host. The net resource usage would be about the same. But the manageability greatly improves when MySQL instances are small. There is the complication of keeping track of ports, and separating the paths for the MySQL instances. However, everything else becomes simpler once this hurdle is crossed.
 
-This is where the use of cluster orchestration software, like Kubernetes and Mesos / DC/OS  comes in handy because they make it much easier to implement these policies.
+There are fewer lock contentions to worry about, replication is a lot happier, production impact of outages become smaller, backups and restores run faster, and a lot more secondary advantages can be realized. For example, you can shuffle instances around to get better machine or rack diversity leading to even smaller production impact on outages, and improved resource usage.
+
+### Cluster orchestration
+
+Vitess started on baremetal at YouTube, and some still choose to run it that way.
+But running Vitess in a cluster orchestration system is the key to achieving the
+benefits of small instances without adding management overhead for each new instance.
+
+We provide sample configs to help you [get started on Kubernetes](/getting-started/)
+since it's the most similar to Borg (the [predecessor to Kubernetes](http://blog.kubernetes.io/2015/04/borg-predecessor-to-kubernetes.html)
+on which Vitess now runs in YouTube).
+If you're more familiar with alternatives like Mesos, Swarm, Nomad, or DC/OS,
+we'd welcome your contribution of sample configs for Vitess.
+
+These orchestration systems typically use [containers](https://en.wikipedia.org/wiki/Software_container) 
+to isolate small instances so they can be efficiently packed onto machines
+without contention on ports, paths, or compute resources.
+Then an automated scheduler does the job of shuffling instances around for
+failure resilience and optimum utilization.
 
 ## Durability through replication
 
@@ -152,12 +170,6 @@ expanding to multiple cells.
 The most stressful part of running a production system is the situation where one is trying to troubleshoot an ongoing outage. You have to be able to get to the root cause quickly and find the correct remedy. This is one area where monitoring becomes critical and Vitess has been battle-tested. A large number of internal state variables and counters are continuously exported by Vitess through the /debug/vars and other URLs. There’s also work underway to integrate with third party monitoring tools like Prometheus.
 
 Vitess errs on the side of over-reporting, but you can be picky about which of these variables you want to monitor.  It’s important and recommended to plot graphs of this data because it’s easy to spot the timing and magnitude of a change. It’s also essential to set up various threshold-based alerts that can be used to proactively prevent outages.
-
-## Cloud environment
-
-<!-- TODO We should add a paragraph… -->
-
-Vitess was built on bare metal and later adapted to run in the cloud. This gives it the unique ability of being able to run on both extremes. Cloud software like Kubernetes and Docker definitely make it easier to get Vitess up and running. Without such setups, one would need to create some custom scripts to manage the servers. This should be no more complicated than running a production setup on bare metal.
 
 ## Development Workflow
 
