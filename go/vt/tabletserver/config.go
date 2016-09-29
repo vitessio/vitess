@@ -50,6 +50,7 @@ func init() {
 	flag.StringVar(&qsConfig.DebugURLPrefix, "debug-url-prefix", DefaultQsConfig.DebugURLPrefix, "debug url prefix, vttablet will report various system debug pages and this config controls the prefix of these debug urls")
 	flag.StringVar(&qsConfig.PoolNamePrefix, "pool-name-prefix", DefaultQsConfig.PoolNamePrefix, "pool name prefix, vttablet has several pools and each of them has a name. This config specifies the prefix of these pool names")
 	flag.BoolVar(&qsConfig.EnableAutoCommit, "enable-autocommit", DefaultQsConfig.EnableAutoCommit, "if the flag is on, a DML outsides a transaction will be auto committed.")
+	flag.IntVar(&qsConfig.MaxBeginsPerSecond, "max-begins-per-second", DefaultQsConfig.MaxBeginsPerSecond, "The maximum number of begins per second to allow. Excess begins will be rejected with at TRANSIENT_ERROR error code. If this flag is negative no limit will be enforced.")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -82,6 +83,7 @@ type Config struct {
 	DebugURLPrefix       string
 	PoolNamePrefix       string
 	TableAclExemptACL    string
+	MaxBeginsPerSecond   int
 }
 
 // DefaultQsConfig is the default value for the query service config.
@@ -114,6 +116,7 @@ var DefaultQsConfig = Config{
 	DebugURLPrefix:       "/debug",
 	PoolNamePrefix:       "",
 	TableAclExemptACL:    "",
+	MaxBeginsPerSecond:   -1, // Negative value indicates no limit.
 }
 
 var qsConfig Config

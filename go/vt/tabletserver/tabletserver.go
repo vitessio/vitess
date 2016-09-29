@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/ratelimiter"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
@@ -132,6 +133,11 @@ type TabletServer struct {
 	// eventTokenMutex protects the current EventToken
 	eventTokenMutex sync.RWMutex
 	eventToken      *querypb.EventToken
+
+	// rate-limiter for begins to honor config.MaxBeginsPerSecond.
+	// This field will be nil if config.MaxBeginsPerSecond < 0 and indicates
+	// that begins should not be rate-limited.
+	beginRateLimiter *ratelimiter.RateLimiter
 }
 
 // RegisterFunction is a callback type to be called when we
@@ -159,6 +165,7 @@ func NewTabletServer(config Config) *TabletServer {
 		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
 		streamHealthMap:     make(map[int]chan<- *querypb.StreamHealthResponse),
 		history:             history.New(10),
+		beginRateLimiter:    createRateLimiter(config.MaxBeginsPerSecond),
 	}
 	tsv.qe = NewQueryEngine(tsv, config)
 	tsv.updateStreamList = &binlog.StreamList{}
@@ -626,6 +633,9 @@ func (tsv *TabletServer) replicationStreamer(ctx context.Context) {
 
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
 func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error) {
+	if tsv.throttleBegin() {
+		return 0, NewTabletError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, "Begin throttled")
+	}
 	err = tsv.execRequest(
 		ctx,
 		"Begin", "begin", nil,
@@ -1623,4 +1633,18 @@ func getColumnMinMax(qre *QueryExecutor, columnName cistring.CIString, tableName
 	// calling this.
 	minMaxSQL := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v", columnName, columnName, tableName)
 	return qre.execSQL(conn, minMaxSQL, true)
+}
+
+func (tsv *TabletServer) throttleBegin() bool {
+	if tsv.beginRateLimiter == nil {
+		return false
+	}
+	return !tsv.beginRateLimiter.Allow()
+}
+
+func createRateLimiter(maxBeginsPerSecond int) *ratelimiter.RateLimiter {
+	if maxBeginsPerSecond >= 0 {
+		return ratelimiter.NewRateLimiter(maxBeginsPerSecond, time.Second)
+	}
+	return nil
 }
