@@ -181,7 +181,15 @@ func (e *executor) checkError(ctx context.Context, err error, isRetry bool, mast
 		e.wr.Logger().Warningf("ExecuteFetch failed on %v; will reresolve and retry because it's due to a MySQL read-only error: %v", tabletString, err)
 		statsRetryCount.Add(1)
 		statsRetryCounters.Add(retryCategoryReadOnly, 1)
-	case errNo == "2002" || errNo == "2006":
+	case errNo == "2002" || errNo == "2006" || errNo == "2013":
+		// Note:
+		// "2006" happens if the connection is already dead. Retrying a query in
+		// this case is safe.
+		// "2013" happens if the connection dies in the middle of a query. This is
+		// also safe to retry because either the query went through on the server or
+		// it was aborted. If we retry the query and get a duplicate entry error, we
+		// assume that the previous execution was successful and ignore the error.
+		// See below for the handling of duplicate entry error "1062".
 		e.wr.Logger().Warningf("ExecuteFetch failed on %v; will reresolve and retry because it's due to a MySQL connection error: %v", tabletString, err)
 		statsRetryCount.Add(1)
 		statsRetryCounters.Add(retryCategoryConnectionError, 1)
