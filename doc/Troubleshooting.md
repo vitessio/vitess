@@ -7,9 +7,9 @@ When an alert fires, you have the following sources of information to perform yo
 * Diagnostic URLs
 * Log files
 
-Here are a few scenarios:
+Below are a few possible scenarios.
 
-### Symptom: Query latency on a master database has shot up.
+### Elevated query latency on master
 
 Diagnosis 1: Inspect the graphs to see if QPS has gone up. If yes, drill down on the more detailed QPS graphs to see which table, or user caused the increase. If a table is identified, look at /debug/queryz for queries on that table.
 
@@ -21,10 +21,27 @@ Diagnosis 3: Latency seems to be up across the board. Inspect transaction latenc
 
 Diagnosis 4: No particular transaction seems to be the culprit. Nothing seems to have changed in any of the requests. Look at system variables to see if there are hardware faults. Is the disk latency too high? Are there memory parity errors? If so, you may have to failover to a new machine.
 
-### Failover gone bad
+### Master starts up read-only
 
-<!-- TODO: Elaborate. -->
+To prevent accidentally accepting writes, our default `my.cnf` settings
+tell MySQL to always start up read-only. If the master MySQL gets restarted,
+it will thus come back read-only until you intervene to confirm that it should
+accept writes. You can use the [SetReadWrite](/reference/vtctl.html#setreadwrite)
+command to do that.
 
-* Writes are failing
-* vtctl TabletExternallyReparented - if external tool (e.g. Orchestrator) has done a failover and Vitess didn't adjust
+However, usually if something unexpected happens to the master, it's better to
+reparent to a different replica with [EmergencyReparentShard](/reference/vtctl.html#emergencyreparentshard). If you need to do planned maintenance on the master,
+it's best to first reparent to another replica with [PlannedReparentShard](/reference/vtctl.html#plannedreparentshard).
 
+### Vitess sees the wrong tablet as master
+
+If you do a failover manually (not through Vitess), you'll need to tell
+Vitess which tablet corresponds to the new master MySQL. Until then,
+writes will fail since they'll be routed to a read-only replica
+(the old master). Use the [TabletExternallyReparented](/reference/vtctl.html#tabletexternallyreparented)
+command to tell Vitess the new master tablet for a shard.
+
+Tools like [Orchestrator](https://github.com/outbrain/orchestrator)
+can be configured to call this automatically when a failover occurs.
+See our sample [orchestrator.conf.json](https://github.com/youtube/vitess/blob/1129d69282bb738c94b8af661b984b6377a759f7/docker/orchestrator/orchestrator.conf.json#L131)
+for an example of this.
