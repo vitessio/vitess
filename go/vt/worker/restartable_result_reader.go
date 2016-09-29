@@ -233,7 +233,7 @@ func (r *RestartableResultReader) nextWithRetries() (*sqltypes.Result, error) {
 			if retryCtx.Err() == context.DeadlineExceeded {
 				return nil, fmt.Errorf("%v: failed to restart the streaming connection after retrying for %v", r.tp.description(), *retryDuration)
 			}
-			return nil, fmt.Errorf("%v: interrupted while trying to restart the streaming connection (%.1f minutes elapsed so far)", r.tp.description(), time.Now().Sub(start).Minutes())
+			return nil, fmt.Errorf("%v: interrupted (context error: %v) while trying to restart the streaming connection (%.1f minutes elapsed so far)", r.tp.description(), retryCtx.Err(), time.Now().Sub(start).Minutes())
 		case <-time.After(*executeFetchRetryTime):
 			// Make a pause between the retries to avoid hammering the servers.
 		}
