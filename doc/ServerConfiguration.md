@@ -547,9 +547,7 @@ For VTGate, here’s a list of possible variables to alert on:
 * Qps/core
 * Latency
 
-## Vtctld
-
-<!-- TODO: Elaborate. -->
+<!-- TODO: Add vtctld section. -->
 
 ## External processes
 
@@ -563,19 +561,77 @@ We recommend to take backups regularly e.g. you should set up a cron job for it.
 
 You will need to run some cron jobs to archive or purge log files periodically.
 
-### Automated failover
+### Orchestrator
 
-<!-- TODO: Elaborate on Orchestrator. -->
+[Orchestrator](https://github.com/outbrain/orchestrator) is a tool for
+managing MySQL replication topologies, including automated failover.
+It can detect master failure and initiate a recovery in a matter of seconds.
 
-### Monitoring
+For the most part, Vitess is agnostic to the actions of Orchestrator,
+which operates below Vitess at the MySQL level. That means you can
+pretty much
+[set up Orchestrator](https://github.com/outbrain/orchestrator/wiki/Orchestrator-Manual)
+in the normal way, with just a few additions as described below.
 
-Monitor server CPU, RAM, Disk, Network, …
+For the [Kubernetes example](/getting-started/), we provide a
+[sample script](https://github.com/youtube/vitess/blob/master/examples/kubernetes/orchestrator-up.sh)
+to launch Orchestrator for you with these settings applied.
 
-Import variables into prefered monitoring system.
+#### Orchestrator configuration
 
-### Alerting
+Orchestrator needs to know some things from the Vitess side,
+like the tablet aliases and whether semisync is enforced
+(with async fallback disabled).
+We pass this information by telling Orchestrator to execute certain
+queries that return local metadata from a non-replicated table,
+as seen in our sample
+[orchestrator.conf.json](https://github.com/youtube/vitess/blob/master/docker/orchestrator/orchestrator.conf.json):
 
-Common alerts to setup:
+```json
+  "DetectClusterAliasQuery": "SELECT value FROM _vt.local_metadata WHERE name='ClusterAlias'",
+  "DetectInstanceAliasQuery": "SELECT value FROM _vt.local_metadata WHERE name='Alias'",
+  "DetectPromotionRuleQuery": "SELECT value FROM _vt.local_metadata WHERE name='PromotionRule'",
+  "DetectSemiSyncEnforcedQuery": "SELECT @@global.rpl_semi_sync_master_wait_no_slave AND @@global.rpl_semi_sync_master_timeout > 1000000",
+```
 
-* ...
+There is also one thing that Vitess needs to know from Orchestrator,
+which is the identity of the master for each shard, if a failover occurs.
+
+From our experience at YouTube, we believe that this signal is too critical
+for data integrity to rely on bottom-up detection such as asking each MySQL
+if it thinks it's the master. Instead, we rely on Orchestrator to be the
+source of truth, and expect it to send a top-down signal to Vitess.
+
+This signal is sent by ensuring the Orchestrator server has access to
+`vtctlclient`, which it then uses to send an RPC to vtctld, informing
+Vitess of the change in mastership via the
+[TabletExternallyReparented](/reference/vtctl.html#tabletexternallyreparented)
+command.
+
+```json
+  "PostMasterFailoverProcesses": [
+    "echo 'Recovered from {failureType} on {failureCluster}. Failed: {failedHost}:{failedPort}; Promoted: {successorHost}:{successorPort}' >> /tmp/recovery.log",
+    "vtctlclient -server vtctld:15999 TabletExternallyReparented {successorAlias}"
+  ],
+```
+
+#### VTTablet configuration
+
+Normally, you need to seed Orchestrator by giving it the addresses of
+MySQL instances in each shard. If you have lots of shards, this could
+be tedious or error-prone.
+
+Luckily, Vitess already knows everything about all the MySQL instances
+that comprise your cluster. So we provide a mechanism for tablets to
+self-register with the Orchestrator API, configured by the following
+vttablet parameters:
+
+* **orc_api_url**: Address of Orchestrator's HTTP API (e.g. http://host:port/api/). Leave empty to disable Orchestrator integration.
+* **orc_discover_interval**: How often (e.g. 60s) to ping Orchestrator's HTTP API endpoint to tell it we exist. 0 means never.
+
+Not only does this relieve you from the initial seeding of addresses into
+Orchestrator, it also means new instances will be discovered immediately,
+and the topology will automatically repopulate even if Orchestrator's
+backing store is wiped out. Note that Orchestrator will forget stale
+instances after a configurable timeout.
 
