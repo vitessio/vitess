@@ -53,7 +53,7 @@ func init() {
 // so this is a rare cleanup action, not a normal part of the flow.
 //
 // This can be used for tablets, shards and keyspaces.
-func (zkts *Server) PurgeActions(zkActionPath string, canBePurged func(data string) bool) error {
+func (zkts *Server) PurgeActions(zkActionPath string, canBePurged func(data []byte) bool) error {
 	if path.Base(zkActionPath) != "action" {
 		return fmt.Errorf("not action path: %v", zkActionPath)
 	}

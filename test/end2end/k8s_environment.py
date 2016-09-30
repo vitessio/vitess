@@ -182,6 +182,7 @@ class K8sEnvironment(base_environment.BaseEnvironment):
     reparent_command = (
         'EmergencyReparentShard' if emergency else 'PlannedReparentShard')
     self.vtctl_helper.execute_vtctl_command(
-        [reparent_command, '%s/%s' % (keyspace, shard_name), new_master_uid])
+        [reparent_command, '-keyspace_shard', '%s/%s' % (keyspace, shard_name),
+         '-new_master', new_master_uid])
     self.vtctl_helper.execute_vtctl_command(['RebuildKeyspaceGraph', keyspace])
     return 0, 'No output'

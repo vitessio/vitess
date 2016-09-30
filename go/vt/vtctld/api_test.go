@@ -79,14 +79,20 @@ func TestAPI(t *testing.T) {
 	realtimeStats := newRealtimeStatsForTesting()
 	initAPI(ctx, ts, actionRepo, realtimeStats)
 
-	ts1 := tabletStats("cell1", "ks1", "-80", topodatapb.TabletType_REPLICA, 100)
-	ts2 := tabletStats("cell1", "ks1", "-80-", topodatapb.TabletType_RDONLY, 200)
-	ts3 := tabletStats("cell2", "ks1", "80-", topodatapb.TabletType_REPLICA, 300)
-	ts4 := tabletStats("cell2", "ks1", "80-", topodatapb.TabletType_RDONLY, 400)
+	ts1 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 100)
+	ts2 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_RDONLY, 200)
+	ts3 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_REPLICA, 300)
+	ts4 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_RDONLY, 400)
+
+	ts5 := tabletStats("ks2", "cell1", "0", topodatapb.TabletType_REPLICA, 500)
+	ts6 := tabletStats("ks2", "cell2", "0", topodatapb.TabletType_REPLICA, 600)
+
 	realtimeStats.StatsUpdate(ts1)
 	realtimeStats.StatsUpdate(ts2)
 	realtimeStats.StatsUpdate(ts3)
 	realtimeStats.StatsUpdate(ts4)
+	realtimeStats.StatsUpdate(ts5)
+	realtimeStats.StatsUpdate(ts6)
 
 	// Test cases.
 	table := []struct {
@@ -98,7 +104,8 @@ func TestAPI(t *testing.T) {
 		// Keyspaces
 		{"GET", "keyspaces", `["ks1"]`},
 		{"GET", "keyspaces/ks1", `{
-				"sharding_column_name": "shardcol"
+				"sharding_column_name": "shardcol",
+				"sharding_column_type": 0
 			}`},
 		{"POST", "keyspaces/ks1?action=TestKeyspaceAction", `{
 				"Name": "TestKeyspaceAction",
@@ -133,11 +140,14 @@ func TestAPI(t *testing.T) {
 			]`},
 		{"GET", "tablets/cell1-100", `{
 				"alias": {"cell": "cell1", "uid": 100},
+				"hostname": "",
+				"ip": "",
 				"port_map": {"vt": 100},
 				"keyspace": "ks1",
 				"shard": "-80",
 				"key_range": {"end": "gA=="},
-				"type": 2
+				"type": 2,
+				"db_name_override": ""
 			}`},
 		{"POST", "tablets/cell1-100?action=TestTabletAction", `{
 				"Name": "TestTabletAction",
@@ -147,14 +157,52 @@ func TestAPI(t *testing.T) {
 			}`},
 
 		// Tablet Updates
-		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=REPLICA&metric=lag", `
-		   {"Labels":[{"Label":{"Name":"cell1","Rowspan":2},"NestedLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]},
-		           {"Label":{"Name":"cell2","Rowspan":2},"NestedLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]}],
-		           "Data":[[100,-1,-1],[-1,200,-1],[-1,-1,300],[-1,-1,400]],
-		           "Aliases":[[{"cell":"cell1","uid":100},null,null],[null,{"cell":"cell1","uid":200},null],[null,null,{"cell":"cell2","uid":300}],[null,null,{"cell":"cell2","uid":400}]]}
-		`},
+		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=REPLICA&metric=lag", `[
+		{
+		    "Data": [ [100, -1] ],
+		    "Aliases": [[ { "cell": "cell1", "uid": 100 }, null ]],
+		    "KeyspaceLabel": { "Name": "ks1", "Rowspan": 1 },
+		    "CellAndTypeLabels": [{ "CellLabel": { "Name": "cell1",  "Rowspan": 1 }, "TypeLabels": [{"Name": "REPLICA", "Rowspan": 1}] }] ,
+		    "ShardLabels": ["-80", "80-"],
+		    "YGridLines": [0.5]
+		  }
+		]`},
+		{"GET", "tablet_statuses/?keyspace=ks1&cell=all&type=all&metric=lag", `[
+		{
+		  "Data":[[-1,400],[-1,300],[200,-1],[100,-1]],  
+		  "Aliases":[[null,{"cell":"cell2","uid":400}],[null,{"cell":"cell2","uid":300}],[{"cell":"cell1","uid":200},null],[{"cell":"cell1","uid":100},null]],
+		  "KeyspaceLabel":{"Name":"ks1","Rowspan":4},
+		  "CellAndTypeLabels":[
+		     {"CellLabel":{"Name":"cell1","Rowspan":2},"TypeLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]},
+		     {"CellLabel":{"Name":"cell2","Rowspan":2},"TypeLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]}],
+		  "ShardLabels":["-80","80-"],
+		  "YGridLines":[0.5,1.5,2.5,3.5]
+		}
+		]`},
+		{"GET", "tablet_statuses/?keyspace=all&cell=all&type=all&metric=lag", `[
+		  {
+		   "Data":[[-1,300],[200,-1]],
+		   "Aliases":null,
+		   "KeyspaceLabel":{"Name":"ks1","Rowspan":2},
+		  "CellAndTypeLabels":[
+		    {"CellLabel":{"Name":"cell1","Rowspan":1},"TypeLabels":null},
+		    {"CellLabel":{"Name":"cell2","Rowspan":1},"TypeLabels":null}],
+		  "ShardLabels":["-80","80-"],
+		  "YGridLines":[0.5,1.5]
+		  },
+		  {
+		    "Data":[[600],[500]],
+		   "Aliases":null,
+		   "KeyspaceLabel":{"Name":"ks2","Rowspan":2},
+		  "CellAndTypeLabels":[
+		    {"CellLabel":{"Name":"cell1","Rowspan":1},"TypeLabels":null},
+		    {"CellLabel":{"Name":"cell2","Rowspan":1},"TypeLabels":null}],
+		  "ShardLabels":["0"],
+		  "YGridLines":[0.5, 1.5]
+		  }
+		]`},
 		{"GET", "tablet_statuses/cell1/REPLICA/lag", "can't get tablet_statuses: invalid target path: \"cell1/REPLICA/lag\"  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>"},
-		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "can't get tablet_statuses: invalid tablet type: hello"},
+		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "can't get tablet_statuses: invalid tablet type: unknown TabletType hello"},
 
 		// Tablet Health
 		{"GET", "tablet_health/cell1/100", `{ "Key": "", "Tablet": { "alias": { "cell": "cell1", "uid": 100 },"port_map": { "vt": 100 }, "keyspace": "ks1", "shard": "-80", "type": 2},
@@ -162,6 +210,18 @@ func TestAPI(t *testing.T) {
 		  "Stats": { "seconds_behind_master": 100 }, "LastError": null }`},
 		{"GET", "tablet_health/cell1", "can't get tablet_health: invalid tablet_health path: \"cell1\"  expected path: /tablet_health/<cell>/<uid>"},
 		{"GET", "tablet_health/cell1/gh", "can't get tablet_health: incorrect uid: bad tablet uid strconv.ParseUint: parsing \"gh\": invalid syntax"},
+
+		// Topology Info
+		{"GET", "topology_info/?keyspace=all&cell=all", `{
+		   "Keyspaces": ["ks1", "ks2"],
+		   "Cells": ["cell1","cell2"],
+		   "TabletTypes": ["REPLICA","RDONLY"]
+		}`},
+		{"GET", "topology_info/?keyspace=ks1&cell=cell1", `{
+		   "Keyspaces": ["ks1", "ks2"],
+		   "Cells": ["cell1","cell2"],
+		   "TabletTypes": ["REPLICA", "RDONLY"]
+		}`},
 	}
 	for _, in := range table {
 		var resp *http.Response

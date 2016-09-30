@@ -44,6 +44,9 @@ message ExecuteRequest {
 
   // keyspace to target the query to.
   string keyspace = 6;
+
+  // options
+  query.ExecuteOptions options = 7;
 }
 
 // ExecuteResponse is the returned value from Execute.
@@ -84,6 +87,9 @@ message ExecuteShardsRequest {
 
   // not_in_transaction is deprecated and should not be used.
   bool not_in_transaction = 7;
+
+  // options
+  query.ExecuteOptions options = 8;
 }
 
 // ExecuteShardsResponse is the returned value from ExecuteShards.
@@ -125,6 +131,9 @@ message ExecuteKeyspaceIdsRequest {
 
   // not_in_transaction is deprecated and should not be used.
   bool not_in_transaction = 7;
+
+  // options
+  query.ExecuteOptions options = 8;
 }
 
 // ExecuteKeyspaceIdsResponse is the returned value from ExecuteKeyspaceIds.
@@ -166,6 +175,9 @@ message ExecuteKeyRangesRequest {
 
   // not_in_transaction is deprecated and should not be used.
   bool not_in_transaction = 7;
+
+  // options
+  query.ExecuteOptions options = 8;
 }
 
 // ExecuteKeyRangesResponse is the returned value from ExecuteKeyRanges.
@@ -221,6 +233,9 @@ message ExecuteEntityIdsRequest {
 
   // not_in_transaction is deprecated and should not be used.
   bool not_in_transaction = 8;
+
+  // options
+  query.ExecuteOptions options = 9;
 }
 
 // ExecuteEntityIdsResponse is the returned value from ExecuteEntityIds.
@@ -271,6 +286,9 @@ message ExecuteBatchShardsRequest {
   // (this can be seen as adding a 'begin' before and 'commit' after the queries).
   // Only makes sense if tablet_type is master. If set, the Session is ignored.
   bool as_transaction = 5;
+
+  // options
+  query.ExecuteOptions options = 6;
 }
 
 // ExecuteBatchShardsResponse is the returned value from ExecuteBatchShards.
@@ -321,6 +339,9 @@ message ExecuteBatchKeyspaceIdsRequest {
   // (this can be seen as adding a 'begin' before and 'commit' after the queries).
   // Only makes sense if tablet_type is master. If set, the Session is ignored.
   bool as_transaction = 5;
+
+  // options
+  query.ExecuteOptions options = 6;
 }
 
 // ExecuteBatchKeyspaceIdsResponse is the returned value from ExecuteBatchKeyspaceId.
@@ -351,6 +372,9 @@ message StreamExecuteRequest {
 
   // keyspace to target the query to.
   string keyspace = 4;
+
+  // options
+  query.ExecuteOptions options = 5;
 }
 
 // StreamExecuteResponse is the returned value from StreamExecute.
@@ -378,6 +402,9 @@ message StreamExecuteShardsRequest {
 
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 5;
+
+  // options
+  query.ExecuteOptions options = 6;
 }
 
 // StreamExecuteShardsResponse is the returned value from StreamExecuteShards.
@@ -406,6 +433,9 @@ message StreamExecuteKeyspaceIdsRequest {
 
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 5;
+
+  // options
+  query.ExecuteOptions options = 6;
 }
 
 // StreamExecuteKeyspaceIdsResponse is the returned value from StreamExecuteKeyspaceIds.
@@ -434,6 +464,9 @@ message StreamExecuteKeyRangesRequest {
 
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 5;
+
+  // options
+  query.ExecuteOptions options = 6;
 }
 
 // StreamExecuteKeyRangesResponse is the returned value from StreamExecuteKeyRanges.
@@ -631,4 +664,47 @@ message GetSrvKeyspaceRequest {
 message GetSrvKeyspaceResponse {
   // srv_keyspace is the topology object for the SrvKeyspace.
   topodata.SrvKeyspace srv_keyspace = 1;
+}
+
+// UpdateStreamRequest is the payload to UpdateStream.
+message UpdateStreamRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // keyspace to target the query to.
+  string keyspace = 2;
+
+  // shard to target the query to, for unsharded keyspaces.
+  string shard = 3;
+
+  // KeyRange to target the query to, for sharded keyspaces.
+  topodata.KeyRange key_range = 4;
+
+  // tablet_type is the type of tablets that this request is targeted to.
+  topodata.TabletType tablet_type = 5;
+
+  // timestamp is the timestamp to start the stream from.  It is
+  // unused is event is set, and we are only streaming from the shard
+  // described by event.shard.
+  int64 timestamp = 6;
+
+  // event is the event to start the stream from.
+  // Note it is only used if we are streaming from exactly the same shard
+  // as this event was coming from. Otherwise we can't use this event,
+  // and will use the timestamp as a starting point.
+  query.EventToken event = 7;
+}
+
+// UpdateStreamResponse is streamed by UpdateStream.
+message UpdateStreamResponse {
+  // event is one event from the stream.
+  query.StreamEvent event = 1;
+
+  // resume_timestamp is the timestamp to resume streaming from if the
+  // client is interrupted. If the Update Stream only goes to one
+  // shard, this is equal to event.timestamp. If the Update Stream
+  // goes to multiple shards and aggregates, this is the minimum value
+  // of the current timestamp for all shards.
+  int64 resume_timestamp = 2;
 }

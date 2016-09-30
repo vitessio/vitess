@@ -153,12 +153,6 @@ func (flavor *mysql56) SendBinlogDumpCommand(conn *SlaveConnection, startPos rep
 		return fmt.Errorf("startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
 	}
 
-	// Tell the server that we understand the format of events that will be used
-	// if binlog_checksum is enabled on the server.
-	if _, err := conn.ExecuteFetch("SET @master_binlog_checksum=@@global.binlog_checksum", 0, false); err != nil {
-		return fmt.Errorf("failed to set @master_binlog_checksum=@@global.binlog_checksum: %v", err)
-	}
-
 	// Build the command.
 	buf := makeBinlogDumpGTIDCommand(0, conn.slaveID, gtidSet)
 	return conn.SendCommand(ComBinlogDumpGTID, buf)

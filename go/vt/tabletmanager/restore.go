@@ -37,6 +37,12 @@ func (agent *ActionAgent) RestoreData(ctx context.Context, logger logutil.Logger
 }
 
 func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.Logger, deleteBeforeRestore bool) error {
+	// Record local metadata values before we start changing the tablet record.
+	localMetadata, err := agent.getLocalMetadataValues()
+	if err != nil {
+		return err
+	}
+
 	// change type to RESTORE (using UpdateTabletFields so it's
 	// always authorized)
 	tablet := agent.Tablet()
@@ -57,10 +63,6 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	// If we're not ok, return an error and the agent will log.Fatalf,
 	// causing the process to be restarted and the restore retried.
 	dir := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
-	localMetadata, err := agent.getLocalMetadataValues()
-	if err != nil {
-		return err
-	}
 	pos, err := mysqlctl.Restore(ctx, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv(), localMetadata, logger, deleteBeforeRestore)
 	switch err {
 	case nil:

@@ -24,12 +24,6 @@ func (factory *fakeAclFactory) New(entries []string) (acl.ACL, error) {
 	return nil, fmt.Errorf("unable to create a new ACL")
 }
 
-type fakeACL struct{}
-
-func (acl *fakeACL) IsMember(principal string) bool {
-	return false
-}
-
 func TestInitWithInvalidFilePath(t *testing.T) {
 	setUpTableACL(&simpleacl.Factory{})
 	if err := Init("/invalid_file_path", func() {}); err == nil {

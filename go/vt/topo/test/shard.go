@@ -51,14 +51,7 @@ func checkShard(t *testing.T, ts topo.Impl) {
 		t.Fatalf("CreateShard: %v", err)
 	}
 
-	// Delete ALL shards.
-	if err := ts.DeleteKeyspaceShards(ctx, "test_keyspace"); err != nil {
-		t.Fatalf("DeleteKeyspaceShards: %v", err)
-	}
-	if err := ts.CreateShard(ctx, "test_keyspace", "b0-c0", shard); err != nil {
-		t.Fatalf("CreateShard: %v", err)
-	}
-
+	// Test getting an invalid shard returns ErrNoNode.
 	if _, _, err := ts.GetShard(ctx, "test_keyspace", "666"); err != topo.ErrNoNode {
 		t.Errorf("GetShard(666): %v", err)
 	}

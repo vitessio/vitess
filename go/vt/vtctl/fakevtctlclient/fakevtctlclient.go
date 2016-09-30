@@ -32,7 +32,7 @@ func (f *FakeVtctlClient) FakeVtctlClientFactory(addr string, dialTimeout time.D
 
 // ExecuteVtctlCommand is part of the vtctlclient interface.
 func (f *FakeVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout time.Duration) (logutil.EventStream, error) {
-	return f.FakeLoggerEventStreamingClient.StreamResult(args)
+	return f.FakeLoggerEventStreamingClient.StreamResult("" /* addr */, args)
 }
 
 // Close is part of the vtctlclient interface.

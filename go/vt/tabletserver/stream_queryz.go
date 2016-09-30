@@ -13,6 +13,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
+	"github.com/youtube/vitess/go/vt/logz"
 )
 
 var (
@@ -60,8 +61,8 @@ func streamQueryzHandler(queryList *QueryList, w http.ResponseWriter, r *http.Re
 		w.Write(js)
 		return
 	}
-	startHTMLTable(w)
-	defer endHTMLTable(w)
+	logz.StartHTMLTable(w)
+	defer logz.EndHTMLTable(w)
 	w.Write(streamqueryzHeader)
 	for i := range rows {
 		if err := streamqueryzTmpl.Execute(w, rows[i]); err != nil {

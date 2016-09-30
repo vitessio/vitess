@@ -24,6 +24,9 @@ namespace Vitess\Proto\Query {
     /**  @var int */
     public $transaction_id = null;
     
+    /**  @var \Vitess\Proto\Query\ExecuteOptions */
+    public $options = null;
+    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -82,6 +85,15 @@ namespace Vitess\Proto\Query {
       $f->name      = "transaction_id";
       $f->type      = \DrSlump\Protobuf::TYPE_INT64;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $descriptor->addField($f);
+
+      // OPTIONAL MESSAGE options = 7
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 7;
+      $f->name      = "options";
+      $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $f->reference = '\Vitess\Proto\Query\ExecuteOptions';
       $descriptor->addField($f);
 
       foreach (self::$__extensions as $cb) {
@@ -331,6 +343,43 @@ namespace Vitess\Proto\Query {
      */
     public function setTransactionId( $value){
       return $this->_set(6, $value);
+    }
+    
+    /**
+     * Check if <options> has a value
+     *
+     * @return boolean
+     */
+    public function hasOptions(){
+      return $this->_has(7);
+    }
+    
+    /**
+     * Clear <options> value
+     *
+     * @return \Vitess\Proto\Query\ExecuteBatchRequest
+     */
+    public function clearOptions(){
+      return $this->_clear(7);
+    }
+    
+    /**
+     * Get <options> value
+     *
+     * @return \Vitess\Proto\Query\ExecuteOptions
+     */
+    public function getOptions(){
+      return $this->_get(7);
+    }
+    
+    /**
+     * Set <options> value
+     *
+     * @param \Vitess\Proto\Query\ExecuteOptions $value
+     * @return \Vitess\Proto\Query\ExecuteBatchRequest
+     */
+    public function setOptions(\Vitess\Proto\Query\ExecuteOptions $value){
+      return $this->_set(7, $value);
     }
   }
 }

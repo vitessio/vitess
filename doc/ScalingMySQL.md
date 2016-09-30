@@ -16,7 +16,7 @@ Starting out, our first step is getting a simple, reliable, durable database clu
 
 ### Planning for scale
 
-We recommend a number of best practices to facilitate scaling your database as your product evolves. You might not experience the benefits of these actions immediately, but adopting these practices from day one will make it much database and product to grow:
+We recommend a number of best practices to facilitate scaling your database as your product evolves. You might not experience the benefits of these actions immediately, but adopting these practices from day one will make it much easier for your database and product to grow:
 
 * Always keep your database schema under source control and provide unit test coverage of that schema. Also check schema changes into source control and run unit tests against the newly modified schema.
 * Think about appropriate sharding keys for your data and structure that data accordingly. Usually, sharding keys are obvious -- e.g. a user ID. However, having your key(s) in place ahead of time is much easier than needing to retrofit your data before you can actually shard it.

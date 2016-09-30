@@ -69,5 +69,11 @@ namespace Vitess\Proto\Queryservice {
     public function StreamHealth($argument, $metadata = array(), $options = array()) {
       return $this->_serverStreamRequest('/queryservice.Query/StreamHealth', $argument, '\Vitess\Proto\Query\StreamHealthResponse::deserialize', $metadata, $options);
     }
+    /**
+     * @param Vitess\Proto\Query\UpdateStreamRequest $input
+     */
+    public function UpdateStream($argument, $metadata = array(), $options = array()) {
+      return $this->_serverStreamRequest('/queryservice.Query/UpdateStream', $argument, '\Vitess\Proto\Query\UpdateStreamResponse::deserialize', $metadata, $options);
+    }
   }
 }

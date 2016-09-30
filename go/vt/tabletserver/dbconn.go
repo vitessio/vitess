@@ -6,6 +6,7 @@ package tabletserver
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -84,9 +85,12 @@ func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, want
 	dbc.current.Set(query)
 	defer dbc.current.Set("")
 
-	done := dbc.setDeadline(ctx)
+	done, wg := dbc.setDeadline(ctx)
 	if done != nil {
-		defer close(done)
+		defer func() {
+			close(done)
+			wg.Wait()
+		}()
 	}
 	// Uncomment this line for manual testing.
 	// defer time.Sleep(20 * time.Second)
@@ -99,7 +103,7 @@ func (dbc *DBConn) ExecOnce(ctx context.Context, query string, maxrows int, want
 }
 
 // Stream executes the query and streams the results.
-func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
+func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int, excludeFieldNames bool) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("DBConn.Stream")
 	defer span.Finish()
@@ -110,7 +114,12 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 			ctx,
 			query,
 			func(r *sqltypes.Result) error {
-				resultSent = true
+				if !resultSent {
+					resultSent = true
+					if excludeFieldNames {
+						r = r.StripFieldNames()
+					}
+				}
 				return callback(r)
 			},
 			streamBufferSize,
@@ -135,9 +144,12 @@ func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*
 	dbc.current.Set(query)
 	defer dbc.current.Set("")
 
-	done := dbc.setDeadline(ctx)
+	done, wg := dbc.setDeadline(ctx)
 	if done != nil {
-		defer close(done)
+		defer func() {
+			close(done)
+			wg.Wait()
+		}()
 	}
 	return dbc.conn.ExecuteStreamFetch(query, callback, streamBufferSize)
 }
@@ -209,22 +221,22 @@ func (dbc *DBConn) reconnect() error {
 	return nil
 }
 
-func (dbc *DBConn) setDeadline(ctx context.Context) chan bool {
+// setDeadline starts a goroutine that will kill the currently executing query
+// if the deadline is exceeded. It returns a channel and a waitgroup. After the
+// query is done executing, the caller is required to close the done channel
+// and wait for the waitgroup to make sure that the necessary cleanup is done.
+func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup) {
 	if ctx.Done() == nil {
-		return nil
+		return nil, nil
 	}
 	done := make(chan bool)
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		startTime := time.Now()
 		select {
 		case <-ctx.Done():
-			// There is a possibility that the query returned very fast,
-			// which will cause ctx to get canceled. Check for this condition.
-			select {
-			case <-done:
-				return
-			default:
-			}
 			dbc.Kill(ctx.Err().Error())
 		case <-done:
 			return
@@ -245,5 +257,5 @@ func (dbc *DBConn) setDeadline(ctx context.Context) chan bool {
 		<-done
 		log.Warningf("Hung query returned")
 	}()
-	return done
+	return done, &wg
 }

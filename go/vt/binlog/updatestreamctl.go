@@ -9,6 +9,8 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
@@ -34,7 +36,6 @@ var usStateNames = map[int64]string{
 var (
 	streamCount          = stats.NewCounters("UpdateStreamStreamCount")
 	updateStreamErrors   = stats.NewCounters("UpdateStreamErrors")
-	updateStreamEvents   = stats.NewCounters("UpdateStreamEvents")
 	keyrangeStatements   = stats.NewInt("UpdateStreamKeyRangeStatements")
 	keyrangeTransactions = stats.NewInt("UpdateStreamKeyRangeTransactions")
 	tablesStatements     = stats.NewInt("UpdateStreamTablesStatements")
@@ -99,36 +100,47 @@ type UpdateStreamImpl struct {
 	actionLock     sync.Mutex
 	state          sync2.AtomicInt64
 	stateWaitGroup sync.WaitGroup
-	streams        streamList
+	streams        StreamList
 }
 
-type streamList struct {
+// StreamList is a map of context.CancelFunc to mass-interrupt ongoing
+// calls.
+type StreamList struct {
 	sync.Mutex
-	streams map[*sync2.ServiceManager]bool
+	currentIndex int
+	streams      map[int]context.CancelFunc
 }
 
-func (sl *streamList) Init() {
+// Init must be called before using the list.
+func (sl *StreamList) Init() {
 	sl.Lock()
-	sl.streams = make(map[*sync2.ServiceManager]bool)
+	sl.streams = make(map[int]context.CancelFunc)
+	sl.currentIndex = 0
 	sl.Unlock()
 }
 
-func (sl *streamList) Add(e *sync2.ServiceManager) {
+// Add adds a CancelFunc to the map.
+func (sl *StreamList) Add(c context.CancelFunc) int {
 	sl.Lock()
-	sl.streams[e] = true
+	defer sl.Unlock()
+
+	sl.currentIndex++
+	sl.streams[sl.currentIndex] = c
+	return sl.currentIndex
+}
+
+// Delete removes a CancelFunc from the list.
+func (sl *StreamList) Delete(i int) {
+	sl.Lock()
+	delete(sl.streams, i)
 	sl.Unlock()
 }
 
-func (sl *streamList) Delete(e *sync2.ServiceManager) {
+// Stop stops all the current streams.
+func (sl *StreamList) Stop() {
 	sl.Lock()
-	delete(sl.streams, e)
-	sl.Unlock()
-}
-
-func (sl *streamList) Stop() {
-	sl.Lock()
-	for stream := range sl.streams {
-		stream.Stop()
+	for _, c := range sl.streams {
+		c()
 	}
 	sl.Unlock()
 }
@@ -203,45 +215,8 @@ func (updateStream *UpdateStreamImpl) IsEnabled() bool {
 	return updateStream.state.Get() == usEnabled
 }
 
-// ServeUpdateStream is part of the UpdateStream interface
-func (updateStream *UpdateStreamImpl) ServeUpdateStream(position string, sendReply func(reply *binlogdatapb.StreamEvent) error) (err error) {
-	pos, err := replication.DecodePosition(position)
-	if err != nil {
-		return err
-	}
-
-	updateStream.actionLock.Lock()
-	if !updateStream.IsEnabled() {
-		updateStream.actionLock.Unlock()
-		log.Errorf("Unable to serve client request: update stream service is not enabled")
-		return fmt.Errorf("update stream service is not enabled")
-	}
-	updateStream.stateWaitGroup.Add(1)
-	updateStream.actionLock.Unlock()
-	defer updateStream.stateWaitGroup.Done()
-
-	streamCount.Add("Updates", 1)
-	defer streamCount.Add("Updates", -1)
-	log.Infof("ServeUpdateStream starting @ %#v", pos)
-
-	evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld, pos, func(reply *binlogdatapb.StreamEvent) error {
-		if reply.Category == binlogdatapb.StreamEvent_SE_ERR {
-			updateStreamErrors.Add("UpdateStream", 1)
-		} else {
-			updateStreamEvents.Add(reply.Category.String(), 1)
-		}
-		return sendReply(reply)
-	})
-
-	svm := &sync2.ServiceManager{}
-	svm.Go(evs.Stream)
-	updateStream.streams.Add(svm)
-	defer updateStream.streams.Delete(svm)
-	return svm.Join()
-}
-
 // StreamKeyRange is part of the UpdateStream interface
-func (updateStream *UpdateStreamImpl) StreamKeyRange(position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) (err error) {
+func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) (err error) {
 	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
@@ -267,17 +242,17 @@ func (updateStream *UpdateStreamImpl) StreamKeyRange(position string, keyRange *
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
 	})
-	bls := NewStreamer(updateStream.dbname, updateStream.mysqld, charset, pos, f)
+	bls := NewStreamer(updateStream.dbname, updateStream.mysqld, charset, pos, 0, f)
 
-	svm := &sync2.ServiceManager{}
-	svm.Go(bls.Stream)
-	updateStream.streams.Add(svm)
-	defer updateStream.streams.Delete(svm)
-	return svm.Join()
+	streamCtx, cancel := context.WithCancel(ctx)
+	i := updateStream.streams.Add(cancel)
+	defer updateStream.streams.Delete(i)
+
+	return bls.Stream(streamCtx)
 }
 
 // StreamTables is part of the UpdateStream interface
-func (updateStream *UpdateStreamImpl) StreamTables(position string, tables []string, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) (err error) {
+func (updateStream *UpdateStreamImpl) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) (err error) {
 	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
@@ -303,13 +278,13 @@ func (updateStream *UpdateStreamImpl) StreamTables(position string, tables []str
 		tablesTransactions.Add(1)
 		return sendReply(reply)
 	})
-	bls := NewStreamer(updateStream.dbname, updateStream.mysqld, charset, pos, f)
+	bls := NewStreamer(updateStream.dbname, updateStream.mysqld, charset, pos, 0, f)
 
-	svm := &sync2.ServiceManager{}
-	svm.Go(bls.Stream)
-	updateStream.streams.Add(svm)
-	defer updateStream.streams.Delete(svm)
-	return svm.Join()
+	streamCtx, cancel := context.WithCancel(ctx)
+	i := updateStream.streams.Add(cancel)
+	defer updateStream.streams.Delete(i)
+
+	return bls.Stream(streamCtx)
 }
 
 // HandlePanic is part of the UpdateStream interface

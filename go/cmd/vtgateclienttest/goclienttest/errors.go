@@ -30,6 +30,7 @@ var (
 		"integrity error":   vtrpcpb.ErrorCode_INTEGRITY_ERROR,
 		"transient error":   vtrpcpb.ErrorCode_TRANSIENT_ERROR,
 		"unauthenticated":   vtrpcpb.ErrorCode_UNAUTHENTICATED,
+		"aborted":           vtrpcpb.ErrorCode_NOT_IN_TX,
 		"unknown error":     vtrpcpb.ErrorCode_UNKNOWN_ERROR,
 	}
 )
@@ -39,29 +40,30 @@ func testErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 	testExecuteErrors(t, conn)
 	testStreamExecuteErrors(t, conn)
 	testTransactionExecuteErrors(t, conn)
+	testUpdateStreamErrors(t, conn)
 }
 
 func testExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 
 	checkExecuteErrors(t, func(query string) error {
-		_, err := conn.Execute(ctx, query, bindVars, tabletType)
+		_, err := conn.Execute(ctx, query, bindVars, tabletType, nil)
 		return err
 	})
 	checkExecuteErrors(t, func(query string) error {
-		_, err := conn.ExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType)
+		_, err := conn.ExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType, nil)
 		return err
 	})
 	checkExecuteErrors(t, func(query string) error {
-		_, err := conn.ExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIDs, bindVars, tabletType)
+		_, err := conn.ExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIDs, bindVars, tabletType, nil)
 		return err
 	})
 	checkExecuteErrors(t, func(query string) error {
-		_, err := conn.ExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType)
+		_, err := conn.ExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType, nil)
 		return err
 	})
 	checkExecuteErrors(t, func(query string) error {
-		_, err := conn.ExecuteEntityIds(ctx, query, keyspace, "column1", entityKeyspaceIDs, bindVars, tabletType)
+		_, err := conn.ExecuteEntityIds(ctx, query, keyspace, "column1", entityKeyspaceIDs, bindVars, tabletType, nil)
 		return err
 	})
 	checkExecuteErrors(t, func(query string) error {
@@ -74,7 +76,7 @@ func testExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 				Keyspace: keyspace,
 				Shards:   shards,
 			},
-		}, tabletType, true)
+		}, tabletType, true, nil)
 		return err
 	})
 	checkExecuteErrors(t, func(query string) error {
@@ -87,7 +89,7 @@ func testExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 				Keyspace:    keyspace,
 				KeyspaceIds: keyspaceIDs,
 			},
-		}, tabletType, true)
+		}, tabletType, true, nil)
 		return err
 	})
 }
@@ -96,16 +98,24 @@ func testStreamExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 
 	checkStreamExecuteErrors(t, func(query string) error {
-		return getStreamError(conn.StreamExecute(ctx, query, bindVars, tabletType))
+		return getStreamError(conn.StreamExecute(ctx, query, bindVars, tabletType, nil))
 	})
 	checkStreamExecuteErrors(t, func(query string) error {
-		return getStreamError(conn.StreamExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType))
+		return getStreamError(conn.StreamExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType, nil))
 	})
 	checkStreamExecuteErrors(t, func(query string) error {
-		return getStreamError(conn.StreamExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIDs, bindVars, tabletType))
+		return getStreamError(conn.StreamExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIDs, bindVars, tabletType, nil))
 	})
 	checkStreamExecuteErrors(t, func(query string) error {
-		return getStreamError(conn.StreamExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType))
+		return getStreamError(conn.StreamExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType, nil))
+	})
+}
+
+func testUpdateStreamErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := context.Background()
+
+	checkStreamExecuteErrors(t, func(query string) error {
+		return getUpdateStreamError(conn.UpdateStream(ctx, query, nil, tabletType, 0, nil))
 	})
 }
 
@@ -113,23 +123,23 @@ func testTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.Execute(ctx, query, bindVars, tabletType)
+		_, err := tx.Execute(ctx, query, bindVars, tabletType, nil)
 		return err
 	})
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.ExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType)
+		_, err := tx.ExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType, nil)
 		return err
 	})
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.ExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIDs, bindVars, tabletType)
+		_, err := tx.ExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIDs, bindVars, tabletType, nil)
 		return err
 	})
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.ExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType)
+		_, err := tx.ExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType, nil)
 		return err
 	})
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.ExecuteEntityIds(ctx, query, keyspace, "column1", entityKeyspaceIDs, bindVars, tabletType)
+		_, err := tx.ExecuteEntityIds(ctx, query, keyspace, "column1", entityKeyspaceIDs, bindVars, tabletType, nil)
 		return err
 	})
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
@@ -142,7 +152,7 @@ func testTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 				Keyspace: keyspace,
 				Shards:   shards,
 			},
-		}, tabletType)
+		}, tabletType, nil)
 		return err
 	})
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
@@ -155,7 +165,7 @@ func testTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 				Keyspace:    keyspace,
 				KeyspaceIds: keyspaceIDs,
 			},
-		}, tabletType)
+		}, tabletType, nil)
 		return err
 	})
 }
@@ -166,6 +176,23 @@ func getStreamError(stream sqltypes.ResultStream, err error) error {
 	}
 	for {
 		_, err := stream.Recv()
+		switch err {
+		case nil:
+			// keep going
+		case io.EOF:
+			return nil
+		default:
+			return err
+		}
+	}
+}
+
+func getUpdateStreamError(stream vtgateconn.UpdateStreamReader, err error) error {
+	if err != nil {
+		return err
+	}
+	for {
+		_, _, err := stream.Recv()
 		switch err {
 		case nil:
 			// keep going

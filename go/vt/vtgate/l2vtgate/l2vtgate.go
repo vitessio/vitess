@@ -81,13 +81,13 @@ func (l *L2VTGate) Rollback(ctx context.Context, target *querypb.Target, transac
 }
 
 // Execute is part of the queryservice.QueryService interface
-func (l *L2VTGate) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
-	return l.gateway.Execute(ctx, target.Keyspace, target.Shard, target.TabletType, sql, bindVariables, transactionID)
+func (l *L2VTGate) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	return l.gateway.Execute(ctx, target.Keyspace, target.Shard, target.TabletType, sql, bindVariables, transactionID, options)
 }
 
 // StreamExecute is part of the queryservice.QueryService interface
-func (l *L2VTGate) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sendReply func(*sqltypes.Result) error) error {
-	stream, err := l.gateway.StreamExecute(ctx, target.Keyspace, target.Shard, target.TabletType, sql, bindVariables)
+func (l *L2VTGate) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+	stream, err := l.gateway.StreamExecute(ctx, target.Keyspace, target.Shard, target.TabletType, sql, bindVariables, options)
 	if err != nil {
 		return err
 	}
@@ -106,18 +106,18 @@ func (l *L2VTGate) StreamExecute(ctx context.Context, target *querypb.Target, sq
 }
 
 // ExecuteBatch is part of the queryservice.QueryService interface
-func (l *L2VTGate) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
-	return l.gateway.ExecuteBatch(ctx, target.Keyspace, target.Shard, target.TabletType, queries, asTransaction, transactionID)
+func (l *L2VTGate) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
+	return l.gateway.ExecuteBatch(ctx, target.Keyspace, target.Shard, target.TabletType, queries, asTransaction, transactionID, options)
 }
 
 // BeginExecute is part of the queryservice.QueryService interface
-func (l *L2VTGate) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}) (*sqltypes.Result, int64, error) {
-	return l.gateway.BeginExecute(ctx, target.Keyspace, target.Shard, target.TabletType, sql, bindVariables)
+func (l *L2VTGate) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
+	return l.gateway.BeginExecute(ctx, target.Keyspace, target.Shard, target.TabletType, sql, bindVariables, options)
 }
 
 // BeginExecuteBatch is part of the queryservice.QueryService interface
-func (l *L2VTGate) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, int64, error) {
-	return l.gateway.BeginExecuteBatch(ctx, target.Keyspace, target.Shard, target.TabletType, queries, asTransaction)
+func (l *L2VTGate) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
+	return l.gateway.BeginExecuteBatch(ctx, target.Keyspace, target.Shard, target.TabletType, queries, asTransaction, options)
 }
 
 // SplitQuery is part of the queryservice.QueryService interface
@@ -138,6 +138,26 @@ func (l *L2VTGate) StreamHealthRegister(chan<- *querypb.StreamHealthResponse) (i
 // StreamHealthUnregister is part of the queryservice.QueryService interface
 func (l *L2VTGate) StreamHealthUnregister(int) error {
 	return fmt.Errorf("L2VTGate does not provide health status")
+}
+
+// UpdateStream is part of the queryservice.QueryService interface
+func (l *L2VTGate) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, sendReply func(*querypb.StreamEvent) error) error {
+	stream, err := l.gateway.UpdateStream(ctx, target.Keyspace, target.Shard, target.TabletType, position, timestamp)
+	if err != nil {
+		return err
+	}
+	for {
+		r, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+		if err := sendReply(r); err != nil {
+			return err
+		}
+	}
 }
 
 // HandlePanic is part of the queryservice.QueryService interface

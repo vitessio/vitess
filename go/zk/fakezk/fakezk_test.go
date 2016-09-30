@@ -22,22 +22,22 @@ func TestBasic(t *testing.T) {
 
 	// Make sure Conn implements the interface.
 	var _ zk.Conn = conn
-	if _, err := conn.Create("/zk", "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
+	if _, err := conn.Create("/zk", nil, 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 		t.Fatalf("conn.Create: %v", err)
 	}
 
-	if _, err := conn.Create("/zk/foo", "foo", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
+	if _, err := conn.Create("/zk/foo", []byte("foo"), 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 		t.Fatalf("conn.Create: %v", err)
 	}
 	data, _, err := conn.Get("/zk/foo")
 	if err != nil {
 		t.Fatalf("conn.Get: %v", err)
 	}
-	if data != "foo" {
+	if string(data) != "foo" {
 		t.Errorf("got %q, wanted %q", data, "foo")
 	}
 
-	if _, err := conn.Set("/zk/foo", "bar", -1); err != nil {
+	if _, err := conn.Set("/zk/foo", []byte("bar"), -1); err != nil {
 		t.Fatalf("conn.Set: %v", err)
 	}
 
@@ -45,12 +45,12 @@ func TestBasic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("conn.Get: %v", err)
 	}
-	if data != "bar" {
+	if string(data) != "bar" {
 		t.Errorf("got %q, wanted %q", data, "bar")
 	}
 
 	// Try Set with the wrong version.
-	if _, err := conn.Set("/zk/foo", "bar", 0); err == nil {
+	if _, err := conn.Set("/zk/foo", []byte("bar"), 0); err == nil {
 		t.Error("conn.Set with a wrong version: expected error")
 	}
 
@@ -60,16 +60,16 @@ func TestBasic(t *testing.T) {
 	}
 
 	// Try Set with a node that doesn't exist.
-	if _, err := conn.Set("/zk/barbarbar", "bar", -1); err == nil {
+	if _, err := conn.Set("/zk/barbarbar", []byte("bar"), -1); err == nil {
 		t.Error("conn.Get with a node that doesn't exist: expected error")
 	}
 
 	// Try Create with a node that exists.
-	if _, err := conn.Create("/zk/foo", "foo", 0, zookeeper.WorldACL(zookeeper.PermAll)); err == nil {
+	if _, err := conn.Create("/zk/foo", []byte("foo"), 0, zookeeper.WorldACL(zookeeper.PermAll)); err == nil {
 		t.Errorf("conn.Create with a node that exists: expected error")
 	}
 	// Try Create with a node whose parents don't exist.
-	if _, err := conn.Create("/a/b/c", "foo", 0, zookeeper.WorldACL(zookeeper.PermAll)); err == nil {
+	if _, err := conn.Create("/a/b/c", []byte("foo"), 0, zookeeper.WorldACL(zookeeper.PermAll)); err == nil {
 		t.Errorf("conn.Create with a node whose parents don't exist: expected error")
 	}
 
@@ -92,7 +92,7 @@ func TestChildren(t *testing.T) {
 	nodes := []string{"/zk", "/zk/foo", "/zk/bar"}
 	wantChildren := []string{"bar", "foo"}
 	for _, path := range nodes {
-		if _, err := conn.Create(path, "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
+		if _, err := conn.Create(path, nil, 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 			t.Fatalf("conn.Create: %v", err)
 		}
 	}
@@ -128,7 +128,7 @@ func TestWatches(t *testing.T) {
 		t.Errorf("stat is not nil: %v", stat)
 	}
 
-	if _, err := conn.Create("/zk", "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
+	if _, err := conn.Create("/zk", nil, 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 		t.Fatalf("conn.Create: %v", err)
 	}
 
@@ -139,7 +139,7 @@ func TestWatches(t *testing.T) {
 	if err != nil {
 		t.Errorf(`conn.ChildrenW("/zk"): %v`, err)
 	}
-	if _, err := conn.Create("/zk/foo", "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
+	if _, err := conn.Create("/zk/foo", nil, 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 		t.Fatalf("conn.Create: %v", err)
 	}
 
@@ -151,7 +151,7 @@ func TestWatches(t *testing.T) {
 		t.Errorf(`conn.GetW("/zk"): %v`, err)
 	}
 
-	if _, err := conn.Set("/zk", "foo", -1); err != nil {
+	if _, err := conn.Set("/zk", []byte("foo"), -1); err != nil {
 		t.Errorf("conn.Set /zk: %v", err)
 	}
 	fireWatch(t, watch)
@@ -193,11 +193,11 @@ func fireWatch(t *testing.T, watch <-chan zookeeper.Event) zookeeper.Event {
 func TestSequence(t *testing.T) {
 	conn := NewConn()
 	defer conn.Close()
-	if _, err := conn.Create("/zk", "", 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
+	if _, err := conn.Create("/zk", nil, 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
 		t.Fatalf("conn.Create: %v", err)
 	}
 
-	newPath, err := conn.Create("/zk/", "", zookeeper.FlagSequence, zookeeper.WorldACL(zookeeper.PermAll))
+	newPath, err := conn.Create("/zk/", nil, zookeeper.FlagSequence, zookeeper.WorldACL(zookeeper.PermAll))
 	if err != nil {
 		t.Errorf("conn.Create: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestSequence(t *testing.T) {
 		t.Errorf("new path: got %q, wanted %q", newPath, wanted)
 	}
 
-	newPath, err = conn.Create("/zk/", "", zookeeper.FlagSequence, zookeeper.WorldACL(zookeeper.PermAll))
+	newPath, err = conn.Create("/zk/", nil, zookeeper.FlagSequence, zookeeper.WorldACL(zookeeper.PermAll))
 	if err != nil {
 		t.Errorf("conn.Create: %v", err)
 	}
@@ -218,7 +218,7 @@ func TestSequence(t *testing.T) {
 		t.Fatalf("conn.Delete: %v", err)
 	}
 
-	newPath, err = conn.Create("/zk/", "", zookeeper.FlagSequence, zookeeper.WorldACL(zookeeper.PermAll))
+	newPath, err = conn.Create("/zk/", nil, zookeeper.FlagSequence, zookeeper.WorldACL(zookeeper.PermAll))
 	if err != nil {
 		t.Errorf("conn.Create: %v", err)
 	}
@@ -227,7 +227,7 @@ func TestSequence(t *testing.T) {
 		t.Errorf("new path: got %q, wanted %q", newPath, wanted)
 	}
 
-	newPath, err = conn.Create("/zk/action_", "", zookeeper.FlagSequence, zookeeper.WorldACL(zookeeper.PermAll))
+	newPath, err = conn.Create("/zk/action_", nil, zookeeper.FlagSequence, zookeeper.WorldACL(zookeeper.PermAll))
 	if err != nil {
 		t.Errorf("conn.Create: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestFromFile(t *testing.T) {
 	if err != nil {
 		t.Errorf("conn.Get(/zk/testing/vt/ns/test_keyspace): %v", err)
 	}
-	if !strings.Contains(data, "ShardReferences") {
+	if !strings.Contains(string(data), "ShardReferences") {
 		t.Errorf("conn.Get(/zk/testing/vt/ns/test_keyspace) returned bad value: %v", data)
 	}
 
@@ -261,7 +261,7 @@ func TestFromFile(t *testing.T) {
 	if err != nil {
 		t.Errorf("conn.Get(/zk/testing/vt/ns/test_keyspace/0/master): %v", err)
 	}
-	if !strings.Contains(data, "NamedPortMap") {
+	if !strings.Contains(string(data), "NamedPortMap") {
 		t.Errorf("conn.Get(/zk/testing/vt/ns/test_keyspace/0/master) returned bad value: %v", data)
 	}
 }

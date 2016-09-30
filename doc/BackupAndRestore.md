@@ -6,12 +6,15 @@ Vitess. Vitess uses backups for two purposes:
 
 ## Prerequisites
 
-Vitess stores data backups on a Backup Storage service. Currently,
-Vitess supports backups to either [Google Cloud Storage](https://cloud.google.com/storage/)
-or any network-mounted drive (such as NFS). The core Vitess software's
-[BackupStorage interface](https://github.com/youtube/vitess/blob/master/go/vt/mysqlctl/backupstorage/interface.go)
-defines methods for creating, listing, and removing backups. Plugins for other
-storage services just need to implement the interface.
+Vitess stores data backups on a Backup Storage service, which is
+a [pluggable interface](https://github.com/youtube/vitess/blob/master/go/vt/mysqlctl/backupstor    age/interface.go).
+
+Currently, we have plugins for:
+
+* A network-mounted path (e.g. NFS)
+* Google Cloud Storage
+* Amazon S3
+* Ceph
 
 Before you can back up or restore a tablet, you need to ensure that the
 tablet is aware of the Backup Storage system that you are using. To do so,
@@ -30,9 +33,10 @@ access to the location where you are storing backups.
       <td>Specifies the implementation of the Backup Storage interface to use.<br><br>
           Current plugin options available are:
           <ul>
-          <li><code>gcs</code>: For Google Cloud Storage.</li>
-          <li><code>ceph</code>: For Ceph Object Gateway S3 API.</li>
-          <li><code>file</code>: For NFS or any other filesystem-mounted network drive.</li>
+          <li><code>file</code>: NFS or any other filesystem-mounted network drive.</li>
+          <li><code>gcs</code>: Google Cloud Storage.</li>
+          <li><code>s3</code>: Amazon S3.</li>
+          <li><code>ceph</code>: Ceph Object Gateway S3 API.</li>
           </ul>
       </td>
     </tr>
@@ -41,16 +45,20 @@ access to the location where you are storing backups.
       <td>For the <code>file</code> plugin, this identifies the root directory for backups.</td>
     </tr>
     <tr>
-      <td><nobr><code>-gcs_backup_storage_project</code></nobr></td>
-      <td>For the <code>gcs</code> plugin, this identifies the <a href="https://cloud.google.com/storage/docs/projects">project</a> to use.</td>
-    </tr>
-    <tr>
       <td><nobr><code>-gcs_backup_storage_bucket</code></nobr></td>
       <td>For the <code>gcs</code> plugin, this identifies the <a href="https://cloud.google.com/storage/docs/concepts-techniques#concepts">bucket</a> to use.</td>
     </tr>
     <tr>
+      <td><nobr><code>-s3_backup_aws_region</code></nobr></td>
+      <td>For the <code>s3</code> plugin, this identifies the AWS region.</td>
+    </tr>
+    <tr>
+      <td><nobr><code>-s3_backup_storage_bucket</code></nobr></td>
+      <td>For the <code>s3</code> plugin, this identifies the AWS S3 bucket.</td>
+    </tr>
+    <tr>
       <td><nobr><code>-ceph_backup_storage_config</code></nobr></td>
-      <td>For the <code>ceph</code> plugin, this identifies the path to a text file with a JSON object as configuration. The JSON object requires the following keys: <code>accessKey</code>, <code>secretKey</code> and  <code>endPoint</code>. Bucket name is computed from keyspace name and is separate for different keyspaces.</td>
+      <td>For the <code>ceph</code> plugin, this identifies the path to a text file with a JSON object as configuration. The JSON object requires the following keys: <code>accessKey</code>, <code>secretKey</code>, <code>endPoint</code> and <code>useSSL</code>. Bucket name is computed from keyspace name and is separate for different keyspaces.</td>
     </tr>
     <tr>
       <td><nobr><code>-restore_from_backup</code></nobr></td>

@@ -92,10 +92,20 @@ class TestTabletManager(unittest.TestCase):
 
     tablet_62344.start_vttablet()
 
-    # make sure the query service is started right away
-    qr = tablet_62344.execute('select * from vt_select_test')
+    # make sure the query service is started right away.
+    qr = tablet_62344.execute('select id, msg from vt_select_test')
     self.assertEqual(len(qr['rows']), 4,
                      'expected 4 rows in vt_select_test: %s' % str(qr))
+    self.assertEqual(qr['fields'][0]['name'], 'id')
+    self.assertEqual(qr['fields'][1]['name'], 'msg')
+
+    # test exclude_field_names to vttablet works as expected.
+    qr = tablet_62344.execute('select id, msg from vt_select_test',
+                              execute_options='exclude_field_names:true ')
+    self.assertEqual(len(qr['rows']), 4,
+                     'expected 4 rows in vt_select_test: %s' % str(qr))
+    self.assertNotIn('name', qr['fields'][0])
+    self.assertNotIn('name', qr['fields'][1])
 
     # make sure direct dba queries work
     query_result = utils.run_vtctl_json(

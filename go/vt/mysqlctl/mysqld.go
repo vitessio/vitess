@@ -30,7 +30,6 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	vtenv "github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/hook"
@@ -52,14 +51,16 @@ var (
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
-	config        *Mycnf
-	dba           *sqldb.ConnParams
-	dbApp         *sqldb.ConnParams
-	dbaPool       *dbconnpool.ConnectionPool
-	appPool       *dbconnpool.ConnectionPool
-	replParams    *sqldb.ConnParams
-	dbaMysqlStats *stats.Timings
-	tabletDir     string
+	config             *Mycnf
+	dba                *sqldb.ConnParams
+	allprivs           *sqldb.ConnParams
+	dbApp              *sqldb.ConnParams
+	dbaPool            *dbconnpool.ConnectionPool
+	appPool            *dbconnpool.ConnectionPool
+	replParams         *sqldb.ConnParams
+	dbaMysqlStats      *stats.Timings
+	allprivsMysqlStats *stats.Timings
+	tabletDir          string
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
@@ -70,43 +71,52 @@ type Mysqld struct {
 
 // NewMysqld creates a Mysqld object based on the provided configuration
 // and connection parameters.
-// dbaName and appName are the base for stats exports, use 'Dba' and 'App', except in tests
-func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *sqldb.ConnParams) *Mysqld {
-	if *dba == dbconfigs.DefaultDBConfigs.Dba {
+func NewMysqld(config *Mycnf, dba, allprivs, app, repl *sqldb.ConnParams, enablePublishStats bool) *Mysqld {
+	noParams := sqldb.ConnParams{}
+	if *dba == noParams {
 		dba.UnixSocket = config.SocketFile
 	}
 
 	// create and open the connection pool for dba access
 	dbaMysqlStatsName := ""
 	dbaPoolName := ""
-	if dbaName != "" {
-		dbaMysqlStatsName = "Mysql" + dbaName
-		dbaPoolName = dbaName + "ConnPool"
+	if enablePublishStats {
+		dbaMysqlStatsName = "MysqlDba"
+		dbaPoolName = "DbaConnPool"
 	}
 	dbaMysqlStats := stats.NewTimings(dbaMysqlStatsName)
 	dbaPool := dbconnpool.NewConnectionPool(dbaPoolName, *dbaPoolSize, *dbaIdleTimeout)
 	dbaPool.Open(dbconnpool.DBConnectionCreator(dba, dbaMysqlStats))
 
+	// create and open the connection pool for allprivs access
+	allprivsMysqlStatsName := ""
+	if enablePublishStats {
+		allprivsMysqlStatsName = "MysqlAllPrivs"
+	}
+	allprivsMysqlStats := stats.NewTimings(allprivsMysqlStatsName)
+
 	// create and open the connection pool for app access
 	appMysqlStatsName := ""
 	appPoolName := ""
-	if appName != "" {
-		appMysqlStatsName = "Mysql" + appName
-		appPoolName = appName + "ConnPool"
+	if enablePublishStats {
+		appMysqlStatsName = "MysqlApp"
+		appPoolName = "AppConnPool"
 	}
 	appMysqlStats := stats.NewTimings(appMysqlStatsName)
 	appPool := dbconnpool.NewConnectionPool(appPoolName, *appPoolSize, *appIdleTimeout)
 	appPool.Open(dbconnpool.DBConnectionCreator(app, appMysqlStats))
 
 	return &Mysqld{
-		config:        config,
-		dba:           dba,
-		dbApp:         app,
-		dbaPool:       dbaPool,
-		appPool:       appPool,
-		replParams:    repl,
-		dbaMysqlStats: dbaMysqlStats,
-		tabletDir:     path.Dir(config.DataDir),
+		config:             config,
+		dba:                dba,
+		allprivs:           allprivs,
+		dbApp:              app,
+		dbaPool:            dbaPool,
+		appPool:            appPool,
+		replParams:         repl,
+		dbaMysqlStats:      dbaMysqlStats,
+		allprivsMysqlStats: allprivsMysqlStats,
+		tabletDir:          path.Dir(config.DataDir),
 	}
 }
 
@@ -707,6 +717,11 @@ func (mysqld *Mysqld) GetAppConnection(ctx context.Context) (dbconnpool.PoolConn
 // GetDbaConnection creates a new DBConnection.
 func (mysqld *Mysqld) GetDbaConnection() (*dbconnpool.DBConnection, error) {
 	return dbconnpool.NewDBConnection(mysqld.dba, mysqld.dbaMysqlStats)
+}
+
+// GetAllPrivsConnection creates a new DBConnection.
+func (mysqld *Mysqld) GetAllPrivsConnection() (*dbconnpool.DBConnection, error) {
+	return dbconnpool.NewDBConnection(mysqld.allprivs, mysqld.allprivsMysqlStats)
 }
 
 // Close will close this instance of Mysqld. It will wait for all dba

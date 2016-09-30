@@ -31,7 +31,7 @@ func (zkts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *v
 		return err
 	}
 	vschemaPath := path.Join(GlobalKeyspacesPath, keyspace, vschemaPath)
-	_, err = zk.CreateOrUpdate(zkts.zconn, vschemaPath, string(data), 0, zookeeper.WorldACL(zookeeper.PermAll), true)
+	_, err = zk.CreateOrUpdate(zkts.zconn, vschemaPath, data, 0, zookeeper.WorldACL(zookeeper.PermAll), true)
 	return convertError(err)
 }
 
@@ -43,7 +43,7 @@ func (zkts *Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb
 		return nil, convertError(err)
 	}
 	var vs vschemapb.Keyspace
-	err = json.Unmarshal([]byte(data), &vs)
+	err = json.Unmarshal(data, &vs)
 	if err != nil {
 		return nil, fmt.Errorf("bad vschema data (%v): %q", err, data)
 	}

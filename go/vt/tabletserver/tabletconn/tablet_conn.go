@@ -9,13 +9,14 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqltypes"
 	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 const (
@@ -48,10 +49,18 @@ type OperationalError string
 
 func (e OperationalError) Error() string { return string(e) }
 
-// StreamHealthReader defines the interface for a reader to read StreamHealth messages.
+// StreamHealthReader defines the interface for a reader to read
+// StreamHealth messages.
 type StreamHealthReader interface {
 	// Recv reads one StreamHealthResponse.
 	Recv() (*querypb.StreamHealthResponse, error)
+}
+
+// StreamEventReader defines the interface for a reader to read
+// StreamEvent messages.
+type StreamEventReader interface {
+	// Recv reads one StreamEvent.
+	Recv() (*querypb.StreamEvent, error)
 }
 
 // In all the following calls, context is an opaque structure that may
@@ -82,17 +91,17 @@ type TabletDialer func(tablet *topodatapb.Tablet, timeout time.Duration) (Tablet
 // - context.Canceled if the query was canceled by the user.
 type TabletConn interface {
 	// Execute executes a non-streaming query on vttablet.
-	Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error)
+	Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error)
 
 	// ExecuteBatch executes a group of queries.
-	ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error)
+	ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error)
 
 	// StreamExecute executes a streaming query on vttablet. It
 	// returns a sqltypes.ResultStream to get results from. If
 	// error is non-nil, it means that the StreamExecute failed to
 	// send the request. Otherwise, you can pull values from the
 	// ResultStream until io.EOF, or any other error.
-	StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error)
+	StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error)
 
 	// Transaction support
 	Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error)
@@ -102,8 +111,8 @@ type TabletConn interface {
 	// Combo RPC calls: they execute both a Begin and another call.
 	// Note even if error is set, transactionID may be returned
 	// and different than zero, if the Begin part worked.
-	BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}) (result *sqltypes.Result, transactionID int64, err error)
-	BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool) (results []sqltypes.Result, transactionID int64, err error)
+	BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (result *sqltypes.Result, transactionID int64, err error)
+	BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (results []sqltypes.Result, transactionID int64, err error)
 
 	// Close must be called for releasing resources.
 	Close()
@@ -129,6 +138,13 @@ type TabletConn interface {
 
 	// StreamHealth starts a streaming RPC for VTTablet health status updates.
 	StreamHealth(ctx context.Context) (StreamHealthReader, error)
+
+	// UpdateStream asks for a stream of updates from a server.
+	// It returns a StreamEventReader to get results from. If
+	// error is non-nil, it means that the UpdateStream failed to
+	// send the request. Otherwise, you can pull values from the
+	// StreamEventReader until io.EOF, or any other error.
+	UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (StreamEventReader, error)
 }
 
 var dialers = make(map[string]TabletDialer)

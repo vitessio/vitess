@@ -94,9 +94,7 @@ performs.
              After the background job finishes, the tablet will resume
              replication (if necessary) and go back to being *rdonly*.
 
-<div style="display:none">
-TODO: Add pointer to complete list of types and explain how to update type?
-</div>
+<!-- TODO: Add pointer to complete list of types and explain how to update type? -->
 
 ## Keyspace Graph
 

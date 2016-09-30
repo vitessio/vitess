@@ -21,5 +21,23 @@ namespace Vitess\Proto\Throttlerservice {
     public function SetMaxRate(\Vitess\Proto\Throttlerdata\SetMaxRateRequest $argument, $metadata = array(), $options = array()) {
       return $this->_simpleRequest('/throttlerservice.Throttler/SetMaxRate', $argument, '\Vitess\Proto\Throttlerdata\SetMaxRateResponse::deserialize', $metadata, $options);
     }
+    /**
+     * @param Vitess\Proto\Throttlerdata\GetConfigurationRequest $input
+     */
+    public function GetConfiguration(\Vitess\Proto\Throttlerdata\GetConfigurationRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/throttlerservice.Throttler/GetConfiguration', $argument, '\Vitess\Proto\Throttlerdata\GetConfigurationResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Throttlerdata\UpdateConfigurationRequest $input
+     */
+    public function UpdateConfiguration(\Vitess\Proto\Throttlerdata\UpdateConfigurationRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/throttlerservice.Throttler/UpdateConfiguration', $argument, '\Vitess\Proto\Throttlerdata\UpdateConfigurationResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Throttlerdata\ResetConfigurationRequest $input
+     */
+    public function ResetConfiguration(\Vitess\Proto\Throttlerdata\ResetConfigurationRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/throttlerservice.Throttler/ResetConfiguration', $argument, '\Vitess\Proto\Throttlerdata\ResetConfigurationResponse::deserialize', $metadata, $options);
+    }
   }
 }

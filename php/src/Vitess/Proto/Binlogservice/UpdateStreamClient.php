@@ -10,12 +10,6 @@ namespace Vitess\Proto\Binlogservice {
       parent::__construct($hostname, $opts, $channel);
     }
     /**
-     * @param Vitess\Proto\Binlogdata\StreamUpdateRequest $input
-     */
-    public function StreamUpdate($argument, $metadata = array(), $options = array()) {
-      return $this->_serverStreamRequest('/binlogservice.UpdateStream/StreamUpdate', $argument, '\Vitess\Proto\Binlogdata\StreamUpdateResponse::deserialize', $metadata, $options);
-    }
-    /**
      * @param Vitess\Proto\Binlogdata\StreamKeyRangeRequest $input
      */
     public function StreamKeyRange($argument, $metadata = array(), $options = array()) {

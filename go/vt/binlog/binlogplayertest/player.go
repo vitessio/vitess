@@ -13,7 +13,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/key"
 
@@ -51,77 +50,6 @@ func NewFakeBinlogStreamer(t *testing.T) *FakeBinlogStreamer {
 }
 
 //
-// ServeUpdateStream tests
-//
-
-var testUpdateStreamRequest = "UpdateStream starting position"
-
-var testStreamEvent = &binlogdatapb.StreamEvent{
-	Category:  binlogdatapb.StreamEvent_SE_DML,
-	TableName: "table1",
-	PrimaryKeyFields: []*querypb.Field{
-		{
-			Name: "id",
-			Type: sqltypes.Binary,
-		},
-	},
-	PrimaryKeyValues: []*querypb.Row{
-		{
-			Lengths: []int64{3},
-			Values:  []byte{'1', '2', '3'},
-		},
-	},
-	Sql:           []byte("test sql with invalid utf-8 character \x80"),
-	Timestamp:     372,
-	TransactionId: "StreamEvent returned transaction id",
-}
-
-// ServeUpdateStream is part of the the UpdateStream interface
-func (fake *FakeBinlogStreamer) ServeUpdateStream(position string, sendReply func(reply *binlogdatapb.StreamEvent) error) error {
-	if fake.panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	if position != testUpdateStreamRequest {
-		fake.t.Errorf("wrong ServeUpdateStream parameter, got %v want %v", position, testUpdateStreamRequest)
-	}
-	sendReply(testStreamEvent)
-	return nil
-}
-
-func testServeUpdateStream(t *testing.T, bpc binlogplayer.Client) {
-	ctx := context.Background()
-	stream, err := bpc.ServeUpdateStream(ctx, testUpdateStreamRequest)
-	if err != nil {
-		t.Fatalf("got error: %v", err)
-	}
-	if se, err := stream.Recv(); err != nil {
-		t.Fatalf("got error: %v", err)
-	} else {
-		if !reflect.DeepEqual(*se, *testStreamEvent) {
-			t.Errorf("got wrong result, got \n%#v expected \n%#v", *se, *testStreamEvent)
-		}
-	}
-	if se, err := stream.Recv(); err == nil {
-		t.Fatalf("got a response when error expected: %v", se)
-	}
-}
-
-func testServeUpdateStreamPanics(t *testing.T, bpc binlogplayer.Client) {
-	ctx := context.Background()
-	stream, err := bpc.ServeUpdateStream(ctx, testUpdateStreamRequest)
-	if err != nil {
-		t.Fatalf("got error: %v", err)
-	}
-	if se, err := stream.Recv(); err == nil {
-		t.Fatalf("got a response when error expected: %v", se)
-	} else {
-		if !strings.Contains(err.Error(), "test-triggered panic") {
-			t.Errorf("wrong error from panic: %v", err)
-		}
-	}
-}
-
-//
 // StreamKeyRange tests
 //
 
@@ -150,12 +78,14 @@ var testBinlogTransaction = &binlogdatapb.BinlogTransaction{
 			Sql: []byte("my statement"),
 		},
 	},
-	Timestamp:     78,
-	TransactionId: "BinlogTransaction returned transaction id",
+	EventToken: &querypb.EventToken{
+		Timestamp: 78,
+		Position:  "BinlogTransaction returned position",
+	},
 }
 
 // StreamKeyRange is part of the the UpdateStream interface
-func (fake *FakeBinlogStreamer) StreamKeyRange(position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) error {
+func (fake *FakeBinlogStreamer) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) error {
 	if fake.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -219,7 +149,7 @@ var testTablesRequest = &tablesRequest{
 }
 
 // StreamTables is part of the the UpdateStream interface
-func (fake *FakeBinlogStreamer) StreamTables(position string, tables []string, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) error {
+func (fake *FakeBinlogStreamer) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) error {
 	if fake.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -282,13 +212,11 @@ func Run(t *testing.T, bpc binlogplayer.Client, tablet *topodatapb.Tablet, fake 
 	}
 
 	// no panic
-	testServeUpdateStream(t, bpc)
 	testStreamKeyRange(t, bpc)
 	testStreamTables(t, bpc)
 
 	// panic now, and test
 	fake.panics = true
-	testServeUpdateStreamPanics(t, bpc)
 	testStreamKeyRangePanics(t, bpc)
 	testStreamTablesPanics(t, bpc)
 	fake.panics = false

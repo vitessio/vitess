@@ -7,7 +7,7 @@
 //
 // The throttler has two main goals:
 // a) allow resharding data into an existing keyspace by throttling at a fixed
-//    rate
+// rate
 // b) ensure that the MySQL replicas do not become overloaded
 //
 // To support b), the throttler constantly monitors the health of all replicas
@@ -301,4 +301,9 @@ func (t *Throttler) UpdateConfiguration(configuration *throttlerdata.Configurati
 // to its initial settings.
 func (t *Throttler) ResetConfiguration() {
 	t.maxReplicationLagModule.resetConfiguration()
+}
+
+// Log returns the most recent changes of the MaxReplicationLag module.
+func (t *Throttler) Log() []result {
+	return t.maxReplicationLagModule.log()
 }

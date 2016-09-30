@@ -1,0 +1,23 @@
+table, td {
+  border: 1px solid black
+}
+
+p, h3 {
+  margin: 0px;
+  font-size: 12px;
+}
+
+.centered {
+  padding: 0px;
+  text-align: center;
+}
+
+.collapsed-border {
+    border-collapse: collapse;
+    border-spacing: 0;
+    margin: 0 auto;
+}
+
+.smaller { 
+  font-size: 10px;
+}

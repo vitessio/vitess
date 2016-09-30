@@ -187,6 +187,16 @@ class TestBackup(unittest.TestCase):
     # check the new slave has the data
     self._check_data(tablet_replica2, 2, 'replica2 tablet getting data')
 
+    # check that the restored slave has the right local_metadata
+    result = tablet_replica2.mquery('_vt', 'select * from local_metadata')
+    metadata = {}
+    for row in result:
+      metadata[row[0]] = row[1]
+    self.assertEqual(metadata['Alias'], 'test_nj-0000062346')
+    self.assertEqual(metadata['ClusterAlias'], 'test_keyspace.0')
+    self.assertEqual(metadata['DataCenter'], 'test_nj')
+    self.assertEqual(metadata['PromotionRule'], 'neutral')
+
     # check that the backup shows up in the listing
     backups = self._list_backups()
     logging.debug('list of backups: %s', backups)
@@ -226,8 +236,9 @@ class TestBackup(unittest.TestCase):
     self._check_data(tablet_replica2, 2, 'replica2 tablet getting data')
 
     # Promote replica2 to master.
-    utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/0',
-                     tablet_replica2.tablet_alias])
+    utils.run_vtctl(['PlannedReparentShard',
+                     '-keyspace_shard', 'test_keyspace/0',
+                     '-new_master', tablet_replica2.tablet_alias])
 
     # insert more data on replica2 (current master)
     self._insert_data(tablet_replica2, 3)
@@ -266,8 +277,9 @@ class TestBackup(unittest.TestCase):
     self._insert_data(tablet_master, 2)
 
     # reparent to replica1
-    utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/0',
-                     tablet_replica1.tablet_alias])
+    utils.run_vtctl(['PlannedReparentShard',
+                     '-keyspace_shard', 'test_keyspace/0',
+                     '-new_master', tablet_replica1.tablet_alias])
 
     # insert more data on new master
     self._insert_data(tablet_replica1, 3)

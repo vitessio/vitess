@@ -97,7 +97,7 @@ func TestPlannedReparentShard(t *testing.T) {
 	defer goodSlave2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	if err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, topoproto.TabletAliasString(newMaster.Tablet.Alias)}); err != nil {
+	if err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)}); err != nil {
 		t.Fatalf("PlannedReparentShard failed: %v", err)
 	}
 

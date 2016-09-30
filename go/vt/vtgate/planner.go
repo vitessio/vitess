@@ -115,26 +115,32 @@ func (plr *Planner) WatchSrvVSchema(ctx context.Context, cell string) {
 		}
 
 		for {
-			n, err := plr.serv.WatchSrvVSchema(ctx, cell)
-			if err != nil {
-				log.Warningf("Error watching vschema for cell %s (will wait 5s before retrying): %v", cell, err)
+			current, changes, _ := plr.serv.WatchSrvVSchema(ctx, cell)
+			if current.Err != nil {
+				// Don't log if there is no VSchema to start with.
+				if current.Err != topo.ErrNoNode {
+					log.Warningf("Error watching vschema for cell %s (will wait 5s before retrying): %v", cell, current.Err)
+				}
 				saveVSchema(nil)
 				time.Sleep(5 * time.Second)
 				continue
 			}
+			saveVSchema(current.Value)
 
-			for value := range n {
-				if value == nil {
-					log.Warningf("Got an empty vschema for cell %v", cell)
-					saveVSchema(&vschemapb.SrvVSchema{})
-					continue
+			for c := range changes {
+				if c.Err != nil {
+					// If the SrvVschema disappears, we need to clear our record.
+					// Otherwise, keep what we already had before.
+					if c.Err == topo.ErrNoNode {
+						saveVSchema(nil)
+					}
+					log.Warningf("Error while watching vschema for cell %s (will wait 5s before retrying): %v", cell, c.Err)
+					break
 				}
-
-				saveVSchema(value)
+				saveVSchema(c.Value)
 			}
 
-			log.Warningf("Watch on vschema for cell %v ended, will wait 5s before retrying", cell)
-			saveVSchema(nil)
+			// Sleep a bit before trying again.
 			time.Sleep(5 * time.Second)
 		}
 	}()

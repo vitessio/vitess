@@ -214,6 +214,17 @@ message ExecuteFetchAsDbaResponse {
   query.QueryResult result = 1;
 }
 
+message ExecuteFetchAsAllPrivsRequest {
+  bytes query = 1;
+  string db_name = 2;
+  uint64 max_rows = 3;
+  bool reload_schema = 4;
+}
+
+message ExecuteFetchAsAllPrivsResponse {
+  query.QueryResult result = 1;
+}
+
 message ExecuteFetchAsAppRequest {
   bytes query = 1;
   uint64 max_rows = 2;

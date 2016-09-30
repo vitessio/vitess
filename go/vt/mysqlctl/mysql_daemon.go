@@ -72,6 +72,8 @@ type MysqlDaemon interface {
 	GetAppConnection(ctx context.Context) (dbconnpool.PoolConnection, error)
 	// GetDbaConnection returns a dba connection.
 	GetDbaConnection() (*dbconnpool.DBConnection, error)
+	// GetAllPrivsConnection returns an allprivs connection (for user with all privileges except SUPER).
+	GetAllPrivsConnection() (*dbconnpool.DBConnection, error)
 
 	// ExecuteSuperQueryList executes a list of queries, no result
 	ExecuteSuperQueryList(ctx context.Context, queryList []string) error
@@ -465,6 +467,11 @@ func (fmd *FakeMysqlDaemon) GetAppConnection(ctx context.Context) (dbconnpool.Po
 
 // GetDbaConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetDbaConnection() (*dbconnpool.DBConnection, error) {
+	return dbconnpool.NewDBConnection(&sqldb.ConnParams{Engine: fmd.db.Name}, stats.NewTimings(""))
+}
+
+// GetAllPrivsConnection is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GetAllPrivsConnection() (*dbconnpool.DBConnection, error) {
 	return dbconnpool.NewDBConnection(&sqldb.ConnParams{Engine: fmd.db.Name}, stats.NewTimings(""))
 }
 

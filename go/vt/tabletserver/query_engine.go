@@ -47,8 +47,10 @@ type QueryEngine struct {
 
 	// Services
 	txPool       *TxPool
+	preparedPool *TxPreparedPool
 	consolidator *sync2.Consolidator
 	streamQList  *QueryList
+	twoPC        *TwoPC
 
 	// Vars
 	strictMode       sync2.AtomicInt64
@@ -71,13 +73,6 @@ type QueryEngine struct {
 
 	// Stats
 	queryServiceStats *QueryServiceStats
-}
-
-type compiledPlan struct {
-	Query string
-	*ExecPlan
-	BindVars      map[string]interface{}
-	TransactionID int64
 }
 
 // Helper method for conn pools to convert errors
@@ -144,6 +139,21 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 		qe.queryServiceStats,
 		checker,
 	)
+
+	// Set the prepared pool capacity to something lower than
+	// tx pool capacity. Those spare connections are needed to
+	// perform metadata state change operations. Without this,
+	// the system can deadlock if all connections get moved to
+	// the TxPreparedPool.
+	prepCap := config.TransactionCap - 2
+	if prepCap < 0 {
+		// A capacity of 0 means that Prepare will always fail.
+		prepCap = 0
+	}
+	qe.preparedPool = NewTxPreparedPool(prepCap)
+
+	// twoPC depends on txPool for some of its operations.
+	qe.twoPC = NewTwoPC(qe.txPool)
 	qe.consolidator = sync2.NewConsolidator()
 	http.Handle(config.DebugURLPrefix+"/consolidations", qe.consolidator)
 	qe.streamQList = NewQueryList()
@@ -199,10 +209,10 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 // Open must be called before sending requests to QueryEngine.
 func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) {
 	qe.dbconfigs = dbconfigs
-	appParams := dbconfigs.App.ConnParams
+	appParams := dbconfigs.App
 	// Create dba params based on App connection params
 	// and Dba credentials.
-	dbaParams := dbconfigs.App.ConnParams
+	dbaParams := dbconfigs.App
 	if dbconfigs.Dba.Uname != "" {
 		dbaParams.Uname = dbconfigs.Dba.Uname
 		dbaParams.Pass = dbconfigs.Dba.Pass
@@ -220,11 +230,12 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) {
 	qe.connPool.Open(&appParams, &dbaParams)
 	qe.streamConnPool.Open(&appParams, &dbaParams)
 	qe.txPool.Open(&appParams, &dbaParams)
+	qe.twoPC.Open(qe.dbconfigs.SidecarDBName, &dbaParams)
 }
 
 // IsMySQLReachable returns true if we can connect to MySQL.
 func (qe *QueryEngine) IsMySQLReachable() bool {
-	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App.ConnParams, qe.queryServiceStats.MySQLStats)
+	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App, qe.queryServiceStats.MySQLStats)
 	if err != nil {
 		if IsConnErr(err) {
 			return false
@@ -248,6 +259,7 @@ func (qe *QueryEngine) WaitForTxEmpty() {
 // before calling Close.
 func (qe *QueryEngine) Close() {
 	// Close in reverse order of Open.
+	qe.twoPC.Close()
 	qe.txPool.Close()
 	qe.streamConnPool.Close()
 	qe.connPool.Close()

@@ -65,7 +65,7 @@ func (tc *legacySplitCloneTestCase) setUp(v3 bool) {
 	db := fakesqldb.Register()
 	tc.ts = zktestserver.New(tc.t, []string{"cell1", "cell2"})
 	ctx := context.Background()
-	tc.wi = NewInstance(ctx, tc.ts, "cell1", time.Second)
+	tc.wi = NewInstance(tc.ts, "cell1", time.Second)
 
 	if v3 {
 		if err := tc.ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}); err != nil {
@@ -231,7 +231,7 @@ type legacyTestQueryService struct {
 	*fakes.StreamHealthQueryService
 }
 
-func (sq *legacyTestQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sendReply func(reply *sqltypes.Result) error) error {
+func (sq *legacyTestQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(reply *sqltypes.Result) error) error {
 	// Custom parsing of the query we expect.
 	min := legacySplitCloneTestMin
 	max := legacySplitCloneTestMax

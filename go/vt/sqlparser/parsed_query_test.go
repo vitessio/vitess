@@ -211,3 +211,30 @@ func TestGenerateParsedQuery(t *testing.T) {
 		t.Errorf("GenerateParsedQuery: %+v, want %+v", pq, want)
 	}
 }
+
+// TestUnorthodox is for testing syntactically invalid constructs
+// that we use internally for efficient SQL generation.
+func TestUnorthodox(t *testing.T) {
+	query := "insert into `%s` values %a"
+	bindVars := map[string]interface{}{
+		"vals": [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			sqltypes.MakeString([]byte("foo('a')")),
+		}, {
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
+			sqltypes.MakeString([]byte("bar(`b`)")),
+		}},
+	}
+	buf := NewTrackedBuffer(nil)
+	buf.Myprintf(query, "t", ":vals")
+	pq := buf.ParsedQuery()
+	bytes, err := pq.GenerateQuery(bindVars)
+	if err != nil {
+		t.Error(err)
+	}
+	got := string(bytes)
+	want := "insert into `t` values (1, 'foo(\\'a\\')'), (2, 'bar(`b`)')"
+	if got != want {
+		t.Errorf("GenerateQuery: %s, want %s", got, want)
+	}
+}

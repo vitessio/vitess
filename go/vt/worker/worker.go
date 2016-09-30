@@ -30,8 +30,8 @@ type Worker interface {
 	StatusAsText() string
 
 	// Run is the main entry point for the worker. It will be
-	// called in a go routine.  When the passed in context is
-	// cancelled, Run should exit as soon as possible.
+	// called in a go routine.  When the passed in context is canceled, Run()
+	// should exit as soon as possible.
 	Run(context.Context) error
 }
 
@@ -56,6 +56,7 @@ var (
 	statsThrottledCounters = stats.NewMultiCounters("WorkerThrottledCounters", []string{"keyspace", "shardname", "thread_id"})
 	// statsStateDurations tracks for each state how much time was spent in it. Mainly used for testing.
 	statsStateDurationsNs = stats.NewCounters("WorkerStateDurations")
+
 	// statsOnlineInsertsCounters tracks for every table how many rows were
 	// inserted during the online clone (reconciliation) phase.
 	statsOnlineInsertsCounters = stats.NewCounters("WorkerOnlineInsertsCounters")
@@ -63,6 +64,9 @@ var (
 	statsOnlineUpdatesCounters = stats.NewCounters("WorkerOnlineUpdatesCounters")
 	// statsOnlineUpdatesCounters tracks for every table how many rows were deleted.
 	statsOnlineDeletesCounters = stats.NewCounters("WorkerOnlineDeletesCounters")
+	// statsOnlineEqualRowsCounters tracks for every table how many rows were equal.
+	statsOnlineEqualRowsCounters = stats.NewCounters("WorkerOnlineEqualRowsCounters")
+
 	// statsOfflineInsertsCounters tracks for every table how many rows were
 	// inserted during the online clone (reconciliation) phase.
 	statsOfflineInsertsCounters = stats.NewCounters("WorkerOfflineInsertsCounters")
@@ -70,6 +74,25 @@ var (
 	statsOfflineUpdatesCounters = stats.NewCounters("WorkerOfflineUpdatesCounters")
 	// statsOfflineUpdatesCounters tracks for every table how many rows were deleted.
 	statsOfflineDeletesCounters = stats.NewCounters("WorkerOfflineDeletesCounters")
+	// statsOfflineEqualRowsCounters tracks for every table how many rows were equal.
+	statsOfflineEqualRowsCounters = stats.NewCounters("WorkerOfflineEqualRowsCounters")
+
+	// statsStreamingQueryRestartsCounters tracks for every tablet alias how often
+	// a streaming query was succesfully established there.
+	statsStreamingQueryCounters = stats.NewCounters("StreamingQueryCounters")
+	// statsStreamingQueryErrorsCounters tracks for every tablet alias how often
+	// a (previously successfully established) streaming query did error.
+	statsStreamingQueryErrorsCounters = stats.NewCounters("StreamingQueryErrorsCounters")
+	// statsStreamingQueryRestartsSameTabletCounters tracks for every tablet alias
+	// how often we successfully restarted a streaming query on the first retry.
+	// This kind of restart is usually necessary when our streaming query is idle
+	// and MySQL aborts it after a timeout.
+	statsStreamingQueryRestartsSameTabletCounters = stats.NewCounters("StreamingQueryRestartsSameTabletCounters")
+	// statsStreamingQueryRestartsDifferentTablet records how many restarts were
+	// successful on the 2 (or higher) retry after the initial retry to the same
+	// tablet failed and we switched to a different tablet. In practice, this
+	// happens when a tablet did go away due to a maintenance operation.
+	statsStreamingQueryRestartsDifferentTablet = stats.NewInt("StreamingQueryRestartsDifferentTablet")
 )
 
 const (
@@ -85,12 +108,19 @@ func resetVars() {
 	statsState.Set("")
 	statsRetryCount.Set(0)
 	statsRetryCounters.Reset()
+
 	statsOnlineInsertsCounters.Reset()
 	statsOnlineUpdatesCounters.Reset()
 	statsOnlineDeletesCounters.Reset()
+	statsOnlineEqualRowsCounters.Reset()
+
 	statsOfflineInsertsCounters.Reset()
 	statsOfflineUpdatesCounters.Reset()
 	statsOfflineDeletesCounters.Reset()
+	statsOfflineEqualRowsCounters.Reset()
+
+	statsStreamingQueryCounters.Reset()
+	statsStreamingQueryErrorsCounters.Reset()
 }
 
 // checkDone returns ctx.Err() iff ctx.Done().

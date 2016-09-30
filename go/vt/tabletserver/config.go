@@ -21,8 +21,9 @@ import (
 )
 
 var (
-	queryLogHandler = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
-	txLogHandler    = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
+	queryLogHandler        = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
+	txLogHandler           = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
+	watchReplicationStream = flag.Bool("watch_replication_stream", false, "When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to support the include_event_token ExecuteOptions.")
 )
 
 func init() {

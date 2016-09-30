@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
@@ -56,11 +57,11 @@ func NewRouter(ctx context.Context, serv topo.SrvTopoServer, cell, statsName str
 }
 
 // Execute routes a non-streaming query.
-func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
+func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
-	vcursor := newRequestContext(ctx, sql, bindVars, keyspace, tabletType, session, notInTransaction, rtr)
+	vcursor := newRequestContext(ctx, sql, bindVars, keyspace, tabletType, session, notInTransaction, options, rtr)
 	plan, err := rtr.planner.GetPlan(sql, keyspace)
 	if err != nil {
 		return nil, err
@@ -69,11 +70,11 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 }
 
 // StreamExecute executes a streaming query.
-func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
+func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
-	vcursor := newRequestContext(ctx, sql, bindVars, keyspace, tabletType, nil, false, rtr)
+	vcursor := newRequestContext(ctx, sql, bindVars, keyspace, tabletType, nil, false, options, rtr)
 	plan, err := rtr.planner.GetPlan(sql, keyspace)
 	if err != nil {
 		return err
@@ -125,6 +126,7 @@ func (rtr *Router) ExecuteRoute(vcursor *requestContext, route *engine.Route, jo
 		vcursor.tabletType,
 		NewSafeSession(vcursor.session),
 		vcursor.notInTransaction,
+		vcursor.options,
 	)
 }
 
@@ -157,6 +159,7 @@ func (rtr *Router) GetRouteFields(vcursor *requestContext, route *engine.Route, 
 		vcursor.tabletType,
 		NewSafeSession(vcursor.session),
 		vcursor.notInTransaction,
+		vcursor.options,
 	)
 }
 
@@ -191,6 +194,7 @@ func (rtr *Router) StreamExecuteRoute(vcursor *requestContext, route *engine.Rou
 		params.ks,
 		params.shardVars,
 		vcursor.tabletType,
+		vcursor.options,
 		sendReply,
 	)
 }
@@ -233,7 +237,11 @@ func (rtr *Router) paramsSelectEqual(vcursor *requestContext, route *engine.Rout
 }
 
 func (rtr *Router) paramsSelectIN(vcursor *requestContext, route *engine.Route) (*scatterParams, error) {
-	keys, err := rtr.resolveKeys(route.Values.([]interface{}), vcursor.bindVars)
+	vals, err := rtr.resolveList(route.Values, vcursor.bindVars)
+	if err != nil {
+		return nil, fmt.Errorf("paramsSelectIN: %v", err)
+	}
+	keys, err := rtr.resolveKeys(vals, vcursor.bindVars)
 	if err != nil {
 		return nil, fmt.Errorf("paramsSelectIN: %v", err)
 	}
@@ -280,7 +288,8 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, route *engine.Route)
 		[]string{shard},
 		vcursor.tabletType,
 		NewSafeSession(vcursor.session),
-		vcursor.notInTransaction)
+		vcursor.notInTransaction,
+		vcursor.options)
 }
 
 func (rtr *Router) execDeleteEqual(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
@@ -310,7 +319,8 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, route *engine.Route)
 		[]string{shard},
 		vcursor.tabletType,
 		NewSafeSession(vcursor.session),
-		vcursor.notInTransaction)
+		vcursor.notInTransaction,
+		vcursor.options)
 }
 
 func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
@@ -360,7 +370,8 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 		[]string{shard},
 		vcursor.tabletType,
 		NewSafeSession(vcursor.session),
-		vcursor.notInTransaction)
+		vcursor.notInTransaction,
+		vcursor.options)
 
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
@@ -374,6 +385,31 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 	return result, nil
 }
 
+// resloveList returns a list of values, typically for an IN clause. If the input
+// is a bind var name, it uses the list provided in the bind var. If the input is
+// already a list, it returns just that.
+func (rtr *Router) resolveList(val interface{}, bindVars map[string]interface{}) (vals []interface{}, err error) {
+	switch v := val.(type) {
+	case []interface{}:
+		vals = v
+	case string:
+		// It can only be a list bind var.
+		list, ok := bindVars[v[2:]]
+		if !ok {
+			return nil, fmt.Errorf("could not find bind var %s", v)
+		}
+		vals, ok = list.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("expecting list for bind var %s: %v", v, list)
+		}
+	default:
+		panic("unexpected")
+	}
+	return vals, nil
+}
+
+// resolveKeys takes a list as input that may have values or bind var names.
+// It returns a new list with all the bind vars resolved.
 func (rtr *Router) resolveKeys(vals []interface{}, bindVars map[string]interface{}) (keys []interface{}, err error) {
 	keys = make([]interface{}, 0, len(vals))
 	for _, val := range vals {
@@ -460,7 +496,8 @@ func (rtr *Router) deleteVindexEntries(vcursor *requestContext, route *engine.Ro
 		[]string{shard},
 		vcursor.tabletType,
 		NewSafeSession(vcursor.session),
-		vcursor.notInTransaction)
+		vcursor.notInTransaction,
+		vcursor.options)
 	if err != nil {
 		return err
 	}
@@ -527,6 +564,7 @@ func (rtr *Router) handleGenerate(vcursor *requestContext, gen *engine.Generate,
 		vcursor.tabletType,
 		NewSafeSession(nil),
 		false,
+		vcursor.options,
 	)
 	if err != nil {
 		return 0, err

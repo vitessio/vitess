@@ -40,9 +40,6 @@ func (s *VtworkerServer) ExecuteVtworkerCommand(args *vtworkerdatapb.ExecuteVtwo
 
 	// Stream everything back what the Wrangler is logging.
 	logstream := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
-		// If the client disconnects, we will just fail
-		// to send the log events, but won't interrupt
-		// the command.
 		stream.Send(&vtworkerdatapb.ExecuteVtworkerCommandResponse{
 			Event: e,
 		})
@@ -52,11 +49,10 @@ func (s *VtworkerServer) ExecuteVtworkerCommand(args *vtworkerdatapb.ExecuteVtwo
 	// is preserved in the logs in case the RPC or vtworker crashes.
 	logger := logutil.NewTeeLogger(logstream, logutil.NewConsoleLogger())
 
-	// create the wrangler
 	wr := s.wi.CreateWrangler(logger)
 
-	// execute the command
-	worker, done, err := s.wi.RunCommand(args.Args, wr, false /*runFromCli*/)
+	// Run the command as long as the RPC Context is valid.
+	worker, done, err := s.wi.RunCommand(stream.Context(), args.Args, wr, false /*runFromCli*/)
 	if err == nil && worker != nil && done != nil {
 		err = s.wi.WaitForCommand(worker, done)
 	}

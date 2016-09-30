@@ -21,6 +21,9 @@ namespace Vitess\Proto\Vtgate {
     /**  @var int - \Vitess\Proto\Topodata\TabletType */
     public $tablet_type = null;
     
+    /**  @var \Vitess\Proto\Query\ExecuteOptions */
+    public $options = null;
+    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -70,6 +73,15 @@ namespace Vitess\Proto\Vtgate {
       $f->type      = \DrSlump\Protobuf::TYPE_ENUM;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $f->reference = '\Vitess\Proto\Topodata\TabletType';
+      $descriptor->addField($f);
+
+      // OPTIONAL MESSAGE options = 6
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 6;
+      $f->name      = "options";
+      $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $f->reference = '\Vitess\Proto\Query\ExecuteOptions';
       $descriptor->addField($f);
 
       foreach (self::$__extensions as $cb) {
@@ -282,6 +294,43 @@ namespace Vitess\Proto\Vtgate {
      */
     public function setTabletType( $value){
       return $this->_set(5, $value);
+    }
+    
+    /**
+     * Check if <options> has a value
+     *
+     * @return boolean
+     */
+    public function hasOptions(){
+      return $this->_has(6);
+    }
+    
+    /**
+     * Clear <options> value
+     *
+     * @return \Vitess\Proto\Vtgate\StreamExecuteShardsRequest
+     */
+    public function clearOptions(){
+      return $this->_clear(6);
+    }
+    
+    /**
+     * Get <options> value
+     *
+     * @return \Vitess\Proto\Query\ExecuteOptions
+     */
+    public function getOptions(){
+      return $this->_get(6);
+    }
+    
+    /**
+     * Set <options> value
+     *
+     * @param \Vitess\Proto\Query\ExecuteOptions $value
+     * @return \Vitess\Proto\Vtgate\StreamExecuteShardsRequest
+     */
+    public function setOptions(\Vitess\Proto\Query\ExecuteOptions $value){
+      return $this->_set(6, $value);
     }
   }
 }

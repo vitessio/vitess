@@ -63,14 +63,6 @@ func (util *testUtils) checkEqual(t *testing.T, expected interface{}, result int
 	}
 }
 
-func (util *testUtils) checkTabletErrorWithRecover(t *testing.T, tabletErrCode vtrpcpb.ErrorCode, tabletErrStr string) {
-	err := recover()
-	if err == nil {
-		t.Fatalf("should get error")
-	}
-	util.checkTabletError(t, err, tabletErrCode, tabletErrStr)
-}
-
 func (util *testUtils) checkTabletError(t *testing.T, err interface{}, tabletErrCode vtrpcpb.ErrorCode, tabletErrStr string) {
 	tabletError, ok := err.(*TabletError)
 	if !ok {
@@ -90,23 +82,19 @@ func (util *testUtils) newMysqld(dbconfigs *dbconfigs.DBConfigs) mysqlctl.MysqlD
 	// assumptions in the code that those IDs are the same.
 	cnf.ServerID = 22222
 	return mysqlctl.NewMysqld(
-		"",
-		"",
 		cnf,
 		&dbconfigs.Dba,
-		&dbconfigs.App.ConnParams,
+		&dbconfigs.AllPrivs,
+		&dbconfigs.App,
 		&dbconfigs.Repl,
+		false, /* enablePublishStats */
 	)
 }
 
 func (util *testUtils) newDBConfigs(db *fakesqldb.DB) dbconfigs.DBConfigs {
-	appDBConfig := dbconfigs.DBConfig{
-		ConnParams: sqldb.ConnParams{Engine: db.Name},
-		Keyspace:   "test_keyspace",
-		Shard:      "0",
-	}
 	return dbconfigs.DBConfigs{
-		App: appDBConfig,
+		App:           sqldb.ConnParams{Engine: db.Name},
+		SidecarDBName: "_vt",
 	}
 }
 

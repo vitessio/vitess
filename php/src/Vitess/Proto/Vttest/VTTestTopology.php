@@ -9,6 +9,9 @@ namespace Vitess\Proto\Vttest {
     /**  @var \Vitess\Proto\Vttest\Keyspace[]  */
     public $keyspaces = array();
     
+    /**  @var string[]  */
+    public $cells = array();
+    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -24,6 +27,14 @@ namespace Vitess\Proto\Vttest {
       $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
       $f->rule      = \DrSlump\Protobuf::RULE_REPEATED;
       $f->reference = '\Vitess\Proto\Vttest\Keyspace';
+      $descriptor->addField($f);
+
+      // REPEATED STRING cells = 2
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 2;
+      $f->name      = "cells";
+      $f->type      = \DrSlump\Protobuf::TYPE_STRING;
+      $f->rule      = \DrSlump\Protobuf::RULE_REPEATED;
       $descriptor->addField($f);
 
       foreach (self::$__extensions as $cb) {
@@ -88,6 +99,63 @@ namespace Vitess\Proto\Vttest {
      */
     public function addKeyspaces(\Vitess\Proto\Vttest\Keyspace $value){
      return $this->_add(1, $value);
+    }
+    
+    /**
+     * Check if <cells> has a value
+     *
+     * @return boolean
+     */
+    public function hasCells(){
+      return $this->_has(2);
+    }
+    
+    /**
+     * Clear <cells> value
+     *
+     * @return \Vitess\Proto\Vttest\VTTestTopology
+     */
+    public function clearCells(){
+      return $this->_clear(2);
+    }
+    
+    /**
+     * Get <cells> value
+     *
+     * @param int $idx
+     * @return string
+     */
+    public function getCells($idx = NULL){
+      return $this->_get(2, $idx);
+    }
+    
+    /**
+     * Set <cells> value
+     *
+     * @param string $value
+     * @return \Vitess\Proto\Vttest\VTTestTopology
+     */
+    public function setCells( $value, $idx = NULL){
+      return $this->_set(2, $value, $idx);
+    }
+    
+    /**
+     * Get all elements of <cells>
+     *
+     * @return string[]
+     */
+    public function getCellsList(){
+     return $this->_get(2);
+    }
+    
+    /**
+     * Add a new element to <cells>
+     *
+     * @param string $value
+     * @return \Vitess\Proto\Vttest\VTTestTopology
+     */
+    public function addCells( $value){
+     return $this->_add(2, $value);
     }
   }
 }

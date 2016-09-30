@@ -19,7 +19,9 @@ class LocalDatabase(object):
                mysql_only,
                init_data_options,
                web_dir=None,
-               default_schema_dir=None):
+               default_schema_dir=None,
+               extra_my_cnf=None,
+               web_dir2=None):
     """Initializes an object of this class.
 
     Args:
@@ -36,6 +38,9 @@ class LocalDatabase(object):
           flag in run_local_database.py
       default_schema_dir: a directory to use if no keyspace is found in the
           schema_dir directory.
+      extra_my_cnf: additional cnf file to use for the EXTRA_MY_CNF var.
+      web_dir2: see the documentation for the corresponding command line
+          flag in run_local_database.py
     """
 
     self.topology = topology
@@ -44,12 +49,15 @@ class LocalDatabase(object):
     self.init_data_options = init_data_options
     self.web_dir = web_dir
     self.default_schema_dir = default_schema_dir
+    self.extra_my_cnf = extra_my_cnf
+    self.web_dir2 = web_dir2
 
   def setup(self):
     """Create a MySQL instance and all Vitess processes."""
     mysql_port = environment.get_port('mysql')
     self.directory = environment.get_test_directory()
-    self.mysql_db = environment.mysql_db_class(self.directory, mysql_port)
+    self.mysql_db = environment.mysql_db_class(
+        self.directory, mysql_port, self.extra_my_cnf)
 
     self.mysql_db.setup()
     self.create_databases()
@@ -62,7 +70,8 @@ class LocalDatabase(object):
 
     vt_processes.start_vt_processes(self.directory, self.topology,
                                     self.mysql_db, self.schema_dir,
-                                    web_dir=self.web_dir)
+                                    web_dir=self.web_dir,
+                                    web_dir2=self.web_dir2)
 
   def teardown(self):
     """Kill all Vitess processes and wait for them to end.
@@ -135,12 +144,11 @@ class LocalDatabase(object):
         # redirected keyspaces have no underlying database
         continue
 
-      for cell in self.topology.cells:
-        for spb in kpb.shards:
-          db_name = spb.db_name_override
-          if not db_name:
-            db_name = 'vt_%s_%s_%s' % (cell, kpb.name, spb.name)
-          cmds.append('create database `%s`' % db_name)
+      for spb in kpb.shards:
+        db_name = spb.db_name_override
+        if not db_name:
+          db_name = 'vt_%s_%s' % (kpb.name, spb.name)
+        cmds.append('create database `%s`' % db_name)
     logging.info('Creating databases')
     self.mysql_execute(cmds)
 
@@ -181,12 +189,11 @@ class LocalDatabase(object):
         cmds = self.get_sql_commands_from_file(filepath, schema_dir)
 
         # Run the cmds on each shard and cell in the keyspace.
-        for cell in self.topology.cells:
-          for spb in kpb.shards:
-            db_name = spb.db_name_override
-            if not db_name:
-              db_name = 'vt_%s_%s_%s' % (cell, kpb.name, spb.name)
-            self.mysql_execute(cmds, db_name=db_name)
+        for spb in kpb.shards:
+          db_name = spb.db_name_override
+          if not db_name:
+            db_name = 'vt_%s_%s' % (kpb.name, spb.name)
+          self.mysql_execute(cmds, db_name=db_name)
 
   def populate_with_random_data(self):
     """Populates all shards with randomly generated data."""
@@ -196,12 +203,11 @@ class LocalDatabase(object):
         # redirected keyspaces have no underlying database
         continue
 
-      for cell in self.topology.cells:
-        for spb in kpb.shards:
-          db_name = spb.db_name_override
-          if not db_name:
-            db_name = 'vt_%s_%s_%s' % (cell, kpb.name, spb.name)
-          self.populate_shard_with_random_data(db_name)
+      for spb in kpb.shards:
+        db_name = spb.db_name_override
+        if not db_name:
+          db_name = 'vt_%s_%s' % (kpb.name, spb.name)
+        self.populate_shard_with_random_data(db_name)
 
   def populate_shard_with_random_data(self, db_name):
     """Populates the given database with randomly generated data.

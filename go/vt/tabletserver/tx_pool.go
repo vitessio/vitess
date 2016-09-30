@@ -25,12 +25,6 @@ import (
 	"golang.org/x/net/context"
 )
 
-/* Function naming convention:
-UpperCaseFunctions() are thread safe, they can still panic on error
-lowerCaseFunctions() are not thread safe
-SafeFunctions() return os.Error instead of throwing exceptions
-*/
-
 // TxLogger can be used to enable logging of transactions.
 // Call TxLogger.ServeLogs in your main program to enable logging.
 // The log format can be inferred by looking at TxConnection.Format.
@@ -41,6 +35,7 @@ const (
 	TxClose    = "close"
 	TxCommit   = "commit"
 	TxRollback = "rollback"
+	TxPrepare  = "prepare"
 	TxKill     = "kill"
 )
 
@@ -111,7 +106,7 @@ func (axp *TxPool) Close() {
 		log.Warningf("killing transaction for shutdown: %s", conn.Format(nil))
 		axp.queryServiceStats.InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
-		conn.discard(TxClose)
+		conn.conclude(TxClose)
 	}
 	axp.pool.Close()
 }
@@ -128,13 +123,13 @@ func (axp *TxPool) transactionKiller() {
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", axp.Timeout(), conn.Format(nil))
 		axp.queryServiceStats.KillStats.Add("Transactions", 1)
 		conn.Close()
-		conn.discard(TxKill)
+		conn.conclude(TxKill)
 	}
 }
 
 // Begin begins a transaction, and returns the associated transaction id.
 // Subsequent statements can access the connection through the transaction id.
-func (axp *TxPool) Begin(ctx context.Context) int64 {
+func (axp *TxPool) Begin(ctx context.Context) (int64, error) {
 	poolCtx := ctx
 	if deadline, ok := ctx.Deadline(); ok {
 		var cancel func()
@@ -145,16 +140,16 @@ func (axp *TxPool) Begin(ctx context.Context) int64 {
 	if err != nil {
 		switch err {
 		case ErrConnPoolClosed:
-			panic(err)
+			return 0, err
 		case pools.ErrTimeout:
 			axp.LogActive()
-			panic(NewTabletError(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, "Transaction pool connection limit exceeded"))
+			return 0, NewTabletError(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, "Transaction pool connection limit exceeded")
 		}
-		panic(NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err))
+		return 0, NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 	}
 	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
 		conn.Recycle()
-		panic(NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err))
+		return 0, NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
 	}
 	transactionID := axp.lastID.Add(1)
 	axp.activePool.Register(
@@ -167,39 +162,75 @@ func (axp *TxPool) Begin(ctx context.Context) int64 {
 			callerid.EffectiveCallerIDFromContext(ctx),
 		),
 	)
-	return transactionID
+	return transactionID, nil
 }
 
 // Commit commits the specified transaction.
-func (axp *TxPool) Commit(ctx context.Context, transactionID int64) {
-	conn := axp.Get(transactionID)
-	defer conn.discard(TxCommit)
-	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
-	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
-		conn.Close()
-		panic(NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err))
+func (axp *TxPool) Commit(ctx context.Context, transactionID int64) error {
+	conn, err := axp.Get(transactionID)
+	if err != nil {
+		return err
 	}
+	return axp.LocalCommit(ctx, conn)
 }
 
 // Rollback rolls back the specified transaction.
-func (axp *TxPool) Rollback(ctx context.Context, transactionID int64) {
-	conn := axp.Get(transactionID)
-	defer conn.discard(TxRollback)
-	axp.txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
-	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
-		conn.Close()
-		panic(NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err))
+func (axp *TxPool) Rollback(ctx context.Context, transactionID int64) error {
+	conn, err := axp.Get(transactionID)
+	if err != nil {
+		return err
 	}
+	return axp.localRollback(ctx, conn)
 }
 
 // Get fetches the connection associated to the transactionID.
 // You must call Recycle on TxConnection once done.
-func (axp *TxPool) Get(transactionID int64) (conn *TxConnection) {
+func (axp *TxPool) Get(transactionID int64) (*TxConnection, error) {
 	v, err := axp.activePool.Get(transactionID, "for query")
 	if err != nil {
-		panic(NewTabletError(vtrpcpb.ErrorCode_NOT_IN_TX, "Transaction %d: %v", transactionID, err))
+		return nil, NewTabletError(vtrpcpb.ErrorCode_NOT_IN_TX, "Transaction %d: %v", transactionID, err)
 	}
-	return v.(*TxConnection)
+	return v.(*TxConnection), nil
+}
+
+// LocalBegin is equivalent to Begin->Get.
+// It's used for executing transactions within a request. It's safe
+// to always call LocalConclude at the end.
+func (axp *TxPool) LocalBegin(ctx context.Context) (*TxConnection, error) {
+	transactionID, err := axp.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return axp.Get(transactionID)
+}
+
+// LocalCommit is the commit function for LocalBegin.
+func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection) error {
+	defer conn.conclude(TxCommit)
+	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
+	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
+		conn.Close()
+		return NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
+	}
+	return nil
+}
+
+// LocalConclude concludes a transaction started by LocalBegin.
+// If the transaction was not previously concluded, it's rolled back.
+func (axp *TxPool) LocalConclude(ctx context.Context, conn *TxConnection) {
+	if conn.DBConn != nil {
+		_ = axp.localRollback(ctx, conn)
+	}
+}
+
+func (axp *TxPool) localRollback(ctx context.Context, conn *TxConnection) error {
+	defer conn.conclude(TxRollback)
+	axp.txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
+	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
+		conn.Close()
+		return NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
+	}
+	return nil
 }
 
 // LogActive causes all existing transactions to be logged when they complete.
@@ -235,7 +266,6 @@ type TxConnection struct {
 	*DBConn
 	TransactionID     int64
 	pool              *TxPool
-	inUse             bool
 	StartTime         time.Time
 	EndTime           time.Time
 	Queries           []string
@@ -274,7 +304,7 @@ func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wa
 // active.
 func (txc *TxConnection) Recycle() {
 	if txc.IsClosed() {
-		txc.discard(TxClose)
+		txc.conclude(TxClose)
 	} else {
 		txc.pool.activePool.Put(txc.TransactionID)
 	}
@@ -285,7 +315,14 @@ func (txc *TxConnection) RecordQuery(query string) {
 	txc.Queries = append(txc.Queries, query)
 }
 
-func (txc *TxConnection) discard(conclusion string) {
+func (txc *TxConnection) conclude(conclusion string) {
+	txc.pool.activePool.Unregister(txc.TransactionID)
+	txc.DBConn.Recycle()
+	txc.DBConn = nil
+	txc.log(conclusion)
+}
+
+func (txc *TxConnection) log(conclusion string) {
 	txc.Conclusion = conclusion
 	txc.EndTime = time.Now()
 
@@ -296,11 +333,6 @@ func (txc *TxConnection) discard(conclusion string) {
 	duration := txc.EndTime.Sub(txc.StartTime)
 	txc.pool.queryServiceStats.UserTransactionCount.Add([]string{username, conclusion}, 1)
 	txc.pool.queryServiceStats.UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
-
-	txc.pool.activePool.Unregister(txc.TransactionID)
-	txc.DBConn.Recycle()
-	// Ensure PoolConnection won't be accessed after Recycle.
-	txc.DBConn = nil
 	if txc.LogToFile.Get() != 0 {
 		log.Infof("Logged transaction: %s", txc.Format(nil))
 	}

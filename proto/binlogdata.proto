@@ -1,5 +1,6 @@
 // This file contains all the types and servers necessary to make
-// RPC calls to VtTablet for the binlog protocol.
+// RPC calls to VtTablet for the binlog protocol, used by filtered
+// replication only.
 
 syntax = "proto3";
 
@@ -19,6 +20,7 @@ message Charset {
 }
 
 // BinlogTransaction describes a transaction inside the binlogs.
+// It is streamed by vttablet for filtered replication, used during resharding.
 message BinlogTransaction {
   message Statement {
     enum Category {
@@ -44,48 +46,17 @@ message BinlogTransaction {
   // the statements in this transaction
   repeated Statement statements = 1;
 
-  // the timestamp of the statements
-  int64 timestamp = 2;
+  // DEPRECATED (replaced by event_token): the timestamp of the statements.
+  // int64 timestamp = 2;
+  reserved 2;
 
-  // the Transaction ID after this statement was applied
-  string transaction_id = 3;
-}
+  // DEPRECATED (replaced by event_token): the Transaction ID after
+  // this statement was applied.
+  // string transaction_id = 3;
+  reserved 3;
 
-// StreamEvent describes an update stream event inside the binlogs.
-message StreamEvent {
-  // the category of this event
-  enum Category {
-    SE_ERR = 0;
-    SE_DML = 1;
-    SE_DDL = 2;
-    SE_POS = 3;
-  }
-  Category category = 1;
-
-  // table_name, primary_key_fields and primary_key_values are set for SE_DML
-  string table_name = 2;
-  repeated query.Field primary_key_fields = 3;
-  repeated query.Row primary_key_values = 4;
-
-  // sql is set for SE_DDL or SE_ERR
-  bytes sql = 5;
-
-  // timestamp is set for SE_DML, SE_DDL or SE_ERR
-  int64 timestamp = 6;
-
-  // the Transaction ID after this statement was applied
-  string transaction_id = 7;
-}
-
-// StreamUpdateRequest is the payload to StreamUpdate
-message StreamUpdateRequest{
-  // where to start
-  string position = 1;
-}
-
-// StreamUpdateResponse is the response from StreamUpdate
-message StreamUpdateResponse{
-  StreamEvent stream_event = 1;
+  // The Event Token for this event.
+  query.EventToken event_token = 4;
 }
 
 // StreamKeyRangeRequest is the payload to StreamKeyRange

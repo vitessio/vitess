@@ -45,7 +45,7 @@ func init() {
 // CreateWorkerInstance returns a properly configured vtworker instance.
 func CreateWorkerInstance(t *testing.T) *worker.Instance {
 	ts := zktestserver.New(t, []string{"cell1", "cell2"})
-	return worker.NewInstance(context.Background(), ts, "cell1", 1*time.Second)
+	return worker.NewInstance(ts, "cell1", 1*time.Second)
 }
 
 // TestSuite runs the test suite on the given vtworker and vtworkerclient.
@@ -54,7 +54,9 @@ func TestSuite(t *testing.T, c vtworkerclient.Client) {
 
 	commandErrors(t, c)
 
-	commandErrorsBecauseBusy(t, c)
+	commandErrorsBecauseBusy(t, c, false /* client side cancelation */)
+
+	commandErrorsBecauseBusy(t, c, true /* server side cancelation */)
 
 	commandPanics(t, c)
 }
@@ -103,14 +105,17 @@ func runVtworkerCommand(client vtworkerclient.Client, args []string) error {
 	}
 }
 
-func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client) {
+// commandErrorsBecauseBusy tests that concurrent commands are rejected with
+// TRANSIENT_ERROR while a command is already running.
+// It also tests the correct propagation of the CANCELED error code.
+func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client, serverSideCancelation bool) {
 	// Run the vtworker "Block" command which blocks until we cancel the context.
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
 	// blockCommandStarted will be closed after we're sure that vtworker is
 	// running the "Block" command.
 	blockCommandStarted := make(chan struct{})
-	var blockErr error
+	var errorCodeCheck error
 	wg.Add(1)
 	go func() {
 		stream, err := client.ExecuteVtworkerCommand(ctx, []string{"Block"})
@@ -121,8 +126,10 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client) {
 		firstLineReceived := false
 		for {
 			if _, err := stream.Recv(); err != nil {
+				// We see CANCELED from the RPC client (client side cancelation) or
+				// from vtworker itself (server side cancelation).
 				if vterrors.RecoverVtErrorCode(err) != vtrpcpb.ErrorCode_CANCELLED {
-					blockErr = fmt.Errorf("Block command should only error due to cancelled context: %v", err)
+					errorCodeCheck = fmt.Errorf("Block command should only error due to canceled context: %v", err)
 				}
 				// Stream has finished.
 				break
@@ -147,27 +154,32 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client) {
 		t.Fatalf("wrong error code for second cmd: got = %v, want = %v, err: %v", gotCode, wantCode, gotErr)
 	}
 
-	// Cancel Block.
+	// Cancel running "Block" command.
+	if serverSideCancelation {
+		if err := runVtworkerCommand(client, []string{"Cancel"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Always cancel the context to not leak it (regardless of client or server
+	// side cancelation).
 	cancel()
+
 	wg.Wait()
-	if blockErr != nil {
-		t.Fatalf("Block command should not have failed: %v", blockErr)
+	if errorCodeCheck != nil {
+		t.Fatalf("Block command did not return the CANCELED error code: %v", errorCodeCheck)
 	}
-	// It looks like gRPC cancels the RPC only on the client-side. Therefore, we
-	// have to explicitly cancel the (still) running vtworker command.
-	if err := runVtworkerCommand(client, []string{"Cancel"}); err != nil {
-		t.Fatal(err)
-	}
+
 	// vtworker is now in a special state where the current job is already
-	// cancelled but not reset yet. New commands are still failing with a
+	// canceled but not reset yet. New commands are still failing with a
 	// retryable error.
-	gotErr2 := runVtworkerCommand(client, []string{"Ping", "Cancelled and still busy?"})
+	gotErr2 := runVtworkerCommand(client, []string{"Ping", "canceled and still busy?"})
 	wantCode2 := vtrpcpb.ErrorCode_TRANSIENT_ERROR
 	if gotCode2 := vterrors.RecoverVtErrorCode(gotErr2); gotCode2 != wantCode2 {
 		t.Fatalf("wrong error code for second cmd before reset: got = %v, want = %v, err: %v", gotCode2, wantCode2, gotErr2)
 	}
 
-	if err := runVtworkerCommand(client, []string{"Reset"}); err != nil {
+	// Reset vtworker for the next test function.
+	if err := resetVtworker(t, client); err != nil {
 		t.Fatal(err)
 	}
 
@@ -179,6 +191,38 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client) {
 	// Reset vtworker for the next test function.
 	if err := runVtworkerCommand(client, []string{"Reset"}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// resetVtworker will retry to "Reset" vtworker until it succeeds.
+// Retries are necessary to cope with the following race:
+// a) RPC started vtworker command e.g. "Block".
+// b) client cancels RPC and triggers vtworker to cancel the running command.
+// c) RPC returns with a response after cancelation was received by vtworker.
+// d) vtworker is still canceling and shutting down the command.
+// e) A new vtworker command e.g. "Reset" would fail at this point with
+// "vtworker still executing" until the cancelation is complete.
+func resetVtworker(t *testing.T, client vtworkerclient.Client) error {
+	start := time.Now()
+	attempts := 0
+	for {
+		attempts++
+		err := runVtworkerCommand(client, []string{"Reset"})
+
+		if err == nil {
+			return nil
+		}
+
+		if time.Since(start) > 5*time.Second {
+			return fmt.Errorf("Reset was not successful after 5s and %d attempts: %v", attempts, err)
+		}
+
+		if !strings.Contains(err.Error(), "worker still executing") {
+			return fmt.Errorf("Reset must not fail: %v", err)
+		}
+
+		t.Logf("retrying to Reset vtworker because the previous command has not finished yet. got err: %v", err)
+		continue
 	}
 }
 

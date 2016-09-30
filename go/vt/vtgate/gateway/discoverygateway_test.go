@@ -18,11 +18,11 @@ import (
 
 func TestDiscoveryGatewayExecute(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
-		_, err := dg.Execute(context.Background(), keyspace, shard, tabletType, "query", nil, 0)
+		_, err := dg.Execute(context.Background(), keyspace, shard, tabletType, "query", nil, 0, nil)
 		return err
 	})
 	testDiscoveryGatewayTransact(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
-		_, err := dg.Execute(context.Background(), keyspace, shard, tabletType, "query", nil, 1)
+		_, err := dg.Execute(context.Background(), keyspace, shard, tabletType, "query", nil, 1, nil)
 		return err
 	})
 }
@@ -30,19 +30,19 @@ func TestDiscoveryGatewayExecute(t *testing.T) {
 func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
 		queries := []querytypes.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, err := dg.ExecuteBatch(context.Background(), keyspace, shard, tabletType, queries, false, 0)
+		_, err := dg.ExecuteBatch(context.Background(), keyspace, shard, tabletType, queries, false, 0, nil)
 		return err
 	})
 	testDiscoveryGatewayTransact(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
 		queries := []querytypes.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, err := dg.ExecuteBatch(context.Background(), keyspace, shard, tabletType, queries, false, 1)
+		_, err := dg.ExecuteBatch(context.Background(), keyspace, shard, tabletType, queries, false, 1, nil)
 		return err
 	})
 }
 
 func TestDiscoveryGatewayExecuteStream(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, true, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
-		_, err := dg.StreamExecute(context.Background(), keyspace, shard, tabletType, "query", nil)
+		_, err := dg.StreamExecute(context.Background(), keyspace, shard, tabletType, "query", nil, nil)
 		return err
 	})
 }
@@ -68,7 +68,7 @@ func TestDiscoveryGatewayRollback(t *testing.T) {
 
 func TestDiscoveryGatewayBeginExecute(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
-		_, _, err := dg.BeginExecute(context.Background(), keyspace, shard, tabletType, "query", nil)
+		_, _, err := dg.BeginExecute(context.Background(), keyspace, shard, tabletType, "query", nil, nil)
 		return err
 	})
 }
@@ -76,7 +76,7 @@ func TestDiscoveryGatewayBeginExecute(t *testing.T) {
 func TestDiscoveryGatewayBeginExecuteBatch(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
 		queries := []querytypes.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, _, err := dg.BeginExecuteBatch(context.Background(), keyspace, shard, tabletType, queries, false)
+		_, _, err := dg.BeginExecuteBatch(context.Background(), keyspace, shard, tabletType, queries, false, nil)
 		return err
 	})
 }

@@ -311,27 +311,6 @@ primary key (name)
                         'msg-range2-%d' % i, 0xE000000000000000 + base + i,
                         should_be_here=False)
 
-  def _test_keyrange_constraints(self):
-    with self.assertRaisesRegexp(
-        Exception, '.*enforce custom_ksid_col range.*'):
-      shard_0_master.execute(
-          "insert into resharding1(id, msg, custom_ksid_col) "
-          " values(1, 'msg', :custom_ksid_col)",
-          bindvars={'custom_ksid_col': 0x9000000000000000},
-      )
-    with self.assertRaisesRegexp(
-        Exception, '.*enforce custom_ksid_col range.*'):
-      shard_0_master.execute(
-          "update resharding1 set msg = 'msg' where id = 1",
-          bindvars={'custom_ksid_col': 0x9000000000000000},
-      )
-    with self.assertRaisesRegexp(
-        Exception, '.*enforce custom_ksid_col range.*'):
-      shard_0_master.execute(
-          'delete from resharding1 where id = 1',
-          bindvars={'custom_ksid_col': 0x9000000000000000},
-      )
-
   def test_resharding(self):
     # we're going to reparent and swap these two
     global shard_2_master, shard_2_replica1
@@ -396,7 +375,6 @@ primary key (name)
     # create the tables
     self._create_schema()
     self._insert_startup_values()
-    self._test_keyrange_constraints()
 
     # run a health check on source replicas so they respond to discovery
     # (for binlog players) and on the source rdonlys (for workers)
@@ -481,7 +459,7 @@ primary key (name)
         worker_rpc_port)
     utils.wait_procs([workerclient_proc])
     self.verify_reconciliation_counters(worker_port, 'Online', 'resharding1',
-                                        2, 0, 0)
+                                        2, 0, 0, 0)
 
     # Reset vtworker such that we can run the next command.
     workerclient_proc = utils.run_vtworker_client_bg(['Reset'], worker_rpc_port)
@@ -507,7 +485,7 @@ primary key (name)
     utils.wait_procs([workerclient_proc])
     # Row 2 will be deleted from shard 2 and inserted to shard 3.
     self.verify_reconciliation_counters(worker_port, 'Online', 'resharding1',
-                                        1, 0, 1)
+                                        1, 0, 1, 1)
     self._check_value(shard_2_master, 'resharding1', 2, 'msg2',
                       0xD000000000000000, should_be_here=False)
     self._check_value(shard_3_master, 'resharding1', 2, 'msg2',
@@ -534,7 +512,7 @@ primary key (name)
     utils.wait_procs([workerclient_proc])
     # Row 2 will be deleted from shard 3 and inserted to shard 2.
     self.verify_reconciliation_counters(worker_port, 'Online', 'resharding1',
-                                        1, 0, 1)
+                                        1, 0, 1, 1)
     self._check_value(shard_2_master, 'resharding1', 2, 'msg2',
                       0x9000000000000000)
     self._check_value(shard_3_master, 'resharding1', 2, 'msg2',
@@ -571,9 +549,9 @@ primary key (name)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly1.tablet_alias,
                      'rdonly'], auto_log=True)
     self.verify_reconciliation_counters(worker_port, 'Online', 'resharding1',
-                                        1, 1, 2)
+                                        1, 1, 2, 0)
     self.verify_reconciliation_counters(worker_port, 'Offline', 'resharding1',
-                                        0, 0, 0)
+                                        0, 0, 0, 2)
     # Terminate worker daemon because it is no longer needed.
     utils.kill_sub_process(worker_proc, soft=True)
 
@@ -775,8 +753,9 @@ primary key (name)
 
     # reparent shard_2 to shard_2_replica1, then insert more data and
     # see it flow through still
-    utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/80-c0',
-                     shard_2_replica1.tablet_alias])
+    utils.run_vtctl(['PlannedReparentShard',
+                     '-keyspace_shard', 'test_keyspace/80-c0',
+                     '-new_master', shard_2_replica1.tablet_alias])
 
     # update our test variables to point at the new master
     shard_2_master, shard_2_replica1 = shard_2_replica1, shard_2_master

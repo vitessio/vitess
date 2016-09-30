@@ -5,12 +5,24 @@
 package worker
 
 import (
+	"errors"
+	"flag"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
+
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestGreaterThanTupleWhereClause(t *testing.T) {
@@ -151,5 +163,42 @@ func TestGenerateQuery(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("testcase = %v: generateQuery(chunk=%v, pk=%v, lastRow=%v) = %v, want = %v", tc.desc, r.chunk, r.td.PrimaryKeyColumns, r.lastRow, got, tc.want)
 		}
+	}
+}
+
+// TestNewRestartableResultReader tests the correct error handling e.g.
+// if the connection to a tablet fails due to a canceled context.
+func TestNewRestartableResultReader(t *testing.T) {
+	wantErr := errors.New("restartable_result_reader_test.go: context canceled")
+
+	tabletconn.RegisterDialer("fake_dialer", func(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
+		return nil, wantErr
+	})
+	protocol := flag.CommandLine.Lookup("tablet_protocol").Value.String()
+	flag.Set("tablet_protocol", "fake_dialer")
+	// Restore the previous flag value after the test.
+	defer flag.Set("tablet_protocol", protocol)
+
+	// Create dependencies e.g. a "singleTabletProvider" instance.
+	ts := zktestserver.New(t, []string{"cell1"})
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell1",
+		Uid:  1,
+	}
+	tablet := &topodatapb.Tablet{
+		Keyspace: "ks1",
+		Shard:    "-80",
+		Alias:    alias,
+	}
+	ctx := context.Background()
+	if err := ts.CreateTablet(ctx, tablet); err != nil {
+		t.Fatalf("CreateTablet failed: %v", err)
+	}
+	tp := newSingleTabletProvider(ctx, ts, alias)
+
+	_, err := NewRestartableResultReader(ctx, wr.Logger(), tp, nil /* td */, chunk{}, false)
+	if err == nil || !strings.Contains(err.Error(), wantErr.Error()) {
+		t.Fatalf("NewRestartableResultReader() should have failed because the context is canceled: %v", err)
 	}
 }

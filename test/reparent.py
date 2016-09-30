@@ -164,14 +164,16 @@ class TestReparent(unittest.TestCase):
     # Perform a planned reparent operation, will try to contact
     # the current master and fail somewhat quickly
     _, stderr = utils.run_vtctl(['-wait-time', '5s',
-                                 'PlannedReparentShard', 'test_keyspace/0',
-                                 tablet_62044.tablet_alias],
+                                 'PlannedReparentShard',
+                                 '-keyspace_shard', 'test_keyspace/0',
+                                 '-new_master', tablet_62044.tablet_alias],
                                 expect_fail=True)
     self.assertIn('DemoteMaster failed', stderr)
 
     # Run forced reparent operation, this should now proceed unimpeded.
-    utils.run_vtctl(['EmergencyReparentShard', 'test_keyspace/0',
-                     tablet_62044.tablet_alias], auto_log=True)
+    utils.run_vtctl(['EmergencyReparentShard',
+                     '-keyspace_shard', 'test_keyspace/0',
+                     '-new_master', tablet_62044.tablet_alias], auto_log=True)
 
     utils.validate_topology()
     self._check_master_tablet(tablet_62044)
@@ -231,8 +233,9 @@ class TestReparent(unittest.TestCase):
     self._check_master_tablet(tablet_62344)
 
     # Perform a graceful reparent operation to another cell.
-    utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/' + shard_id,
-                     tablet_31981.tablet_alias], auto_log=True)
+    utils.run_vtctl(['PlannedReparentShard',
+                     '-keyspace_shard', 'test_keyspace/' + shard_id,
+                     '-new_master', tablet_31981.tablet_alias], auto_log=True)
     utils.validate_topology()
 
     self._check_master_tablet(tablet_31981)
@@ -303,8 +306,9 @@ class TestReparent(unittest.TestCase):
     self.assertIn('master', lines[0])  # master first
 
     # Perform a graceful reparent operation.
-    utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/' + shard_id,
-                     tablet_62044.tablet_alias], auto_log=True)
+    utils.run_vtctl(['PlannedReparentShard',
+                     '-keyspace_shard', 'test_keyspace/' + shard_id,
+                     '-new_master', tablet_62044.tablet_alias], auto_log=True)
     utils.validate_topology()
 
     self._check_master_tablet(tablet_62044)
@@ -376,11 +380,81 @@ class TestReparent(unittest.TestCase):
     tablet_31981.kill_vttablet()
 
     # Perform a graceful reparent operation.
-    utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/' + shard_id,
-                     tablet_62044.tablet_alias])
+    utils.run_vtctl(['PlannedReparentShard',
+                     '-keyspace_shard', 'test_keyspace/' + shard_id,
+                     '-new_master', tablet_62044.tablet_alias])
     self._check_master_tablet(tablet_62044)
 
     tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983])
+
+  def test_reparent_avoid(self):
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
+
+    # create the database so vttablets start, as they are serving
+    tablet_62344.create_db('vt_test_keyspace')
+    tablet_62044.create_db('vt_test_keyspace')
+    tablet_31981.create_db('vt_test_keyspace')
+
+    # Start up a master mysql and vttablet
+    tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True,
+                             wait_for_start=False)
+
+    # Create a few slaves for testing reparenting. Won't be healthy
+    # as replication is not running.
+    tablet_62044.init_tablet('replica', 'test_keyspace', '0', start=True,
+                             wait_for_start=False)
+    tablet_31981.init_tablet('replica', 'test_keyspace', '0', start=True,
+                             wait_for_start=False)
+    tablet_62344.wait_for_vttablet_state('SERVING')
+    for t in [tablet_62044, tablet_31981]:
+      t.wait_for_vttablet_state('NOT_SERVING')
+
+    utils.validate_topology()
+
+    # Force the slaves to reparent assuming that all the datasets are
+    # identical.
+    for t in [tablet_62344, tablet_62044, tablet_31981]:
+      t.reset_replication()
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
+                     tablet_62344.tablet_alias], auto_log=True)
+
+    utils.validate_topology(ping_tablets=True)
+    self._check_master_tablet(tablet_62344)
+
+    # Perform a reparent operation with avoid_master pointing to non-master. It
+    # should succeed without doing anything.
+    utils.run_vtctl(['PlannedReparentShard',
+                     '-keyspace_shard', 'test_keyspace/0',
+                     '-avoid_master', tablet_62044.tablet_alias], auto_log=True)
+
+    utils.validate_topology()
+    self._check_master_tablet(tablet_62344)
+
+    # Perform a reparent operation with avoid_master pointing to master.
+    utils.run_vtctl(['PlannedReparentShard',
+                     '-keyspace_shard', 'test_keyspace/0',
+                     '-avoid_master', tablet_62344.tablet_alias], auto_log=True)
+
+    utils.validate_topology()
+    # 62044 is in the same cell and 31981 is in a different cell, so we must
+    # land on 62044
+    self._check_master_tablet(tablet_62044)
+
+    # If we kill the tablet in the same cell as master then reparent
+    # -avoid_master will fail.
+    tablet_62344.kill_vttablet()
+    _, stderr = utils.run_vtctl(['PlannedReparentShard',
+                                 '-keyspace_shard', 'test_keyspace/0',
+                                 '-avoid_master', tablet_62044.tablet_alias],
+                                auto_log=True,
+                                expect_fail=True)
+    self.assertIn('cannot find a tablet to reparent to', stderr)
+
+    utils.validate_topology()
+    self._check_master_tablet(tablet_62044)
+
+    tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983,
+                         tablet_31981])
 
   # assume a different entity is doing the reparent, and telling us it was done
   def test_reparent_from_outside(self):
@@ -468,12 +542,6 @@ class TestReparent(unittest.TestCase):
 
     self._test_reparent_from_outside_check(brutal, base_time)
 
-    # RebuildReplicationGraph will rebuild the topo data from
-    # the tablet records. It is an emergency command only.
-    utils.run_vtctl(['RebuildReplicationGraph', 'test_nj', 'test_keyspace'])
-
-    self._test_reparent_from_outside_check(brutal, base_time)
-
     if not brutal:
       tablet_62344.kill_vttablet()
     tablet.kill_tablets([tablet_31981, tablet_62044, tablet_41983])
@@ -555,8 +623,8 @@ class TestReparent(unittest.TestCase):
 
     # Perform a graceful reparent operation. It will fail as one tablet is down.
     _, stderr = utils.run_vtctl(['PlannedReparentShard',
-                                 'test_keyspace/' + shard_id,
-                                 tablet_62044.tablet_alias],
+                                 '-keyspace_shard', 'test_keyspace/' + shard_id,
+                                 '-new_master', tablet_62044.tablet_alias],
                                 expect_fail=True)
     self.assertIn('TabletManager.SetMaster on test_nj-0000041983 error', stderr)
 

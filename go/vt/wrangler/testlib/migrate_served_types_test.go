@@ -5,6 +5,7 @@
 package testlib
 
 import (
+	"flag"
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -43,6 +44,10 @@ func checkShardSourceShards(t *testing.T, ts topo.Server, shard string, expected
 }
 
 func TestMigrateServedTypes(t *testing.T) {
+	// TODO(b/26388813): Remove the next two lines once vtctl WaitForDrain is integrated in the vtctl MigrateServed* commands.
+	flag.Set("wait_for_drain_sleep_rdonly", "0s")
+	flag.Set("wait_for_drain_sleep_replica", "0s")
+
 	db := fakesqldb.Register()
 	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())

@@ -220,20 +220,6 @@ func (ts Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) (
 	return result, nil
 }
 
-// DeleteKeyspaceShards wraps the underlying Impl.DeleteKeyspaceShards
-// and dispatches the event.
-func (ts Server) DeleteKeyspaceShards(ctx context.Context, keyspace string) error {
-	if err := ts.Impl.DeleteKeyspaceShards(ctx, keyspace); err != nil {
-		return err
-	}
-	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceName: keyspace,
-		Keyspace:     nil,
-		Status:       "deleted all shards",
-	})
-	return nil
-}
-
 // DeleteKeyspace wraps the underlying Impl.DeleteKeyspace
 // and dispatches the event.
 func (ts Server) DeleteKeyspace(ctx context.Context, keyspace string) error {

@@ -8,30 +8,41 @@ export class DialogSettings {
   public actionFunction: any;
   public dialogTitle: string;
   public dialogSubtitle: string;
-  public beforeNameRespText: string;
-  public afterNameRespText: string;
-  public openModal= false;
+  public respText: string;
+  public errMsg: string;
+  public logText: string;
+  public open= false;
   public dialogForm= true;
   public dialogLog= false;
   public pending= false;
+  public onCloseFunction= undefined;
 
-  public constructor(actionWord= '', actionFunction= undefined, dialogTitle= '',
-                     dialogSubtitle= '') {
+  constructor(actionWord = '', dialogTitle = '', dialogSubtitle = '', errMsg = '') {
     this.actionWord = actionWord;
-    this.actionFunction = actionFunction;
     this.dialogTitle = dialogTitle;
     this.dialogSubtitle = dialogSubtitle;
+    this.errMsg = errMsg;
   }
 
   public startPending() {
     this.pending = true;
   }
+
   public endPending() {
     this.pending = false;
   }
-  public setMessage(before, after) {
-    this.beforeNameRespText = before;
-    this.afterNameRespText = after;
+
+  public setMessage(message) {
+    this.respText = message;
+  }
+
+  public setLog(message) {
+    this.logText = message;
+  }
+
+  // Opens/closes the gray modal behind a dialog box.
+  public toggleModal() {
+    this.open = !this.open;
   }
 }
 

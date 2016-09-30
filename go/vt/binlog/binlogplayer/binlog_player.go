@@ -169,15 +169,15 @@ func NewBinlogPlayerTables(dbClient VtClient, tablet *topodatapb.Tablet, tables 
 //   transaction_timestamp alone (keeping the old value), and we don't
 //   change SecondsBehindMaster
 func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransaction) error {
-	gtid, err := replication.DecodeGTID(tx.TransactionId)
+	position, err := replication.DecodePosition(tx.EventToken.Position)
 	if err != nil {
 		return err
 	}
 
 	now := time.Now().Unix()
 
-	blp.position = replication.AppendGTID(blp.position, gtid)
-	updateRecovery := updateBlpCheckpoint(blp.uid, blp.position, now, tx.Timestamp)
+	blp.position = position
+	updateRecovery := updateBlpCheckpoint(blp.uid, blp.position, now, tx.EventToken.Timestamp)
 
 	qr, err := blp.exec(updateRecovery)
 	if err != nil {
@@ -187,8 +187,8 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 		return fmt.Errorf("Cannot update blp_recovery table, affected %v rows", qr.RowsAffected)
 	}
 	blp.blplStats.SetLastPosition(blp.position)
-	if tx.Timestamp != 0 {
-		blp.blplStats.SecondsBehindMaster.Set(now - tx.Timestamp)
+	if tx.EventToken.Timestamp != 0 {
+		blp.blplStats.SecondsBehindMaster.Set(now - tx.EventToken.Timestamp)
 	}
 	return nil
 }
@@ -197,7 +197,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 // the provided binlog player.
 func ReadStartPosition(dbClient VtClient, uid uint32) (string, string, error) {
 	selectRecovery := QueryBlpCheckpoint(uid)
-	qr, err := dbClient.ExecuteFetch(selectRecovery, 1, true)
+	qr, err := dbClient.ExecuteFetch(selectRecovery, 1)
 	if err != nil {
 		return "", "", fmt.Errorf("error %v in selecting from recovery table %v", err, selectRecovery)
 	}
@@ -211,7 +211,7 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (string, string, error) {
 // replication from the checkpoint table.
 func (blp *BinlogPlayer) readThrottlerSettings() (int64, int64, error) {
 	selectThrottlerSettings := QueryBlpThrottlerSettings(blp.uid)
-	qr, err := blp.dbClient.ExecuteFetch(selectThrottlerSettings, 1, true)
+	qr, err := blp.dbClient.ExecuteFetch(selectThrottlerSettings, 1)
 	if err != nil {
 		return throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("error %v in selecting the throttler settings %v", err, selectThrottlerSettings)
 	}
@@ -257,7 +257,7 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 				// proceeds, but in Vitess-land this usually means a misconfigured
 				// server or a misbehaving client, so we spam the logs with warnings.
 				log.Warningf("BinlogPlayer changing charset from %v to %v for statement %d in transaction %v", blp.currentCharset, stmtCharset, i, *tx)
-				err = dbClient.dbConn.SetCharset(stmtCharset)
+				err = sqldb.SetCharset(dbClient.dbConn, stmtCharset)
 				if err != nil {
 					return false, fmt.Errorf("can't set charset for statement %d in transaction %v: %v", i, *tx, err)
 				}
@@ -286,7 +286,7 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 
 func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 	queryStartTime := time.Now()
-	qr, err := blp.dbClient.ExecuteFetch(sql, 0, false)
+	qr, err := blp.dbClient.ExecuteFetch(sql, 0)
 	blp.blplStats.Timings.Record(BlplQuery, queryStartTime)
 	if d := time.Now().Sub(queryStartTime); d > SlowQueryThreshold {
 		log.Infof("SLOW QUERY (took %.2fs) '%s'", d.Seconds(), sql)
@@ -362,7 +362,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	// to check that they match. The streamer will also only send per-statement
 	// charset data if that statement's charset is different from what we specify.
 	if dbClient, ok := blp.dbClient.(*DBClient); ok {
-		blp.defaultCharset, err = dbClient.dbConn.GetCharset()
+		blp.defaultCharset, err = sqldb.GetCharset(dbClient.dbConn)
 		if err != nil {
 			return fmt.Errorf("can't get charset to request binlog stream: %v", err)
 		}
@@ -376,7 +376,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 				return
 			}
 			log.Infof("restoring original charset %v", blp.defaultCharset)
-			if csErr := dbClient.dbConn.SetCharset(blp.defaultCharset); csErr != nil {
+			if csErr := sqldb.SetCharset(dbClient.dbConn, blp.defaultCharset); csErr != nil {
 				log.Errorf("can't restore original charset %v: %v", blp.defaultCharset, csErr)
 			}
 		}()

@@ -18,8 +18,8 @@ from vttest.mysql_flavor import mysql_flavor
 class MySqlDBMysqlctl(mysql_db.MySqlDB):
   """Contains data and methods to manage a MySQL instance using mysqlctl."""
 
-  def __init__(self, directory, port):
-    super(MySqlDBMysqlctl, self).__init__(directory, port)
+  def __init__(self, directory, port, extra_my_cnf):
+    super(MySqlDBMysqlctl, self).__init__(directory, port, extra_my_cnf)
 
   def setup(self):
     cmd = [
@@ -35,7 +35,10 @@ class MySqlDBMysqlctl(mysql_db.MySqlDB):
     ]
     env = os.environ
     env['VTDATAROOT'] = self._directory
-    env['EXTRA_MY_CNF'] = mysql_flavor().my_cnf()
+    my_cnf = mysql_flavor().my_cnf()
+    if self._extra_my_cnf:
+      my_cnf += ':%s' % self._extra_my_cnf
+    env['EXTRA_MY_CNF'] = my_cnf
     result = subprocess.call(cmd, env=env)
     if result != 0:
       raise Exception('mysqlctl failed', result)

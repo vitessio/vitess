@@ -22,6 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtgateservicepb "github.com/youtube/vitess/go/vt/proto/vtgateservice"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -90,7 +91,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
-	result, err := vtg.server.Execute(ctx, string(request.Query.Sql), bv, request.Keyspace, request.TabletType, request.Session, request.NotInTransaction)
+	result, err := vtg.server.Execute(ctx, string(request.Query.Sql), bv, request.Keyspace, request.TabletType, request.Session, request.NotInTransaction, request.Options)
 	return &vtgatepb.ExecuteResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: request.Session,
@@ -113,7 +114,8 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, request *vtgatepb.ExecuteS
 		request.Shards,
 		request.TabletType,
 		request.Session,
-		request.NotInTransaction)
+		request.NotInTransaction,
+		request.Options)
 	return &vtgatepb.ExecuteShardsResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: request.Session,
@@ -136,7 +138,8 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *vtgatepb.Exe
 		request.KeyspaceIds,
 		request.TabletType,
 		request.Session,
-		request.NotInTransaction)
+		request.NotInTransaction,
+		request.Options)
 	return &vtgatepb.ExecuteKeyspaceIdsResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: request.Session,
@@ -159,7 +162,8 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *vtgatepb.Execu
 		request.KeyRanges,
 		request.TabletType,
 		request.Session,
-		request.NotInTransaction)
+		request.NotInTransaction,
+		request.Options)
 	return &vtgatepb.ExecuteKeyRangesResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: request.Session,
@@ -183,7 +187,8 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *vtgatepb.Execu
 		request.EntityKeyspaceIds,
 		request.TabletType,
 		request.Session,
-		request.NotInTransaction)
+		request.NotInTransaction,
+		request.Options)
 	return &vtgatepb.ExecuteEntityIdsResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: request.Session,
@@ -199,7 +204,8 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, request *vtgatepb.Exe
 		request.Queries,
 		request.TabletType,
 		request.AsTransaction,
-		request.Session)
+		request.Session,
+		request.Options)
 	return &vtgatepb.ExecuteBatchShardsResponse{
 		Results: sqltypes.ResultsToProto3(result),
 		Session: request.Session,
@@ -216,7 +222,8 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *vtgatep
 		request.Queries,
 		request.TabletType,
 		request.AsTransaction,
-		request.Session)
+		request.Session,
+		request.Options)
 	return &vtgatepb.ExecuteBatchKeyspaceIdsResponse{
 		Results: sqltypes.ResultsToProto3(result),
 		Session: request.Session,
@@ -237,6 +244,7 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 		bv,
 		request.Keyspace,
 		request.TabletType,
+		request.Options,
 		func(value *sqltypes.Result) error {
 			return stream.Send(&vtgatepb.StreamExecuteResponse{
 				Result: sqltypes.ResultToProto3(value),
@@ -259,6 +267,7 @@ func (vtg *VTGate) StreamExecuteShards(request *vtgatepb.StreamExecuteShardsRequ
 		request.Keyspace,
 		request.Shards,
 		request.TabletType,
+		request.Options,
 		func(value *sqltypes.Result) error {
 			return stream.Send(&vtgatepb.StreamExecuteShardsResponse{
 				Result: sqltypes.ResultToProto3(value),
@@ -282,6 +291,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(request *vtgatepb.StreamExecuteKeysp
 		request.Keyspace,
 		request.KeyspaceIds,
 		request.TabletType,
+		request.Options,
 		func(value *sqltypes.Result) error {
 			return stream.Send(&vtgatepb.StreamExecuteKeyspaceIdsResponse{
 				Result: sqltypes.ResultToProto3(value),
@@ -305,6 +315,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(request *vtgatepb.StreamExecuteKeyRang
 		request.Keyspace,
 		request.KeyRanges,
 		request.TabletType,
+		request.Options,
 		func(value *sqltypes.Result) error {
 			return stream.Send(&vtgatepb.StreamExecuteKeyRangesResponse{
 				Result: sqltypes.ResultToProto3(value),
@@ -388,6 +399,26 @@ func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, request *vtgatepb.GetSrvK
 	return &vtgatepb.GetSrvKeyspaceResponse{
 		SrvKeyspace: sk,
 	}, nil
+}
+
+// UpdateStream is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) UpdateStream(request *vtgatepb.UpdateStreamRequest, stream vtgateservicepb.Vitess_UpdateStreamServer) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx := withCallerIDContext(stream.Context(), request.CallerId)
+	vtgErr := vtg.server.UpdateStream(ctx,
+		request.Keyspace,
+		request.Shard,
+		request.KeyRange,
+		request.TabletType,
+		request.Timestamp,
+		request.Event,
+		func(event *querypb.StreamEvent, resumeTimestamp int64) error {
+			return stream.Send(&vtgatepb.UpdateStreamResponse{
+				Event:           event,
+				ResumeTimestamp: resumeTimestamp,
+			})
+		})
+	return vterrors.ToGRPCError(vtgErr)
 }
 
 func init() {

@@ -9,11 +9,11 @@
 # It sets up filtered replication between two shards and checks how data flows
 # through binlog streamer.
 
+import base64
 import logging
 import unittest
 
 from vtdb import keyrange_constants
-from vtdb import update_stream
 
 import environment
 import tablet
@@ -133,12 +133,27 @@ def tearDownModule():
     t.remove_tree()
 
 
-def _get_update_stream(tblt):
-  protocol, endpoint = tblt.update_stream_python_endpoint()
-  return update_stream.connect(protocol, endpoint, 30)
-
-
 class TestBinlog(unittest.TestCase):
+
+  def _wait_for_replica_event(self, position, sql):
+    """Wait for a replica event with the given SQL string."""
+    while True:
+      event = utils.run_vtctl_json(['VtTabletUpdateStream',
+                                    '-position', position,
+                                    '-count', '1',
+                                    dst_replica.tablet_alias])
+      if 'statements' not in event:
+        logging.debug('skipping event with no statements: %s', event)
+      for statement in event['statements']:
+        if 'sql' not in statement:
+          logging.debug('skipping statement with no sql: %s', statement)
+          continue
+        base64sql = statement['sql']
+        s = base64.standard_b64decode(base64sql)
+        logging.debug('found sql: %s', s)
+        if s == sql:
+          return
+      position = event['event_token']['position']
 
   def test_charset(self):
     start_position = mysql_flavor().master_position(dst_replica)
@@ -157,11 +172,12 @@ class TestBinlog(unittest.TestCase):
         conn_params={'charset': 'latin1'}, write=True)
 
     # Wait for it to replicate.
-    stream = _get_update_stream(dst_replica)
-    for stream_event in stream.stream_update(start_position):
-      if stream_event.category == update_stream.StreamEvent.POS:
-        break
-    stream.close()
+    event = utils.run_vtctl_json(['VtTabletUpdateStream',
+                                  '-position', start_position,
+                                  '-count', '1',
+                                  dst_replica.tablet_alias])
+    self.assertIn('event_token', event)
+    self.assertIn('timestamp', event['event_token'])
 
     # Check the value.
     data = dst_master.mquery(
@@ -192,16 +208,7 @@ class TestBinlog(unittest.TestCase):
 
     # Look for it using update stream to see if binlog streamer can talk to
     # dst_replica, which now has binlog_checksum enabled.
-    stream = _get_update_stream(dst_replica)
-    found = False
-    for stream_event in stream.stream_update(start_position):
-      if stream_event.category == update_stream.StreamEvent.POS:
-        break
-      if stream_event.sql == sql:
-        found = True
-        break
-    stream.close()
-    self.assertEqual(found, True, 'expected query not found in update stream')
+    self._wait_for_replica_event(start_position, sql)
 
   def test_checksum_disabled(self):
     # Disable binlog_checksum to make sure we can also talk to a server without
@@ -222,16 +229,7 @@ class TestBinlog(unittest.TestCase):
 
     # Look for it using update stream to see if binlog streamer can talk to
     # dst_replica, which now has binlog_checksum disabled.
-    stream = _get_update_stream(dst_replica)
-    found = False
-    for stream_event in stream.stream_update(start_position):
-      if stream_event.category == update_stream.StreamEvent.POS:
-        break
-      if stream_event.sql == sql:
-        found = True
-        break
-    stream.close()
-    self.assertEqual(found, True, 'expected query not found in update stream')
+    self._wait_for_replica_event(start_position, sql)
 
 
 if __name__ == '__main__':

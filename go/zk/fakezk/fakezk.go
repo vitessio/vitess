@@ -74,9 +74,9 @@ func NewConnFromFile(filename string) zk.Conn {
 		// CreateRecursive will work for a leaf node where the parent
 		// doesn't exist, but not for a node in the middle of a tree
 		// that already exists. So have to use 'Set' as a backup.
-		if _, err := zk.CreateRecursive(result, k, string(jv), 0, nil); err != nil {
+		if _, err := zk.CreateRecursive(result, k, jv, 0, nil); err != nil {
 			if err == zookeeper.ErrNodeExists {
-				_, err = result.Set(k, string(jv), -1)
+				_, err = result.Set(k, jv, -1)
 			}
 			if err != nil {
 				panic(fmt.Errorf("NewConnFromFile failed to zk.CreateRecursive value %v: %v", k, err))
@@ -86,29 +86,29 @@ func NewConnFromFile(filename string) zk.Conn {
 	return result
 }
 
-func (conn *zconn) Get(zkPath string) (data string, stat *zookeeper.Stat, err error) {
+func (conn *zconn) Get(zkPath string) (data []byte, stat *zookeeper.Stat, err error) {
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
 	node, _, rest, err := conn.getNode(zkPath, "get")
 	if err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 	if len(rest) != 0 {
-		return "", nil, zookeeper.ErrNoNode
+		return nil, nil, zookeeper.ErrNoNode
 	}
 	return node.content, node.statCopy(), nil
 }
 
-func (conn *zconn) GetW(zkPath string) (data string, stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error) {
+func (conn *zconn) GetW(zkPath string) (data []byte, stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error) {
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
 	node, _, rest, err := conn.getNode(zkPath, "getw")
 	if err != nil {
-		return "", nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if len(rest) != 0 {
-		return "", nil, nil, zookeeper.ErrNoNode
+		return nil, nil, nil, zookeeper.ErrNoNode
 	}
 	c := make(chan zookeeper.Event, 1)
 	node.changeWatches = append(node.changeWatches, c)
@@ -185,7 +185,7 @@ func (conn *zconn) ExistsW(zkPath string) (stat *zookeeper.Stat, watch <-chan zo
 
 }
 
-func (conn *zconn) Create(zkPath, value string, flags int, aclv []zookeeper.ACL) (zkPathCreated string, err error) {
+func (conn *zconn) Create(zkPath string, value []byte, flags int, aclv []zookeeper.ACL) (zkPathCreated string, err error) {
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
 
@@ -249,7 +249,7 @@ func (conn *zconn) Create(zkPath, value string, flags int, aclv []zookeeper.ACL)
 	return zkPath, nil
 }
 
-func (conn *zconn) Set(zkPath, value string, version int32) (stat *zookeeper.Stat, err error) {
+func (conn *zconn) Set(zkPath string, value []byte, version int32) (stat *zookeeper.Stat, err error) {
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
 
@@ -364,7 +364,7 @@ func (conn *zconn) getNode(zkPath string, op string) (node *node, parent *node, 
 
 type node struct {
 	name    string
-	content string
+	content []byte
 	stat    zookeeper.Stat
 
 	acl      []zookeeper.ACL
@@ -405,7 +405,7 @@ func (n *node) nextSequence() string {
 func (n *node) fprintRecursive(level int, buf *bytes.Buffer) {
 	start := strings.Repeat("  ", level)
 	fmt.Fprintf(buf, "%v-%v:\n", start, n.name)
-	if n.content != "" {
+	if len(n.content) > 0 {
 		fmt.Fprintf(buf, "%v content: %q\n\n", start, n.content)
 	}
 	if len(n.children) > 0 {

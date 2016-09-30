@@ -26,17 +26,20 @@ import json
 import os
 import struct
 import subprocess
+import time
 import urllib
 
 import unittest
 
 from google.protobuf import text_format
 
+from vtproto import topodata_pb2
 from vtproto import vttest_pb2
 
+from vtdb import dbexceptions
+from vtdb import proto3_encoding
 from vtdb import vtgate_client
 from vtdb import vtgate_cursor
-from vtdb import dbexceptions
 
 import utils
 import environment
@@ -57,6 +60,8 @@ class TestMysqlctl(unittest.TestCase):
 
     topology = vttest_pb2.VTTestTopology()
     keyspace = topology.keyspaces.add(name='test_keyspace')
+    keyspace.replica_count = 2
+    keyspace.rdonly_count = 1
     keyspace.shards.add(name='-80')
     keyspace.shards.add(name='80-')
     topology.keyspaces.add(name='redirect', served_from='test_keyspace')
@@ -94,6 +99,11 @@ class TestMysqlctl(unittest.TestCase):
                 'using protocol: %s.\n'
                 'Press enter to continue.' % (vtgate_addr, protocol))
 
+    # Remember the current timestamp after we sleep for a bit, so we
+    # can use it for UpdateStream later.
+    time.sleep(2)
+    before_insert = long(time.time())
+
     # Connect to vtgate.
     conn = vtgate_client.connect(protocol, vtgate_addr, conn_timeout)
 
@@ -121,9 +131,9 @@ class TestMysqlctl(unittest.TestCase):
     result = cursor.fetchall()
     self.assertEqual(result[0][1], 'test 123')
 
-    # try to insert again, see if we get the rigth integrity error exception
+    # try to insert again, see if we get the right integrity error exception
     # (this is meant to test vtcombo properly returns exceptions, and to a
-    # lesser extend that the python client converts it properly)
+    # lesser extent that the python client converts it properly)
     cursor.begin()
     with self.assertRaises(dbexceptions.IntegrityError):
       cursor.execute(insert, bind_variables)
@@ -136,6 +146,7 @@ class TestMysqlctl(unittest.TestCase):
     cursor.begin()
     for i in xrange(id_start, id_start+rowcount):
       bind_variables['id'] = i
+      bind_variables['keyspace_id'] = get_keyspace_id(i)
       cursor.execute(insert, bind_variables)
     cursor.commit()
     cursor.close()
@@ -162,6 +173,55 @@ class TestMysqlctl(unittest.TestCase):
     result = cursor.fetchall()
     self.assertEqual(result[0][1], 'test 123')
     cursor.close()
+
+    # Try to get the update stream from the connection. This makes
+    # sure that part works as well.
+    count = 0
+    for (event, _) in conn.update_stream(
+        'test_keyspace', topodata_pb2.MASTER,
+        timestamp=before_insert,
+        shard='-80'):
+      for statement in event.statements:
+        if statement.table_name == 'test_table':
+          count += 1
+      if count == rowcount + 1:
+        # We're getting the initial value, plus the 500 updates.
+        break
+
+    # Insert a sentinel value into the second shard.
+    row_id = 0x8100000000000000
+    keyspace_id = get_keyspace_id(row_id)
+    cursor = conn.cursor(
+        tablet_type='master', keyspace='test_keyspace',
+        keyspace_ids=[pack_kid(keyspace_id)],
+        writable=True)
+    cursor.begin()
+    bind_variables = {
+        'id': row_id,
+        'msg': 'test %s' % row_id,
+        'keyspace_id': keyspace_id,
+        }
+    cursor.execute(insert, bind_variables)
+    cursor.commit()
+    cursor.close()
+
+    # Try to connect to an update stream on the other shard.
+    # We may get some random update stream events, but we should not get any
+    # event that's related to the first shard. Only events related to
+    # the Insert we just did.
+    found = False
+    for (event, _) in conn.update_stream(
+        'test_keyspace', topodata_pb2.MASTER,
+        timestamp=before_insert,
+        shard='80-'):
+      for statement in event.statements:
+        self.assertEqual(statement.table_name, 'test_table')
+        fields, rows = proto3_encoding.convert_stream_event_statement(statement)
+        self.assertEqual(fields[0], 'id')
+        self.assertEqual(rows[0][0], row_id)
+        found = True
+      if found:
+        break
 
     # Clean up the connection
     conn.close()

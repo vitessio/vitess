@@ -113,10 +113,8 @@ public class VitessConnection implements Connection {
         checkOpen();
         if (this.autoCommit != autoCommit) { //If same then no-op
             //Old Transaction Needs to be committed as per JDBC 4.1 Spec.
-            if (null != this.vtGateTx) {
-                Context context = createContext(Constants.CONNECTION_TIMEOUT);
-                this.vtGateTx.commit(context).checkedGet();
-                this.vtGateTx = null;
+            if (isInTransaction()) {
+                this.commit();
             }
             this.autoCommit = autoCommit;
         }
@@ -167,9 +165,8 @@ public class VitessConnection implements Connection {
     public void close() throws SQLException {
         if (!this.closed) { //no-op when Connection already closed
             try {
-                if (null != this.vtGateTx) { //Rolling back active transaction on close
-                    Context context = createContext(Constants.CONNECTION_TIMEOUT);
-                    this.vtGateTx.rollback(context).checkedGet();
+                if (isInTransaction()) { //Rolling back active transaction on close
+                    this.rollback();
                 }
                 closeAllOpenStatements();
             } finally {
@@ -222,7 +219,7 @@ public class VitessConnection implements Connection {
     public void setReadOnly(boolean readOnly) throws SQLException {
         checkOpen();
 
-        if (null != this.vtGateTx) {
+        if (isInTransaction()) {
             throw new SQLException(
                 Constants.SQLExceptionMessages.METHOD_CALLED_ON_OPEN_TRANSACTION);
         }
@@ -548,7 +545,7 @@ public class VitessConnection implements Connection {
         }
     }
 
-    private boolean isInTransaction() throws SQLException {
+    private boolean isInTransaction() {
         return null != this.vtGateTx;
     }
 

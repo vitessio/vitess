@@ -57,7 +57,7 @@ func digits(i int) int {
 func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodatapb.Tablet, td *tabletmanagerdatapb.TableDefinition, chunkCount, minRowsPerChunk int) ([]chunk, error) {
 	if len(td.PrimaryKeyColumns) == 0 {
 		// No explicit primary key. Cannot chunk the rows then.
-		wr.Logger().Infof("Not splitting table %v into multiple chunks because it has no primary key columns. This will reduce the performance of the clone.", td.Name)
+		wr.Logger().Infof("table=%v: Not splitting the table into multiple chunks because it has no primary key columns. This will reduce the performance of the clone.", td.Name)
 		return singleCompleteChunk, nil
 	}
 	if td.RowCount < 2*uint64(minRowsPerChunk) {
@@ -65,7 +65,7 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 		// below would set "chunkCount" to less than 2 i.e. 1 or 0 chunks.
 		// In practice in this case there should be exactly one chunk.
 		// Return early in this case and notice the user about this.
-		wr.Logger().Infof("Not splitting table %v into multiple chunks because it has only %d rows.", td.Name, td.RowCount)
+		wr.Logger().Infof("table=%v: Not splitting the table into multiple chunks because it has only %d rows.", td.Name, td.RowCount)
 		return singleCompleteChunk, nil
 	}
 	if chunkCount == 1 {
@@ -89,7 +89,7 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 	max := result.Rows[0][1].ToNative()
 
 	if min == nil || max == nil {
-		wr.Logger().Infof("Not splitting table %v into multiple chunks, min or max is NULL: %v", td.Name, qr.Rows[0])
+		wr.Logger().Infof("table=%v: Not splitting the table into multiple chunks, min or max is NULL: %v", td.Name, qr.Rows[0])
 		return singleCompleteChunk, nil
 	}
 
@@ -98,7 +98,7 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 	if avgRowsPerChunk < uint64(minRowsPerChunk) {
 		// Reduce the chunkCount to fulfill minRowsPerChunk.
 		newChunkCount := td.RowCount / uint64(minRowsPerChunk)
-		wr.Logger().Infof("Reducing the number of chunks for table %v from the default %d to %d to make sure that each chunk has at least %d rows.", td.Name, chunkCount, newChunkCount, minRowsPerChunk)
+		wr.Logger().Infof("table=%v: Reducing the number of chunks from the default %d to %d to make sure that each chunk has at least %d rows.", td.Name, chunkCount, newChunkCount, minRowsPerChunk)
 		chunkCount = int(newChunkCount)
 	}
 
@@ -110,25 +110,25 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 		max := max.(int64)
 		interval = (max - min) / int64(chunkCount)
 		if interval == 0 {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v to %v", td.Name, min, max)
+			wr.Logger().Infof("table=%v: Not splitting the table into multiple chunks, interval=0: %v to %v", td.Name, min, max)
 			return singleCompleteChunk, nil
 		}
 	case uint64:
 		max := max.(uint64)
 		interval = (max - min) / uint64(chunkCount)
 		if interval == 0 {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v to %v", td.Name, min, max)
+			wr.Logger().Infof("table=%v: Not splitting the table into multiple chunks, interval=0: %v to %v", td.Name, min, max)
 			return singleCompleteChunk, nil
 		}
 	case float64:
 		max := max.(float64)
 		interval = (max - min) / float64(chunkCount)
 		if interval == 0 {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v to %v", td.Name, min, max)
+			wr.Logger().Infof("table=%v: Not splitting the table into multiple chunks, interval=0: %v to %v", td.Name, min, max)
 			return singleCompleteChunk, nil
 		}
 	default:
-		wr.Logger().Infof("Not splitting table %v into multiple chunks, primary key not numeric.", td.Name)
+		wr.Logger().Infof("table=%v: Not splitting the table into multiple chunks, primary key not numeric.", td.Name)
 		return singleCompleteChunk, nil
 	}
 

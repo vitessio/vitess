@@ -100,6 +100,7 @@ ExecuteBatchKeyspaceIds executes the list of queries based on the specified keys
 | <code>queries</code> <br>list &lt;[BoundKeyspaceIdQuery](#boundkeyspaceidquery)&gt;| BoundKeyspaceIdQuery represents a single query request for the specified list of keyspace ids. This is used in a list for ExecuteBatchKeyspaceIdsRequest. |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
 | <code>as_transaction</code> <br>bool| as_transaction will execute the queries in this batch in a single transaction per shard, created for this purpose. (this can be seen as adding a 'begin' before and 'commit' after the queries). Only makes sense if tablet_type is master. If set, the Session is ignored. |
+| <code>options</code> <br>[query.ExecuteOptions](#query.executeoptions)| ExecuteOptions is passed around for all Execute calls. |
 
 #### Response
 
@@ -133,6 +134,7 @@ ExecuteEntityIds executes the query based on the specified external id to keyspa
 | <code>entity_keyspace_ids</code> <br>list &lt;[EntityId](#executeentityidsrequest.entityid)&gt;| entity_keyspace_ids are pairs of entity_column_name values associated with its corresponding keyspace_id. |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
 | <code>not_in_transaction</code> <br>bool| not_in_transaction is deprecated and should not be used. |
+| <code>options</code> <br>[query.ExecuteOptions](#query.executeoptions)| ExecuteOptions is passed around for all Execute calls. |
 
 #### Messages
 
@@ -177,6 +179,7 @@ ExecuteKeyRanges executes the query based on the specified key ranges.
 | <code>key_ranges</code> <br>list &lt;[topodata.KeyRange](#topodata.keyrange)&gt;| KeyRange describes a range of sharding keys, when range-based sharding is used. |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
 | <code>not_in_transaction</code> <br>bool| not_in_transaction is deprecated and should not be used. |
+| <code>options</code> <br>[query.ExecuteOptions](#query.executeoptions)| ExecuteOptions is passed around for all Execute calls. |
 
 #### Response
 
@@ -209,6 +212,7 @@ ExecuteKeyspaceIds executes the query based on the specified keyspace ids.
 | <code>keyspace_ids</code> <br>list &lt;bytes&gt;| keyspace_ids contains the list of keyspace_ids affected by this query. Will be used to find the shards to send the query to. |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
 | <code>not_in_transaction</code> <br>bool| not_in_transaction is deprecated and should not be used. |
+| <code>options</code> <br>[query.ExecuteOptions](#query.executeoptions)| ExecuteOptions is passed around for all Execute calls. |
 
 #### Response
 
@@ -239,6 +243,7 @@ StreamExecuteKeyRanges executes a streaming query based on key ranges. Use this 
 | <code>keyspace</code> <br>string| keyspace to target the query to. |
 | <code>key_ranges</code> <br>list &lt;[topodata.KeyRange](#topodata.keyrange)&gt;| KeyRange describes a range of sharding keys, when range-based sharding is used. |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
+| <code>options</code> <br>[query.ExecuteOptions](#query.executeoptions)| ExecuteOptions is passed around for all Execute calls. |
 
 #### Response
 
@@ -267,6 +272,7 @@ StreamExecuteKeyspaceIds executes a streaming query based on keyspace ids. Use t
 | <code>keyspace</code> <br>string| keyspace to target the query to. |
 | <code>keyspace_ids</code> <br>list &lt;bytes&gt;| keyspace_ids contains the list of keyspace_ids affected by this query. Will be used to find the shards to send the query to. |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
+| <code>options</code> <br>[query.ExecuteOptions](#query.executeoptions)| ExecuteOptions is passed around for all Execute calls. |
 
 #### Response
 
@@ -369,6 +375,7 @@ ExecuteBatchShards executes the list of queries on the specified shards.
 | <code>queries</code> <br>list &lt;[BoundShardQuery](#boundshardquery)&gt;| BoundShardQuery represents a single query request for the specified list of shards. This is used in a list for ExecuteBatchShardsRequest. |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
 | <code>as_transaction</code> <br>bool| as_transaction will execute the queries in this batch in a single transaction per shard, created for this purpose. (this can be seen as adding a 'begin' before and 'commit' after the queries). Only makes sense if tablet_type is master. If set, the Session is ignored. |
+| <code>options</code> <br>[query.ExecuteOptions](#query.executeoptions)| ExecuteOptions is passed around for all Execute calls. |
 
 #### Response
 
@@ -401,6 +408,7 @@ ExecuteShards executes the query on the specified shards.
 | <code>shards</code> <br>list &lt;string&gt;| shards to target the query to. A DML can only target one shard. |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
 | <code>not_in_transaction</code> <br>bool| not_in_transaction is deprecated and should not be used. |
+| <code>options</code> <br>[query.ExecuteOptions](#query.executeoptions)| ExecuteOptions is passed around for all Execute calls. |
 
 #### Response
 
@@ -431,6 +439,7 @@ StreamExecuteShards executes a streaming query based on shards. Use this method 
 | <code>keyspace</code> <br>string| keyspace to target the query to. |
 | <code>shards</code> <br>list &lt;string&gt;| shards to target the query to. |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
+| <code>options</code> <br>[query.ExecuteOptions](#query.executeoptions)| ExecuteOptions is passed around for all Execute calls. |
 
 #### Response
 
@@ -549,6 +558,7 @@ Execute tries to route the query to the right shard. It depends on the query and
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
 | <code>not_in_transaction</code> <br>bool| not_in_transaction is deprecated and should not be used. |
 | <code>keyspace</code> <br>string| keyspace to target the query to. |
+| <code>options</code> <br>[query.ExecuteOptions](#query.executeoptions)| ExecuteOptions is passed around for all Execute calls. |
 
 #### Response
 
@@ -578,6 +588,7 @@ StreamExecute executes a streaming query based on shards. It depends on the quer
 | <code>query</code> <br>[query.BoundQuery](#query.boundquery)| BoundQuery is a query with its bind variables |
 | <code>tablet_type</code> <br>[topodata.TabletType](#topodata.tablettype)| TabletType represents the type of a given tablet. |
 | <code>keyspace</code> <br>string| keyspace to target the query to. |
+| <code>options</code> <br>[query.ExecuteOptions](#query.executeoptions)| ExecuteOptions is passed around for all Execute calls. |
 
 #### Response
 
@@ -745,6 +756,28 @@ BoundQuery is a query with its bind variables
 | <code>sql</code> <br>string| sql is the SQL query to execute |
 | <code>bind_variables</code> <br>map &lt;string, [BindVariable](#query.bindvariable)&gt;| bind_variables is a map of all bind variables to expand in the query |
 
+### query.EventToken
+
+EventToken is a structure that describes a point in time in a replication stream on one shard. The most recent known replication position can be retrieved from vttablet when executing a query. It is also sent with the replication streams from the binlog service.
+
+#### Properties
+
+| Name |Description |
+| :-------- | :-------- 
+| <code>timestamp</code> <br>int64| timestamp is the MySQL timestamp of the statements. Seconds since Epoch. |
+| <code>shard</code> <br>string| The shard name that applied the statements. Note this is not set when streaming from a vttablet. It is only used on the client -> vtgate link. |
+| <code>position</code> <br>string| The position on the replication stream after this statement was applied. It is not the transaction ID / GTID, but the position / GTIDSet. |
+
+### query.ExecuteOptions
+
+ExecuteOptions is passed around for all Execute calls.
+
+#### Properties
+
+| Name |Description |
+| :-------- | :-------- 
+| <code>exclude_field_names</code> <br>bool| If set, the resulting Field array won’t have a Name, just a Type. This is an optimization for high-QPS queries where the client knows what it's getting. |
+
 ### query.Field
 
 Field describes a single column returned by a query
@@ -779,6 +812,45 @@ Row is a database row.
 | :-------- | :-------- 
 | <code>lengths</code> <br>list &lt;sint64&gt;| lengths contains the length of each value in values. A length of -1 means that the field is NULL. While reading values, you have to accummulate the length to know the offset where the next value begins in values. |
 | <code>values</code> <br>bytes| values contains a concatenation of all values in the row. |
+
+### query.StreamEvent
+
+StreamEvent describes a set of transformations that happened as a single transactional unit on a server. It is streamed back by the Update Stream calls.
+
+#### Properties
+
+| Name |Description |
+| :-------- | :-------- 
+| <code>statements</code> <br>list &lt;[Statement](#streamevent.statement)&gt;| The statements in this transaction. |
+| <code>event_token</code> <br>[EventToken](#query.eventtoken)| EventToken is a structure that describes a point in time in a replication stream on one shard. The most recent known replication position can be retrieved from vttablet when executing a query. It is also sent with the replication streams from the binlog service. |
+
+#### Messages
+
+##### StreamEvent.Statement
+
+One individual Statement in a transaction.
+
+<em>Properties</em>
+
+| Name |Description |
+| :-------- | :-------- 
+| <code>category</code> <br>[Category](#streamevent.statement.category)| |
+| <code>table_name</code> <br>string| table_name, primary_key_fields and primary_key_values are set for DML. |
+| <code>primary_key_fields</code> <br>list &lt;[Field](#query.field)&gt;| Field describes a single column returned by a query |
+| <code>primary_key_values</code> <br>list &lt;[Row](#query.row)&gt;| Row is a database row. |
+| <code>sql</code> <br>bytes| sql is set for all queries. FIXME(alainjobart) we may not need it for DMLs. |
+
+#### Enums
+
+##### StreamEvent.Statement.Category
+
+ One individual Statement in a transaction. The category of one statement.
+
+| Name |Value |Description |
+| :-------- | :-------- | :-------- 
+| <code>Error</code> | <code>0</code> |  |
+| <code>DML</code> | <code>1</code> |  |
+| <code>DDL</code> | <code>2</code> |  |
 
 ### query.Target
 

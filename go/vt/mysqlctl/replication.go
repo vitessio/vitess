@@ -9,12 +9,10 @@ Handle creating replicas and setting up the replication streams.
 package mysqlctl
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
-	"text/template"
 	"time"
 
 	"golang.org/x/net/context"
@@ -35,15 +33,6 @@ const (
 	// SQLStopSlave is the SQl command issued to stop MySQL replication
 	SQLStopSlave = "STOP SLAVE"
 )
-
-func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
-	myTemplate := template.Must(template.New("").Parse(tmpl))
-	data := new(bytes.Buffer)
-	if err := myTemplate.Execute(data, vars); err != nil {
-		return "", err
-	}
-	return data.String(), nil
-}
 
 func changeMasterArgs(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) []string {
 	var args []string
@@ -280,7 +269,15 @@ func FindSlaves(mysqld MysqlDaemon) ([]string, error) {
 	for _, row := range qr.Rows {
 		// Check for prefix, since it could be "Binlog Dump GTID".
 		if strings.HasPrefix(row[colCommand].String(), binlogDumpCommand) {
-			host, _, err := netutil.SplitHostPort(row[colClientAddr].String())
+			host := row[colClientAddr].String()
+			if host == "localhost" {
+				// If we have a local binlog streamer, it will
+				// show up as being connected
+				// from 'localhost' through the local
+				// socket. Ignore it.
+				continue
+			}
+			host, _, err = netutil.SplitHostPort(host)
 			if err != nil {
 				return nil, fmt.Errorf("FindSlaves: malformed addr %v", err)
 			}

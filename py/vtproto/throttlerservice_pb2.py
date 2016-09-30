@@ -29,78 +29,216 @@ _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
 
-import abc
+import grpc
 from grpc.beta import implementations as beta_implementations
+from grpc.beta import interfaces as beta_interfaces
 from grpc.framework.common import cardinality
 from grpc.framework.interfaces.face import utilities as face_utilities
 
-class BetaThrottlerServicer(object):
-  """<fill me in later!>"""
-  __metaclass__ = abc.ABCMeta
-  @abc.abstractmethod
+
+class ThrottlerStub(object):
+  """Throttler defines the throttler RPC calls.
+  """
+
+  def __init__(self, channel):
+    """Constructor.
+
+    Args:
+      channel: A grpc.Channel.
+    """
+    self.MaxRates = channel.unary_unary(
+        '/throttlerservice.Throttler/MaxRates',
+        request_serializer=throttlerdata__pb2.MaxRatesRequest.SerializeToString,
+        response_deserializer=throttlerdata__pb2.MaxRatesResponse.FromString,
+        )
+    self.SetMaxRate = channel.unary_unary(
+        '/throttlerservice.Throttler/SetMaxRate',
+        request_serializer=throttlerdata__pb2.SetMaxRateRequest.SerializeToString,
+        response_deserializer=throttlerdata__pb2.SetMaxRateResponse.FromString,
+        )
+    self.GetConfiguration = channel.unary_unary(
+        '/throttlerservice.Throttler/GetConfiguration',
+        request_serializer=throttlerdata__pb2.GetConfigurationRequest.SerializeToString,
+        response_deserializer=throttlerdata__pb2.GetConfigurationResponse.FromString,
+        )
+    self.UpdateConfiguration = channel.unary_unary(
+        '/throttlerservice.Throttler/UpdateConfiguration',
+        request_serializer=throttlerdata__pb2.UpdateConfigurationRequest.SerializeToString,
+        response_deserializer=throttlerdata__pb2.UpdateConfigurationResponse.FromString,
+        )
+    self.ResetConfiguration = channel.unary_unary(
+        '/throttlerservice.Throttler/ResetConfiguration',
+        request_serializer=throttlerdata__pb2.ResetConfigurationRequest.SerializeToString,
+        response_deserializer=throttlerdata__pb2.ResetConfigurationResponse.FromString,
+        )
+
+
+class ThrottlerServicer(object):
+  """Throttler defines the throttler RPC calls.
+  """
+
   def MaxRates(self, request, context):
-    raise NotImplementedError()
-  @abc.abstractmethod
+    """MaxRates returns the current max rate for each throttler of the process.
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
   def SetMaxRate(self, request, context):
-    raise NotImplementedError()
-  @abc.abstractmethod
+    """SetMaxRate allows to change the current max rate for all throttlers
+    of the process.
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
   def GetConfiguration(self, request, context):
-    raise NotImplementedError()
-  @abc.abstractmethod
+    """GetConfiguration returns the configuration of the MaxReplicationlag module
+    for the given throttler or all throttlers if "throttler_name" is empty.
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
   def UpdateConfiguration(self, request, context):
-    raise NotImplementedError()
-  @abc.abstractmethod
+    """UpdateConfiguration (partially) updates the configuration of the
+    MaxReplicationlag module for the given throttler or all throttlers if
+    "throttler_name" is empty.
+    If "copy_zero_values" is true, fields with zero values will be copied
+    as well.
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
   def ResetConfiguration(self, request, context):
-    raise NotImplementedError()
+    """ResetConfiguration resets the configuration of the MaxReplicationlag module
+    to the initial configuration for the given throttler or all throttlers if
+    "throttler_name" is empty.
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
+
+def add_ThrottlerServicer_to_server(servicer, server):
+  rpc_method_handlers = {
+      'MaxRates': grpc.unary_unary_rpc_method_handler(
+          servicer.MaxRates,
+          request_deserializer=throttlerdata__pb2.MaxRatesRequest.FromString,
+          response_serializer=throttlerdata__pb2.MaxRatesResponse.SerializeToString,
+      ),
+      'SetMaxRate': grpc.unary_unary_rpc_method_handler(
+          servicer.SetMaxRate,
+          request_deserializer=throttlerdata__pb2.SetMaxRateRequest.FromString,
+          response_serializer=throttlerdata__pb2.SetMaxRateResponse.SerializeToString,
+      ),
+      'GetConfiguration': grpc.unary_unary_rpc_method_handler(
+          servicer.GetConfiguration,
+          request_deserializer=throttlerdata__pb2.GetConfigurationRequest.FromString,
+          response_serializer=throttlerdata__pb2.GetConfigurationResponse.SerializeToString,
+      ),
+      'UpdateConfiguration': grpc.unary_unary_rpc_method_handler(
+          servicer.UpdateConfiguration,
+          request_deserializer=throttlerdata__pb2.UpdateConfigurationRequest.FromString,
+          response_serializer=throttlerdata__pb2.UpdateConfigurationResponse.SerializeToString,
+      ),
+      'ResetConfiguration': grpc.unary_unary_rpc_method_handler(
+          servicer.ResetConfiguration,
+          request_deserializer=throttlerdata__pb2.ResetConfigurationRequest.FromString,
+          response_serializer=throttlerdata__pb2.ResetConfigurationResponse.SerializeToString,
+      ),
+  }
+  generic_handler = grpc.method_handlers_generic_handler(
+      'throttlerservice.Throttler', rpc_method_handlers)
+  server.add_generic_rpc_handlers((generic_handler,))
+
+
+class BetaThrottlerServicer(object):
+  """Throttler defines the throttler RPC calls.
+  """
+  def MaxRates(self, request, context):
+    """MaxRates returns the current max rate for each throttler of the process.
+    """
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+  def SetMaxRate(self, request, context):
+    """SetMaxRate allows to change the current max rate for all throttlers
+    of the process.
+    """
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+  def GetConfiguration(self, request, context):
+    """GetConfiguration returns the configuration of the MaxReplicationlag module
+    for the given throttler or all throttlers if "throttler_name" is empty.
+    """
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+  def UpdateConfiguration(self, request, context):
+    """UpdateConfiguration (partially) updates the configuration of the
+    MaxReplicationlag module for the given throttler or all throttlers if
+    "throttler_name" is empty.
+    If "copy_zero_values" is true, fields with zero values will be copied
+    as well.
+    """
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+  def ResetConfiguration(self, request, context):
+    """ResetConfiguration resets the configuration of the MaxReplicationlag module
+    to the initial configuration for the given throttler or all throttlers if
+    "throttler_name" is empty.
+    """
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+
 
 class BetaThrottlerStub(object):
-  """The interface to which stubs will conform."""
-  __metaclass__ = abc.ABCMeta
-  @abc.abstractmethod
-  def MaxRates(self, request, timeout):
+  """Throttler defines the throttler RPC calls.
+  """
+  def MaxRates(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
+    """MaxRates returns the current max rate for each throttler of the process.
+    """
     raise NotImplementedError()
   MaxRates.future = None
-  @abc.abstractmethod
-  def SetMaxRate(self, request, timeout):
+  def SetMaxRate(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
+    """SetMaxRate allows to change the current max rate for all throttlers
+    of the process.
+    """
     raise NotImplementedError()
   SetMaxRate.future = None
-  @abc.abstractmethod
-  def GetConfiguration(self, request, timeout):
+  def GetConfiguration(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
+    """GetConfiguration returns the configuration of the MaxReplicationlag module
+    for the given throttler or all throttlers if "throttler_name" is empty.
+    """
     raise NotImplementedError()
   GetConfiguration.future = None
-  @abc.abstractmethod
-  def UpdateConfiguration(self, request, timeout):
+  def UpdateConfiguration(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
+    """UpdateConfiguration (partially) updates the configuration of the
+    MaxReplicationlag module for the given throttler or all throttlers if
+    "throttler_name" is empty.
+    If "copy_zero_values" is true, fields with zero values will be copied
+    as well.
+    """
     raise NotImplementedError()
   UpdateConfiguration.future = None
-  @abc.abstractmethod
-  def ResetConfiguration(self, request, timeout):
+  def ResetConfiguration(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
+    """ResetConfiguration resets the configuration of the MaxReplicationlag module
+    to the initial configuration for the given throttler or all throttlers if
+    "throttler_name" is empty.
+    """
     raise NotImplementedError()
   ResetConfiguration.future = None
 
+
 def beta_create_Throttler_server(servicer, pool=None, pool_size=None, default_timeout=None, maximum_timeout=None):
-  import throttlerdata_pb2
-  import throttlerdata_pb2
-  import throttlerdata_pb2
-  import throttlerdata_pb2
-  import throttlerdata_pb2
-  import throttlerdata_pb2
-  import throttlerdata_pb2
-  import throttlerdata_pb2
-  import throttlerdata_pb2
-  import throttlerdata_pb2
   request_deserializers = {
-    ('throttlerservice.Throttler', 'GetConfiguration'): throttlerdata_pb2.GetConfigurationRequest.FromString,
-    ('throttlerservice.Throttler', 'MaxRates'): throttlerdata_pb2.MaxRatesRequest.FromString,
-    ('throttlerservice.Throttler', 'ResetConfiguration'): throttlerdata_pb2.ResetConfigurationRequest.FromString,
-    ('throttlerservice.Throttler', 'SetMaxRate'): throttlerdata_pb2.SetMaxRateRequest.FromString,
-    ('throttlerservice.Throttler', 'UpdateConfiguration'): throttlerdata_pb2.UpdateConfigurationRequest.FromString,
+    ('throttlerservice.Throttler', 'GetConfiguration'): throttlerdata__pb2.GetConfigurationRequest.FromString,
+    ('throttlerservice.Throttler', 'MaxRates'): throttlerdata__pb2.MaxRatesRequest.FromString,
+    ('throttlerservice.Throttler', 'ResetConfiguration'): throttlerdata__pb2.ResetConfigurationRequest.FromString,
+    ('throttlerservice.Throttler', 'SetMaxRate'): throttlerdata__pb2.SetMaxRateRequest.FromString,
+    ('throttlerservice.Throttler', 'UpdateConfiguration'): throttlerdata__pb2.UpdateConfigurationRequest.FromString,
   }
   response_serializers = {
-    ('throttlerservice.Throttler', 'GetConfiguration'): throttlerdata_pb2.GetConfigurationResponse.SerializeToString,
-    ('throttlerservice.Throttler', 'MaxRates'): throttlerdata_pb2.MaxRatesResponse.SerializeToString,
-    ('throttlerservice.Throttler', 'ResetConfiguration'): throttlerdata_pb2.ResetConfigurationResponse.SerializeToString,
-    ('throttlerservice.Throttler', 'SetMaxRate'): throttlerdata_pb2.SetMaxRateResponse.SerializeToString,
-    ('throttlerservice.Throttler', 'UpdateConfiguration'): throttlerdata_pb2.UpdateConfigurationResponse.SerializeToString,
+    ('throttlerservice.Throttler', 'GetConfiguration'): throttlerdata__pb2.GetConfigurationResponse.SerializeToString,
+    ('throttlerservice.Throttler', 'MaxRates'): throttlerdata__pb2.MaxRatesResponse.SerializeToString,
+    ('throttlerservice.Throttler', 'ResetConfiguration'): throttlerdata__pb2.ResetConfigurationResponse.SerializeToString,
+    ('throttlerservice.Throttler', 'SetMaxRate'): throttlerdata__pb2.SetMaxRateResponse.SerializeToString,
+    ('throttlerservice.Throttler', 'UpdateConfiguration'): throttlerdata__pb2.UpdateConfigurationResponse.SerializeToString,
   }
   method_implementations = {
     ('throttlerservice.Throttler', 'GetConfiguration'): face_utilities.unary_unary_inline(servicer.GetConfiguration),
@@ -112,30 +250,21 @@ def beta_create_Throttler_server(servicer, pool=None, pool_size=None, default_ti
   server_options = beta_implementations.server_options(request_deserializers=request_deserializers, response_serializers=response_serializers, thread_pool=pool, thread_pool_size=pool_size, default_timeout=default_timeout, maximum_timeout=maximum_timeout)
   return beta_implementations.server(method_implementations, options=server_options)
 
+
 def beta_create_Throttler_stub(channel, host=None, metadata_transformer=None, pool=None, pool_size=None):
-  import throttlerdata_pb2
-  import throttlerdata_pb2
-  import throttlerdata_pb2
-  import throttlerdata_pb2
-  import throttlerdata_pb2
-  import throttlerdata_pb2
-  import throttlerdata_pb2
-  import throttlerdata_pb2
-  import throttlerdata_pb2
-  import throttlerdata_pb2
   request_serializers = {
-    ('throttlerservice.Throttler', 'GetConfiguration'): throttlerdata_pb2.GetConfigurationRequest.SerializeToString,
-    ('throttlerservice.Throttler', 'MaxRates'): throttlerdata_pb2.MaxRatesRequest.SerializeToString,
-    ('throttlerservice.Throttler', 'ResetConfiguration'): throttlerdata_pb2.ResetConfigurationRequest.SerializeToString,
-    ('throttlerservice.Throttler', 'SetMaxRate'): throttlerdata_pb2.SetMaxRateRequest.SerializeToString,
-    ('throttlerservice.Throttler', 'UpdateConfiguration'): throttlerdata_pb2.UpdateConfigurationRequest.SerializeToString,
+    ('throttlerservice.Throttler', 'GetConfiguration'): throttlerdata__pb2.GetConfigurationRequest.SerializeToString,
+    ('throttlerservice.Throttler', 'MaxRates'): throttlerdata__pb2.MaxRatesRequest.SerializeToString,
+    ('throttlerservice.Throttler', 'ResetConfiguration'): throttlerdata__pb2.ResetConfigurationRequest.SerializeToString,
+    ('throttlerservice.Throttler', 'SetMaxRate'): throttlerdata__pb2.SetMaxRateRequest.SerializeToString,
+    ('throttlerservice.Throttler', 'UpdateConfiguration'): throttlerdata__pb2.UpdateConfigurationRequest.SerializeToString,
   }
   response_deserializers = {
-    ('throttlerservice.Throttler', 'GetConfiguration'): throttlerdata_pb2.GetConfigurationResponse.FromString,
-    ('throttlerservice.Throttler', 'MaxRates'): throttlerdata_pb2.MaxRatesResponse.FromString,
-    ('throttlerservice.Throttler', 'ResetConfiguration'): throttlerdata_pb2.ResetConfigurationResponse.FromString,
-    ('throttlerservice.Throttler', 'SetMaxRate'): throttlerdata_pb2.SetMaxRateResponse.FromString,
-    ('throttlerservice.Throttler', 'UpdateConfiguration'): throttlerdata_pb2.UpdateConfigurationResponse.FromString,
+    ('throttlerservice.Throttler', 'GetConfiguration'): throttlerdata__pb2.GetConfigurationResponse.FromString,
+    ('throttlerservice.Throttler', 'MaxRates'): throttlerdata__pb2.MaxRatesResponse.FromString,
+    ('throttlerservice.Throttler', 'ResetConfiguration'): throttlerdata__pb2.ResetConfigurationResponse.FromString,
+    ('throttlerservice.Throttler', 'SetMaxRate'): throttlerdata__pb2.SetMaxRateResponse.FromString,
+    ('throttlerservice.Throttler', 'UpdateConfiguration'): throttlerdata__pb2.UpdateConfigurationResponse.FromString,
   }
   cardinalities = {
     'GetConfiguration': cardinality.Cardinality.UNARY_UNARY,

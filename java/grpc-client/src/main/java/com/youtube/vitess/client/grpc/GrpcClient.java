@@ -3,7 +3,6 @@ package com.youtube.vitess.client.grpc;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.Proto;
 import com.youtube.vitess.client.RpcClient;
@@ -44,21 +43,19 @@ import com.youtube.vitess.proto.Vtgate.StreamExecuteShardsResponse;
 import com.youtube.vitess.proto.grpc.VitessGrpc;
 import com.youtube.vitess.proto.grpc.VitessGrpc.VitessFutureStub;
 import com.youtube.vitess.proto.grpc.VitessGrpc.VitessStub;
-
-import org.joda.time.Duration;
-
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
-
 import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.SQLInvalidAuthorizationSpecException;
 import java.sql.SQLNonTransientException;
+import java.sql.SQLRecoverableException;
 import java.sql.SQLSyntaxErrorException;
 import java.sql.SQLTimeoutException;
 import java.sql.SQLTransientException;
 import java.util.concurrent.TimeUnit;
+import org.joda.time.Duration;
 
 /**
  * GrpcClient is a gRPC-based implementation of Vitess Rpcclient.
@@ -82,64 +79,50 @@ public class GrpcClient implements RpcClient {
   @Override
   public ListenableFuture<ExecuteResponse> execute(Context ctx, ExecuteRequest request)
       throws SQLException {
-    return Futures.catchingAsync(
-        getFutureStub(ctx).execute(request),
-        Exception.class,
+    return Futures.catchingAsync(getFutureStub(ctx).execute(request), Exception.class,
         new ExceptionConverter<ExecuteResponse>());
   }
 
   @Override
-  public ListenableFuture<ExecuteShardsResponse> executeShards(
-      Context ctx, ExecuteShardsRequest request) throws SQLException {
-    return Futures.catchingAsync(
-        getFutureStub(ctx).executeShards(request),
-        Exception.class,
+  public ListenableFuture<ExecuteShardsResponse> executeShards(Context ctx,
+      ExecuteShardsRequest request) throws SQLException {
+    return Futures.catchingAsync(getFutureStub(ctx).executeShards(request), Exception.class,
         new ExceptionConverter<ExecuteShardsResponse>());
   }
 
   @Override
-  public ListenableFuture<ExecuteKeyspaceIdsResponse> executeKeyspaceIds(
-      Context ctx, ExecuteKeyspaceIdsRequest request) throws SQLException {
-    return Futures.catchingAsync(
-        getFutureStub(ctx).executeKeyspaceIds(request),
-        Exception.class,
+  public ListenableFuture<ExecuteKeyspaceIdsResponse> executeKeyspaceIds(Context ctx,
+      ExecuteKeyspaceIdsRequest request) throws SQLException {
+    return Futures.catchingAsync(getFutureStub(ctx).executeKeyspaceIds(request), Exception.class,
         new ExceptionConverter<ExecuteKeyspaceIdsResponse>());
   }
 
   @Override
-  public ListenableFuture<ExecuteKeyRangesResponse> executeKeyRanges(
-      Context ctx, ExecuteKeyRangesRequest request) throws SQLException {
-    return Futures.catchingAsync(
-        getFutureStub(ctx).executeKeyRanges(request),
-        Exception.class,
+  public ListenableFuture<ExecuteKeyRangesResponse> executeKeyRanges(Context ctx,
+      ExecuteKeyRangesRequest request) throws SQLException {
+    return Futures.catchingAsync(getFutureStub(ctx).executeKeyRanges(request), Exception.class,
         new ExceptionConverter<ExecuteKeyRangesResponse>());
   }
 
   @Override
-  public ListenableFuture<ExecuteEntityIdsResponse> executeEntityIds(
-      Context ctx, ExecuteEntityIdsRequest request) throws SQLException {
-    return Futures.catchingAsync(
-        getFutureStub(ctx).executeEntityIds(request),
-        Exception.class,
+  public ListenableFuture<ExecuteEntityIdsResponse> executeEntityIds(Context ctx,
+      ExecuteEntityIdsRequest request) throws SQLException {
+    return Futures.catchingAsync(getFutureStub(ctx).executeEntityIds(request), Exception.class,
         new ExceptionConverter<ExecuteEntityIdsResponse>());
   }
 
   @Override
-  public ListenableFuture<ExecuteBatchShardsResponse> executeBatchShards(
-      Context ctx, ExecuteBatchShardsRequest request) throws SQLException {
-    return Futures.catchingAsync(
-        getFutureStub(ctx).executeBatchShards(request),
-        Exception.class,
+  public ListenableFuture<ExecuteBatchShardsResponse> executeBatchShards(Context ctx,
+      ExecuteBatchShardsRequest request) throws SQLException {
+    return Futures.catchingAsync(getFutureStub(ctx).executeBatchShards(request), Exception.class,
         new ExceptionConverter<ExecuteBatchShardsResponse>());
   }
 
   @Override
-  public ListenableFuture<ExecuteBatchKeyspaceIdsResponse> executeBatchKeyspaceIds(
-      Context ctx, ExecuteBatchKeyspaceIdsRequest request) throws SQLException {
-    return Futures.catchingAsync(
-        getFutureStub(ctx).executeBatchKeyspaceIds(request),
-        Exception.class,
-        new ExceptionConverter<ExecuteBatchKeyspaceIdsResponse>());
+  public ListenableFuture<ExecuteBatchKeyspaceIdsResponse> executeBatchKeyspaceIds(Context ctx,
+      ExecuteBatchKeyspaceIdsRequest request) throws SQLException {
+    return Futures.catchingAsync(getFutureStub(ctx).executeBatchKeyspaceIds(request),
+        Exception.class, new ExceptionConverter<ExecuteBatchKeyspaceIdsResponse>());
   }
 
   @Override
@@ -157,8 +140,8 @@ public class GrpcClient implements RpcClient {
   }
 
   @Override
-  public StreamIterator<QueryResult> streamExecuteShards(
-      Context ctx, StreamExecuteShardsRequest request) throws SQLException {
+  public StreamIterator<QueryResult> streamExecuteShards(Context ctx,
+      StreamExecuteShardsRequest request) throws SQLException {
     GrpcStreamAdapter<StreamExecuteShardsResponse, QueryResult> adapter =
         new GrpcStreamAdapter<StreamExecuteShardsResponse, QueryResult>() {
           @Override
@@ -171,8 +154,8 @@ public class GrpcClient implements RpcClient {
   }
 
   @Override
-  public StreamIterator<QueryResult> streamExecuteKeyspaceIds(
-      Context ctx, StreamExecuteKeyspaceIdsRequest request) throws SQLException {
+  public StreamIterator<QueryResult> streamExecuteKeyspaceIds(Context ctx,
+      StreamExecuteKeyspaceIdsRequest request) throws SQLException {
     GrpcStreamAdapter<StreamExecuteKeyspaceIdsResponse, QueryResult> adapter =
         new GrpcStreamAdapter<StreamExecuteKeyspaceIdsResponse, QueryResult>() {
           @Override
@@ -185,8 +168,8 @@ public class GrpcClient implements RpcClient {
   }
 
   @Override
-  public StreamIterator<QueryResult> streamExecuteKeyRanges(
-      Context ctx, StreamExecuteKeyRangesRequest request) throws SQLException {
+  public StreamIterator<QueryResult> streamExecuteKeyRanges(Context ctx,
+      StreamExecuteKeyRangesRequest request) throws SQLException {
     GrpcStreamAdapter<StreamExecuteKeyRangesResponse, QueryResult> adapter =
         new GrpcStreamAdapter<StreamExecuteKeyRangesResponse, QueryResult>() {
           @Override
@@ -201,45 +184,35 @@ public class GrpcClient implements RpcClient {
   @Override
   public ListenableFuture<BeginResponse> begin(Context ctx, BeginRequest request)
       throws SQLException {
-    return Futures.catchingAsync(
-        getFutureStub(ctx).begin(request),
-        Exception.class,
+    return Futures.catchingAsync(getFutureStub(ctx).begin(request), Exception.class,
         new ExceptionConverter<BeginResponse>());
   }
 
   @Override
   public ListenableFuture<CommitResponse> commit(Context ctx, CommitRequest request)
       throws SQLException {
-    return Futures.catchingAsync(
-        getFutureStub(ctx).commit(request),
-        Exception.class,
+    return Futures.catchingAsync(getFutureStub(ctx).commit(request), Exception.class,
         new ExceptionConverter<CommitResponse>());
   }
 
   @Override
   public ListenableFuture<RollbackResponse> rollback(Context ctx, RollbackRequest request)
       throws SQLException {
-    return Futures.catchingAsync(
-        getFutureStub(ctx).rollback(request),
-        Exception.class,
+    return Futures.catchingAsync(getFutureStub(ctx).rollback(request), Exception.class,
         new ExceptionConverter<RollbackResponse>());
   }
 
   @Override
   public ListenableFuture<SplitQueryResponse> splitQuery(Context ctx, SplitQueryRequest request)
       throws SQLException {
-    return Futures.catchingAsync(
-        getFutureStub(ctx).splitQuery(request),
-        Exception.class,
+    return Futures.catchingAsync(getFutureStub(ctx).splitQuery(request), Exception.class,
         new ExceptionConverter<SplitQueryResponse>());
   }
 
   @Override
-  public ListenableFuture<GetSrvKeyspaceResponse> getSrvKeyspace(
-      Context ctx, GetSrvKeyspaceRequest request) throws SQLException {
-    return Futures.catchingAsync(
-        getFutureStub(ctx).getSrvKeyspace(request),
-        Exception.class,
+  public ListenableFuture<GetSrvKeyspaceResponse> getSrvKeyspace(Context ctx,
+      GetSrvKeyspaceRequest request) throws SQLException {
+    return Futures.catchingAsync(getFutureStub(ctx).getSrvKeyspace(request), Exception.class,
         new ExceptionConverter<GetSrvKeyspaceResponse>());
   }
 
@@ -264,6 +237,8 @@ public class GrpcClient implements RpcClient {
           return new SQLInvalidAuthorizationSpecException(sre.toString(), sqlState, errno, sre);
         case UNAVAILABLE:
           return new SQLTransientException(sre.toString(), sqlState, errno, sre);
+        case ABORTED:
+          return new SQLRecoverableException(sre.toString(), sqlState, errno, sre);
         default: // Covers e.g. UNKNOWN.
           String advice = "";
           if (e.getCause() instanceof java.nio.channels.ClosedChannelException) {

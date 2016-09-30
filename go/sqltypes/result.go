@@ -8,10 +8,11 @@ import querypb "github.com/youtube/vitess/go/vt/proto/query"
 
 // Result represents a query result.
 type Result struct {
-	Fields       []*querypb.Field `json:"fields"`
-	RowsAffected uint64           `json:"rows_affected"`
-	InsertID     uint64           `json:"insert_id"`
-	Rows         [][]Value        `json:"rows"`
+	Fields       []*querypb.Field      `json:"fields"`
+	RowsAffected uint64                `json:"rows_affected"`
+	InsertID     uint64                `json:"insert_id"`
+	Rows         [][]Value             `json:"rows"`
+	Extras       *querypb.ResultExtras `json:"extras"`
 }
 
 // ResultStream is an interface for receiving Result. It is used for
@@ -67,6 +68,18 @@ func (result *Result) Copy() *Result {
 		}
 		out.Rows = rows
 	}
+	if result.Extras != nil {
+		out.Extras = &querypb.ResultExtras{
+			Fresher: result.Extras.Fresher,
+		}
+		if result.Extras.EventToken != nil {
+			out.Extras.EventToken = &querypb.EventToken{
+				Timestamp: result.Extras.EventToken.Timestamp,
+				Shard:     result.Extras.EventToken.Shard,
+				Position:  result.Extras.EventToken.Position,
+			}
+		}
+	}
 	return out
 }
 
@@ -85,4 +98,22 @@ func MakeRowTrusted(fields []*querypb.Field, row *querypb.Row) []Value {
 		offset += length
 	}
 	return sqlRow
+}
+
+// StripFieldNames will return a new Result that has the same Rows,
+// but the Field objects will have their Name emptied.  Note we don't
+// proto.Copy each Field for performance reasons, but we only copy the
+// individual fields.
+func (result *Result) StripFieldNames() *Result {
+	if len(result.Fields) == 0 {
+		return result
+	}
+	r := *result
+	r.Fields = make([]*querypb.Field, len(result.Fields))
+	newFieldsArray := make([]querypb.Field, len(result.Fields))
+	for i, f := range result.Fields {
+		r.Fields[i] = &newFieldsArray[i]
+		newFieldsArray[i].Type = f.Type
+	}
+	return &r
 }

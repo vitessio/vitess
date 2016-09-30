@@ -5,6 +5,7 @@
 package wrangler
 
 import (
+	"flag"
 	"fmt"
 	"strings"
 	"sync"
@@ -21,6 +22,12 @@ import (
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+)
+
+// TODO(b/26388813): Remove these flags once vtctl WaitForDrain is integrated in the vtctl MigrateServed* commands.
+var (
+	waitForDrainSleepRdonly  = flag.Duration("wait_for_drain_sleep_rdonly", 5*time.Second, "time to wait before shutting the query service on old RDONLY tablets during MigrateServedTypes")
+	waitForDrainSleepReplica = flag.Duration("wait_for_drain_sleep_replica", 15*time.Second, "time to wait before shutting the query service on old REPLICA tablets during MigrateServedTypes")
 )
 
 // keyspace related methods for Wrangler
@@ -151,6 +158,22 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 			// For a forwards migration, we just disabled query service on the source shards
 			refreshShards = sourceShards
 		}
+
+		// TODO(b/26388813): Integrate vtctl WaitForDrain here instead of just sleeping.
+		var waitForDrainSleep time.Duration
+		switch servedType {
+		case topodatapb.TabletType_RDONLY:
+			waitForDrainSleep = *waitForDrainSleepRdonly
+		case topodatapb.TabletType_REPLICA:
+			waitForDrainSleep = *waitForDrainSleepReplica
+		default:
+			wr.Logger().Warningf("invalid TabletType: %v for MigrateServedTypes command", servedType)
+		}
+
+		wr.Logger().Infof("WaitForDrain: Sleeping for %.0f seconds before shutting down query service on old tablets...", waitForDrainSleep.Seconds())
+		time.Sleep(waitForDrainSleep)
+		wr.Logger().Infof("WaitForDrain: Sleeping finished. Shutting down queryservice on old tablets now.")
+
 		for _, si := range refreshShards {
 			rec.RecordError(wr.RefreshTabletsByShard(ctx, si, servedType, cells))
 		}

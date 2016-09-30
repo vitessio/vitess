@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
+
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -32,6 +34,109 @@ func TestKey(t *testing.T) {
 	f(k2, "7fffffffffffffff")
 	f(k3, "8000000000000000")
 	f(k4, "ffffffffffffffff")
+}
+
+func TestEvenShardsKeyRange(t *testing.T) {
+	testCases := []struct {
+		i, n     int
+		wantSpec string
+		want     *topodatapb.KeyRange
+	}{
+		{0, 1,
+			"-",
+			&topodatapb.KeyRange{},
+		},
+		{0, 2,
+			"-80",
+			&topodatapb.KeyRange{
+				End: []byte{0x80},
+			},
+		},
+		{1, 2,
+			"80-",
+			&topodatapb.KeyRange{
+				Start: []byte{0x80},
+			},
+		},
+		{1, 4,
+			"40-80",
+			&topodatapb.KeyRange{
+				Start: []byte{0x40},
+				End:   []byte{0x80},
+			},
+		},
+		{2, 4,
+			"80-c0",
+			&topodatapb.KeyRange{
+				Start: []byte{0x80},
+				End:   []byte{0xc0},
+			},
+		},
+		{1, 256,
+			"01-02",
+			&topodatapb.KeyRange{
+				Start: []byte{0x01},
+				End:   []byte{0x02},
+			},
+		},
+		{256, 512,
+			"8000-8080",
+			&topodatapb.KeyRange{
+				Start: []byte{0x80, 0x00},
+				End:   []byte{0x80, 0x80},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		got, err := EvenShardsKeyRange(tc.i, tc.n)
+		if err != nil {
+			t.Fatalf("EvenShardsKeyRange(%v, %v) returned unexpected error: %v", tc.i, tc.n, err)
+		}
+		if !proto.Equal(got, tc.want) {
+			t.Errorf("EvenShardsKeyRange(%v, %v) = (%x, %x), want = (%x, %x)", tc.i, tc.n, got.Start, got.End, tc.want.Start, tc.want.End)
+		}
+
+		// Check if the string representation is equal as well.
+		if gotStr, want := KeyRangeString(got), tc.wantSpec; gotStr != want {
+			t.Errorf("EvenShardsKeyRange(%v) = %v, want = %v", got, gotStr, want)
+		}
+
+		// Now verify that ParseKeyRangeParts() produces the same KeyRange object as
+		// we do.
+		parts := strings.Split(tc.wantSpec, "-")
+		kr, err := ParseKeyRangeParts(parts[0], parts[1])
+		if !proto.Equal(got, kr) {
+			t.Errorf("EvenShardsKeyRange(%v, %v) != ParseKeyRangeParts(%v, %v): (%x, %x) != (%x, %x)", tc.i, tc.n, parts[0], parts[1], got.Start, got.End, kr.Start, kr.End)
+		}
+	}
+}
+
+func TestEvenShardsKeyRange_Error(t *testing.T) {
+	testCases := []struct {
+		i, n      int
+		wantError string
+	}{
+		{
+			-1, 0,
+			"the shard count must be > 0",
+		},
+		{
+			32, 8,
+			"must be less than",
+		},
+		{
+			1, 6,
+			"must be a power of two",
+		},
+	}
+
+	for _, tc := range testCases {
+		kr, err := EvenShardsKeyRange(tc.i, tc.n)
+		if err == nil || !strings.Contains(err.Error(), tc.wantError) {
+			t.Fatalf("EvenShardsKeyRange(%v, %v) = (%v, %v) want error = %v", tc.i, tc.n, kr, err, tc.wantError)
+		}
+	}
 }
 
 func TestParseShardingSpec(t *testing.T) {

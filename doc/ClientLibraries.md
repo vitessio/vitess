@@ -47,14 +47,11 @@ Vitess client libraries follow these core principles:
 * Each client library should support language-specific, idiomatic
   constructs to simplify application development in that language.
 * Client libraries should integrate with the following language-specific
-  database drivers, though this support is not yet provided in some cases:
-  * Go: [database/sql package](http://golang.org/pkg/database/sql/) (done)
+  database drivers. For example, current languages implement the following:
+  * Go: [database/sql package](http://golang.org/pkg/database/sql/)
   * Java: [JDBC](https://docs.oracle.com/javase/tutorial/jdbc/index.html)
-    compliance (in progress)
   * PHP: [PHP Data Objects \(PDO\)](http://php.net/manual/en/intro.pdo.php)
-    compliance (in progress)
-  * Python: [DB API](https://www.python.org/dev/peps/pep-0249/) compliance
-    (done)
+  * Python: [PEP 0249 DB API](https://www.python.org/dev/peps/pep-0249/)
 * Libraries provide a thin wrapper around the proto3 service definitions.
   Those wrappers could be extended with adapters to higher level libraries
   like SQLAlchemy (Python) or JDBC (Java), with other object-based helper
@@ -86,7 +83,7 @@ Alternatively, you can set the
 [command line flag "vtgate_protocol"](https://github.com/youtube/vitess/blob/ff800b2a1801f0bb8b0c29a701d9c0988bf827e2/go/vt/vtgate/vtgateconn/vtgateconn.go#L27)
 to "grpc".
 
-The Go client interface has multiple Execute* methods for different use-cases
+The Go client interface has multiple `Execute*()` methods for different use-cases
 and sharding configurations. When you start off with an unsharded database, we
 recommend to use the
 [ExecuteShards method](https://godoc.org/github.com/youtube/vitess/go/vt/vtgate/vtgateconn#VTGateConn.ExecuteShards)

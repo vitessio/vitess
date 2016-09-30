@@ -27,15 +27,23 @@ func NewFakeVtworkerClient() *FakeVtworkerClient {
 	return &FakeVtworkerClient{fakevtctlclient.NewFakeLoggerEventStreamingClient()}
 }
 
-// FakeVtworkerClientFactory always returns the current instance.
+// FakeVtworkerClientFactory returns the current instance and stores the
+// dialed server address in an outer struct.
 func (f *FakeVtworkerClient) FakeVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworkerclient.Client, error) {
-	return f, nil
+	return &perAddrFakeVtworkerClient{f, addr}, nil
+}
+
+// perAddrFakeVtworkerClient is a client instance which captures the server
+// address which was dialed by the client.
+type perAddrFakeVtworkerClient struct {
+	*FakeVtworkerClient
+	addr string
 }
 
 // ExecuteVtworkerCommand is part of the vtworkerclient interface.
-func (f *FakeVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (logutil.EventStream, error) {
-	return f.FakeLoggerEventStreamingClient.StreamResult(args)
+func (c *perAddrFakeVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (logutil.EventStream, error) {
+	return c.FakeLoggerEventStreamingClient.StreamResult(c.addr, args)
 }
 
 // Close is part of the vtworkerclient interface.
-func (f *FakeVtworkerClient) Close() {}
+func (c *perAddrFakeVtworkerClient) Close() {}

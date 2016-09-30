@@ -19,5 +19,9 @@ class DiscoveryGateway(gateway.VTGateGateway):
     """Return the vars name containing the number of serving connections."""
     return 'HealthcheckConnections'
 
+  def no_tablet_found_message(self):
+    """Return the text message that appears in the gateway."""
+    return 'no valid tablet'
+
 
 gateway.register_flavor('discoverygateway', DiscoveryGateway)

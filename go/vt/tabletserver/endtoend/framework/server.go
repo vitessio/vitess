@@ -34,20 +34,17 @@ var (
 // once at the beginning of the test.
 func StartServer(connParams sqldb.ConnParams) error {
 	dbcfgs := dbconfigs.DBConfigs{
-		App: dbconfigs.DBConfig{
-			ConnParams: connParams,
-			Keyspace:   "vttest",
-			Shard:      "0",
-		},
+		App:           connParams,
+		SidecarDBName: "_vt",
 	}
 
 	mysqld := mysqlctl.NewMysqld(
-		"Dba",
-		"App",
 		&mysqlctl.Mycnf{},
 		&dbcfgs.Dba,
-		&dbcfgs.App.ConnParams,
-		&dbcfgs.Repl)
+		&dbcfgs.AllPrivs,
+		&dbcfgs.App,
+		&dbcfgs.Repl,
+		true /* enablePublishStats */)
 
 	BaseConfig = tabletserver.DefaultQsConfig
 	BaseConfig.EnableAutoCommit = true

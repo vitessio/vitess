@@ -35,7 +35,7 @@ var (
 )
 
 const (
-	dbconfigFlags = dbconfigs.AppConfig | dbconfigs.DbaConfig |
+	dbconfigFlags = dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
 )
 

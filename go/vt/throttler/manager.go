@@ -99,13 +99,10 @@ func (m *managerImpl) SetMaxRate(rate int64) []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	var names []string
-	for name, t := range m.throttlers {
+	for _, t := range m.throttlers {
 		t.SetMaxRate(rate)
-		names = append(names, name)
 	}
-	sort.Strings(names)
-	return names
+	return m.throttlerNamesLocked()
 }
 
 // GetConfiguration implements the "Manager" interface.
@@ -150,15 +147,12 @@ func (m *managerImpl) UpdateConfiguration(throttlerName string, configuration *t
 		return []string{throttlerName}, nil
 	}
 
-	var names []string
 	for name, t := range m.throttlers {
 		if err := t.UpdateConfiguration(configuration, copyZeroValues); err != nil {
 			return nil, fmt.Errorf("failed to update throttler: %v err: %v", name, err)
 		}
-		names = append(names, name)
 	}
-	sort.Strings(names)
-	return names, nil
+	return m.throttlerNamesLocked(), nil
 }
 
 // ResetConfiguration implements the "Manager" interface.
@@ -175,11 +169,39 @@ func (m *managerImpl) ResetConfiguration(throttlerName string) ([]string, error)
 		return []string{throttlerName}, nil
 	}
 
-	var names []string
-	for name, t := range m.throttlers {
+	for _, t := range m.throttlers {
 		t.ResetConfiguration()
-		names = append(names, name)
+	}
+	return m.throttlerNamesLocked(), nil
+}
+
+// Throttlers returns the sorted list of active throttlers.
+func (m *managerImpl) Throttlers() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return m.throttlerNamesLocked()
+}
+
+func (m *managerImpl) throttlerNamesLocked() []string {
+	var names []string
+	for k := range m.throttlers {
+		names = append(names, k)
 	}
 	sort.Strings(names)
-	return names, nil
+	return names
+}
+
+// Log returns the most recent changes of the MaxReplicationLag module.
+// There will be one result for each processed replication lag record.
+func (m *managerImpl) Log(throttlerName string) ([]result, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	t, ok := m.throttlers[throttlerName]
+	if !ok {
+		return nil, fmt.Errorf("throttler: %v does not exist", throttlerName)
+	}
+
+	return t.Log(), nil
 }

@@ -1,3 +1,4 @@
+
 {
 	"Tests": {
 		"automation_horizontal_resharding": {
@@ -37,6 +38,15 @@
 			"Tags": [
 				"worker_test"
 			]
+		},
+		"cache_invalidation": {
+			"File": "cache_invalidation.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"custom_sharding": {
 			"File": "custom_sharding.py",
@@ -218,10 +228,10 @@
 				"make",
 				"php_test"
 			],
-			"Manual": false,
+			"Manual": true,
 			"Shard": 4,
 			"RetryMax": 0,
-			"Tags": []
+				"Tags": []
 		},
 		"python_client": {
 			"File": "python_client_test.py",
@@ -281,17 +291,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"sql_builder": {
-			"File": "sql_builder_test.py",
-			"Args": [],
-			"Command": [
-				"test/sql_builder_test.py"
-			],
-			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"tabletmanager": {
 			"File": "tabletmanager.py",
 			"Args": [],
@@ -322,7 +321,7 @@
 				"unit_test_race"
 			],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -357,6 +356,17 @@
 		},
 		"vtctld_web": {
 			"File": "vtctld_web_test.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": [
+				"webdriver"
+			]
+		},
+		"vtctld2_web": {
+			"File": "vtctld2_web_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,

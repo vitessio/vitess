@@ -89,4 +89,8 @@ service Vitess {
   // using custom sharding.
   // API group: Topology
   rpc GetSrvKeyspace(vtgate.GetSrvKeyspaceRequest) returns (vtgate.GetSrvKeyspaceResponse) {};
+
+  // UpdateStream asks the server for a stream of StreamEvent objects.
+  // API group: Update Stream
+  rpc UpdateStream(vtgate.UpdateStreamRequest) returns (stream vtgate.UpdateStreamResponse) {};
 }

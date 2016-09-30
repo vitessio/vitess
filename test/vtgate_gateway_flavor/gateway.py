@@ -19,6 +19,15 @@ class VTGateGateway(object):
     """Return the vars name containing the number of serving connections."""
     raise NotImplementedError()
 
+  def no_tablet_found_message(self):
+    """Return the text message that appears in the gateway.
+
+    When we ask a gateway implementation to perform an operation and
+    there is no available tablet for it, this string will appear in
+    the error message.
+    """
+    raise NotImplementedError()
+
   def flavor(self):
     """Return the name of this topo server flavor."""
     return self.flavor_name

@@ -30,6 +30,23 @@ message VTGateCallerID {
   string username = 1;
 }
 
+// EventToken is a structure that describes a point in time in a
+// replication stream on one shard. The most recent known replication
+// position can be retrieved from vttablet when executing a query. It
+// is also sent with the replication streams from the binlog service.
+message EventToken {
+  // timestamp is the MySQL timestamp of the statements. Seconds since Epoch.
+  int64 timestamp = 1;
+
+  // The shard name that applied the statements. Note this is not set when
+  // streaming from a vttablet. It is only used on the client -> vtgate link.
+  string shard = 2;
+
+  // The position on the replication stream after this statement was applied.
+  // It is not the transaction ID / GTID, but the position / GTIDSet.
+  string position = 3;
+}
+
 // Flag allows us to qualify types by their common properties.
 enum Flag {
   NONE = 0;
@@ -157,6 +174,22 @@ message BoundQuery {
   map<string, BindVariable> bind_variables = 2;
 }
 
+// ExecuteOptions is passed around for all Execute calls.
+message ExecuteOptions {
+  // If set, the resulting Field array won’t have a Name, just a Type.
+  // This is an optimization for high-QPS queries where the client knows
+  // what it's getting.
+  bool exclude_field_names = 1;
+
+  // If set, we will try to include an EventToken with the responses.
+  bool include_event_token = 2;
+
+  // If set, the fresher field may be set as a result comparison to this token.
+  // This is a shortcut so the application doesn't need to care about
+  // comparing EventTokens.
+  EventToken compare_event_token = 3;
+}
+
 // Field describes a single column returned by a query
 message Field {
   // name of the field as returned by mysql C API
@@ -177,6 +210,18 @@ message Row {
   bytes values = 2;
 }
 
+// ResultExtras contains optional out-of-band information. Usually the
+// extras are requested by adding ExecuteOptions flags.
+message ResultExtras {
+  // event_token is populated if the include_event_token flag is set
+  // in ExecuteOptions.
+  EventToken event_token = 1;
+
+  // If set, it means the data returned with this result is fresher
+  // than the compare_token passed in the ExecuteOptions.
+  bool fresher = 2;
+}
+
 // QueryResult is returned by Execute and ExecuteStream.
 //
 // As returned by Execute, len(fields) is always equal to len(row)
@@ -191,6 +236,38 @@ message QueryResult {
   uint64 rows_affected = 2;
   uint64 insert_id = 3;
   repeated Row rows = 4;
+  ResultExtras extras = 5;
+}
+
+// StreamEvent describes a set of transformations that happened as a
+// single transactional unit on a server. It is streamed back by the
+// Update Stream calls.
+message StreamEvent {
+  // One individual Statement in a transaction.
+  message Statement {
+    // The category of one statement.
+    enum Category {
+      Error = 0;
+      DML = 1;
+      DDL = 2;
+    }
+    Category category = 1;
+
+    // table_name, primary_key_fields and primary_key_values are set for DML.
+    string table_name = 2;
+    repeated Field primary_key_fields = 3;
+    repeated Row primary_key_values = 4;
+
+    // sql is set for all queries.
+    // FIXME(alainjobart) we may not need it for DMLs.
+    bytes sql = 5;
+  }
+
+  // The statements in this transaction.
+  repeated Statement statements = 1;
+
+  // The Event Token for this event.
+  EventToken event_token = 2;
 }
 
 // ExecuteRequest is the payload to Execute
@@ -200,6 +277,7 @@ message ExecuteRequest {
   Target target = 3;
   BoundQuery query = 4;
   int64 transaction_id = 5;
+  ExecuteOptions options = 6;
 }
 
 // ExecuteResponse is the returned value from Execute
@@ -215,6 +293,7 @@ message ExecuteBatchRequest {
   repeated BoundQuery queries = 4;
   bool as_transaction = 5;
   int64 transaction_id = 6;
+  ExecuteOptions options = 7;
 }
 
 // ExecuteBatchResponse is the returned value from ExecuteBatch
@@ -228,6 +307,7 @@ message StreamExecuteRequest {
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   BoundQuery query = 4;
+  ExecuteOptions options = 5;
 }
 
 // StreamExecuteResponse is the returned value from StreamExecute
@@ -275,6 +355,7 @@ message BeginExecuteRequest {
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   BoundQuery query = 4;
+  ExecuteOptions options = 5;
 }
 
 // BeginExecuteResponse is the returned value from BeginExecute
@@ -297,6 +378,7 @@ message BeginExecuteBatchRequest {
   Target target = 3;
   repeated BoundQuery queries = 4;
   bool as_transaction = 5;
+  ExecuteOptions options = 6;
 }
 
 // BeginExecuteBatchResponse is the returned value from BeginExecuteBatch
@@ -418,4 +500,26 @@ message StreamHealthResponse {
 
   // realtime_stats contains information about the tablet status
   RealtimeStats realtime_stats = 4;
+}
+
+// UpdateStreamRequest is the payload for UpdateStream. At most one of
+// position and timestamp can be set. If neither is set, we will start
+// streaming from the current binlog position.
+message UpdateStreamRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+
+  // If position is set, we will start the streaming from that replication
+  // position. Incompatible with timestamp.
+  string position = 4;
+
+  // If timestamp is set, we will start the streaming from the first
+  // event in the binlogs that have that timestamp. Incompatible with position.
+  int64 timestamp = 5;
+}
+
+// UpdateStreamResponse is returned by UpdateStream
+message UpdateStreamResponse {
+  StreamEvent event = 1;
 }

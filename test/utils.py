@@ -17,6 +17,8 @@ import time
 import unittest
 import urllib2
 
+from vtdb import prefer_vtroot_imports  # pylint: disable=unused-import
+
 import environment
 from mysql_flavor import mysql_flavor
 from mysql_flavor import set_mysql_flavor
@@ -651,14 +653,27 @@ class VtGate(object):
       return json.loads(out), err
     return out, err
 
-  def execute(self, sql, tablet_type='master', bindvars=None):
-    """Uses 'vtctl VtGateExecute' to execute a command."""
+  def execute(self, sql, tablet_type='master', bindvars=None,
+              execute_options=None):
+    """Uses 'vtctl VtGateExecute' to execute a command.
+
+    Args:
+      sql: the command to execute.
+      tablet_type: the tablet_type to use.
+      bindvars: a dict of bind variables.
+      execute_options: proto-encoded ExecuteOptions object.
+
+    Returns:
+      the result of running vtctl command.
+    """
     _, addr = self.rpc_endpoint()
     args = ['VtGateExecute', '-json',
             '-server', addr,
             '-tablet_type', tablet_type]
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
+    if execute_options:
+      args.extend(['-options', execute_options])
     args.append(sql)
     return run_vtctl_json(args)
 
@@ -795,12 +810,14 @@ class L2VtGate(object):
     Args:
       name: name of the endpoint, in the form: 'keyspace.shard.type'.
     """
+    def condition(v):
+      return (v.get(vtgate_gateway_flavor().connection_count_vars())
+              .get(name, None)) is None
+
     poll_for_vars('l2vtgate', self.port,
                   'no endpoint named ' + name,
                   timeout=5.0,
-                  condition_fn=lambda v: v.get(vtgate_gateway_flavor().
-                                               connection_count_vars()).
-                  get(name, None) is None)
+                  condition_fn=condition)
 
 
 # vtctl helpers
@@ -851,6 +868,10 @@ def run_vtctl_vtctl(clargs, auto_log=False, expect_fail=False,
   args.extend(['-throttler_client_protocol',
                protocols_flavor().throttler_client_protocol()])
   args.extend(['-vtgate_protocol', protocols_flavor().vtgate_protocol()])
+  # TODO(b/26388813): Remove the next two lines once vtctl WaitForDrain is
+  #                   integrated in the vtctl MigrateServed* commands.
+  args.extend(['--wait_for_drain_sleep_rdonly', '0s'])
+  args.extend(['--wait_for_drain_sleep_replica', '0s'])
 
   if auto_log:
     args.append('--stderrthreshold=%s' % get_log_level())
@@ -1218,6 +1239,10 @@ class Vtctld(object):
         protocols_flavor().throttler_client_protocol(),
         '-vtgate_protocol', protocols_flavor().vtgate_protocol(),
     ] + environment.topo_server().flags()
+    # TODO(b/26388813): Remove the next two lines once vtctl WaitForDrain is
+    #                   integrated in the vtctl MigrateServed* commands.
+    args.extend(['--wait_for_drain_sleep_rdonly', '0s'])
+    args.extend(['--wait_for_drain_sleep_replica', '0s'])
     if enable_schema_change_dir:
       args += [
           '--schema_change_dir', self.schema_change_dir,

@@ -92,7 +92,10 @@ def convert_value(value, proto_value, allow_lists=False):
     proto_value: the proto3 object, needs a type and value field.
     allow_lists: allows the use of python lists.
   """
-  if isinstance(value, int):
+  if isinstance(value, bool):
+    proto_value.type = query_pb2.INT64
+    proto_value.value = str(int(value))
+  elif isinstance(value, int):
     proto_value.type = query_pb2.INT64
     proto_value.value = str(value)
   elif isinstance(value, long):
@@ -142,6 +145,31 @@ def convert_bind_vars(bind_variables, request_bind_variables):
     convert_value(val, request_bind_variables[key], allow_lists=True)
 
 
+def convert_stream_event_statement(statement):
+  """Converts encoded rows inside a StreamEvent.Statement to native types.
+
+  Args:
+    statement: the StreamEvent.Statement object.
+
+  Returns:
+    fields: array of names for the primary key columns.
+    rows: array of tuples for each primary key value.
+  """
+  fields = []
+  rows = []
+  if statement.primary_key_fields:
+    convs = []
+    for field in statement.primary_key_fields:
+      fields.append(field.name)
+      convs.append(conversions.get(field.type))
+
+    for r in statement.primary_key_values:
+      row = tuple(make_row(r, convs))
+      rows.append(row)
+
+  return fields, rows
+
+
 class Proto3Connection(object):
   """A base class for proto3-based python connectors.
 
@@ -150,6 +178,8 @@ class Proto3Connection(object):
 
   def __init__(self):
     self._effective_caller_id = None
+    self.event_token = None
+    self.fresher = None
 
   def _add_caller_id(self, request, caller_id):
     """Adds the vtgate_client.CallerID to the proto3 request, if any.
@@ -313,7 +343,8 @@ class Proto3Connection(object):
                                keyspace_ids,
                                key_ranges,
                                entity_column_name, entity_keyspace_id_map,
-                               not_in_transaction, effective_caller_id):
+                               not_in_transaction, effective_caller_id,
+                               include_event_token, compare_event_token):
     """Builds the right vtgate_pb2 Request and method for an _execute call.
 
     Args:
@@ -328,6 +359,8 @@ class Proto3Connection(object):
       entity_keyspace_id_map: map of external id to keyspace id.
       not_in_transaction: do not create a transaction to a new shard.
       effective_caller_id: optional vtgate_client.CallerID.
+      include_event_token: boolean on whether to ask for event token.
+      compare_event_token: set the result extras fresher based on this token.
 
     Returns:
       A vtgate_pb2.XXXRequest object.
@@ -376,6 +409,12 @@ class Proto3Connection(object):
     request.not_in_transaction = not_in_transaction
     self._add_caller_id(request, effective_caller_id)
     self._add_session(request)
+    if include_event_token:
+      request.options.include_event_token = True
+    if compare_event_token:
+      request.options.compare_event_token.CopyFrom(compare_event_token)
+    self.event_token = None
+    self.fresher = None
     return request, routing_kwargs, method_name
 
   def process_execute_response(self, exec_method, response):
@@ -392,6 +431,9 @@ class Proto3Connection(object):
     """
     self.update_session(response)
     self._extract_rpc_error(exec_method, response.error)
+    if response.result.extras:
+      self.event_token = response.result.extras.event_token
+      self.fresher = response.result.extras.fresher
     return self._get_rowset_from_query_result(response.result)
 
   def execute_batch_request_and_name(self, sql_list, bind_variables_list,
@@ -458,6 +500,46 @@ class Proto3Connection(object):
       rowset = self._get_rowset_from_query_result(result)
       rowsets.append(rowset)
     return rowsets
+
+  def update_stream_request(self,
+                            keyspace_name,
+                            shard,
+                            key_range,
+                            tablet_type,
+                            timestamp,
+                            event,
+                            effective_caller_id):
+    """Builds the right vtgate_pb2 UpdateStreamRequest.
+
+    Args:
+      keyspace_name: keyspace to apply the query to.
+      shard: shard to ask for.
+      key_range: keyrange.KeyRange object.
+      tablet_type: string tablet type.
+      timestamp: when to start the stream from.
+      event: alternate way to describe where to start the stream from.
+      effective_caller_id: optional vtgate_client.CallerID.
+
+    Returns:
+      A vtgate_pb2.UpdateStreamRequest object.
+    """
+    request = vtgate_pb2.UpdateStreamRequest(keyspace=keyspace_name,
+                                             tablet_type=tablet_type,
+                                             shard=shard)
+    if timestamp:
+      request.timestamp = timestamp
+    if event:
+      if event.timestamp:
+        request.event.timestamp = event.timestamp
+      if event.shard:
+        request.event.shard = event.shard
+      if event.position:
+        request.event.position = event.position
+    if key_range:
+      request.key_range.start = key_range.Start
+      request.key_range.end = key_range.End
+    self._add_caller_id(request, effective_caller_id)
+    return request
 
   def stream_execute_request_and_name(self, sql, bind_variables, tablet_type,
                                       keyspace_name,

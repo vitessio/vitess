@@ -58,10 +58,6 @@ class MysqlFlavor(object):
     """Returns true if position 'a' is after 'b'."""
     return self.position_at_least(a, b) and not self.position_equal(a, b)
 
-  def position_append(self, pos, gtid):
-    """Returns a new position with the given GTID appended."""
-    raise NotImplementedError()
-
   def enable_binlog_checksum(self, tablet):
     """Enables binlog_checksum and returns True if the flavor supports it.
 
@@ -104,12 +100,6 @@ class MariaDB(MysqlFlavor):
     # positions are MariaDB/A-B-C and we only compare C
     return int(a.split("-")[2]) >= int(b.split("-")[2])
 
-  def position_append(self, pos, gtid):
-    if self.position_at_least(pos, gtid):
-      return pos
-    else:
-      return gtid
-
   def change_master_commands(self, host, port, pos):
     gtid = pos.split("/")[1]
     return [
@@ -135,11 +125,6 @@ class MySQL56(MysqlFlavor):
     return subprocess.check_output([
         "mysqlctl", "position", "at_least", a, b,
     ]).strip() == "true"
-
-  def position_append(self, pos, gtid):
-    return "MySQL56/" + subprocess.check_output([
-        "mysqlctl", "position", "append", pos, gtid,
-    ]).strip()
 
   def extra_my_cnf(self):
     return environment.vttop + "/config/mycnf/master_mysql56.cnf"

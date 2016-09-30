@@ -7,12 +7,18 @@ reviewers:
   required: 1
   members:
   - alainjobart
+  - alainjobart-bot
   - AndyDiamondstein
   - dumbunny
   - enisoc
+  - enisoc-bot
   - erzel
+  - mberlin-bot
   - michael-berlin
   - sougou
+  - sougou-bot
   - thompsonja
+  - thompsonja-bot
   - pivanof
+  - pivanof-bot
 
