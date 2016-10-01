@@ -100,6 +100,11 @@ func trimmedRequestToError(received string) error {
 			vtrpcpb.ErrorCode_TRANSIENT_ERROR,
 			errors.New("request_backlog: too many requests in flight: vtgate test client forced error: transient error"),
 		)
+	case "throttled error":
+		return vterrors.FromError(
+			vtrpcpb.ErrorCode_TRANSIENT_ERROR,
+			errors.New("request_backlog: exceeded XXX quota, rate limiting: vtgate test client forced error: transient error"),
+		)
 	case "unauthenticated":
 		return vterrors.FromError(
 			vtrpcpb.ErrorCode_UNAUTHENTICATED,
@@ -109,6 +114,11 @@ func trimmedRequestToError(received string) error {
 		return vterrors.FromError(
 			vtrpcpb.ErrorCode_NOT_IN_TX,
 			errors.New("vtgate test client forced error: aborted"),
+		)
+	case "query not served":
+		return vterrors.FromError(
+			vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
+			errors.New("vtgate test client forced error: query not served"),
 		)
 	case "unknown error":
 		return vterrors.FromError(

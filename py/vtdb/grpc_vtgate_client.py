@@ -25,8 +25,6 @@ from vtdb import vtgate_utils
 
 
 _errno_pattern = re.compile(r'\(errno (\d+)\)', re.IGNORECASE)
-_throttler_err_pattern = re.compile(
-    r'exceeded (.*) quota, rate limiting', re.IGNORECASE)
 
 
 class GRPCVTGateConnection(vtgate_client.VTGateClient,
@@ -118,7 +116,8 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     finally:
       self.session = None
 
-  @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.ThrottledError,
+                                           dbexceptions.TransientError))
   def _execute(
       self, sql, bind_variables, tablet_type, keyspace_name=None,
       shards=None, keyspace_ids=None, keyranges=None,
@@ -148,7 +147,8 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
           not_in_transaction=not_in_transaction,
           **routing_kwargs)
 
-  @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.ThrottledError,
+                                           dbexceptions.TransientError))
   def _execute_batch(
       self, sql_list, bind_variables_list, keyspace_list, keyspace_ids_list,
       shards_list, tablet_type, as_transaction, effective_caller_id=None,
@@ -170,7 +170,8 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
           sqls=sql_list, tablet_type=tablet_type,
           as_transaction=as_transaction)
 
-  @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.ThrottledError,
+                                           dbexceptions.TransientError))
   def _stream_execute(
       self, sql, bind_variables, tablet_type, keyspace_name=None,
       shards=None, keyspace_ids=None, keyranges=None,
@@ -220,7 +221,8 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     except (grpc.RpcError, vtgate_utils.VitessError) as e:
       raise _convert_exception(e, keyspace=name)
 
-  @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.ThrottledError,
+                                           dbexceptions.TransientError))
   def update_stream(
       self, keyspace_name, tablet_type,
       timestamp=None, event=None,
@@ -233,7 +235,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
           keyspace_name, shard, key_range, tablet_type,
           timestamp, event, effective_caller_id)
       it = self.stub.UpdateStream(request, self.timeout)
-    except (face.AbortionError, vtgate_utils.VitessError) as e:
+    except (grpc.RpcError, vtgate_utils.VitessError) as e:
       raise _convert_exception(
           e, 'UpdateStream',
           keyspace=keyspace_name, tablet_type=tablet_type)
@@ -275,11 +277,10 @@ def _convert_exception(exc, *args, **kwargs):
     if isinstance(exc, grpc.Call):
       code = exc.code()
       details = exc.details()
-
       if code == grpc.StatusCode.DEADLINE_EXCEEDED:
         new_exc = dbexceptions.TimeoutError(new_args)
       elif code == grpc.StatusCode.UNAVAILABLE:
-        if _throttler_err_pattern.search(details):
+        if vtgate_utils.throttler_err_re.search(details):
           return dbexceptions.ThrottledError(new_args)
         else:
           return dbexceptions.TransientError(new_args)
