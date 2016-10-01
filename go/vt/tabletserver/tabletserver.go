@@ -411,6 +411,11 @@ func (tsv *TabletServer) serveNewType() (err error) {
 	}()
 	if tsv.target.TabletType != topodatapb.TabletType_MASTER {
 		tsv.startReplicationStreamer()
+		err = tsv.qe.PrepareFromRedo()
+		if err != nil {
+			// TODO(sougou): raise alarms.
+			log.Errorf("Could not prepare transactions: %v", err)
+		}
 	}
 	tsv.transition(StateServing)
 	return nil
@@ -663,6 +668,57 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, t
 	)
 }
 
+// Prepare prepares the specified transaction.
+func (tsv *TabletServer) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	return tsv.execRequest(
+		ctx,
+		"Prepare", "prepare", nil,
+		target, false, true,
+		func(ctx context.Context, logStats *LogStats) error {
+			txe := &TxExecutor{
+				ctx:      ctx,
+				logStats: logStats,
+				qe:       tsv.qe,
+			}
+			return txe.Prepare(transactionID, dtid)
+		},
+	)
+}
+
+// CommitPrepared commits the prepared transaction.
+func (tsv *TabletServer) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	return tsv.execRequest(
+		ctx,
+		"CommitPrepared", "commit_prepared", nil,
+		target, false, true,
+		func(ctx context.Context, logStats *LogStats) error {
+			txe := &TxExecutor{
+				ctx:      ctx,
+				logStats: logStats,
+				qe:       tsv.qe,
+			}
+			return txe.CommitPrepared(dtid)
+		},
+	)
+}
+
+// RollbackPrepared commits the prepared transaction.
+func (tsv *TabletServer) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error) {
+	return tsv.execRequest(
+		ctx,
+		"RollbackPrepared", "rollback_prepared", nil,
+		target, false, true,
+		func(ctx context.Context, logStats *LogStats) error {
+			txe := &TxExecutor{
+				ctx:      ctx,
+				logStats: logStats,
+				qe:       tsv.qe,
+			}
+			return txe.RollbackPrepared(dtid, originalID)
+		},
+	)
+}
+
 // Execute executes the query and returns the result as response.
 func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
 	allowShutdown := (transactionID != 0)
@@ -799,7 +855,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	if asTransaction {
 		transactionID, err = tsv.Begin(ctx, target)
 		if err != nil {
-			return nil, tsv.handleErrorNoPanic("batch", nil, &err, nil)
+			return nil, tsv.handleErrorNoPanic("batch", nil, err, nil)
 		}
 		// If transaction was not committed by the end, it means
 		// that there was an error, roll it back.
@@ -813,14 +869,14 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	for _, bound := range queries {
 		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, transactionID, options)
 		if err != nil {
-			return nil, tsv.handleErrorNoPanic("batch", nil, &err, nil)
+			return nil, tsv.handleErrorNoPanic("batch", nil, err, nil)
 		}
 		results = append(results, *localReply)
 	}
 	if asTransaction {
 		if err = tsv.Commit(ctx, target, transactionID); err != nil {
 			transactionID = 0
-			return nil, tsv.handleErrorNoPanic("batch", nil, &err, nil)
+			return nil, tsv.handleErrorNoPanic("batch", nil, err, nil)
 		}
 		transactionID = 0
 	}
@@ -936,13 +992,13 @@ func (tsv *TabletServer) SplitQueryV2(
 		numRowsPerQueryPart,
 		algorithm,
 	); err != nil {
-		return nil, tsv.handleErrorNoPanic(sql, bindVariables, &err, logStats)
+		return nil, tsv.handleErrorNoPanic(sql, bindVariables, err, logStats)
 	}
 	schema := getSchemaForSplitQuery(tsv.qe.schemaInfo)
 	splitParams, err := createSplitParams(
 		sql, bindVariables, ciSplitColumns, splitCount, numRowsPerQueryPart, schema)
 	if err != nil {
-		return nil, tsv.handleErrorNoPanic(sql, bindVariables, &err, logStats)
+		return nil, tsv.handleErrorNoPanic(sql, bindVariables, err, logStats)
 	}
 	defer func(start time.Time) {
 		splitTableName := splitParams.GetSplitTableName()
@@ -951,17 +1007,17 @@ func (tsv *TabletServer) SplitQueryV2(
 	}(time.Now())
 	sqlExecuter, err := newSplitQuerySQLExecuter(ctx, logStats, tsv.qe)
 	if err != nil {
-		return nil, tsv.handleErrorNoPanic(sql, bindVariables, &err, logStats)
+		return nil, tsv.handleErrorNoPanic(sql, bindVariables, err, logStats)
 	}
 	defer sqlExecuter.done()
 	algorithmObject, err := createSplitQueryAlgorithmObject(algorithm, splitParams, sqlExecuter)
 	if err != nil {
-		return nil, tsv.handleErrorNoPanic(sql, bindVariables, &err, logStats)
+		return nil, tsv.handleErrorNoPanic(sql, bindVariables, err, logStats)
 	}
 	result, err := splitquery.NewSplitter(splitParams, algorithmObject).Split()
 	if err != nil {
 		err = splitQueryToTabletError(err)
-		return nil, tsv.handleErrorNoPanic(sql, bindVariables, &err, logStats)
+		return nil, tsv.handleErrorNoPanic(sql, bindVariables, err, logStats)
 	}
 	return result, nil
 }

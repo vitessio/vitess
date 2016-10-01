@@ -9,16 +9,17 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
+	"golang.org/x/net/context"
 )
 
 // QueryEngine implements the core functionality of tabletserver.
@@ -151,9 +152,7 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 		prepCap = 0
 	}
 	qe.preparedPool = NewTxPreparedPool(prepCap)
-
-	// twoPC depends on txPool for some of its operations.
-	qe.twoPC = NewTwoPC(qe.txPool)
+	qe.twoPC = NewTwoPC()
 	qe.consolidator = sync2.NewConsolidator()
 	http.Handle(config.DebugURLPrefix+"/consolidations", qe.consolidator)
 	qe.streamQList = NewQueryList()
@@ -245,6 +244,48 @@ func (qe *QueryEngine) IsMySQLReachable() bool {
 	}
 	conn.Close()
 	return true
+}
+
+// PrepareFromRedo replays and prepares the transactions
+// from the redo log. This is called when a tablet becomes
+// a master.
+func (qe *QueryEngine) PrepareFromRedo() error {
+	ctx := context.Background()
+	var allErr concurrency.AllErrorRecorder
+	readConn, err := qe.connPool.Get(ctx)
+	if err != nil {
+		return err
+	}
+	defer readConn.Recycle()
+	transactions, err := qe.twoPC.ReadPrepared(ctx, readConn)
+	if err != nil {
+		return err
+	}
+
+outer:
+	for dtid, tx := range transactions {
+		conn, err := qe.txPool.LocalBegin(ctx)
+		if err != nil {
+			allErr.RecordError(err)
+			continue
+		}
+		for _, stmt := range tx {
+			_, err := conn.Exec(ctx, stmt, 1, false)
+			if err != nil {
+				allErr.RecordError(err)
+				qe.txPool.LocalConclude(ctx, conn)
+				continue outer
+			}
+		}
+		// We should not use the external Prepare because
+		// we don't want to write again to the redo log.
+		err = qe.preparedPool.Put(conn, dtid)
+		if err != nil {
+			allErr.RecordError(err)
+			continue
+		}
+	}
+	return allErr.Error()
 }
 
 // WaitForTxEmpty must be called before calling Close.
