@@ -17,6 +17,7 @@ import (
 	"cloud.google.com/go/storage"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
@@ -110,22 +111,22 @@ func (bs *GCSBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHandl
 		Prefix:    searchPrefix,
 	}
 
-	// Loop in case results are returned in multiple batches.
-	for query != nil {
-		objs, err := c.Bucket(*bucket).List(context.TODO(), query)
+	it := c.Bucket(*bucket).Objects(context.TODO(), query)
+	for {
+		obj, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
 		if err != nil {
 			return nil, err
 		}
-
 		// Each returned prefix is a subdir.
 		// Strip parent dir from full path.
-		for _, prefix := range objs.Prefixes {
-			subdir := strings.TrimPrefix(prefix, searchPrefix)
+		if obj.Prefix != "" {
+			subdir := strings.TrimPrefix(obj.Prefix, searchPrefix)
 			subdir = strings.TrimSuffix(subdir, "/")
 			subdirs = append(subdirs, subdir)
 		}
-
-		query = objs.Next
 	}
 
 	// Backups must be returned in order, oldest first.
@@ -171,24 +172,20 @@ func (bs *GCSBackupStorage) RemoveBackup(dir, name string) error {
 	query := &storage.Query{
 		Prefix: objName(dir, name, "" /* include trailing slash */),
 	}
-
-	// Loop in case results are returned in multiple batches.
-	for query != nil {
-		objs, err := c.Bucket(*bucket).List(context.TODO(), query)
+	// Delete all the found objects.
+	it := c.Bucket(*bucket).Objects(context.TODO(), query)
+	for {
+		obj, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
 		if err != nil {
 			return err
 		}
-
-		// Delete all the found objects.
-		for _, obj := range objs.Results {
-			if err := c.Bucket(*bucket).Object(obj.Name).Delete(context.TODO()); err != nil {
-				return fmt.Errorf("unable to delete %q from bucket %q: %v", obj.Name, *bucket, err)
-			}
+		if err := c.Bucket(*bucket).Object(obj.Name).Delete(context.TODO()); err != nil {
+			return fmt.Errorf("unable to delete %q from bucket %q: %v", obj.Name, *bucket, err)
 		}
-
-		query = objs.Next
 	}
-
 	return nil
 }
 
