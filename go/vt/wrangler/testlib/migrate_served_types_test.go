@@ -6,6 +6,7 @@ package testlib
 
 import (
 	"flag"
+	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -156,6 +157,12 @@ func TestMigrateServedTypes(t *testing.T) {
 	}
 	dest2Master.StartActionLoop(t, wr)
 	defer dest2Master.StopActionLoop(t)
+
+	// migrate will error if the overlapping shards have no "SourceShard" entry
+	// and we cannot decide which shard is the source or the destination.
+	if err := vp.Run([]string{"MigrateServedTypes", "ks/0", "rdonly"}); err == nil || !strings.Contains(err.Error(), "neither Shard '-80' nor Shard '0' have a 'SourceShards' entry. Did you successfully run vtworker SplitClone before? Or did you already migrate the MASTER type?") {
+		t.Fatalf("MigrateServedType(rdonly) should fail if no 'SourceShards' entry is present: %v", err)
+	}
 
 	// simulate the clone, by fixing the dest shard record
 	checkShardSourceShards(t, ts, "-80", 0)
