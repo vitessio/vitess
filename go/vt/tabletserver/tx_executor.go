@@ -7,8 +7,11 @@ package tabletserver
 import (
 	"time"
 
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/trace"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // TxExecutor is used for executing a transactional request.
@@ -76,7 +79,7 @@ func (txe *TxExecutor) CommitPrepared(dtid string) error {
 	}
 	// We have to use a context that will never give up,
 	// even if the original context expires.
-	ctx := context.Background()
+	ctx := trace.CopySpan(context.Background(), txe.ctx)
 	defer txe.qe.txPool.LocalConclude(ctx, conn)
 	err := txe.qe.twoPC.DeleteRedo(ctx, conn, dtid)
 	if err != nil {
