@@ -574,6 +574,48 @@ func TestTabletServerTarget(t *testing.T) {
 	}
 }
 
+func TestTabletServerStopWithPrepare(t *testing.T) {
+	// Reuse code from tx_executor_test.
+	_, tsv, _ := newTestTxExecutor()
+	ctx := context.Background()
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	transactionID, err := tsv.Begin(ctx, &target)
+	if err != nil {
+		t.Error(err)
+	}
+	if _, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, nil); err != nil {
+		t.Error(err)
+	}
+	if err = tsv.Prepare(ctx, &target, transactionID, "aa"); err != nil {
+		t.Error(err)
+	}
+	ch := make(chan bool)
+	go func() {
+		tsv.StopService()
+		ch <- true
+	}()
+
+	// StopService must wait for the prepared transaction to resolve.
+	select {
+	case <-ch:
+		t.Fatal("ch should not fire")
+	case <-time.After(10 * time.Millisecond):
+	}
+	if len(tsv.qe.preparedPool.conns) != 1 {
+		t.Errorf("len(tsv.qe.preparedPool.conns): %d, want 1", len(tsv.qe.preparedPool.conns))
+	}
+
+	// RollbackPrepared will allow StopService to complete.
+	err = tsv.RollbackPrepared(ctx, &target, "aa", 0)
+	if err != nil {
+		t.Error(err)
+	}
+	<-ch
+	if len(tsv.qe.preparedPool.conns) != 0 {
+		t.Errorf("len(tsv.qe.preparedPool.conns): %d, want 0", len(tsv.qe.preparedPool.conns))
+	}
+}
+
 func TestTabletServerBeginFail(t *testing.T) {
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
@@ -687,6 +729,68 @@ func TestTabletServerRollback(t *testing.T) {
 	}
 	if err := tsv.Rollback(ctx, &target, transactionID); err != nil {
 		t.Fatalf("call TabletServer.Rollback failed: %v", err)
+	}
+}
+
+func TestTabletServerPrepare(t *testing.T) {
+	// Reuse code from tx_executor_test.
+	_, tsv, _ := newTestTxExecutor()
+	defer tsv.StopService()
+	ctx := context.Background()
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	transactionID, err := tsv.Begin(ctx, &target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, nil); err != nil {
+		t.Fatal(err)
+	}
+	defer tsv.RollbackPrepared(ctx, &target, "aa", 0)
+	if err := tsv.Prepare(ctx, &target, transactionID, "aa"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTabletServerCommitPrepared(t *testing.T) {
+	// Reuse code from tx_executor_test.
+	_, tsv, _ := newTestTxExecutor()
+	defer tsv.StopService()
+	ctx := context.Background()
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	transactionID, err := tsv.Begin(ctx, &target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := tsv.Prepare(ctx, &target, transactionID, "aa"); err != nil {
+		t.Fatal(err)
+	}
+	defer tsv.RollbackPrepared(ctx, &target, "aa", 0)
+	if err := tsv.CommitPrepared(ctx, &target, "aa"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTabletServerRollbackPrepared(t *testing.T) {
+	// Reuse code from tx_executor_test.
+	_, tsv, _ := newTestTxExecutor()
+	defer tsv.StopService()
+	ctx := context.Background()
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	transactionID, err := tsv.Begin(ctx, &target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := tsv.Prepare(ctx, &target, transactionID, "aa"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tsv.RollbackPrepared(ctx, &target, "aa", transactionID); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -7,8 +7,11 @@ package tabletserver
 import (
 	"time"
 
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/trace"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // TxExecutor is used for executing a transactional request.
@@ -31,6 +34,12 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 		return NewTabletError(vtrpcpb.ErrorCode_NOT_IN_TX, "prepare failed for transaction %d: %v", transactionID, err)
 	}
 	conn := v.(*TxConnection)
+
+	// If no queries were executed, we just rollback.
+	if len(conn.Queries) == 0 {
+		txe.qe.txPool.LocalCommit(txe.ctx, conn)
+		return nil
+	}
 
 	err = txe.qe.preparedPool.Put(conn, dtid)
 	if err != nil {
@@ -68,13 +77,16 @@ func (txe *TxExecutor) CommitPrepared(dtid string) error {
 	if conn == nil {
 		return nil
 	}
-	defer txe.qe.txPool.LocalConclude(txe.ctx, conn)
-	err := txe.qe.twoPC.DeleteRedo(txe.ctx, conn, dtid)
+	// We have to use a context that will never give up,
+	// even if the original context expires.
+	ctx := trace.CopySpan(context.Background(), txe.ctx)
+	defer txe.qe.txPool.LocalConclude(ctx, conn)
+	err := txe.qe.twoPC.DeleteRedo(ctx, conn, dtid)
 	if err != nil {
 		// TODO(sougou): raise alarms & mark as defunct.
 		return err
 	}
-	err = txe.qe.txPool.LocalCommit(txe.ctx, conn)
+	err = txe.qe.txPool.LocalCommit(ctx, conn)
 	if err != nil {
 		// TODO(sougou): raise alarms & mark as defunct.
 		return err
@@ -116,11 +128,9 @@ func (txe *TxExecutor) RollbackPrepared(dtid string, originalID int64) error {
 	err = txe.qe.txPool.LocalCommit(txe.ctx, localConn)
 
 returnConn:
-	conn := txe.qe.preparedPool.Get(dtid)
-	if conn == nil {
-		return nil
+	if conn := txe.qe.preparedPool.Get(dtid); conn != nil {
+		txe.qe.txPool.LocalConclude(txe.ctx, conn)
 	}
-	txe.qe.txPool.LocalConclude(txe.ctx, conn)
 	if originalID != 0 {
 		txe.qe.txPool.Rollback(txe.ctx, originalID)
 	}

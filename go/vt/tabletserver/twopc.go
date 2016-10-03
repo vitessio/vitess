@@ -59,32 +59,26 @@ const (
 	sqlInsertRedoStmt = "insert into `%s`.redo_log_statement(dtid, id, statement) values %a"
 	sqlDeleteRedoTx   = "delete from `%s`.redo_log_transaction where dtid = %a"
 	sqlDeleteRedoStmt = "delete from `%s`.redo_log_statement where dtid = %a"
+	sqlReadPrepared   = "select s.dtid, s.id, s.statement from `%s`.redo_log_transaction t join `%s`.redo_log_statement s on t.dtid = s.dtid where t.resolution = 'Prepared' order by s.dtid, s.id"
 )
 
 // TwoPC performs 2PC metadata management (MM) functions.
 type TwoPC struct {
-	txpool        *TxPool
-	sidecarDBName string
-
-	// Parsed queries for efficient code generation.
 	insertRedoTx   *sqlparser.ParsedQuery
 	insertRedoStmt *sqlparser.ParsedQuery
 	deleteRedoTx   *sqlparser.ParsedQuery
 	deleteRedoStmt *sqlparser.ParsedQuery
+	readPrepared   string
 }
 
-// NewTwoPC creates a TwoPC variable. It requires a TxPool to
-// perform its operations.
-func NewTwoPC(txpool *TxPool) *TwoPC {
-	return &TwoPC{
-		txpool: txpool,
-	}
+// NewTwoPC creates a TwoPC variable.
+func NewTwoPC() *TwoPC {
+	return &TwoPC{}
 }
 
 // Open starts the 2PC MM service. If the metadata database or tables
 // are not present, they are created.
-func (tpc *TwoPC) Open(sidecardbname string, dbaparams *sqldb.ConnParams) {
-	tpc.sidecarDBName = sidecardbname
+func (tpc *TwoPC) Open(sidecarDBName string, dbaparams *sqldb.ConnParams) {
 	conn, err := dbconnpool.NewDBConnection(dbaparams, stats.NewTimings(""))
 	if err != nil {
 		panic(err)
@@ -92,11 +86,11 @@ func (tpc *TwoPC) Open(sidecardbname string, dbaparams *sqldb.ConnParams) {
 	defer conn.Close()
 	statements := []string{
 		sqlTurnoffBinlog,
-		fmt.Sprintf(sqlCreateSidecarDB, tpc.sidecarDBName),
-		fmt.Sprintf(sqlCreateTableRedoLogTransaction, tpc.sidecarDBName),
-		fmt.Sprintf(sqlCreateTableRedoLogStatement, tpc.sidecarDBName),
-		fmt.Sprintf(sqlCreateTableTransaction, tpc.sidecarDBName),
-		fmt.Sprintf(sqlCreateTableParticipant, tpc.sidecarDBName),
+		fmt.Sprintf(sqlCreateSidecarDB, sidecarDBName),
+		fmt.Sprintf(sqlCreateTableRedoLogTransaction, sidecarDBName),
+		fmt.Sprintf(sqlCreateTableRedoLogStatement, sidecarDBName),
+		fmt.Sprintf(sqlCreateTableTransaction, sidecarDBName),
+		fmt.Sprintf(sqlCreateTableParticipant, sidecarDBName),
 	}
 	for _, s := range statements {
 		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
@@ -104,22 +98,22 @@ func (tpc *TwoPC) Open(sidecardbname string, dbaparams *sqldb.ConnParams) {
 		}
 	}
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf(sqlInsertRedoTx, tpc.sidecarDBName, ":vals")
+	buf.Myprintf(sqlInsertRedoTx, sidecarDBName, ":vals")
 	tpc.insertRedoTx = buf.ParsedQuery()
 	buf = sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf(sqlInsertRedoStmt, tpc.sidecarDBName, ":vals")
+	buf.Myprintf(sqlInsertRedoStmt, sidecarDBName, ":vals")
 	tpc.insertRedoStmt = buf.ParsedQuery()
 	buf = sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf(sqlDeleteRedoTx, tpc.sidecarDBName, ":dtid")
+	buf.Myprintf(sqlDeleteRedoTx, sidecarDBName, ":dtid")
 	tpc.deleteRedoTx = buf.ParsedQuery()
 	buf = sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf(sqlDeleteRedoStmt, tpc.sidecarDBName, ":dtid")
+	buf.Myprintf(sqlDeleteRedoStmt, sidecarDBName, ":dtid")
 	tpc.deleteRedoStmt = buf.ParsedQuery()
+	tpc.readPrepared = fmt.Sprintf(sqlReadPrepared, sidecarDBName, sidecarDBName)
 }
 
 // Close shuts down the 2PC MM service.
 func (tpc *TwoPC) Close() {
-	tpc.sidecarDBName = ""
 }
 
 // SaveRedo saves the statements in the redo log using the supplied connection.
@@ -164,6 +158,34 @@ func (tpc *TwoPC) DeleteRedo(ctx context.Context, conn *TxConnection, dtid strin
 		return err
 	}
 	return tpc.exec(ctx, conn, tpc.deleteRedoStmt, bindVars)
+}
+
+// ReadPrepared returns all the prepared transactions from the redo logs.
+func (tpc *TwoPC) ReadPrepared(ctx context.Context, conn *DBConn) (map[string][]string, error) {
+	qr, err := conn.Exec(ctx, tpc.readPrepared, 10000, false)
+	if err != nil {
+		return nil, err
+	}
+	transactions := make(map[string][]string)
+	var stmts []string
+	var dtid string
+	for i, row := range qr.Rows {
+		curdtid := row[0].String()
+		if i == 0 {
+			dtid = curdtid
+		}
+		if dtid == curdtid {
+			stmts = append(stmts, row[2].String())
+			continue
+		}
+		transactions[dtid] = stmts
+		dtid = curdtid
+		stmts = []string{row[2].String()}
+	}
+	if stmts != nil {
+		transactions[dtid] = stmts
+	}
+	return transactions, nil
 }
 
 func (tpc *TwoPC) exec(ctx context.Context, conn *TxConnection, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) error {

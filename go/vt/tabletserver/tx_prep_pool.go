@@ -22,7 +22,7 @@ type TxPreparedPool struct {
 // NewTxPreparedPool creates a new TxPreparedPool.
 func NewTxPreparedPool(capacity int) *TxPreparedPool {
 	return &TxPreparedPool{
-		conns:    make(map[string]*TxConnection),
+		conns:    make(map[string]*TxConnection, capacity),
 		capacity: capacity,
 	}
 }
