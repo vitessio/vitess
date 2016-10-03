@@ -476,19 +476,26 @@ func (si *ShardInfo) GetServedTypesPerCell(cell string) []topodatapb.TabletType 
 
 // CheckServedTypesMigration makes sure the provided migration is possible
 func (si *ShardInfo) CheckServedTypesMigration(tabletType topodatapb.TabletType, cells []string, remove bool) error {
+	// we can't remove a type we don't have
+	if si.GetServedType(tabletType) == nil && remove {
+		return fmt.Errorf("supplied type %v cannot be migrated out of the shard because it is not a served type: %v", tabletType, si)
+	}
+
 	// master is a special case with a few extra checks
 	if tabletType == topodatapb.TabletType_MASTER {
 		if len(cells) > 0 {
 			return fmt.Errorf("cannot migrate only some cells for master in shard %v/%v", si.keyspace, si.shardName)
 		}
 		if remove && len(si.ServedTypes) > 1 {
-			return fmt.Errorf("cannot migrate master away from %v/%v until everything else is migrated", si.keyspace, si.shardName)
+			// Log which types must be migrated first.
+			var types []string
+			for _, servedType := range si.ServedTypes {
+				if servedType.TabletType != topodatapb.TabletType_MASTER {
+					types = append(types, servedType.TabletType.String())
+				}
+			}
+			return fmt.Errorf("cannot migrate MASTER away from %v/%v until everything else is migrated. Make sure that the following types are migrated first: %v", si.keyspace, si.shardName, strings.Join(types, ", "))
 		}
-	}
-
-	// we can't remove a type we don't have
-	if si.GetServedType(tabletType) == nil && remove {
-		return fmt.Errorf("supplied type %v cannot be migrated out of %#v", tabletType, si)
 	}
 
 	return nil
