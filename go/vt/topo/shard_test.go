@@ -337,6 +337,10 @@ func TestUpdateServedTypesMap(t *testing.T) {
 		t.Fatalf("remove master failed: %v", err)
 	}
 	// MASTER
+	// Migration fails if a list of cells is specified.
+	if err := si.UpdateServedTypesMap(topodatapb.TabletType_MASTER, []string{"first", "third"}, true); err == nil || err.Error() != "cannot migrate only some cells for MASTER in shard ks/sh. Do not specify a list of cells" {
+		t.Fatalf("remove master failed: %v", err)
+	}
 	if err := si.UpdateServedTypesMap(topodatapb.TabletType_MASTER, nil, true); err != nil {
 		t.Fatalf("remove master failed: %v", err)
 	}

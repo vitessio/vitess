@@ -484,7 +484,7 @@ func (si *ShardInfo) CheckServedTypesMigration(tabletType topodatapb.TabletType,
 	// master is a special case with a few extra checks
 	if tabletType == topodatapb.TabletType_MASTER {
 		if len(cells) > 0 {
-			return fmt.Errorf("cannot migrate only some cells for master in shard %v/%v", si.keyspace, si.shardName)
+			return fmt.Errorf("cannot migrate only some cells for MASTER in shard %v/%v. Do not specify a list of cells", si.keyspace, si.shardName)
 		}
 		if remove && len(si.ServedTypes) > 1 {
 			// Log which types must be migrated first.
