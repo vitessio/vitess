@@ -1579,11 +1579,11 @@ Removes the cell from the shard's Cells list.
 
 ### SetShardServedTypes
 
-Sets a given shard's served tablet types. Does not rebuild any serving graph.
+Add or remove served type to/from a shard. This is meant as an emergency function. It does not rebuild any serving graph i.e. does not run 'RebuildKeyspaceGraph'.
 
 #### Example
 
-<pre class="command-example">SetShardServedTypes &lt;keyspace/shard&gt; [&lt;served tablet type1&gt;,&lt;served tablet type2&gt;,...]</pre>
+<pre class="command-example">SetShardServedTypes [--cells=c1,c2,...] [--remove] &lt;keyspace/shard&gt; &lt;served tablet type&gt;</pre>
 
 #### Flags
 
@@ -1596,7 +1596,7 @@ Sets a given shard's served tablet types. Does not rebuild any serving graph.
 #### Arguments
 
 * <code>&lt;keyspace/shard&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables as well as the shard associated with the command. The keyspace must be identified by a string that does not contain whitepace, while the shard is typically identified by a string in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.
-* <code>&lt;served tablet type&gt;</code> &ndash; Optional. The vttablet's role. Valid values are:
+* <code>&lt;served tablet type&gt;</code> &ndash; Required. The vttablet's role. Valid values are:
 
     * <code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes
     * <code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)
