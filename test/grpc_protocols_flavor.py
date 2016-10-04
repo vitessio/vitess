@@ -42,9 +42,6 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
   def vtgate_python_protocol(self):
     return 'grpc'
 
-  def vtgate_python_types(self):
-    return 'proto3'
-
   def client_error_exception_type(self):
     return face.AbortionError
 
