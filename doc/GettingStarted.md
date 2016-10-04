@@ -30,7 +30,7 @@ vitess@32f187ef9351:/vt/src/github.com/youtube/vitess$ make build
 Now you can proceed to [start a Vitess cluster](#start-a-vitess-cluster) inside
 the Docker container you just started. Note that if you want to access the
 servers from outside the container, you'll need to expose the ports as described
-in the [Docker user guide](https://docs.docker.com/userguide/).
+in the [Docker Engine Reference Guide](https://docs.docker.com/engine/reference/run/#/expose-incoming-ports).
 
 For local testing, you can also access the servers on the local IP address
 created for the container by Docker:
