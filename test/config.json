@@ -365,17 +365,6 @@
 				"webdriver"
 			]
 		},
-		"vtctld2_web": {
-			"File": "vtctld2_web_test.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": [
-				"webdriver"
-			]
-		},
 		"vtgate_utils": {
 			"File": "vtgate_utils_test.py",
 			"Args": [],
