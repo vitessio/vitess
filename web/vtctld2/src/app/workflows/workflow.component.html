@@ -36,15 +36,13 @@
                   Log
                 </span>
               </header>
-              <div class="vt-log-text vt-workflow-padding">
-                {{workflow.log}}
-              </div>
+              <div class="vt-log-text vt-workflow-padding">{{workflow.log}}</div>
               </p-accordionTab>
             </p-accordion>
           </div>
           <div class="vt-actions">
             <span *ngFor="let action of workflow.actions">
-              <button md-raised-button disableRipple=true [disabled]="action.isDisabled()" class="{{getActionClass(action.style)}}">{{action.name}}</button>
+              <button md-raised-button disableRipple=true [disabled]="action.isDisabled()" (click)="actionClicked(action.name);" class="{{getActionClass(action.style)}}">{{action.name}}</button>
             </span>
           </div>
         </div>

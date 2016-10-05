@@ -112,6 +112,9 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 	var sourceShards []*topo.ShardInfo
 	var destinationShards []*topo.ShardInfo
 	if len(os.Left[0].SourceShards) == 0 {
+		if len(os.Right[0].SourceShards) == 0 {
+			return fmt.Errorf("neither Shard '%v' nor Shard '%v' have a 'SourceShards' entry. Did you successfully run vtworker SplitClone before? Or did you already migrate the MASTER type?", os.Left[0].ShardName(), os.Right[0].ShardName())
+		}
 		sourceShards = os.Left
 		destinationShards = os.Right
 	} else {

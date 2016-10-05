@@ -8,6 +8,15 @@ import (
 	"testing"
 )
 
+func TestEmptyPrep(t *testing.T) {
+	pp := NewTxPreparedPool(0)
+	want := "prepared transactions exceeded limit: 0"
+	err := pp.Put(nil, "aa")
+	if err == nil || err.Error() != want {
+		t.Errorf("Put err: %v, want %s", err, want)
+	}
+}
+
 func TestPrepPut(t *testing.T) {
 	pp := NewTxPreparedPool(2)
 	err := pp.Put(nil, "aa")

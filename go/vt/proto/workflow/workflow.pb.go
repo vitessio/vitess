@@ -29,6 +29,9 @@ var _ = math.Inf
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 // WorkflowState describes the state of a workflow.
+// This constant should match the Node object described in
+// web/vtctld2/src/app/workflows/node.ts as it is exposed as JSON to
+// the Angular 2 web app.
 type WorkflowState int32
 
 const (

@@ -170,4 +170,7 @@ func InitVtctld(ts topo.Server) {
 
 	// Init redirects for explorers
 	initExplorer(ts)
+
+	// Init workflow manager.
+	initWorkflowManager(ts)
 }

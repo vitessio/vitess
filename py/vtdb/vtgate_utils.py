@@ -14,6 +14,12 @@ MAX_DELAY_MS = 100
 BACKOFF_MULTIPLIER = 2
 
 
+# This pattern is used in transient error messages to differentiate
+# between a transient error and a throttling error.
+throttler_err_re = re.compile(
+    r'exceeded (.*) quota, rate limiting', re.IGNORECASE)
+
+
 def log_exception(exc, keyspace=None, tablet_type=None):
   """This method logs the exception.
 
@@ -123,7 +129,11 @@ class VitessError(Exception):
     # used for integrity errors, and nothing else. The other cases
     # have to provide the message in the args.
     if self.code == vtrpc_pb2.TRANSIENT_ERROR:
+      if throttler_err_re.search(self.message):
+        return dbexceptions.ThrottledError(args)
       return dbexceptions.TransientError(args)
+    if self.code == vtrpc_pb2.QUERY_NOT_SERVED:
+      return dbexceptions.QueryNotServed(args)
     if self.code == vtrpc_pb2.INTEGRITY_ERROR:
       # Prune the error message to truncate after the mysql errno, since
       # the error message may contain the query string with bind variables.

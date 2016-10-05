@@ -1066,6 +1066,7 @@ const (
 	noFlags      executorFlags = 0
 	enableStrict               = 1 << iota
 	enableStrictTableAcl
+	smallTxPool
 )
 
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
@@ -1076,7 +1077,11 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	config.DebugURLPrefix = fmt.Sprintf("/debug-%d-", randID)
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	config.PoolSize = 100
-	config.TransactionCap = 100
+	if flags&smallTxPool > 0 {
+		config.TransactionCap = 3
+	} else {
+		config.TransactionCap = 100
+	}
 	config.EnablePublishStats = false
 	config.EnableAutoCommit = true
 
