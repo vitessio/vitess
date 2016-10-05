@@ -12,7 +12,7 @@ RUN apt-key adv --keyserver ha.pool.sks-keyservers.net \
     } | debconf-set-selections && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-        percona-server-server-5.7=5.7.14* libperconaserverclient18.1 bzip2 && \
+        percona-server-server-5.7 libperconaserverclient18.1 bzip2 && \
     rm -rf /var/lib/apt/lists/*
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
