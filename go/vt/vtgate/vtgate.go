@@ -770,6 +770,11 @@ func (vtg *VTGate) GetGatewayCacheStatus() gateway.TabletCacheStatusList {
 	return vtg.resolver.GetGatewayCacheStatus()
 }
 
+// VSchemaStats returns the loaded vschema stats.
+func (vtg *VTGate) VSchemaStats() *VSchemaStats {
+	return vtg.router.planner.VSchemaStats()
+}
+
 // Any errors that are caused by VTGate dependencies (e.g, VtTablet) should be logged
 // as errors in those components, but logged to Info in VTGate itself.
 func logError(err error, query map[string]interface{}, logger *logutil.ThrottledLogger) {

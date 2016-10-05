@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
@@ -31,12 +32,109 @@ import (
 // Planner is used to compute the plan. It contains
 // the vschema, and has a cache of previous computed plans.
 type Planner struct {
-	serv    topo.SrvTopoServer
-	cell    string
-	mu      sync.Mutex
-	vschema *vindexes.VSchema
-	plans   *cache.LRUCache
+	serv         topo.SrvTopoServer
+	cell         string
+	mu           sync.Mutex
+	vschema      *vindexes.VSchema
+	plans        *cache.LRUCache
+	vschemaStats *VSchemaStats
 }
+
+// VSchemaStats contains a rollup of the VSchema stats.
+type VSchemaStats struct {
+	Error     string
+	Keyspaces VSchemaKeyspaceStatsList
+}
+
+// VSchemaKeyspaceStats contains a rollup of the VSchema stats for a keyspace.
+// It is used to display a table with the information in the status page.
+type VSchemaKeyspaceStats struct {
+	Keyspace    string
+	Sharded     bool
+	TableCount  int
+	VindexCount int
+}
+
+// VSchemaKeyspaceStatsList is to sort VSchemaKeyspaceStats by keyspace.
+type VSchemaKeyspaceStatsList []*VSchemaKeyspaceStats
+
+// Len is part of sort.Interface
+func (l VSchemaKeyspaceStatsList) Len() int {
+	return len(l)
+}
+
+// Less is part of sort.Interface
+func (l VSchemaKeyspaceStatsList) Less(i, j int) bool {
+	return l[i].Keyspace < l[j].Keyspace
+}
+
+// Swap is part of sort.Interface
+func (l VSchemaKeyspaceStatsList) Swap(i, j int) {
+	l[i], l[j] = l[j], l[i]
+}
+
+// NewVSchemaStats returns a new VSchemaStats from a VSchema.
+func NewVSchemaStats(vschema *vindexes.VSchema, errorMessage string) *VSchemaStats {
+	stats := &VSchemaStats{
+		Error:     errorMessage,
+		Keyspaces: make([]*VSchemaKeyspaceStats, 0, len(vschema.Keyspaces)),
+	}
+	for n, k := range vschema.Keyspaces {
+		s := &VSchemaKeyspaceStats{
+			Keyspace: n,
+		}
+		if k.Keyspace != nil {
+			s.Sharded = k.Keyspace.Sharded
+			s.TableCount += len(k.Tables)
+			for _, t := range k.Tables {
+				s.VindexCount += len(t.ColumnVindexes) + len(t.Ordered) + len(t.Owned)
+			}
+		}
+		stats.Keyspaces = append(stats.Keyspaces, s)
+	}
+	sort.Sort(stats.Keyspaces)
+
+	return stats
+}
+
+const (
+	// VSchemaTemplate is the HTML template to display VSchemaStats.
+	VSchemaTemplate = `
+<style>
+  table {
+    border-collapse: collapse;
+  }
+  td, th {
+    border: 1px solid #999;
+    padding: 0.2rem;
+  }
+</style>
+<table>
+  <tr>
+    <th colspan="4">VSchema{{if not .Error}} <i><a href="/debug/vschema">in JSON</a></i>{{end}}</th>
+  </tr>
+{{if .Error}}
+  <tr>
+    <th>Error</th>
+    <td colspan="3">{{$.Error}}</td>
+  </tr>
+{{else}}
+  <tr>
+    <th>Keyspace</th>
+    <th>Sharded</th>
+    <th>Table Count</th>
+    <th>Vindex Count</th>
+  </tr>
+{{range $i, $ks := .Keyspaces}}  <tr>
+    <td>{{$ks.Keyspace}}</td>
+    <td>{{if $ks.Sharded}}Yes{{else}}No{{end}}</td>
+    <td>{{$ks.TableCount}}</td>
+    <td>{{$ks.VindexCount}}</td>
+  </tr>{{end}}
+{{end}}
+</table>
+`
+)
 
 var plannerOnce sync.Once
 
@@ -75,7 +173,7 @@ func (plr *Planner) WatchSrvVSchema(ctx context.Context, cell string) {
 		// we don't know the real value. In this case, we want
 		// to use the previous value if it was set, or an
 		// empty vschema if it wasn't.
-		saveVSchema := func(v *vschemapb.SrvVSchema) {
+		saveVSchema := func(v *vschemapb.SrvVSchema, errorMessage string) {
 			// transform the provided SrvVSchema into a VSchema
 			var vschema *vindexes.VSchema
 			if v != nil {
@@ -84,6 +182,7 @@ func (plr *Planner) WatchSrvVSchema(ctx context.Context, cell string) {
 				if err != nil {
 					log.Warningf("Error creating VSchema for cell %v (will try again next update): %v", cell, err)
 					v = nil
+					errorMessage = fmt.Sprintf("Error creating VSchema for cell %v: %v", cell, err)
 				}
 			}
 			if v == nil {
@@ -91,6 +190,9 @@ func (plr *Planner) WatchSrvVSchema(ctx context.Context, cell string) {
 				// empty vschema
 				vschema, _ = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
 			}
+
+			// Build the display version.
+			stats := NewVSchemaStats(vschema, errorMessage)
 
 			// save our value
 			plr.mu.Lock()
@@ -104,6 +206,7 @@ func (plr *Planner) WatchSrvVSchema(ctx context.Context, cell string) {
 					plr.vschema = vschema
 				}
 			}
+			plr.vschemaStats = stats
 			plr.mu.Unlock()
 			plr.plans.Clear()
 
@@ -121,23 +224,23 @@ func (plr *Planner) WatchSrvVSchema(ctx context.Context, cell string) {
 				if current.Err != topo.ErrNoNode {
 					log.Warningf("Error watching vschema for cell %s (will wait 5s before retrying): %v", cell, current.Err)
 				}
-				saveVSchema(nil)
+				saveVSchema(nil, fmt.Sprintf("Error watching SvrVSchema: %v", current.Err.Error()))
 				time.Sleep(5 * time.Second)
 				continue
 			}
-			saveVSchema(current.Value)
+			saveVSchema(current.Value, "")
 
 			for c := range changes {
 				if c.Err != nil {
 					// If the SrvVschema disappears, we need to clear our record.
 					// Otherwise, keep what we already had before.
 					if c.Err == topo.ErrNoNode {
-						saveVSchema(nil)
+						saveVSchema(nil, "SrvVSchema object was removed from topology.")
 					}
 					log.Warningf("Error while watching vschema for cell %s (will wait 5s before retrying): %v", cell, c.Err)
 					break
 				}
-				saveVSchema(c.Value)
+				saveVSchema(c.Value, "")
 			}
 
 			// Sleep a bit before trying again.
@@ -214,6 +317,18 @@ func (plr *Planner) ServeHTTP(response http.ResponseWriter, request *http.Reques
 	} else {
 		response.WriteHeader(http.StatusNotFound)
 	}
+}
+
+// VSchemaStats returns the loaded vschema stats.
+func (plr *Planner) VSchemaStats() *VSchemaStats {
+	plr.mu.Lock()
+	defer plr.mu.Unlock()
+	if plr.vschemaStats == nil {
+		return &VSchemaStats{
+			Error: "No VSchema loaded yet.",
+		}
+	}
+	return plr.vschemaStats
 }
 
 type wrappedVSchema struct {
