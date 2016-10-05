@@ -33,7 +33,7 @@ func (m *Manager) HandleHTTP(pattern string) {
 
 		// First we send the full dump
 		if err := c.WriteMessage(websocket.TextMessage, tree); err != nil {
-			log.Warningf("WriteMessage(tree(%v)) failed: %v", err)
+			log.Warningf("WriteMessage(tree) failed: %v", err)
 			return
 		}
 
@@ -82,7 +82,7 @@ func (m *Manager) HandleHTTP(pattern string) {
 					return
 				}
 				if err := c.WriteMessage(websocket.TextMessage, message); err != nil {
-					log.Warningf("WriteMessage(tree(%v)) failed: %v", err)
+					log.Warningf("WriteMessage(tree) failed: %v", err)
 					return
 				}
 			}
