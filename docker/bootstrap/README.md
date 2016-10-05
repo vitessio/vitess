@@ -10,6 +10,7 @@ The `vitess/bootstrap` image comes in different flavors:
 * `vitess/bootstrap:mysql56` - bootstrap image for MySQL 5.6
 * `vitess/bootstrap:mysql57` - bootstrap image for MySQL 5.7
 * `vitess/bootstrap:percona` - bootstrap image for Percona Server
+* `vitess/bootstrap:percona57` - bootstrap image for Percona Server 5.7
 
 **NOTE: Unlike the base image that builds Vitess itself, this bootstrap image
 will NOT be rebuilt automatically on every push to the Vitess master branch.**
