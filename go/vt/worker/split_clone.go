@@ -999,7 +999,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				// Ignore the diff report because all diffs should get reconciled.
 				_ /* DiffReport */, err = differ.Diff()
 				if err != nil {
-					processError("%v: RowDiffer2 failed: %v", errPrefix, err)
+					processError("RowDiffer2 failed for table: %v, Error: %v", td.Name, err)
 					return
 				}
 
