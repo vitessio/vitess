@@ -150,6 +150,11 @@ func newCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, 
 	if cloneType != horizontalResharding && cloneType != verticalSplit {
 		return nil, fmt.Errorf("unknown cloneType: %v This is a bug. Please report", cloneType)
 	}
+
+	// Verify user defined flags.
+	if !online && !offline {
+		return nil, errors.New("at least one clone phase (-online, -offline) must be enabled (and not set to false)")
+	}
 	if tables != nil && len(tables) == 0 {
 		return nil, errors.New("list of tablets to be split out must not be empty")
 	}
@@ -157,15 +162,37 @@ func newCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, 
 	if err != nil {
 		return nil, err
 	}
+	if chunkCount <= 0 {
+		return nil, fmt.Errorf("chunk_count must be > 0: %v", chunkCount)
+	}
+	if minRowsPerChunk <= 0 {
+		return nil, fmt.Errorf("min_rows_per_chunk must be > 0: %v", minRowsPerChunk)
+	}
+	if sourceReaderCount <= 0 {
+		return nil, fmt.Errorf("source_reader_count must be > 0: %v", sourceReaderCount)
+	}
+	if writeQueryMaxRows <= 0 {
+		return nil, fmt.Errorf("write_query_max_rows must be > 0: %v", writeQueryMaxRows)
+	}
+	if writeQueryMaxSize <= 0 {
+		return nil, fmt.Errorf("write_query_max_size must be > 0: %v", writeQueryMaxSize)
+	}
+	if destinationWriterCount <= 0 {
+		return nil, fmt.Errorf("destination_writer_count must be > 0: %v", destinationWriterCount)
+	}
+	if minHealthyRdonlyTablets < 0 {
+		return nil, fmt.Errorf("min_healthy_rdonly_tablets must be >= 0: %v", minHealthyRdonlyTablets)
+	}
 	if maxTPS != throttler.MaxRateModuleDisabled {
 		wr.Logger().Infof("throttling enabled and set to a max of %v transactions/second", maxTPS)
 	}
 	if maxTPS != throttler.MaxRateModuleDisabled && maxTPS < int64(destinationWriterCount) {
 		return nil, fmt.Errorf("-max_tps must be >= -destination_writer_count: %v >= %v", maxTPS, destinationWriterCount)
 	}
-	if !online && !offline {
-		return nil, errors.New("at least one clone phase (-online, -offline) must be enabled (and not set to false)")
+	if maxReplicationLag <= 0 {
+		return nil, fmt.Errorf("max_replication_lag must be >= 1s: %v", maxReplicationLag)
 	}
+
 	scw := &SplitCloneWorker{
 		StatusWorker:            NewStatusWorker(),
 		wr:                      wr,
