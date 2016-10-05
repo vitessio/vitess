@@ -3,6 +3,6 @@
     <h1>Workflows</h1>
   </div>
   <span *ngFor="let workflow of workflows; let i = index">
-    <vt-workflow [(workflow)]="workflows[i]"></vt-workflow>
+    <vt-workflow [workflow]="workflows[i]" [workflowService]="workflowService"></vt-workflow>
   </span>
 </div>

@@ -411,6 +411,12 @@
 			"revisionTime": "2016-06-12T21:17:59Z"
 		},
 		{
+			"checksumSHA1": "Tknk9q8ncICzdw+etBD6UViMhvc=",
+			"path": "github.com/gorilla/websocket",
+			"revision": "2d1e4548da234d9cb742cc3628556fef86aafbac",
+			"revisionTime": "2016-09-12T15:30:41Z"
+		},
+		{
 			"checksumSHA1": "fe0NspvyJjx6DhmTjIpO0zmR+kg=",
 			"path": "github.com/influxdb/influxdb/client",
 			"revision": "afde71eb1740fd763ab9450e1f700ba0e53c36d0",
@@ -461,6 +467,12 @@
 			"path": "github.com/olekukonko/tablewriter",
 			"revision": "cca8bbc0798408af109aaaa239cbd2634846b340",
 			"revisionTime": "2016-01-15T11:10:02Z"
+		},
+		{
+			"checksumSHA1": "W5ipMLrFEUJLdAeVil1hQi/hJ00=",
+			"path": "github.com/pborman/uuid",
+			"revision": "b984ec7fa9ff9e428bd0cf0abf429384dfbe3e37",
+			"revisionTime": "2016-08-24T21:06:00Z"
 		},
 		{
 			"checksumSHA1": "RZOdTSZN/PgcTqko5LzIAzw+UT4=",

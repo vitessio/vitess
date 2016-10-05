@@ -1230,6 +1230,7 @@ class Vtctld(object):
         '-enable_queries',
         '-cell', 'test_nj',
         '-web_dir', environment.vttop + '/web/vtctld',
+        '-web_dir2', environment.vttop + '/web/vtctld2/dist',
         '--log_dir', environment.vtlogroot,
         '--port', str(self.port),
         '-tablet_manager_protocol',
@@ -1238,6 +1239,7 @@ class Vtctld(object):
         '-throttler_client_protocol',
         protocols_flavor().throttler_client_protocol(),
         '-vtgate_protocol', protocols_flavor().vtgate_protocol(),
+        '-workflow_manager_init',
     ] + environment.topo_server().flags()
     # TODO(b/26388813): Remove the next two lines once vtctl WaitForDrain is
     #                   integrated in the vtctl MigrateServed* commands.

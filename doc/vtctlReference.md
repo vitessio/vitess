@@ -11,6 +11,7 @@ Commands are listed in the following groups:
 * [Serving Graph](#serving-graph)
 * [Shards](#shards)
 * [Tablets](#tablets)
+* [Workflows](#workflows)
 
 
 ## Generic
@@ -2263,5 +2264,113 @@ Updates the IP address and port numbers of a tablet.
 
 * The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;UpdateTabletAddrs&gt;</code> command. This error occurs if the command is not called with exactly one argument.
 * malformed address: %v
+
+
+## Workflows
+
+* [WorkflowAction](#workflowaction)
+* [WorkflowCreate](#workflowcreate)
+* [WorkflowStart](#workflowstart)
+* [WorkflowStop](#workflowstop)
+* [WorkflowTree](#workflowtree)
+* [WorkflowWait](#workflowwait)
+
+### WorkflowAction
+
+Sends the provided action name on the specified path.
+
+#### Example
+
+<pre class="command-example">WorkflowAction &lt;path&gt; &lt;name&gt;</pre>
+
+#### Arguments
+
+* <code>&lt;name&gt;</code> &ndash; Required.
+
+#### Errors
+
+* the <code>&lt;path&gt;</code> and <code>&lt;name&gt;</code> arguments are required for the <code>&lt;WorkflowAction&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
+* no workflow.Manager registered
+
+
+### WorkflowCreate
+
+Creates the workflow with the provided parameters. The workflow is also started, unless -nostart is specified.
+
+#### Example
+
+<pre class="command-example">WorkflowCreate [-nostart] &lt;factoryName&gt; [parameters...]</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| start | Boolean | If set, the workflow will also be started. |
+
+
+#### Arguments
+
+* <code>&lt;factoryName&gt;</code> &ndash; Required.
+
+#### Errors
+
+* the <code>&lt;factoryName&gt;</code> argument is required for the <code>&lt;WorkflowCreate&gt;</code> command This error occurs if the command is not called with at least one argument.
+* no workflow.Manager registered
+
+
+### WorkflowStart
+
+Starts the workflow.
+
+#### Example
+
+<pre class="command-example">WorkflowStart &lt;uuid&gt;</pre>
+
+#### Errors
+
+* the <code>&lt;uuid&gt;</code> argument is required for the <code>&lt;WorkflowStart&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* no workflow.Manager registered
+
+
+### WorkflowStop
+
+Stops the workflow.
+
+#### Example
+
+<pre class="command-example">WorkflowStop &lt;uuid&gt;</pre>
+
+#### Errors
+
+* the <code>&lt;uuid&gt;</code> argument is required for the <code>&lt;WorkflowStop&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* no workflow.Manager registered
+
+
+### WorkflowTree
+
+Displays a JSON representation of the workflow tree.
+
+#### Example
+
+<pre class="command-example">WorkflowTree </pre>
+
+#### Errors
+
+* the <code>&lt;WorkflowTree&gt;</code> command takes no parameter This error occurs if the command is not called with exactly 0 arguments.
+* no workflow.Manager registered
+
+
+### WorkflowWait
+
+Waits for the workflow to finish.
+
+#### Example
+
+<pre class="command-example">WorkflowWait &lt;uuid&gt;</pre>
+
+#### Errors
+
+* the <code>&lt;uuid&gt;</code> argument is required for the <code>&lt;WorkflowWait&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* no workflow.Manager registered
 
 
