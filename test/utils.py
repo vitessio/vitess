@@ -1226,6 +1226,10 @@ class Vtctld(object):
       self.grpc_port = environment.reserve_ports(1)
 
   def start(self, enable_schema_change_dir=False):
+    # Note the vtctld2 web dir is set to 'dist', which is populated
+    # when a toplevel 'make build_web' is run. This is meant to test
+    # the development version of the UI. The real checked-in app is in
+    # app/.
     args = environment.binary_args('vtctld') + [
         '-enable_queries',
         '-cell', 'test_nj',
