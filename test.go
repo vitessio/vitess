@@ -63,7 +63,7 @@ For example:
 
 // Flags
 var (
-	flavor   = flag.String("flavor", "mariadb,mysql56,mysql57,percona", "comma-separated bootstrap flavor(s) to run against (when using Docker mode)")
+	flavor   = flag.String("flavor", "mariadb,mysql56,mysql57,percona,percona57", "comma-separated bootstrap flavor(s) to run against (when using Docker mode)")
 	runCount = flag.Int("runs", 1, "run each test this many times")
 	retryMax = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
 	logPass  = flag.Bool("log-pass", false, "log test output even if it passes")
