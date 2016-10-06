@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestCommit(t *testing.T) {
@@ -387,5 +389,128 @@ func TestForUpdate(t *testing.T) {
 			t.Error(err)
 			return
 		}
+	}
+}
+
+func TestPrepareRollback(t *testing.T) {
+	client := framework.NewClient()
+	defer client.Execute("delete from vitess_test where intval=4", nil)
+
+	query := "insert into vitess_test (intval, floatval, charval, binval) " +
+		"values(4, null, null, null)"
+	err := client.Begin()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = client.Execute(query, nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = client.Prepare("aa")
+	if err != nil {
+		client.RollbackPrepared("aa", 0)
+		t.Error(err)
+		return
+	}
+	err = client.RollbackPrepared("aa", 0)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	qr, err := client.Execute("select * from vitess_test", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if qr.RowsAffected != 3 {
+		t.Errorf("rows affected: %d, want 3", qr.RowsAffected)
+	}
+}
+
+func TestPrepareCommit(t *testing.T) {
+	client := framework.NewClient()
+	defer client.Execute("delete from vitess_test where intval=4", nil)
+
+	query := "insert into vitess_test (intval, floatval, charval, binval) " +
+		"values(4, null, null, null)"
+	err := client.Begin()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = client.Execute(query, nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = client.Prepare("aa")
+	if err != nil {
+		client.RollbackPrepared("aa", 0)
+		t.Error(err)
+		return
+	}
+	err = client.CommitPrepared("aa")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	qr, err := client.Execute("select * from vitess_test", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if qr.RowsAffected != 4 {
+		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
+	}
+}
+
+func TestPrepareReparentCommit(t *testing.T) {
+	client := framework.NewClient()
+	defer client.Execute("delete from vitess_test where intval=4", nil)
+
+	query := "insert into vitess_test (intval, floatval, charval, binval) " +
+		"values(4, null, null, null)"
+	err := client.Begin()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = client.Execute(query, nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = client.Prepare("aa")
+	if err != nil {
+		client.RollbackPrepared("aa", 0)
+		t.Error(err)
+		return
+	}
+	// Rollback all transactions
+	err = client.SetServingType(topodatapb.TabletType_REPLICA)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	// This should resurrect the prepared transaction.
+	err = client.SetServingType(topodatapb.TabletType_MASTER)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = client.CommitPrepared("aa")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	qr, err := client.Execute("select * from vitess_test", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if qr.RowsAffected != 4 {
+		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
 	}
 }
