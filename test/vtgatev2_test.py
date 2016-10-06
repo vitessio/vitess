@@ -866,6 +866,15 @@ class TestCoreVTGateFunctions(BaseTestCase):
           keyspace_ids=keyspace_ids)
       self.assertEqual(result, [tuple(bind_vars.values())])
 
+  def test_vschema_vars(self):
+    v = utils.vtgate.get_vars()
+    self.assertIn('VtgateVSchemaCounts', v)
+    self.assertIn('Reload', v['VtgateVSchemaCounts'])
+    self.assertTrue(v['VtgateVSchemaCounts']['Reload'] > 0)
+    self.assertIn('WatchError', v['VtgateVSchemaCounts'])
+    self.assertTrue(v['VtgateVSchemaCounts']['WatchError'] > 0)
+    self.assertNotIn('Parsing', v['VtgateVSchemaCounts'])
+
 
 class TestFailures(BaseTestCase):
 

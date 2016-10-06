@@ -50,6 +50,8 @@ var (
 	qpsByKeyspace  *stats.Rates
 	qpsByDbType    *stats.Rates
 
+	vschemaCounters *stats.Counters
+
 	errorsByOperation *stats.Rates
 	errorsByKeyspace  *stats.Rates
 	errorsByDbType    *stats.Rates
@@ -114,6 +116,11 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 		logStreamExecuteShards:      logutil.NewThrottledLogger("StreamExecuteShards", 5*time.Second),
 		logUpdateStream:             logutil.NewThrottledLogger("UpdateStream", 5*time.Second),
 	}
+
+	// vschemaCounters needs to be initialized before planner to
+	// catch the initial load stats.
+	vschemaCounters = stats.NewCounters("VtgateVSchemaCounts")
+
 	// Resuse resolver's scatterConn.
 	rpcVTGate.router = NewRouter(ctx, serv, cell, "VTGateRouter", rpcVTGate.resolver.scatterConn)
 	normalErrors = stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType"})

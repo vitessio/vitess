@@ -183,6 +183,9 @@ func (plr *Planner) WatchSrvVSchema(ctx context.Context, cell string) {
 					log.Warningf("Error creating VSchema for cell %v (will try again next update): %v", cell, err)
 					v = nil
 					errorMessage = fmt.Sprintf("Error creating VSchema for cell %v: %v", cell, err)
+					if vschemaCounters != nil {
+						vschemaCounters.Add("Parsing", 1)
+					}
 				}
 			}
 			if v == nil {
@@ -210,6 +213,10 @@ func (plr *Planner) WatchSrvVSchema(ctx context.Context, cell string) {
 			plr.mu.Unlock()
 			plr.plans.Clear()
 
+			if vschemaCounters != nil {
+				vschemaCounters.Add("Reload", 1)
+			}
+
 			// notify the listener
 			if !foundFirstValue {
 				foundFirstValue = true
@@ -225,6 +232,9 @@ func (plr *Planner) WatchSrvVSchema(ctx context.Context, cell string) {
 					log.Warningf("Error watching vschema for cell %s (will wait 5s before retrying): %v", cell, current.Err)
 				}
 				saveVSchema(nil, fmt.Sprintf("Error watching SvrVSchema: %v", current.Err.Error()))
+				if vschemaCounters != nil {
+					vschemaCounters.Add("WatchError", 1)
+				}
 				time.Sleep(5 * time.Second)
 				continue
 			}
@@ -238,6 +248,9 @@ func (plr *Planner) WatchSrvVSchema(ctx context.Context, cell string) {
 						saveVSchema(nil, "SrvVSchema object was removed from topology.")
 					}
 					log.Warningf("Error while watching vschema for cell %s (will wait 5s before retrying): %v", cell, c.Err)
+					if vschemaCounters != nil {
+						vschemaCounters.Add("WatchError", 1)
+					}
 					break
 				}
 				saveVSchema(c.Value, "")
