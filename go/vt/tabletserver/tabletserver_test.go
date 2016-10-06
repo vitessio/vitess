@@ -8,6 +8,7 @@ import (
 	"expvar"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -614,6 +615,108 @@ func TestTabletServerStopWithPrepare(t *testing.T) {
 	if len(tsv.qe.preparedPool.conns) != 0 {
 		t.Errorf("len(tsv.qe.preparedPool.conns): %d, want 0", len(tsv.qe.preparedPool.conns))
 	}
+}
+
+func TestTabletServerMasterToReplica(t *testing.T) {
+	// Reuse code from tx_executor_test.
+	_, tsv, _ := newTestTxExecutor()
+	ctx := context.Background()
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	txid1, err := tsv.Begin(ctx, &target)
+	if err != nil {
+		t.Error(err)
+	}
+	if _, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid1, nil); err != nil {
+		t.Error(err)
+	}
+	if err = tsv.Prepare(ctx, &target, txid1, "aa"); err != nil {
+		t.Error(err)
+	}
+	txid2, err := tsv.Begin(ctx, &target)
+	if err != nil {
+		t.Error(err)
+	}
+	// This makes txid2 busy
+	conn2, err := tsv.qe.txPool.Get(txid2)
+	if err != nil {
+		t.Error(err)
+	}
+	ch := make(chan bool)
+	go func() {
+		tsv.SetServingType(topodatapb.TabletType_REPLICA, true, []topodatapb.TabletType{topodatapb.TabletType_MASTER})
+		ch <- true
+	}()
+
+	// SetServingType must rollback the prepared transaction,
+	// but it must wait for the unprepared (txid2) to become non-busy.
+	select {
+	case <-ch:
+		t.Fatal("ch should not fire")
+	case <-time.After(10 * time.Millisecond):
+	}
+	if tsv.qe.txPool.activePool.Size() != 1 {
+		t.Errorf("len(tsv.qe.txPool.activePool.Size()): %d, want 1", len(tsv.qe.preparedPool.conns))
+	}
+
+	// Concluding conn2 will allow the transition to go through.
+	tsv.qe.txPool.LocalConclude(ctx, conn2)
+	<-ch
+}
+
+func TestTabletServerReplicaToMaster(t *testing.T) {
+	// Reuse code from tx_executor_test.
+	_, tsv, db := newTestTxExecutor()
+	defer tsv.StopService()
+	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+	tpc := tsv.qe.twoPC
+
+	db.AddQuery(tpc.readPrepared, &sqltypes.Result{})
+	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
+	if len(tsv.qe.preparedPool.conns) != 0 {
+		t.Errorf("len(tsv.qe.preparedPool.conns): %d, want 0", len(tsv.qe.preparedPool.conns))
+	}
+	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+
+	db.AddQuery(tpc.readPrepared, &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeString([]byte("dtid0")),
+			sqltypes.MakeString([]byte("")),
+			sqltypes.MakeString([]byte("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */")),
+		}},
+	})
+	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
+	if len(tsv.qe.preparedPool.conns) != 1 {
+		t.Errorf("len(tsv.qe.preparedPool.conns): %d, want 1", len(tsv.qe.preparedPool.conns))
+	}
+	got := tsv.qe.preparedPool.conns["dtid0"].Queries
+	want := []string{"update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Prepared queries: %v, want %v", got, want)
+	}
+	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+
+	// Ensure we continue past errors.
+	db.AddQuery(tpc.readPrepared, &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeString([]byte("bogus")),
+			sqltypes.MakeString([]byte("")),
+			sqltypes.MakeString([]byte("bogus")),
+		}, {
+			sqltypes.MakeString([]byte("dtid0")),
+			sqltypes.MakeString([]byte("")),
+			sqltypes.MakeString([]byte("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */")),
+		}},
+	})
+	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
+	if len(tsv.qe.preparedPool.conns) != 1 {
+		t.Errorf("len(tsv.qe.preparedPool.conns): %d, want 1", len(tsv.qe.preparedPool.conns))
+	}
+	got = tsv.qe.preparedPool.conns["dtid0"].Queries
+	want = []string{"update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Prepared queries: %v, want %v", got, want)
+	}
+	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 }
 
 func TestTabletServerBeginFail(t *testing.T) {

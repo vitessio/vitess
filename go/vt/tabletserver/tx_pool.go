@@ -111,9 +111,16 @@ func (axp *TxPool) Close() {
 	axp.pool.Close()
 }
 
-// WaitForEmpty waits until all active transactions are completed.
-func (axp *TxPool) WaitForEmpty() {
-	axp.activePool.WaitForEmpty()
+// RollbackNonBusy rolls back all transactions that are not in use.
+// Transactions can be in use for situations like executing statements
+// or in prepared state.
+func (axp *TxPool) RollbackNonBusy(ctx context.Context) {
+	for _, v := range axp.activePool.GetOutdated(time.Duration(0), "for transition") {
+		conn := v.(*TxConnection)
+		log.Warningf("rolling back transaction for transition: %s", conn.Format(nil))
+		axp.queryServiceStats.InternalErrors.Add("StrayTransactions", 1)
+		axp.LocalConclude(ctx, conn)
+	}
 }
 
 func (axp *TxPool) transactionKiller() {
@@ -125,6 +132,11 @@ func (axp *TxPool) transactionKiller() {
 		conn.Close()
 		conn.conclude(TxKill)
 	}
+}
+
+// WaitForEmpty waits until all active transactions are completed.
+func (axp *TxPool) WaitForEmpty() {
+	axp.activePool.WaitForEmpty()
 }
 
 // Begin begins a transaction, and returns the associated transaction id.

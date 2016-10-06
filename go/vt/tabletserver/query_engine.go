@@ -271,6 +271,7 @@ outer:
 			continue
 		}
 		for _, stmt := range tx {
+			conn.RecordQuery(stmt)
 			_, err := conn.Exec(ctx, stmt, 1, false)
 			if err != nil {
 				allErr.RecordError(err)
@@ -287,6 +288,25 @@ outer:
 		}
 	}
 	return allErr.Error()
+}
+
+// RollbackTransactions rolls back all open transactions
+// including the prepared ones.
+// This is used for transitioning from a master to a non-master
+// serving type.
+func (qe *QueryEngine) RollbackTransactions() {
+	ctx := context.Background()
+	// The order of rollbacks is currently not material because
+	// we don't allow new statements or commits during
+	// this function. In case of any such change, this will
+	// have to be revisited.
+	qe.txPool.RollbackNonBusy(ctx)
+	for _, c := range qe.preparedPool.GetAll() {
+		qe.txPool.LocalConclude(ctx, c)
+	}
+
+	// If there are stray transactions, we must wait.
+	qe.WaitForTxEmpty()
 }
 
 // WaitForTxEmpty must be called before calling Close.

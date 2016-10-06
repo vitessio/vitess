@@ -51,3 +51,15 @@ func (pp *TxPreparedPool) Get(dtid string) *TxConnection {
 	delete(pp.conns, dtid)
 	return c
 }
+
+// GetAll removes all connections and returns them as a list.
+func (pp *TxPreparedPool) GetAll() []*TxConnection {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+	conns := make([]*TxConnection, 0, len(pp.conns))
+	for _, c := range pp.conns {
+		conns = append(conns, c)
+	}
+	pp.conns = make(map[string]*TxConnection, pp.capacity)
+	return conns
+}
