@@ -360,3 +360,37 @@
 # syntax error
 "the quick brown fox"
 "syntax error at position 4 near 'the'"
+
+# Sharding Key Condition in Parenthesis
+"select * from user where name ='abc' AND (id = 4) limit 5"
+{
+  "Original": "select * from user where name ='abc' AND (id = 4) limit 5",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user where name = 'abc' and (id = 4) limit 5",
+    "FieldQuery": "select * from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 4
+  }
+}
+
+"select * from user where (id = 4) AND (name ='abc') limit 5"
+{
+  "Original": "select * from user where (id = 4) AND (name ='abc') limit 5",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user where (id = 4) and (name = 'abc') limit 5",
+    "FieldQuery": "select * from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 4
+  }
+}
+

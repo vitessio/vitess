@@ -201,3 +201,11 @@
 # nextval not supported yet
 "select next value from user"
 "unsupported: NEXT VALUE construct"
+
+# complex expression in parenthesis with limit not supported yet
+"select * from user where (id = 4 AND name ='abc') limit 5"
+"unsupported: limits with scatter"
+
+# complex expression in parenthesis with order by not supported yet
+"select * from user where (id = 4 AND name ='abc') order by id"
+"unsupported: scatter and order by"
