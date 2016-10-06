@@ -1090,5 +1090,13 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(first_half_queries, 1, 'invalid split %s' % str(s))
     self.assertEqual(second_half_queries, 1, 'invalid split %s' % str(s))
 
+  def test_vschema_vars(self):
+    v = utils.vtgate.get_vars()
+    self.assertIn('VtgateVSchemaCounts', v)
+    self.assertIn('Reload', v['VtgateVSchemaCounts'])
+    self.assertTrue(v['VtgateVSchemaCounts']['Reload'] > 0)
+    self.assertNotIn('Parsing', v['VtgateVSchemaCounts'])
+    self.assertNotIn('WatchError', v['VtgateVSchemaCounts'])
+
 if __name__ == '__main__':
   utils.main()
