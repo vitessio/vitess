@@ -319,7 +319,6 @@ func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (colsym *cols
 	if col, ok := expr.Expr.(*sqlparser.ColName); ok {
 		if colsym.Alias.Original() == "" {
 			colsym.Alias = sqlparser.NewColIdent(sqlparser.String(col))
-
 		} else {
 			colsym.ExprName = sqlparser.NewColIdent(sqlparser.String(col))
 		}
