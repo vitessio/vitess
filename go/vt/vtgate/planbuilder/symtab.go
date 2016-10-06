@@ -144,7 +144,7 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (rb *route, isL
 			Qualifier: col.Qualifier,
 		})
 		for _, colsym := range st.Colsyms {
-			if colsym.Alias.EqualString(name) || colsym.Alias.EqualString(starname) || colsym.Alias.EqualString("*") {
+			if colsym.Alias.EqualString(name) || colsym.Alias.EqualString(starname) || colsym.Alias.EqualString("*") || colsym.AlternateAlias.EqualString(name) || colsym.AlternateAlias.EqualString(starname) || colsym.AlternateAlias.EqualString("*") {
 				col.Metadata = colsym
 				return colsym.Route(), true, nil
 			}
@@ -275,11 +275,12 @@ func (t *tabsym) FindVindex(name sqlparser.ColIdent) vindexes.Vindex {
 // is set to the column it refers. If the referenced column has a Vindex,
 // the Vindex field is also accordingly set.
 type colsym struct {
-	Alias      sqlparser.ColIdent
-	route      *route
-	symtab     *symtab
-	Underlying colref
-	Vindex     vindexes.Vindex
+	Alias          sqlparser.ColIdent
+	route          *route
+	symtab         *symtab
+	Underlying     colref
+	Vindex         vindexes.Vindex
+	AlternateAlias sqlparser.ColIdent
 }
 
 // newColsym builds a colsym for the specified route and symtab.

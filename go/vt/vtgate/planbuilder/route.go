@@ -319,6 +319,8 @@ func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (colsym *cols
 	if col, ok := expr.Expr.(*sqlparser.ColName); ok {
 		if colsym.Alias.Original() == "" {
 			colsym.Alias = sqlparser.NewColIdent(sqlparser.String(col))
+		} else {
+			colsym.AlternateAlias = sqlparser.NewColIdent(sqlparser.String(col))
 		}
 		colsym.Vindex = rb.Symtab().Vindex(col, rb, true)
 		colsym.Underlying = newColref(col)
