@@ -573,6 +573,26 @@ func TestTabletServerTarget(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
 	}
+
+	// Disallow tx statements if non-master.
+	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+	_, err = tsv.Begin(ctx, &target1)
+	want = "transactional statement disallowed on non-master tablet"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must contain %s", err, want)
+	}
+	err = tsv.Commit(ctx, &target1, 1)
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must contain %s", err, want)
+	}
+
+	// Disallow all if service is stopped.
+	tsv.StopService()
+	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0, nil)
+	want = "operation not allowed in state NOT_SERVING"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must contain %s", err, want)
+	}
 }
 
 func TestTabletServerStopWithPrepare(t *testing.T) {
@@ -743,7 +763,7 @@ func TestTabletServerBeginFail(t *testing.T) {
 	}
 }
 
-func TestTabletServerCommitTransaciton(t *testing.T) {
+func TestTabletServerCommitTransaction(t *testing.T) {
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	// sql that will be executed in this test

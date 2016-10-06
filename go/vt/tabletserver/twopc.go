@@ -59,7 +59,7 @@ const (
 	sqlInsertRedoStmt = "insert into `%s`.redo_log_statement(dtid, id, statement) values %a"
 	sqlDeleteRedoTx   = "delete from `%s`.redo_log_transaction where dtid = %a"
 	sqlDeleteRedoStmt = "delete from `%s`.redo_log_statement where dtid = %a"
-	sqlReadPrepared   = "select s.dtid, s.id, s.statement from `%s`.redo_log_transaction t join `%s`.redo_log_statement s on t.dtid = s.dtid where t.resolution = 'Prepared' order by s.dtid, s.id"
+	sqlReadPrepared   = "select s.dtid, s.id, s.statement from `%s`.redo_log_transaction t join `%s`.redo_log_statement s on t.dtid = s.dtid where t.state = 'Prepared' order by s.dtid, s.id"
 )
 
 // TwoPC performs 2PC metadata management (MM) functions.
