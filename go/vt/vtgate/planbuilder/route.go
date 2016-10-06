@@ -265,6 +265,8 @@ func (rb *route) computePlan(filter sqlparser.BoolExpr) (opcode engine.RouteOpco
 		case sqlparser.InStr:
 			return rb.computeINPlan(node)
 		}
+	case *sqlparser.ParenBoolExpr:
+		return rb.computePlan(node.Expr)
 	}
 	return engine.SelectScatter, nil, nil
 }
