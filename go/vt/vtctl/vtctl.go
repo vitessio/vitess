@@ -174,6 +174,9 @@ var commands = []commandGroup{
 			{"RefreshState", commandRefreshState,
 				"<tablet alias>",
 				"Reloads the tablet record on the specified tablet."},
+			{"RefreshStateByShard", commandRefreshStateByShard,
+				"[-cells=c1,c2,...] <keyspace/shard>",
+				"Runs 'RefreshState' on all tablets in the given shard."},
 			{"RunHealthCheck", commandRunHealthCheck,
 				"<tablet alias>",
 				"Runs a health check on a remote tablet."},
@@ -869,6 +872,31 @@ func commandRefreshState(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	return wr.TabletManagerClient().RefreshState(ctx, tabletInfo.Tablet)
+}
+
+func commandRefreshStateByShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells whose tablets are included. If empty, all cells are considered.")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("The <keyspace/shard> argument is required for the RefreshStateByShard command.")
+	}
+
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	si, err := wr.TopoServer().GetShard(ctx, keyspace, shard)
+	if err != nil {
+		return err
+	}
+
+	var cells []string
+	if *cellsStr != "" {
+		cells = strings.Split(*cellsStr, ",")
+	}
+	return wr.RefreshTabletsByShard(ctx, si, nil /* tabletTypes */, cells)
 }
 
 func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

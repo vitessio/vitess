@@ -178,7 +178,7 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 		wr.Logger().Infof("WaitForDrain: Sleeping finished. Shutting down queryservice on old tablets now.")
 
 		for _, si := range refreshShards {
-			rec.RecordError(wr.RefreshTabletsByShard(ctx, si, servedType, cells))
+			rec.RecordError(wr.RefreshTabletsByShard(ctx, si, []topodatapb.TabletType{servedType}, cells))
 		}
 		return rec.Error()
 	}
@@ -383,7 +383,7 @@ func (wr *Wrangler) migrateServedTypesLocked(ctx context.Context, keyspace strin
 	if needToRefreshSourceTablets {
 		event.DispatchUpdate(ev, "refreshing source shard tablets so they restart their query service")
 		for _, si := range sourceShards {
-			wr.RefreshTabletsByShard(ctx, si, servedType, cells)
+			wr.RefreshTabletsByShard(ctx, si, []topodatapb.TabletType{servedType}, cells)
 		}
 	}
 
@@ -433,7 +433,7 @@ func (wr *Wrangler) migrateServedTypesLocked(ctx context.Context, keyspace strin
 	if needToRefreshDestinationTablets {
 		event.DispatchUpdate(ev, "refreshing destination shard tablets so they restart their query service")
 		for _, si := range destinationShards {
-			wr.RefreshTabletsByShard(ctx, si, servedType, cells)
+			wr.RefreshTabletsByShard(ctx, si, []topodatapb.TabletType{servedType}, cells)
 		}
 	}
 
@@ -690,7 +690,7 @@ func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.Keysp
 	// Now refresh the source servers so they reload their
 	// blacklisted table list
 	event.DispatchUpdate(ev, "refreshing sources tablets state so they update their blacklisted tables")
-	if err := wr.RefreshTabletsByShard(ctx, sourceShard, servedType, cells); err != nil {
+	if err := wr.RefreshTabletsByShard(ctx, sourceShard, []topodatapb.TabletType{servedType}, cells); err != nil {
 		return err
 	}
 
@@ -801,7 +801,7 @@ func (wr *Wrangler) SetKeyspaceServedFrom(ctx context.Context, keyspace string, 
 // RefreshTabletsByShard calls RefreshState on all the tables of a
 // given type in a shard. It would work for the master, but the
 // discovery wouldn't be very efficient.
-func (wr *Wrangler) RefreshTabletsByShard(ctx context.Context, si *topo.ShardInfo, tabletType topodatapb.TabletType, cells []string) error {
+func (wr *Wrangler) RefreshTabletsByShard(ctx context.Context, si *topo.ShardInfo, tabletTypes []topodatapb.TabletType, cells []string) error {
 	wr.Logger().Infof("RefreshTabletsByShard called on shard %v/%v", si.Keyspace(), si.ShardName())
 	tabletMap, err := wr.ts.GetTabletMapForShardByCell(ctx, si.Keyspace(), si.ShardName(), cells)
 	switch err {
@@ -816,7 +816,7 @@ func (wr *Wrangler) RefreshTabletsByShard(ctx context.Context, si *topo.ShardInf
 	// ignore errors in this phase
 	wg := sync.WaitGroup{}
 	for _, ti := range tabletMap {
-		if ti.Type != tabletType {
+		if tabletTypes != nil && !topoproto.IsTypeInList(ti.Type, tabletTypes) {
 			continue
 		}
 
