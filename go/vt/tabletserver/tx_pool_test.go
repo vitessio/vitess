@@ -87,6 +87,42 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 	}
 }
 
+func TestTxPoolRollbackNonBusy(t *testing.T) {
+	db := fakesqldb.Register()
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("rollback", &sqltypes.Result{})
+
+	txPool := newTxPool(false)
+	appParams := sqldb.ConnParams{Engine: db.Name}
+	dbaParams := sqldb.ConnParams{Engine: db.Name}
+	txPool.Open(&appParams, &dbaParams)
+	defer txPool.Close()
+	ctx := context.Background()
+	txid1, err := txPool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = txPool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn1, err := txPool.Get(txid1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// This should rollback only txid2.
+	txPool.RollbackNonBusy(ctx)
+	if sz := txPool.activePool.Size(); sz != 1 {
+		t.Errorf("txPool.activePool.Size(): %d, want 1", sz)
+	}
+	conn1.Recycle()
+	// This should rollback txid1.
+	txPool.RollbackNonBusy(ctx)
+	if sz := txPool.activePool.Size(); sz != 0 {
+		t.Errorf("txPool.activePool.Size(): %d, want 0", sz)
+	}
+}
+
 func TestTxPoolTransactionKiller(t *testing.T) {
 	sql := "alter table test_table add test_column int"
 	db := fakesqldb.Register()
@@ -190,7 +226,7 @@ func TestTxPoolBeginWithExecError(t *testing.T) {
 	}
 }
 
-func TestTxPoolSafeCommitFail(t *testing.T) {
+func TestTxPoolCommitFail(t *testing.T) {
 	db := fakesqldb.Register()
 	sql := fmt.Sprintf("alter table test_table add test_column int")
 	db.AddQuery("begin", &sqltypes.Result{})

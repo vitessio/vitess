@@ -409,13 +409,15 @@ func (tsv *TabletServer) serveNewType() (err error) {
 			err = x.(error)
 		}
 	}()
-	if tsv.target.TabletType != topodatapb.TabletType_MASTER {
-		tsv.startReplicationStreamer()
+	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
 		err = tsv.qe.PrepareFromRedo()
 		if err != nil {
 			// TODO(sougou): raise alarms.
 			log.Errorf("Could not prepare transactions: %v", err)
 		}
+	} else {
+		tsv.qe.RollbackTransactions()
+		tsv.startReplicationStreamer()
 	}
 	tsv.transition(StateServing)
 	return nil

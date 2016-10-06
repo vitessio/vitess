@@ -131,9 +131,6 @@ func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *TxConnection, dtid string,
 		return err
 	}
 
-	if len(queries) == 0 {
-		return nil
-	}
 	rows := make([][]sqltypes.Value, len(queries))
 	for i, query := range queries {
 		rows[i] = []sqltypes.Value{

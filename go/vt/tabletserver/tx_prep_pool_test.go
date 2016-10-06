@@ -56,3 +56,18 @@ func TestPrepGet(t *testing.T) {
 		t.Errorf("Get(aa): %v, want nil", got)
 	}
 }
+
+func TestPrepGetAll(t *testing.T) {
+	pp := NewTxPreparedPool(2)
+	conn1 := &TxConnection{}
+	conn2 := &TxConnection{}
+	pp.Put(conn1, "aa")
+	pp.Put(conn2, "bb")
+	got := pp.GetAll()
+	if len(got) != 2 {
+		t.Errorf("GetAll len: %d, want 2", len(got))
+	}
+	if len(pp.conns) != 0 {
+		t.Errorf("len(pp.conns): %d, want 0", len(pp.conns))
+	}
+}

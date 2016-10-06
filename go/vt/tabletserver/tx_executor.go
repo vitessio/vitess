@@ -37,7 +37,7 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 
 	// If no queries were executed, we just rollback.
 	if len(conn.Queries) == 0 {
-		txe.qe.txPool.LocalCommit(txe.ctx, conn)
+		txe.qe.txPool.LocalConclude(txe.ctx, conn)
 		return nil
 	}
 
