@@ -40,6 +40,9 @@ git submodule update --init
 if [ `uname -s` == "Darwin" ]; then
   export GRPC_PYTHON_BUILD_WITH_CYTHON=1
   $grpc_dist/usr/local/bin/pip install Cython
+
+  # this enables to build protobuf on OSX Sierra
+  export CPPFLAGS="-Wno-deprecated-declarations"
 fi
 
 # build everything
