@@ -264,7 +264,7 @@ class InvalidatorThread(threading.Thread):
             self.timestamp)
 
   def invalidate(self, table_name, row_id, token):
-    logging.debug('Invalidating %s(%d):', table_name, row_id)
+    logging.debug('Invalidating %s(%d) - %s:', table_name, row_id, token)
     version, cache_event_token, _ = self.cache.gets(table_name, row_id)
     if version is None:
       logging.debug('  no entry in cache, saving event_token')

@@ -251,6 +251,11 @@ func (ev mariadbBinlogEvent) GTID(f replication.BinlogFormat) (replication.GTID,
 	}, nil
 }
 
+// PreviousGTIDs implements BinlogEvent.PreviousGTIDs().
+func (ev mariadbBinlogEvent) PreviousGTIDs(f replication.BinlogFormat) (replication.Position, error) {
+	return replication.Position{}, fmt.Errorf("MariaDB should not provide PREVIOUS_GTIDS_EVENT events")
+}
+
 // StripChecksum implements BinlogEvent.StripChecksum().
 func (ev mariadbBinlogEvent) StripChecksum(f replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
 	switch f.ChecksumAlgorithm {

@@ -54,6 +54,8 @@ type BinlogEvent interface {
 	// because it's a GTID_EVENT (MariaDB, MySQL 5.6), or because it is some
 	// arbitrary event type that has a GTID in the header (Google MySQL).
 	HasGTID(BinlogFormat) bool
+	// IsPreviousGTIDs returns true if this event is a PREVIOUS_GTIDS_EVENT.
+	IsPreviousGTIDs() bool
 
 	// Timestamp returns the timestamp from the event header.
 	Timestamp() uint32
@@ -78,6 +80,9 @@ type BinlogEvent interface {
 	// Rand returns the two seed values for a RAND_EVENT.
 	// This is only valid if IsRand() returns true.
 	Rand(BinlogFormat) (uint64, uint64, error)
+	// PreviousGTIDs returns the Position from the event.
+	// This is only valid if IsPreviousGTIDs() returns true.
+	PreviousGTIDs(BinlogFormat) (Position, error)
 
 	// StripChecksum returns the checksum and a modified event with the checksum
 	// stripped off, if any. If there is no checksum, it returns the same event
