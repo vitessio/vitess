@@ -122,32 +122,33 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 	defer span.Finish()
 	ctx = trace.NewContext(ctx, span)
 
-	// Save the old tablet so callbacks can have a better idea of
-	// the precise nature of the transition.
-	oldTablet := agent.Tablet()
-
 	// Actions should have side effects on the tablet, so reload the data.
-	tablet, err := agent.updateTabletFromTopo(ctx)
+	ti, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", reason, err)
 		return fmt.Errorf("refreshTablet failed rereading tablet after %v: %v", reason, err)
 	}
+	tablet := ti.Tablet
 
 	if updatedTablet := agent.checkTabletMysqlPort(ctx, tablet); updatedTablet != nil {
-		agent.setTablet(updatedTablet)
+		tablet = updatedTablet
 	}
 
-	agent.updateState(ctx, oldTablet, reason)
+	agent.updateState(ctx, tablet, reason)
 	log.Infof("Done with post-action state refresh")
 	return nil
 }
 
-// updateState will use the provided tablet record as a base, the current
-// tablet record as the new one, run changeCallback, and dispatch the event.
-func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *topodatapb.Tablet, reason string) {
-	newTablet := agent.Tablet()
+// updateState will use the provided tablet record as the new tablet state,
+// the current tablet as a base, run changeCallback, and dispatch the event.
+func (agent *ActionAgent) updateState(ctx context.Context, newTablet *topodatapb.Tablet, reason string) {
+	oldTablet := agent.Tablet()
+	if oldTablet == nil {
+		oldTablet = &topodatapb.Tablet{}
+	}
 	log.Infof("Running tablet callback because: %v", reason)
 	agent.changeCallback(ctx, oldTablet, newTablet)
+	agent.setTablet(newTablet)
 	event.Dispatch(&events.StateChange{
 		OldTablet: *oldTablet,
 		NewTablet: *newTablet,

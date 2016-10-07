@@ -543,23 +543,19 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
 	return replication.EncodePosition(pos), nil
 }
 
-func (agent *ActionAgent) isMasterEligible() (bool, error) {
-	switch agent.Tablet().Type {
+func isMasterEligible(tabletType topodatapb.TabletType) bool {
+	switch tabletType {
 	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:
-		return true, nil
+		return true
 	}
 
-	return false, nil
+	return false
 }
 
 func (agent *ActionAgent) enableSemiSync(master bool) error {
 	// Only enable if we're eligible for becoming master (REPLICA type).
 	// Ineligible slaves (RDONLY) shouldn't ACK because we'll never promote them.
-	masterEligible, err := agent.isMasterEligible()
-	if err != nil {
-		return fmt.Errorf("can't enable semi-sync: %v", err)
-	}
-	if !masterEligible {
+	if !isMasterEligible(agent.Tablet().Type) {
 		return nil
 	}
 
