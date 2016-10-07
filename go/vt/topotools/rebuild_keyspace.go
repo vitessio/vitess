@@ -8,7 +8,9 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"sync"
 
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -119,14 +121,21 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts topo.Serv
 		}
 	}
 
-	// and then finally save the keyspace objects
+	// And then finally save the keyspace objects, in parallel.
+	rec := &concurrency.AllErrorRecorder{}
+	wg := sync.WaitGroup{}
 	for cell, srvKeyspace := range srvKeyspaceMap {
-		log.Infof("updating keyspace serving graph in cell %v for %v", cell, keyspace)
-		if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace); err != nil {
-			return fmt.Errorf("writing serving data failed: %v", err)
-		}
+		wg.Add(1)
+		go func(cell string, srvKeyspace *topodatapb.SrvKeyspace) {
+			defer wg.Done()
+			log.Infof("updating keyspace serving graph in cell %v for %v", cell, keyspace)
+			if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace); err != nil {
+				rec.RecordError(fmt.Errorf("writing serving data failed: %v", err))
+			}
+		}(cell, srvKeyspace)
 	}
-	return nil
+	wg.Wait()
+	return rec.Error()
 }
 
 // orderAndCheckPartitions will re-order the partition list, and check
