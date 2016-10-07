@@ -437,7 +437,17 @@ func TestMysql56GTIDSetSIDBlock(t *testing.T) {
 		// sid2: interval 1 end
 		6, 0, 0, 0, 0, 0, 0, 0,
 	}
-	if got := input.SIDBlock(); !reflect.DeepEqual(got, want) {
+	got := input.SIDBlock()
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("%#v.SIDBlock() = %#v, want %#v", input, got, want)
+	}
+
+	// Testing the conversion back.
+	set, err := NewMysql56GTIDSetFromSIDBlock(want)
+	if err != nil {
+		t.Fatalf("Reconstructing Mysql56GTIDSet from SID block failed: %v", err)
+	}
+	if !reflect.DeepEqual(set, input) {
+		t.Errorf("NewMysql56GTIDSetFromSIDBlock(%#v) = %#v, want %#v", want, set, input)
 	}
 }

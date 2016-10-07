@@ -131,7 +131,7 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 
 	var events <-chan replication.BinlogEvent
 	if bls.timestamp != 0 {
-		events, err = bls.conn.StartBinlogDumpFromTimestamp(ctx, bls.timestamp)
+		events, err = bls.conn.StartBinlogDumpFromBinlogBeforeTimestamp(ctx, bls.timestamp)
 	} else if !bls.startPos.IsZero() {
 		events, err = bls.conn.StartBinlogDumpFromPosition(ctx, bls.startPos)
 	} else {
@@ -174,18 +174,20 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 	// A commit can be triggered either by a COMMIT query, or by an XID_EVENT.
 	// Statements that aren't wrapped in BEGIN/COMMIT are committed immediately.
 	commit := func(timestamp uint32) error {
-		trans := &binlogdatapb.BinlogTransaction{
-			Statements: statements,
-			EventToken: &querypb.EventToken{
-				Timestamp: int64(timestamp),
-				Position:  replication.EncodePosition(pos),
-			},
-		}
-		if err = bls.sendTransaction(trans); err != nil {
-			if err == io.EOF {
-				return ErrClientEOF
+		if int64(timestamp) >= bls.timestamp {
+			trans := &binlogdatapb.BinlogTransaction{
+				Statements: statements,
+				EventToken: &querypb.EventToken{
+					Timestamp: int64(timestamp),
+					Position:  replication.EncodePosition(pos),
+				},
 			}
-			return fmt.Errorf("send reply error: %v", err)
+			if err = bls.sendTransaction(trans); err != nil {
+				if err == io.EOF {
+					return ErrClientEOF
+				}
+				return fmt.Errorf("send reply error: %v", err)
+			}
 		}
 		statements = nil
 		autocommit = true
@@ -327,6 +329,22 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 						return pos, err
 					}
 				}
+			}
+		case ev.IsPreviousGTIDs(): // PREVIOUS_GTIDS_EVENT
+			// MySQL 5.6 only: The Binlogs contain an
+			// event that gives us all the previously
+			// applied commits. It is an authoritative
+			// value, so we use that now.  When we start
+			// streaming from the beginning of a binlog
+			// file (when starting with a timestamp), this
+			// will give us the full position.
+			newPos, err := ev.PreviousGTIDs(format)
+			if err != nil {
+				return pos, err
+			}
+			pos = newPos
+			if err = commit(ev.Timestamp()); err != nil {
+				return pos, err
 			}
 		}
 	}

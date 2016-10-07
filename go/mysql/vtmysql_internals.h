@@ -39,8 +39,8 @@ unsigned long cli_safe_read(MYSQL *mysql);
 
 // st_mysql_methods and simple_command are declared in mysql.h in
 // Google MySQL 5.1 (VERSION_ID=501xx), but were moved to sql_common.h in
-// MariaDB (VERSION_ID=1000xx) and MySQL 5.6 (VERSION_ID=506xx).
-#if MYSQL_VERSION_ID >= 50600 // MySQL version >= 5.6
+// MariaDB (VERSION_ID=1000xx) and MySQL 5.5 (VERSION_ID=505xx).
+#if MYSQL_VERSION_ID >= 50500 // MySQL version >= 5.5
 
 typedef struct st_mysql_methods
 {
