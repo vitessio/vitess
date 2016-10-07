@@ -145,17 +145,15 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		return fmt.Errorf("InitTablet TabletComplete failed: %v", err)
 	}
 
-	// now try to create the record
+	// Now try to create the record (it will also fix up the
+	// ShardReplication record if necessary).
 	err = agent.TopoServer.CreateTablet(ctx, tablet)
 	switch err {
 	case nil:
-		// it worked, we're good, can update the replication graph
-		if err := topo.UpdateTabletReplicationData(ctx, agent.TopoServer, tablet); err != nil {
-			return fmt.Errorf("UpdateTabletReplicationData failed: %v", err)
-		}
-
+		// It worked, we're good.
 	case topo.ErrNodeExists:
-		// The node already exists, will just try to update it. So we read it first.
+		// The node already exists, will just try to update
+		// it. So we read it first.
 		oldTablet, err := agent.TopoServer.GetTablet(ctx, tablet.Alias)
 		if err != nil {
 			return fmt.Errorf("InitTablet failed to read existing tablet record: %v", err)
@@ -170,10 +168,6 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		if err := agent.TopoServer.UpdateTablet(ctx, topo.NewTabletInfo(tablet, -1)); err != nil {
 			return fmt.Errorf("UpdateTablet failed: %v", err)
 		}
-
-		// Note we don't need to UpdateTabletReplicationData
-		// as the tablet already existed with the right data
-		// in the replication graph
 	default:
 		return fmt.Errorf("CreateTablet failed: %v", err)
 	}

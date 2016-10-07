@@ -99,13 +99,12 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 	// Execute state change to master by force-updating only the local copy of the
 	// tablet record. The actual record in topo will be updated later.
 	log.Infof("fastTabletExternallyReparented: executing change callback for state change to MASTER")
-	oldTablet := proto.Clone(tablet).(*topodatapb.Tablet)
-	tablet.Type = topodatapb.TabletType_MASTER
-	agent.setTablet(tablet)
+	newTablet := proto.Clone(tablet).(*topodatapb.Tablet)
+	newTablet.Type = topodatapb.TabletType_MASTER
 
 	// This is where updateState will block for gracePeriod, while it gives
 	// vtgate a chance to stop sending replica queries.
-	agent.updateState(ctx, oldTablet, "fastTabletExternallyReparented")
+	agent.updateState(ctx, newTablet, "fastTabletExternallyReparented")
 
 	// Start the finalize stage with a background context, but connect the trace.
 	bgCtx, cancel := context.WithTimeout(agent.batchCtx, *finalizeReparentTimeout)
