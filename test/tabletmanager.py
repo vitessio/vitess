@@ -118,9 +118,12 @@ class TestTabletManager(unittest.TestCase):
         len(query_result['fields']), 2,
         'expected 2 fields in vt_select_test: %s' % str(query_result))
 
-    # check Ping / RefreshState
+    # check Ping / RefreshState / RefreshStateByShard
     utils.run_vtctl(['Ping', tablet_62344.tablet_alias])
     utils.run_vtctl(['RefreshState', tablet_62344.tablet_alias])
+    utils.run_vtctl(['RefreshStateByShard', 'test_keyspace/0'])
+    utils.run_vtctl(['RefreshStateByShard', '--cells=test_nj',
+                     'test_keyspace/0'])
 
     # Quickly check basic actions.
     utils.run_vtctl(['SetReadOnly', tablet_62344.tablet_alias])
