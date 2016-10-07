@@ -22,7 +22,8 @@ func startManager(t *testing.T, m *Manager) (*sync.WaitGroup, context.CancelFunc
 	}()
 
 	// Wait for the manager to start, by watching its ctx object.
-	for timeout := 0; ; timeout++ {
+	timeout := 0
+	for {
 		m.mu.Lock()
 		running := m.ctx != nil
 		m.mu.Unlock()
@@ -96,7 +97,8 @@ func TestManagerRestart(t *testing.T) {
 	wg, cancel = startManager(t, m)
 
 	// Make sure the job is in there shortly.
-	for timeout := 0; ; timeout++ {
+	timeout := 0
+	for {
 		tree, err := m.NodeManager().GetFullTree()
 		if err != nil {
 			t.Fatalf("cannot get full node tree: %v", err)
