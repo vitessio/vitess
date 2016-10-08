@@ -40,6 +40,13 @@ git submodule update --init
 if [ `uname -s` == "Darwin" ]; then
   export GRPC_PYTHON_BUILD_WITH_CYTHON=1
   $grpc_dist/usr/local/bin/pip install Cython
+
+  # Remove "-Werror" from the compiler options to work-around a bug on
+  # macOS Sierra: https://github.com/youtube/vitess/issues/2115
+  # TODO(mberlin): Remove this when the underlying issue is fixed and available
+  #                in the gRPC version used by Vitess.
+  #                See: https://github.com/google/protobuf/issues/2182
+  sed -i '' -e 's,-Werror,,' third_party/protobuf/src/Makefile.am
 fi
 
 # build everything
