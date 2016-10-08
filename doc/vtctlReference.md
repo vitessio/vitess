@@ -2032,7 +2032,6 @@ Initializes a tablet in the topology.<br><br>
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| allow_different_shard | Boolean | Use this flag to force initialization if a tablet with the same name but a different keyspace/shard already exists. Use with caution. |
 | allow_master_override | Boolean | Use this flag to force initialization if a tablet is created as master, and a master for the keyspace/shard already exists. Use with caution. |
 | allow_update | Boolean | Use this flag to force initialization if a tablet with the same name already exists. Use with caution. |
 | db_name_override | string | Overrides the name of the database that the vttablet uses |
