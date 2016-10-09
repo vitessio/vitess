@@ -84,7 +84,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 
 	if qre.transactionID != 0 {
 		// Need upfront connection for DMLs and transactions
-		conn, err := qre.qe.txPool.Get(qre.transactionID)
+		conn, err := qre.qe.txPool.Get(qre.transactionID, "for query")
 		if err != nil {
 			return nil, err
 		}

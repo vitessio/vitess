@@ -523,3 +523,20 @@ message UpdateStreamRequest {
 message UpdateStreamResponse {
   StreamEvent event = 1;
 }
+
+// TransactionState represents the state of a distributed transaction.
+enum TransactionState {
+  UNKNOWN = 0;
+  PREPARE = 1;
+  COMMIT = 2;
+  ROLLBACK = 3;
+}
+
+// TransactionMetadata contains the metadata for a distributed transaction.
+message TransactionMetadata {
+  string dtid = 1;
+  TransactionState state = 2;
+  int64 time_created = 3;
+  int64 time_updated = 4;
+  repeated Target participants = 5;
+}

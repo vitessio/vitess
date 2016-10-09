@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='tabletmanagerservice.proto',
   package='tabletmanagerservice',
   syntax='proto3',
-  serialized_pb=_b('\n\x1atabletmanagerservice.proto\x12\x14tabletmanagerservice\x1a\x17tabletmanagerdata.proto2\x9b!\n\rTabletManager\x12I\n\x04Ping\x12\x1e.tabletmanagerdata.PingRequest\x1a\x1f.tabletmanagerdata.PingResponse\"\x00\x12L\n\x05Sleep\x12\x1f.tabletmanagerdata.SleepRequest\x1a .tabletmanagerdata.SleepResponse\"\x00\x12^\n\x0b\x45xecuteHook\x12%.tabletmanagerdata.ExecuteHookRequest\x1a&.tabletmanagerdata.ExecuteHookResponse\"\x00\x12X\n\tGetSchema\x12#.tabletmanagerdata.GetSchemaRequest\x1a$.tabletmanagerdata.GetSchemaResponse\"\x00\x12g\n\x0eGetPermissions\x12(.tabletmanagerdata.GetPermissionsRequest\x1a).tabletmanagerdata.GetPermissionsResponse\"\x00\x12^\n\x0bSetReadOnly\x12%.tabletmanagerdata.SetReadOnlyRequest\x1a&.tabletmanagerdata.SetReadOnlyResponse\"\x00\x12\x61\n\x0cSetReadWrite\x12&.tabletmanagerdata.SetReadWriteRequest\x1a\'.tabletmanagerdata.SetReadWriteResponse\"\x00\x12[\n\nChangeType\x12$.tabletmanagerdata.ChangeTypeRequest\x1a%.tabletmanagerdata.ChangeTypeResponse\"\x00\x12\x61\n\x0cRefreshState\x12&.tabletmanagerdata.RefreshStateRequest\x1a\'.tabletmanagerdata.RefreshStateResponse\"\x00\x12g\n\x0eRunHealthCheck\x12(.tabletmanagerdata.RunHealthCheckRequest\x1a).tabletmanagerdata.RunHealthCheckResponse\"\x00\x12p\n\x11IgnoreHealthError\x12+.tabletmanagerdata.IgnoreHealthErrorRequest\x1a,.tabletmanagerdata.IgnoreHealthErrorResponse\"\x00\x12\x61\n\x0cReloadSchema\x12&.tabletmanagerdata.ReloadSchemaRequest\x1a\'.tabletmanagerdata.ReloadSchemaResponse\"\x00\x12j\n\x0fPreflightSchema\x12).tabletmanagerdata.PreflightSchemaRequest\x1a*.tabletmanagerdata.PreflightSchemaResponse\"\x00\x12^\n\x0b\x41pplySchema\x12%.tabletmanagerdata.ApplySchemaRequest\x1a&.tabletmanagerdata.ApplySchemaResponse\"\x00\x12p\n\x11\x45xecuteFetchAsDba\x12+.tabletmanagerdata.ExecuteFetchAsDbaRequest\x1a,.tabletmanagerdata.ExecuteFetchAsDbaResponse\"\x00\x12p\n\x11\x45xecuteFetchAsApp\x12+.tabletmanagerdata.ExecuteFetchAsAppRequest\x1a,.tabletmanagerdata.ExecuteFetchAsAppResponse\"\x00\x12^\n\x0bSlaveStatus\x12%.tabletmanagerdata.SlaveStatusRequest\x1a&.tabletmanagerdata.SlaveStatusResponse\"\x00\x12g\n\x0eMasterPosition\x12(.tabletmanagerdata.MasterPositionRequest\x1a).tabletmanagerdata.MasterPositionResponse\"\x00\x12X\n\tStopSlave\x12#.tabletmanagerdata.StopSlaveRequest\x1a$.tabletmanagerdata.StopSlaveResponse\"\x00\x12m\n\x10StopSlaveMinimum\x12*.tabletmanagerdata.StopSlaveMinimumRequest\x1a+.tabletmanagerdata.StopSlaveMinimumResponse\"\x00\x12[\n\nStartSlave\x12$.tabletmanagerdata.StartSlaveRequest\x1a%.tabletmanagerdata.StartSlaveResponse\"\x00\x12\x8b\x01\n\x1aTabletExternallyReparented\x12\x34.tabletmanagerdata.TabletExternallyReparentedRequest\x1a\x35.tabletmanagerdata.TabletExternallyReparentedResponse\"\x00\x12\x82\x01\n\x17TabletExternallyElected\x12\x31.tabletmanagerdata.TabletExternallyElectedRequest\x1a\x32.tabletmanagerdata.TabletExternallyElectedResponse\"\x00\x12X\n\tGetSlaves\x12#.tabletmanagerdata.GetSlavesRequest\x1a$.tabletmanagerdata.GetSlavesResponse\"\x00\x12j\n\x0fWaitBlpPosition\x12).tabletmanagerdata.WaitBlpPositionRequest\x1a*.tabletmanagerdata.WaitBlpPositionResponse\"\x00\x12R\n\x07StopBlp\x12!.tabletmanagerdata.StopBlpRequest\x1a\".tabletmanagerdata.StopBlpResponse\"\x00\x12U\n\x08StartBlp\x12\".tabletmanagerdata.StartBlpRequest\x1a#.tabletmanagerdata.StartBlpResponse\"\x00\x12^\n\x0bRunBlpUntil\x12%.tabletmanagerdata.RunBlpUntilRequest\x1a&.tabletmanagerdata.RunBlpUntilResponse\"\x00\x12m\n\x10ResetReplication\x12*.tabletmanagerdata.ResetReplicationRequest\x1a+.tabletmanagerdata.ResetReplicationResponse\"\x00\x12[\n\nInitMaster\x12$.tabletmanagerdata.InitMasterRequest\x1a%.tabletmanagerdata.InitMasterResponse\"\x00\x12\x82\x01\n\x17PopulateReparentJournal\x12\x31.tabletmanagerdata.PopulateReparentJournalRequest\x1a\x32.tabletmanagerdata.PopulateReparentJournalResponse\"\x00\x12X\n\tInitSlave\x12#.tabletmanagerdata.InitSlaveRequest\x1a$.tabletmanagerdata.InitSlaveResponse\"\x00\x12\x61\n\x0c\x44\x65moteMaster\x12&.tabletmanagerdata.DemoteMasterRequest\x1a\'.tabletmanagerdata.DemoteMasterResponse\"\x00\x12\x85\x01\n\x18PromoteSlaveWhenCaughtUp\x12\x32.tabletmanagerdata.PromoteSlaveWhenCaughtUpRequest\x1a\x33.tabletmanagerdata.PromoteSlaveWhenCaughtUpResponse\"\x00\x12m\n\x10SlaveWasPromoted\x12*.tabletmanagerdata.SlaveWasPromotedRequest\x1a+.tabletmanagerdata.SlaveWasPromotedResponse\"\x00\x12X\n\tSetMaster\x12#.tabletmanagerdata.SetMasterRequest\x1a$.tabletmanagerdata.SetMasterResponse\"\x00\x12p\n\x11SlaveWasRestarted\x12+.tabletmanagerdata.SlaveWasRestartedRequest\x1a,.tabletmanagerdata.SlaveWasRestartedResponse\"\x00\x12\x8e\x01\n\x1bStopReplicationAndGetStatus\x12\x35.tabletmanagerdata.StopReplicationAndGetStatusRequest\x1a\x36.tabletmanagerdata.StopReplicationAndGetStatusResponse\"\x00\x12\x61\n\x0cPromoteSlave\x12&.tabletmanagerdata.PromoteSlaveRequest\x1a\'.tabletmanagerdata.PromoteSlaveResponse\"\x00\x12Q\n\x06\x42\x61\x63kup\x12 .tabletmanagerdata.BackupRequest\x1a!.tabletmanagerdata.BackupResponse\"\x00\x30\x01\x12r\n\x11RestoreFromBackup\x12+.tabletmanagerdata.RestoreFromBackupRequest\x1a,.tabletmanagerdata.RestoreFromBackupResponse\"\x00\x30\x01\x62\x06proto3')
+  serialized_pb=_b('\n\x1atabletmanagerservice.proto\x12\x14tabletmanagerservice\x1a\x17tabletmanagerdata.proto2\x9c\"\n\rTabletManager\x12I\n\x04Ping\x12\x1e.tabletmanagerdata.PingRequest\x1a\x1f.tabletmanagerdata.PingResponse\"\x00\x12L\n\x05Sleep\x12\x1f.tabletmanagerdata.SleepRequest\x1a .tabletmanagerdata.SleepResponse\"\x00\x12^\n\x0b\x45xecuteHook\x12%.tabletmanagerdata.ExecuteHookRequest\x1a&.tabletmanagerdata.ExecuteHookResponse\"\x00\x12X\n\tGetSchema\x12#.tabletmanagerdata.GetSchemaRequest\x1a$.tabletmanagerdata.GetSchemaResponse\"\x00\x12g\n\x0eGetPermissions\x12(.tabletmanagerdata.GetPermissionsRequest\x1a).tabletmanagerdata.GetPermissionsResponse\"\x00\x12^\n\x0bSetReadOnly\x12%.tabletmanagerdata.SetReadOnlyRequest\x1a&.tabletmanagerdata.SetReadOnlyResponse\"\x00\x12\x61\n\x0cSetReadWrite\x12&.tabletmanagerdata.SetReadWriteRequest\x1a\'.tabletmanagerdata.SetReadWriteResponse\"\x00\x12[\n\nChangeType\x12$.tabletmanagerdata.ChangeTypeRequest\x1a%.tabletmanagerdata.ChangeTypeResponse\"\x00\x12\x61\n\x0cRefreshState\x12&.tabletmanagerdata.RefreshStateRequest\x1a\'.tabletmanagerdata.RefreshStateResponse\"\x00\x12g\n\x0eRunHealthCheck\x12(.tabletmanagerdata.RunHealthCheckRequest\x1a).tabletmanagerdata.RunHealthCheckResponse\"\x00\x12p\n\x11IgnoreHealthError\x12+.tabletmanagerdata.IgnoreHealthErrorRequest\x1a,.tabletmanagerdata.IgnoreHealthErrorResponse\"\x00\x12\x61\n\x0cReloadSchema\x12&.tabletmanagerdata.ReloadSchemaRequest\x1a\'.tabletmanagerdata.ReloadSchemaResponse\"\x00\x12j\n\x0fPreflightSchema\x12).tabletmanagerdata.PreflightSchemaRequest\x1a*.tabletmanagerdata.PreflightSchemaResponse\"\x00\x12^\n\x0b\x41pplySchema\x12%.tabletmanagerdata.ApplySchemaRequest\x1a&.tabletmanagerdata.ApplySchemaResponse\"\x00\x12p\n\x11\x45xecuteFetchAsDba\x12+.tabletmanagerdata.ExecuteFetchAsDbaRequest\x1a,.tabletmanagerdata.ExecuteFetchAsDbaResponse\"\x00\x12\x7f\n\x16\x45xecuteFetchAsAllPrivs\x12\x30.tabletmanagerdata.ExecuteFetchAsAllPrivsRequest\x1a\x31.tabletmanagerdata.ExecuteFetchAsAllPrivsResponse\"\x00\x12p\n\x11\x45xecuteFetchAsApp\x12+.tabletmanagerdata.ExecuteFetchAsAppRequest\x1a,.tabletmanagerdata.ExecuteFetchAsAppResponse\"\x00\x12^\n\x0bSlaveStatus\x12%.tabletmanagerdata.SlaveStatusRequest\x1a&.tabletmanagerdata.SlaveStatusResponse\"\x00\x12g\n\x0eMasterPosition\x12(.tabletmanagerdata.MasterPositionRequest\x1a).tabletmanagerdata.MasterPositionResponse\"\x00\x12X\n\tStopSlave\x12#.tabletmanagerdata.StopSlaveRequest\x1a$.tabletmanagerdata.StopSlaveResponse\"\x00\x12m\n\x10StopSlaveMinimum\x12*.tabletmanagerdata.StopSlaveMinimumRequest\x1a+.tabletmanagerdata.StopSlaveMinimumResponse\"\x00\x12[\n\nStartSlave\x12$.tabletmanagerdata.StartSlaveRequest\x1a%.tabletmanagerdata.StartSlaveResponse\"\x00\x12\x8b\x01\n\x1aTabletExternallyReparented\x12\x34.tabletmanagerdata.TabletExternallyReparentedRequest\x1a\x35.tabletmanagerdata.TabletExternallyReparentedResponse\"\x00\x12\x82\x01\n\x17TabletExternallyElected\x12\x31.tabletmanagerdata.TabletExternallyElectedRequest\x1a\x32.tabletmanagerdata.TabletExternallyElectedResponse\"\x00\x12X\n\tGetSlaves\x12#.tabletmanagerdata.GetSlavesRequest\x1a$.tabletmanagerdata.GetSlavesResponse\"\x00\x12j\n\x0fWaitBlpPosition\x12).tabletmanagerdata.WaitBlpPositionRequest\x1a*.tabletmanagerdata.WaitBlpPositionResponse\"\x00\x12R\n\x07StopBlp\x12!.tabletmanagerdata.StopBlpRequest\x1a\".tabletmanagerdata.StopBlpResponse\"\x00\x12U\n\x08StartBlp\x12\".tabletmanagerdata.StartBlpRequest\x1a#.tabletmanagerdata.StartBlpResponse\"\x00\x12^\n\x0bRunBlpUntil\x12%.tabletmanagerdata.RunBlpUntilRequest\x1a&.tabletmanagerdata.RunBlpUntilResponse\"\x00\x12m\n\x10ResetReplication\x12*.tabletmanagerdata.ResetReplicationRequest\x1a+.tabletmanagerdata.ResetReplicationResponse\"\x00\x12[\n\nInitMaster\x12$.tabletmanagerdata.InitMasterRequest\x1a%.tabletmanagerdata.InitMasterResponse\"\x00\x12\x82\x01\n\x17PopulateReparentJournal\x12\x31.tabletmanagerdata.PopulateReparentJournalRequest\x1a\x32.tabletmanagerdata.PopulateReparentJournalResponse\"\x00\x12X\n\tInitSlave\x12#.tabletmanagerdata.InitSlaveRequest\x1a$.tabletmanagerdata.InitSlaveResponse\"\x00\x12\x61\n\x0c\x44\x65moteMaster\x12&.tabletmanagerdata.DemoteMasterRequest\x1a\'.tabletmanagerdata.DemoteMasterResponse\"\x00\x12\x85\x01\n\x18PromoteSlaveWhenCaughtUp\x12\x32.tabletmanagerdata.PromoteSlaveWhenCaughtUpRequest\x1a\x33.tabletmanagerdata.PromoteSlaveWhenCaughtUpResponse\"\x00\x12m\n\x10SlaveWasPromoted\x12*.tabletmanagerdata.SlaveWasPromotedRequest\x1a+.tabletmanagerdata.SlaveWasPromotedResponse\"\x00\x12X\n\tSetMaster\x12#.tabletmanagerdata.SetMasterRequest\x1a$.tabletmanagerdata.SetMasterResponse\"\x00\x12p\n\x11SlaveWasRestarted\x12+.tabletmanagerdata.SlaveWasRestartedRequest\x1a,.tabletmanagerdata.SlaveWasRestartedResponse\"\x00\x12\x8e\x01\n\x1bStopReplicationAndGetStatus\x12\x35.tabletmanagerdata.StopReplicationAndGetStatusRequest\x1a\x36.tabletmanagerdata.StopReplicationAndGetStatusResponse\"\x00\x12\x61\n\x0cPromoteSlave\x12&.tabletmanagerdata.PromoteSlaveRequest\x1a\'.tabletmanagerdata.PromoteSlaveResponse\"\x00\x12Q\n\x06\x42\x61\x63kup\x12 .tabletmanagerdata.BackupRequest\x1a!.tabletmanagerdata.BackupResponse\"\x00\x30\x01\x12r\n\x11RestoreFromBackup\x12+.tabletmanagerdata.RestoreFromBackupRequest\x1a,.tabletmanagerdata.RestoreFromBackupResponse\"\x00\x30\x01\x62\x06proto3')
   ,
   dependencies=[tabletmanagerdata__pb2.DESCRIPTOR,])
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
@@ -123,6 +123,11 @@ class TabletManagerStub(object):
         '/tabletmanagerservice.TabletManager/ExecuteFetchAsDba',
         request_serializer=tabletmanagerdata__pb2.ExecuteFetchAsDbaRequest.SerializeToString,
         response_deserializer=tabletmanagerdata__pb2.ExecuteFetchAsDbaResponse.FromString,
+        )
+    self.ExecuteFetchAsAllPrivs = channel.unary_unary(
+        '/tabletmanagerservice.TabletManager/ExecuteFetchAsAllPrivs',
+        request_serializer=tabletmanagerdata__pb2.ExecuteFetchAsAllPrivsRequest.SerializeToString,
+        response_deserializer=tabletmanagerdata__pb2.ExecuteFetchAsAllPrivsResponse.FromString,
         )
     self.ExecuteFetchAsApp = channel.unary_unary(
         '/tabletmanagerservice.TabletManager/ExecuteFetchAsApp',
@@ -351,6 +356,11 @@ class TabletManagerServicer(object):
     raise NotImplementedError('Method not implemented!')
 
   def ExecuteFetchAsDba(self, request, context):
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
+  def ExecuteFetchAsAllPrivs(self, request, context):
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
     context.set_details('Method not implemented!')
     raise NotImplementedError('Method not implemented!')
@@ -652,6 +662,11 @@ def add_TabletManagerServicer_to_server(servicer, server):
           request_deserializer=tabletmanagerdata__pb2.ExecuteFetchAsDbaRequest.FromString,
           response_serializer=tabletmanagerdata__pb2.ExecuteFetchAsDbaResponse.SerializeToString,
       ),
+      'ExecuteFetchAsAllPrivs': grpc.unary_unary_rpc_method_handler(
+          servicer.ExecuteFetchAsAllPrivs,
+          request_deserializer=tabletmanagerdata__pb2.ExecuteFetchAsAllPrivsRequest.FromString,
+          response_serializer=tabletmanagerdata__pb2.ExecuteFetchAsAllPrivsResponse.SerializeToString,
+      ),
       'ExecuteFetchAsApp': grpc.unary_unary_rpc_method_handler(
           servicer.ExecuteFetchAsApp,
           request_deserializer=tabletmanagerdata__pb2.ExecuteFetchAsAppRequest.FromString,
@@ -840,6 +855,8 @@ class BetaTabletManagerServicer(object):
   def ApplySchema(self, request, context):
     context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
   def ExecuteFetchAsDba(self, request, context):
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+  def ExecuteFetchAsAllPrivs(self, request, context):
     context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
   def ExecuteFetchAsApp(self, request, context):
     context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
@@ -1052,6 +1069,9 @@ class BetaTabletManagerStub(object):
   def ExecuteFetchAsDba(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
     raise NotImplementedError()
   ExecuteFetchAsDba.future = None
+  def ExecuteFetchAsAllPrivs(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
+    raise NotImplementedError()
+  ExecuteFetchAsAllPrivs.future = None
   def ExecuteFetchAsApp(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
     raise NotImplementedError()
   ExecuteFetchAsApp.future = None
@@ -1225,6 +1245,7 @@ def beta_create_TabletManager_server(servicer, pool=None, pool_size=None, defaul
     ('tabletmanagerservice.TabletManager', 'Backup'): tabletmanagerdata__pb2.BackupRequest.FromString,
     ('tabletmanagerservice.TabletManager', 'ChangeType'): tabletmanagerdata__pb2.ChangeTypeRequest.FromString,
     ('tabletmanagerservice.TabletManager', 'DemoteMaster'): tabletmanagerdata__pb2.DemoteMasterRequest.FromString,
+    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsAllPrivs'): tabletmanagerdata__pb2.ExecuteFetchAsAllPrivsRequest.FromString,
     ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsApp'): tabletmanagerdata__pb2.ExecuteFetchAsAppRequest.FromString,
     ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsDba'): tabletmanagerdata__pb2.ExecuteFetchAsDbaRequest.FromString,
     ('tabletmanagerservice.TabletManager', 'ExecuteHook'): tabletmanagerdata__pb2.ExecuteHookRequest.FromString,
@@ -1268,6 +1289,7 @@ def beta_create_TabletManager_server(servicer, pool=None, pool_size=None, defaul
     ('tabletmanagerservice.TabletManager', 'Backup'): tabletmanagerdata__pb2.BackupResponse.SerializeToString,
     ('tabletmanagerservice.TabletManager', 'ChangeType'): tabletmanagerdata__pb2.ChangeTypeResponse.SerializeToString,
     ('tabletmanagerservice.TabletManager', 'DemoteMaster'): tabletmanagerdata__pb2.DemoteMasterResponse.SerializeToString,
+    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsAllPrivs'): tabletmanagerdata__pb2.ExecuteFetchAsAllPrivsResponse.SerializeToString,
     ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsApp'): tabletmanagerdata__pb2.ExecuteFetchAsAppResponse.SerializeToString,
     ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsDba'): tabletmanagerdata__pb2.ExecuteFetchAsDbaResponse.SerializeToString,
     ('tabletmanagerservice.TabletManager', 'ExecuteHook'): tabletmanagerdata__pb2.ExecuteHookResponse.SerializeToString,
@@ -1311,6 +1333,7 @@ def beta_create_TabletManager_server(servicer, pool=None, pool_size=None, defaul
     ('tabletmanagerservice.TabletManager', 'Backup'): face_utilities.unary_stream_inline(servicer.Backup),
     ('tabletmanagerservice.TabletManager', 'ChangeType'): face_utilities.unary_unary_inline(servicer.ChangeType),
     ('tabletmanagerservice.TabletManager', 'DemoteMaster'): face_utilities.unary_unary_inline(servicer.DemoteMaster),
+    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsAllPrivs'): face_utilities.unary_unary_inline(servicer.ExecuteFetchAsAllPrivs),
     ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsApp'): face_utilities.unary_unary_inline(servicer.ExecuteFetchAsApp),
     ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsDba'): face_utilities.unary_unary_inline(servicer.ExecuteFetchAsDba),
     ('tabletmanagerservice.TabletManager', 'ExecuteHook'): face_utilities.unary_unary_inline(servicer.ExecuteHook),
@@ -1359,6 +1382,7 @@ def beta_create_TabletManager_stub(channel, host=None, metadata_transformer=None
     ('tabletmanagerservice.TabletManager', 'Backup'): tabletmanagerdata__pb2.BackupRequest.SerializeToString,
     ('tabletmanagerservice.TabletManager', 'ChangeType'): tabletmanagerdata__pb2.ChangeTypeRequest.SerializeToString,
     ('tabletmanagerservice.TabletManager', 'DemoteMaster'): tabletmanagerdata__pb2.DemoteMasterRequest.SerializeToString,
+    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsAllPrivs'): tabletmanagerdata__pb2.ExecuteFetchAsAllPrivsRequest.SerializeToString,
     ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsApp'): tabletmanagerdata__pb2.ExecuteFetchAsAppRequest.SerializeToString,
     ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsDba'): tabletmanagerdata__pb2.ExecuteFetchAsDbaRequest.SerializeToString,
     ('tabletmanagerservice.TabletManager', 'ExecuteHook'): tabletmanagerdata__pb2.ExecuteHookRequest.SerializeToString,
@@ -1402,6 +1426,7 @@ def beta_create_TabletManager_stub(channel, host=None, metadata_transformer=None
     ('tabletmanagerservice.TabletManager', 'Backup'): tabletmanagerdata__pb2.BackupResponse.FromString,
     ('tabletmanagerservice.TabletManager', 'ChangeType'): tabletmanagerdata__pb2.ChangeTypeResponse.FromString,
     ('tabletmanagerservice.TabletManager', 'DemoteMaster'): tabletmanagerdata__pb2.DemoteMasterResponse.FromString,
+    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsAllPrivs'): tabletmanagerdata__pb2.ExecuteFetchAsAllPrivsResponse.FromString,
     ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsApp'): tabletmanagerdata__pb2.ExecuteFetchAsAppResponse.FromString,
     ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsDba'): tabletmanagerdata__pb2.ExecuteFetchAsDbaResponse.FromString,
     ('tabletmanagerservice.TabletManager', 'ExecuteHook'): tabletmanagerdata__pb2.ExecuteHookResponse.FromString,
@@ -1445,6 +1470,7 @@ def beta_create_TabletManager_stub(channel, host=None, metadata_transformer=None
     'Backup': cardinality.Cardinality.UNARY_STREAM,
     'ChangeType': cardinality.Cardinality.UNARY_UNARY,
     'DemoteMaster': cardinality.Cardinality.UNARY_UNARY,
+    'ExecuteFetchAsAllPrivs': cardinality.Cardinality.UNARY_UNARY,
     'ExecuteFetchAsApp': cardinality.Cardinality.UNARY_UNARY,
     'ExecuteFetchAsDba': cardinality.Cardinality.UNARY_UNARY,
     'ExecuteHook': cardinality.Cardinality.UNARY_UNARY,

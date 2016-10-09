@@ -14,14 +14,16 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
-	"golang.org/x/net/context"
 )
 
 func TestTabletServerGetState(t *testing.T) {
@@ -657,7 +659,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 		t.Error(err)
 	}
 	// This makes txid2 busy
-	conn2, err := tsv.qe.txPool.Get(txid2)
+	conn2, err := tsv.qe.txPool.Get(txid2, "for query")
 	if err != nil {
 		t.Error(err)
 	}
@@ -737,6 +739,161 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 		t.Errorf("Prepared queries: %v, want %v", got, want)
 	}
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+}
+
+func TestTabletServerCreateTransaction(t *testing.T) {
+	_, tsv, db := newTestTxExecutor()
+	defer tsv.StopService()
+	ctx := context.Background()
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+
+	db.AddQueryPattern("insert into `_vt`\\.transaction\\(dtid, state, time_created, time_updated\\) values \\('aa', 'Prepare',.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into `_vt`\\.participant\\(dtid, id, keyspace, shard\\) values \\('aa', 1,.*", &sqltypes.Result{})
+	err := tsv.CreateTransaction(ctx, &target, "aa", []*querypb.Target{{
+		Keyspace: "t1",
+		Shard:    "0",
+	}})
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestTabletServerStartCommit(t *testing.T) {
+	_, tsv, db := newTestTxExecutor()
+	defer tsv.StopService()
+	ctx := context.Background()
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+
+	commitTransition := "update `_vt`.transaction set state = 'Commit' where dtid = 'aa' and state = 'Prepare'"
+	db.AddQuery(commitTransition, &sqltypes.Result{RowsAffected: 1})
+	txid := newTxForPrep(tsv)
+	err := tsv.StartCommit(ctx, &target, txid, "aa")
+	if err != nil {
+		t.Error(err)
+	}
+
+	db.AddQuery(commitTransition, &sqltypes.Result{})
+	txid = newTxForPrep(tsv)
+	err = tsv.StartCommit(ctx, &target, txid, "aa")
+	want := "error: could not transition to Commit: aa"
+	if err == nil || err.Error() != want {
+		t.Errorf("Prepare err: %v, want %s", err, want)
+	}
+}
+
+func TestTabletserverSetRollback(t *testing.T) {
+	_, tsv, db := newTestTxExecutor()
+	defer tsv.StopService()
+	ctx := context.Background()
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+
+	rollbackTransition := "update `_vt`.transaction set state = 'Rollback' where dtid = 'aa' and state = 'Prepare'"
+	db.AddQuery(rollbackTransition, &sqltypes.Result{RowsAffected: 1})
+	txid := newTxForPrep(tsv)
+	err := tsv.SetRollback(ctx, &target, "aa", txid)
+	if err != nil {
+		t.Error(err)
+	}
+
+	db.AddQuery(rollbackTransition, &sqltypes.Result{})
+	txid = newTxForPrep(tsv)
+	err = tsv.SetRollback(ctx, &target, "aa", txid)
+	want := "error: could not transition to Rollback: aa"
+	if err == nil || err.Error() != want {
+		t.Errorf("Prepare err: %v, want %s", err, want)
+	}
+}
+
+func TestTabletServerReadTransaction(t *testing.T) {
+	_, tsv, db := newTestTxExecutor()
+	defer tsv.StopService()
+	ctx := context.Background()
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+
+	db.AddQuery("select dtid, state, time_created, time_updated from `_vt`.transaction where dtid = 'aa'", &sqltypes.Result{})
+	got, err := tsv.ReadTransaction(ctx, &target, "aa")
+	if err != nil {
+		t.Error(err)
+	}
+	want := &querypb.TransactionMetadata{}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ReadTransaction: %v, want %v", got, want)
+	}
+
+	txResult := &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeString([]byte("aa")),
+			sqltypes.MakeString([]byte("Prepare")),
+			sqltypes.MakeString([]byte("1")),
+			sqltypes.MakeString([]byte("2")),
+		}},
+	}
+	db.AddQuery("select dtid, state, time_created, time_updated from `_vt`.transaction where dtid = 'aa'", txResult)
+	db.AddQuery("select keyspace, shard from `_vt`.participant where dtid = 'aa'", &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeString([]byte("test1")),
+			sqltypes.MakeString([]byte("0")),
+		}, {
+			sqltypes.MakeString([]byte("test2")),
+			sqltypes.MakeString([]byte("1")),
+		}},
+	})
+	got, err = tsv.ReadTransaction(ctx, &target, "aa")
+	if err != nil {
+		t.Error(err)
+	}
+	want = &querypb.TransactionMetadata{
+		Dtid:        "aa",
+		State:       querypb.TransactionState_PREPARE,
+		TimeCreated: 1,
+		TimeUpdated: 2,
+		Participants: []*querypb.Target{{
+			Keyspace: "test1",
+			Shard:    "0",
+		}, {
+			Keyspace: "test2",
+			Shard:    "1",
+		}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ReadTransaction: %v, want %v", got, want)
+	}
+
+	txResult.Rows[0][1] = sqltypes.MakeString([]byte("Commit"))
+	db.AddQuery("select dtid, state, time_created, time_updated from `_vt`.transaction where dtid = 'aa'", txResult)
+	want.State = querypb.TransactionState_COMMIT
+	got, err = tsv.ReadTransaction(ctx, &target, "aa")
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ReadTransaction: %v, want %v", got, want)
+	}
+
+	txResult.Rows[0][1] = sqltypes.MakeString([]byte("Rollback"))
+	db.AddQuery("select dtid, state, time_created, time_updated from `_vt`.transaction where dtid = 'aa'", txResult)
+	want.State = querypb.TransactionState_ROLLBACK
+	got, err = tsv.ReadTransaction(ctx, &target, "aa")
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ReadTransaction: %v, want %v", got, want)
+	}
+}
+
+func TestTabletServerResolveTransaction(t *testing.T) {
+	_, tsv, db := newTestTxExecutor()
+	defer tsv.StopService()
+	ctx := context.Background()
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+
+	db.AddQuery("delete from `_vt`.transaction where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from `_vt`.participant where dtid = 'aa'", &sqltypes.Result{})
+	err := tsv.ResolveTransaction(ctx, &target, "aa")
+	if err != nil {
+		t.Error(err)
+	}
 }
 
 func TestTabletServerBeginFail(t *testing.T) {
