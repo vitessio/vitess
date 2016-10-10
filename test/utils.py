@@ -975,11 +975,13 @@ def run_vtworker_client_bg(args, rpc_port):
     proc: process returned by subprocess.Popen
   """
   return run_bg(
-      environment.binary_args('vtworkerclient') +
-      ['-vtworker_client_protocol',
-       protocols_flavor().vtworker_client_protocol(),
-       '-server', 'localhost:%d' % rpc_port,
-       '-stderrthreshold', get_log_level()] + args)
+      environment.binary_args('vtworkerclient') + [
+          '-log_dir', environment.vtlogroot,
+          '-vtworker_client_protocol',
+          protocols_flavor().vtworker_client_protocol(),
+          '-server', 'localhost:%d' % rpc_port,
+          '-stderrthreshold', get_log_level(),
+      ] + args)
 
 
 def run_automation_server(auto_log=False):
