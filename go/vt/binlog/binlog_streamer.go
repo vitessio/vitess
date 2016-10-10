@@ -69,10 +69,11 @@ type Streamer struct {
 	dbname string
 	mysqld mysqlctl.MysqlDaemon
 
-	clientCharset   *binlogdatapb.Charset
-	startPos        replication.Position
-	timestamp       int64
-	sendTransaction sendTransactionFunc
+	clientCharset    *binlogdatapb.Charset
+	startPos         replication.Position
+	timestamp        int64
+	sendTransaction  sendTransactionFunc
+	usePreviousGTIDs bool
 
 	conn *mysqlctl.SlaveConnection
 }
@@ -131,8 +132,21 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 
 	var events <-chan replication.BinlogEvent
 	if bls.timestamp != 0 {
+		// MySQL 5.6 only: We are going to start reading the
+		// logs from the beginning of a binlog file. That is
+		// going to send us the PREVIOUS_GTIDS_EVENT that
+		// contains the starting GTIDSet, and we will save
+		// that as the current position.
+		bls.usePreviousGTIDs = true
 		events, err = bls.conn.StartBinlogDumpFromBinlogBeforeTimestamp(ctx, bls.timestamp)
 	} else if !bls.startPos.IsZero() {
+		// MySQL 5.6 only: we are starting from a random
+		// binlog position. It turns out we will receive a
+		// PREVIOUS_GTIDS_EVENT event, that has a GTIDSet
+		// extracted from the binlogs. It is not related to
+		// the starting position we pass in, it seems it is
+		// just the PREVIOUS_GTIDS_EVENT from the file we're reading.
+		// So we have to skip it.
 		events, err = bls.conn.StartBinlogDumpFromPosition(ctx, bls.startPos)
 	} else {
 		bls.startPos, events, err = bls.conn.StartBinlogDumpFromCurrent(ctx)
@@ -333,11 +347,12 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 		case ev.IsPreviousGTIDs(): // PREVIOUS_GTIDS_EVENT
 			// MySQL 5.6 only: The Binlogs contain an
 			// event that gives us all the previously
-			// applied commits. It is an authoritative
-			// value, so we use that now.  When we start
-			// streaming from the beginning of a binlog
-			// file (when starting with a timestamp), this
-			// will give us the full position.
+			// applied commits. It is *not* an
+			// authoritative value, unless we started from
+			// the beginning of a binlog file.
+			if !bls.usePreviousGTIDs {
+				continue
+			}
 			newPos, err := ev.PreviousGTIDs(format)
 			if err != nil {
 				return pos, err
