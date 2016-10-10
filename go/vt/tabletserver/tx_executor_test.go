@@ -6,6 +6,7 @@ package tabletserver
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -58,7 +59,7 @@ func TestTxExecutorPrepareNotInTx(t *testing.T) {
 	txe, tsv, _ := newTestTxExecutor()
 	defer tsv.StopService()
 	err := txe.Prepare(0, "aa")
-	want := "not_in_tx: prepare failed for transaction 0: not found"
+	want := "not_in_tx: Transaction 0: not found"
 	if err == nil || err.Error() != want {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
@@ -206,12 +207,157 @@ func TestTxExecutorRollbackRedoFail(t *testing.T) {
 	}
 }
 
+func TestExecutorCreateTransaction(t *testing.T) {
+	txe, tsv, db := newTestTxExecutor()
+	defer tsv.StopService()
+
+	db.AddQueryPattern("insert into `_vt`\\.transaction\\(dtid, state, time_created, time_updated\\) values \\('aa', 'Prepare',.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into `_vt`\\.participant\\(dtid, id, keyspace, shard\\) values \\('aa', 1,.*", &sqltypes.Result{})
+	err := txe.CreateTransaction("aa", []*querypb.Target{{
+		Keyspace: "t1",
+		Shard:    "0",
+	}})
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestExecutorStartCommit(t *testing.T) {
+	txe, tsv, db := newTestTxExecutor()
+	defer tsv.StopService()
+
+	commitTransition := "update `_vt`.transaction set state = 'Commit' where dtid = 'aa' and state = 'Prepare'"
+	db.AddQuery(commitTransition, &sqltypes.Result{RowsAffected: 1})
+	txid := newTxForPrep(tsv)
+	err := txe.StartCommit(txid, "aa")
+	if err != nil {
+		t.Error(err)
+	}
+
+	db.AddQuery(commitTransition, &sqltypes.Result{})
+	txid = newTxForPrep(tsv)
+	err = txe.StartCommit(txid, "aa")
+	want := "error: could not transition to Commit: aa"
+	if err == nil || err.Error() != want {
+		t.Errorf("Prepare err: %v, want %s", err, want)
+	}
+}
+
+func TestExecutorSetRollback(t *testing.T) {
+	txe, tsv, db := newTestTxExecutor()
+	defer tsv.StopService()
+
+	rollbackTransition := "update `_vt`.transaction set state = 'Rollback' where dtid = 'aa' and state = 'Prepare'"
+	db.AddQuery(rollbackTransition, &sqltypes.Result{RowsAffected: 1})
+	txid := newTxForPrep(tsv)
+	err := txe.SetRollback("aa", txid)
+	if err != nil {
+		t.Error(err)
+	}
+
+	db.AddQuery(rollbackTransition, &sqltypes.Result{})
+	txid = newTxForPrep(tsv)
+	err = txe.SetRollback("aa", txid)
+	want := "error: could not transition to Rollback: aa"
+	if err == nil || err.Error() != want {
+		t.Errorf("Prepare err: %v, want %s", err, want)
+	}
+}
+
+func TestExecutorResolveTransaction(t *testing.T) {
+	txe, tsv, db := newTestTxExecutor()
+	defer tsv.StopService()
+
+	db.AddQuery("delete from `_vt`.transaction where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from `_vt`.participant where dtid = 'aa'", &sqltypes.Result{})
+	err := txe.ResolveTransaction("aa")
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestExecutorReadTransaction(t *testing.T) {
+	txe, tsv, db := newTestTxExecutor()
+	defer tsv.StopService()
+
+	db.AddQuery("select dtid, state, time_created, time_updated from `_vt`.transaction where dtid = 'aa'", &sqltypes.Result{})
+	got, err := txe.ReadTransaction("aa")
+	if err != nil {
+		t.Error(err)
+	}
+	want := &querypb.TransactionMetadata{}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ReadTransaction: %v, want %v", got, want)
+	}
+
+	txResult := &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeString([]byte("aa")),
+			sqltypes.MakeString([]byte("Prepare")),
+			sqltypes.MakeString([]byte("1")),
+			sqltypes.MakeString([]byte("2")),
+		}},
+	}
+	db.AddQuery("select dtid, state, time_created, time_updated from `_vt`.transaction where dtid = 'aa'", txResult)
+	db.AddQuery("select keyspace, shard from `_vt`.participant where dtid = 'aa'", &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeString([]byte("test1")),
+			sqltypes.MakeString([]byte("0")),
+		}, {
+			sqltypes.MakeString([]byte("test2")),
+			sqltypes.MakeString([]byte("1")),
+		}},
+	})
+	got, err = txe.ReadTransaction("aa")
+	if err != nil {
+		t.Error(err)
+	}
+	want = &querypb.TransactionMetadata{
+		Dtid:        "aa",
+		State:       querypb.TransactionState_PREPARE,
+		TimeCreated: 1,
+		TimeUpdated: 2,
+		Participants: []*querypb.Target{{
+			Keyspace: "test1",
+			Shard:    "0",
+		}, {
+			Keyspace: "test2",
+			Shard:    "1",
+		}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ReadTransaction: %v, want %v", got, want)
+	}
+
+	txResult.Rows[0][1] = sqltypes.MakeString([]byte("Commit"))
+	db.AddQuery("select dtid, state, time_created, time_updated from `_vt`.transaction where dtid = 'aa'", txResult)
+	want.State = querypb.TransactionState_COMMIT
+	got, err = txe.ReadTransaction("aa")
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ReadTransaction: %v, want %v", got, want)
+	}
+
+	txResult.Rows[0][1] = sqltypes.MakeString([]byte("Rollback"))
+	db.AddQuery("select dtid, state, time_created, time_updated from `_vt`.transaction where dtid = 'aa'", txResult)
+	want.State = querypb.TransactionState_ROLLBACK
+	got, err = txe.ReadTransaction("aa")
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ReadTransaction: %v, want %v", got, want)
+	}
+}
+
 func newTestTxExecutor() (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest()
 	ctx := context.Background()
 	logStats := newLogStats("TestTxExecutor", ctx)
 	tsv = newTestTabletServer(ctx, smallTxPool, db)
-	db.AddQueryPattern("insert into `_vt`\\.redo_log_transaction\\(dtid, state, resolution, time_created\\) values \\('aa', 'Prepared', null,.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into `_vt`\\.redo_log_transaction\\(dtid, state, time_created\\) values \\('aa', 'Prepared',.*", &sqltypes.Result{})
 	db.AddQueryPattern("insert into `_vt`\\.redo_log_statement.*", &sqltypes.Result{})
 	db.AddQuery("delete from `_vt`.redo_log_transaction where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("delete from `_vt`.redo_log_statement where dtid = 'aa'", &sqltypes.Result{})

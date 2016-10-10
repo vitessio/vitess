@@ -179,7 +179,7 @@ func (axp *TxPool) Begin(ctx context.Context) (int64, error) {
 
 // Commit commits the specified transaction.
 func (axp *TxPool) Commit(ctx context.Context, transactionID int64) error {
-	conn, err := axp.Get(transactionID)
+	conn, err := axp.Get(transactionID, "for commit")
 	if err != nil {
 		return err
 	}
@@ -188,7 +188,7 @@ func (axp *TxPool) Commit(ctx context.Context, transactionID int64) error {
 
 // Rollback rolls back the specified transaction.
 func (axp *TxPool) Rollback(ctx context.Context, transactionID int64) error {
-	conn, err := axp.Get(transactionID)
+	conn, err := axp.Get(transactionID, "for rollback")
 	if err != nil {
 		return err
 	}
@@ -197,8 +197,8 @@ func (axp *TxPool) Rollback(ctx context.Context, transactionID int64) error {
 
 // Get fetches the connection associated to the transactionID.
 // You must call Recycle on TxConnection once done.
-func (axp *TxPool) Get(transactionID int64) (*TxConnection, error) {
-	v, err := axp.activePool.Get(transactionID, "for query")
+func (axp *TxPool) Get(transactionID int64, reason string) (*TxConnection, error) {
+	v, err := axp.activePool.Get(transactionID, reason)
 	if err != nil {
 		return nil, NewTabletError(vtrpcpb.ErrorCode_NOT_IN_TX, "Transaction %d: %v", transactionID, err)
 	}
@@ -213,7 +213,7 @@ func (axp *TxPool) LocalBegin(ctx context.Context) (*TxConnection, error) {
 	if err != nil {
 		return nil, err
 	}
-	return axp.Get(transactionID)
+	return axp.Get(transactionID, "for local query")
 }
 
 // LocalCommit is the commit function for LocalBegin.

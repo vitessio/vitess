@@ -36,7 +36,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	txConn, err := txPool.Get(transactionID)
+	txConn, err := txPool.Get(transactionID, "for query")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	txConn, err := txPool.Get(transactionID)
+	txConn, err := txPool.Get(transactionID, "for query")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	conn1, err := txPool.Get(txid1)
+	conn1, err := txPool.Get(txid1, "for query")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestTxPoolTransactionKiller(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	txConn, err := txPool.Get(transactionID)
+	txConn, err := txPool.Get(transactionID, "for query")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func TestTxPoolCommitFail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	txConn, err := txPool.Get(transactionID)
+	txConn, err := txPool.Get(transactionID, "for query")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +275,7 @@ func TestTxPoolRollbackFail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	txConn, err := txPool.Get(transactionID)
+	txConn, err := txPool.Get(transactionID, "for query")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +299,7 @@ func TestTxPoolGetConnFail(t *testing.T) {
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	txPool.Open(&appParams, &dbaParams)
 	defer txPool.Close()
-	_, err := txPool.Get(12345)
+	_, err := txPool.Get(12345, "for query")
 	want := "not_in_tx: Transaction 12345: not found"
 	if err == nil || err.Error() != want {
 		t.Errorf("Get: %v, want %s", err, want)
@@ -323,7 +323,7 @@ func TestTxPoolExecFailDueToConnFail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	txConn, err := txPool.Get(transactionID)
+	txConn, err := txPool.Get(transactionID, "for query")
 	if err != nil {
 		t.Fatal(err)
 	}

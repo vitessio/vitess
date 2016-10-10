@@ -11,6 +11,7 @@ import (
 
 	"github.com/youtube/vitess/go/trace"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -29,11 +30,10 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 	defer txe.qe.queryServiceStats.QueryStats.Record("PREPARE", time.Now())
 	txe.logStats.TransactionID = transactionID
 
-	v, err := txe.qe.txPool.activePool.Get(transactionID, "for prepare")
+	conn, err := txe.qe.txPool.Get(transactionID, "for prepare")
 	if err != nil {
-		return NewTabletError(vtrpcpb.ErrorCode_NOT_IN_TX, "prepare failed for transaction %d: %v", transactionID, err)
+		return err
 	}
-	conn := v.(*TxConnection)
 
 	// If no queries were executed, we just rollback.
 	if len(conn.Queries) == 0 {
@@ -114,26 +114,118 @@ func (txe *TxExecutor) CommitPrepared(dtid string) error {
 // killer will be the one to eventually roll it back.
 func (txe *TxExecutor) RollbackPrepared(dtid string, originalID int64) error {
 	defer txe.qe.queryServiceStats.QueryStats.Record("ROLLBACK_PREPARED", time.Now())
-	localConn, err := txe.qe.txPool.LocalBegin(txe.ctx)
+	conn, err := txe.qe.txPool.LocalBegin(txe.ctx)
 	if err != nil {
 		goto returnConn
 	}
-	defer txe.qe.txPool.LocalConclude(txe.ctx, localConn)
+	defer txe.qe.txPool.LocalConclude(txe.ctx, conn)
 
-	err = txe.qe.twoPC.DeleteRedo(txe.ctx, localConn, dtid)
+	err = txe.qe.twoPC.DeleteRedo(txe.ctx, conn, dtid)
 	if err != nil {
 		goto returnConn
 	}
 
-	err = txe.qe.txPool.LocalCommit(txe.ctx, localConn)
+	err = txe.qe.txPool.LocalCommit(txe.ctx, conn)
 
 returnConn:
-	if conn := txe.qe.preparedPool.Get(dtid); conn != nil {
-		txe.qe.txPool.LocalConclude(txe.ctx, conn)
+	if preparedConn := txe.qe.preparedPool.Get(dtid); preparedConn != nil {
+		txe.qe.txPool.LocalConclude(txe.ctx, preparedConn)
 	}
 	if originalID != 0 {
 		txe.qe.txPool.Rollback(txe.ctx, originalID)
 	}
 
 	return err
+}
+
+// CreateTransaction creates the metadata for a 2PC transaction.
+func (txe *TxExecutor) CreateTransaction(dtid string, participants []*querypb.Target) error {
+	defer txe.qe.queryServiceStats.QueryStats.Record("CREATE_TRANSACTION", time.Now())
+	conn, err := txe.qe.txPool.LocalBegin(txe.ctx)
+	if err != nil {
+		return err
+	}
+	defer txe.qe.txPool.LocalConclude(txe.ctx, conn)
+
+	err = txe.qe.twoPC.CreateTransaction(txe.ctx, conn, dtid, participants)
+	if err != nil {
+		return err
+	}
+	return txe.qe.txPool.LocalCommit(txe.ctx, conn)
+}
+
+// StartCommit atomically commits the transaction along with the
+// decision to commit the associated 2pc transaction.
+func (txe *TxExecutor) StartCommit(transactionID int64, dtid string) error {
+	defer txe.qe.queryServiceStats.QueryStats.Record("START_COMMIT", time.Now())
+	txe.logStats.TransactionID = transactionID
+
+	conn, err := txe.qe.txPool.Get(transactionID, "for 2pc commit")
+	if err != nil {
+		return err
+	}
+	defer txe.qe.txPool.LocalConclude(txe.ctx, conn)
+
+	err = txe.qe.twoPC.Transition(txe.ctx, conn, dtid, "Commit")
+	if err != nil {
+		return err
+	}
+	return txe.qe.txPool.LocalCommit(txe.ctx, conn)
+}
+
+// SetRollback transitions the 2pc transaction to the Rollback state.
+// If a transaction id is provided, that transaction is also rolled back.
+func (txe *TxExecutor) SetRollback(dtid string, transactionID int64) error {
+	defer txe.qe.queryServiceStats.QueryStats.Record("SET_ROLLBACK", time.Now())
+	txe.logStats.TransactionID = transactionID
+
+	if transactionID != 0 {
+		txe.qe.txPool.Rollback(txe.ctx, transactionID)
+	}
+
+	conn, err := txe.qe.txPool.LocalBegin(txe.ctx)
+	if err != nil {
+		return err
+	}
+	defer txe.qe.txPool.LocalConclude(txe.ctx, conn)
+
+	err = txe.qe.twoPC.Transition(txe.ctx, conn, dtid, "Rollback")
+	if err != nil {
+		return err
+	}
+
+	err = txe.qe.txPool.LocalCommit(txe.ctx, conn)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ResolveTransaction deletes the 2pc transaction metadata
+// essentially resolving it.
+func (txe *TxExecutor) ResolveTransaction(dtid string) error {
+	defer txe.qe.queryServiceStats.QueryStats.Record("RESOLVE", time.Now())
+
+	conn, err := txe.qe.txPool.LocalBegin(txe.ctx)
+	if err != nil {
+		return err
+	}
+	defer txe.qe.txPool.LocalConclude(txe.ctx, conn)
+
+	err = txe.qe.twoPC.DeleteTransaction(txe.ctx, conn, dtid)
+	if err != nil {
+		return err
+	}
+	return txe.qe.txPool.LocalCommit(txe.ctx, conn)
+}
+
+// ReadTransaction returns the metadata for the sepcified dtid.
+func (txe *TxExecutor) ReadTransaction(dtid string) (*querypb.TransactionMetadata, error) {
+	conn, err := txe.qe.connPool.Get(txe.ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+	return txe.qe.twoPC.ReadTransaction(txe.ctx, conn, dtid)
 }

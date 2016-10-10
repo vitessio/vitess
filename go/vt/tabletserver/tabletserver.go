@@ -418,7 +418,9 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		}
 	} else {
 		// Wait for in-flight transactional requests to complete
-		// before rolling back everything.
+		// before rolling back everything. In this state new
+		// transactional requests are not allowed. So, we can
+		// be sure that the tx pool won't change after the wait.
 		tsv.txRequests.Wait()
 		tsv.qe.RollbackTransactions()
 		tsv.startReplicationStreamer()
@@ -461,6 +463,10 @@ func (tsv *TabletServer) StopService() {
 
 func (tsv *TabletServer) waitForShutdown() {
 	// Wait till txRequests have completed before waiting on tx pool.
+	// During this state, new Begins are not allowed. After the wait,
+	// we have the assurance that only non-begin transactional calls
+	// will be allowed. They will enable the conclusion of outstanding
+	// transactions.
 	tsv.txRequests.Wait()
 	tsv.qe.WaitForTxEmpty()
 	tsv.qe.streamQList.TerminateAll()
@@ -725,13 +731,103 @@ func (tsv *TabletServer) RollbackPrepared(ctx context.Context, target *querypb.T
 	)
 }
 
+// CreateTransaction creates the metadata for a 2PC transaction.
+func (tsv *TabletServer) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
+	return tsv.execRequest(
+		ctx, tsv.QueryTimeout.Get(),
+		"CreateTransaction", "create_transaction", nil,
+		target, true, true,
+		func(ctx context.Context, logStats *LogStats) error {
+			txe := &TxExecutor{
+				ctx:      ctx,
+				logStats: logStats,
+				qe:       tsv.qe,
+			}
+			return txe.CreateTransaction(dtid, participants)
+		},
+	)
+}
+
+// StartCommit atomically commits the transaction along with the
+// decision to commit the associated 2pc transaction.
+func (tsv *TabletServer) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	return tsv.execRequest(
+		ctx, tsv.QueryTimeout.Get(),
+		"StartCommit", "start_commit", nil,
+		target, true, true,
+		func(ctx context.Context, logStats *LogStats) error {
+			txe := &TxExecutor{
+				ctx:      ctx,
+				logStats: logStats,
+				qe:       tsv.qe,
+			}
+			return txe.StartCommit(transactionID, dtid)
+		},
+	)
+}
+
+// SetRollback transitions the 2pc transaction to the Rollback state.
+// If a transaction id is provided, that transaction is also rolled back.
+func (tsv *TabletServer) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
+	return tsv.execRequest(
+		ctx, tsv.QueryTimeout.Get(),
+		"SetRollback", "set_rollback", nil,
+		target, true, true,
+		func(ctx context.Context, logStats *LogStats) error {
+			txe := &TxExecutor{
+				ctx:      ctx,
+				logStats: logStats,
+				qe:       tsv.qe,
+			}
+			return txe.SetRollback(dtid, transactionID)
+		},
+	)
+}
+
+// ResolveTransaction deletes the 2pc transaction metadata
+// essentially resolving it.
+func (tsv *TabletServer) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	return tsv.execRequest(
+		ctx, tsv.QueryTimeout.Get(),
+		"ResolveTransaction", "resolve_transaction", nil,
+		target, true, true,
+		func(ctx context.Context, logStats *LogStats) error {
+			txe := &TxExecutor{
+				ctx:      ctx,
+				logStats: logStats,
+				qe:       tsv.qe,
+			}
+			return txe.ResolveTransaction(dtid)
+		},
+	)
+}
+
+// ReadTransaction returns the metadata for the sepcified dtid.
+func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
+	err = tsv.execRequest(
+		ctx, tsv.QueryTimeout.Get(),
+		"ReadTransaction", "read_transaction", nil,
+		target, false, true,
+		func(ctx context.Context, logStats *LogStats) error {
+			txe := &TxExecutor{
+				ctx:      ctx,
+				logStats: logStats,
+				qe:       tsv.qe,
+			}
+			metadata, err = txe.ReadTransaction(dtid)
+			return err
+		},
+	)
+	return metadata, err
+}
+
 // Execute executes the query and returns the result as response.
 func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
-	allowShutdown := (transactionID != 0)
+	allowOnShutdown := (transactionID != 0)
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Execute", sql, bindVariables,
-		target, false, allowShutdown,
+		target, false, allowOnShutdown,
 		func(ctx context.Context, logStats *LogStats) error {
 			if bindVariables == nil {
 				bindVariables = make(map[string]interface{})
@@ -813,7 +909,7 @@ func (tsv *TabletServer) computeExtras(options *querypb.ExecuteOptions) *querypb
 // The subsequent QueryResult will have Rows set (and Fields nil).
 func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) (err error) {
 	err = tsv.execRequest(
-		ctx, tsv.QueryTimeout.Get(),
+		ctx, 0,
 		"StreamExecute", sql, bindVariables,
 		target, false, false,
 		func(ctx context.Context, logStats *LogStats) error {
@@ -851,8 +947,8 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "cannot start a new transaction in the scope of an existing one")
 	}
 
-	allowShutdown := (transactionID != 0)
-	if err = tsv.startRequest(target, false, allowShutdown); err != nil {
+	allowOnShutdown := (transactionID != 0)
+	if err = tsv.startRequest(target, false, allowOnShutdown); err != nil {
 		return nil, err
 	}
 	defer tsv.endRequest(false)
@@ -972,7 +1068,7 @@ func (tsv *TabletServer) SplitQueryV2(
 	algorithm querypb.SplitQueryRequest_Algorithm,
 ) (splits []querytypes.QuerySplit, err error) {
 	err = tsv.execRequest(
-		ctx, 24*365*10*time.Hour, /* practically forever */
+		ctx, 0,
 		"SplitQuery", sql, bindVariables,
 		target, false, false,
 		func(ctx context.Context, logStats *LogStats) error {
@@ -1029,14 +1125,14 @@ func (tsv *TabletServer) SplitQueryV2(
 func (tsv *TabletServer) execRequest(
 	ctx context.Context, timeout time.Duration,
 	requestName, sql string, bindVariables map[string]interface{},
-	target *querypb.Target, isTx, allowShutdown bool,
+	target *querypb.Target, isTx, allowOnShutdown bool,
 	exec func(ctx context.Context, logStats *LogStats) error,
 ) (err error) {
 	logStats := newLogStats(requestName, ctx)
 	logStats.OriginalSQL = sql
 	logStats.BindVariables = bindVariables
 	defer tsv.handleError(sql, bindVariables, &err, logStats)
-	if err = tsv.startRequest(target, isTx, allowShutdown); err != nil {
+	if err = tsv.startRequest(target, isTx, allowOnShutdown); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, timeout)
@@ -1399,13 +1495,13 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 // isTx must be set to true, which increments an additional waitgroup.
 // During state transitions, this waitgroup will be checked to make
 // sure that no such statements are in-flight while we resolve the tx pool.
-func (tsv *TabletServer) startRequest(target *querypb.Target, isTx, allowShutdown bool) (err error) {
+func (tsv *TabletServer) startRequest(target *querypb.Target, isTx, allowOnShutdown bool) (err error) {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state == StateServing {
 		goto verifyTarget
 	}
-	if allowShutdown && tsv.state == StateShuttingDown {
+	if allowOnShutdown && tsv.state == StateShuttingDown {
 		goto verifyTarget
 	}
 	return NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
