@@ -122,7 +122,7 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts topo.Serv
 	}
 
 	// And then finally save the keyspace objects, in parallel.
-	rec := &concurrency.AllErrorRecorder{}
+	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for cell, srvKeyspace := range srvKeyspaceMap {
 		wg.Add(1)

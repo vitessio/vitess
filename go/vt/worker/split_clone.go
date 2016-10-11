@@ -124,10 +124,6 @@ type SplitCloneWorker struct {
 	tableStatusListOnline *tableStatusList
 	// populated during WorkerStateCloneOffline
 	tableStatusListOffline *tableStatusList
-	// aliases of tablets that need to have their state refreshed.
-	// Only populated once, read-only after that.
-	refreshAliases [][]*topodatapb.TabletAlias
-	refreshTablets []map[topodatapb.TabletAlias]*topo.TabletInfo
 
 	ev event.Updater
 }
@@ -789,23 +785,6 @@ func (scw *SplitCloneWorker) waitForTablets(ctx context.Context, shardInfos []*t
 	return rec.Error()
 }
 
-// Find all tablets on all destination shards. This should be done immediately before refreshing
-// state on these tablets, to minimize the chances of the topo changing in between.
-func (scw *SplitCloneWorker) findRefreshTargets(ctx context.Context) error {
-	scw.refreshAliases = make([][]*topodatapb.TabletAlias, len(scw.destinationShards))
-	scw.refreshTablets = make([]map[topodatapb.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
-
-	for shardIndex, si := range scw.destinationShards {
-		refreshAliases, refreshTablets, err := resolveRefreshTabletsForShard(ctx, si.Keyspace(), si.ShardName(), scw.wr)
-		if err != nil {
-			return err
-		}
-		scw.refreshAliases[shardIndex], scw.refreshTablets[shardIndex] = refreshAliases, refreshTablets
-	}
-
-	return nil
-}
-
 // copy phase:
 //	- copy the data from source tablets to destination masters (with replication on)
 // Assumes that the schema has already been created on each destination tablet
@@ -1108,28 +1087,32 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 			}
 		}
 
-		// Force a state refresh (re-read topo) on all destination tablets.
-		// The master tablet will end up starting filtered replication at this point.
-		//
-		// Find all tablets first, then refresh the state on each in parallel.
-		err = scw.findRefreshTargets(ctx)
-		if err != nil {
-			return fmt.Errorf("failed before refreshing state on destination tablets: %v", err)
+		// Force a state refresh (re-read of the "Shard" object from the topology)
+		// on all destination masters to start filtered replication.
+		rec := concurrency.AllErrorRecorder{}
+		for _, si := range scw.destinationShards {
+			destinationWaitGroup.Add(1)
+			go func(keyspace, shard string) {
+				defer destinationWaitGroup.Done()
+
+				masters := scw.tsc.GetHealthyTabletStats(keyspace, shard, topodatapb.TabletType_MASTER)
+				if len(masters) == 0 {
+					rec.RecordError(fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v (in cell: %v) in HealthCheck: empty TabletStats list", keyspace, shard, scw.cell))
+				}
+				master := masters[0]
+				alias := topoproto.TabletAliasString(master.Tablet.Alias)
+
+				scw.wr.Logger().Infof("Refreshing state on tablet %v", alias)
+				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+				defer cancel()
+				if err := scw.wr.TabletManagerClient().RefreshState(shortCtx, master.Tablet); err != nil {
+					rec.RecordError(fmt.Errorf("RefreshState failed on tablet %v: %v", alias, err))
+				}
+			}(si.Keyspace(), si.ShardName())
 		}
-		for shardIndex := range scw.destinationShards {
-			for _, tabletAlias := range scw.refreshAliases[shardIndex] {
-				destinationWaitGroup.Add(1)
-				go func(ti *topo.TabletInfo) {
-					defer destinationWaitGroup.Done()
-					scw.wr.Logger().Infof("Refreshing state on tablet %v", ti.AliasString())
-					shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-					err := scw.wr.TabletManagerClient().RefreshState(shortCtx, ti.Tablet)
-					cancel()
-					if err != nil {
-						processError("RefreshState failed on tablet %v: %v", ti.AliasString(), err)
-					}
-				}(scw.refreshTablets[shardIndex][*tabletAlias])
-			}
+		destinationWaitGroup.Wait()
+		if err := rec.Error(); err != nil {
+			processError("Triggering the start of filtered replication failed for some destination masters. Please run 'vtctl RefreshState' manually on the failed ones. Errors: %v", err)
 		}
 	} // clonePhase == offline
 
