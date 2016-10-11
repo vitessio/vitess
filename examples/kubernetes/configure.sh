@@ -11,14 +11,6 @@ if [ -n "$REPLY" ]; then storage="$REPLY"; fi
 case "$storage" in
 gcs)
   # Google Cloud Storage
-  project=$(gcloud config list project | grep 'project\s*=' | sed -r 's/^.*=\s*(.*)$/\1/')
-  read -p "Google Developers Console Project [$project]: "
-  if [ -n "$REPLY" ]; then project="$REPLY"; fi
-  if [ -z "$project" ]; then
-    echo "ERROR: Project name must not be empty."
-    exit 1
-  fi
-
   read -p "Google Cloud Storage bucket for Vitess backups: " bucket
   if [ -z "$bucket" ]; then
     echo "ERROR: Bucket name must not be empty."
@@ -30,7 +22,6 @@ gcs)
   echo
 
   backup_flags=$(echo -backup_storage_implementation gcs \
-                      -gcs_backup_storage_project "'$project'" \
                       -gcs_backup_storage_bucket "'$bucket'")
   ;;
 file)
