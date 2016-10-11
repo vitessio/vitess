@@ -40,6 +40,19 @@ func TestHealthCheck(t *testing.T) {
 	hc.AddTablet(tablet, "")
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
+	// Immediately after AddTablet() there will be the first notification.
+	want := &TabletStats{
+		Key:     "a,vt:1",
+		Tablet:  tablet,
+		Target:  &querypb.Target{},
+		Up:      true,
+		Serving: false,
+	}
+	res := <-l.output
+	if !reflect.DeepEqual(res, want) {
+		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
+	}
+
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
@@ -47,7 +60,7 @@ func TestHealthCheck(t *testing.T) {
 		TabletExternallyReparentedTimestamp: 10,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
-	want := &TabletStats{
+	want = &TabletStats{
 		Key:     "a,vt:1",
 		Tablet:  tablet,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
@@ -58,7 +71,7 @@ func TestHealthCheck(t *testing.T) {
 	}
 	input <- shr
 	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, Serving: true, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
-	res := <-l.output
+	res = <-l.output
 	if !reflect.DeepEqual(res, want) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
 	}
@@ -201,6 +214,19 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	hc.AddTablet(tablet, "")
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
+	// Immediately after AddTablet() there will be the first notification.
+	want := &TabletStats{
+		Key:     "a,vt:1",
+		Tablet:  tablet,
+		Target:  &querypb.Target{},
+		Up:      true,
+		Serving: false,
+	}
+	res := <-l.output
+	if !reflect.DeepEqual(res, want) {
+		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
+	}
+
 	// Verify that the listener works in general.
 	shr := &querypb.StreamHealthResponse{
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
@@ -208,7 +234,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 		TabletExternallyReparentedTimestamp: 10,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
-	want := &TabletStats{
+	want = &TabletStats{
 		Key:     "a,vt:1",
 		Tablet:  tablet,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
@@ -219,7 +245,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	}
 	input <- shr
 	t.Logf(`input <- %v`, shr)
-	res := <-l.output
+	res = <-l.output
 	if !reflect.DeepEqual(res, want) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
 	}
@@ -236,8 +262,15 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	// fail in some cases.
 	input <- shr
 	t.Logf(`input <- %v`, shr)
+
+	// After Close() we'll receive one or two notifications with Serving == false.
+	res = <-l.output
+	if res.Serving {
+		t.Errorf(`Received one more notification with Serving == true: %+v`, res)
+	}
+
 	select {
-	case res := <-l.output:
+	case res = <-l.output:
 		if res.TabletExternallyReparentedTimestamp == 10 && res.LastError == context.Canceled {
 			// HealthCheck repeats the previous stats if there is an error.
 			// This is expected.
@@ -247,6 +280,11 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	case <-time.After(1 * time.Millisecond):
 		// No response after timeout. Close probably closed all Go routines
 		// properly and won't use the listener anymore.
+	}
+
+	// The last notification should have Up = false.
+	if res.Up || res.Serving {
+		t.Errorf(`Last notification doesn't have Up == false and Serving == false: %+v`, res)
 	}
 
 	// Check if there are more updates than the one emitted during Close().
@@ -271,6 +309,19 @@ func TestHealthCheckTimeout(t *testing.T) {
 	hc.AddTablet(tablet, "")
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
+	// Immediately after AddTablet() there will be the first notification.
+	want := &TabletStats{
+		Key:     "a,vt:1",
+		Tablet:  tablet,
+		Target:  &querypb.Target{},
+		Up:      true,
+		Serving: false,
+	}
+	res := <-l.output
+	if !reflect.DeepEqual(res, want) {
+		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
+	}
+
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
@@ -278,7 +329,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 		TabletExternallyReparentedTimestamp: 10,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
-	want := &TabletStats{
+	want = &TabletStats{
 		Key:     "a,vt:1",
 		Tablet:  tablet,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
@@ -289,7 +340,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 	}
 	input <- shr
 	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, Serving: true, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
-	res := <-l.output
+	res = <-l.output
 	if !reflect.DeepEqual(res, want) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
 	}
@@ -348,7 +399,7 @@ type listener struct {
 }
 
 func newListener() *listener {
-	return &listener{output: make(chan *TabletStats, 1)}
+	return &listener{output: make(chan *TabletStats, 2)}
 }
 
 func (l *listener) StatsUpdate(ts *TabletStats) {
