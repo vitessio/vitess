@@ -1,5 +1,5 @@
 /*
-  Parent flag class for dialog content and it's UI subclasses. All production
+  Parent flag class for dialog content and its UI subclasses. All production
   classes should extend one of the subclasses, not Flag itself. Currently, the
   subclasses support:
     InputFlag:    Takes in user raw input and stores it as a string. The UI
@@ -22,8 +22,11 @@ export class Flag {
   public value: any;
   private blockOnEmptyList= []; // Block this flag if any flag in this list is empty/false.
   private blockOnFilledList= []; // Block this flag if any flag in this list is filled/true.
+  private displayOnFlag: string; // Only display this flag if the given flag has the given value.
+  private displayOnValue: string;
   public show: boolean;
   public positional = false;
+  public namedPositional: string; // if positional and this is set, this will be a named parameter.
 
   constructor(position: number, type: string, id: string, name: string, description= '', value= '', show= true) {
     this.position = position;
@@ -51,6 +54,19 @@ export class Flag {
     return this.blockOnFilledList;
   }
 
+  public setDisplayOn(flag: string, value: string) {
+    this.displayOnFlag = flag;
+    this.displayOnValue = value;
+  }
+
+  public getDisplayOnFlag(): string {
+    return this.displayOnFlag;
+  }
+
+  public getDisplayOnValue(): string {
+    return this.displayOnValue;
+  }
+
   public getStrValue(): string {
     return this.value;
   }
@@ -75,6 +91,13 @@ export class Flag {
     if (this.getValue() === false || this.getStrValue() === '' || !this.positional) {
       return [];
     }
+    if (this.namedPositional !== undefined) {
+      if (this.getValue() === true) {
+        return [`-${this.namedPositional}`];
+      }
+      // Named positional arguments are used for workflow creation, mainly.
+      return [`-${this.namedPositional}=${this.getStrValue()}`];
+    }
     // Positional arguments only need a value not a key.
     return [this.getStrValue()];
   }
@@ -84,6 +107,9 @@ export class Flag {
       return [];
     }
     // Non-positional arguments need a key value pair.
+    if (this.getValue() === true) {
+      return [`-${this.id}`];
+    }
     return [`-${this.id}=${this.getStrValue()}`];
   }
 }

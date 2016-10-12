@@ -4,22 +4,29 @@
       <p-accordionTab class="{{getState(workflow.state)}}">
         <header class="vt-pad-header">
           <div class="vt-accordion-name-wrapper">
-              <span class="vt-accordion-name">
-                <md-icon *ngIf="workflow.isDone()">check</md-icon>
-                <md-icon *ngIf="workflow.isRunning()">forward</md-icon>
-                <md-icon *ngIf="workflow.isNotStarted()">remove</md-icon>
-                {{workflow.name}}
-              </span>
-            </div>
-            <div class="vt-progress-bar-wrapper">
-              <md-progress-bar class="vt-progress-bar" *ngIf="workflow.isDeterminate()" mode="determinate" [value]="workflow.progress" color="primary"></md-progress-bar>
-              <md-progress-bar class="vt-progress-bar" *ngIf="workflow.isIndeterminate()" mode="indeterminate" color="primary"></md-progress-bar>
-            </div>
-            <div class="vt-progress-msg-wrapper" *ngIf="workflow.isDeterminate() || workflow.isIndeterminate()" >
-              <span class="vt-progress-msg">
-                {{workflow.progressMsg}}
-              </span>
-            </div>
+            <span class="vt-accordion-name">
+              <md-icon *ngIf="workflow.isNotStarted()">remove</md-icon>
+              <md-icon *ngIf="workflow.isRunning()">forward</md-icon>
+              <md-icon *ngIf="workflow.isDone()">check</md-icon>
+              {{workflow.name}}
+            </span>
+          </div>
+          <div class="vt-progress-bar-wrapper">
+            <md-progress-bar class="vt-progress-bar" *ngIf="workflow.isDeterminate()" mode="determinate" [value]="workflow.progress" color="primary"></md-progress-bar>
+            <md-progress-bar class="vt-progress-bar" *ngIf="workflow.isIndeterminate()" mode="indeterminate" color="primary"></md-progress-bar>
+          </div>
+          <div class="vt-progress-msg-wrapper" *ngIf="workflow.isDeterminate() || workflow.isIndeterminate()" >
+            <span class="vt-progress-msg">
+              {{workflow.progressMsg}}
+            </span>
+          </div>
+          <div class="vt-workflow-action-wrapper">
+            <span class="vt-workflow-action">
+              <button md-raised-button *ngIf="workflow.isNotStarted()" (click)="startClicked($event); false">Start</button>
+              <button md-raised-button *ngIf="workflow.isRunning()" (click)="stopClicked($event); false">Stop</button>
+              <button md-raised-button *ngIf="workflow.isDone()" (click)="deleteClicked($event); false">Delete</button>
+            </span>
+          </div>
         </header>
         <div class="vt-workflow-content">
           <div *ngIf="getTime()" class="vt-workflow-time">
@@ -50,4 +57,9 @@
       </p-accordionTab>
     </span>
   </p-accordion>
+  <p-dialog [(header)]="dialogSettings.dialogTitle" [(visible)]="dialogSettings.open" draggable="" resizable="" width="800">
+    <vt-dialog [(dialogContent)]="dialogContent" [(dialogSettings)]="dialogSettings"></vt-dialog>
+  </p-dialog>
+  <div *ngIf="dialogSettings.open" class="vt-popUpContainer" >
+  </div>
 </div>

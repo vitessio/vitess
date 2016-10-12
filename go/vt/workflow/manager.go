@@ -82,7 +82,14 @@ type runningWorkflow struct {
 	workflow Workflow
 
 	// done is the channel to close when the workflow is done.
+	// Used for synchronization.
 	done chan struct{}
+
+	// stopped is true if the workflow was explicitly stopped (by
+	// calling Manager.Stop(ctx, uuid)).  Otherwise, it remains
+	// false e.g. if the Manager and its workflows are shut down
+	// by canceling the context.
+	stopped bool
 }
 
 // NewManager creates an initialized Manager.
@@ -292,14 +299,29 @@ func (m *Manager) Start(ctx context.Context, uuid string) error {
 func (m *Manager) runWorkflow(ctx context.Context, uuid string, rw *runningWorkflow) {
 	defer close(rw.done)
 
-	// Run will block until the workflow is done, or ctx is canceled.
+	// Run will block until one of three things happen:
+	//
+	// 1. The workflow is stopped (calling Stop(uuid)). At this
+	// point, err is context.Canceled (because Stop cancels the
+	// individual context). We want to save our workflow state as
+	// Done in the topology, using context.Canceled as the error.
+	//
+	// 2. The Manager is stopped (by canceling the context that was
+	// passed to Run()). At this point, err is context.Canceled
+	// (because the umbrella context was canceled). We do not want
+	// to save our state there, so that when the Manager restarts
+	// next time, it restarts the workflow where it left of.
+	//
+	// 3. The workflow is done (with a valid context). err can be
+	// anything (including nil), we just need to save it.
 	err := rw.workflow.Run(ctx, m, rw.wi)
 
 	// Change the Manager state.
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.ctx == nil {
-		// We are shutting down, nothing else to do.
+
+	// Check for manager stoppage (case 2. above).
+	if err == context.Canceled && !rw.stopped {
 		return
 	}
 
@@ -320,11 +342,15 @@ func (m *Manager) runWorkflow(ctx context.Context, uuid string, rw *runningWorkf
 // Stop stops the running workflow. It will cancel its context and
 // wait for it to exit.
 func (m *Manager) Stop(ctx context.Context, uuid string) error {
-	// Find the workflow.
-	rw, err := m.getRunningWorkflow(uuid)
-	if err != nil {
-		return err
+	// Find the workflow, mark it as stopped.
+	m.mu.Lock()
+	rw, ok := m.workflows[uuid]
+	if !ok {
+		m.mu.Unlock()
+		return fmt.Errorf("no running workflow with uuid %v", uuid)
 	}
+	rw.stopped = true
+	m.mu.Unlock()
 
 	// Cancel the running guy, and waits for it.
 	rw.cancel()

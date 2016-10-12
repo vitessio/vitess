@@ -19,8 +19,9 @@ func initWorkflowManager(ts topo.Server) {
 	if *workflowManagerInit {
 		vtctl.WorkflowManager = workflow.NewManager(ts)
 
-		// Register the websocket handler.
-		vtctl.WorkflowManager.HandleHTTP(apiPrefix + "workflow")
+		// Register the long polling and websocket handlers.
+		vtctl.WorkflowManager.HandleHTTPLongPolling(apiPrefix + "workflow")
+		vtctl.WorkflowManager.HandleHTTPWebSocket(apiPrefix + "workflow")
 
 		// FIXME(alainjobart) look at a flag to use master
 		// election here.

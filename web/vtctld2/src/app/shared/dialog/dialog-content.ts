@@ -77,17 +77,30 @@ export class DialogContent {
   */
   public canDisplay(flagId: string) {
     if (this.flags[flagId] === undefined || this.flags[flagId].show === false) {
+      // This is the case where the flag is just disabled.
       return false;
     }
     for (let testEmpty of this.flags[flagId].blockOnEmptyList) {
+      // We do not display this flag if a list of strings is empty.
       if (this.flags[testEmpty].isEmpty()) {
         return false;
       }
     }
     for (let testFilled of this.flags[flagId].blockOnFilledList) {
+      // We do not display this flag if a list of strings is not empty.
       if (this.flags[testFilled].isFilled()) {
         return false;
       }
+    }
+    if (this.flags[flagId].getDisplayOnFlag() !== undefined) {
+      // We only display this flag if another flag has a specific
+      // value.  This is used to display conditional flags if a
+      // dropdown has a given value.
+      let dependsOn = this.flags[flagId].getDisplayOnFlag();
+      if (this.flags[dependsOn] === undefined || this.flags[dependsOn].show === false) {
+         return false;
+      }
+      return this.flags[dependsOn].getStrValue() === this.flags[flagId].getDisplayOnValue();
     }
     return true;
   }
