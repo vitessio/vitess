@@ -6,6 +6,7 @@ import time
 import unittest
 import urllib
 import urllib2
+import re
 
 import MySQLdb
 
@@ -19,6 +20,10 @@ from protocols_flavor import protocols_flavor
 
 tablet_62344 = tablet.Tablet(62344)
 tablet_62044 = tablet.Tablet(62044)
+
+# regexp to check if the tablet status page reports healthy,
+# regardless of actual replication lag
+healthy_expr = re.compile(r'Current status: <span.+?>healthy')
 
 
 def setUpModule():
@@ -416,7 +421,7 @@ class TestTabletManager(unittest.TestCase):
     self.check_healthz(tablet_62044, True)
 
     # make sure status web page is healthy
-    self.assertIn('>healthy</span></div>', tablet_62044.get_status())
+    self.assertRegexpMatches(tablet_62044.get_status(), healthy_expr)
 
     # make sure the health stream is updated
     health = utils.run_vtctl_json(['VtTabletStreamHealth',
@@ -432,7 +437,7 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
 
     # make sure status web page is healthy
-    self.assertIn('>healthy</span></div>', tablet_62044.get_status())
+    self.assertRegexpMatches(tablet_62044.get_status(), healthy_expr)
 
     # now test VtTabletStreamHealth returns the right thing
     stdout, _ = utils.run_vtctl(['VtTabletStreamHealth',

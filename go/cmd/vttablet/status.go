@@ -150,18 +150,19 @@ No binlog player is running.
 type healthStatus struct {
 	Records []interface{}
 	Config  template.HTML
+	current *tabletmanager.HealthRecord
 }
 
 func (hs *healthStatus) CurrentClass() string {
-	if len(hs.Records) > 0 {
-		return hs.Records[0].(*tabletmanager.HealthRecord).Class()
+	if hs.current != nil {
+		return hs.current.Class()
 	}
 	return "unknown"
 }
 
 func (hs *healthStatus) CurrentHTML() template.HTML {
-	if len(hs.Records) > 0 {
-		return hs.Records[0].(*tabletmanager.HealthRecord).HTML()
+	if hs.current != nil {
+		return hs.current.HTML()
 	}
 	return template.HTML("unknown")
 }
@@ -189,6 +190,7 @@ func addStatusParts(qsc tabletserver.Controller) {
 		return &healthStatus{
 			Records: agent.History.Records(),
 			Config:  tabletmanager.ConfigHTML(),
+			current: agent.History.Latest().(*tabletmanager.HealthRecord),
 		}
 	})
 	qsc.AddStatusPart()
