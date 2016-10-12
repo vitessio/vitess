@@ -277,17 +277,40 @@ func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 	return res
 }
 
+// finalizeConn closes the health checking connection and sends the final
+// notification about the tablet to downstream. To be called only on exit from
+// checkConn().
+func (hc *HealthCheckImpl) finalizeConn(hcc *healthCheckConn) {
+	hcc.mu.Lock()
+	if hcc.conn != nil {
+		hcc.conn.Close()
+		hcc.conn = nil
+	}
+	hcc.tabletStats.Up = false
+	hcc.tabletStats.Serving = false
+	// Note: checkConn() exits only when hcc.ctx.Done() is closed. Thus it's
+	// safe to simply get Err() value here and assign to LastError.
+	hcc.tabletStats.LastError = hcc.ctx.Err()
+	ts := hcc.tabletStats
+	hcc.mu.Unlock()
+	if hc.listener != nil {
+		hc.listener.StatsUpdate(&ts)
+	}
+}
+
 // checkConn performs health checking on the given tablet.
 func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 	defer hc.wg.Done()
-	defer func() {
-		hcc.mu.Lock()
-		if hcc.conn != nil {
-			hcc.conn.Close()
-			hcc.conn = nil
-		}
-		hcc.mu.Unlock()
-	}()
+	defer hc.finalizeConn(hcc)
+
+	// Initial notification for downstream about the tablet existence.
+	hcc.mu.Lock()
+	ts := hcc.tabletStats
+	hcc.mu.Unlock()
+	if hc.listener != nil {
+		hc.listener.StatsUpdate(&ts)
+	}
+
 	// retry health check if it fails
 	for {
 		// Try to connect to the tablet.
