@@ -6,6 +6,7 @@ package planbuilder
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
@@ -179,13 +180,16 @@ func (rb *route) isSameRoute(rhs *route, filter sqlparser.BoolExpr) bool {
 		lVindex = rb.Symtab().Vindex(left, rb, false)
 	}
 	if lVindex == nil || !vindexes.IsUnique(lVindex) {
+		fmt.Printf("h1\n")
 		return false
 	}
 	rVindex := rhs.Symtab().Vindex(right, rhs, false)
 	if rVindex == nil {
+		fmt.Printf("h2\n")
 		return false
 	}
 	if rVindex != lVindex {
+		fmt.Printf("h3")
 		return false
 	}
 	return true

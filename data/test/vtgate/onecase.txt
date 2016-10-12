@@ -1,5 +1,5 @@
 # This is for trouble-shooting one-off failures.
-"select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col"
+"SELECT  ps0.local_id Variant_ID FROM `product_sku` ps0 JOIN( SELECT ps.sku, ps.account_id FROM product_sku ps WHERE ps.account_id = 539805 ) ps1 ON ps0.sku = ps1.sku AND ps1.account_id = ps0.account_id WHERE ps0.account_id = 539805 AND ps0.active=1"
 {
   "Original": "select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col",
   "Instructions": {
