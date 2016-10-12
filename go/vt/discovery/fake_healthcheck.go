@@ -50,6 +50,10 @@ func (fhc *FakeHealthCheck) SetListener(listener HealthCheckStatsListener, sendD
 	fhc.listener = listener
 }
 
+// WaitForInitialStatsUpdates is not implemented.
+func (fhc *FakeHealthCheck) WaitForInitialStatsUpdates() {
+}
+
 // AddTablet adds the tablet and calls the listener.
 func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet, name string) {
 	key := TabletToMapKey(tablet)

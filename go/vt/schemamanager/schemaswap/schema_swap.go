@@ -99,6 +99,13 @@ func (shardSwap *shardSchemaSwap) startHealthWatchers() error {
 			discovery.DefaultTopoReadConcurrency)
 		shardSwap.tabletWatchers = append(shardSwap.tabletWatchers, watcher)
 	}
+	for _, watcher := range shardSwap.tabletWatchers {
+		err := watcher.WaitForInitialTopology()
+		if err != nil {
+			return err
+		}
+	}
+	shardSwap.tabletHealthCheck.WaitForInitialStatsUpdates()
 	return nil
 }
 
