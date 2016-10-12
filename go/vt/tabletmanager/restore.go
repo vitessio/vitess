@@ -60,7 +60,7 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	localMetadata := agent.getLocalMetadataValues(originalType)
 	tablet := agent.Tablet()
 	dir := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
-	pos, err := mysqlctl.Restore(ctx, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv(), localMetadata, logger, deleteBeforeRestore)
+	pos, err := mysqlctl.Restore(ctx, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv(), localMetadata, logger, deleteBeforeRestore, topoproto.TabletDbName(tablet))
 	switch err {
 	case nil:
 		// Reconnect to master.
