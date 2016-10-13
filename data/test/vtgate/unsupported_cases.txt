@@ -99,7 +99,7 @@
 "unsupported: complex join and group by"
 
 # Group by references outer query
-"select id from user where id = 5 having id in (select u.id from user u join user_extra e on u.id = e.user_id where u.id = 5 group by id)"
+"select aa, id from user where id = 5 having id in (select u.id from user u join user_extra e on u.id = e.user_id where u.id = 5 group by aa)"
 "unsupported: subquery references outer query in group by"
 
 # Group by and scatter
@@ -111,7 +111,7 @@
 "unsupported: subqueries in group by expression"
 
 # Order by references outer query
-"select id from user where id = 5 having id in (select u.id from user u join user_extra e on u.id = e.user_id where u.id = 5 order by id)"
+"select aa, id from user where id = 5 having id in (select u.id from user u join user_extra e on u.id = e.user_id where u.id = 5 order by aa)"
 "unsupported: subquery references outer query in order by"
 
 # Order by uses complex expression

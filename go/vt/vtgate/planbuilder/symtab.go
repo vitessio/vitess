@@ -63,10 +63,7 @@ func newSymtab(vschema VSchema) *symtab {
 }
 
 // AddAlias adds a table alias to symtab.
-func (st *symtab) AddAlias(alias, astName sqlparser.TableIdent, table *vindexes.Table, rb *route) error {
-	if found := st.findTable(alias); found != nil {
-		return fmt.Errorf("duplicate symbol: %s", alias)
-	}
+func (st *symtab) AddAlias(alias, astName sqlparser.TableIdent, table *vindexes.Table, rb *route) {
 	st.tables = append(st.tables, &tabsym{
 		Alias:          alias,
 		ASTName:        astName,
@@ -75,7 +72,6 @@ func (st *symtab) AddAlias(alias, astName sqlparser.TableIdent, table *vindexes.
 		Keyspace:       table.Keyspace,
 		ColumnVindexes: table.ColumnVindexes,
 	})
-	return nil
 }
 
 // Merge merges the new symtab into the current one.
@@ -139,14 +135,29 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (rb *route, isL
 	}
 	if len(st.Colsyms) != 0 {
 		name := sqlparser.String(col)
+		var cursym *colsym
+		for _, colsym := range st.Colsyms {
+			if colsym.Alias.EqualString("*") {
+				col.Metadata = colsym
+				return colsym.Route(), true, nil
+			}
+			if colsym.Alias.EqualString(name) {
+				if cursym != nil {
+					return nil, false, fmt.Errorf("ambiguous symbol reference: %v", sqlparser.String(col))
+				}
+				cursym = colsym
+				col.Metadata = colsym
+			}
+		}
+		if cursym != nil {
+			return cursym.Route(), true, nil
+		}
 		starname := sqlparser.String(&sqlparser.ColName{
 			Name:      sqlparser.NewColIdent("*"),
 			Qualifier: col.Qualifier,
 		})
 		for _, colsym := range st.Colsyms {
-			if colsym.Alias.EqualString(name) || colsym.Alias.EqualString(starname) ||
-				colsym.Alias.EqualString("*") || colsym.ExprName.EqualString(name) ||
-				colsym.ExprName.EqualString(starname) || colsym.ExprName.EqualString("*") {
+			if colsym.QualifiedName.EqualString(name) || colsym.QualifiedName.EqualString(starname) {
 				col.Metadata = colsym
 				return colsym.Route(), true, nil
 			}
@@ -163,10 +174,7 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (rb *route, isL
 	}
 	qualifier := sqlparser.TableIdent(sqlparser.String(col.Qualifier))
 	if qualifier == "" && autoResolve && len(st.tables) == 1 {
-		for _, t := range st.tables {
-			qualifier = t.Alias
-			break
-		}
+		qualifier = st.tables[0].Alias
 	}
 	alias := st.findTable(qualifier)
 	if alias == nil {
@@ -277,12 +285,12 @@ func (t *tabsym) FindVindex(name sqlparser.ColIdent) vindexes.Vindex {
 // is set to the column it refers. If the referenced column has a Vindex,
 // the Vindex field is also accordingly set.
 type colsym struct {
-	Alias      sqlparser.ColIdent
-	ExprName   sqlparser.ColIdent
-	route      *route
-	symtab     *symtab
-	Underlying colref
-	Vindex     vindexes.Vindex
+	Alias         sqlparser.ColIdent
+	QualifiedName sqlparser.ColIdent
+	route         *route
+	symtab        *symtab
+	Underlying    colref
+	Vindex        vindexes.Vindex
 }
 
 // newColsym builds a colsym for the specified route and symtab.
