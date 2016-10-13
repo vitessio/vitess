@@ -24,9 +24,9 @@ import (
 // without changes to the replication graph
 func IsTrivialTypeChange(oldTabletType, newTabletType topodatapb.TabletType) bool {
 	switch oldTabletType {
-	case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE, topodatapb.TabletType_BACKUP, topodatapb.TabletType_EXPERIMENTAL, topodatapb.TabletType_WORKER:
+	case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE, topodatapb.TabletType_BACKUP, topodatapb.TabletType_EXPERIMENTAL, topodatapb.TabletType_DRAINED:
 		switch newTabletType {
-		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE, topodatapb.TabletType_BACKUP, topodatapb.TabletType_EXPERIMENTAL, topodatapb.TabletType_WORKER:
+		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE, topodatapb.TabletType_BACKUP, topodatapb.TabletType_EXPERIMENTAL, topodatapb.TabletType_DRAINED:
 			return true
 		}
 	case topodatapb.TabletType_RESTORE:
@@ -50,7 +50,7 @@ func IsInServingGraph(tt topodatapb.TabletType) bool {
 // IsRunningQueryService returns if a tablet is running the query service
 func IsRunningQueryService(tt topodatapb.TabletType) bool {
 	switch tt {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_EXPERIMENTAL, topodatapb.TabletType_WORKER:
+	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_EXPERIMENTAL, topodatapb.TabletType_DRAINED:
 		return true
 	}
 	return false
@@ -92,10 +92,10 @@ func IsRunningUpdateStream(tt topodatapb.TabletType) bool {
 // IsSlaveType returns if this type should be connected to a master db
 // and actively replicating?
 // MASTER is not obviously (only support one level replication graph)
-// BACKUP, RESTORE, WORKER may or may not be, but we don't know for sure
+// BACKUP, RESTORE, DRAINED may or may not be, but we don't know for sure
 func IsSlaveType(tt topodatapb.TabletType) bool {
 	switch tt {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_BACKUP, topodatapb.TabletType_RESTORE, topodatapb.TabletType_WORKER:
+	case topodatapb.TabletType_MASTER, topodatapb.TabletType_BACKUP, topodatapb.TabletType_RESTORE, topodatapb.TabletType_DRAINED:
 		return false
 	}
 	return true

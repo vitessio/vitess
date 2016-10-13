@@ -207,7 +207,7 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 	// Figure out if we should be running QueryService, see if we are,
 	// and reconcile.
 	if healthErr != nil {
-		if tablet.Type != topodatapb.TabletType_WORKER {
+		if tablet.Type != topodatapb.TabletType_DRAINED {
 			// We are not healthy and must shut down QueryService.
 			// At the moment, the only exception to this are "worker" tablets which
 			// still must serve queries e.g. as source tablet during a "SplitClone".

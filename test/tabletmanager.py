@@ -479,11 +479,11 @@ class TestTabletManager(unittest.TestCase):
     # kill the tablets
     tablet.kill_tablets([tablet_62344, tablet_62044])
 
-  def test_health_check_worker_state_does_not_shutdown_query_service(self):
+  def test_health_check_drained_state_does_not_shutdown_query_service(self):
     # This test is similar to test_health_check, but has the following
     # differences:
     # - the second tablet is an 'rdonly' and not a 'replica'
-    # - the second tablet will be set to 'worker' and we expect that
+    # - the second tablet will be set to 'drained' and we expect that
     #   the query service won't be shutdown
 
     # Setup master and rdonly tablets.
@@ -511,15 +511,15 @@ class TestTabletManager(unittest.TestCase):
     tablet_62044.wait_for_vttablet_state('SERVING')
     self.check_healthz(tablet_62044, True)
 
-    # Change from rdonly to worker and stop replication. (These
+    # Change from rdonly to drained and stop replication. (These
     # actions are similar to the SplitClone vtworker command
     # implementation.)  The tablet will stay healthy, and the
     # query service is still running.
-    utils.run_vtctl(['ChangeSlaveType', tablet_62044.tablet_alias, 'worker'])
+    utils.run_vtctl(['ChangeSlaveType', tablet_62044.tablet_alias, 'drained'])
     utils.run_vtctl(['StopSlave', tablet_62044.tablet_alias])
     # Trigger healthcheck explicitly to avoid waiting for the next interval.
     utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
-    utils.wait_for_tablet_type(tablet_62044.tablet_alias, 'worker')
+    utils.wait_for_tablet_type(tablet_62044.tablet_alias, 'drained')
     self.check_healthz(tablet_62044, True)
     # Query service is still running.
     tablet_62044.wait_for_vttablet_state('SERVING')
