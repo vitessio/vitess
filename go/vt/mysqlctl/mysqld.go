@@ -358,8 +358,12 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, waitForMysqld bool) error {
 			return err
 		}
 		arg := []string{
-			"-u", mysqld.dba.Uname, "-S", mysqld.config.SocketFile,
-			"shutdown"}
+			"-u", mysqld.dba.Uname, "-S", mysqld.config.SocketFile}
+		if mysqld.dba.Pass != "" {
+			// --password must be omitted entirely if empty, or else it will prompt.
+			arg = append(arg, "--password", mysqld.dba.Pass)
+		}
+		arg = append(arg, "shutdown")
 		env := []string{
 			os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql"),
 		}
@@ -698,6 +702,10 @@ func (mysqld *Mysqld) executeMysqlScript(user string, sql io.Reader) error {
 		return err
 	}
 	arg := []string{"--batch", "-u", user, "-S", mysqld.config.SocketFile}
+	if mysqld.dba.Pass != "" {
+		// --password must be omitted entirely if empty, or else it will prompt.
+		arg = append(arg, "--password", mysqld.dba.Pass)
+	}
 	env := []string{
 		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),
 	}
