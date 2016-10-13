@@ -172,9 +172,9 @@ type HealthCheck interface {
 	SetListener(listener HealthCheckStatsListener, sendDownEvents bool)
 	// WaitForInitialStatsUpdates waits until all tablets added via
 	// AddTablet() call were propagated to the listener via corresponding
-	// StatsUpdate() calls. Note that path from AddTablet() to corresponding
-	// StatsUpdate() is asynchronous but not cancelable, thus this function
-	// is also non-cancelable and can't return error.
+	// StatsUpdate() calls. Note that code path from AddTablet() to
+	// corresponding StatsUpdate() is asynchronous but not cancelable, thus
+	// this function is also non-cancelable and can't return error.
 	WaitForInitialStatsUpdates()
 	// GetConnection returns the TabletConn of the given tablet.
 	GetConnection(key string) tabletconn.TabletConn
@@ -222,13 +222,8 @@ type HealthCheckImpl struct {
 	// addrToConns maps from address to the healthCheckConn object.
 	addrToConns map[string]*healthCheckConn
 
-	// Number of AddTablet() calls made. Used to determine when initial StatsUpdate() is called for all added tablets.
-	cntAddedTablets int
-	// Number of initial StatsUpdate() calls made for added tablets. Used to compare with cntAddedTablets to determine
-	// when initial StatsUpdate() is called for all added tablets.
-	cntInitialUpdates int
-	// Condition variable used to signal when all initial StatsUpdate() calls are made after the AddTablet() calls.
-	initialUpdatesCond *sync.Cond
+	// Wait group that's used to wait until all initial StatsUpdate() calls are made after the AddTablet() calls.
+	initialUpdatesWG sync.WaitGroup
 }
 
 // NewHealthCheck creates a new HealthCheck object.
@@ -240,7 +235,6 @@ func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration, healthC
 		healthCheckTimeout: healthCheckTimeout,
 		closeChan:          make(chan struct{}),
 	}
-	hc.initialUpdatesCond = &sync.Cond{L: &hc.mu}
 
 	hc.wg.Add(1)
 	go func() {
@@ -325,12 +319,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 	if hc.listener != nil {
 		hc.listener.StatsUpdate(&ts)
 	}
-	hc.mu.Lock()
-	hc.cntInitialUpdates++
-	if hc.cntInitialUpdates == hc.cntAddedTablets {
-		hc.initialUpdatesCond.Broadcast()
-	}
-	hc.mu.Unlock()
+	hc.initialUpdatesWG.Done()
 
 	// retry health check if it fails
 	for {
@@ -585,7 +574,7 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name string) {
 		return
 	}
 	hc.addrToConns[key] = hcc
-	hc.cntAddedTablets++
+	hc.initialUpdatesWG.Add(1)
 	hc.mu.Unlock()
 
 	hc.wg.Add(1)
@@ -601,12 +590,7 @@ func (hc *HealthCheckImpl) RemoveTablet(tablet *topodatapb.Tablet) {
 // WaitForInitialStatsUpdates waits until all tablets added via AddTablet() call
 // were propagated to downstream via corresponding StatsUpdate() calls.
 func (hc *HealthCheckImpl) WaitForInitialStatsUpdates() {
-	hc.mu.Lock()
-	defer hc.mu.Unlock()
-
-	if hc.cntAddedTablets != hc.cntInitialUpdates {
-		hc.initialUpdatesCond.Wait()
-	}
+	hc.initialUpdatesWG.Wait()
 }
 
 // GetConnection returns the TabletConn of the given tablet.

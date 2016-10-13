@@ -87,7 +87,7 @@ type TopologyWatcher struct {
 	// Whether first load of the topology data is done.
 	firstLoadDone bool
 	// Channel that is closed when the initial loading of topology data is done.
-	firstLoadChan chan interface{}
+	firstLoadChan chan struct{}
 }
 
 // NewTopologyWatcher returns a TopologyWatcher that monitors all
@@ -102,7 +102,7 @@ func NewTopologyWatcher(topoServer topo.Server, tr TabletRecorder, cell string, 
 		sem:             make(chan int, topoReadConcurrency),
 		tablets:         make(map[string]*tabletInfo),
 	}
-	tw.firstLoadChan = make(chan interface{})
+	tw.firstLoadChan = make(chan struct{})
 	tw.ctx, tw.cancelFunc = context.WithCancel(context.Background())
 	tw.wg.Add(1)
 	go tw.watch()
@@ -188,18 +188,12 @@ func (tw *TopologyWatcher) loadTablets() {
 // for the first time and transfers the information to TabletRecorder via its
 // AddTablet() method.
 func (tw *TopologyWatcher) WaitForInitialTopology() error {
-	tw.mu.Lock()
-	firstLoadDone := tw.firstLoadDone
-	tw.mu.Unlock()
-	if !firstLoadDone {
-		select {
-		case <-tw.ctx.Done():
-			return tw.ctx.Err()
-		case <-tw.firstLoadChan:
-			// First load is done, normally return from the function.
-		}
+	select {
+	case <-tw.ctx.Done():
+		return tw.ctx.Err()
+	case <-tw.firstLoadChan:
+		return nil
 	}
-	return nil
 }
 
 // Stop stops the watcher. It does not clean up the tablets added to TabletRecorder.
