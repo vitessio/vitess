@@ -595,10 +595,21 @@ func Restore(
 		return replication.Position{}, err
 	}
 	defer bs.Close()
+
 	bhs, err := bs.ListBackups(dir)
 	if err != nil {
 		return replication.Position{}, fmt.Errorf("ListBackups failed: %v", err)
 	}
+
+	if len(bhs) == 0 {
+		// There are no backups (not even broken/incomplete ones).
+		logger.Errorf("No backup to restore on BackupStorage for directory %v. Starting up empty.", dir)
+		if err = populateMetadataTables(mysqld, localMetadata); err == nil {
+			err = ErrNoBackup
+		}
+		return replication.Position{}, err
+	}
+
 	var bh backupstorage.BackupHandle
 	var bm BackupManifest
 	var toRestore int
@@ -621,11 +632,10 @@ func Restore(
 		break
 	}
 	if toRestore < 0 {
-		logger.Errorf("No backup to restore on BackupStorage for directory %v. Starting up empty.", dir)
-		if err = populateMetadataTables(mysqld, localMetadata); err == nil {
-			err = ErrNoBackup
-		}
-		return replication.Position{}, err
+		// There is at least one attempted backup, but none could be read.
+		// This implies there is data we ought to have, so it's not safe to start
+		// up empty.
+		return replication.Position{}, errors.New("Backup(s) found but none could be read. Unsafe to start up empty. Restart to retry restore.")
 	}
 
 	if !deleteBeforeRestore {
