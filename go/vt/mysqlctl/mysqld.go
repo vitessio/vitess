@@ -701,7 +701,7 @@ func (mysqld *Mysqld) executeMysqlScript(user string, sql io.Reader) error {
 	if err != nil {
 		return err
 	}
-	arg := []string{"--batch", "-u", mysqld.dba.Uname, "-S", mysqld.config.SocketFile}
+	arg := []string{"--batch", "-u", user, "-S", mysqld.config.SocketFile}
 	if mysqld.dba.Pass != "" {
 		// --password must be omitted entirely if empty, or else it will prompt.
 		arg = append(arg, "--password", mysqld.dba.Pass)
