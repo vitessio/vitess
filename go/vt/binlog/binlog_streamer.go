@@ -69,10 +69,11 @@ type Streamer struct {
 	dbname string
 	mysqld mysqlctl.MysqlDaemon
 
-	clientCharset   *binlogdatapb.Charset
-	startPos        replication.Position
-	timestamp       int64
-	sendTransaction sendTransactionFunc
+	clientCharset    *binlogdatapb.Charset
+	startPos         replication.Position
+	timestamp        int64
+	sendTransaction  sendTransactionFunc
+	usePreviousGTIDs bool
 
 	conn *mysqlctl.SlaveConnection
 }
@@ -131,8 +132,21 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 
 	var events <-chan replication.BinlogEvent
 	if bls.timestamp != 0 {
-		events, err = bls.conn.StartBinlogDumpFromTimestamp(ctx, bls.timestamp)
+		// MySQL 5.6 only: We are going to start reading the
+		// logs from the beginning of a binlog file. That is
+		// going to send us the PREVIOUS_GTIDS_EVENT that
+		// contains the starting GTIDSet, and we will save
+		// that as the current position.
+		bls.usePreviousGTIDs = true
+		events, err = bls.conn.StartBinlogDumpFromBinlogBeforeTimestamp(ctx, bls.timestamp)
 	} else if !bls.startPos.IsZero() {
+		// MySQL 5.6 only: we are starting from a random
+		// binlog position. It turns out we will receive a
+		// PREVIOUS_GTIDS_EVENT event, that has a GTIDSet
+		// extracted from the binlogs. It is not related to
+		// the starting position we pass in, it seems it is
+		// just the PREVIOUS_GTIDS_EVENT from the file we're reading.
+		// So we have to skip it.
 		events, err = bls.conn.StartBinlogDumpFromPosition(ctx, bls.startPos)
 	} else {
 		bls.startPos, events, err = bls.conn.StartBinlogDumpFromCurrent(ctx)
@@ -174,18 +188,20 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 	// A commit can be triggered either by a COMMIT query, or by an XID_EVENT.
 	// Statements that aren't wrapped in BEGIN/COMMIT are committed immediately.
 	commit := func(timestamp uint32) error {
-		trans := &binlogdatapb.BinlogTransaction{
-			Statements: statements,
-			EventToken: &querypb.EventToken{
-				Timestamp: int64(timestamp),
-				Position:  replication.EncodePosition(pos),
-			},
-		}
-		if err = bls.sendTransaction(trans); err != nil {
-			if err == io.EOF {
-				return ErrClientEOF
+		if int64(timestamp) >= bls.timestamp {
+			trans := &binlogdatapb.BinlogTransaction{
+				Statements: statements,
+				EventToken: &querypb.EventToken{
+					Timestamp: int64(timestamp),
+					Position:  replication.EncodePosition(pos),
+				},
 			}
-			return fmt.Errorf("send reply error: %v", err)
+			if err = bls.sendTransaction(trans); err != nil {
+				if err == io.EOF {
+					return ErrClientEOF
+				}
+				return fmt.Errorf("send reply error: %v", err)
+			}
 		}
 		statements = nil
 		autocommit = true
@@ -327,6 +343,23 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 						return pos, err
 					}
 				}
+			}
+		case ev.IsPreviousGTIDs(): // PREVIOUS_GTIDS_EVENT
+			// MySQL 5.6 only: The Binlogs contain an
+			// event that gives us all the previously
+			// applied commits. It is *not* an
+			// authoritative value, unless we started from
+			// the beginning of a binlog file.
+			if !bls.usePreviousGTIDs {
+				continue
+			}
+			newPos, err := ev.PreviousGTIDs(format)
+			if err != nil {
+				return pos, err
+			}
+			pos = newPos
+			if err = commit(ev.Timestamp()); err != nil {
+				return pos, err
 			}
 		}
 	}

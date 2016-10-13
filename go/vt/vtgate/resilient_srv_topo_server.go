@@ -13,11 +13,10 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -350,8 +349,8 @@ func (st *SrvKeyspaceCacheStatus) StatusAsHTML() template.HTML {
 	}
 
 	result := "<b>Partitions:</b><br>"
-	for tabletType, keyspacePartition := range st.Value.Partitions {
-		result += "&nbsp;<b>" + string(tabletType) + "</b>"
+	for _, keyspacePartition := range st.Value.Partitions {
+		result += "&nbsp;<b>" + keyspacePartition.ServedType.String() + ":</b>"
 		for _, shard := range keyspacePartition.ShardReferences {
 			result += "&nbsp;" + shard.Name
 		}
@@ -360,13 +359,13 @@ func (st *SrvKeyspaceCacheStatus) StatusAsHTML() template.HTML {
 
 	if st.Value.ShardingColumnName != "" {
 		result += "<b>ShardingColumnName:</b>&nbsp;" + st.Value.ShardingColumnName + "<br>"
-		result += "<b>ShardingColumnType:</b>&nbsp;" + string(st.Value.ShardingColumnType) + "<br>"
+		result += "<b>ShardingColumnType:</b>&nbsp;" + st.Value.ShardingColumnType.String() + "<br>"
 	}
 
 	if len(st.Value.ServedFrom) > 0 {
 		result += "<b>ServedFrom:</b><br>"
 		for _, sf := range st.Value.ServedFrom {
-			result += "&nbsp;<b>" + topoproto.TabletTypeLString(sf.TabletType) + "</b>&nbsp;" + sf.Keyspace + "<br>"
+			result += "&nbsp;<b>" + sf.TabletType.String() + ":</b>&nbsp;" + sf.Keyspace + "<br>"
 		}
 	}
 

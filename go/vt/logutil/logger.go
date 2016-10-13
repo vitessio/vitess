@@ -231,6 +231,13 @@ func (ml *MemoryLogger) String() string {
 	return buf.String()
 }
 
+// Clear clears the logs.
+func (ml *MemoryLogger) Clear() {
+	ml.mu.Lock()
+	ml.Events = nil
+	ml.mu.Unlock()
+}
+
 // LoggerWriter is an adapter that implements the io.Writer interface.
 type LoggerWriter struct {
 	logger Logger

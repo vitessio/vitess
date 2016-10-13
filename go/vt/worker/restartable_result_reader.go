@@ -68,7 +68,7 @@ func NewRestartableResultReader(ctx context.Context, logger logutil.Logger, tp t
 
 	// If the initial connection fails, we do not restart.
 	if _ /* retryable */, err := r.getTablet(); err != nil {
-		return nil, fmt.Errorf("tablet=%v: %v", topoproto.TabletAliasString(r.tablet.Alias), err)
+		return nil, fmt.Errorf("tablet=unknown: %v", err)
 	}
 	if _ /* retryable */, err := r.startStream(); err != nil {
 		return nil, fmt.Errorf("tablet=%v: %v", topoproto.TabletAliasString(r.tablet.Alias), err)
@@ -96,7 +96,7 @@ func (r *RestartableResultReader) getTablet() (bool, error) {
 		return true /* retryable */, fmt.Errorf("failed get tablet for streaming query: %v", err)
 	}
 
-	// Get the dialer for it.
+	// Connect (dial) to the tablet.
 	conn, err := tabletconn.GetDialer()(tablet, *remoteActionsTimeout)
 	if err != nil {
 		return false /* retryable */, fmt.Errorf("failed to get dialer for tablet: %v", err)
@@ -233,7 +233,7 @@ func (r *RestartableResultReader) nextWithRetries() (*sqltypes.Result, error) {
 			if retryCtx.Err() == context.DeadlineExceeded {
 				return nil, fmt.Errorf("%v: failed to restart the streaming connection after retrying for %v", r.tp.description(), *retryDuration)
 			}
-			return nil, fmt.Errorf("%v: interrupted while trying to restart the streaming connection (%.1f minutes elapsed so far)", r.tp.description(), time.Now().Sub(start).Minutes())
+			return nil, fmt.Errorf("%v: interrupted (context error: %v) while trying to restart the streaming connection (%.1f minutes elapsed so far)", r.tp.description(), retryCtx.Err(), time.Now().Sub(start).Minutes())
 		case <-time.After(*executeFetchRetryTime):
 			// Make a pause between the retries to avoid hammering the servers.
 		}

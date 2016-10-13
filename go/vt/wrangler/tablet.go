@@ -24,11 +24,9 @@ import (
 // appropriate parent. If createShardAndKeyspace is true and the
 // parent keyspace or shard don't exist, they will be created.  If
 // allowUpdate is true, and a tablet with the same ID exists, just update it.
-// If a tablet already exists, and has a different keyspace / shard,
-// allowDifferentShard must be set to accept the update.
 // If a tablet is created as master, and there is already a different
 // master in the shard, allowMasterOverride must be set.
-func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, allowMasterOverride, allowDifferentShard, createShardAndKeyspace, allowUpdate bool) error {
+func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, allowMasterOverride, createShardAndKeyspace, allowUpdate bool) error {
 	if err := topo.TabletComplete(tablet); err != nil {
 		return err
 	}
@@ -73,19 +71,14 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 
 		// Check we have the same keyspace / shard, and if not,
 		// require the allowDifferentShard flag.
-		if (oldTablet.Keyspace != tablet.Keyspace || oldTablet.Shard != tablet.Shard) && !allowDifferentShard {
-			return fmt.Errorf("old tablet has shard %v/%v, cannot override with shard %v/%v unless allow_different_shard is set", oldTablet.Keyspace, oldTablet.Shard, tablet.Keyspace, tablet.Shard)
+		if oldTablet.Keyspace != tablet.Keyspace || oldTablet.Shard != tablet.Shard {
+			return fmt.Errorf("old tablet has shard %v/%v. Cannot override with shard %v/%v. Delete and re-add tablet if you want to change the tablet's keyspace/shard", oldTablet.Keyspace, oldTablet.Shard, tablet.Keyspace, tablet.Shard)
 		}
 
 		*(oldTablet.Tablet) = *tablet
 		if err := wr.ts.UpdateTablet(ctx, oldTablet); err != nil {
 			return fmt.Errorf("failed updating tablet %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
 		}
-	}
-
-	// now update the replication data
-	if err := topo.UpdateTabletReplicationData(ctx, wr.ts, tablet); err != nil {
-		return fmt.Errorf("failed updating tablet replication data for %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
 	}
 	return nil
 }

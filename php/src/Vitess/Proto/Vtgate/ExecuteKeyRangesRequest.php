@@ -27,6 +27,9 @@ namespace Vitess\Proto\Vtgate {
     /**  @var boolean */
     public $not_in_transaction = null;
     
+    /**  @var \Vitess\Proto\Query\ExecuteOptions */
+    public $options = null;
+    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -94,6 +97,15 @@ namespace Vitess\Proto\Vtgate {
       $f->name      = "not_in_transaction";
       $f->type      = \DrSlump\Protobuf::TYPE_BOOL;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $descriptor->addField($f);
+
+      // OPTIONAL MESSAGE options = 8
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 8;
+      $f->name      = "options";
+      $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $f->reference = '\Vitess\Proto\Query\ExecuteOptions';
       $descriptor->addField($f);
 
       foreach (self::$__extensions as $cb) {
@@ -380,6 +392,43 @@ namespace Vitess\Proto\Vtgate {
      */
     public function setNotInTransaction( $value){
       return $this->_set(7, $value);
+    }
+    
+    /**
+     * Check if <options> has a value
+     *
+     * @return boolean
+     */
+    public function hasOptions(){
+      return $this->_has(8);
+    }
+    
+    /**
+     * Clear <options> value
+     *
+     * @return \Vitess\Proto\Vtgate\ExecuteKeyRangesRequest
+     */
+    public function clearOptions(){
+      return $this->_clear(8);
+    }
+    
+    /**
+     * Get <options> value
+     *
+     * @return \Vitess\Proto\Query\ExecuteOptions
+     */
+    public function getOptions(){
+      return $this->_get(8);
+    }
+    
+    /**
+     * Set <options> value
+     *
+     * @param \Vitess\Proto\Query\ExecuteOptions $value
+     * @return \Vitess\Proto\Vtgate\ExecuteKeyRangesRequest
+     */
+    public function setOptions(\Vitess\Proto\Query\ExecuteOptions $value){
+      return $this->_set(8, $value);
     }
   }
 }

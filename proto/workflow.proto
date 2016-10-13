@@ -7,6 +7,9 @@ syntax = "proto3";
 package workflow;
 
 // WorkflowState describes the state of a workflow.
+// This constant should match the Node object described in
+// web/vtctld2/src/app/workflows/node.ts as it is exposed as JSON to
+// the Angular 2 web app.
 enum WorkflowState {
   NotStarted = 0;
   Running = 1;

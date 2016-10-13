@@ -12,6 +12,9 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestCommit(t *testing.T) {
@@ -387,5 +390,266 @@ func TestForUpdate(t *testing.T) {
 			t.Error(err)
 			return
 		}
+	}
+}
+
+func TestPrepareRollback(t *testing.T) {
+	client := framework.NewClient()
+	defer client.Execute("delete from vitess_test where intval=4", nil)
+
+	query := "insert into vitess_test (intval, floatval, charval, binval) " +
+		"values(4, null, null, null)"
+	err := client.Begin()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = client.Execute(query, nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = client.Prepare("aa")
+	if err != nil {
+		client.RollbackPrepared("aa", 0)
+		t.Error(err)
+		return
+	}
+	err = client.RollbackPrepared("aa", 0)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	qr, err := client.Execute("select * from vitess_test", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if qr.RowsAffected != 3 {
+		t.Errorf("rows affected: %d, want 3", qr.RowsAffected)
+	}
+}
+
+func TestPrepareCommit(t *testing.T) {
+	client := framework.NewClient()
+	defer client.Execute("delete from vitess_test where intval=4", nil)
+
+	query := "insert into vitess_test (intval, floatval, charval, binval) " +
+		"values(4, null, null, null)"
+	err := client.Begin()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = client.Execute(query, nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = client.Prepare("aa")
+	if err != nil {
+		client.RollbackPrepared("aa", 0)
+		t.Error(err)
+		return
+	}
+	err = client.CommitPrepared("aa")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	qr, err := client.Execute("select * from vitess_test", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if qr.RowsAffected != 4 {
+		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
+	}
+}
+
+func TestPrepareReparentCommit(t *testing.T) {
+	client := framework.NewClient()
+	defer client.Execute("delete from vitess_test where intval=4", nil)
+
+	query := "insert into vitess_test (intval, floatval, charval, binval) " +
+		"values(4, null, null, null)"
+	err := client.Begin()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = client.Execute(query, nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = client.Prepare("aa")
+	if err != nil {
+		client.RollbackPrepared("aa", 0)
+		t.Error(err)
+		return
+	}
+	// Rollback all transactions
+	err = client.SetServingType(topodatapb.TabletType_REPLICA)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	// This should resurrect the prepared transaction.
+	err = client.SetServingType(topodatapb.TabletType_MASTER)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = client.CommitPrepared("aa")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	qr, err := client.Execute("select * from vitess_test", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if qr.RowsAffected != 4 {
+		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
+	}
+}
+
+func TestMMCommitFlow(t *testing.T) {
+	client := framework.NewClient()
+	defer client.Execute("delete from vitess_test where intval=4", nil)
+
+	query := "insert into vitess_test (intval, floatval, charval, binval) " +
+		"values(4, null, null, null)"
+	err := client.Begin()
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = client.Execute(query, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = client.CreateTransaction("aa", []*querypb.Target{{
+		Keyspace: "test1",
+		Shard:    "0",
+	}, {
+		Keyspace: "test2",
+		Shard:    "1",
+	}})
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = client.CreateTransaction("aa", []*querypb.Target{})
+	want := "Duplicate entry"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Error: %v, must contain %s", err, want)
+	}
+
+	err = client.StartCommit("aa")
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = client.SetRollback("aa", 0)
+	want = "error: could not transition to Rollback: aa"
+	if err == nil || err.Error() != want {
+		t.Errorf("Error: %v, must contain %s", err, want)
+	}
+
+	info, err := client.ReadTransaction("aa")
+	if err != nil {
+		t.Error(err)
+	}
+	info.TimeCreated = 0
+	info.TimeUpdated = 0
+	wantInfo := &querypb.TransactionMetadata{
+		Dtid:  "aa",
+		State: 2,
+		Participants: []*querypb.Target{{
+			Keyspace: "test1",
+			Shard:    "0",
+		}, {
+			Keyspace: "test2",
+			Shard:    "1",
+		}},
+	}
+	if !reflect.DeepEqual(info, wantInfo) {
+		t.Errorf("ReadTransaction: %#v, want %#v", info, wantInfo)
+	}
+
+	err = client.ResolveTransaction("aa")
+	if err != nil {
+		t.Error(err)
+	}
+
+	info, err = client.ReadTransaction("aa")
+	if err != nil {
+		t.Error(err)
+	}
+	wantInfo = &querypb.TransactionMetadata{}
+	if !reflect.DeepEqual(info, wantInfo) {
+		t.Errorf("ReadTransaction: %#v, want %#v", info, wantInfo)
+	}
+}
+
+func TestMMRollbackFlow(t *testing.T) {
+	client := framework.NewClient()
+	defer client.Execute("delete from vitess_test where intval=4", nil)
+
+	query := "insert into vitess_test (intval, floatval, charval, binval) " +
+		"values(4, null, null, null)"
+	err := client.Begin()
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = client.Execute(query, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = client.CreateTransaction("aa", []*querypb.Target{{
+		Keyspace: "test1",
+		Shard:    "0",
+	}, {
+		Keyspace: "test2",
+		Shard:    "1",
+	}})
+	if err != nil {
+		t.Error(err)
+	}
+	client.Rollback()
+
+	err = client.SetRollback("aa", 0)
+	if err != nil {
+		t.Error(err)
+	}
+
+	info, err := client.ReadTransaction("aa")
+	if err != nil {
+		t.Error(err)
+	}
+	info.TimeCreated = 0
+	info.TimeUpdated = 0
+	wantInfo := &querypb.TransactionMetadata{
+		Dtid:  "aa",
+		State: 3,
+		Participants: []*querypb.Target{{
+			Keyspace: "test1",
+			Shard:    "0",
+		}, {
+			Keyspace: "test2",
+			Shard:    "1",
+		}},
+	}
+	if !reflect.DeepEqual(info, wantInfo) {
+		t.Errorf("ReadTransaction: %#v, want %#v", info, wantInfo)
+	}
+
+	err = client.ResolveTransaction("aa")
+	if err != nil {
+		t.Error(err)
 	}
 }

@@ -265,6 +265,8 @@ func (rb *route) computePlan(filter sqlparser.BoolExpr) (opcode engine.RouteOpco
 		case sqlparser.InStr:
 			return rb.computeINPlan(node)
 		}
+	case *sqlparser.ParenBoolExpr:
+		return rb.computePlan(node.Expr)
 	}
 	return engine.SelectScatter, nil, nil
 }
@@ -313,12 +315,12 @@ func (rb *route) computeINPlan(comparison *sqlparser.ComparisonExpr) (opcode eng
 // PushSelect pushes the select expression into the route.
 func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (colsym *colsym, colnum int, err error) {
 	colsym = newColsym(rb, rb.Symtab())
-	if expr.As.Original() != "" {
-		colsym.Alias = expr.As
-	}
+	colsym.Alias = expr.As
 	if col, ok := expr.Expr.(*sqlparser.ColName); ok {
 		if colsym.Alias.Original() == "" {
 			colsym.Alias = sqlparser.NewColIdent(sqlparser.String(col))
+		} else {
+			colsym.ExprName = sqlparser.NewColIdent(sqlparser.String(col))
 		}
 		colsym.Vindex = rb.Symtab().Vindex(col, rb, true)
 		colsym.Underlying = newColref(col)

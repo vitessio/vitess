@@ -22,13 +22,22 @@ namespace Vitess\Proto\Throttlerdata {
     public $emergency_decrease = null;
     
     /**  @var int */
-    public $min_duration_between_changes_sec = null;
+    public $min_duration_between_increases_sec = null;
     
     /**  @var int */
     public $max_duration_between_increases_sec = null;
     
     /**  @var int */
+    public $min_duration_between_decreases_sec = null;
+    
+    /**  @var int */
+    public $spread_backlog_across_sec = null;
+    
+    /**  @var int */
     public $ignore_n_slowest_replicas = null;
+    
+    /**  @var int */
+    public $ignore_n_slowest_rdonlys = null;
     
     /**  @var int */
     public $age_bad_rate_after_sec = null;
@@ -84,10 +93,10 @@ namespace Vitess\Proto\Throttlerdata {
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
-      // OPTIONAL INT64 min_duration_between_changes_sec = 6
+      // OPTIONAL INT64 min_duration_between_increases_sec = 6
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 6;
-      $f->name      = "min_duration_between_changes_sec";
+      $f->name      = "min_duration_between_increases_sec";
       $f->type      = \DrSlump\Protobuf::TYPE_INT64;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
@@ -100,25 +109,49 @@ namespace Vitess\Proto\Throttlerdata {
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
-      // OPTIONAL INT32 ignore_n_slowest_replicas = 8
+      // OPTIONAL INT64 min_duration_between_decreases_sec = 8
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 8;
+      $f->name      = "min_duration_between_decreases_sec";
+      $f->type      = \DrSlump\Protobuf::TYPE_INT64;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $descriptor->addField($f);
+
+      // OPTIONAL INT64 spread_backlog_across_sec = 9
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 9;
+      $f->name      = "spread_backlog_across_sec";
+      $f->type      = \DrSlump\Protobuf::TYPE_INT64;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $descriptor->addField($f);
+
+      // OPTIONAL INT32 ignore_n_slowest_replicas = 10
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 10;
       $f->name      = "ignore_n_slowest_replicas";
       $f->type      = \DrSlump\Protobuf::TYPE_INT32;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
-      // OPTIONAL INT64 age_bad_rate_after_sec = 9
+      // OPTIONAL INT32 ignore_n_slowest_rdonlys = 11
       $f = new \DrSlump\Protobuf\Field();
-      $f->number    = 9;
+      $f->number    = 11;
+      $f->name      = "ignore_n_slowest_rdonlys";
+      $f->type      = \DrSlump\Protobuf::TYPE_INT32;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $descriptor->addField($f);
+
+      // OPTIONAL INT64 age_bad_rate_after_sec = 12
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 12;
       $f->name      = "age_bad_rate_after_sec";
       $f->type      = \DrSlump\Protobuf::TYPE_INT64;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
-      // OPTIONAL DOUBLE bad_rate_increase = 10
+      // OPTIONAL DOUBLE bad_rate_increase = 13
       $f = new \DrSlump\Protobuf\Field();
-      $f->number    = 10;
+      $f->number    = 13;
       $f->name      = "bad_rate_increase";
       $f->type      = \DrSlump\Protobuf::TYPE_DOUBLE;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
@@ -317,39 +350,39 @@ namespace Vitess\Proto\Throttlerdata {
     }
     
     /**
-     * Check if <min_duration_between_changes_sec> has a value
+     * Check if <min_duration_between_increases_sec> has a value
      *
      * @return boolean
      */
-    public function hasMinDurationBetweenChangesSec(){
+    public function hasMinDurationBetweenIncreasesSec(){
       return $this->_has(6);
     }
     
     /**
-     * Clear <min_duration_between_changes_sec> value
+     * Clear <min_duration_between_increases_sec> value
      *
      * @return \Vitess\Proto\Throttlerdata\Configuration
      */
-    public function clearMinDurationBetweenChangesSec(){
+    public function clearMinDurationBetweenIncreasesSec(){
       return $this->_clear(6);
     }
     
     /**
-     * Get <min_duration_between_changes_sec> value
+     * Get <min_duration_between_increases_sec> value
      *
      * @return int
      */
-    public function getMinDurationBetweenChangesSec(){
+    public function getMinDurationBetweenIncreasesSec(){
       return $this->_get(6);
     }
     
     /**
-     * Set <min_duration_between_changes_sec> value
+     * Set <min_duration_between_increases_sec> value
      *
      * @param int $value
      * @return \Vitess\Proto\Throttlerdata\Configuration
      */
-    public function setMinDurationBetweenChangesSec( $value){
+    public function setMinDurationBetweenIncreasesSec( $value){
       return $this->_set(6, $value);
     }
     
@@ -391,12 +424,86 @@ namespace Vitess\Proto\Throttlerdata {
     }
     
     /**
+     * Check if <min_duration_between_decreases_sec> has a value
+     *
+     * @return boolean
+     */
+    public function hasMinDurationBetweenDecreasesSec(){
+      return $this->_has(8);
+    }
+    
+    /**
+     * Clear <min_duration_between_decreases_sec> value
+     *
+     * @return \Vitess\Proto\Throttlerdata\Configuration
+     */
+    public function clearMinDurationBetweenDecreasesSec(){
+      return $this->_clear(8);
+    }
+    
+    /**
+     * Get <min_duration_between_decreases_sec> value
+     *
+     * @return int
+     */
+    public function getMinDurationBetweenDecreasesSec(){
+      return $this->_get(8);
+    }
+    
+    /**
+     * Set <min_duration_between_decreases_sec> value
+     *
+     * @param int $value
+     * @return \Vitess\Proto\Throttlerdata\Configuration
+     */
+    public function setMinDurationBetweenDecreasesSec( $value){
+      return $this->_set(8, $value);
+    }
+    
+    /**
+     * Check if <spread_backlog_across_sec> has a value
+     *
+     * @return boolean
+     */
+    public function hasSpreadBacklogAcrossSec(){
+      return $this->_has(9);
+    }
+    
+    /**
+     * Clear <spread_backlog_across_sec> value
+     *
+     * @return \Vitess\Proto\Throttlerdata\Configuration
+     */
+    public function clearSpreadBacklogAcrossSec(){
+      return $this->_clear(9);
+    }
+    
+    /**
+     * Get <spread_backlog_across_sec> value
+     *
+     * @return int
+     */
+    public function getSpreadBacklogAcrossSec(){
+      return $this->_get(9);
+    }
+    
+    /**
+     * Set <spread_backlog_across_sec> value
+     *
+     * @param int $value
+     * @return \Vitess\Proto\Throttlerdata\Configuration
+     */
+    public function setSpreadBacklogAcrossSec( $value){
+      return $this->_set(9, $value);
+    }
+    
+    /**
      * Check if <ignore_n_slowest_replicas> has a value
      *
      * @return boolean
      */
     public function hasIgnoreNSlowestReplicas(){
-      return $this->_has(8);
+      return $this->_has(10);
     }
     
     /**
@@ -405,7 +512,7 @@ namespace Vitess\Proto\Throttlerdata {
      * @return \Vitess\Proto\Throttlerdata\Configuration
      */
     public function clearIgnoreNSlowestReplicas(){
-      return $this->_clear(8);
+      return $this->_clear(10);
     }
     
     /**
@@ -414,7 +521,7 @@ namespace Vitess\Proto\Throttlerdata {
      * @return int
      */
     public function getIgnoreNSlowestReplicas(){
-      return $this->_get(8);
+      return $this->_get(10);
     }
     
     /**
@@ -424,7 +531,44 @@ namespace Vitess\Proto\Throttlerdata {
      * @return \Vitess\Proto\Throttlerdata\Configuration
      */
     public function setIgnoreNSlowestReplicas( $value){
-      return $this->_set(8, $value);
+      return $this->_set(10, $value);
+    }
+    
+    /**
+     * Check if <ignore_n_slowest_rdonlys> has a value
+     *
+     * @return boolean
+     */
+    public function hasIgnoreNSlowestRdonlys(){
+      return $this->_has(11);
+    }
+    
+    /**
+     * Clear <ignore_n_slowest_rdonlys> value
+     *
+     * @return \Vitess\Proto\Throttlerdata\Configuration
+     */
+    public function clearIgnoreNSlowestRdonlys(){
+      return $this->_clear(11);
+    }
+    
+    /**
+     * Get <ignore_n_slowest_rdonlys> value
+     *
+     * @return int
+     */
+    public function getIgnoreNSlowestRdonlys(){
+      return $this->_get(11);
+    }
+    
+    /**
+     * Set <ignore_n_slowest_rdonlys> value
+     *
+     * @param int $value
+     * @return \Vitess\Proto\Throttlerdata\Configuration
+     */
+    public function setIgnoreNSlowestRdonlys( $value){
+      return $this->_set(11, $value);
     }
     
     /**
@@ -433,7 +577,7 @@ namespace Vitess\Proto\Throttlerdata {
      * @return boolean
      */
     public function hasAgeBadRateAfterSec(){
-      return $this->_has(9);
+      return $this->_has(12);
     }
     
     /**
@@ -442,7 +586,7 @@ namespace Vitess\Proto\Throttlerdata {
      * @return \Vitess\Proto\Throttlerdata\Configuration
      */
     public function clearAgeBadRateAfterSec(){
-      return $this->_clear(9);
+      return $this->_clear(12);
     }
     
     /**
@@ -451,7 +595,7 @@ namespace Vitess\Proto\Throttlerdata {
      * @return int
      */
     public function getAgeBadRateAfterSec(){
-      return $this->_get(9);
+      return $this->_get(12);
     }
     
     /**
@@ -461,7 +605,7 @@ namespace Vitess\Proto\Throttlerdata {
      * @return \Vitess\Proto\Throttlerdata\Configuration
      */
     public function setAgeBadRateAfterSec( $value){
-      return $this->_set(9, $value);
+      return $this->_set(12, $value);
     }
     
     /**
@@ -470,7 +614,7 @@ namespace Vitess\Proto\Throttlerdata {
      * @return boolean
      */
     public function hasBadRateIncrease(){
-      return $this->_has(10);
+      return $this->_has(13);
     }
     
     /**
@@ -479,7 +623,7 @@ namespace Vitess\Proto\Throttlerdata {
      * @return \Vitess\Proto\Throttlerdata\Configuration
      */
     public function clearBadRateIncrease(){
-      return $this->_clear(10);
+      return $this->_clear(13);
     }
     
     /**
@@ -488,7 +632,7 @@ namespace Vitess\Proto\Throttlerdata {
      * @return float
      */
     public function getBadRateIncrease(){
-      return $this->_get(10);
+      return $this->_get(13);
     }
     
     /**
@@ -498,7 +642,7 @@ namespace Vitess\Proto\Throttlerdata {
      * @return \Vitess\Proto\Throttlerdata\Configuration
      */
     public function setBadRateIncrease( $value){
-      return $this->_set(10, $value);
+      return $this->_set(13, $value);
     }
   }
 }

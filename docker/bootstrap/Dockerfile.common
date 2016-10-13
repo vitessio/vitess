@@ -1,4 +1,4 @@
-FROM golang:1.5
+FROM golang:1.7
 
 # Install Vitess build dependencies
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -42,7 +42,7 @@ RUN export MAKEFLAGS="-j$(nproc)" && \
     curl -sL --connect-timeout 10 --retry 3 \
         https://phar.phpunit.de/phpunit-4.8.9.phar > /vt/bin/phpunit && \
     chmod +x /vt/bin/phpunit && \
-    curl -sS --connect-timeout 10 --retry 3 \
+    curl -sL --connect-timeout 10 --retry 3 \
         https://getcomposer.org/installer | php -- --install-dir=/vt/bin --filename=composer && \
     pecl install xdebug && \
     echo "zend_extension=$(pecl config-get ext_dir default)/xdebug.so" > /etc/php5/cli/conf.d/20-xdebug.ini

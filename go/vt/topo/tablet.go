@@ -310,19 +310,26 @@ func Validate(ctx context.Context, ts Server, tabletAlias *topodatapb.TabletAlia
 func (ts Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) error {
 	// Have the Server create the tablet
 	err := ts.Impl.CreateTablet(ctx, tablet)
-	if err != nil {
+	if err != nil && err != ErrNodeExists {
 		return err
 	}
 
-	if err := UpdateTabletReplicationData(ctx, ts, tablet); err != nil {
-		return err
+	// Update ShardReplication in any case, to be sure.  This is
+	// meant to fix the case when a Tablet record was created, but
+	// then the ShardReplication record was not (because for
+	// instance of a startup timeout). Upon running this code
+	// again, we want to fix ShardReplication.
+	if updateErr := UpdateTabletReplicationData(ctx, ts, tablet); updateErr != nil {
+		return updateErr
 	}
 
-	event.Dispatch(&events.TabletChange{
-		Tablet: *tablet,
-		Status: "created",
-	})
-	return nil
+	if err == nil {
+		event.Dispatch(&events.TabletChange{
+			Tablet: *tablet,
+			Status: "created",
+		})
+	}
+	return err
 }
 
 // DeleteTablet wraps the underlying Impl.DeleteTablet

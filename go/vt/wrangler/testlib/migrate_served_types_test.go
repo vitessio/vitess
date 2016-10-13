@@ -5,6 +5,8 @@
 package testlib
 
 import (
+	"flag"
+	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -43,6 +45,10 @@ func checkShardSourceShards(t *testing.T, ts topo.Server, shard string, expected
 }
 
 func TestMigrateServedTypes(t *testing.T) {
+	// TODO(b/26388813): Remove the next two lines once vtctl WaitForDrain is integrated in the vtctl MigrateServed* commands.
+	flag.Set("wait_for_drain_sleep_rdonly", "0s")
+	flag.Set("wait_for_drain_sleep_replica", "0s")
+
 	db := fakesqldb.Register()
 	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -151,6 +157,12 @@ func TestMigrateServedTypes(t *testing.T) {
 	}
 	dest2Master.StartActionLoop(t, wr)
 	defer dest2Master.StopActionLoop(t)
+
+	// migrate will error if the overlapping shards have no "SourceShard" entry
+	// and we cannot decide which shard is the source or the destination.
+	if err := vp.Run([]string{"MigrateServedTypes", "ks/0", "rdonly"}); err == nil || !strings.Contains(err.Error(), "' have a 'SourceShards' entry. Did you successfully run vtworker SplitClone before? Or did you already migrate the MASTER type?") {
+		t.Fatalf("MigrateServedType(rdonly) should fail if no 'SourceShards' entry is present: %v", err)
+	}
 
 	// simulate the clone, by fixing the dest shard record
 	checkShardSourceShards(t, ts, "-80", 0)

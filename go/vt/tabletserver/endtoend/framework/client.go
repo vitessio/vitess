@@ -9,11 +9,12 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -63,6 +64,55 @@ func (client *QueryClient) Commit() error {
 func (client *QueryClient) Rollback() error {
 	defer func() { client.transactionID = 0 }()
 	return client.server.Rollback(client.ctx, &client.target, client.transactionID)
+}
+
+// Prepare executes a prepare on the current transaction.
+func (client *QueryClient) Prepare(dtid string) error {
+	defer func() { client.transactionID = 0 }()
+	return client.server.Prepare(client.ctx, &client.target, client.transactionID, dtid)
+}
+
+// CommitPrepared commits a prepared transaction.
+func (client *QueryClient) CommitPrepared(dtid string) error {
+	return client.server.CommitPrepared(client.ctx, &client.target, dtid)
+}
+
+// RollbackPrepared rollsback a prepared transaction.
+func (client *QueryClient) RollbackPrepared(dtid string, originalID int64) error {
+	return client.server.RollbackPrepared(client.ctx, &client.target, dtid, originalID)
+}
+
+// CreateTransaction issues a CreateTransaction to TabletServer.
+func (client *QueryClient) CreateTransaction(dtid string, participants []*querypb.Target) error {
+	return client.server.CreateTransaction(client.ctx, &client.target, dtid, participants)
+}
+
+// StartCommit issues a StartCommit to TabletServer for the current transaction.
+func (client *QueryClient) StartCommit(dtid string) error {
+	defer func() { client.transactionID = 0 }()
+	return client.server.StartCommit(client.ctx, &client.target, client.transactionID, dtid)
+}
+
+// SetRollback issues a SetRollback to TabletServer.
+func (client *QueryClient) SetRollback(dtid string, transactionID int64) error {
+	return client.server.SetRollback(client.ctx, &client.target, dtid, client.transactionID)
+}
+
+// ResolveTransaction issues a ResolveTransaction to TabletServer.
+func (client *QueryClient) ResolveTransaction(dtid string) error {
+	return client.server.ResolveTransaction(client.ctx, &client.target, dtid)
+}
+
+// ReadTransaction returns the transaction metadata.
+func (client *QueryClient) ReadTransaction(dtid string) (*querypb.TransactionMetadata, error) {
+	return client.server.ReadTransaction(client.ctx, &client.target, dtid)
+}
+
+// SetServingType is for testing transitions.
+// It currently supports only master->replica and back.
+func (client *QueryClient) SetServingType(tabletType topodatapb.TabletType) error {
+	_, err := client.server.SetServingType(tabletType, true, nil)
+	return err
 }
 
 // Execute executes a query.

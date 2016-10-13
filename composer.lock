@@ -4,34 +4,9 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "hash": "ee30f9a7bdb87d0117d08f7f81a74451",
-    "content-hash": "ac27aa6775524f2c7df3c5eab6058f13",
+    "hash": "b37bde69302058ef01f45bfe5858e396",
+    "content-hash": "64f1877959de9ad06d22633049abb636",
     "packages": [
-        {
-            "name": "datto/protobuf-php",
-            "version": "dev-master",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/pixelfederation/datto-Protobuf-PHP-fake.git",
-                "reference": "e85085f54abad7e30f72c8086adae47c21372e7f"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/pixelfederation/datto-Protobuf-PHP-fake/zipball/e85085f54abad7e30f72c8086adae47c21372e7f",
-                "reference": "e85085f54abad7e30f72c8086adae47c21372e7f",
-                "shasum": ""
-            },
-            "type": "library",
-            "license": [
-                "MIT"
-            ],
-            "description": "Fake datto/protobuf-php repository for overriding in youtube/vitess",
-            "support": {
-                "source": "https://github.com/pixelfederation/datto-Protobuf-PHP-fake/tree/master",
-                "issues": "https://github.com/pixelfederation/datto-Protobuf-PHP-fake/issues"
-            },
-            "time": "2016-07-19 22:01:45"
-        },
         {
             "name": "firebase/php-jwt",
             "version": "v3.0.0",
@@ -77,27 +52,28 @@
         },
         {
             "name": "google/auth",
-            "version": "v0.7",
+            "version": "v0.10",
             "source": {
                 "type": "git",
                 "url": "https://github.com/google/google-auth-library-php.git",
-                "reference": "f3288860ce7b3076a6768e4ff7b85e0f6100e221"
+                "reference": "760e3fbe4064c0525c22e27e5374eada3c103da8"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/google/google-auth-library-php/zipball/f3288860ce7b3076a6768e4ff7b85e0f6100e221",
-                "reference": "f3288860ce7b3076a6768e4ff7b85e0f6100e221",
+                "url": "https://api.github.com/repos/google/google-auth-library-php/zipball/760e3fbe4064c0525c22e27e5374eada3c103da8",
+                "reference": "760e3fbe4064c0525c22e27e5374eada3c103da8",
                 "shasum": ""
             },
             "require": {
                 "firebase/php-jwt": "~2.0|~3.0",
-                "guzzlehttp/guzzle": "~5.2|~6.0",
-                "guzzlehttp/psr7": "1.2.*",
+                "guzzlehttp/guzzle": "~5.3|~6.0",
+                "guzzlehttp/psr7": "~1.2",
                 "php": ">=5.4",
-                "psr/http-message": "1.0.*"
+                "psr/cache": "^1.0",
+                "psr/http-message": "^1.0"
             },
             "require-dev": {
-                "phplint/phplint": "0.0.1",
+                "friendsofphp/php-cs-fixer": "^1.11",
                 "phpunit/phpunit": "3.7.*"
             },
             "type": "library",
@@ -120,26 +96,28 @@
                 "google",
                 "oauth2"
             ],
-            "time": "2016-03-03 02:03:58"
+            "time": "2016-08-02 22:00:48"
         },
         {
             "name": "grpc/grpc",
-            "version": "dev-release-0_13",
+            "version": "v1.0.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/grpc/grpc.git",
-                "reference": "768c769acef173ef6ba4fc076e782607816c5ab9"
+                "reference": "2a69139aa7f609e439c24a46754252a5f9d37500"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/grpc/grpc/zipball/768c769acef173ef6ba4fc076e782607816c5ab9",
-                "reference": "768c769acef173ef6ba4fc076e782607816c5ab9",
+                "url": "https://api.github.com/repos/grpc/grpc/zipball/2a69139aa7f609e439c24a46754252a5f9d37500",
+                "reference": "2a69139aa7f609e439c24a46754252a5f9d37500",
                 "shasum": ""
             },
             "require": {
-                "datto/protobuf-php": "dev-master",
-                "google/auth": "v0.7",
-                "php": ">=5.5.0"
+                "php": ">=5.5.0",
+                "stanley-cheung/protobuf-php": "v0.6"
+            },
+            "require-dev": {
+                "google/auth": "v0.9"
             },
             "type": "library",
             "autoload": {
@@ -156,31 +134,31 @@
             "keywords": [
                 "rpc"
             ],
-            "time": "2016-04-29 18:06:37"
+            "time": "2016-08-19 00:55:10"
         },
         {
             "name": "guzzlehttp/guzzle",
-            "version": "6.2.0",
+            "version": "dev-master",
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/guzzle.git",
-                "reference": "d094e337976dff9d8e2424e8485872194e768662"
+                "reference": "3b45e7675e8997ac96142b0265d158343958f708"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/guzzle/zipball/d094e337976dff9d8e2424e8485872194e768662",
-                "reference": "d094e337976dff9d8e2424e8485872194e768662",
+                "url": "https://api.github.com/repos/guzzle/guzzle/zipball/3b45e7675e8997ac96142b0265d158343958f708",
+                "reference": "3b45e7675e8997ac96142b0265d158343958f708",
                 "shasum": ""
             },
             "require": {
-                "guzzlehttp/promises": "~1.0",
-                "guzzlehttp/psr7": "~1.1",
-                "php": ">=5.5.0"
+                "guzzlehttp/promises": "^1.0",
+                "guzzlehttp/psr7": "^1.3.1",
+                "php": ">=5.5"
             },
             "require-dev": {
                 "ext-curl": "*",
-                "phpunit/phpunit": "~4.0",
-                "psr/log": "~1.0"
+                "phpunit/phpunit": "^4.0",
+                "psr/log": "^1.0"
             },
             "type": "library",
             "extra": {
@@ -218,7 +196,7 @@
                 "rest",
                 "web service"
             ],
-            "time": "2016-03-21 20:02:09"
+            "time": "2016-08-04 00:05:49"
         },
         {
             "name": "guzzlehttp/promises",
@@ -273,16 +251,16 @@
         },
         {
             "name": "guzzlehttp/psr7",
-            "version": "1.2.3",
+            "version": "dev-master",
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/psr7.git",
-                "reference": "2e89629ff057ebb49492ba08e6995d3a6a80021b"
+                "reference": "64862e854f876bc5aee2996cab2f552db8586065"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/psr7/zipball/2e89629ff057ebb49492ba08e6995d3a6a80021b",
-                "reference": "2e89629ff057ebb49492ba08e6995d3a6a80021b",
+                "url": "https://api.github.com/repos/guzzle/psr7/zipball/64862e854f876bc5aee2996cab2f552db8586065",
+                "reference": "64862e854f876bc5aee2996cab2f552db8586065",
                 "shasum": ""
             },
             "require": {
@@ -298,7 +276,7 @@
             "type": "library",
             "extra": {
                 "branch-alias": {
-                    "dev-master": "1.0-dev"
+                    "dev-master": "1.4-dev"
                 }
             },
             "autoload": {
@@ -318,16 +296,69 @@
                     "name": "Michael Dowling",
                     "email": "mtdowling@gmail.com",
                     "homepage": "https://github.com/mtdowling"
+                },
+                {
+                    "name": "Tobias Schultze",
+                    "homepage": "https://github.com/Tobion"
                 }
             ],
-            "description": "PSR-7 message implementation",
+            "description": "PSR-7 message implementation that also provides common utility methods",
             "keywords": [
                 "http",
                 "message",
+                "request",
+                "response",
                 "stream",
-                "uri"
+                "uri",
+                "url"
             ],
-            "time": "2016-02-18 21:54:00"
+            "time": "2016-08-03 09:33:34"
+        },
+        {
+            "name": "psr/cache",
+            "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/php-fig/cache.git",
+                "reference": "d11b50ad223250cf17b86e38383413f5a6764bf8"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/php-fig/cache/zipball/d11b50ad223250cf17b86e38383413f5a6764bf8",
+                "reference": "d11b50ad223250cf17b86e38383413f5a6764bf8",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3.0"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "1.0.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Psr\\Cache\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "PHP-FIG",
+                    "homepage": "http://www.php-fig.org/"
+                }
+            ],
+            "description": "Common interface for caching libraries",
+            "keywords": [
+                "cache",
+                "psr",
+                "psr-6"
+            ],
+            "time": "2016-08-06 20:24:11"
         },
         {
             "name": "psr/http-message",
@@ -335,12 +366,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/php-fig/http-message.git",
-                "reference": "85d63699f0dbedb190bbd4b0d2b9dc707ea4c298"
+                "reference": "f6561bf28d520154e4b0ec72be95418abe6d9363"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/php-fig/http-message/zipball/85d63699f0dbedb190bbd4b0d2b9dc707ea4c298",
-                "reference": "85d63699f0dbedb190bbd4b0d2b9dc707ea4c298",
+                "url": "https://api.github.com/repos/php-fig/http-message/zipball/f6561bf28d520154e4b0ec72be95418abe6d9363",
+                "reference": "f6561bf28d520154e4b0ec72be95418abe6d9363",
                 "shasum": ""
             },
             "require": {
@@ -368,6 +399,7 @@
                 }
             ],
             "description": "Common interface for HTTP messages",
+            "homepage": "https://github.com/php-fig/http-message",
             "keywords": [
                 "http",
                 "http-message",
@@ -376,20 +408,20 @@
                 "request",
                 "response"
             ],
-            "time": "2015-05-04 20:22:00"
+            "time": "2016-08-06 14:39:51"
         },
         {
             "name": "stanley-cheung/protobuf-php",
-            "version": "dev-master",
+            "version": "v0.6",
             "source": {
                 "type": "git",
                 "url": "https://github.com/stanley-cheung/Protobuf-PHP.git",
-                "reference": "02e2c2ac00f42bc788cedbd10306d3565fec8090"
+                "reference": "e5d3b55b1898233e36abb552281d2dd0ce86c5e7"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/stanley-cheung/Protobuf-PHP/zipball/02e2c2ac00f42bc788cedbd10306d3565fec8090",
-                "reference": "02e2c2ac00f42bc788cedbd10306d3565fec8090",
+                "url": "https://api.github.com/repos/stanley-cheung/Protobuf-PHP/zipball/e5d3b55b1898233e36abb552281d2dd0ce86c5e7",
+                "reference": "e5d3b55b1898233e36abb552281d2dd0ce86c5e7",
                 "shasum": ""
             },
             "require": {
@@ -410,6 +442,7 @@
                     "DrSlump": "library/"
                 }
             },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
@@ -427,19 +460,13 @@
                 "protocol buffer",
                 "serializing"
             ],
-            "support": {
-                "source": "https://github.com/stanley-cheung/Protobuf-PHP/tree/v0.5"
-            },
-            "time": "2016-07-13 23:17:34"
+            "time": "2016-07-22 02:12:15"
         }
     ],
     "packages-dev": [],
     "aliases": [],
     "minimum-stability": "dev",
-    "stability-flags": {
-        "stanley-cheung/protobuf-php": 20,
-        "grpc/grpc": 20
-    },
+    "stability-flags": [],
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {

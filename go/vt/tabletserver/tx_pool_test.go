@@ -36,7 +36,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	txConn, err := txPool.Get(transactionID)
+	txConn, err := txPool.Get(transactionID, "for query")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	txConn, err := txPool.Get(transactionID)
+	txConn, err := txPool.Get(transactionID, "for query")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,6 +84,42 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 	txConn.Recycle()
 	if err != nil {
 		t.Fatalf("got error: %v", err)
+	}
+}
+
+func TestTxPoolRollbackNonBusy(t *testing.T) {
+	db := fakesqldb.Register()
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("rollback", &sqltypes.Result{})
+
+	txPool := newTxPool(false)
+	appParams := sqldb.ConnParams{Engine: db.Name}
+	dbaParams := sqldb.ConnParams{Engine: db.Name}
+	txPool.Open(&appParams, &dbaParams)
+	defer txPool.Close()
+	ctx := context.Background()
+	txid1, err := txPool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = txPool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn1, err := txPool.Get(txid1, "for query")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// This should rollback only txid2.
+	txPool.RollbackNonBusy(ctx)
+	if sz := txPool.activePool.Size(); sz != 1 {
+		t.Errorf("txPool.activePool.Size(): %d, want 1", sz)
+	}
+	conn1.Recycle()
+	// This should rollback txid1.
+	txPool.RollbackNonBusy(ctx)
+	if sz := txPool.activePool.Size(); sz != 0 {
+		t.Errorf("txPool.activePool.Size(): %d, want 0", sz)
 	}
 }
 
@@ -106,7 +142,7 @@ func TestTxPoolTransactionKiller(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	txConn, err := txPool.Get(transactionID)
+	txConn, err := txPool.Get(transactionID, "for query")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +226,7 @@ func TestTxPoolBeginWithExecError(t *testing.T) {
 	}
 }
 
-func TestTxPoolSafeCommitFail(t *testing.T) {
+func TestTxPoolCommitFail(t *testing.T) {
 	db := fakesqldb.Register()
 	sql := fmt.Sprintf("alter table test_table add test_column int")
 	db.AddQuery("begin", &sqltypes.Result{})
@@ -206,7 +242,7 @@ func TestTxPoolSafeCommitFail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	txConn, err := txPool.Get(transactionID)
+	txConn, err := txPool.Get(transactionID, "for query")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +275,7 @@ func TestTxPoolRollbackFail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	txConn, err := txPool.Get(transactionID)
+	txConn, err := txPool.Get(transactionID, "for query")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +299,7 @@ func TestTxPoolGetConnFail(t *testing.T) {
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	txPool.Open(&appParams, &dbaParams)
 	defer txPool.Close()
-	_, err := txPool.Get(12345)
+	_, err := txPool.Get(12345, "for query")
 	want := "not_in_tx: Transaction 12345: not found"
 	if err == nil || err.Error() != want {
 		t.Errorf("Get: %v, want %s", err, want)
@@ -287,7 +323,7 @@ func TestTxPoolExecFailDueToConnFail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	txConn, err := txPool.Get(transactionID)
+	txConn, err := txPool.Get(transactionID, "for query")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,6 +332,43 @@ func TestTxPoolExecFailDueToConnFail(t *testing.T) {
 	txConn.Recycle()
 	if err == nil {
 		t.Fatalf("exec should fail because of a conn error")
+	}
+}
+
+func TestTxPoolLocal(t *testing.T) {
+	db := fakesqldb.Register()
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("commit", &sqltypes.Result{})
+	txPool := newTxPool(false)
+	appParams := sqldb.ConnParams{Engine: db.Name}
+	dbaParams := sqldb.ConnParams{Engine: db.Name}
+	txPool.Open(&appParams, &dbaParams)
+	ctx := context.Background()
+	conn, err := txPool.LocalBegin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = txPool.LocalCommit(ctx, conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Call LocalConclude twice to ensure nothing blows up.
+	txPool.LocalConclude(ctx, conn)
+	txPool.LocalConclude(ctx, conn)
+
+	conn, err = txPool.LocalBegin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Call LocalConclude twice to ensure nothing blows up.
+	txPool.LocalConclude(ctx, conn)
+	txPool.LocalConclude(ctx, conn)
+
+	txPool.Close()
+	_, err = txPool.LocalBegin(ctx)
+	want := "fatal: connection pool is closed"
+	if err == nil || err.Error() != want {
+		t.Errorf("Begin err: %v, want %v", err, want)
 	}
 }
 

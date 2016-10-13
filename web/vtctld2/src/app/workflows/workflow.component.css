@@ -85,6 +85,7 @@
 /* Rules for workflow log */
 .vt-log-text {
   max-height: 100px;
+  white-space: pre-wrap;
 }
 >>> vt-workflow .vt-log .ui-accordion-header{
   background-color: #E0F2F1;

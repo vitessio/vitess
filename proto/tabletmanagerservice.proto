@@ -53,6 +53,8 @@ service TabletManager {
 
   rpc ExecuteFetchAsDba(tabletmanagerdata.ExecuteFetchAsDbaRequest) returns (tabletmanagerdata.ExecuteFetchAsDbaResponse) {};
 
+  rpc ExecuteFetchAsAllPrivs(tabletmanagerdata.ExecuteFetchAsAllPrivsRequest) returns (tabletmanagerdata.ExecuteFetchAsAllPrivsResponse) {};
+
   rpc ExecuteFetchAsApp(tabletmanagerdata.ExecuteFetchAsAppRequest) returns (tabletmanagerdata.ExecuteFetchAsAppResponse) {};
 
   //

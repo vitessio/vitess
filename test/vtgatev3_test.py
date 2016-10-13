@@ -9,12 +9,11 @@ import urllib
 import environment
 import keyspace_util
 import utils
-from protocols_flavor import protocols_flavor
-
 
 from vtdb import dbexceptions
 from vtdb import vtgate_cursor
 from vtdb import vtgate_client
+
 
 shard_0_master = None
 shard_1_master = None
@@ -312,14 +311,11 @@ def get_connection(timeout=10.0):
 
 class TestVTGateFunctions(unittest.TestCase):
 
+  int_type = 265
+  string_type = 6165
+
   def setUp(self):
     self.master_tablet = shard_1_master
-    if protocols_flavor().vtgate_python_types() == 'proto3':
-      self.int_type = 265
-      self.string_type = 6165
-    else:
-      self.int_type = 8L
-      self.string_type = 253L
 
   def execute_on_master(self, vtgate_conn, sql, bind_vars):
     return vtgate_conn._execute(
@@ -1093,6 +1089,14 @@ class TestVTGateFunctions(unittest.TestCase):
         second_half_queries += 1
     self.assertEqual(first_half_queries, 1, 'invalid split %s' % str(s))
     self.assertEqual(second_half_queries, 1, 'invalid split %s' % str(s))
+
+  def test_vschema_vars(self):
+    v = utils.vtgate.get_vars()
+    self.assertIn('VtgateVSchemaCounts', v)
+    self.assertIn('Reload', v['VtgateVSchemaCounts'])
+    self.assertTrue(v['VtgateVSchemaCounts']['Reload'] > 0)
+    self.assertNotIn('Parsing', v['VtgateVSchemaCounts'])
+    self.assertNotIn('WatchError', v['VtgateVSchemaCounts'])
 
 if __name__ == '__main__':
   utils.main()

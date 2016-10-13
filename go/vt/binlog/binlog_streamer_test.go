@@ -33,6 +33,7 @@ func (fakeEvent) IsGTID() bool                          { return false }
 func (fakeEvent) IsRotate() bool                        { return false }
 func (fakeEvent) IsIntVar() bool                        { return false }
 func (fakeEvent) IsRand() bool                          { return false }
+func (fakeEvent) IsPreviousGTIDs() bool                 { return false }
 func (fakeEvent) HasGTID(replication.BinlogFormat) bool { return true }
 func (fakeEvent) Timestamp() uint32                     { return 1407805592 }
 func (fakeEvent) Format() (replication.BinlogFormat, error) {
@@ -40,6 +41,9 @@ func (fakeEvent) Format() (replication.BinlogFormat, error) {
 }
 func (fakeEvent) GTID(replication.BinlogFormat) (replication.GTID, error) {
 	return replication.MariadbGTID{Domain: 0, Server: 62344, Sequence: 0xd}, nil
+}
+func (fakeEvent) PreviousGTIDs(replication.BinlogFormat) (replication.Position, error) {
+	return replication.Position{}, errors.New("not a PreviousGTIDs")
 }
 func (fakeEvent) IsBeginGTID(replication.BinlogFormat) bool { return false }
 func (fakeEvent) Query(replication.BinlogFormat) (replication.Query, error) {

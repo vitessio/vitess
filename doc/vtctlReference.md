@@ -11,6 +11,7 @@ Commands are listed in the following groups:
 * [Serving Graph](#serving-graph)
 * [Shards](#shards)
 * [Tablets](#tablets)
+* [Workflows](#workflows)
 
 
 ## Generic
@@ -1579,11 +1580,11 @@ Removes the cell from the shard's Cells list.
 
 ### SetShardServedTypes
 
-Sets a given shard's served tablet types. Does not rebuild any serving graph.
+Add or remove served type to/from a shard. This is meant as an emergency function. It does not rebuild any serving graph i.e. does not run 'RebuildKeyspaceGraph'.
 
 #### Example
 
-<pre class="command-example">SetShardServedTypes &lt;keyspace/shard&gt; [&lt;served tablet type1&gt;,&lt;served tablet type2&gt;,...]</pre>
+<pre class="command-example">SetShardServedTypes [--cells=c1,c2,...] [--remove] &lt;keyspace/shard&gt; &lt;served tablet type&gt;</pre>
 
 #### Flags
 
@@ -1596,7 +1597,7 @@ Sets a given shard's served tablet types. Does not rebuild any serving graph.
 #### Arguments
 
 * <code>&lt;keyspace/shard&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables as well as the shard associated with the command. The keyspace must be identified by a string that does not contain whitepace, while the shard is typically identified by a string in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.
-* <code>&lt;served tablet type&gt;</code> &ndash; Optional. The vttablet's role. Valid values are:
+* <code>&lt;served tablet type&gt;</code> &ndash; Required. The vttablet's role. Valid values are:
 
     * <code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes
     * <code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)
@@ -1823,6 +1824,7 @@ Blocks until the specified shard has caught up with the filtered replication of 
 * [InitTablet](#inittablet)
 * [Ping](#ping)
 * [RefreshState](#refreshstate)
+* [RefreshStateByShard](#refreshstatebyshard)
 * [ReparentTablet](#reparenttablet)
 * [RestoreFromBackup](#restorefrombackup)
 * [RunHealthCheck](#runhealthcheck)
@@ -2030,7 +2032,6 @@ Initializes a tablet in the topology.<br><br>
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| allow_different_shard | Boolean | Use this flag to force initialization if a tablet with the same name but a different keyspace/shard already exists. Use with caution. |
 | allow_master_override | Boolean | Use this flag to force initialization if a tablet is created as master, and a master for the keyspace/shard already exists. Use with caution. |
 | allow_update | Boolean | Use this flag to force initialization if a tablet with the same name already exists. Use with caution. |
 | db_name_override | string | Overrides the name of the database that the vttablet uses |
@@ -2101,6 +2102,30 @@ Reloads the tablet record on the specified tablet.
 #### Errors
 
 * The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;RefreshState&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+
+
+### RefreshStateByShard
+
+Runs 'RefreshState' on all tablets in the given shard.
+
+#### Example
+
+<pre class="command-example">RefreshStateByShard [-cells=c1,c2,...] &lt;keyspace/shard&gt;</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| cells | string | Specifies a comma-separated list of cells whose tablets are included. If empty, all cells are considered. |
+
+
+#### Arguments
+
+* <code>&lt;keyspace/shard&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables as well as the shard associated with the command. The keyspace must be identified by a string that does not contain whitepace, while the shard is typically identified by a string in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.
+
+#### Errors
+
+* The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;RefreshStateByShard&gt;</code> command. This error occurs if the command is not called with exactly one argument.
 
 
 ### ReparentTablet
@@ -2263,5 +2288,113 @@ Updates the IP address and port numbers of a tablet.
 
 * The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;UpdateTabletAddrs&gt;</code> command. This error occurs if the command is not called with exactly one argument.
 * malformed address: %v
+
+
+## Workflows
+
+* [WorkflowAction](#workflowaction)
+* [WorkflowCreate](#workflowcreate)
+* [WorkflowStart](#workflowstart)
+* [WorkflowStop](#workflowstop)
+* [WorkflowTree](#workflowtree)
+* [WorkflowWait](#workflowwait)
+
+### WorkflowAction
+
+Sends the provided action name on the specified path.
+
+#### Example
+
+<pre class="command-example">WorkflowAction &lt;path&gt; &lt;name&gt;</pre>
+
+#### Arguments
+
+* <code>&lt;name&gt;</code> &ndash; Required.
+
+#### Errors
+
+* the <code>&lt;path&gt;</code> and <code>&lt;name&gt;</code> arguments are required for the <code>&lt;WorkflowAction&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
+* no workflow.Manager registered
+
+
+### WorkflowCreate
+
+Creates the workflow with the provided parameters. The workflow is also started, unless -nostart is specified.
+
+#### Example
+
+<pre class="command-example">WorkflowCreate [-nostart] &lt;factoryName&gt; [parameters...]</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| start | Boolean | If set, the workflow will also be started. |
+
+
+#### Arguments
+
+* <code>&lt;factoryName&gt;</code> &ndash; Required.
+
+#### Errors
+
+* the <code>&lt;factoryName&gt;</code> argument is required for the <code>&lt;WorkflowCreate&gt;</code> command This error occurs if the command is not called with at least one argument.
+* no workflow.Manager registered
+
+
+### WorkflowStart
+
+Starts the workflow.
+
+#### Example
+
+<pre class="command-example">WorkflowStart &lt;uuid&gt;</pre>
+
+#### Errors
+
+* the <code>&lt;uuid&gt;</code> argument is required for the <code>&lt;WorkflowStart&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* no workflow.Manager registered
+
+
+### WorkflowStop
+
+Stops the workflow.
+
+#### Example
+
+<pre class="command-example">WorkflowStop &lt;uuid&gt;</pre>
+
+#### Errors
+
+* the <code>&lt;uuid&gt;</code> argument is required for the <code>&lt;WorkflowStop&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* no workflow.Manager registered
+
+
+### WorkflowTree
+
+Displays a JSON representation of the workflow tree.
+
+#### Example
+
+<pre class="command-example">WorkflowTree </pre>
+
+#### Errors
+
+* the <code>&lt;WorkflowTree&gt;</code> command takes no parameter This error occurs if the command is not called with exactly 0 arguments.
+* no workflow.Manager registered
+
+
+### WorkflowWait
+
+Waits for the workflow to finish.
+
+#### Example
+
+<pre class="command-example">WorkflowWait &lt;uuid&gt;</pre>
+
+#### Errors
+
+* the <code>&lt;uuid&gt;</code> argument is required for the <code>&lt;WorkflowWait&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* no workflow.Manager registered
 
 

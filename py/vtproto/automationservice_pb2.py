@@ -29,45 +29,103 @@ _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
 
-import abc
+import grpc
 from grpc.beta import implementations as beta_implementations
+from grpc.beta import interfaces as beta_interfaces
 from grpc.framework.common import cardinality
 from grpc.framework.interfaces.face import utilities as face_utilities
 
-class BetaAutomationServicer(object):
-  """<fill me in later!>"""
-  __metaclass__ = abc.ABCMeta
-  @abc.abstractmethod
+
+class AutomationStub(object):
+
+  def __init__(self, channel):
+    """Constructor.
+
+    Args:
+      channel: A grpc.Channel.
+    """
+    self.EnqueueClusterOperation = channel.unary_unary(
+        '/automationservice.Automation/EnqueueClusterOperation',
+        request_serializer=automation__pb2.EnqueueClusterOperationRequest.SerializeToString,
+        response_deserializer=automation__pb2.EnqueueClusterOperationResponse.FromString,
+        )
+    self.GetClusterOperationDetails = channel.unary_unary(
+        '/automationservice.Automation/GetClusterOperationDetails',
+        request_serializer=automation__pb2.GetClusterOperationDetailsRequest.SerializeToString,
+        response_deserializer=automation__pb2.GetClusterOperationDetailsResponse.FromString,
+        )
+
+
+class AutomationServicer(object):
+
   def EnqueueClusterOperation(self, request, context):
-    raise NotImplementedError()
-  @abc.abstractmethod
+    """Start a cluster operation.
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
   def GetClusterOperationDetails(self, request, context):
-    raise NotImplementedError()
+    """TODO(mberlin): Polling this is bad. Implement a subscribe mechanism to wait for changes?
+    Get all details of an active cluster operation.
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
+
+def add_AutomationServicer_to_server(servicer, server):
+  rpc_method_handlers = {
+      'EnqueueClusterOperation': grpc.unary_unary_rpc_method_handler(
+          servicer.EnqueueClusterOperation,
+          request_deserializer=automation__pb2.EnqueueClusterOperationRequest.FromString,
+          response_serializer=automation__pb2.EnqueueClusterOperationResponse.SerializeToString,
+      ),
+      'GetClusterOperationDetails': grpc.unary_unary_rpc_method_handler(
+          servicer.GetClusterOperationDetails,
+          request_deserializer=automation__pb2.GetClusterOperationDetailsRequest.FromString,
+          response_serializer=automation__pb2.GetClusterOperationDetailsResponse.SerializeToString,
+      ),
+  }
+  generic_handler = grpc.method_handlers_generic_handler(
+      'automationservice.Automation', rpc_method_handlers)
+  server.add_generic_rpc_handlers((generic_handler,))
+
+
+class BetaAutomationServicer(object):
+  def EnqueueClusterOperation(self, request, context):
+    """Start a cluster operation.
+    """
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+  def GetClusterOperationDetails(self, request, context):
+    """TODO(mberlin): Polling this is bad. Implement a subscribe mechanism to wait for changes?
+    Get all details of an active cluster operation.
+    """
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+
 
 class BetaAutomationStub(object):
-  """The interface to which stubs will conform."""
-  __metaclass__ = abc.ABCMeta
-  @abc.abstractmethod
-  def EnqueueClusterOperation(self, request, timeout):
+  def EnqueueClusterOperation(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
+    """Start a cluster operation.
+    """
     raise NotImplementedError()
   EnqueueClusterOperation.future = None
-  @abc.abstractmethod
-  def GetClusterOperationDetails(self, request, timeout):
+  def GetClusterOperationDetails(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
+    """TODO(mberlin): Polling this is bad. Implement a subscribe mechanism to wait for changes?
+    Get all details of an active cluster operation.
+    """
     raise NotImplementedError()
   GetClusterOperationDetails.future = None
 
+
 def beta_create_Automation_server(servicer, pool=None, pool_size=None, default_timeout=None, maximum_timeout=None):
-  import automation_pb2
-  import automation_pb2
-  import automation_pb2
-  import automation_pb2
   request_deserializers = {
-    ('automationservice.Automation', 'EnqueueClusterOperation'): automation_pb2.EnqueueClusterOperationRequest.FromString,
-    ('automationservice.Automation', 'GetClusterOperationDetails'): automation_pb2.GetClusterOperationDetailsRequest.FromString,
+    ('automationservice.Automation', 'EnqueueClusterOperation'): automation__pb2.EnqueueClusterOperationRequest.FromString,
+    ('automationservice.Automation', 'GetClusterOperationDetails'): automation__pb2.GetClusterOperationDetailsRequest.FromString,
   }
   response_serializers = {
-    ('automationservice.Automation', 'EnqueueClusterOperation'): automation_pb2.EnqueueClusterOperationResponse.SerializeToString,
-    ('automationservice.Automation', 'GetClusterOperationDetails'): automation_pb2.GetClusterOperationDetailsResponse.SerializeToString,
+    ('automationservice.Automation', 'EnqueueClusterOperation'): automation__pb2.EnqueueClusterOperationResponse.SerializeToString,
+    ('automationservice.Automation', 'GetClusterOperationDetails'): automation__pb2.GetClusterOperationDetailsResponse.SerializeToString,
   }
   method_implementations = {
     ('automationservice.Automation', 'EnqueueClusterOperation'): face_utilities.unary_unary_inline(servicer.EnqueueClusterOperation),
@@ -76,18 +134,15 @@ def beta_create_Automation_server(servicer, pool=None, pool_size=None, default_t
   server_options = beta_implementations.server_options(request_deserializers=request_deserializers, response_serializers=response_serializers, thread_pool=pool, thread_pool_size=pool_size, default_timeout=default_timeout, maximum_timeout=maximum_timeout)
   return beta_implementations.server(method_implementations, options=server_options)
 
+
 def beta_create_Automation_stub(channel, host=None, metadata_transformer=None, pool=None, pool_size=None):
-  import automation_pb2
-  import automation_pb2
-  import automation_pb2
-  import automation_pb2
   request_serializers = {
-    ('automationservice.Automation', 'EnqueueClusterOperation'): automation_pb2.EnqueueClusterOperationRequest.SerializeToString,
-    ('automationservice.Automation', 'GetClusterOperationDetails'): automation_pb2.GetClusterOperationDetailsRequest.SerializeToString,
+    ('automationservice.Automation', 'EnqueueClusterOperation'): automation__pb2.EnqueueClusterOperationRequest.SerializeToString,
+    ('automationservice.Automation', 'GetClusterOperationDetails'): automation__pb2.GetClusterOperationDetailsRequest.SerializeToString,
   }
   response_deserializers = {
-    ('automationservice.Automation', 'EnqueueClusterOperation'): automation_pb2.EnqueueClusterOperationResponse.FromString,
-    ('automationservice.Automation', 'GetClusterOperationDetails'): automation_pb2.GetClusterOperationDetailsResponse.FromString,
+    ('automationservice.Automation', 'EnqueueClusterOperation'): automation__pb2.EnqueueClusterOperationResponse.FromString,
+    ('automationservice.Automation', 'GetClusterOperationDetails'): automation__pb2.GetClusterOperationDetailsResponse.FromString,
   }
   cardinalities = {
     'EnqueueClusterOperation': cardinality.Cardinality.UNARY_UNARY,

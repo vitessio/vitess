@@ -282,7 +282,7 @@ func (si *SchemaInfo) Reload(ctx context.Context) error {
 	// Reload any tables that have changed. We try every table even if some fail,
 	// but we return success only if all tables succeed.
 	// The following section requires us to hold mu.
-	errs := &concurrency.AllErrorRecorder{}
+	rec := concurrency.AllErrorRecorder{}
 	si.mu.Lock()
 	defer si.mu.Unlock()
 	for _, row := range tableData.Rows {
@@ -295,7 +295,7 @@ func (si *SchemaInfo) Reload(ctx context.Context) error {
 				si.mu.Unlock()
 				defer si.mu.Lock()
 				log.Infof("Reloading schema for table: %s", tableName)
-				errs.RecordError(si.createOrUpdateTableLocked(ctx, tableName))
+				rec.RecordError(si.createOrUpdateTableLocked(ctx, tableName))
 			}()
 			continue
 		}
@@ -303,7 +303,7 @@ func (si *SchemaInfo) Reload(ctx context.Context) error {
 		si.tables[tableName].SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
 	}
 	si.lastChange = curTime
-	return errs.Error()
+	return rec.Error()
 }
 
 func (si *SchemaInfo) mysqlTime(ctx context.Context) int64 {

@@ -21,7 +21,7 @@ var (
 	actionTimeout = flag.Duration("action_timeout", wrangler.DefaultActionTimeout, "time to wait for an action before resorting to force")
 )
 
-// ActionResult contains the result of an action. If Error, the aciton failed.
+// ActionResult contains the result of an action. If Error, the action failed.
 type ActionResult struct {
 	Name       string
 	Parameters string

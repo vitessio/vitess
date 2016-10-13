@@ -22,7 +22,7 @@ replicate from that master.
 
 ## MySQL requirements
 
-Vitess supports [MySQL 5.6](https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-howto.html), [MySQL 5.7](https://dev.mysql.com/doc/refman/5.7/en/replication-gtids-howto.html) and [MariaDB](https://mariadb.com/kb/en/mariadb/global-transaction-id/) implementations.
+Vitess supports [MySQL 5.6](https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-howto.html), [MySQL 5.7](https://dev.mysql.com/doc/refman/5.7/en/replication-gtids-howto.html) and [MariaDB 10.0](https://mariadb.com/kb/en/mariadb/global-transaction-id/) implementations.
 
 ### GTIDs
 Vitess requires the use of global transaction identifiers
@@ -176,11 +176,7 @@ by starting <code>vtctld</code> with the
 <code>--disable\_active\_reparents</code> flag set to <code>true</code>.
 (You cannot set the flag after <code>vtctld</code> is started.)
 
-## Reparenting And Serving Graph
-
-During the reparenting process, Vitess shuffles servers such that servers
-might be demoted, or promoted. The **serving graph** should
-reflect the latest state of the service.
+## Fixing Replication
 
 A tablet can be orphaned after a reparenting if it is unavailable
 when the reparent operation is running but then recovers later on.

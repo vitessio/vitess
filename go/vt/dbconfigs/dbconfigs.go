@@ -29,6 +29,10 @@ type DBConfigFlag int
 const (
 	EmptyConfig DBConfigFlag = 0
 	AppConfig   DBConfigFlag = 1 << iota
+	// AllPrivs user should have more privileges than App (should include possibility to do
+	// schema changes and write to internal Vitess tables), but it shouldn't have SUPER
+	// privilege like Dba has.
+	AllPrivsConfig
 	DbaConfig
 	FilteredConfig
 	ReplConfig
@@ -61,6 +65,10 @@ func RegisterFlags(flags DBConfigFlag) DBConfigFlag {
 	if AppConfig&flags != 0 {
 		registerConnFlags(&dbConfigs.App, "app")
 		registeredFlags |= AppConfig
+	}
+	if AllPrivsConfig&flags != 0 {
+		registerConnFlags(&dbConfigs.AllPrivs, "allprivs")
+		registeredFlags |= AllPrivsConfig
 	}
 	if DbaConfig&flags != 0 {
 		registerConnFlags(&dbConfigs.Dba, "dba")
@@ -105,12 +113,15 @@ func MysqlParams(cp *sqldb.ConnParams) (sqldb.ConnParams, error) {
 
 // DBConfigs is all we need for a smart tablet server:
 // - App access with db name for serving app queries
+// - AllPrivs access for administrative actions (like schema changes) that should
+//   be done without SUPER privilege
 // - Dba access for any dba-type operation (db creation, replication, ...)
 // - Filtered access for filtered replication
 // - Replication access to change master
 // - SidecarDBName for storing operational metadata
 type DBConfigs struct {
 	App           sqldb.ConnParams
+	AllPrivs      sqldb.ConnParams
 	Dba           sqldb.ConnParams
 	Filtered      sqldb.ConnParams
 	Repl          sqldb.ConnParams
@@ -131,6 +142,7 @@ func (dbcfgs *DBConfigs) String() string {
 // Redact will remove the password, so the object can be logged
 func (dbcfgs *DBConfigs) Redact() {
 	dbcfgs.App.Pass = mysql.RedactedPassword
+	dbcfgs.AllPrivs.Pass = mysql.RedactedPassword
 	dbcfgs.Dba.Pass = mysql.RedactedPassword
 	dbcfgs.Filtered.Pass = mysql.RedactedPassword
 	dbcfgs.Repl.Pass = mysql.RedactedPassword
@@ -149,6 +161,11 @@ func Init(socketFile string, flags DBConfigFlag) (DBConfigs, error) {
 	if AppConfig&flags != 0 {
 		if err := initConnParams(&dbConfigs.App, socketFile); err != nil {
 			return DBConfigs{}, fmt.Errorf("app dbconfig cannot be initialized: %v", err)
+		}
+	}
+	if AllPrivsConfig&flags != 0 {
+		if err := initConnParams(&dbConfigs.AllPrivs, socketFile); err != nil {
+			return DBConfigs{}, fmt.Errorf("allprivs dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if DbaConfig&flags != 0 {

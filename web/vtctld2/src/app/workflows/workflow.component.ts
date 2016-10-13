@@ -1,7 +1,8 @@
 import { Component, Input } from '@angular/core';
 import { Node, ActionStyle } from './node';
+import { Accordion, AccordionTab, Header } from 'primeng/primeng';
 
-import {Accordion, AccordionTab, Header} from 'primeng/primeng';
+import { WorkflowService } from '../api/workflow.service';
 
 @Component({
   selector: 'vt-workflow',
@@ -12,6 +13,7 @@ import {Accordion, AccordionTab, Header} from 'primeng/primeng';
 
 export class WorkflowComponent {
   @Input() workflow: Node;
+  @Input() workflowService: WorkflowService;
 
   getChildrenIds() {
     return Object.keys(this.workflow.children);
@@ -19,7 +21,7 @@ export class WorkflowComponent {
 
   getTime() {
     if (this.workflow.lastChanged) {
-      let d = new Date(this.workflow.lastChanged);
+      let d = new Date(this.workflow.lastChanged * 1000);
       return d.toString();
     }
   }
@@ -55,5 +57,10 @@ export class WorkflowComponent {
   blockClick(e) {
     e.stopPropagation();
     e.preventDefault();
+  }
+
+  actionClicked(name) {
+    console.log('ActionClicked(%s,%s)', this.workflow.path, name);
+    this.workflowService.sendAction(this.workflow.path, name);
   }
 }

@@ -6,8 +6,8 @@ namespace Vitess\Proto\Tabletmanagerservice {
 
   class TabletManagerClient extends \Grpc\BaseStub {
 
-    public function __construct($hostname, $opts) {
-      parent::__construct($hostname, $opts);
+    public function __construct($hostname, $opts, $channel = null) {
+      parent::__construct($hostname, $opts, $channel);
     }
     /**
      * @param Vitess\Proto\Tabletmanagerdata\PingRequest $input
@@ -98,6 +98,12 @@ namespace Vitess\Proto\Tabletmanagerservice {
      */
     public function ExecuteFetchAsDba(\Vitess\Proto\Tabletmanagerdata\ExecuteFetchAsDbaRequest $argument, $metadata = array(), $options = array()) {
       return $this->_simpleRequest('/tabletmanagerservice.TabletManager/ExecuteFetchAsDba', $argument, '\Vitess\Proto\Tabletmanagerdata\ExecuteFetchAsDbaResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Tabletmanagerdata\ExecuteFetchAsAllPrivsRequest $input
+     */
+    public function ExecuteFetchAsAllPrivs(\Vitess\Proto\Tabletmanagerdata\ExecuteFetchAsAllPrivsRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/tabletmanagerservice.TabletManager/ExecuteFetchAsAllPrivs', $argument, '\Vitess\Proto\Tabletmanagerdata\ExecuteFetchAsAllPrivsResponse::deserialize', $metadata, $options);
     }
     /**
      * @param Vitess\Proto\Tabletmanagerdata\ExecuteFetchAsAppRequest $input

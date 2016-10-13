@@ -297,67 +297,140 @@ ReinitConfigResponse = _reflection.GeneratedProtocolMessageType('ReinitConfigRes
 _sym_db.RegisterMessage(ReinitConfigResponse)
 
 
-import abc
+import grpc
 from grpc.beta import implementations as beta_implementations
+from grpc.beta import interfaces as beta_interfaces
 from grpc.framework.common import cardinality
 from grpc.framework.interfaces.face import utilities as face_utilities
 
-class BetaMysqlCtlServicer(object):
-  """<fill me in later!>"""
-  __metaclass__ = abc.ABCMeta
-  @abc.abstractmethod
+
+class MysqlCtlStub(object):
+  """MysqlCtl is the service definition
+  """
+
+  def __init__(self, channel):
+    """Constructor.
+
+    Args:
+      channel: A grpc.Channel.
+    """
+    self.Start = channel.unary_unary(
+        '/mysqlctl.MysqlCtl/Start',
+        request_serializer=StartRequest.SerializeToString,
+        response_deserializer=StartResponse.FromString,
+        )
+    self.Shutdown = channel.unary_unary(
+        '/mysqlctl.MysqlCtl/Shutdown',
+        request_serializer=ShutdownRequest.SerializeToString,
+        response_deserializer=ShutdownResponse.FromString,
+        )
+    self.RunMysqlUpgrade = channel.unary_unary(
+        '/mysqlctl.MysqlCtl/RunMysqlUpgrade',
+        request_serializer=RunMysqlUpgradeRequest.SerializeToString,
+        response_deserializer=RunMysqlUpgradeResponse.FromString,
+        )
+    self.ReinitConfig = channel.unary_unary(
+        '/mysqlctl.MysqlCtl/ReinitConfig',
+        request_serializer=ReinitConfigRequest.SerializeToString,
+        response_deserializer=ReinitConfigResponse.FromString,
+        )
+
+
+class MysqlCtlServicer(object):
+  """MysqlCtl is the service definition
+  """
+
   def Start(self, request, context):
-    raise NotImplementedError()
-  @abc.abstractmethod
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
   def Shutdown(self, request, context):
-    raise NotImplementedError()
-  @abc.abstractmethod
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
   def RunMysqlUpgrade(self, request, context):
-    raise NotImplementedError()
-  @abc.abstractmethod
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
   def ReinitConfig(self, request, context):
-    raise NotImplementedError()
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
+
+def add_MysqlCtlServicer_to_server(servicer, server):
+  rpc_method_handlers = {
+      'Start': grpc.unary_unary_rpc_method_handler(
+          servicer.Start,
+          request_deserializer=StartRequest.FromString,
+          response_serializer=StartResponse.SerializeToString,
+      ),
+      'Shutdown': grpc.unary_unary_rpc_method_handler(
+          servicer.Shutdown,
+          request_deserializer=ShutdownRequest.FromString,
+          response_serializer=ShutdownResponse.SerializeToString,
+      ),
+      'RunMysqlUpgrade': grpc.unary_unary_rpc_method_handler(
+          servicer.RunMysqlUpgrade,
+          request_deserializer=RunMysqlUpgradeRequest.FromString,
+          response_serializer=RunMysqlUpgradeResponse.SerializeToString,
+      ),
+      'ReinitConfig': grpc.unary_unary_rpc_method_handler(
+          servicer.ReinitConfig,
+          request_deserializer=ReinitConfigRequest.FromString,
+          response_serializer=ReinitConfigResponse.SerializeToString,
+      ),
+  }
+  generic_handler = grpc.method_handlers_generic_handler(
+      'mysqlctl.MysqlCtl', rpc_method_handlers)
+  server.add_generic_rpc_handlers((generic_handler,))
+
+
+class BetaMysqlCtlServicer(object):
+  """MysqlCtl is the service definition
+  """
+  def Start(self, request, context):
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+  def Shutdown(self, request, context):
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+  def RunMysqlUpgrade(self, request, context):
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+  def ReinitConfig(self, request, context):
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+
 
 class BetaMysqlCtlStub(object):
-  """The interface to which stubs will conform."""
-  __metaclass__ = abc.ABCMeta
-  @abc.abstractmethod
-  def Start(self, request, timeout):
+  """MysqlCtl is the service definition
+  """
+  def Start(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
     raise NotImplementedError()
   Start.future = None
-  @abc.abstractmethod
-  def Shutdown(self, request, timeout):
+  def Shutdown(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
     raise NotImplementedError()
   Shutdown.future = None
-  @abc.abstractmethod
-  def RunMysqlUpgrade(self, request, timeout):
+  def RunMysqlUpgrade(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
     raise NotImplementedError()
   RunMysqlUpgrade.future = None
-  @abc.abstractmethod
-  def ReinitConfig(self, request, timeout):
+  def ReinitConfig(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
     raise NotImplementedError()
   ReinitConfig.future = None
 
+
 def beta_create_MysqlCtl_server(servicer, pool=None, pool_size=None, default_timeout=None, maximum_timeout=None):
-  import mysqlctl_pb2
-  import mysqlctl_pb2
-  import mysqlctl_pb2
-  import mysqlctl_pb2
-  import mysqlctl_pb2
-  import mysqlctl_pb2
-  import mysqlctl_pb2
-  import mysqlctl_pb2
   request_deserializers = {
-    ('mysqlctl.MysqlCtl', 'ReinitConfig'): mysqlctl_pb2.ReinitConfigRequest.FromString,
-    ('mysqlctl.MysqlCtl', 'RunMysqlUpgrade'): mysqlctl_pb2.RunMysqlUpgradeRequest.FromString,
-    ('mysqlctl.MysqlCtl', 'Shutdown'): mysqlctl_pb2.ShutdownRequest.FromString,
-    ('mysqlctl.MysqlCtl', 'Start'): mysqlctl_pb2.StartRequest.FromString,
+    ('mysqlctl.MysqlCtl', 'ReinitConfig'): ReinitConfigRequest.FromString,
+    ('mysqlctl.MysqlCtl', 'RunMysqlUpgrade'): RunMysqlUpgradeRequest.FromString,
+    ('mysqlctl.MysqlCtl', 'Shutdown'): ShutdownRequest.FromString,
+    ('mysqlctl.MysqlCtl', 'Start'): StartRequest.FromString,
   }
   response_serializers = {
-    ('mysqlctl.MysqlCtl', 'ReinitConfig'): mysqlctl_pb2.ReinitConfigResponse.SerializeToString,
-    ('mysqlctl.MysqlCtl', 'RunMysqlUpgrade'): mysqlctl_pb2.RunMysqlUpgradeResponse.SerializeToString,
-    ('mysqlctl.MysqlCtl', 'Shutdown'): mysqlctl_pb2.ShutdownResponse.SerializeToString,
-    ('mysqlctl.MysqlCtl', 'Start'): mysqlctl_pb2.StartResponse.SerializeToString,
+    ('mysqlctl.MysqlCtl', 'ReinitConfig'): ReinitConfigResponse.SerializeToString,
+    ('mysqlctl.MysqlCtl', 'RunMysqlUpgrade'): RunMysqlUpgradeResponse.SerializeToString,
+    ('mysqlctl.MysqlCtl', 'Shutdown'): ShutdownResponse.SerializeToString,
+    ('mysqlctl.MysqlCtl', 'Start'): StartResponse.SerializeToString,
   }
   method_implementations = {
     ('mysqlctl.MysqlCtl', 'ReinitConfig'): face_utilities.unary_unary_inline(servicer.ReinitConfig),
@@ -368,26 +441,19 @@ def beta_create_MysqlCtl_server(servicer, pool=None, pool_size=None, default_tim
   server_options = beta_implementations.server_options(request_deserializers=request_deserializers, response_serializers=response_serializers, thread_pool=pool, thread_pool_size=pool_size, default_timeout=default_timeout, maximum_timeout=maximum_timeout)
   return beta_implementations.server(method_implementations, options=server_options)
 
+
 def beta_create_MysqlCtl_stub(channel, host=None, metadata_transformer=None, pool=None, pool_size=None):
-  import mysqlctl_pb2
-  import mysqlctl_pb2
-  import mysqlctl_pb2
-  import mysqlctl_pb2
-  import mysqlctl_pb2
-  import mysqlctl_pb2
-  import mysqlctl_pb2
-  import mysqlctl_pb2
   request_serializers = {
-    ('mysqlctl.MysqlCtl', 'ReinitConfig'): mysqlctl_pb2.ReinitConfigRequest.SerializeToString,
-    ('mysqlctl.MysqlCtl', 'RunMysqlUpgrade'): mysqlctl_pb2.RunMysqlUpgradeRequest.SerializeToString,
-    ('mysqlctl.MysqlCtl', 'Shutdown'): mysqlctl_pb2.ShutdownRequest.SerializeToString,
-    ('mysqlctl.MysqlCtl', 'Start'): mysqlctl_pb2.StartRequest.SerializeToString,
+    ('mysqlctl.MysqlCtl', 'ReinitConfig'): ReinitConfigRequest.SerializeToString,
+    ('mysqlctl.MysqlCtl', 'RunMysqlUpgrade'): RunMysqlUpgradeRequest.SerializeToString,
+    ('mysqlctl.MysqlCtl', 'Shutdown'): ShutdownRequest.SerializeToString,
+    ('mysqlctl.MysqlCtl', 'Start'): StartRequest.SerializeToString,
   }
   response_deserializers = {
-    ('mysqlctl.MysqlCtl', 'ReinitConfig'): mysqlctl_pb2.ReinitConfigResponse.FromString,
-    ('mysqlctl.MysqlCtl', 'RunMysqlUpgrade'): mysqlctl_pb2.RunMysqlUpgradeResponse.FromString,
-    ('mysqlctl.MysqlCtl', 'Shutdown'): mysqlctl_pb2.ShutdownResponse.FromString,
-    ('mysqlctl.MysqlCtl', 'Start'): mysqlctl_pb2.StartResponse.FromString,
+    ('mysqlctl.MysqlCtl', 'ReinitConfig'): ReinitConfigResponse.FromString,
+    ('mysqlctl.MysqlCtl', 'RunMysqlUpgrade'): RunMysqlUpgradeResponse.FromString,
+    ('mysqlctl.MysqlCtl', 'Shutdown'): ShutdownResponse.FromString,
+    ('mysqlctl.MysqlCtl', 'Start'): StartResponse.FromString,
   }
   cardinalities = {
     'ReinitConfig': cardinality.Cardinality.UNARY_UNARY,

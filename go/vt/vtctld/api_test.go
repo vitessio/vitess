@@ -96,18 +96,18 @@ func TestAPI(t *testing.T) {
 
 	// Test cases.
 	table := []struct {
-		method, path, want string
+		method, path, body, want string
 	}{
 		// Cells
-		{"GET", "cells", `["cell1","cell2"]`},
+		{"GET", "cells", "", `["cell1","cell2"]`},
 
 		// Keyspaces
-		{"GET", "keyspaces", `["ks1"]`},
-		{"GET", "keyspaces/ks1", `{
+		{"GET", "keyspaces", "", `["ks1"]`},
+		{"GET", "keyspaces/ks1", "", `{
 				"sharding_column_name": "shardcol",
 				"sharding_column_type": 0
 			}`},
-		{"POST", "keyspaces/ks1?action=TestKeyspaceAction", `{
+		{"POST", "keyspaces/ks1?action=TestKeyspaceAction", "", `{
 				"Name": "TestKeyspaceAction",
 				"Parameters": "ks1",
 				"Output": "TestKeyspaceAction Result",
@@ -115,12 +115,12 @@ func TestAPI(t *testing.T) {
 			}`},
 
 		// Shards
-		{"GET", "shards/ks1/", `["-80","80-"]`},
-		{"GET", "shards/ks1/-80", `{
+		{"GET", "shards/ks1/", "", `["-80","80-"]`},
+		{"GET", "shards/ks1/-80", "", `{
 				"key_range": {"end":"gA=="},
 				"cells": ["cell1", "cell2"]
 			}`},
-		{"POST", "shards/ks1/-80?action=TestShardAction", `{
+		{"POST", "shards/ks1/-80?action=TestShardAction", "", `{
 				"Name": "TestShardAction",
 				"Parameters": "ks1/-80",
 				"Output": "TestShardAction Result",
@@ -128,17 +128,17 @@ func TestAPI(t *testing.T) {
 			}`},
 
 		// Tablets
-		{"GET", "tablets/?shard=ks1%2F-80", `[
+		{"GET", "tablets/?shard=ks1%2F-80", "", `[
 				{"cell":"cell1","uid":100},
 				{"cell":"cell2","uid":200}
 			]`},
-		{"GET", "tablets/?cell=cell1", `[
+		{"GET", "tablets/?cell=cell1", "", `[
 				{"cell":"cell1","uid":100}
 			]`},
-		{"GET", "tablets/?shard=ks1%2F-80&cell=cell2", `[
+		{"GET", "tablets/?shard=ks1%2F-80&cell=cell2", "", `[
 				{"cell":"cell2","uid":200}
 			]`},
-		{"GET", "tablets/cell1-100", `{
+		{"GET", "tablets/cell1-100", "", `{
 				"alias": {"cell": "cell1", "uid": 100},
 				"hostname": "",
 				"ip": "",
@@ -149,7 +149,7 @@ func TestAPI(t *testing.T) {
 				"type": 2,
 				"db_name_override": ""
 			}`},
-		{"POST", "tablets/cell1-100?action=TestTabletAction", `{
+		{"POST", "tablets/cell1-100?action=TestTabletAction", "", `{
 				"Name": "TestTabletAction",
 				"Parameters": "cell1-0000000100",
 				"Output": "TestTabletAction Result",
@@ -157,7 +157,7 @@ func TestAPI(t *testing.T) {
 			}`},
 
 		// Tablet Updates
-		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=REPLICA&metric=lag", `[
+		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=REPLICA&metric=lag", "", `[
 		{
 		    "Data": [ [100, -1] ],
 		    "Aliases": [[ { "cell": "cell1", "uid": 100 }, null ]],
@@ -167,7 +167,7 @@ func TestAPI(t *testing.T) {
 		    "YGridLines": [0.5]
 		  }
 		]`},
-		{"GET", "tablet_statuses/?keyspace=ks1&cell=all&type=all&metric=lag", `[
+		{"GET", "tablet_statuses/?keyspace=ks1&cell=all&type=all&metric=lag", "", `[
 		{
 		  "Data":[[-1,400],[-1,300],[200,-1],[100,-1]],  
 		  "Aliases":[[null,{"cell":"cell2","uid":400}],[null,{"cell":"cell2","uid":300}],[{"cell":"cell1","uid":200},null],[{"cell":"cell1","uid":100},null]],
@@ -179,7 +179,7 @@ func TestAPI(t *testing.T) {
 		  "YGridLines":[0.5,1.5,2.5,3.5]
 		}
 		]`},
-		{"GET", "tablet_statuses/?keyspace=all&cell=all&type=all&metric=lag", `[
+		{"GET", "tablet_statuses/?keyspace=all&cell=all&type=all&metric=lag", "", `[
 		  {
 		   "Data":[[-1,300],[200,-1]],
 		   "Aliases":null,
@@ -201,27 +201,38 @@ func TestAPI(t *testing.T) {
 		  "YGridLines":[0.5, 1.5]
 		  }
 		]`},
-		{"GET", "tablet_statuses/cell1/REPLICA/lag", "can't get tablet_statuses: invalid target path: \"cell1/REPLICA/lag\"  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>"},
-		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "can't get tablet_statuses: invalid tablet type: unknown TabletType hello"},
+		{"GET", "tablet_statuses/cell1/REPLICA/lag", "", "can't get tablet_statuses: invalid target path: \"cell1/REPLICA/lag\"  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>"},
+		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "", "can't get tablet_statuses: invalid tablet type: unknown TabletType hello"},
 
 		// Tablet Health
-		{"GET", "tablet_health/cell1/100", `{ "Key": "", "Tablet": { "alias": { "cell": "cell1", "uid": 100 },"port_map": { "vt": 100 }, "keyspace": "ks1", "shard": "-80", "type": 2},
+		{"GET", "tablet_health/cell1/100", "", `{ "Key": "", "Tablet": { "alias": { "cell": "cell1", "uid": 100 },"port_map": { "vt": 100 }, "keyspace": "ks1", "shard": "-80", "type": 2},
 		  "Name": "", "Target": { "keyspace": "ks1", "shard": "-80", "tablet_type": 2 }, "Up": true, "Serving": true, "TabletExternallyReparentedTimestamp": 0,
 		  "Stats": { "seconds_behind_master": 100 }, "LastError": null }`},
-		{"GET", "tablet_health/cell1", "can't get tablet_health: invalid tablet_health path: \"cell1\"  expected path: /tablet_health/<cell>/<uid>"},
-		{"GET", "tablet_health/cell1/gh", "can't get tablet_health: incorrect uid: bad tablet uid strconv.ParseUint: parsing \"gh\": invalid syntax"},
+		{"GET", "tablet_health/cell1", "", "can't get tablet_health: invalid tablet_health path: \"cell1\"  expected path: /tablet_health/<cell>/<uid>"},
+		{"GET", "tablet_health/cell1/gh", "", "can't get tablet_health: incorrect uid: bad tablet uid strconv.ParseUint: parsing \"gh\": invalid syntax"},
 
 		// Topology Info
-		{"GET", "topology_info/?keyspace=all&cell=all", `{
+		{"GET", "topology_info/?keyspace=all&cell=all", "", `{
 		   "Keyspaces": ["ks1", "ks2"],
 		   "Cells": ["cell1","cell2"],
 		   "TabletTypes": ["REPLICA","RDONLY"]
 		}`},
-		{"GET", "topology_info/?keyspace=ks1&cell=cell1", `{
+		{"GET", "topology_info/?keyspace=ks1&cell=cell1", "", `{
 		   "Keyspaces": ["ks1", "ks2"],
 		   "Cells": ["cell1","cell2"],
 		   "TabletTypes": ["REPLICA", "RDONLY"]
 		}`},
+
+		// vtctl RunCommand
+		{"POST", "vtctl/", `["GetKeyspace","ks1"]`, `{
+		   "Error": "",
+		   "Output": "{\n  \"sharding_column_name\": \"shardcol\"\n}\n\n"
+		}`},
+		{"POST", "vtctl/", `["GetKeyspace","does_not_exist"]`, `{
+		   "Error": "node doesn't exist",
+		   "Output": ""
+		}`},
+		{"POST", "vtctl/", `["Panic"]`, `uncaught panic: this command panics on purpose`},
 	}
 	for _, in := range table {
 		var resp *http.Response
@@ -231,7 +242,7 @@ func TestAPI(t *testing.T) {
 		case "GET":
 			resp, err = http.Get(server.URL + apiPrefix + in.path)
 		case "POST":
-			resp, err = http.Post(server.URL+apiPrefix+in.path, "", nil)
+			resp, err = http.Post(server.URL+apiPrefix+in.path, "application/json", strings.NewReader(in.body))
 		default:
 			t.Errorf("[%v] unknown method: %v", in.path, in.method)
 			continue

@@ -30,7 +30,7 @@ vitess@32f187ef9351:/vt/src/github.com/youtube/vitess$ make build
 Now you can proceed to [start a Vitess cluster](#start-a-vitess-cluster) inside
 the Docker container you just started. Note that if you want to access the
 servers from outside the container, you'll need to expose the ports as described
-in the [Docker user guide](https://docs.docker.com/userguide/).
+in the [Docker Engine Reference Guide](https://docs.docker.com/engine/reference/run/#/expose-incoming-ports).
 
 For local testing, you can also access the servers on the local IP address
 created for the container by Docker:
@@ -73,7 +73,7 @@ OS X 10.11 (El Capitan) should work as well, the installation instructions are b
 
 In addition, Vitess requires the software and libraries listed below.
 
-1.  [Install Go 1.5+](http://golang.org/doc/install).
+1.  [Install Go 1.7+](http://golang.org/doc/install).
 
 2.  Install [MariaDB 10.0](https://downloads.mariadb.org/) or
     [MySQL 5.6](http://dev.mysql.com/downloads/mysql). You can use any

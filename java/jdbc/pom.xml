@@ -42,7 +42,7 @@
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-all</artifactId>
-            <version>0.13.1</version>
+            <version>${grpc.version}</version>
         </dependency>
         <dependency>
             <groupId>commons-lang</groupId>

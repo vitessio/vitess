@@ -50,6 +50,8 @@ var (
 	qpsByKeyspace  *stats.Rates
 	qpsByDbType    *stats.Rates
 
+	vschemaCounters *stats.Counters
+
 	errorsByOperation *stats.Rates
 	errorsByKeyspace  *stats.Rates
 	errorsByDbType    *stats.Rates
@@ -114,6 +116,11 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 		logStreamExecuteShards:      logutil.NewThrottledLogger("StreamExecuteShards", 5*time.Second),
 		logUpdateStream:             logutil.NewThrottledLogger("UpdateStream", 5*time.Second),
 	}
+
+	// vschemaCounters needs to be initialized before planner to
+	// catch the initial load stats.
+	vschemaCounters = stats.NewCounters("VtgateVSchemaCounts")
+
 	// Resuse resolver's scatterConn.
 	rpcVTGate.router = NewRouter(ctx, serv, cell, "VTGateRouter", rpcVTGate.resolver.scatterConn)
 	normalErrors = stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType"})
@@ -768,6 +775,11 @@ func (vtg *VTGate) UpdateStream(ctx context.Context, keyspace string, shard stri
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
 func (vtg *VTGate) GetGatewayCacheStatus() gateway.TabletCacheStatusList {
 	return vtg.resolver.GetGatewayCacheStatus()
+}
+
+// VSchemaStats returns the loaded vschema stats.
+func (vtg *VTGate) VSchemaStats() *VSchemaStats {
+	return vtg.router.planner.VSchemaStats()
 }
 
 // Any errors that are caused by VTGate dependencies (e.g, VtTablet) should be logged
