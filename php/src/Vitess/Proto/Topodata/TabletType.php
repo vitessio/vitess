@@ -14,6 +14,6 @@ namespace Vitess\Proto\Topodata {
     const EXPERIMENTAL = 5;
     const BACKUP = 6;
     const RESTORE = 7;
-    const WORKER = 8;
+    const DRAINED = 8;
   }
 }
