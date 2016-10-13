@@ -174,7 +174,10 @@ type HealthCheck interface {
 	// AddTablet() call were propagated to the listener via corresponding
 	// StatsUpdate() calls. Note that code path from AddTablet() to
 	// corresponding StatsUpdate() is asynchronous but not cancelable, thus
-	// this function is also non-cancelable and can't return error.
+	// this function is also non-cancelable and can't return error. Also
+	// note that all AddTablet() calls should happen before calling this
+	// method. WaitForInitialStatsUpdates won't wait for StatsUpdate() calls
+	// corresponding to AddTablet() calls made during its execution.
 	WaitForInitialStatsUpdates()
 	// GetConnection returns the TabletConn of the given tablet.
 	GetConnection(key string) tabletconn.TabletConn

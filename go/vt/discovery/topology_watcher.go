@@ -84,9 +84,9 @@ type TopologyWatcher struct {
 	// mu protects all variables below
 	mu      sync.Mutex
 	tablets map[string]*tabletInfo
-	// Whether first load of the topology data is done.
+	// firstLoadDone is true when first load of the topology data is done.
 	firstLoadDone bool
-	// Channel that is closed when the initial loading of topology data is done.
+	// firstLoadChan is closed when the initial loading of topology data is done.
 	firstLoadChan chan struct{}
 }
 
