@@ -100,8 +100,7 @@ func (shardSwap *shardSchemaSwap) startHealthWatchers() error {
 		shardSwap.tabletWatchers = append(shardSwap.tabletWatchers, watcher)
 	}
 	for _, watcher := range shardSwap.tabletWatchers {
-		err := watcher.WaitForInitialTopology()
-		if err != nil {
+		if err := watcher.WaitForInitialTopology(); err != nil {
 			return err
 		}
 	}
