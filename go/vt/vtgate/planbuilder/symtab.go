@@ -279,18 +279,30 @@ func (t *tabsym) FindVindex(name sqlparser.ColIdent) vindexes.Vindex {
 // a tabsym, colsym also contains a backpointer to the symtab,
 // and a pointer to the route that would compute or fetch this value.
 // In the future, it could point to primitives other than a route.
-// A colsym may not have an alias, in which case, it cannot be referenced
-// by ohter parts of the query.
 // If the expression is a plain column reference, then the 'Underlying' field
 // is set to the column it refers. If the referenced column has a Vindex,
 // the Vindex field is also accordingly set.
 type colsym struct {
-	Alias         sqlparser.ColIdent
+	// Alias will represent the unqualified symbol name for that expression.
+	// If the statement provides an explicit alias, that name will be used.
+	// Otherwise, one will be generated. If the expression is a simple
+	// column, then the base name of the column will be used as the alias.
+	Alias sqlparser.ColIdent
+
+	// QualfiedName will represent the fully qualified column name,
+	// if the expression is a simple column reference. If the column
+	// expression does not reference a table (or alias), a fully
+	// qualified name will be generated based on the table alias
+	// the column references.
+	// Alias or QualifiedName or both could be blank if such names
+	// could not be generated. If so, those expressions cannot be
+	// referenced by other clauses of the SQL statement.
 	QualifiedName sqlparser.ColIdent
-	route         *route
-	symtab        *symtab
-	Underlying    colref
-	Vindex        vindexes.Vindex
+
+	route      *route
+	symtab     *symtab
+	Underlying colref
+	Vindex     vindexes.Vindex
 }
 
 // newColsym builds a colsym for the specified route and symtab.
