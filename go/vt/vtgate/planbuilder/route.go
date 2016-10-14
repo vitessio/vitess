@@ -55,7 +55,7 @@ func newRoute(from sqlparser.TableExprs, eroute *engine.Route, table *vindexes.T
 		order:  1,
 		ERoute: eroute,
 	}
-	_ = rb.symtab.AddAlias(alias, astName, table, rb)
+	rb.symtab.AddAlias(alias, astName, table, rb)
 	return rb
 }
 
@@ -317,10 +317,15 @@ func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (colsym *cols
 	colsym = newColsym(rb, rb.Symtab())
 	colsym.Alias = expr.As
 	if col, ok := expr.Expr.(*sqlparser.ColName); ok {
+		// If no alias was specified, then the base name
+		// of the column becomes the alias.
 		if colsym.Alias.Original() == "" {
-			colsym.Alias = sqlparser.NewColIdent(sqlparser.String(col))
-		} else {
-			colsym.ExprName = sqlparser.NewColIdent(sqlparser.String(col))
+			colsym.Alias = col.Name
+		}
+		// We should always allow other parts of the query to reference
+		// the fully qualified name of the column.
+		if tab, ok := col.Metadata.(*tabsym); ok {
+			colsym.QualifiedName = sqlparser.NewColIdent(sqlparser.String(tab.Alias) + "." + col.Name.Original())
 		}
 		colsym.Vindex = rb.Symtab().Vindex(col, rb, true)
 		colsym.Underlying = newColref(col)
@@ -328,6 +333,10 @@ func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (colsym *cols
 		if rb.IsRHS {
 			return nil, 0, errors.New("unsupported: complex left join and column expressions")
 		}
+		// We should ideally generate an alias based on the
+		// expression, but we currently don't have the ability
+		// to reference such expressions. So, we leave the
+		// alias blank.
 	}
 	rb.Select.SelectExprs = append(rb.Select.SelectExprs, expr)
 	rb.Colsyms = append(rb.Colsyms, colsym)
@@ -337,7 +346,17 @@ func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (colsym *cols
 // PushStar pushes the '*' expression into the route.
 func (rb *route) PushStar(expr *sqlparser.StarExpr) *colsym {
 	colsym := newColsym(rb, rb.Symtab())
-	colsym.Alias = sqlparser.NewColIdent(sqlparser.String(expr))
+	// This is not perfect, but it should be good enough.
+	// We'll match unqualified column names against Alias
+	// and qualified column names against QualifiedName.
+	// If someone uses 'select *' and then uses table.col
+	// in the HAVING clause, then things won't match. But
+	// such cases are easy to correct in the application.
+	if expr.TableName == "" {
+		colsym.Alias = sqlparser.NewColIdent(sqlparser.String(expr))
+	} else {
+		colsym.QualifiedName = sqlparser.NewColIdent(sqlparser.String(expr))
+	}
 	rb.Select.SelectExprs = append(rb.Select.SelectExprs, expr)
 	rb.Colsyms = append(rb.Colsyms, colsym)
 	return colsym

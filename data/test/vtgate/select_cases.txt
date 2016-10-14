@@ -28,6 +28,21 @@
   }
 }
 
+# unqualified '*' expression for simple route
+"select * from user"
+{
+  "Original": "select * from user",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user",
+    "FieldQuery": "select * from user where 1 != 1"
+  }
+}
+
 # RHS route referenced
 "select user_extra.id from user join user_extra"
 {

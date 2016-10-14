@@ -683,6 +683,27 @@
   }
 }
 
+# subquery with join, and aliased references
+"select t.id from (select user.id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id"
+{
+  "Original": "select t.id from (select user.id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select t.id from (select user.id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id",
+    "FieldQuery": "select t.id from (select user.id from user where 1 != 1) as t join user_extra where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 5
+  }
+}
+
+# subquery with join, duplicate columns
+"select t.id from (select user.id, id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id"
+"duplicate column aliases: id"
+
 # subquery in RHS of join
 "select t.id from user_extra join (select id from user where id = 5) as t on t.id = user_extra.user_id"
 {

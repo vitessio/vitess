@@ -49,6 +49,60 @@
 "select id from user group by col"
 "symbol col not found"
 
+# HAVING references base name of a column
+"select user.col1 from user having col1 = 2"
+{
+  "Original": "select user.col1 from user having col1 = 2",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.col1 from user having col1 = 2",
+    "FieldQuery": "select user.col1 from user where 1 != 1"
+  }
+}
+
+# HAVING references base name of non-existent column
+"select user.col1 from user having col2 = 2"
+"symbol col2 not found"
+
+# ambiguous symbol reference
+"select user.col1, user_extra.col1 from user join user_extra having col1 = 2"
+"ambiguous symbol reference: col1"
+
+# non-ambiguous symbol reference
+"select user.col1, user_extra.col1 from user join user_extra having user_extra.col1 = 2"
+{
+  "Original": "select user.col1, user_extra.col1 from user join user_extra having user_extra.col1 = 2",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col1 from user",
+      "FieldQuery": "select user.col1 from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user_extra.col1 from user_extra having user_extra.col1 = 2",
+      "FieldQuery": "select user_extra.col1 from user_extra where 1 != 1"
+    },
+    "Cols": [
+      -1,
+      1
+    ]
+  }
+}
+
 # HAVING multi-route
 "select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1"
 {
