@@ -667,7 +667,8 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 
 	// now restart the map until we get the right BlpPosition
 	mysqlDaemon.BinlogPlayerEnabled = false
-	ctx1, _ := context.WithTimeout(ctx, 5*time.Second)
+	ctx1, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	if err := bpm.RunUntil(ctx1, []*tabletmanagerdatapb.BlpPosition{
 		{
 			Uid:      1,
