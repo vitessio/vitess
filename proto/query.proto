@@ -349,6 +349,101 @@ message RollbackRequest {
 // RollbackResponse is the returned value from Rollback
 message RollbackResponse {}
 
+// PrepareRequest is the payload to Prepare
+message PrepareRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  int64 transaction_id = 4;
+  string dtid = 5;
+}
+
+// PrepareResponse is the returned value from Prepare
+message PrepareResponse {}
+
+// CommitPreparedRequest is the payload to CommitPrepared
+message CommitPreparedRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  string dtid = 4;
+}
+
+// CommitPreparedResponse is the returned value from CommitPrepared
+message CommitPreparedResponse {}
+
+// RollbackPreparedRequest is the payload to RollbackPrepared
+message RollbackPreparedRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  int64 transaction_id = 4;
+  string dtid = 5;
+}
+
+// RollbackPreparedResponse is the returned value from RollbackPrepared
+message RollbackPreparedResponse {}
+
+// CreateTransactionRequest is the payload to CreateTransaction
+message CreateTransactionRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  string dtid = 4;
+  repeated Target participants = 5;
+}
+
+// CreateTransactionResponse is the returned value from CreateTransaction
+message CreateTransactionResponse {}
+
+// StartCommitRequest is the payload to StartCommit
+message StartCommitRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  int64 transaction_id = 4;
+  string dtid = 5;
+}
+
+// StartCommitResponse is the returned value from StartCommit
+message StartCommitResponse {}
+
+// SetRollbackRequest is the payload to SetRollback
+message SetRollbackRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  int64 transaction_id = 4;
+  string dtid = 5;
+}
+
+// SetRollbackResponse is the returned value from SetRollback
+message SetRollbackResponse {}
+
+// ResolveTransactionRequest is the payload to ResolveTransaction
+message ResolveTransactionRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  string dtid = 4;
+}
+
+// ResolveTransactionResponse is the returned value from ResolveTransaction
+message ResolveTransactionResponse {}
+
+// ReadTransactionRequest is the payload to ReadTransaction
+message ReadTransactionRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  string dtid = 4;
+}
+
+// ReadTransactionResponse is the returned value from ReadTransaction
+message ReadTransactionResponse {
+  TransactionMetadata metadata = 1;
+}
+
 // BeginExecuteRequest is the payload to BeginExecute
 message BeginExecuteRequest {
   vtrpc.CallerID effective_caller_id = 1;

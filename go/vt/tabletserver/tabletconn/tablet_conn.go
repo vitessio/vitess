@@ -107,6 +107,14 @@ type TabletConn interface {
 	Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error)
 	Commit(ctx context.Context, target *querypb.Target, transactionID int64) error
 	Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error
+	Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error)
+	CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error)
+	RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error)
+	CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error)
+	StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error)
+	SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error)
+	ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error)
+	ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error)
 
 	// Combo RPC calls: they execute both a Begin and another call.
 	// Note even if error is set, transactionID may be returned

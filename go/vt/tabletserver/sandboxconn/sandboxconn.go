@@ -34,11 +34,19 @@ type SandboxConn struct {
 
 	// These Count vars report how often the corresponding
 	// functions were called.
-	ExecCount          sync2.AtomicInt64
-	BeginCount         sync2.AtomicInt64
-	CommitCount        sync2.AtomicInt64
-	RollbackCount      sync2.AtomicInt64
-	AsTransactionCount sync2.AtomicInt64
+	ExecCount               sync2.AtomicInt64
+	BeginCount              sync2.AtomicInt64
+	CommitCount             sync2.AtomicInt64
+	RollbackCount           sync2.AtomicInt64
+	AsTransactionCount      sync2.AtomicInt64
+	PrepareCount            sync2.AtomicInt64
+	CommitPreparedCount     sync2.AtomicInt64
+	RollbackPreparedCount   sync2.AtomicInt64
+	CreateTransactionCount  sync2.AtomicInt64
+	StartCommitCount        sync2.AtomicInt64
+	SetRollbackCount        sync2.AtomicInt64
+	ResolveTransactionCount sync2.AtomicInt64
+	ReadTransactionCount    sync2.AtomicInt64
 
 	// Queries stores the non-batch requests received.
 	Queries []querytypes.BoundQuery
@@ -205,6 +213,57 @@ func (sbc *SandboxConn) Commit(ctx context.Context, target *querypb.Target, tran
 func (sbc *SandboxConn) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	sbc.RollbackCount.Add(1)
 	return sbc.getError()
+}
+
+// Prepare prepares the specified transaction.
+func (sbc *SandboxConn) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	sbc.PrepareCount.Add(1)
+	return sbc.getError()
+}
+
+// CommitPrepared commits the prepared transaction.
+func (sbc *SandboxConn) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	sbc.CommitPreparedCount.Add(1)
+	return sbc.getError()
+}
+
+// RollbackPrepared rolls back the prepared transaction.
+func (sbc *SandboxConn) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error) {
+	sbc.RollbackPreparedCount.Add(1)
+	return sbc.getError()
+}
+
+// CreateTransaction creates the metadata for a 2PC transaction.
+func (sbc *SandboxConn) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
+	sbc.CreateTransactionCount.Add(1)
+	return sbc.getError()
+}
+
+// StartCommit atomically commits the transaction along with the
+// decision to commit the associated 2pc transaction.
+func (sbc *SandboxConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	sbc.StartCommitCount.Add(1)
+	return sbc.getError()
+}
+
+// SetRollback transitions the 2pc transaction to the Rollback state.
+// If a transaction id is provided, that transaction is also rolled back.
+func (sbc *SandboxConn) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
+	sbc.SetRollbackCount.Add(1)
+	return sbc.getError()
+}
+
+// ResolveTransaction deletes the 2pc transaction metadata
+// essentially resolving it.
+func (sbc *SandboxConn) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	sbc.ResolveTransactionCount.Add(1)
+	return sbc.getError()
+}
+
+// ReadTransaction returns the metadata for the sepcified dtid.
+func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
+	sbc.ReadTransactionCount.Add(1)
+	return nil, sbc.getError()
 }
 
 // BeginExecute is part of the TabletConn interface.
