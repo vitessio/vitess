@@ -1,13 +1,22 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
+
+import { Observable } from 'rxjs/Observable';
+
 import { Node, Action, Display, State, ActionState, ActionStyle } from './node';
 import { WorkflowComponent } from './workflow.component';
 import { Accordion, AccordionTab, Header } from 'primeng/primeng';
 import { WorkflowService } from '../api/workflow.service';
+import { DialogContent } from '../shared/dialog/dialog-content';
+import { DialogSettings } from '../shared/dialog/dialog-settings';
+import { PrepareResponse } from '../shared/prepare-response';
+import { NewWorkflowFlags } from '../shared/flags/workflow.flags';
+
+import { MenuItem } from 'primeng/primeng';
 
 @Component({
   selector: 'vt-tasks',
   templateUrl: './workflow-list.component.html',
-  styleUrls: ['./workflow-list.component.css', './workflow.component.css'],
+  styleUrls: ['../styles/vt.style.css', './workflow-list.component.css', './workflow.component.css'],
   directives: [
     WorkflowComponent,
     Accordion, AccordionTab, Header,
@@ -15,8 +24,8 @@ import { WorkflowService } from '../api/workflow.service';
   providers: [WorkflowService],
 })
 
-export class WorkflowListComponent implements OnInit {
-  title = 'Vitess Control Panel';
+export class WorkflowListComponent implements OnDestroy, OnInit {
+  title = 'Running Workflows';
   workflows = [
     new Node('Horizontal Resharding Workflow', '/UU130429', [
       new Node('Approval', '/UU130429/1', []),
@@ -48,6 +57,10 @@ export class WorkflowListComponent implements OnInit {
     ]),
     new Node('TEST DUMMY', '/UU948312', [])
   ];
+  dialogSettings: DialogSettings;
+  dialogContent: DialogContent;
+  private actions: MenuItem[];
+  private running = true;
 
   constructor(private workflowService: WorkflowService) {}
 
@@ -55,6 +68,10 @@ export class WorkflowListComponent implements OnInit {
     this.workflowService.updates().subscribe(update => {
       this.processUpdateJson(update);
     });
+    this.dialogContent = new DialogContent();
+    this.dialogSettings = new DialogSettings();
+    this.actions = [{label: 'Toggle Running / Non-running Workflows', command: (event) => {this.toggleRunning(); }}];
+
     // Resharding Workflow Example
     this.updateWorkFlow('/UU130429', {
       message: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt\
@@ -192,6 +209,10 @@ dolore magnam aliquam quaerat voluptatem.'});
     this.updateWorkFlow('/UU130429/5/18', {
       message: 'Recursively removing old shards',
       display: Display.DETERMINATE});
+  }
+
+  ngOnDestroy() {
+    this.workflowService.stop();
   }
 
   processUpdateJson(update: any) {
@@ -339,6 +360,46 @@ dolore magnam aliquam quaerat voluptatem.'});
         return 'vt-workflow-done-dark';
       default:
         return '';
+    }
+  }
+
+  openNewDialog() {
+    this.dialogSettings = new DialogSettings('Create', 'Create a new Workflow', '', 'There was a problem creating {{factory_name}}:');
+    this.dialogSettings.setMessage('Created {{factory_name}}');
+    let flags = new NewWorkflowFlags().flags;
+    this.dialogContent = new DialogContent('factory_name', flags, {'factory_name': true}, this.prepareNew.bind(this), 'WorkflowCreate');
+    this.dialogSettings.toggleModal();
+  }
+
+  prepareNew(flags) {
+    let newFlags = new NewWorkflowFlags().flags;
+    for (let key of Object.keys(flags)) {
+      newFlags[key].value = flags[key].value;
+    }
+    this.workflowParametersSanitize(newFlags);
+    return new PrepareResponse(true, newFlags);
+  }
+
+  workflowParametersSanitize(newFlags) {
+    if (newFlags['factory_name'] === 'sleep') {
+      newFlags['duration']['value'] = '30';
+    }
+    if (newFlags['factory_name'] === 'other') {
+      newFlags['duration']['value'] = '';
+    }
+  }
+
+  canDeactivate(): Observable<boolean> | boolean {
+    return !this.dialogSettings.pending;
+  }
+
+  toggleRunning() {
+    if (this.running) {
+      this.running = false;
+      this.title = 'Stopped Workflows';
+    } else {
+      this.running = true;
+      this.title = 'Running Workflows';
     }
   }
 }

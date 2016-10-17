@@ -14,10 +14,18 @@ import (
 
 var upgrader = websocket.Upgrader{} // use default options
 
-// HandleHTTP registers the WebSocket handler.
-func (m *Manager) HandleHTTP(pattern string) {
+// HandleHTTPWebSocket registers the WebSocket handler.
+func (m *Manager) HandleHTTPWebSocket(pattern string) {
 	log.Infof("workflow Manager listening to websocket traffic at %v", pattern)
 	http.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if x := recover(); x != nil {
+				errMsg := fmt.Sprintf("uncaught panic: %v", x)
+				log.Error(errMsg)
+				http.Error(w, errMsg, http.StatusInternalServerError)
+			}
+		}()
+
 		// Check ACL.
 		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
 			msg := fmt.Sprintf("WorkflowManager acl.CheckAccessHTTP failed: %v", err)

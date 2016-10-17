@@ -18,7 +18,7 @@ func TestWebSocket(t *testing.T) {
 	m := NewManager(topo.Server{Impl: ts})
 
 	// Register the manager to a web handler, start a web server.
-	m.HandleHTTP("/workflow")
+	m.HandleHTTPWebSocket("/workflow")
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)

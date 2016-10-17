@@ -10,6 +10,8 @@ import (
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+
+	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
 )
 
 func startManager(t *testing.T, m *Manager) (*sync.WaitGroup, context.CancelFunc) {
@@ -43,8 +45,8 @@ func startManager(t *testing.T, m *Manager) (*sync.WaitGroup, context.CancelFunc
 
 // TestManagerSimpleRun starts and stops a job within a Manager.
 func TestManagerSimpleRun(t *testing.T) {
-	ts := memorytopo.NewMemoryTopo([]string{"cell1"})
-	m := NewManager(topo.Server{Impl: ts})
+	ts := topo.Server{Impl: memorytopo.NewMemoryTopo([]string{"cell1"})}
+	m := NewManager(ts)
 
 	// Run the manager in the background.
 	wg, cancel := startManager(t, m)
@@ -72,8 +74,8 @@ func TestManagerSimpleRun(t *testing.T) {
 // TestManagerRestart starts a job within a manager, stops the
 // manager, restarts a manager, and stops the job.
 func TestManagerRestart(t *testing.T) {
-	ts := memorytopo.NewMemoryTopo([]string{"cell1"})
-	m := NewManager(topo.Server{Impl: ts})
+	ts := topo.Server{Impl: memorytopo.NewMemoryTopo([]string{"cell1"})}
+	m := NewManager(ts)
 
 	// Run the manager in the background.
 	wg, cancel := startManager(t, m)
@@ -92,6 +94,17 @@ func TestManagerRestart(t *testing.T) {
 	// Stop the manager.
 	cancel()
 	wg.Wait()
+
+	// Make sure the workflow is still in the topo server.  This
+	// validates that interrupting the Manager leaves the jobs in
+	// the right state in the topo server.
+	wi, err := ts.GetWorkflow(context.Background(), uuid)
+	if err != nil {
+		t.Fatalf("cannot read workflow %v: %v", uuid, err)
+	}
+	if wi.State != workflowpb.WorkflowState_Running {
+		t.Fatalf("unexpected workflow state %v was expecting %v", wi.State, workflowpb.WorkflowState_Running)
+	}
 
 	// Restart the manager.
 	wg, cancel = startManager(t, m)
@@ -113,12 +126,27 @@ func TestManagerRestart(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
-	// Stop the job.
+	// Stop the job. Note Stop() waits until the background go
+	// routine that saves the job is done, so when we return from
+	// this call, the job is saved with the right updated State
+	// inside the topo server.
 	if err := m.Stop(context.Background(), uuid); err != nil {
-		t.Fatalf("cannot start sleep workflow: %v", err)
+		t.Fatalf("cannot stop sleep workflow: %v", err)
 	}
 
 	// And stop the manager.
 	cancel()
 	wg.Wait()
+
+	// Make sure the workflow is stopped in the topo server.
+	wi, err = ts.GetWorkflow(context.Background(), uuid)
+	if err != nil {
+		t.Fatalf("cannot read workflow %v: %v", uuid, err)
+	}
+	if wi.State != workflowpb.WorkflowState_Done {
+		t.Fatalf("unexpected workflow state %v was expecting %v", wi.State, workflowpb.WorkflowState_Running)
+	}
+	if !strings.Contains(wi.Error, "canceled") {
+		t.Errorf("invalid workflow error: %v", wi.Error)
+	}
 }

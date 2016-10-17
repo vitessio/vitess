@@ -34,7 +34,7 @@
 
 .vt-progress-bar-wrapper {
   display: inline-block;
-  width: 60%;
+  width: 50%;
 }
 
 .vt-progress-bar {
@@ -53,6 +53,14 @@
 .vt-progress-msg {
   padding-left: 10px;
   padding-top: 1px;
+}
+
+.vt-workflow-action-wrapper {
+  display: inline-block;
+  width: 10%;
+}
+
+.vt-workflow-action {
 }
 
 /* Rules for workflow content */
