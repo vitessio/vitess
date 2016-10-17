@@ -434,8 +434,14 @@ class TestEcho(TestPythonClientBase):
 
   echo_prefix = 'echo://'
 
-  query = 'test query with bind variables: :int :float :bytes'
-  query_echo = 'test query with bind variables: :int :float :bytes'
+  query = (
+      u'test query with bind variables: :int :float :bytes, unicode: '
+      u'\u6211\u80fd\u541e\u4e0b\u73bb\u7483\u800c\u4e0d\u50b7\u8eab\u9ad4'
+      ).encode('utf-8')
+  query_echo = (
+      u'test query with bind variables: :int :float :bytes, unicode: '
+      u'\u6211\u80fd\u541e\u4e0b\u73bb\u7483\u800c\u4e0d\u50b7\u8eab\u9ad4'
+      ).encode('utf-8')
   keyspace = 'test_keyspace'
 
   shards = ['-80', '80-']
