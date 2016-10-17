@@ -11,7 +11,7 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
 
     private static $client;
 
-    private static $ECHO_QUERY = 'echo://test query';
+    private static $ECHO_QUERY = "echo://test query with utf-8: \xe6\x88\x91\xe8\x83\xbd\xe5\x90\x9e\xe4\xb8\x8b\xe7\x8e\xbb\xe7\x92\x83\xe8\x80\x8c\xe4\xb8\x8d\xe5\x82\xb7\xe8\xba\xab\xe9\xab\x94";
 
     private static $ERROR_PREFIX = 'error://';
 
