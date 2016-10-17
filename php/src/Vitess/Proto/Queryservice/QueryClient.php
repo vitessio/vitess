@@ -46,6 +46,54 @@ namespace Vitess\Proto\Queryservice {
       return $this->_simpleRequest('/queryservice.Query/Rollback', $argument, '\Vitess\Proto\Query\RollbackResponse::deserialize', $metadata, $options);
     }
     /**
+     * @param Vitess\Proto\Query\PrepareRequest $input
+     */
+    public function Prepare(\Vitess\Proto\Query\PrepareRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/queryservice.Query/Prepare', $argument, '\Vitess\Proto\Query\PrepareResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Query\CommitPreparedRequest $input
+     */
+    public function CommitPrepared(\Vitess\Proto\Query\CommitPreparedRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/queryservice.Query/CommitPrepared', $argument, '\Vitess\Proto\Query\CommitPreparedResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Query\RollbackPreparedRequest $input
+     */
+    public function RollbackPrepared(\Vitess\Proto\Query\RollbackPreparedRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/queryservice.Query/RollbackPrepared', $argument, '\Vitess\Proto\Query\RollbackPreparedResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Query\CreateTransactionRequest $input
+     */
+    public function CreateTransaction(\Vitess\Proto\Query\CreateTransactionRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/queryservice.Query/CreateTransaction', $argument, '\Vitess\Proto\Query\CreateTransactionResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Query\StartCommitRequest $input
+     */
+    public function StartCommit(\Vitess\Proto\Query\StartCommitRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/queryservice.Query/StartCommit', $argument, '\Vitess\Proto\Query\StartCommitResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Query\SetRollbackRequest $input
+     */
+    public function SetRollback(\Vitess\Proto\Query\SetRollbackRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/queryservice.Query/SetRollback', $argument, '\Vitess\Proto\Query\SetRollbackResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Query\ResolveTransactionRequest $input
+     */
+    public function ResolveTransaction(\Vitess\Proto\Query\ResolveTransactionRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/queryservice.Query/ResolveTransaction', $argument, '\Vitess\Proto\Query\ResolveTransactionResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Query\ReadTransactionRequest $input
+     */
+    public function ReadTransaction(\Vitess\Proto\Query\ReadTransactionRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/queryservice.Query/ReadTransaction', $argument, '\Vitess\Proto\Query\ReadTransactionResponse::deserialize', $metadata, $options);
+    }
+    /**
      * @param Vitess\Proto\Query\BeginExecuteRequest $input
      */
     public function BeginExecute(\Vitess\Proto\Query\BeginExecuteRequest $argument, $metadata = array(), $options = array()) {
