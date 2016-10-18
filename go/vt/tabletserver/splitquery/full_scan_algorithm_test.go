@@ -31,7 +31,7 @@ func TestMultipleBoundaries(t *testing.T) {
 	expectedCall1 := mockSQLExecuter.EXPECT().SQLExecute(
 		"select id, user_id from test_table"+
 			" order by id asc, user_id asc"+
-			" limit 999, 1",
+			" limit 1000, 1",
 		map[string]interface{}{})
 	expectedCall1.Return(
 		&sqltypes.Result{
@@ -45,7 +45,7 @@ func TestMultipleBoundaries(t *testing.T) {
 			" :_splitquery_prev_id < id or"+
 			" (:_splitquery_prev_id = id and :_splitquery_prev_user_id <= user_id)"+
 			" order by id asc, user_id asc"+
-			" limit 999, 1",
+			" limit 1000, 1",
 		map[string]interface{}{
 			"_splitquery_prev_id":      int64(1),
 			"_splitquery_prev_user_id": int64(1),
@@ -63,7 +63,7 @@ func TestMultipleBoundaries(t *testing.T) {
 			" :_splitquery_prev_id < id or"+
 			" (:_splitquery_prev_id = id and :_splitquery_prev_user_id <= user_id)"+
 			" order by id asc, user_id asc"+
-			" limit 999, 1",
+			" limit 1000, 1",
 		map[string]interface{}{
 			"_splitquery_prev_id":      int64(2),
 			"_splitquery_prev_user_id": int64(10),
@@ -109,7 +109,7 @@ func TestSmallNumberOfRows(t *testing.T) {
 	expectedCall1 := mockSQLExecuter.EXPECT().SQLExecute(
 		"select id, user_id from test_table"+
 			" order by id asc, user_id asc"+
-			" limit 999, 1",
+			" limit 1000, 1",
 		map[string]interface{}{})
 	expectedCall1.Return(
 		&sqltypes.Result{Rows: [][]sqltypes.Value{}}, nil)
@@ -148,7 +148,7 @@ func TestSQLExecuterReturnsError(t *testing.T) {
 	expectedCall1 := mockSQLExecuter.EXPECT().SQLExecute(
 		"select id, user_id from test_table"+
 			" order by id asc, user_id asc"+
-			" limit 999, 1",
+			" limit 1000, 1",
 		map[string]interface{}{})
 	expectedCall1.Return(
 		&sqltypes.Result{
@@ -162,7 +162,7 @@ func TestSQLExecuterReturnsError(t *testing.T) {
 			" :_splitquery_prev_id < id or"+
 			" (:_splitquery_prev_id = id and :_splitquery_prev_user_id <= user_id)"+
 			" order by id asc, user_id asc"+
-			" limit 999, 1",
+			" limit 1000, 1",
 		map[string]interface{}{
 			"_splitquery_prev_id":      int64(1),
 			"_splitquery_prev_user_id": int64(1),

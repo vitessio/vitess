@@ -109,7 +109,7 @@ func (a *FullScanAlgorithm) populatePrevTupleInBindVariables(
 // the Sql field of the result will be:
 // "SELECT sc_1,sc_2,...,sc_n FROM <table>
 //                            ORDER BY <split_columns>
-//                            LIMIT splitParams.numRowsPerQueryPart-1, 1",
+//                            LIMIT splitParams.numRowsPerQueryPart, 1",
 // The BindVariables field of the result will contain a deep-copy of splitParams.BindVariables.
 func buildInitialQuery(splitParams *SplitParams) *querytypes.BoundQuery {
 	resultSelectAST := buildInitialQueryAST(splitParams)
@@ -128,7 +128,7 @@ func buildInitialQueryAST(splitParams *SplitParams) *sqlparser.Select {
 	resultSelectAST := *splitParams.selectAST
 	resultSelectAST.Where = nil
 	resultSelectAST.SelectExprs = convertColumnsToSelectExprs(splitParams.splitColumns)
-	resultSelectAST.Limit = buildLimitClause(splitParams.numRowsPerQueryPart-1, 1)
+	resultSelectAST.Limit = buildLimitClause(splitParams.numRowsPerQueryPart, 1)
 	resultSelectAST.OrderBy = buildOrderByClause(splitParams.splitColumns)
 	return &resultSelectAST
 }
