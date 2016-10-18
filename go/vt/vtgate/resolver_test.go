@@ -434,12 +434,12 @@ func TestResolverBuildEntityIds(t *testing.T) {
 	shards, sqls, bindVars := buildEntityIds(shardMap, sql, entityColName, bindVar)
 	wantShards := []string{"-20", "20-40"}
 	wantSqls := map[string]string{
-		"-20":   "select a from table where id=:id and uid in (:uid0, :uid1)",
-		"20-40": "select a from table where id=:id and uid in (:uid0)",
+		"-20":   "select a from table where id=:id and uid in ::uid_entity_ids",
+		"20-40": "select a from table where id=:id and uid in ::uid_entity_ids",
 	}
 	wantBindVars := map[string]map[string]interface{}{
-		"-20":   {"id": 10, "uid0": "0", "uid1": 1},
-		"20-40": {"id": 10, "uid0": "2"},
+		"-20":   {"id": 10, "uid_entity_ids": []interface{}{"0", 1}},
+		"20-40": {"id": 10, "uid_entity_ids": []interface{}{"2"}},
 	}
 	sort.Strings(wantShards)
 	sort.Strings(shards)

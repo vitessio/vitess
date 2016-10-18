@@ -28,12 +28,10 @@ import (
 )
 
 var (
-	separator        = []byte(", ")
-	sqlVarIdentifier = []byte(":")
-	openBracket      = []byte(" in (")
-	closeBracket     = []byte(")")
-	kwAnd            = []byte(" and ")
-	kwWhere          = []byte(" where ")
+	sqlListIdentifier = []byte("::")
+	inOperator        = []byte(" in ")
+	kwAnd             = []byte(" and ")
+	kwWhere           = []byte(" where ")
 )
 
 // Resolver is the layer to resolve KeyspaceIds and KeyRanges
@@ -447,23 +445,17 @@ func buildEntityIds(shardIDMap map[string][]interface{}, qSQL, entityColName str
 	for shard, ids := range shardIDMap {
 		var b bytes.Buffer
 		b.Write([]byte(entityColName))
-		b.Write(openBracket)
 		bindVar := make(map[string]interface{})
 		for k, v := range qBindVars {
 			bindVar[k] = v
 		}
-		for i, id := range ids {
-			bvName := fmt.Sprintf("%v%v", entityColName, i)
-			bindVar[bvName] = id
-			if i > 0 {
-				b.Write(separator)
-			}
-			b.Write(sqlVarIdentifier)
-			b.Write([]byte(bvName))
-		}
-		b.Write(closeBracket)
-		sqls[shard] = insertSQLClause(qSQL, b.String())
+		bvName := fmt.Sprintf("%v_entity_ids", entityColName)
+		bindVar[bvName] = ids
+		b.Write(inOperator)
+		b.Write(sqlListIdentifier)
+		b.Write([]byte(bvName))
 		bindVars[shard] = bindVar
+		sqls[shard] = insertSQLClause(qSQL, b.String())
 		shards[shardsIdx] = shard
 		shardsIdx++
 	}
