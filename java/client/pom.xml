@@ -49,10 +49,6 @@
       <name>Central Repository</name>
       <url>https://repo.maven.apache.org/maven2</url>
     </pluginRepository>
-    <pluginRepository>
-      <id>protoc-plugin</id>
-      <url>https://dl.bintray.com/sergei-ivanov/maven/</url>
-    </pluginRepository>
   </pluginRepositories>
 
   <build>
@@ -73,9 +69,9 @@
         </configuration>
       </plugin>
       <plugin>
-        <groupId>com.google.protobuf.tools</groupId>
-        <artifactId>maven-protoc-plugin</artifactId>
-        <version>0.4.2</version>
+        <groupId>org.xolstice.maven.plugins</groupId>
+        <artifactId>protobuf-maven-plugin</artifactId>
+        <version>0.5.0</version>
         <configuration>
           <protocArtifact>com.google.protobuf:protoc:${protobuf.java.version}:exe:${os.detected.classifier}</protocArtifact>
           <protoSourceRoot>../../proto</protoSourceRoot>
