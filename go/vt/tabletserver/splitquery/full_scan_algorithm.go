@@ -126,6 +126,7 @@ func buildInitialQueryAST(splitParams *SplitParams) *sqlparser.Select {
 			*splitParams))
 	}
 	resultSelectAST := *splitParams.selectAST
+	resultSelectAST.Where = nil
 	resultSelectAST.SelectExprs = convertColumnsToSelectExprs(splitParams.splitColumns)
 	resultSelectAST.Limit = buildLimitClause(splitParams.numRowsPerQueryPart, 1)
 	resultSelectAST.OrderBy = buildOrderByClause(splitParams.splitColumns)
