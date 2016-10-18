@@ -381,6 +381,54 @@ func (itc *internalTabletConn) Rollback(ctx context.Context, target *querypb.Tar
 	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
+// Prepare is part of tabletconn.TabletConn
+func (itc *internalTabletConn) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) error {
+	err := itc.tablet.qsc.QueryService().Prepare(ctx, target, transactionID, dtid)
+	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
+}
+
+// CommitPrepared is part of tabletconn.TabletConn
+func (itc *internalTabletConn) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) error {
+	err := itc.tablet.qsc.QueryService().CommitPrepared(ctx, target, dtid)
+	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
+}
+
+// RollbackPrepared is part of tabletconn.TabletConn
+func (itc *internalTabletConn) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) error {
+	err := itc.tablet.qsc.QueryService().RollbackPrepared(ctx, target, dtid, originalID)
+	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
+}
+
+// CreateTransaction is part of tabletconn.TabletConn
+func (itc *internalTabletConn) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) error {
+	err := itc.tablet.qsc.QueryService().CreateTransaction(ctx, target, dtid, participants)
+	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
+}
+
+// StartCommit is part of tabletconn.TabletConn
+func (itc *internalTabletConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) error {
+	err := itc.tablet.qsc.QueryService().StartCommit(ctx, target, transactionID, dtid)
+	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
+}
+
+// SetRollback is part of tabletconn.TabletConn
+func (itc *internalTabletConn) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) error {
+	err := itc.tablet.qsc.QueryService().SetRollback(ctx, target, dtid, transactionID)
+	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
+}
+
+// ResolveTransaction is part of tabletconn.TabletConn
+func (itc *internalTabletConn) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) error {
+	err := itc.tablet.qsc.QueryService().ResolveTransaction(ctx, target, dtid)
+	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
+}
+
+// ReadTransaction is part of tabletconn.TabletConn
+func (itc *internalTabletConn) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
+	metadata, err = itc.tablet.qsc.QueryService().ReadTransaction(ctx, target, dtid)
+	return metadata, tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
+}
+
 // BeginExecute is part of tabletconn.TabletConn
 func (itc *internalTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
 	transactionID, err := itc.Begin(ctx, target)

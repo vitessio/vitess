@@ -80,6 +80,46 @@ func (l *L2VTGate) Rollback(ctx context.Context, target *querypb.Target, transac
 	return l.gateway.Rollback(ctx, target.Keyspace, target.Shard, target.TabletType, transactionID)
 }
 
+// Prepare is part of the queryservice.QueryService interface
+func (l *L2VTGate) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	return l.gateway.Prepare(ctx, target.Keyspace, target.Shard, target.TabletType, transactionID, dtid)
+}
+
+// CommitPrepared is part of the queryservice.QueryService interface
+func (l *L2VTGate) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	return l.gateway.CommitPrepared(ctx, target.Keyspace, target.Shard, target.TabletType, dtid)
+}
+
+// RollbackPrepared is part of the queryservice.QueryService interface
+func (l *L2VTGate) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error) {
+	return l.gateway.RollbackPrepared(ctx, target.Keyspace, target.Shard, target.TabletType, dtid, originalID)
+}
+
+// CreateTransaction is part of the queryservice.QueryService interface
+func (l *L2VTGate) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
+	return l.gateway.CreateTransaction(ctx, target.Keyspace, target.Shard, target.TabletType, dtid, participants)
+}
+
+// StartCommit is part of the queryservice.QueryService interface
+func (l *L2VTGate) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	return l.gateway.StartCommit(ctx, target.Keyspace, target.Shard, target.TabletType, transactionID, dtid)
+}
+
+// SetRollback is part of the queryservice.QueryService interface
+func (l *L2VTGate) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
+	return l.gateway.SetRollback(ctx, target.Keyspace, target.Shard, target.TabletType, dtid, transactionID)
+}
+
+// ResolveTransaction is part of the queryservice.QueryService interface
+func (l *L2VTGate) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	return l.gateway.ResolveTransaction(ctx, target.Keyspace, target.Shard, target.TabletType, dtid)
+}
+
+// ReadTransaction is part of the queryservice.QueryService interface
+func (l *L2VTGate) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
+	return l.gateway.ReadTransaction(ctx, target.Keyspace, target.Shard, target.TabletType, dtid)
+}
+
 // Execute is part of the queryservice.QueryService interface
 func (l *L2VTGate) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	return l.gateway.Execute(ctx, target.Keyspace, target.Shard, target.TabletType, sql, bindVariables, transactionID, options)

@@ -248,6 +248,182 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, target *querypb.Targe
 	return nil
 }
 
+// Prepare executes a Prepare on the ongoing transaction.
+func (conn *gRPCQueryClient) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) error {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return tabletconn.ConnClosed
+	}
+
+	req := &querypb.PrepareRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		TransactionId:     transactionID,
+		Dtid:              dtid,
+	}
+	_, err := conn.c.Prepare(ctx, req)
+	if err != nil {
+		return tabletconn.TabletErrorFromGRPC(err)
+	}
+	return nil
+}
+
+// CommitPrepared commits the prepared transaction.
+func (conn *gRPCQueryClient) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) error {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return tabletconn.ConnClosed
+	}
+
+	req := &querypb.CommitPreparedRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Dtid:              dtid,
+	}
+	_, err := conn.c.CommitPrepared(ctx, req)
+	if err != nil {
+		return tabletconn.TabletErrorFromGRPC(err)
+	}
+	return nil
+}
+
+// RollbackPrepared rolls back the prepared transaction.
+func (conn *gRPCQueryClient) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) error {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return tabletconn.ConnClosed
+	}
+
+	req := &querypb.RollbackPreparedRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		TransactionId:     originalID,
+		Dtid:              dtid,
+	}
+	_, err := conn.c.RollbackPrepared(ctx, req)
+	if err != nil {
+		return tabletconn.TabletErrorFromGRPC(err)
+	}
+	return nil
+}
+
+// CreateTransaction creates the metadata for a 2PC transaction.
+func (conn *gRPCQueryClient) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) error {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return tabletconn.ConnClosed
+	}
+
+	req := &querypb.CreateTransactionRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Dtid:              dtid,
+		Participants:      participants,
+	}
+	_, err := conn.c.CreateTransaction(ctx, req)
+	if err != nil {
+		return tabletconn.TabletErrorFromGRPC(err)
+	}
+	return nil
+}
+
+// StartCommit atomically commits the transaction along with the
+// decision to commit the associated 2pc transaction.
+func (conn *gRPCQueryClient) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) error {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return tabletconn.ConnClosed
+	}
+
+	req := &querypb.StartCommitRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		TransactionId:     transactionID,
+		Dtid:              dtid,
+	}
+	_, err := conn.c.StartCommit(ctx, req)
+	if err != nil {
+		return tabletconn.TabletErrorFromGRPC(err)
+	}
+	return nil
+}
+
+// SetRollback transitions the 2pc transaction to the Rollback state.
+// If a transaction id is provided, that transaction is also rolled back.
+func (conn *gRPCQueryClient) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) error {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return tabletconn.ConnClosed
+	}
+
+	req := &querypb.SetRollbackRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		TransactionId:     transactionID,
+		Dtid:              dtid,
+	}
+	_, err := conn.c.SetRollback(ctx, req)
+	if err != nil {
+		return tabletconn.TabletErrorFromGRPC(err)
+	}
+	return nil
+}
+
+// ResolveTransaction deletes the 2pc transaction metadata
+// essentially resolving it.
+func (conn *gRPCQueryClient) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) error {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return tabletconn.ConnClosed
+	}
+
+	req := &querypb.ResolveTransactionRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Dtid:              dtid,
+	}
+	_, err := conn.c.ResolveTransaction(ctx, req)
+	if err != nil {
+		return tabletconn.TabletErrorFromGRPC(err)
+	}
+	return nil
+}
+
+// ReadTransaction returns the metadata for the sepcified dtid.
+func (conn *gRPCQueryClient) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (*querypb.TransactionMetadata, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return nil, tabletconn.ConnClosed
+	}
+
+	req := &querypb.ReadTransactionRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Dtid:              dtid,
+	}
+	response, err := conn.c.ReadTransaction(ctx, req)
+	if err != nil {
+		return nil, tabletconn.TabletErrorFromGRPC(err)
+	}
+	return response.Metadata, nil
+}
+
 // BeginExecute starts a transaction and runs an Execute.
 func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (result *sqltypes.Result, transactionID int64, err error) {
 	conn.mu.RLock()

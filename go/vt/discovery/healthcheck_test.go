@@ -483,6 +483,46 @@ func (fc *fakeConn) Rollback(ctx context.Context, target *querypb.Target, transa
 	return fmt.Errorf("not implemented")
 }
 
+// Prepare implements tabletconn.TabletConn.
+func (fc *fakeConn) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	return fmt.Errorf("not implemented")
+}
+
+// CommitPrepared implements tabletconn.TabletConn.
+func (fc *fakeConn) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	return fmt.Errorf("not implemented")
+}
+
+// RollbackPrepared implements tabletconn.TabletConn.
+func (fc *fakeConn) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error) {
+	return fmt.Errorf("not implemented")
+}
+
+// CreateTransaction implements tabletconn.TabletConn.
+func (fc *fakeConn) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
+	return fmt.Errorf("not implemented")
+}
+
+// StartCommit implements tabletconn.TabletConn.
+func (fc *fakeConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	return fmt.Errorf("not implemented")
+}
+
+// SetRollback implements tabletconn.TabletConn.
+func (fc *fakeConn) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
+	return fmt.Errorf("not implemented")
+}
+
+// ResolveTransaction implements tabletconn.TabletConn.
+func (fc *fakeConn) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	return fmt.Errorf("not implemented")
+}
+
+// ReadTransaction implements tabletconn.TabletConn.
+func (fc *fakeConn) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
 // BeginExecute implements tabletconn.TabletConn.
 func (fc *fakeConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
 	return nil, 0, fmt.Errorf("not implemented")

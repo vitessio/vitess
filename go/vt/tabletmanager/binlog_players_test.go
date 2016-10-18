@@ -149,6 +149,46 @@ func (ftc *fakeTabletConn) Rollback(ctx context.Context, target *querypb.Target,
 	return fmt.Errorf("not implemented in this test")
 }
 
+// Prepare is part of the TabletConn interface
+func (ftc *fakeTabletConn) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	return fmt.Errorf("not implemented in this test")
+}
+
+// CommitPrepared is part of the TabletConn interface
+func (ftc *fakeTabletConn) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	return fmt.Errorf("not implemented in this test")
+}
+
+// RollbackPrepared is part of the TabletConn interface
+func (ftc *fakeTabletConn) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error) {
+	return fmt.Errorf("not implemented in this test")
+}
+
+// CreateTransaction is part of the TabletConn interface
+func (ftc *fakeTabletConn) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
+	return fmt.Errorf("not implemented in this test")
+}
+
+// StartCommit is part of the TabletConn interface
+func (ftc *fakeTabletConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	return fmt.Errorf("not implemented in this test")
+}
+
+// SetRollback is part of the TabletConn interface
+func (ftc *fakeTabletConn) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
+	return fmt.Errorf("not implemented in this test")
+}
+
+// ResolveTransaction is part of the TabletConn interface
+func (ftc *fakeTabletConn) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	return fmt.Errorf("not implemented in this test")
+}
+
+// ReadTransaction is part of the TabletConn interface
+func (ftc *fakeTabletConn) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
+	return nil, fmt.Errorf("not implemented in this test")
+}
+
 // BeginExecute is part of the TabletConn interface
 func (ftc *fakeTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
 	return nil, 0, fmt.Errorf("not implemented in this test")
@@ -667,7 +707,8 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 
 	// now restart the map until we get the right BlpPosition
 	mysqlDaemon.BinlogPlayerEnabled = false
-	ctx1, _ := context.WithTimeout(ctx, 5*time.Second)
+	ctx1, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	if err := bpm.RunUntil(ctx1, []*tabletmanagerdatapb.BlpPosition{
 		{
 			Uid:      1,

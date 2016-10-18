@@ -57,6 +57,38 @@ func (ga *gatewayAdapter) Rollback(ctx context.Context, target *querypb.Target, 
 	return ga.g.Rollback(ctx, target.Keyspace, target.Shard, target.TabletType, transactionID)
 }
 
+func (ga *gatewayAdapter) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	return ga.g.Prepare(ctx, target.Keyspace, target.Shard, target.TabletType, transactionID, dtid)
+}
+
+func (ga *gatewayAdapter) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	return ga.g.CommitPrepared(ctx, target.Keyspace, target.Shard, target.TabletType, dtid)
+}
+
+func (ga *gatewayAdapter) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error) {
+	return ga.g.RollbackPrepared(ctx, target.Keyspace, target.Shard, target.TabletType, dtid, originalID)
+}
+
+func (ga *gatewayAdapter) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
+	return ga.g.CreateTransaction(ctx, target.Keyspace, target.Shard, target.TabletType, dtid, participants)
+}
+
+func (ga *gatewayAdapter) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	return ga.g.StartCommit(ctx, target.Keyspace, target.Shard, target.TabletType, transactionID, dtid)
+}
+
+func (ga *gatewayAdapter) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
+	return ga.g.SetRollback(ctx, target.Keyspace, target.Shard, target.TabletType, dtid, transactionID)
+}
+
+func (ga *gatewayAdapter) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	return ga.g.ResolveTransaction(ctx, target.Keyspace, target.Shard, target.TabletType, dtid)
+}
+
+func (ga *gatewayAdapter) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
+	return ga.g.ReadTransaction(ctx, target.Keyspace, target.Shard, target.TabletType, dtid)
+}
+
 func (ga *gatewayAdapter) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (result *sqltypes.Result, transactionID int64, err error) {
 	return ga.g.BeginExecute(ctx, target.Keyspace, target.Shard, target.TabletType, query, bindVars, options)
 }

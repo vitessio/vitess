@@ -34,6 +34,46 @@ func (e *ErrorQueryService) Rollback(ctx context.Context, target *querypb.Target
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
+// Prepare is part of QueryService interface
+func (e *ErrorQueryService) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	return fmt.Errorf("ErrorQueryService does not implement any method")
+}
+
+// CommitPrepared is part of QueryService interface
+func (e *ErrorQueryService) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	return fmt.Errorf("ErrorQueryService does not implement any method")
+}
+
+// RollbackPrepared is part of QueryService interface
+func (e *ErrorQueryService) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error) {
+	return fmt.Errorf("ErrorQueryService does not implement any method")
+}
+
+// CreateTransaction is part of QueryService interface
+func (e *ErrorQueryService) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
+	return fmt.Errorf("ErrorQueryService does not implement any method")
+}
+
+// StartCommit is part of QueryService interface
+func (e *ErrorQueryService) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	return fmt.Errorf("ErrorQueryService does not implement any method")
+}
+
+// SetRollback is part of QueryService interface
+func (e *ErrorQueryService) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
+	return fmt.Errorf("ErrorQueryService does not implement any method")
+}
+
+// ResolveTransaction is part of QueryService interface
+func (e *ErrorQueryService) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	return fmt.Errorf("ErrorQueryService does not implement any method")
+}
+
+// ReadTransaction is part of QueryService interface
+func (e *ErrorQueryService) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
+	return nil, fmt.Errorf("ErrorQueryService does not implement any method")
+}
+
 // Execute is part of QueryService interface
 func (e *ErrorQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("ErrorQueryService does not implement any method")

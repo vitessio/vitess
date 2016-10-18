@@ -31,6 +31,30 @@ service Query {
   // Rollback a transaction.
   rpc Rollback(query.RollbackRequest) returns (query.RollbackResponse) {};
 
+  // Prepare preares a transaction.
+  rpc Prepare(query.PrepareRequest) returns (query.PrepareResponse) {};
+
+  // CommitPrepared commits a prepared transaction.
+  rpc CommitPrepared(query.CommitPreparedRequest) returns (query.CommitPreparedResponse) {};
+
+  // RollbackPrepared rolls back a prepared transaction.
+  rpc RollbackPrepared(query.RollbackPreparedRequest) returns (query.RollbackPreparedResponse) {};
+
+  // CreateTransaction creates the metadata for a 2pc transaction.
+  rpc CreateTransaction(query.CreateTransactionRequest) returns (query.CreateTransactionResponse) {};
+
+  // StartCommit initiates a commit for a 2pc transaction.
+  rpc StartCommit(query.StartCommitRequest) returns (query.StartCommitResponse) {};
+
+  // SetRollback marks the 2pc transaction for rollback.
+  rpc SetRollback(query.SetRollbackRequest) returns (query.SetRollbackResponse) {};
+
+  // ResolveTransaction marks the 2pc transaction as resolved.
+  rpc ResolveTransaction(query.ResolveTransactionRequest) returns (query.ResolveTransactionResponse) {};
+
+  // ReadTransaction returns the 2pc transaction info.
+  rpc ReadTransaction(query.ReadTransactionRequest) returns (query.ReadTransactionResponse) {};
+
   // BeginExecute executes a begin and the specified SQL query.
   rpc BeginExecute(query.BeginExecuteRequest) returns (query.BeginExecuteResponse) {};
 

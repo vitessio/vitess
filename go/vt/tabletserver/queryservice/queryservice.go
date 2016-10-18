@@ -28,6 +28,33 @@ type QueryService interface {
 	// Rollback aborts the current transaction
 	Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error
 
+	// Prepare prepares the specified transaction.
+	Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error)
+
+	// CommitPrepared commits the prepared transaction.
+	CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error)
+
+	// RollbackPrepared rolls back the prepared transaction.
+	RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error)
+
+	// CreateTransaction creates the metadata for a 2PC transaction.
+	CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error)
+
+	// StartCommit atomically commits the transaction along with the
+	// decision to commit the associated 2pc transaction.
+	StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error)
+
+	// SetRollback transitions the 2pc transaction to the Rollback state.
+	// If a transaction id is provided, that transaction is also rolled back.
+	SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error)
+
+	// ResolveTransaction deletes the 2pc transaction metadata
+	// essentially resolving it.
+	ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error)
+
+	// ReadTransaction returns the metadata for the sepcified dtid.
+	ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error)
+
 	// Query execution
 	Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error)
 	StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error
