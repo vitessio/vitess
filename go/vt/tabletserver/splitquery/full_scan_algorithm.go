@@ -18,8 +18,8 @@ import (
 //                           WHERE :prev_boundary <= (<split_columns>)
 //                           ORDER BY <split_columns>
 //                           LIMIT <num_rows_per_query_part>, 1
-// where <split_columns> denotes the ordered list of split columns, and <table> is the
-// value of the FROM and WHERE clauses of the input query, respectfully.
+// where <split_columns> denotes the ordered list of split columns and <table> is the
+// value of the FROM clause.
 // The 'prev_boundary' bind variable holds a tuple consisting of split column values.
 // It is updated after each iteration with the result of the query. In the query executed in the
 // first iteration (the initial query) the term ':prev_boundary <= (<split_columns>)' is
@@ -28,8 +28,8 @@ import (
 // consisting of the result of each query in order.
 //
 // Actually, the code below differs slightly from the above description: the lexicographial tuple
-// inequality in the query above is actually re-written to use only scalar comparisons since MySQL
-// does not optimize queries involving tuple inequalities, correctly. Instead of using a single
+// inequality in the query above is re-written to use only scalar comparisons since MySQL
+// does not optimize queries involving tuple inequalities correctly. Instead of using a single
 // tuple bind variable: 'prev_boundary', the code uses a list of scalar bind-variables--one for each
 // element of the tuple. The bind variable storing the tuple element corresponding to a
 // split-column named 'x' is called <prevBindVariablePrefix><x>, where prevBindVariablePrefix is
