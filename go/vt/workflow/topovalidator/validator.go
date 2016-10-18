@@ -1,0 +1,213 @@
+// Package topovalidator contains a workflow that validates the
+// topology data. It is meant to detect and propose fixes for topology
+// problems. Ideally, the topology should always be
+// consistent. However, with tasks dying or network problems, there is
+// a risk some bad data is left in the topology. Most data problems
+// should be self-healing, so it is important to only add new
+// validations steps only for corner cases that would be too costly or
+// time-consuming to address in the first place.
+package topovalidator
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+
+	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/workflow"
+
+	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
+)
+
+const (
+	topoValidatorFactoryName = "topovalidator"
+)
+
+var (
+	validators = make(map[string]Validator)
+)
+
+// Register needs to be called to register the topovalidator factory.
+func Register() {
+	workflow.Register(topoValidatorFactoryName, &WorkflowFactory{})
+}
+
+// Validator is an individual process that validates an aspect of the topology.
+// Typically, it looks for something wrong, and if it finds anything, it registers a Fixer in the workflow.
+type Validator interface {
+	// Audit is called by the Workflow. It can add Fixer objects to the Workflow.
+	Audit(ctx context.Context, ts topo.Server, w *Workflow) error
+}
+
+// Fixer is the interface to implement to register a job capable of
+// fixing something in the topology. It is given the action that the
+// user chose.
+type Fixer interface {
+	Action(ctx context.Context, name string) error
+}
+
+// RegisterValidator adds a Validator to our list. Typically called at
+// init() time.
+func RegisterValidator(name string, v Validator) {
+	if _, ok := validators[name]; ok {
+		log.Fatalf("Registering duplicate Validator with name %v", name)
+	}
+	validators[name] = v
+}
+
+// Workflow is the workflow that runs the validation.
+// It implements workflow.Workflow.
+type Workflow struct {
+	// fixers is the array of possible fixes.
+	fixers []*workflowFixer
+
+	// runCount is the number of validators we already ran.
+	runCount int
+
+	// logger is the logger we export UI logs from.
+	logger *logutil.MemoryLogger
+}
+
+// workflowFixer contains all the information about a fixer.
+type workflowFixer struct {
+	name    string
+	message string
+	fixer   Fixer
+	actions []string
+	node    *workflow.Node
+}
+
+// AddFixer adds a Fixer to the Workflow. It will end up displaying a
+// sub-task for the user to act on. When the user presses one action,
+// the Fixer.Action() callback will be called.
+func (w *Workflow) AddFixer(name, message string, fixer Fixer, actions []string) {
+	w.fixers = append(w.fixers, &workflowFixer{
+		name:    name,
+		message: message,
+		fixer:   fixer,
+		actions: actions,
+	})
+}
+
+// Run is part of the workflow.Workflow interface.
+func (w *Workflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.WorkflowInfo) error {
+	// Create a UI Node.
+	node := workflow.NewToplevelNode(wi, w)
+	node.State = workflowpb.WorkflowState_Running
+	node.Display = workflow.NodeDisplayDeterminate
+	node.Message = "Validates the Topology and proposes fixes for known issues."
+	w.uiUpdate(node)
+	if err := manager.NodeManager().AddRootNode(node); err != nil {
+		return err
+	}
+	defer manager.NodeManager().RemoveRootNode(node)
+
+	// Run all the validators. They may add fixers.
+	for name, v := range validators {
+		w.logger.Infof("Running validator: %v", name)
+		node.Modify(func() {
+			w.uiUpdate(node)
+		})
+		err := v.Audit(ctx, manager.TopoServer(), w)
+		if err != nil {
+			w.logger.Errorf("Validator %v failed: %v", name, err)
+		} else {
+			w.logger.Errorf("Validator %v successfully finished", name)
+		}
+		w.runCount++
+	}
+
+	// Now for each Fixer, add a sub node.
+	node.Modify(func() {
+		if len(w.fixers) == 0 {
+			w.logger.Errorf("No problem found")
+		}
+		for i, f := range w.fixers {
+			f.node, _ = node.AddChild(fmt.Sprintf("%v", i))
+			f.node.Name = f.name
+			f.node.Message = f.message
+			f.node.Display = workflow.NodeDisplayIndeterminate
+			for _, action := range f.actions {
+				f.node.Actions = append(f.node.Actions, &workflow.Action{
+					Name: action,
+				})
+			}
+		}
+		w.uiUpdate(node)
+	})
+
+	// And wait for the workflow to be terminated.
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// uiUpdate updates the computed parts of the Node, based on the
+// current state.  Needs to be called from inside node.Modify.
+func (w *Workflow) uiUpdate(node *workflow.Node) {
+	c := len(validators)
+	node.Progress = 100 * w.runCount / c
+	node.ProgressMessage = fmt.Sprintf("%v/%v", w.runCount, c)
+	node.Log = w.logger.String()
+}
+
+// Action is part of the workflow.Workflow interface.
+func (w *Workflow) Action(ctx context.Context, path, name string) error {
+	// path will be of the form /<uuid>/<index>
+	parts := strings.Split(path, "/")
+	if len(parts) != 3 {
+		return fmt.Errorf("invalid action path: %v", path)
+	}
+
+	i, err := strconv.Atoi(parts[2])
+	if err != nil {
+		return fmt.Errorf("invalid action index %v: %v", parts[2], err)
+	}
+	if i < 0 || i >= len(w.fixers) {
+		return fmt.Errorf("invalid action index %v, expected 0 <= index < %v", i, len(w.fixers))
+	}
+	f := w.fixers[i]
+	if f.node.Actions == nil {
+		// Action was already run.
+		return nil
+	}
+	err = f.fixer.Action(ctx, name)
+	f.node.Modify(func() {
+		if err != nil {
+			f.node.Log = fmt.Sprintf("action %v failed: %v", name, err)
+		} else {
+			f.node.Log = fmt.Sprintf("action %v successful", name)
+		}
+		f.node.Actions = nil
+		f.node.State = workflowpb.WorkflowState_Done
+		f.node.Message = "Addressed(" + name + "): " + f.node.Message
+		f.node.Display = workflow.NodeDisplayNone
+	})
+	return nil
+}
+
+// WorkflowFactory is the factory to register the topo validator
+// workflow.
+type WorkflowFactory struct{}
+
+// Init is part of the workflow.Factory interface.
+func (f *WorkflowFactory) Init(w *workflowpb.Workflow, args []string) error {
+	// No parameters to parse.
+	if len(args) > 0 {
+		return fmt.Errorf("topovalidator doesn't take any parameter")
+	}
+	w.Name = "Topology Validator"
+	return nil
+}
+
+// Instantiate is part of the workflow.Factory interface.
+func (f *WorkflowFactory) Instantiate(w *workflowpb.Workflow) (workflow.Workflow, error) {
+	return &Workflow{
+		logger: logutil.NewMemoryLogger(),
+	}, nil
+}

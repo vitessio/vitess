@@ -9,6 +9,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/workflow"
+	"github.com/youtube/vitess/go/vt/workflow/topovalidator"
 )
 
 var (
@@ -17,6 +18,12 @@ var (
 
 func initWorkflowManager(ts topo.Server) {
 	if *workflowManagerInit {
+		// Register the Topo Validators
+		topovalidator.RegisterKeyspaceValidator()
+		topovalidator.RegisterShardValidator()
+		topovalidator.Register()
+
+		// Create the WorkflowManager.
 		vtctl.WorkflowManager = workflow.NewManager(ts)
 
 		// Register the long polling and websocket handlers.

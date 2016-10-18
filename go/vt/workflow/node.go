@@ -352,7 +352,7 @@ func (m *NodeManager) getNodeByPath(nodePath string) (*Node, error) {
 
 	// Find the subnode if needed.
 	for i := 1; i < len(parts)-1; i++ {
-		subPath := path.Join(parts[0 : i+1]...)
+		subPath := "/" + path.Join(parts[1:i+2]...)
 		found := false
 		for _, sn := range n.Children {
 			if sn.Path == subPath {
